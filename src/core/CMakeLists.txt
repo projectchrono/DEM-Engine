@@ -20,6 +20,11 @@ target_include_directories(
 	PUBLIC ${ProjectIncludeRoot}
 )
 
+target_link_libraries(
+	core
+	PUBLIC CUB::CUB
+)
+
 set(core_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/ApiVer.h
 )
