@@ -8,7 +8,7 @@ set (core_message "[core]")
 message(STATUS "${core_message} Generating API version header...")
 
 configure_file(
-	ApiVer.h.in ApiVer.h
+	ApiVersion.h.in ApiVersion.h
 	USE_SOURCE_PERMISSIONS
 	@ONLY
 )
@@ -26,11 +26,12 @@ target_link_libraries(
 )
 
 set(core_headers
-	${CMAKE_CURRENT_SOURCE_DIR}/ApiVer.h
+	${CMAKE_CURRENT_SOURCE_DIR}/ApiVersion.h
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/ManagedAllocator.hpp
 )
 
 set(core_sources
-	# Add source files here
+	${CMAKE_CURRENT_SOURCE_DIR}/DebugInfo.cpp
 )
 
 target_sources(

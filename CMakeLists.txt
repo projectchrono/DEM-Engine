@@ -31,7 +31,7 @@ set_property(
 	STRINGS auto cxx11 cxx14 cxx17 cxx20 cxx2b
 )
 
-set(ProjectIncludeRoot "${CMAKE_CURRENT_SOURCE_DIR}/src")
+set(ProjectIncludeRoot "${CMAKE_CURRENT_BINARY_DIR}/src")
 
 
 # Find CUB library (this might need to be done in source-level config)
