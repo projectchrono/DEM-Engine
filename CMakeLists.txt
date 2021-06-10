@@ -46,6 +46,8 @@ find_package(
 # ---------------------------------------------------------------------------- #
 
 add_subdirectory(src/core)
+add_subdirectory(src/granular)
+add_subdirectory(src/demo)
 
 # ---------------------------------------------------------------------------- #
 # Final Link Step
@@ -55,4 +57,5 @@ add_library(
 	sbel_gpu_physics 
 	SHARED
 	$<TARGET_OBJECTS:core>
+	$<TARGET_OBJECTS:granular>
 )
