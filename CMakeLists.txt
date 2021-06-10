@@ -31,7 +31,7 @@ set_property(
 	STRINGS auto cxx11 cxx14 cxx17 cxx20 cxx2b
 )
 
-set(ProjectIncludeRoot "${CMAKE_CURRENT_BINARY_DIR}/src")
+set(ProjectIncludeRoot "${CMAKE_CURRENT_SOURCE_DIR}/src" "${CMAKE_CURRENT_BINARY_DIR}/src")
 
 
 # Find CUB library (this might need to be done in source-level config)
@@ -47,7 +47,6 @@ find_package(
 
 add_subdirectory(src/core)
 add_subdirectory(src/granular)
-add_subdirectory(src/demo)
 
 # ---------------------------------------------------------------------------- #
 # Final Link Step
@@ -58,4 +57,6 @@ add_library(
 	SHARED
 	$<TARGET_OBJECTS:core>
 	$<TARGET_OBJECTS:granular>
-)
+	)
+	
+add_subdirectory(src/demo)

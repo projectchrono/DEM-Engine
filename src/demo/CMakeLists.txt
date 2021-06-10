@@ -20,18 +20,21 @@ SET(DEMOS
 # Add all executables
 # ------------------------------------------------------------------------------
 
-MESSAGE(STATUS "Demo programs for Gpu module...")
+message(STATUS "Demo programs for Gpu module...")
 
 FOREACH(PROGRAM ${DEMOS})
-		MESSAGE(STATUS "...add ${PROGRAM}")
+		
+		message(STATUS "...add ${PROGRAM}")
 
-		ADD_EXECUTABLE(${PROGRAM}  "${PROGRAM}.cpp")
+		add_executable(${PROGRAM}  "${PROGRAM}.cpp")
+		
+		source_group(""  FILES "${PROGRAM}.cpp")
 		
 		target_include_directories(${PROGRAM} PUBLIC ${ProjectIncludeRoot})
+		target_link_libraries(${PROGRAM} PUBLIC ${LIBRARIES})
+		
 
-		SOURCE_GROUP(""  FILES "${PROGRAM}.cpp")
+		add_dependencies(${PROGRAM} ${LIBRARIES})
 
-		TARGET_LINK_LIBRARIES(${PROGRAM} ${LIBRARIES})
-		ADD_DEPENDENCIES(${PROGRAM} ${LIBRARIES})
 ENDFOREACH(PROGRAM)
 
