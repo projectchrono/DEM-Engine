@@ -28,6 +28,7 @@ target_link_libraries(
 set(core_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/ApiVersion.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ManagedAllocator.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/ThreadManager.h
 )
 
 set(core_sources

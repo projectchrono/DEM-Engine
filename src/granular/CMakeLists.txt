@@ -19,11 +19,13 @@ target_link_libraries(
 set(granular_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/PhysicsSystem.h
 	${CMAKE_CURRENT_SOURCE_DIR}/ApiSystem.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/GranularDefines.h
 )
 
 set(granular_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/PhysicsSystem.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/ApiSystem.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/PhysicsSystem.cu
 )
 
 target_sources(

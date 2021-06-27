@@ -3,14 +3,15 @@
 //  All rights reserved.
 
 #include <core/ApiVersion.h>
+#include <core/utils/ThreadManager.h>
 #include <granular/ApiSystem.h>
-#include <cstdio>
 
+#include <cstdio>
 
 using namespace sgps;
 
 int main() {
-	SGPS_api aa(1.f);
-	printf("Constructed!\n");
-	return 0;
+  SGPS_api aa(1.f);
+  printf("Constructed!\n");
+  return 0;
 }

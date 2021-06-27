@@ -2,22 +2,22 @@
 //  Copyright (c) 2021, University of Wisconsin - Madison
 //  All rights reserved.
 
-#pragma once 
+#pragma once
 
 #include <core/ApiVersion.h>
-#include "PhysicsSystem.h"
+#include <granular/PhysicsSystem.h>
 namespace sgps {
 
 class SGPS_impl;
 
 class SGPS_api {
-	public:
-		SGPS_api(float rad);
-		virtual ~SGPS_api();
-	protected:
-		SGPS_api(): m_sys(nullptr) {}
-		SGPS_impl* m_sys;
+public:
+  SGPS_api(float rad);
+  virtual ~SGPS_api();
+
+protected:
+  SGPS_api() : m_sys(nullptr) {}
+  SGPS_impl *m_sys;
 };
 
-}
-
+} // namespace sgps
