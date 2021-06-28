@@ -11,6 +11,7 @@
 namespace sgps {
 
 SGPS_impl::SGPS_impl(float rad) : sphereUU(rad) {
+  ThreadManager *dTkT_InteractionManager = new ThreadManager();
   dTkT_InteractionManager->consumerRequestedUpdateFrequency = updateFreq;
 
   kinematicThread kT(dTkT_InteractionManager);
