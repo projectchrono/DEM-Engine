@@ -6,6 +6,7 @@
 #include <cstring>
 #include <granular/GranularDefines.h>
 #include <granular/PhysicsSystem.h>
+#include <iostream>
 #include <thread>
 
 namespace sgps {
@@ -26,6 +27,27 @@ SGPS_impl::SGPS_impl(float rad) : sphereUU(rad) {
   kT.setDestinationBuffer(pBuffer);
   kT.primeConsumer();
   kT.setProducerAverageTime(timeProducerSide);
+  // get the threads going
+  std::thread kThread(std::ref(kT));
+  std::thread dThread(std::ref(dT));
+
+  dThread.join();
+  kThread.join();
+
+  // Sim statistics
+  std::cout << "\n~~ SIM STATISTICS ~~\n";
+  std::cout << "Number of consumer updates: "
+            << dTkT_InteractionManager->schedulingStats.nConsumerUpdates
+            << std::endl;
+  std::cout << "Number of producer updates: "
+            << dTkT_InteractionManager->schedulingStats.nProducerUpdates
+            << std::endl;
+  std::cout << "Number of times consumer held back: "
+            << dTkT_InteractionManager->schedulingStats.nTimesConsumerHeldBack
+            << std::endl;
+  std::cout << "Number of times producer held back: "
+            << dTkT_InteractionManager->schedulingStats.nTimesProducerHeldBack
+            << std::endl;
 }
 
 SGPS_impl::~SGPS_impl(){};
