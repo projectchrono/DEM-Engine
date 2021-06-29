@@ -5,8 +5,10 @@
 #pragma once
 
 #include <mutex>
+#include <vector>
 
 #include <core/ApiVersion.h>
+#include <core/utils/ManagedAllocator.hpp>
 #include <core/utils/ThreadManager.h>
 #include <granular/GranularDefines.h>
 
@@ -76,6 +78,11 @@ protected:
   SGPS_impl() = delete;
   SGPS_impl(float sphere_rad);
   float sphereUU;
+
+  // Arrays in managed memory
+  std::vector<float, cudallocator<float>> mass;
+  std::vector<float, cudallocator<float>> mmiXX;
+
   int updateFreq = 1;
   int timeConsumerSide = 1;
   int timeProducerSide = 1;
