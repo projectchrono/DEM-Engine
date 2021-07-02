@@ -12,4 +12,4 @@ typedef unsigned char materialIndex_t;
 
 // somehow add array materialsArray and radiiArray??
 
-} // namespace sgps
+}  // namespace sgps

@@ -6,12 +6,12 @@
 #include <core/ApiVersion.h>
 
 class GpuManager {
-public:
+  public:
     GpuManager(unsigned int total_streams = 1);
     ~GpuManager();
 
     struct Stream {
-    public:
+      public:
         cudaStream_t stream;
         int device;
     };
@@ -20,13 +20,13 @@ public:
     unsigned int getStreamsPerDevice();
     // Returns the HIGHEST number of streams per device
     unsigned int getMaxStreamsPerDevice();
-    
+
     unsigned int getNumDevices();
-    
+
     const std::vector<cudaStream_t>& getStreamsFromDevice(int index);
     const std::vector<cudaStream_t>& getStreamsFromDevice(const struct Stream&);
-    
-private:
+
+  private:
     std::vector<std::vector<cudaStream_t>> streams;
 };
 

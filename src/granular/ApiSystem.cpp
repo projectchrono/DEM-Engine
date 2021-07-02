@@ -7,8 +7,12 @@
 
 namespace sgps {
 
-SGPS_api::SGPS_api(float rad) { m_sys = new SGPS_impl(rad); }
+SGPS_api::SGPS_api(float rad) {
+    m_sys = new SGPS_impl(rad);
+}
 
-SGPS_api::~SGPS_api() { delete m_sys; }
+SGPS_api::~SGPS_api() {
+    delete m_sys;
+}
 
-} // namespace sgps
+}  // namespace sgps
