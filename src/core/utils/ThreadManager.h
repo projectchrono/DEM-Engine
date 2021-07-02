@@ -34,11 +34,11 @@ public:
   std::atomic<int> dynamicRequestedUpdateFrequency;
   std::atomic<bool> dynamicDone;
 
-  std::atomic<bool> consOwned_Prod2ConsBuffer_isFresh;
-  std::atomic<bool> prodOwned_Cons2ProdBuffer_isFresh;
+  std::atomic<bool> dynamicOwned_Prod2ConsBuffer_isFresh;
+  std::atomic<bool> kinematicOwned_Cons2ProdBuffer_isFresh;
 
-  std::mutex consOwnedBuffer_AccessCoordination;
-  std::mutex prodOwnedBuffer_AccessCoordination;
+  std::mutex dynamicOwnedBuffer_AccessCoordination;
+  std::mutex kinematicOwnedBuffer_AccessCoordination;
   std::mutex kinematicCanProceed;
   std::mutex dynamicCanProceed;
   std::condition_variable cv_KinematicCanProceed;
@@ -51,8 +51,8 @@ public:
     stampLastUpdateOfDynamic = -1;
     currentStampOfDynamic = 0;
     dynamicDone = false;
-    consOwned_Prod2ConsBuffer_isFresh = false;
-    prodOwned_Cons2ProdBuffer_isFresh = false;
+    dynamicOwned_Prod2ConsBuffer_isFresh = false;
+    kinematicOwned_Cons2ProdBuffer_isFresh = false;
   }
 
   ~ThreadManager() {}

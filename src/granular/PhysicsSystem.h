@@ -23,17 +23,17 @@ private:
   int product[N_MANUFACTURED_ITEMS] = {1, 2, 3};
   int transferBuffer[N_INPUT_ITEMS] = {0, 0, 0, 0};
   int inputData[N_INPUT_ITEMS];
-  int prodAverageTime;
+  int kinematicAverageTime;
   int costlyProductionStep(int) const;
 
 public:
   kinematicThread(ThreadManager *pSchedSup) : pSchedSupport(pSchedSup) {
-    prodAverageTime = 0;
+    kinematicAverageTime = 0;
     pDynamicOwned_TransfBuffer = NULL;
   }
   ~kinematicThread() {}
 
-  void setKinematicAverageTime(int val) { prodAverageTime = val; }
+  void setKinematicAverageTime(int val) { kinematicAverageTime = val; }
   void setDestinationBuffer(int *pCB) { pDynamicOwned_TransfBuffer = pCB; }
   int *pDestinationBuffer() { return transferBuffer; }
   void primeDynamic();
@@ -50,7 +50,7 @@ private:
   int outcome[N_INPUT_ITEMS];
   int input4Kinematic[N_INPUT_ITEMS] = {-1, -2, -3, -4};
 
-  int consAverageTime; // time required in the consumption process; fake lag
+  int dynamicAverageTime; // time required in the consumption process; fake lag
   int nDynamicCycles;
 
   int localUse(int val);
@@ -59,11 +59,11 @@ public:
   dynamicThread(ThreadManager *pSchedSup) : pSchedSupport(pSchedSup) {
     pKinematicOwned_TransfBuffer = NULL;
     nDynamicCycles = 0;
-    consAverageTime = 0;
+    dynamicAverageTime = 0;
   }
   ~dynamicThread() {}
 
-  void setDynamicAverageTime(int val) { consAverageTime = val; }
+  void setDynamicAverageTime(int val) { dynamicAverageTime = val; }
   void setDestinationBuffer(int *pPB) { pKinematicOwned_TransfBuffer = pPB; }
   void setNDynamicCycles(int val) { nDynamicCycles = val; }
   int *pDestinationBuffer() { return transferBuffer; }
