@@ -24,7 +24,7 @@ project(
 # ---------------------------------------------------------------------------- #
 
 # The compiler will build against this C++ standard, if available.
-set(TargetCXXStandard "auto" CACHE STRING "The C++ standard used by the compiler")
+set(TargetCXXStandard "STD_AUTODETECT" CACHE STRING "The C++ standard used by the compiler")
 set_property(
 	CACHE TargetCXXStandard
 	PROPERTY
@@ -40,6 +40,12 @@ find_package(
 	PATHS ${CMAKE_CURRENT_LIST_DIR}/thirdparty/cub/cub
 )
 
+find_path(
+	NVIDIAJitifyPath
+	NAMES jitify.hpp
+	PATHS "${CMAKE_CURRENT_LIST_DIR}/thirdparty/jitify"
+
+)
 
 # ---------------------------------------------------------------------------- #
 # Source-level configuration
