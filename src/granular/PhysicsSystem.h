@@ -54,32 +54,10 @@ class dynamicThread {
     int dynamicAverageTime;  // time required in the consumption process; fake lag
     int nDynamicCycles;
 
-    int localUse(int val);
-
-  public:
-    dynamicThread(ThreadManager* pSchedSup) : pSchedSupport(pSchedSup) {
-        pKinematicOwned_TransfBuffer = NULL;
-        nDynamicCycles = 0;
-        dynamicAverageTime = 0;
-    }
-    ~dynamicThread() {}
-
-    void setDynamicAverageTime(int val) { dynamicAverageTime = val; }
-    void setDestinationBuffer(int* pPB) { pKinematicOwned_TransfBuffer = pPB; }
-    void setNDynamicCycles(int val) { nDynamicCycles = val; }
-    int* pDestinationBuffer() { return transferBuffer; }
-    void operator()();
-};
-
-class SGPS_impl {
-  public:
-    virtual ~SGPS_impl();
-    friend class SGPS_api;
-
-  protected:
-    SGPS_impl() = delete;
-    SGPS_impl(float sphere_rad);
-    float sphereUU;
+    // Pointers to dynamics-related arrays
+    struct SysState {
+        float* mass;
+    };
 
     // Body-related arrays in managed memory
 
@@ -130,12 +108,43 @@ class SGPS_impl {
     std::vector<float, ManagedAllocator<float>> offsetY;
     std::vector<float, ManagedAllocator<float>> offsetZ;
 
+    int localUse(int val);
+
+  public:
+    dynamicThread(ThreadManager* pSchedSup) : pSchedSupport(pSchedSup) {
+        pKinematicOwned_TransfBuffer = NULL;
+        nDynamicCycles = 0;
+        dynamicAverageTime = 0;
+    }
+    ~dynamicThread() {}
+
+    void setDynamicAverageTime(int val) { dynamicAverageTime = val; }
+    void setDestinationBuffer(int* pPB) { pKinematicOwned_TransfBuffer = pPB; }
+    void setNDynamicCycles(int val) { nDynamicCycles = val; }
+    int* pDestinationBuffer() { return transferBuffer; }
+    void operator()();
+};
+
+class SGPS_impl {
+  public:
+    virtual ~SGPS_impl();
+    friend class SGPS_api;
+
+  protected:
+    SGPS_impl() = delete;
+    SGPS_impl(float sphere_rad);
+    float sphereUU;
+
     int updateFreq = 1;
     int timeDynamicSide = 1;
     int timeKinematicSide = 1;
     int nDynamicCycles = 1;
 
-    // ThreadManager *dTkT_InteractionManager;
+    ThreadManager* dTkT_InteractionManager;
+    kinematicThread* kT;
+    dynamicThread* dT;
+
+    int LaunchThreads();
 };
 
 }  // namespace sgps

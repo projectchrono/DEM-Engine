@@ -15,4 +15,8 @@ SGPS_api::~SGPS_api() {
     delete m_sys;
 }
 
+void SGPS_api::LaunchThreads() {
+    m_sys->LaunchThreads();
+}
+
 }  // namespace sgps

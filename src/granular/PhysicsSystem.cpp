@@ -12,27 +12,21 @@
 namespace sgps {
 
 SGPS_impl::SGPS_impl(float rad) : sphereUU(rad) {
-    ThreadManager* dTkT_InteractionManager = new ThreadManager();
+    dTkT_InteractionManager = new ThreadManager();
     dTkT_InteractionManager->dynamicRequestedUpdateFrequency = updateFreq;
 
-    kinematicThread kT(dTkT_InteractionManager);
-    dynamicThread dT(dTkT_InteractionManager);
+    kT = new kinematicThread(dTkT_InteractionManager);
+    dT = new dynamicThread(dTkT_InteractionManager);
 
-    int* pBuffer = kT.pDestinationBuffer();
-    dT.setDestinationBuffer(pBuffer);
-    dT.setDynamicAverageTime(timeDynamicSide);
-    dT.setNDynamicCycles(nDynamicCycles);
+    int* pBuffer = kT->pDestinationBuffer();
+    dT->setDestinationBuffer(pBuffer);
+    dT->setDynamicAverageTime(timeDynamicSide);
+    dT->setNDynamicCycles(nDynamicCycles);
 
-    pBuffer = dT.pDestinationBuffer();
-    kT.setDestinationBuffer(pBuffer);
-    kT.primeDynamic();
-    kT.setKinematicAverageTime(timeKinematicSide);
-    // get the threads going
-    std::thread kThread(std::ref(kT));
-    std::thread dThread(std::ref(dT));
-
-    dThread.join();
-    kThread.join();
+    pBuffer = dT->pDestinationBuffer();
+    kT->setDestinationBuffer(pBuffer);
+    kT->primeDynamic();
+    kT->setKinematicAverageTime(timeKinematicSide);
 
     // Sim statistics
     std::cout << "\n~~ SIM STATISTICS ~~\n";
@@ -46,6 +40,17 @@ SGPS_impl::SGPS_impl(float rad) : sphereUU(rad) {
 }
 
 SGPS_impl::~SGPS_impl(){};
+
+int SGPS_impl::LaunchThreads() {
+    // get the threads going
+    std::thread kThread(std::ref(*kT));
+    std::thread dThread(std::ref(*dT));
+
+    dThread.join();
+    kThread.join();
+
+    return 0;    
+}
 
 void kinematicThread::primeDynamic() {
     // produce produce to prime the pipeline

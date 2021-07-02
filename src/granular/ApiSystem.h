@@ -15,6 +15,8 @@ class SGPS_api {
     SGPS_api(float rad);
     virtual ~SGPS_api();
 
+    void LaunchThreads();
+
   protected:
     SGPS_api() : m_sys(nullptr) {}
     SGPS_impl* m_sys;

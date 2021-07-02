@@ -11,7 +11,9 @@
 using namespace sgps;
 
 int main() {
-  SGPS_api aa(1.f);
-  printf("Constructed!\n");
-  return 0;
+    SGPS_api aa(1.f);
+    printf("Constructed!\n");
+
+    aa.LaunchThreads();
+    return 0;
 }
