@@ -18,6 +18,7 @@ add_library(core OBJECT)
 target_include_directories(
 	core
 	PUBLIC ${ProjectIncludeRoot}
+	PUBLIC ${NVIDIAJitifyPath}
 )
 
 target_link_libraries(
