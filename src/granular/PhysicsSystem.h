@@ -25,6 +25,7 @@ private:
   int inputData[N_INPUT_ITEMS];
   int kinematicAverageTime;
   int costlyProductionStep(int) const;
+  int device_id;
 
 public:
   kinematicThread(ThreadManager *pSchedSup) : pSchedSupport(pSchedSup) {
@@ -83,58 +84,58 @@ protected:
   // Body-related arrays in managed memory
 
   // The mass
-  std::vector<float, cudallocator<float>> mass;
+  std::vector<float, ManagedAllocator<float>> mass;
 
   // The components of MOI
-  std::vector<float, cudallocator<float>> mmiXX;
-  std::vector<float, cudallocator<float>> mmiYY;
-  std::vector<float, cudallocator<float>> mmiZZ;
+  std::vector<float, ManagedAllocator<float>> mmiXX;
+  std::vector<float, ManagedAllocator<float>> mmiYY;
+  std::vector<float, ManagedAllocator<float>> mmiZZ;
 
   // The voxel ID (split into 3 parts, representing XYZ location)
-  std::vector<voxelID_ts, cudallocator<voxelID_ts>> voxelID;
+  std::vector<voxelID_ts, ManagedAllocator<voxelID_ts>> voxelID;
 
   // The XYZ local location inside a voxel
-  std::vector<unsigned int, cudallocator<unsigned int>> locX;
-  std::vector<unsigned int, cudallocator<unsigned int>> locY;
-  std::vector<unsigned int, cudallocator<unsigned int>> locZ;
+  std::vector<unsigned int, ManagedAllocator<unsigned int>> locX;
+  std::vector<unsigned int, ManagedAllocator<unsigned int>> locY;
+  std::vector<unsigned int, ManagedAllocator<unsigned int>> locZ;
 
   // The unit quaternion
-  std::vector<int, cudallocator<int>> oriQ0;
-  std::vector<int, cudallocator<int>> oriQ1;
-  std::vector<int, cudallocator<int>> oriQ2;
-  std::vector<int, cudallocator<int>> oriQ3;
+  std::vector<int, ManagedAllocator<int>> oriQ0;
+  std::vector<int, ManagedAllocator<int>> oriQ1;
+  std::vector<int, ManagedAllocator<int>> oriQ2;
+  std::vector<int, ManagedAllocator<int>> oriQ3;
 
   // Velocity times ts size: hv
-  std::vector<int, cudallocator<int>> hvX;
-  std::vector<int, cudallocator<int>> hvY;
-  std::vector<int, cudallocator<int>> hvZ;
+  std::vector<int, ManagedAllocator<int>> hvX;
+  std::vector<int, ManagedAllocator<int>> hvY;
+  std::vector<int, ManagedAllocator<int>> hvZ;
 
   // The angular velocity
-  std::vector<int, cudallocator<int>> omgBarX;
-  std::vector<int, cudallocator<int>> omgBarY;
-  std::vector<int, cudallocator<int>> omgBarZ;
+  std::vector<int, ManagedAllocator<int>> omgBarX;
+  std::vector<int, ManagedAllocator<int>> omgBarY;
+  std::vector<int, ManagedAllocator<int>> omgBarZ;
 
   // Sphere-related arrays in managed memory
   // Belonged-body ID (default unsigned int type)
-  std::vector<bodyID_t, cudallocator<bodyID_t>> bodyID;
+  std::vector<bodyID_t, ManagedAllocator<bodyID_t>> bodyID;
 
   // The ID that maps this sphere's radius
-  std::vector<radiusIndex_t, cudallocator<radiusIndex_t>> radiusID;
+  std::vector<radiusIndex_t, ManagedAllocator<radiusIndex_t>> radiusID;
 
   // The ID that maps this sphere's material
-  std::vector<materialIndex_t, cudallocator<materialIndex_t>> materialID;
+  std::vector<materialIndex_t, ManagedAllocator<materialIndex_t>> materialID;
 
   // The location of the sphere, relative to the LRF of the body it belongs to
-  std::vector<float, cudallocator<float>> offsetX;
-  std::vector<float, cudallocator<float>> offsetY;
-  std::vector<float, cudallocator<float>> offsetZ;
+  std::vector<float, ManagedAllocator<float>> offsetX;
+  std::vector<float, ManagedAllocator<float>> offsetY;
+  std::vector<float, ManagedAllocator<float>> offsetZ;
 
   int updateFreq = 1;
   int timeDynamicSide = 1;
   int timeKinematicSide = 1;
   int nDynamicCycles = 1;
 
-  ThreadManager *dTkT_InteractionManager;
+  // ThreadManager *dTkT_InteractionManager;
 };
 
 } // namespace sgps

@@ -28,7 +28,7 @@ set(TargetCXXStandard "auto" CACHE STRING "The C++ standard used by the compiler
 set_property(
 	CACHE TargetCXXStandard
 	PROPERTY
-	STRINGS auto cxx11 cxx14 cxx17 cxx20 cxx2b
+	STRINGS STD_AUTODETECT STD_CXX11 STD_CXX14 STD_CXX17 STD_CXX20 STD_CXX2b
 )
 
 set(ProjectIncludeRoot "${CMAKE_CURRENT_SOURCE_DIR}/src" "${CMAKE_CURRENT_BINARY_DIR}/src")

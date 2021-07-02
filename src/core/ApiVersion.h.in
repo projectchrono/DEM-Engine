@@ -13,17 +13,22 @@
 // The project version number expressed in the form 0xMMMMmmPP (for easy numerical comparisons)
 #define API_VERSION ((VERSION_MAJOR << 16) | (VERSION_MINOR << 8) | (VERSION_PATCH))
 
+
 // C++ Standard Macros
+#define STD_AUTODETECT (__cplusplus)
 #define STD_CXX98 199711L
 #define STD_CXX11 201103L
 #define STD_CXX14 201402L
 #define STD_CXX17 201703L
 #define STD_CXX20 202002L
 
+// The C++ Standard Version targeted by the library
+#define CXX_TARGET @TargetCXXStandard@
+
 // C++ Standard Comparisons
-#define CXX_EQUAL(x)    (__cplusplus == x)
-#define CXX_NEWER(x)    (__cplusplus >  x)
-#define CXX_OLDER(x)    (__cplusplus <  x)
+#define CXX_EQUAL(x)    (CXX_TARGET == x)
+#define CXX_NEWER(x)    (CXX_TARGET >  x)
+#define CXX_OLDER(x)    (CXX_TARGET <  x)
 
 // C++ Standard Composite Comparisons
 #define CXX_EQ_NEWER(x)	(CXX_EQUAL(x) || CXX_NEWER(x))

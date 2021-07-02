@@ -36,8 +36,21 @@ void kinematicThread::operator()() {
     cudaGetDeviceCount(&totGPU);
     printf("Total device: %d\n", totGPU);
 
+    // cudaSetDevice(this->device_id);
+    // auto kinematicStreams = gpuManager->getStreamsFromDevice(device_id);
+
+    // figure out the amount of shared mem
+    // cudaDeviceGetAttribute.cudaDevAttrMaxSharedMemoryPerBlock
+    
     // produce something here; fake stuff for now
     for (int j = 0; j < N_MANUFACTURED_ITEMS; j++) {
+      // kinematicTestKernel<<<1, 1, 0, kinematicStreams.at(0)>>>();
+
+      // use cudaLaunchKernel
+      // cudaLaunchKernel((void*)&kinematicTestKernel, dim3(1), dim3(1), NULL, 0, stream_id);
+      // example argument list:
+      //  args = { &arg1, &arg2, ... &argN };
+      // cudaLaunchKernel((void*)&kinematicTestKernelWithArgs, dim3(1), dim3(1), &args, 0, stream_id);
       kinematicTestKernel<<<1, 1>>>();
       cudaDeviceSynchronize();
 

@@ -1,0 +1,12 @@
+BasedOnStyle: Chromium
+
+# Longer lines
+ColumnLimit: 120
+
+# Increase indentation
+IndentWidth: 4
+IndentPPDirectives: BeforeHash
+TabWidth: 4
+AccessModifierOffset: -2
+SortUsingDeclarations: false
+SortIncludes: false

@@ -16,7 +16,7 @@
 #include <utility>
 
 template <class T>
-struct cudallocator {
+struct ManagedAllocator {
 public:
     using value_type = T;
     using size_type = std::size_t;
@@ -30,7 +30,7 @@ public:
     
     template <class U>
     struct rebind {
-        typedef typename ::cudallocator<U> other;
+        typedef typename ::ManagedAllocator<U> other;
     };
     #endif
 
@@ -49,17 +49,17 @@ public:
 
 
     #if CXX_EQ_OLDER(STD_CXX17)  // C++17 or older
-    cudallocator() noexcept {}
-    cudallocator(const cudallocator& other) noexcept {}
+    ManagedAllocator() noexcept {}
+    ManagedAllocator(const ManagedAllocator& other) noexcept {}
 
     template <class U>
-    cudallocator(const cudallocator<U>& other) noexcept {}
+    ManagedAllocator(const ManagedAllocator<U>& other) noexcept {}
     #else // CXX_EQ_NEWER(STD_CXX20) C++20 or newer
-    constexpr cudallocator() noexcept {};
-    constexpr cudallocator(const cudallocator& other) noexcept {}
+    constexpr ManagedAllocator() noexcept {};
+    constexpr ManagedAllocator(const ManagedAllocator& other) noexcept {}
 
     template <class U>
-    constexpr cudallocator(const cudallocator<U>& other) noexcept {}
+    constexpr ManagedAllocator(const ManagedAllocator<U>& other) noexcept {}
     #endif
     
     #if CXX_OLDER(STD_CXX20)  // before C++20
@@ -101,14 +101,14 @@ public:
 
     #if CXX_OLDER(STD_CXX20)
     template <class T2>
-    bool operator==(const cudallocator<T2>& other) noexcept { return true; }
+    bool operator==(const ManagedAllocator<T2>& other) noexcept { return true; }
 
     template <class T2>
-    bool operator!=(const cudallocator<T2>& other) noexcept { return false; }
+    bool operator!=(const ManagedAllocator<T2>& other) noexcept { return false; }
 
     #else // CXX_EQ_NEWER(STD_CXX20)
     template <class T2>
-    constexpr bool operator==(const cudallocator<T2>& other) noexcept { return true; }
+    constexpr bool operator==(const ManagedAllocator<T2>& other) noexcept { return true; }
     #endif
 
 private:

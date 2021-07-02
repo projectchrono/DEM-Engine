@@ -29,10 +29,12 @@ set(core_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/ApiVersion.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ManagedAllocator.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ThreadManager.h
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuManager.h
 )
 
 set(core_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/DebugInfo.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuManager.cpp
 )
 
 target_sources(
