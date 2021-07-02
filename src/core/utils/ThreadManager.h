@@ -10,16 +10,16 @@
 // class holds on to statistics related to the scheduling process
 class ManagerStatistics {
 public:
-  std::atomic<unsigned int> nTimesConsumerHeldBack;
-  std::atomic<unsigned int> nTimesProducerHeldBack;
-  std::atomic<unsigned int> nConsumerUpdates;
-  std::atomic<unsigned int> nProducerUpdates;
+  std::atomic<unsigned int> nTimesDynamicHeldBack;
+  std::atomic<unsigned int> nTimesKinematicHeldBack;
+  std::atomic<unsigned int> nDynamicUpdates;
+  std::atomic<unsigned int> nKinematicUpdates;
 
   ManagerStatistics() noexcept {
-    nTimesConsumerHeldBack = 0;
-    nTimesProducerHeldBack = 0;
-    nConsumerUpdates = 0;
-    nProducerUpdates = 0;
+    nTimesDynamicHeldBack = 0;
+    nTimesKinematicHeldBack = 0;
+    nDynamicUpdates = 0;
+    nKinematicUpdates = 0;
   }
 
   ~ManagerStatistics() {}
@@ -29,45 +29,45 @@ public:
 // production-consumption interplay
 class ThreadManager {
 public:
-  std::atomic<int> stampLastUpdateOfConsumer;
-  std::atomic<int> currentStampOfConsumer;
-  std::atomic<int> consumerRequestedUpdateFrequency;
-  std::atomic<bool> consumerDone;
+  std::atomic<int> stampLastUpdateOfDynamic;
+  std::atomic<int> currentStampOfDynamic;
+  std::atomic<int> dynamicRequestedUpdateFrequency;
+  std::atomic<bool> dynamicDone;
 
   std::atomic<bool> consOwned_Prod2ConsBuffer_isFresh;
   std::atomic<bool> prodOwned_Cons2ProdBuffer_isFresh;
 
   std::mutex consOwnedBuffer_AccessCoordination;
   std::mutex prodOwnedBuffer_AccessCoordination;
-  std::mutex producerCanProceed;
-  std::mutex consumerCanProceed;
-  std::condition_variable cv_ProducerCanProceed;
-  std::condition_variable cv_ConsumerCanProceed;
+  std::mutex kinematicCanProceed;
+  std::mutex dynamicCanProceed;
+  std::condition_variable cv_KinematicCanProceed;
+  std::condition_variable cv_DynamicCanProceed;
   ManagerStatistics schedulingStats;
 
   ThreadManager() noexcept {
-    // that is, let consumer advance into future as much as it wants
-    consumerRequestedUpdateFrequency = -1;
-    stampLastUpdateOfConsumer = -1;
-    currentStampOfConsumer = 0;
-    consumerDone = false;
+    // that is, let dynamic advance into future as much as it wants
+    dynamicRequestedUpdateFrequency = -1;
+    stampLastUpdateOfDynamic = -1;
+    currentStampOfDynamic = 0;
+    dynamicDone = false;
     consOwned_Prod2ConsBuffer_isFresh = false;
     prodOwned_Cons2ProdBuffer_isFresh = false;
   }
 
   ~ThreadManager() {}
 
-  inline bool consumerShouldWait() const {
-    // do not hold consumer back under the following circustances:
-    // * the update frequency is negative, consumer can drift into future
-    // * the producer is done
-    if (consumerRequestedUpdateFrequency < 0)
+  inline bool dynamicShouldWait() const {
+    // do not hold dynamic back under the following circustances:
+    // * the update frequency is negative, dynamic can drift into future
+    // * the kinematic is done
+    if (dynamicRequestedUpdateFrequency < 0)
       return false;
 
-    // the consumer should wait if it moved too far into the future
+    // the dynamic should wait if it moved too far into the future
     bool shouldWait =
-        (currentStampOfConsumer >
-                 stampLastUpdateOfConsumer + consumerRequestedUpdateFrequency
+        (currentStampOfDynamic >
+                 stampLastUpdateOfDynamic + dynamicRequestedUpdateFrequency
              ? true
              : false);
     return shouldWait;

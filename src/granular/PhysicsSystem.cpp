@@ -13,20 +13,20 @@ namespace sgps {
 
 SGPS_impl::SGPS_impl(float rad) : sphereUU(rad) {
   ThreadManager *dTkT_InteractionManager = new ThreadManager();
-  dTkT_InteractionManager->consumerRequestedUpdateFrequency = updateFreq;
+  dTkT_InteractionManager->dynamicRequestedUpdateFrequency = updateFreq;
 
   kinematicThread kT(dTkT_InteractionManager);
   dynamicThread dT(dTkT_InteractionManager);
 
   int *pBuffer = kT.pDestinationBuffer();
   dT.setDestinationBuffer(pBuffer);
-  dT.setConsumerAverageTime(timeConsumerSide);
-  dT.setNConsumerCycles(nConsumerCycles);
+  dT.setDynamicAverageTime(timeDynamicSide);
+  dT.setNDynamicCycles(nDynamicCycles);
 
   pBuffer = dT.pDestinationBuffer();
   kT.setDestinationBuffer(pBuffer);
-  kT.primeConsumer();
-  kT.setProducerAverageTime(timeProducerSide);
+  kT.primeDynamic();
+  kT.setKinematicAverageTime(timeKinematicSide);
   // get the threads going
   std::thread kThread(std::ref(kT));
   std::thread dThread(std::ref(dT));
@@ -36,32 +36,32 @@ SGPS_impl::SGPS_impl(float rad) : sphereUU(rad) {
 
   // Sim statistics
   std::cout << "\n~~ SIM STATISTICS ~~\n";
-  std::cout << "Number of consumer updates: "
-            << dTkT_InteractionManager->schedulingStats.nConsumerUpdates
+  std::cout << "Number of dynamic updates: "
+            << dTkT_InteractionManager->schedulingStats.nDynamicUpdates
             << std::endl;
-  std::cout << "Number of producer updates: "
-            << dTkT_InteractionManager->schedulingStats.nProducerUpdates
+  std::cout << "Number of kinematic updates: "
+            << dTkT_InteractionManager->schedulingStats.nKinematicUpdates
             << std::endl;
-  std::cout << "Number of times consumer held back: "
-            << dTkT_InteractionManager->schedulingStats.nTimesConsumerHeldBack
+  std::cout << "Number of times dynamic held back: "
+            << dTkT_InteractionManager->schedulingStats.nTimesDynamicHeldBack
             << std::endl;
-  std::cout << "Number of times producer held back: "
-            << dTkT_InteractionManager->schedulingStats.nTimesProducerHeldBack
+  std::cout << "Number of times kinematic held back: "
+            << dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack
             << std::endl;
 }
 
 SGPS_impl::~SGPS_impl(){};
 
-void kinematicThread::primeConsumer() {
+void kinematicThread::primeDynamic() {
   // produce produce to prime the pipeline
   for (int j = 0; j < N_INPUT_ITEMS; j++) {
     product[j] += this->costlyProductionStep(j);
   }
 
-  // transfer produce to consumer buffer
-  memcpy(pConsumerOwned_TransfBuffer, product, N_INPUT_ITEMS * sizeof(int));
+  // transfer produce to dynamic buffer
+  memcpy(pDynamicOwned_TransfBuffer, product, N_INPUT_ITEMS * sizeof(int));
   pSchedSupport->consOwned_Prod2ConsBuffer_isFresh = true;
-  pSchedSupport->schedulingStats.nConsumerUpdates++;
+  pSchedSupport->schedulingStats.nDynamicUpdates++;
 }
 
 int kinematicThread::costlyProductionStep(int val) const {
@@ -71,20 +71,20 @@ int kinematicThread::costlyProductionStep(int val) const {
 
 void kinematicThread::operator()() {
   // run a while loop producing stuff in each iteration;
-  // once produced, it should be made available to the consumer via memcpy
-  while (!pSchedSupport->consumerDone) {
+  // once produced, it should be made available to the dynamic via memcpy
+  while (!pSchedSupport->dynamicDone) {
     // before producing something, a new work order should be in place. Wait on
     // it
     if (!pSchedSupport->prodOwned_Cons2ProdBuffer_isFresh) {
-      pSchedSupport->schedulingStats.nTimesProducerHeldBack++;
-      std::unique_lock<std::mutex> lock(pSchedSupport->producerCanProceed);
+      pSchedSupport->schedulingStats.nTimesKinematicHeldBack++;
+      std::unique_lock<std::mutex> lock(pSchedSupport->kinematicCanProceed);
       while (!pSchedSupport->prodOwned_Cons2ProdBuffer_isFresh) {
         // loop to avoid spurious wakeups
-        pSchedSupport->cv_ProducerCanProceed.wait(lock);
+        pSchedSupport->cv_KinematicCanProceed.wait(lock);
       }
       // getting here means that new "work order" data has been provided
       {
-        // acquire lock and supply the consumer with fresh produce
+        // acquire lock and supply the dynamic with fresh produce
         std::lock_guard<std::mutex> lock(
             pSchedSupport->prodOwnedBuffer_AccessCoordination);
         memcpy(inputData, transferBuffer, N_INPUT_ITEMS * sizeof(int));
@@ -102,21 +102,21 @@ void kinematicThread::operator()() {
     pSchedSupport->prodOwned_Cons2ProdBuffer_isFresh = false;
 
     {
-      // acquire lock and supply the consumer with fresh produce
+      // acquire lock and supply the dynamic with fresh produce
       std::lock_guard<std::mutex> lock(
           pSchedSupport->consOwnedBuffer_AccessCoordination);
-      memcpy(pConsumerOwned_TransfBuffer, product,
+      memcpy(pDynamicOwned_TransfBuffer, product,
              N_MANUFACTURED_ITEMS * sizeof(int));
     }
     pSchedSupport->consOwned_Prod2ConsBuffer_isFresh = true;
-    pSchedSupport->schedulingStats.nConsumerUpdates++;
+    pSchedSupport->schedulingStats.nDynamicUpdates++;
 
-    // signal the consumer that it has fresh produce
-    pSchedSupport->cv_ConsumerCanProceed.notify_all();
+    // signal the dynamic that it has fresh produce
+    pSchedSupport->cv_DynamicCanProceed.notify_all();
   }
 
-  // in case the consumer is hanging in there...
-  pSchedSupport->cv_ConsumerCanProceed.notify_all();
+  // in case the dynamic is hanging in there...
+  pSchedSupport->cv_DynamicCanProceed.notify_all();
 }
 
 } // namespace sgps

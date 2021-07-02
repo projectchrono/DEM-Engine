@@ -17,8 +17,9 @@ namespace sgps {
 class kinematicThread {
 private:
   ThreadManager *pSchedSupport;
-  // this is where the consumer stores data that needs to be produced herein
-  int *pConsumerOwned_TransfBuffer;
+  // this is where the dynamic thread stores data that needs to be produced
+  // herein
+  int *pDynamicOwned_TransfBuffer;
   int product[N_MANUFACTURED_ITEMS] = {1, 2, 3};
   int transferBuffer[N_INPUT_ITEMS] = {0, 0, 0, 0};
   int inputData[N_INPUT_ITEMS];
@@ -28,43 +29,43 @@ private:
 public:
   kinematicThread(ThreadManager *pSchedSup) : pSchedSupport(pSchedSup) {
     prodAverageTime = 0;
-    pConsumerOwned_TransfBuffer = NULL;
+    pDynamicOwned_TransfBuffer = NULL;
   }
   ~kinematicThread() {}
 
-  void setProducerAverageTime(int val) { prodAverageTime = val; }
-  void setDestinationBuffer(int *pCB) { pConsumerOwned_TransfBuffer = pCB; }
+  void setKinematicAverageTime(int val) { prodAverageTime = val; }
+  void setDestinationBuffer(int *pCB) { pDynamicOwned_TransfBuffer = pCB; }
   int *pDestinationBuffer() { return transferBuffer; }
-  void primeConsumer();
+  void primeDynamic();
   void operator()();
 };
 
 class dynamicThread {
 private:
   ThreadManager *pSchedSupport;
-  // pointer to remote buffer where producer stores work-order data provided by
-  // the consumer
-  int *pProducerOwned_TransfBuffer;
+  // pointer to remote buffer where kinematic thread stores work-order data
+  // provided by the dynamic thread
+  int *pKinematicOwned_TransfBuffer;
   int transferBuffer[N_MANUFACTURED_ITEMS] = {0, 0, 0};
   int outcome[N_INPUT_ITEMS];
-  int input4Producer[N_INPUT_ITEMS] = {-1, -2, -3, -4};
+  int input4Kinematic[N_INPUT_ITEMS] = {-1, -2, -3, -4};
 
   int consAverageTime; // time required in the consumption process; fake lag
-  int nConsumerCycles;
+  int nDynamicCycles;
 
   int localUse(int val);
 
 public:
   dynamicThread(ThreadManager *pSchedSup) : pSchedSupport(pSchedSup) {
-    pProducerOwned_TransfBuffer = NULL;
-    nConsumerCycles = 0;
+    pKinematicOwned_TransfBuffer = NULL;
+    nDynamicCycles = 0;
     consAverageTime = 0;
   }
   ~dynamicThread() {}
 
-  void setConsumerAverageTime(int val) { consAverageTime = val; }
-  void setDestinationBuffer(int *pPB) { pProducerOwned_TransfBuffer = pPB; }
-  void setNConsumerCycles(int val) { nConsumerCycles = val; }
+  void setDynamicAverageTime(int val) { consAverageTime = val; }
+  void setDestinationBuffer(int *pPB) { pKinematicOwned_TransfBuffer = pPB; }
+  void setNDynamicCycles(int val) { nDynamicCycles = val; }
   int *pDestinationBuffer() { return transferBuffer; }
   void operator()();
 };
@@ -129,9 +130,9 @@ protected:
   std::vector<float, cudallocator<float>> offsetZ;
 
   int updateFreq = 1;
-  int timeConsumerSide = 1;
-  int timeProducerSide = 1;
-  int nConsumerCycles = 1;
+  int timeDynamicSide = 1;
+  int timeKinematicSide = 1;
+  int nDynamicCycles = 1;
 
   ThreadManager *dTkT_InteractionManager;
 };
