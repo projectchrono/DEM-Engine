@@ -34,3 +34,8 @@ target_sources(
 	PRIVATE ${granular_sources}
 )
 
+set_target_properties(
+	granular PROPERTIES
+	POSITION_INDEPENDENT_CODE True
+)
+
