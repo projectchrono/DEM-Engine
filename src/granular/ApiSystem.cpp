@@ -15,6 +15,16 @@ SGPS_api::~SGPS_api() {
     delete m_sys;
 }
 
+unsigned int SGPS_api::LoadClumpType(std::vector<float> sp_radii,
+                                     std::vector<float> sp_location_x,
+                                     std::vector<float> sp_location_y,
+                                     std::vector<float> sp_location_z,
+                                     std::vector<float> sp_density) {
+    m_clumps_sp_radii.push_back(sp_radii);
+
+    return m_clumps_sp_radii.size() - 1;
+}
+
 void SGPS_api::LaunchThreads() {
     m_sys->LaunchThreads();
 }

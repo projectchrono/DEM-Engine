@@ -134,7 +134,8 @@ void dynamicThread::operator()() {
         // dynamic wrapped up one cycle
         pSchedSupport->currentStampOfDynamic++;
 
-        // check if we need to wait; i.e., if dynamic drifted too much into future
+        // check if we need to wait; i.e., if dynamic drifted too much into future, then we must wait a bit before the
+        // next cycle begins
         if (pSchedSupport->dynamicShouldWait()) {
             // wait for a signal from the kinematic to indicate that
             // the kinematic has caught up
