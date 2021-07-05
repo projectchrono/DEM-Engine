@@ -18,13 +18,13 @@ SGPS_impl::SGPS_impl(float rad) : sphereUU(rad) {
     kT = new kinematicThread(dTkT_InteractionManager);
     dT = new dynamicThread(dTkT_InteractionManager);
 
-    int* pBuffer = kT->pDestinationBuffer();
-    dT->setDestinationBuffer(pBuffer);
+    voxelID_ts* pBuffer = kT->pBuffer_voxelID();
+    dT->setDestinationBuffer_voxelID(pBuffer);
     dT->setDynamicAverageTime(timeDynamicSide);
     dT->setNDynamicCycles(nDynamicCycles);
 
-    pBuffer = dT->pDestinationBuffer();
-    kT->setDestinationBuffer(pBuffer);
+    pBuffer = dT->pBuffer_voxelID();
+    kT->setDestinationBuffer_voxelID(pBuffer);
     kT->primeDynamic();
     kT->setKinematicAverageTime(timeKinematicSide);
 
@@ -49,19 +49,7 @@ int SGPS_impl::LaunchThreads() {
     dThread.join();
     kThread.join();
 
-    return 0;    
-}
-
-void kinematicThread::primeDynamic() {
-    // produce produce to prime the pipeline
-    for (int j = 0; j < N_INPUT_ITEMS; j++) {
-        product[j] += this->costlyProductionStep(j);
-    }
-
-    // transfer produce to dynamic buffer
-    memcpy(pDynamicOwned_TransfBuffer, product, N_INPUT_ITEMS * sizeof(int));
-    pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = true;
-    pSchedSupport->schedulingStats.nDynamicUpdates++;
+    return 0;
 }
 
 int kinematicThread::costlyProductionStep(int val) const {

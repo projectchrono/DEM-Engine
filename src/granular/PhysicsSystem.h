@@ -19,24 +19,36 @@ class kinematicThread {
     ThreadManager* pSchedSupport;
     // this is where the dynamic thread stores data that needs to be produced
     // herein
-    int* pDynamicOwned_TransfBuffer;
-    int product[N_MANUFACTURED_ITEMS] = {1, 2, 3};
-    int transferBuffer[N_INPUT_ITEMS] = {0, 0, 0, 0};
-    int inputData[N_INPUT_ITEMS];
+    voxelID_ts* pDynamicOwnedBuffer_voxelID;
     int kinematicAverageTime;
     int costlyProductionStep(int) const;
     int device_id;
 
+    // Buffer arrays for storing info from the dT side.
+    // dT modifies these arrays; kT uses them only.
+
+    // buffer array for voxelID
+    std::vector<voxelID_ts, ManagedAllocator<voxelID_ts>> transferBuffer_voxelID;
+
+    // The voxel ID (split into 3 parts, representing XYZ location)
+    std::vector<voxelID_ts, ManagedAllocator<voxelID_ts>> voxelID;
+
   public:
     kinematicThread(ThreadManager* pSchedSup) : pSchedSupport(pSchedSup) {
         kinematicAverageTime = 0;
-        pDynamicOwned_TransfBuffer = NULL;
+        pDynamicOwnedBuffer_voxelID = NULL;
+
+        transferBuffer_voxelID.resize(N_MANUFACTURED_ITEMS, 0);
+        voxelID.resize(N_MANUFACTURED_ITEMS, 1);
     }
     ~kinematicThread() {}
 
     void setKinematicAverageTime(int val) { kinematicAverageTime = val; }
-    void setDestinationBuffer(int* pCB) { pDynamicOwned_TransfBuffer = pCB; }
-    int* pDestinationBuffer() { return transferBuffer; }
+
+    // buffer exchange methods
+    void setDestinationBuffer_voxelID(voxelID_ts* pCB) { pDynamicOwnedBuffer_voxelID = pCB; }
+    voxelID_ts* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
+
     void primeDynamic();
     void operator()();
 };
@@ -46,13 +58,16 @@ class dynamicThread {
     ThreadManager* pSchedSupport;
     // pointer to remote buffer where kinematic thread stores work-order data
     // provided by the dynamic thread
-    int* pKinematicOwned_TransfBuffer;
-    int transferBuffer[N_MANUFACTURED_ITEMS] = {0, 0, 0};
-    int outcome[N_INPUT_ITEMS];
-    int input4Kinematic[N_INPUT_ITEMS] = {-1, -2, -3, -4};
+    voxelID_ts* pKinematicOwnedBuffer_voxelID;
 
     int dynamicAverageTime;  // time required in the consumption process; fake lag
     int nDynamicCycles;
+
+    // Buffer arrays for storing info from the dT side.
+    // dT modifies these arrays; kT uses them only.
+
+    // buffer array for voxelID
+    std::vector<voxelID_ts, ManagedAllocator<voxelID_ts>> transferBuffer_voxelID;
 
     // Pointers to dynamics-related arrays
     struct SysState {
@@ -112,16 +127,22 @@ class dynamicThread {
 
   public:
     dynamicThread(ThreadManager* pSchedSup) : pSchedSupport(pSchedSup) {
-        pKinematicOwned_TransfBuffer = NULL;
+        pKinematicOwnedBuffer_voxelID = NULL;
         nDynamicCycles = 0;
         dynamicAverageTime = 0;
+
+        transferBuffer_voxelID.resize(N_MANUFACTURED_ITEMS, 0);
+        voxelID.resize(N_MANUFACTURED_ITEMS, 0);
     }
     ~dynamicThread() {}
 
     void setDynamicAverageTime(int val) { dynamicAverageTime = val; }
-    void setDestinationBuffer(int* pPB) { pKinematicOwned_TransfBuffer = pPB; }
     void setNDynamicCycles(int val) { nDynamicCycles = val; }
-    int* pDestinationBuffer() { return transferBuffer; }
+
+    // buffer exchange methods
+    void setDestinationBuffer_voxelID(voxelID_ts* pPB) { pKinematicOwnedBuffer_voxelID = pPB; }
+    voxelID_ts* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
+
     void operator()();
 };
 
