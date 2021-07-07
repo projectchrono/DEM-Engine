@@ -10,8 +10,15 @@ namespace sgps {
 __global__ void dynamicTestKernel() {
     printf("Dynamic run\n");
 }
-__global__ void kinematicTestKernel() {
-    printf("Kinematic run\n");
+__global__ void kinematicTestKernel(voxelID_ts* data) {
+    if (threadIdx.x == 0) {
+        printf("Kinematic run\n");
+    }
+
+    if (threadIdx.x < N_INPUT_ITEMS) {
+        data[threadIdx.x] = 2 * data[threadIdx.x] + 1;
+        printf("%d\n", data[threadIdx.x]);
+    }
 }
 
 void kinematicThread::operator()() {
@@ -36,18 +43,22 @@ void kinematicThread::operator()() {
             }
         }
 
-        int totGPU;
-        cudaGetDeviceCount(&totGPU);
-        printf("Total device: %d\n", totGPU);
-
-        /* Currently do nothing
-        // cudaSetDevice(this->device_id);
-        // auto kinematicStreams = gpuManager->getStreamsFromDevice(device_id);
+        cudaSetDevice(this->device_id);
+        // auto kinematicStreams = m_sys->gpuManager->getStreamsFromDevice(device_id);
 
         // figure out the amount of shared mem
         // cudaDeviceGetAttribute.cudaDevAttrMaxSharedMemoryPerBlock
 
         // produce something here; fake stuff for now
+        // cudaStream_t currentStream;
+        // cudaStreamCreate(&currentStream);
+        void* args[] = {(void*)(voxelID.data())};
+        // cudaLaunchKernel((void*)&kinematicTestKernel, dim3(1), dim3(N_INPUT_ITEMS), args);
+        kinematicTestKernel<<<1, 4>>>(voxelID.data());
+        cudaDeviceSynchronize();
+        // cudaStreamDestroy(currentStream);
+
+        /* for reference staff
         for (int j = 0; j < N_MANUFACTURED_ITEMS; j++) {
             // kinematicTestKernel<<<1, 1, 0, kinematicStreams.at(0)>>>();
 
@@ -135,9 +146,6 @@ void dynamicThread::operator()() {
         printf("Total device: %d\n", totGPU);
 
         std::cout << "Dynamic side values. Cycle: " << cycle << std::endl;
-        for (int j = 0; j < N_MANUFACTURED_ITEMS; j++) {
-            std::cout << voxelID.at(j) << std::endl;
-        }
 
         // dynamic wrapped up one cycle
         pSchedSupport->currentStampOfDynamic++;

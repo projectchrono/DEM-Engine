@@ -10,6 +10,7 @@
 #include <core/ApiVersion.h>
 #include <core/utils/ManagedAllocator.hpp>
 #include <core/utils/ThreadManager.h>
+#include <core/utils/GpuManager.h>
 #include <granular/GranularDefines.h>
 
 namespace sgps {
@@ -22,7 +23,7 @@ class kinematicThread {
     voxelID_ts* pDynamicOwnedBuffer_voxelID;
     int kinematicAverageTime;
     int costlyProductionStep(int) const;
-    int device_id;
+    int device_id = 0;
 
     // Buffer arrays for storing info from the dT side.
     // dT modifies these arrays; kT uses them only.
@@ -64,7 +65,7 @@ class dynamicThread {
     int nDynamicCycles;
 
     // Buffer arrays for storing info from the dT side.
-    // dT modifies these arrays; kT uses them only.
+    // kT modifies these arrays; dT uses them only.
 
     // buffer array for voxelID
     std::vector<voxelID_ts, ManagedAllocator<voxelID_ts>> transferBuffer_voxelID;
@@ -159,12 +160,13 @@ class SGPS_impl {
     int updateFreq = 1;
     int timeDynamicSide = 1;
     int timeKinematicSide = 1;
-    int nDynamicCycles = 1;
+    int nDynamicCycles = 5;
 
     ThreadManager* dTkT_InteractionManager;
     kinematicThread* kT;
     dynamicThread* dT;
 
+    // GpuManager* dTkT_GpuManager;
     int LaunchThreads();
 };
 
