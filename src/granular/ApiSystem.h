@@ -19,32 +19,45 @@ namespace sgps {
 // class dynamicThread;
 // class ThreadManager;
 
-class SGPS_api {
+class SGPS {
   public:
-    SGPS_api(float rad);
-    virtual ~SGPS_api();
+    SGPS(float rad);
+    virtual ~SGPS();
 
-    unsigned int LoadClumpType(std::vector<float> sp_radii,
-                               std::vector<float> sp_location_x,
-                               std::vector<float> sp_location_y,
-                               std::vector<float> sp_location_z,
-                               std::vector<float> sp_density);
+    clumpBodyInertiaOffset_t LoadClumpType(const std::vector<float>& sp_radii,
+                                           const std::vector<float>& sp_locations_x,
+                                           const std::vector<float>& sp_locations_y,
+                                           const std::vector<float>& sp_locations_z,
+                                           const std::vector<materialsOffset_t>& sp_material_ids);
     // TODO: need to overload with (float radii, float3 location, object properties)
 
-    // return the voxel ID of a clump by its numbering
-    voxelID_ts GetClumpVoxelID(unsigned int i) const;
+    // load possible materials into the API-level cache
+    materialsOffset_t LoadMaterialType(float density, float E);
 
-    
+    // return the voxel ID of a clump by its numbering
+    voxelID_t GetClumpVoxelID(unsigned int i) const;
+
     int LaunchThreads();
 
-/*
-  protected:
-    SGPS_api() : m_sys(nullptr) {}
-    SGPS_impl* m_sys;
-*/
+    /*
+      protected:
+        SGPS() : m_sys(nullptr) {}
+        SGPS_impl* m_sys;
+    */
 
   private:
+    // This is the cached material information.
+    // It will be massaged into kernels upon Initialize.
+    struct Material {
+        float density;
+        float E;
+    };
+    std::vector<Material> m_sp_materials;
+
+    // This is the cached clump structure information.
+    // It will be massaged into kernels upon Initialize.
     std::vector<std::vector<float>> m_clumps_sp_radii;
+    std::vector<std::vector<float>> m_clumps_sp_location_x;
 
     float sphereUU;
 

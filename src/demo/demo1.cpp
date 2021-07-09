@@ -11,7 +11,7 @@
 using namespace sgps;
 
 int main() {
-    SGPS_api aa(1.f);
+    SGPS aa(1.f);
 
     aa.LaunchThreads();
 

@@ -12,7 +12,7 @@
 
 namespace sgps {
 
-SGPS_api::SGPS_api(float rad) {
+SGPS::SGPS(float rad) {
     dTkT_InteractionManager = new ThreadManager();
     dTkT_InteractionManager->dynamicRequestedUpdateFrequency = updateFreq;
 
@@ -21,7 +21,7 @@ SGPS_api::SGPS_api(float rad) {
     kT = new kinematicThread(dTkT_InteractionManager, dTkT_GpuManager);
     dT = new dynamicThread(dTkT_InteractionManager, dTkT_GpuManager);
 
-    voxelID_ts* pBuffer = kT->pBuffer_voxelID();
+    voxelID_t* pBuffer = kT->pBuffer_voxelID();
     dT->setDestinationBuffer_voxelID(pBuffer);
     dT->setDynamicAverageTime(timeDynamicSide);
     dT->setNDynamicCycles(nDynamicCycles);
@@ -32,25 +32,34 @@ SGPS_api::SGPS_api(float rad) {
     kT->setKinematicAverageTime(timeKinematicSide);
 }
 
-SGPS_api::~SGPS_api() {
+SGPS::~SGPS() {
     // delete m_sys;
 }
 
-unsigned int SGPS_api::LoadClumpType(std::vector<float> sp_radii,
-                                     std::vector<float> sp_location_x,
-                                     std::vector<float> sp_location_y,
-                                     std::vector<float> sp_location_z,
-                                     std::vector<float> sp_density) {
+materialsOffset_t SGPS::LoadMaterialType(float density, float E) {
+    struct Material a_material;
+    a_material.density = density;
+    a_material.E = E;
+
+    m_sp_materials.push_back(a_material);
+    return m_sp_materials.size() - 1;
+}
+
+clumpBodyInertiaOffset_t SGPS::LoadClumpType(const std::vector<float>& sp_radii,
+                                             const std::vector<float>& sp_locations_x,
+                                             const std::vector<float>& sp_locations_y,
+                                             const std::vector<float>& sp_locations_z,
+                                             const std::vector<materialsOffset_t>& sp_material_ids) {
     m_clumps_sp_radii.push_back(sp_radii);
 
     return m_clumps_sp_radii.size() - 1;
 }
 
-voxelID_ts SGPS_api::GetClumpVoxelID(unsigned int i) const {
+voxelID_t SGPS::GetClumpVoxelID(unsigned int i) const {
     return dT->voxelID.at(i);
 }
 
-int SGPS_api::LaunchThreads() {
+int SGPS::LaunchThreads() {
     // get the threads going
     std::thread kThread(std::ref(*kT));
     std::thread dThread(std::ref(*dT));

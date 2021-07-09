@@ -21,7 +21,7 @@ class kinematicThread {
     GpuManager* pGpuDistributor;
     // this is where the dynamic thread stores data that needs to be produced
     // herein
-    voxelID_ts* pDynamicOwnedBuffer_voxelID;
+    voxelID_t* pDynamicOwnedBuffer_voxelID;
     int kinematicAverageTime;
     int costlyProductionStep(int) const;
     int device_id = 0;
@@ -30,13 +30,13 @@ class kinematicThread {
     // dT modifies these arrays; kT uses them only.
 
     // buffer array for voxelID
-    std::vector<voxelID_ts, ManagedAllocator<voxelID_ts>> transferBuffer_voxelID;
+    std::vector<voxelID_t, ManagedAllocator<voxelID_t>> transferBuffer_voxelID;
 
     // The voxel ID (split into 3 parts, representing XYZ location)
-    std::vector<voxelID_ts, ManagedAllocator<voxelID_ts>> voxelID;
+    std::vector<voxelID_t, ManagedAllocator<voxelID_t>> voxelID;
 
   public:
-    friend class SGPS_api;
+    friend class SGPS;
 
     kinematicThread(ThreadManager* pSchedSup, GpuManager* pGpuDist)
         : pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
@@ -51,8 +51,8 @@ class kinematicThread {
     void setKinematicAverageTime(int val) { kinematicAverageTime = val; }
 
     // buffer exchange methods
-    void setDestinationBuffer_voxelID(voxelID_ts* pCB) { pDynamicOwnedBuffer_voxelID = pCB; }
-    voxelID_ts* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
+    void setDestinationBuffer_voxelID(voxelID_t* pCB) { pDynamicOwnedBuffer_voxelID = pCB; }
+    voxelID_t* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
 
     void primeDynamic();
     void operator()();
@@ -64,7 +64,7 @@ class dynamicThread {
     GpuManager* pGpuDistributor;
     // pointer to remote buffer where kinematic thread stores work-order data
     // provided by the dynamic thread
-    voxelID_ts* pKinematicOwnedBuffer_voxelID;
+    voxelID_t* pKinematicOwnedBuffer_voxelID;
 
     int dynamicAverageTime;  // time required in the consumption process; fake lag
     int nDynamicCycles;
@@ -73,7 +73,7 @@ class dynamicThread {
     // kT modifies these arrays; dT uses them only.
 
     // buffer array for voxelID
-    std::vector<voxelID_ts, ManagedAllocator<voxelID_ts>> transferBuffer_voxelID;
+    std::vector<voxelID_t, ManagedAllocator<voxelID_t>> transferBuffer_voxelID;
 
     // Pointers to dynamics-related arrays
     struct SysState {
@@ -91,7 +91,7 @@ class dynamicThread {
     std::vector<float, ManagedAllocator<float>> mmiZZ;
 
     // The voxel ID (split into 3 parts, representing XYZ location)
-    std::vector<voxelID_ts, ManagedAllocator<voxelID_ts>> voxelID;
+    std::vector<voxelID_t, ManagedAllocator<voxelID_t>> voxelID;
 
     // The XYZ local location inside a voxel
     std::vector<unsigned int, ManagedAllocator<unsigned int>> locX;
@@ -119,10 +119,10 @@ class dynamicThread {
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> bodyID;
 
     // The ID that maps this sphere's radius
-    std::vector<radiusIndex_t, ManagedAllocator<radiusIndex_t>> radiusID;
+    std::vector<distinctSphereRadiiOffset_t, ManagedAllocator<distinctSphereRadiiOffset_t>> radiusID;
 
     // The ID that maps this sphere's material
-    std::vector<materialIndex_t, ManagedAllocator<materialIndex_t>> materialID;
+    std::vector<materialsOffset_t, ManagedAllocator<materialsOffset_t>> materialID;
 
     // The location of the sphere, relative to the LRF of the body it belongs to
     std::vector<float, ManagedAllocator<float>> offsetX;
@@ -132,7 +132,7 @@ class dynamicThread {
     int localUse(int val);
 
   public:
-    friend class SGPS_api;
+    friend class SGPS;
 
     dynamicThread(ThreadManager* pSchedSup, GpuManager* pGpuDist)
         : pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
@@ -149,8 +149,8 @@ class dynamicThread {
     void setNDynamicCycles(int val) { nDynamicCycles = val; }
 
     // buffer exchange methods
-    void setDestinationBuffer_voxelID(voxelID_ts* pPB) { pKinematicOwnedBuffer_voxelID = pPB; }
-    voxelID_ts* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
+    void setDestinationBuffer_voxelID(voxelID_t* pPB) { pKinematicOwnedBuffer_voxelID = pPB; }
+    voxelID_t* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
 
     void operator()();
 };
