@@ -15,5 +15,8 @@ int main() {
     printf("Constructed!\n");
 
     aa.LaunchThreads();
+
+    std::cout << aa.GetClumpVoxelID(0) << std::endl;
+
     return 0;
 }

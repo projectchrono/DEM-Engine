@@ -16,7 +16,7 @@
 namespace sgps {
 
 class kinematicThread {
-  private:
+  protected:
     ThreadManager* pSchedSupport;
     // this is where the dynamic thread stores data that needs to be produced
     // herein
@@ -35,6 +35,8 @@ class kinematicThread {
     std::vector<voxelID_ts, ManagedAllocator<voxelID_ts>> voxelID;
 
   public:
+    friend class SGPS_api;
+
     kinematicThread(ThreadManager* pSchedSup) : pSchedSupport(pSchedSup) {
         kinematicAverageTime = 0;
         pDynamicOwnedBuffer_voxelID = NULL;
@@ -55,7 +57,7 @@ class kinematicThread {
 };
 
 class dynamicThread {
-  private:
+  protected:
     ThreadManager* pSchedSupport;
     // pointer to remote buffer where kinematic thread stores work-order data
     // provided by the dynamic thread
@@ -127,6 +129,8 @@ class dynamicThread {
     int localUse(int val);
 
   public:
+    friend class SGPS_api;
+
     dynamicThread(ThreadManager* pSchedSup) : pSchedSupport(pSchedSup) {
         pKinematicOwnedBuffer_voxelID = NULL;
         nDynamicCycles = 0;
@@ -145,29 +149,6 @@ class dynamicThread {
     voxelID_ts* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
 
     void operator()();
-};
-
-class SGPS_impl {
-  public:
-    virtual ~SGPS_impl();
-    friend class SGPS_api;
-
-  protected:
-    SGPS_impl() = delete;
-    SGPS_impl(float sphere_rad);
-    float sphereUU;
-
-    int updateFreq = 1;
-    int timeDynamicSide = 1;
-    int timeKinematicSide = 1;
-    int nDynamicCycles = 5;
-
-    ThreadManager* dTkT_InteractionManager;
-    kinematicThread* kT;
-    dynamicThread* dT;
-
-    // GpuManager* dTkT_GpuManager;
-    int LaunchThreads();
 };
 
 }  // namespace sgps

@@ -17,7 +17,7 @@ __global__ void kinematicTestKernel(voxelID_ts* data) {
 
     if (threadIdx.x < N_INPUT_ITEMS) {
         data[threadIdx.x] = 2 * data[threadIdx.x] + 1;
-        printf("%d\n", data[threadIdx.x]);
+        // printf("%d\n", data[threadIdx.x]);
     }
 }
 
