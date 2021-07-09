@@ -16,10 +16,10 @@ SGPS_api::SGPS_api(float rad) {
     dTkT_InteractionManager = new ThreadManager();
     dTkT_InteractionManager->dynamicRequestedUpdateFrequency = updateFreq;
 
-    // dTkT_GpuManager = new GpuManager(2);
+    dTkT_GpuManager = new GpuManager(2);
 
-    kT = new kinematicThread(dTkT_InteractionManager, NULL);
-    dT = new dynamicThread(dTkT_InteractionManager, NULL);
+    kT = new kinematicThread(dTkT_InteractionManager, dTkT_GpuManager);
+    dT = new dynamicThread(dTkT_InteractionManager, dTkT_GpuManager);
 
     voxelID_ts* pBuffer = kT->pBuffer_voxelID();
     dT->setDestinationBuffer_voxelID(pBuffer);

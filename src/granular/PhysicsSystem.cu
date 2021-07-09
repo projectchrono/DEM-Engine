@@ -44,7 +44,7 @@ void kinematicThread::operator()() {
         }
 
         cudaSetDevice(this->device_id);
-        // auto kinematicStreams = pGpuDistributor->getStreamsFromDevice(this->device_id);
+        auto kinematicStreams = pGpuDistributor->getStreamsFromDevice(this->device_id);
 
         // figure out the amount of shared mem
         // cudaDeviceGetAttribute.cudaDevAttrMaxSharedMemoryPerBlock
@@ -54,7 +54,7 @@ void kinematicThread::operator()() {
         // cudaStreamCreate(&currentStream);
         void* args[] = {(void*)(voxelID.data())};
         // cudaLaunchKernel((void*)&kinematicTestKernel, dim3(1), dim3(N_INPUT_ITEMS), args);
-        kinematicTestKernel<<<1, 4>>>(voxelID.data());
+        kinematicTestKernel<<<1, 4, 0, kinematicStreams.at(0)>>>(voxelID.data());
         cudaDeviceSynchronize();
         // cudaStreamDestroy(currentStream);
 

@@ -9,14 +9,14 @@ GpuManager::GpuManager(unsigned int total_streams) {
     this->streams.resize(ndevices);
 
     for (unsigned int current_device = 0; total_streams > 0; total_streams--, current_device++) {
+        if (current_device >= ndevices) {
+            current_device = 0;
+        }
+
         cudaStream_t new_stream;
         cudaStreamCreate(&new_stream);
 
         this->streams[current_device].push_back(new_stream);
-
-        if (current_device >= ndevices) {
-            current_device = 0;
-        }
     }
 }
 
