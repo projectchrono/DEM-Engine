@@ -44,7 +44,7 @@ void kinematicThread::operator()() {
         }
 
         cudaSetDevice(this->device_id);
-        // auto kinematicStreams = m_sys->gpuManager->getStreamsFromDevice(device_id);
+        // auto kinematicStreams = pGpuDistributor->getStreamsFromDevice(this->device_id);
 
         // figure out the amount of shared mem
         // cudaDeviceGetAttribute.cudaDevAttrMaxSharedMemoryPerBlock

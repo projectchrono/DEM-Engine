@@ -18,6 +18,7 @@ namespace sgps {
 class kinematicThread {
   protected:
     ThreadManager* pSchedSupport;
+    GpuManager* pGpuDistributor;
     // this is where the dynamic thread stores data that needs to be produced
     // herein
     voxelID_ts* pDynamicOwnedBuffer_voxelID;
@@ -37,7 +38,8 @@ class kinematicThread {
   public:
     friend class SGPS_api;
 
-    kinematicThread(ThreadManager* pSchedSup) : pSchedSupport(pSchedSup) {
+    kinematicThread(ThreadManager* pSchedSup, GpuManager* pGpuDist)
+        : pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
         kinematicAverageTime = 0;
         pDynamicOwnedBuffer_voxelID = NULL;
 
@@ -59,6 +61,7 @@ class kinematicThread {
 class dynamicThread {
   protected:
     ThreadManager* pSchedSupport;
+    GpuManager* pGpuDistributor;
     // pointer to remote buffer where kinematic thread stores work-order data
     // provided by the dynamic thread
     voxelID_ts* pKinematicOwnedBuffer_voxelID;
@@ -131,7 +134,8 @@ class dynamicThread {
   public:
     friend class SGPS_api;
 
-    dynamicThread(ThreadManager* pSchedSup) : pSchedSupport(pSchedSup) {
+    dynamicThread(ThreadManager* pSchedSup, GpuManager* pGpuDist)
+        : pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
         pKinematicOwnedBuffer_voxelID = NULL;
         nDynamicCycles = 0;
         dynamicAverageTime = 0;

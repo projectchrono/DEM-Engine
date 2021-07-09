@@ -16,10 +16,10 @@ SGPS_api::SGPS_api(float rad) {
     dTkT_InteractionManager = new ThreadManager();
     dTkT_InteractionManager->dynamicRequestedUpdateFrequency = updateFreq;
 
-    kT = new kinematicThread(dTkT_InteractionManager);
-    dT = new dynamicThread(dTkT_InteractionManager);
+    // dTkT_GpuManager = new GpuManager(2);
 
-    // gpuManager = new GpuManager(1);
+    kT = new kinematicThread(dTkT_InteractionManager, NULL);
+    dT = new dynamicThread(dTkT_InteractionManager, NULL);
 
     voxelID_ts* pBuffer = kT->pBuffer_voxelID();
     dT->setDestinationBuffer_voxelID(pBuffer);
@@ -46,7 +46,7 @@ unsigned int SGPS_api::LoadClumpType(std::vector<float> sp_radii,
     return m_clumps_sp_radii.size() - 1;
 }
 
-voxelID_ts SGPS_api::GetClumpVoxelID(unsigned int i) {
+voxelID_ts SGPS_api::GetClumpVoxelID(unsigned int i) const {
     return dT->voxelID.at(i);
 }
 

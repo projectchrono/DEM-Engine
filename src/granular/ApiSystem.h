@@ -31,10 +31,10 @@ class SGPS_api {
                                std::vector<float> sp_density);
     // TODO: need to overload with (float radii, float3 location, object properties)
 
-    // return the voxel ID of a clump by its number
-    voxelID_ts GetClumpVoxelID(unsigned int i);
+    // return the voxel ID of a clump by its numbering
+    voxelID_ts GetClumpVoxelID(unsigned int i) const;
 
-    // GpuManager* dTkT_GpuManager;
+    
     int LaunchThreads();
 
 /*
@@ -53,6 +53,7 @@ class SGPS_api {
     int timeKinematicSide = 1;
     int nDynamicCycles = 5;
 
+    GpuManager* dTkT_GpuManager;
     ThreadManager* dTkT_InteractionManager;
     kinematicThread* kT;
     dynamicThread* dT;
