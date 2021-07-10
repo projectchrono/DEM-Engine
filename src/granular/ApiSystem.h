@@ -37,6 +37,8 @@ class SGPS {
     // return the voxel ID of a clump by its numbering
     voxelID_t GetClumpVoxelID(unsigned int i) const;
 
+    int Initialize();
+
     int LaunchThreads();
 
     /*
@@ -70,6 +72,8 @@ class SGPS {
     ThreadManager* dTkT_InteractionManager;
     kinematicThread* kT;
     dynamicThread* dT;
+
+    int generateJITResources();
 };
 
 }  // namespace sgps

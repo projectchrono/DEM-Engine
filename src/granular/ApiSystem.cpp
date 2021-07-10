@@ -33,7 +33,10 @@ SGPS::SGPS(float rad) {
 }
 
 SGPS::~SGPS() {
-    // delete m_sys;
+    delete dTkT_InteractionManager;
+    delete dTkT_GpuManager;
+    delete kT;
+    delete dT;
 }
 
 materialsOffset_t SGPS::LoadMaterialType(float density, float E) {
@@ -57,6 +60,16 @@ clumpBodyInertiaOffset_t SGPS::LoadClumpType(const std::vector<float>& sp_radii,
 
 voxelID_t SGPS::GetClumpVoxelID(unsigned int i) const {
     return dT->voxelID.at(i);
+}
+
+int SGPS::generateJITResources() {
+    return 0;
+}
+
+int SGPS::Initialize() {
+    generateJITResources();
+
+    return 0;
 }
 
 int SGPS::LaunchThreads() {

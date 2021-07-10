@@ -1,3 +1,7 @@
+//  Copyright (c) 2021, SBEL GPU Development Team
+//  Copyright (c) 2021, University of Wisconsin - Madison
+//  All rights reserved.
+
 #pragma once
 #include <climits>
 
