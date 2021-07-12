@@ -10,6 +10,7 @@
 #include <core/utils/ManagedAllocator.hpp>
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
+#include <core/utils/Macros.h>
 #include <granular/GranularDefines.h>
 
 namespace sgps {
@@ -24,14 +25,26 @@ class SGPS {
     SGPS(float rad);
     virtual ~SGPS();
 
-    clumpBodyInertiaOffset_t LoadClumpType(const std::vector<float>& sp_radii,
+    // load possible clump types into the API-level cache
+    // return the index of the clump type just loaded
+    clumpBodyInertiaOffset_t LoadClumpType(float mass,
+                                           float moiX,
+                                           float moiY,
+                                           float moiZ,
+                                           const std::vector<float>& sp_radii,
                                            const std::vector<float>& sp_locations_x,
                                            const std::vector<float>& sp_locations_y,
                                            const std::vector<float>& sp_locations_z,
                                            const std::vector<materialsOffset_t>& sp_material_ids);
-    // TODO: need to overload with (float radii, float3 location, object properties)
+    // TODO: need to overload with (vec_float radii, vec_float3 location, vec_sp_material_ids)
+    // TODO: need to overload with (vec_distinctSphereRadiiOffset_t spheres_component_type, vec_float3 location). If
+    // this method is called then corresponding sphere_types must have been defined via LoadSphereType.
+
+    // a simplified version of LoadClumpType: it's just a one-sphere clump
+    clumpBodyInertiaOffset_t LoadClumpSimpleSphere(float mass, float radius, materialsOffset_t material_id);
 
     // load possible materials into the API-level cache
+    // return the index of the material type just loaded
     materialsOffset_t LoadMaterialType(float density, float E);
 
     // return the voxel ID of a clump by its numbering
@@ -58,10 +71,21 @@ class SGPS {
 
     // This is the cached clump structure information.
     // It will be massaged into kernels upon Initialize.
+    std::vector<float> m_clumps_mass;
+    std::vector<float> m_clumps_moiX;
+    std::vector<float> m_clumps_moiY;
+    std::vector<float> m_clumps_moiZ;
     std::vector<std::vector<float>> m_clumps_sp_radii;
     std::vector<std::vector<float>> m_clumps_sp_location_x;
+    std::vector<std::vector<float>> m_clumps_sp_location_y;
+    std::vector<std::vector<float>> m_clumps_sp_location_z;
+    std::vector<std::vector<materialsOffset_t>> m_clumps_sp_material_ids;
 
     float sphereUU;
+
+    unsigned int nDistinctSphereRadii_computed;
+    unsigned int nDistinctSphereRelativePositions_computed;
+    unsigned int nDistinctClumpBodyTopologies_computed;
 
     int updateFreq = 1;
     int timeDynamicSide = 1;

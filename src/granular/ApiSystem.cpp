@@ -48,14 +48,39 @@ materialsOffset_t SGPS::LoadMaterialType(float density, float E) {
     return m_sp_materials.size() - 1;
 }
 
-clumpBodyInertiaOffset_t SGPS::LoadClumpType(const std::vector<float>& sp_radii,
+clumpBodyInertiaOffset_t SGPS::LoadClumpType(float mass,
+                                             float moiX,
+                                             float moiY,
+                                             float moiZ,
+                                             const std::vector<float>& sp_radii,
                                              const std::vector<float>& sp_locations_x,
                                              const std::vector<float>& sp_locations_y,
                                              const std::vector<float>& sp_locations_z,
                                              const std::vector<materialsOffset_t>& sp_material_ids) {
+    auto l = sp_radii.size();
+    if (l != sp_locations_x.size() || l != sp_locations_y.size() || l != sp_locations_z.size() ||
+        l != sp_material_ids.size()) {
+        SGPS_ERROR("Arrays defining a clump type must all have the same length.");
+    }
+
+    m_clumps_mass.push_back(mass);
+    m_clumps_moiX.push_back(moiX);
+    m_clumps_moiY.push_back(moiY);
+    m_clumps_moiZ.push_back(moiZ);
     m_clumps_sp_radii.push_back(sp_radii);
+    m_clumps_sp_location_x.push_back(sp_locations_x);
+    m_clumps_sp_location_y.push_back(sp_locations_y);
+    m_clumps_sp_location_z.push_back(sp_locations_z);
+    m_clumps_sp_material_ids.push_back(sp_material_ids);
 
     return m_clumps_sp_radii.size() - 1;
+}
+
+clumpBodyInertiaOffset_t SGPS::LoadClumpSimpleSphere(float mass, float radius, materialsOffset_t material_id) {
+    float I = 2.0 / 5.0 * mass * radius * radius;
+    return LoadClumpType(mass, I, I, I, std::vector<float>(1, radius), std::vector<float>(1, 0),
+                         std::vector<float>(1, 0), std::vector<float>(1, 0),
+                         std::vector<materialsOffset_t>(1, material_id));
 }
 
 voxelID_t SGPS::GetClumpVoxelID(unsigned int i) const {
@@ -63,10 +88,18 @@ voxelID_t SGPS::GetClumpVoxelID(unsigned int i) const {
 }
 
 int SGPS::generateJITResources() {
+    // Call a subroutine to compile the magic number header.
+
+    // Call a subroutine to compile the kernels needed.
+
     return 0;
 }
 
 int SGPS::Initialize() {
+    // a few error checks first
+    if (m_sp_materials.size() == 0) {
+        SGPS_ERROR("Before initializing the system, at least one material type should be loaded via LoadMaterialType.");
+    }
     generateJITResources();
 
     return 0;

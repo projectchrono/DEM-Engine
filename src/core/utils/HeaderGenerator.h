@@ -5,26 +5,24 @@
 #include <unordered_map>
 
 class HeaderGenerator {
+  public:
+    std::string generateHeader(const std::filesystem::path&){
 
-	public:
-		std::string generateHeader(const std::filesystem::path&) {
-			
-			// read source from file
-			
-			/*
-				for pair in subst
-					replace(source, pair.first, pair.second);
-			*/
-		};
+        // read source from file
 
-		template <typename T>
-		void addSubstitution(std::string& key, T& value) {
-			subst.emplace(key, std::to_string(value));
-		}
+        /*
+            for pair in subst
+                replace(source, pair.first, pair.second);
+        */
+    };
 
+    template <typename T>
+    void addSubstitution(std::string& key, T& value) {
+        subst.emplace(key, std::to_string(value));
+    }
 
-	private:
-		std::unordered_map<std::string, std::string> subst;
+  private:
+    std::unordered_map<std::string, std::string> subst;
 };
 
 #endif
