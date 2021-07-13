@@ -60,7 +60,7 @@ clumpBodyInertiaOffset_t SGPS::LoadClumpType(float mass,
     auto l = sp_radii.size();
     if (l != sp_locations_x.size() || l != sp_locations_y.size() || l != sp_locations_z.size() ||
         l != sp_material_ids.size()) {
-        SGPS_ERROR("Arrays defining a clump type must all have the same length.");
+        SGPS_ERROR("Arrays defining a clump topology type must all have the same length.");
     }
 
     m_clumps_mass.push_back(mass);
@@ -88,9 +88,33 @@ voxelID_t SGPS::GetClumpVoxelID(unsigned int i) const {
 }
 
 int SGPS::generateJITResources() {
-    // Call a subroutine to compile the magic number header.
+    size_t num_clump_types = m_clumps_mass.size();
+    // Put unique clump mass values in a set.
+    m_clumps_mass_types.insert(m_clumps_mass.begin(), m_clumps_mass.end());
+    for (size_t i = 0; i < num_clump_types; i++) {
+        // Put unique sphere radii values in a set.
+        m_clumps_sp_radii_types.insert(m_clumps_sp_radii.at(i).begin(), m_clumps_sp_radii.at(i).end());
+    }
+    // Now rearrange so the original input mass and sphere radii are now stored as the offsets to their respective
+    // uniques sets.
+    for (size_t i = 0; i < num_clump_types; i++) {
+        m_clumps_mass_type_offset.push_back(
+            std::distance(m_clumps_mass_types.begin(), m_clumps_mass_types.find(m_clumps_mass.at(i))));
+        std::vector<distinctSphereRadiiOffset_t> sp_radii_type_offset(m_clumps_sp_radii.at(i).size(), 0);
+        for (size_t j = 0; j < sp_radii_type_offset.size(); j++) {
+            sp_radii_type_offset.at(j) = std::distance(m_clumps_sp_radii_types.begin(),
+                                                       m_clumps_sp_radii_types.find(m_clumps_sp_radii.at(i).at(j)));
+        }
+        m_clumps_sp_radii_type_offset.push_back(sp_radii_type_offset);
+    }
 
-    // Call a subroutine to compile the kernels needed.
+    // Compile the magic number header.
+    nDistinctSphereRadii_computed = m_clumps_sp_radii_types.size();
+    nDistinctClumpBodyTopologies_computed = m_clumps_mass_types.size();
+    // std::cout << nDistinctClumpBodyTopologies_computed << std::endl;
+    // std::cout << nDistinctSphereRadii_computed << std::endl;
+
+    // Compile the kernels needed.
 
     return 0;
 }
@@ -100,6 +124,8 @@ int SGPS::Initialize() {
     if (m_sp_materials.size() == 0) {
         SGPS_ERROR("Before initializing the system, at least one material type should be loaded via LoadMaterialType.");
     }
+
+    // Call the JIT compiler generator to make prep for this simulation.
     generateJITResources();
 
     return 0;

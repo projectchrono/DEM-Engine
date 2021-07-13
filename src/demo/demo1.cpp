@@ -14,11 +14,16 @@ int main() {
     SGPS aa(1.f);
 
     std::vector<float> a_vec(3, 1);
-    std::vector<unsigned char> b_vec(2, 1);
-    std::vector<unsigned char> c_vec(3, 1);
+    std::vector<float> b_vec(3, 2);
+    std::vector<unsigned char> c_vec(3, 0);
 
-    // aa.LoadClumpType(1, 1, 1, 1, a_vec, a_vec, a_vec, a_vec, c_vec);
-    aa.LoadClumpSimpleSphere(1, 1, 1);
+    aa.LoadClumpType(1, 1, 1, 1, a_vec, a_vec, a_vec, a_vec, c_vec);
+    aa.LoadClumpType(2, 2, 2, 2, b_vec, a_vec, b_vec, a_vec, c_vec);
+    // aa.LoadClumpSimpleSphere(1, 1, 0);
+
+    aa.LoadMaterialType(1, 10);
+
+    aa.Initialize();
 
     aa.LaunchThreads();
 

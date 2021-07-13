@@ -5,6 +5,8 @@
 #pragma once
 
 #include <vector>
+#include <set>
+
 #include <core/ApiVersion.h>
 #include <granular/PhysicsSystem.h>
 #include <core/utils/ManagedAllocator.hpp>
@@ -80,6 +82,13 @@ class SGPS {
     std::vector<std::vector<float>> m_clumps_sp_location_y;
     std::vector<std::vector<float>> m_clumps_sp_location_z;
     std::vector<std::vector<materialsOffset_t>> m_clumps_sp_material_ids;
+
+    // unique clump masses derived from m_clumps_mass
+    std::set<float> m_clumps_mass_types;
+    std::vector<clumpBodyInertiaOffset_t> m_clumps_mass_type_offset;
+    // unique sphere radii types derived from m_clumps_sp_radii
+    std::set<float> m_clumps_sp_radii_types;
+    std::vector<std::vector<distinctSphereRadiiOffset_t>> m_clumps_sp_radii_type_offset;
 
     float sphereUU;
 
