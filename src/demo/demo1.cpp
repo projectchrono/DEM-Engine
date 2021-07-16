@@ -13,6 +13,8 @@ using namespace sgps;
 int main() {
     SGPS aa(1.f);
 
+    float3 relative_pos = make_float3(1,0,0);
+
     std::vector<float> a_vec(3, 1);
     std::vector<float> b_vec(3, 2);
     std::vector<unsigned int> c_vec(3, 0);

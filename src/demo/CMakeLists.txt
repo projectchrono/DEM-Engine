@@ -28,11 +28,9 @@ FOREACH(PROGRAM ${DEMOS})
 
 		add_executable(${PROGRAM}  "${PROGRAM}.cpp")
 		
-		source_group(""  FILES "${PROGRAM}.cpp")
+		source_group("" FILES "${PROGRAM}.cpp")
 		
-		target_include_directories(${PROGRAM} PUBLIC ${ProjectIncludeRoot})
 		target_link_libraries(${PROGRAM} PUBLIC ${LIBRARIES})
-		
 
 		add_dependencies(${PROGRAM} ${LIBRARIES})
 

@@ -113,6 +113,7 @@ int SGPS::generateJITResources() {
     // Compile the magic number header.
     nDistinctSphereRadii_computed = m_clumps_sp_radii_types.size();
     nDistinctClumpBodyTopologies_computed = m_clumps_mass_types.size();
+    nMatTuples_computed = m_sp_materials.size();
     // std::cout << nDistinctClumpBodyTopologies_computed << std::endl;
     // std::cout << nDistinctSphereRadii_computed << std::endl;
 
