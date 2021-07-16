@@ -9,11 +9,12 @@ namespace sgps {
 #define N_MANUFACTURED_ITEMS 4
 #define N_INPUT_ITEMS 4
 
-typedef unsigned int voxelID_t_default;
-typedef unsigned int bodyID_t_default;
-typedef unsigned int distinctSphereRadiiOffset_t_default;
-typedef unsigned int materialsOffset_t_default;
-typedef unsigned int clumpBodyInertiaOffset_t_default;
+typedef unsigned int voxelID_default_t;
+typedef unsigned int bodyID_default_t;
+typedef unsigned int distinctSphereRadiiOffset_default_t;
+typedef unsigned int materialsOffset_default_t;
+typedef unsigned int clumpBodyInertiaOffset_default_t;
+typedef unsigned int distinctSphereRelativePositions_t;
 
 // somehow add array materialsArray and radiiArray??
 

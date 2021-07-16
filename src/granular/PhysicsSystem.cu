@@ -14,7 +14,7 @@ namespace sgps {
 __global__ void dynamicTestKernel() {
     printf("Dynamic run\n");
 }
-__global__ void kinematicTestKernel(voxelID_t_default* data) {
+__global__ void kinematicTestKernel(voxelID_default_t* data) {
     if (threadIdx.x == 0) {
         printf("Kinematic run\n");
     }
@@ -42,7 +42,7 @@ void kinematicThread::operator()() {
             {
                 // acquire lock and supply the dynamic with fresh produce
                 std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
-                cudaMemcpy(voxelID.data(), transferBuffer_voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_t_default),
+                cudaMemcpy(voxelID.data(), transferBuffer_voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_default_t),
                            cudaMemcpyDeviceToDevice);
             }
         }
@@ -57,7 +57,7 @@ void kinematicThread::operator()() {
         // cudaStream_t currentStream;
         // cudaStreamCreate(&currentStream);
         void* args[] = {(void*)(voxelID.data())};
-        // cudaLaunchKernel((void*)&kinematicTestKernel, dim3(1), dim3(N_INPUT_ITEMS), args);
+        // cudaLaunchKernel((void*)&kinematicTestKernel, dim3(1), dim3(N_INPUT_ITEMS), args, 0, kinematicStreams.at(0));
         kinematicTestKernel<<<1, 4, 0, kinematicStreams.at(0)>>>(voxelID.data());
         cudaDeviceSynchronize();
         // cudaStreamDestroy(currentStream);
@@ -86,7 +86,7 @@ void kinematicThread::operator()() {
         {
             // acquire lock and supply the dynamic with fresh produce
             std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
-            cudaMemcpy(pDynamicOwnedBuffer_voxelID, voxelID.data(), N_MANUFACTURED_ITEMS * sizeof(voxelID_t_default),
+            cudaMemcpy(pDynamicOwnedBuffer_voxelID, voxelID.data(), N_MANUFACTURED_ITEMS * sizeof(voxelID_default_t),
                        cudaMemcpyDeviceToDevice);
         }
         pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = true;
@@ -112,7 +112,7 @@ void dynamicThread::operator()() {
                 // buffer
                 std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
                 cudaMemcpy(voxelID.data(), transferBuffer_voxelID.data(),
-                           N_MANUFACTURED_ITEMS * sizeof(voxelID_t_default), cudaMemcpyDeviceToDevice);
+                           N_MANUFACTURED_ITEMS * sizeof(voxelID_default_t), cudaMemcpyDeviceToDevice);
             }
             pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
             pSchedSupport->stampLastUpdateOfDynamic = cycle;
@@ -129,7 +129,7 @@ void dynamicThread::operator()() {
             // acquire lock and refresh the work order for the kinematic
             {
                 std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
-                cudaMemcpy(pKinematicOwnedBuffer_voxelID, voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_t_default),
+                cudaMemcpy(pKinematicOwnedBuffer_voxelID, voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_default_t),
                            cudaMemcpyDeviceToDevice);
             }
             pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
@@ -178,7 +178,7 @@ int dynamicThread::localUse(int val) {
 
 void kinematicThread::primeDynamic() {
     // transfer produce to dynamic buffer
-    cudaMemcpy(pDynamicOwnedBuffer_voxelID, voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_t_default),
+    cudaMemcpy(pDynamicOwnedBuffer_voxelID, voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_default_t),
                cudaMemcpyDeviceToDevice);
     pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = true;
     pSchedSupport->schedulingStats.nDynamicUpdates++;
