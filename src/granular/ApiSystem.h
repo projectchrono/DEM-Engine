@@ -29,28 +29,30 @@ class SGPS {
 
     // load possible clump types into the API-level cache
     // return the index of the clump type just loaded
-    clumpBodyInertiaOffset_t LoadClumpType(float mass,
-                                           float moiX,
-                                           float moiY,
-                                           float moiZ,
-                                           const std::vector<float>& sp_radii,
-                                           const std::vector<float>& sp_locations_x,
-                                           const std::vector<float>& sp_locations_y,
-                                           const std::vector<float>& sp_locations_z,
-                                           const std::vector<materialsOffset_t>& sp_material_ids);
+    clumpBodyInertiaOffset_t_default LoadClumpType(float mass,
+                                                   float moiX,
+                                                   float moiY,
+                                                   float moiZ,
+                                                   const std::vector<float>& sp_radii,
+                                                   const std::vector<float>& sp_locations_x,
+                                                   const std::vector<float>& sp_locations_y,
+                                                   const std::vector<float>& sp_locations_z,
+                                                   const std::vector<materialsOffset_t_default>& sp_material_ids);
     // TODO: need to overload with (vec_float radii, vec_float3 location, vec_sp_material_ids)
-    // TODO: need to overload with (vec_distinctSphereRadiiOffset_t spheres_component_type, vec_float3 location). If
-    // this method is called then corresponding sphere_types must have been defined via LoadSphereType.
+    // TODO: need to overload with (vec_distinctSphereRadiiOffset_t_default spheres_component_type, vec_float3
+    // location). If this method is called then corresponding sphere_types must have been defined via LoadSphereType.
 
     // a simplified version of LoadClumpType: it's just a one-sphere clump
-    clumpBodyInertiaOffset_t LoadClumpSimpleSphere(float mass, float radius, materialsOffset_t material_id);
+    clumpBodyInertiaOffset_t_default LoadClumpSimpleSphere(float mass,
+                                                           float radius,
+                                                           materialsOffset_t_default material_id);
 
     // load possible materials into the API-level cache
     // return the index of the material type just loaded
-    materialsOffset_t LoadMaterialType(float density, float E);
+    materialsOffset_t_default LoadMaterialType(float density, float E);
 
     // return the voxel ID of a clump by its numbering
-    voxelID_t GetClumpVoxelID(unsigned int i) const;
+    voxelID_t_default GetClumpVoxelID(unsigned int i) const;
 
     int Initialize();
 
@@ -81,14 +83,14 @@ class SGPS {
     std::vector<std::vector<float>> m_clumps_sp_location_x;
     std::vector<std::vector<float>> m_clumps_sp_location_y;
     std::vector<std::vector<float>> m_clumps_sp_location_z;
-    std::vector<std::vector<materialsOffset_t>> m_clumps_sp_material_ids;
+    std::vector<std::vector<materialsOffset_t_default>> m_clumps_sp_material_ids;
 
     // unique clump masses derived from m_clumps_mass
     std::set<float> m_clumps_mass_types;
-    std::vector<clumpBodyInertiaOffset_t> m_clumps_mass_type_offset;
+    std::vector<clumpBodyInertiaOffset_t_default> m_clumps_mass_type_offset;
     // unique sphere radii types derived from m_clumps_sp_radii
     std::set<float> m_clumps_sp_radii_types;
-    std::vector<std::vector<distinctSphereRadiiOffset_t>> m_clumps_sp_radii_type_offset;
+    std::vector<std::vector<distinctSphereRadiiOffset_t_default>> m_clumps_sp_radii_type_offset;
 
     float sphereUU;
 

@@ -21,7 +21,7 @@ SGPS::SGPS(float rad) {
     kT = new kinematicThread(dTkT_InteractionManager, dTkT_GpuManager);
     dT = new dynamicThread(dTkT_InteractionManager, dTkT_GpuManager);
 
-    voxelID_t* pBuffer = kT->pBuffer_voxelID();
+    voxelID_t_default* pBuffer = kT->pBuffer_voxelID();
     dT->setDestinationBuffer_voxelID(pBuffer);
     dT->setDynamicAverageTime(timeDynamicSide);
     dT->setNDynamicCycles(nDynamicCycles);
@@ -39,7 +39,7 @@ SGPS::~SGPS() {
     delete dT;
 }
 
-materialsOffset_t SGPS::LoadMaterialType(float density, float E) {
+materialsOffset_t_default SGPS::LoadMaterialType(float density, float E) {
     struct Material a_material;
     a_material.density = density;
     a_material.E = E;
@@ -48,15 +48,15 @@ materialsOffset_t SGPS::LoadMaterialType(float density, float E) {
     return m_sp_materials.size() - 1;
 }
 
-clumpBodyInertiaOffset_t SGPS::LoadClumpType(float mass,
-                                             float moiX,
-                                             float moiY,
-                                             float moiZ,
-                                             const std::vector<float>& sp_radii,
-                                             const std::vector<float>& sp_locations_x,
-                                             const std::vector<float>& sp_locations_y,
-                                             const std::vector<float>& sp_locations_z,
-                                             const std::vector<materialsOffset_t>& sp_material_ids) {
+clumpBodyInertiaOffset_t_default SGPS::LoadClumpType(float mass,
+                                                     float moiX,
+                                                     float moiY,
+                                                     float moiZ,
+                                                     const std::vector<float>& sp_radii,
+                                                     const std::vector<float>& sp_locations_x,
+                                                     const std::vector<float>& sp_locations_y,
+                                                     const std::vector<float>& sp_locations_z,
+                                                     const std::vector<materialsOffset_t_default>& sp_material_ids) {
     auto l = sp_radii.size();
     if (l != sp_locations_x.size() || l != sp_locations_y.size() || l != sp_locations_z.size() ||
         l != sp_material_ids.size()) {
@@ -76,14 +76,16 @@ clumpBodyInertiaOffset_t SGPS::LoadClumpType(float mass,
     return m_clumps_sp_radii.size() - 1;
 }
 
-clumpBodyInertiaOffset_t SGPS::LoadClumpSimpleSphere(float mass, float radius, materialsOffset_t material_id) {
+clumpBodyInertiaOffset_t_default SGPS::LoadClumpSimpleSphere(float mass,
+                                                             float radius,
+                                                             materialsOffset_t_default material_id) {
     float I = 2.0 / 5.0 * mass * radius * radius;
     return LoadClumpType(mass, I, I, I, std::vector<float>(1, radius), std::vector<float>(1, 0),
                          std::vector<float>(1, 0), std::vector<float>(1, 0),
-                         std::vector<materialsOffset_t>(1, material_id));
+                         std::vector<materialsOffset_t_default>(1, material_id));
 }
 
-voxelID_t SGPS::GetClumpVoxelID(unsigned int i) const {
+voxelID_t_default SGPS::GetClumpVoxelID(unsigned int i) const {
     return dT->voxelID.at(i);
 }
 
@@ -100,7 +102,7 @@ int SGPS::generateJITResources() {
     for (size_t i = 0; i < num_clump_types; i++) {
         m_clumps_mass_type_offset.push_back(
             std::distance(m_clumps_mass_types.begin(), m_clumps_mass_types.find(m_clumps_mass.at(i))));
-        std::vector<distinctSphereRadiiOffset_t> sp_radii_type_offset(m_clumps_sp_radii.at(i).size(), 0);
+        std::vector<distinctSphereRadiiOffset_t_default> sp_radii_type_offset(m_clumps_sp_radii.at(i).size(), 0);
         for (size_t j = 0; j < sp_radii_type_offset.size(); j++) {
             sp_radii_type_offset.at(j) = std::distance(m_clumps_sp_radii_types.begin(),
                                                        m_clumps_sp_radii_types.find(m_clumps_sp_radii.at(i).at(j)));

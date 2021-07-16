@@ -15,11 +15,11 @@ int main() {
 
     std::vector<float> a_vec(3, 1);
     std::vector<float> b_vec(3, 2);
-    std::vector<unsigned char> c_vec(3, 0);
+    std::vector<unsigned int> c_vec(3, 0);
 
     aa.LoadClumpType(1, 1, 1, 1, a_vec, a_vec, a_vec, a_vec, c_vec);
     aa.LoadClumpType(2, 2, 2, 2, b_vec, a_vec, b_vec, a_vec, c_vec);
-    // aa.LoadClumpSimpleSphere(1, 1, 0);
+    aa.LoadClumpSimpleSphere(3, 3, 0);
 
     aa.LoadMaterialType(1, 10);
 
