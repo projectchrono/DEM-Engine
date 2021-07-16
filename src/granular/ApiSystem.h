@@ -7,12 +7,15 @@
 #include <vector>
 #include <set>
 
+
+
 #include <core/ApiVersion.h>
 #include <granular/PhysicsSystem.h>
 #include <core/utils/ManagedAllocator.hpp>
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
 #include <core/utils/Macros.h>
+#include <helper_math.h>
 #include <granular/GranularDefines.h>
 
 namespace sgps {
@@ -27,8 +30,11 @@ class SGPS {
     SGPS(float rad);
     virtual ~SGPS();
 
-    // load possible clump types into the API-level cache
-    // return the index of the clump type just loaded
+    // 
+    int InstructBoxDomainDimension(float x, float y, float z);
+
+    // Load possible clump types into the API-level cache.
+    // Return the index of the clump type just loaded.
     clumpBodyInertiaOffset_default_t LoadClumpType(float mass,
                                                    float moiX,
                                                    float moiY,
@@ -47,11 +53,11 @@ class SGPS {
                                                            float radius,
                                                            materialsOffset_default_t material_id);
 
-    // load possible materials into the API-level cache
-    // return the index of the material type just loaded
+    // Load possible materials into the API-level cache
+    // Return the index of the material type just loaded
     materialsOffset_default_t LoadMaterialType(float density, float E);
 
-    // return the voxel ID of a clump by its numbering
+    // Return the voxel ID of a clump by its numbering
     voxelID_default_t GetClumpVoxelID(unsigned int i) const;
 
     int Initialize();
@@ -97,6 +103,7 @@ class SGPS {
     unsigned int nDistinctSphereRadii_computed;
     unsigned int nDistinctSphereRelativePositions_computed;
     unsigned int nDistinctClumpBodyTopologies_computed;
+    unsigned int nMatTuples_computed;
 
     int updateFreq = 1;
     int timeDynamicSide = 1;

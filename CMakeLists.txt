@@ -47,6 +47,8 @@ find_path(
 
 )
 
+set(NVIDIAMathDir ${CMAKE_CURRENT_LIST_DIR}/thirdparty/nvidia_helper_math)
+
 # ---------------------------------------------------------------------------- #
 # Source-level configuration
 # ---------------------------------------------------------------------------- #
@@ -55,7 +57,7 @@ add_subdirectory(src/core)
 add_subdirectory(src/granular)
 
 # ---------------------------------------------------------------------------- #
-# Final Link Step
+# Final Library Generation
 # ---------------------------------------------------------------------------- #
 
 add_library(
@@ -64,5 +66,15 @@ add_library(
 	$<TARGET_OBJECTS:core>
 	$<TARGET_OBJECTS:granular>
 	)
+
+# Extract include directories from the object bundles
+get_target_property(CORE_INTERFACE core INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(GRANULAR_INTERFACE granular INTERFACE_INCLUDE_DIRECTORIES)
+
+# Attach include directories to the top-level library target
+set_target_properties(sbel_gpu_physics
+	PROPERTIES
+	INTERFACE_INCLUDE_DIRECTORIES "${CORE_INTERFACE} ${GRANULAR_INTERFACE}"
+)
 	
 add_subdirectory(src/demo)

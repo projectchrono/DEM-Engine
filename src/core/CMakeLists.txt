@@ -19,6 +19,7 @@ target_include_directories(
 	core
 	PUBLIC ${ProjectIncludeRoot}
 	PUBLIC ${NVIDIAJitifyPath}
+	PUBLIC ${NVIDIAMathDir}
 )
 
 target_link_libraries(
@@ -33,6 +34,7 @@ set(core_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuManager.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/Macros.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/chpf/particle_writer.hpp
+	${NVIDIAMathDir}/helper_math.h
 )
 
 set(core_sources

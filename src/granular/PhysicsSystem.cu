@@ -56,9 +56,11 @@ void kinematicThread::operator()() {
         // produce something here; fake stuff for now
         // cudaStream_t currentStream;
         // cudaStreamCreate(&currentStream);
-        void* args[] = {(void*)(voxelID.data())};
-        // cudaLaunchKernel((void*)&kinematicTestKernel, dim3(1), dim3(N_INPUT_ITEMS), args, 0, kinematicStreams.at(0));
-        kinematicTestKernel<<<1, 4, 0, kinematicStreams.at(0)>>>(voxelID.data());
+                 
+        auto data_arg = voxelID.data();
+        void* args[] = {(void*)(&data_arg)};
+        cudaLaunchKernel((void*)&kinematicTestKernel, dim3(1), dim3(N_INPUT_ITEMS), args, 0, kinematicStreams.at(0));
+        // kinematicTestKernel<<<1, 4, 0, kinematicStreams.at(0)>>>(voxelID.data());
         cudaDeviceSynchronize();
         // cudaStreamDestroy(currentStream);
 

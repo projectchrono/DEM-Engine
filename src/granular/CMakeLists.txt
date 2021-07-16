@@ -9,6 +9,7 @@ add_library(granular OBJECT)
 target_include_directories(
 	granular
 	PUBLIC ${ProjectIncludeRoot}
+	PUBLIC ${NVIDIAMathDir}
 )
 
 target_link_libraries(
@@ -19,7 +20,8 @@ target_link_libraries(
 set(granular_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/PhysicsSystem.h
 	${CMAKE_CURRENT_SOURCE_DIR}/ApiSystem.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/GranularDefines.h
+	${CMAKE_CURRENT_SOURCE_DIR}/GranularDefines.h
+	${NVIDIAMathDir}/helper_math.h
 )
 
 set(granular_sources
