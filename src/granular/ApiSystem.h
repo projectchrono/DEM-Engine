@@ -7,15 +7,13 @@
 #include <vector>
 #include <set>
 
-
-
 #include <core/ApiVersion.h>
 #include <granular/PhysicsSystem.h>
 #include <core/utils/ManagedAllocator.hpp>
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
 #include <core/utils/Macros.h>
-#include <helper_math.h>
+#include <helper_math.cuh>
 #include <granular/GranularDefines.h>
 
 namespace sgps {
@@ -30,21 +28,16 @@ class SGPS {
     SGPS(float rad);
     virtual ~SGPS();
 
-    // 
+    //
     int InstructBoxDomainDimension(float x, float y, float z);
 
     // Load possible clump types into the API-level cache.
     // Return the index of the clump type just loaded.
     clumpBodyInertiaOffset_default_t LoadClumpType(float mass,
-                                                   float moiX,
-                                                   float moiY,
-                                                   float moiZ,
+                                                   float3 moi,
                                                    const std::vector<float>& sp_radii,
-                                                   const std::vector<float>& sp_locations_x,
-                                                   const std::vector<float>& sp_locations_y,
-                                                   const std::vector<float>& sp_locations_z,
+                                                   const std::vector<float3>& sp_locations_xyz,
                                                    const std::vector<materialsOffset_default_t>& sp_material_ids);
-    // TODO: need to overload with (vec_float radii, vec_float3 location, vec_sp_material_ids)
     // TODO: need to overload with (vec_distinctSphereRadiiOffset_default_t spheres_component_type, vec_float3
     // location). If this method is called then corresponding sphere_types must have been defined via LoadSphereType.
 
@@ -82,13 +75,9 @@ class SGPS {
     // This is the cached clump structure information.
     // It will be massaged into kernels upon Initialize.
     std::vector<float> m_clumps_mass;
-    std::vector<float> m_clumps_moiX;
-    std::vector<float> m_clumps_moiY;
-    std::vector<float> m_clumps_moiZ;
+    std::vector<float3> m_clumps_moi;
     std::vector<std::vector<float>> m_clumps_sp_radii;
-    std::vector<std::vector<float>> m_clumps_sp_location_x;
-    std::vector<std::vector<float>> m_clumps_sp_location_y;
-    std::vector<std::vector<float>> m_clumps_sp_location_z;
+    std::vector<std::vector<float3>> m_clumps_sp_location_xyz;
     std::vector<std::vector<materialsOffset_default_t>> m_clumps_sp_material_ids;
 
     // unique clump masses derived from m_clumps_mass
@@ -97,6 +86,9 @@ class SGPS {
     // unique sphere radii types derived from m_clumps_sp_radii
     std::set<float> m_clumps_sp_radii_types;
     std::vector<std::vector<distinctSphereRadiiOffset_default_t>> m_clumps_sp_radii_type_offset;
+    // unique sphere radii types derived from m_clumps_sp_location_xyz
+    std::set<float3, less_than> m_clumps_sp_location_types;
+    std::vector<std::vector<distinctSphereRadiiOffset_default_t>> m_clumps_sp_location_type_offset;
 
     float sphereUU;
 

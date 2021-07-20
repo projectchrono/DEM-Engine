@@ -49,39 +49,30 @@ materialsOffset_default_t SGPS::LoadMaterialType(float density, float E) {
 }
 
 clumpBodyInertiaOffset_default_t SGPS::LoadClumpType(float mass,
-                                                     float moiX,
-                                                     float moiY,
-                                                     float moiZ,
+                                                     float3 moi,
                                                      const std::vector<float>& sp_radii,
-                                                     const std::vector<float>& sp_locations_x,
-                                                     const std::vector<float>& sp_locations_y,
-                                                     const std::vector<float>& sp_locations_z,
+                                                     const std::vector<float3>& sp_locations_xyz,
                                                      const std::vector<materialsOffset_default_t>& sp_material_ids) {
     auto l = sp_radii.size();
-    if (l != sp_locations_x.size() || l != sp_locations_y.size() || l != sp_locations_z.size() ||
-        l != sp_material_ids.size()) {
+    if (l != sp_locations_xyz.size() || l != sp_material_ids.size()) {
         SGPS_ERROR("Arrays defining a clump topology type must all have the same length.");
     }
 
     m_clumps_mass.push_back(mass);
-    m_clumps_moiX.push_back(moiX);
-    m_clumps_moiY.push_back(moiY);
-    m_clumps_moiZ.push_back(moiZ);
+    m_clumps_moi.push_back(moi);
     m_clumps_sp_radii.push_back(sp_radii);
-    m_clumps_sp_location_x.push_back(sp_locations_x);
-    m_clumps_sp_location_y.push_back(sp_locations_y);
-    m_clumps_sp_location_z.push_back(sp_locations_z);
+    m_clumps_sp_location_xyz.push_back(sp_locations_xyz);
     m_clumps_sp_material_ids.push_back(sp_material_ids);
 
-    return m_clumps_sp_radii.size() - 1;
+    return m_clumps_mass.size() - 1;
 }
 
 clumpBodyInertiaOffset_default_t SGPS::LoadClumpSimpleSphere(float mass,
                                                              float radius,
                                                              materialsOffset_default_t material_id) {
-    float I = 2.0 / 5.0 * mass * radius * radius;
-    return LoadClumpType(mass, I, I, I, std::vector<float>(1, radius), std::vector<float>(1, 0),
-                         std::vector<float>(1, 0), std::vector<float>(1, 0),
+    float3 I = make_float3(2.0 / 5.0 * mass * radius * radius);
+    float3 pos = make_float3(0);
+    return LoadClumpType(mass, I, std::vector<float>(1, radius), std::vector<float3>(1, pos),
                          std::vector<materialsOffset_default_t>(1, material_id));
 }
 
@@ -96,6 +87,8 @@ int SGPS::generateJITResources() {
     for (size_t i = 0; i < num_clump_types; i++) {
         // Put unique sphere radii values in a set.
         m_clumps_sp_radii_types.insert(m_clumps_sp_radii.at(i).begin(), m_clumps_sp_radii.at(i).end());
+        // Put unique clump sphere component locations in a set.
+        m_clumps_sp_location_types.insert(m_clumps_sp_location_xyz.at(i).begin(), m_clumps_sp_location_xyz.at(i).end());
     }
     // Now rearrange so the original input mass and sphere radii are now stored as the offsets to their respective
     // uniques sets.
@@ -114,8 +107,10 @@ int SGPS::generateJITResources() {
     nDistinctSphereRadii_computed = m_clumps_sp_radii_types.size();
     nDistinctClumpBodyTopologies_computed = m_clumps_mass_types.size();
     nMatTuples_computed = m_sp_materials.size();
+    nDistinctSphereRelativePositions_computed = m_clumps_sp_location_types.size();
     // std::cout << nDistinctClumpBodyTopologies_computed << std::endl;
     // std::cout << nDistinctSphereRadii_computed << std::endl;
+    // std::cout << nDistinctSphereRelativePositions_computed << std::endl;
 
     // Compile the kernels needed.
 
