@@ -96,11 +96,17 @@ int SGPS::generateJITResources() {
         m_clumps_mass_type_offset.push_back(
             std::distance(m_clumps_mass_types.begin(), m_clumps_mass_types.find(m_clumps_mass.at(i))));
         std::vector<distinctSphereRadiiOffset_default_t> sp_radii_type_offset(m_clumps_sp_radii.at(i).size(), 0);
+        std::vector<distinctSphereRelativePositions_default_t> sp_location_type_offset(
+            m_clumps_sp_location_xyz.at(i).size(), 0);
         for (size_t j = 0; j < sp_radii_type_offset.size(); j++) {
             sp_radii_type_offset.at(j) = std::distance(m_clumps_sp_radii_types.begin(),
                                                        m_clumps_sp_radii_types.find(m_clumps_sp_radii.at(i).at(j)));
+            sp_location_type_offset.at(j) =
+                std::distance(m_clumps_sp_location_types.begin(),
+                              m_clumps_sp_location_types.find(m_clumps_sp_location_xyz.at(i).at(j)));
         }
         m_clumps_sp_radii_type_offset.push_back(sp_radii_type_offset);
+        m_clumps_sp_location_type_offset.push_back(sp_location_type_offset);
     }
 
     // Compile the magic number header.
@@ -111,6 +117,12 @@ int SGPS::generateJITResources() {
     // std::cout << nDistinctClumpBodyTopologies_computed << std::endl;
     // std::cout << nDistinctSphereRadii_computed << std::endl;
     // std::cout << nDistinctSphereRelativePositions_computed << std::endl;
+    // for (int i = 0; i < m_clumps_sp_location_type_offset.size(); i++) {
+    //    for (int j = 0; j < m_clumps_sp_location_type_offset.at(i).size(); j++) {
+    //       std::cout << m_clumps_sp_location_type_offset.at(i).at(j) << " ";
+    //   }
+    //   std::cout << std::endl;
+    //}
 
     // Compile the kernels needed.
 
