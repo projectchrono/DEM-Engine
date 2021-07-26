@@ -933,7 +933,7 @@ inline __host__ __device__ bool Near(const float& a, const float& b) {
 }
 
 // Float3 < is an element-wise comparison where x, y, z components are assigned priorities in that order.
-struct less_than {
+struct float3_less_than {
     bool operator()(const float3& a, const float3& b) {
         if (!Near(a.x, b.x))  // x component being different
             return a.x < b.x;

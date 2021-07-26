@@ -50,6 +50,9 @@ class SGPS {
     // Return the index of the material type just loaded
     materialsOffset_default_t LoadMaterialType(float density, float E);
 
+    // Load input clumps (topology types and initial locations) on a per-pair basis
+    void SetClumps(const std::vector<clumpBodyInertiaOffset_default_t>& types, const std::vector<float3>& xyz);
+
     // Return the voxel ID of a clump by its numbering
     voxelID_default_t GetClumpVoxelID(unsigned int i) const;
 
@@ -87,7 +90,7 @@ class SGPS {
     std::set<float> m_clumps_sp_radii_types;
     std::vector<std::vector<distinctSphereRadiiOffset_default_t>> m_clumps_sp_radii_type_offset;
     // unique sphere (local) location types derived from m_clumps_sp_location_xyz
-    std::set<float3, less_than> m_clumps_sp_location_types;
+    std::set<float3, float3_less_than> m_clumps_sp_location_types;
     std::vector<std::vector<distinctSphereRelativePositions_default_t>> m_clumps_sp_location_type_offset;
 
     float sphereUU;
@@ -96,6 +99,10 @@ class SGPS {
     unsigned int nDistinctSphereRelativePositions_computed;
     unsigned int nDistinctClumpBodyTopologies_computed;
     unsigned int nMatTuples_computed;
+
+    // cached state vectors such as the types and locations of the initial clumps to fill the sim domain with
+    std::vector<clumpBodyInertiaOffset_default_t> m_input_clump_types;
+    std::vector<float3> m_input_clump_xyz;
 
     int updateFreq = 1;
     int timeDynamicSide = 1;

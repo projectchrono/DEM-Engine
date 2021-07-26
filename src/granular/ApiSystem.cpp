@@ -118,15 +118,24 @@ int SGPS::generateJITResources() {
     // std::cout << nDistinctSphereRadii_computed << std::endl;
     // std::cout << nDistinctSphereRelativePositions_computed << std::endl;
     // for (int i = 0; i < m_clumps_sp_location_type_offset.size(); i++) {
-    //    for (int j = 0; j < m_clumps_sp_location_type_offset.at(i).size(); j++) {
-    //       std::cout << m_clumps_sp_location_type_offset.at(i).at(j) << " ";
-    //   }
-    //   std::cout << std::endl;
-    //}
+    //     for (int j = 0; j < m_clumps_sp_location_type_offset.at(i).size(); j++) {
+    //        std::cout << m_clumps_sp_location_type_offset.at(i).at(j) << " ";
+    //    }
+    //    std::cout << std::endl;
+    // }
 
     // Compile the kernels needed.
 
     return 0;
+}
+
+void SGPS::SetClumps(const std::vector<clumpBodyInertiaOffset_default_t>& types, const std::vector<float3>& xyz) {
+    if (types.size() != xyz.size()) {
+        SGPS_ERROR("Arrays in the call SetClumps must all have the same length.");
+    }
+
+    m_input_clump_types.insert(m_input_clump_types.end(), types.begin(), types.end());
+    m_input_clump_xyz.insert(m_input_clump_xyz.end(), xyz.begin(), xyz.end());
 }
 
 int SGPS::Initialize() {
@@ -135,8 +144,17 @@ int SGPS::Initialize() {
         SGPS_ERROR("Before initializing the system, at least one material type should be loaded via LoadMaterialType.");
     }
 
+    // Figure out a part of the required simulation information such as the scale of the rpoblem domain. Make sure these
+    // info live in managed memory.
+
     // Call the JIT compiler generator to make prep for this simulation.
     generateJITResources();
+
+    // Now that the CUDA-related functions and data types are JITCompiled, we can feed those GPU-side arrays with the
+    // cached API-level simulation info.
+/*     dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_clumps_mass_types, m_clumps_sp_radii_types,
+                              m_clumps_sp_location_types, m_clumps_mass_type_offset, m_clumps_sp_radii_type_offset,
+                              m_clumps_sp_location_type_offset); */
 
     return 0;
 }

@@ -171,6 +171,18 @@ void dynamicThread::operator()() {
     }
 }
 
+/* void dynamicThread::(
+    const std::vector<clumpBodyInertiaOffset_default_t>& input_clump_types,
+    const std::vector<float3>& input_clump_xyz,
+    const std::set<float>& clumps_mass_types,
+    const std::set<float>& clumps_sp_radii_types,
+    const std::set<float3, sgps::float3_less_than>& clumps_sp_location_types,
+    const std::vector<clumpBodyInertiaOffset_default_t>& clumps_mass_type_offset,
+    const std::vector<std::vector<distinctSphereRadiiOffset_default_t>>& clumps_sp_radii_type_offset,
+    const std::vector<std::vector<distinctSphereRelativePositions_default_t>>& clumps_sp_location_type_offset) {
+    int a = 1;
+} */
+
 int dynamicThread::localUse(int val) {
     // std::this_thread::sleep_for(std::chrono::milliseconds(dynamicAverageTime));
     dynamicTestKernel<<<1, 1>>>();

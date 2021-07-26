@@ -6,12 +6,14 @@
 
 #include <mutex>
 #include <vector>
+#include <set>
 
 #include <core/ApiVersion.h>
 #include <core/utils/ManagedAllocator.hpp>
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
 #include <granular/GranularDefines.h>
+// #include <helper_math.cuh>
 
 namespace sgps {
 
@@ -151,6 +153,17 @@ class dynamicThread {
     // buffer exchange methods
     void setDestinationBuffer_voxelID(voxelID_default_t* pPB) { pKinematicOwnedBuffer_voxelID = pPB; }
     voxelID_default_t* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
+
+    // Data type TBD, should come from JITCed headers
+/*     void populateManagedArrays(
+        const std::vector<clumpBodyInertiaOffset_default_t>& input_clump_types,
+        const std::vector<float3>& input_clump_xyz,
+        const std::set<float>& clumps_mass_types,
+        const std::set<float>& clumps_sp_radii_types,
+        const std::set<float3, float3_less_than>& clumps_sp_location_types,
+        const std::vector<clumpBodyInertiaOffset_default_t>& clumps_mass_type_offset,
+        const std::vector<std::vector<distinctSphereRadiiOffset_default_t>>& clumps_sp_radii_type_offset,
+        const std::vector<std::vector<distinctSphereRelativePositions_default_t>>& clumps_sp_location_type_offset); */
 
     void operator()();
 };
