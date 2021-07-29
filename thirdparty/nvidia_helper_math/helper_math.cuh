@@ -50,7 +50,7 @@
 #endif
 
 #ifndef __CUDACC__
-    #include <math.h>
+    #include <cmath>
 #endif
 
 namespace sgps {
@@ -59,28 +59,24 @@ using uint = unsigned int;
 using ushort = unsigned short;
 
 ////////////////////////////////////////////////////////////////////////////////
-// host implementations of CUDA functions
+// override implementations of CUDA functions
 ////////////////////////////////////////////////////////////////////////////////
-#ifndef __CUDACC__
-inline float fminf(float a, float b) {
-    return a < b ? a : b;
-}
 
-inline float fmaxf(float a, float b) {
-    return a > b ? a : b;
-}
+#ifdef __CUDACC__
+    using ::fminf;
+    using ::fmaxf;
+    using ::max;
+    using ::min;
+    using ::rsqrtf;
+#else
+    using std::fminf;
+    using std::fmaxf;
+    using std::max;
+    using std::min;
 
-inline int max(int a, int b) {
-    return a > b ? a : b;
-}
-
-inline int min(int a, int b) {
-    return a < b ? a : b;
-}
-
-inline float rsqrtf(float x) {
-    return 1.0f / sqrtf(x);
-}
+    inline float rsqrtf(float x) {
+        return 1.0f / sqrtf(x);
+    }
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -861,13 +857,13 @@ inline __host__ __device__ float4 operator/(float b, float4 a) {
 ////////////////////////////////////////////////////////////////////////////////
 
 inline __host__ __device__ float2 fminf(float2 a, float2 b) {
-    return ::make_float2(fminf(a.x, b.x), fminf(a.y, b.y));
+    return ::make_float2(::fminf(a.x, b.x), ::fminf(a.y, b.y));
 }
 inline __host__ __device__ float3 fminf(float3 a, float3 b) {
-    return ::make_float3(fminf(a.x, b.x), fminf(a.y, b.y), fminf(a.z, b.z));
+    return ::make_float3(::fminf(a.x, b.x), ::fminf(a.y, b.y), ::fminf(a.z, b.z));
 }
 inline __host__ __device__ float4 fminf(float4 a, float4 b) {
-    return ::make_float4(fminf(a.x, b.x), fminf(a.y, b.y), fminf(a.z, b.z), fminf(a.w, b.w));
+    return ::make_float4(::fminf(a.x, b.x), ::fminf(a.y, b.y), ::fminf(a.z, b.z), ::fminf(a.w, b.w));
 }
 
 inline __host__ __device__ int2 min(int2 a, int2 b) {
@@ -946,7 +942,7 @@ struct float3_less_than {
     }
 };
 
-/*
+/* 
 // Float3 < is an element-wise comparison where x, y, z components are assigned priorities in that order.
 inline __host__ __device__ bool operator<(const float3 &a, const float3 &b) {
     if (!Near(a.x, b.x)) // x component being different
@@ -958,7 +954,7 @@ inline __host__ __device__ bool operator<(const float3 &a, const float3 &b) {
     else // all components same
         return false; // for constructing a set
 }
-*/
+ */
 
 ////////////////////////////////////////////////////////////////////////////////
 // lerp

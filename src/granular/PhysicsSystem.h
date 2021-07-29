@@ -13,7 +13,7 @@
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
 #include <granular/GranularDefines.h>
-// #include <helper_math.cuh>
+#include <helper_math.cuh>
 
 namespace sgps {
 
