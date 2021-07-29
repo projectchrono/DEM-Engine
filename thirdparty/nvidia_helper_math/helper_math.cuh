@@ -63,20 +63,20 @@ using ushort = unsigned short;
 ////////////////////////////////////////////////////////////////////////////////
 
 #ifdef __CUDACC__
-    using ::fminf;
-    using ::fmaxf;
-    using ::max;
-    using ::min;
-    using ::rsqrtf;
+using ::fminf;
+using ::fmaxf;
+using ::max;
+using ::min;
+using ::rsqrtf;
 #else
-    using std::fminf;
-    using std::fmaxf;
-    using std::max;
-    using std::min;
+using std::fminf;
+using std::fmaxf;
+using std::max;
+using std::min;
 
-    inline float rsqrtf(float x) {
-        return 1.0f / sqrtf(x);
-    }
+inline float rsqrtf(float x) {
+    return 1.0f / sqrtf(x);
+}
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -929,7 +929,8 @@ inline __host__ __device__ bool Near(const float& a, const float& b) {
 }
 
 // Float3 < is an element-wise comparison where x, y, z components are assigned priorities in that order.
-struct float3_less_than {
+// You can feed this to the constructor of float3 sets, or not (use globally defined < operator instead).
+/* struct float3_less_than {
     bool operator()(const float3& a, const float3& b) {
         if (!Near(a.x, b.x))  // x component being different
             return a.x < b.x;
@@ -940,21 +941,7 @@ struct float3_less_than {
         else               // all components same
             return false;  // for constructing a set
     }
-};
-
-/* 
-// Float3 < is an element-wise comparison where x, y, z components are assigned priorities in that order.
-inline __host__ __device__ bool operator<(const float3 &a, const float3 &b) {
-    if (!Near(a.x, b.x)) // x component being different
-        return a.x < b.x;
-    else if (!Near(a.y, b.y)) // x comp. same but y different
-        return a.y < b.y;
-    else if (!Near(a.z, b.z)) // y comp. same but z different
-        return a.z < b.z;
-    else // all components same
-        return false; // for constructing a set
-}
- */
+}; */
 
 ////////////////////////////////////////////////////////////////////////////////
 // lerp
@@ -1223,5 +1210,18 @@ inline __device__ __host__ float4 smoothstep(float4 a, float4 b, float4 x) {
 }
 
 }  // END namespace sgps
+
+// Float3 < is an element-wise comparison where x, y, z components are assigned priorities in that order.
+// Must be in global namespace for std::less to pick it up.
+inline __host__ __device__ bool operator<(const float3& a, const float3& b) {
+    if (!sgps::Near(a.x, b.x))  // x component being different
+        return a.x < b.x;
+    else if (!sgps::Near(a.y, b.y))  // x comp. same but y different
+        return a.y < b.y;
+    else if (!sgps::Near(a.z, b.z))  // y comp. same but z different
+        return a.z < b.z;
+    else               // all components same
+        return false;  // for constructing a set
+}
 
 #endif

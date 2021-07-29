@@ -155,15 +155,15 @@ class dynamicThread {
     voxelID_default_t* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
 
     // Data type TBD, should come from JITCed headers
-/*     void populateManagedArrays(
+    void populateManagedArrays(
         const std::vector<clumpBodyInertiaOffset_default_t>& input_clump_types,
         const std::vector<float3>& input_clump_xyz,
         const std::set<float>& clumps_mass_types,
         const std::set<float>& clumps_sp_radii_types,
-        const std::set<float3, float3_less_than>& clumps_sp_location_types,
+        const std::set<float3>& clumps_sp_location_types,
         const std::vector<clumpBodyInertiaOffset_default_t>& clumps_mass_type_offset,
         const std::vector<std::vector<distinctSphereRadiiOffset_default_t>>& clumps_sp_radii_type_offset,
-        const std::vector<std::vector<distinctSphereRelativePositions_default_t>>& clumps_sp_location_type_offset); */
+        const std::vector<std::vector<distinctSphereRelativePositions_default_t>>& clumps_sp_location_type_offset);
 
     void operator()();
 };

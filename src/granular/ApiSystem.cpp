@@ -152,9 +152,9 @@ int SGPS::Initialize() {
 
     // Now that the CUDA-related functions and data types are JITCompiled, we can feed those GPU-side arrays with the
     // cached API-level simulation info.
-/*     dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_clumps_mass_types, m_clumps_sp_radii_types,
+    dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_clumps_mass_types, m_clumps_sp_radii_types,
                               m_clumps_sp_location_types, m_clumps_mass_type_offset, m_clumps_sp_radii_type_offset,
-                              m_clumps_sp_location_type_offset); */
+                              m_clumps_sp_location_type_offset);
 
     return 0;
 }

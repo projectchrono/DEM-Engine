@@ -90,7 +90,8 @@ class SGPS {
     std::set<float> m_clumps_sp_radii_types;
     std::vector<std::vector<distinctSphereRadiiOffset_default_t>> m_clumps_sp_radii_type_offset;
     // unique sphere (local) location types derived from m_clumps_sp_location_xyz
-    std::set<float3, float3_less_than> m_clumps_sp_location_types;
+    // std::set<float3, float3_less_than> m_clumps_sp_location_types;
+    std::set<float3> m_clumps_sp_location_types;
     std::vector<std::vector<distinctSphereRelativePositions_default_t>> m_clumps_sp_location_type_offset;
 
     float sphereUU;
