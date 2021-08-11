@@ -63,6 +63,7 @@ include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 add_subdirectory(src/core)
 add_subdirectory(src/granular)
 add_subdirectory(src/sph)
+add_subdirectory(src/kernel)
 
 # ---------------------------------------------------------------------------- #
 # Final Library Generation
@@ -74,6 +75,7 @@ add_library(
 	$<TARGET_OBJECTS:core>
 	$<TARGET_OBJECTS:granular>
 	$<TARGET_OBJECTS:sph>
+	$<TARGET_OBJECTS:kernel>
 	)
 
 # Extract include directories from the object bundles

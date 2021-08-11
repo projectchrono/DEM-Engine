@@ -1,5 +1,5 @@
 // data structure utility class
-
+#pragma once
 // 3d vector data structure
 struct vector3 {
   float x;

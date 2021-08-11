@@ -8,22 +8,9 @@
 #include <granular/PhysicsSystem.h>
 #include <iostream>
 #include <thread>
+#include <kernel/cudaKernels.cuh>
 
 namespace sgps {
-
-__global__ void dynamicTestKernel() {
-    printf("Dynamic run\n");
-}
-__global__ void kinematicTestKernel(voxelID_default_t* data) {
-    if (threadIdx.x == 0) {
-        printf("Kinematic run\n");
-    }
-
-    if (threadIdx.x < N_INPUT_ITEMS) {
-        data[threadIdx.x] = 2 * data[threadIdx.x] + 1;
-        // printf("%d\n", data[threadIdx.x]);
-    }
-}
 
 void kinematicThread::operator()() {
     // Set the device for this thread
