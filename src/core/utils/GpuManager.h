@@ -10,10 +10,12 @@ class GpuManager {
     GpuManager(unsigned int total_streams = 1);
     ~GpuManager();
 
-    struct Stream {
+    struct StreamInfo {
       public:
-        cudaStream_t stream;
         int device;
+        cudaStream_t stream;
+        
+        bool _impl_active; // Reserved for the implementation
     };
 
     // Returns the LEAST number of streams available on any device
@@ -23,11 +25,21 @@ class GpuManager {
 
     unsigned int getNumDevices();
 
-    const std::vector<cudaStream_t>& getStreamsFromDevice(int index);
-    const std::vector<cudaStream_t>& getStreamsFromDevice(const struct Stream&);
+    // DO NOT USE UNLESS YOU INTEND TO MANUALLY HANDLE YOUR STREAMS
+    const std::vector<StreamInfo>& getStreamsFromDevice(int index);
+    
+    // DO NOT USE UNLESS YOU INTEND TO MANUALLY HANDLE YOUR STREAMS
+    const std::vector<StreamInfo>& getStreamsFromDevice(const StreamInfo&);
+
+    // Get a stream which hasn't been used yet and mark it as used
+    const StreamInfo& getAvailableStream();
+    const StreamInfo& getAvailableStreamFromDevice(int index);
+
+    // Mark a stream as unused
+    void setStreamAvailable(const StreamInfo&);
 
   private:
-    std::vector<std::vector<cudaStream_t>> streams;
+    std::vector<std::vector<StreamInfo>> streams;
 };
 
 #endif

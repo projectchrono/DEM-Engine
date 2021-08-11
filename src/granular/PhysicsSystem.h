@@ -21,12 +21,16 @@ class kinematicThread {
   protected:
     ThreadManager* pSchedSupport;
     GpuManager* pGpuDistributor;
+    
+    // Object which stores the device and stream IDs for this thread
+    GpuManager::StreamInfo streamInfo;
+
     // this is where the dynamic thread stores data that needs to be produced
     // herein
     voxelID_default_t* pDynamicOwnedBuffer_voxelID;
     int kinematicAverageTime;
     int costlyProductionStep(int) const;
-    int device_id = 0;
+
 
     // Buffer arrays for storing info from the dT side.
     // dT modifies these arrays; kT uses them only.
@@ -47,6 +51,9 @@ class kinematicThread {
 
         transferBuffer_voxelID.resize(N_MANUFACTURED_ITEMS, 0);
         voxelID.resize(N_MANUFACTURED_ITEMS, 1);
+
+        // Get a device/stream ID to use from the GPU Manager
+        streamInfo = pGpuDistributor->getAvailableStream();
     }
     ~kinematicThread() {}
 
@@ -64,6 +71,10 @@ class dynamicThread {
   protected:
     ThreadManager* pSchedSupport;
     GpuManager* pGpuDistributor;
+
+    // Object which stores the device and stream IDs for this thread
+    GpuManager::StreamInfo streamInfo;
+
     // pointer to remote buffer where kinematic thread stores work-order data
     // provided by the dynamic thread
     voxelID_default_t* pKinematicOwnedBuffer_voxelID;
@@ -144,6 +155,9 @@ class dynamicThread {
 
         transferBuffer_voxelID.resize(N_MANUFACTURED_ITEMS, 0);
         voxelID.resize(N_MANUFACTURED_ITEMS, 0);
+
+        // Get a device/stream ID to use from the GPU Manager
+        streamInfo = pGpuDistributor->getAvailableStream();
     }
     ~dynamicThread() {}
 

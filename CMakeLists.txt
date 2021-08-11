@@ -6,7 +6,7 @@
 # CMake Project Settings
 # ---------------------------------------------------------------------------- #
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.18)
 
 # Version information
 set(VERSION_MAJOR   0)
@@ -18,6 +18,26 @@ project(
 	VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
 	LANGUAGES CXX CUDA
 )
+
+# ---------------------------------------------------------------------------- #
+# Additional Packages
+# ---------------------------------------------------------------------------- #
+include(cmake/FixNinjaColors.cmake)
+fix_ninja_colors()
+
+# Find CUB library (this might need to be done in source-level config)
+find_package(
+	CUB REQUIRED
+	PATHS ${CMAKE_CURRENT_LIST_DIR}/thirdparty/cub/cub
+)
+
+find_path(
+	NVIDIAJitifyPath
+	NAMES jitify.hpp
+	PATHS "${CMAKE_CURRENT_LIST_DIR}/thirdparty/jitify"
+)
+
+set(NVIDIAMathDir ${CMAKE_CURRENT_LIST_DIR}/thirdparty/nvidia_helper_math)
 
 # ---------------------------------------------------------------------------- #
 # Global Configuration
@@ -33,21 +53,8 @@ set_property(
 
 set(ProjectIncludeRoot "${CMAKE_CURRENT_SOURCE_DIR}/src" "${CMAKE_CURRENT_BINARY_DIR}/src")
 
-
-# Find CUB library (this might need to be done in source-level config)
-find_package(
-	CUB REQUIRED
-	PATHS ${CMAKE_CURRENT_LIST_DIR}/thirdparty/cub/cub
-)
-
-find_path(
-	NVIDIAJitifyPath
-	NAMES jitify.hpp
-	PATHS "${CMAKE_CURRENT_LIST_DIR}/thirdparty/jitify"
-
-)
-
-set(NVIDIAMathDir ${CMAKE_CURRENT_LIST_DIR}/thirdparty/nvidia_helper_math)
+# Global fix for CUDA language bug
+include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
 # ---------------------------------------------------------------------------- #
 # Source-level configuration

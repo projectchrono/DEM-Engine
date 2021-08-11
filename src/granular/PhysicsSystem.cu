@@ -26,6 +26,9 @@ __global__ void kinematicTestKernel(voxelID_default_t* data) {
 }
 
 void kinematicThread::operator()() {
+    // Set the device for this thread
+    cudaSetDevice(streamInfo.device);
+
     // run a while loop producing stuff in each iteration;
     // once produced, it should be made available to the dynamic via memcpy
     while (!pSchedSupport->dynamicDone) {
@@ -47,9 +50,6 @@ void kinematicThread::operator()() {
             }
         }
 
-        cudaSetDevice(this->device_id);
-        auto kinematicStreams = pGpuDistributor->getStreamsFromDevice(this->device_id);
-
         // figure out the amount of shared mem
         // cudaDeviceGetAttribute.cudaDevAttrMaxSharedMemoryPerBlock
 
@@ -59,14 +59,14 @@ void kinematicThread::operator()() {
 
         auto data_arg = voxelID.data();
         void* args[] = {(void*)(&data_arg)};
-        cudaLaunchKernel((void*)&kinematicTestKernel, dim3(1), dim3(N_INPUT_ITEMS), args, 0, kinematicStreams.at(0));
-        // kinematicTestKernel<<<1, 4, 0, kinematicStreams.at(0)>>>(voxelID.data());
+        cudaLaunchKernel((void*)&kinematicTestKernel, dim3(1), dim3(N_INPUT_ITEMS), args, 0, streamInfo.stream);
+        // kinematicTestKernel<<<1, 4, 0, kinematicStream.stream>>>(voxelID.data());
         cudaDeviceSynchronize();
         // cudaStreamDestroy(currentStream);
 
         /* for reference staff
         for (int j = 0; j < N_MANUFACTURED_ITEMS; j++) {
-            // kinematicTestKernel<<<1, 1, 0, kinematicStreams.at(0)>>>();
+            // kinematicTestKernel<<<1, 1, 0, kinematicStream.stream>>>();
 
             // use cudaLaunchKernel
             // cudaLaunchKernel((void*)&kinematicTestKernel, dim3(1), dim3(1), NULL, 0, stream_id);
@@ -103,6 +103,10 @@ void kinematicThread::operator()() {
 }
 
 void dynamicThread::operator()() {
+
+    // Set the gpu for this thread
+    cudaSetDevice(streamInfo.device);
+
     // acquire lock to prevent the kinematic to mess up
     // with the transfer buffer while the latter is used
 
@@ -184,8 +188,11 @@ void dynamicThread::populateManagedArrays(
 }
 
 int dynamicThread::localUse(int val) {
+    cudaSetDevice(streamInfo.device);
     // std::this_thread::sleep_for(std::chrono::milliseconds(dynamicAverageTime));
-    dynamicTestKernel<<<1, 1>>>();
+
+    // dynamicTestKernel<<<1, 1>>>();
+    cudaLaunchKernel((void*)&dynamicTestKernel, dim3(1), dim3(1), NULL, 0, streamInfo.stream);
     cudaDeviceSynchronize();
     return 2 * val;
 }

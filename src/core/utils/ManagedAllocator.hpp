@@ -80,7 +80,7 @@ struct ManagedAllocator {
 #if CXX_OLDER(STD_CXX17)
     pointer allocate(size_type n, std::allocator<void>::const_pointer hint = 0) { return this->__alloc_impl(n); }
 #elif CXX_EQUAL(STD_CXX17)
-    T* allocate(std::size_t n) { this->__alloc_impl(n); }
+    T* allocate(std::size_t n) { return this->__alloc_impl(n); }
     T* allocate(std::size_t n, const void* hint) { return this->__alloc_impl(n); }
 #elif CXX_EQ_NEWER(STD_CXX20)
     [[nodiscard]] constexpr T* allocate(std::size_t n) { return this->__alloc_impl(n); }
