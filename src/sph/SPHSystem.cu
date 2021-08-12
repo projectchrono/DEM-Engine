@@ -14,12 +14,13 @@ void SPHSystem::initialize(float radius,vector3 *pos, int n) {
 
   // create a ThreadManager to create a management pool for data sharing between 2 GPUs
   InteractionManager* tm = new InteractionManager();
+  GpuManager* gm = new GpuManager(2);
 
 
   // initialize two threads for Dual GPU computation
-  kt = new KinematicTread(tm);
+  kt = new KinematicTread(gm, tm);
   kt->kInitialize(radius, pos, vel, acc, n);
-  dt = new DynamicThread(tm);
+  dt = new DynamicThread(gm, tm);
   dt->dInitialize(radius, pos, vel, acc, n);
 }
 
@@ -47,9 +48,10 @@ void SPHSystem::printCSV(std::string filename) {
 
 void KinematicTread::kInitialize(float radius,vector3* pos, vector3* vel, vector3* acc, int n)
 {
+  cudaSetDevice(streamInfo.device);
   k_n = n;
   k_radius = radius;
-  cudaSetDevice(this->device_id);
+
   cudaMalloc(&k_pos, k_n*sizeof(vector3));
   cudaMalloc(&k_vel, k_n*sizeof(vector3));
   cudaMalloc(&k_acc, k_n*sizeof(vector3));
@@ -61,8 +63,8 @@ void KinematicTread::kInitialize(float radius,vector3* pos, vector3* vel, vector
 
 void KinematicTread::doKinematicStep()
 {
+  cudaSetDevice(streamInfo.device);
   float tolerance = 0.05;
-  cudaSetDevice(this->device_id);
   //kinematicTestKernel<<<1, 1, 0, kStream>>>();
 
   // for each step, the kinematic thread needs to do two passes
@@ -78,7 +80,7 @@ void KinematicTread::doKinematicStep()
   cudaMemcpy(k_num_arr, cpu_num_arr, k_n*sizeof(int), cudaMemcpyHostToDevice);
 
   // first kinematic pass to calculate offset array
-  kinematic1stPass<<<1,k_n,0,kStream>>>(k_pos, k_n, tolerance, k_radius, k_num_arr);
+  kinematic1stPass<<<1,k_n,0,streamInfo.stream>>>(k_pos, k_n, tolerance, k_radius, k_num_arr);
 
   cudaDeviceSynchronize();
 
@@ -111,7 +113,7 @@ void KinematicTread::doKinematicStep()
   cudaMalloc(&gpu_pair_data, contact_sum*sizeof(contactData));
   cudaMemcpy(gpu_pair_data, cpu_pair_data, contact_sum*sizeof(contactData), cudaMemcpyHostToDevice);
 
-  kinematic2ndPass<<<1,k_n,0,kStream>>>(k_pos,k_n,gpu_offset_arr,k_num_arr,tolerance,k_radius,gpu_pair_data);
+  kinematic2ndPass<<<1,k_n,0,streamInfo.stream>>>(k_pos,k_n,gpu_offset_arr,k_num_arr,tolerance,k_radius,gpu_pair_data);
 
   cudaMemcpy(cpu_pair_data, gpu_pair_data, contact_sum*sizeof(contactData), cudaMemcpyDeviceToHost);
 
@@ -131,9 +133,10 @@ void KinematicTread::doKinematicStep()
 
 void DynamicThread::dInitialize(float radius,vector3* pos, vector3* vel, vector3* acc, int n)
 {
+  cudaSetDevice(streamInfo.device);
   d_n = n;
   d_radius = radius;
-  cudaSetDevice(this->device_id);
+
   cudaMalloc(&d_pos, d_n*sizeof(vector3));
   cudaMalloc(&d_vel, d_n*sizeof(vector3));
   cudaMalloc(&d_acc, d_n*sizeof(vector3));
@@ -145,7 +148,7 @@ void DynamicThread::dInitialize(float radius,vector3* pos, vector3* vel, vector3
 
 void DynamicThread::doDynamicStep()
 {
-  cudaSetDevice(this->device_id);
+  cudaSetDevice(streamInfo.device);
   //dynamicTestKernel<<<1, 1, 0, dStream>>>();
 
   // retrieve contact pair data from the ThreadManager
@@ -164,7 +167,7 @@ void DynamicThread::doDynamicStep()
   int num_thread = 64;
   int num_block = cpu_pair_n / num_thread + 1;
 
-  dynamicPass<<<num_block, num_thread, 0, dStream>>>(gpu_pair_data, cpu_pair_n, d_pos, d_vel, d_acc, d_radius);
+  dynamicPass<<<num_block, num_thread, 0, streamInfo.stream>>>(gpu_pair_data, cpu_pair_n, d_pos, d_vel, d_acc, d_radius);
 
   cudaDeviceSynchronize();
 }

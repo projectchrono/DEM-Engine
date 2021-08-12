@@ -5,6 +5,7 @@
 #include "iostream"
 #include "string"
 #include "interactionManager.h"
+#include <core/utils/GpuManager.h>
 #include <cuda_runtime_api.h>
 
 
@@ -16,20 +17,22 @@ private:
   vector3* k_vel;
   vector3* k_acc;
   float k_radius;
+
+  GpuManager* gpuManager;
   InteractionManager* threadManager;
 
+  GpuManager::StreamInfo streamInfo;
+
 public:
-  KinematicTread(InteractionManager* tm){
-    cudaSetDevice(device_id);
-    cudaStreamCreate(&kStream);
+  KinematicTread(GpuManager* gm, InteractionManager* tm){
+    gpuManager = gm;
     threadManager = tm;
+
+    streamInfo = gpuManager->getAvailableStream();
   }
 
   void kInitialize(float radius, vector3* pos, vector3* vel, vector3* acc, int n);
-  void doKinematicStep();
-  int device_id = 0;
-  cudaStream_t kStream;
-  
+  void doKinematicStep(); 
 };
 
 class DynamicThread{
@@ -41,18 +44,21 @@ private:
   vector3* d_acc;
   int d_n;  // total number of particles
   float d_radius;
+  
+  GpuManager* gpuManager;
   InteractionManager* threadManager;
+
+  GpuManager::StreamInfo streamInfo;
   
 public:
-  DynamicThread(InteractionManager* tm){
-    cudaSetDevice(device_id);
-    cudaStreamCreate(&dStream);
+  DynamicThread(GpuManager* gm, InteractionManager* tm){
+    gpuManager = gm;
     threadManager = tm;
+
+    streamInfo = gpuManager->getAvailableStream();
   }
   void dInitialize(float radius, vector3* pos, vector3* vel, vector3* acc, int n);
-  void doDynamicStep();
-  int device_id = 1;
-  cudaStream_t dStream;
+  void doDynamicStep(); 
 };
 
 class SPHSystem {
