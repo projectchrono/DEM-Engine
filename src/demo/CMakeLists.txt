@@ -31,8 +31,11 @@ FOREACH(PROGRAM ${DEMOS})
 		
 		source_group("" FILES "${PROGRAM}.cpp")
 		
-		target_link_libraries(${PROGRAM} PUBLIC ${LIBRARIES})
-
+		target_link_libraries(${PROGRAM} 
+			PUBLIC ${LIBRARIES}
+			PUBLIC ${EXTERNAL_LIBRARIES}
+		)
+		
 		add_dependencies(${PROGRAM} ${LIBRARIES})
 
 ENDFOREACH(PROGRAM)

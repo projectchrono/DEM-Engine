@@ -39,6 +39,19 @@ public:
 
 private:
 	static jitify::JitCache kcache;
+
+	inline static std::string loadSourceFile(const std::filesystem::path& sourcefile) {
+		std::string code;
+		// If the file exists, read in the entire thing.
+		if (std::filesystem::exists(sourcefile)) {
+			std::ifstream input(sourcefile);
+			std::getline(input, code, std::string::traits_type::to_char_type(
+				std::string::traits_type::eof()
+			));
+		}
+		return code;
+	};
+
 };
 
 

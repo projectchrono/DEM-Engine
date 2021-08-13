@@ -6,18 +6,16 @@
 #include <filesystem>
 #include <string>
 
+#include <jitify.hpp>
+
 #include "JitHelper.h"
 
-JitHelper::Header::Header(std::filesystem::path& sourcepath) {
-	
-	// If the file exists, read in the entire thing.
-	if (std::filesystem::exists(sourcepath)) {
-		std::ifstream input(sourcepath);
-		std::getline(input, this->_source, std::string::traits_type::to_char_type(
-			std::string::traits_type::eof()
-		));
-	}
 
+jitify::JitCache JitHelper::kcache;
+
+
+JitHelper::Header::Header(std::filesystem::path& sourcefile) {
+	this->_source = JitHelper::loadSourceFile(sourcefile);
 }
 
 const std::string& JitHelper::Header::getSource() {
@@ -27,4 +25,22 @@ const std::string& JitHelper::Header::getSource() {
 // TODO: This should substitute constant values for certain symbols known at runtime
 void JitHelper::Header::substitute(const std::string& symbol, const std::string& value) {
 	// ...
+}
+
+
+jitify::Program JitHelper::buildProgram(
+	const std::string& name, const std::filesystem::path& source,
+	std::vector<JitHelper::Header> headers,
+	std::vector<std::string> flags
+) {
+	std::string code = name + "\n";
+
+	std::vector<std::string> header_code;
+	for (auto it = headers.begin(); it != headers.end(); it++) {
+		header_code.push_back(it->getSource());
+	}
+
+	code.append(JitHelper::loadSourceFile(source));
+	
+	return kcache.program(code, header_code, flags);
 }

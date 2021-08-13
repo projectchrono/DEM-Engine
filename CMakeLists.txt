@@ -25,6 +25,8 @@ project(
 include(cmake/FixNinjaColors.cmake)
 fix_ninja_colors()
 
+find_package(CUDAToolkit REQUIRED)
+
 # Find CUB library (this might need to be done in source-level config)
 find_package(
 	CUB REQUIRED
@@ -48,7 +50,7 @@ set(TargetCXXStandard "STD_AUTODETECT" CACHE STRING "The C++ standard used by th
 set_property(
 	CACHE TargetCXXStandard
 	PROPERTY
-	STRINGS STD_AUTODETECT STD_CXX11 STD_CXX14 STD_CXX17 STD_CXX20 STD_CXX2b
+	STRINGS STD_AUTODETECT STD_CXX11 STD_CXX14 STD_CXX17 STD_CXX20
 )
 
 set(ProjectIncludeRoot "${CMAKE_CURRENT_SOURCE_DIR}/src" "${CMAKE_CURRENT_BINARY_DIR}/src")
@@ -82,10 +84,12 @@ add_library(
 get_target_property(CORE_INTERFACE core INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(GRANULAR_INTERFACE granular INTERFACE_INCLUDE_DIRECTORIES)
 
+
 # Attach include directories to the top-level library target
 set_target_properties(sbel_gpu_physics
 	PROPERTIES
 	INTERFACE_INCLUDE_DIRECTORIES "${CORE_INTERFACE} ${GRANULAR_INTERFACE}"
+	INTERFACE_LINK_LIBRARIES "CUDA::cudart;CUDA::nvrtc"
 )
 	
 add_subdirectory(src/demo)
