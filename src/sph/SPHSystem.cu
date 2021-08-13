@@ -6,21 +6,22 @@
 
 
 void SPHSystem::initialize(float radius,vector3 *pos, int n) {
+
+  shared_data = new ExchangeData();
+
   m_pos = pos;
   m_n = n;
 
   vector3* vel = new vector3[n];
   vector3* acc = new vector3[n];
 
-  // create a ThreadManager to create a management pool for data sharing between 2 GPUs
-  InteractionManager* tm = new InteractionManager();
   GpuManager* gm = new GpuManager(2);
 
 
   // initialize two threads for Dual GPU computation
-  kt = new KinematicTread(gm, tm);
+  kt = new KinematicTread(gm,shared_data);
   kt->kInitialize(radius, pos, vel, acc, n);
-  dt = new DynamicThread(gm, tm);
+  dt = new DynamicThread(gm,shared_data);
   dt->dInitialize(radius, pos, vel, acc, n);
 }
 
@@ -122,11 +123,11 @@ void KinematicTread::doKinematicStep()
 
 
   // share data through a common ThreadManager instance
-  threadManager->contact_pair = cpu_pair_data;
-  threadManager->contact_pair_n = contact_sum;
+  k_shared_data->contact_pair = cpu_pair_data;
+  k_shared_data->contact_pair_n = contact_sum;
 
-  threadManager->offset = offset_arr;
-  threadManager->offset_n = k_n;
+  k_shared_data->offset = offset_arr;
+  k_shared_data->offset_n = k_n;
 
   cudaDeviceSynchronize();
 }
@@ -152,11 +153,11 @@ void DynamicThread::doDynamicStep()
   //dynamicTestKernel<<<1, 1, 0, dStream>>>();
 
   // retrieve contact pair data from the ThreadManager
-  contactData* cpu_pair = threadManager->contact_pair;
-  int cpu_pair_n = threadManager->contact_pair_n;
+  contactData* cpu_pair = d_shared_data->contact_pair;
+  int cpu_pair_n = d_shared_data->contact_pair_n;
   
-  int* cpu_offset = threadManager->offset;
-  int cpu_offset_n = threadManager->offset_n;
+  int* cpu_offset = d_shared_data->offset;
+  int cpu_offset_n = d_shared_data->offset_n;
 
   // copy data to the Dynamic GPU
   contactData* gpu_pair_data;

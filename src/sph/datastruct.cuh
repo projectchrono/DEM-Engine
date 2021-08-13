@@ -30,3 +30,14 @@ struct contactData{
   intVetor2 contact_pair;
   vector3 contact_force;
 };
+
+struct ExchangeData {
+    contactData* contact_pair;
+    int contact_pair_n;
+
+    int* offset;
+    int offset_n;
+
+    vector3* pos;
+    int pos_n;
+};

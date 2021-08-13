@@ -4,10 +4,9 @@
 #include "fstream"
 #include "iostream"
 #include "string"
-#include "interactionManager.h"
 #include <core/utils/GpuManager.h>
 #include <cuda_runtime_api.h>
-
+#include <sph/datastruct.cuh>
 
 class KinematicTread{
 private:
@@ -19,14 +18,16 @@ private:
   float k_radius;
 
   GpuManager* gpuManager;
-  InteractionManager* threadManager;
+
+  ExchangeData* k_shared_data;
 
   GpuManager::StreamInfo streamInfo;
 
 public:
-  KinematicTread(GpuManager* gm, InteractionManager* tm){
+  KinematicTread(GpuManager* gm,  ExchangeData* shared_data){
     gpuManager = gm;
-    threadManager = tm;
+
+    k_shared_data = shared_data;
 
     streamInfo = gpuManager->getAvailableStream();
   }
@@ -46,14 +47,16 @@ private:
   float d_radius;
   
   GpuManager* gpuManager;
-  InteractionManager* threadManager;
+
+  ExchangeData* d_shared_data;
 
   GpuManager::StreamInfo streamInfo;
   
 public:
-  DynamicThread(GpuManager* gm, InteractionManager* tm){
+  DynamicThread(GpuManager* gm, ExchangeData* shared_data){
     gpuManager = gm;
-    threadManager = tm;
+
+    d_shared_data = shared_data;
 
     streamInfo = gpuManager->getAvailableStream();
   }
@@ -65,6 +68,9 @@ class SPHSystem {
 private:
   KinematicTread* kt;
   DynamicThread* dt;
+
+  // shared data
+  ExchangeData* shared_data;
 
 
   vector3 *m_pos; // particle locations, on cpu
