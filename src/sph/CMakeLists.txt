@@ -20,6 +20,7 @@ target_link_libraries(
 # .h, .hpp
 set(sph_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/SPHSystem.cuh
+	${CMAKE_CURRENT_SOURCE_DIR}/datastruct.cuh
 )
 
 # .c, .cpp, .cu

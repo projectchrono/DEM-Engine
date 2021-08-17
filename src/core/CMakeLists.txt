@@ -44,6 +44,7 @@ set(core_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ManagedAllocator.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/JitHelper.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ThreadManager.h
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuError.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuManager.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/Macros.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/chpf/particle_writer.hpp

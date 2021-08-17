@@ -1,97 +1,82 @@
 // SPH-DualGPU
 // SPH system base class header
 
-#include "fstream"
-#include "iostream"
-#include "string"
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <vector>
+#include <core/utils/ManagedAllocator.hpp>
 #include <core/utils/GpuManager.h>
 #include <cuda_runtime_api.h>
 #include <sph/datastruct.cuh>
 
-class KinematicTread{
+struct DataManager {
+    float radius;
+    std::vector<vector3, ManagedAllocator<vector3>> m_pos; // particle locations
+    std::vector<vector3, ManagedAllocator<vector3>> m_vel; // particle velocities
+    std::vector<vector3, ManagedAllocator<vector3>> m_acc; // particle accelerations
+
+    std::vector<contactData, ManagedAllocator<contactData>> m_contact; // contact pair data
+
+    std::vector<int, ManagedAllocator<int>> m_offset; // index offset array for the contact pair data
+};
+
+class KinematicThread {
 private:
-  int nKinematicCycle;
-  int k_n;  // total number of particles
-  vector3* k_pos;
-  vector3* k_vel;
-  vector3* k_acc;
-  float k_radius;
+    GpuManager& gpuManager;
 
-  GpuManager* gpuManager;
+    GpuManager::StreamInfo streamInfo;
 
-  ExchangeData* k_shared_data;
-
-  GpuManager::StreamInfo streamInfo;
+    DataManager& dataManager;
 
 public:
-  KinematicTread(GpuManager* gm,  ExchangeData* shared_data){
-    gpuManager = gm;
+    KinematicThread(DataManager& dm, GpuManager& gm) : dataManager(dm), gpuManager(gm) {
 
-    k_shared_data = shared_data;
+        streamInfo = gm.getAvailableStream();
+    }
 
-    streamInfo = gpuManager->getAvailableStream();
-  }
-
-  void kInitialize(float radius, vector3* pos, vector3* vel, vector3* acc, int n);
-  void doKinematicStep(); 
+    void doKinematicStep();
 };
 
 class DynamicThread{
 private:
-  
-  int nDynamicCycle;
-  vector3* d_pos;
-  vector3* d_vel;
-  vector3* d_acc;
-  int d_n;  // total number of particles
-  float d_radius;
-  
-  GpuManager* gpuManager;
+    
+    GpuManager& gpuManager;
 
-  ExchangeData* d_shared_data;
+    GpuManager::StreamInfo streamInfo;
 
-  GpuManager::StreamInfo streamInfo;
-  
+    DataManager& dataManager;
+    
 public:
-  DynamicThread(GpuManager* gm, ExchangeData* shared_data){
-    gpuManager = gm;
+    DynamicThread(DataManager& dm, GpuManager& gm) : dataManager(dm), gpuManager(gm) {
+        streamInfo = gm.getAvailableStream();
+    }
 
-    d_shared_data = shared_data;
-
-    streamInfo = gpuManager->getAvailableStream();
-  }
-  void dInitialize(float radius, vector3* pos, vector3* vel, vector3* acc, int n);
-  void doDynamicStep(); 
+    void doDynamicStep(); 
 };
 
 class SPHSystem {
 private:
-  KinematicTread* kt;
-  DynamicThread* dt;
 
-  // shared data
-  ExchangeData* shared_data;
+    KinematicThread kt;
+    DynamicThread dt;
 
+    DataManager dataManager;
 
-  vector3 *m_pos; // particle locations, on cpu
-  int m_n;      // total number of particles
-
-
-  contactData *m_contact; // contact pair data
-
-  vector3 *unified_pos; // unified gpu/cpu memory for particle position data
-
-
-  // main data transfer array
+    // main data transfer array
 
 public:
-  // initialize the SPHSystem with pos as the particle positions
-  // n as the total number of particles initialized in the SPHSystem
-  void initialize(float radius,vector3 *pos, int n);
 
-  // start performing simulation dynamics
-  void doStepDynamics(float time_step);
+    inline SPHSystem(GpuManager& gm) : kt(dataManager, gm), dt(dataManager, gm) {};
 
-  // print particle file to csv for paraview visualization purposes
-  void printCSV(std::string filename);
+    // initialize the SPHSystem with pos as the particle positions
+    // n as the total number of particles initialized in the SPHSystem
+    void initialize(float radius,std::vector<vector3> &pos, std::vector<vector3> &vel, std::vector<vector3> &acc);
+
+    // start performing simulation dynamics
+    void doStepDynamics(float time_step);
+
+    // print particle file to csv for paraview visualization purposes
+    void printCSV(std::string filename);
+
 };

@@ -37,21 +37,26 @@ int main(int argc, char* argv[]) {
 
     // set particle radius
     float radius = 0.2;
-    vector3* pos_arr = new vector3[2];
-    // first particle at [0,0,0.21]
-    pos_arr[0].x = 0.f;
-    pos_arr[0].y = 0.f;
-    pos_arr[0].z = 0.21f;
-    // second particle at [0,0,0.65]
-    pos_arr[1].x = 0.f;
-    pos_arr[1].y = 0.f;
-    pos_arr[1].z = 0.65f;
+    std::vector<vector3> pos_vec;
+    pos_vec.push_back(vector3(0.f, 0.f, 0.21f));
+    pos_vec.push_back(vector3(0.f, 0.f, 0.65f));
+
+    std::vector<vector3> vel_vec;
+    vel_vec.push_back(vector3(0.f, 0.f, 0.f));
+    vel_vec.push_back(vector3(0.f, 0.f, 0.f));
+
+    std::vector<vector3> acc_vec;
+    acc_vec.push_back(vector3(0.f, 0.f, 0.f));
+    acc_vec.push_back(vector3(0.f, 0.f, 0.f));
+
+    // create a new GpuManager
+    GpuManager gpu_distributor(2);
 
     // create SPHSystem
-    SPHSystem* system = new SPHSystem();
+    SPHSystem* system = new SPHSystem(gpu_distributor);
 
     // initialize the SPHSystem
-    system->initialize(radius, pos_arr, 2);
+    system->initialize(radius, pos_vec, vel_vec, acc_vec);
     system->doStepDynamics(0.0001);
 
     // print out test
