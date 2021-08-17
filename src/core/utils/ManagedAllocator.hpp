@@ -15,6 +15,8 @@
 #include <type_traits>
 #include <utility>
 
+namespace sgps {
+
 template <class T>
 struct ManagedAllocator {
   public:
@@ -30,7 +32,7 @@ struct ManagedAllocator {
 
     template <class U>
     struct rebind {
-        typedef typename ::ManagedAllocator<U> other;
+        typedef typename sgps::ManagedAllocator<U> other;
     };
 #endif
 
@@ -119,6 +121,11 @@ struct ManagedAllocator {
         }
         return (T*)vptr;
     }
+
 };
+
+
+
+} // END namespace sgps
 
 #endif
