@@ -9,7 +9,7 @@ message(STATUS "${core_message} Generating API version header...")
 
 configure_file(
 	ApiVersion.h.in ApiVersion.h
-	USE_SOURCE_PERMISSIONS
+	#	USE_SOURCE_PERMISSIONS ## This doesn't work in CMake <3.20
 	@ONLY
 )
 
