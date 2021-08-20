@@ -59,7 +59,7 @@ void KinematicThread::doKinematicStep() {
 
     std::cout << "0.3 " << std::endl;
 
-    std::vector<int, ManagedAllocator<int>> num_arr(k_n, -1);
+    std::vector<int, sgps::ManagedAllocator<int>> num_arr(k_n, -1);
     // for (int i = 0; i < k_n; i++) {
     //     num_arr.push_back(-1);
     // }

@@ -12,52 +12,49 @@
 
 struct DataManager {
     float radius;
-    std::vector<vector3, ManagedAllocator<vector3>> m_pos; // particle locations
-    std::vector<vector3, ManagedAllocator<vector3>> m_vel; // particle velocities
-    std::vector<vector3, ManagedAllocator<vector3>> m_acc; // particle accelerations
+    std::vector<vector3, sgps::ManagedAllocator<vector3>> m_pos;  // particle locations
+    std::vector<vector3, sgps::ManagedAllocator<vector3>> m_vel;  // particle velocities
+    std::vector<vector3, sgps::ManagedAllocator<vector3>> m_acc;  // particle accelerations
 
-    std::vector<contactData, ManagedAllocator<contactData>> m_contact; // contact pair data
+    std::vector<contactData, sgps::ManagedAllocator<contactData>> m_contact;  // contact pair data
 
-    std::vector<int, ManagedAllocator<int>> m_offset; // index offset array for the contact pair data
+    std::vector<int, sgps::ManagedAllocator<int>> m_offset;  // index offset array for the contact pair data
 };
 
 class KinematicThread {
-private:
+  private:
     GpuManager& gpuManager;
 
     GpuManager::StreamInfo streamInfo;
 
     DataManager& dataManager;
 
-public:
+  public:
     KinematicThread(DataManager& dm, GpuManager& gm) : dataManager(dm), gpuManager(gm) {
-
         streamInfo = gm.getAvailableStream();
     }
 
     void doKinematicStep();
 };
 
-class DynamicThread{
-private:
-    
+class DynamicThread {
+  private:
     GpuManager& gpuManager;
 
     GpuManager::StreamInfo streamInfo;
 
     DataManager& dataManager;
-    
-public:
+
+  public:
     DynamicThread(DataManager& dm, GpuManager& gm) : dataManager(dm), gpuManager(gm) {
         streamInfo = gm.getAvailableStream();
     }
 
-    void doDynamicStep(); 
+    void doDynamicStep();
 };
 
 class SPHSystem {
-private:
-
+  private:
     KinematicThread kt;
     DynamicThread dt;
 
@@ -65,18 +62,16 @@ private:
 
     // main data transfer array
 
-public:
-
-    inline SPHSystem(GpuManager& gm) : kt(dataManager, gm), dt(dataManager, gm) {};
+  public:
+    inline SPHSystem(GpuManager& gm) : kt(dataManager, gm), dt(dataManager, gm){};
 
     // initialize the SPHSystem with pos as the particle positions
     // n as the total number of particles initialized in the SPHSystem
-    void initialize(float radius,std::vector<vector3> &pos, std::vector<vector3> &vel, std::vector<vector3> &acc);
+    void initialize(float radius, std::vector<vector3>& pos, std::vector<vector3>& vel, std::vector<vector3>& acc);
 
     // start performing simulation dynamics
     void doStepDynamics(float time_step);
 
     // print particle file to csv for paraview visualization purposes
     void printCSV(std::string filename);
-
 };

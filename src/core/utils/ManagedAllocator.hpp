@@ -121,11 +121,8 @@ struct ManagedAllocator {
         }
         return (T*)vptr;
     }
-
 };
 
-
-
-} // END namespace sgps
+}  // END namespace sgps
 
 #endif
