@@ -39,16 +39,10 @@ void SPHSystem::printCSV(std::string filename) {
 }
 
 void KinematicThread::doKinematicStep() {
-    std::cout << "IN KI Thread" << std::endl;
-    std::cout << "0.1 " << std::endl;
     cudaSetDevice(streamInfo.device);
 
     // get total numer of particles
     int k_n = dataManager.m_pos.size();
-
-    std::cout << "k_n:" << k_n << std::endl;
-
-    std::cout << "0.2 " << std::endl;
 
     float tolerance = 0.05;
     // kinematicTestKernel<<<1, 1, 0, kStream>>>();
@@ -57,31 +51,16 @@ void KinematicThread::doKinematicStep() {
     // first pass - look for 'number' of potential contacts
     // crate an array to store number of valid potential contacts
 
-    std::cout << "0.3 " << std::endl;
-
     std::vector<int, sgps::ManagedAllocator<int>> num_arr(k_n, -1);
-    // for (int i = 0; i < k_n; i++) {
-    //     num_arr.push_back(-1);
-    // }
 
     // first kinematic pass to calculate offset array
-
-    std::cout << "1" << std::endl;
-
+    // void* args[] = {(void*)(dataManager.m_pos.data()), (void*)(dataManager.m_pos.size()), (void*)(tolerance),
+    //                (void*)(dataManager.radius), (void*)(num_arr.data())};
+    // cudaLaunchKernel((void*)&kinematic1stPass, dim3(1), dim3(k_n), args, 0, streamInfo.stream);
     kinematic1stPass<<<1, dataManager.m_pos.size(), 0, streamInfo.stream>>>(
         dataManager.m_pos.data(), dataManager.m_pos.size(), tolerance, dataManager.radius, num_arr.data());
 
     GPU_CALL(cudaDeviceSynchronize());
-
-    std::cout << "1.5" << std::endl;
-
-    std::cout << "1.6" << std::endl;
-
-    for (int i = 0; i < 2; i++) {
-        std::cout << "test: " << num_arr[i] << std::endl;
-    }
-
-    std::cout << "2" << std::endl;
 
     // calculate the offset array
     int cur_idx = 0;
@@ -99,29 +78,19 @@ void KinematicThread::doKinematicStep() {
         contact_sum = contact_sum + num_arr[i];
     }
 
-    std::cout << "3" << std::endl;
-
     // second kinematic pass to fill the contact pair array
-    std::cout << "contact_sum:" << contact_sum << std::endl;
     dataManager.m_contact.resize(contact_sum);
 
-    std::cout << "3.5" << std::endl;
-
     dataManager.m_contact.clear();
-
-    std::cout << "4" << std::endl;
 
     kinematic2ndPass<<<1, k_n, 0, streamInfo.stream>>>(dataManager.m_pos.data(), dataManager.m_pos.size(),
                                                        dataManager.m_offset.data(), num_arr.data(), tolerance,
                                                        dataManager.radius, dataManager.m_contact.data());
 
     cudaDeviceSynchronize();
-
-    std::cout << "OUT KI Thread" << std::endl;
 }
 
 void DynamicThread::doDynamicStep() {
-    std::cout << "IN DY Thread" << std::endl;
     cudaSetDevice(streamInfo.device);
     // dynamicTestKernel<<<1, 1, 0, dStream>>>();
 
@@ -134,5 +103,4 @@ void DynamicThread::doDynamicStep() {
         dataManager.m_acc.data(), dataManager.radius);
 
     cudaDeviceSynchronize();
-    std::cout << "OUT DY Thread" << std::endl;
 }
