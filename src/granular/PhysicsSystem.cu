@@ -90,7 +90,6 @@ void kinematicThread::operator()() {
 }
 
 void dynamicThread::operator()() {
-
     // Set the gpu for this thread
     cudaSetDevice(streamInfo.device);
 
@@ -160,18 +159,6 @@ void dynamicThread::operator()() {
             }
         }
     }
-}
-
-void dynamicThread::populateManagedArrays(
-    const std::vector<clumpBodyInertiaOffset_default_t>& input_clump_types,
-    const std::vector<float3>& input_clump_xyz,
-    const std::set<float>& clumps_mass_types,
-    const std::set<float>& clumps_sp_radii_types,
-    const std::set<float3>& clumps_sp_location_types,
-    const std::vector<clumpBodyInertiaOffset_default_t>& clumps_mass_type_offset,
-    const std::vector<std::vector<distinctSphereRadiiOffset_default_t>>& clumps_sp_radii_type_offset,
-    const std::vector<std::vector<distinctSphereRelativePositions_default_t>>& clumps_sp_location_type_offset) {
-    int a = 1;
 }
 
 int dynamicThread::localUse(int val) {

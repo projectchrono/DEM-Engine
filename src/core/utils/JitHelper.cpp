@@ -10,37 +10,33 @@
 
 #include "JitHelper.h"
 
-
 jitify::JitCache JitHelper::kcache;
 
-
 JitHelper::Header::Header(std::filesystem::path& sourcefile) {
-	this->_source = JitHelper::loadSourceFile(sourcefile);
+    this->_source = JitHelper::loadSourceFile(sourcefile);
 }
 
 const std::string& JitHelper::Header::getSource() {
-	return _source;
+    return _source;
 }
 
 // TODO: This should substitute constant values for certain symbols known at runtime
 void JitHelper::Header::substitute(const std::string& symbol, const std::string& value) {
-	// ...
+    // ...
 }
 
+jitify::Program JitHelper::buildProgram(const std::string& name,
+                                        const std::filesystem::path& source,
+                                        std::vector<JitHelper::Header> headers,
+                                        std::vector<std::string> flags) {
+    std::string code = name + "\n";
 
-jitify::Program JitHelper::buildProgram(
-	const std::string& name, const std::filesystem::path& source,
-	std::vector<JitHelper::Header> headers,
-	std::vector<std::string> flags
-) {
-	std::string code = name + "\n";
+    std::vector<std::string> header_code;
+    for (auto it = headers.begin(); it != headers.end(); it++) {
+        header_code.push_back(it->getSource());
+    }
 
-	std::vector<std::string> header_code;
-	for (auto it = headers.begin(); it != headers.end(); it++) {
-		header_code.push_back(it->getSource());
-	}
+    code.append(JitHelper::loadSourceFile(source));
 
-	code.append(JitHelper::loadSourceFile(source));
-	
-	return kcache.program(code, header_code, flags);
+    return kcache.program(code, header_code, flags);
 }

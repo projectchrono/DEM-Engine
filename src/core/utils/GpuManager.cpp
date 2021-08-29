@@ -18,7 +18,7 @@ GpuManager::GpuManager(unsigned int total_streams) {
         cudaStream_t new_stream;
         cudaStreamCreate(&new_stream);
 
-        this->streams[current_device].push_back(StreamInfo {(signed)current_device, new_stream, false});
+        this->streams[current_device].push_back(StreamInfo{(signed)current_device, new_stream, false});
     }
 }
 
@@ -70,7 +70,8 @@ const GpuManager::StreamInfo& GpuManager::getAvailableStream() {
         }
     }
 
-    // This exception is not meant to be handled, it serves as a notifier that the algorithm is using more streams than it allocated
+    // This exception is not meant to be handled, it serves as a notifier that the algorithm is using more streams than
+    // it allocated
     throw std::range_error("no available streams!");
 }
 

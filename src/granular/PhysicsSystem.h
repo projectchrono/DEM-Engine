@@ -21,7 +21,7 @@ class kinematicThread {
   protected:
     ThreadManager* pSchedSupport;
     GpuManager* pGpuDistributor;
-    
+
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
 
@@ -31,6 +31,7 @@ class kinematicThread {
     int kinematicAverageTime;
     int costlyProductionStep(int) const;
 
+    size_t m_approx_bytes_used = 0;
 
     // Buffer arrays for storing info from the dT side.
     // dT modifies these arrays; kT uses them only.
@@ -126,6 +127,8 @@ class dynamicThread {
     std::vector<int, ManagedAllocator<int>> omgBarX;
     std::vector<int, ManagedAllocator<int>> omgBarY;
     std::vector<int, ManagedAllocator<int>> omgBarZ;
+
+    size_t m_approx_bytes_used = 0;
 
     // Sphere-related arrays in managed memory
     // Belonged-body ID (default unsigned int type)

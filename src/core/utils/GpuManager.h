@@ -14,8 +14,8 @@ class GpuManager {
       public:
         int device;
         cudaStream_t stream;
-        
-        bool _impl_active; // Reserved for the implementation
+
+        bool _impl_active;  // Reserved for the implementation
     };
 
     // Returns the LEAST number of streams available on any device
@@ -27,7 +27,7 @@ class GpuManager {
 
     // DO NOT USE UNLESS YOU INTEND TO MANUALLY HANDLE YOUR STREAMS
     const std::vector<StreamInfo>& getStreamsFromDevice(int index);
-    
+
     // DO NOT USE UNLESS YOU INTEND TO MANUALLY HANDLE YOUR STREAMS
     const std::vector<StreamInfo>& getStreamsFromDevice(const StreamInfo&);
 

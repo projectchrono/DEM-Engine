@@ -144,7 +144,7 @@ int SGPS::Initialize() {
         SGPS_ERROR("Before initializing the system, at least one material type should be loaded via LoadMaterialType.");
     }
 
-    // Figure out a part of the required simulation information such as the scale of the rpoblem domain. Make sure these
+    // Figure out a part of the required simulation information such as the scale of the poblem domain. Make sure these
     // info live in managed memory.
 
     // Call the JIT compiler generator to make prep for this simulation.
