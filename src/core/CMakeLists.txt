@@ -67,4 +67,5 @@ target_sources(
 set_target_properties(
 	core PROPERTIES 
 	POSITION_INDEPENDENT_CODE True
+	CXX_STANDARD ${core_cxxver}
 )
