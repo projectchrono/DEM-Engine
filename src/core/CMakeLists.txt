@@ -22,6 +22,7 @@ elseif(TargetCXXStandard STREQUAL STD_CXX17)
 elseif(TargetCXXStandard STREQUAL STD_CXX20)
 	set(core_cxxver 20)
 else()
+	message(SEND_ERROR "STD_AUTODETECT is not yet supported! Set TargetCXXStandard to an appropriate value to continue.")
 	# TODO: Perform C++ version autodetection based on the compiler ID
 endif()
 
