@@ -46,6 +46,8 @@ int main() {
     }
     aa.SetClumps(input_types, input_xyz);
 
+    aa.InstructBoxDomainNumVoxel(16, 8, 8);
+
     aa.Initialize();
 
     aa.LaunchThreads();

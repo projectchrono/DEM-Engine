@@ -7,6 +7,7 @@
 #include <granular/GranularDefines.h>
 
 #include <iostream>
+#include <fstream>
 #include <thread>
 #include <cstring>
 
@@ -39,6 +40,19 @@ SGPS::~SGPS() {
     delete dT;
 }
 
+void SGPS::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned char z, float len_unit, float3 O) {
+    if (x + y + z != 32 && x + y + z != 64) {
+        SGPS_ERROR(
+            "Please give voxel numbers (as powers of 2) along each direction such that they add up to 32 or 64.");
+    }
+    l = len_unit;
+    nvXp2 = x;
+    nvYp2 = y;
+    nvZp2 = z;
+    m_boxO = O;
+    explicit_nv_override = true;
+}
+
 materialsOffset_default_t SGPS::LoadMaterialType(float density, float E) {
     struct Material a_material;
     a_material.density = density;
@@ -53,8 +67,8 @@ clumpBodyInertiaOffset_default_t SGPS::LoadClumpType(float mass,
                                                      const std::vector<float>& sp_radii,
                                                      const std::vector<float3>& sp_locations_xyz,
                                                      const std::vector<materialsOffset_default_t>& sp_material_ids) {
-    auto l = sp_radii.size();
-    if (l != sp_locations_xyz.size() || l != sp_material_ids.size()) {
+    auto len = sp_radii.size();
+    if (len != sp_locations_xyz.size() || len != sp_material_ids.size()) {
         SGPS_ERROR("Arrays defining a clump topology type must all have the same length.");
     }
 
@@ -78,6 +92,17 @@ clumpBodyInertiaOffset_default_t SGPS::LoadClumpSimpleSphere(float mass,
 
 voxelID_default_t SGPS::GetClumpVoxelID(unsigned int i) const {
     return dT->voxelID.at(i);
+}
+
+// Figure out the unit length l and corresponding numbers of voxels along each direction, based on domain size X, Y, Z
+int SGPS::figureOutNV() {
+    if (m_boxX <= 0.f || m_boxY <= 0.f || m_boxZ <= 0.f) {
+        SGPS_ERROR(
+            "The size of the simulation world is set to be (or default to be) %f by %f by %f. It is impossibly small.",
+            m_boxX, m_boxY, m_boxZ);
+    }
+
+    return 0;
 }
 
 int SGPS::generateJITResources() {
@@ -126,6 +151,11 @@ int SGPS::generateJITResources() {
 
     // Compile the kernels needed.
 
+    if (!explicit_nv_override) {
+        figureOutNV();
+    }
+    std::cout << "The length unit in this simulation is: " << l << std::endl;
+
     return 0;
 }
 
@@ -136,6 +166,11 @@ void SGPS::SetClumps(const std::vector<clumpBodyInertiaOffset_default_t>& types,
 
     m_input_clump_types.insert(m_input_clump_types.end(), types.begin(), types.end());
     m_input_clump_xyz.insert(m_input_clump_xyz.end(), xyz.begin(), xyz.end());
+}
+
+void SGPS::WriteFileAsSpheres(const std::string& outfilename) const {
+    std::ofstream ptFile(outfilename, std::ios::out);  // std::ios::binary?
+    dT->WriteCsvAsSpheres(ptFile);
 }
 
 int SGPS::Initialize() {

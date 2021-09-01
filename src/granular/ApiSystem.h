@@ -6,6 +6,7 @@
 
 #include <vector>
 #include <set>
+#include <cfloat>
 
 #include <core/ApiVersion.h>
 #include <granular/PhysicsSystem.h>
@@ -28,8 +29,18 @@ class SGPS {
     SGPS(float rad);
     virtual ~SGPS();
 
-    //
-    int InstructBoxDomainDimension(float x, float y, float z);
+    // Instruct the dimension of the ``world'', as well as the origin point of this ``world''. On initialization, this
+    // info will be used to figure out how to assign the num of voxels in each direction. If your ``useful'' domain is
+    // not box-shaped, then define a box that contains your domian.
+    void InstructBoxDomainDimension(float x, float y, float z, float3 O = make_float3(0));
+
+    // Explicitly instruct the number of voxels (as 2^{x,y,z}) along each direction, as well as the smallest unit length
+    // l. This is usually for test purposes, and will overwrite other size-related definitions of the big domain.
+    void InstructBoxDomainNumVoxel(unsigned char x,
+                                   unsigned char y,
+                                   unsigned char z,
+                                   float len_unit = 1e-10f,
+                                   float3 O = make_float3(0));
 
     // Load possible clump types into the API-level cache.
     // Return the index of the clump type just loaded.
@@ -55,6 +66,11 @@ class SGPS {
 
     // Return the voxel ID of a clump by its numbering
     voxelID_default_t GetClumpVoxelID(unsigned int i) const;
+
+    // Write current simulation status to a file
+    // Write overlapping spheres, not clumps. It makes the file larger, but less trouble to visualize. Use for test
+    // purposes only.
+    void WriteFileAsSpheres(const std::string& outfilename) const;
 
     int Initialize();
 
@@ -94,7 +110,27 @@ class SGPS {
     std::set<float3> m_clumps_sp_location_types;
     std::vector<std::vector<distinctSphereRelativePositions_default_t>> m_clumps_sp_location_type_offset;
 
+    // ``World'' size along X dir
+    float m_boxX = 0.f;
+    // ``World'' size along Y dir
+    float m_boxY = 0.f;
+    // ``World'' size along Z dir
+    float m_boxZ = 0.f;
+    // Origin of the ``world''
+    float3 m_boxO = make_float3(0);
+    // Number of voxels in the X direction, expressed as a power of 2
+    unsigned char nvXp2;
+    // Number of voxels in the Y direction, expressed as a power of 2
+    unsigned char nvYp2;
+    // Number of voxels in the Z direction, expressed as a power of 2
+    unsigned char nvZp2;
+
     float sphereUU;
+
+    // The length unit. Any XYZ we report to the user, is under the hood a multiple of this l.
+    float l = FLT_MAX;
+    // Whether the number of voxels and length unit l is explicitly given by the user.
+    bool explicit_nv_override = false;
 
     unsigned int nDistinctSphereRadii_computed;
     unsigned int nDistinctSphereRelativePositions_computed;
@@ -116,6 +152,7 @@ class SGPS {
     dynamicThread* dT;
 
     int generateJITResources();
+    int figureOutNV();
 };
 
 }  // namespace sgps

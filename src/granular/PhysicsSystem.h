@@ -112,7 +112,7 @@ class dynamicThread {
     std::vector<unsigned int, ManagedAllocator<unsigned int>> locY;
     std::vector<unsigned int, ManagedAllocator<unsigned int>> locZ;
 
-    // The unit quaternion
+    // The clump quaternion
     std::vector<int, ManagedAllocator<int>> oriQ0;
     std::vector<int, ManagedAllocator<int>> oriQ1;
     std::vector<int, ManagedAllocator<int>> oriQ2;
@@ -181,6 +181,8 @@ class dynamicThread {
         const std::vector<clumpBodyInertiaOffset_default_t>& clumps_mass_type_offset,
         const std::vector<std::vector<distinctSphereRadiiOffset_default_t>>& clumps_sp_radii_type_offset,
         const std::vector<std::vector<distinctSphereRelativePositions_default_t>>& clumps_sp_location_type_offset);
+
+    void WriteCsvAsSpheres(std::ofstream& ptFile) const;
 
     void operator()();
 };

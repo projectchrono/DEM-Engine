@@ -8,6 +8,7 @@
 
 #include <core/ApiVersion.h>
 #include <core/utils/Macros.h>
+#include <core/utils/chpf/particle_writer.hpp>
 #include <granular/GranularDefines.h>
 #include <granular/PhysicsSystem.h>
 
@@ -28,6 +29,11 @@ void dynamicThread::populateManagedArrays(
     const std::vector<std::vector<distinctSphereRadiiOffset_default_t>>& clumps_sp_radii_type_offset,
     const std::vector<std::vector<distinctSphereRelativePositions_default_t>>& clumps_sp_location_type_offset) {
     TRACKED_VECTOR_RESIZE(mass, 5, "mass", 0);
+}
+
+void dynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
+    ParticleFormatWriter pw;
+    // pw.write(ptFile, ParticleFormatWriter::CompressionType::NONE, mass);
 }
 
 }  // namespace sgps

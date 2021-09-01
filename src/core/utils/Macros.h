@@ -10,13 +10,15 @@
 
 extern size_t m_approx_bytes_used;
 
-#define SGPS_ERROR(...)                  \
-    {                                    \
-        printf("ERROR!");                \
-        printf("\n%s", __VA_ARGS__);     \
-        printf("\n%s", __func__);        \
-        printf(": EXITING SGPS SIM.\n"); \
-        exit(1);                         \
+#define SGPS_ERROR(...)                      \
+    {                                        \
+        char error_message[255];             \
+        sprintf(error_message, __VA_ARGS__); \
+        printf("ERROR!");                    \
+        printf("\n%s", error_message);       \
+        printf("\n%s", __func__);            \
+        printf(": EXITING SGPS SIM.\n");     \
+        exit(1);                             \
     }
 
 #define TRACKED_VECTOR_RESIZE(vec, newsize, name, val)         \
