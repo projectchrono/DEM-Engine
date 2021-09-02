@@ -14,6 +14,7 @@
 #include <core/utils/GpuManager.h>
 #include <granular/GranularDefines.h>
 #include <helper_math.cuh>
+#include <core/utils/GpuError.h>
 
 namespace sgps {
 
@@ -90,9 +91,15 @@ class dynamicThread {
     std::vector<voxelID_default_t, ManagedAllocator<voxelID_default_t>> transferBuffer_voxelID;
 
     // Pointers to dynamics-related arrays
-    struct SysState {
-        float* mass;
+    struct SimParams {
+        // Number of voxels in the X direction, expressed as a power of 2
+        unsigned char nvXp2;
+        // Number of voxels in the Y direction, expressed as a power of 2
+        unsigned char nvYp2;
+        // Number of voxels in the Z direction, expressed as a power of 2
+        unsigned char nvZp2;
     };
+    SimParams* simParams;
 
     // Body-related arrays in managed memory
 
@@ -107,6 +114,13 @@ class dynamicThread {
 
     // The distinct sphere radii values
     std::vector<float, ManagedAllocator<float>> radiiSphere;
+
+    // The distinct sphere local position (wrt CoM) values
+    // This array is actually not used? In the tech report as we decided to store relPosSphereXYZ as a long array; but
+    // wouldn't it be better to use it via offsets too?
+    std::vector<float, ManagedAllocator<float>> relPosSphereX;
+    std::vector<float, ManagedAllocator<float>> relPosSphereY;
+    std::vector<float, ManagedAllocator<float>> relPosSphereZ;
 
     // Those are the large ones, ones that have the same length as the number of clumps
     // The mass offsets
@@ -151,9 +165,9 @@ class dynamicThread {
     std::vector<materialsOffset_default_t, ManagedAllocator<materialsOffset_default_t>> materialTupleOffset;
 
     // The location of the sphere, relative to the LRF of the body it belongs to
-    std::vector<float, ManagedAllocator<float>> relPosSphereX;
-    std::vector<float, ManagedAllocator<float>> relPosSphereY;
-    std::vector<float, ManagedAllocator<float>> relPosSphereZ;
+    std::vector<float, ManagedAllocator<float>> sphereRelPosXOffset;
+    std::vector<float, ManagedAllocator<float>> sphereRelPosYOffset;
+    std::vector<float, ManagedAllocator<float>> sphereRelPosZOffset;
 
     int localUse(int val);
 
@@ -162,6 +176,8 @@ class dynamicThread {
 
     dynamicThread(ThreadManager* pSchedSup, GpuManager* pGpuDist)
         : pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
+        GPU_CALL(cudaMallocManaged(&simParams, sizeof(SimParams), cudaMemAttachGlobal));
+
         pKinematicOwnedBuffer_voxelID = NULL;
         nDynamicCycles = 0;
         dynamicAverageTime = 0;

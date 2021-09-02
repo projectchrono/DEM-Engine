@@ -183,6 +183,7 @@ void SGPS::SetClumps(const std::vector<clumpBodyInertiaOffset_default_t>& types,
         SGPS_ERROR("Arrays in the call SetClumps must all have the same length.");
     }
 
+    // clump_xyz are effectively the xyz of the CoM
     m_input_clump_types.insert(m_input_clump_types.end(), types.begin(), types.end());
     m_input_clump_xyz.insert(m_input_clump_xyz.end(), xyz.begin(), xyz.end());
 }
