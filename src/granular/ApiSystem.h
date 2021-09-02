@@ -31,7 +31,8 @@ class SGPS {
 
     // Instruct the dimension of the ``world'', as well as the origin point of this ``world''. On initialization, this
     // info will be used to figure out how to assign the num of voxels in each direction. If your ``useful'' domain is
-    // not box-shaped, then define a box that contains your domian.
+    // not box-shaped, then define a box that contains your domian. O is the coordinate of the left-bottom-front point
+    // of your simulation ``world''.
     void InstructBoxDomainDimension(float x, float y, float z, float3 O = make_float3(0));
 
     // Explicitly instruct the number of voxels (as 2^{x,y,z}) along each direction, as well as the smallest unit length
@@ -41,6 +42,12 @@ class SGPS {
                                    unsigned char z,
                                    float len_unit = 1e-10f,
                                    float3 O = make_float3(0));
+
+    // A convenient call that sets the origin of your coordinate system to be in the dead center of your simulation
+    // ``world''. Useful especially you feel like having this ``world'' large to safely hold everything, and don't quite
+    // care about the amount accuracy lost in the process. Returns the coordinate of the left-bottom-front point of your
+    // simulation ``world'' after this operation.
+    float3 CeterCoordSys();
 
     // Load possible clump types into the API-level cache.
     // Return the index of the clump type just loaded.

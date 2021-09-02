@@ -53,10 +53,19 @@ void SGPS::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned 
 
     // Calculating ``world'' size by the input nvXp2 and l
     m_voxelSize = (double)pow(2, VOXEL_RES_POWER2) * (double)l;
-    m_boxX = m_voxelSize * (double)x;
-    m_boxY = m_voxelSize * (double)y;
-    m_boxZ = m_voxelSize * (double)z;
+    m_boxX = m_voxelSize * (double)(1u << x);
+    m_boxY = m_voxelSize * (double)(1u << y);
+    m_boxZ = m_voxelSize * (double)(1u << z);
     explicit_nv_override = true;
+}
+
+float3 SGPS::CeterCoordSys() {
+    float3 O;
+    O.x = -m_boxX / 2.0;
+    O.y = -m_boxY / 2.0;
+    O.z = -m_boxZ / 2.0;
+    m_boxO = O;
+    return O;
 }
 
 materialsOffset_default_t SGPS::LoadMaterialType(float density, float E) {
@@ -159,7 +168,9 @@ int SGPS::generateJITResources() {
     if (!explicit_nv_override) {
         figureOutNV();
     }
+    std::cout << "The dimension of the simulation world: " << m_boxX << ", " << m_boxY << ", " << m_boxZ << std::endl;
     std::cout << "The length unit in this simulation is: " << l << std::endl;
+    std::cout << "The edge length of a voxel: " << m_voxelSize << std::endl;
 
     // Figure out the initial profile/status of clumps, and related quantities, if need to
     nClumpBodies = m_input_clump_types.size();
@@ -204,6 +215,9 @@ int SGPS::Initialize() {
 
     // Call the JIT compiler generator to make prep for this simulation.
     generateJITResources();
+
+    // Transfer some simulation params
+    dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_boxO);
 
     // Resize managed arrays based on the statistical data we had from the previous step
     dT->allocateManagedArrays(nClumpBodies, nSpheresGM, nDistinctClumpBodyTopologies_computed,

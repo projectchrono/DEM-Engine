@@ -11,7 +11,7 @@ __global__ void kinematicTestKernel(sgps::voxelID_default_t* data) {
     }
 
     if (threadIdx.x < N_INPUT_ITEMS) {
-        data[threadIdx.x] = 2 * data[threadIdx.x] + 1;
+        // data[threadIdx.x] = 2 * data[threadIdx.x] + 1;
         // printf("%d\n", data[threadIdx.x]);
     }
 }

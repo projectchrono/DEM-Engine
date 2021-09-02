@@ -98,6 +98,17 @@ class dynamicThread {
         unsigned char nvYp2;
         // Number of voxels in the Z direction, expressed as a power of 2
         unsigned char nvZp2;
+        // Smallest length unit
+        float l;
+        // Double-precision single voxel size
+        double voxelSize;
+        // Number of clumps and spheres
+        unsigned int nClumpBodies;
+        unsigned int nSpheresGM;
+        // Coordinate of the left-bottom-front point of the simulation ``world''
+        float LBFX;
+        float LBFY;
+        float LBFZ;
     };
     SimParams* simParams;
 
@@ -196,6 +207,14 @@ class dynamicThread {
     // buffer exchange methods
     void setDestinationBuffer_voxelID(voxelID_default_t* pPB) { pKinematicOwnedBuffer_voxelID = pPB; }
     voxelID_default_t* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
+
+    // Set SimParams items
+    void setSimParams(unsigned char nvXp2,
+                      unsigned char nvYp2,
+                      unsigned char nvZp2,
+                      float l,
+                      double voxelSize,
+                      float3 LBFPoint);
 
     // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
     void allocateManagedArrays(unsigned int nClumpBodies,
