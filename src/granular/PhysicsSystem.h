@@ -96,13 +96,22 @@ class dynamicThread {
 
     // Body-related arrays in managed memory
 
-    // The mass
-    std::vector<float, ManagedAllocator<float>> mass;
+    // Those are the smaller ones, the unique, template ones
+    // The mass values
+    std::vector<float, ManagedAllocator<float>> massClumpBody;
 
-    // The components of MOI
+    // The components of MOI values
     std::vector<float, ManagedAllocator<float>> mmiXX;
     std::vector<float, ManagedAllocator<float>> mmiYY;
     std::vector<float, ManagedAllocator<float>> mmiZZ;
+
+    // The distinct sphere radii values
+    std::vector<float, ManagedAllocator<float>> radiiSphere;
+
+    // Those are the large ones, ones that have the same length as the number of clumps
+    // The mass offsets
+    std::vector<clumpBodyInertiaOffset_default_t, ManagedAllocator<clumpBodyInertiaOffset_default_t>>
+        inertiaPropOffsets;
 
     // The voxel ID (split into 3 parts, representing XYZ location)
     std::vector<voxelID_default_t, ManagedAllocator<voxelID_default_t>> voxelID;
@@ -132,18 +141,19 @@ class dynamicThread {
 
     // Sphere-related arrays in managed memory
     // Belonged-body ID (default unsigned int type)
-    std::vector<bodyID_default_t, ManagedAllocator<bodyID_default_t>> bodyID;
+    std::vector<bodyID_default_t, ManagedAllocator<bodyID_default_t>> ownerClumpBody;
 
     // The ID that maps this sphere's radius
-    std::vector<distinctSphereRadiiOffset_default_t, ManagedAllocator<distinctSphereRadiiOffset_default_t>> radiusID;
+    std::vector<distinctSphereRadiiOffset_default_t, ManagedAllocator<distinctSphereRadiiOffset_default_t>>
+        sphereRadiusOffset;
 
     // The ID that maps this sphere's material
-    std::vector<materialsOffset_default_t, ManagedAllocator<materialsOffset_default_t>> materialID;
+    std::vector<materialsOffset_default_t, ManagedAllocator<materialsOffset_default_t>> materialTupleOffset;
 
     // The location of the sphere, relative to the LRF of the body it belongs to
-    std::vector<float, ManagedAllocator<float>> offsetX;
-    std::vector<float, ManagedAllocator<float>> offsetY;
-    std::vector<float, ManagedAllocator<float>> offsetZ;
+    std::vector<float, ManagedAllocator<float>> relPosSphereX;
+    std::vector<float, ManagedAllocator<float>> relPosSphereY;
+    std::vector<float, ManagedAllocator<float>> relPosSphereZ;
 
     int localUse(int val);
 
@@ -170,6 +180,14 @@ class dynamicThread {
     // buffer exchange methods
     void setDestinationBuffer_voxelID(voxelID_default_t* pPB) { pKinematicOwnedBuffer_voxelID = pPB; }
     voxelID_default_t* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
+
+    // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
+    void allocateManagedArrays(unsigned int nClumpBodies,
+                               unsigned int nSpheresGM,
+                               clumpBodyInertiaOffset_default_t nClumpTopo,
+                               distinctSphereRadiiOffset_default_t nSphereRadii,
+                               distinctSphereRelativePositions_default_t nSphereRelaPos,
+                               materialsOffset_default_t nMatTuples);
 
     // Data type TBD, should come from JITCed headers
     void populateManagedArrays(

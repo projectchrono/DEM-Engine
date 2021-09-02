@@ -50,6 +50,12 @@ void SGPS::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned 
     nvYp2 = y;
     nvZp2 = z;
     m_boxO = O;
+
+    // Calculating ``world'' size by the input nvXp2 and l
+    m_voxelSize = (double)pow(2, VOXEL_RES_POWER2) * (double)l;
+    m_boxX = m_voxelSize * (double)x;
+    m_boxY = m_voxelSize * (double)y;
+    m_boxZ = m_voxelSize * (double)z;
     explicit_nv_override = true;
 }
 
@@ -106,10 +112,10 @@ int SGPS::figureOutNV() {
 }
 
 int SGPS::generateJITResources() {
-    size_t num_clump_types = m_clumps_mass.size();
+    size_t input_num_clump_types = m_clumps_mass.size();
     // Put unique clump mass values in a set.
     m_clumps_mass_types.insert(m_clumps_mass.begin(), m_clumps_mass.end());
-    for (size_t i = 0; i < num_clump_types; i++) {
+    for (size_t i = 0; i < input_num_clump_types; i++) {
         // Put unique sphere radii values in a set.
         m_clumps_sp_radii_types.insert(m_clumps_sp_radii.at(i).begin(), m_clumps_sp_radii.at(i).end());
         // Put unique clump sphere component locations in a set.
@@ -117,7 +123,7 @@ int SGPS::generateJITResources() {
     }
     // Now rearrange so the original input mass and sphere radii are now stored as the offsets to their respective
     // uniques sets.
-    for (size_t i = 0; i < num_clump_types; i++) {
+    for (size_t i = 0; i < input_num_clump_types; i++) {
         m_clumps_mass_type_offset.push_back(
             std::distance(m_clumps_mass_types.begin(), m_clumps_mass_types.find(m_clumps_mass.at(i))));
         std::vector<distinctSphereRadiiOffset_default_t> sp_radii_type_offset(m_clumps_sp_radii.at(i).size(), 0);
@@ -149,12 +155,25 @@ int SGPS::generateJITResources() {
     //    std::cout << std::endl;
     // }
 
-    // Compile the kernels needed.
-
+    // Figure out the parameters related to the simulation ``world'', if need to
     if (!explicit_nv_override) {
         figureOutNV();
     }
     std::cout << "The length unit in this simulation is: " << l << std::endl;
+
+    // Figure out the initial profile/status of clumps, and related quantities, if need to
+    nClumpBodies = m_input_clump_types.size();
+
+    // now a quick hack using for loop
+    // I'll have to change that to be more... efficient
+    nSpheresGM = 0;
+    for (size_t i = 0; i < m_input_clump_types.size(); i++) {
+        auto this_type_num = m_input_clump_types.at(i);
+        auto this_radii_offsets = m_clumps_sp_radii_type_offset.at(this_type_num);
+        nSpheresGM += this_radii_offsets.size();
+    }
+
+    // Compile the kernels if there are some can be compiled now
 
     return 0;
 }
@@ -184,6 +203,11 @@ int SGPS::Initialize() {
 
     // Call the JIT compiler generator to make prep for this simulation.
     generateJITResources();
+
+    // Resize managed arrays based on the statistical data we had from the previous step
+    dT->allocateManagedArrays(nClumpBodies, nSpheresGM, nDistinctClumpBodyTopologies_computed,
+                              nDistinctSphereRadii_computed, nDistinctSphereRelativePositions_computed,
+                              nMatTuples_computed);
 
     // Now that the CUDA-related functions and data types are JITCompiled, we can feed those GPU-side arrays with the
     // cached API-level simulation info.

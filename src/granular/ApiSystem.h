@@ -124,6 +124,13 @@ class SGPS {
     unsigned char nvYp2;
     // Number of voxels in the Z direction, expressed as a power of 2
     unsigned char nvZp2;
+    // Actual (double-precision) size of a voxel
+    double m_voxelSize;
+
+    // Total number of spheres
+    unsigned int nSpheresGM;
+    // Total number of clump bodies
+    unsigned int nClumpBodies;
 
     float sphereUU;
 
