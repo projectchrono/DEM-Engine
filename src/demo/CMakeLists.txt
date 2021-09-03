@@ -39,5 +39,10 @@ FOREACH(PROGRAM ${DEMOS})
 		
 		add_dependencies(${PROGRAM} ${LIBRARIES})
 
+		set_target_properties(
+			${PROGRAM} PROPERTIES
+			CXX_STANDARD ${GLOBAL_cxxver}
+		)
+
 ENDFOREACH(PROGRAM)
 

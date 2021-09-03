@@ -53,6 +53,22 @@ set_property(
 	STRINGS STD_AUTODETECT STD_CXX11 STD_CXX14 STD_CXX17 STD_CXX20
 )
 
+# Convert the standard into something CMake will understand
+if(TargetCXXStandard STREQUAL STD_CXX11)
+	set(GLOBAL_cxxver 11 CACHE INTERNAL "")
+elseif(TargetCXXStandard STREQUAL STD_CXX14)
+	set(GLOBAL_cxxver 14 CACHE INTERNAL "")
+elseif(TargetCXXStandard STREQUAL STD_CXX17)
+	set(GLOBAL_cxxver 17 CACHE INTERNAL "")
+elseif(TargetCXXStandard STREQUAL STD_CXX20)
+	set(GLOBAL_cxxver 20 CACHE INTERNAL "")
+else()
+	message(SEND_ERROR "STD_AUTODETECT is not yet supported! Set TargetCXXStandard to an appropriate value to continue.")
+	# TODO: Perform C++ version autodetection based on the compiler ID
+endif()
+
+
+# Allow the use of #include <> for project headers (allowing cleaner better relative pathing)
 set(ProjectIncludeRoot "${CMAKE_CURRENT_SOURCE_DIR}/src" "${CMAKE_CURRENT_BINARY_DIR}/src")
 
 # Global fix for CUDA language bug

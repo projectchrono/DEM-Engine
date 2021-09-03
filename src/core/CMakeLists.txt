@@ -13,19 +13,6 @@ configure_file(
 	@ONLY
 )
 
-if(TargetCXXStandard STREQUAL STD_CXX11)
-	set(core_cxxver 11)
-elseif(TargetCXXStandard STREQUAL STD_CXX14)
-	set(core_cxxver 14)
-elseif(TargetCXXStandard STREQUAL STD_CXX17)
-	set(core_cxxver 17)
-elseif(TargetCXXStandard STREQUAL STD_CXX20)
-	set(core_cxxver 20)
-else()
-	message(SEND_ERROR "STD_AUTODETECT is not yet supported! Set TargetCXXStandard to an appropriate value to continue.")
-	# TODO: Perform C++ version autodetection based on the compiler ID
-endif()
-
 add_library(core OBJECT)
 
 target_include_directories(
@@ -68,5 +55,5 @@ target_sources(
 set_target_properties(
 	core PROPERTIES 
 	POSITION_INDEPENDENT_CODE True
-	CXX_STANDARD ${core_cxxver}
+	CXX_STANDARD ${GLOBAL_cxxver}
 )
