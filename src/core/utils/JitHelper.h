@@ -35,6 +35,8 @@ class JitHelper {
     // 	std::vector<std::string> flags = 0
     // );
 
+    static const std::filesystem::path KERNEL_DIR;
+
   private:
     static jitify::JitCache kcache;
 

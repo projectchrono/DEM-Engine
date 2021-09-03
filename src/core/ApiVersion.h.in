@@ -34,5 +34,6 @@
 #define CXX_EQ_NEWER(x)	(CXX_EQUAL(x) || CXX_NEWER(x))
 #define CXX_EQ_OLDER(x) (CXX_EQUAL(x) || CXX_OLDER(x))
 
+#define PROJECT_SOURCE_DIRECTORY "@PROJECT_SOURCE_DIR@"
 
 #endif

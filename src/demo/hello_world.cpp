@@ -9,8 +9,10 @@ int main(int argc, char** argv) {
 	
 	cudaSetDevice(stream_info.device);
 
-	std::cerr << "[NOTICE]: This demo assumes you are running from a typical build directory location inside of the source directory!\n\n";
-	auto program = JitHelper::buildProgram("hello", "../src/kernel/hello.cu");
+	std::cerr << "[NOTICE]: This demo assumes you are running from a typical build directory location inside of the source directory!\n";
+	
+	std::cerr << "[INFO]: Building kernel from " << JitHelper::KERNEL_DIR << "\n\n";
+	auto program = JitHelper::buildProgram("hello", JitHelper::KERNEL_DIR / "hello.cu");
 
 	program.kernel("helloWorldKernel").instantiate().configure(dim3(1), dim3(1), 0, stream_info.stream).launch();
 
