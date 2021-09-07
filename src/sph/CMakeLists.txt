@@ -8,6 +8,7 @@ add_library(sph OBJECT)
 
 target_include_directories(
 	sph
+	PUBLIC ${NVIDIAJitifyPath}
 	PUBLIC ${ProjectIncludeRoot}
 	PUBLIC ${NVIDIAMathDir}
 )
@@ -37,5 +38,6 @@ target_sources(
 set_target_properties(
 	sph PROPERTIES
 	POSITION_INDEPENDENT_CODE True
+	CXX_STANDARD ${GLOBAL_cxxver}
 )
 

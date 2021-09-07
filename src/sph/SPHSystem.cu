@@ -3,7 +3,7 @@
 
 #include <ostream>
 #include <sph/SPHSystem.cuh>
-#include <kernel/cudaKernels.cuh>
+#include <core/utils/JitHelper.h>
 #include <vector>
 #include <core/utils/GpuError.h>
 #include "datastruct.cuh"
@@ -57,10 +57,17 @@ void KinematicThread::doKinematicStep() {
     // void* args[] = {(void*)(dataManager.m_pos.data()), (void*)(dataManager.m_pos.size()), (void*)(tolerance),
     //                (void*)(dataManager.radius), (void*)(num_arr.data())};
     // cudaLaunchKernel((void*)&kinematic1stPass, dim3(1), dim3(k_n), args, 0, streamInfo.stream);
-    kinematic1stPass<<<1, dataManager.m_pos.size(), 0, streamInfo.stream>>>(
-        dataManager.m_pos.data(), dataManager.m_pos.size(), tolerance, dataManager.radius, num_arr.data());
+
+    auto kinematic_program = JitHelper::buildProgram("cudaKernels", JitHelper::KERNEL_DIR / "cudaKernels.cu");
+
+    kinematic_program.kernel("kinematic1stPass")
+        .instantiate()
+        .configure(dim3(1), dim3(1), 0, streamInfo.stream)
+        .launch(dataManager.m_pos.data(), dataManager.m_pos.size(), tolerance, dataManager.radius, num_arr.data());
 
     GPU_CALL(cudaDeviceSynchronize());
+
+    /*
 
     // calculate the offset array
     int cur_idx = 0;
@@ -88,6 +95,7 @@ void KinematicThread::doKinematicStep() {
                                                        dataManager.radius, dataManager.m_contact.data());
 
     cudaDeviceSynchronize();
+    */
 }
 
 void DynamicThread::doDynamicStep() {
@@ -98,9 +106,11 @@ void DynamicThread::doDynamicStep() {
     int num_thread = 64;
     int num_block = dataManager.m_contact.size() / num_thread + 1;
 
+    /*
     dynamicPass<<<num_block, num_thread, 0, streamInfo.stream>>>(
         dataManager.m_contact.data(), dataManager.m_contact.size(), dataManager.m_pos.data(), dataManager.m_vel.data(),
         dataManager.m_acc.data(), dataManager.radius);
 
     cudaDeviceSynchronize();
+    */
 }

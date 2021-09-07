@@ -8,7 +8,6 @@
 #include <granular/PhysicsSystem.h>
 #include <iostream>
 #include <thread>
-#include <kernel/cudaKernels.cuh>
 
 namespace sgps {
 
@@ -46,7 +45,7 @@ void kinematicThread::operator()() {
 
         auto data_arg = voxelID.data();
         void* args[] = {(void*)(&data_arg)};
-        cudaLaunchKernel((void*)&kinematicTestKernel, dim3(1), dim3(N_INPUT_ITEMS), args, 0, streamInfo.stream);
+        // cudaLaunchKernel((void*)&kinematicTestKernel, dim3(1), dim3(N_INPUT_ITEMS), args, 0, streamInfo.stream);
         // kinematicTestKernel<<<1, 4, 0, kinematicStream.stream>>>(voxelID.data());
         cudaDeviceSynchronize();
         // cudaStreamDestroy(currentStream);
@@ -166,8 +165,8 @@ int dynamicThread::localUse(int val) {
     // std::this_thread::sleep_for(std::chrono::milliseconds(dynamicAverageTime));
 
     // dynamicTestKernel<<<1, 1>>>();
-    cudaLaunchKernel((void*)&dynamicTestKernel, dim3(1), dim3(1), NULL, 0, streamInfo.stream);
-    cudaDeviceSynchronize();
+    // cudaLaunchKernel((void*)&dynamicTestKernel, dim3(1), dim3(1), NULL, 0, streamInfo.stream);
+    // cudaDeviceSynchronize();
     return 2 * val;
 }
 
