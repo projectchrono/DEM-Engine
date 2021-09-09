@@ -8,6 +8,7 @@ add_library(granular OBJECT)
 
 target_include_directories(
 	granular
+	PUBLIC ${NVIDIAJitifyPath}
 	PUBLIC ${ProjectIncludeRoot}
 	PUBLIC ${NVIDIAMathDir}
 )
@@ -27,7 +28,6 @@ set(granular_headers
 set(granular_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/PhysicsSystem.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/ApiSystem.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/PhysicsSystem.cu
 )
 
 target_sources(
@@ -39,5 +39,6 @@ target_sources(
 set_target_properties(
 	granular PROPERTIES
 	POSITION_INDEPENDENT_CODE True
+	CXX_STANDARD ${GLOBAL_cxxver}
 )
 

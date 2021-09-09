@@ -20,13 +20,13 @@ target_link_libraries(
 
 # .h, .hpp
 set(sph_headers
-	${CMAKE_CURRENT_SOURCE_DIR}/SPHSystem.cuh
-	${CMAKE_CURRENT_SOURCE_DIR}/datastruct.cuh
+	${CMAKE_CURRENT_SOURCE_DIR}/SPHSystem.h
+	${CMAKE_CURRENT_SOURCE_DIR}/datastruct.h
 )
 
 # .c, .cpp, .cu
 set(sph_sources
-	${CMAKE_CURRENT_SOURCE_DIR}/SPHSystem.cu
+	${CMAKE_CURRENT_SOURCE_DIR}/SPHSystem.cpp
 )
 
 target_sources(

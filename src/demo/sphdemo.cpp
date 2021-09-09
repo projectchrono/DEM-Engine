@@ -1,7 +1,7 @@
 // SPH-DualGPU
 // driver code
 
-#include <sph/SPHSystem.cuh>
+#include <sph/SPHSystem.h>
 
 int main(int argc, char* argv[]) {
     /*
@@ -49,6 +49,10 @@ int main(int argc, char* argv[]) {
     acc_vec.push_back(vector3(0.f, 0.f, 0.f));
     acc_vec.push_back(vector3(0.f, 0.f, 0.f));
 
+    std::vector<bool> fix_vec;
+    fix_vec.push_back(true);
+    fix_vec.push_back(false);
+
     // create a new GpuManager
     GpuManager gpu_distributor(2);
 
@@ -56,8 +60,13 @@ int main(int argc, char* argv[]) {
     SPHSystem* system = new SPHSystem(gpu_distributor);
 
     // initialize the SPHSystem
-    system->initialize(radius, pos_vec, vel_vec, acc_vec);
-    system->doStepDynamics(0.0001);
+    system->initialize(radius, pos_vec, vel_vec, acc_vec, fix_vec);
+    int frame = 0;
+    for (int i = 0; i < 100; i++) {
+        frame = frame + 1;
+        system->doStepDynamics(0.01);
+        system->printCSV("test" + std::to_string(frame) + ".csv");
+    }
 
     // print out test
     // print particle data into a csv for paraview visualization
