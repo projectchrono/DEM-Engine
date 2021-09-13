@@ -4,8 +4,8 @@
 
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
-#include <granular/ApiSystem.h>
 #include <core/utils/chpf/particle_writer.hpp>
+#include <granular/ApiSystem.h>
 
 #include <cstdio>
 #include <time.h>
@@ -15,6 +15,21 @@ using namespace sgps;
 int main() {
     SGPS aa(1.f);
 
+    srand(time(NULL));
+
+    // total number of random clump templates to generate
+    int num_template = 27;
+
+    int min_sphere = 1;
+    int max_sphere = 5;
+
+    float min_rad = 0.4;
+    float max_rad = 1.0;
+
+    float min_relpos = 0.26;
+    float max_relpos = 0.85;
+
+    /*
     std::vector<float> radii_a_vec(3, .4);
     std::vector<float> radii_b_vec(3, .6);
     std::vector<float> radii_c_vec(3, .8);
@@ -23,41 +38,65 @@ int main() {
     std::vector<float3> pos_b_vec(3, make_float3(.1, .05, .06));
     std::vector<float3> pos_c_vec(3, make_float3(.12, .1, .14));
     std::vector<float3> pos_d_vec;
-    pos_d_vec.push_back(make_float3(.2, .3, .17));
-    pos_d_vec.push_back(make_float3(.12, .4, .37));
-    pos_d_vec.push_back(make_float3(.22, .19, .45));
+    pos_d_vec.push_back(2. * make_float3(.2, .3, .17));
+    pos_d_vec.push_back(2. * make_float3(.12, .4, .37));
+    pos_d_vec.push_back(2. * make_float3(.22, .19, .45));
 
     std::vector<unsigned int> mat_vec(3, 0);
+    */
 
     aa.LoadMaterialType(1, 10);
 
-    auto type1 = aa.LoadClumpType(1, make_float3(1), radii_a_vec, pos_d_vec, mat_vec);
-    auto type2 = aa.LoadClumpType(2, make_float3(2), radii_b_vec, pos_d_vec, mat_vec);
-    auto type3 = aa.LoadClumpType(2, make_float3(3), radii_c_vec, pos_d_vec, mat_vec);
-    auto type4 = aa.LoadClumpSimpleSphere(3, 1., 0);
+    for (int i = 0; i < num_template; i++) {
+        // first decide the number of spheres that live in this clump
+        int num_sphere = rand() % (max_sphere - min_sphere + 1) + 1;
 
-    std::vector<unsigned int> input_types;
+        // then allocate the clump template definition arrays
+        float mass = (float)rand() / RAND_MAX;
+        float3 MOI = make_float3((float)rand() / RAND_MAX, (float)rand() / RAND_MAX, (float)rand() / RAND_MAX);
+        std::vector<float> radii;
+        std::vector<float3> relPos;
+        std::vector<unsigned int> mat;
+
+        // randomly generate clump template configurations
+
+        // the relPos of a sphere is always seeded from one of the already-generated sphere
+        float3 seed_pos = make_float3(0);
+        for (int j = 0; j < num_sphere; j++) {
+            radii.push_back(((float)rand() / RAND_MAX) * (max_rad - min_rad) + min_rad);
+            float3 tmp;
+            tmp.x = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
+            tmp.y = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
+            tmp.z = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
+            tmp += seed_pos;
+            relPos.push_back(tmp);
+            mat.push_back(0);
+
+            // seed relPos from one of the previously generated spheres
+            int choose_from = rand() % (j + 1);
+            seed_pos = relPos.at(choose_from);
+        }
+
+        // it returns the numbering of this clump template (although here we don't care)
+        auto template_num = aa.LoadClumpType(mass, MOI, radii, relPos, mat);
+    }
+    // auto num = aa.LoadClumpSimpleSphere(3, 1., 0);
+
+    std::vector<unsigned int> input_template_num;
     std::vector<float3> input_xyz;
 
-    /*
-    srand(time(NULL));
-    unsigned int total_types = 3;
-    unsigned int total_clumps = 6;
-    for (unsigned int i = 0; i < total_clumps; i++) {
-        input_types.push_back(i % total_types);
-        input_xyz.push_back(
-            10.*make_float3((float)rand() / (RAND_MAX), (float)rand() / (RAND_MAX), (float)rand() / (RAND_MAX)));
+    // show one for each template configuration
+    for (int i = 0; i < num_template; i++) {
+        input_template_num.push_back(i);
+
+        float grid_size = 5.0;
+        int ticks = 3;
+        int ix = i % ticks;
+        int iy = (i % (ticks * ticks)) / ticks;
+        int iz = i / (ticks * ticks);
+        input_xyz.push_back(grid_size * make_float3(ix, iy, iz));
     }
-    */
-    input_types.push_back(0);
-    input_types.push_back(1);
-    input_types.push_back(2);
-    input_types.push_back(3);
-    input_xyz.push_back(make_float3(10, 10, 5));
-    input_xyz.push_back(make_float3(10, 5, 10));
-    input_xyz.push_back(make_float3(5, 5, 10));
-    input_xyz.push_back(make_float3(5, 10, 10));
-    aa.SetClumps(input_types, input_xyz);
+    aa.SetClumps(input_template_num, input_xyz);
 
     aa.InstructBoxDomainNumVoxel(16, 8, 8, 1e-10);
 
