@@ -38,10 +38,9 @@ void dynamicThread::setSimParams(unsigned char nvXp2,
 
 void dynamicThread::allocateManagedArrays(unsigned int nClumpBodies,
                                           unsigned int nSpheresGM,
-                                          clumpBodyInertiaOffset_default_t nClumpTopo,
-                                          distinctSphereRadiiOffset_default_t nSphereRadii,
-                                          distinctSphereRelativePositions_default_t nSphereRelaPos,
-                                          materialsOffset_default_t nMatTuples) {
+                                          unsigned int nClumpTopo,
+                                          unsigned int nClumpComponents,
+                                          unsigned int nMatTuples) {
     simParams->nSpheresGM = nSpheresGM;
     simParams->nClumpBodies = nClumpBodies;
     // Resize those that are as long as the number of clumps
@@ -52,44 +51,44 @@ void dynamicThread::allocateManagedArrays(unsigned int nClumpBodies,
 
     // Resize those that are as long as the number of spheres
     TRACKED_VECTOR_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
-    TRACKED_VECTOR_RESIZE(sphereRadiusOffset, nSpheresGM, "sphereRadiusOffset", 0);
-    TRACKED_VECTOR_RESIZE(sphereRelPosXOffset, nSpheresGM, "sphereRelPosXOffset", 0);
-    TRACKED_VECTOR_RESIZE(sphereRelPosYOffset, nSpheresGM, "sphereRelPosYOffset", 0);
-    TRACKED_VECTOR_RESIZE(sphereRelPosZOffset, nSpheresGM, "sphereRelPosZOffset",
-                          0);  // TODO: these relPosOffsets should be reduced to 1
+    TRACKED_VECTOR_RESIZE(clumpComponentOffset, nSpheresGM, "sphereRadiusOffset", 0);
 
     // Resize those that are as long as the template lengths
     TRACKED_VECTOR_RESIZE(massClumpBody, nClumpTopo, "massClumpBody", 0);
-    TRACKED_VECTOR_RESIZE(radiiSphere, nSphereRadii, "radiiSphere", 0);
-    TRACKED_VECTOR_RESIZE(relPosSphereX, nSphereRelaPos, "relPosSphereX", 0);
-    TRACKED_VECTOR_RESIZE(relPosSphereY, nSphereRelaPos, "relPosSphereY", 0);
-    TRACKED_VECTOR_RESIZE(relPosSphereZ, nSphereRelaPos, "relPosSphereZ", 0);
+    TRACKED_VECTOR_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);
+    TRACKED_VECTOR_RESIZE(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
+    TRACKED_VECTOR_RESIZE(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
+    TRACKED_VECTOR_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
 }
 
-void dynamicThread::populateManagedArrays(
-    const std::vector<clumpBodyInertiaOffset_default_t>& input_clump_types,
-    const std::vector<float3>& input_clump_xyz,
-    const std::set<float>& clumps_mass_types,
-    const std::set<float>& clumps_sp_radii_types,
-    const std::set<float3>& clumps_sp_location_types,
-    const std::vector<clumpBodyInertiaOffset_default_t>& clumps_mass_type_offset,
-    const std::vector<std::vector<distinctSphereRadiiOffset_default_t>>& clumps_sp_radii_type_offset,
-    const std::vector<std::vector<distinctSphereRelativePositions_default_t>>& clumps_sp_location_type_offset) {
+void dynamicThread::populateManagedArrays(const std::vector<clumpBodyInertiaOffset_default_t>& input_clump_types,
+                                          const std::vector<float3>& input_clump_xyz,
+                                          const std::vector<float>& clumps_mass_types,
+                                          const std::vector<std::vector<float>>& clumps_sp_radii_types,
+                                          const std::vector<std::vector<float3>>& clumps_sp_location_types) {
     // Use some temporary hacks to get the info in the managed mem
     // All the input vectors should have the same length, nClumpTopo
     unsigned int k = 0;
+    std::vector<unsigned int> prescans;
 
+    prescans.push_back(0);
     for (auto elem : clumps_sp_radii_types) {
-        radiiSphere.at(k) = elem;
-        k++;
+        for (auto radius : elem) {
+            radiiSphere.at(k) = radius;
+            k++;
+        }
+        prescans.push_back(k);
     }
+    prescans.pop_back();
     k = 0;
 
     for (auto elem : clumps_sp_location_types) {
-        relPosSphereX.at(k) = elem.x;
-        relPosSphereY.at(k) = elem.y;
-        relPosSphereZ.at(k) = elem.z;
-        k++;
+        for (auto loc : elem) {
+            relPosSphereX.at(k) = loc.x;
+            relPosSphereY.at(k) = loc.y;
+            relPosSphereZ.at(k) = loc.z;
+            k++;
+        }
         // std::cout << "sphere location types: " << elem.x << ", " << elem.y << ", " << elem.z << std::endl;
     }
     k = 0;
@@ -103,15 +102,12 @@ void dynamicThread::populateManagedArrays(
         auto this_CoM_coord = input_clump_xyz.at(i) - LBF;
         // std::cout << "CoM position: " << this_CoM_coord.x << ", " << this_CoM_coord.y << ", " << this_CoM_coord.z <<
         // std::endl;
-        auto this_clump_no_sp_radii_offsets = clumps_sp_radii_type_offset.at(type_of_this_clump);
-        auto this_clump_no_sp_loc_offsets = clumps_sp_location_type_offset.at(type_of_this_clump);
+        auto this_clump_no_sp_radii = clumps_sp_radii_types.at(type_of_this_clump);
+        auto this_clump_no_sp_relPos = clumps_sp_location_types.at(type_of_this_clump);
 
-        for (size_t j = 0; j < this_clump_no_sp_radii_offsets.size(); j++) {
-            sphereRadiusOffset.at(k) = this_clump_no_sp_radii_offsets.at(j);
+        for (size_t j = 0; j < this_clump_no_sp_radii.size(); j++) {
+            clumpComponentOffset.at(k) = prescans.at(type_of_this_clump) + j;
             ownerClumpBody.at(k) = i;
-            sphereRelPosXOffset.at(k) = this_clump_no_sp_loc_offsets.at(j);
-            sphereRelPosYOffset.at(k) = this_clump_no_sp_loc_offsets.at(j);
-            sphereRelPosZOffset.at(k) = this_clump_no_sp_loc_offsets.at(j);
             k++;
             // std::cout << "Sphere Rel Pos offset: " << this_clump_no_sp_loc_offsets.at(j) << std::endl;
         }
@@ -151,9 +147,9 @@ void dynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
         // std::cout << "Out voxel ID: " << voxelID.at(this_owner) << std::endl;
         // std::cout << "Out voxel ID XYZ: " << voxelIDX << ", " << voxelIDY << ", " << voxelIDZ << std::endl;
 
-        auto this_sp_deviation_x = relPosSphereX.at(sphereRelPosXOffset.at(i));
-        auto this_sp_deviation_y = relPosSphereY.at(sphereRelPosYOffset.at(i));
-        auto this_sp_deviation_z = relPosSphereZ.at(sphereRelPosZOffset.at(i));
+        auto this_sp_deviation_x = relPosSphereX.at(clumpComponentOffset.at(i));
+        auto this_sp_deviation_y = relPosSphereY.at(clumpComponentOffset.at(i));
+        auto this_sp_deviation_z = relPosSphereZ.at(clumpComponentOffset.at(i));
         posX.at(i) = voxelIDX * simParams->voxelSize + locX.at(this_owner) * simParams->l + this_sp_deviation_x +
                      simParams->LBFX;
         posY.at(i) = voxelIDY * simParams->voxelSize + locY.at(this_owner) * simParams->l + this_sp_deviation_y +
@@ -162,7 +158,7 @@ void dynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
                      simParams->LBFZ;
         // std::cout << "Sphere Pos: " << posX.at(i) << ", " << posY.at(i) << ", " << posZ.at(i) << std::endl;
 
-        spRadii.at(i) = radiiSphere.at(sphereRadiusOffset.at(i));
+        spRadii.at(i) = radiiSphere.at(clumpComponentOffset.at(i));
     }
     pw.write(ptFile, ParticleFormatWriter::CompressionType::NONE, posX, posY, posZ, spRadii);
 }

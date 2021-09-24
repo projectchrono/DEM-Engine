@@ -12,11 +12,12 @@ namespace sgps {
 
 typedef unsigned int voxelID_default_t;
 typedef unsigned int bodyID_default_t;
-typedef unsigned int distinctSphereRadiiOffset_default_t;
 typedef unsigned int materialsOffset_default_t;
 typedef unsigned int clumpBodyInertiaOffset_default_t;
-typedef unsigned int distinctSphereRelativePositions_default_t;
 typedef unsigned int stateVectors_default_t;
+typedef unsigned int clumpComponentOffset_t;
+// typedef unsigned int distinctSphereRelativePositions_default_t;
+// typedef unsigned int distinctSphereRadiiOffset_default_t;
 
 // somehow add array materialsArray and radiiArray??
 

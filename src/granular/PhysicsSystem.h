@@ -168,17 +168,11 @@ class dynamicThread {
     // Belonged-body ID (default unsigned int type)
     std::vector<bodyID_default_t, ManagedAllocator<bodyID_default_t>> ownerClumpBody;
 
-    // The ID that maps this sphere's radius
-    std::vector<distinctSphereRadiiOffset_default_t, ManagedAllocator<distinctSphereRadiiOffset_default_t>>
-        sphereRadiusOffset;
+    // The ID that maps this sphere's radius and relPos
+    std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> clumpComponentOffset;
 
     // The ID that maps this sphere's material
     std::vector<materialsOffset_default_t, ManagedAllocator<materialsOffset_default_t>> materialTupleOffset;
-
-    // The location of the sphere, relative to the LRF of the body it belongs to
-    std::vector<float, ManagedAllocator<float>> sphereRelPosXOffset;
-    std::vector<float, ManagedAllocator<float>> sphereRelPosYOffset;
-    std::vector<float, ManagedAllocator<float>> sphereRelPosZOffset;
 
     int localUse(int val);
 
@@ -219,21 +213,16 @@ class dynamicThread {
     // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
     void allocateManagedArrays(unsigned int nClumpBodies,
                                unsigned int nSpheresGM,
-                               clumpBodyInertiaOffset_default_t nClumpTopo,
-                               distinctSphereRadiiOffset_default_t nSphereRadii,
-                               distinctSphereRelativePositions_default_t nSphereRelaPos,
-                               materialsOffset_default_t nMatTuples);
+                               unsigned int nClumpTopo,
+                               unsigned int nClumpComponents,
+                               unsigned int nMatTuples);
 
     // Data type TBD, should come from JITCed headers
-    void populateManagedArrays(
-        const std::vector<clumpBodyInertiaOffset_default_t>& input_clump_types,
-        const std::vector<float3>& input_clump_xyz,
-        const std::set<float>& clumps_mass_types,
-        const std::set<float>& clumps_sp_radii_types,
-        const std::set<float3>& clumps_sp_location_types,
-        const std::vector<clumpBodyInertiaOffset_default_t>& clumps_mass_type_offset,
-        const std::vector<std::vector<distinctSphereRadiiOffset_default_t>>& clumps_sp_radii_type_offset,
-        const std::vector<std::vector<distinctSphereRelativePositions_default_t>>& clumps_sp_location_type_offset);
+    void populateManagedArrays(const std::vector<clumpBodyInertiaOffset_default_t>& input_clump_types,
+                               const std::vector<float3>& input_clump_xyz,
+                               const std::vector<float>& clumps_mass_types,
+                               const std::vector<std::vector<float>>& clumps_sp_radii_types,
+                               const std::vector<std::vector<float3>>& clumps_sp_location_types);
 
     void WriteCsvAsSpheres(std::ofstream& ptFile) const;
 

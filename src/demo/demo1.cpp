@@ -26,8 +26,8 @@ int main() {
     float min_rad = 0.4;
     float max_rad = 1.0;
 
-    float min_relpos = 0.26;
-    float max_relpos = 0.85;
+    float min_relpos = -0.5;
+    float max_relpos = 0.5;
 
     /*
     std::vector<float> radii_a_vec(3, .4);

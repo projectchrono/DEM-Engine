@@ -87,13 +87,13 @@ clumpBodyInertiaOffset_default_t SGPS::LoadClumpType(float mass,
         SGPS_ERROR("Arrays defining a clump topology type must all have the same length.");
     }
 
-    m_clumps_mass.push_back(mass);
-    m_clumps_moi.push_back(moi);
-    m_clumps_sp_radii.push_back(sp_radii);
-    m_clumps_sp_location_xyz.push_back(sp_locations_xyz);
-    m_clumps_sp_material_ids.push_back(sp_material_ids);
+    m_template_mass.push_back(mass);
+    m_template_moi.push_back(moi);
+    m_template_sp_radii.push_back(sp_radii);
+    m_template_sp_relPos.push_back(sp_locations_xyz);
+    m_template_sp_mat_ids.push_back(sp_material_ids);
 
-    return m_clumps_mass.size() - 1;
+    return m_template_mass.size() - 1;
 }
 
 clumpBodyInertiaOffset_default_t SGPS::LoadClumpSimpleSphere(float mass,
@@ -121,39 +121,55 @@ int SGPS::figureOutNV() {
 }
 
 int SGPS::generateJITResources() {
-    size_t input_num_clump_types = m_clumps_mass.size();
+    /*
+    // Dan and Ruochun decided not to extract unique input values.
+    // Instead, we trust users: we simply store all clump template info users give.
+    // So the unique-value-extractor block is disabled and commented.
+    size_t input_num_clump_types = m_template_mass.size();
     // Put unique clump mass values in a set.
-    m_clumps_mass_types.insert(m_clumps_mass.begin(), m_clumps_mass.end());
+    m_template_mass_types.insert(m_template_mass.begin(), m_template_mass.end());
     for (size_t i = 0; i < input_num_clump_types; i++) {
         // Put unique sphere radii values in a set.
-        m_clumps_sp_radii_types.insert(m_clumps_sp_radii.at(i).begin(), m_clumps_sp_radii.at(i).end());
+        m_template_sp_radii_types.insert(m_template_sp_radii.at(i).begin(), m_template_sp_radii.at(i).end());
         // Put unique clump sphere component locations in a set.
-        m_clumps_sp_location_types.insert(m_clumps_sp_location_xyz.at(i).begin(), m_clumps_sp_location_xyz.at(i).end());
+        m_clumps_sp_location_types.insert(m_template_sp_relPos.at(i).begin(), m_template_sp_relPos.at(i).end());
     }
     // Now rearrange so the original input mass and sphere radii are now stored as the offsets to their respective
     // uniques sets.
     for (size_t i = 0; i < input_num_clump_types; i++) {
-        m_clumps_mass_type_offset.push_back(
-            std::distance(m_clumps_mass_types.begin(), m_clumps_mass_types.find(m_clumps_mass.at(i))));
-        std::vector<distinctSphereRadiiOffset_default_t> sp_radii_type_offset(m_clumps_sp_radii.at(i).size(), 0);
+        m_template_mass_type_offset.push_back(
+            std::distance(m_template_mass_types.begin(), m_template_mass_types.find(m_template_mass.at(i))));
+        std::vector<distinctSphereRadiiOffset_default_t> sp_radii_type_offset(m_template_sp_radii.at(i).size(), 0);
         std::vector<distinctSphereRelativePositions_default_t> sp_location_type_offset(
-            m_clumps_sp_location_xyz.at(i).size(), 0);
+            m_template_sp_relPos.at(i).size(), 0);
         for (size_t j = 0; j < sp_radii_type_offset.size(); j++) {
-            sp_radii_type_offset.at(j) = std::distance(m_clumps_sp_radii_types.begin(),
-                                                       m_clumps_sp_radii_types.find(m_clumps_sp_radii.at(i).at(j)));
+            sp_radii_type_offset.at(j) = std::distance(m_template_sp_radii_types.begin(),
+                                                       m_template_sp_radii_types.find(m_template_sp_radii.at(i).at(j)));
             sp_location_type_offset.at(j) =
                 std::distance(m_clumps_sp_location_types.begin(),
-                              m_clumps_sp_location_types.find(m_clumps_sp_location_xyz.at(i).at(j)));
+                              m_clumps_sp_location_types.find(m_template_sp_relPos.at(i).at(j)));
         }
-        m_clumps_sp_radii_type_offset.push_back(sp_radii_type_offset);
+        m_template_sp_radii_type_offset.push_back(sp_radii_type_offset);
         m_clumps_sp_location_type_offset.push_back(sp_location_type_offset);
     }
 
-    // Compile the magic number header.
-    nDistinctSphereRadii_computed = m_clumps_sp_radii_types.size();
-    nDistinctClumpBodyTopologies_computed = m_clumps_mass_types.size();
+    nDistinctClumpBodyTopologies_computed = m_template_mass_types.size();
     nMatTuples_computed = m_sp_materials.size();
+
+    nDistinctSphereRadii_computed = m_template_sp_radii_types.size();
     nDistinctSphereRelativePositions_computed = m_clumps_sp_location_types.size();
+    */
+
+    // Compile the magic number header.
+    nDistinctClumpComponents_computed = 0;
+    nDistinctClumpBodyTopologies_computed = m_template_mass.size();
+    for (unsigned int i = 0; i < nDistinctClumpBodyTopologies_computed; i++) {
+        nDistinctClumpComponents_computed += m_template_sp_radii.at(i).size();
+    }
+    nMatTuples_computed = m_template_sp_mat_ids.size();
+
+    // nDistinctSphereRadii_computed = m_template_sp_radii_types.size();
+    // nDistinctSphereRelativePositions_computed = m_clumps_sp_location_types.size();
     // std::cout << nDistinctClumpBodyTopologies_computed << std::endl;
     // std::cout << nDistinctSphereRadii_computed << std::endl;
     // std::cout << nDistinctSphereRelativePositions_computed << std::endl;
@@ -180,8 +196,8 @@ int SGPS::generateJITResources() {
     nSpheresGM = 0;
     for (size_t i = 0; i < m_input_clump_types.size(); i++) {
         auto this_type_num = m_input_clump_types.at(i);
-        auto this_radii_offsets = m_clumps_sp_radii_type_offset.at(this_type_num);
-        nSpheresGM += this_radii_offsets.size();
+        auto this_radii = m_template_sp_radii.at(this_type_num);
+        nSpheresGM += this_radii.size();
     }
 
     // Compile the kernels if there are some can be compiled now
@@ -221,14 +237,12 @@ int SGPS::Initialize() {
 
     // Resize managed arrays based on the statistical data we had from the previous step
     dT->allocateManagedArrays(nClumpBodies, nSpheresGM, nDistinctClumpBodyTopologies_computed,
-                              nDistinctSphereRadii_computed, nDistinctSphereRelativePositions_computed,
-                              nMatTuples_computed);
+                              nDistinctClumpComponents_computed, nMatTuples_computed);
 
     // Now that the CUDA-related functions and data types are JITCompiled, we can feed those GPU-side arrays with the
     // cached API-level simulation info.
-    dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_clumps_mass_types, m_clumps_sp_radii_types,
-                              m_clumps_sp_location_types, m_clumps_mass_type_offset, m_clumps_sp_radii_type_offset,
-                              m_clumps_sp_location_type_offset);
+    dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_template_mass, m_template_sp_radii,
+                              m_template_sp_relPos);
 
     return 0;
 }

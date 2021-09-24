@@ -100,22 +100,28 @@ class SGPS {
 
     // This is the cached clump structure information.
     // It will be massaged into kernels upon Initialize.
-    std::vector<float> m_clumps_mass;
-    std::vector<float3> m_clumps_moi;
-    std::vector<std::vector<float>> m_clumps_sp_radii;
-    std::vector<std::vector<float3>> m_clumps_sp_location_xyz;
-    std::vector<std::vector<materialsOffset_default_t>> m_clumps_sp_material_ids;
+    std::vector<float> m_template_mass;
+    std::vector<float3> m_template_moi;
+    std::vector<std::vector<materialsOffset_default_t>> m_template_sp_mat_ids;
+    std::vector<std::vector<float>> m_template_sp_radii;
+    std::vector<std::vector<float3>> m_template_sp_relPos;
 
-    // unique clump masses derived from m_clumps_mass
-    std::set<float> m_clumps_mass_types;
-    std::vector<clumpBodyInertiaOffset_default_t> m_clumps_mass_type_offset;
-    // unique sphere radii types derived from m_clumps_sp_radii
-    std::set<float> m_clumps_sp_radii_types;
-    std::vector<std::vector<distinctSphereRadiiOffset_default_t>> m_clumps_sp_radii_type_offset;
-    // unique sphere (local) location types derived from m_clumps_sp_location_xyz
+    /*
+    // Dan and Ruochun decided not to extract unique input values.
+    // Instead, we trust users: we simply store all clump template info users give.
+    // So the unique-value-extractor block is disabled and commented.
+
+    // unique clump masses derived from m_template_mass
+    std::set<float> m_template_mass_types;
+    std::vector<clumpBodyInertiaOffset_default_t> m_template_mass_type_offset;
+    // unique sphere radii types derived from m_template_sp_radii
+    std::set<float> m_template_sp_radii_types;
+    std::vector<std::vector<distinctSphereRadiiOffset_default_t>> m_template_sp_radii_type_offset;
+    // unique sphere (local) location types derived from m_template_sp_relPos
     // std::set<float3, float3_less_than> m_clumps_sp_location_types;
     std::set<float3> m_clumps_sp_location_types;
     std::vector<std::vector<distinctSphereRelativePositions_default_t>> m_clumps_sp_location_type_offset;
+    */
 
     // ``World'' size along X dir
     float m_boxX = 0.f;
@@ -146,8 +152,11 @@ class SGPS {
     // Whether the number of voxels and length unit l is explicitly given by the user.
     bool explicit_nv_override = false;
 
-    unsigned int nDistinctSphereRadii_computed;
-    unsigned int nDistinctSphereRelativePositions_computed;
+    // Right now, the following two are integrated into one, in nDistinctClumpComponents
+    // unsigned int nDistinctSphereRadii_computed;
+    // unsigned int nDistinctSphereRelativePositions_computed;
+
+    unsigned int nDistinctClumpComponents_computed;
     unsigned int nDistinctClumpBodyTopologies_computed;
     unsigned int nMatTuples_computed;
 
