@@ -6,7 +6,7 @@
 
 #include <mutex>
 #include <vector>
-#include <set>
+// #include <set>
 
 #include <core/ApiVersion.h>
 #include <core/utils/ManagedAllocator.hpp>
@@ -109,6 +109,10 @@ class dynamicThread {
         float LBFX;
         float LBFY;
         float LBFZ;
+        // Grav acceleration
+        float Gx;
+        float Gy;
+        float Gz;
     };
     SimParams* simParams;
 
@@ -208,7 +212,8 @@ class dynamicThread {
                       unsigned char nvZp2,
                       float l,
                       double voxelSize,
-                      float3 LBFPoint);
+                      float3 LBFPoint,
+                      float3 G);
 
     // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
     void allocateManagedArrays(unsigned int nClumpBodies,

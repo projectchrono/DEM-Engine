@@ -102,7 +102,7 @@ int main() {
 
     aa.Initialize();
 
-    // aa.LaunchThreads();
+    aa.LaunchThreads();
 
     std::cout << aa.GetClumpVoxelID(0) << std::endl;
 

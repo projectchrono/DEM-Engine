@@ -25,7 +25,8 @@ void dynamicThread::setSimParams(unsigned char nvXp2,
                                  unsigned char nvZp2,
                                  float l,
                                  double voxelSize,
-                                 float3 LBFPoint) {
+                                 float3 LBFPoint,
+                                 float3 G) {
     simParams->nvXp2 = nvXp2;
     simParams->nvYp2 = nvYp2;
     simParams->nvZp2 = nvZp2;
@@ -34,6 +35,9 @@ void dynamicThread::setSimParams(unsigned char nvXp2,
     simParams->LBFX = LBFPoint.x;
     simParams->LBFY = LBFPoint.y;
     simParams->LBFZ = LBFPoint.z;
+    simParams->Gx = G.x;
+    simParams->Gy = G.y;
+    simParams->Gz = G.z;
 }
 
 void dynamicThread::allocateManagedArrays(unsigned int nClumpBodies,
@@ -206,10 +210,10 @@ void kinematicThread::operator()() {
             .configure(dim3(1), dim3(N_INPUT_ITEMS), 0, streamInfo.stream)
             .launch((void*)(&data_arg));
 
-        cudaDeviceSynchronize();
+        cudaStreamSynchronize(streamInfo.stream);
         // cudaStreamDestroy(currentStream);
 
-        /* for reference staff
+        /* for the reference 
         for (int j = 0; j < N_MANUFACTURED_ITEMS; j++) {
             // kinematicTestKernel<<<1, 1, 0, kinematicStream.stream>>>();
 
@@ -300,6 +304,17 @@ void dynamicThread::operator()() {
         printf("Total device: %d\n", totGPU);
 
         std::cout << "Dynamic side values. Cycle: " << cycle << std::endl;
+
+        auto gpu_program =
+            JitHelper::buildProgram("gpuKernels", JitHelper::KERNEL_DIR / "gpuKernels.cu",
+                                    std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+
+        gpu_program.kernel("dynamicTestKernel")
+            .instantiate()
+            .configure(dim3(1), dim3(1), 0, streamInfo.stream)
+            .launch();
+
+        cudaStreamSynchronize(streamInfo.stream);
 
         // dynamic wrapped up one cycle
         pSchedSupport->currentStampOfDynamic++;

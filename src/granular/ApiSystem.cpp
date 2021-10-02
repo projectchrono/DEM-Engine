@@ -59,13 +59,17 @@ void SGPS::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned 
     explicit_nv_override = true;
 }
 
-float3 SGPS::CeterCoordSys() {
+float3 SGPS::CenterCoordSys() {
     float3 O;
     O.x = -m_boxX / 2.0;
     O.y = -m_boxY / 2.0;
     O.z = -m_boxZ / 2.0;
     m_boxO = O;
     return O;
+}
+
+void SGPS::SetGravitationalAcceleration(float3 g) {
+    G = g;
 }
 
 materialsOffset_default_t SGPS::LoadMaterialType(float density, float E) {
@@ -233,7 +237,7 @@ int SGPS::Initialize() {
     generateJITResources();
 
     // Transfer some simulation params
-    dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_boxO);
+    dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_boxO, G);
 
     // Resize managed arrays based on the statistical data we had from the previous step
     dT->allocateManagedArrays(nClumpBodies, nSpheresGM, nDistinctClumpBodyTopologies_computed,

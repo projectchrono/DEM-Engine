@@ -43,11 +43,14 @@ class SGPS {
                                    float len_unit = 1e-10f,
                                    float3 O = make_float3(0));
 
+    // Set gravity
+    void SetGravitationalAcceleration(float3 g);
+
     // A convenient call that sets the origin of your coordinate system to be in the dead center of your simulation
     // ``world''. Useful especially you feel like having this ``world'' large to safely hold everything, and don't quite
     // care about the amount accuracy lost in the process. Returns the coordinate of the left-bottom-front point of your
     // simulation ``world'' after this operation.
-    float3 CeterCoordSys();
+    float3 CenterCoordSys();
 
     // Load possible clump types into the API-level cache.
     // Return the index of the clump type just loaded.
@@ -163,6 +166,9 @@ class SGPS {
     // cached state vectors such as the types and locations of the initial clumps to fill the sim domain with
     std::vector<clumpBodyInertiaOffset_default_t> m_input_clump_types;
     std::vector<float3> m_input_clump_xyz;
+
+    // Gravitational acceleration
+    float3 G;
 
     int updateFreq = 1;
     int timeDynamicSide = 1;
