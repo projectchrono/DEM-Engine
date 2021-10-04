@@ -64,21 +64,22 @@ __global__ void dynamicPass(contactData* gpu_pair_data,
                             vector3* gpu_acc,
                             float radius) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    /*
     if (idx >= gpu_pair_n) {
         return;
     }
 
-    float dir_x = gpu_pos[gpu_pair_data[idx].contact_pair.x].x - gpu_pos[gpu_pair_data[idx].contact_pair.y].x;
-    float dir_y = gpu_pos[gpu_pair_data[idx].contact_pair.x].y - gpu_pos[gpu_pair_data[idx].contact_pair.y].y;
-    float dir_z = gpu_pos[gpu_pair_data[idx].contact_pair.x].z - gpu_pos[gpu_pair_data[idx].contact_pair.y].z;
+        float dir_x = gpu_pos[gpu_pair_data[idx].contact_pair.x].x - gpu_pos[gpu_pair_data[idx].contact_pair.y].x;
+        float dir_y = gpu_pos[gpu_pair_data[idx].contact_pair.x].y - gpu_pos[gpu_pair_data[idx].contact_pair.y].y;
+        float dir_z = gpu_pos[gpu_pair_data[idx].contact_pair.x].z - gpu_pos[gpu_pair_data[idx].contact_pair.y].z;
 
-    float dist2 = dir_x * dir_x + dir_y * dir_y + dir_z * dir_z;
+        float dist2 = dir_x * dir_x + dir_y * dir_y + dir_z * dir_z;
 
-    if (dist2 < radius * radius) {
-        // TODO
-    }
+                if (m < radius * radius) {
+                    // TODO
+                }
 
-    __syncthreads();
+                __syncthreads();*/
 }
 
 __global__ void testKernel() {
