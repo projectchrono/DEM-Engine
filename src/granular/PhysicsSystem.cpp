@@ -26,7 +26,8 @@ void dynamicThread::setSimParams(unsigned char nvXp2,
                                  float l,
                                  double voxelSize,
                                  float3 LBFPoint,
-                                 float3 G) {
+                                 float3 G,
+                                 double ts_size) {
     simParams->nvXp2 = nvXp2;
     simParams->nvYp2 = nvYp2;
     simParams->nvZp2 = nvZp2;
@@ -38,6 +39,7 @@ void dynamicThread::setSimParams(unsigned char nvXp2,
     simParams->Gx = G.x;
     simParams->Gy = G.y;
     simParams->Gz = G.z;
+    simParams->tsSize = ts_size;
 }
 
 void dynamicThread::allocateManagedArrays(unsigned int nClumpBodies,
@@ -213,7 +215,7 @@ void kinematicThread::operator()() {
         cudaStreamSynchronize(streamInfo.stream);
         // cudaStreamDestroy(currentStream);
 
-        /* for the reference 
+        /* for the reference
         for (int j = 0; j < N_MANUFACTURED_ITEMS; j++) {
             // kinematicTestKernel<<<1, 1, 0, kinematicStream.stream>>>();
 
@@ -262,8 +264,7 @@ void dynamicThread::operator()() {
         // if the produce is fresh, use it
         if (pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
             {
-                // acquire lock and use the content of the dynamic-owned transfer
-                // buffer
+                // acquire lock and use the content of the dynamic-owned transfer buffer
                 std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
                 cudaMemcpy(voxelID.data(), transferBuffer_voxelID.data(),
                            N_MANUFACTURED_ITEMS * sizeof(voxelID_default_t), cudaMemcpyDeviceToDevice);
@@ -314,7 +315,7 @@ void dynamicThread::operator()() {
             .configure(dim3(1), dim3(1), 0, streamInfo.stream)
             .launch();
 
-        cudaStreamSynchronize(streamInfo.stream);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // dynamic wrapped up one cycle
         pSchedSupport->currentStampOfDynamic++;

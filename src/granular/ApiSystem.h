@@ -45,11 +45,14 @@ class SGPS {
 
     // Set gravity
     void SetGravitationalAcceleration(float3 g);
+    // Set a constant time step size
+    void SetTimeStepSize(double ts_size);
+    // TODO: Implement an API that allows setting ts size through a list
 
     // A convenient call that sets the origin of your coordinate system to be in the dead center of your simulation
     // ``world''. Useful especially you feel like having this ``world'' large to safely hold everything, and don't quite
-    // care about the amount accuracy lost in the process. Returns the coordinate of the left-bottom-front point of your
-    // simulation ``world'' after this operation.
+    // care about the amount of accuracy lost by not fine-tuning the ``world'' size.
+    // Returns the coordinate of the left-bottom-front point of your simulation ``world'' after this operation.
     float3 CenterCoordSys();
 
     // Load possible clump types into the API-level cache.
@@ -86,6 +89,10 @@ class SGPS {
 
     int LaunchThreads();
 
+    // Copy the cached sim params to the GPU-accessible managed memory, so that they are picked up from the next ts of
+    // simulation. Usually used when you want to change simulation parameters after the system is already Intialized.
+    void UpdateSimParams();
+
     /*
       protected:
         SGPS() : m_sys(nullptr) {}
@@ -110,9 +117,9 @@ class SGPS {
     std::vector<std::vector<float3>> m_template_sp_relPos;
 
     /*
-    // Dan and Ruochun decided not to extract unique input values.
+    // Dan and Ruochun decided NOT to extract unique input values.
     // Instead, we trust users: we simply store all clump template info users give.
-    // So the unique-value-extractor block is disabled and commented.
+    // So this unique-value-extractor block is disabled and commented.
 
     // unique clump masses derived from m_template_mass
     std::set<float> m_template_mass_types;
@@ -133,15 +140,21 @@ class SGPS {
     // ``World'' size along Z dir
     float m_boxZ = 0.f;
     // Origin of the ``world''
-    float3 m_boxO = make_float3(0);
+    float3 m_boxLBF = make_float3(0);
     // Number of voxels in the X direction, expressed as a power of 2
     unsigned char nvXp2;
     // Number of voxels in the Y direction, expressed as a power of 2
     unsigned char nvYp2;
     // Number of voxels in the Z direction, expressed as a power of 2
     unsigned char nvZp2;
+    // Gravitational acceleration
+    float3 G;
     // Actual (double-precision) size of a voxel
     double m_voxelSize;
+    // Time step size
+    double m_ts_size;
+    // The length unit. Any XYZ we report to the user, is under the hood a multiple of this l.
+    float l = FLT_MAX;
 
     // Total number of spheres
     unsigned int nSpheresGM;
@@ -150,10 +163,10 @@ class SGPS {
 
     float sphereUU;
 
-    // The length unit. Any XYZ we report to the user, is under the hood a multiple of this l.
-    float l = FLT_MAX;
     // Whether the number of voxels and length unit l is explicitly given by the user.
     bool explicit_nv_override = false;
+    // Whether the GPU-side systems have been initialized
+    bool sys_initialized = false;
 
     // Right now, the following two are integrated into one, in nDistinctClumpComponents
     // unsigned int nDistinctSphereRadii_computed;
@@ -167,9 +180,6 @@ class SGPS {
     std::vector<clumpBodyInertiaOffset_default_t> m_input_clump_types;
     std::vector<float3> m_input_clump_xyz;
 
-    // Gravitational acceleration
-    float3 G;
-
     int updateFreq = 1;
     int timeDynamicSide = 1;
     int timeKinematicSide = 1;
@@ -182,6 +192,8 @@ class SGPS {
 
     int generateJITResources();
     int figureOutNV();
+    // Transfer cached sim params to dT (and kT?)
+    void transferSimParams();
 };
 
 }  // namespace sgps

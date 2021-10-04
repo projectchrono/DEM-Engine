@@ -49,7 +49,7 @@ void SGPS::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned 
     nvXp2 = x;
     nvYp2 = y;
     nvZp2 = z;
-    m_boxO = O;
+    m_boxLBF = O;
 
     // Calculating ``world'' size by the input nvXp2 and l
     m_voxelSize = (double)pow(2, VOXEL_RES_POWER2) * (double)l;
@@ -61,15 +61,19 @@ void SGPS::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned 
 
 float3 SGPS::CenterCoordSys() {
     float3 O;
-    O.x = -m_boxX / 2.0;
-    O.y = -m_boxY / 2.0;
-    O.z = -m_boxZ / 2.0;
-    m_boxO = O;
+    O.x = -(m_boxX) / 2.0;
+    O.y = -(m_boxY) / 2.0;
+    O.z = -(m_boxZ) / 2.0;
+    m_boxLBF = O;
     return O;
 }
 
 void SGPS::SetGravitationalAcceleration(float3 g) {
     G = g;
+}
+
+void SGPS::SetTimeStepSize(double ts_size) {
+    m_ts_size = ts_size;
 }
 
 materialsOffset_default_t SGPS::LoadMaterialType(float density, float E) {
@@ -224,6 +228,10 @@ void SGPS::WriteFileAsSpheres(const std::string& outfilename) const {
     dT->WriteCsvAsSpheres(ptFile);
 }
 
+void SGPS::transferSimParams() {
+    dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_boxLBF, G, m_ts_size);
+}
+
 int SGPS::Initialize() {
     // a few error checks first
     if (m_sp_materials.size() == 0) {
@@ -236,8 +244,8 @@ int SGPS::Initialize() {
     // Call the JIT compiler generator to make prep for this simulation.
     generateJITResources();
 
-    // Transfer some simulation params
-    dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_boxO, G);
+    // Transfer some simulation params to implementation level
+    transferSimParams();
 
     // Resize managed arrays based on the statistical data we had from the previous step
     dT->allocateManagedArrays(nClumpBodies, nSpheresGM, nDistinctClumpBodyTopologies_computed,
@@ -248,7 +256,13 @@ int SGPS::Initialize() {
     dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_template_mass, m_template_sp_radii,
                               m_template_sp_relPos);
 
+    sys_initialized = true;
     return 0;
+}
+
+void SGPS::UpdateSimParams() {
+    // TODO: maybe some massaging is needed here, for more sophisticated params updates
+    transferSimParams();
 }
 
 int SGPS::LaunchThreads() {

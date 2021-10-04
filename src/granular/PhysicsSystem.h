@@ -113,6 +113,8 @@ class dynamicThread {
         float Gx;
         float Gy;
         float Gz;
+        // Time step size
+        double tsSize;
     };
     SimParams* simParams;
 
@@ -213,7 +215,8 @@ class dynamicThread {
                       float l,
                       double voxelSize,
                       float3 LBFPoint,
-                      float3 G);
+                      float3 G,
+                      double ts_size);
 
     // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
     void allocateManagedArrays(unsigned int nClumpBodies,
