@@ -320,14 +320,12 @@ void dynamicThread::operator()() {
             JitHelper::buildProgram("granForceKernels", JitHelper::KERNEL_DIR / "granForceKernels.cu",
                                     std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
-        /*
         gpu_program.kernel("deriveClumpForces")
             .instantiate()
             .configure(dim3(1), dim3(1), 0, streamInfo.stream)
             .launch((void*)(&simParams), (void*)(&granData));
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-        */
 
         // dynamic wrapped up one cycle
         pSchedSupport->currentStampOfDynamic++;

@@ -63,4 +63,7 @@ struct GranDataDT {
     int* h2AlphaZ;
 };
 
+// typedef GranDataDT* GranDataDTPtr;
+// typedef GranSimParams* GranSimParamsPtr;
+
 }  // namespace sgps
