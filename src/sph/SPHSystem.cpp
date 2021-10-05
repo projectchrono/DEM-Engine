@@ -45,9 +45,8 @@ void SPHSystem::printCSV(std::string filename) {
 }
 
 void KinematicThread::operator()() {
+    cudaSetDevice(streamInfo.device);
     for (int lp = 0; lp < 10; lp++) {
-        cudaSetDevice(streamInfo.device);
-
         float tolerance = 0.05;
 
         // for each step, the kinematic thread needs to do two passes
@@ -85,7 +84,7 @@ void KinematicThread::operator()() {
             .configure(dim3(1), dim3(k_n), 0, streamInfo.stream)
             .launch(pos_data.data(), pos_data.size(), tolerance, dataManager.radius, num_arr.data());
 
-        GPU_CALL(cudaDeviceSynchronize());
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // calculate the offset array
         int cur_idx = 0;
@@ -117,7 +116,7 @@ void KinematicThread::operator()() {
                 .launch(pos_data.data(), pos_data.size(), offset_data.data(), num_arr.data(), tolerance,
                         dataManager.radius, contact_data.data());
 
-            cudaDeviceSynchronize();
+            GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         }
 
         // copy data back to the dataManager
@@ -136,110 +135,84 @@ void KinematicThread::operator()() {
 }
 
 void DynamicThread::operator()() {
-    // display current loop
-    for (int lp = 0; lp < 10; lp++) {
-        std::cout << "dy lp:" << lp << std::endl;
+    GPU_CALL(cudaSetDevice(streamInfo.device));
+
+    // Touch the CUDA context before the Kernel is accessed
+
+    // Option 1:
+    // std::vector<int, sgps::ManagedAllocator<int>> num_arr(dataManager.m_pos.size(), -1);
+
+    // Option 2:
+    // cudaEvent_t ev;
+    // cudaEventCreate(&ev);
+
+    // create vector to store data from the dataManager
+    std::vector<contactData, sgps::ManagedAllocator<contactData>> contact_data;
+    std::vector<int, sgps::ManagedAllocator<int>> offset_data;
+    std::vector<vector3, sgps::ManagedAllocator<vector3>> pos_data;
+    std::vector<vector3, sgps::ManagedAllocator<vector3>> vel_data;
+    std::vector<vector3, sgps::ManagedAllocator<vector3>> acc_data;
+    std::vector<bool, sgps::ManagedAllocator<bool>> fix_data;
+    float radius = dataManager.radius;
+    // temp step size explicit definition
+    float time_step = 0.01;
+
+    {
+        getParentSystem().getMutexContact().lock();
+        contact_data.assign(dataManager.m_contact.begin(), dataManager.m_contact.end());
+        offset_data.assign(dataManager.m_offset.begin(), dataManager.m_offset.end());
+        getParentSystem().getMutexContact().unlock();
     }
-    /*
-    std::cout << "dynamic count: " << dynamicCounter++ << std::endl;
 
-    cudaSetDevice(streamInfo.device);
-    // calculate number of threads needed and number of block needed
-    int num_thread = 64;
-    int num_block = dataManager.m_contact.size() / num_thread + 1;
-*/
-    /*
+    {
+        getParentSystem().getMutexPos().lock();
+        pos_data.assign(dataManager.m_pos.begin(), dataManager.m_pos.end());
+        vel_data.assign(dataManager.m_vel.begin(), dataManager.m_vel.end());
+        acc_data.assign(dataManager.m_acc.begin(), dataManager.m_acc.end());
+        fix_data.assign(dataManager.m_fix.begin(), dataManager.m_fix.end());
+        getParentSystem().getMutexPos().unlock();
+    }
 
-    // std::cout << "hit_check: 4" << std::endl;
-    auto dynamic_program =
-        JitHelper::buildProgram("sphKernels", JitHelper::KERNEL_DIR / "sphKernels.cu", std::vector<JitHelper::Header>(),
-                                {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+    int num_block = 1;
+    int num_thread = 1024;
 
+    // display current loop
+    for (int lp = 0; lp < 100; lp++) {
+        auto dynamic_program =
+            JitHelper::buildProgram("sphKernels", JitHelper::KERNEL_DIR / "sphKernels.cu",
+                                    std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
-        dynamic_program.kernel("dynamicPass")
+        // handle data fixity
+        auto fix_arr = std::make_unique<bool[]>(fix_data.size());
+        std::copy(std::begin(fix_data), std::end(fix_data), fix_arr.get());
+
+        // call dynamic first gpu pass
+        dynamic_program.kernel("dynamic1stPass")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(dataManager.m_contact.data(), dataManager.m_contact.size(), dataManager.m_pos.data(),
-                    dataManager.m_vel.data(), dataManager.m_acc.data(), dataManager.radius);
+            .launch(contact_data.data(), contact_data.size(), pos_data.data(), vel_data.data(), acc_data.data(),
+                    fix_arr, radius);
 
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-    dynamic_program.kernel("testKernel").instantiate().configure(dim3(1), dim3(1), 0, streamInfo.stream).launch();
+        // call dynamic second gpu pass
+        dynamic_program.kernel("dynamic2ndPass")
+            .instantiate()
+            .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
+            .launch(pos_data.data(), dataManager.m_vel.data(), dataManager.m_acc.data(), fix_arr, pos_data.size(),
+                    time_step, dataManager.radius);
 
-    GPU_CALL(cudaDeviceSynchronize());
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-    std::cerr << "Kernel should be finished now\n";
-    */
+        std::cout << "dy lp:" << lp << std::endl;
+    }
 
-    // retreive data from the dataManager
-    /*
-        std::vector<contactData, sgps::ManagedAllocator<contactData>> contact_data;
-        std::vector<vector3, sgps::ManagedAllocator<vector3>> pos_data;
-        std::vector<vector3, sgps::ManagedAllocator<vector3>> vel_data;
-        std::vector<vector3, sgps::ManagedAllocator<vector3>> acc_data;
-
-        {
-            getParentSystem().getMutex().lock();
-            contact_data.assign(dataManager.m_contact.begin(), dataManager.m_contact.end());
-            pos_data.assign(dataManager.m_pos.begin(), dataManager.m_pos.end());
-            vel_data.assign(dataManager.m_vel.begin(), dataManager.m_vel.end());
-            acc_data.assign(dataManager.m_acc.begin(), dataManager.m_acc.end());
-            getParentSystem().getMutex().unlock();
-        }
-
-        for (int i = 0; i < contact_data.size(); i++) {
-            float dir_x = pos_data[contact_data[i].contact_pair.x].x - pos_data[contact_data[i].contact_pair.y].x;
-            float dir_y = pos_data[contact_data[i].contact_pair.x].y - pos_data[contact_data[i].contact_pair.y].y;
-            float dir_z = pos_data[contact_data[i].contact_pair.x].z - pos_data[contact_data[i].contact_pair.y].z;
-
-            float dist2 = dir_x * dir_x + dir_y * dir_y + dir_z * dir_z;
-
-            if (dist2 < (2 * dataManager.radius) * (2 * dataManager.radius)) {
-                float coe = 1000.f;
-
-                if (dataManager.m_fix[contact_data[i].contact_pair.x] == false) {
-                    acc_data[contact_data[i].contact_pair.x].x = dir_x * coe;
-                    acc_data[contact_data[i].contact_pair.x].y = dir_y * coe;
-                    acc_data[contact_data[i].contact_pair.x].z = dir_z * coe;
-                }
-
-                if (dataManager.m_fix[contact_data[i].contact_pair.y] == false) {
-                    acc_data[contact_data[i].contact_pair.y].x = -dir_x * coe;
-                    acc_data[contact_data[i].contact_pair.y].y = -dir_y * coe;
-                    acc_data[contact_data[i].contact_pair.y].z = -dir_z * coe;
-                }
-
-                std::cout << "acc_z:" << acc_data[contact_data[i].contact_pair.y].z << std::endl;
-            }
-        }
-
-        for (int i = 0; i < pos_data.size(); i++) {
-            if (dataManager.m_fix[i] == false) {
-                float grav = -9.8f;
-
-                acc_data[i].z = acc_data[i].z + grav;
-            }
-
-            vel_data[i].x = vel_data[i].x + acc_data[i].x * 0.01;
-            vel_data[i].y = vel_data[i].y + acc_data[i].y * 0.01;
-            vel_data[i].z = vel_data[i].z + acc_data[i].z * 0.01;
-
-            pos_data[i].x = pos_data[i].x + vel_data[i].x * 0.01;
-            pos_data[i].y = pos_data[i].y + vel_data[i].y * 0.01;
-            pos_data[i].z = pos_data[i].z + vel_data[i].z * 0.01;
-
-            acc_data[i].x = 0.f;
-            acc_data[i].y = 0.f;
-            acc_data[i].z = 0.f;
-
-            std::cout << "part: " << i << " " << pos_data[i].z << " " << std::endl;
-        }
-
-        {
-            getParentSystem().getMutex().lock();
-            dataManager.m_contact.assign(contact_data.begin(), contact_data.end());
-            dataManager.m_pos.assign(pos_data.begin(), pos_data.end());
-            dataManager.m_vel.assign(vel_data.begin(), vel_data.end());
-            dataManager.m_acc.assign(acc_data.begin(), acc_data.end());
-            getParentSystem().getMutex().unlock();
-        }*/
+    // copy data back to the dataManager
+    {
+        getParentSystem().getMutexPos().lock();
+        dataManager.m_pos.assign(pos_data.begin(), pos_data.end());
+        dataManager.m_vel.assign(vel_data.begin(), vel_data.end());
+        dataManager.m_acc.assign(acc_data.begin(), acc_data.end());
+        getParentSystem().getMutexPos().unlock();
+    }
 }

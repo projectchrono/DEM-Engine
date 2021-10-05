@@ -69,10 +69,10 @@ int main(int argc, char* argv[]) {
 
     // initialize the SPHSystem
     system->initialize(radius, pos_vec, vel_vec, acc_vec, fix_vec);
+    system->doStepDynamics(0.01);
     int frame = 0;
     for (int i = 0; i < 1; i++) {
         frame = frame + 1;
-        system->doStepDynamics(0.01);
         // system->printCSV("test" + std::to_string(frame) + ".csv");
     }
 
