@@ -22,6 +22,7 @@ set(granular_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/PhysicsSystem.h
 	${CMAKE_CURRENT_SOURCE_DIR}/ApiSystem.h
 	${CMAKE_CURRENT_SOURCE_DIR}/GranularDefines.h
+	${CMAKE_CURRENT_SOURCE_DIR}/DataStructs.h
 	${NVIDIAMathDir}/helper_math.h
 )
 

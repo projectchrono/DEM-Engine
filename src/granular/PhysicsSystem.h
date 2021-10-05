@@ -12,9 +12,11 @@
 #include <core/utils/ManagedAllocator.hpp>
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
-#include <granular/GranularDefines.h>
 #include <helper_math.cuh>
 #include <core/utils/GpuError.h>
+
+#include <granular/GranularDefines.h>
+#include <granular/DataStructs.h>
 
 namespace sgps {
 
@@ -90,33 +92,12 @@ class dynamicThread {
     // buffer array for voxelID
     std::vector<voxelID_default_t, ManagedAllocator<voxelID_default_t>> transferBuffer_voxelID;
 
-    // Pointers to dynamics-related arrays
-    struct SimParams {
-        // Number of voxels in the X direction, expressed as a power of 2
-        unsigned char nvXp2;
-        // Number of voxels in the Y direction, expressed as a power of 2
-        unsigned char nvYp2;
-        // Number of voxels in the Z direction, expressed as a power of 2
-        unsigned char nvZp2;
-        // Smallest length unit
-        float l;
-        // Double-precision single voxel size
-        double voxelSize;
-        // Number of clumps and spheres
-        unsigned int nClumpBodies;
-        unsigned int nSpheresGM;
-        // Coordinate of the left-bottom-front point of the simulation ``world''
-        float LBFX;
-        float LBFY;
-        float LBFZ;
-        // Grav acceleration
-        float Gx;
-        float Gy;
-        float Gz;
-        // Time step size
-        double tsSize;
-    };
-    SimParams* simParams;
+    // Pointers to simulation params-related arrays
+    // Check DataStructs.h for details
+    GranSimParams* simParams;
+
+    // Pointers to those data arrays defined below, stored in a struct
+    GranDataDT* granData;
 
     // Body-related arrays in managed memory
 
@@ -133,8 +114,6 @@ class dynamicThread {
     std::vector<float, ManagedAllocator<float>> radiiSphere;
 
     // The distinct sphere local position (wrt CoM) values
-    // This array is actually not used? In the tech report as we decided to store relPosSphereXYZ as a long array; but
-    // wouldn't it be better to use it via offsets too?
     std::vector<float, ManagedAllocator<float>> relPosSphereX;
     std::vector<float, ManagedAllocator<float>> relPosSphereY;
     std::vector<float, ManagedAllocator<float>> relPosSphereZ;
@@ -158,15 +137,25 @@ class dynamicThread {
     std::vector<int, ManagedAllocator<int>> oriQ2;
     std::vector<int, ManagedAllocator<int>> oriQ3;
 
-    // Velocity times ts size: hv
+    // Linear velocity times ts size: hv
     std::vector<int, ManagedAllocator<int>> hvX;
     std::vector<int, ManagedAllocator<int>> hvY;
     std::vector<int, ManagedAllocator<int>> hvZ;
 
-    // The angular velocity
-    std::vector<int, ManagedAllocator<int>> omgBarX;
-    std::vector<int, ManagedAllocator<int>> omgBarY;
-    std::vector<int, ManagedAllocator<int>> omgBarZ;
+    // The angular velocity times ts size: h*omega
+    std::vector<int, ManagedAllocator<int>> hOmgBarX;
+    std::vector<int, ManagedAllocator<int>> hOmgBarY;
+    std::vector<int, ManagedAllocator<int>> hOmgBarZ;
+
+    // Linear acceleration times h^2
+    std::vector<int, ManagedAllocator<int>> h2aX;
+    std::vector<int, ManagedAllocator<int>> h2aY;
+    std::vector<int, ManagedAllocator<int>> h2aZ;
+
+    // Angular acceleration times h^2
+    std::vector<int, ManagedAllocator<int>> h2AlphaX;
+    std::vector<int, ManagedAllocator<int>> h2AlphaY;
+    std::vector<int, ManagedAllocator<int>> h2AlphaZ;
 
     size_t m_approx_bytes_used = 0;
 
@@ -187,7 +176,8 @@ class dynamicThread {
 
     dynamicThread(ThreadManager* pSchedSup, GpuManager* pGpuDist)
         : pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
-        GPU_CALL(cudaMallocManaged(&simParams, sizeof(SimParams), cudaMemAttachGlobal));
+        GPU_CALL(cudaMallocManaged(&simParams, sizeof(GranSimParams), cudaMemAttachGlobal));
+        GPU_CALL(cudaMallocManaged(&granData, sizeof(GranDataDT), cudaMemAttachGlobal));
 
         pKinematicOwnedBuffer_voxelID = NULL;
         nDynamicCycles = 0;
@@ -231,6 +221,9 @@ class dynamicThread {
                                const std::vector<float>& clumps_mass_types,
                                const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                const std::vector<std::vector<float3>>& clumps_sp_location_types);
+
+    // Put sim data array pointers in place
+    void packDataPointers();
 
     void WriteCsvAsSpheres(std::ofstream& ptFile) const;
 

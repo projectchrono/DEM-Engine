@@ -256,6 +256,9 @@ int SGPS::Initialize() {
     dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_template_mass, m_template_sp_radii,
                               m_template_sp_relPos);
 
+    // Put sim data array pointers in place
+    dT->packDataPointers();
+
     sys_initialized = true;
     return 0;
 }

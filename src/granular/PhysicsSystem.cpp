@@ -20,6 +20,13 @@ int kinematicThread::costlyProductionStep(int val) const {
     return 2 * val + 1;
 }
 
+// Put sim data array pointers in place
+void dynamicThread::packDataPointers() {
+    granData->h2aX = h2aX.data();
+    granData->h2aY = h2aY.data();
+    granData->h2aZ = h2aZ.data();
+}
+
 void dynamicThread::setSimParams(unsigned char nvXp2,
                                  unsigned char nvYp2,
                                  unsigned char nvZp2,
@@ -39,7 +46,7 @@ void dynamicThread::setSimParams(unsigned char nvXp2,
     simParams->Gx = G.x;
     simParams->Gy = G.y;
     simParams->Gz = G.z;
-    simParams->tsSize = ts_size;
+    simParams->h = ts_size;
 }
 
 void dynamicThread::allocateManagedArrays(unsigned int nClumpBodies,
@@ -49,17 +56,20 @@ void dynamicThread::allocateManagedArrays(unsigned int nClumpBodies,
                                           unsigned int nMatTuples) {
     simParams->nSpheresGM = nSpheresGM;
     simParams->nClumpBodies = nClumpBodies;
-    // Resize those that are as long as the number of clumps
+    // Resize to the number of clumps
     TRACKED_VECTOR_RESIZE(voxelID, nClumpBodies, "voxelID", 0);
     TRACKED_VECTOR_RESIZE(locX, nClumpBodies, "locX", 0);
     TRACKED_VECTOR_RESIZE(locY, nClumpBodies, "locY", 0);
     TRACKED_VECTOR_RESIZE(locZ, nClumpBodies, "locZ", 0);
+    TRACKED_VECTOR_RESIZE(h2aX, nClumpBodies, "h2aX", 0);
+    TRACKED_VECTOR_RESIZE(h2aY, nClumpBodies, "h2aY", 0);
+    TRACKED_VECTOR_RESIZE(h2aZ, nClumpBodies, "h2aZ", 0);
 
-    // Resize those that are as long as the number of spheres
+    // Resize to the number of spheres
     TRACKED_VECTOR_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
     TRACKED_VECTOR_RESIZE(clumpComponentOffset, nSpheresGM, "sphereRadiusOffset", 0);
 
-    // Resize those that are as long as the template lengths
+    // Resize to the length of the clump templates
     TRACKED_VECTOR_RESIZE(massClumpBody, nClumpTopo, "massClumpBody", 0);
     TRACKED_VECTOR_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);
     TRACKED_VECTOR_RESIZE(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
@@ -212,7 +222,7 @@ void kinematicThread::operator()() {
             .configure(dim3(1), dim3(N_INPUT_ITEMS), 0, streamInfo.stream)
             .launch((void*)(&data_arg));
 
-        cudaStreamSynchronize(streamInfo.stream);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         // cudaStreamDestroy(currentStream);
 
         /* for the reference
@@ -307,15 +317,17 @@ void dynamicThread::operator()() {
         std::cout << "Dynamic side values. Cycle: " << cycle << std::endl;
 
         auto gpu_program =
-            JitHelper::buildProgram("gpuKernels", JitHelper::KERNEL_DIR / "gpuKernels.cu",
+            JitHelper::buildProgram("granForceKernels", JitHelper::KERNEL_DIR / "granForceKernels.cu",
                                     std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
-        gpu_program.kernel("dynamicTestKernel")
+        /*
+        gpu_program.kernel("deriveClumpForces")
             .instantiate()
             .configure(dim3(1), dim3(1), 0, streamInfo.stream)
-            .launch();
+            .launch((void*)(&simParams), (void*)(&granData));
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        */
 
         // dynamic wrapped up one cycle
         pSchedSupport->currentStampOfDynamic++;

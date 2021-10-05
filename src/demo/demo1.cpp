@@ -102,8 +102,8 @@ int main() {
 
     aa.Initialize();
 
-    aa.UpdateSimParams();
-    
+    aa.UpdateSimParams();  // Not needed; just testing if this function works...
+
     aa.LaunchThreads();
 
     std::cout << aa.GetClumpVoxelID(0) << std::endl;
