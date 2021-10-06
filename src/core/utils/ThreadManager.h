@@ -44,6 +44,15 @@ class ThreadManager {
     std::condition_variable cv_KinematicCanProceed;
     std::condition_variable cv_DynamicCanProceed;
     ManagerStatistics schedulingStats;
+    
+    std::atomic<bool> dynamicStarted;
+    std::atomic<bool> dynamicShouldJoin;
+    std::atomic<bool> kinematicStarted;
+    std::atomic<bool> kinematicShouldJoin;
+    std::mutex dynamicStartLock;
+    std::mutex kinematicStartLock;
+    std::condition_variable cv_DynamicStartLock;
+    std::condition_variable cv_kinematicStartLock;
 
     ThreadManager() noexcept {
         // that is, let dynamic advance into future as much as it wants

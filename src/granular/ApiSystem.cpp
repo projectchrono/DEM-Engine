@@ -269,12 +269,9 @@ void SGPS::UpdateSimParams() {
 }
 
 int SGPS::LaunchThreads() {
-    // get the threads going
-    std::thread kThread(std::ref(*kT));
-    std::thread dThread(std::ref(*dT));
 
-    dThread.join();
-    kThread.join();
+    dT->startThread();
+    kT->startThread();
 
     // Sim statistics
     std::cout << "\n~~ SIM STATISTICS ~~\n";
