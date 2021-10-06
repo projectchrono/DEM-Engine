@@ -220,7 +220,7 @@ void kinematicThread::operator()() {
         gpu_program.kernel("kinematicTestKernel")
             .instantiate()
             .configure(dim3(1), dim3(N_INPUT_ITEMS), 0, streamInfo.stream)
-            .launch((void*)(&data_arg));
+            .launch(data_arg);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         // cudaStreamDestroy(currentStream);
@@ -323,7 +323,7 @@ void dynamicThread::operator()() {
         gpu_program.kernel("deriveClumpForces")
             .instantiate()
             .configure(dim3(1), dim3(1), 0, streamInfo.stream)
-            .launch((void*)(&simParams), (void*)(&granData));
+            .launch(simParams, granData);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 

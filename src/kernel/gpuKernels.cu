@@ -14,6 +14,7 @@ __global__ void kinematicTestKernel(sgps::voxelID_default_t* data) {
     if (threadIdx.x == 0) {
         printf("Kinematic run\n");
     }
+    // printf("data: %u\n", data[0]);
 
     if (threadIdx.x < N_INPUT_ITEMS) {
         // data[threadIdx.x] = 2 * data[threadIdx.x] + 1;
