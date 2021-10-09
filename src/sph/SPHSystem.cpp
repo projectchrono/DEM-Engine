@@ -21,7 +21,9 @@ void SPHSystem::initialize(float radius,
     dataManager.m_fix.assign(fix.begin(), fix.end());
 }
 
-void SPHSystem::doStepDynamics(float time_step) {
+void SPHSystem::doStepDynamics(float time_step, float sim_time) {
+    this->time_step = time_step;
+    this->sim_time = sim_time;
     std::thread kinematics(kt);
     std::thread dynamics(dt);
 
@@ -29,16 +31,17 @@ void SPHSystem::doStepDynamics(float time_step) {
     dynamics.join();
 }
 
-void SPHSystem::printCSV(std::string filename) {
+void SPHSystem::printCSV(std::string filename, vector3* pos_arr, int pos_n, vector3* vel_arr, vector3* acc_arr) {
     // create file
     std::ofstream csvFile(filename);
 
-    csvFile << "x_pos,y_pos,z_pos" << std::endl;
+    csvFile << "x_pos,y_pos,z_pos,x_vel,y_vel,z_vel,x_acc,y_acc,z_acc" << std::endl;
 
     // write particle data into csv file
-    for (int i = 0; i < dataManager.m_pos.size(); i++) {
-        csvFile << dataManager.m_pos[i].x << "," << dataManager.m_pos[i].y << "," << dataManager.m_pos[i].z
-                << std::endl;
+    for (int i = 0; i < pos_n; i++) {
+        csvFile << pos_arr[i].x << "," << pos_arr[i].y << "," << pos_arr[i].z << "," << vel_arr[i].x << ","
+                << vel_arr[i].y << "," << vel_arr[i].z << "," << acc_arr[i].x << "," << acc_arr[i].y << ","
+                << acc_arr[i].z << std::endl;
     }
 
     csvFile.close();
@@ -46,32 +49,37 @@ void SPHSystem::printCSV(std::string filename) {
 
 void KinematicThread::operator()() {
     cudaSetDevice(streamInfo.device);
-    for (int lp = 0; lp < 10; lp++) {
+    cudaStreamCreate(&streamInfo.stream);
+
+    // get total numer of particles
+    int k_n;
+    {
+        getParentSystem().getMutexPos().lock();
+        k_n = dataManager.m_pos.size();
+        getParentSystem().getMutexPos().unlock();
+    }
+
+    // make a copy of the necessary data stored in DataManager
+    std::vector<int, sgps::ManagedAllocator<int>> num_arr(k_n, -1);
+    std::vector<contactData, sgps::ManagedAllocator<contactData>> contact_data;
+    std::vector<vector3, sgps::ManagedAllocator<vector3>> pos_data;
+    std::vector<int, sgps::ManagedAllocator<int>> offset_data;
+
+    while (getParentSystem().curr_time < getParentSystem().sim_time) {
         float tolerance = 0.05;
 
         // for each step, the kinematic thread needs to do two passes
         // first pass - look for 'number' of potential contacts
         // crate an array to store number of valid potential contacts
 
-        // get total numer of particles
-        int k_n;
-        {
-            getParentSystem().getMutexPos().lock();
-            k_n = dataManager.m_pos.size();
-            getParentSystem().getMutexPos().unlock();
-        }
-
-        // make a copy of the necessary data stored in DataManager
-        std::vector<int, sgps::ManagedAllocator<int>> num_arr(k_n, -1);
-        std::vector<contactData, sgps::ManagedAllocator<contactData>> contact_data;
-        std::vector<vector3, sgps::ManagedAllocator<vector3>> pos_data;
-        std::vector<int, sgps::ManagedAllocator<int>> offset_data;
-
-        {
+        if (getParentSystem().pos_data_isFresh == true) {
             getParentSystem().getMutexPos().lock();
             pos_data.assign(dataManager.m_pos.begin(), dataManager.m_pos.end());
             getParentSystem().getMutexPos().unlock();
         }
+
+        // notify the system that the position data has been consumed
+        getParentSystem().pos_data_isFresh = false;
 
         // initiate JitHelper to perform JITC
         auto kinematic_program =
@@ -127,24 +135,21 @@ void KinematicThread::operator()() {
             getParentSystem().getMutexContact().unlock();
         }
 
+        // notify the system that the contact data is now fresh
+        // increment kinematic counter
+        getParentSystem().contact_data_isFresh = true;
+        kinematicCounter++;
+
         // display current loop
-        std::cout << "ki lp:" << lp << std::endl;
+        std::cout << "ki ct:" << kinematicCounter << std::endl;
     }
 
-    // std::cout << "contact_arr_length: " << dataManager.m_contact.size() << std::endl;
+    cudaStreamDestroy(streamInfo.stream);
 }
 
 void DynamicThread::operator()() {
     GPU_CALL(cudaSetDevice(streamInfo.device));
-
-    // Touch the CUDA context before the Kernel is accessed
-
-    // Option 1:
-    // std::vector<int, sgps::ManagedAllocator<int>> num_arr(dataManager.m_pos.size(), -1);
-
-    // Option 2:
-    // cudaEvent_t ev;
-    // cudaEventCreate(&ev);
+    cudaStreamCreate(&streamInfo.stream);
 
     // create vector to store data from the dataManager
     std::vector<contactData, sgps::ManagedAllocator<contactData>> contact_data;
@@ -154,30 +159,48 @@ void DynamicThread::operator()() {
     std::vector<vector3, sgps::ManagedAllocator<vector3>> acc_data;
     std::vector<bool, sgps::ManagedAllocator<bool>> fix_data;
     float radius = dataManager.radius;
-    // temp step size explicit definition
-    float time_step = 0.01;
 
-    {
-        getParentSystem().getMutexContact().lock();
-        contact_data.assign(dataManager.m_contact.begin(), dataManager.m_contact.end());
-        offset_data.assign(dataManager.m_offset.begin(), dataManager.m_offset.end());
-        getParentSystem().getMutexContact().unlock();
-    }
+    while (getParentSystem().curr_time < getParentSystem().sim_time) {
+        // Touch the CUDA context before the Kernel is accessed
 
-    {
-        getParentSystem().getMutexPos().lock();
-        pos_data.assign(dataManager.m_pos.begin(), dataManager.m_pos.end());
-        vel_data.assign(dataManager.m_vel.begin(), dataManager.m_vel.end());
-        acc_data.assign(dataManager.m_acc.begin(), dataManager.m_acc.end());
-        fix_data.assign(dataManager.m_fix.begin(), dataManager.m_fix.end());
-        getParentSystem().getMutexPos().unlock();
-    }
+        // Option 1:
+        // std::vector<int, sgps::ManagedAllocator<int>> num_arr(dataManager.m_pos.size(), -1);
 
-    int num_block = 1;
-    int num_thread = 1024;
+        // Option 2:
+        // cudaEvent_t ev;
+        // cudaEventCreate(&ev);
 
-    // display current loop
-    for (int lp = 0; lp < 100; lp++) {
+        // temp step size explicit definition
+        float time_step = getParentSystem().time_step;
+
+        if (getParentSystem().contact_data_isFresh == true) {
+            getParentSystem().getMutexContact().lock();
+            contact_data.assign(dataManager.m_contact.begin(), dataManager.m_contact.end());
+            offset_data.assign(dataManager.m_offset.begin(), dataManager.m_offset.end());
+            getParentSystem().getMutexContact().unlock();
+        }
+
+        // notify the system that the contact data is old
+        getParentSystem().contact_data_isFresh = false;
+
+        int contact_size = contact_data.size();
+
+        if (contact_size == 0) {
+            continue;
+        }
+
+        {
+            getParentSystem().getMutexPos().lock();
+            pos_data.assign(dataManager.m_pos.begin(), dataManager.m_pos.end());
+            vel_data.assign(dataManager.m_vel.begin(), dataManager.m_vel.end());
+            acc_data.assign(dataManager.m_acc.begin(), dataManager.m_acc.end());
+            fix_data.assign(dataManager.m_fix.begin(), dataManager.m_fix.end());
+            getParentSystem().getMutexPos().unlock();
+        }
+
+        int num_block = 1;
+        int num_thread = 1024;
+
         auto dynamic_program =
             JitHelper::buildProgram("sphKernels", JitHelper::KERNEL_DIR / "sphKernels.cu",
                                     std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
@@ -199,20 +222,35 @@ void DynamicThread::operator()() {
         dynamic_program.kernel("dynamic2ndPass")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(pos_data.data(), dataManager.m_vel.data(), dataManager.m_acc.data(), fix_arr, pos_data.size(),
-                    time_step, dataManager.radius);
+            .launch(pos_data.data(), vel_data.data(), acc_data.data(), fix_arr, pos_data.size(), time_step,
+                    dataManager.radius);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        std::cout << "dy lp:" << lp << std::endl;
-    }
+        // copy data back to the dataManager
+        {
+            getParentSystem().getMutexPos().lock();
+            dataManager.m_pos.assign(pos_data.begin(), pos_data.end());
+            dataManager.m_vel.assign(vel_data.begin(), vel_data.end());
+            dataManager.m_acc.assign(acc_data.begin(), acc_data.end());
+            getParentSystem().getMutexPos().unlock();
+        }
 
-    // copy data back to the dataManager
-    {
-        getParentSystem().getMutexPos().lock();
-        dataManager.m_pos.assign(pos_data.begin(), pos_data.end());
-        dataManager.m_vel.assign(vel_data.begin(), vel_data.end());
-        dataManager.m_acc.assign(acc_data.begin(), acc_data.end());
-        getParentSystem().getMutexPos().unlock();
+        if (getParentSystem().getPrintOut() == true) {
+            getParentSystem().printCSV("test" + std::to_string(dynamicCounter) + ".csv", pos_data.data(),
+                                       pos_data.size(), vel_data.data(), acc_data.data());
+        }
+
+        // notify the system that the position data is fresh
+        // increment the dynamic thread
+        getParentSystem().pos_data_isFresh = true;
+        dynamicCounter++;
+
+        // increment current simulation time
+        getParentSystem().curr_time += getParentSystem().time_step;
+
+        std::cout << "dy ct:" << dynamicCounter << std::endl;
+
+        cudaStreamDestroy(streamInfo.stream);
     }
 }

@@ -32,9 +32,9 @@ class KinematicThread {
 
     SPHSystem& parentSystem;
 
+  public:
     int kinematicCounter;
 
-  public:
     KinematicThread(DataManager& dm, GpuManager& gm, SPHSystem& system)
         : dataManager(dm), gpuManager(gm), parentSystem(system) {
         streamInfo = gm.getAvailableStream();
@@ -56,9 +56,9 @@ class DynamicThread {
 
     SPHSystem& parentSystem;
 
+  public:
     int dynamicCounter;
 
-  public:
     DynamicThread(DataManager& dm, GpuManager& gm, SPHSystem& system)
         : dataManager(dm), gpuManager(gm), parentSystem(system) {
         streamInfo = gm.getAvailableStream();
@@ -80,8 +80,21 @@ class SPHSystem {
     std::mutex mutex_lock_pos;
     std::mutex mutex_lock_contact;
 
+    // printout indicator
+    bool isPrint;
+
   public:
-    inline SPHSystem(GpuManager& gm) : kt(dataManager, gm, *this), dt(dataManager, gm, *this){};
+    inline SPHSystem(GpuManager& gm) : kt(dataManager, gm, *this), dt(dataManager, gm, *this) {
+        curr_time = 0.0f;
+        pos_data_isFresh = true;
+        contact_data_isFresh = false;
+
+        isPrint = false;
+    };
+
+    void setPrintOut(bool isPrint) { this->isPrint = isPrint; }
+
+    bool getPrintOut() { return isPrint; }
 
     // initialize the SPHSystem with pos as the particle positions
     // n as the total number of particles initialized in the SPHSystem
@@ -92,11 +105,22 @@ class SPHSystem {
                     std::vector<bool>& fix);
 
     // start performing simulation dynamics
-    void doStepDynamics(float time_step);
+    void doStepDynamics(float time_step, float sim_time);
 
     // print particle file to csv for paraview visualization purposes
-    void printCSV(std::string filename);
+    void printCSV(std::string filename, vector3* pos_arr, int pos_n, vector3* vel_arr, vector3* acc_arr);
 
+    // dual gpu coordinations
     std::mutex& getMutexPos() { return mutex_lock_pos; }
     std::mutex& getMutexContact() { return mutex_lock_contact; }
+
+    int getKiCounter() { return kt.kinematicCounter; }
+    int getDyCounter() { return dt.dynamicCounter; }
+
+    float curr_time;
+    float sim_time;
+    float time_step;
+
+    bool pos_data_isFresh;
+    bool contact_data_isFresh;
 };

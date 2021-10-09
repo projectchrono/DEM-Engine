@@ -16,7 +16,7 @@ GpuManager::GpuManager(unsigned int total_streams) {
         }
 
         cudaStream_t new_stream;
-        cudaStreamCreate(&new_stream);
+        // cudaStreamCreate(&new_stream);
 
         this->streams[current_device].push_back(StreamInfo{(signed)current_device, new_stream, false});
     }
@@ -26,7 +26,7 @@ GpuManager::GpuManager(unsigned int total_streams) {
 GpuManager::~GpuManager() {
     for (auto outer = this->streams.begin(); outer != this->streams.end(); outer++) {
         for (auto inner = (*outer).begin(); inner != (*outer).end(); inner++) {
-            cudaStreamDestroy(inner->stream);
+            // cudaStreamDestroy(inner->stream);
         }
     }
 }

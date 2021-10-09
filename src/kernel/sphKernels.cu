@@ -110,7 +110,6 @@ __global__ void dynamic2ndPass(vector3* gpu_pos,
 
     if (gpu_fix[idx] == false) {
         float grav = -9.8f;
-
         gpu_acc[idx].z = gpu_acc[idx].z + grav;
     }
 
