@@ -6,6 +6,7 @@
 
 #include <mutex>
 #include <vector>
+#include <thread>
 // #include <set>
 
 #include <core/ApiVersion.h>
@@ -45,6 +46,8 @@ class kinematicThread {
     // The voxel ID (split into 3 parts, representing XYZ location)
     std::vector<voxelID_default_t, ManagedAllocator<voxelID_default_t>> voxelID;
 
+    std::thread th;
+    
   public:
     friend class SGPS;
 
@@ -59,7 +62,10 @@ class kinematicThread {
         // Get a device/stream ID to use from the GPU Manager
         streamInfo = pGpuDistributor->getAvailableStream();
     }
-    ~kinematicThread() {}
+    ~kinematicThread() {
+        pSchedSupport->kinematicShouldJoin = true;
+        th.join();
+    }
 
     void setKinematicAverageTime(int val) { kinematicAverageTime = val; }
 
@@ -68,13 +74,17 @@ class kinematicThread {
     voxelID_default_t* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
 
     void primeDynamic();
-    void operator()();
+
+    void startThread();
+    void workerThread();
 };
 
 class dynamicThread {
   protected:
     ThreadManager* pSchedSupport;
     GpuManager* pGpuDistributor;
+
+    std::thread th;
 
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
@@ -187,8 +197,19 @@ class dynamicThread {
 
         // Get a device/stream ID to use from the GPU Manager
         streamInfo = pGpuDistributor->getAvailableStream();
+
+        pSchedSupport->dynamicShouldJoin = false;
+        pSchedSupport->dynamicStarted = false;
+        
+        // Launch a worker thread bound to this instance
+        th = std::move(std::thread([this](){
+            this->workerThread();
+        }));
     }
-    ~dynamicThread() {}
+    ~dynamicThread() {
+        pSchedSupport->dynamicShouldJoin = true;
+        th.join();
+    }
 
     void setDynamicAverageTime(int val) { dynamicAverageTime = val; }
     void setNDynamicCycles(int val) { nDynamicCycles = val; }
@@ -226,7 +247,10 @@ class dynamicThread {
 
     void WriteCsvAsSpheres(std::ofstream& ptFile) const;
 
-    void operator()();
+    void startThread();
+
+    // The actual kernel things go here
+    void workerThread();
 };
 
 }  // namespace sgps
