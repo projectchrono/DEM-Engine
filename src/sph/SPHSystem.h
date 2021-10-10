@@ -10,12 +10,13 @@
 #include <cuda_runtime_api.h>
 #include <sph/datastruct.h>
 #include <mutex>
+#include <atomic>
 struct DataManager {
     float radius;
     std::vector<vector3, sgps::ManagedAllocator<vector3>> m_pos;              // particle locations
     std::vector<vector3, sgps::ManagedAllocator<vector3>> m_vel;              // particle velocities
     std::vector<vector3, sgps::ManagedAllocator<vector3>> m_acc;              // particle accelerations
-    std::vector<bool, sgps::ManagedAllocator<bool>> m_fix;                    // particle fixity
+    std::vector<char, sgps::ManagedAllocator<char>> m_fix;                    // particle fixity
     std::vector<contactData, sgps::ManagedAllocator<contactData>> m_contact;  // contact pair data
 
     std::vector<int, sgps::ManagedAllocator<int>> m_offset;  // index offset array for the contact pair data
@@ -102,7 +103,7 @@ class SPHSystem {
                     std::vector<vector3>& pos,
                     std::vector<vector3>& vel,
                     std::vector<vector3>& acc,
-                    std::vector<bool>& fix);
+                    std::vector<char>& fix);
 
     // start performing simulation dynamics
     void doStepDynamics(float time_step, float sim_time);
@@ -117,10 +118,10 @@ class SPHSystem {
     int getKiCounter() { return kt.kinematicCounter; }
     int getDyCounter() { return dt.dynamicCounter; }
 
-    float curr_time;
-    float sim_time;
-    float time_step;
+    std::atomic<float> curr_time;
+    std::atomic<float> sim_time;
+    std::atomic<float> time_step;
 
-    bool pos_data_isFresh;
-    bool contact_data_isFresh;
+    std::atomic<bool> pos_data_isFresh;
+    std::atomic<bool> contact_data_isFresh;
 };

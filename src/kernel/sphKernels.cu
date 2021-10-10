@@ -101,7 +101,7 @@ __global__ void dynamic1stPass(contactData* gpu_pair_data,
 __global__ void dynamic2ndPass(vector3* gpu_pos,
                                vector3* gpu_vel,
                                vector3* gpu_acc,
-                               bool* gpu_fix,
+                               char* gpu_fix,
                                int gpu_n,
                                float time_step,
                                float radius) {
@@ -111,10 +111,12 @@ __global__ void dynamic2ndPass(vector3* gpu_pos,
         return;
     }
 
-    if (gpu_fix[idx] == false) {
+    if (gpu_fix[idx] == 0) {
         float grav = -9.8f;
         gpu_acc[idx].z = gpu_acc[idx].z + grav;
     }
+
+    __syncthreads();
 
     gpu_vel[idx].x = gpu_vel[idx].x + gpu_acc[idx].x * time_step;
     gpu_vel[idx].y = gpu_vel[idx].y + gpu_acc[idx].y * time_step;
@@ -127,6 +129,8 @@ __global__ void dynamic2ndPass(vector3* gpu_pos,
     gpu_acc[idx].x = 0.f;
     gpu_acc[idx].y = 0.f;
     gpu_acc[idx].z = 0.f;
+
+    __syncthreads();
 }
 
 __global__ void testKernel() {
