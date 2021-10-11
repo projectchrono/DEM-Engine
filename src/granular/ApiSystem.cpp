@@ -269,7 +269,6 @@ void SGPS::UpdateSimParams() {
 }
 
 int SGPS::LaunchThreads() {
-
     dT->startThread();
     kT->startThread();
 

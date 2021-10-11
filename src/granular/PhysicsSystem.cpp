@@ -191,8 +191,8 @@ void kinematicThread::workerThread() {
                 pSchedSupport->cv_KinematicStartLock.wait(lock);
             }
             // Ensure that we wait for start signal on next iteration
-            pSchedSupport->kinematicStarted = false;        
-        }        
+            pSchedSupport->kinematicStarted = false;
+        }
 
         // run a while loop producing stuff in each iteration;
         // once produced, it should be made available to the dynamic via memcpy
@@ -211,7 +211,7 @@ void kinematicThread::workerThread() {
                     // acquire lock and supply the dynamic with fresh produce
                     std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
                     cudaMemcpy(voxelID.data(), transferBuffer_voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_default_t),
-                            cudaMemcpyDeviceToDevice);
+                               cudaMemcpyDeviceToDevice);
                 }
             }
 
@@ -224,9 +224,9 @@ void kinematicThread::workerThread() {
 
             auto data_arg = voxelID.data();
 
-            auto gpu_program =
-                JitHelper::buildProgram("gpuKernels", JitHelper::KERNEL_DIR / "gpuKernels.cu",
-                                        std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+            auto gpu_program = JitHelper::buildProgram("gpuKernels", JitHelper::KERNEL_DIR / "gpuKernels.cu",
+                                                       std::vector<JitHelper::Header>(),
+                                                       {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
             gpu_program.kernel("kinematicTestKernel")
                 .instantiate()
@@ -260,8 +260,8 @@ void kinematicThread::workerThread() {
             {
                 // acquire lock and supply the dynamic with fresh produce
                 std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
-                cudaMemcpy(pDynamicOwnedBuffer_voxelID, voxelID.data(), N_MANUFACTURED_ITEMS * sizeof(voxelID_default_t),
-                        cudaMemcpyDeviceToDevice);
+                cudaMemcpy(pDynamicOwnedBuffer_voxelID, voxelID.data(),
+                           N_MANUFACTURED_ITEMS * sizeof(voxelID_default_t), cudaMemcpyDeviceToDevice);
             }
             pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = true;
             pSchedSupport->schedulingStats.nDynamicUpdates++;
@@ -272,14 +272,12 @@ void kinematicThread::workerThread() {
 
         // in case the dynamic is hanging in there...
         pSchedSupport->cv_DynamicCanProceed.notify_all();
-
     }
 
     cudaStreamDestroy(streamInfo.stream);
 }
 
 void dynamicThread::workerThread() {
-
     // Set the gpu for this thread
     cudaSetDevice(streamInfo.device);
     // cudaStreamCreate(&streamInfo.stream);
@@ -292,7 +290,6 @@ void dynamicThread::workerThread() {
             }
             // Ensure that we wait for start signal on next iteration
             pSchedSupport->dynamicStarted = false;
-            
         }
 
         // acquire lock to prevent the kinematic to mess up
@@ -305,7 +302,7 @@ void dynamicThread::workerThread() {
                     // acquire lock and use the content of the dynamic-owned transfer buffer
                     std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
                     cudaMemcpy(voxelID.data(), transferBuffer_voxelID.data(),
-                            N_MANUFACTURED_ITEMS * sizeof(voxelID_default_t), cudaMemcpyDeviceToDevice);
+                               N_MANUFACTURED_ITEMS * sizeof(voxelID_default_t), cudaMemcpyDeviceToDevice);
                 }
                 pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
                 pSchedSupport->stampLastUpdateOfDynamic = cycle;
@@ -323,7 +320,7 @@ void dynamicThread::workerThread() {
                 {
                     std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
                     cudaMemcpy(pKinematicOwnedBuffer_voxelID, voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_default_t),
-                            cudaMemcpyDeviceToDevice);
+                               cudaMemcpyDeviceToDevice);
                 }
                 pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
                 pSchedSupport->schedulingStats.nKinematicUpdates++;
@@ -344,9 +341,9 @@ void dynamicThread::workerThread() {
 
             std::cout << "Dynamic side values. Cycle: " << cycle << std::endl;
 
-            auto gpu_program =
-                JitHelper::buildProgram("granForceKernels", JitHelper::KERNEL_DIR / "granForceKernels.cu",
-                                        std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+            auto gpu_program = JitHelper::buildProgram(
+                "granForceKernels", JitHelper::KERNEL_DIR / "granForceKernels.cu", std::vector<JitHelper::Header>(),
+                {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
             gpu_program.kernel("deriveClumpForces")
                 .instantiate()
@@ -358,8 +355,8 @@ void dynamicThread::workerThread() {
             // dynamic wrapped up one cycle
             pSchedSupport->currentStampOfDynamic++;
 
-            // check if we need to wait; i.e., if dynamic drifted too much into future, then we must wait a bit before the
-            // next cycle begins
+            // check if we need to wait; i.e., if dynamic drifted too much into future, then we must wait a bit before
+            // the next cycle begins
             if (pSchedSupport->dynamicShouldWait()) {
                 // wait for a signal from the kinematic to indicate that
                 // the kinematic has caught up

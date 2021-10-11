@@ -48,7 +48,7 @@ class kinematicThread {
 
     // The voxel ID (split into 3 parts, representing XYZ location)
     std::vector<voxelID_default_t, ManagedAllocator<voxelID_default_t>> voxelID;
-    
+
   public:
     friend class SGPS;
 
@@ -67,9 +67,7 @@ class kinematicThread {
         pSchedSupport->kinematicStarted = false;
 
         // Launch a worker thread bound to this instance
-        th = std::move(std::thread([this](){
-            this->workerThread();
-        }));
+        th = std::move(std::thread([this]() { this->workerThread(); }));
     }
     ~kinematicThread() {
         pSchedSupport->kinematicShouldJoin = true;
@@ -87,7 +85,7 @@ class kinematicThread {
     // Called each time when the user calls LaunchThreads.
     void startThread();
 
-    // The actual kernel things go here. 
+    // The actual kernel things go here.
     // It is called upon construction.
     void workerThread();
 };
@@ -214,11 +212,9 @@ class dynamicThread {
 
         pSchedSupport->dynamicShouldJoin = false;
         pSchedSupport->dynamicStarted = false;
-        
+
         // Launch a worker thread bound to this instance
-        th = std::move(std::thread([this](){
-            this->workerThread();
-        }));
+        th = std::move(std::thread([this]() { this->workerThread(); }));
     }
     ~dynamicThread() {
         pSchedSupport->dynamicShouldJoin = true;
@@ -264,7 +260,7 @@ class dynamicThread {
     // Called each time when the user calls LaunchThreads.
     void startThread();
 
-    // The actual kernel things go here. 
+    // The actual kernel things go here.
     // It is called upon construction.
     void workerThread();
 };
