@@ -273,6 +273,7 @@ int SGPS::LaunchThreads() {
     dT->startThread();
     kT->startThread();
 
+    /*
     // Sim statistics
     std::cout << "\n~~ SIM STATISTICS ~~\n";
     std::cout << "Number of dynamic updates: " << dTkT_InteractionManager->schedulingStats.nDynamicUpdates << std::endl;
@@ -282,6 +283,7 @@ int SGPS::LaunchThreads() {
               << std::endl;
     std::cout << "Number of times kinematic held back: "
               << dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack << std::endl;
+    */
     return 0;
 }
 

@@ -26,6 +26,9 @@ class kinematicThread {
     ThreadManager* pSchedSupport;
     GpuManager* pGpuDistributor;
 
+    // The std::thread that binds to this instance
+    std::thread th;
+
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
 
@@ -45,8 +48,6 @@ class kinematicThread {
 
     // The voxel ID (split into 3 parts, representing XYZ location)
     std::vector<voxelID_default_t, ManagedAllocator<voxelID_default_t>> voxelID;
-
-    std::thread th;
     
   public:
     friend class SGPS;
@@ -61,6 +62,14 @@ class kinematicThread {
 
         // Get a device/stream ID to use from the GPU Manager
         streamInfo = pGpuDistributor->getAvailableStream();
+
+        pSchedSupport->kinematicShouldJoin = false;
+        pSchedSupport->kinematicStarted = false;
+
+        // Launch a worker thread bound to this instance
+        th = std::move(std::thread([this](){
+            this->workerThread();
+        }));
     }
     ~kinematicThread() {
         pSchedSupport->kinematicShouldJoin = true;
@@ -75,7 +84,11 @@ class kinematicThread {
 
     void primeDynamic();
 
+    // Called each time when the user calls LaunchThreads.
     void startThread();
+
+    // The actual kernel things go here. 
+    // It is called upon construction.
     void workerThread();
 };
 
@@ -84,6 +97,7 @@ class dynamicThread {
     ThreadManager* pSchedSupport;
     GpuManager* pGpuDistributor;
 
+    // The std::thread that binds to this instance
     std::thread th;
 
     // Object which stores the device and stream IDs for this thread
@@ -247,9 +261,11 @@ class dynamicThread {
 
     void WriteCsvAsSpheres(std::ofstream& ptFile) const;
 
+    // Called each time when the user calls LaunchThreads.
     void startThread();
 
-    // The actual kernel things go here
+    // The actual kernel things go here. 
+    // It is called upon construction.
     void workerThread();
 };
 
