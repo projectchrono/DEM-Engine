@@ -3,9 +3,13 @@
 // *----------------------------------------
 // SPH - Kinematic kernels
 
-__global__ void kinematic1stPass(vector3* pos, int n, float tolerance, float radius, int* res_arr) {
-    // printf("in kernel\n");
-    int idx = threadIdx.x;
+__global__ void kinematic1stPass(vector3* pos, 
+                                 int n, 
+                                 float tolerance, 
+                                 float radius, 
+                                 int* res_arr) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    
     int count = 0;  // count total number of valid contact for the current particle
 
     if (idx > n) {
@@ -33,7 +37,7 @@ __global__ void kinematic2ndPass(vector3* pos,
                                  float tolerance,
                                  float radius,
                                  contactData* pair_data) {
-    int idx = threadIdx.x;
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (contact_num_arr[idx] != 0) {
         int cur_idx = offset[idx];

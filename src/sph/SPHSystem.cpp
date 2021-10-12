@@ -240,10 +240,10 @@ void DynamicThread::operator()() {
             dataManager.m_acc.assign(acc_data.begin(), acc_data.end());
         }
 
-        if (getParentSystem().getPrintOut() == true) {
-            getParentSystem().printCSV("test" + std::to_string(dynamicCounter) + ".csv", pos_data.data(),
-                                       pos_data.size(), vel_data.data(), acc_data.data());
-        }
+        // if (getParentSystem().getPrintOut() == true) {
+        //     getParentSystem().printCSV("test" + std::to_string(dynamicCounter) + ".csv", pos_data.data(),
+        //                                pos_data.size(), vel_data.data(), acc_data.data());
+        // }
 
         // notify the system that the position data is fresh
         // increment the dynamic thread

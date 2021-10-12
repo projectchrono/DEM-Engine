@@ -5,8 +5,8 @@
 
 int main(int argc, char* argv[]) {
     // initialize particles in a cubic 10x10x10 domain
-    float dim_x = 4;
-    float dim_y = 4;
+    float dim_x = 40;
+    float dim_y = 40;
     float dim_z = 4;
 
     // set particle radius
@@ -29,6 +29,7 @@ int main(int argc, char* argv[]) {
     float min_z = 2 * -dim_z / 2 + 1 * (2 * radius + gap) + radius;
 
     // sample all particles
+    int num_par = 0;
     for (int k = 0; k < num_z; k++) {
         for (int j = 0; j < num_y; j++) {
             for (int i = 0; i < num_x; i++) {
@@ -47,9 +48,11 @@ int main(int argc, char* argv[]) {
                     fix_vec.push_back(1);
                 if (k == 1)
                     fix_vec.push_back(0);
+                num_par++;
             }
         }
     }
+    std::cout << "Total number of particles is " << num_par << std::endl;
 
     /*
         // set particle radius
