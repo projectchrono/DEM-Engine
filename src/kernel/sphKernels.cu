@@ -83,15 +83,21 @@ __global__ void dynamic1stPass(contactData* gpu_pair_data,
         float penetration = 2 * radius - dist;
 
         if (gpu_fix[gpu_pair_data[idx].contact_pair.x] == false) {
-            gpu_acc[gpu_pair_data[idx].contact_pair.x].x = dir_x * dist_inv * penetration * coe;
-            gpu_acc[gpu_pair_data[idx].contact_pair.x].y = dir_y * dist_inv * penetration * coe;
-            gpu_acc[gpu_pair_data[idx].contact_pair.x].z = dir_z * dist_inv * penetration * coe;
+            gpu_acc[gpu_pair_data[idx].contact_pair.x].x =
+                dir_x * dist_inv * penetration * coe + gpu_acc[gpu_pair_data[idx].contact_pair.x].x;
+            gpu_acc[gpu_pair_data[idx].contact_pair.x].y =
+                dir_y * dist_inv * penetration * coe + gpu_acc[gpu_pair_data[idx].contact_pair.x].y;
+            gpu_acc[gpu_pair_data[idx].contact_pair.x].z =
+                dir_z * dist_inv * penetration * coe + gpu_acc[gpu_pair_data[idx].contact_pair.x].z;
         }
 
         if (gpu_fix[gpu_pair_data[idx].contact_pair.y] == false) {
-            gpu_acc[gpu_pair_data[idx].contact_pair.y].x = -dir_x * dist_inv * penetration * coe;
-            gpu_acc[gpu_pair_data[idx].contact_pair.y].y = -dir_y * dist_inv * penetration * coe;
-            gpu_acc[gpu_pair_data[idx].contact_pair.y].z = -dir_z * dist_inv * penetration * coe;
+            gpu_acc[gpu_pair_data[idx].contact_pair.y].x =
+                -dir_x * dist_inv * penetration * coe + gpu_acc[gpu_pair_data[idx].contact_pair.y].x;
+            gpu_acc[gpu_pair_data[idx].contact_pair.y].y =
+                -dir_y * dist_inv * penetration * coe + gpu_acc[gpu_pair_data[idx].contact_pair.y].y;
+            gpu_acc[gpu_pair_data[idx].contact_pair.y].z =
+                -dir_z * dist_inv * penetration * coe + gpu_acc[gpu_pair_data[idx].contact_pair.y].z;
         }
     }
 
