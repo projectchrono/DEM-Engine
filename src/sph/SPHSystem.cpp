@@ -58,6 +58,11 @@ void KinematicThread::operator()() {
         k_n = dataManager.m_pos.size();
     }
 
+    // set number of blocks and number of threads in each block
+    int block_size = 1024;
+    int num_thread = (block_size < k_n) ? block_size : k_n;
+    int num_block = (k_n % num_thread != 0) ? (k_n / num_thread + 1) : (k_n / num_thread);
+
     // make a copy of the necessary data stored in DataManager
     std::vector<int, sgps::ManagedAllocator<int>> num_arr(k_n, -1);
     std::vector<contactData, sgps::ManagedAllocator<contactData>> contact_data;
@@ -87,7 +92,7 @@ void KinematicThread::operator()() {
         // kinematic thread first pass
         kinematic_program.kernel("kinematic1stPass")
             .instantiate()
-            .configure(dim3(1), dim3(k_n), 0, streamInfo.stream)
+            .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), pos_data.size(), tolerance, dataManager.radius, num_arr.data());
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -118,7 +123,7 @@ void KinematicThread::operator()() {
         if (contact_sum != 0) {
             kinematic_program.kernel("kinematic2ndPass")
                 .instantiate()
-                .configure(dim3(1), dim3(k_n), 0, streamInfo.stream)
+                .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
                 .launch(pos_data.data(), pos_data.size(), offset_data.data(), num_arr.data(), tolerance,
                         dataManager.radius, contact_data.data());
 
@@ -157,6 +162,18 @@ void DynamicThread::operator()() {
     std::vector<char, sgps::ManagedAllocator<char>> fix_data;
     float radius = dataManager.radius;
 
+    // get total numer of particles
+    int k_n;
+    {
+        const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
+        k_n = dataManager.m_pos.size();
+    }
+    
+    // set number of blocks and number of threads in each block
+    int block_size = 1024;
+    int num_thread = (block_size < k_n) ? block_size : k_n;
+    int num_block = (k_n % num_thread != 0) ? (k_n / num_thread + 1) : (k_n / num_thread);
+
     while (getParentSystem().curr_time < getParentSystem().sim_time) {
         // Touch the CUDA context before the Kernel is accessed
 
@@ -192,9 +209,6 @@ void DynamicThread::operator()() {
             acc_data.assign(dataManager.m_acc.begin(), dataManager.m_acc.end());
             fix_data.assign(dataManager.m_fix.begin(), dataManager.m_fix.end());
         }
-
-        int num_block = 1;
-        int num_thread = 1024;
 
         auto dynamic_program =
             JitHelper::buildProgram("sphKernels", JitHelper::KERNEL_DIR / "sphKernels.cu",
