@@ -9,6 +9,7 @@ namespace sgps {
 #define N_MANUFACTURED_ITEMS 4
 #define N_INPUT_ITEMS 4
 #define VOXEL_RES_POWER2 32
+#define WAIT_GRANULARITY_MS 1
 
 typedef unsigned int voxelID_default_t;
 typedef unsigned int bodyID_default_t;

@@ -9,6 +9,7 @@
 #include <iostream>
 #include <fstream>
 #include <thread>
+#include <chrono>
 #include <cstring>
 
 namespace sgps {
@@ -268,11 +269,22 @@ void SGPS::UpdateSimParams() {
     transferSimParams();
 }
 
+void SGPS::waitOnThreads() {
+    while (!(kT->isUserCallDone() & dT->isUserCallDone())) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_GRANULARITY_MS));
+    }
+    // Reset UserDone to false, make ready for the next user AdvanceSim call.
+    kT->resetUserCallStat();
+    dT->resetUserCallStat();
+}
+
 int SGPS::LaunchThreads() {
     dT->startThread();
     kT->startThread();
 
-    /*
+    // We have to wait until these 2 threads finish their job before moving on.
+    waitOnThreads();
+
     // Sim statistics
     std::cout << "\n~~ SIM STATISTICS ~~\n";
     std::cout << "Number of dynamic updates: " << dTkT_InteractionManager->schedulingStats.nDynamicUpdates << std::endl;
@@ -282,7 +294,7 @@ int SGPS::LaunchThreads() {
               << std::endl;
     std::cout << "Number of times kinematic held back: "
               << dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack << std::endl;
-    */
+
     return 0;
 }
 

@@ -182,7 +182,7 @@ void dynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
 void kinematicThread::workerThread() {
     // Set the device for this thread
     cudaSetDevice(streamInfo.device);
-    // cudaStreamCreate(&streamInfo.stream);
+    cudaStreamCreate(&streamInfo.stream);
 
     while (!pSchedSupport->kinematicShouldJoin) {
         {
@@ -192,6 +192,9 @@ void kinematicThread::workerThread() {
             }
             // Ensure that we wait for start signal on next iteration
             pSchedSupport->kinematicStarted = false;
+            if (pSchedSupport->kinematicShouldJoin) {
+                break;
+            }
         }
 
         // run a while loop producing stuff in each iteration;
@@ -234,7 +237,8 @@ void kinematicThread::workerThread() {
                 .launch(data_arg);
 
             GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-            // cudaStreamDestroy(currentStream);
+
+            std::cout << "A kinematic side cycle. " << std::endl;
 
             /* for the reference
             for (int j = 0; j < N_MANUFACTURED_ITEMS; j++) {
@@ -247,7 +251,7 @@ void kinematicThread::workerThread() {
                 // cudaLaunchKernel((void*)&kinematicTestKernelWithArgs, dim3(1), dim3(1), &args, 0, stream_id);
                 kinematicTestKernel<<<1, 1>>>();
                 cudaDeviceSynchronize();
-    pSchedSupport->dynamicShouldWait()
+                pSchedSupport->dynamicShouldWait()
                 int indx = j % N_INPUT_ITEMS;
                 product[j] += this->costlyProductionStep(j) + inputData[indx];
             }
@@ -272,15 +276,16 @@ void kinematicThread::workerThread() {
 
         // in case the dynamic is hanging in there...
         pSchedSupport->cv_DynamicCanProceed.notify_all();
-    }
 
-    cudaStreamDestroy(streamInfo.stream);
+        // When getting here, dT has finished one user call (although perhaps not at the end of the user script).
+        userCallDone = true;
+    }
 }
 
 void dynamicThread::workerThread() {
     // Set the gpu for this thread
     cudaSetDevice(streamInfo.device);
-    // cudaStreamCreate(&streamInfo.stream);
+    cudaStreamCreate(&streamInfo.stream);
 
     while (!pSchedSupport->dynamicShouldJoin) {
         {
@@ -290,6 +295,9 @@ void dynamicThread::workerThread() {
             }
             // Ensure that we wait for start signal on next iteration
             pSchedSupport->dynamicStarted = false;
+            if (pSchedSupport->dynamicShouldJoin) {
+                break;
+            }
         }
 
         // acquire lock to prevent the kinematic to mess up
@@ -339,8 +347,6 @@ void dynamicThread::workerThread() {
             cudaGetDeviceCount(&totGPU);
             printf("Total device: %d\n", totGPU);
 
-            std::cout << "Dynamic side values. Cycle: " << cycle << std::endl;
-
             auto gpu_program = JitHelper::buildProgram(
                 "granForceKernels", JitHelper::KERNEL_DIR / "granForceKernels.cu", std::vector<JitHelper::Header>(),
                 {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
@@ -351,6 +357,8 @@ void dynamicThread::workerThread() {
                 .launch(simParams, granData);
 
             GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+            std::cout << "Dynamic side values. Cycle: " << cycle << std::endl;
 
             // dynamic wrapped up one cycle
             pSchedSupport->currentStampOfDynamic++;
@@ -368,9 +376,10 @@ void dynamicThread::workerThread() {
                 }
             }
         }
-    }
 
-    cudaStreamDestroy(streamInfo.stream);
+        // When getting here, dT has finished one user call (although perhaps not at the end of the user script).
+        userCallDone = true;
+    }
 }
 
 void kinematicThread::startThread() {
@@ -383,6 +392,24 @@ void dynamicThread::startThread() {
     std::lock_guard<std::mutex> lock(pSchedSupport->dynamicStartLock);
     pSchedSupport->dynamicStarted = true;
     pSchedSupport->cv_DynamicStartLock.notify_one();
+}
+
+bool dynamicThread::isUserCallDone() {
+    // return true if done, false if not
+    return userCallDone;
+}
+
+bool kinematicThread::isUserCallDone() {
+    // return true if done, false if not
+    return userCallDone;
+}
+
+void dynamicThread::resetUserCallStat() {
+    userCallDone = false;
+}
+
+void kinematicThread::resetUserCallStat() {
+    userCallDone = false;
 }
 
 int dynamicThread::localUse(int val) {

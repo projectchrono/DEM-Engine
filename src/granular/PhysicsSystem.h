@@ -40,6 +40,9 @@ class kinematicThread {
 
     size_t m_approx_bytes_used = 0;
 
+    // Set to true only when a user AdvanceSimulation call is finished. Set to false otherwise.
+    bool userCallDone = false;
+
     // Buffer arrays for storing info from the dT side.
     // dT modifies these arrays; kT uses them only.
 
@@ -70,8 +73,11 @@ class kinematicThread {
         th = std::move(std::thread([this]() { this->workerThread(); }));
     }
     ~kinematicThread() {
+        std::cout << "Kinematic thread closing..." << std::endl;
         pSchedSupport->kinematicShouldJoin = true;
+        startThread();
         th.join();
+        cudaStreamDestroy(streamInfo.stream);
     }
 
     void setKinematicAverageTime(int val) { kinematicAverageTime = val; }
@@ -88,6 +94,11 @@ class kinematicThread {
     // The actual kernel things go here.
     // It is called upon construction.
     void workerThread();
+
+    // Query the value of userCallDone
+    bool isUserCallDone();
+    // Reset userCallDone back to false
+    void resetUserCallStat();
 };
 
 class dynamicThread {
@@ -181,6 +192,9 @@ class dynamicThread {
 
     size_t m_approx_bytes_used = 0;
 
+    // Set to true only when a user AdvanceSimulation call is finished. Set to false otherwise.
+    bool userCallDone = false;
+
     // Sphere-related arrays in managed memory
     // Belonged-body ID (default unsigned int type)
     std::vector<bodyID_default_t, ManagedAllocator<bodyID_default_t>> ownerClumpBody;
@@ -217,8 +231,12 @@ class dynamicThread {
         th = std::move(std::thread([this]() { this->workerThread(); }));
     }
     ~dynamicThread() {
+        std::cout << "Dynamic thread closing..." << std::endl;
         pSchedSupport->dynamicShouldJoin = true;
+        startThread();
+
         th.join();
+        cudaStreamDestroy(streamInfo.stream);
     }
 
     void setDynamicAverageTime(int val) { dynamicAverageTime = val; }
@@ -263,6 +281,11 @@ class dynamicThread {
     // The actual kernel things go here.
     // It is called upon construction.
     void workerThread();
+
+    // Query the value of userCallDone
+    bool isUserCallDone();
+    // Reset userCallDone back to false
+    void resetUserCallStat();
 };
 
 }  // namespace sgps

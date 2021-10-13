@@ -194,6 +194,8 @@ class SGPS {
     int figureOutNV();
     // Transfer cached sim params to dT (and kT?)
     void transferSimParams();
+    // Wait for kT and dT until they are done with the work and a signal is give by them, then the ApiSystem can go on.
+    void waitOnThreads();
 };
 
 }  // namespace sgps

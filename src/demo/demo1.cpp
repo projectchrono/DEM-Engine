@@ -114,5 +114,6 @@ int main() {
     sprintf(filename, "./test_gran_output.csv");
     aa.WriteFileAsSpheres(std::string(filename));
 
+    std::cout << "Demo exiting..." << std::endl;
     return 0;
 }
