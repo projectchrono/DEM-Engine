@@ -35,10 +35,10 @@ SGPS::SGPS(float rad) {
 }
 
 SGPS::~SGPS() {
-    delete dTkT_InteractionManager;
-    delete dTkT_GpuManager;
     delete kT;
     delete dT;
+    delete dTkT_InteractionManager;
+    delete dTkT_GpuManager;
 }
 
 void SGPS::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned char z, float len_unit, float3 O) {
