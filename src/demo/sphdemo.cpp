@@ -82,6 +82,6 @@ int main(int argc, char* argv[]) {
 
     // initialize the SPHSystem
     system->initialize(radius, pos_vec, vel_vec, acc_vec, fix_vec);
-    system->setPrintOut(true);
+    system->setPrintOut(false, 10);
     system->doStepDynamics(0.005f, 3.0f);
 }

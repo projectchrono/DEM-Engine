@@ -71,10 +71,27 @@ class DynamicThread {
     SPHSystem& getParentSystem() { return parentSystem; }
 };
 
+class WriteOutThread {
+  private:
+    DataManager& dataManager;
+
+    SPHSystem& parentSystem;
+
+  public:
+    int writeOutCounter;
+
+    WriteOutThread(DataManager& dm, SPHSystem& system) : dataManager(dm), parentSystem(system) { writeOutCounter = 0; }
+
+    void operator()();
+
+    SPHSystem& getParentSystem() { return parentSystem; }
+};
+
 class SPHSystem {
   private:
     KinematicThread kt;
     DynamicThread dt;
+    WriteOutThread wt;
 
     DataManager dataManager;
 
@@ -84,8 +101,12 @@ class SPHSystem {
     // printout indicator
     bool isPrint;
 
+    // write out parameters
+    int stepPrint;  // this parameter determines how many steps to do 1 step write out
+    int curPrint;   // this parameter counts write out step currently at
+
   public:
-    inline SPHSystem(GpuManager& gm) : kt(dataManager, gm, *this), dt(dataManager, gm, *this) {
+    inline SPHSystem(GpuManager& gm) : kt(dataManager, gm, *this), dt(dataManager, gm, *this), wt(dataManager, *this) {
         curr_time = 0.0f;
         pos_data_isFresh = true;
         contact_data_isFresh = false;
@@ -93,9 +114,18 @@ class SPHSystem {
         isPrint = false;
     };
 
-    void setPrintOut(bool isPrint) { this->isPrint = isPrint; }
+    void setPrintOut(bool isPrint, int stepPrint) {
+        this->isPrint = isPrint;
+        this->stepPrint = stepPrint;
+        this->curPrint = 0;
+        this->wt_thread_busy = false;
+        this->wt_buffer_fresh = false;
+    }
 
     bool getPrintOut() { return isPrint; }
+    int getCurPrint() { return curPrint; }
+    void setCurPrint(int set_val) { curPrint = set_val; }
+    int getStepPrint() { return stepPrint; }
 
     // initialize the SPHSystem with pos as the particle positions
     // n as the total number of particles initialized in the SPHSystem
@@ -118,10 +148,17 @@ class SPHSystem {
     int getKiCounter() { return kt.kinematicCounter; }
     int getDyCounter() { return dt.dynamicCounter; }
 
+    KinematicThread& getKtRef() { return kt; }
+    DynamicThread& getDtRef() { return dt; }
+    WriteOutThread& getWtRef() { return wt; }
+
     std::atomic<float> curr_time;
     std::atomic<float> sim_time;
     std::atomic<float> time_step;
 
     std::atomic<bool> pos_data_isFresh;
     std::atomic<bool> contact_data_isFresh;
+
+    std::atomic<bool> wt_thread_busy;
+    std::atomic<bool> wt_buffer_fresh;
 };

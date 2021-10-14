@@ -6,6 +6,7 @@
 #include <core/utils/JitHelper.h>
 #include <thread>
 #include <vector>
+#include <chrono>
 #include <core/utils/GpuError.h>
 #include "datastruct.h"
 
@@ -26,9 +27,17 @@ void SPHSystem::doStepDynamics(float time_step, float sim_time) {
     this->sim_time = sim_time;
     std::thread kinematics(kt);
     std::thread dynamics(dt);
+    std::thread writeout(wt);
 
     kinematics.join();
     dynamics.join();
+
+    // join the write-out thread only when write out mode is enabled
+    if (this->getPrintOut() == true) {
+        writeout.join();
+    } else {
+        writeout.~thread();
+    }
 }
 
 void SPHSystem::printCSV(std::string filename, vector3* pos_arr, int pos_n, vector3* vel_arr, vector3* acc_arr) {
@@ -168,7 +177,7 @@ void DynamicThread::operator()() {
         const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
         k_n = dataManager.m_pos.size();
     }
-    
+
     // set number of blocks and number of threads in each block
     int block_size = 1024;
     int num_thread = (block_size < k_n) ? block_size : k_n;
@@ -240,11 +249,27 @@ void DynamicThread::operator()() {
             dataManager.m_acc.assign(acc_data.begin(), acc_data.end());
         }
 
-        // if (getParentSystem().getPrintOut() == true) {
-        //     getParentSystem().printCSV("test" + std::to_string(dynamicCounter) + ".csv", pos_data.data(),
-        //                                pos_data.size(), vel_data.data(), acc_data.data());
-        // }
+        if (getParentSystem().getPrintOut() == true &&
+            getParentSystem().getCurPrint() == getParentSystem().getStepPrint() - 1) {
+            while (getParentSystem().wt_thread_busy == true) {
+                continue;
+            }
+            getParentSystem().wt_buffer_fresh = true;
+            getParentSystem().setCurPrint(0);
+            while (getParentSystem().wt_buffer_fresh == true) {
+                continue;
+            }
 
+        } else {
+            getParentSystem().setCurPrint(getParentSystem().getCurPrint() + 1);
+        }
+
+        /*
+                if (getParentSystem().getPrintOut() == true) {
+                    getParentSystem().printCSV("test" + std::to_string(dynamicCounter) + ".csv", pos_data.data(),
+                                               pos_data.size(), vel_data.data(), acc_data.data());
+                }
+        */
         // notify the system that the position data is fresh
         // increment the dynamic thread
         getParentSystem().pos_data_isFresh = true;
@@ -257,4 +282,31 @@ void DynamicThread::operator()() {
     }
 
     cudaStreamDestroy(streamInfo.stream);
+}
+
+void WriteOutThread::operator()() {
+    while (getParentSystem().curr_time < getParentSystem().sim_time) {
+        if (getParentSystem().wt_buffer_fresh == true && getParentSystem().wt_thread_busy == false) {
+            getParentSystem().wt_thread_busy = true;
+            std::vector<vector3> wt_pos;
+            std::vector<vector3> wt_vel;
+            std::vector<vector3> wt_acc;
+
+            {
+                const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
+                wt_pos.assign(dataManager.m_pos.begin(), dataManager.m_pos.end());
+                wt_vel.assign(dataManager.m_vel.begin(), dataManager.m_vel.end());
+                wt_acc.assign(dataManager.m_acc.begin(), dataManager.m_acc.end());
+                getParentSystem().wt_buffer_fresh = false;
+            }
+
+            getParentSystem().printCSV("test" + std::to_string(writeOutCounter) + ".csv", wt_pos.data(), wt_pos.size(),
+                                       wt_vel.data(), wt_acc.data());
+            getParentSystem().wt_thread_busy = false;
+            writeOutCounter++;
+            std::cout << "wo ct:" << writeOutCounter << std::endl;
+        } else {
+            continue;
+        }
+    }
 }
