@@ -36,7 +36,7 @@ void SPHSystem::doStepDynamics(float time_step, float sim_time) {
     if (this->getPrintOut() == true) {
         writeout.join();
     } else {
-        writeout.~thread();
+        writeout.detach();
     }
 }
 
