@@ -19,15 +19,15 @@
 
 namespace sgps {
 
-// class SGPS_impl;
-// class kinematicThread;
-// class dynamicThread;
+// class DEMSolver_impl;
+// class DEMKinematicThread;
+// class DEMDynamicThread;
 // class ThreadManager;
 
-class SGPS {
+class DEMSolver {
   public:
-    SGPS(float rad);
-    virtual ~SGPS();
+    DEMSolver(float rad);
+    virtual ~DEMSolver();
 
     // Instruct the dimension of the ``world'', as well as the origin point of this ``world''. On initialization, this
     // info will be used to figure out how to assign the num of voxels in each direction. If your ``useful'' domain is
@@ -95,8 +95,8 @@ class SGPS {
 
     /*
       protected:
-        SGPS() : m_sys(nullptr) {}
-        SGPS_impl* m_sys;
+        DEMSolver() : m_sys(nullptr) {}
+        DEMSolver_impl* m_sys;
     */
 
   private:
@@ -187,8 +187,8 @@ class SGPS {
 
     GpuManager* dTkT_GpuManager;
     ThreadManager* dTkT_InteractionManager;
-    kinematicThread* kT;
-    dynamicThread* dT;
+    DEMKinematicThread* kT;
+    DEMDynamicThread* dT;
 
     int generateJITResources();
     int figureOutNV();

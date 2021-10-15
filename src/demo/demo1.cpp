@@ -13,7 +13,7 @@
 using namespace sgps;
 
 int main() {
-    SGPS aa(1.f);
+    DEMSolver aa(1.f);
 
     srand(time(NULL));
 

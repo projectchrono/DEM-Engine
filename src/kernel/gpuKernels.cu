@@ -3,8 +3,8 @@
 #include <granular/GranularDefines.h>
 // #include <granular/PhysicsSystem.h> // Do not include this! It confuses JITC
 
-// using sgps::dynamicThread;
-// using sgps::kinematicThread;
+// using sgps::DEMDynamicThread;
+// using sgps::DEMKinematicThread;
 
 __global__ void dynamicTestKernel() {
     printf("Dynamic run\n");

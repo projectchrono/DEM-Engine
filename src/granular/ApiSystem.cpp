@@ -14,14 +14,14 @@
 
 namespace sgps {
 
-SGPS::SGPS(float rad) {
+DEMSolver::DEMSolver(float rad) {
     dTkT_InteractionManager = new ThreadManager();
     dTkT_InteractionManager->dynamicRequestedUpdateFrequency = updateFreq;
 
     dTkT_GpuManager = new GpuManager(2);
 
-    kT = new kinematicThread(dTkT_InteractionManager, dTkT_GpuManager);
-    dT = new dynamicThread(dTkT_InteractionManager, dTkT_GpuManager);
+    kT = new DEMKinematicThread(dTkT_InteractionManager, dTkT_GpuManager);
+    dT = new DEMDynamicThread(dTkT_InteractionManager, dTkT_GpuManager);
 
     voxelID_default_t* pBuffer = kT->pBuffer_voxelID();
     dT->setDestinationBuffer_voxelID(pBuffer);
@@ -34,14 +34,14 @@ SGPS::SGPS(float rad) {
     kT->setKinematicAverageTime(timeKinematicSide);
 }
 
-SGPS::~SGPS() {
+DEMSolver::~DEMSolver() {
     delete kT;
     delete dT;
     delete dTkT_InteractionManager;
     delete dTkT_GpuManager;
 }
 
-void SGPS::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned char z, float len_unit, float3 O) {
+void DEMSolver::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned char z, float len_unit, float3 O) {
     if (x + y + z != 32 && x + y + z != 64) {
         SGPS_ERROR(
             "Please give voxel numbers (as powers of 2) along each direction such that they add up to 32 or 64.");
@@ -60,7 +60,7 @@ void SGPS::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned 
     explicit_nv_override = true;
 }
 
-float3 SGPS::CenterCoordSys() {
+float3 DEMSolver::CenterCoordSys() {
     float3 O;
     O.x = -(m_boxX) / 2.0;
     O.y = -(m_boxY) / 2.0;
@@ -69,15 +69,15 @@ float3 SGPS::CenterCoordSys() {
     return O;
 }
 
-void SGPS::SetGravitationalAcceleration(float3 g) {
+void DEMSolver::SetGravitationalAcceleration(float3 g) {
     G = g;
 }
 
-void SGPS::SetTimeStepSize(double ts_size) {
+void DEMSolver::SetTimeStepSize(double ts_size) {
     m_ts_size = ts_size;
 }
 
-materialsOffset_default_t SGPS::LoadMaterialType(float density, float E) {
+materialsOffset_default_t DEMSolver::LoadMaterialType(float density, float E) {
     struct Material a_material;
     a_material.density = density;
     a_material.E = E;
@@ -86,7 +86,7 @@ materialsOffset_default_t SGPS::LoadMaterialType(float density, float E) {
     return m_sp_materials.size() - 1;
 }
 
-clumpBodyInertiaOffset_default_t SGPS::LoadClumpType(float mass,
+clumpBodyInertiaOffset_default_t DEMSolver::LoadClumpType(float mass,
                                                      float3 moi,
                                                      const std::vector<float>& sp_radii,
                                                      const std::vector<float3>& sp_locations_xyz,
@@ -105,7 +105,7 @@ clumpBodyInertiaOffset_default_t SGPS::LoadClumpType(float mass,
     return m_template_mass.size() - 1;
 }
 
-clumpBodyInertiaOffset_default_t SGPS::LoadClumpSimpleSphere(float mass,
+clumpBodyInertiaOffset_default_t DEMSolver::LoadClumpSimpleSphere(float mass,
                                                              float radius,
                                                              materialsOffset_default_t material_id) {
     float3 I = make_float3(2.0 / 5.0 * mass * radius * radius);
@@ -114,12 +114,12 @@ clumpBodyInertiaOffset_default_t SGPS::LoadClumpSimpleSphere(float mass,
                          std::vector<materialsOffset_default_t>(1, material_id));
 }
 
-voxelID_default_t SGPS::GetClumpVoxelID(unsigned int i) const {
+voxelID_default_t DEMSolver::GetClumpVoxelID(unsigned int i) const {
     return dT->voxelID.at(i);
 }
 
 // Figure out the unit length l and corresponding numbers of voxels along each direction, based on domain size X, Y, Z
-int SGPS::figureOutNV() {
+int DEMSolver::figureOutNV() {
     if (m_boxX <= 0.f || m_boxY <= 0.f || m_boxZ <= 0.f) {
         SGPS_ERROR(
             "The size of the simulation world is set to be (or default to be) %f by %f by %f. It is impossibly small.",
@@ -129,7 +129,7 @@ int SGPS::figureOutNV() {
     return 0;
 }
 
-int SGPS::generateJITResources() {
+int DEMSolver::generateJITResources() {
     /*
     // Dan and Ruochun decided not to extract unique input values.
     // Instead, we trust users: we simply store all clump template info users give.
@@ -214,7 +214,7 @@ int SGPS::generateJITResources() {
     return 0;
 }
 
-void SGPS::SetClumps(const std::vector<clumpBodyInertiaOffset_default_t>& types, const std::vector<float3>& xyz) {
+void DEMSolver::SetClumps(const std::vector<clumpBodyInertiaOffset_default_t>& types, const std::vector<float3>& xyz) {
     if (types.size() != xyz.size()) {
         SGPS_ERROR("Arrays in the call SetClumps must all have the same length.");
     }
@@ -224,16 +224,16 @@ void SGPS::SetClumps(const std::vector<clumpBodyInertiaOffset_default_t>& types,
     m_input_clump_xyz.insert(m_input_clump_xyz.end(), xyz.begin(), xyz.end());
 }
 
-void SGPS::WriteFileAsSpheres(const std::string& outfilename) const {
+void DEMSolver::WriteFileAsSpheres(const std::string& outfilename) const {
     std::ofstream ptFile(outfilename, std::ios::out);  // std::ios::binary?
     dT->WriteCsvAsSpheres(ptFile);
 }
 
-void SGPS::transferSimParams() {
+void DEMSolver::transferSimParams() {
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_boxLBF, G, m_ts_size);
 }
 
-int SGPS::Initialize() {
+int DEMSolver::Initialize() {
     // a few error checks first
     if (m_sp_materials.size() == 0) {
         SGPS_ERROR("Before initializing the system, at least one material type should be loaded via LoadMaterialType.");
@@ -264,12 +264,12 @@ int SGPS::Initialize() {
     return 0;
 }
 
-void SGPS::UpdateSimParams() {
+void DEMSolver::UpdateSimParams() {
     // TODO: maybe some massaging is needed here, for more sophisticated params updates
     transferSimParams();
 }
 
-void SGPS::waitOnThreads() {
+void DEMSolver::waitOnThreads() {
     while (!(kT->isUserCallDone() & dT->isUserCallDone())) {
         std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_GRANULARITY_MS));
     }
@@ -278,7 +278,7 @@ void SGPS::waitOnThreads() {
     dT->resetUserCallStat();
 }
 
-int SGPS::LaunchThreads() {
+int DEMSolver::LaunchThreads() {
     dT->startThread();
     kT->startThread();
 

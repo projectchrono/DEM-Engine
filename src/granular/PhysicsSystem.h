@@ -21,7 +21,7 @@
 
 namespace sgps {
 
-class kinematicThread {
+class DEMKinematicThread {
   protected:
     ThreadManager* pSchedSupport;
     GpuManager* pGpuDistributor;
@@ -53,9 +53,9 @@ class kinematicThread {
     std::vector<voxelID_default_t, ManagedAllocator<voxelID_default_t>> voxelID;
 
   public:
-    friend class SGPS;
+    friend class DEMSolver;
 
-    kinematicThread(ThreadManager* pSchedSup, GpuManager* pGpuDist)
+    DEMKinematicThread(ThreadManager* pSchedSup, GpuManager* pGpuDist)
         : pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
         kinematicAverageTime = 0;
         pDynamicOwnedBuffer_voxelID = NULL;
@@ -72,8 +72,8 @@ class kinematicThread {
         // Launch a worker thread bound to this instance
         th = std::move(std::thread([this]() { this->workerThread(); }));
     }
-    ~kinematicThread() {
-        std::cout << "Kinematic thread closing..." << std::endl;
+    ~DEMKinematicThread() {
+        // std::cout << "Kinematic thread closing..." << std::endl;
         pSchedSupport->kinematicShouldJoin = true;
         startThread();
         th.join();
@@ -101,7 +101,7 @@ class kinematicThread {
     void resetUserCallStat();
 };
 
-class dynamicThread {
+class DEMDynamicThread {
   protected:
     ThreadManager* pSchedSupport;
     GpuManager* pGpuDistributor;
@@ -127,10 +127,10 @@ class dynamicThread {
 
     // Pointers to simulation params-related arrays
     // Check DataStructs.h for details
-    GranSimParams* simParams;
+    DEMSimParams* simParams;
 
     // Pointers to those data arrays defined below, stored in a struct
-    GranDataDT* granData;
+    DEMDataDT* granData;
 
     // Body-related arrays in managed memory
 
@@ -208,12 +208,12 @@ class dynamicThread {
     int localUse(int val);
 
   public:
-    friend class SGPS;
+    friend class DEMSolver;
 
-    dynamicThread(ThreadManager* pSchedSup, GpuManager* pGpuDist)
+    DEMDynamicThread(ThreadManager* pSchedSup, GpuManager* pGpuDist)
         : pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
-        GPU_CALL(cudaMallocManaged(&simParams, sizeof(GranSimParams), cudaMemAttachGlobal));
-        GPU_CALL(cudaMallocManaged(&granData, sizeof(GranDataDT), cudaMemAttachGlobal));
+        GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
+        GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataDT), cudaMemAttachGlobal));
 
         pKinematicOwnedBuffer_voxelID = NULL;
         nDynamicCycles = 0;
@@ -230,11 +230,10 @@ class dynamicThread {
         // Launch a worker thread bound to this instance
         th = std::move(std::thread([this]() { this->workerThread(); }));
     }
-    ~dynamicThread() {
-        std::cout << "Dynamic thread closing..." << std::endl;
+    ~DEMDynamicThread() {
+        // std::cout << "Dynamic thread closing..." << std::endl;
         pSchedSupport->dynamicShouldJoin = true;
         startThread();
-
         th.join();
         cudaStreamDestroy(streamInfo.stream);
     }

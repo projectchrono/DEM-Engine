@@ -15,19 +15,19 @@
 
 namespace sgps {
 
-int kinematicThread::costlyProductionStep(int val) const {
+int DEMKinematicThread::costlyProductionStep(int val) const {
     std::this_thread::sleep_for(std::chrono::milliseconds(kinematicAverageTime));
     return 2 * val + 1;
 }
 
 // Put sim data array pointers in place
-void dynamicThread::packDataPointers() {
+void DEMDynamicThread::packDataPointers() {
     granData->h2aX = h2aX.data();
     granData->h2aY = h2aY.data();
     granData->h2aZ = h2aZ.data();
 }
 
-void dynamicThread::setSimParams(unsigned char nvXp2,
+void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                  unsigned char nvYp2,
                                  unsigned char nvZp2,
                                  float l,
@@ -49,7 +49,7 @@ void dynamicThread::setSimParams(unsigned char nvXp2,
     simParams->h = ts_size;
 }
 
-void dynamicThread::allocateManagedArrays(unsigned int nClumpBodies,
+void DEMDynamicThread::allocateManagedArrays(unsigned int nClumpBodies,
                                           unsigned int nSpheresGM,
                                           unsigned int nClumpTopo,
                                           unsigned int nClumpComponents,
@@ -77,7 +77,7 @@ void dynamicThread::allocateManagedArrays(unsigned int nClumpBodies,
     TRACKED_VECTOR_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
 }
 
-void dynamicThread::populateManagedArrays(const std::vector<clumpBodyInertiaOffset_default_t>& input_clump_types,
+void DEMDynamicThread::populateManagedArrays(const std::vector<clumpBodyInertiaOffset_default_t>& input_clump_types,
                                           const std::vector<float3>& input_clump_xyz,
                                           const std::vector<float>& clumps_mass_types,
                                           const std::vector<std::vector<float>>& clumps_sp_radii_types,
@@ -146,7 +146,7 @@ void dynamicThread::populateManagedArrays(const std::vector<clumpBodyInertiaOffs
     }
 }
 
-void dynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
+void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
     ParticleFormatWriter pw;
     // pw.write(ptFile, ParticleFormatWriter::CompressionType::NONE, mass);
     std::vector<float> posX(simParams->nSpheresGM, 0);
@@ -179,7 +179,7 @@ void dynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
     pw.write(ptFile, ParticleFormatWriter::CompressionType::NONE, posX, posY, posZ, spRadii);
 }
 
-void kinematicThread::workerThread() {
+void DEMKinematicThread::workerThread() {
     // Set the device for this thread
     cudaSetDevice(streamInfo.device);
     cudaStreamCreate(&streamInfo.stream);
@@ -282,7 +282,7 @@ void kinematicThread::workerThread() {
     }
 }
 
-void dynamicThread::workerThread() {
+void DEMDynamicThread::workerThread() {
     // Set the gpu for this thread
     cudaSetDevice(streamInfo.device);
     cudaStreamCreate(&streamInfo.stream);
@@ -382,37 +382,37 @@ void dynamicThread::workerThread() {
     }
 }
 
-void kinematicThread::startThread() {
+void DEMKinematicThread::startThread() {
     std::lock_guard<std::mutex> lock(pSchedSupport->kinematicStartLock);
     pSchedSupport->kinematicStarted = true;
     pSchedSupport->cv_KinematicStartLock.notify_one();
 }
 
-void dynamicThread::startThread() {
+void DEMDynamicThread::startThread() {
     std::lock_guard<std::mutex> lock(pSchedSupport->dynamicStartLock);
     pSchedSupport->dynamicStarted = true;
     pSchedSupport->cv_DynamicStartLock.notify_one();
 }
 
-bool dynamicThread::isUserCallDone() {
+bool DEMDynamicThread::isUserCallDone() {
     // return true if done, false if not
     return userCallDone;
 }
 
-bool kinematicThread::isUserCallDone() {
+bool DEMKinematicThread::isUserCallDone() {
     // return true if done, false if not
     return userCallDone;
 }
 
-void dynamicThread::resetUserCallStat() {
+void DEMDynamicThread::resetUserCallStat() {
     userCallDone = false;
 }
 
-void kinematicThread::resetUserCallStat() {
+void DEMKinematicThread::resetUserCallStat() {
     userCallDone = false;
 }
 
-int dynamicThread::localUse(int val) {
+int DEMDynamicThread::localUse(int val) {
     cudaSetDevice(streamInfo.device);
     // std::this_thread::sleep_for(std::chrono::milliseconds(dynamicAverageTime));
 
@@ -427,7 +427,7 @@ int dynamicThread::localUse(int val) {
     return 2 * val;
 }
 
-void kinematicThread::primeDynamic() {
+void DEMKinematicThread::primeDynamic() {
     // transfer produce to dynamic buffer
     cudaMemcpy(pDynamicOwnedBuffer_voxelID, voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_default_t),
                cudaMemcpyDeviceToDevice);

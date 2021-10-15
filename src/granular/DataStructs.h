@@ -6,7 +6,7 @@
 
 namespace sgps {
 // A structure for storing simulation parameters
-struct GranSimParams {
+struct DEMSimParams {
     // Number of voxels in the X direction, expressed as a power of 2
     unsigned char nvXp2;
     // Number of voxels in the Y direction, expressed as a power of 2
@@ -34,7 +34,7 @@ struct GranSimParams {
 
 // A struct that holds pointers to data arrays that dT uses
 // For more details just look at PhysicsSystem.h
-struct GranDataDT {
+struct DEMDataDT {
     unsigned int* voxelID;
 
     unsigned int* locX;
@@ -63,7 +63,7 @@ struct GranDataDT {
     int* h2AlphaZ;
 };
 
-// typedef GranDataDT* GranDataDTPtr;
-// typedef GranSimParams* GranSimParamsPtr;
+// typedef DEMDataDT* DEMDataDTPtr;
+// typedef DEMSimParams* DEMSimParamsPtr;
 
 }  // namespace sgps
