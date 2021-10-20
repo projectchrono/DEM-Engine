@@ -28,13 +28,13 @@ void DEMDynamicThread::packDataPointers() {
 }
 
 void DEMDynamicThread::setSimParams(unsigned char nvXp2,
-                                 unsigned char nvYp2,
-                                 unsigned char nvZp2,
-                                 float l,
-                                 double voxelSize,
-                                 float3 LBFPoint,
-                                 float3 G,
-                                 double ts_size) {
+                                    unsigned char nvYp2,
+                                    unsigned char nvZp2,
+                                    float l,
+                                    double voxelSize,
+                                    float3 LBFPoint,
+                                    float3 G,
+                                    double ts_size) {
     simParams->nvXp2 = nvXp2;
     simParams->nvYp2 = nvYp2;
     simParams->nvZp2 = nvZp2;
@@ -50,10 +50,10 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
 }
 
 void DEMDynamicThread::allocateManagedArrays(unsigned int nClumpBodies,
-                                          unsigned int nSpheresGM,
-                                          unsigned int nClumpTopo,
-                                          unsigned int nClumpComponents,
-                                          unsigned int nMatTuples) {
+                                             unsigned int nSpheresGM,
+                                             unsigned int nClumpTopo,
+                                             unsigned int nClumpComponents,
+                                             unsigned int nMatTuples) {
     simParams->nSpheresGM = nSpheresGM;
     simParams->nClumpBodies = nClumpBodies;
     // Resize to the number of clumps
@@ -78,10 +78,10 @@ void DEMDynamicThread::allocateManagedArrays(unsigned int nClumpBodies,
 }
 
 void DEMDynamicThread::populateManagedArrays(const std::vector<clumpBodyInertiaOffset_default_t>& input_clump_types,
-                                          const std::vector<float3>& input_clump_xyz,
-                                          const std::vector<float>& clumps_mass_types,
-                                          const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                                          const std::vector<std::vector<float3>>& clumps_sp_location_types) {
+                                             const std::vector<float3>& input_clump_xyz,
+                                             const std::vector<float>& clumps_mass_types,
+                                             const std::vector<std::vector<float>>& clumps_sp_radii_types,
+                                             const std::vector<std::vector<float3>>& clumps_sp_location_types) {
     // Use some temporary hacks to get the info in the managed mem
     // All the input vectors should have the same length, nClumpTopo
     unsigned int k = 0;
@@ -128,15 +128,12 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<clumpBodyInertiaO
             // std::cout << "Sphere Rel Pos offset: " << this_clump_no_sp_loc_offsets.at(j) << std::endl;
         }
 
-        unsigned int voxelNumX = (unsigned int)((double)this_CoM_coord.x / simParams->voxelSize);
-        unsigned int voxelNumY = (unsigned int)((double)this_CoM_coord.y / simParams->voxelSize);
-        unsigned int voxelNumZ = (unsigned int)((double)this_CoM_coord.z / simParams->voxelSize);
-        locX.at(i) =
-            (unsigned int)(((double)this_CoM_coord.x - (double)voxelNumX * simParams->voxelSize) / simParams->l);
-        locY.at(i) =
-            (unsigned int)(((double)this_CoM_coord.y - (double)voxelNumY * simParams->voxelSize) / simParams->l);
-        locZ.at(i) =
-            (unsigned int)(((double)this_CoM_coord.z - (double)voxelNumZ * simParams->voxelSize) / simParams->l);
+        voxelID_default_t voxelNumX = (double)this_CoM_coord.x / simParams->voxelSize;
+        voxelID_default_t voxelNumY = (double)this_CoM_coord.y / simParams->voxelSize;
+        voxelID_default_t voxelNumZ = (double)this_CoM_coord.z / simParams->voxelSize;
+        locX.at(i) = ((double)this_CoM_coord.x - (double)voxelNumX * simParams->voxelSize) / simParams->l;
+        locY.at(i) = ((double)this_CoM_coord.y - (double)voxelNumY * simParams->voxelSize) / simParams->l;
+        locZ.at(i) = ((double)this_CoM_coord.z - (double)voxelNumZ * simParams->voxelSize) / simParams->l;
         // std::cout << "Clump voxel num: " << voxelNumX << ", " << voxelNumY << ", " << voxelNumZ << std::endl;
 
         voxelID.at(i) += voxelNumX;
@@ -155,9 +152,10 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
     std::vector<float> spRadii(simParams->nSpheresGM, 0);
     for (unsigned int i = 0; i < simParams->nSpheresGM; i++) {
         auto this_owner = ownerClumpBody.at(i);
-        unsigned int voxelIDX =
-            voxelID.at(this_owner) & ((1u << simParams->nvXp2) - 1);  // & operation here equals modulo
-        unsigned int voxelIDY = (voxelID.at(this_owner) >> simParams->nvXp2) & ((1u << simParams->nvYp2) - 1);
+        unsigned int voxelIDX = voxelID.at(this_owner) &
+                                (((voxelID_default_t)1 << simParams->nvXp2) - 1);  // & operation here equals modulo
+        unsigned int voxelIDY =
+            (voxelID.at(this_owner) >> simParams->nvXp2) & (((voxelID_default_t)1 << simParams->nvYp2) - 1);
         unsigned int voxelIDZ = (voxelID.at(this_owner)) >> (simParams->nvXp2 + simParams->nvYp2);
         // std::cout << "this owner: " << this_owner << std::endl;
         // std::cout << "Out voxel ID: " << voxelID.at(this_owner) << std::endl;
@@ -282,6 +280,10 @@ void DEMKinematicThread::workerThread() {
     }
 }
 
+void DEMDynamicThread::integrateClumpLinearMotions() {}
+
+void DEMDynamicThread::integrateClumpRotationalMotions() {}
+
 void DEMDynamicThread::workerThread() {
     // Set the gpu for this thread
     cudaSetDevice(streamInfo.device);
@@ -357,6 +359,10 @@ void DEMDynamicThread::workerThread() {
                 .launch(simParams, granData);
 
             GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+            integrateClumpLinearMotions();
+
+            integrateClumpRotationalMotions();
 
             std::cout << "Dynamic side values. Cycle: " << cycle << std::endl;
 

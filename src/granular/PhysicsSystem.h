@@ -245,6 +245,14 @@ class DEMDynamicThread {
     void setDestinationBuffer_voxelID(voxelID_default_t* pPB) { pKinematicOwnedBuffer_voxelID = pPB; }
     voxelID_default_t* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
 
+    // update clump-based acceleration array based on sphere-based force array
+
+    // update clump pos and vel based on acceleration
+    void integrateClumpLinearMotions();
+
+    // update clump orientation and angvel based on ang-acceleration
+    void integrateClumpRotationalMotions();
+
     // Set SimParams items
     void setSimParams(unsigned char nvXp2,
                       unsigned char nvYp2,

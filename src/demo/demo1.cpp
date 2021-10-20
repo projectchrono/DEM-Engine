@@ -98,7 +98,7 @@ int main() {
     }
     aa.SetClumps(input_template_num, input_xyz);
 
-    aa.InstructBoxDomainNumVoxel(16, 8, 8, 1e-10);
+    aa.InstructBoxDomainNumVoxel(22, 21, 21, 1e-10);
     aa.SetTimeStepSize(1e-4);
     aa.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
 
