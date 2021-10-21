@@ -23,11 +23,11 @@ int main() {
     int min_sphere = 1;
     int max_sphere = 5;
 
-    float min_rad = 0.4;
-    float max_rad = 1.0;
+    float min_rad = 0.08;
+    float max_rad = 0.2;
 
-    float min_relpos = -0.5;
-    float max_relpos = 0.5;
+    float min_relpos = -0.1;
+    float max_relpos = 0.1;
 
     /*
     std::vector<float> radii_a_vec(3, .4);
@@ -89,7 +89,7 @@ int main() {
     for (int i = 0; i < num_template; i++) {
         input_template_num.push_back(i);
 
-        float grid_size = 5.0;
+        float grid_size = 1.0;
         int ticks = 3;
         int ix = i % ticks;
         int iy = (i % (ticks * ticks)) / ticks;
@@ -99,6 +99,7 @@ int main() {
     aa.SetClumps(input_template_num, input_xyz);
 
     aa.InstructBoxDomainNumVoxel(22, 21, 21, 1e-10);
+    aa.CenterCoordSys();
     aa.SetTimeStepSize(1e-4);
     aa.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
 

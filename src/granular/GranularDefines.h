@@ -13,6 +13,7 @@ namespace sgps {
 #define VOXEL_RES_POWER2 16
 #define WAIT_GRANULARITY_MS 1
 
+typedef uint16_t subVoxelPos_default_t;
 typedef uint64_t voxelID_default_t;
 typedef unsigned int bodyID_default_t;
 typedef unsigned int materialsOffset_default_t;

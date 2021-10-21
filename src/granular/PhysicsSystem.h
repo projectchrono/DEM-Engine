@@ -61,7 +61,6 @@ class DEMKinematicThread {
         pDynamicOwnedBuffer_voxelID = NULL;
 
         transferBuffer_voxelID.resize(N_MANUFACTURED_ITEMS, 0);
-        voxelID.resize(N_MANUFACTURED_ITEMS, 1);
 
         // Get a device/stream ID to use from the GPU Manager
         streamInfo = pGpuDistributor->getAvailableStream();
@@ -160,9 +159,9 @@ class DEMDynamicThread {
     std::vector<voxelID_default_t, ManagedAllocator<voxelID_default_t>> voxelID;
 
     // The XYZ local location inside a voxel
-    std::vector<unsigned int, ManagedAllocator<unsigned int>> locX;
-    std::vector<unsigned int, ManagedAllocator<unsigned int>> locY;
-    std::vector<unsigned int, ManagedAllocator<unsigned int>> locZ;
+    std::vector<subVoxelPos_default_t, ManagedAllocator<subVoxelPos_default_t>> locX;
+    std::vector<subVoxelPos_default_t, ManagedAllocator<subVoxelPos_default_t>> locY;
+    std::vector<subVoxelPos_default_t, ManagedAllocator<subVoxelPos_default_t>> locZ;
 
     // The clump quaternion
     std::vector<int, ManagedAllocator<int>> oriQ0;

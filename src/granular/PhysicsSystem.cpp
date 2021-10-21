@@ -152,11 +152,11 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
     std::vector<float> spRadii(simParams->nSpheresGM, 0);
     for (unsigned int i = 0; i < simParams->nSpheresGM; i++) {
         auto this_owner = ownerClumpBody.at(i);
-        unsigned int voxelIDX = voxelID.at(this_owner) &
-                                (((voxelID_default_t)1 << simParams->nvXp2) - 1);  // & operation here equals modulo
-        unsigned int voxelIDY =
+        voxelID_default_t voxelIDX = voxelID.at(this_owner) & (((voxelID_default_t)1 << simParams->nvXp2) -
+                                                               1);  // & operation here equals modulo
+        voxelID_default_t voxelIDY =
             (voxelID.at(this_owner) >> simParams->nvXp2) & (((voxelID_default_t)1 << simParams->nvYp2) - 1);
-        unsigned int voxelIDZ = (voxelID.at(this_owner)) >> (simParams->nvXp2 + simParams->nvYp2);
+        voxelID_default_t voxelIDZ = (voxelID.at(this_owner)) >> (simParams->nvXp2 + simParams->nvYp2);
         // std::cout << "this owner: " << this_owner << std::endl;
         // std::cout << "Out voxel ID: " << voxelID.at(this_owner) << std::endl;
         // std::cout << "Out voxel ID XYZ: " << voxelIDX << ", " << voxelIDY << ", " << voxelIDZ << std::endl;
@@ -311,8 +311,8 @@ void DEMDynamicThread::workerThread() {
                 {
                     // acquire lock and use the content of the dynamic-owned transfer buffer
                     std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
-                    cudaMemcpy(voxelID.data(), transferBuffer_voxelID.data(),
-                               N_MANUFACTURED_ITEMS * sizeof(voxelID_default_t), cudaMemcpyDeviceToDevice);
+                    // cudaMemcpy(voxelID.data(), transferBuffer_voxelID.data(),
+                    //            N_MANUFACTURED_ITEMS * sizeof(voxelID_default_t), cudaMemcpyDeviceToDevice);
                 }
                 pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
                 pSchedSupport->stampLastUpdateOfDynamic = cycle;

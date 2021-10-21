@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <granular/GranularDefines.h>
+
 namespace sgps {
 // A structure for storing simulation parameters
 struct DEMSimParams {
@@ -35,11 +37,11 @@ struct DEMSimParams {
 // A struct that holds pointers to data arrays that dT uses
 // For more details just look at PhysicsSystem.h
 struct DEMDataDT {
-    unsigned int* voxelID;
+    voxelID_default_t* voxelID;
 
-    unsigned int* locX;
-    unsigned int* locY;
-    unsigned int* locZ;
+    subVoxelPos_default_t* locX;
+    subVoxelPos_default_t* locY;
+    subVoxelPos_default_t* locZ;
 
     int* oriQ0;
     int* oriQ1;
