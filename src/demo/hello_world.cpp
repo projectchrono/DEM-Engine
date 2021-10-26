@@ -12,7 +12,7 @@ int main(int argc, char** argv) {
                  "source directory!\n";
 
     std::cerr << "[INFO]: Building kernel from " << JitHelper::KERNEL_DIR << "\n\n";
-    auto program = JitHelper::buildProgram("hello", JitHelper::KERNEL_DIR / "hello.cu");
+    auto program = JitHelper::buildProgram("hello", JitHelper::KERNEL_DIR / "hello.cu", {}, {"-I/opt/cuda/include", "-I/home/colin/src/gpu-physics/thirdparty/cub/cub"});
 
     program.kernel("helloWorldKernel").instantiate().configure(dim3(1), dim3(1), 0, stream_info.stream).launch();
 

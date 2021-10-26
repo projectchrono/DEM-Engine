@@ -15,7 +15,7 @@ class JitHelper {
   public:
     class Header {
       public:
-        Header(std::filesystem::path& sourcefile);
+        Header(const std::filesystem::path& sourcefile);
         const std::string& getSource();
         void substitute(const std::string& symbol, const std::string& value);
 
