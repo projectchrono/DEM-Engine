@@ -100,20 +100,24 @@ int main() {
 
     aa.InstructBoxDomainNumVoxel(22, 21, 21, 1e-10);
     aa.CenterCoordSys();
-    aa.SetTimeStepSize(1e-4);
+    aa.SetTimeStepSize(1e-7);
     aa.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
 
     aa.Initialize();
 
     aa.UpdateSimParams();  // Not needed; just testing if this function works...
 
-    aa.LaunchThreads();
+    // TODO: i > 1 makes dynamic stale on waiting for kinematic????
+    for (int i = 0; i < 1; i++) {
+        std::cout << "Iteration: " << i + 1 << std::endl;
+        aa.LaunchThreads();
 
-    std::cout << aa.GetClumpVoxelID(0) << std::endl;
+        // std::cout << aa.GetClumpVoxelID(0) << std::endl;
 
-    char filename[100];
-    sprintf(filename, "./test_gran_output.csv");
-    aa.WriteFileAsSpheres(std::string(filename));
+        char filename[100];
+        sprintf(filename, "./test_gran_output_%04d.csv", i);
+        aa.WriteFileAsSpheres(std::string(filename));
+    }
 
     std::cout << "Demo exiting..." << std::endl;
     return 0;

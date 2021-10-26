@@ -48,21 +48,21 @@ struct DEMDataDT {
     int* oriQ2;
     int* oriQ3;
 
-    int* hvX;
-    int* hvY;
-    int* hvZ;
+    float* hvX;
+    float* hvY;
+    float* hvZ;
 
-    int* hOmgBarX;
-    int* hOmgBarY;
-    int* hOmgBarZ;
+    float* hOmgBarX;
+    float* hOmgBarY;
+    float* hOmgBarZ;
 
-    int* h2aX;
-    int* h2aY;
-    int* h2aZ;
+    float* h2aX;
+    float* h2aY;
+    float* h2aZ;
 
-    int* h2AlphaX;
-    int* h2AlphaY;
-    int* h2AlphaZ;
+    float* h2AlphaX;
+    float* h2AlphaY;
+    float* h2AlphaZ;
 };
 
 // typedef DEMDataDT* DEMDataDTPtr;

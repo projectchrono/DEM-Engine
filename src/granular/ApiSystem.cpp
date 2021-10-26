@@ -280,6 +280,9 @@ void DEMSolver::waitOnThreads() {
 }
 
 int DEMSolver::LaunchThreads() {
+    // Is it needed here??
+    dT->packDataPointers();
+
     dT->startThread();
     kT->startThread();
 

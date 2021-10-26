@@ -98,6 +98,9 @@ class DEMKinematicThread {
     bool isUserCallDone();
     // Reset userCallDone back to false
     void resetUserCallStat();
+
+  private:
+    void contactDetection();
 };
 
 class DEMDynamicThread {
@@ -170,24 +173,24 @@ class DEMDynamicThread {
     std::vector<int, ManagedAllocator<int>> oriQ3;
 
     // Linear velocity times ts size: hv
-    std::vector<int, ManagedAllocator<int>> hvX;
-    std::vector<int, ManagedAllocator<int>> hvY;
-    std::vector<int, ManagedAllocator<int>> hvZ;
+    std::vector<float, ManagedAllocator<float>> hvX;
+    std::vector<float, ManagedAllocator<float>> hvY;
+    std::vector<float, ManagedAllocator<float>> hvZ;
 
     // The angular velocity times ts size: h*omega
-    std::vector<int, ManagedAllocator<int>> hOmgBarX;
-    std::vector<int, ManagedAllocator<int>> hOmgBarY;
-    std::vector<int, ManagedAllocator<int>> hOmgBarZ;
+    std::vector<float, ManagedAllocator<float>> hOmgBarX;
+    std::vector<float, ManagedAllocator<float>> hOmgBarY;
+    std::vector<float, ManagedAllocator<float>> hOmgBarZ;
 
     // Linear acceleration times h^2
-    std::vector<int, ManagedAllocator<int>> h2aX;
-    std::vector<int, ManagedAllocator<int>> h2aY;
-    std::vector<int, ManagedAllocator<int>> h2aZ;
+    std::vector<float, ManagedAllocator<float>> h2aX;
+    std::vector<float, ManagedAllocator<float>> h2aY;
+    std::vector<float, ManagedAllocator<float>> h2aZ;
 
     // Angular acceleration times h^2
-    std::vector<int, ManagedAllocator<int>> h2AlphaX;
-    std::vector<int, ManagedAllocator<int>> h2AlphaY;
-    std::vector<int, ManagedAllocator<int>> h2AlphaZ;
+    std::vector<float, ManagedAllocator<float>> h2AlphaX;
+    std::vector<float, ManagedAllocator<float>> h2AlphaY;
+    std::vector<float, ManagedAllocator<float>> h2AlphaZ;
 
     size_t m_approx_bytes_used = 0;
 
@@ -244,14 +247,6 @@ class DEMDynamicThread {
     void setDestinationBuffer_voxelID(voxelID_default_t* pPB) { pKinematicOwnedBuffer_voxelID = pPB; }
     voxelID_default_t* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
 
-    // update clump-based acceleration array based on sphere-based force array
-
-    // update clump pos and vel based on acceleration
-    void integrateClumpLinearMotions();
-
-    // update clump orientation and angvel based on ang-acceleration
-    void integrateClumpRotationalMotions();
-
     // Set SimParams items
     void setSimParams(unsigned char nvXp2,
                       unsigned char nvYp2,
@@ -292,6 +287,16 @@ class DEMDynamicThread {
     bool isUserCallDone();
     // Reset userCallDone back to false
     void resetUserCallStat();
+
+  private:
+    // update clump-based acceleration array based on sphere-based force array
+    void calculateForces();
+
+    // update clump pos and vel based on acceleration
+    void integrateClumpLinearMotions();
+
+    // update clump orientation and angvel based on ang-acceleration
+    void integrateClumpRotationalMotions();
 };
 
 }  // namespace sgps

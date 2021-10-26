@@ -22,9 +22,15 @@ int DEMKinematicThread::costlyProductionStep(int val) const {
 
 // Put sim data array pointers in place
 void DEMDynamicThread::packDataPointers() {
+    granData->locX = locX.data();
+    granData->locY = locY.data();
+    granData->locZ = locZ.data();
     granData->h2aX = h2aX.data();
     granData->h2aY = h2aY.data();
     granData->h2aZ = h2aZ.data();
+    granData->hvX = hvX.data();
+    granData->hvY = hvY.data();
+    granData->hvZ = hvZ.data();
 }
 
 void DEMDynamicThread::setSimParams(unsigned char nvXp2,
@@ -61,6 +67,9 @@ void DEMDynamicThread::allocateManagedArrays(unsigned int nClumpBodies,
     TRACKED_VECTOR_RESIZE(locX, nClumpBodies, "locX", 0);
     TRACKED_VECTOR_RESIZE(locY, nClumpBodies, "locY", 0);
     TRACKED_VECTOR_RESIZE(locZ, nClumpBodies, "locZ", 0);
+    TRACKED_VECTOR_RESIZE(hvX, nClumpBodies, "hvX", 0);
+    TRACKED_VECTOR_RESIZE(hvY, nClumpBodies, "hvY", 0);
+    TRACKED_VECTOR_RESIZE(hvZ, nClumpBodies, "hvZ", 0);
     TRACKED_VECTOR_RESIZE(h2aX, nClumpBodies, "h2aX", 0);
     TRACKED_VECTOR_RESIZE(h2aY, nClumpBodies, "h2aY", 0);
     TRACKED_VECTOR_RESIZE(h2aZ, nClumpBodies, "h2aZ", 0);
@@ -177,6 +186,20 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
     pw.write(ptFile, ParticleFormatWriter::CompressionType::NONE, posX, posY, posZ, spRadii);
 }
 
+void DEMKinematicThread::contactDetection() {
+    auto data_arg = voxelID.data();
+    auto kinematic_test =
+        JitHelper::buildProgram("gpuKernels", JitHelper::KERNEL_DIR / "gpuKernels.cu", std::vector<JitHelper::Header>(),
+                                {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+
+    kinematic_test.kernel("kinematicTestKernel")
+        .instantiate()
+        .configure(dim3(1), dim3(N_INPUT_ITEMS), 0, streamInfo.stream)
+        .launch(data_arg);
+
+    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+}
+
 void DEMKinematicThread::workerThread() {
     // Set the device for this thread
     cudaSetDevice(streamInfo.device);
@@ -223,18 +246,8 @@ void DEMKinematicThread::workerThread() {
             // cudaStream_t currentStream;
             // cudaStreamCreate(&currentStream);pSchedSupport->dynamicShouldWait()
 
-            auto data_arg = voxelID.data();
-
-            auto gpu_program = JitHelper::buildProgram("gpuKernels", JitHelper::KERNEL_DIR / "gpuKernels.cu",
-                                                       std::vector<JitHelper::Header>(),
-                                                       {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
-
-            gpu_program.kernel("kinematicTestKernel")
-                .instantiate()
-                .configure(dim3(1), dim3(N_INPUT_ITEMS), 0, streamInfo.stream)
-                .launch(data_arg);
-
-            GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+            // TODO: So why kinematic cannot run any kernels now??
+            // contactDetection();
 
             std::cout << "A kinematic side cycle. " << std::endl;
 
@@ -280,7 +293,32 @@ void DEMKinematicThread::workerThread() {
     }
 }
 
-void DEMDynamicThread::integrateClumpLinearMotions() {}
+void DEMDynamicThread::calculateForces() {
+    unsigned int nClumps = simParams->nClumpBodies;
+    auto cal_force =
+        JitHelper::buildProgram("DEMForceKernels", JitHelper::KERNEL_DIR / "DEMForceKernels.cu",
+                                std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+
+    cal_force.kernel("deriveClumpForces")
+        .instantiate()
+        .configure(dim3(1), dim3(nClumps), 0, streamInfo.stream)
+        .launch(simParams, granData);
+
+    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+}
+
+void DEMDynamicThread::integrateClumpLinearMotions() {
+    unsigned int nClumps = simParams->nClumpBodies;
+    auto integrator =
+        JitHelper::buildProgram("DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu",
+                                std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+    integrator.kernel("integrateClumps")
+        .instantiate()
+        .configure(dim3(1), dim3(nClumps), 0, streamInfo.stream)
+        .launch(simParams, granData);
+
+    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+}
 
 void DEMDynamicThread::integrateClumpRotationalMotions() {}
 
@@ -349,17 +387,7 @@ void DEMDynamicThread::workerThread() {
             cudaGetDeviceCount(&totGPU);
             printf("Total device: %d\n", totGPU);
 
-            auto gpu_program = JitHelper::buildProgram(
-                "granForceKernels", JitHelper::KERNEL_DIR / "granForceKernels.cu", std::vector<JitHelper::Header>(),
-                {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
-
-            gpu_program.kernel("deriveClumpForces")
-                .instantiate()
-                .configure(dim3(1), dim3(1), 0, streamInfo.stream)
-                .launch(simParams, granData);
-
-            GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-
+            calculateForces();
             integrateClumpLinearMotions();
 
             integrateClumpRotationalMotions();
