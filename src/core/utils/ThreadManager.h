@@ -76,7 +76,10 @@ class ThreadManager {
         if (dynamicRequestedUpdateFrequency < 0)
             return false;
 
-        // the dynamic should wait if it moved too far into the future
+        // The dynamic should wait if it moved too far into the future.
+        // stampLastUpdateOfDynamic stamps the last time when dT acquires something from kT.
+        // dynamicRequestedUpdateFrequency is the max number of cycles dT can run with no new information form kT,
+        // defaulting to -1 (just keep going, no waiting for kT).
         bool shouldWait =
             (currentStampOfDynamic > stampLastUpdateOfDynamic + dynamicRequestedUpdateFrequency ? true : false);
         return shouldWait;

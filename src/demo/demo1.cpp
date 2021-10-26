@@ -107,8 +107,7 @@ int main() {
 
     aa.UpdateSimParams();  // Not needed; just testing if this function works...
 
-    // TODO: i > 1 makes dynamic stale on waiting for kinematic????
-    for (int i = 0; i < 1; i++) {
+    for (int i = 0; i < 5; i++) {
         std::cout << "Iteration: " << i + 1 << std::endl;
         aa.LaunchThreads();
 

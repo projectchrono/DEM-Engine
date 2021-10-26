@@ -217,7 +217,6 @@ void DEMKinematicThread::workerThread() {
                 break;
             }
         }
-
         // run a while loop producing stuff in each iteration;
         // once produced, it should be made available to the dynamic via memcpy
         while (!pSchedSupport->dynamicDone) {
@@ -440,10 +439,18 @@ bool DEMKinematicThread::isUserCallDone() {
 
 void DEMDynamicThread::resetUserCallStat() {
     userCallDone = false;
+    // Reset last kT-side data receiving cycle time stamp.
+    pSchedSupport->stampLastUpdateOfDynamic = -1;
+    pSchedSupport->currentStampOfDynamic = 0;
+    // Reset dT stats variables, making ready for next user call
+    pSchedSupport->dynamicDone = false;
+    pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
 }
 
 void DEMKinematicThread::resetUserCallStat() {
     userCallDone = false;
+    // Reset kT stats variables, making ready for next user call
+    pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = false;
 }
 
 int DEMDynamicThread::localUse(int val) {
