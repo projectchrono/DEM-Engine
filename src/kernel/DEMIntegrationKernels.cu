@@ -15,9 +15,9 @@ inline __device__ void integrateLinPos(unsigned int thisClump,
                                        sgps::DEMSimParams* simParams,
                                        sgps::DEMDataDT* granData) {
     // TODO: call a kernel here to determine whether loc is in a new voxel now
-    granData->locX[thisClump] += granData->hvX[thisClump] / simParams->l;
-    granData->locY[thisClump] += granData->hvY[thisClump] / simParams->l;
-    granData->locZ[thisClump] += granData->hvZ[thisClump] / simParams->l;
+    granData->locX[thisClump] += granData->hvX[thisClump];
+    granData->locY[thisClump] += granData->hvY[thisClump];
+    granData->locZ[thisClump] += granData->hvZ[thisClump];
 }
 
 __global__ void integrateClumps(sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData) {
