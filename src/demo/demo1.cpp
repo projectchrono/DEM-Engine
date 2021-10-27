@@ -100,7 +100,7 @@ int main() {
 
     aa.InstructBoxDomainNumVoxel(22, 21, 21, 1e-10);
     // aa.InstructBoxDomainNumVoxel(11, 11, 10, 1e-10);
-    
+
     aa.CenterCoordSys();
     aa.SetTimeStepSize(1e-5);
     aa.SetGravitationalAcceleration(make_float3(0, 0, -9.8));

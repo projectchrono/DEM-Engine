@@ -27,7 +27,8 @@ set(granular_headers
 )
 
 set(granular_sources
-	${CMAKE_CURRENT_SOURCE_DIR}/PhysicsSystem.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/kT.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/dT.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/ApiSystem.cpp
 )
 

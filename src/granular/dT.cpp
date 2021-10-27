@@ -15,11 +15,6 @@
 
 namespace sgps {
 
-int DEMKinematicThread::costlyProductionStep(int val) const {
-    std::this_thread::sleep_for(std::chrono::milliseconds(kinematicAverageTime));
-    return 2 * val + 1;
-}
-
 // Put sim data array pointers in place
 void DEMDynamicThread::packDataPointers() {
     granData->locX = locX.data();
@@ -186,114 +181,6 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
     pw.write(ptFile, ParticleFormatWriter::CompressionType::NONE, posX, posY, posZ, spRadii);
 }
 
-void DEMKinematicThread::contactDetection() {
-    auto data_arg = voxelID.data();
-    auto kinematic_test =
-        JitHelper::buildProgram("gpuKernels", JitHelper::KERNEL_DIR / "gpuKernels.cu", std::vector<JitHelper::Header>(),
-                                {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
-
-    kinematic_test.kernel("kinematicTestKernel")
-        .instantiate()
-        .configure(dim3(1), dim3(N_INPUT_ITEMS), 0, streamInfo.stream)
-        .launch(data_arg);
-
-    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-}
-
-void DEMKinematicThread::workerThread() {
-    // Set the device for this thread
-    cudaSetDevice(streamInfo.device);
-    cudaStreamCreate(&streamInfo.stream);
-
-    while (!pSchedSupport->kinematicShouldJoin) {
-        {
-            std::unique_lock<std::mutex> lock(pSchedSupport->kinematicStartLock);
-            while (!pSchedSupport->kinematicStarted) {
-                pSchedSupport->cv_KinematicStartLock.wait(lock);
-            }
-            // Ensure that we wait for start signal on next iteration
-            pSchedSupport->kinematicStarted = false;
-            if (pSchedSupport->kinematicShouldJoin) {
-                break;
-            }
-        }
-        // run a while loop producing stuff in each iteration;
-        // once produced, it should be made available to the dynamic via memcpy
-        while (!pSchedSupport->dynamicDone) {
-            // before producing something, a new work order should be in place. Wait on
-            // it
-            if (!pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh) {
-                pSchedSupport->schedulingStats.nTimesKinematicHeldBack++;
-                std::unique_lock<std::mutex> lock(pSchedSupport->kinematicCanProceed);
-                
-                while (!pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh) {
-                    // loop to avoid spurious wakeups
-                    pSchedSupport->cv_KinematicCanProceed.wait(lock);
-                }
-                
-                // getting here means that new "work order" data has been provided
-                {
-                    // acquire lock and supply the dynamic with fresh produce
-                    std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
-                    cudaMemcpy(voxelID.data(), transferBuffer_voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_default_t),
-                               cudaMemcpyDeviceToDevice);
-                }
-            }
-
-            // figure out the amount of shared mem
-            // cudaDeviceGetAttribute.cudaDevAttrMaxSharedMemoryPerBlock
-
-            // produce something here; fake stuff for now
-            // cudaStream_t currentStream;
-            // cudaStreamCreate(&currentStream);pSchedSupport->dynamicShouldWait()
-
-            // TODO: So why kinematic cannot run any kernels now??
-            // contactDetection();
-
-            std::cout << "A kinematic side cycle. " << std::endl;
-
-            /* for the reference
-            for (int j = 0; j < N_MANUFACTURED_ITEMS; j++) {
-                // kinematicTestKernel<<<1, 1, 0, kinematicStream.stream>>>();
-
-                // use cudaLaunchKernel
-                // cudaLaunchKernel((void*)&kinematicTestKernel, dim3(1), dim3(1), NULL, 0, stream_id);
-                // example argument list:
-                //  args = { &arg1, &arg2, ... &argN };
-                // cudaLaunchKernel((void*)&kinematicTestKernelWithArgs, dim3(1), dim3(1), &args, 0, stream_id);
-                kinematicTestKernel<<<1, 1>>>();
-                cudaDeviceSynchronize();
-                pSchedSupport->dynamicShouldWait()
-                int indx = j % N_INPUT_ITEMS;
-                product[j] += this->costlyProductionStep(j) + inputData[indx];
-            }
-            */
-
-            // make it clear that the data for most recent work order has
-            // been used, in case there is interest in updating it
-            pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = false;
-
-            {               
-                // acquire lock and supply the dynamic with fresh produce
-                std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
-                cudaMemcpy(pDynamicOwnedBuffer_voxelID, voxelID.data(),
-                           N_MANUFACTURED_ITEMS * sizeof(voxelID_default_t), cudaMemcpyDeviceToDevice);
-            }
-            pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = true;
-            pSchedSupport->schedulingStats.nDynamicUpdates++;
-
-            // signal the dynamic that it has fresh produce
-            pSchedSupport->cv_DynamicCanProceed.notify_all();
-        }
-
-        // in case the dynamic is hanging in there...
-        pSchedSupport->cv_DynamicCanProceed.notify_all();
-
-        // When getting here, dT has finished one user call (although perhaps not at the end of the user script).
-        userCallDone = true;
-    }
-}
-
 void DEMDynamicThread::calculateForces() {
     unsigned int nClumps = simParams->nClumpBodies;
     auto cal_force =
@@ -417,12 +304,6 @@ void DEMDynamicThread::workerThread() {
     }
 }
 
-void DEMKinematicThread::startThread() {
-    std::lock_guard<std::mutex> lock(pSchedSupport->kinematicStartLock);
-    pSchedSupport->kinematicStarted = true;
-    pSchedSupport->cv_KinematicStartLock.notify_one();
-}
-
 void DEMDynamicThread::startThread() {
     std::lock_guard<std::mutex> lock(pSchedSupport->dynamicStartLock);
     pSchedSupport->dynamicStarted = true;
@@ -430,11 +311,6 @@ void DEMDynamicThread::startThread() {
 }
 
 bool DEMDynamicThread::isUserCallDone() {
-    // return true if done, false if not
-    return userCallDone;
-}
-
-bool DEMKinematicThread::isUserCallDone() {
     // return true if done, false if not
     return userCallDone;
 }
@@ -447,12 +323,6 @@ void DEMDynamicThread::resetUserCallStat() {
     // Reset dT stats variables, making ready for next user call
     pSchedSupport->dynamicDone = false;
     pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
-}
-
-void DEMKinematicThread::resetUserCallStat() {
-    userCallDone = false;
-    // Reset kT stats variables, making ready for next user call
-    pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = false;
 }
 
 int DEMDynamicThread::localUse(int val) {
@@ -468,14 +338,6 @@ int DEMDynamicThread::localUse(int val) {
     // cudaLaunchKernel((void*)&dynamicTestKernel, dim3(1), dim3(1), NULL, 0, streamInfo.stream);
     cudaDeviceSynchronize();
     return 2 * val;
-}
-
-void DEMKinematicThread::primeDynamic() {
-    // transfer produce to dynamic buffer
-    cudaMemcpy(pDynamicOwnedBuffer_voxelID, voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_default_t),
-               cudaMemcpyDeviceToDevice);
-    pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = true;
-    pSchedSupport->schedulingStats.nDynamicUpdates++;
 }
 
 }  // namespace sgps
