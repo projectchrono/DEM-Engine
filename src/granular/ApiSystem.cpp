@@ -234,6 +234,24 @@ void DEMSolver::transferSimParams() {
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_boxLBF, G, m_ts_size);
 }
 
+void DEMSolver::initializeArrays() {
+    // Resize managed arrays based on the statistical data we had from the previous step
+    dT->allocateManagedArrays(nClumpBodies, nSpheresGM, nDistinctClumpBodyTopologies_computed,
+                              nDistinctClumpComponents_computed, nMatTuples_computed);
+    kT->allocateManagedArrays(nClumpBodies, nSpheresGM, nDistinctClumpBodyTopologies_computed,
+                              nDistinctClumpComponents_computed, nMatTuples_computed);
+
+    // Now that the CUDA-related functions and data types are JITCompiled, we can feed those GPU-side arrays with the
+    // cached API-level simulation info.
+    dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_template_mass, m_template_sp_radii,
+                              m_template_sp_relPos);
+}
+
+void DEMSolver::packDataPointers() {
+    dT->packDataPointers();
+    kT->packDataPointers();
+}
+
 int DEMSolver::Initialize() {
     // a few error checks first
     if (m_sp_materials.size() == 0) {
@@ -249,17 +267,11 @@ int DEMSolver::Initialize() {
     // Transfer some simulation params to implementation level
     transferSimParams();
 
-    // Resize managed arrays based on the statistical data we had from the previous step
-    dT->allocateManagedArrays(nClumpBodies, nSpheresGM, nDistinctClumpBodyTopologies_computed,
-                              nDistinctClumpComponents_computed, nMatTuples_computed);
-
-    // Now that the CUDA-related functions and data types are JITCompiled, we can feed those GPU-side arrays with the
-    // cached API-level simulation info.
-    dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_template_mass, m_template_sp_radii,
-                              m_template_sp_relPos);
+    // Allocate and populate kT dT managed arrays
+    initializeArrays();
 
     // Put sim data array pointers in place
-    dT->packDataPointers();
+    packDataPointers();
 
     sys_initialized = true;
     return 0;

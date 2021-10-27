@@ -21,15 +21,15 @@ int DEMKinematicThread::costlyProductionStep(int val) const {
 }
 
 void DEMKinematicThread::contactDetection() {
-    auto data_arg = voxelID.data();
+    // auto data_arg = voxelID.data();
     auto kinematic_test =
         JitHelper::buildProgram("gpuKernels", JitHelper::KERNEL_DIR / "gpuKernels.cu", std::vector<JitHelper::Header>(),
                                 {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
     kinematic_test.kernel("kinematicTestKernel")
         .instantiate()
-        .configure(dim3(1), dim3(N_INPUT_ITEMS), 0, streamInfo.stream)
-        .launch(data_arg);
+        .configure(dim3(1), dim3(simParams->nClumpBodies), 0, streamInfo.stream)
+        .launch(simParams, granData);
 
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
@@ -69,7 +69,7 @@ void DEMKinematicThread::workerThread() {
                 {
                     // acquire lock and supply the dynamic with fresh produce
                     std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
-                    cudaMemcpy(voxelID.data(), transferBuffer_voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_default_t),
+                    cudaMemcpy(granData->voxelID, transferBuffer_voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_default_t),
                                cudaMemcpyDeviceToDevice);
                 }
             }
@@ -80,8 +80,9 @@ void DEMKinematicThread::workerThread() {
             // produce something here; fake stuff for now
             // cudaStream_t currentStream;
             // cudaStreamCreate(&currentStream);pSchedSupport->dynamicShouldWait()
+            
 
-            // TODO: So why kinematic cannot run any kernels now??
+            // TODO: crash on reaching conditioanl variable if the other thread is in kernel??
             // contactDetection();
 
             std::cout << "A kinematic side cycle. " << std::endl;
@@ -110,7 +111,7 @@ void DEMKinematicThread::workerThread() {
             {
                 // acquire lock and supply the dynamic with fresh produce
                 std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
-                cudaMemcpy(pDynamicOwnedBuffer_voxelID, voxelID.data(),
+                cudaMemcpy(pDynamicOwnedBuffer_voxelID, granData->voxelID,
                            N_MANUFACTURED_ITEMS * sizeof(voxelID_default_t), cudaMemcpyDeviceToDevice);
             }
             pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = true;
@@ -145,10 +146,58 @@ void DEMKinematicThread::resetUserCallStat() {
     pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = false;
 }
 
+// Put sim data array pointers in place
+void DEMKinematicThread::packDataPointers() {
+    granData->voxelID = voxelID.data();
+    granData->locX = locX.data();
+    granData->locY = locY.data();
+    granData->locZ = locZ.data();
+}
+
+void DEMKinematicThread::setSimParams(unsigned char nvXp2,
+                                    unsigned char nvYp2,
+                                    unsigned char nvZp2,
+                                    float l,
+                                    double voxelSize,
+                                    float3 LBFPoint,
+                                    float3 G,
+                                    double ts_size) {
+    simParams->nvXp2 = nvXp2;
+    simParams->nvYp2 = nvYp2;
+    simParams->nvZp2 = nvZp2;
+    simParams->l = l;
+    simParams->voxelSize = voxelSize;
+    simParams->LBFX = LBFPoint.x;
+    simParams->LBFY = LBFPoint.y;
+    simParams->LBFZ = LBFPoint.z;
+    simParams->Gx = G.x;
+    simParams->Gy = G.y;
+    simParams->Gz = G.z;
+    simParams->h = ts_size;
+}
+
+void DEMKinematicThread::allocateManagedArrays(unsigned int nClumpBodies,
+                                               unsigned int nSpheresGM,
+                                               unsigned int nClumpTopo,
+                                               unsigned int nClumpComponents,
+                                               unsigned int nMatTuples) {
+    simParams->nSpheresGM = nSpheresGM;
+    simParams->nClumpBodies = nClumpBodies;
+
+    // Resize to the number of clumps
+    TRACKED_VECTOR_RESIZE(voxelID, nClumpBodies, "voxelID", 0);
+    TRACKED_VECTOR_RESIZE(locX, nClumpBodies, "locX", 0);
+    TRACKED_VECTOR_RESIZE(locY, nClumpBodies, "locY", 0);
+    TRACKED_VECTOR_RESIZE(locZ, nClumpBodies, "locZ", 0);
+
+    // Transfer buffer arrays
+    TRACKED_VECTOR_RESIZE(transferBuffer_voxelID, nClumpBodies, "transferBuffer_voxelID", 0);
+}
+
 void DEMKinematicThread::primeDynamic() {
     // transfer produce to dynamic buffer
-    cudaMemcpy(pDynamicOwnedBuffer_voxelID, voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_default_t),
-               cudaMemcpyDeviceToDevice);
+    // cudaMemcpy(pDynamicOwnedBuffer_voxelID, voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_default_t),
+    //            cudaMemcpyDeviceToDevice);
     pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = true;
     pSchedSupport->schedulingStats.nDynamicUpdates++;
 }

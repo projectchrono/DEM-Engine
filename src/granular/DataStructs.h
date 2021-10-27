@@ -65,6 +65,21 @@ struct DEMDataDT {
     float* h2AlphaZ;
 };
 
+// A struct that holds pointers to data arrays that kT uses
+// For more details just look at PhysicsSystem.h
+struct DEMDataKT {
+    voxelID_default_t* voxelID;
+
+    subVoxelPos_default_t* locX;
+    subVoxelPos_default_t* locY;
+    subVoxelPos_default_t* locZ;
+
+    int* oriQ0;
+    int* oriQ1;
+    int* oriQ2;
+    int* oriQ3;
+};
+
 // typedef DEMDataDT* DEMDataDTPtr;
 // typedef DEMSimParams* DEMSimParamsPtr;
 

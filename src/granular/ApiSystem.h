@@ -196,6 +196,10 @@ class DEMSolver {
     void transferSimParams();
     // Wait for kT and dT until they are done with the work and a signal is give by them, then the ApiSystem can go on.
     void waitOnThreads();
+    // Allocate and populate kT dT managed arrays.
+    void initializeArrays();
+    // Pack array pointers to a struct so they can be easily used as kernel arguments
+    void packDataPointers();
 };
 
 }  // namespace sgps

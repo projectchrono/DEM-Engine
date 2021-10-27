@@ -17,6 +17,7 @@ namespace sgps {
 
 // Put sim data array pointers in place
 void DEMDynamicThread::packDataPointers() {
+    granData->voxelID = voxelID.data();
     granData->locX = locX.data();
     granData->locY = locY.data();
     granData->locZ = locZ.data();
@@ -79,6 +80,9 @@ void DEMDynamicThread::allocateManagedArrays(unsigned int nClumpBodies,
     TRACKED_VECTOR_RESIZE(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
     TRACKED_VECTOR_RESIZE(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
     TRACKED_VECTOR_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
+
+    // Transfer buffer arrays
+    TRACKED_VECTOR_RESIZE(transferBuffer_voxelID, nClumpBodies, "transferBuffer_voxelID", 0);
 }
 
 void DEMDynamicThread::populateManagedArrays(const std::vector<clumpBodyInertiaOffset_default_t>& input_clump_types,
@@ -214,6 +218,9 @@ void DEMDynamicThread::workerThread() {
     // Set the gpu for this thread
     cudaSetDevice(streamInfo.device);
     cudaStreamCreate(&streamInfo.stream);
+    int totGPU;
+    cudaGetDeviceCount(&totGPU);
+    printf("Total device: %d\n", totGPU);
 
     while (!pSchedSupport->dynamicShouldJoin) {
         {
@@ -237,6 +244,7 @@ void DEMDynamicThread::workerThread() {
                 {
                     // acquire lock and use the content of the dynamic-owned transfer buffer
                     std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_GRANULARITY_MS));
                     // cudaMemcpy(voxelID.data(), transferBuffer_voxelID.data(),
                     //            N_MANUFACTURED_ITEMS * sizeof(voxelID_default_t), cudaMemcpyDeviceToDevice);
                 }
@@ -255,7 +263,7 @@ void DEMDynamicThread::workerThread() {
                 // acquire lock and refresh the work order for the kinematic
                 {
                     std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
-                    cudaMemcpy(pKinematicOwnedBuffer_voxelID, voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_default_t),
+                    cudaMemcpy(pKinematicOwnedBuffer_voxelID, granData->voxelID, N_INPUT_ITEMS * sizeof(voxelID_default_t),
                                cudaMemcpyDeviceToDevice);
                 }
                 pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
@@ -270,10 +278,6 @@ void DEMDynamicThread::workerThread() {
                 outcome[j] += this->localUse(j);
             }
             */
-
-            int totGPU;
-            cudaGetDeviceCount(&totGPU);
-            printf("Total device: %d\n", totGPU);
 
             calculateForces();
             integrateClumpLinearMotions();
@@ -293,7 +297,7 @@ void DEMDynamicThread::workerThread() {
                 pSchedSupport->schedulingStats.nTimesDynamicHeldBack++;
                 std::unique_lock<std::mutex> lock(pSchedSupport->dynamicCanProceed);
                 while (!pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
-                    // loop to avoid spurious wakeups
+                    // loop to avoid spurious wakeups   
                     pSchedSupport->cv_DynamicCanProceed.wait(lock);
                 }
             }

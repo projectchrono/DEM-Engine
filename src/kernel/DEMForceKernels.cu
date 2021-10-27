@@ -1,6 +1,5 @@
 // DEM force computation related custom kernels
 #include <granular/DataStructs.h>
-#include <cub/device/device_reduce.cuh>
 
 inline __device__ void cleanUpForces(unsigned int thisClump, sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData) {
     // Actually, h should be JITCed into the kernel itself

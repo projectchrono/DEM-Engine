@@ -43,6 +43,13 @@ class DEMKinematicThread {
     // Set to true only when a user AdvanceSimulation call is finished. Set to false otherwise.
     bool userCallDone = false;
 
+    // Pointers to simulation params-related arrays
+    // Check DataStructs.h for details
+    DEMSimParams* simParams;
+
+    // Pointers to those data arrays defined below, stored in a struct
+    DEMDataKT* granData;
+
     // Buffer arrays for storing info from the dT side.
     // dT modifies these arrays; kT uses them only.
 
@@ -52,16 +59,26 @@ class DEMKinematicThread {
     // The voxel ID (split into 3 parts, representing XYZ location)
     std::vector<voxelID_default_t, ManagedAllocator<voxelID_default_t>> voxelID;
 
+    // The XYZ local location inside a voxel
+    std::vector<subVoxelPos_default_t, ManagedAllocator<subVoxelPos_default_t>> locX;
+    std::vector<subVoxelPos_default_t, ManagedAllocator<subVoxelPos_default_t>> locY;
+    std::vector<subVoxelPos_default_t, ManagedAllocator<subVoxelPos_default_t>> locZ;
+
+    // The clump quaternion
+    std::vector<int, ManagedAllocator<int>> oriQ0;
+    std::vector<int, ManagedAllocator<int>> oriQ1;
+    std::vector<int, ManagedAllocator<int>> oriQ2;
+    std::vector<int, ManagedAllocator<int>> oriQ3;
+
   public:
     friend class DEMSolver;
 
     DEMKinematicThread(ThreadManager* pSchedSup, GpuManager* pGpuDist)
         : pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
+        GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
+        GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataKT), cudaMemAttachGlobal));
         kinematicAverageTime = 0;
         pDynamicOwnedBuffer_voxelID = NULL;
-
-        transferBuffer_voxelID.resize(N_MANUFACTURED_ITEMS, 0);
-        // voxelID.resize(N_MANUFACTURED_ITEMS, 0);
 
         // Get a device/stream ID to use from the GPU Manager
         streamInfo = pGpuDistributor->getAvailableStream();
@@ -99,6 +116,26 @@ class DEMKinematicThread {
     bool isUserCallDone();
     // Reset userCallDone back to false
     void resetUserCallStat();
+
+    // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
+    void allocateManagedArrays(unsigned int nClumpBodies,
+                               unsigned int nSpheresGM,
+                               unsigned int nClumpTopo,
+                               unsigned int nClumpComponents,
+                               unsigned int nMatTuples);
+
+    // Set SimParams items
+    void setSimParams(unsigned char nvXp2,
+                      unsigned char nvYp2,
+                      unsigned char nvZp2,
+                      float l,
+                      double voxelSize,
+                      float3 LBFPoint,
+                      float3 G,
+                      double ts_size);
+
+    // Put sim data array pointers in place
+    void packDataPointers();
 
   private:
     void contactDetection();
@@ -221,8 +258,6 @@ class DEMDynamicThread {
         pKinematicOwnedBuffer_voxelID = NULL;
         nDynamicCycles = 0;
         dynamicAverageTime = 0;
-
-        transferBuffer_voxelID.resize(N_MANUFACTURED_ITEMS, 0);
 
         // Get a device/stream ID to use from the GPU Manager
         streamInfo = pGpuDistributor->getAvailableStream();
