@@ -45,7 +45,7 @@ int main() {
     std::vector<unsigned int> mat_vec(3, 0);
     */
 
-    aa.LoadMaterialType(1, 10);
+    auto mat_type_1 = aa.LoadMaterialType(1, 10);
 
     for (int i = 0; i < num_template; i++) {
         // first decide the number of spheres that live in this clump
@@ -70,7 +70,7 @@ int main() {
             tmp.z = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
             tmp += seed_pos;
             relPos.push_back(tmp);
-            mat.push_back(0);
+            mat.push_back(mat_type_1);
 
             // seed relPos from one of the previously generated spheres
             int choose_from = rand() % (j + 1);
@@ -99,6 +99,8 @@ int main() {
     aa.SetClumps(input_template_num, input_xyz);
 
     aa.InstructBoxDomainNumVoxel(22, 21, 21, 1e-10);
+    // aa.InstructBoxDomainNumVoxel(11, 11, 10, 1e-10);
+    
     aa.CenterCoordSys();
     aa.SetTimeStepSize(1e-5);
     aa.SetGravitationalAcceleration(make_float3(0, 0, -9.8));

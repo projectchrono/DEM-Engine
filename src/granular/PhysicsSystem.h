@@ -61,6 +61,7 @@ class DEMKinematicThread {
         pDynamicOwnedBuffer_voxelID = NULL;
 
         transferBuffer_voxelID.resize(N_MANUFACTURED_ITEMS, 0);
+        // voxelID.resize(N_MANUFACTURED_ITEMS, 0);
 
         // Get a device/stream ID to use from the GPU Manager
         streamInfo = pGpuDistributor->getAvailableStream();

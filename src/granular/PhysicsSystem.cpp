@@ -225,10 +225,12 @@ void DEMKinematicThread::workerThread() {
             if (!pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh) {
                 pSchedSupport->schedulingStats.nTimesKinematicHeldBack++;
                 std::unique_lock<std::mutex> lock(pSchedSupport->kinematicCanProceed);
+                
                 while (!pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh) {
                     // loop to avoid spurious wakeups
                     pSchedSupport->cv_KinematicCanProceed.wait(lock);
                 }
+                
                 // getting here means that new "work order" data has been provided
                 {
                     // acquire lock and supply the dynamic with fresh produce
@@ -271,7 +273,7 @@ void DEMKinematicThread::workerThread() {
             // been used, in case there is interest in updating it
             pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = false;
 
-            {
+            {               
                 // acquire lock and supply the dynamic with fresh produce
                 std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
                 cudaMemcpy(pDynamicOwnedBuffer_voxelID, voxelID.data(),
