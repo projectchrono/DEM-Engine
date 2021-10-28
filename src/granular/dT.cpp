@@ -185,7 +185,7 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
     pw.write(ptFile, ParticleFormatWriter::CompressionType::NONE, posX, posY, posZ, spRadii);
 }
 
-void DEMDynamicThread::calculateForces() {
+inline void DEMDynamicThread::calculateForces() {
     unsigned int nClumps = simParams->nClumpBodies;
     auto cal_force =
         JitHelper::buildProgram("DEMForceKernels", JitHelper::KERNEL_DIR / "DEMForceKernels.cu",
@@ -199,7 +199,7 @@ void DEMDynamicThread::calculateForces() {
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
-void DEMDynamicThread::integrateClumpLinearMotions() {
+inline void DEMDynamicThread::integrateClumpLinearMotions() {
     unsigned int nClumps = simParams->nClumpBodies;
     auto integrator =
         JitHelper::buildProgram("DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu",

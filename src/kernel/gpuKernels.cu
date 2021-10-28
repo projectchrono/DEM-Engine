@@ -13,7 +13,7 @@ __global__ void dynamicTestKernel() {
 
 __global__ void kinematicTestKernel(sgps::DEMSimParams* simParams, sgps::DEMDataKT* granData) {
     if (threadIdx.x == 0) {
-        printf("Kinematic run\n");
+        printf("A kinematic side cycle. \n");
     }
     // printf("data: %u\n", data[0]);
 

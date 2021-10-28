@@ -20,7 +20,7 @@ int DEMKinematicThread::costlyProductionStep(int val) const {
     return 2 * val + 1;
 }
 
-void DEMKinematicThread::contactDetection() {
+inline void DEMKinematicThread::contactDetection() {
     // auto data_arg = voxelID.data();
     auto kinematic_test =
         JitHelper::buildProgram("gpuKernels", JitHelper::KERNEL_DIR / "gpuKernels.cu", std::vector<JitHelper::Header>(),
@@ -83,9 +83,7 @@ void DEMKinematicThread::workerThread() {
             
 
             // TODO: crash on reaching conditioanl variable if the other thread is in kernel??
-            // contactDetection();
-
-            std::cout << "A kinematic side cycle. " << std::endl;
+            contactDetection();
 
             /* for the reference
             for (int j = 0; j < N_MANUFACTURED_ITEMS; j++) {

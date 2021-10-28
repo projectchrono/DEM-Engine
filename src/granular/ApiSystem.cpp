@@ -232,6 +232,7 @@ void DEMSolver::WriteFileAsSpheres(const std::string& outfilename) const {
 
 void DEMSolver::transferSimParams() {
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_boxLBF, G, m_ts_size);
+    kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_boxLBF, G, m_ts_size);
 }
 
 void DEMSolver::initializeArrays() {
