@@ -12,6 +12,7 @@
 #include <granular/GranularDefines.h>
 #include <granular/PhysicsSystem.h>
 #include <core/utils/JitHelper.h>
+#include <helper_math.cuh>
 
 namespace sgps {
 
@@ -263,8 +264,8 @@ void DEMDynamicThread::workerThread() {
                 // acquire lock and refresh the work order for the kinematic
                 {
                     std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
-                    cudaMemcpy(pKinematicOwnedBuffer_voxelID, granData->voxelID, N_INPUT_ITEMS * sizeof(voxelID_default_t),
-                               cudaMemcpyDeviceToDevice);
+                    cudaMemcpy(pKinematicOwnedBuffer_voxelID, granData->voxelID,
+                               N_INPUT_ITEMS * sizeof(voxelID_default_t), cudaMemcpyDeviceToDevice);
                 }
                 pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
                 pSchedSupport->schedulingStats.nKinematicUpdates++;
@@ -297,7 +298,7 @@ void DEMDynamicThread::workerThread() {
                 pSchedSupport->schedulingStats.nTimesDynamicHeldBack++;
                 std::unique_lock<std::mutex> lock(pSchedSupport->dynamicCanProceed);
                 while (!pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
-                    // loop to avoid spurious wakeups   
+                    // loop to avoid spurious wakeups
                     pSchedSupport->cv_DynamicCanProceed.wait(lock);
                 }
             }

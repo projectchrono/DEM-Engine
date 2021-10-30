@@ -69,8 +69,8 @@ void DEMKinematicThread::workerThread() {
                 {
                     // acquire lock and supply the dynamic with fresh produce
                     std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
-                    cudaMemcpy(granData->voxelID, transferBuffer_voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_default_t),
-                               cudaMemcpyDeviceToDevice);
+                    cudaMemcpy(granData->voxelID, transferBuffer_voxelID.data(),
+                               N_INPUT_ITEMS * sizeof(voxelID_default_t), cudaMemcpyDeviceToDevice);
                 }
             }
 
@@ -80,10 +80,9 @@ void DEMKinematicThread::workerThread() {
             // produce something here; fake stuff for now
             // cudaStream_t currentStream;
             // cudaStreamCreate(&currentStream);pSchedSupport->dynamicShouldWait()
-            
 
             // TODO: crash on reaching conditioanl variable if the other thread is in kernel??
-            contactDetection();
+            // contactDetection();
 
             /* for the reference
             for (int j = 0; j < N_MANUFACTURED_ITEMS; j++) {
@@ -153,13 +152,13 @@ void DEMKinematicThread::packDataPointers() {
 }
 
 void DEMKinematicThread::setSimParams(unsigned char nvXp2,
-                                    unsigned char nvYp2,
-                                    unsigned char nvZp2,
-                                    float l,
-                                    double voxelSize,
-                                    float3 LBFPoint,
-                                    float3 G,
-                                    double ts_size) {
+                                      unsigned char nvYp2,
+                                      unsigned char nvZp2,
+                                      float l,
+                                      double voxelSize,
+                                      float3 LBFPoint,
+                                      float3 G,
+                                      double ts_size) {
     simParams->nvXp2 = nvXp2;
     simParams->nvYp2 = nvYp2;
     simParams->nvZp2 = nvZp2;
