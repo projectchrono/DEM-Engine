@@ -119,15 +119,27 @@ voxelID_default_t DEMSolver::GetClumpVoxelID(unsigned int i) const {
     return dT->voxelID.at(i);
 }
 
-// Figure out the unit length l and corresponding numbers of voxels along each direction, based on domain size X, Y, Z
-int DEMSolver::figureOutNV() {
+void DEMSolver::figureOutNV() {
     if (m_boxX <= 0.f || m_boxY <= 0.f || m_boxZ <= 0.f) {
         SGPS_ERROR(
             "The size of the simulation world is set to be (or default to be) %f by %f by %f. It is impossibly small.",
             m_boxX, m_boxY, m_boxZ);
     }
 
-    return 0;
+}
+
+void DEMSolver::decideDefaultBinSize() {
+    // find the smallest radius
+    float smallest_radius = FLT_MAX;
+    for (auto elem : m_template_sp_radii) {
+        for (auto radius : elem) {
+            if (radius < smallest_radius) {
+                smallest_radius = radius;
+            }    
+        }
+    }
+
+    m_binSize = smallest_radius / m_voxelSize;
 }
 
 int DEMSolver::generateJITResources() {
@@ -194,9 +206,11 @@ int DEMSolver::generateJITResources() {
     if (!explicit_nv_override) {
         figureOutNV();
     }
+    decideDefaultBinSize();
     std::cout << "The dimension of the simulation world: " << m_boxX << ", " << m_boxY << ", " << m_boxZ << std::endl;
     std::cout << "The length unit in this simulation is: " << l << std::endl;
     std::cout << "The edge length of a voxel: " << m_voxelSize << std::endl;
+    std::cout << "The edge length of a bin: " << (double)m_binSize * m_voxelSize << std::endl;
 
     // Figure out the initial profile/status of clumps, and related quantities, if need to
     nClumpBodies = m_input_clump_types.size();
@@ -231,8 +245,8 @@ void DEMSolver::WriteFileAsSpheres(const std::string& outfilename) const {
 }
 
 void DEMSolver::transferSimParams() {
-    dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_boxLBF, G, m_ts_size);
-    kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_boxLBF, G, m_ts_size);
+    dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, m_boxLBF, G, m_ts_size);
+    kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, m_boxLBF, G, m_ts_size);
 }
 
 void DEMSolver::initializeArrays() {

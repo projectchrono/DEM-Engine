@@ -130,6 +130,7 @@ class DEMKinematicThread {
                       unsigned char nvZp2,
                       float l,
                       double voxelSize,
+                      unsigned int binSize,
                       float3 LBFPoint,
                       float3 G,
                       double ts_size);
@@ -289,6 +290,7 @@ class DEMDynamicThread {
                       unsigned char nvZp2,
                       float l,
                       double voxelSize,
+                      unsigned int binSize,
                       float3 LBFPoint,
                       float3 G,
                       double ts_size);

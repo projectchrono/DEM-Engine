@@ -19,6 +19,8 @@ struct DEMSimParams {
     float l;
     // Double-precision single voxel size
     double voxelSize;
+    // The edge length of a bin (for contact detection), as a multiple of voxelSize
+    unsigned int binSize;
     // Number of clumps and spheres
     unsigned int nClumpBodies;
     unsigned int nSpheresGM;

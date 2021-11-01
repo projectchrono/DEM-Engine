@@ -35,6 +35,7 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                     unsigned char nvZp2,
                                     float l,
                                     double voxelSize,
+                                    unsigned int binSize,
                                     float3 LBFPoint,
                                     float3 G,
                                     double ts_size) {
@@ -43,6 +44,7 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->nvZp2 = nvZp2;
     simParams->l = l;
     simParams->voxelSize = voxelSize;
+    simParams->binSize = binSize;
     simParams->LBFX = LBFPoint.x;
     simParams->LBFY = LBFPoint.y;
     simParams->LBFZ = LBFPoint.z;

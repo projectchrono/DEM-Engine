@@ -155,6 +155,8 @@ class DEMSolver {
     double m_ts_size;
     // The length unit. Any XYZ we report to the user, is under the hood a multiple of this l.
     float l = FLT_MAX;
+    // The edge length of a bin (for contact detection), as a multiple of the voxel edge length
+    unsigned int m_binSize;
 
     // Total number of spheres
     unsigned int nSpheresGM;
@@ -191,7 +193,10 @@ class DEMSolver {
     DEMDynamicThread* dT;
 
     int generateJITResources();
-    int figureOutNV();
+    // Figure out the unit length l and corresponding numbers of voxels along each direction, based on domain size X, Y, Z
+    void figureOutNV();
+    // Set the default bin (for contact detection) size to be the same of the smallest sphere
+    void decideDefaultBinSize();
     // Transfer cached sim params to dT (and kT?)
     void transferSimParams();
     // Wait for kT and dT until they are done with the work and a signal is give by them, then the ApiSystem can go on.
