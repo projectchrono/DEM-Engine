@@ -34,25 +34,19 @@ inline __device__ T1 mod_floor(T1 a, T2 b) {
     return ret;
 }
 
-// Chops voxelID into XYZ components
-inline __device__ void voxelIDChopper(sgps::voxelID_default_t& X,
-                                      sgps::voxelID_default_t& Y,
-                                      sgps::voxelID_default_t& Z,
-                                      sgps::voxelID_default_t& voxelID,
-                                      sgps::DEMSimParams* simParams) {
-    X = voxelID & (((sgps::voxelID_default_t)1 << simParams->nvXp2) - 1);  // & operation here equals modulo
-    Y = (voxelID >> simParams->nvXp2) & (((sgps::voxelID_default_t)1 << simParams->nvYp2) - 1);
-    Z = (voxelID) >> (simParams->nvXp2 + simParams->nvYp2);
+// Chops a long ID (typically voxelID) into XYZ components
+template <typename T1, typename T2>
+inline __device__ void IDChopper(T1& X, T1& Y, T1& Z, T2& ID, unsigned char& nvXp2, unsigned char& nvYp2) {
+    X = ID & (((T1)1 << nvXp2) - 1);  // & operation here equals modulo
+    Y = (ID >> nvXp2) & (((T1)1 << nvYp2) - 1);
+    Z = (ID) >> (nvXp2 + nvYp2);
 }
 
-// Packs XYZ components back to voxelID
-inline __device__ void voxelIDPacker(sgps::voxelID_default_t& voxelID,
-                                     sgps::voxelID_default_t& X,
-                                     sgps::voxelID_default_t& Y,
-                                     sgps::voxelID_default_t& Z,
-                                     sgps::DEMSimParams* simParams) {
-    voxelID = 0;
-    voxelID += X;
-    voxelID += Y << simParams->nvXp2;
-    voxelID += Z << (simParams->nvXp2 + simParams->nvYp2);
+// Packs XYZ components back to a long ID (typically voxelID)
+template <typename T1, typename T2>
+inline __device__ void IDPacker(T1& ID, T2& X, T2& Y, T2& Z, unsigned char& nvXp2, unsigned char& nvYp2) {
+    ID = 0;
+    ID += X;
+    ID += Y << nvXp2;
+    ID += Z << (nvXp2 + nvYp2);
 }

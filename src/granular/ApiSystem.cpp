@@ -125,7 +125,6 @@ void DEMSolver::figureOutNV() {
             "The size of the simulation world is set to be (or default to be) %f by %f by %f. It is impossibly small.",
             m_boxX, m_boxY, m_boxZ);
     }
-
 }
 
 void DEMSolver::decideDefaultBinSize() {
@@ -135,11 +134,11 @@ void DEMSolver::decideDefaultBinSize() {
         for (auto radius : elem) {
             if (radius < smallest_radius) {
                 smallest_radius = radius;
-            }    
+            }
         }
     }
 
-    m_binSize = smallest_radius / m_voxelSize;
+    m_binSize = 2.0 * smallest_radius / m_voxelSize;
 }
 
 int DEMSolver::generateJITResources() {
@@ -210,7 +209,12 @@ int DEMSolver::generateJITResources() {
     std::cout << "The dimension of the simulation world: " << m_boxX << ", " << m_boxY << ", " << m_boxZ << std::endl;
     std::cout << "The length unit in this simulation is: " << l << std::endl;
     std::cout << "The edge length of a voxel: " << m_voxelSize << std::endl;
-    std::cout << "The edge length of a bin: " << (double)m_binSize * m_voxelSize << std::endl;
+
+    double bin_edge_size = (double)m_binSize * m_voxelSize;
+    uint64_t num_bins = (uint64_t)(m_boxX / bin_edge_size + 1) + (uint64_t)(m_boxY / bin_edge_size + 1) +
+                        (uint64_t)(m_boxZ / bin_edge_size + 1);
+    std::cout << "The edge length of a bin: " << bin_edge_size << std::endl;
+    std::cout << "The total number of bins: " << num_bins << std::endl;
 
     // Figure out the initial profile/status of clumps, and related quantities, if need to
     nClumpBodies = m_input_clump_types.size();

@@ -193,7 +193,8 @@ class DEMSolver {
     DEMDynamicThread* dT;
 
     int generateJITResources();
-    // Figure out the unit length l and corresponding numbers of voxels along each direction, based on domain size X, Y, Z
+    // Figure out the unit length l and corresponding numbers of voxels along each direction, based on domain size X, Y,
+    // Z
     void figureOutNV();
     // Set the default bin (for contact detection) size to be the same of the smallest sphere
     void decideDefaultBinSize();
