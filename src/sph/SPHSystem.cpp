@@ -8,6 +8,7 @@
 #include <vector>
 #include <chrono>
 #include <core/utils/GpuError.h>
+#include <core/utils/CpuAlgorithmHelper.h>
 #include "datastruct.h"
 
 void SPHSystem::initialize(float radius,
