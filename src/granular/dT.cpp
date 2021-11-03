@@ -238,8 +238,25 @@ void DEMDynamicThread::workerThread() {
             }
         }
 
-        // acquire lock to prevent the kinematic to mess up
-        // with the transfer buffer while the latter is used
+        // At the beginning of each  user call, send kT a work order, b/c dT need results from CD to proceed. After this
+        // one instance, kT and dT may work in an async fashion.
+        {
+            std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
+            cudaMemcpy(pKinematicOwnedBuffer_voxelID, granData->voxelID, N_INPUT_ITEMS * sizeof(voxelID_default_t),
+                       cudaMemcpyDeviceToDevice);
+        }
+        pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
+        pSchedSupport->schedulingStats.nKinematicUpdates++;
+        // Signal the kinematic that it has data for a new work order.
+        pSchedSupport->cv_KinematicCanProceed.notify_all();
+        // Then dT will wait for kT to finish one initial run
+        {
+            std::unique_lock<std::mutex> lock(pSchedSupport->dynamicCanProceed);
+            while (!pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
+                // loop to avoid spurious wakeups
+                pSchedSupport->cv_DynamicCanProceed.wait(lock);
+            }
+        }
 
         for (int cycle = 0; cycle < nDynamicCycles; cycle++) {
             // if the produce is fresh, use it

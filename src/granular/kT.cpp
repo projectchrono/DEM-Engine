@@ -22,13 +22,13 @@ int DEMKinematicThread::costlyProductionStep(int val) const {
 
 inline void DEMKinematicThread::contactDetection() {
     // auto data_arg = voxelID.data();
-    auto kinematic_test =
-        JitHelper::buildProgram("gpuKernels", JitHelper::KERNEL_DIR / "gpuKernels.cu", std::vector<JitHelper::Header>(),
-                                {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+    auto bin_occupation =
+        JitHelper::buildProgram("DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu",
+                                std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
-    kinematic_test.kernel("kinematicTestKernel")
+    bin_occupation.kernel("calculateSphereBinOverlap")
         .instantiate()
-        .configure(dim3(1), dim3(simParams->nClumpBodies), 0, streamInfo.stream)
+        .configure(dim3(1), dim3(simParams->nSpheresGM), 0, streamInfo.stream)
         .launch(simParams, granData);
 
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -67,7 +67,7 @@ void DEMKinematicThread::workerThread() {
 
                 // getting here means that new "work order" data has been provided
                 {
-                    // acquire lock and supply the dynamic with fresh produce
+                    // acquire lock and get the work order
                     std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
                     cudaMemcpy(granData->voxelID, transferBuffer_voxelID.data(),
                                N_INPUT_ITEMS * sizeof(voxelID_default_t), cudaMemcpyDeviceToDevice);
