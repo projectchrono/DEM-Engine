@@ -22,7 +22,7 @@ DEMSolver::DEMSolver(float rad) {
 
     kT = new DEMKinematicThread(dTkT_InteractionManager, dTkT_GpuManager);
     dT = new DEMDynamicThread(dTkT_InteractionManager, dTkT_GpuManager);
-
+    
     voxelID_default_t* pBuffer = kT->pBuffer_voxelID();
     dT->setDestinationBuffer_voxelID(pBuffer);
     dT->setDynamicAverageTime(timeDynamicSide);
@@ -254,11 +254,13 @@ void DEMSolver::transferSimParams() {
 }
 
 void DEMSolver::initializeArrays() {
+
     // Resize managed arrays based on the statistical data we had from the previous step
     dT->allocateManagedArrays(nClumpBodies, nSpheresGM, nDistinctClumpBodyTopologies_computed,
                               nDistinctClumpComponents_computed, nMatTuples_computed);
     kT->allocateManagedArrays(nClumpBodies, nSpheresGM, nDistinctClumpBodyTopologies_computed,
                               nDistinctClumpComponents_computed, nMatTuples_computed);
+
 
     // Now that the CUDA-related functions and data types are JITCompiled, we can feed those GPU-side arrays with the
     // cached API-level simulation info.
@@ -269,6 +271,8 @@ void DEMSolver::initializeArrays() {
 void DEMSolver::packDataPointers() {
     dT->packDataPointers();
     kT->packDataPointers();
+
+
 }
 
 int DEMSolver::Initialize() {
@@ -276,6 +280,7 @@ int DEMSolver::Initialize() {
     if (m_sp_materials.size() == 0) {
         SGPS_ERROR("Before initializing the system, at least one material type should be loaded via LoadMaterialType.");
     }
+
 
     // Figure out a part of the required simulation information such as the scale of the poblem domain. Make sure these
     // info live in managed memory.
@@ -286,8 +291,13 @@ int DEMSolver::Initialize() {
     // Transfer some simulation params to implementation level
     transferSimParams();
 
+
+
+
     // Allocate and populate kT dT managed arrays
     initializeArrays();
+
+
 
     // Put sim data array pointers in place
     packDataPointers();

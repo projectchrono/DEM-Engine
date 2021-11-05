@@ -53,8 +53,23 @@ class DEMKinematicThread {
     // Buffer arrays for storing info from the dT side.
     // dT modifies these arrays; kT uses them only.
 
+    // kT gets clump locations and rotations from dT
+    // The voxel ID 
+    std::vector<voxelID_default_t, ManagedAllocator<voxelID_default_t>> voxelID_buffer;
+    // The XYZ local location inside a voxel
+    std::vector<subVoxelPos_default_t, ManagedAllocator<subVoxelPos_default_t>> locX_buffer;
+    std::vector<subVoxelPos_default_t, ManagedAllocator<subVoxelPos_default_t>> locY_buffer;
+    std::vector<subVoxelPos_default_t, ManagedAllocator<subVoxelPos_default_t>> locZ_buffer;
+    // The clump quaternion
+    std::vector<int, ManagedAllocator<int>> oriQ0_buffer;
+    std::vector<int, ManagedAllocator<int>> oriQ1_buffer;
+    std::vector<int, ManagedAllocator<int>> oriQ2_buffer;
+    std::vector<int, ManagedAllocator<int>> oriQ3_buffer;
+
     // buffer array for voxelID
     std::vector<voxelID_default_t, ManagedAllocator<voxelID_default_t>> transferBuffer_voxelID;
+
+    // Managed arrays for dT's personal use (not transfer buffer)
 
     // The voxel ID (split into 3 parts, representing XYZ location)
     std::vector<voxelID_default_t, ManagedAllocator<voxelID_default_t>> voxelID;
@@ -69,6 +84,10 @@ class DEMKinematicThread {
     std::vector<int, ManagedAllocator<int>> oriQ1;
     std::vector<int, ManagedAllocator<int>> oriQ2;
     std::vector<int, ManagedAllocator<int>> oriQ3;
+
+    // kT computed contact pair info
+    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA;
+    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB;   
 
   public:
     friend class DEMSolver;
@@ -163,6 +182,10 @@ class DEMDynamicThread {
     // Buffer arrays for storing info from the dT side.
     // kT modifies these arrays; dT uses them only.
 
+    // dT gets contact pair/location info from kT
+    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA_buffer;
+    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB_buffer;
+
     // buffer array for voxelID
     std::vector<voxelID_default_t, ManagedAllocator<voxelID_default_t>> transferBuffer_voxelID;
 
@@ -173,7 +196,7 @@ class DEMDynamicThread {
     // Pointers to those data arrays defined below, stored in a struct
     DEMDataDT* granData;
 
-    // Body-related arrays in managed memory
+    // Body-related arrays in managed memory, for dT's personal use (not transfer buffer)
 
     // Those are the smaller ones, the unique, template ones
     // The mass values
@@ -231,6 +254,10 @@ class DEMDynamicThread {
     std::vector<float, ManagedAllocator<float>> h2AlphaY;
     std::vector<float, ManagedAllocator<float>> h2AlphaZ;
 
+    // Contact pair/location, for dT's personal use!!
+    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA;
+    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB;
+
     size_t m_approx_bytes_used = 0;
 
     // Set to true only when a user AdvanceSimulation call is finished. Set to false otherwise.
@@ -238,7 +265,7 @@ class DEMDynamicThread {
 
     // Sphere-related arrays in managed memory
     // Belonged-body ID (default unsigned int type)
-    std::vector<bodyID_default_t, ManagedAllocator<bodyID_default_t>> ownerClumpBody;
+    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerClumpBody;
 
     // The ID that maps this sphere's radius and relPos
     std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> clumpComponentOffset;

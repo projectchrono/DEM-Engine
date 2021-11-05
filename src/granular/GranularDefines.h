@@ -15,12 +15,12 @@ namespace sgps {
 
 typedef uint16_t subVoxelPos_default_t;
 typedef uint64_t voxelID_default_t;
-typedef unsigned int bodyID_default_t;
+typedef unsigned int bodyID_t;
 typedef unsigned int materialsOffset_default_t;
 typedef unsigned int clumpBodyInertiaOffset_default_t;
-typedef unsigned int stateVectors_default_t;
 typedef unsigned int clumpComponentOffset_t;
 
+// typedef unsigned int stateVectors_default_t; // what's this for??
 // typedef unsigned int distinctSphereRelativePositions_default_t;
 // typedef unsigned int distinctSphereRadiiOffset_default_t;
 
