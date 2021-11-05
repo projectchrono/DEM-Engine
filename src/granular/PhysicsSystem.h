@@ -21,6 +21,7 @@
 
 namespace sgps {
 
+/// KinematicThread class
 class DEMKinematicThread {
   protected:
     ThreadManager* pSchedSupport;
@@ -32,9 +33,6 @@ class DEMKinematicThread {
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
 
-    // this is where the dynamic thread stores data that needs to be produced
-    // herein
-    voxelID_t* pDynamicOwnedBuffer_voxelID;
     int kinematicAverageTime;
     int costlyProductionStep(int) const;
 
@@ -54,7 +52,7 @@ class DEMKinematicThread {
     // dT modifies these arrays; kT uses them only.
 
     // kT gets clump locations and rotations from dT
-    // The voxel ID 
+    // The voxel ID
     std::vector<voxelID_t, ManagedAllocator<voxelID_t>> voxelID_buffer;
     // The XYZ local location inside a voxel
     std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locX_buffer;
@@ -65,9 +63,6 @@ class DEMKinematicThread {
     std::vector<int, ManagedAllocator<int>> oriQ1_buffer;
     std::vector<int, ManagedAllocator<int>> oriQ2_buffer;
     std::vector<int, ManagedAllocator<int>> oriQ3_buffer;
-
-    // buffer array for voxelID
-    std::vector<voxelID_t, ManagedAllocator<voxelID_t>> transferBuffer_voxelID;
 
     // Managed arrays for dT's personal use (not transfer buffer)
 
@@ -87,17 +82,17 @@ class DEMKinematicThread {
 
     // kT computed contact pair info
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA;
-    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB;   
+    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB;
 
   public:
     friend class DEMSolver;
+    friend class DEMDynamicThread;
 
     DEMKinematicThread(ThreadManager* pSchedSup, GpuManager* pGpuDist)
         : pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
         GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
         GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataKT), cudaMemAttachGlobal));
         kinematicAverageTime = 0;
-        pDynamicOwnedBuffer_voxelID = NULL;
 
         // Get a device/stream ID to use from the GPU Manager
         streamInfo = pGpuDistributor->getAvailableStream();
@@ -119,8 +114,7 @@ class DEMKinematicThread {
     void setKinematicAverageTime(int val) { kinematicAverageTime = val; }
 
     // buffer exchange methods
-    void setDestinationBuffer_voxelID(voxelID_t* pCB) { pDynamicOwnedBuffer_voxelID = pCB; }
-    voxelID_t* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
+    void setDestinationBufferPointers();
 
     void primeDynamic();
 
@@ -155,12 +149,13 @@ class DEMKinematicThread {
                       double ts_size);
 
     // Put sim data array pointers in place
-    void packDataPointers();
+    void packDataPointers(DEMDataDT* dTData);
 
   private:
     void contactDetection();
 };
 
+/// DynamicThread class
 class DEMDynamicThread {
   protected:
     ThreadManager* pSchedSupport;
@@ -172,10 +167,6 @@ class DEMDynamicThread {
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
 
-    // pointer to remote buffer where kinematic thread stores work-order data
-    // provided by the dynamic thread
-    voxelID_t* pKinematicOwnedBuffer_voxelID;
-
     int dynamicAverageTime;  // time required in the consumption process; fake lag
     int nDynamicCycles;
 
@@ -185,9 +176,6 @@ class DEMDynamicThread {
     // dT gets contact pair/location info from kT
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA_buffer;
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB_buffer;
-
-    // buffer array for voxelID
-    std::vector<voxelID_t, ManagedAllocator<voxelID_t>> transferBuffer_voxelID;
 
     // Pointers to simulation params-related arrays
     // Check DataStructs.h for details
@@ -217,8 +205,7 @@ class DEMDynamicThread {
 
     // Those are the large ones, ones that have the same length as the number of clumps
     // The mass offsets
-    std::vector<clumpBodyInertiaOffset_t, ManagedAllocator<clumpBodyInertiaOffset_t>>
-        inertiaPropOffsets;
+    std::vector<clumpBodyInertiaOffset_t, ManagedAllocator<clumpBodyInertiaOffset_t>> inertiaPropOffsets;
 
     // The voxel ID (split into 3 parts, representing XYZ location)
     std::vector<voxelID_t, ManagedAllocator<voxelID_t>> voxelID;
@@ -277,13 +264,13 @@ class DEMDynamicThread {
 
   public:
     friend class DEMSolver;
+    friend class DEMKinematicThread;
 
     DEMDynamicThread(ThreadManager* pSchedSup, GpuManager* pGpuDist)
         : pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
         GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
         GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataDT), cudaMemAttachGlobal));
 
-        pKinematicOwnedBuffer_voxelID = NULL;
         nDynamicCycles = 0;
         dynamicAverageTime = 0;
 
@@ -308,8 +295,7 @@ class DEMDynamicThread {
     void setNDynamicCycles(int val) { nDynamicCycles = val; }
 
     // buffer exchange methods
-    void setDestinationBuffer_voxelID(voxelID_t* pPB) { pKinematicOwnedBuffer_voxelID = pPB; }
-    voxelID_t* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
+    void setDestinationBufferPointers();
 
     // Set SimParams items
     void setSimParams(unsigned char nvXp2,
@@ -337,7 +323,7 @@ class DEMDynamicThread {
                                const std::vector<std::vector<float3>>& clumps_sp_location_types);
 
     // Put sim data array pointers in place
-    void packDataPointers();
+    void packDataPointers(DEMDataKT* kTData);
 
     void WriteCsvAsSpheres(std::ofstream& ptFile) const;
 

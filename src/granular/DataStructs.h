@@ -65,21 +65,56 @@ struct DEMDataDT {
     float* h2AlphaX;
     float* h2AlphaY;
     float* h2AlphaZ;
+
+    bodyID_t* idGeometryA;
+    bodyID_t* idGeometryB;
+
+    // dT-owned buffer pointers, for itself's usage
+    bodyID_t* idGeometryA_buffer;
+    bodyID_t* idGeometryB_buffer;
+
+    // pointer to remote buffer where kinematic thread stores work-order data
+    // provided by the dynamic thread
+    voxelID_t* pKTOwnedBuffer_voxelID = NULL;
+    subVoxelPos_t* pKTOwnedBuffer_locX = NULL;
+    subVoxelPos_t* pKTOwnedBuffer_locY = NULL;
+    subVoxelPos_t* pKTOwnedBuffer_locZ = NULL;
+    int* pKTOwnedBuffer_oriQ0 = NULL;
+    int* pKTOwnedBuffer_oriQ1 = NULL;
+    int* pKTOwnedBuffer_oriQ2 = NULL;
+    int* pKTOwnedBuffer_oriQ3 = NULL;
 };
 
 // A struct that holds pointers to data arrays that kT uses
 // For more details just look at PhysicsSystem.h
 struct DEMDataKT {
     voxelID_t* voxelID;
-
     subVoxelPos_t* locX;
     subVoxelPos_t* locY;
     subVoxelPos_t* locZ;
-
     int* oriQ0;
     int* oriQ1;
     int* oriQ2;
     int* oriQ3;
+
+    // kT-owned buffer pointers, for itself's usage
+    voxelID_t* voxelID_buffer;
+    subVoxelPos_t* locX_buffer;
+    subVoxelPos_t* locY_buffer;
+    subVoxelPos_t* locZ_buffer;
+    int* oriQ0_buffer;
+    int* oriQ1_buffer;
+    int* oriQ2_buffer;
+    int* oriQ3_buffer;
+
+    // kT produces contact info, and stores it, temporarily
+    bodyID_t* idGeometryA;
+    bodyID_t* idGeometryB;
+
+    // this is where the dynamic thread stores data that needs to be produced
+    // herein
+    bodyID_t* pDTOwnedBuffer_idGeometryA = NULL;
+    bodyID_t* pDTOwnedBuffer_idGeometryB = NULL;
 };
 
 // typedef DEMDataDT* DEMDataDTPtr;

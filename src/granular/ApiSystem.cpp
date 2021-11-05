@@ -23,13 +23,9 @@ DEMSolver::DEMSolver(float rad) {
     kT = new DEMKinematicThread(dTkT_InteractionManager, dTkT_GpuManager);
     dT = new DEMDynamicThread(dTkT_InteractionManager, dTkT_GpuManager);
 
-    voxelID_t* pBuffer = kT->pBuffer_voxelID();
-    dT->setDestinationBuffer_voxelID(pBuffer);
     dT->setDynamicAverageTime(timeDynamicSide);
     dT->setNDynamicCycles(nDynamicCycles);
 
-    pBuffer = dT->pBuffer_voxelID();
-    kT->setDestinationBuffer_voxelID(pBuffer);
     kT->primeDynamic();
     kT->setKinematicAverageTime(timeKinematicSide);
 }
@@ -86,12 +82,11 @@ materialsOffset_t DEMSolver::LoadMaterialType(float density, float E) {
     return m_sp_materials.size() - 1;
 }
 
-clumpBodyInertiaOffset_t DEMSolver::LoadClumpType(
-    float mass,
-    float3 moi,
-    const std::vector<float>& sp_radii,
-    const std::vector<float3>& sp_locations_xyz,
-    const std::vector<materialsOffset_t>& sp_material_ids) {
+clumpBodyInertiaOffset_t DEMSolver::LoadClumpType(float mass,
+                                                  float3 moi,
+                                                  const std::vector<float>& sp_radii,
+                                                  const std::vector<float3>& sp_locations_xyz,
+                                                  const std::vector<materialsOffset_t>& sp_material_ids) {
     auto len = sp_radii.size();
     if (len != sp_locations_xyz.size() || len != sp_material_ids.size()) {
         SGPS_ERROR("Arrays defining a clump topology type must all have the same length.");
@@ -106,9 +101,7 @@ clumpBodyInertiaOffset_t DEMSolver::LoadClumpType(
     return m_template_mass.size() - 1;
 }
 
-clumpBodyInertiaOffset_t DEMSolver::LoadClumpSimpleSphere(float mass,
-                                                                  float radius,
-                                                                  materialsOffset_t material_id) {
+clumpBodyInertiaOffset_t DEMSolver::LoadClumpSimpleSphere(float mass, float radius, materialsOffset_t material_id) {
     float3 I = make_float3(2.0 / 5.0 * mass * radius * radius);
     float3 pos = make_float3(0);
     return LoadClumpType(mass, I, std::vector<float>(1, radius), std::vector<float3>(1, pos),
@@ -254,13 +247,11 @@ void DEMSolver::transferSimParams() {
 }
 
 void DEMSolver::initializeArrays() {
-
     // Resize managed arrays based on the statistical data we had from the previous step
     dT->allocateManagedArrays(nClumpBodies, nSpheresGM, nDistinctClumpBodyTopologies_computed,
                               nDistinctClumpComponents_computed, nMatTuples_computed);
     kT->allocateManagedArrays(nClumpBodies, nSpheresGM, nDistinctClumpBodyTopologies_computed,
                               nDistinctClumpComponents_computed, nMatTuples_computed);
-
 
     // Now that the CUDA-related functions and data types are JITCompiled, we can feed those GPU-side arrays with the
     // cached API-level simulation info.
@@ -269,10 +260,8 @@ void DEMSolver::initializeArrays() {
 }
 
 void DEMSolver::packDataPointers() {
-    dT->packDataPointers();
-    kT->packDataPointers();
-
-
+    dT->packDataPointers(kT->granData);
+    kT->packDataPointers(dT->granData);
 }
 
 int DEMSolver::Initialize() {
@@ -280,7 +269,6 @@ int DEMSolver::Initialize() {
     if (m_sp_materials.size() == 0) {
         SGPS_ERROR("Before initializing the system, at least one material type should be loaded via LoadMaterialType.");
     }
-
 
     // Figure out a part of the required simulation information such as the scale of the poblem domain. Make sure these
     // info live in managed memory.
@@ -291,13 +279,8 @@ int DEMSolver::Initialize() {
     // Transfer some simulation params to implementation level
     transferSimParams();
 
-
-
-
     // Allocate and populate kT dT managed arrays
     initializeArrays();
-
-
 
     // Put sim data array pointers in place
     packDataPointers();
@@ -322,7 +305,7 @@ void DEMSolver::waitOnThreads() {
 
 int DEMSolver::LaunchThreads() {
     // Is it needed here??
-    dT->packDataPointers();
+    // dT->packDataPointers(kT->granData);
 
     dT->startThread();
     kT->startThread();

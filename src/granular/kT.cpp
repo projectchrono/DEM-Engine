@@ -69,8 +69,8 @@ void DEMKinematicThread::workerThread() {
                 {
                     // acquire lock and get the work order
                     std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
-                    cudaMemcpy(granData->voxelID, transferBuffer_voxelID.data(),
-                               N_INPUT_ITEMS * sizeof(voxelID_t), cudaMemcpyDeviceToDevice);
+                    cudaMemcpy(granData->voxelID, granData->voxelID_buffer, N_INPUT_ITEMS * sizeof(voxelID_t),
+                               cudaMemcpyDeviceToDevice);
                 }
             }
 
@@ -108,8 +108,8 @@ void DEMKinematicThread::workerThread() {
             {
                 // acquire lock and supply the dynamic with fresh produce
                 std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
-                cudaMemcpy(pDynamicOwnedBuffer_voxelID, granData->voxelID,
-                           N_MANUFACTURED_ITEMS * sizeof(voxelID_t), cudaMemcpyDeviceToDevice);
+                cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA,
+                           N_MANUFACTURED_ITEMS * sizeof(bodyID_t), cudaMemcpyDeviceToDevice);
             }
             pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = true;
             pSchedSupport->schedulingStats.nDynamicUpdates++;
@@ -144,11 +144,31 @@ void DEMKinematicThread::resetUserCallStat() {
 }
 
 // Put sim data array pointers in place
-void DEMKinematicThread::packDataPointers() {
+void DEMKinematicThread::packDataPointers(DEMDataDT* dTData) {
     granData->voxelID = voxelID.data();
     granData->locX = locX.data();
     granData->locY = locY.data();
     granData->locZ = locZ.data();
+    granData->oriQ0 = oriQ0.data();
+    granData->oriQ1 = oriQ1.data();
+    granData->oriQ2 = oriQ2.data();
+    granData->oriQ3 = oriQ3.data();
+    granData->idGeometryA = idGeometryA.data();
+    granData->idGeometryB = idGeometryB.data();
+
+    // for kT, each of its state vectors are fed by dT, so each has a buffer
+    granData->voxelID = voxelID_buffer.data();
+    granData->locX = locX_buffer.data();
+    granData->locY = locY_buffer.data();
+    granData->locZ = locZ_buffer.data();
+    granData->oriQ0 = oriQ0_buffer.data();
+    granData->oriQ1 = oriQ1_buffer.data();
+    granData->oriQ2 = oriQ2_buffer.data();
+    granData->oriQ3 = oriQ3_buffer.data();
+
+    // Set the pointers to dT owned buffers
+    granData->pDTOwnedBuffer_idGeometryA = dTData->idGeometryA_buffer;
+    granData->pDTOwnedBuffer_idGeometryB = dTData->idGeometryB_buffer;
 }
 
 void DEMKinematicThread::setSimParams(unsigned char nvXp2,
@@ -188,14 +208,25 @@ void DEMKinematicThread::allocateManagedArrays(unsigned int nClumpBodies,
     TRACKED_VECTOR_RESIZE(locX, nClumpBodies, "locX", 0);
     TRACKED_VECTOR_RESIZE(locY, nClumpBodies, "locY", 0);
     TRACKED_VECTOR_RESIZE(locZ, nClumpBodies, "locZ", 0);
+    TRACKED_VECTOR_RESIZE(oriQ0, nClumpBodies, "oriQ0", 0);
+    TRACKED_VECTOR_RESIZE(oriQ1, nClumpBodies, "oriQ1", 0);
+    TRACKED_VECTOR_RESIZE(oriQ2, nClumpBodies, "oriQ2", 0);
+    TRACKED_VECTOR_RESIZE(oriQ3, nClumpBodies, "oriQ3", 0);
 
     // Transfer buffer arrays
-    TRACKED_VECTOR_RESIZE(transferBuffer_voxelID, nClumpBodies, "transferBuffer_voxelID", 0);
+    TRACKED_VECTOR_RESIZE(voxelID_buffer, nClumpBodies, "voxelID_buffer", 0);
+    TRACKED_VECTOR_RESIZE(locX_buffer, nClumpBodies, "locX_buffer", 0);
+    TRACKED_VECTOR_RESIZE(locY_buffer, nClumpBodies, "locY_buffer", 0);
+    TRACKED_VECTOR_RESIZE(locZ_buffer, nClumpBodies, "locZ_buffer", 0);
+    TRACKED_VECTOR_RESIZE(oriQ0_buffer, nClumpBodies, "oriQ0_buffer", 0);
+    TRACKED_VECTOR_RESIZE(oriQ1_buffer, nClumpBodies, "oriQ1_buffer", 0);
+    TRACKED_VECTOR_RESIZE(oriQ2_buffer, nClumpBodies, "oriQ2_buffer", 0);
+    TRACKED_VECTOR_RESIZE(oriQ3_buffer, nClumpBodies, "oriQ3_buffer", 0);
 }
 
 void DEMKinematicThread::primeDynamic() {
     // transfer produce to dynamic buffer
-    // cudaMemcpy(pDynamicOwnedBuffer_voxelID, voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_t),
+    // cudaMemcpy(pDTOwnedBuffer_voxelID, voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_t),
     //            cudaMemcpyDeviceToDevice);
     pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = true;
     pSchedSupport->schedulingStats.nDynamicUpdates++;

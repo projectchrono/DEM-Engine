@@ -22,8 +22,7 @@ inline __device__ void locateNewVoxel(sgps::voxelID_t& voxel,
     sgps::voxelID_t voxelX;
     sgps::voxelID_t voxelY;
     sgps::voxelID_t voxelZ;
-    IDChopper<sgps::voxelID_t, sgps::voxelID_t>(voxelX, voxelY, voxelZ, voxel, simParams->nvXp2,
-                                                                simParams->nvYp2);
+    IDChopper<sgps::voxelID_t, sgps::voxelID_t>(voxelX, voxelY, voxelZ, voxel, simParams->nvXp2, simParams->nvYp2);
 
     voxelX += div_floor<int64_t, int>(locX_tmp, max_loc);
     voxelY += div_floor<int64_t, int>(locY_tmp, max_loc);
@@ -34,8 +33,7 @@ inline __device__ void locateNewVoxel(sgps::voxelID_t& voxel,
 
     // Should add a check here where, if negative voxel component spotted, stop the simulation
 
-    IDPacker<sgps::voxelID_t, sgps::voxelID_t>(voxel, voxelX, voxelY, voxelZ, simParams->nvXp2,
-                                                               simParams->nvYp2);
+    IDPacker<sgps::voxelID_t, sgps::voxelID_t>(voxel, voxelX, voxelY, voxelZ, simParams->nvXp2, simParams->nvYp2);
 }
 
 inline __device__ void integrateLinPos(unsigned int thisClump,

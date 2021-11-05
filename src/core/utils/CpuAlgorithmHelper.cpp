@@ -1,85 +1,76 @@
-#include<iostream>
-#include<list>
-#include<cmath>
-#include<vector>
-#include<algorithm>
+#include <iostream>
+#include <list>
+#include <cmath>
+#include <vector>
+#include <algorithm>
 #include "CpuAlgorithmHelper.h"
 using namespace std;
-void display(int *array, int size) {
-   for(int i = 0; i<size; i++)
-      cout << array[i] << " ";
-   cout << endl;
+void display(int* array, int size) {
+    for (int i = 0; i < size; i++)
+        cout << array[i] << " ";
+    cout << endl;
 }
-void display(float *array, int size) {
-   for(int i = 0; i<size; i++)
-      cout << array[i] << " ";
-   cout << endl;
-}
-
-
-void radixSort(int *key, float *val, int n, int max) {
-   int i, j, m, p = 1, index, temp, count = 0;
-   list<int> pocket[10];      //radix of decimal number is 10
-   list<float> pocket_val[10];
-   for(i = 0; i< max; i++) {
-      m = pow(10, i+1);
-      p = pow(10, i);
-      for(j = 0; j<n; j++) {
-         temp = key[j]%m;
-         index = temp/p;      //find index for pocket array
-         pocket[index].push_back(key[j]);
-         pocket_val[index].push_back(val[j]);
-      }
-      count = 0;
-      for(j = 0; j<10; j++) {
-         //delete from linked lists and store to array
-         while(!pocket[j].empty()) {
-            key[count] = *(pocket[j].begin());
-            pocket[j].erase(pocket[j].begin());
-            val[count] = *(pocket_val[j].begin());
-            pocket_val[j].erase(pocket_val[j].begin());
-            count++;
-         }
-      }
-   }
+void display(float* array, int size) {
+    for (int i = 0; i < size; i++)
+        cout << array[i] << " ";
+    cout << endl;
 }
 
-void reduceByKey(int *key, float *val, int n, std::vector<int> &key_reduced, std::vector<float> &val_reduced)
-{
+void radixSort(int* key, float* val, int n, int max) {
+    int i, j, m, p = 1, index, temp, count = 0;
+    list<int> pocket[10];  // radix of decimal number is 10
+    list<float> pocket_val[10];
+    for (i = 0; i < max; i++) {
+        m = pow(10, i + 1);
+        p = pow(10, i);
+        for (j = 0; j < n; j++) {
+            temp = key[j] % m;
+            index = temp / p;  // find index for pocket array
+            pocket[index].push_back(key[j]);
+            pocket_val[index].push_back(val[j]);
+        }
+        count = 0;
+        for (j = 0; j < 10; j++) {
+            // delete from linked lists and store to array
+            while (!pocket[j].empty()) {
+                key[count] = *(pocket[j].begin());
+                pocket[j].erase(pocket[j].begin());
+                val[count] = *(pocket_val[j].begin());
+                pocket_val[j].erase(pocket_val[j].begin());
+                count++;
+            }
+        }
+    }
+}
+
+void reduceByKey(int* key, float* val, int n, std::vector<int>& key_reduced, std::vector<float>& val_reduced) {
     float temp_sum;
     int prev_key = -1;
-    for(int i = 0; i<n;i++)
-    {
-        if(i==0)
-        {
+    for (int i = 0; i < n; i++) {
+        if (i == 0) {
             key_reduced.push_back(key[0]);
             temp_sum = val[i];
-        }else{
-            if(prev_key == key[i])
-            {
+        } else {
+            if (prev_key == key[i]) {
                 temp_sum += val[i];
-            }else{
+            } else {
                 key_reduced.push_back(key[i]);
                 val_reduced.push_back(temp_sum);
                 temp_sum = val[i];
             }
         }
 
-        if(i==n-1)
-        {
+        if (i == n - 1) {
             val_reduced.push_back(temp_sum);
         }
 
-
         prev_key = key[i];
-
     }
 }
 
-void sortReduce(int *key, float *val, std::vector<int> &key_reduced, std::vector<float> &val_reduced, int n, int max)
-{
-    radixSort(key,val,n,max);
-    reduceByKey(key,val,n,key_reduced, val_reduced);
+void sortReduce(int* key, float* val, std::vector<int>& key_reduced, std::vector<float>& val_reduced, int n, int max) {
+    radixSort(key, val, n, max);
+    reduceByKey(key, val, n, key_reduced, val_reduced);
 }
 
 /*

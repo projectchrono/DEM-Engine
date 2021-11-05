@@ -58,17 +58,15 @@ class DEMSolver {
     // Load possible clump types into the API-level cache.
     // Return the index of the clump type just loaded.
     clumpBodyInertiaOffset_t LoadClumpType(float mass,
-                                                   float3 moi,
-                                                   const std::vector<float>& sp_radii,
-                                                   const std::vector<float3>& sp_locations_xyz,
-                                                   const std::vector<materialsOffset_t>& sp_material_ids);
+                                           float3 moi,
+                                           const std::vector<float>& sp_radii,
+                                           const std::vector<float3>& sp_locations_xyz,
+                                           const std::vector<materialsOffset_t>& sp_material_ids);
     // TODO: need to overload with (vec_distinctSphereRadiiOffset_default_t spheres_component_type, vec_float3
     // location). If this method is called then corresponding sphere_types must have been defined via LoadSphereType.
 
     // a simplified version of LoadClumpType: it's just a one-sphere clump
-    clumpBodyInertiaOffset_t LoadClumpSimpleSphere(float mass,
-                                                           float radius,
-                                                           materialsOffset_t material_id);
+    clumpBodyInertiaOffset_t LoadClumpSimpleSphere(float mass, float radius, materialsOffset_t material_id);
 
     // Load possible materials into the API-level cache
     // Return the index of the material type just loaded
