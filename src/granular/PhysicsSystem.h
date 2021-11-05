@@ -34,7 +34,7 @@ class DEMKinematicThread {
 
     // this is where the dynamic thread stores data that needs to be produced
     // herein
-    voxelID_default_t* pDynamicOwnedBuffer_voxelID;
+    voxelID_t* pDynamicOwnedBuffer_voxelID;
     int kinematicAverageTime;
     int costlyProductionStep(int) const;
 
@@ -55,11 +55,11 @@ class DEMKinematicThread {
 
     // kT gets clump locations and rotations from dT
     // The voxel ID 
-    std::vector<voxelID_default_t, ManagedAllocator<voxelID_default_t>> voxelID_buffer;
+    std::vector<voxelID_t, ManagedAllocator<voxelID_t>> voxelID_buffer;
     // The XYZ local location inside a voxel
-    std::vector<subVoxelPos_default_t, ManagedAllocator<subVoxelPos_default_t>> locX_buffer;
-    std::vector<subVoxelPos_default_t, ManagedAllocator<subVoxelPos_default_t>> locY_buffer;
-    std::vector<subVoxelPos_default_t, ManagedAllocator<subVoxelPos_default_t>> locZ_buffer;
+    std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locX_buffer;
+    std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locY_buffer;
+    std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locZ_buffer;
     // The clump quaternion
     std::vector<int, ManagedAllocator<int>> oriQ0_buffer;
     std::vector<int, ManagedAllocator<int>> oriQ1_buffer;
@@ -67,17 +67,17 @@ class DEMKinematicThread {
     std::vector<int, ManagedAllocator<int>> oriQ3_buffer;
 
     // buffer array for voxelID
-    std::vector<voxelID_default_t, ManagedAllocator<voxelID_default_t>> transferBuffer_voxelID;
+    std::vector<voxelID_t, ManagedAllocator<voxelID_t>> transferBuffer_voxelID;
 
     // Managed arrays for dT's personal use (not transfer buffer)
 
     // The voxel ID (split into 3 parts, representing XYZ location)
-    std::vector<voxelID_default_t, ManagedAllocator<voxelID_default_t>> voxelID;
+    std::vector<voxelID_t, ManagedAllocator<voxelID_t>> voxelID;
 
     // The XYZ local location inside a voxel
-    std::vector<subVoxelPos_default_t, ManagedAllocator<subVoxelPos_default_t>> locX;
-    std::vector<subVoxelPos_default_t, ManagedAllocator<subVoxelPos_default_t>> locY;
-    std::vector<subVoxelPos_default_t, ManagedAllocator<subVoxelPos_default_t>> locZ;
+    std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locX;
+    std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locY;
+    std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locZ;
 
     // The clump quaternion
     std::vector<int, ManagedAllocator<int>> oriQ0;
@@ -119,8 +119,8 @@ class DEMKinematicThread {
     void setKinematicAverageTime(int val) { kinematicAverageTime = val; }
 
     // buffer exchange methods
-    void setDestinationBuffer_voxelID(voxelID_default_t* pCB) { pDynamicOwnedBuffer_voxelID = pCB; }
-    voxelID_default_t* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
+    void setDestinationBuffer_voxelID(voxelID_t* pCB) { pDynamicOwnedBuffer_voxelID = pCB; }
+    voxelID_t* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
 
     void primeDynamic();
 
@@ -174,7 +174,7 @@ class DEMDynamicThread {
 
     // pointer to remote buffer where kinematic thread stores work-order data
     // provided by the dynamic thread
-    voxelID_default_t* pKinematicOwnedBuffer_voxelID;
+    voxelID_t* pKinematicOwnedBuffer_voxelID;
 
     int dynamicAverageTime;  // time required in the consumption process; fake lag
     int nDynamicCycles;
@@ -187,7 +187,7 @@ class DEMDynamicThread {
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB_buffer;
 
     // buffer array for voxelID
-    std::vector<voxelID_default_t, ManagedAllocator<voxelID_default_t>> transferBuffer_voxelID;
+    std::vector<voxelID_t, ManagedAllocator<voxelID_t>> transferBuffer_voxelID;
 
     // Pointers to simulation params-related arrays
     // Check DataStructs.h for details
@@ -217,16 +217,16 @@ class DEMDynamicThread {
 
     // Those are the large ones, ones that have the same length as the number of clumps
     // The mass offsets
-    std::vector<clumpBodyInertiaOffset_default_t, ManagedAllocator<clumpBodyInertiaOffset_default_t>>
+    std::vector<clumpBodyInertiaOffset_t, ManagedAllocator<clumpBodyInertiaOffset_t>>
         inertiaPropOffsets;
 
     // The voxel ID (split into 3 parts, representing XYZ location)
-    std::vector<voxelID_default_t, ManagedAllocator<voxelID_default_t>> voxelID;
+    std::vector<voxelID_t, ManagedAllocator<voxelID_t>> voxelID;
 
     // The XYZ local location inside a voxel
-    std::vector<subVoxelPos_default_t, ManagedAllocator<subVoxelPos_default_t>> locX;
-    std::vector<subVoxelPos_default_t, ManagedAllocator<subVoxelPos_default_t>> locY;
-    std::vector<subVoxelPos_default_t, ManagedAllocator<subVoxelPos_default_t>> locZ;
+    std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locX;
+    std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locY;
+    std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locZ;
 
     // The clump quaternion
     std::vector<int, ManagedAllocator<int>> oriQ0;
@@ -271,7 +271,7 @@ class DEMDynamicThread {
     std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> clumpComponentOffset;
 
     // The ID that maps this sphere's material
-    std::vector<materialsOffset_default_t, ManagedAllocator<materialsOffset_default_t>> materialTupleOffset;
+    std::vector<materialsOffset_t, ManagedAllocator<materialsOffset_t>> materialTupleOffset;
 
     int localUse(int val);
 
@@ -308,8 +308,8 @@ class DEMDynamicThread {
     void setNDynamicCycles(int val) { nDynamicCycles = val; }
 
     // buffer exchange methods
-    void setDestinationBuffer_voxelID(voxelID_default_t* pPB) { pKinematicOwnedBuffer_voxelID = pPB; }
-    voxelID_default_t* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
+    void setDestinationBuffer_voxelID(voxelID_t* pPB) { pKinematicOwnedBuffer_voxelID = pPB; }
+    voxelID_t* pBuffer_voxelID() { return transferBuffer_voxelID.data(); }
 
     // Set SimParams items
     void setSimParams(unsigned char nvXp2,
@@ -330,7 +330,7 @@ class DEMDynamicThread {
                                unsigned int nMatTuples);
 
     // Data type TBD, should come from JITCed headers
-    void populateManagedArrays(const std::vector<clumpBodyInertiaOffset_default_t>& input_clump_types,
+    void populateManagedArrays(const std::vector<clumpBodyInertiaOffset_t>& input_clump_types,
                                const std::vector<float3>& input_clump_xyz,
                                const std::vector<float>& clumps_mass_types,
                                const std::vector<std::vector<float>>& clumps_sp_radii_types,

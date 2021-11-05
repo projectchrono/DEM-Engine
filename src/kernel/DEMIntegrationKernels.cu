@@ -13,16 +13,16 @@ inline __device__ void integrateLinVel(unsigned int thisClump,
     granData->hvZ[thisClump] += granData->h2aZ[thisClump];
 }
 
-inline __device__ void locateNewVoxel(sgps::voxelID_default_t& voxel,
+inline __device__ void locateNewVoxel(sgps::voxelID_t& voxel,
                                       int64_t& locX_tmp,
                                       int64_t& locY_tmp,
                                       int64_t& locZ_tmp,
                                       sgps::DEMSimParams* simParams) {
     int max_loc = (1 << VOXEL_RES_POWER2);
-    sgps::voxelID_default_t voxelX;
-    sgps::voxelID_default_t voxelY;
-    sgps::voxelID_default_t voxelZ;
-    IDChopper<sgps::voxelID_default_t, sgps::voxelID_default_t>(voxelX, voxelY, voxelZ, voxel, simParams->nvXp2,
+    sgps::voxelID_t voxelX;
+    sgps::voxelID_t voxelY;
+    sgps::voxelID_t voxelZ;
+    IDChopper<sgps::voxelID_t, sgps::voxelID_t>(voxelX, voxelY, voxelZ, voxel, simParams->nvXp2,
                                                                 simParams->nvYp2);
 
     voxelX += div_floor<int64_t, int>(locX_tmp, max_loc);
@@ -34,7 +34,7 @@ inline __device__ void locateNewVoxel(sgps::voxelID_default_t& voxel,
 
     // Should add a check here where, if negative voxel component spotted, stop the simulation
 
-    IDPacker<sgps::voxelID_default_t, sgps::voxelID_default_t>(voxel, voxelX, voxelY, voxelZ, simParams->nvXp2,
+    IDPacker<sgps::voxelID_t, sgps::voxelID_t>(voxel, voxelX, voxelY, voxelZ, simParams->nvXp2,
                                                                simParams->nvYp2);
 }
 
@@ -45,7 +45,7 @@ inline __device__ void integrateLinPos(unsigned int thisClump,
     int64_t locX_tmp = (int64_t)granData->locX[thisClump] + granData->hvX[thisClump];
     int64_t locY_tmp = (int64_t)granData->locY[thisClump] + granData->hvY[thisClump];
     int64_t locZ_tmp = (int64_t)granData->locZ[thisClump] + granData->hvZ[thisClump];
-    sgps::voxelID_default_t newVoxel = granData->voxelID[thisClump];
+    sgps::voxelID_t newVoxel = granData->voxelID[thisClump];
     locateNewVoxel(newVoxel, locX_tmp, locY_tmp, locZ_tmp, simParams);
     granData->voxelID[thisClump] = newVoxel;
     granData->locX[thisClump] = locX_tmp;

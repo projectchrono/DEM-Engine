@@ -70,7 +70,7 @@ void DEMKinematicThread::workerThread() {
                     // acquire lock and get the work order
                     std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
                     cudaMemcpy(granData->voxelID, transferBuffer_voxelID.data(),
-                               N_INPUT_ITEMS * sizeof(voxelID_default_t), cudaMemcpyDeviceToDevice);
+                               N_INPUT_ITEMS * sizeof(voxelID_t), cudaMemcpyDeviceToDevice);
                 }
             }
 
@@ -109,7 +109,7 @@ void DEMKinematicThread::workerThread() {
                 // acquire lock and supply the dynamic with fresh produce
                 std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
                 cudaMemcpy(pDynamicOwnedBuffer_voxelID, granData->voxelID,
-                           N_MANUFACTURED_ITEMS * sizeof(voxelID_default_t), cudaMemcpyDeviceToDevice);
+                           N_MANUFACTURED_ITEMS * sizeof(voxelID_t), cudaMemcpyDeviceToDevice);
             }
             pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = true;
             pSchedSupport->schedulingStats.nDynamicUpdates++;
@@ -195,7 +195,7 @@ void DEMKinematicThread::allocateManagedArrays(unsigned int nClumpBodies,
 
 void DEMKinematicThread::primeDynamic() {
     // transfer produce to dynamic buffer
-    // cudaMemcpy(pDynamicOwnedBuffer_voxelID, voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_default_t),
+    // cudaMemcpy(pDynamicOwnedBuffer_voxelID, voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_t),
     //            cudaMemcpyDeviceToDevice);
     pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = true;
     pSchedSupport->schedulingStats.nDynamicUpdates++;

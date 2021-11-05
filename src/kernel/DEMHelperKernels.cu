@@ -4,7 +4,7 @@
 #include <granular/GranularDefines.h>
 
 // inline __device__ double3 voxelID2LRFPosition
-// inline __device__ voxelID_default_t position2VoxelID
+// inline __device__ voxelID_t position2VoxelID
 
 // Sign function
 template <typename T>

@@ -88,7 +88,7 @@ void DEMDynamicThread::allocateManagedArrays(unsigned int nClumpBodies,
     TRACKED_VECTOR_RESIZE(transferBuffer_voxelID, nClumpBodies, "transferBuffer_voxelID", 0);
 }
 
-void DEMDynamicThread::populateManagedArrays(const std::vector<clumpBodyInertiaOffset_default_t>& input_clump_types,
+void DEMDynamicThread::populateManagedArrays(const std::vector<clumpBodyInertiaOffset_t>& input_clump_types,
                                              const std::vector<float3>& input_clump_xyz,
                                              const std::vector<float>& clumps_mass_types,
                                              const std::vector<std::vector<float>>& clumps_sp_radii_types,
@@ -139,9 +139,9 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<clumpBodyInertiaO
             // std::cout << "Sphere Rel Pos offset: " << this_clump_no_sp_loc_offsets.at(j) << std::endl;
         }
 
-        voxelID_default_t voxelNumX = (double)this_CoM_coord.x / simParams->voxelSize;
-        voxelID_default_t voxelNumY = (double)this_CoM_coord.y / simParams->voxelSize;
-        voxelID_default_t voxelNumZ = (double)this_CoM_coord.z / simParams->voxelSize;
+        voxelID_t voxelNumX = (double)this_CoM_coord.x / simParams->voxelSize;
+        voxelID_t voxelNumY = (double)this_CoM_coord.y / simParams->voxelSize;
+        voxelID_t voxelNumZ = (double)this_CoM_coord.z / simParams->voxelSize;
         locX.at(i) = ((double)this_CoM_coord.x - (double)voxelNumX * simParams->voxelSize) / simParams->l;
         locY.at(i) = ((double)this_CoM_coord.y - (double)voxelNumY * simParams->voxelSize) / simParams->l;
         locZ.at(i) = ((double)this_CoM_coord.z - (double)voxelNumZ * simParams->voxelSize) / simParams->l;
@@ -163,11 +163,11 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
     std::vector<float> spRadii(simParams->nSpheresGM, 0);
     for (unsigned int i = 0; i < simParams->nSpheresGM; i++) {
         auto this_owner = ownerClumpBody.at(i);
-        voxelID_default_t voxelIDX = voxelID.at(this_owner) & (((voxelID_default_t)1 << simParams->nvXp2) -
+        voxelID_t voxelIDX = voxelID.at(this_owner) & (((voxelID_t)1 << simParams->nvXp2) -
                                                                1);  // & operation here equals modulo
-        voxelID_default_t voxelIDY =
-            (voxelID.at(this_owner) >> simParams->nvXp2) & (((voxelID_default_t)1 << simParams->nvYp2) - 1);
-        voxelID_default_t voxelIDZ = (voxelID.at(this_owner)) >> (simParams->nvXp2 + simParams->nvYp2);
+        voxelID_t voxelIDY =
+            (voxelID.at(this_owner) >> simParams->nvXp2) & (((voxelID_t)1 << simParams->nvYp2) - 1);
+        voxelID_t voxelIDZ = (voxelID.at(this_owner)) >> (simParams->nvXp2 + simParams->nvYp2);
         // std::cout << "this owner: " << this_owner << std::endl;
         // std::cout << "Out voxel ID: " << voxelID.at(this_owner) << std::endl;
         // std::cout << "Out voxel ID XYZ: " << voxelIDX << ", " << voxelIDY << ", " << voxelIDZ << std::endl;
@@ -242,7 +242,7 @@ void DEMDynamicThread::workerThread() {
         // one instance, kT and dT may work in an async fashion.
         {
             std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
-            cudaMemcpy(pKinematicOwnedBuffer_voxelID, granData->voxelID, N_INPUT_ITEMS * sizeof(voxelID_default_t),
+            cudaMemcpy(pKinematicOwnedBuffer_voxelID, granData->voxelID, N_INPUT_ITEMS * sizeof(voxelID_t),
                        cudaMemcpyDeviceToDevice);
         }
         pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
@@ -266,7 +266,7 @@ void DEMDynamicThread::workerThread() {
                     std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
                     std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_GRANULARITY_MS));
                     // cudaMemcpy(voxelID.data(), transferBuffer_voxelID.data(),
-                    //            N_MANUFACTURED_ITEMS * sizeof(voxelID_default_t), cudaMemcpyDeviceToDevice);
+                    //            N_MANUFACTURED_ITEMS * sizeof(voxelID_t), cudaMemcpyDeviceToDevice);
                 }
                 pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
                 pSchedSupport->stampLastUpdateOfDynamic = cycle;
@@ -284,7 +284,7 @@ void DEMDynamicThread::workerThread() {
                 {
                     std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
                     cudaMemcpy(pKinematicOwnedBuffer_voxelID, granData->voxelID,
-                               N_INPUT_ITEMS * sizeof(voxelID_default_t), cudaMemcpyDeviceToDevice);
+                               N_INPUT_ITEMS * sizeof(voxelID_t), cudaMemcpyDeviceToDevice);
                 }
                 pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
                 pSchedSupport->schedulingStats.nKinematicUpdates++;

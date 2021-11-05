@@ -22,8 +22,8 @@ DEMSolver::DEMSolver(float rad) {
 
     kT = new DEMKinematicThread(dTkT_InteractionManager, dTkT_GpuManager);
     dT = new DEMDynamicThread(dTkT_InteractionManager, dTkT_GpuManager);
-    
-    voxelID_default_t* pBuffer = kT->pBuffer_voxelID();
+
+    voxelID_t* pBuffer = kT->pBuffer_voxelID();
     dT->setDestinationBuffer_voxelID(pBuffer);
     dT->setDynamicAverageTime(timeDynamicSide);
     dT->setNDynamicCycles(nDynamicCycles);
@@ -42,9 +42,9 @@ DEMSolver::~DEMSolver() {
 }
 
 void DEMSolver::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned char z, float len_unit, float3 O) {
-    if (x + y + z != sizeof(voxelID_default_t) * BITS_PER_BYTE) {
+    if (x + y + z != sizeof(voxelID_t) * BITS_PER_BYTE) {
         SGPS_ERROR("Please give voxel numbers (as powers of 2) along each direction such that they add up to %zu.",
-                   sizeof(voxelID_default_t) * BITS_PER_BYTE);
+                   sizeof(voxelID_t) * BITS_PER_BYTE);
     }
     l = len_unit;
     nvXp2 = x;
@@ -77,7 +77,7 @@ void DEMSolver::SetTimeStepSize(double ts_size) {
     m_ts_size = ts_size;
 }
 
-materialsOffset_default_t DEMSolver::LoadMaterialType(float density, float E) {
+materialsOffset_t DEMSolver::LoadMaterialType(float density, float E) {
     struct Material a_material;
     a_material.density = density;
     a_material.E = E;
@@ -86,12 +86,12 @@ materialsOffset_default_t DEMSolver::LoadMaterialType(float density, float E) {
     return m_sp_materials.size() - 1;
 }
 
-clumpBodyInertiaOffset_default_t DEMSolver::LoadClumpType(
+clumpBodyInertiaOffset_t DEMSolver::LoadClumpType(
     float mass,
     float3 moi,
     const std::vector<float>& sp_radii,
     const std::vector<float3>& sp_locations_xyz,
-    const std::vector<materialsOffset_default_t>& sp_material_ids) {
+    const std::vector<materialsOffset_t>& sp_material_ids) {
     auto len = sp_radii.size();
     if (len != sp_locations_xyz.size() || len != sp_material_ids.size()) {
         SGPS_ERROR("Arrays defining a clump topology type must all have the same length.");
@@ -106,16 +106,16 @@ clumpBodyInertiaOffset_default_t DEMSolver::LoadClumpType(
     return m_template_mass.size() - 1;
 }
 
-clumpBodyInertiaOffset_default_t DEMSolver::LoadClumpSimpleSphere(float mass,
+clumpBodyInertiaOffset_t DEMSolver::LoadClumpSimpleSphere(float mass,
                                                                   float radius,
-                                                                  materialsOffset_default_t material_id) {
+                                                                  materialsOffset_t material_id) {
     float3 I = make_float3(2.0 / 5.0 * mass * radius * radius);
     float3 pos = make_float3(0);
     return LoadClumpType(mass, I, std::vector<float>(1, radius), std::vector<float3>(1, pos),
-                         std::vector<materialsOffset_default_t>(1, material_id));
+                         std::vector<materialsOffset_t>(1, material_id));
 }
 
-voxelID_default_t DEMSolver::GetClumpVoxelID(unsigned int i) const {
+voxelID_t DEMSolver::GetClumpVoxelID(unsigned int i) const {
     return dT->voxelID.at(i);
 }
 
@@ -233,7 +233,7 @@ int DEMSolver::generateJITResources() {
     return 0;
 }
 
-void DEMSolver::SetClumps(const std::vector<clumpBodyInertiaOffset_default_t>& types, const std::vector<float3>& xyz) {
+void DEMSolver::SetClumps(const std::vector<clumpBodyInertiaOffset_t>& types, const std::vector<float3>& xyz) {
     if (types.size() != xyz.size()) {
         SGPS_ERROR("Arrays in the call SetClumps must all have the same length.");
     }

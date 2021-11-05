@@ -57,28 +57,28 @@ class DEMSolver {
 
     // Load possible clump types into the API-level cache.
     // Return the index of the clump type just loaded.
-    clumpBodyInertiaOffset_default_t LoadClumpType(float mass,
+    clumpBodyInertiaOffset_t LoadClumpType(float mass,
                                                    float3 moi,
                                                    const std::vector<float>& sp_radii,
                                                    const std::vector<float3>& sp_locations_xyz,
-                                                   const std::vector<materialsOffset_default_t>& sp_material_ids);
+                                                   const std::vector<materialsOffset_t>& sp_material_ids);
     // TODO: need to overload with (vec_distinctSphereRadiiOffset_default_t spheres_component_type, vec_float3
     // location). If this method is called then corresponding sphere_types must have been defined via LoadSphereType.
 
     // a simplified version of LoadClumpType: it's just a one-sphere clump
-    clumpBodyInertiaOffset_default_t LoadClumpSimpleSphere(float mass,
+    clumpBodyInertiaOffset_t LoadClumpSimpleSphere(float mass,
                                                            float radius,
-                                                           materialsOffset_default_t material_id);
+                                                           materialsOffset_t material_id);
 
     // Load possible materials into the API-level cache
     // Return the index of the material type just loaded
-    materialsOffset_default_t LoadMaterialType(float density, float E);
+    materialsOffset_t LoadMaterialType(float density, float E);
 
     // Load input clumps (topology types and initial locations) on a per-pair basis
-    void SetClumps(const std::vector<clumpBodyInertiaOffset_default_t>& types, const std::vector<float3>& xyz);
+    void SetClumps(const std::vector<clumpBodyInertiaOffset_t>& types, const std::vector<float3>& xyz);
 
     // Return the voxel ID of a clump by its numbering
-    voxelID_default_t GetClumpVoxelID(unsigned int i) const;
+    voxelID_t GetClumpVoxelID(unsigned int i) const;
 
     // Write current simulation status to a file
     // Write overlapping spheres, not clumps. It makes the file larger, but less trouble to visualize. Use for test
@@ -112,7 +112,7 @@ class DEMSolver {
     // It will be massaged into kernels upon Initialize.
     std::vector<float> m_template_mass;
     std::vector<float3> m_template_moi;
-    std::vector<std::vector<materialsOffset_default_t>> m_template_sp_mat_ids;
+    std::vector<std::vector<materialsOffset_t>> m_template_sp_mat_ids;
     std::vector<std::vector<float>> m_template_sp_radii;
     std::vector<std::vector<float3>> m_template_sp_relPos;
 
@@ -123,7 +123,7 @@ class DEMSolver {
 
     // unique clump masses derived from m_template_mass
     std::set<float> m_template_mass_types;
-    std::vector<clumpBodyInertiaOffset_default_t> m_template_mass_type_offset;
+    std::vector<clumpBodyInertiaOffset_t> m_template_mass_type_offset;
     // unique sphere radii types derived from m_template_sp_radii
     std::set<float> m_template_sp_radii_types;
     std::vector<std::vector<distinctSphereRadiiOffset_default_t>> m_template_sp_radii_type_offset;
@@ -179,7 +179,7 @@ class DEMSolver {
     unsigned int nMatTuples_computed;
 
     // cached state vectors such as the types and locations of the initial clumps to fill the sim domain with
-    std::vector<clumpBodyInertiaOffset_default_t> m_input_clump_types;
+    std::vector<clumpBodyInertiaOffset_t> m_input_clump_types;
     std::vector<float3> m_input_clump_xyz;
 
     int updateFreq = 1;

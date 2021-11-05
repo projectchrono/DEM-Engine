@@ -39,11 +39,11 @@ struct DEMSimParams {
 // A struct that holds pointers to data arrays that dT uses
 // For more details just look at PhysicsSystem.h
 struct DEMDataDT {
-    voxelID_default_t* voxelID;
+    voxelID_t* voxelID;
 
-    subVoxelPos_default_t* locX;
-    subVoxelPos_default_t* locY;
-    subVoxelPos_default_t* locZ;
+    subVoxelPos_t* locX;
+    subVoxelPos_t* locY;
+    subVoxelPos_t* locZ;
 
     int* oriQ0;
     int* oriQ1;
@@ -70,11 +70,11 @@ struct DEMDataDT {
 // A struct that holds pointers to data arrays that kT uses
 // For more details just look at PhysicsSystem.h
 struct DEMDataKT {
-    voxelID_default_t* voxelID;
+    voxelID_t* voxelID;
 
-    subVoxelPos_default_t* locX;
-    subVoxelPos_default_t* locY;
-    subVoxelPos_default_t* locZ;
+    subVoxelPos_t* locX;
+    subVoxelPos_t* locY;
+    subVoxelPos_t* locZ;
 
     int* oriQ0;
     int* oriQ1;
