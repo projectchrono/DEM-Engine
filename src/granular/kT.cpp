@@ -34,6 +34,32 @@ inline void DEMKinematicThread::contactDetection() {
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
+inline void DEMKinematicThread::unpackMyBuffer() {
+    cudaMemcpy(granData->voxelID, granData->voxelID_buffer, simParams->nClumpBodies * sizeof(voxelID_t),
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(granData->locX, granData->locX_buffer, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(granData->locY, granData->locY_buffer, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(granData->locZ, granData->locZ_buffer, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(granData->oriQ0, granData->oriQ0_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(granData->oriQ1, granData->oriQ1_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(granData->oriQ2, granData->oriQ2_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(granData->oriQ3, granData->oriQ3_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
+               cudaMemcpyDeviceToDevice);
+}
+
+inline void DEMKinematicThread::sendToTheirBuffer() {
+    cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA, N_MANUFACTURED_ITEMS * sizeof(bodyID_t),
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(granData->pDTOwnedBuffer_idGeometryB, granData->idGeometryB, N_MANUFACTURED_ITEMS * sizeof(bodyID_t),
+               cudaMemcpyDeviceToDevice);
+}
+
 void DEMKinematicThread::workerThread() {
     // Set the device for this thread
     cudaSetDevice(streamInfo.device);
@@ -69,8 +95,7 @@ void DEMKinematicThread::workerThread() {
                 {
                     // acquire lock and get the work order
                     std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
-                    cudaMemcpy(granData->voxelID, granData->voxelID_buffer, N_INPUT_ITEMS * sizeof(voxelID_t),
-                               cudaMemcpyDeviceToDevice);
+                    unpackMyBuffer();
                 }
             }
 
@@ -108,8 +133,7 @@ void DEMKinematicThread::workerThread() {
             {
                 // acquire lock and supply the dynamic with fresh produce
                 std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
-                cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA,
-                           N_MANUFACTURED_ITEMS * sizeof(bodyID_t), cudaMemcpyDeviceToDevice);
+                sendToTheirBuffer();
             }
             pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = true;
             pSchedSupport->schedulingStats.nDynamicUpdates++;
@@ -201,6 +225,7 @@ void DEMKinematicThread::allocateManagedArrays(unsigned int nClumpBodies,
                                                unsigned int nClumpTopo,
                                                unsigned int nClumpComponents,
                                                unsigned int nMatTuples) {
+    // TODO: Why are they here?? Shouldn't they be in setSimParams?
     simParams->nSpheresGM = nSpheresGM;
     simParams->nClumpBodies = nClumpBodies;
 
@@ -223,6 +248,11 @@ void DEMKinematicThread::allocateManagedArrays(unsigned int nClumpBodies,
     TRACKED_VECTOR_RESIZE(oriQ1_buffer, nClumpBodies, "oriQ1_buffer", 0);
     TRACKED_VECTOR_RESIZE(oriQ2_buffer, nClumpBodies, "oriQ2_buffer", 0);
     TRACKED_VECTOR_RESIZE(oriQ3_buffer, nClumpBodies, "oriQ3_buffer", 0);
+
+    // Arrays for kT produced contact info
+    // The length of idGeometry arrays is an estimate
+    TRACKED_VECTOR_RESIZE(idGeometryA, nSpheresGM, "idGeometryA", 0);
+    TRACKED_VECTOR_RESIZE(idGeometryB, nSpheresGM, "idGeometryB", 0);
 }
 
 void DEMKinematicThread::primeDynamic() {

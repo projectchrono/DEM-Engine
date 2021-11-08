@@ -59,10 +59,10 @@ class DEMKinematicThread {
     std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locY_buffer;
     std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locZ_buffer;
     // The clump quaternion
-    std::vector<int, ManagedAllocator<int>> oriQ0_buffer;
-    std::vector<int, ManagedAllocator<int>> oriQ1_buffer;
-    std::vector<int, ManagedAllocator<int>> oriQ2_buffer;
-    std::vector<int, ManagedAllocator<int>> oriQ3_buffer;
+    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ0_buffer;
+    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ1_buffer;
+    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ2_buffer;
+    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ3_buffer;
 
     // Managed arrays for dT's personal use (not transfer buffer)
 
@@ -75,10 +75,10 @@ class DEMKinematicThread {
     std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locZ;
 
     // The clump quaternion
-    std::vector<int, ManagedAllocator<int>> oriQ0;
-    std::vector<int, ManagedAllocator<int>> oriQ1;
-    std::vector<int, ManagedAllocator<int>> oriQ2;
-    std::vector<int, ManagedAllocator<int>> oriQ3;
+    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ0;
+    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ1;
+    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ2;
+    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ3;
 
     // kT computed contact pair info
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA;
@@ -154,7 +154,12 @@ class DEMKinematicThread {
 
   private:
     void contactDetection();
-};
+
+    // Bring kT buffer array data to its working arrays
+    void unpackMyBuffer();
+    // Send produced data to dT-owned biffers
+    void sendToTheirBuffer();
+};  // kT ends
 
 /// DynamicThread class
 class DEMDynamicThread {
@@ -217,10 +222,10 @@ class DEMDynamicThread {
     std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locZ;
 
     // The clump quaternion
-    std::vector<int, ManagedAllocator<int>> oriQ0;
-    std::vector<int, ManagedAllocator<int>> oriQ1;
-    std::vector<int, ManagedAllocator<int>> oriQ2;
-    std::vector<int, ManagedAllocator<int>> oriQ3;
+    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ0;
+    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ1;
+    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ2;
+    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ3;
 
     // Linear velocity times ts size: hv
     std::vector<float, ManagedAllocator<float>> hvX;
@@ -350,6 +355,11 @@ class DEMDynamicThread {
 
     // update clump orientation and angvel based on ang-acceleration
     void integrateClumpRotationalMotions();
-};
+
+    // Bring dT buffer array data to its working arrays
+    void unpackMyBuffer();
+    // Send produced data to kT-owned biffers
+    void sendToTheirBuffer();
+};  // dT ends
 
 }  // namespace sgps

@@ -74,6 +74,7 @@ void DEMDynamicThread::allocateManagedArrays(unsigned int nClumpBodies,
                                              unsigned int nClumpTopo,
                                              unsigned int nClumpComponents,
                                              unsigned int nMatTuples) {
+    // TODO: Why are they here?? Shouldn't they be in setSimParams?
     simParams->nSpheresGM = nSpheresGM;
     simParams->nClumpBodies = nClumpBodies;
     // Resize to the number of clumps
@@ -209,6 +210,32 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
     pw.write(ptFile, ParticleFormatWriter::CompressionType::NONE, posX, posY, posZ, spRadii);
 }
 
+inline void DEMDynamicThread::unpackMyBuffer() {
+    cudaMemcpy(granData->idGeometryA, granData->idGeometryA_buffer, N_MANUFACTURED_ITEMS * sizeof(bodyID_t),
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(granData->idGeometryA, granData->idGeometryA_buffer, N_MANUFACTURED_ITEMS * sizeof(bodyID_t),
+               cudaMemcpyDeviceToDevice);
+}
+
+inline void DEMDynamicThread::sendToTheirBuffer() {
+    cudaMemcpy(granData->pKTOwnedBuffer_voxelID, granData->voxelID, simParams->nClumpBodies * sizeof(voxelID_t),
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(granData->pKTOwnedBuffer_locX, granData->locX, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(granData->pKTOwnedBuffer_locY, granData->locY, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(granData->pKTOwnedBuffer_locZ, granData->locZ, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(granData->pKTOwnedBuffer_oriQ0, granData->oriQ0, simParams->nClumpBodies * sizeof(oriQ_t),
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(granData->pKTOwnedBuffer_oriQ1, granData->oriQ1, simParams->nClumpBodies * sizeof(oriQ_t),
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(granData->pKTOwnedBuffer_oriQ2, granData->oriQ2, simParams->nClumpBodies * sizeof(oriQ_t),
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(granData->pKTOwnedBuffer_oriQ3, granData->oriQ3, simParams->nClumpBodies * sizeof(oriQ_t),
+               cudaMemcpyDeviceToDevice);
+}
+
 inline void DEMDynamicThread::calculateForces() {
     unsigned int nClumps = simParams->nClumpBodies;
     auto cal_force =
@@ -259,12 +286,11 @@ void DEMDynamicThread::workerThread() {
             }
         }
 
-        // At the beginning of each  user call, send kT a work order, b/c dT need results from CD to proceed. After this
+        // At the beginning of each user call, send kT a work order, b/c dT need results from CD to proceed. After this
         // one instance, kT and dT may work in an async fashion.
         {
             std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
-            cudaMemcpy(granData->pKTOwnedBuffer_voxelID, granData->voxelID, N_INPUT_ITEMS * sizeof(voxelID_t),
-                       cudaMemcpyDeviceToDevice);
+            sendToTheirBuffer();
         }
         pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
         pSchedSupport->schedulingStats.nKinematicUpdates++;
@@ -286,8 +312,7 @@ void DEMDynamicThread::workerThread() {
                     // acquire lock and use the content of the dynamic-owned transfer buffer
                     std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
                     std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_GRANULARITY_MS));
-                    // cudaMemcpy(voxelID.data(), transferBuffer_voxelID.data(),
-                    //            N_MANUFACTURED_ITEMS * sizeof(voxelID_t), cudaMemcpyDeviceToDevice);
+                    // unpackMyBuffer();
                 }
                 pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
                 pSchedSupport->stampLastUpdateOfDynamic = cycle;
@@ -304,8 +329,7 @@ void DEMDynamicThread::workerThread() {
                 // acquire lock and refresh the work order for the kinematic
                 {
                     std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
-                    cudaMemcpy(granData->pKTOwnedBuffer_voxelID, granData->voxelID, N_INPUT_ITEMS * sizeof(voxelID_t),
-                               cudaMemcpyDeviceToDevice);
+                    sendToTheirBuffer();
                 }
                 pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
                 pSchedSupport->schedulingStats.nKinematicUpdates++;

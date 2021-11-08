@@ -45,10 +45,10 @@ struct DEMDataDT {
     subVoxelPos_t* locY;
     subVoxelPos_t* locZ;
 
-    int* oriQ0;
-    int* oriQ1;
-    int* oriQ2;
-    int* oriQ3;
+    oriQ_t* oriQ0;
+    oriQ_t* oriQ1;
+    oriQ_t* oriQ2;
+    oriQ_t* oriQ3;
 
     float* hvX;
     float* hvY;
@@ -91,20 +91,20 @@ struct DEMDataKT {
     subVoxelPos_t* locX;
     subVoxelPos_t* locY;
     subVoxelPos_t* locZ;
-    int* oriQ0;
-    int* oriQ1;
-    int* oriQ2;
-    int* oriQ3;
+    oriQ_t* oriQ0;
+    oriQ_t* oriQ1;
+    oriQ_t* oriQ2;
+    oriQ_t* oriQ3;
 
     // kT-owned buffer pointers, for itself's usage
     voxelID_t* voxelID_buffer;
     subVoxelPos_t* locX_buffer;
     subVoxelPos_t* locY_buffer;
     subVoxelPos_t* locZ_buffer;
-    int* oriQ0_buffer;
-    int* oriQ1_buffer;
-    int* oriQ2_buffer;
-    int* oriQ3_buffer;
+    oriQ_t* oriQ0_buffer;
+    oriQ_t* oriQ1_buffer;
+    oriQ_t* oriQ2_buffer;
+    oriQ_t* oriQ3_buffer;
 
     // kT produces contact info, and stores it, temporarily
     bodyID_t* idGeometryA;
