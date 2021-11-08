@@ -17,7 +17,7 @@
 namespace sgps {
 
 // Put sim data array pointers in place
-void DEMDynamicThread::packDataPointers(DEMDataKT* kTData) {
+void DEMDynamicThread::packDataPointers() {
     granData->voxelID = voxelID.data();
     granData->locX = locX.data();
     granData->locY = locY.data();
@@ -32,7 +32,8 @@ void DEMDynamicThread::packDataPointers(DEMDataKT* kTData) {
     granData->idGeometryB = idGeometryB.data();
     granData->idGeometryA_buffer = idGeometryA_buffer.data();
     granData->idGeometryB_buffer = idGeometryB_buffer.data();
-
+}
+void DEMDynamicThread::packTransferPointers(DEMDataKT* kTData) {
     // These are the pointers for sending data to dT
     granData->pKTOwnedBuffer_voxelID = kTData->voxelID_buffer;
     granData->pKTOwnedBuffer_locX = kTData->locX_buffer;

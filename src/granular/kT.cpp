@@ -144,7 +144,7 @@ void DEMKinematicThread::resetUserCallStat() {
 }
 
 // Put sim data array pointers in place
-void DEMKinematicThread::packDataPointers(DEMDataDT* dTData) {
+void DEMKinematicThread::packDataPointers() {
     granData->voxelID = voxelID.data();
     granData->locX = locX.data();
     granData->locY = locY.data();
@@ -156,7 +156,7 @@ void DEMKinematicThread::packDataPointers(DEMDataDT* dTData) {
     granData->idGeometryA = idGeometryA.data();
     granData->idGeometryB = idGeometryB.data();
 
-    // for kT, each of its state vectors are fed by dT, so each has a buffer
+    // for kT, those state vectors are fed by dT, so each has a buffer
     granData->voxelID = voxelID_buffer.data();
     granData->locX = locX_buffer.data();
     granData->locY = locY_buffer.data();
@@ -165,7 +165,8 @@ void DEMKinematicThread::packDataPointers(DEMDataDT* dTData) {
     granData->oriQ1 = oriQ1_buffer.data();
     granData->oriQ2 = oriQ2_buffer.data();
     granData->oriQ3 = oriQ3_buffer.data();
-
+}
+void DEMKinematicThread::packTransferPointers(DEMDataDT* dTData) {
     // Set the pointers to dT owned buffers
     granData->pDTOwnedBuffer_idGeometryA = dTData->idGeometryA_buffer;
     granData->pDTOwnedBuffer_idGeometryB = dTData->idGeometryB_buffer;

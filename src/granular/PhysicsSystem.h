@@ -149,7 +149,8 @@ class DEMKinematicThread {
                       double ts_size);
 
     // Put sim data array pointers in place
-    void packDataPointers(DEMDataDT* dTData);
+    void packDataPointers();
+    void packTransferPointers(DEMDataDT* dTData);
 
   private:
     void contactDetection();
@@ -323,7 +324,8 @@ class DEMDynamicThread {
                                const std::vector<std::vector<float3>>& clumps_sp_location_types);
 
     // Put sim data array pointers in place
-    void packDataPointers(DEMDataKT* kTData);
+    void packDataPointers();
+    void packTransferPointers(DEMDataKT* kTData);
 
     void WriteCsvAsSpheres(std::ofstream& ptFile) const;
 

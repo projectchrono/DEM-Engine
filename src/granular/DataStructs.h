@@ -73,8 +73,7 @@ struct DEMDataDT {
     bodyID_t* idGeometryA_buffer;
     bodyID_t* idGeometryB_buffer;
 
-    // pointer to remote buffer where kinematic thread stores work-order data
-    // provided by the dynamic thread
+    // pointer to remote buffer where kinematic thread stores work-order data provided by the dynamic thread
     voxelID_t* pKTOwnedBuffer_voxelID = NULL;
     subVoxelPos_t* pKTOwnedBuffer_locX = NULL;
     subVoxelPos_t* pKTOwnedBuffer_locY = NULL;
@@ -111,8 +110,7 @@ struct DEMDataKT {
     bodyID_t* idGeometryA;
     bodyID_t* idGeometryB;
 
-    // this is where the dynamic thread stores data that needs to be produced
-    // herein
+    // data pointers that is kT's transfer destination
     bodyID_t* pDTOwnedBuffer_idGeometryA = NULL;
     bodyID_t* pDTOwnedBuffer_idGeometryB = NULL;
 };
