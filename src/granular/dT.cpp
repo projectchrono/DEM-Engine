@@ -95,6 +95,9 @@ void DEMDynamicThread::allocateManagedArrays(unsigned int nClumpBodies,
 
     // Resize to the length of the clump templates
     TRACKED_VECTOR_RESIZE(massClumpBody, nClumpTopo, "massClumpBody", 0);
+    TRACKED_VECTOR_RESIZE(mmiXX, nClumpTopo, "mmiXX", 0);
+    TRACKED_VECTOR_RESIZE(mmiYY, nClumpTopo, "mmiYY", 0);
+    TRACKED_VECTOR_RESIZE(mmiZZ, nClumpTopo, "mmiZZ", 0);
     TRACKED_VECTOR_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);
     TRACKED_VECTOR_RESIZE(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
     TRACKED_VECTOR_RESIZE(relPosSphereY, nClumpComponents, "relPosSphereY", 0);

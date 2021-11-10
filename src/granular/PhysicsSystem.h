@@ -66,6 +66,15 @@ class DEMKinematicThread {
 
     // Managed arrays for dT's personal use (not transfer buffer)
 
+    // Those are the smaller ones, the unique, template ones. TODO: These should be jitified into kernels not brought
+    // from global mem The distinct sphere radii values
+    std::vector<float, ManagedAllocator<float>> radiiSphere;
+
+    // The distinct sphere local position (wrt CoM) values
+    std::vector<float, ManagedAllocator<float>> relPosSphereX;
+    std::vector<float, ManagedAllocator<float>> relPosSphereY;
+    std::vector<float, ManagedAllocator<float>> relPosSphereZ;
+
     // The voxel ID (split into 3 parts, representing XYZ location)
     std::vector<voxelID_t, ManagedAllocator<voxelID_t>> voxelID;
 
@@ -83,6 +92,13 @@ class DEMKinematicThread {
     // kT computed contact pair info
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA;
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB;
+
+    // Sphere-related arrays in managed memory
+    // Belonged-body ID (default unsigned int type)
+    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerClumpBody;
+
+    // The ID that maps this sphere's radius and relPos
+    std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> clumpComponentOffset;
 
   public:
     friend class DEMSolver;
@@ -136,6 +152,13 @@ class DEMKinematicThread {
                                unsigned int nClumpTopo,
                                unsigned int nClumpComponents,
                                unsigned int nMatTuples);
+
+    // Data type TBD, should come from JITCed headers
+    void populateManagedArrays(const std::vector<clumpBodyInertiaOffset_t>& input_clump_types,
+                               const std::vector<float3>& input_clump_xyz,
+                               const std::vector<float>& clumps_mass_types,
+                               const std::vector<std::vector<float>>& clumps_sp_radii_types,
+                               const std::vector<std::vector<float3>>& clumps_sp_location_types);
 
     // Set SimParams items
     void setSimParams(unsigned char nvXp2,
@@ -192,8 +215,8 @@ class DEMDynamicThread {
 
     // Body-related arrays in managed memory, for dT's personal use (not transfer buffer)
 
-    // Those are the smaller ones, the unique, template ones
-    // The mass values
+    // Those are the smaller ones, the unique, template ones. TODO: These should be jitified into kernels not brought
+    // from global mem The mass values
     std::vector<float, ManagedAllocator<float>> massClumpBody;
 
     // The components of MOI values

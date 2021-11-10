@@ -107,7 +107,7 @@ void DEMKinematicThread::workerThread() {
             // cudaStreamCreate(&currentStream);pSchedSupport->dynamicShouldWait()
 
             // TODO: crash on reaching conditioanl variable if the other thread is in kernel??
-            // contactDetection();
+            contactDetection();
 
             /* for the reference
             for (int j = 0; j < N_MANUFACTURED_ITEMS; j++) {
@@ -249,10 +249,70 @@ void DEMKinematicThread::allocateManagedArrays(unsigned int nClumpBodies,
     TRACKED_VECTOR_RESIZE(oriQ2_buffer, nClumpBodies, "oriQ2_buffer", 0);
     TRACKED_VECTOR_RESIZE(oriQ3_buffer, nClumpBodies, "oriQ3_buffer", 0);
 
+    // Resize to the number of spheres
+    TRACKED_VECTOR_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
+    TRACKED_VECTOR_RESIZE(clumpComponentOffset, nSpheresGM, "sphereRadiusOffset", 0);
+
+    // Resize to the length of the clump templates
+    TRACKED_VECTOR_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);
+    TRACKED_VECTOR_RESIZE(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
+    TRACKED_VECTOR_RESIZE(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
+    TRACKED_VECTOR_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
+
     // Arrays for kT produced contact info
     // The length of idGeometry arrays is an estimate
     TRACKED_VECTOR_RESIZE(idGeometryA, nSpheresGM, "idGeometryA", 0);
     TRACKED_VECTOR_RESIZE(idGeometryB, nSpheresGM, "idGeometryB", 0);
+}
+
+void DEMKinematicThread::populateManagedArrays(const std::vector<clumpBodyInertiaOffset_t>& input_clump_types,
+                                               const std::vector<float3>& input_clump_xyz,
+                                               const std::vector<float>& clumps_mass_types,
+                                               const std::vector<std::vector<float>>& clumps_sp_radii_types,
+                                               const std::vector<std::vector<float3>>& clumps_sp_location_types) {
+    // Use some temporary hacks to get the info in the managed mem
+    // All the input vectors should have the same length, nClumpTopo
+    unsigned int k = 0;
+    std::vector<unsigned int> prescans;
+
+    prescans.push_back(0);
+    for (auto elem : clumps_sp_radii_types) {
+        for (auto radius : elem) {
+            radiiSphere.at(k) = radius;
+            k++;
+        }
+        prescans.push_back(k);
+    }
+    prescans.pop_back();
+    k = 0;
+
+    for (auto elem : clumps_sp_location_types) {
+        for (auto loc : elem) {
+            relPosSphereX.at(k) = loc.x;
+            relPosSphereY.at(k) = loc.y;
+            relPosSphereZ.at(k) = loc.z;
+            k++;
+        }
+        // std::cout << "sphere location types: " << elem.x << ", " << elem.y << ", " << elem.z << std::endl;
+    }
+    k = 0;
+
+    for (size_t i = 0; i < input_clump_types.size(); i++) {
+        auto type_of_this_clump = input_clump_types.at(i);
+        float3 LBF;
+        LBF.x = simParams->LBFX;
+        LBF.y = simParams->LBFY;
+        LBF.z = simParams->LBFZ;
+        auto this_CoM_coord = input_clump_xyz.at(i) - LBF;
+        auto this_clump_no_sp_radii = clumps_sp_radii_types.at(type_of_this_clump);
+        auto this_clump_no_sp_relPos = clumps_sp_location_types.at(type_of_this_clump);
+
+        for (size_t j = 0; j < this_clump_no_sp_radii.size(); j++) {
+            clumpComponentOffset.at(k) = prescans.at(type_of_this_clump) + j;
+            ownerClumpBody.at(k) = i;
+            k++;
+        }
+    }
 }
 
 void DEMKinematicThread::primeDynamic() {
