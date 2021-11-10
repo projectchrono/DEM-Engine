@@ -78,10 +78,10 @@ struct DEMDataDT {
     subVoxelPos_t* pKTOwnedBuffer_locX = NULL;
     subVoxelPos_t* pKTOwnedBuffer_locY = NULL;
     subVoxelPos_t* pKTOwnedBuffer_locZ = NULL;
-    int* pKTOwnedBuffer_oriQ0 = NULL;
-    int* pKTOwnedBuffer_oriQ1 = NULL;
-    int* pKTOwnedBuffer_oriQ2 = NULL;
-    int* pKTOwnedBuffer_oriQ3 = NULL;
+    oriQ_t* pKTOwnedBuffer_oriQ0 = NULL;
+    oriQ_t* pKTOwnedBuffer_oriQ1 = NULL;
+    oriQ_t* pKTOwnedBuffer_oriQ2 = NULL;
+    oriQ_t* pKTOwnedBuffer_oriQ3 = NULL;
 };
 
 // A struct that holds pointers to data arrays that kT uses
