@@ -69,8 +69,23 @@ void reduceByKey(int* key, float* val, int n, std::vector<int>& key_reduced, std
 }
 
 void sortReduce(int* key, float* val, std::vector<int>& key_reduced, std::vector<float>& val_reduced, int n, int max) {
-    radixSort(key, val, n, max);
-    reduceByKey(key, val, n, key_reduced, val_reduced);
+    std::vector<int> key_shallow;
+    std::vector<float> val_shallow;
+    for (int i = 0; i < n; i++) {
+        key_shallow.push_back(key[i]);
+        val_shallow.push_back(val[i]);
+    }
+    radixSort(key_shallow.data(), val_shallow.data(), n, max);
+    reduceByKey(key_shallow.data(), val_shallow.data(), n, key_reduced, val_reduced);
+}
+
+int count_digit(int number) {
+    int count = 0;
+    while (number != 0) {
+        number = number / 10;
+        count++;
+    }
+    return count;
 }
 
 /*

@@ -6,5 +6,6 @@
     #define SGPS_CPU_ALGORITHM
 
 void sortReduce(int* key, float* val, std::vector<int>& key_reduced, std::vector<float>& val_reduced, int n, int max);
+int count_digit(int number);
 
 #endif

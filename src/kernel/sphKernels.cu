@@ -81,30 +81,49 @@ __global__ void dynamic1stPass(contactData* gpu_pair_data,
         float dist = sqrt(dist2);
         float dist_inv = 1.0 / dist;
         float penetration = 2 * radius - dist;
-
-        if (gpu_fix[gpu_pair_data[idx].contact_pair.x] == false) {
-            gpu_acc[gpu_pair_data[idx].contact_pair.x].x =
-                dir_x * dist_inv * penetration * coe + gpu_acc[gpu_pair_data[idx].contact_pair.x].x;
-            gpu_acc[gpu_pair_data[idx].contact_pair.x].y =
-                dir_y * dist_inv * penetration * coe + gpu_acc[gpu_pair_data[idx].contact_pair.x].y;
-            gpu_acc[gpu_pair_data[idx].contact_pair.x].z =
-                dir_z * dist_inv * penetration * coe + gpu_acc[gpu_pair_data[idx].contact_pair.x].z;
-        }
-
-        if (gpu_fix[gpu_pair_data[idx].contact_pair.y] == false) {
-            gpu_acc[gpu_pair_data[idx].contact_pair.y].x =
-                -dir_x * dist_inv * penetration * coe + gpu_acc[gpu_pair_data[idx].contact_pair.y].x;
-            gpu_acc[gpu_pair_data[idx].contact_pair.y].y =
-                -dir_y * dist_inv * penetration * coe + gpu_acc[gpu_pair_data[idx].contact_pair.y].y;
-            gpu_acc[gpu_pair_data[idx].contact_pair.y].z =
-                -dir_z * dist_inv * penetration * coe + gpu_acc[gpu_pair_data[idx].contact_pair.y].z;
-        }
+        // fill in contact pair data with respect to the first element of the contact pair data
+        gpu_pair_data[idx].contact_force.x = dir_x * coe;
+        gpu_pair_data[idx].contact_force.y = dir_y * coe;
+        gpu_pair_data[idx].contact_force.z = dir_z * coe;
     }
 
     __syncthreads();
 }
 
-__global__ void dynamic2ndPass(vector3* gpu_pos,
+__global__ void dynamic2ndPass(contactData* gpu_pair_data, int gpu_pair_n, contactData* inv_gpu_pair_data) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx >= gpu_pair_n) {
+        return;
+    }
+
+    inv_gpu_pair_data[idx].contact_pair.x = gpu_pair_data[idx].contact_pair.y;
+    inv_gpu_pair_data[idx].contact_pair.y = gpu_pair_data[idx].contact_pair.x;
+    inv_gpu_pair_data[idx].contact_force.x = -gpu_pair_data[idx].contact_force.x;
+    inv_gpu_pair_data[idx].contact_force.y = -gpu_pair_data[idx].contact_force.y;
+    inv_gpu_pair_data[idx].contact_force.z = -gpu_pair_data[idx].contact_force.z;
+}
+
+__global__ void dynamic3rdPass(int* key,
+                               float* x_reduced,
+                               float* y_reduced,
+                               float* z_reduced,
+                               int n,
+                               vector3* gpu_acc) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx >= n) {
+        return;
+    }
+    __syncthreads();
+
+    gpu_acc[key[idx]].x = x_reduced[idx];
+    gpu_acc[key[idx]].y = y_reduced[idx];
+    gpu_acc[key[idx]].z = z_reduced[idx];
+    __syncthreads();
+}
+
+__global__ void dynamic4thPass(vector3* gpu_pos,
                                vector3* gpu_vel,
                                vector3* gpu_acc,
                                char* gpu_fix,
@@ -120,17 +139,16 @@ __global__ void dynamic2ndPass(vector3* gpu_pos,
     if (gpu_fix[idx] == 0) {
         float grav = -9.8f;
         gpu_acc[idx].z = gpu_acc[idx].z + grav;
+
+        gpu_vel[idx].x = gpu_vel[idx].x + gpu_acc[idx].x * time_step;
+        gpu_vel[idx].y = gpu_vel[idx].y + gpu_acc[idx].y * time_step;
+        gpu_vel[idx].z = gpu_vel[idx].z + gpu_acc[idx].z * time_step;
+
+        gpu_pos[idx].x = gpu_pos[idx].x + gpu_vel[idx].x * time_step;
+        gpu_pos[idx].y = gpu_pos[idx].y + gpu_vel[idx].y * time_step;
+        gpu_pos[idx].z = gpu_pos[idx].z + gpu_vel[idx].z * time_step;
     }
-
     __syncthreads();
-
-    gpu_vel[idx].x = gpu_vel[idx].x + gpu_acc[idx].x * time_step;
-    gpu_vel[idx].y = gpu_vel[idx].y + gpu_acc[idx].y * time_step;
-    gpu_vel[idx].z = gpu_vel[idx].z + gpu_acc[idx].z * time_step;
-
-    gpu_pos[idx].x = gpu_pos[idx].x + gpu_vel[idx].x * time_step;
-    gpu_pos[idx].y = gpu_pos[idx].y + gpu_vel[idx].y * time_step;
-    gpu_pos[idx].z = gpu_pos[idx].z + gpu_vel[idx].z * time_step;
 
     gpu_acc[idx].x = 0.f;
     gpu_acc[idx].y = 0.f;

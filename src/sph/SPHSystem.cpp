@@ -179,11 +179,6 @@ void DynamicThread::operator()() {
         k_n = dataManager.m_pos.size();
     }
 
-    // set number of blocks and number of threads in each block
-    int block_size = 1024;
-    int num_thread = (block_size < k_n) ? block_size : k_n;
-    int num_block = (k_n % num_thread != 0) ? (k_n / num_thread + 1) : (k_n / num_thread);
-
     while (getParentSystem().curr_time < getParentSystem().sim_time) {
         // Touch the CUDA context before the Kernel is accessed
 
@@ -224,17 +219,103 @@ void DynamicThread::operator()() {
             JitHelper::buildProgram("sphKernels", JitHelper::KERNEL_DIR / "sphKernels.cu",
                                     std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
+        int block_size = 1024;
+        int num_thread = (block_size < contact_data.size()) ? block_size : contact_data.size();
+        int num_block = (contact_data.size() % num_thread != 0) ? (contact_data.size() / num_thread + 1)
+                                                                : (contact_data.size() / num_thread);
+
         // call dynamic first gpu pass
+        // this pass will fill the contact pair data vector
         dynamic_program.kernel("dynamic1stPass")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(contact_data.data(), contact_data.size(), pos_data.data(), vel_data.data(), acc_data.data(),
                     fix_data.data(), radius);
-
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // call dynamic second gpu pass
+        // this pass will use gpu to generate another array full of inverse elements of contact_data
+        std::vector<contactData, sgps::ManagedAllocator<contactData>> inv_contact_data;
+        inv_contact_data.resize(contact_data.size());
+
         dynamic_program.kernel("dynamic2ndPass")
+            .instantiate()
+            .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
+            .launch(contact_data.data(), contact_data.size(), inv_contact_data.data());
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+        contact_data.insert(contact_data.end(), inv_contact_data.begin(), inv_contact_data.end());
+
+        inv_contact_data.clear();
+
+        // TEST SECTION
+        // call dynamic second GPU pass
+        // this is SUPPOSED TO BE A CUB REDUCTION
+        // now using CPU
+
+        // set up CPU data input
+        // create a long array to reduce
+        std::vector<int> keys;
+        std::vector<float> x_frcs;
+        std::vector<float> y_frcs;
+        std::vector<float> z_frcs;
+
+        for (int i = 0; i < contact_data.size(); i++) {
+            keys.push_back(contact_data[i].contact_pair.x);
+            x_frcs.push_back(contact_data[i].contact_force.x);
+            y_frcs.push_back(contact_data[i].contact_force.y);
+            z_frcs.push_back(contact_data[i].contact_force.z);
+        }
+
+        std::vector<int> key_reduced;
+        std::vector<float> x_reduced;
+        std::vector<float> y_reduced;
+        std::vector<float> z_reduced;
+
+        sortReduce(keys.data(), x_frcs.data(), key_reduced, x_reduced, keys.size(), count_digit(k_n));
+        key_reduced.clear();
+        sortReduce(keys.data(), y_frcs.data(), key_reduced, y_reduced, keys.size(), count_digit(k_n));
+        key_reduced.clear();
+        sortReduce(keys.data(), z_frcs.data(), key_reduced, z_reduced, keys.size(), count_digit(k_n));
+        /*
+                std::cout << "key sz: " << keys.size() << std::endl;
+                std::cout << "key rd sz: " << key_reduced.size() << std::endl;
+                std::cout << "x sz: " << x_reduced.size() << std::endl;
+                std::cout << "y sz: " << y_reduced.size() << std::endl;
+                std::cout << "z sz: " << z_reduced.size() << std::endl;
+        */
+        // transfer data to GPU
+        std::vector<int, sgps::ManagedAllocator<int>> gpu_key_reduced;
+        std::vector<float, sgps::ManagedAllocator<float>> gpu_x_reduced;
+        std::vector<float, sgps::ManagedAllocator<float>> gpu_y_reduced;
+        std::vector<float, sgps::ManagedAllocator<float>> gpu_z_reduced;
+
+        gpu_key_reduced.assign(key_reduced.begin(), key_reduced.end());
+        gpu_x_reduced.assign(x_reduced.begin(), x_reduced.end());
+        gpu_y_reduced.assign(y_reduced.begin(), y_reduced.end());
+        gpu_z_reduced.assign(z_reduced.begin(), z_reduced.end());
+        // END TEST SECTION
+
+        block_size = 1024;
+        num_thread = (block_size < gpu_key_reduced.size()) ? block_size : gpu_key_reduced.size();
+        num_block = (gpu_key_reduced.size() % num_thread != 0) ? (gpu_key_reduced.size() / num_thread + 1)
+                                                               : (gpu_key_reduced.size() / num_thread);
+
+        // call dynamic third gpu pass
+        dynamic_program.kernel("dynamic3rdPass")
+            .instantiate()
+            .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
+            .launch(gpu_key_reduced.data(), gpu_x_reduced.data(), gpu_y_reduced.data(), gpu_z_reduced.data(),
+                    gpu_key_reduced.size(), acc_data.data());
+
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+        block_size = 1024;
+        num_thread = (block_size < k_n) ? block_size : k_n;
+        num_block = (k_n % num_thread != 0) ? (k_n / num_thread + 1) : (k_n / num_thread);
+
+        // call dynamic second gpu pass
+        dynamic_program.kernel("dynamic4thPass")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), vel_data.data(), acc_data.data(), fix_data.data(), pos_data.size(), time_step,

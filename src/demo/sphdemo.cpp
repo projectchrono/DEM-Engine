@@ -5,8 +5,8 @@
 
 int main(int argc, char* argv[]) {
     // initialize particles in a cubic 10x10x10 domain
-    float dim_x = 40;
-    float dim_y = 40;
+    float dim_x = 4;
+    float dim_y = 4;
     float dim_z = 4;
 
     // set particle radius
@@ -39,6 +39,7 @@ int main(int argc, char* argv[]) {
                 } else {
                     float r = ((float)rand() / (RAND_MAX));
                     temp_z = r * (max_z - min_z) + min_z;
+                    // temp_z = (max_z + min_z) / 2;
                 }
                 pos_vec.push_back(vector3(-dim_x / 2 + i * (2 * radius + gap) + radius,
                                           -dim_y / 2 + j * (2 * radius + gap) + radius, temp_z));
@@ -82,6 +83,6 @@ int main(int argc, char* argv[]) {
 
     // initialize the SPHSystem
     system->initialize(radius, pos_vec, vel_vec, acc_vec, fix_vec);
-    system->setPrintOut(false, 10);
+    system->setPrintOut(true, 2);
     system->doStepDynamics(0.005f, 3.0f);
 }
