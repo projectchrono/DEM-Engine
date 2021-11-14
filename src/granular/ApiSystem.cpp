@@ -74,7 +74,7 @@ void DEMSolver::SetTimeStepSize(double ts_size) {
 }
 
 materialsOffset_t DEMSolver::LoadMaterialType(float density, float E) {
-    struct Material a_material;
+    struct DEMMaterial a_material;
     a_material.density = density;
     a_material.E = E;
 
@@ -241,11 +241,14 @@ void DEMSolver::WriteFileAsSpheres(const std::string& outfilename) const {
     dT->WriteCsvAsSpheres(ptFile);
 }
 
+/// Transfer (CPU-side) cached simulation data (about sim world) to the GPU-side. It is called automatically during
+/// system initialization.
 void DEMSolver::transferSimParams() {
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, m_boxLBF, G, m_ts_size);
     kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, m_boxLBF, G, m_ts_size);
 }
 
+/// Transfer (CPU-side) cached clump templates info and initial clump type/position info to GPU-side arrays
 void DEMSolver::initializeArrays() {
     // Resize managed arrays based on the statistical data we had from the previous step
     dT->allocateManagedArrays(nClumpBodies, nSpheresGM, nDistinctClumpBodyTopologies_computed,
@@ -256,6 +259,8 @@ void DEMSolver::initializeArrays() {
     // Now that the CUDA-related functions and data types are JITCompiled, we can feed those GPU-side arrays with the
     // cached API-level simulation info.
     dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_template_mass, m_template_sp_radii,
+                              m_template_sp_relPos);
+    kT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_template_mass, m_template_sp_radii,
                               m_template_sp_relPos);
 }
 
@@ -293,8 +298,11 @@ int DEMSolver::Initialize() {
     return 0;
 }
 
+/// Designed such that when (CPU-side) cached simulation data (about sim world, and clump templates) are updated by the
+/// user, they can call this method to transfer them to the GPU-side in mid-simulation.
 void DEMSolver::UpdateSimParams() {
-    // TODO: maybe some massaging is needed here, for more sophisticated params updates
+    // TODO: transferSimParams() only transfers sim world info, not clump template info. Clump info transformation is
+    // now in populateManagedArrays! Need to resolve that.
     transferSimParams();
 }
 

@@ -31,7 +31,7 @@ inline __device__ void locateNewVoxel(sgps::voxelID_t& voxel,
     locY_tmp = mod_floor<int64_t, int>(locY_tmp, max_loc);
     locZ_tmp = mod_floor<int64_t, int>(locZ_tmp, max_loc);
 
-    // Should add a check here where, if negative voxel component spotted, stop the simulation
+    // TODO: Should add a check here where, if negative voxel component spotted, stop the simulation
 
     IDPacker<sgps::voxelID_t, sgps::voxelID_t>(voxel, voxelX, voxelY, voxelZ, simParams->nvXp2, simParams->nvYp2);
 }

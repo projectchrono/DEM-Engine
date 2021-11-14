@@ -99,12 +99,12 @@ class DEMSolver {
 
   private:
     // This is the cached material information.
-    // It will be massaged into kernels upon Initialize.
-    struct Material {
+    // It will be massaged into the managed memory upon Initialize().
+    struct DEMMaterial {
         float density;
         float E;
     };
-    std::vector<Material> m_sp_materials;
+    std::vector<DEMMaterial> m_sp_materials;
 
     // This is the cached clump structure information.
     // It will be massaged into kernels upon Initialize.

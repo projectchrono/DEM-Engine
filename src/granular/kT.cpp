@@ -26,7 +26,14 @@ inline void DEMKinematicThread::contactDetection() {
         JitHelper::buildProgram("DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu",
                                 std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
-    bin_occupation.kernel("calculateSphereBinOverlap")
+    bin_occupation.kernel("getNumberOfBinsEachSphereTouches")
+        .instantiate()
+        .configure(dim3(1), dim3(simParams->nSpheresGM), 0, streamInfo.stream)
+        .launch(simParams, granData);
+
+    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+    bin_occupation.kernel("populateBinSphereTouchingPairs")
         .instantiate()
         .configure(dim3(1), dim3(simParams->nSpheresGM), 0, streamInfo.stream)
         .launch(simParams, granData);
@@ -181,14 +188,14 @@ void DEMKinematicThread::packDataPointers() {
     granData->idGeometryB = idGeometryB.data();
 
     // for kT, those state vectors are fed by dT, so each has a buffer
-    granData->voxelID = voxelID_buffer.data();
-    granData->locX = locX_buffer.data();
-    granData->locY = locY_buffer.data();
-    granData->locZ = locZ_buffer.data();
-    granData->oriQ0 = oriQ0_buffer.data();
-    granData->oriQ1 = oriQ1_buffer.data();
-    granData->oriQ2 = oriQ2_buffer.data();
-    granData->oriQ3 = oriQ3_buffer.data();
+    granData->voxelID_buffer = voxelID_buffer.data();
+    granData->locX_buffer = locX_buffer.data();
+    granData->locY_buffer = locY_buffer.data();
+    granData->locZ_buffer = locZ_buffer.data();
+    granData->oriQ0_buffer = oriQ0_buffer.data();
+    granData->oriQ1_buffer = oriQ1_buffer.data();
+    granData->oriQ2_buffer = oriQ2_buffer.data();
+    granData->oriQ3_buffer = oriQ3_buffer.data();
 }
 void DEMKinematicThread::packTransferPointers(DEMDataDT* dTData) {
     // Set the pointers to dT owned buffers

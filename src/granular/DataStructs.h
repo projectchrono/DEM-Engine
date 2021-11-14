@@ -36,6 +36,12 @@ struct DEMSimParams {
     double h;
 };
 
+// DEM material proxy, such that when they are used in force kernels, we can use these (which are associated with each
+// material individually, mind you) to somehow recover the contact properties such as tangential and normal stiffness k.
+struct DEMMaterialProxy {
+    float k_proxy = 50000.0;
+};
+
 // A struct that holds pointers to data arrays that dT uses
 // For more details just look at PhysicsSystem.h
 struct DEMDataDT {
