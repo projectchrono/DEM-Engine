@@ -147,14 +147,14 @@ class DEMKinematicThread {
     void resetUserCallStat();
 
     // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
-    void allocateManagedArrays(unsigned int nClumpBodies,
-                               unsigned int nSpheresGM,
+    void allocateManagedArrays(size_t nClumpBodies,
+                               size_t nSpheresGM,
                                unsigned int nClumpTopo,
                                unsigned int nClumpComponents,
                                unsigned int nMatTuples);
 
     // Data type TBD, should come from JITCed headers
-    void populateManagedArrays(const std::vector<clumpBodyInertiaOffset_t>& input_clump_types,
+    void populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
                                const std::vector<float3>& input_clump_xyz,
                                const std::vector<float>& clumps_mass_types,
                                const std::vector<std::vector<float>>& clumps_sp_radii_types,
@@ -338,14 +338,14 @@ class DEMDynamicThread {
                       double ts_size);
 
     // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
-    void allocateManagedArrays(unsigned int nClumpBodies,
-                               unsigned int nSpheresGM,
+    void allocateManagedArrays(size_t nClumpBodies,
+                               size_t nSpheresGM,
                                unsigned int nClumpTopo,
                                unsigned int nClumpComponents,
                                unsigned int nMatTuples);
 
     // Data type TBD, should come from JITCed headers
-    void populateManagedArrays(const std::vector<clumpBodyInertiaOffset_t>& input_clump_types,
+    void populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
                                const std::vector<float3>& input_clump_xyz,
                                const std::vector<float>& clumps_mass_types,
                                const std::vector<std::vector<float>>& clumps_sp_radii_types,

@@ -4,6 +4,8 @@
 
 __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams, sgps::DEMDataKT* granData) {
     // __shared__ const distinctSphereRadii[???];
+    // TODO: These info should be jitfied not brought from global mem
+
     sgps::bodyID_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;
     if (sphereID < simParams->nSpheresGM) {
     }

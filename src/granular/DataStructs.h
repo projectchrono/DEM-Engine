@@ -7,6 +7,8 @@
 #include <granular/GranularDefines.h>
 
 namespace sgps {
+// A structs defined here will be used by GPUs.
+
 // A structure for storing simulation parameters
 struct DEMSimParams {
     // Number of voxels in the X direction, expressed as a power of 2
@@ -22,8 +24,12 @@ struct DEMSimParams {
     // The edge length of a bin (for contact detection), as a multiple of voxelSize
     unsigned int binSize;
     // Number of clumps and spheres
-    unsigned int nClumpBodies;
-    unsigned int nSpheresGM;
+    bodyID_t nClumpBodies;
+    bodyID_t nSpheresGM;
+    // Number of the templates (or say the ``types'') of clumps and spheres
+    clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies;
+    clumpComponentOffset_t nDistinctClumpComponents;
+    materialsOffset_t nMatTuples;
     // Coordinate of the left-bottom-front point of the simulation ``world''
     float LBFX;
     float LBFY;

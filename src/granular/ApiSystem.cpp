@@ -73,7 +73,7 @@ void DEMSolver::SetTimeStepSize(double ts_size) {
     m_ts_size = ts_size;
 }
 
-materialsOffset_t DEMSolver::LoadMaterialType(float density, float E) {
+unsigned int DEMSolver::LoadMaterialType(float density, float E) {
     struct DEMMaterial a_material;
     a_material.density = density;
     a_material.E = E;
@@ -82,11 +82,11 @@ materialsOffset_t DEMSolver::LoadMaterialType(float density, float E) {
     return m_sp_materials.size() - 1;
 }
 
-clumpBodyInertiaOffset_t DEMSolver::LoadClumpType(float mass,
-                                                  float3 moi,
-                                                  const std::vector<float>& sp_radii,
-                                                  const std::vector<float3>& sp_locations_xyz,
-                                                  const std::vector<materialsOffset_t>& sp_material_ids) {
+unsigned int DEMSolver::LoadClumpType(float mass,
+                                      float3 moi,
+                                      const std::vector<float>& sp_radii,
+                                      const std::vector<float3>& sp_locations_xyz,
+                                      const std::vector<unsigned int>& sp_material_ids) {
     auto len = sp_radii.size();
     if (len != sp_locations_xyz.size() || len != sp_material_ids.size()) {
         SGPS_ERROR("Arrays defining a clump topology type must all have the same length.");
@@ -101,11 +101,11 @@ clumpBodyInertiaOffset_t DEMSolver::LoadClumpType(float mass,
     return m_template_mass.size() - 1;
 }
 
-clumpBodyInertiaOffset_t DEMSolver::LoadClumpSimpleSphere(float mass, float radius, materialsOffset_t material_id) {
+unsigned int DEMSolver::LoadClumpSimpleSphere(float mass, float radius, unsigned int material_id) {
     float3 I = make_float3(2.0 / 5.0 * mass * radius * radius);
     float3 pos = make_float3(0);
     return LoadClumpType(mass, I, std::vector<float>(1, radius), std::vector<float3>(1, pos),
-                         std::vector<materialsOffset_t>(1, material_id));
+                         std::vector<unsigned int>(1, material_id));
 }
 
 voxelID_t DEMSolver::GetClumpVoxelID(unsigned int i) const {
@@ -226,7 +226,7 @@ int DEMSolver::generateJITResources() {
     return 0;
 }
 
-void DEMSolver::SetClumps(const std::vector<clumpBodyInertiaOffset_t>& types, const std::vector<float3>& xyz) {
+void DEMSolver::SetClumps(const std::vector<unsigned int>& types, const std::vector<float3>& xyz) {
     if (types.size() != xyz.size()) {
         SGPS_ERROR("Arrays in the call SetClumps must all have the same length.");
     }
@@ -273,17 +273,23 @@ void DEMSolver::packDataPointers() {
     kT->packTransferPointers(dT->granData);
 }
 
-int DEMSolver::Initialize() {
-    // a few error checks first
+void DEMSolver::validateUserInputs() {
     if (m_sp_materials.size() == 0) {
         SGPS_ERROR("Before initializing the system, at least one material type should be loaded via LoadMaterialType.");
     }
 
-    // Figure out a part of the required simulation information such as the scale of the poblem domain. Make sure these
-    // info live in managed memory.
+    // TODO: Add check for inputs sizes (nClumps, nSpheres, nMat, nTopo...)
+}
 
+// The method should be called after user inputs are in place, and before starting the simulation. It figures out a part
+// of the required simulation information such as the scale of the poblem domain, and makes sure these info live in
+// managed memory.
+int DEMSolver::Initialize() {
     // Call the JIT compiler generator to make prep for this simulation.
     generateJITResources();
+
+    // A few checks first.
+    validateUserInputs();
 
     // Transfer some simulation params to implementation level
     transferSimParams();

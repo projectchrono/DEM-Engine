@@ -227,14 +227,17 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
     simParams->h = ts_size;
 }
 
-void DEMKinematicThread::allocateManagedArrays(unsigned int nClumpBodies,
-                                               unsigned int nSpheresGM,
+void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
+                                               size_t nSpheresGM,
                                                unsigned int nClumpTopo,
                                                unsigned int nClumpComponents,
                                                unsigned int nMatTuples) {
-    // TODO: Why are they here?? Shouldn't they be in setSimParams?
+    // Sizes of these arrays
     simParams->nSpheresGM = nSpheresGM;
     simParams->nClumpBodies = nClumpBodies;
+    simParams->nDistinctClumpBodyTopologies = nClumpTopo;
+    simParams->nDistinctClumpComponents = nClumpComponents;
+    simParams->nMatTuples = nMatTuples;
 
     // Resize to the number of clumps
     TRACKED_VECTOR_RESIZE(voxelID, nClumpBodies, "voxelID", 0);
@@ -272,7 +275,7 @@ void DEMKinematicThread::allocateManagedArrays(unsigned int nClumpBodies,
     TRACKED_VECTOR_RESIZE(idGeometryB, nSpheresGM, "idGeometryB", 0);
 }
 
-void DEMKinematicThread::populateManagedArrays(const std::vector<clumpBodyInertiaOffset_t>& input_clump_types,
+void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
                                                const std::vector<float3>& input_clump_xyz,
                                                const std::vector<float>& clumps_mass_types,
                                                const std::vector<std::vector<float>>& clumps_sp_radii_types,
