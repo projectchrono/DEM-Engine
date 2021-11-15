@@ -77,7 +77,7 @@ __global__ void dynamic1stPass(contactData* gpu_pair_data,
     float dist2 = dir_x * dir_x + dir_y * dir_y + dir_z * dir_z;
 
     if (dist2 < (2 * radius) * (2 * radius)) {
-        float coe = 1000.f;
+        float coe = 700.f;
         float dist = sqrt(dist2);
         float dist_inv = 1.0 / dist;
         float penetration = 2 * radius - dist;
