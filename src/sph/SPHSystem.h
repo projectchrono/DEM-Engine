@@ -17,6 +17,8 @@ struct DataManager {
     std::vector<vector3, sgps::ManagedAllocator<vector3>> m_vel;              // particle velocities
     std::vector<vector3, sgps::ManagedAllocator<vector3>> m_acc;              // particle accelerations
     std::vector<char, sgps::ManagedAllocator<char>> m_fix;                    // particle fixity
+    std::vector<int, sgps::ManagedAllocator<int>> m_idx;                      // particle l2 domain idx
+    std::vector<int, sgps::ManagedAllocator<int>> m_idx_hd;                   // particle l2 starting idx
     std::vector<contactData, sgps::ManagedAllocator<contactData>> m_contact;  // contact pair data
 
     std::vector<int, sgps::ManagedAllocator<int>> m_offset;  // index offset array for the contact pair data
@@ -133,7 +135,10 @@ class SPHSystem {
                     std::vector<vector3>& pos,
                     std::vector<vector3>& vel,
                     std::vector<vector3>& acc,
-                    std::vector<char>& fix);
+                    std::vector<char>& fix,
+                    float domain_x,
+                    float domain_y,
+                    float domain_z);
 
     // start performing simulation dynamics
     void doStepDynamics(float time_step, float sim_time);
@@ -147,6 +152,11 @@ class SPHSystem {
 
     int getKiCounter() { return kt.kinematicCounter; }
     int getDyCounter() { return dt.dynamicCounter; }
+
+    // global domain size
+    float domain_x;
+    float domain_y;
+    float domain_z;
 
     KinematicThread& getKtRef() { return kt; }
     DynamicThread& getDtRef() { return dt; }

@@ -95,7 +95,7 @@ int main(int argc, char* argv[]) {
     SPHSystem* system = new SPHSystem(gpu_distributor);
 
     // initialize the SPHSystem
-    system->initialize(radius, pos_vec, vel_vec, acc_vec, fix_vec);
+    system->initialize(radius, pos_vec, vel_vec, acc_vec, fix_vec, dim_x, dim_y, dim_z);
     system->setPrintOut(true, 2);
     system->doStepDynamics(0.005f, 3.0f);
 }

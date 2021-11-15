@@ -11,16 +11,26 @@
 #include <core/utils/CpuAlgorithmHelper.h>
 #include "datastruct.h"
 
+const int X_SUB_NUM = 10;
+const int Y_SUB_NUM = 10;
+const int Z_SUB_NUM = 10;
+
 void SPHSystem::initialize(float radius,
                            std::vector<vector3>& pos,
                            std::vector<vector3>& vel,
                            std::vector<vector3>& acc,
-                           std::vector<char>& fix) {
+                           std::vector<char>& fix,
+                           float domain_x,
+                           float domain_y,
+                           float domain_z) {
     dataManager.radius = radius;
     dataManager.m_pos.assign(pos.begin(), pos.end());
     dataManager.m_vel.assign(vel.begin(), vel.end());
     dataManager.m_acc.assign(acc.begin(), acc.end());
     dataManager.m_fix.assign(fix.begin(), fix.end());
+    this->domain_x = domain_x;
+    this->domain_y = domain_y;
+    this->domain_z = domain_z;
 }
 
 void SPHSystem::doStepDynamics(float time_step, float sim_time) {
@@ -78,6 +88,8 @@ void KinematicThread::operator()() {
     std::vector<contactData, sgps::ManagedAllocator<contactData>> contact_data;
     std::vector<vector3, sgps::ManagedAllocator<vector3>> pos_data;
     std::vector<int, sgps::ManagedAllocator<int>> offset_data;
+    std::vector<int, sgps::ManagedAllocator<int>> idx_data;
+    std::vector<int, sgps::ManagedAllocator<int>> idx_hd_data;
 
     while (getParentSystem().curr_time < getParentSystem().sim_time) {
         float tolerance = 0.05;
@@ -89,15 +101,39 @@ void KinematicThread::operator()() {
         if (getParentSystem().pos_data_isFresh == true) {
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
             pos_data.assign(dataManager.m_pos.begin(), dataManager.m_pos.end());
+            idx_data.assign(dataManager.m_idx.begin(), dataManager.m_idx.end());
+            idx_hd_data.assign(dataManager.m_idx_hd.begin(), dataManager.m_idx_hd.end());
         }
 
         // notify the system that the position data has been consumed
         getParentSystem().pos_data_isFresh = false;
 
+        // loop through all vertices to fill in domain vector
+        float d_domain_x = getParentSystem().domain_x / X_SUB_NUM;
+        float d_domain_y = getParentSystem().domain_y / Y_SUB_NUM;
+        float d_domain_z = getParentSystem().domain_z / Z_SUB_NUM;
+
+        // resize idx_data and idx_hd_data
+        idx_data.resize(k_n);
+        idx_hd_data.resize(X_SUB_NUM * Y_SUB_NUM * Z_SUB_NUM);
+
+        // GPU sweep to put particles into their l1 subdomains
         // initiate JitHelper to perform JITC
         auto kinematic_program =
             JitHelper::buildProgram("sphKernels", JitHelper::KERNEL_DIR / "sphKernels.cu",
                                     std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+
+        // kinematic thread first pass
+        kinematic_program.kernel("IdxSweep")
+            .instantiate()
+            .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
+            .launch(pos_data.data(), idx_data.data(), k_n, d_domain_x, d_domain_y, d_domain_z, X_SUB_NUM, Y_SUB_NUM,
+                    Z_SUB_NUM);
+
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+        // TODO:: Implement Reduction to sort the pos vector with ascending idx_arr
+        // TODO:: Figure out how to get the starting location of the arr
 
         // kinematic thread first pass
         kinematic_program.kernel("kinematic1stPass")
@@ -145,6 +181,8 @@ void KinematicThread::operator()() {
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexContact());
             dataManager.m_contact.assign(contact_data.begin(), contact_data.end());
             dataManager.m_offset.assign(offset_data.begin(), offset_data.end());
+            dataManager.m_idx.assign(idx_data.begin(), idx_data.end());
+            dataManager.m_idx_hd.assign(idx_hd_data.begin(), idx_hd_data.end());
         }
 
         // notify the system that the contact data is now fresh
