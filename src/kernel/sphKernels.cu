@@ -2,13 +2,35 @@
 
 // *----------------------------------------
 // SPH - Kinematic kernels
+__global__ void IdxSweep(vector3* pos,
+                         int* idx_arr,
+                         int n,
+                         float d_domain_x,
+                         float d_domain_y,
+                         float d_domain_z,
+                         int num_domain_x,
+                         int num_domain_y,
+                         int num_domain_z) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx >= n) {
+        return;
+    }
+    /*
+        int x_idx = int(pos[idx].x / d_domain_x);
+        int y_idx = int(pos[idx].x / d_domain_x);
+        int z_idx = int(pos[idx].x / d_domain_x);
+
+        idx_arr[idx] = z_idx * num_domain_x * num_domain_y + y_idx * num_domain_x + x_idx;
+        */
+}
 
 __global__ void kinematic1stPass(vector3* pos, int n, float tolerance, float radius, int* res_arr) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     int count = 0;  // count total number of valid contact for the current particle
 
-    if (idx > n) {
+    if (idx >= n) {
         res_arr[idx] = count;
         return;
     }
@@ -77,7 +99,7 @@ __global__ void dynamic1stPass(contactData* gpu_pair_data,
     float dist2 = dir_x * dir_x + dir_y * dir_y + dir_z * dir_z;
 
     if (dist2 < (2 * radius) * (2 * radius)) {
-        float coe = 1000.f;
+        float coe = 700.f;
         float dist = sqrt(dist2);
         float dist_inv = 1.0 / dist;
         float penetration = 2 * radius - dist;
