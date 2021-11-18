@@ -48,6 +48,9 @@ class DEMKinematicThread {
     // Pointers to those data arrays defined below, stored in a struct
     DEMDataKT* granData;
 
+    // Pointers to clump template data. In the end, the use of this struct should be replaced by JIT.
+    DEMTemplate* granTemplates;
+
     // Buffer arrays for storing info from the dT side.
     // dT modifies these arrays; kT uses them only.
 
@@ -69,6 +72,8 @@ class DEMKinematicThread {
     // Those are the smaller ones, the unique, template ones. TODO: These should be jitified into kernels not brought
     // from global mem The distinct sphere radii values
     std::vector<float, ManagedAllocator<float>> radiiSphere;
+    // Radii times beta, expressed as the multiple of voxelSize, used only in contact detection
+    std::vector<unsigned int, ManagedAllocator<unsigned int>> inflatedRadiiVoxelRatio;
 
     // The distinct sphere local position (wrt CoM) values
     std::vector<float, ManagedAllocator<float>> relPosSphereX;
@@ -108,6 +113,7 @@ class DEMKinematicThread {
         : pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
         GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
         GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataKT), cudaMemAttachGlobal));
+        GPU_CALL(cudaMallocManaged(&granTemplates, sizeof(DEMTemplate), cudaMemAttachGlobal));
         kinematicAverageTime = 0;
 
         // Get a device/stream ID to use from the GPU Manager
@@ -169,7 +175,8 @@ class DEMKinematicThread {
                       unsigned int binSize,
                       float3 LBFPoint,
                       float3 G,
-                      double ts_size);
+                      double ts_size,
+                      float expand_factor);
 
     // Put sim data array pointers in place
     void packDataPointers();
@@ -213,10 +220,15 @@ class DEMDynamicThread {
     // Pointers to those data arrays defined below, stored in a struct
     DEMDataDT* granData;
 
+    // Pointers to clump template data. In the end, the use of this struct should be replaced by JIT.
+    DEMTemplate* granTemplates;
+    DEMMaterialProxy* matProxy;
+
     // Body-related arrays in managed memory, for dT's personal use (not transfer buffer)
 
     // Those are the smaller ones, the unique, template ones. TODO: These should be jitified into kernels not brought
-    // from global mem The mass values
+    // from global mem.
+    // The mass values
     std::vector<float, ManagedAllocator<float>> massClumpBody;
 
     // The components of MOI values
@@ -335,7 +347,8 @@ class DEMDynamicThread {
                       unsigned int binSize,
                       float3 LBFPoint,
                       float3 G,
-                      double ts_size);
+                      double ts_size,
+                      float expand_factor);
 
     // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
     void allocateManagedArrays(size_t nClumpBodies,

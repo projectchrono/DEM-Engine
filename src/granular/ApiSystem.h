@@ -55,6 +55,10 @@ class DEMSolver {
     // Returns the coordinate of the left-bottom-front point of your simulation ``world'' after this operation.
     float3 CenterCoordSys();
 
+    /// Set the ratio by which the radii of the spheres are expanded for the purpose of contact detection (safe, and
+    /// creates false positives)
+    void SetExpandFactor(float beta);
+
     // Load possible clump types into the API-level cache.
     // Return the index of the clump type just loaded.
     unsigned int LoadClumpType(float mass,
@@ -155,6 +159,8 @@ class DEMSolver {
     float l = FLT_MAX;
     // The edge length of a bin (for contact detection), as a multiple of the voxel edge length
     unsigned int m_binSize;
+    // Sphere radii inflation ratio (for safer contact detection)
+    float m_expand_factor = 1.0f;
 
     // Total number of spheres
     size_t nSpheresGM;

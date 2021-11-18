@@ -32,6 +32,12 @@ void DEMDynamicThread::packDataPointers() {
     granData->idGeometryB = idGeometryB.data();
     granData->idGeometryA_buffer = idGeometryA_buffer.data();
     granData->idGeometryB_buffer = idGeometryB_buffer.data();
+
+    // The offset info that indexes into the template arrays
+    granData->ownerClumpBody = ownerClumpBody.data();
+    granData->clumpComponentOffset = clumpComponentOffset.data();
+
+    // Template array pointers, which will be removed after JIT is fully functional
 }
 void DEMDynamicThread::packTransferPointers(DEMDataKT* kTData) {
     // These are the pointers for sending data to dT
@@ -53,7 +59,8 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                     unsigned int binSize,
                                     float3 LBFPoint,
                                     float3 G,
-                                    double ts_size) {
+                                    double ts_size,
+                                    float expand_factor) {
     simParams->nvXp2 = nvXp2;
     simParams->nvYp2 = nvYp2;
     simParams->nvZp2 = nvZp2;
@@ -67,6 +74,7 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->Gy = G.y;
     simParams->Gz = G.z;
     simParams->h = ts_size;
+    simParams->beta = expand_factor;
 }
 
 void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,

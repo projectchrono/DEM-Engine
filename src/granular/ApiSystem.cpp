@@ -65,6 +65,10 @@ float3 DEMSolver::CenterCoordSys() {
     return O;
 }
 
+void DEMSolver::SetExpandFactor(float beta) {
+    m_expand_factor = beta;
+}
+
 void DEMSolver::SetGravitationalAcceleration(float3 g) {
     G = g;
 }
@@ -244,8 +248,8 @@ void DEMSolver::WriteFileAsSpheres(const std::string& outfilename) const {
 /// Transfer (CPU-side) cached simulation data (about sim world) to the GPU-side. It is called automatically during
 /// system initialization.
 void DEMSolver::transferSimParams() {
-    dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, m_boxLBF, G, m_ts_size);
-    kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, m_boxLBF, G, m_ts_size);
+    dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, m_boxLBF, G, m_ts_size, m_expand_factor);
+    kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, m_boxLBF, G, m_ts_size, m_expand_factor);
 }
 
 /// Transfer (CPU-side) cached clump templates info and initial clump type/position info to GPU-side arrays

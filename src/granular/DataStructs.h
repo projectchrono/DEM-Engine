@@ -40,6 +40,18 @@ struct DEMSimParams {
     float Gz;
     // Time step size
     double h;
+    // Sphere radii inflation ratio (for safer contact detection)
+    float beta;
+};
+
+// The collection of pointers to DEM template arrays such as radiiSphere. This struct will become useless eventually as
+// the string substitution in JIT comes into play.
+struct DEMTemplate {
+    unsigned int* inflatedRadiiVoxelRatio;
+    float* radiiSphere;
+    float* relPosSphereX;
+    float* relPosSphereY;
+    float* relPosSphereZ;
 };
 
 // DEM material proxy, such that when they are used in force kernels, we can use these (which are associated with each
@@ -81,6 +93,10 @@ struct DEMDataDT {
     bodyID_t* idGeometryA;
     bodyID_t* idGeometryB;
 
+    // The offset info that indexes into the template arrays
+    bodyID_t* ownerClumpBody;
+    clumpComponentOffset_t* clumpComponentOffset;
+
     // dT-owned buffer pointers, for itself's usage
     bodyID_t* idGeometryA_buffer;
     bodyID_t* idGeometryB_buffer;
@@ -117,6 +133,10 @@ struct DEMDataKT {
     oriQ_t* oriQ1_buffer;
     oriQ_t* oriQ2_buffer;
     oriQ_t* oriQ3_buffer;
+
+    // The offset info that indexes into the template arrays
+    bodyID_t* ownerClumpBody;
+    clumpComponentOffset_t* clumpComponentOffset;
 
     // kT produces contact info, and stores it, temporarily
     bodyID_t* idGeometryA;
