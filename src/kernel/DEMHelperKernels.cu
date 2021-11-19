@@ -50,3 +50,8 @@ inline __device__ void IDPacker(T1& ID, T2& X, T2& Y, T2& Z, unsigned char& nvXp
     ID += Y << nvXp2;
     ID += Z << (nvXp2 + nvYp2);
 }
+
+template <typename T1, typename T2>
+inline __device__ void applyOriQToVector3(T1& X, T1& Y, T1& Z) {
+    // Now does nothing
+}

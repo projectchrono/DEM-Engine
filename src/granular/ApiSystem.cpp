@@ -135,7 +135,8 @@ void DEMSolver::decideDefaultBinSize() {
         }
     }
 
-    m_binSize = 2.0 * smallest_radius / m_voxelSize;
+    // What should be a default bin size?
+    m_binSize = 4.0 * smallest_radius;
 }
 
 int DEMSolver::generateJITResources() {
@@ -207,10 +208,9 @@ int DEMSolver::generateJITResources() {
     std::cout << "The length unit in this simulation is: " << l << std::endl;
     std::cout << "The edge length of a voxel: " << m_voxelSize << std::endl;
 
-    double bin_edge_size = (double)m_binSize * m_voxelSize;
-    uint64_t num_bins = (uint64_t)(m_boxX / bin_edge_size + 1) + (uint64_t)(m_boxY / bin_edge_size + 1) +
-                        (uint64_t)(m_boxZ / bin_edge_size + 1);
-    std::cout << "The edge length of a bin: " << bin_edge_size << std::endl;
+    uint64_t num_bins =
+        (uint64_t)(m_boxX / m_binSize + 1) + (uint64_t)(m_boxY / m_binSize + 1) + (uint64_t)(m_boxZ / m_binSize + 1);
+    std::cout << "The edge length of a bin: " << m_binSize << std::endl;
     std::cout << "The total number of bins: " << num_bins << std::endl;
 
     // Figure out the initial profile/status of clumps, and related quantities, if need to

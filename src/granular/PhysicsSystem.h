@@ -72,8 +72,8 @@ class DEMKinematicThread {
     // Those are the smaller ones, the unique, template ones. TODO: These should be jitified into kernels not brought
     // from global mem The distinct sphere radii values
     std::vector<float, ManagedAllocator<float>> radiiSphere;
-    // Radii times beta, expressed as the multiple of voxelSize, used only in contact detection
-    std::vector<unsigned int, ManagedAllocator<unsigned int>> inflatedRadiiVoxelRatio;
+    // Radii times beta, expressed as the multiple of voxelSize, used only in contact detection (TODO: Remove this
+    // unused array) std::vector<unsigned int, ManagedAllocator<unsigned int>> inflatedRadiiVoxelRatio;
 
     // The distinct sphere local position (wrt CoM) values
     std::vector<float, ManagedAllocator<float>> relPosSphereX;
@@ -104,6 +104,9 @@ class DEMKinematicThread {
 
     // The ID that maps this sphere's radius and relPos
     std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> clumpComponentOffset;
+
+    // The number of bins each sphere touches
+    std::vector<binsSphereTouches_t, ManagedAllocator<binsSphereTouches_t>> numBinsSphereTouches;
 
   public:
     friend class DEMSolver;
@@ -172,7 +175,7 @@ class DEMKinematicThread {
                       unsigned char nvZp2,
                       float l,
                       double voxelSize,
-                      unsigned int binSize,
+                      double binSize,
                       float3 LBFPoint,
                       float3 G,
                       double ts_size,
@@ -344,7 +347,7 @@ class DEMDynamicThread {
                       unsigned char nvZp2,
                       float l,
                       double voxelSize,
-                      unsigned int binSize,
+                      double binSize,
                       float3 LBFPoint,
                       float3 G,
                       double ts_size,

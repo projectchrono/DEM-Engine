@@ -157,8 +157,8 @@ class DEMSolver {
     double m_ts_size;
     // The length unit. Any XYZ we report to the user, is under the hood a multiple of this l.
     float l = FLT_MAX;
-    // The edge length of a bin (for contact detection), as a multiple of the voxel edge length
-    unsigned int m_binSize;
+    // The edge length of a bin (for contact detection)
+    double m_binSize;
     // Sphere radii inflation ratio (for safer contact detection)
     float m_expand_factor = 1.0f;
 

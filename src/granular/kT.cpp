@@ -28,7 +28,7 @@ inline void DEMKinematicThread::contactDetection() {
 
     bin_occupation.kernel("getNumberOfBinsEachSphereTouches")
         .instantiate()
-        .configure(dim3(1), dim3(simParams->nSpheresGM), sizeof(unsigned int) * 128, streamInfo.stream)
+        .configure(dim3(1), dim3(simParams->nSpheresGM), sizeof(float) * TEST_SHARED_SIZE * 4, streamInfo.stream)
         .launch(simParams, granData, granTemplates);
 
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -201,12 +201,15 @@ void DEMKinematicThread::packDataPointers() {
     granData->ownerClumpBody = ownerClumpBody.data();
     granData->clumpComponentOffset = clumpComponentOffset.data();
 
+    // kT's own work arrays
+    granData->numBinsSphereTouches = numBinsSphereTouches.data();
+
     // Template array pointers, which will be removed after JIT is fully functional
     granTemplates->radiiSphere = radiiSphere.data();
     granTemplates->relPosSphereX = relPosSphereX.data();
     granTemplates->relPosSphereY = relPosSphereY.data();
     granTemplates->relPosSphereZ = relPosSphereZ.data();
-    granTemplates->inflatedRadiiVoxelRatio = inflatedRadiiVoxelRatio.data();
+    // granTemplates->inflatedRadiiVoxelRatio = inflatedRadiiVoxelRatio.data();
 }
 void DEMKinematicThread::packTransferPointers(DEMDataDT* dTData) {
     // Set the pointers to dT owned buffers
@@ -219,7 +222,7 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
                                       unsigned char nvZp2,
                                       float l,
                                       double voxelSize,
-                                      unsigned int binSize,
+                                      double binSize,
                                       float3 LBFPoint,
                                       float3 G,
                                       double ts_size,
@@ -275,13 +278,14 @@ void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
     // Resize to the number of spheres
     TRACKED_VECTOR_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
     TRACKED_VECTOR_RESIZE(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
+    TRACKED_VECTOR_RESIZE(numBinsSphereTouches, nSpheresGM, "numBinsSphereTouches", 0);
 
     // Resize to the length of the clump templates
     TRACKED_VECTOR_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);
     TRACKED_VECTOR_RESIZE(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
     TRACKED_VECTOR_RESIZE(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
     TRACKED_VECTOR_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
-    TRACKED_VECTOR_RESIZE(inflatedRadiiVoxelRatio, nClumpComponents, "inflatedRadiiVoxelRatio", 0);
+    // TRACKED_VECTOR_RESIZE(inflatedRadiiVoxelRatio, nClumpComponents, "inflatedRadiiVoxelRatio", 0);
 
     // Arrays for kT produced contact info
     // The length of idGeometry arrays is an estimate
@@ -303,7 +307,7 @@ void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& 
     for (auto elem : clumps_sp_radii_types) {
         for (auto radius : elem) {
             radiiSphere.at(k) = radius;
-            inflatedRadiiVoxelRatio.at(k) = (unsigned int)(radius * simParams->beta / simParams->voxelSize) + 1;
+            // inflatedRadiiVoxelRatio.at(k) = (unsigned int)(radius * simParams->beta / simParams->voxelSize) + 1;
             k++;
         }
         prescans.push_back(k);

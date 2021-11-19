@@ -21,8 +21,8 @@ struct DEMSimParams {
     float l;
     // Double-precision single voxel size
     double voxelSize;
-    // The edge length of a bin (for contact detection), as a multiple of voxelSize
-    unsigned int binSize;
+    // The edge length of a bin (for contact detection)
+    double binSize;
     // Number of clumps and spheres
     bodyID_t nClumpBodies;
     bodyID_t nSpheresGM;
@@ -47,7 +47,7 @@ struct DEMSimParams {
 // The collection of pointers to DEM template arrays such as radiiSphere. This struct will become useless eventually as
 // the string substitution in JIT comes into play.
 struct DEMTemplate {
-    unsigned int* inflatedRadiiVoxelRatio;
+    // unsigned int* inflatedRadiiVoxelRatio;
     float* radiiSphere;
     float* relPosSphereX;
     float* relPosSphereY;
@@ -137,6 +137,9 @@ struct DEMDataKT {
     // The offset info that indexes into the template arrays
     bodyID_t* ownerClumpBody;
     clumpComponentOffset_t* clumpComponentOffset;
+
+    // Other kT's own work arrays
+    binsSphereTouches_t* numBinsSphereTouches;
 
     // kT produces contact info, and stores it, temporarily
     bodyID_t* idGeometryA;

@@ -12,14 +12,17 @@ namespace sgps {
 #define N_INPUT_ITEMS 4
 #define VOXEL_RES_POWER2 16
 #define WAIT_GRANULARITY_MS 1
+#define TEST_SHARED_SIZE 128
 
-typedef uint16_t subVoxelPos_t;
+typedef uint16_t subVoxelPos_t;  ///< uint16 or uint32
 typedef uint64_t voxelID_t;
 typedef int oriQ_t;  // orientation quaternion data type
 typedef unsigned int bodyID_t;
 typedef unsigned short int materialsOffset_t;
 typedef unsigned short int clumpBodyInertiaOffset_t;
 typedef unsigned short int clumpComponentOffset_t;
+typedef unsigned int binsSphereTouches_t;  ///< How many bins a sphere can touch, max?
+typedef double floatFine_t;
 
 // typedef unsigned int stateVectors_default_t; // what's this for??
 // typedef unsigned int distinctSphereRelativePositions_default_t;
