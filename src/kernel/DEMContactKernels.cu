@@ -98,9 +98,9 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
         double myRadiusSpan = (double)(CDRadii[myCompOffset]) / simParams->binSize;
         // Now, write the IDs of those bins that I touch, back to the global memory
         sgps::binID_t thisBinID;
-        for (unsigned int k = (unsigned int)(myBinZ - myRadiusSpan); k <= (unsigned int)(myBinZ + myRadiusSpan); k++)
+        for (unsigned int k = (unsigned int)(myBinZ - myRadiusSpan); k <= (unsigned int)(myBinZ + myRadiusSpan); k++) {
             for (unsigned int j = (unsigned int)(myBinY - myRadiusSpan); j <= (unsigned int)(myBinY + myRadiusSpan);
-                 j++)
+                 j++) {
                 for (unsigned int i = (unsigned int)(myBinX - myRadiusSpan); i <= (unsigned int)(myBinX + myRadiusSpan);
                      i++) {
                     thisBinID = (sgps::binID_t)i + (sgps::binID_t)j * simParams->nbX +
@@ -109,5 +109,7 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
                     granData->sphereIDsEachBinTouches[myReportOffset] = sphereID;
                     myReportOffset++;
                 }
+            }
+        }
     }
 }

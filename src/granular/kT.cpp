@@ -22,7 +22,6 @@ int DEMKinematicThread::costlyProductionStep(int val) const {
 }
 
 inline void DEMKinematicThread::contactDetection() {
-    // auto data_arg = voxelID.data();
     auto bin_occupation =
         JitHelper::buildProgram("DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu",
                                 std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
@@ -51,6 +50,19 @@ inline void DEMKinematicThread::contactDetection() {
                                      granData->numBinsSphereTouches[simParams->nSpheresGM]);
     // displayArray<binID_t>(granData->binIDsEachSphereTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
     // displayArray<bodyID_t>(granData->sphereIDsEachBinTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
+
+    // TODO: use cub to do this. Probably one-two punch: first the number of jumps, then jump locations
+    // Search for bins that have at least 2 spheres touching.
+    size_t total_active_bins;
+    hostScanForJumpsNum<binID_t, binsSphereTouches_t>(
+        granData->binIDsEachSphereTouches, granData->numBinsSphereTouches[simParams->nSpheresGM], 2, total_active_bins);
+    sphereIDsLookUpTable.resize(total_active_bins);
+    numSpheresBinTouches.resize(total_active_bins);
+    hostScanForJumps<binID_t, binsSphereTouches_t, spheresBinTouches_t>(
+        granData->binIDsEachSphereTouches, granData->sphereIDsLookUpTable, granData->numSpheresBinTouches,
+        granData->numBinsSphereTouches[simParams->nSpheresGM], 2);
+    // displayArray<binsSphereTouches_t>(granData->sphereIDsLookUpTable, total_active_bins);
+    // displayArray<spheresBinTouches_t>(granData->numSpheresBinTouches, total_active_bins);
 }
 
 inline void DEMKinematicThread::unpackMyBuffer() {
@@ -217,6 +229,8 @@ void DEMKinematicThread::packDataPointers() {
     granData->numBinsSphereTouches = numBinsSphereTouches.data();
     granData->binIDsEachSphereTouches = binIDsEachSphereTouches.data();
     granData->sphereIDsEachBinTouches = sphereIDsEachBinTouches.data();
+    granData->sphereIDsLookUpTable = sphereIDsLookUpTable.data();
+    granData->numSpheresBinTouches = numSpheresBinTouches.data();
 
     // Template array pointers, which will be removed after JIT is fully functional
     granTemplates->radiiSphere = radiiSphere.data();
@@ -301,6 +315,8 @@ void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
     // The following 2 arrays will be larger than nSpheresGM, so here we only used an estimate
     TRACKED_VECTOR_RESIZE(binIDsEachSphereTouches, nSpheresGM, "binIDsEachSphereTouches", 0);
     TRACKED_VECTOR_RESIZE(sphereIDsEachBinTouches, nSpheresGM, "sphereIDsEachBinTouches", 0);
+    TRACKED_VECTOR_RESIZE(sphereIDsLookUpTable, nSpheresGM, "sphereIDsLookUpTable", 0);
+    TRACKED_VECTOR_RESIZE(numSpheresBinTouches, nSpheresGM, "numSpheresBinTouches", 0);
 
     // Resize to the length of the clump templates
     TRACKED_VECTOR_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);

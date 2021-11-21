@@ -148,6 +148,8 @@ struct DEMDataKT {
     binsSphereTouches_t* numBinsSphereTouches;
     binID_t* binIDsEachSphereTouches;
     bodyID_t* sphereIDsEachBinTouches;
+    binsSphereTouches_t* sphereIDsLookUpTable;
+    spheresBinTouches_t* numSpheresBinTouches;
 
     // kT produces contact info, and stores it, temporarily
     bodyID_t* idGeometryA;

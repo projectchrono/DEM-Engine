@@ -59,6 +59,44 @@ inline void hostSortByKey(T1* keys, T2* vals, size_t n) {
     }
 }
 
+template <typename T1, typename T2>
+void hostScanForJumpsNum(T1* arr, size_t n, unsigned int minSegLen, size_t& total_found) {
+    T2 i = 0;
+    total_found = 0;
+    while (i < n - 1) {
+        T2 thisIndx = i;
+        T1 thisItem = arr[i];
+        do {
+            i++;
+        } while (arr[i] == thisItem && i < n - 1);
+        if (i - thisIndx >= minSegLen) {
+            total_found++;
+        }
+    }
+}
+
+// Tell each active bin where to find its touching spheres
+template <typename T1, typename T2, typename T3>
+void hostScanForJumps(T1* arr, T2* jump_loc, T3* jump_len, size_t n, unsigned int minSegLen) {
+    size_t total_found = 0;
+    T2 i = 0;
+    unsigned int thisSegLen;
+    while (i < n - 1) {
+        thisSegLen = 0;
+        T2 thisIndx = i;
+        T1 thisItem = arr[i];
+        do {
+            i++;
+            thisSegLen++;
+        } while (arr[i] == thisItem && i < n - 1);
+        if (i - thisIndx >= minSegLen) {
+            jump_loc[total_found] = thisIndx;
+            jump_len[total_found] = thisSegLen;
+            total_found++;
+        }
+    }
+}
+
 }  // namespace sgps
 
 #endif

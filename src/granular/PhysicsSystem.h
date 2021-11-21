@@ -109,8 +109,14 @@ class DEMKinematicThread {
     std::vector<binsSphereTouches_t, ManagedAllocator<binsSphereTouches_t>> numBinsSphereTouches;
     // The IDs of those bins that touch each sphere
     std::vector<binID_t, ManagedAllocator<binID_t>> binIDsEachSphereTouches;
-    // The company array of the previous one:
+    // The company array of the previous one
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> sphereIDsEachBinTouches;
+    // Derived from binIDsEachSphereTouches we have the IDs of the active bins (have at least 2 spheres in it). Then
+    // this following array is generated to instruct the kernel where to look in sphereIDsEachBinTouches to find this
+    // thread's relevant sphere IDs.
+    std::vector<binsSphereTouches_t, ManagedAllocator<binsSphereTouches_t>> sphereIDsLookUpTable;
+    // And how far should this thread look into (number of spheres this bin touches)?
+    std::vector<spheresBinTouches_t, ManagedAllocator<spheresBinTouches_t>> numSpheresBinTouches;
 
   public:
     friend class DEMSolver;
