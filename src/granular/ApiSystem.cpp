@@ -50,9 +50,9 @@ void DEMSolver::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsi
 
     // Calculating ``world'' size by the input nvXp2 and l
     m_voxelSize = (double)pow(2, VOXEL_RES_POWER2) * (double)l;
-    m_boxX = m_voxelSize * (double)(1u << x);
-    m_boxY = m_voxelSize * (double)(1u << y);
-    m_boxZ = m_voxelSize * (double)(1u << z);
+    m_boxX = m_voxelSize * (double)((size_t)1 << x);
+    m_boxY = m_voxelSize * (double)((size_t)1 << y);
+    m_boxZ = m_voxelSize * (double)((size_t)1 << z);
     explicit_nv_override = true;
 }
 
@@ -209,7 +209,7 @@ int DEMSolver::generateJITResources() {
     std::cout << "The edge length of a voxel: " << m_voxelSize << std::endl;
 
     uint64_t num_bins =
-        (uint64_t)(m_boxX / m_binSize + 1) + (uint64_t)(m_boxY / m_binSize + 1) + (uint64_t)(m_boxZ / m_binSize + 1);
+        (uint64_t)(m_boxX / m_binSize + 1) * (uint64_t)(m_boxY / m_binSize + 1) * (uint64_t)(m_boxZ / m_binSize + 1);
     std::cout << "The edge length of a bin: " << m_binSize << std::endl;
     std::cout << "The total number of bins: " << num_bins << std::endl;
 

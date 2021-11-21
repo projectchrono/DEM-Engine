@@ -107,6 +107,10 @@ class DEMKinematicThread {
 
     // The number of bins each sphere touches
     std::vector<binsSphereTouches_t, ManagedAllocator<binsSphereTouches_t>> numBinsSphereTouches;
+    // The IDs of those bins that touch each sphere
+    std::vector<binID_t, ManagedAllocator<binID_t>> binIDsEachSphereTouches;
+    // The company array of the previous one: 
+    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> sphereIDsEachBinTouches;
 
   public:
     friend class DEMSolver;

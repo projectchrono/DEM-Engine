@@ -17,6 +17,12 @@ struct DEMSimParams {
     unsigned char nvYp2;
     // Number of voxels in the Z direction, expressed as a power of 2
     unsigned char nvZp2;
+    // Number of bins in the X direction (actual number)
+    binID_t nbX;
+    // Number of bins in the Y direction (actual number)
+    binID_t nbY;
+    // Number of bins in the Z direction (actual number)
+    binID_t nbZ;
     // Smallest length unit
     float l;
     // Double-precision single voxel size
@@ -140,6 +146,8 @@ struct DEMDataKT {
 
     // Other kT's own work arrays
     binsSphereTouches_t* numBinsSphereTouches;
+    binID_t* binIDsEachSphereTouches;
+    bodyID_t* sphereIDsEachBinTouches;
 
     // kT produces contact info, and stores it, temporarily
     bodyID_t* idGeometryA;

@@ -18,11 +18,14 @@ typedef uint16_t subVoxelPos_t;  ///< uint16 or uint32
 typedef uint64_t voxelID_t;
 typedef int oriQ_t;  // orientation quaternion data type
 typedef unsigned int bodyID_t;
+typedef unsigned int binID_t;
 typedef unsigned short int materialsOffset_t;
 typedef unsigned short int clumpBodyInertiaOffset_t;
 typedef unsigned short int clumpComponentOffset_t;
-typedef unsigned int binsSphereTouches_t;  ///< How many bins a sphere can touch, max?
 typedef double floatFine_t;
+
+// How many bin--sphere touch pairs can there be, tops? This type needs to be large enough to hold the result of a prefix scan, but normally, it should be the same magnitude as bodyID_t.
+typedef unsigned int binsSphereTouches_t; 
 
 // typedef unsigned int stateVectors_default_t; // what's this for??
 // typedef unsigned int distinctSphereRelativePositions_default_t;

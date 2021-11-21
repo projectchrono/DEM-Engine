@@ -75,6 +75,10 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->Gz = G.z;
     simParams->h = ts_size;
     simParams->beta = expand_factor;
+    // Figure out how many bins there are in each direction
+    simParams->nbX = (binID_t)(voxelSize * (double)((size_t)1 << nvXp2) / binSize) + 1;
+    simParams->nbY = (binID_t)(voxelSize * (double)((size_t)1 << nvYp2) / binSize) + 1;
+    simParams->nbZ = (binID_t)(voxelSize * (double)((size_t)1 << nvZp2) / binSize) + 1;
 }
 
 void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,

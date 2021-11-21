@@ -11,6 +11,7 @@
 #include <core/utils/chpf/particle_writer.hpp>
 #include <granular/GranularDefines.h>
 #include <granular/PhysicsSystem.h>
+#include <granular/HostSideHelpers.hpp>
 #include <core/utils/JitHelper.h>
 
 namespace sgps {
@@ -33,12 +34,19 @@ inline void DEMKinematicThread::contactDetection() {
 
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
+    hostPrefixScan<binsSphereTouches_t>(granData->numBinsSphereTouches, simParams->nSpheresGM + 1);
+    // displayArray<binsSphereTouches_t>(granData->numBinsSphereTouches, simParams->nSpheresGM + 1);
+    // Resize those work arrays to be the size of the number of all sphere--bin pairs
+    binIDsEachSphereTouches.resize(granData->numBinsSphereTouches[simParams->nSpheresGM]);
+    sphereIDsEachBinTouches.resize(granData->numBinsSphereTouches[simParams->nSpheresGM]);
+
     bin_occupation.kernel("populateBinSphereTouchingPairs")
         .instantiate()
-        .configure(dim3(1), dim3(simParams->nSpheresGM), 0, streamInfo.stream)
-        .launch(simParams, granData);
+        .configure(dim3(1), dim3(simParams->nSpheresGM), sizeof(float) * TEST_SHARED_SIZE * 4, streamInfo.stream)
+        .launch(simParams, granData, granTemplates);
 
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    // displayArray<binID_t>(granData->binIDsEachSphereTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
 }
 
 inline void DEMKinematicThread::unpackMyBuffer() {
@@ -203,6 +211,8 @@ void DEMKinematicThread::packDataPointers() {
 
     // kT's own work arrays
     granData->numBinsSphereTouches = numBinsSphereTouches.data();
+    granData->binIDsEachSphereTouches = binIDsEachSphereTouches.data();
+    granData->sphereIDsEachBinTouches = sphereIDsEachBinTouches.data();
 
     // Template array pointers, which will be removed after JIT is fully functional
     granTemplates->radiiSphere = radiiSphere.data();
@@ -241,6 +251,10 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
     simParams->Gz = G.z;
     simParams->h = ts_size;
     simParams->beta = expand_factor;
+    // Figure out how many bins there are in each direction
+    simParams->nbX = (binID_t)(voxelSize * (double)((size_t)1 << nvXp2) / binSize) + 1;
+    simParams->nbY = (binID_t)(voxelSize * (double)((size_t)1 << nvYp2) / binSize) + 1;
+    simParams->nbZ = (binID_t)(voxelSize * (double)((size_t)1 << nvZp2) / binSize) + 1;
 }
 
 void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
@@ -278,7 +292,11 @@ void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
     // Resize to the number of spheres
     TRACKED_VECTOR_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
     TRACKED_VECTOR_RESIZE(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
-    TRACKED_VECTOR_RESIZE(numBinsSphereTouches, nSpheresGM, "numBinsSphereTouches", 0);
+    // 1 extra element is given to numBinsSphereTouches for easy prefix scanning
+    TRACKED_VECTOR_RESIZE(numBinsSphereTouches, nSpheresGM + 1, "numBinsSphereTouches", 0);
+    // The following 2 arrays will be larger than nSpheresGM, so here we only used an estimate
+    TRACKED_VECTOR_RESIZE(binIDsEachSphereTouches, nSpheresGM, "binIDsEachSphereTouches", 0);
+    TRACKED_VECTOR_RESIZE(sphereIDsEachBinTouches, nSpheresGM, "sphereIDsEachBinTouches", 0);
 
     // Resize to the length of the clump templates
     TRACKED_VECTOR_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);
