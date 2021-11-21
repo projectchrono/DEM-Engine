@@ -18,6 +18,7 @@ inline __device__ void locateNewVoxel(sgps::voxelID_t& voxel,
                                       int64_t& locY_tmp,
                                       int64_t& locZ_tmp,
                                       sgps::DEMSimParams* simParams) {
+    // TODO: this int type explodes if VOXEL_RES_POWER2 >= 32. It in fact should be controlled by JITC.
     int max_loc = (1 << VOXEL_RES_POWER2);
     sgps::voxelID_t voxelX;
     sgps::voxelID_t voxelY;

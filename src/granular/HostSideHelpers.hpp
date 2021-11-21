@@ -33,6 +33,32 @@ inline void hostPrefixScan(T1* arr, size_t n) {
     }
 }
 
+template <typename T1>
+inline void elemSwap(T1* x, T1* y) {
+    T1 tmp = *x;
+    *x = *y;
+    *y = tmp;
+}
+
+template <typename T1, typename T2>
+inline void hostSortByKey(T1* keys, T2* vals, size_t n) {
+    // Just bubble sort it
+    bool swapped;
+    for (size_t i = 0; i < n - 1; i++) {
+        swapped = false;
+        for (size_t j = 0; j < n - i - 1; j++) {
+            if (keys[j] > keys[j + 1]) {
+                elemSwap<T1>(&keys[j], &keys[j + 1]);
+                elemSwap<T2>(&vals[j], &vals[j + 1]);
+                swapped = true;
+            }
+        }
+        if (!swapped) {
+            break;
+        }
+    }
+}
+
 }  // namespace sgps
 
 #endif

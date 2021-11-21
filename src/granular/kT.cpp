@@ -46,7 +46,11 @@ inline void DEMKinematicThread::contactDetection() {
         .launch(simParams, granData, granTemplates);
 
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+    hostSortByKey<binID_t, bodyID_t>(granData->binIDsEachSphereTouches, granData->sphereIDsEachBinTouches,
+                                     granData->numBinsSphereTouches[simParams->nSpheresGM]);
     // displayArray<binID_t>(granData->binIDsEachSphereTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
+    // displayArray<bodyID_t>(granData->sphereIDsEachBinTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
 }
 
 inline void DEMKinematicThread::unpackMyBuffer() {
