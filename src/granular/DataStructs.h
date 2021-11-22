@@ -48,6 +48,8 @@ struct DEMSimParams {
     double h;
     // Sphere radii inflation ratio (for safer contact detection)
     float beta;
+    // Number of bins active (that have at least 2 spheres in it)
+    size_t nActiveBins = 0;
 };
 
 // The collection of pointers to DEM template arrays such as radiiSphere. This struct will become useless eventually as
@@ -150,6 +152,7 @@ struct DEMDataKT {
     bodyID_t* sphereIDsEachBinTouches;
     binsSphereTouches_t* sphereIDsLookUpTable;
     spheresBinTouches_t* numSpheresBinTouches;
+    contactPairs_t* numContactsInEachBin;
 
     // kT produces contact info, and stores it, temporarily
     bodyID_t* idGeometryA;

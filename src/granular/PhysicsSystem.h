@@ -105,7 +105,8 @@ class DEMKinematicThread {
     // The ID that maps this sphere's radius and relPos
     std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> clumpComponentOffset;
 
-    // The number of bins each sphere touches
+    // A number of kT work arrays
+    // The number of bins each sphere touches (also serves as the container for the related prefix scan)
     std::vector<binsSphereTouches_t, ManagedAllocator<binsSphereTouches_t>> numBinsSphereTouches;
     // The IDs of those bins that touch each sphere
     std::vector<binID_t, ManagedAllocator<binID_t>> binIDsEachSphereTouches;
@@ -117,6 +118,8 @@ class DEMKinematicThread {
     std::vector<binsSphereTouches_t, ManagedAllocator<binsSphereTouches_t>> sphereIDsLookUpTable;
     // And how far should this thread look into (number of spheres this bin touches)?
     std::vector<spheresBinTouches_t, ManagedAllocator<spheresBinTouches_t>> numSpheresBinTouches;
+    // The number of contact pairs in each bin (also serves as the container for the related prefix scan)
+    std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>> numContactsInEachBin;
 
   public:
     friend class DEMSolver;

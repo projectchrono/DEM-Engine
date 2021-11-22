@@ -23,7 +23,7 @@ int DEMKinematicThread::costlyProductionStep(int val) const {
 
 inline void DEMKinematicThread::contactDetection() {
     auto bin_occupation =
-        JitHelper::buildProgram("DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu",
+        JitHelper::buildProgram("DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
                                 std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
     bin_occupation.kernel("getNumberOfBinsEachSphereTouches")
@@ -52,17 +52,37 @@ inline void DEMKinematicThread::contactDetection() {
     // displayArray<bodyID_t>(granData->sphereIDsEachBinTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
 
     // TODO: use cub to do this. Probably one-two punch: first the number of jumps, then jump locations
-    // Search for bins that have at least 2 spheres touching.
-    size_t total_active_bins;
-    hostScanForJumpsNum<binID_t, binsSphereTouches_t>(
-        granData->binIDsEachSphereTouches, granData->numBinsSphereTouches[simParams->nSpheresGM], 2, total_active_bins);
-    sphereIDsLookUpTable.resize(total_active_bins);
-    numSpheresBinTouches.resize(total_active_bins);
+    // Search for bins that have at least 2 spheres living in.
+    // TODO: Is it good to ensure that the bins are non-empty here? If we do it here, we can increase the occupation
+    // rate in the contact detection kernels, since it reduces the number of idle threads there (well, maybe this is not
+    // even that much, since there will be bins that suffice but has like 2 spheres in it, so they will finish rather
+    // quickly); but is it easy to use CUB to ensure each jump has at least 2 relevant elements?
+    hostScanForJumpsNum<binID_t, binsSphereTouches_t>(granData->binIDsEachSphereTouches,
+                                                      granData->numBinsSphereTouches[simParams->nSpheresGM], 2,
+                                                      simParams->nActiveBins);
+    sphereIDsLookUpTable.resize(simParams->nActiveBins);
+    numSpheresBinTouches.resize(simParams->nActiveBins);
     hostScanForJumps<binID_t, binsSphereTouches_t, spheresBinTouches_t>(
         granData->binIDsEachSphereTouches, granData->sphereIDsLookUpTable, granData->numSpheresBinTouches,
         granData->numBinsSphereTouches[simParams->nSpheresGM], 2);
     // displayArray<binsSphereTouches_t>(granData->sphereIDsLookUpTable, total_active_bins);
     // displayArray<spheresBinTouches_t>(granData->numSpheresBinTouches, total_active_bins);
+
+    // Now find the contact pairs. One-two punch: first find num of contacts in each bin, then pre-scan, then find the
+    // actual pair names, (then finally we remove the redundant pairs, through cub??)
+    numContactsInEachBin.resize(simParams->nActiveBins);
+    size_t blocks_needed = (simParams->nActiveBins + NUM_BINS_PER_BLOCK - 1) / NUM_BINS_PER_BLOCK;
+    auto contact_detection =
+        JitHelper::buildProgram("DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu",
+                                std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+
+    contact_detection.kernel("getNumberOfContactsEachBin")
+        .instantiate()
+        .configure(dim3(blocks_needed), dim3(NUM_BINS_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
+                   streamInfo.stream)
+        .launch(simParams, granData, granTemplates);
+    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    // displayArray<contactPairs_t>(granData->numContactsInEachBin, simParams->nActiveBins);
 }
 
 inline void DEMKinematicThread::unpackMyBuffer() {
@@ -231,6 +251,7 @@ void DEMKinematicThread::packDataPointers() {
     granData->sphereIDsEachBinTouches = sphereIDsEachBinTouches.data();
     granData->sphereIDsLookUpTable = sphereIDsLookUpTable.data();
     granData->numSpheresBinTouches = numSpheresBinTouches.data();
+    granData->numContactsInEachBin = numContactsInEachBin.data();
 
     // Template array pointers, which will be removed after JIT is fully functional
     granTemplates->radiiSphere = radiiSphere.data();
@@ -312,11 +333,12 @@ void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
     TRACKED_VECTOR_RESIZE(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
     // 1 extra element is given to numBinsSphereTouches for easy prefix scanning
     TRACKED_VECTOR_RESIZE(numBinsSphereTouches, nSpheresGM + 1, "numBinsSphereTouches", 0);
-    // The following 2 arrays will be larger than nSpheresGM, so here we only used an estimate
+    // The following several arrays will be larger than nSpheresGM, so here we only used an estimate
     TRACKED_VECTOR_RESIZE(binIDsEachSphereTouches, nSpheresGM, "binIDsEachSphereTouches", 0);
     TRACKED_VECTOR_RESIZE(sphereIDsEachBinTouches, nSpheresGM, "sphereIDsEachBinTouches", 0);
     TRACKED_VECTOR_RESIZE(sphereIDsLookUpTable, nSpheresGM, "sphereIDsLookUpTable", 0);
     TRACKED_VECTOR_RESIZE(numSpheresBinTouches, nSpheresGM, "numSpheresBinTouches", 0);
+    TRACKED_VECTOR_RESIZE(numContactsInEachBin, nSpheresGM, "numContactsInEachBin", 0);
 
     // Resize to the length of the clump templates
     TRACKED_VECTOR_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);

@@ -55,3 +55,8 @@ template <typename T1, typename T2>
 inline __device__ void applyOriQToVector3(T1& X, T1& Y, T1& Z) {
     // Now does nothing
 }
+
+template <typename T1>
+inline __device__ T1 distSquared(T1 x1, T1 y1, T1 z1, T1 x2, T1 y2, T1 z2) {
+    return (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2) + (z1 - z2) * (z1 - z2);
+}

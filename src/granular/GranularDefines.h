@@ -9,7 +9,8 @@
 namespace sgps {
 #define BITS_PER_BYTE 8
 #define N_MANUFACTURED_ITEMS 4
-#define N_INPUT_ITEMS 4
+#define NUM_BINS_PER_BLOCK 1024
+#define MAX_SPHERES_PER_BIN 16
 #define VOXEL_RES_POWER2 16
 #define WAIT_GRANULARITY_MS 1
 #define TEST_SHARED_SIZE 128
@@ -28,8 +29,11 @@ typedef double floatFine_t;
 // prefix scan, but normally, it should be the same magnitude as bodyID_t.
 typedef unsigned int binsSphereTouches_t;
 // How many spheres a bin can touch, tops? This one will not double as a container for prefix scans, so we can assume it
-// will not be too large.
-typedef unsigned short int spheresBinTouches_t;
+// will not be too large. We should keep it as small as possible, since in contact detection,
+typedef unsigned char spheresBinTouches_t;
+// Need to be large enough to hold the number of total contact pairs. This number should be in the same magnitude as
+// bodyID
+typedef unsigned int contactPairs_t;
 
 // typedef unsigned int stateVectors_default_t; // what's this for??
 // typedef unsigned int distinctSphereRelativePositions_default_t;
