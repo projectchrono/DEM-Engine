@@ -9,7 +9,7 @@ inline __device__ void cleanUpForces(unsigned int thisClump, sgps::DEMSimParams*
 }
 
 inline __device__ void applyGravity(unsigned int thisClump, sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData) {
-    // Actually, h should be JITCed into the kernel itself
+    // Actually, l should be JITCed into the kernel itself
     granData->h2aX[thisClump] += simParams->h * simParams->h * simParams->Gx / simParams->l;
     granData->h2aY[thisClump] += simParams->h * simParams->h * simParams->Gy / simParams->l;
     granData->h2aZ[thisClump] += simParams->h * simParams->h * simParams->Gz / simParams->l;

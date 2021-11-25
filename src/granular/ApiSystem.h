@@ -76,8 +76,13 @@ class DEMSolver {
     // Return the index of the material type just loaded
     unsigned int LoadMaterialType(float density, float E);
 
-    // Load input clumps (topology types and initial locations) on a per-pair basis
+    /// Load input clumps (topology types and initial locations) on a per-pair basis
+    /// TODO: Add a overload that takes velocities too
     void SetClumps(const std::vector<unsigned int>& types, const std::vector<float3>& xyz);
+
+    /// Load input clump initial velocities on a per-pair basis. If this is not called (or if this vector is shorter
+    /// than the clump location vector then for the unassigned part) the initial velocity is assumed to be 0.
+    void SetClumpVels(const std::vector<float3>& vel);
 
     // Return the voxel ID of a clump by its numbering
     voxelID_t GetClumpVoxelID(unsigned int i) const;
@@ -182,9 +187,10 @@ class DEMSolver {
     unsigned int nDistinctClumpBodyTopologies_computed;
     unsigned int nMatTuples_computed;
 
-    // cached state vectors such as the types and locations of the initial clumps to fill the sim domain with
+    // cached state vectors such as the types and locations/velocities of the initial clumps to fill the sim domain with
     std::vector<unsigned int> m_input_clump_types;
     std::vector<float3> m_input_clump_xyz;
+    std::vector<float3> m_input_clump_vel;
 
     int updateFreq = 1;
     int timeDynamicSide = 1;

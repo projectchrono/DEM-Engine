@@ -240,6 +240,10 @@ void DEMSolver::SetClumps(const std::vector<unsigned int>& types, const std::vec
     m_input_clump_xyz.insert(m_input_clump_xyz.end(), xyz.begin(), xyz.end());
 }
 
+void DEMSolver::SetClumpVels(const std::vector<float3>& vel) {
+    m_input_clump_vel.insert(m_input_clump_vel.end(), vel.begin(), vel.end());
+}
+
 void DEMSolver::WriteFileAsSpheres(const std::string& outfilename) const {
     std::ofstream ptFile(outfilename, std::ios::out);  // std::ios::binary?
     dT->WriteCsvAsSpheres(ptFile);
@@ -262,10 +266,11 @@ void DEMSolver::initializeArrays() {
 
     // Now that the CUDA-related functions and data types are JITCompiled, we can feed those GPU-side arrays with the
     // cached API-level simulation info.
-    dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_template_mass, m_template_sp_radii,
-                              m_template_sp_relPos);
-    kT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_template_mass, m_template_sp_radii,
-                              m_template_sp_relPos);
+    m_input_clump_vel.resize(m_input_clump_xyz.size(), make_float3(0));
+    dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_template_mass,
+                              m_template_sp_radii, m_template_sp_relPos);
+    kT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_template_mass,
+                              m_template_sp_radii, m_template_sp_relPos);
 }
 
 void DEMSolver::packDataPointers() {

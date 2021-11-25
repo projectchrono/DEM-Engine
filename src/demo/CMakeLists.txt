@@ -14,6 +14,7 @@ SET(LIBRARIES
 
 SET(DEMOS
         demo1
+		DEMdemo_Collide
 		sphdemo
 		hello_world
 )

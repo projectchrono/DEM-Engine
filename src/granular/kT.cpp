@@ -70,7 +70,8 @@ inline void DEMKinematicThread::contactDetection() {
 
     // Now find the contact pairs. One-two punch: first find num of contacts in each bin, then pre-scan, then find the
     // actual pair names, (then finally we remove the redundant pairs, through cub??)
-    numContactsInEachBin.resize(simParams->nActiveBins);
+    // 1 extra element is given to numContactsInEachBin for an easier prefix scan
+    numContactsInEachBin.resize(simParams->nActiveBins + 1);
     size_t blocks_needed = (simParams->nActiveBins + NUM_BINS_PER_BLOCK - 1) / NUM_BINS_PER_BLOCK;
     auto contact_detection =
         JitHelper::buildProgram("DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu",
@@ -82,7 +83,11 @@ inline void DEMKinematicThread::contactDetection() {
                    streamInfo.stream)
         .launch(simParams, granData, granTemplates);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-    // displayArray<contactPairs_t>(granData->numContactsInEachBin, simParams->nActiveBins);
+
+    hostPrefixScan<contactPairs_t>(granData->numContactsInEachBin, simParams->nActiveBins + 1);
+    // displayArray<contactPairs_t>(granData->numContactsInEachBin, simParams->nActiveBins + 1);
+    idGeometryA.resize(granData->numContactsInEachBin[simParams->nActiveBins + 1]);
+    idGeometryB.resize(granData->numContactsInEachBin[simParams->nActiveBins + 1]);
 }
 
 inline void DEMKinematicThread::unpackMyBuffer() {
@@ -196,7 +201,7 @@ void DEMKinematicThread::workerThread() {
         // in case the dynamic is hanging in there...
         pSchedSupport->cv_DynamicCanProceed.notify_all();
 
-        // When getting here, dT has finished one user call (although perhaps not at the end of the user script).
+        // When getting here, kT has finished one user call (although perhaps not at the end of the user script).
         userCallDone = true;
     }
 }
@@ -355,6 +360,7 @@ void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
 
 void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
                                                const std::vector<float3>& input_clump_xyz,
+                                               const std::vector<float3>& input_clump_vel,
                                                const std::vector<float>& clumps_mass_types,
                                                const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                                const std::vector<std::vector<float3>>& clumps_sp_location_types) {

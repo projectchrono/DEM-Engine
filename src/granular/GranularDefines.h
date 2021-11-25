@@ -9,7 +9,7 @@
 namespace sgps {
 #define BITS_PER_BYTE 8
 #define N_MANUFACTURED_ITEMS 4
-#define NUM_BINS_PER_BLOCK 1024
+#define NUM_BINS_PER_BLOCK 128
 #define MAX_SPHERES_PER_BIN 16
 #define VOXEL_RES_POWER2 16
 #define WAIT_GRANULARITY_MS 1
@@ -32,7 +32,7 @@ typedef unsigned int binsSphereTouches_t;
 // will not be too large. We should keep it as small as possible, since in contact detection,
 typedef unsigned char spheresBinTouches_t;
 // Need to be large enough to hold the number of total contact pairs. This number should be in the same magnitude as
-// bodyID
+// bodyID_t
 typedef unsigned int contactPairs_t;
 
 // typedef unsigned int stateVectors_default_t; // what's this for??

@@ -178,6 +178,7 @@ class DEMKinematicThread {
     // Data type TBD, should come from JITCed headers
     void populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
                                const std::vector<float3>& input_clump_xyz,
+                               const std::vector<float3>& input_clump_vel,
                                const std::vector<float>& clumps_mass_types,
                                const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                const std::vector<std::vector<float3>>& clumps_sp_location_types);
@@ -278,7 +279,7 @@ class DEMDynamicThread {
     std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ2;
     std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ3;
 
-    // Linear velocity times ts size: hv
+    // Linear velocity times ts size, as a multiple of l
     std::vector<float, ManagedAllocator<float>> hvX;
     std::vector<float, ManagedAllocator<float>> hvY;
     std::vector<float, ManagedAllocator<float>> hvZ;
@@ -288,7 +289,7 @@ class DEMDynamicThread {
     std::vector<float, ManagedAllocator<float>> hOmgBarY;
     std::vector<float, ManagedAllocator<float>> hOmgBarZ;
 
-    // Linear acceleration times h^2
+    // Linear acceleration times h^2, as a multiple of l
     std::vector<float, ManagedAllocator<float>> h2aX;
     std::vector<float, ManagedAllocator<float>> h2aY;
     std::vector<float, ManagedAllocator<float>> h2aZ;
@@ -376,6 +377,7 @@ class DEMDynamicThread {
     // Data type TBD, should come from JITCed headers
     void populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
                                const std::vector<float3>& input_clump_xyz,
+                               const std::vector<float3>& input_clump_vel,
                                const std::vector<float>& clumps_mass_types,
                                const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                const std::vector<std::vector<float3>>& clumps_sp_location_types);

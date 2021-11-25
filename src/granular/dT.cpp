@@ -132,6 +132,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
 
 void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
                                              const std::vector<float3>& input_clump_xyz,
+                                             const std::vector<float3>& input_clump_vel,
                                              const std::vector<float>& clumps_mass_types,
                                              const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                              const std::vector<std::vector<float3>>& clumps_sp_location_types) {
@@ -193,6 +194,12 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
         voxelID.at(i) += voxelNumY << simParams->nvXp2;
         voxelID.at(i) += voxelNumZ << (simParams->nvXp2 + simParams->nvYp2);
         // std::cout << "Computed voxel num: " << voxelID.at(i) << std::endl;
+
+        // Set initial velocity
+        auto vel_of_this_clump = input_clump_vel.at(i);
+        hvX.at(i) = vel_of_this_clump.x * simParams->h / simParams->l;
+        hvY.at(i) = vel_of_this_clump.y * simParams->h / simParams->l;
+        hvZ.at(i) = vel_of_this_clump.z * simParams->h / simParams->l;
     }
 }
 
