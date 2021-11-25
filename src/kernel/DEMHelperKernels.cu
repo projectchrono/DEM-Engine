@@ -60,3 +60,54 @@ template <typename T1>
 inline __device__ T1 distSquared(T1 x1, T1 y1, T1 z1, T1 x2, T1 y2, T1 z2) {
     return (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2) + (z1 - z2) * (z1 - z2);
 }
+
+// Normalize a 3-component vector
+template <typename T1>
+inline __device__ void normalizeVector3(T1& x, T1& y, T1& z) {
+    T1 magnitude = sqrt(x * x + y * y + z * z);
+    // TODO: Think about whether this is safe
+    x /= magnitude;
+    y /= magnitude;
+    z /= magnitude;
+}
+
+// Return whether 2 spheres intersect and the intersection point coordinates
+template <typename T1>
+inline __device__ void ifTwoSpheresOverlap(const T1& XA,
+                                           const T1& YA,
+                                           const T1& ZA,
+                                           const T1& radA,
+                                           const T1& XB,
+                                           const T1& YB,
+                                           const T1& ZB,
+                                           const T1& radB,
+                                           T1& CPX,
+                                           T1& CPY,
+                                           T1& CPZ,
+                                           bool& overlap) {
+    T1 centerDist2 = distSquared<T1>(XA, YA, ZA, XB, YB, ZB);
+    if (centerDist2 > (radA + radB) * (radA + radB)) {
+        overlap = false;
+        return;
+    }
+    // If getting this far, then 2 spheres have an intersection, let's calculate the intersection point
+    overlap = true;
+    T1 A2BVecX = XB - XA;
+    T1 A2BVecY = YB - YA;
+    T1 A2BVecZ = ZB - ZA;
+    normalizeVector3<double>(A2BVecX, A2BVecY, A2BVecZ);
+    T1 halfOverlapDepth = (radA + radB - sqrt(centerDist2)) / (T1)2;
+    // From center of A, towards center of B, move a distance of radA, then backtrack a bit, for half the overlap depth
+    CPX = XA + (radA - halfOverlapDepth) * A2BVecX;
+    CPY = YA + (radA - halfOverlapDepth) * A2BVecY;
+    CPZ = ZA + (radA - halfOverlapDepth) * A2BVecZ;
+}
+
+template <typename T1>
+inline __device__ T1
+getPointBinID(const double& X, const double& Y, const double& Z, const double& binSize, const T1& nbX, const T1& nbY) {
+    T1 binIDX = X / binSize;
+    T1 binIDY = Y / binSize;
+    T1 binIDZ = Z / binSize;
+    return binIDX + binIDY * nbX + binIDZ * nbX * nbY;
+}

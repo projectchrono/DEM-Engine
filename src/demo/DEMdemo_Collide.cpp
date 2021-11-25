@@ -21,7 +21,7 @@ int main() {
     int num_template = 2;
 
     int min_sphere = 1;
-    int max_sphere = 5;
+    int max_sphere = 1;
 
     float min_rad = 0.08;
     float max_rad = 0.2;
@@ -49,9 +49,15 @@ int main() {
         for (int j = 0; j < num_sphere; j++) {
             radii.push_back(((float)rand() / RAND_MAX) * (max_rad - min_rad) + min_rad);
             float3 tmp;
-            tmp.x = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
-            tmp.y = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
-            tmp.z = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
+            if (j == 0) {
+                tmp.x = 0;
+                tmp.y = 0;
+                tmp.z = 0;
+            } else {
+                tmp.x = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
+                tmp.y = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
+                tmp.z = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
+            }
             tmp += seed_pos;
             relPos.push_back(tmp);
             mat.push_back(mat_type_1);
@@ -72,7 +78,7 @@ int main() {
     // show one for each template configuration
     for (int i = 0; i < num_template; i++) {
         input_template_num.push_back(i);
-        input_xyz.push_back(make_float3(i, 0, 0));
+        input_xyz.push_back(make_float3(i * 0.3, 0, 0));
         float sgn_vel = (i % 2 == 0) ? 1.0 : -1.0;
         input_vel.push_back(make_float3(sgn_vel * 50.0, 0, 0));
     }
@@ -87,7 +93,7 @@ int main() {
 
     DEM_sim.Initialize();
 
-    for (int i = 0; i < 500; i++) {
+    for (int i = 0; i < 100; i++) {
         std::cout << "Iteration: " << i + 1 << std::endl;
         DEM_sim.LaunchThreads();
 

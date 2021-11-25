@@ -150,6 +150,7 @@ struct DEMDataKT {
     binsSphereTouches_t* numBinsSphereTouches;
     binID_t* binIDsEachSphereTouches;
     bodyID_t* sphereIDsEachBinTouches;
+    binID_t* activeBinIDs;
     binsSphereTouches_t* sphereIDsLookUpTable;
     spheresBinTouches_t* numSpheresBinTouches;
     contactPairs_t* numContactsInEachBin;

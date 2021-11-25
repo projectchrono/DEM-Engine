@@ -60,13 +60,25 @@ inline void DEMKinematicThread::contactDetection() {
     hostScanForJumpsNum<binID_t, binsSphereTouches_t>(granData->binIDsEachSphereTouches,
                                                       granData->numBinsSphereTouches[simParams->nSpheresGM], 2,
                                                       simParams->nActiveBins);
+
+    // OK, 2 choices here: either use this array activeBinIDs to register active bin IDs (we need this info to rule out
+    // double-count in CD), or screw the idea of activeBins, just give every bin a place in these following 2 arrays,
+    // and quickly retire empty ones in kernels
+    activeBinIDs.resize(simParams->nActiveBins);
     sphereIDsLookUpTable.resize(simParams->nActiveBins);
     numSpheresBinTouches.resize(simParams->nActiveBins);
     hostScanForJumps<binID_t, binsSphereTouches_t, spheresBinTouches_t>(
-        granData->binIDsEachSphereTouches, granData->sphereIDsLookUpTable, granData->numSpheresBinTouches,
-        granData->numBinsSphereTouches[simParams->nSpheresGM], 2);
-    // displayArray<binsSphereTouches_t>(granData->sphereIDsLookUpTable, total_active_bins);
-    // displayArray<spheresBinTouches_t>(granData->numSpheresBinTouches, total_active_bins);
+        granData->binIDsEachSphereTouches, granData->activeBinIDs, granData->sphereIDsLookUpTable,
+        granData->numSpheresBinTouches, granData->numBinsSphereTouches[simParams->nSpheresGM], 2);
+    // displayArray<binID_t>(granData->activeBinIDs, simParams->nActiveBins);
+    // std::cout << "numSpheresBinTouches: ";
+    // displayArray<spheresBinTouches_t>(granData->numSpheresBinTouches, simParams->nActiveBins);
+    // std::cout << "binIDsEachSphereTouches: ";
+    // displayArray<binID_t>(granData->binIDsEachSphereTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
+    // std::cout << "sphereIDsLookUpTable: ";
+    // displayArray<binsSphereTouches_t>(granData->sphereIDsLookUpTable, simParams->nActiveBins);
+    // std::cout << "sphereIDsEachBinTouches: ";
+    // displayArray<bodyID_t>(granData->sphereIDsEachBinTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
 
     // Now find the contact pairs. One-two punch: first find num of contacts in each bin, then pre-scan, then find the
     // actual pair names, (then finally we remove the redundant pairs, through cub??)
@@ -254,6 +266,7 @@ void DEMKinematicThread::packDataPointers() {
     granData->numBinsSphereTouches = numBinsSphereTouches.data();
     granData->binIDsEachSphereTouches = binIDsEachSphereTouches.data();
     granData->sphereIDsEachBinTouches = sphereIDsEachBinTouches.data();
+    granData->activeBinIDs = activeBinIDs.data();
     granData->sphereIDsLookUpTable = sphereIDsLookUpTable.data();
     granData->numSpheresBinTouches = numSpheresBinTouches.data();
     granData->numContactsInEachBin = numContactsInEachBin.data();
@@ -341,6 +354,7 @@ void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
     // The following several arrays will be larger than nSpheresGM, so here we only used an estimate
     TRACKED_VECTOR_RESIZE(binIDsEachSphereTouches, nSpheresGM, "binIDsEachSphereTouches", 0);
     TRACKED_VECTOR_RESIZE(sphereIDsEachBinTouches, nSpheresGM, "sphereIDsEachBinTouches", 0);
+    TRACKED_VECTOR_RESIZE(activeBinIDs, nSpheresGM, "activeBinIDs", 0);
     TRACKED_VECTOR_RESIZE(sphereIDsLookUpTable, nSpheresGM, "sphereIDsLookUpTable", 0);
     TRACKED_VECTOR_RESIZE(numSpheresBinTouches, nSpheresGM, "numSpheresBinTouches", 0);
     TRACKED_VECTOR_RESIZE(numContactsInEachBin, nSpheresGM, "numContactsInEachBin", 0);

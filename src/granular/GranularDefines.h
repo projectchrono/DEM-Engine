@@ -30,7 +30,7 @@ typedef double floatFine_t;
 typedef unsigned int binsSphereTouches_t;
 // How many spheres a bin can touch, tops? This one will not double as a container for prefix scans, so we can assume it
 // will not be too large. We should keep it as small as possible, since in contact detection,
-typedef unsigned char spheresBinTouches_t;
+typedef uint16_t spheresBinTouches_t;
 // Need to be large enough to hold the number of total contact pairs. This number should be in the same magnitude as
 // bodyID_t
 typedef unsigned int contactPairs_t;

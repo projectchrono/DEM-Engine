@@ -375,7 +375,7 @@ void DEMDynamicThread::workerThread() {
 
             integrateClumpRotationalMotions();
 
-            std::cout << "Dynamic side values. Cycle: " << cycle << std::endl;
+            // std::cout << "Dynamic side values. Cycle: " << cycle << std::endl;
 
             // dynamic wrapped up one cycle
             pSchedSupport->currentStampOfDynamic++;

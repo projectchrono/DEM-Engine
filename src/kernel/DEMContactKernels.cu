@@ -3,26 +3,6 @@
 #include <granular/GranularDefines.h>
 #include <kernel/DEMHelperKernels.cu>
 
-inline __device__ bool ifTwoSpheresOverlap(double XA,
-                                           double YA,
-                                           double ZA,
-                                           float radA,
-                                           sgps::bodyID_t ownerA,
-                                           double XB,
-                                           double YB,
-                                           double ZB,
-                                           float radB,
-                                           sgps::bodyID_t ownerB) {
-    if (ownerA == ownerB) {
-        return false;
-    }
-    if (distSquared<double>(XA, YA, ZA, XB, YB, ZB) > (radA + radB) * (radA + radB)) {
-        return false;
-    }
-    // TODO: Check if the contact point is inside the bin
-    return true;
-}
-
 __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
                                            sgps::DEMDataKT* granData,
                                            sgps::DEMTemplate* granTemplates) {
@@ -42,7 +22,10 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
     }
     __syncthreads();
 
-    sgps::binID_t binID = blockIdx.x * blockDim.x + threadIdx.x;
+    // Only active bins got execute this...
+    sgps::binID_t myActiveID = blockIdx.x * blockDim.x + threadIdx.x;
+    // But I got a true bin ID
+    sgps::binID_t binID = granData->activeBinIDs[myActiveID];
     // I need to store all the sphereIDs that I am supposed to look into
     // A100 has about 164K shMem... these arrays really need to be small, or we can only fit a small number of bins in
     // one block
@@ -51,13 +34,13 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
     double bodyX[MAX_SPHERES_PER_BIN];
     double bodyY[MAX_SPHERES_PER_BIN];
     double bodyZ[MAX_SPHERES_PER_BIN];
-    if (binID < simParams->nActiveBins) {
+    if (myActiveID < simParams->nActiveBins) {
         sgps::contactPairs_t contact_count = 0;
         // Grab the bodies that I care, put into local memory
-        sgps::spheresBinTouches_t nBodiesMeHandle = granData->numSpheresBinTouches[binID];
-        sgps::binsSphereTouches_t myBodiesTableEntry = granData->sphereIDsLookUpTable[binID];
+        sgps::spheresBinTouches_t nBodiesMeHandle = granData->numSpheresBinTouches[myActiveID];
+        sgps::binsSphereTouches_t myBodiesTableEntry = granData->sphereIDsLookUpTable[myActiveID];
         for (sgps::spheresBinTouches_t i = 0; i < nBodiesMeHandle; i++) {
-            sgps::bodyID_t bodyID = granData->sphereIDsLookUpTable[myBodiesTableEntry + i];
+            sgps::bodyID_t bodyID = granData->sphereIDsEachBinTouches[myBodiesTableEntry + i];
             ownerIDs[i] = granData->ownerClumpBody[bodyID];
             sgps::clumpComponentOffset_t thisCompOffset = granData->clumpComponentOffset[bodyID];
             sgps::voxelID_t ownerVoxelX;
@@ -74,18 +57,43 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
             bodyY[i] = (double)ownerVoxelY * simParams->voxelSize + (double)myRelPosY;
             bodyZ[i] = (double)ownerVoxelZ * simParams->voxelSize + (double)myRelPosZ;
         }
+
         for (sgps::spheresBinTouches_t bodyA = 0; bodyA < nBodiesMeHandle - 1; bodyA++) {
             for (sgps::spheresBinTouches_t bodyB = bodyA + 1; bodyB < nBodiesMeHandle; bodyB++) {
-                // For 2 bodies to be considered in contact, the contact point must be in this bin, and they do not
-                // belong to the same clump
-                bool in_contact = ifTwoSpheresOverlap(
-                    bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], CDRadii[compOffsets[bodyA]], ownerIDs[bodyA],
-                    bodyX[bodyB], bodyY[bodyB], bodyZ[bodyB], CDRadii[compOffsets[bodyB]], ownerIDs[bodyB]);
-                if (in_contact) {
+                // For 2 bodies to be considered in contact, the contact point must be in this bin (to avoid
+                // double-counting), and they do not belong to the same clump
+                if (ownerIDs[bodyA] == ownerIDs[bodyB])
+                    continue;
+
+                double contactPntX;
+                double contactPntY;
+                double contactPntZ;
+                bool in_contact;
+                ifTwoSpheresOverlap<double>(bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], CDRadii[compOffsets[bodyA]],
+                                            bodyX[bodyB], bodyY[bodyB], bodyZ[bodyB], CDRadii[compOffsets[bodyB]],
+                                            contactPntX, contactPntY, contactPntZ, in_contact);
+                sgps::binID_t contactPntBin = getPointBinID<sgps::binID_t>(
+                    contactPntX, contactPntY, contactPntZ, simParams->binSize, simParams->nbX, simParams->nbY);
+
+                /*
+                printf("contactPntBin: %u, %u, %u\n", (unsigned int)(contactPntX/simParams->binSize),
+                                                        (unsigned int)(contactPntY/simParams->binSize),
+                                                        (unsigned int)(contactPntZ/simParams->binSize));
+                unsigned int ZZ = binID/(simParams->nbX*simParams->nbY);
+                unsigned int YY = binID%(simParams->nbX*simParams->nbY)/simParams->nbX;
+                unsigned int XX = binID%(simParams->nbX*simParams->nbY)%simParams->nbX;
+                printf("binID: %u, %u, %u\n", XX,YY,ZZ);
+                printf("bodyA: %f, %f, %f\n", bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA]);
+                printf("bodyB: %f, %f, %f\n", bodyX[bodyB], bodyY[bodyB], bodyZ[bodyB]);
+                printf("contactPnt: %f, %f, %f\n", contactPntX, contactPntY, contactPntZ);
+                printf("contactPntBin: %u\n", contactPntBin);
+                */
+
+                if (in_contact && (contactPntBin == binID)) {
                     contact_count++;
                 }
             }
         }
-        granData->numContactsInEachBin[binID] = contact_count;
+        granData->numContactsInEachBin[myActiveID] = contact_count;
     }
 }

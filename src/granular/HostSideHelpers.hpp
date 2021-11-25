@@ -77,7 +77,7 @@ void hostScanForJumpsNum(T1* arr, size_t n, unsigned int minSegLen, size_t& tota
 
 // Tell each active bin where to find its touching spheres
 template <typename T1, typename T2, typename T3>
-void hostScanForJumps(T1* arr, T2* jump_loc, T3* jump_len, size_t n, unsigned int minSegLen) {
+void hostScanForJumps(T1* arr, T1* arr_elem, T2* jump_loc, T3* jump_len, size_t n, unsigned int minSegLen) {
     size_t total_found = 0;
     T2 i = 0;
     unsigned int thisSegLen;
@@ -92,6 +92,7 @@ void hostScanForJumps(T1* arr, T2* jump_loc, T3* jump_len, size_t n, unsigned in
         if (i - thisIndx >= minSegLen) {
             jump_loc[total_found] = thisIndx;
             jump_len[total_found] = thisSegLen;
+            arr_elem[total_found] = arr[thisIndx];
             total_found++;
         }
     }
