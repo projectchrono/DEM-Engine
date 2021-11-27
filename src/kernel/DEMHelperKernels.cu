@@ -7,14 +7,14 @@
 // inline __device__ voxelID_t position2VoxelID
 
 // Sign function
-template <typename T>
-inline __device__ int sgn(T val) {
+template <typename T1>
+inline __device__ int sgn(const T1& val) {
     return (T(0) < val) - (val < T(0));
 }
 
 // Integer division that rounds towards -infty
 template <typename T1, typename T2>
-inline __device__ T1 div_floor(T1 a, T2 b) {
+inline __device__ T1 div_floor(const T1& a, const T2& b) {
     T1 res = a / b;
     T1 rem = a % b;
     // Correct division result downwards if up-rounding happened,
@@ -25,7 +25,7 @@ inline __device__ T1 div_floor(T1 a, T2 b) {
 
 // Modulus that rounds towards -infty
 template <typename T1, typename T2>
-inline __device__ T1 mod_floor(T1 a, T2 b) {
+inline __device__ T1 mod_floor(const T1& a, const T2& b) {
     if (b < 0)  // you can check for b == 0 separately and do what you want
         return -mod_floor(-a, -b);
     T1 ret = a % b;
@@ -36,7 +36,12 @@ inline __device__ T1 mod_floor(T1 a, T2 b) {
 
 // Chops a long ID (typically voxelID) into XYZ components
 template <typename T1, typename T2>
-inline __device__ void IDChopper(T1& X, T1& Y, T1& Z, T2& ID, unsigned char& nvXp2, unsigned char& nvYp2) {
+inline __device__ void IDChopper(T1& X,
+                                 T1& Y,
+                                 T1& Z,
+                                 const T2& ID,
+                                 const unsigned char& nvXp2,
+                                 const unsigned char& nvYp2) {
     X = ID & (((T1)1 << nvXp2) - 1);  // & operation here equals modulo
     Y = (ID >> nvXp2) & (((T1)1 << nvYp2) - 1);
     Z = (ID) >> (nvXp2 + nvYp2);
@@ -44,7 +49,12 @@ inline __device__ void IDChopper(T1& X, T1& Y, T1& Z, T2& ID, unsigned char& nvX
 
 // Packs XYZ components back to a long ID (typically voxelID)
 template <typename T1, typename T2>
-inline __device__ void IDPacker(T1& ID, T2& X, T2& Y, T2& Z, unsigned char& nvXp2, unsigned char& nvYp2) {
+inline __device__ void IDPacker(T1& ID,
+                                const T2& X,
+                                const T2& Y,
+                                const T2& Z,
+                                const unsigned char& nvXp2,
+                                const unsigned char& nvYp2) {
     ID = 0;
     ID += X;
     ID += Y << nvXp2;
@@ -57,7 +67,7 @@ inline __device__ void applyOriQToVector3(T1& X, T1& Y, T1& Z) {
 }
 
 template <typename T1>
-inline __device__ T1 distSquared(T1 x1, T1 y1, T1 z1, T1 x2, T1 y2, T1 z2) {
+inline __device__ T1 distSquared(const T1 x1, const T1 y1, const T1 z1, const T1 x2, const T1 y2, const T1 z2) {
     return (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2) + (z1 - z2) * (z1 - z2);
 }
 
@@ -73,7 +83,7 @@ inline __device__ void normalizeVector3(T1& x, T1& y, T1& z) {
 
 // Return whether 2 spheres intersect and the intersection point coordinates
 template <typename T1>
-inline __device__ void ifTwoSpheresOverlap(const T1& XA,
+inline __device__ void checkSpheresOverlap(const T1& XA,
                                            const T1& YA,
                                            const T1& ZA,
                                            const T1& radA,

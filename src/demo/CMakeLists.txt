@@ -13,7 +13,7 @@ SET(LIBRARIES
 # ------------------------------------------------------------------------------
 
 SET(DEMOS
-        demo1
+		DEMdemo_Pile
 		DEMdemo_Collide
 		sphdemo
 		hello_world

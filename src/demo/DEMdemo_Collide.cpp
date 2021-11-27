@@ -93,7 +93,7 @@ int main() {
 
     DEM_sim.Initialize();
 
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 10; i++) {
         std::cout << "Iteration: " << i + 1 << std::endl;
         DEM_sim.LaunchThreads();
 

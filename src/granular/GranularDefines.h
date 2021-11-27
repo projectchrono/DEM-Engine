@@ -32,7 +32,7 @@ typedef unsigned int binsSphereTouches_t;
 // will not be too large. We should keep it as small as possible, since in contact detection,
 typedef uint16_t spheresBinTouches_t;
 // Need to be large enough to hold the number of total contact pairs. This number should be in the same magnitude as
-// bodyID_t
+// bodyID_t.
 typedef unsigned int contactPairs_t;
 
 // typedef unsigned int stateVectors_default_t; // what's this for??

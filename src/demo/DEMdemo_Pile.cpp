@@ -120,6 +120,6 @@ int main() {
         aa.WriteFileAsSpheres(std::string(filename));
     }
 
-    std::cout << "Demo exiting..." << std::endl;
+    std::cout << "DEMdemo_Pile exiting..." << std::endl;
     return 0;
 }

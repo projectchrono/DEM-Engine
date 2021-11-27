@@ -82,9 +82,11 @@ inline void DEMKinematicThread::contactDetection() {
 
     // Now find the contact pairs. One-two punch: first find num of contacts in each bin, then pre-scan, then find the
     // actual pair names, (then finally we remove the redundant pairs, through cub??)
-    // 1 extra element is given to numContactsInEachBin for an easier prefix scan
+    // 1 extra element is given to numContactsInEachBin for an easier prefix scan. Therefore, its last element registers
+    // the total number of contact pairs.
     numContactsInEachBin.resize(simParams->nActiveBins + 1);
     size_t blocks_needed = (simParams->nActiveBins + NUM_BINS_PER_BLOCK - 1) / NUM_BINS_PER_BLOCK;
+    // TODO: check if blocks_needed is 0
     auto contact_detection =
         JitHelper::buildProgram("DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu",
                                 std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
@@ -98,8 +100,16 @@ inline void DEMKinematicThread::contactDetection() {
 
     hostPrefixScan<contactPairs_t>(granData->numContactsInEachBin, simParams->nActiveBins + 1);
     // displayArray<contactPairs_t>(granData->numContactsInEachBin, simParams->nActiveBins + 1);
-    idGeometryA.resize(granData->numContactsInEachBin[simParams->nActiveBins + 1]);
-    idGeometryB.resize(granData->numContactsInEachBin[simParams->nActiveBins + 1]);
+    idGeometryA.resize(granData->numContactsInEachBin[simParams->nActiveBins]);
+    idGeometryB.resize(granData->numContactsInEachBin[simParams->nActiveBins]);
+
+    contact_detection.kernel("populateContactPairsEachBin")
+        .instantiate()
+        .configure(dim3(blocks_needed), dim3(NUM_BINS_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
+                   streamInfo.stream)
+        .launch(simParams, granData, granTemplates);
+    // displayArray<bodyID_t>(granData->idGeometryA, granData->numContactsInEachBin[simParams->nActiveBins]);
+    // displayArray<bodyID_t>(granData->idGeometryB, granData->numContactsInEachBin[simParams->nActiveBins]);
 }
 
 inline void DEMKinematicThread::unpackMyBuffer() {
