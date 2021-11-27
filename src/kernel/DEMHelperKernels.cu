@@ -9,7 +9,7 @@
 // Sign function
 template <typename T1>
 inline __device__ int sgn(const T1& val) {
-    return (T(0) < val) - (val < T(0));
+    return (T1(0) < val) - (val < T1(0));
 }
 
 // Integer division that rounds towards -infty
@@ -67,7 +67,7 @@ inline __device__ void applyOriQToVector3(T1& X, T1& Y, T1& Z) {
 }
 
 template <typename T1>
-inline __device__ T1 distSquared(const T1 x1, const T1 y1, const T1 z1, const T1 x2, const T1 y2, const T1 z2) {
+inline __device__ T1 distSquared(const T1& x1, const T1& y1, const T1& z1, const T1& x2, const T1& y2, const T1& z2) {
     return (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2) + (z1 - z2) * (z1 - z2);
 }
 
