@@ -89,7 +89,8 @@ void KinematicThread::operator()() {
     std::vector<vector3, sgps::ManagedAllocator<vector3>> pos_data;
     std::vector<int, sgps::ManagedAllocator<int>> offset_data;
     std::vector<int, sgps::ManagedAllocator<int>> idx_data;
-    std::vector<int, sgps::ManagedAllocator<int>> idx_hd_data;
+    // std::vector<int, sgps::ManagedAllocator<int>> idx_hd_data;
+    std::vector<int, sgps::ManagedAllocator<int>> idx_track_data;
 
     while (getParentSystem().curr_time < getParentSystem().sim_time) {
         float tolerance = 0.05;
@@ -102,7 +103,7 @@ void KinematicThread::operator()() {
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
             pos_data.assign(dataManager.m_pos.begin(), dataManager.m_pos.end());
             idx_data.assign(dataManager.m_idx.begin(), dataManager.m_idx.end());
-            idx_hd_data.assign(dataManager.m_idx_hd.begin(), dataManager.m_idx_hd.end());
+            // idx_hd_data.assign(dataManager.m_idx_hd.begin(), dataManager.m_idx_hd.end());
         }
 
         // notify the system that the position data has been consumed
@@ -113,9 +114,9 @@ void KinematicThread::operator()() {
         float d_domain_y = getParentSystem().domain_y / Y_SUB_NUM;
         float d_domain_z = getParentSystem().domain_z / Z_SUB_NUM;
 
-        // resize idx_data and idx_hd_data
+        // resize idx_data and idx_track_data
         idx_data.resize(k_n);
-        idx_hd_data.resize(X_SUB_NUM * Y_SUB_NUM * Z_SUB_NUM);
+        idx_track_data.resize(k_n);
 
         // GPU sweep to put particles into their l1 subdomains
         // initiate JitHelper to perform JITC
@@ -127,12 +128,28 @@ void KinematicThread::operator()() {
         kinematic_program.kernel("IdxSweep")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(pos_data.data(), idx_data.data(), k_n, d_domain_x, d_domain_y, d_domain_z, X_SUB_NUM, Y_SUB_NUM,
-                    Z_SUB_NUM);
+            .launch(pos_data.data(), idx_data.data(), idx_track_data.data(), k_n, d_domain_x, d_domain_y, d_domain_z,
+                    X_SUB_NUM, Y_SUB_NUM, Z_SUB_NUM, getParentSystem().domain_x, getParentSystem().domain_y,
+                    getParentSystem().domain_z);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        // TODO:: Implement Reduction to sort the pos vector with ascending idx_arr
+        // TODO:: Implement sort to sort the pos vector with ascending idx_arr
+
+        std::vector<int> idx_sorted;
+        std::vector<int> idx_track_sorted;
+
+        std::vector<int> keys;
+        std::vector<int> idx_track;
+
+        for (int i = 0; i < k_n; i++) {
+            keys.push_back(idx_data[i]);
+            idx_track.push_back(idx_track_data[i]);
+        }
+
+        sortOnly(keys.data(), idx_track.data(), idx_sorted, idx_track_sorted, keys.size(),
+                 count_digit(X_SUB_NUM * Y_SUB_NUM * Z_SUB_NUM));
+
         // TODO:: Figure out how to get the starting location of the arr
 
         // kinematic thread first pass
@@ -182,7 +199,7 @@ void KinematicThread::operator()() {
             dataManager.m_contact.assign(contact_data.begin(), contact_data.end());
             dataManager.m_offset.assign(offset_data.begin(), offset_data.end());
             dataManager.m_idx.assign(idx_data.begin(), idx_data.end());
-            dataManager.m_idx_hd.assign(idx_hd_data.begin(), idx_hd_data.end());
+            // dataManager.m_idx_hd.assign(idx_hd_data.begin(), idx_hd_data.end());
         }
 
         // notify the system that the contact data is now fresh

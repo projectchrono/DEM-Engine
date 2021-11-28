@@ -4,25 +4,34 @@
 // SPH - Kinematic kernels
 __global__ void IdxSweep(vector3* pos,
                          int* idx_arr,
+                         int* idx_track_arr,
                          int n,
                          float d_domain_x,
                          float d_domain_y,
                          float d_domain_z,
                          int num_domain_x,
                          int num_domain_y,
-                         int num_domain_z) {
+                         int num_domain_z,
+                         float domain_x,
+                         float domain_y,
+                         float domain_z) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= n) {
         return;
     }
-    /*
-        int x_idx = int(pos[idx].x / d_domain_x);
-        int y_idx = int(pos[idx].x / d_domain_x);
-        int z_idx = int(pos[idx].x / d_domain_x);
 
-        idx_arr[idx] = z_idx * num_domain_x * num_domain_y + y_idx * num_domain_x + x_idx;
-        */
+    idx_track_arr[idx] = idx;
+
+    float dx_2_0 = int(pos[idx].x - (-domain_x / 2));
+    float dy_2_0 = int(pos[idx].y - (-domain_y / 2));
+    float dz_2_0 = int(pos[idx].z - (-domain_z / 2));
+
+    int x_idx = int(dx_2_0 / d_domain_x);
+    int y_idx = int(dy_2_0 / d_domain_x);
+    int z_idx = int(dz_2_0 / d_domain_x);
+
+    idx_arr[idx] = z_idx * num_domain_x * num_domain_y + y_idx * num_domain_x + x_idx;
 }
 
 __global__ void kinematic1stPass(vector3* pos, int n, float tolerance, float radius, int* res_arr) {

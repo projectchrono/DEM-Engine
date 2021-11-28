@@ -13,12 +13,12 @@
 #include <atomic>
 struct DataManager {
     float radius;
-    std::vector<vector3, sgps::ManagedAllocator<vector3>> m_pos;              // particle locations
-    std::vector<vector3, sgps::ManagedAllocator<vector3>> m_vel;              // particle velocities
-    std::vector<vector3, sgps::ManagedAllocator<vector3>> m_acc;              // particle accelerations
-    std::vector<char, sgps::ManagedAllocator<char>> m_fix;                    // particle fixity
-    std::vector<int, sgps::ManagedAllocator<int>> m_idx;                      // particle l2 domain idx
-    std::vector<int, sgps::ManagedAllocator<int>> m_idx_hd;                   // particle l2 starting idx
+    std::vector<vector3, sgps::ManagedAllocator<vector3>> m_pos;  // particle locations
+    std::vector<vector3, sgps::ManagedAllocator<vector3>> m_vel;  // particle velocities
+    std::vector<vector3, sgps::ManagedAllocator<vector3>> m_acc;  // particle accelerations
+    std::vector<char, sgps::ManagedAllocator<char>> m_fix;        // particle fixity
+    std::vector<int, sgps::ManagedAllocator<int>> m_idx;          // particle l2 domain idx
+    // std::vector<int, sgps::ManagedAllocator<int>> m_idx_hd;                   // particle l2 starting idx
     std::vector<contactData, sgps::ManagedAllocator<contactData>> m_contact;  // contact pair data
 
     std::vector<int, sgps::ManagedAllocator<int>> m_offset;  // index offset array for the contact pair data
