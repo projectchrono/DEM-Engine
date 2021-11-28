@@ -89,7 +89,7 @@ void KinematicThread::operator()() {
     std::vector<vector3, sgps::ManagedAllocator<vector3>> pos_data;
     std::vector<int, sgps::ManagedAllocator<int>> offset_data;
     std::vector<int, sgps::ManagedAllocator<int>> idx_data;
-    // std::vector<int, sgps::ManagedAllocator<int>> idx_hd_data;
+    std::vector<int, sgps::ManagedAllocator<int>> idx_hd_data;
     std::vector<int, sgps::ManagedAllocator<int>> idx_track_data;
 
     while (getParentSystem().curr_time < getParentSystem().sim_time) {
@@ -117,11 +117,12 @@ void KinematicThread::operator()() {
         // resize idx_data and idx_track_data
         idx_data.resize(k_n);
         idx_track_data.resize(k_n);
+        idx_hd_data.resize(2 * X_SUB_NUM * Y_SUB_NUM * Z_SUB_NUM);
 
         // GPU sweep to put particles into their l1 subdomains
         // initiate JitHelper to perform JITC
         auto kinematic_program =
-            JitHelper::buildProgram("sphKernels", JitHelper::KERNEL_DIR / "sphKernels.cu",
+            JitHelper::buildProgram("SPHKinematicKernels", JitHelper::KERNEL_DIR / "SPHKinematicKernels.cu",
                                     std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
         // kinematic thread first pass
@@ -150,7 +151,18 @@ void KinematicThread::operator()() {
         sortOnly(keys.data(), idx_track.data(), idx_sorted, idx_track_sorted, keys.size(),
                  count_digit(X_SUB_NUM * Y_SUB_NUM * Z_SUB_NUM));
 
-        // TODO:: Figure out how to get the starting location of the arr
+        // =================================================================
+        /*
+        // Use a GPU to look up starting idx of each cell
+        kinematic_program.kernel("hdSweep")
+            .instantiate()
+            .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
+            .launch(idx_sorted.data(), idx_hd_data.data(), idx_sorted.size(), idx_hd_data.size());
+
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        */
+
+        // =================================================================
 
         // kinematic thread first pass
         kinematic_program.kernel("kinematic1stPass")
@@ -271,7 +283,7 @@ void DynamicThread::operator()() {
         }
 
         auto dynamic_program =
-            JitHelper::buildProgram("sphKernels", JitHelper::KERNEL_DIR / "sphKernels.cu",
+            JitHelper::buildProgram("SPHDynamicKernels", JitHelper::KERNEL_DIR / "SPHDynamicKernels.cu",
                                     std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
         int block_size = 1024;
