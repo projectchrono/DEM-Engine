@@ -57,9 +57,8 @@ inline void DEMKinematicThread::contactDetection() {
     // rate in the contact detection kernels, since it reduces the number of idle threads there (well, maybe this is not
     // even that much, since there will be bins that suffice but has like 2 spheres in it, so they will finish rather
     // quickly); but is it easy to use CUB to ensure each jump has at least 2 relevant elements?
-    hostScanForJumpsNum<binID_t, binsSphereTouches_t>(granData->binIDsEachSphereTouches,
-                                                      granData->numBinsSphereTouches[simParams->nSpheresGM], 2,
-                                                      simParams->nActiveBins);
+    hostScanForJumpsNum<binID_t>(granData->binIDsEachSphereTouches,
+                                 granData->numBinsSphereTouches[simParams->nSpheresGM], 2, simParams->nActiveBins);
 
     // OK, 2 choices here: either use this array activeBinIDs to register active bin IDs (we need this info to rule out
     // double-count in CD), or screw the idea of activeBins, just give every bin a place in these following 2 arrays,
@@ -70,6 +69,7 @@ inline void DEMKinematicThread::contactDetection() {
     hostScanForJumps<binID_t, binsSphereTouches_t, spheresBinTouches_t>(
         granData->binIDsEachSphereTouches, granData->activeBinIDs, granData->sphereIDsLookUpTable,
         granData->numSpheresBinTouches, granData->numBinsSphereTouches[simParams->nSpheresGM], 2);
+    // std::cout << "activeBinIDs: ";
     // displayArray<binID_t>(granData->activeBinIDs, simParams->nActiveBins);
     // std::cout << "numSpheresBinTouches: ";
     // displayArray<spheresBinTouches_t>(granData->numSpheresBinTouches, simParams->nActiveBins);
@@ -86,30 +86,36 @@ inline void DEMKinematicThread::contactDetection() {
     // the total number of contact pairs.
     numContactsInEachBin.resize(simParams->nActiveBins + 1);
     size_t blocks_needed = (simParams->nActiveBins + NUM_BINS_PER_BLOCK - 1) / NUM_BINS_PER_BLOCK;
-    // TODO: check if blocks_needed is 0
-    auto contact_detection =
-        JitHelper::buildProgram("DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu",
-                                std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+    if (blocks_needed > 0) {
+        auto contact_detection =
+            JitHelper::buildProgram("DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu",
+                                    std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
-    contact_detection.kernel("getNumberOfContactsEachBin")
-        .instantiate()
-        .configure(dim3(blocks_needed), dim3(NUM_BINS_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
-                   streamInfo.stream)
-        .launch(simParams, granData, granTemplates);
-    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        contact_detection.kernel("getNumberOfContactsEachBin")
+            .instantiate()
+            .configure(dim3(blocks_needed), dim3(NUM_BINS_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
+                       streamInfo.stream)
+            .launch(simParams, granData, granTemplates);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-    hostPrefixScan<contactPairs_t>(granData->numContactsInEachBin, simParams->nActiveBins + 1);
-    // displayArray<contactPairs_t>(granData->numContactsInEachBin, simParams->nActiveBins + 1);
-    idGeometryA.resize(granData->numContactsInEachBin[simParams->nActiveBins]);
-    idGeometryB.resize(granData->numContactsInEachBin[simParams->nActiveBins]);
+        hostPrefixScan<contactPairs_t>(granData->numContactsInEachBin, simParams->nActiveBins + 1);
+        // displayArray<contactPairs_t>(granData->numContactsInEachBin, simParams->nActiveBins + 1);
+        idGeometryA.resize(granData->numContactsInEachBin[simParams->nActiveBins]);
+        idGeometryB.resize(granData->numContactsInEachBin[simParams->nActiveBins]);
 
-    contact_detection.kernel("populateContactPairsEachBin")
-        .instantiate()
-        .configure(dim3(blocks_needed), dim3(NUM_BINS_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
-                   streamInfo.stream)
-        .launch(simParams, granData, granTemplates);
-    // displayArray<bodyID_t>(granData->idGeometryA, granData->numContactsInEachBin[simParams->nActiveBins]);
-    // displayArray<bodyID_t>(granData->idGeometryB, granData->numContactsInEachBin[simParams->nActiveBins]);
+        contact_detection.kernel("populateContactPairsEachBin")
+            .instantiate()
+            .configure(dim3(blocks_needed), dim3(NUM_BINS_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
+                       streamInfo.stream)
+            .launch(simParams, granData, granTemplates);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        // displayArray<bodyID_t>(granData->idGeometryA, granData->numContactsInEachBin[simParams->nActiveBins]);
+        // displayArray<bodyID_t>(granData->idGeometryB, granData->numContactsInEachBin[simParams->nActiveBins]);
+
+        simParams->nContactPairs = granData->numContactsInEachBin[simParams->nActiveBins];
+    } else {
+        simParams->nContactPairs = 0;
+    }
 }
 
 inline void DEMKinematicThread::unpackMyBuffer() {
@@ -132,9 +138,11 @@ inline void DEMKinematicThread::unpackMyBuffer() {
 }
 
 inline void DEMKinematicThread::sendToTheirBuffer() {
-    cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA, N_MANUFACTURED_ITEMS * sizeof(bodyID_t),
+    cudaMemcpy(granData->pDTOwnedBuffer_nContactPairs, &(simParams->nContactPairs), sizeof(size_t),
                cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->pDTOwnedBuffer_idGeometryB, granData->idGeometryB, N_MANUFACTURED_ITEMS * sizeof(bodyID_t),
+    cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA, simParams->nContactPairs * sizeof(bodyID_t),
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(granData->pDTOwnedBuffer_idGeometryB, granData->idGeometryB, simParams->nContactPairs * sizeof(bodyID_t),
                cudaMemcpyDeviceToDevice);
 }
 
@@ -290,6 +298,7 @@ void DEMKinematicThread::packDataPointers() {
 }
 void DEMKinematicThread::packTransferPointers(DEMDataDT* dTData) {
     // Set the pointers to dT owned buffers
+    granData->pDTOwnedBuffer_nContactPairs = &(dTData->nContactPairs_buffer);
     granData->pDTOwnedBuffer_idGeometryA = dTData->idGeometryA_buffer;
     granData->pDTOwnedBuffer_idGeometryB = dTData->idGeometryB_buffer;
 }

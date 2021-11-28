@@ -237,9 +237,11 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
 }
 
 inline void DEMDynamicThread::unpackMyBuffer() {
-    cudaMemcpy(granData->idGeometryA, granData->idGeometryA_buffer, N_MANUFACTURED_ITEMS * sizeof(bodyID_t),
+    cudaMemcpy(&(simParams->nContactPairs), &(granData->nContactPairs_buffer), sizeof(size_t),
                cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->idGeometryA, granData->idGeometryA_buffer, N_MANUFACTURED_ITEMS * sizeof(bodyID_t),
+    cudaMemcpy(granData->idGeometryA, granData->idGeometryA_buffer, simParams->nContactPairs * sizeof(bodyID_t),
+               cudaMemcpyDeviceToDevice);
+    cudaMemcpy(granData->idGeometryA, granData->idGeometryA_buffer, simParams->nContactPairs * sizeof(bodyID_t),
                cudaMemcpyDeviceToDevice);
 }
 
@@ -337,8 +339,8 @@ void DEMDynamicThread::workerThread() {
                 {
                     // acquire lock and use the content of the dynamic-owned transfer buffer
                     std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_GRANULARITY_MS));
-                    // unpackMyBuffer();
+                    // std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_GRANULARITY_MS));
+                    unpackMyBuffer();
                 }
                 pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
                 pSchedSupport->stampLastUpdateOfDynamic = cycle;
@@ -375,6 +377,7 @@ void DEMDynamicThread::workerThread() {
 
             integrateClumpRotationalMotions();
 
+            std::cout << "dT Total contact pairs: " << granData->nContactPairs_buffer << std::endl;
             // std::cout << "Dynamic side values. Cycle: " << cycle << std::endl;
 
             // dynamic wrapped up one cycle

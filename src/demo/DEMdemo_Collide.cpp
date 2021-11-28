@@ -48,6 +48,12 @@ int main() {
         float3 seed_pos = make_float3(0);
         for (int j = 0; j < num_sphere; j++) {
             radii.push_back(((float)rand() / RAND_MAX) * (max_rad - min_rad) + min_rad);
+            /*
+            if (i == 0)
+                radii.push_back(0.16138418018817902);
+            else
+                radii.push_back(0.16321393847465515);
+            */
             float3 tmp;
             if (j == 0) {
                 tmp.x = 0;

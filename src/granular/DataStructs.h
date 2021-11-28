@@ -48,8 +48,11 @@ struct DEMSimParams {
     double h;
     // Sphere radii inflation ratio (for safer contact detection)
     float beta;
-    // Number of bins active (that have at least 2 spheres in it)
+    // Number of bins active
     size_t nActiveBins = 0;
+    // Number of active contact pairs. kT figures this number out but it is dT that badly needs this number to do its
+    // work.
+    size_t nContactPairs = 0;
 };
 
 // The collection of pointers to DEM template arrays such as radiiSphere. This struct will become useless eventually as
@@ -106,6 +109,7 @@ struct DEMDataDT {
     clumpComponentOffset_t* clumpComponentOffset;
 
     // dT-owned buffer pointers, for itself's usage
+    size_t nContactPairs_buffer = 0;
     bodyID_t* idGeometryA_buffer;
     bodyID_t* idGeometryB_buffer;
 
@@ -160,6 +164,7 @@ struct DEMDataKT {
     bodyID_t* idGeometryB;
 
     // data pointers that is kT's transfer destination
+    size_t* pDTOwnedBuffer_nContactPairs = NULL;
     bodyID_t* pDTOwnedBuffer_idGeometryA = NULL;
     bodyID_t* pDTOwnedBuffer_idGeometryB = NULL;
 };

@@ -59,17 +59,17 @@ inline void hostSortByKey(T1* keys, T2* vals, size_t n) {
     }
 }
 
-template <typename T1, typename T2>
+template <typename T1>
 void hostScanForJumpsNum(T1* arr, size_t n, unsigned int minSegLen, size_t& total_found) {
-    T2 i = 0;
+    size_t i = 0;
     total_found = 0;
     while (i < n - 1) {
-        T2 thisIndx = i;
+        size_t thisIndx = i;
         T1 thisItem = arr[i];
         do {
             i++;
         } while (arr[i] == thisItem && i < n - 1);
-        if (i - thisIndx >= minSegLen) {
+        if (i - thisIndx >= minSegLen || (i == n - 1 && i - thisIndx + 1 >= minSegLen && arr[i] == thisItem)) {
             total_found++;
         }
     }
@@ -89,8 +89,10 @@ void hostScanForJumps(T1* arr, T1* arr_elem, T2* jump_loc, T3* jump_len, size_t 
             i++;
             thisSegLen++;
         } while (arr[i] == thisItem && i < n - 1);
-        if (i - thisIndx >= minSegLen) {
+        if (i - thisIndx >= minSegLen || (i == n - 1 && i - thisIndx + 1 >= minSegLen && arr[i] == thisItem)) {
             jump_loc[total_found] = thisIndx;
+            if (i == n - 1 && i - thisIndx + 1 >= minSegLen && arr[i] == thisItem)
+                thisSegLen++;
             jump_len[total_found] = thisSegLen;
             arr_elem[total_found] = arr[thisIndx];
             total_found++;
