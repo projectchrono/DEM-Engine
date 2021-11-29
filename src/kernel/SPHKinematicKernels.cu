@@ -41,36 +41,33 @@ __global__ void IdxSweep(vector3* pos,
 __global__ void hdSweep(int* idx_sorted, int* idx_hd_data, int idx_size, int hd_size) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (idx >= idx_size || idx == 0 || idx == idx_size - 1) {
+    if (idx >= idx_size) {
         return;
     }
-    __syncthreads();
+
+    // marginal case handling
+    if (idx == 0) {
+        idx_hd_data[idx_sorted[idx] * 2] = idx;
+        return;
+    }
+
+    if (idx == idx_size - 1) {
+        idx_hd_data[idx_sorted[idx] * 2 + 1] = idx;
+        return;
+    }
 
     // examine the (current idx) and (current idx - 1)
     // here we already assumed that idx_sorted[idx] >= idx_sorted[idx-1] after radix sort
     if (idx_sorted[idx] != idx_sorted[idx - 1]) {
-        int diff = idx_sorted[idx] - idx_sorted[idx - 1];
         idx_hd_data[idx_sorted[idx - 1] * 2 + 1] = idx - 1;
-
         idx_hd_data[idx_sorted[idx] * 2] = idx;
-        // for all non - activated cell heading and tail number
-        for (int i = 0; i < diff - 1; i++) {
-            idx_hd_data[idx_sorted[idx - 1] * 2 + 2 + 2 * i] = -1;
-            idx_hd_data[idx_sorted[idx - 1] * 2 + 2 + 2 * i + 1] = -1;
-        }
     }
 
     // examine the (current idx + 1) and (current idx)
     // here we already assumed that idx_sorted[idx+1] >= idx_sorted[idx] after radix sort
     if (idx_sorted[idx + 1] != idx_sorted[idx]) {
-        int diff = idx_sorted[idx + 1] - idx_sorted[idx];
-        idx_hd_data[idx_sorted[idx] * 2 - 1] = idx;
-        idx_hd_data[idx_sorted[idx + 1] * 2 - 2] = idx + 1;
-        // for all non-activated cell heading and tail number
-        for (int i = 0; i < diff - 1; i++) {
-            idx_hd_data[idx_sorted[idx] * 2 + 2 * i] = -1;
-            idx_hd_data[idx_sorted[idx] * 2 + 2 * i + 1] = -1;
-        }
+        idx_hd_data[idx_sorted[idx] * 2 + 1] = idx;
+        idx_hd_data[idx_sorted[idx + 1] * 2] = idx + 1;
     }
 }
 

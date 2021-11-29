@@ -119,6 +119,11 @@ void KinematicThread::operator()() {
         idx_track_data.resize(k_n);
         idx_hd_data.resize(2 * X_SUB_NUM * Y_SUB_NUM * Z_SUB_NUM);
 
+        // initialize all idx_hd_data to -1
+        for (int i = 0; i < idx_hd_data.size(); i++) {
+            idx_hd_data[i] = -1;
+        }
+
         // GPU sweep to put particles into their l1 subdomains
         // initiate JitHelper to perform JITC
         auto kinematic_program =
@@ -143,6 +148,9 @@ void KinematicThread::operator()() {
         std::vector<int> keys;
         std::vector<int> idx_track;
 
+        std::vector<int, sgps::ManagedAllocator<int>> idx_sorted_gpu;
+        std::vector<int, sgps::ManagedAllocator<int>> idx_track_sorted_gpu;
+
         for (int i = 0; i < k_n; i++) {
             keys.push_back(idx_data[i]);
             idx_track.push_back(idx_track_data[i]);
@@ -152,16 +160,16 @@ void KinematicThread::operator()() {
                  count_digit(X_SUB_NUM * Y_SUB_NUM * Z_SUB_NUM));
 
         // =================================================================
-        /*
+        idx_sorted_gpu.assign(idx_sorted.begin(), idx_sorted.end());
+        idx_track_sorted_gpu.assign(idx_track.begin(), idx_track.end());
+
         // Use a GPU to look up starting idx of each cell
         kinematic_program.kernel("hdSweep")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(idx_sorted.data(), idx_hd_data.data(), idx_sorted.size(), idx_hd_data.size());
+            .launch(idx_sorted_gpu.data(), idx_hd_data.data(), idx_sorted_gpu.size(), idx_hd_data.size());
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-        */
-
         // =================================================================
 
         // kinematic thread first pass
