@@ -131,6 +131,7 @@ void sortOnly(int* key, int* val, std::vector<int>& key_sorted, std::vector<int>
         key_shallow.push_back(key[i]);
         val_shallow.push_back(val[i]);
     }
+
     radixSort(key_shallow.data(), val_shallow.data(), n, max);
     key_sorted.assign(key_shallow.begin(), key_shallow.end());
     val_sorted.assign(val_shallow.begin(), val_shallow.end());

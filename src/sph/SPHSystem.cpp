@@ -140,30 +140,21 @@ void KinematicThread::operator()() {
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        // TODO:: Implement sort to sort the pos vector with ascending idx_arr
+        // sort to sort the idx data with ascending idx_arr
 
         std::vector<int> idx_sorted;
         std::vector<int> idx_track_sorted;
-
-        std::vector<int> keys;
-        std::vector<int> idx_track;
-
         std::vector<int, sgps::ManagedAllocator<int>> idx_sorted_gpu;
         std::vector<int, sgps::ManagedAllocator<int>> idx_track_sorted_gpu;
 
-        for (int i = 0; i < k_n; i++) {
-            keys.push_back(idx_data[i]);
-            idx_track.push_back(idx_track_data[i]);
-        }
-
-        sortOnly(keys.data(), idx_track.data(), idx_sorted, idx_track_sorted, keys.size(),
+        sortOnly(idx_data.data(), idx_track_data.data(), idx_sorted, idx_track_sorted, k_n,
                  count_digit(X_SUB_NUM * Y_SUB_NUM * Z_SUB_NUM));
-
         // =================================================================
         idx_sorted_gpu.assign(idx_sorted.begin(), idx_sorted.end());
-        idx_track_sorted_gpu.assign(idx_track.begin(), idx_track.end());
+        idx_track_sorted_gpu.assign(idx_track_sorted.begin(), idx_track_sorted.end());
 
         // Use a GPU to look up starting idx of each cell
+
         kinematic_program.kernel("hdSweep")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
