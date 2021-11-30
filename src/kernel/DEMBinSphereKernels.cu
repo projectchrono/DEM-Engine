@@ -27,19 +27,18 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
         // My sphere voxel ID and my relPos
         sgps::bodyID_t myOwnerID = granData->ownerClumpBody[sphereID];
         sgps::clumpComponentOffset_t myCompOffset = granData->clumpComponentOffset[sphereID];
-        sgps::voxelID_t ownerVoxelX;
-        sgps::voxelID_t ownerVoxelY;
-        sgps::voxelID_t ownerVoxelZ;
-        IDChopper<sgps::voxelID_t, sgps::voxelID_t>(ownerVoxelX, ownerVoxelY, ownerVoxelZ, granData->voxelID[myOwnerID],
-                                                    simParams->nvXp2, simParams->nvYp2);
+        double ownerX, ownerY, ownerZ;
+        voxelID2Position<double, sgps::bodyID_t, sgps::subVoxelPos_t>(
+            ownerX, ownerY, ownerZ, granData->voxelID[myOwnerID], granData->locX[myOwnerID], granData->locY[myOwnerID],
+            granData->locZ[myOwnerID], simParams->nvXp2, simParams->nvYp2, simParams->voxelSize, simParams->l);
         float myRelPosX = CDRelPosX[myCompOffset];
         float myRelPosY = CDRelPosY[myCompOffset];
         float myRelPosZ = CDRelPosZ[myCompOffset];
         applyOriQToVector3<float, float>(myRelPosX, myRelPosY, myRelPosZ);
         // The bin number that I live in (with fractions)?
-        double myBinX = ((double)ownerVoxelX * simParams->voxelSize + (double)myRelPosX) / simParams->binSize;
-        double myBinY = ((double)ownerVoxelY * simParams->voxelSize + (double)myRelPosY) / simParams->binSize;
-        double myBinZ = ((double)ownerVoxelZ * simParams->voxelSize + (double)myRelPosZ) / simParams->binSize;
+        double myBinX = (ownerX + (double)myRelPosX) / simParams->binSize;
+        double myBinY = (ownerY + (double)myRelPosY) / simParams->binSize;
+        double myBinZ = (ownerZ + (double)myRelPosZ) / simParams->binSize;
         // How many bins my radius spans (with fractions)?
         double myRadiusSpan = (double)(CDRadii[myCompOffset]) / simParams->binSize;
         // Now, figure out how many bins I touch in each direction
@@ -81,19 +80,18 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
         sgps::clumpComponentOffset_t myCompOffset = granData->clumpComponentOffset[sphereID];
         // Get the offset of my spot where I should start writing back to the global bin--sphere pair registration array
         sgps::binsSphereTouches_t myReportOffset = granData->numBinsSphereTouches[sphereID];
-        sgps::voxelID_t ownerVoxelX;
-        sgps::voxelID_t ownerVoxelY;
-        sgps::voxelID_t ownerVoxelZ;
-        IDChopper<sgps::voxelID_t, sgps::voxelID_t>(ownerVoxelX, ownerVoxelY, ownerVoxelZ, granData->voxelID[myOwnerID],
-                                                    simParams->nvXp2, simParams->nvYp2);
+        double ownerX, ownerY, ownerZ;
+        voxelID2Position<double, sgps::bodyID_t, sgps::subVoxelPos_t>(
+            ownerX, ownerY, ownerZ, granData->voxelID[myOwnerID], granData->locX[myOwnerID], granData->locY[myOwnerID],
+            granData->locZ[myOwnerID], simParams->nvXp2, simParams->nvYp2, simParams->voxelSize, simParams->l);
         float myRelPosX = CDRelPosX[myCompOffset];
         float myRelPosY = CDRelPosY[myCompOffset];
         float myRelPosZ = CDRelPosZ[myCompOffset];
         applyOriQToVector3<float, float>(myRelPosX, myRelPosY, myRelPosZ);
         // The bin number that I live in (with fractions)?
-        double myBinX = ((double)ownerVoxelX * simParams->voxelSize + (double)myRelPosX) / simParams->binSize;
-        double myBinY = ((double)ownerVoxelY * simParams->voxelSize + (double)myRelPosY) / simParams->binSize;
-        double myBinZ = ((double)ownerVoxelZ * simParams->voxelSize + (double)myRelPosZ) / simParams->binSize;
+        double myBinX = (ownerX + (double)myRelPosX) / simParams->binSize;
+        double myBinY = (ownerY + (double)myRelPosY) / simParams->binSize;
+        double myBinZ = (ownerZ + (double)myRelPosZ) / simParams->binSize;
         // How many bins my radius spans (with fractions)?
         double myRadiusSpan = (double)(CDRadii[myCompOffset]) / simParams->binSize;
         // Now, write the IDs of those bins that I touch, back to the global memory

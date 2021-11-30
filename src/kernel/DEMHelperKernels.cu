@@ -3,7 +3,6 @@
 #include <granular/DataStructs.h>
 #include <granular/GranularDefines.h>
 
-// inline __device__ double3 voxelID2LRFPosition
 // inline __device__ voxelID_t position2VoxelID
 
 // Sign function
@@ -61,6 +60,26 @@ inline __device__ void IDPacker(T1& ID,
     ID += Z << (nvXp2 + nvYp2);
 }
 
+// From a voxelID to (usually double-precision) xyz coordinate
+template <typename T1, typename T2, typename T3>
+inline __device__ void voxelID2Position(T1& X,
+                                        T1& Y,
+                                        T1& Z,
+                                        const T2& ID,
+                                        const T3& subPosX,
+                                        const T3& subPosY,
+                                        const T3& subPosZ,
+                                        const unsigned char& nvXp2,
+                                        const unsigned char& nvYp2,
+                                        const T1& voxelSize,
+                                        const T1& l) {
+    T2 voxelIDX, voxelIDY, voxelIDZ;
+    IDChopper<T2, T2>(voxelIDX, voxelIDY, voxelIDZ, ID, nvXp2, nvYp2);
+    X = (T1)voxelIDX * voxelSize + (T1)subPosX * l;
+    Y = (T1)voxelIDY * voxelSize + (T1)subPosY * l;
+    Z = (T1)voxelIDZ * voxelSize + (T1)subPosZ * l;
+}
+
 template <typename T1, typename T2>
 inline __device__ void applyOriQToVector3(T1& X, T1& Y, T1& Z) {
     // Now does nothing
@@ -111,6 +130,42 @@ inline __device__ void checkSpheresOverlap(const T1& XA,
     CPX = XA + (radA - halfOverlapDepth) * A2BVecX;
     CPY = YA + (radA - halfOverlapDepth) * A2BVecY;
     CPZ = ZA + (radA - halfOverlapDepth) * A2BVecZ;
+}
+
+// Another version of checkSpheresOverlap which also gives the penetration length and bodyA's outward contact normal
+template <typename T1>
+inline __device__ void checkSpheresOverlap(const T1& XA,
+                                           const T1& YA,
+                                           const T1& ZA,
+                                           const T1& radA,
+                                           const T1& XB,
+                                           const T1& YB,
+                                           const T1& ZB,
+                                           const T1& radB,
+                                           T1& CPX,
+                                           T1& CPY,
+                                           T1& CPZ,
+                                           T1& normalX,
+                                           T1& normalY,
+                                           T1& normalZ,
+                                           T1& overlapDepth,
+                                           bool& overlap) {
+    T1 centerDist2 = distSquared<T1>(XA, YA, ZA, XB, YB, ZB);
+    if (centerDist2 > (radA + radB) * (radA + radB)) {
+        overlap = false;
+        return;
+    }
+    // If getting this far, then 2 spheres have an intersection, let's calculate the intersection point
+    overlap = true;
+    normalX = XB - XA;
+    normalY = YB - YA;
+    normalZ = ZB - ZA;
+    normalizeVector3<double>(normalX, normalY, normalZ);
+    overlapDepth = radA + radB - sqrt(centerDist2);
+    // From center of A, towards center of B, move a distance of radA, then backtrack a bit, for half the overlap depth
+    CPX = XA + (radA - overlapDepth / (T1)2) * normalX;
+    CPY = YA + (radA - overlapDepth / (T1)2) * normalY;
+    CPZ = ZA + (radA - overlapDepth / (T1)2) * normalZ;
 }
 
 template <typename T1>

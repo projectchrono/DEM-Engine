@@ -12,6 +12,7 @@
 #include <granular/GranularDefines.h>
 #include <granular/PhysicsSystem.h>
 #include <core/utils/JitHelper.h>
+#include <granular/HostSideHelpers.hpp>
 #include <helper_math.cuh>
 
 namespace sgps {
@@ -32,12 +33,19 @@ void DEMDynamicThread::packDataPointers() {
     granData->idGeometryB = idGeometryB.data();
     granData->idGeometryA_buffer = idGeometryA_buffer.data();
     granData->idGeometryB_buffer = idGeometryB_buffer.data();
+    granData->bodyForceX = bodyForceX.data();
+    granData->bodyForceY = bodyForceY.data();
+    granData->bodyForceZ = bodyForceZ.data();
 
     // The offset info that indexes into the template arrays
     granData->ownerClumpBody = ownerClumpBody.data();
     granData->clumpComponentOffset = clumpComponentOffset.data();
 
     // Template array pointers, which will be removed after JIT is fully functional
+    granTemplates->radiiSphere = radiiSphere.data();
+    granTemplates->relPosSphereX = relPosSphereX.data();
+    granTemplates->relPosSphereY = relPosSphereY.data();
+    granTemplates->relPosSphereZ = relPosSphereZ.data();
 }
 void DEMDynamicThread::packTransferPointers(DEMDataKT* kTData) {
     // These are the pointers for sending data to dT
@@ -108,6 +116,9 @@ void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
     // Resize to the number of spheres
     TRACKED_VECTOR_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
     TRACKED_VECTOR_RESIZE(clumpComponentOffset, nSpheresGM, "sphereRadiusOffset", 0);
+    TRACKED_VECTOR_RESIZE(bodyForceX, nSpheresGM, "bodyForceX", 0);
+    TRACKED_VECTOR_RESIZE(bodyForceY, nSpheresGM, "bodyForceY", 0);
+    TRACKED_VECTOR_RESIZE(bodyForceZ, nSpheresGM, "bodyForceZ", 0);
 
     // Resize to the length of the clump templates
     TRACKED_VECTOR_RESIZE(massClumpBody, nClumpTopo, "massClumpBody", 0);
@@ -241,7 +252,7 @@ inline void DEMDynamicThread::unpackMyBuffer() {
                cudaMemcpyDeviceToDevice);
     cudaMemcpy(granData->idGeometryA, granData->idGeometryA_buffer, simParams->nContactPairs * sizeof(bodyID_t),
                cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->idGeometryA, granData->idGeometryA_buffer, simParams->nContactPairs * sizeof(bodyID_t),
+    cudaMemcpy(granData->idGeometryB, granData->idGeometryB_buffer, simParams->nContactPairs * sizeof(bodyID_t),
                cudaMemcpyDeviceToDevice);
 }
 
@@ -265,28 +276,45 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
 }
 
 inline void DEMDynamicThread::calculateForces() {
-    unsigned int nClumps = simParams->nClumpBodies;
+    size_t blocks_needed_for_clumps = (simParams->nClumpBodies + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
+    size_t blocks_needed_for_contacts = (simParams->nContactPairs + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
     auto cal_force =
         JitHelper::buildProgram("DEMForceKernels", JitHelper::KERNEL_DIR / "DEMForceKernels.cu",
                                 std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
-    cal_force.kernel("deriveClumpForces")
+    cal_force.kernel("prepareForceArrays")
         .instantiate()
-        .configure(dim3(1), dim3(nClumps), 0, streamInfo.stream)
-        .launch(simParams, granData);
+        .configure(dim3(blocks_needed_for_clumps), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
+                   streamInfo.stream)
+        .launch(simParams, granData, granTemplates);
 
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+    // TODO: Consider if it is possible to do this step using CUB
+    cal_force.kernel("calculateNormalContactForces")
+        .instantiate()
+        .configure(dim3(blocks_needed_for_contacts), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
+                   streamInfo.stream)
+        .launch(simParams, granData, granTemplates);
+
+    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+    // Reflect those body-wise forces on their owner clumps
+    // TODO: Do it with CUB
+    hostCollectForces<bodyID_t>(granData->bodyForceX, granData->h2aX, granData->ownerClumpBody, simParams->h,
+                                simParams->nSpheresGM);
+    // displayArray<float>(granData->h2aX, simParams->nClumpBodies);
 }
 
 inline void DEMDynamicThread::integrateClumpLinearMotions() {
-    unsigned int nClumps = simParams->nClumpBodies;
+    size_t nClumps = simParams->nClumpBodies;
     auto integrator =
         JitHelper::buildProgram("DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu",
                                 std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
     integrator.kernel("integrateClumps")
         .instantiate()
         .configure(dim3(1), dim3(nClumps), 0, streamInfo.stream)
-        .launch(simParams, granData);
+        .launch(simParams, granData, granTemplates);
 
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
@@ -342,13 +370,19 @@ void DEMDynamicThread::workerThread() {
                     // std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_GRANULARITY_MS));
                     unpackMyBuffer();
                 }
+                // dT got the produce, now mark its buffer to be no longer fresh
                 pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
                 pSchedSupport->stampLastUpdateOfDynamic = cycle;
             }
 
-            // if it's the case, it's important at this point to let the kinematic know
-            // that this is the last dynamic cycle; this is important otherwise the
-            // kinematic will hang waiting for communication swith the dynamic
+            calculateForces();
+
+            integrateClumpLinearMotions();
+
+            integrateClumpRotationalMotions();
+
+            // if it's the case, it's important at this point to let the kinematic know that this is the last dynamic
+            // cycle; this is important otherwise the kinematic will hang waiting for communication swith the dynamic
             if (cycle == (nDynamicCycles - 1))
                 pSchedSupport->dynamicDone = true;
 
@@ -365,19 +399,7 @@ void DEMDynamicThread::workerThread() {
                 pSchedSupport->cv_KinematicCanProceed.notify_all();
             }
 
-            /* Currently no work at all
-            // this is the fake place where produce is used;
-            for (int j = 0; j < N_MANUFACTURED_ITEMS; j++) {
-                outcome[j] += this->localUse(j);
-            }
-            */
-
-            calculateForces();
-            integrateClumpLinearMotions();
-
-            integrateClumpRotationalMotions();
-
-            std::cout << "dT Total contact pairs: " << granData->nContactPairs_buffer << std::endl;
+            // std::cout << "dT Total contact pairs: " << granData->nContactPairs_buffer << std::endl;
             // std::cout << "Dynamic side values. Cycle: " << cycle << std::endl;
 
             // dynamic wrapped up one cycle

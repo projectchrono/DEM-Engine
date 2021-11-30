@@ -84,7 +84,7 @@ int main() {
     // show one for each template configuration
     for (int i = 0; i < num_template; i++) {
         input_template_num.push_back(i);
-        input_xyz.push_back(make_float3(i * 0.3, 0, 0));
+        input_xyz.push_back(make_float3(i * 0.6, 0, 0));
         float sgn_vel = (i % 2 == 0) ? 1.0 : -1.0;
         input_vel.push_back(make_float3(sgn_vel * 50.0, 0, 0));
     }
@@ -99,7 +99,7 @@ int main() {
 
     DEM_sim.Initialize();
 
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 20; i++) {
         std::cout << "Iteration: " << i + 1 << std::endl;
         DEM_sim.LaunchThreads();
 

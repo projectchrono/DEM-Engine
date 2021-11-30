@@ -42,20 +42,19 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
         for (sgps::spheresBinTouches_t i = 0; i < nBodiesMeHandle; i++) {
             sgps::bodyID_t bodyID = granData->sphereIDsEachBinTouches[myBodiesTableEntry + i];
             ownerIDs[i] = granData->ownerClumpBody[bodyID];
-            sgps::clumpComponentOffset_t thisCompOffset = granData->clumpComponentOffset[bodyID];
-            sgps::voxelID_t ownerVoxelX;
-            sgps::voxelID_t ownerVoxelY;
-            sgps::voxelID_t ownerVoxelZ;
-            IDChopper<sgps::voxelID_t, sgps::voxelID_t>(ownerVoxelX, ownerVoxelY, ownerVoxelZ,
-                                                        granData->voxelID[ownerIDs[i]], simParams->nvXp2,
-                                                        simParams->nvYp2);
-            float myRelPosX = CDRelPosX[thisCompOffset];
-            float myRelPosY = CDRelPosY[thisCompOffset];
-            float myRelPosZ = CDRelPosZ[thisCompOffset];
+            compOffsets[i] = granData->clumpComponentOffset[bodyID];
+            double ownerX, ownerY, ownerZ;
+            voxelID2Position<double, sgps::bodyID_t, sgps::subVoxelPos_t>(
+                ownerX, ownerY, ownerZ, granData->voxelID[ownerIDs[i]], granData->locX[ownerIDs[i]],
+                granData->locY[ownerIDs[i]], granData->locZ[ownerIDs[i]], simParams->nvXp2, simParams->nvYp2,
+                simParams->voxelSize, simParams->l);
+            float myRelPosX = CDRelPosX[compOffsets[i]];
+            float myRelPosY = CDRelPosY[compOffsets[i]];
+            float myRelPosZ = CDRelPosZ[compOffsets[i]];
             applyOriQToVector3<float, float>(myRelPosX, myRelPosY, myRelPosZ);
-            bodyX[i] = (double)ownerVoxelX * simParams->voxelSize + (double)myRelPosX;
-            bodyY[i] = (double)ownerVoxelY * simParams->voxelSize + (double)myRelPosY;
-            bodyZ[i] = (double)ownerVoxelZ * simParams->voxelSize + (double)myRelPosZ;
+            bodyX[i] = ownerX + (double)myRelPosX;
+            bodyY[i] = ownerY + (double)myRelPosY;
+            bodyZ[i] = ownerZ + (double)myRelPosZ;
         }
 
         for (sgps::spheresBinTouches_t bodyA = 0; bodyA < nBodiesMeHandle - 1; bodyA++) {
@@ -117,7 +116,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
     }
     __syncthreads();
 
-    // Only active bins got execute this...
+    // Only active bins got to execute this...
     sgps::binID_t myActiveID = blockIdx.x * blockDim.x + threadIdx.x;
     // But I got a true bin ID
     sgps::binID_t binID = granData->activeBinIDs[myActiveID];
@@ -138,20 +137,19 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
             sgps::bodyID_t bodyID = granData->sphereIDsEachBinTouches[myBodiesTableEntry + i];
             ownerIDs[i] = granData->ownerClumpBody[bodyID];
             bodyIDs[i] = bodyID;
-            sgps::clumpComponentOffset_t thisCompOffset = granData->clumpComponentOffset[bodyID];
-            sgps::voxelID_t ownerVoxelX;
-            sgps::voxelID_t ownerVoxelY;
-            sgps::voxelID_t ownerVoxelZ;
-            IDChopper<sgps::voxelID_t, sgps::voxelID_t>(ownerVoxelX, ownerVoxelY, ownerVoxelZ,
-                                                        granData->voxelID[ownerIDs[i]], simParams->nvXp2,
-                                                        simParams->nvYp2);
-            float myRelPosX = CDRelPosX[thisCompOffset];
-            float myRelPosY = CDRelPosY[thisCompOffset];
-            float myRelPosZ = CDRelPosZ[thisCompOffset];
+            compOffsets[i] = granData->clumpComponentOffset[bodyID];
+            double ownerX, ownerY, ownerZ;
+            voxelID2Position<double, sgps::bodyID_t, sgps::subVoxelPos_t>(
+                ownerX, ownerY, ownerZ, granData->voxelID[ownerIDs[i]], granData->locX[ownerIDs[i]],
+                granData->locY[ownerIDs[i]], granData->locZ[ownerIDs[i]], simParams->nvXp2, simParams->nvYp2,
+                simParams->voxelSize, simParams->l);
+            float myRelPosX = CDRelPosX[compOffsets[i]];
+            float myRelPosY = CDRelPosY[compOffsets[i]];
+            float myRelPosZ = CDRelPosZ[compOffsets[i]];
             applyOriQToVector3<float, float>(myRelPosX, myRelPosY, myRelPosZ);
-            bodyX[i] = (double)ownerVoxelX * simParams->voxelSize + (double)myRelPosX;
-            bodyY[i] = (double)ownerVoxelY * simParams->voxelSize + (double)myRelPosY;
-            bodyZ[i] = (double)ownerVoxelZ * simParams->voxelSize + (double)myRelPosZ;
+            bodyX[i] = ownerX + (double)myRelPosX;
+            bodyY[i] = ownerY + (double)myRelPosY;
+            bodyZ[i] = ownerZ + (double)myRelPosZ;
         }
 
         // Get my offset for writing back to the global arrays that contain contact pair info

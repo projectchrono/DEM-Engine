@@ -304,6 +304,11 @@ class DEMDynamicThread {
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA;
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB;
 
+    // Some of dT's own work arrays
+    std::vector<float, ManagedAllocator<float>> bodyForceX;
+    std::vector<float, ManagedAllocator<float>> bodyForceY;
+    std::vector<float, ManagedAllocator<float>> bodyForceZ;
+
     size_t m_approx_bytes_used = 0;
 
     // Set to true only when a user AdvanceSimulation call is finished. Set to false otherwise.
@@ -329,6 +334,7 @@ class DEMDynamicThread {
         : pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
         GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
         GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataDT), cudaMemAttachGlobal));
+        GPU_CALL(cudaMallocManaged(&granTemplates, sizeof(DEMTemplate), cudaMemAttachGlobal));
 
         nDynamicCycles = 0;
         dynamicAverageTime = 0;

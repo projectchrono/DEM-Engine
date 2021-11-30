@@ -52,8 +52,10 @@ inline __device__ void integrateLinPos(unsigned int thisClump,
     granData->locZ[thisClump] = locZ_tmp;
 }
 
-__global__ void integrateClumps(sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData) {
-    unsigned int thisClump = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void integrateClumps(sgps::DEMSimParams* simParams,
+                                sgps::DEMDataDT* granData,
+                                sgps::DEMTemplate* granTemplates) {
+    sgps::bodyID_t thisClump = blockIdx.x * blockDim.x + threadIdx.x;
     if (thisClump < simParams->nClumpBodies) {
         integrateLinVel(thisClump, simParams, granData);
         integrateLinPos(thisClump, simParams, granData);

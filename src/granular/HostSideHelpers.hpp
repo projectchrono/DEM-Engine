@@ -100,6 +100,15 @@ void hostScanForJumps(T1* arr, T1* arr_elem, T2* jump_loc, T3* jump_len, size_t 
     }
 }
 
+// Note we assume the ``force'' here is actually acceleration written in terms of multiples of l
+template <typename T1>
+void hostCollectForces(float* bodyForces, float* clumpForces, T1* ownerClumpBody, double h, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        T1 thisOwner = ownerClumpBody[i];
+        clumpForces[thisOwner] += bodyForces[i] * h * h;
+    }
+}
+
 }  // namespace sgps
 
 #endif
