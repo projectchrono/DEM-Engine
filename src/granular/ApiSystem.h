@@ -19,7 +19,6 @@
 
 namespace sgps {
 
-// class DEMSolver_impl;
 // class DEMKinematicThread;
 // class DEMDynamicThread;
 // class ThreadManager;

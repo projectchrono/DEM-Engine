@@ -22,6 +22,9 @@
 namespace sgps {
 
 /// KinematicThread class
+class DEMKinematicThread;
+class DEMDynamicThread;
+
 class DEMKinematicThread {
   protected:
     ThreadManager* pSchedSupport;
@@ -50,6 +53,10 @@ class DEMKinematicThread {
 
     // Pointers to clump template data. In the end, the use of this struct should be replaced by JIT.
     DEMTemplate* granTemplates;
+
+    // The pointers to dT owned buffer arrays themselves. The sole purpose of these pointers are for resizing.
+    std::vector<bodyID_t, ManagedAllocator<bodyID_t>>* pDTOwnedVector_idGeometryA;
+    std::vector<bodyID_t, ManagedAllocator<bodyID_t>>* pDTOwnedVector_idGeometryB;
 
     // Buffer arrays for storing info from the dT side.
     // dT modifies these arrays; kT uses them only.
@@ -198,7 +205,7 @@ class DEMKinematicThread {
 
     // Put sim data array pointers in place
     void packDataPointers();
-    void packTransferPointers(DEMDataDT* dTData);
+    void packTransferPointers(DEMDynamicThread* dT);
 
   private:
     void contactDetection();
@@ -305,9 +312,11 @@ class DEMDynamicThread {
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB;
 
     // Some of dT's own work arrays
-    std::vector<float, ManagedAllocator<float>> bodyForceX;
-    std::vector<float, ManagedAllocator<float>> bodyForceY;
-    std::vector<float, ManagedAllocator<float>> bodyForceZ;
+    // Force of each contact event. It is the force that bodyA feels.
+    std::vector<float3, ManagedAllocator<float3>> contactForces;
+    // Local position of contact point of contact w.r.t. the reference frame of body A and B
+    std::vector<float3, ManagedAllocator<float3>> contactPointGeometryA;
+    std::vector<float3, ManagedAllocator<float3>> contactPointGeometryB;
 
     size_t m_approx_bytes_used = 0;
 
@@ -391,7 +400,7 @@ class DEMDynamicThread {
 
     // Put sim data array pointers in place
     void packDataPointers();
-    void packTransferPointers(DEMDataKT* kTData);
+    void packTransferPointers(DEMKinematicThread* kT);
 
     void WriteCsvAsSpheres(std::ofstream& ptFile) const;
 
@@ -421,6 +430,8 @@ class DEMDynamicThread {
     void unpackMyBuffer();
     // Send produced data to kT-owned biffers
     void sendToTheirBuffer();
+    // Resize some work arrays based on the number of contact pairs provided by kT
+    void contactEventArraysResize(size_t nContactPairs);
 };  // dT ends
 
 }  // namespace sgps

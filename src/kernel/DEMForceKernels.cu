@@ -7,9 +7,9 @@ inline __device__ void cleanUpContactForces(sgps::bodyID_t thisBody,
                                             sgps::DEMSimParams* simParams,
                                             sgps::DEMDataDT* granData) {
     // Actually, h should be JITCed into the kernel itself
-    granData->bodyForceX[thisBody] = 0;
-    granData->bodyForceY[thisBody] = 0;
-    granData->bodyForceZ[thisBody] = 0;
+    granData->contactForces[thisBody].x = 0;
+    granData->contactForces[thisBody].y = 0;
+    granData->contactForces[thisBody].z = 0;
 }
 
 inline __device__ void cleanUpAcc(sgps::bodyID_t thisClump, sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData) {
@@ -106,10 +106,9 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
                                     CDRadii[bodyBCompOffset], contactPntX, contactPntY, contactPntZ, A2BX, A2BY, A2BZ,
                                     overlapDepth, in_contact);
         if (in_contact) {
-            // Right now, give it a fake force
-            float fake_force = 1e15;
-            atomicAdd(granData->bodyForceX + bodyA, -fake_force * A2BX);
-            atomicAdd(granData->bodyForceX + bodyB, fake_force * A2BX);
+            // Instead of add the force to a body-based register, we store it in event-based register, and use CUB to
+            // reduce them afterwards atomicAdd(granData->bodyForceX + bodyA, -force * A2BX);
+            // atomicAdd(granData->bodyForceX + bodyB, force * A2BX);
         }
     }
 }

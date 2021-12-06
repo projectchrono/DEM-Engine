@@ -278,8 +278,8 @@ void DEMSolver::packDataPointers() {
     kT->packDataPointers();
     // Each worker thread needs pointers used for data transfering. Note this step must be done after packDataPointers
     // are called, so each thread has its own pointers packed.
-    dT->packTransferPointers(kT->granData);
-    kT->packTransferPointers(dT->granData);
+    dT->packTransferPointers(kT);
+    kT->packTransferPointers(dT);
 }
 
 void DEMSolver::validateUserInputs() {

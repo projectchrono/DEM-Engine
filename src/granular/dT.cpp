@@ -33,9 +33,9 @@ void DEMDynamicThread::packDataPointers() {
     granData->idGeometryB = idGeometryB.data();
     granData->idGeometryA_buffer = idGeometryA_buffer.data();
     granData->idGeometryB_buffer = idGeometryB_buffer.data();
-    granData->bodyForceX = bodyForceX.data();
-    granData->bodyForceY = bodyForceY.data();
-    granData->bodyForceZ = bodyForceZ.data();
+    granData->contactForces = contactForces.data();
+    granData->contactPointGeometryA = contactPointGeometryA.data();
+    granData->contactPointGeometryB = contactPointGeometryB.data();
 
     // The offset info that indexes into the template arrays
     granData->ownerClumpBody = ownerClumpBody.data();
@@ -47,16 +47,16 @@ void DEMDynamicThread::packDataPointers() {
     granTemplates->relPosSphereY = relPosSphereY.data();
     granTemplates->relPosSphereZ = relPosSphereZ.data();
 }
-void DEMDynamicThread::packTransferPointers(DEMDataKT* kTData) {
+void DEMDynamicThread::packTransferPointers(DEMKinematicThread* kT) {
     // These are the pointers for sending data to dT
-    granData->pKTOwnedBuffer_voxelID = kTData->voxelID_buffer;
-    granData->pKTOwnedBuffer_locX = kTData->locX_buffer;
-    granData->pKTOwnedBuffer_locY = kTData->locY_buffer;
-    granData->pKTOwnedBuffer_locZ = kTData->locZ_buffer;
-    granData->pKTOwnedBuffer_oriQ0 = kTData->oriQ0_buffer;
-    granData->pKTOwnedBuffer_oriQ1 = kTData->oriQ1_buffer;
-    granData->pKTOwnedBuffer_oriQ2 = kTData->oriQ2_buffer;
-    granData->pKTOwnedBuffer_oriQ3 = kTData->oriQ3_buffer;
+    granData->pKTOwnedBuffer_voxelID = kT->granData->voxelID_buffer;
+    granData->pKTOwnedBuffer_locX = kT->granData->locX_buffer;
+    granData->pKTOwnedBuffer_locY = kT->granData->locY_buffer;
+    granData->pKTOwnedBuffer_locZ = kT->granData->locZ_buffer;
+    granData->pKTOwnedBuffer_oriQ0 = kT->granData->oriQ0_buffer;
+    granData->pKTOwnedBuffer_oriQ1 = kT->granData->oriQ1_buffer;
+    granData->pKTOwnedBuffer_oriQ2 = kT->granData->oriQ2_buffer;
+    granData->pKTOwnedBuffer_oriQ3 = kT->granData->oriQ3_buffer;
 }
 
 void DEMDynamicThread::setSimParams(unsigned char nvXp2,
@@ -116,9 +116,6 @@ void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
     // Resize to the number of spheres
     TRACKED_VECTOR_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
     TRACKED_VECTOR_RESIZE(clumpComponentOffset, nSpheresGM, "sphereRadiusOffset", 0);
-    TRACKED_VECTOR_RESIZE(bodyForceX, nSpheresGM, "bodyForceX", 0);
-    TRACKED_VECTOR_RESIZE(bodyForceY, nSpheresGM, "bodyForceY", 0);
-    TRACKED_VECTOR_RESIZE(bodyForceZ, nSpheresGM, "bodyForceZ", 0);
 
     // Resize to the length of the clump templates
     TRACKED_VECTOR_RESIZE(massClumpBody, nClumpTopo, "massClumpBody", 0);
@@ -131,9 +128,12 @@ void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
     TRACKED_VECTOR_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
 
     // Arrays for contact info
-    // The length of idGeometry arrays is an estimate
+    // The lengths of contact event-based arrays are just estimates
     TRACKED_VECTOR_RESIZE(idGeometryA, nSpheresGM, "idGeometryA", 0);
     TRACKED_VECTOR_RESIZE(idGeometryB, nSpheresGM, "idGeometryB", 0);
+    TRACKED_VECTOR_RESIZE(contactForces, nSpheresGM, "contactForces", make_float3(0));
+    TRACKED_VECTOR_RESIZE(contactPointGeometryA, nSpheresGM, "contactPointGeometryA", make_float3(0));
+    TRACKED_VECTOR_RESIZE(contactPointGeometryB, nSpheresGM, "contactPointGeometryB", make_float3(0));
 
     // Transfer buffer arrays
     // The length of idGeometry arrays is an estimate
@@ -247,9 +247,21 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
     pw.write(ptFile, ParticleFormatWriter::CompressionType::NONE, posX, posY, posZ, spRadii);
 }
 
+inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
+    idGeometryA.resize(nContactPairs);
+    idGeometryB.resize(nContactPairs);
+    contactForces.resize(nContactPairs);
+    contactPointGeometryA.resize(nContactPairs);
+    contactPointGeometryB.resize(nContactPairs);
+}
+
 inline void DEMDynamicThread::unpackMyBuffer() {
     cudaMemcpy(&(simParams->nContactPairs), &(granData->nContactPairs_buffer), sizeof(size_t),
                cudaMemcpyDeviceToDevice);
+
+    // Need to resize those contact event-based arrays before usage
+    contactEventArraysResize(simParams->nContactPairs);
+
     cudaMemcpy(granData->idGeometryA, granData->idGeometryA_buffer, simParams->nContactPairs * sizeof(bodyID_t),
                cudaMemcpyDeviceToDevice);
     cudaMemcpy(granData->idGeometryB, granData->idGeometryB_buffer, simParams->nContactPairs * sizeof(bodyID_t),
@@ -301,7 +313,7 @@ inline void DEMDynamicThread::calculateForces() {
 
     // Reflect those body-wise forces on their owner clumps
     // TODO: Do it with CUB
-    hostCollectForces<bodyID_t>(granData->bodyForceX, granData->h2aX, granData->ownerClumpBody, simParams->h,
+    hostCollectForces<bodyID_t>(granData->contactForces, granData->h2aX, granData->ownerClumpBody, simParams->h,
                                 simParams->nSpheresGM);
     // displayArray<float>(granData->h2aX, simParams->nClumpBodies);
 }

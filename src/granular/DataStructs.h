@@ -105,9 +105,9 @@ struct DEMDataDT {
     bodyID_t* idGeometryB;
 
     // Some dT's own work array pointers
-    float* bodyForceX;
-    float* bodyForceY;
-    float* bodyForceZ;
+    float3* contactForces;
+    float3* contactPointGeometryA;
+    float3* contactPointGeometryB;
 
     // The offset info that indexes into the template arrays
     bodyID_t* ownerClumpBody;

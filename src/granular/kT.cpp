@@ -140,6 +140,9 @@ inline void DEMKinematicThread::unpackMyBuffer() {
 inline void DEMKinematicThread::sendToTheirBuffer() {
     cudaMemcpy(granData->pDTOwnedBuffer_nContactPairs, &(simParams->nContactPairs), sizeof(size_t),
                cudaMemcpyDeviceToDevice);
+    // Resize dT owned buffers before usage
+    pDTOwnedVector_idGeometryA->resize(simParams->nContactPairs);
+    pDTOwnedVector_idGeometryB->resize(simParams->nContactPairs);
     cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA, simParams->nContactPairs * sizeof(bodyID_t),
                cudaMemcpyDeviceToDevice);
     cudaMemcpy(granData->pDTOwnedBuffer_idGeometryB, granData->idGeometryB, simParams->nContactPairs * sizeof(bodyID_t),
@@ -296,11 +299,16 @@ void DEMKinematicThread::packDataPointers() {
     granTemplates->relPosSphereZ = relPosSphereZ.data();
     // granTemplates->inflatedRadiiVoxelRatio = inflatedRadiiVoxelRatio.data();
 }
-void DEMKinematicThread::packTransferPointers(DEMDataDT* dTData) {
+void DEMKinematicThread::packTransferPointers(DEMDynamicThread* dT) {
     // Set the pointers to dT owned buffers
-    granData->pDTOwnedBuffer_nContactPairs = &(dTData->nContactPairs_buffer);
-    granData->pDTOwnedBuffer_idGeometryA = dTData->idGeometryA_buffer;
-    granData->pDTOwnedBuffer_idGeometryB = dTData->idGeometryB_buffer;
+    granData->pDTOwnedBuffer_nContactPairs = &(dT->granData->nContactPairs_buffer);
+    granData->pDTOwnedBuffer_idGeometryA = dT->granData->idGeometryA_buffer;
+    granData->pDTOwnedBuffer_idGeometryB = dT->granData->idGeometryB_buffer;
+    // We need to resize dT owned buffer arrays from kT side (because the contact number is not known beforehand), so
+    // the pointers to geometry id buffers need to be registered as well. It is a bummer, but I don't know if there is a
+    // better solution.
+    pDTOwnedVector_idGeometryA = &(dT->idGeometryA_buffer);
+    pDTOwnedVector_idGeometryB = &(dT->idGeometryB_buffer);
 }
 
 void DEMKinematicThread::setSimParams(unsigned char nvXp2,
