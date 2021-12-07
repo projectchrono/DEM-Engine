@@ -25,6 +25,7 @@ typedef unsigned short int materialsOffset_t;
 typedef unsigned short int clumpBodyInertiaOffset_t;
 typedef unsigned short int clumpComponentOffset_t;
 typedef double floatFine_t;
+typedef unsigned char contact_t;
 
 // How many bin--sphere touch pairs can there be, tops? This type needs to be large enough to hold the result of a
 // prefix scan, but normally, it should be the same magnitude as bodyID_t.

@@ -54,7 +54,8 @@ class DEMKinematicThread {
     // Pointers to clump template data. In the end, the use of this struct should be replaced by JIT.
     DEMTemplate* granTemplates;
 
-    // The pointers to dT owned buffer arrays themselves. The sole purpose of these pointers are for resizing.
+    // The pointers to dT owned buffer arrays themselves. The sole purpose of these pointers are for resizing on kT
+    // side.
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>>* pDTOwnedVector_idGeometryA;
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>>* pDTOwnedVector_idGeometryB;
 

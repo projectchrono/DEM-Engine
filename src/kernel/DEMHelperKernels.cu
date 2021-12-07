@@ -100,7 +100,13 @@ inline __device__ void normalizeVector3(T1& x, T1& y, T1& z) {
     z /= magnitude;
 }
 
-// Return whether 2 spheres intersect and the intersection point coordinates
+/**
+ * Template arguments:
+ *   - T1: the floating point accuracy level for contact point location/penetration depth
+ *
+ * Basic idea: determines whether 2 spheres intersect and the intersection point coordinates
+ *
+ */
 template <typename T1>
 inline __device__ void checkSpheresOverlap(const T1& XA,
                                            const T1& YA,
@@ -132,8 +138,16 @@ inline __device__ void checkSpheresOverlap(const T1& XA,
     CPZ = ZA + (radA - halfOverlapDepth) * A2BVecZ;
 }
 
-// Another version of checkSpheresOverlap which also gives the penetration length and bodyA's outward contact normal
-template <typename T1>
+/**
+ * Template arguments:
+ *   - T1: the floating point accuracy level for contact point location/penetration depth
+ *   - T2: the floating point accuracy level for the relative position of 2 bodies involved
+ *
+ * Basic idea: this is another version of checkSpheresOverlap which also gives the penetration length and bodyA's
+ * outward contact normal
+ *
+ */
+template <typename T1, typename T2>
 inline __device__ void checkSpheresOverlap(const T1& XA,
                                            const T1& YA,
                                            const T1& ZA,
@@ -145,9 +159,9 @@ inline __device__ void checkSpheresOverlap(const T1& XA,
                                            T1& CPX,
                                            T1& CPY,
                                            T1& CPZ,
-                                           T1& normalX,
-                                           T1& normalY,
-                                           T1& normalZ,
+                                           T2& normalX,
+                                           T2& normalY,
+                                           T2& normalZ,
                                            T1& overlapDepth,
                                            bool& overlap) {
     T1 centerDist2 = distSquared<T1>(XA, YA, ZA, XB, YB, ZB);
@@ -160,7 +174,7 @@ inline __device__ void checkSpheresOverlap(const T1& XA,
     normalX = XB - XA;
     normalY = YB - YA;
     normalZ = ZB - ZA;
-    normalizeVector3<double>(normalX, normalY, normalZ);
+    normalizeVector3<T2>(normalX, normalY, normalZ);
     overlapDepth = radA + radB - sqrt(centerDist2);
     // From center of A, towards center of B, move a distance of radA, then backtrack a bit, for half the overlap depth
     CPX = XA + (radA - overlapDepth / (T1)2) * normalX;
@@ -175,4 +189,27 @@ getPointBinID(const double& X, const double& Y, const double& Z, const double& b
     T1 binIDY = Y / binSize;
     T1 binIDZ = Z / binSize;
     return binIDX + binIDY * nbX + binIDZ * nbX * nbY;
+}
+
+/**
+ * Template arguments:
+ *   - T1: the floating point accuracy level for the point coordinate and the frame O coordinate
+ *
+ * Basic idea: calculate a point's (typically contact point) local coordinate in a specific frame, then return as a
+ * float3
+ *
+ */
+template <typename T1>
+inline __device__ float3 findLocalCoord(T1 X,
+                                        T1 Y,
+                                        T1 Z,
+                                        T1 Ox,
+                                        T1 Oy,
+                                        T1 Oz,
+                                        sgps::oriQ_t oriQ0,
+                                        sgps::oriQ_t AoriQ1,
+                                        sgps::oriQ_t AoriQ2,
+                                        sgps::oriQ_t AoriQ3) {
+    // For now, oriQ is not considered
+    return make_float3(X - Ox, Y - Oy, Z - Oz);
 }
