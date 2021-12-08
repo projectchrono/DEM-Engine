@@ -102,10 +102,27 @@ void hostScanForJumps(T1* arr, T1* arr_elem, T2* jump_loc, T3* jump_len, size_t 
 
 // Note we assume the ``force'' here is actually acceleration written in terms of multiples of l
 template <typename T1>
-void hostCollectForces(float3* bodyForces, float* clumpForces, T1* ownerClumpBody, double h, size_t n) {
+void hostCollectForces(bodyID_t* idA,
+                       bodyID_t* idB,
+                       float3* contactForces,
+                       float* clump_h2aX,
+                       float* clump_h2aY,
+                       float* clump_h2aZ,
+                       T1* ownerClumpBody,
+                       double h,
+                       size_t n) {
     for (size_t i = 0; i < n; i++) {
-        T1 thisOwner = ownerClumpBody[i];
-        clumpForces[thisOwner] += bodyForces[i].x * h * h;
+        bodyID_t bodyA = idA[i];
+        bodyID_t bodyB = idB[i];
+        T1 AOwner = ownerClumpBody[bodyA];
+        clump_h2aX[AOwner] += contactForces[i].x * h * h;
+        clump_h2aY[AOwner] += contactForces[i].y * h * h;
+        clump_h2aZ[AOwner] += contactForces[i].z * h * h;
+
+        T1 BOwner = ownerClumpBody[bodyB];
+        clump_h2aX[BOwner] += -contactForces[i].x * h * h;
+        clump_h2aY[BOwner] += -contactForces[i].y * h * h;
+        clump_h2aZ[BOwner] += -contactForces[i].z * h * h;
     }
 }
 

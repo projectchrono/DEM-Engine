@@ -290,17 +290,21 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
 inline void DEMDynamicThread::calculateForces() {
     size_t blocks_needed_for_clumps = (simParams->nClumpBodies + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
     size_t blocks_needed_for_contacts = (simParams->nContactPairs + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
-    auto cal_force =
-        JitHelper::buildProgram("DEMForceKernels", JitHelper::KERNEL_DIR / "DEMForceKernels.cu",
+    auto prep_force =
+        JitHelper::buildProgram("DEMPrepForceKernels", JitHelper::KERNEL_DIR / "DEMPrepForceKernels.cu",
                                 std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
-    cal_force.kernel("prepareForceArrays")
+    prep_force.kernel("prepareForceArrays")
         .instantiate()
         .configure(dim3(blocks_needed_for_clumps), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
                    streamInfo.stream)
         .launch(simParams, granData, granTemplates);
 
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+    auto cal_force =
+        JitHelper::buildProgram("DEMFrictionlessForceKernels", JitHelper::KERNEL_DIR / "DEMFrictionlessForceKernels.cu",
+                                std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
     // TODO: Consider if it is possible to do this step using CUB
     cal_force.kernel("calculateNormalContactForces")
@@ -313,8 +317,9 @@ inline void DEMDynamicThread::calculateForces() {
 
     // Reflect those body-wise forces on their owner clumps
     // TODO: Do it with CUB
-    hostCollectForces<bodyID_t>(granData->contactForces, granData->h2aX, granData->ownerClumpBody, simParams->h,
-                                simParams->nSpheresGM);
+    hostCollectForces<bodyID_t>(granData->idGeometryA, granData->idGeometryB, granData->contactForces, granData->h2aX,
+                                granData->h2aY, granData->h2aZ, granData->ownerClumpBody, simParams->h,
+                                simParams->nContactPairs);
     // displayArray<float>(granData->h2aX, simParams->nClumpBodies);
 }
 

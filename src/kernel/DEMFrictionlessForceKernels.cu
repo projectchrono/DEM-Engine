@@ -2,44 +2,24 @@
 #include <granular/DataStructs.h>
 #include <granular/GranularDefines.h>
 #include <kernel/DEMHelperKernels.cu>
+#include <helper_math.cuh>
 
-inline __device__ void cleanUpContactForces(sgps::bodyID_t thisBody,
-                                            sgps::DEMSimParams* simParams,
-                                            sgps::DEMDataDT* granData) {
-    // Actually, h should be JITCed into the kernel itself
-    granData->contactForces[thisBody].x = 0;
-    granData->contactForces[thisBody].y = 0;
-    granData->contactForces[thisBody].z = 0;
-}
-
-inline __device__ void cleanUpAcc(sgps::bodyID_t thisClump, sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData) {
-    // Actually, h should be JITCed into the kernel itself
-    granData->h2aX[thisClump] = 0;
-    granData->h2aY[thisClump] = 0;
-    granData->h2aZ[thisClump] = 0;
-}
-
-inline __device__ void applyGravity(sgps::bodyID_t thisClump,
-                                    sgps::DEMSimParams* simParams,
-                                    sgps::DEMDataDT* granData) {
-    // Actually, l should be JITCed into the kernel itself
-    granData->h2aX[thisClump] += simParams->h * simParams->h * simParams->Gx / simParams->l;
-    granData->h2aY[thisClump] += simParams->h * simParams->h * simParams->Gy / simParams->l;
-    granData->h2aZ[thisClump] += simParams->h * simParams->h * simParams->Gz / simParams->l;
-}
-
-__global__ void prepareForceArrays(sgps::DEMSimParams* simParams,
-                                   sgps::DEMDataDT* granData,
-                                   sgps::DEMTemplate* granTemplates) {
-    sgps::bodyID_t thisBody = blockIdx.x * blockDim.x + threadIdx.x;
-    if (thisBody < simParams->nSpheresGM) {
-        cleanUpContactForces(thisBody, simParams, granData);
-        // Exploiting that nClumps <= nSpheres
-        if (thisBody < simParams->nClumpBodies) {
-            cleanUpAcc(thisBody, simParams, granData);
-            applyGravity(thisBody, simParams, granData);
-        }
-    }
+/**
+ * Template arguments:
+ *   - T1: the floating point accuracy level for contact point location/penetration depth
+ *   - T2: the floating point accuracy level for the relative position of 2 bodies involved
+ *
+ * Basic idea: calculate the frictionless force between 2 bodies, return as a float3
+ *
+ * Assumptions:
+ *  - The A2B vector is normalized
+ *
+ */
+template <typename T1, typename T2>
+inline __device__ float3 calcNormalForce(T1 overlapDepth, T2 A2BX, T2 A2BY, T2 A2BZ, sgps::contact_t contact_type) {
+    // A placeholder calculation
+    float F_mag = 1e15 * overlapDepth;
+    return make_float3(-F_mag * A2BX, -F_mag * A2BY, -F_mag * A2BZ);
 }
 
 __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
@@ -72,43 +52,56 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
         sgps::clumpComponentOffset_t bodyBCompOffset = granData->clumpComponentOffset[bodyB];
 
         // Take care of 2 bodies in order, bodyA first
-        double ownerX, ownerY, ownerZ;
+        double AownerX, AownerY, AownerZ;
+        sgps::oriQ_t AoriQ0, AoriQ1, AoriQ2, AoriQ3;
         voxelID2Position<double, sgps::bodyID_t, sgps::subVoxelPos_t>(
-            ownerX, ownerY, ownerZ, granData->voxelID[bodyAOwner], granData->locX[bodyAOwner],
+            AownerX, AownerY, AownerZ, granData->voxelID[bodyAOwner], granData->locX[bodyAOwner],
             granData->locY[bodyAOwner], granData->locZ[bodyAOwner], simParams->nvXp2, simParams->nvYp2,
             simParams->voxelSize, simParams->l);
         float myRelPosX = CDRelPosX[bodyACompOffset];
         float myRelPosY = CDRelPosY[bodyACompOffset];
         float myRelPosZ = CDRelPosZ[bodyACompOffset];
         applyOriQToVector3<float, float>(myRelPosX, myRelPosY, myRelPosZ);
-        double bodyAX = ownerX + (double)myRelPosX;
-        double bodyAY = ownerY + (double)myRelPosY;
-        double bodyAZ = ownerZ + (double)myRelPosZ;
+        double bodyAX = AownerX + (double)myRelPosX;
+        double bodyAY = AownerY + (double)myRelPosY;
+        double bodyAZ = AownerZ + (double)myRelPosZ;
         // Then bodyB
+        double BownerX, BownerY, BownerZ;
+        sgps::oriQ_t BoriQ0, BoriQ1, BoriQ2, BoriQ3;
         voxelID2Position<double, sgps::bodyID_t, sgps::subVoxelPos_t>(
-            ownerX, ownerY, ownerZ, granData->voxelID[bodyBOwner], granData->locX[bodyBOwner],
+            BownerX, BownerY, BownerZ, granData->voxelID[bodyBOwner], granData->locX[bodyBOwner],
             granData->locY[bodyBOwner], granData->locZ[bodyBOwner], simParams->nvXp2, simParams->nvYp2,
             simParams->voxelSize, simParams->l);
         myRelPosX = CDRelPosX[bodyBCompOffset];
         myRelPosY = CDRelPosY[bodyBCompOffset];
         myRelPosZ = CDRelPosZ[bodyBCompOffset];
         applyOriQToVector3<float, float>(myRelPosX, myRelPosY, myRelPosZ);
-        double bodyBX = ownerX + (double)myRelPosX;
-        double bodyBY = ownerY + (double)myRelPosY;
-        double bodyBZ = ownerZ + (double)myRelPosZ;
+        double bodyBX = BownerX + (double)myRelPosX;
+        double bodyBY = BownerY + (double)myRelPosY;
+        double bodyBZ = BownerZ + (double)myRelPosZ;
 
         // Now compute the contact point to see if they are truely still in contact
         double contactPntX, contactPntY, contactPntZ;
-        double A2BX, A2BY, A2BZ;
+        float A2BX, A2BY, A2BZ;
         double overlapDepth;
         bool in_contact;
-        checkSpheresOverlap<double>(bodyAX, bodyAY, bodyAZ, CDRadii[bodyACompOffset], bodyBX, bodyBY, bodyBZ,
-                                    CDRadii[bodyBCompOffset], contactPntX, contactPntY, contactPntZ, A2BX, A2BY, A2BZ,
-                                    overlapDepth, in_contact);
+        checkSpheresOverlap<double, float>(bodyAX, bodyAY, bodyAZ, CDRadii[bodyACompOffset], bodyBX, bodyBY, bodyBZ,
+                                           CDRadii[bodyBCompOffset], contactPntX, contactPntY, contactPntZ, A2BX, A2BY,
+                                           A2BZ, overlapDepth, in_contact);
         if (in_contact) {
             // Instead of add the force to a body-based register, we store it in event-based register, and use CUB to
-            // reduce them afterwards atomicAdd(granData->bodyForceX + bodyA, -force * A2BX);
+            // reduce them afterwards
+            // atomicAdd(granData->bodyForceX + bodyA, -force * A2BX);
             // atomicAdd(granData->bodyForceX + bodyB, force * A2BX);
+
+            // Right now, only handles contact type 0, sphere--sphere
+            sgps::contact_t contact_type = 0;
+            granData->contactForces[myContactID] =
+                calcNormalForce<double, float>(overlapDepth, A2BX, A2BY, A2BZ, contact_type);
+            granData->contactPointGeometryA[myContactID] = findLocalCoord<double>(
+                contactPntX, contactPntY, contactPntZ, AownerX, AownerY, AownerZ, AoriQ0, AoriQ1, AoriQ2, AoriQ3);
+            granData->contactPointGeometryA[myContactID] = findLocalCoord<double>(
+                contactPntX, contactPntY, contactPntZ, BownerX, BownerY, BownerZ, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
         }
     }
 }
