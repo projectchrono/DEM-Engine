@@ -84,7 +84,6 @@ void KinematicThread::operator()() {
     int num_block = (k_n % num_thread != 0) ? (k_n / num_thread + 1) : (k_n / num_thread);
 
     // make a copy of the necessary data stored in DataManager
-    std::vector<int, sgps::ManagedAllocator<int>> num_arr(k_n, -1);
     std::vector<contactData, sgps::ManagedAllocator<contactData>> contact_data;
     std::vector<vector3, sgps::ManagedAllocator<vector3>> pos_data;
     std::vector<int, sgps::ManagedAllocator<int>> offset_data;
@@ -131,9 +130,9 @@ void KinematicThread::operator()() {
                                     std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
         // kinematic thread first pass
-        kinematic_program.kernel("IdxSweep")
+        kinematic_program.kernel("kinematic1Pass")
             .instantiate()
-            .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
+            .configure(dim3(num_block), dim3(num_thread), (MAX_NUM_UNIT * UNIT_SHARED_SIZE), streamInfo.stream)
             .launch(pos_data.data(), idx_data.data(), idx_track_data.data(), k_n, d_domain_x, d_domain_y, d_domain_z,
                     X_SUB_NUM, Y_SUB_NUM, Z_SUB_NUM, getParentSystem().domain_x, getParentSystem().domain_y,
                     getParentSystem().domain_z);
@@ -150,12 +149,14 @@ void KinematicThread::operator()() {
         sortOnly(idx_data.data(), idx_track_data.data(), idx_sorted, idx_track_sorted, k_n,
                  count_digit(X_SUB_NUM * Y_SUB_NUM * Z_SUB_NUM));
         // =================================================================
+        // cell domain sorted
         idx_sorted_gpu.assign(idx_sorted.begin(), idx_sorted.end());
+        // particle index tracking array sorted
         idx_track_sorted_gpu.assign(idx_track_sorted.begin(), idx_track_sorted.end());
 
         // Use a GPU to look up starting idx of each cell
 
-        kinematic_program.kernel("hdSweep")
+        kinematic_program.kernel("kinematic2Pass")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(idx_sorted_gpu.data(), idx_hd_data.data(), idx_sorted_gpu.size(), idx_hd_data.size());
@@ -163,29 +164,77 @@ void KinematicThread::operator()() {
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         // =================================================================
 
+        std::vector<int> subdomain_decomp = slice_global_sd(10);
+        std::vector<int, sgps::ManagedAllocator<int>> subdomain_decomp_gpu;  // subdomain decomposition data
+        subdomain_decomp_gpu.assign(subdomain_decomp.begin(), subdomain_decomp.end());
+
+        int num_cd_each_sd = 64;
+        int num_sd = subdomain_decomp_gpu.size() / num_cd_each_sd;
+
+        std::cout << "num_sd: " << num_sd << std::endl;
+
+        // =================================================================
+
+        std::vector<int, sgps::ManagedAllocator<int>> n_each_sd;  // number of particles in each subdomain;
+        n_each_sd.resize(subdomain_decomp_gpu.size() / num_cd_each_sd);
+
+        kinematic_program.kernel("kinematic3Pass")
+            .instantiate()
+            .configure(dim3(1), dim3(1024), 0, streamInfo.stream)
+            .launch(idx_hd_data.data(), subdomain_decomp_gpu.data(), num_cd_each_sd, n_each_sd.data(),
+                    n_each_sd.size());
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+        std::vector<int, sgps::ManagedAllocator<int>> num_arr(n_each_sd.size() * 1024, -1);
+
+        num_block = n_each_sd.size();
+        num_thread = 1024;
+
         // kinematic thread first pass
-        kinematic_program.kernel("kinematic1stPass")
+        kinematic_program.kernel("kinematic4Pass")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(pos_data.data(), pos_data.size(), tolerance, dataManager.radius, num_arr.data());
+            .launch(pos_data.data(), pos_data.size(), tolerance, dataManager.radius, num_arr.data(), num_cd_each_sd,
+                    subdomain_decomp_gpu.data(), idx_track_sorted_gpu.data(), idx_hd_data.data(), n_each_sd.data(),
+                    n_each_sd.size());
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+        // calculate total number of contact
+        int contact_sum = 0;
+
+        for (int i = 0; i < num_arr.size(); i++) {
+            if (num_arr[i] == -1)
+                continue;
+            contact_sum = contact_sum + num_arr[i];
+        }
 
         // calculate the offset array
         int cur_idx = 0;
         offset_data.clear();
         offset_data.resize(0);
-        for (int i = 0; i < k_n; i++) {
-            offset_data.push_back(cur_idx);
-            cur_idx = cur_idx + num_arr[i];
+        for (int i = 0; i < num_arr.size(); i++) {
+            if (num_arr[i] != -1) {
+                offset_data.push_back(cur_idx);
+                cur_idx = cur_idx + num_arr[i];
+            } else {
+                offset_data.push_back(-1);
+            }
         }
 
-        // calculate total number of contact
-        int contact_sum = 0;
+        std::cout << "num_arr sz:" << num_arr.size() << std::endl;
+        std::cout << "offset_data sz: " << offset_data.size() << std::endl;
 
-        for (int i = 0; i < k_n; i++) {
-            contact_sum = contact_sum + num_arr[i];
+        std::cout << "======" << std::endl;
+        std::cout << "contact_sum: " << contact_sum << std::endl;
+
+        for (int i = 0; i < offset_data.size(); i++) {
+            if (offset_data[offset_data.size() - 1 - i] != -1) {
+                std::cout << offset_data[offset_data.size() - 1 - i] << " =============" << std::endl;
+                break;
+            }
         }
+        std::cout << "==========" << std::endl;
 
         // second kinematic pass to fill the contact pair array
         // dataManager.m_contact.resize(contact_sum);
@@ -195,11 +244,13 @@ void KinematicThread::operator()() {
 
         // if the contact_sum is not 0, we perform the kinematic 2nd pass
         if (contact_sum != 0) {
-            kinematic_program.kernel("kinematic2ndPass")
+            kinematic_program.kernel("kinematic5Pass")
                 .instantiate()
                 .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
                 .launch(pos_data.data(), pos_data.size(), offset_data.data(), num_arr.data(), tolerance,
-                        dataManager.radius, contact_data.data());
+                        dataManager.radius, contact_data.data(), num_cd_each_sd, subdomain_decomp_gpu.data(),
+                        idx_track_sorted_gpu.data(), idx_hd_data.data(), n_each_sd.data(), n_each_sd.size(),
+                        contact_sum);
 
             GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         }
@@ -448,8 +499,8 @@ void WriteOutThread::operator()() {
                 getParentSystem().wt_buffer_fresh = false;
             }
 
-            getParentSystem().printCSV("test" + std::to_string(writeOutCounter) + ".csv", wt_pos.data(), wt_pos.size(),
-                                       wt_vel.data(), wt_acc.data());
+            getParentSystem().printCSV("sph_folder/test" + std::to_string(writeOutCounter) + ".csv", wt_pos.data(),
+                                       wt_pos.size(), wt_vel.data(), wt_acc.data());
             getParentSystem().wt_thread_busy = false;
             writeOutCounter++;
             std::cout << "wo ct:" << writeOutCounter << std::endl;

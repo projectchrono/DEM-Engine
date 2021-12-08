@@ -1,5 +1,6 @@
 // data structure utility class
 #pragma once
+
 // 3d vector data structure
 struct vector3 {
     float x;
@@ -74,3 +75,6 @@ struct contactData {
         contact_force = frc;
     }
 };
+
+#define UNIT_SHARED_SIZE sizeof(vector3)
+#define MAX_NUM_UNIT 2048  // TODO: We currently define maximum particle in one 'subdomain' is 2000

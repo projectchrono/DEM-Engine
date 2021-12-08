@@ -168,6 +168,60 @@ int count_digit(int number) {
     return count;
 }
 
+std::vector<int> slice_global_sd(int num_cd_each_side){
+    int num_sd = 3;
+    int num_cd_each_sd_side = 4;
+    int num_cd_each_sd = num_cd_each_sd_side * num_cd_each_sd_side;
+    std::vector<int> res;
+
+    for(int k = 0; k < num_sd; k ++)
+    {
+        for(int j = 0; j < num_sd; j++)
+        {
+            for(int i = 0; i < num_sd; i++)
+            {
+                int start_x = i * (num_cd_each_sd_side-1);   // starting cd idx of the current sd on x
+                int start_y = j * (num_cd_each_sd_side-1);   // starting cd idx of the current sd on y  
+                int start_z = k * (num_cd_each_sd_side-1);   // starting cd idx of the current sd on z
+                for (int a = 0; a < num_cd_each_sd_side; a++)
+                {
+                    for (int b = 0; b < num_cd_each_sd_side; b++)
+                    {
+                        for (int c = 0; c < num_cd_each_sd_side; c++)
+                        {
+                            res.push_back((start_z + a)* num_cd_each_side*num_cd_each_side + (start_y + b)*num_cd_each_side + (start_x+c));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return res;
+}
+
+/*
+class SPH_Find_Cell2Sub_Exception : public exception {
+    virtual const char* what() const throw() { return "SPH_Find_Cell2Sub_Exception happened"; }
+} Cell2SubException;
+
+// helper function to look for subdomain idx from cell idx
+int SPH_Find_Cell2Sub(int num_c_x, int num_c_y, int num_c_z, int c_x, int c_y, int c_z, int cell_i) {
+    if (cell_i >= num_c_x * num_c_y * num_c_z) {
+        throw Cell2SubException;
+    }
+
+    int idx_c_z = cell_i / (num_c_y * num_c_x);
+    int idx_c_y = int((cell_i % (num_c_y * num_c_x)) / num_c_x);
+    int idx_c_x = int(cell_i - (idx_c_z * num_c_x * num_c_y) - idx_c_y * num_c_x);
+
+    int idx_s_x = idx_c_x / c_x;
+    int idx_s_y = idx_c_y / c_y;
+    int idx_s_z = idx_c_z / c_z;
+
+    std::cout << "idx_s_x: " << idx_s_x << std::endl;
+    std::cout << "idx_s_y: " << idx_s_y << std::endl;
+    std::cout << "idx_s_z: " << idx_s_z << std::endl;
+}*/
 /*
 int main() {
     int n=7;
