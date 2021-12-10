@@ -78,7 +78,7 @@ __global__ void kinematic2Pass(int* idx_sorted, int* idx_ht_data, int idx_size, 
 }
 
 // =================================================================================================================
-// Kinematic 3rd Pass, this pass compute total number of particles in each cd
+// Kinematic 3rd Pass, this pass compute total number of particles in each sd
 // =================================================================================================================
 
 __global__ void kinematic3Pass(int* idx_hd, int* subdomain_decomp, int num_cd_each_sd, int* n_each_sd, int n_sd) {
@@ -113,9 +113,9 @@ __global__ void kinematic4Pass(vector3* pos,
                                int* idx_ht_data,
                                int* n_each_sd,
                                int n_sd) {
-    __shared__ vector3 pos_sd[1024];  // request maximum capacity for the shared mem
-    __shared__ int idx_track[1024];   // request maximum capacity for track
-    __shared__ int cd_sz_track[64];
+    __shared__ vector3 pos_sd[512];  // request maximum capacity for the shared mem
+    __shared__ int idx_track[512];   // request maximum capacity for track
+    __shared__ int cd_sz_track[1024];
     __shared__ int tot_in_sd;
     // It's supposed to be the following line but it's giving me an error
     // extern __shared__ int cd_sz_track[];
@@ -182,7 +182,7 @@ __global__ void kinematic4Pass(vector3* pos,
         }
     }
 
-    res_arr[sd_idx * 1024 + idx] = count;
+    res_arr[sd_idx * 512 + idx] = count;
 }
 
 // =================================================================================================================
@@ -203,9 +203,9 @@ __global__ void kinematic5Pass(vector3* pos,
                                int* n_each_sd,
                                int n_sd,
                                int contact_sum) {
-    __shared__ vector3 pos_sd[1024];  // request maximum capacity for the shared mem
-    __shared__ int idx_track[1024];   // request maximum capacity for track
-    __shared__ int cd_sz_track[64];
+    __shared__ vector3 pos_sd[512];  // request maximum capacity for the shared mem
+    __shared__ int idx_track[512];   // request maximum capacity for track
+    __shared__ int cd_sz_track[1024];
     __shared__ int tot_in_sd;
 
     int sd_idx = blockIdx.x;
@@ -260,10 +260,10 @@ __global__ void kinematic5Pass(vector3* pos,
         return;
     }
 
-    if (contact_num_arr[sd_idx * 1024 + idx] == 0)
+    if (contact_num_arr[sd_idx * 512 + idx] == 0)
         return;
 
-    int cur_idx = offset[sd_idx * 1024 + idx];
+    int cur_idx = offset[sd_idx * 512 + idx];
 
     for (int i = 0; i < tot_in_sd; i++) {
         if ((i != idx) && (idx_track[idx] < idx_track[i])) {

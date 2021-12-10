@@ -145,6 +145,7 @@ class SPHSystem {
 
     // print particle file to csv for paraview visualization purposes
     void printCSV(std::string filename, vector3* pos_arr, int pos_n, vector3* vel_arr, vector3* acc_arr);
+    void printCSV(std::string filename, vector3* pos_arr, int pos_n, vector3* vel_arr);
 
     // dual gpu coordinations
     std::mutex& getMutexPos() { return mutex_lock_pos; }

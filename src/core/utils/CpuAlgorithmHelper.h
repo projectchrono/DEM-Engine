@@ -18,13 +18,13 @@ void sortOnly(int* key, int* val, std::vector<int>& key_sorted, std::vector<int>
 int count_digit(int number);
 
 // a test algorithm to slice obtain a std::vector indicating which cell is in that sd
-std::vector<int> slice_global_sd(int num_cd_each_side);
+std::vector<int> slice_global_sd(int X_SUB_NUM, int Y_SUB_NUM, int Z_SUB_NUM);
 
 // helper function to look for cell idx from subdomain idx
-//std::vector<int>
-//SPH_Find_Sub2Cell(int num_c_x, int num_c_y, int num_c_z, int num_s_x, int num_s_y, int num_s_z, int sub_i);
+// std::vector<int>
+// SPH_Find_Sub2Cell(int num_c_x, int num_c_y, int num_c_z, int num_s_x, int num_s_y, int num_s_z, int sub_i);
 
 // helper function to look for subdomain idx from cell idx
-//int SPH_Find_Cell2Sub(int num_c_x, int num_c_y, int num_c_z, int num_s_x, int num_s_y, int num_s_z, int cell_i);
+// int SPH_Find_Cell2Sub(int num_c_x, int num_c_y, int num_c_z, int num_s_x, int num_s_y, int num_s_z, int cell_i);
 
 #endif

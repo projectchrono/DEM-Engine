@@ -168,28 +168,24 @@ int count_digit(int number) {
     return count;
 }
 
-std::vector<int> slice_global_sd(int num_cd_each_side){
-    int num_sd = 3;
+std::vector<int> slice_global_sd(int X_SUB_NUM, int Y_SUB_NUM, int Z_SUB_NUM) {
+    int num_sd_x = (X_SUB_NUM - 1) / 3;
+    int num_sd_y = (Y_SUB_NUM - 1) / 3;
+    int num_sd_z = (Z_SUB_NUM - 1) / 3;
     int num_cd_each_sd_side = 4;
-    int num_cd_each_sd = num_cd_each_sd_side * num_cd_each_sd_side;
     std::vector<int> res;
 
-    for(int k = 0; k < num_sd; k ++)
-    {
-        for(int j = 0; j < num_sd; j++)
-        {
-            for(int i = 0; i < num_sd; i++)
-            {
-                int start_x = i * (num_cd_each_sd_side-1);   // starting cd idx of the current sd on x
-                int start_y = j * (num_cd_each_sd_side-1);   // starting cd idx of the current sd on y  
-                int start_z = k * (num_cd_each_sd_side-1);   // starting cd idx of the current sd on z
-                for (int a = 0; a < num_cd_each_sd_side; a++)
-                {
-                    for (int b = 0; b < num_cd_each_sd_side; b++)
-                    {
-                        for (int c = 0; c < num_cd_each_sd_side; c++)
-                        {
-                            res.push_back((start_z + a)* num_cd_each_side*num_cd_each_side + (start_y + b)*num_cd_each_side + (start_x+c));
+    for (int k = 0; k < num_sd_z; k++) {
+        for (int j = 0; j < num_sd_y; j++) {
+            for (int i = 0; i < num_sd_x; i++) {
+                int start_x = i * (num_cd_each_sd_side - 1);  // starting cd idx of the current sd on x
+                int start_y = j * (num_cd_each_sd_side - 1);  // starting cd idx of the current sd on y
+                int start_z = k * (num_cd_each_sd_side - 1);  // starting cd idx of the current sd on z
+                for (int a = 0; a < num_cd_each_sd_side; a++) {
+                    for (int b = 0; b < num_cd_each_sd_side; b++) {
+                        for (int c = 0; c < num_cd_each_sd_side; c++) {
+                            res.push_back((start_z + a) * X_SUB_NUM * Y_SUB_NUM + (start_y + b) * X_SUB_NUM +
+                                          (start_x + c));
                         }
                     }
                 }

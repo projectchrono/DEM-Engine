@@ -5,9 +5,9 @@
 
 int main(int argc, char* argv[]) {
     // initialize particles in a cubic 10x10x10 domain
-    float dim_x = 10;
-    float dim_y = 10;
-    float dim_z = 5;
+    float dim_x = 32;
+    float dim_y = 32;
+    float dim_z = 8;
 
     // set particle radius
     float radius = 0.2;

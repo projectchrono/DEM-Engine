@@ -11,9 +11,9 @@
 #include <core/utils/CpuAlgorithmHelper.h>
 #include "datastruct.h"
 
-const int X_SUB_NUM = 10;
-const int Y_SUB_NUM = 10;
-const int Z_SUB_NUM = 10;
+int X_SUB_NUM = 0;
+int Y_SUB_NUM = 0;
+int Z_SUB_NUM = 0;
 
 void SPHSystem::initialize(float radius,
                            std::vector<vector3>& pos,
@@ -31,6 +31,10 @@ void SPHSystem::initialize(float radius,
     this->domain_x = domain_x;
     this->domain_y = domain_y;
     this->domain_z = domain_z;
+
+    X_SUB_NUM = domain_x / (4 * radius);
+    Y_SUB_NUM = domain_y / (4 * radius);
+    Z_SUB_NUM = domain_z / (4 * radius);
 }
 
 void SPHSystem::doStepDynamics(float time_step, float sim_time) {
@@ -51,11 +55,26 @@ void SPHSystem::doStepDynamics(float time_step, float sim_time) {
     }
 }
 
-void SPHSystem::printCSV(std::string filename, vector3* pos_arr, int pos_n, vector3* vel_arr, vector3* acc_arr) {
+void SPHSystem::printCSV(std::string filename, vector3* pos_arr, int pos_n, vector3* vel_arr) {
     // create file
     std::ofstream csvFile(filename);
 
     csvFile << "x_pos,y_pos,z_pos,x_vel,y_vel,z_vel,x_acc,y_acc,z_acc" << std::endl;
+
+    // write particle data into csv file
+    for (int i = 0; i < pos_n; i++) {
+        csvFile << pos_arr[i].x << "," << pos_arr[i].y << "," << pos_arr[i].z << "," << vel_arr[i].x << ","
+                << vel_arr[i].y << "," << vel_arr[i].z << "," << std::endl;
+    }
+
+    csvFile.close();
+}
+
+void SPHSystem::printCSV(std::string filename, vector3* pos_arr, int pos_n, vector3* vel_arr, vector3* acc_arr) {
+    // create file
+    std::ofstream csvFile(filename);
+
+    csvFile << "x_pos,y_pos,z_pos,x_vel,y_vel,z_vel" << std::endl;
 
     // write particle data into csv file
     for (int i = 0; i < pos_n; i++) {
@@ -185,7 +204,7 @@ void KinematicThread::operator()() {
         // Kinematic Step 4
         // Slice the entire simulation domain and obtain CDs contained in each SD
         // ==============================================================================================================
-        std::vector<int> subdomain_decomp = slice_global_sd(10);
+        std::vector<int> subdomain_decomp = slice_global_sd(X_SUB_NUM, Y_SUB_NUM, Z_SUB_NUM);
         std::vector<int, sgps::ManagedAllocator<int>> subdomain_decomp_gpu;  // subdomain decomposition data
         subdomain_decomp_gpu.assign(subdomain_decomp.begin(), subdomain_decomp.end());
 
@@ -193,7 +212,7 @@ void KinematicThread::operator()() {
         int num_sd = subdomain_decomp_gpu.size() / num_cd_each_sd;
 
         std::vector<int, sgps::ManagedAllocator<int>> n_each_sd;  // number of particles in each subdomain;
-        n_each_sd.resize(subdomain_decomp_gpu.size() / num_cd_each_sd);
+        n_each_sd.resize(num_sd);
 
         // ==============================================================================================================
         // Kinematic Step 5
@@ -202,7 +221,7 @@ void KinematicThread::operator()() {
 
         kinematic_program.kernel("kinematic3Pass")
             .instantiate()
-            .configure(dim3(1), dim3(1024), 0, streamInfo.stream)
+            .configure(dim3(1), dim3(num_sd), 0, streamInfo.stream)
             .launch(idx_ht_data.data(), subdomain_decomp_gpu.data(), num_cd_each_sd, n_each_sd.data(),
                     n_each_sd.size());
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -217,7 +236,7 @@ void KinematicThread::operator()() {
         // ==============================================================================================================
 
         num_block = n_each_sd.size();
-        num_thread = 1024;
+        num_thread = 512;
 
         // kinematic thread first pass
         kinematic_program.kernel("kinematic4Pass")
@@ -260,7 +279,6 @@ void KinematicThread::operator()() {
         // Kinematic Step 7
         // Based on the generated num_arr data, fill in all contact pair data
         // ==============================================================================================================
-
         // if the contact_sum is not 0, we perform the kinematic 2nd pass
         if (contact_sum != 0) {
             kinematic_program.kernel("kinematic5Pass")
@@ -518,12 +536,11 @@ void WriteOutThread::operator()() {
                 const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
                 wt_pos.assign(dataManager.m_pos.begin(), dataManager.m_pos.end());
                 wt_vel.assign(dataManager.m_vel.begin(), dataManager.m_vel.end());
-                wt_acc.assign(dataManager.m_acc.begin(), dataManager.m_acc.end());
                 getParentSystem().wt_buffer_fresh = false;
             }
 
             getParentSystem().printCSV("sph_folder/test" + std::to_string(writeOutCounter) + ".csv", wt_pos.data(),
-                                       wt_pos.size(), wt_vel.data(), wt_acc.data());
+                                       wt_pos.size(), wt_vel.data());
             getParentSystem().wt_thread_busy = false;
             writeOutCounter++;
             std::cout << "wo ct:" << writeOutCounter << std::endl;
