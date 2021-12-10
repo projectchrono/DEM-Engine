@@ -25,13 +25,14 @@ typedef unsigned short int materialsOffset_t;
 typedef unsigned short int clumpBodyInertiaOffset_t;
 typedef unsigned short int clumpComponentOffset_t;
 typedef double floatFine_t;
+// Contact type (sphere--sphere is 0, etc.)
 typedef unsigned char contact_t;
 
 // How many bin--sphere touch pairs can there be, tops? This type needs to be large enough to hold the result of a
 // prefix scan, but normally, it should be the same magnitude as bodyID_t.
 typedef unsigned int binsSphereTouches_t;
 // How many spheres a bin can touch, tops? This one will not double as a container for prefix scans, so we can assume it
-// will not be too large. We should keep it as small as possible, since in contact detection,
+// will not be too large. We should keep it as small as possible, since in contact detection...
 typedef uint16_t spheresBinTouches_t;
 // Need to be large enough to hold the number of total contact pairs. This number should be in the same magnitude as
 // bodyID_t.

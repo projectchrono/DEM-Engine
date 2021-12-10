@@ -39,12 +39,13 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
         // Grab the bodies that I care, put into local memory
         sgps::spheresBinTouches_t nBodiesMeHandle = granData->numSpheresBinTouches[myActiveID];
         sgps::binsSphereTouches_t myBodiesTableEntry = granData->sphereIDsLookUpTable[myActiveID];
+        // printf("nBodies: %u\n", nBodiesMeHandle);
         for (sgps::spheresBinTouches_t i = 0; i < nBodiesMeHandle; i++) {
             sgps::bodyID_t bodyID = granData->sphereIDsEachBinTouches[myBodiesTableEntry + i];
             ownerIDs[i] = granData->ownerClumpBody[bodyID];
             compOffsets[i] = granData->clumpComponentOffset[bodyID];
             double ownerX, ownerY, ownerZ;
-            voxelID2Position<double, sgps::bodyID_t, sgps::subVoxelPos_t>(
+            voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[ownerIDs[i]], granData->locX[ownerIDs[i]],
                 granData->locY[ownerIDs[i]], granData->locZ[ownerIDs[i]], simParams->nvXp2, simParams->nvYp2,
                 simParams->voxelSize, simParams->l);
@@ -139,7 +140,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
             bodyIDs[i] = bodyID;
             compOffsets[i] = granData->clumpComponentOffset[bodyID];
             double ownerX, ownerY, ownerZ;
-            voxelID2Position<double, sgps::bodyID_t, sgps::subVoxelPos_t>(
+            voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[ownerIDs[i]], granData->locX[ownerIDs[i]],
                 granData->locY[ownerIDs[i]], granData->locZ[ownerIDs[i]], simParams->nvXp2, simParams->nvYp2,
                 simParams->voxelSize, simParams->l);

@@ -21,10 +21,10 @@ int count_digit(int number);
 std::vector<int> slice_global_sd(int num_cd_each_side);
 
 // helper function to look for cell idx from subdomain idx
-//std::vector<int>
-//SPH_Find_Sub2Cell(int num_c_x, int num_c_y, int num_c_z, int num_s_x, int num_s_y, int num_s_z, int sub_i);
+// std::vector<int>
+// SPH_Find_Sub2Cell(int num_c_x, int num_c_y, int num_c_z, int num_s_x, int num_s_y, int num_s_z, int sub_i);
 
 // helper function to look for subdomain idx from cell idx
-//int SPH_Find_Cell2Sub(int num_c_x, int num_c_y, int num_c_z, int num_s_x, int num_s_y, int num_s_z, int cell_i);
+// int SPH_Find_Cell2Sub(int num_c_x, int num_c_y, int num_c_z, int num_s_x, int num_s_y, int num_s_z, int cell_i);
 
 #endif
