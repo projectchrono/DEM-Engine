@@ -128,17 +128,19 @@ void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
     TRACKED_VECTOR_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
 
     // Arrays for contact info
-    // The lengths of contact event-based arrays are just estimates
-    TRACKED_VECTOR_RESIZE(idGeometryA, nSpheresGM, "idGeometryA", 0);
-    TRACKED_VECTOR_RESIZE(idGeometryB, nSpheresGM, "idGeometryB", 0);
-    TRACKED_VECTOR_RESIZE(contactForces, nSpheresGM, "contactForces", make_float3(0));
-    TRACKED_VECTOR_RESIZE(contactPointGeometryA, nSpheresGM, "contactPointGeometryA", make_float3(0));
-    TRACKED_VECTOR_RESIZE(contactPointGeometryB, nSpheresGM, "contactPointGeometryB", make_float3(0));
+    // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is 4n, and I
+    // think the max is 6n (although I can't prove it). Note the estimate should be large enough to decrease the number
+    // of reallocations in the simulation, but not too large that eats too much memory.
+    TRACKED_VECTOR_RESIZE(idGeometryA, nClumpBodies * 4, "idGeometryA", 0);
+    TRACKED_VECTOR_RESIZE(idGeometryB, nClumpBodies * 4, "idGeometryB", 0);
+    TRACKED_VECTOR_RESIZE(contactForces, nClumpBodies * 4, "contactForces", make_float3(0));
+    TRACKED_VECTOR_RESIZE(contactPointGeometryA, nClumpBodies * 4, "contactPointGeometryA", make_float3(0));
+    TRACKED_VECTOR_RESIZE(contactPointGeometryB, nClumpBodies * 4, "contactPointGeometryB", make_float3(0));
 
     // Transfer buffer arrays
-    // The length of idGeometry arrays is an estimate
-    TRACKED_VECTOR_RESIZE(idGeometryA_buffer, nSpheresGM, "idGeometryA_buffer", 0);
-    TRACKED_VECTOR_RESIZE(idGeometryB_buffer, nSpheresGM, "idGeometryB_buffer", 0);
+    // The following several arrays will have variable sizes, so here we only used an estimate.
+    TRACKED_VECTOR_RESIZE(idGeometryA_buffer, nClumpBodies * 4, "idGeometryA_buffer", 0);
+    TRACKED_VECTOR_RESIZE(idGeometryB_buffer, nClumpBodies * 4, "idGeometryB_buffer", 0);
 }
 
 void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
@@ -253,6 +255,13 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     contactForces.resize(nContactPairs);
     contactPointGeometryA.resize(nContactPairs);
     contactPointGeometryB.resize(nContactPairs);
+
+    // Re-pack pointers in case the arrays got reallocated
+    granData->idGeometryA = idGeometryA.data();
+    granData->idGeometryB = idGeometryB.data();
+    granData->contactForces = contactForces.data();
+    granData->contactPointGeometryA = contactPointGeometryA.data();
+    granData->contactPointGeometryB = contactPointGeometryB.data();
 }
 
 inline void DEMDynamicThread::unpackMyBuffer() {

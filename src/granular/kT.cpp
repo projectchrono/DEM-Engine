@@ -39,6 +39,8 @@ inline void DEMKinematicThread::contactDetection() {
     // Resize those work arrays to be the size of the number of all sphere--bin pairs
     binIDsEachSphereTouches.resize(granData->numBinsSphereTouches[simParams->nSpheresGM]);
     sphereIDsEachBinTouches.resize(granData->numBinsSphereTouches[simParams->nSpheresGM]);
+    granData->binIDsEachSphereTouches = binIDsEachSphereTouches.data();
+    granData->sphereIDsEachBinTouches = sphereIDsEachBinTouches.data();
 
     bin_occupation.kernel("populateBinSphereTouchingPairs")
         .instantiate()
@@ -73,6 +75,9 @@ inline void DEMKinematicThread::contactDetection() {
     activeBinIDs.resize(simParams->nActiveBins);
     sphereIDsLookUpTable.resize(simParams->nActiveBins);
     numSpheresBinTouches.resize(simParams->nActiveBins);
+    granData->activeBinIDs = activeBinIDs.data();
+    granData->sphereIDsLookUpTable = sphereIDsLookUpTable.data();
+    granData->numSpheresBinTouches = numSpheresBinTouches.data();
     hostScanForJumps<binID_t, binsSphereTouches_t, spheresBinTouches_t>(
         granData->binIDsEachSphereTouches, granData->activeBinIDs, granData->sphereIDsLookUpTable,
         granData->numSpheresBinTouches, granData->numBinsSphereTouches[simParams->nSpheresGM], 2);
@@ -92,6 +97,7 @@ inline void DEMKinematicThread::contactDetection() {
     // 1 extra element is given to numContactsInEachBin for an easier prefix scan. Therefore, its last element registers
     // the total number of contact pairs.
     numContactsInEachBin.resize(simParams->nActiveBins + 1);
+    granData->numContactsInEachBin = numContactsInEachBin.data();
     size_t blocks_needed_for_bins = (simParams->nActiveBins + NUM_BINS_PER_BLOCK - 1) / NUM_BINS_PER_BLOCK;
     if (blocks_needed_for_bins > 0) {
         auto contact_detection =
@@ -109,6 +115,8 @@ inline void DEMKinematicThread::contactDetection() {
         // displayArray<contactPairs_t>(granData->numContactsInEachBin, simParams->nActiveBins + 1);
         idGeometryA.resize(granData->numContactsInEachBin[simParams->nActiveBins]);
         idGeometryB.resize(granData->numContactsInEachBin[simParams->nActiveBins]);
+        granData->idGeometryA = idGeometryA.data();
+        granData->idGeometryB = idGeometryB.data();
 
         contact_detection.kernel("populateContactPairsEachBin")
             .instantiate()
@@ -150,6 +158,8 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
     // Resize dT owned buffers before usage
     pDTOwnedVector_idGeometryA->resize(simParams->nContactPairs);
     pDTOwnedVector_idGeometryB->resize(simParams->nContactPairs);
+    granData->pDTOwnedBuffer_idGeometryA = pDTOwnedVector_idGeometryA->data();
+    granData->pDTOwnedBuffer_idGeometryB = pDTOwnedVector_idGeometryB->data();
     cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA, simParams->nContactPairs * sizeof(bodyID_t),
                cudaMemcpyDeviceToDevice);
     cudaMemcpy(granData->pDTOwnedBuffer_idGeometryB, granData->idGeometryB, simParams->nContactPairs * sizeof(bodyID_t),
@@ -385,13 +395,14 @@ void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
     TRACKED_VECTOR_RESIZE(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
     // 1 extra element is given to numBinsSphereTouches for easy prefix scanning
     TRACKED_VECTOR_RESIZE(numBinsSphereTouches, nSpheresGM + 1, "numBinsSphereTouches", 0);
-    // The following several arrays will be larger than nSpheresGM, so here we only used an estimate
-    TRACKED_VECTOR_RESIZE(binIDsEachSphereTouches, 10000 * nSpheresGM, "binIDsEachSphereTouches", 0);
-    TRACKED_VECTOR_RESIZE(sphereIDsEachBinTouches, 10000 * nSpheresGM, "sphereIDsEachBinTouches", 0);
-    TRACKED_VECTOR_RESIZE(activeBinIDs, 10000 * nSpheresGM, "activeBinIDs", 0);
-    TRACKED_VECTOR_RESIZE(sphereIDsLookUpTable, 10000 * nSpheresGM, "sphereIDsLookUpTable", 0);
-    TRACKED_VECTOR_RESIZE(numSpheresBinTouches, 10000 * nSpheresGM, "numSpheresBinTouches", 0);
-    TRACKED_VECTOR_RESIZE(numContactsInEachBin, 10000 * nSpheresGM, "numContactsInEachBin", 0);
+    // The following several arrays will have variable sizes, so here we only used an estimate.
+    // TODO: Find a good estimate.
+    TRACKED_VECTOR_RESIZE(binIDsEachSphereTouches, nSpheresGM, "binIDsEachSphereTouches", 0);
+    TRACKED_VECTOR_RESIZE(sphereIDsEachBinTouches, nSpheresGM, "sphereIDsEachBinTouches", 0);
+    TRACKED_VECTOR_RESIZE(activeBinIDs, nSpheresGM, "activeBinIDs", 0);
+    TRACKED_VECTOR_RESIZE(sphereIDsLookUpTable, nSpheresGM, "sphereIDsLookUpTable", 0);
+    TRACKED_VECTOR_RESIZE(numSpheresBinTouches, nSpheresGM, "numSpheresBinTouches", 0);
+    TRACKED_VECTOR_RESIZE(numContactsInEachBin, nSpheresGM, "numContactsInEachBin", 0);
 
     // Resize to the length of the clump templates
     TRACKED_VECTOR_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);
@@ -401,9 +412,11 @@ void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
     // TRACKED_VECTOR_RESIZE(inflatedRadiiVoxelRatio, nClumpComponents, "inflatedRadiiVoxelRatio", 0);
 
     // Arrays for kT produced contact info
-    // The length of idGeometry arrays is an estimate
-    TRACKED_VECTOR_RESIZE(idGeometryA, nSpheresGM, "idGeometryA", 0);
-    TRACKED_VECTOR_RESIZE(idGeometryB, nSpheresGM, "idGeometryB", 0);
+    // The following several arrays will have variable sizes, so here we only used an estimate. My estimate of total
+    // contact pairs is 4n, and I think the max is 6n (although I can't prove it). Note the estimate should be large
+    // enough to decrease the number of reallocations in the simulation, but not too large that eats too much memory.
+    TRACKED_VECTOR_RESIZE(idGeometryA, nClumpBodies * 4, "idGeometryA", 0);
+    TRACKED_VECTOR_RESIZE(idGeometryB, nClumpBodies * 4, "idGeometryB", 0);
 }
 
 void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
