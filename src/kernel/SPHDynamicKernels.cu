@@ -1,13 +1,22 @@
+// All Dynamic CUDA kernels for SPH in gpu-physics
+
 #include <sph/datastruct.h>
-// *----------------------------------------
-// SPH - Dynamic kernals
-__global__ void dynamic1stPass(contactData* gpu_pair_data,
-                               int gpu_pair_n,
-                               vector3* gpu_pos,
-                               vector3* gpu_vel,
-                               vector3* gpu_acc,
-                               bool* gpu_fix,
-                               float radius) {
+
+// =================================================================================================================
+// ========================================= START of Dynamic kernels ==============================================
+// =================================================================================================================
+
+// =================================================================================================================
+// Dynamic 1st Pass, this pass compute the contact force of each contact pair
+// the computed force will be filled in contact_force field in each contact pair
+// =================================================================================================================
+__global__ void dynamic1Pass(contactData* gpu_pair_data,
+                             int gpu_pair_n,
+                             vector3* gpu_pos,
+                             vector3* gpu_vel,
+                             vector3* gpu_acc,
+                             bool* gpu_fix,
+                             float radius) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= gpu_pair_n) {
@@ -30,11 +39,14 @@ __global__ void dynamic1stPass(contactData* gpu_pair_data,
         gpu_pair_data[idx].contact_force.y = dir_y * coe;
         gpu_pair_data[idx].contact_force.z = dir_z * coe;
     }
-
-    __syncthreads();
 }
 
-__global__ void dynamic2ndPass(contactData* gpu_pair_data, int gpu_pair_n, contactData* inv_gpu_pair_data) {
+// =================================================================================================================
+// Dynamic 2nd pass, this pass is intended to flaten the array
+// for the original contact_pair array, pair i_a and j_a will only appear once
+// this pass makes sure that (i_a,j_a) will be in one contact_pair element and (j_a,i_a) will be in one contact_pair
+// =================================================================================================================
+__global__ void dynamic2Pass(contactData* gpu_pair_data, int gpu_pair_n, contactData* inv_gpu_pair_data) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= gpu_pair_n) {
@@ -48,12 +60,11 @@ __global__ void dynamic2ndPass(contactData* gpu_pair_data, int gpu_pair_n, conta
     inv_gpu_pair_data[idx].contact_force.z = -gpu_pair_data[idx].contact_force.z;
 }
 
-__global__ void dynamic3rdPass(int* key,
-                               float* x_reduced,
-                               float* y_reduced,
-                               float* z_reduced,
-                               int n,
-                               vector3* gpu_acc) {
+// =================================================================================================================
+// Dynamic 3rd pass, this pass is intended to copy all reduced data into global memory gpu_acc
+// TODO: reconsider the necessity of existence of this kernel
+// =================================================================================================================
+__global__ void dynamic3Pass(int* key, float* x_reduced, float* y_reduced, float* z_reduced, int n, vector3* gpu_acc) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= n) {
@@ -64,16 +75,20 @@ __global__ void dynamic3rdPass(int* key,
     gpu_acc[key[idx]].x = x_reduced[idx];
     gpu_acc[key[idx]].y = y_reduced[idx];
     gpu_acc[key[idx]].z = z_reduced[idx];
-    __syncthreads();
 }
 
-__global__ void dynamic4thPass(vector3* gpu_pos,
-                               vector3* gpu_vel,
-                               vector3* gpu_acc,
-                               char* gpu_fix,
-                               int gpu_n,
-                               float time_step,
-                               float radius) {
+// =================================================================================================================
+// Dynamic 4th pass, the actual integration pass
+// this pass will integrate gpu_acc to gpu_vel to gpu_pos
+// and push simulation 1 step forward
+// =================================================================================================================
+__global__ void dynamic4Pass(vector3* gpu_pos,
+                             vector3* gpu_vel,
+                             vector3* gpu_acc,
+                             char* gpu_fix,
+                             int gpu_n,
+                             float time_step,
+                             float radius) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= gpu_n) {
@@ -97,12 +112,8 @@ __global__ void dynamic4thPass(vector3* gpu_pos,
     gpu_acc[idx].x = 0.f;
     gpu_acc[idx].y = 0.f;
     gpu_acc[idx].z = 0.f;
-
-    __syncthreads();
 }
 
-__global__ void testKernel() {
-    printf("test run\n");
-}
-// END of Dynamic kernels
-// *----------------------------------------
+// =================================================================================================================
+// ========================================= END of Dynamic kernels ================================================
+// =================================================================================================================

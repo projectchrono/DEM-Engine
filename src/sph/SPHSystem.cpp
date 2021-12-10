@@ -84,12 +84,17 @@ void KinematicThread::operator()() {
     int num_block = (k_n % num_thread != 0) ? (k_n / num_thread + 1) : (k_n / num_thread);
 
     // make a copy of the necessary data stored in DataManager
-    std::vector<contactData, sgps::ManagedAllocator<contactData>> contact_data;
-    std::vector<vector3, sgps::ManagedAllocator<vector3>> pos_data;
-    std::vector<int, sgps::ManagedAllocator<int>> offset_data;
-    std::vector<int, sgps::ManagedAllocator<int>> idx_data;
-    std::vector<int, sgps::ManagedAllocator<int>> idx_hd_data;
-    std::vector<int, sgps::ManagedAllocator<int>> idx_track_data;
+    std::vector<contactData, sgps::ManagedAllocator<contactData>> contact_data;  // contact pair data
+    std::vector<vector3, sgps::ManagedAllocator<vector3>> pos_data;              // position data of all particles
+    std::vector<int, sgps::ManagedAllocator<int>> offset_data;  // vector to store offset data - helps the 2nd kernel
+                                                                // call to identify location to write contact pair data
+    std::vector<int, sgps::ManagedAllocator<int>> cd_idx_data;  // vector to store the cd of each particle
+    std::vector<int, sgps::ManagedAllocator<int>>
+        idx_ht_data;  // vector to store head and tail of each cell after sorting
+    std::vector<int, sgps::ManagedAllocator<int>>
+        idx_track_data;  // vector to store original particle idx after sorting
+
+    // intermediate variables declaration
 
     while (getParentSystem().curr_time < getParentSystem().sim_time) {
         float tolerance = 0.05;
@@ -101,8 +106,7 @@ void KinematicThread::operator()() {
         if (getParentSystem().pos_data_isFresh == true) {
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
             pos_data.assign(dataManager.m_pos.begin(), dataManager.m_pos.end());
-            idx_data.assign(dataManager.m_idx.begin(), dataManager.m_idx.end());
-            // idx_hd_data.assign(dataManager.m_idx_hd.begin(), dataManager.m_idx_hd.end());
+            cd_idx_data.assign(dataManager.m_idx.begin(), dataManager.m_idx.end());
         }
 
         // notify the system that the position data has been consumed
@@ -113,14 +117,14 @@ void KinematicThread::operator()() {
         float d_domain_y = getParentSystem().domain_y / Y_SUB_NUM;
         float d_domain_z = getParentSystem().domain_z / Z_SUB_NUM;
 
-        // resize idx_data and idx_track_data
-        idx_data.resize(k_n);
+        // resize cd_idx_data and idx_track_data
+        cd_idx_data.resize(k_n);
         idx_track_data.resize(k_n);
-        idx_hd_data.resize(2 * X_SUB_NUM * Y_SUB_NUM * Z_SUB_NUM);
+        idx_ht_data.resize(2 * X_SUB_NUM * Y_SUB_NUM * Z_SUB_NUM);
 
-        // initialize all idx_hd_data to -1
-        for (int i = 0; i < idx_hd_data.size(); i++) {
-            idx_hd_data[i] = -1;
+        // initialize all idx_ht_data to -1
+        for (int i = 0; i < idx_ht_data.size(); i++) {
+            idx_ht_data[i] = -1;
         }
 
         // GPU sweep to put particles into their l1 subdomains
@@ -129,41 +133,58 @@ void KinematicThread::operator()() {
             JitHelper::buildProgram("SPHKinematicKernels", JitHelper::KERNEL_DIR / "SPHKinematicKernels.cu",
                                     std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
+        // ==============================================================================================================
+        // Kinematic Step 1
+        // Identify CD each particle belongs to
+        // ==============================================================================================================
+
         // kinematic thread first pass
         kinematic_program.kernel("kinematic1Pass")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), (MAX_NUM_UNIT * UNIT_SHARED_SIZE), streamInfo.stream)
-            .launch(pos_data.data(), idx_data.data(), idx_track_data.data(), k_n, d_domain_x, d_domain_y, d_domain_z,
+            .launch(pos_data.data(), cd_idx_data.data(), idx_track_data.data(), k_n, d_domain_x, d_domain_y, d_domain_z,
                     X_SUB_NUM, Y_SUB_NUM, Z_SUB_NUM, getParentSystem().domain_x, getParentSystem().domain_y,
                     getParentSystem().domain_z);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        // sort to sort the idx data with ascending idx_arr
+        // ==============================================================================================================
+        // Kinematic Step 2
+        // Sort all particles based on their CD, store new sequence in idx_track
+        // ==============================================================================================================
 
+        // sort to sort the idx data with ascending idx_arr
         std::vector<int> idx_sorted;
         std::vector<int> idx_track_sorted;
         std::vector<int, sgps::ManagedAllocator<int>> idx_sorted_gpu;
         std::vector<int, sgps::ManagedAllocator<int>> idx_track_sorted_gpu;
 
-        sortOnly(idx_data.data(), idx_track_data.data(), idx_sorted, idx_track_sorted, k_n,
+        // TODO: replace this function call with CUB
+        sortOnly(cd_idx_data.data(), idx_track_data.data(), idx_sorted, idx_track_sorted, k_n,
                  count_digit(X_SUB_NUM * Y_SUB_NUM * Z_SUB_NUM));
-        // =================================================================
+
         // cell domain sorted
         idx_sorted_gpu.assign(idx_sorted.begin(), idx_sorted.end());
         // particle index tracking array sorted
         idx_track_sorted_gpu.assign(idx_track_sorted.begin(), idx_track_sorted.end());
 
-        // Use a GPU to look up starting idx of each cell
+        // ==============================================================================================================
+        // Kinematic Step 3
+        // Obtain the head and tail of particles starting and ending in each cell - idx in idx_track vector
+        // ==============================================================================================================
 
+        // Use a GPU to look up starting idx of each cell
         kinematic_program.kernel("kinematic2Pass")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(idx_sorted_gpu.data(), idx_hd_data.data(), idx_sorted_gpu.size(), idx_hd_data.size());
+            .launch(idx_sorted_gpu.data(), idx_ht_data.data(), idx_sorted_gpu.size(), idx_ht_data.size());
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-        // =================================================================
 
+        // ==============================================================================================================
+        // Kinematic Step 4
+        // Slice the entire simulation domain and obtain CDs contained in each SD
+        // ==============================================================================================================
         std::vector<int> subdomain_decomp = slice_global_sd(10);
         std::vector<int, sgps::ManagedAllocator<int>> subdomain_decomp_gpu;  // subdomain decomposition data
         subdomain_decomp_gpu.assign(subdomain_decomp.begin(), subdomain_decomp.end());
@@ -171,21 +192,29 @@ void KinematicThread::operator()() {
         int num_cd_each_sd = 64;
         int num_sd = subdomain_decomp_gpu.size() / num_cd_each_sd;
 
-        std::cout << "num_sd: " << num_sd << std::endl;
-
-        // =================================================================
-
         std::vector<int, sgps::ManagedAllocator<int>> n_each_sd;  // number of particles in each subdomain;
         n_each_sd.resize(subdomain_decomp_gpu.size() / num_cd_each_sd);
+
+        // ==============================================================================================================
+        // Kinematic Step 5
+        // Compute total number of particles in each SD
+        // ==============================================================================================================
 
         kinematic_program.kernel("kinematic3Pass")
             .instantiate()
             .configure(dim3(1), dim3(1024), 0, streamInfo.stream)
-            .launch(idx_hd_data.data(), subdomain_decomp_gpu.data(), num_cd_each_sd, n_each_sd.data(),
+            .launch(idx_ht_data.data(), subdomain_decomp_gpu.data(), num_cd_each_sd, n_each_sd.data(),
                     n_each_sd.size());
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         std::vector<int, sgps::ManagedAllocator<int>> num_arr(n_each_sd.size() * 1024, -1);
+
+        // ==============================================================================================================
+        // Kinematic Step 6
+        // Compute total number of contacts for each particle
+        // Current we assume each SD has 1024 particles, if particle doesn't exists, give -1, if zero contact, give 0
+        // Then compute total number of contacts
+        // ==============================================================================================================
 
         num_block = n_each_sd.size();
         num_thread = 1024;
@@ -195,7 +224,7 @@ void KinematicThread::operator()() {
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), pos_data.size(), tolerance, dataManager.radius, num_arr.data(), num_cd_each_sd,
-                    subdomain_decomp_gpu.data(), idx_track_sorted_gpu.data(), idx_hd_data.data(), n_each_sd.data(),
+                    subdomain_decomp_gpu.data(), idx_track_sorted_gpu.data(), idx_ht_data.data(), n_each_sd.data(),
                     n_each_sd.size());
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -222,25 +251,15 @@ void KinematicThread::operator()() {
             }
         }
 
-        std::cout << "num_arr sz:" << num_arr.size() << std::endl;
-        std::cout << "offset_data sz: " << offset_data.size() << std::endl;
-
-        std::cout << "======" << std::endl;
-        std::cout << "contact_sum: " << contact_sum << std::endl;
-
-        for (int i = 0; i < offset_data.size(); i++) {
-            if (offset_data[offset_data.size() - 1 - i] != -1) {
-                std::cout << offset_data[offset_data.size() - 1 - i] << " =============" << std::endl;
-                break;
-            }
-        }
-        std::cout << "==========" << std::endl;
-
-        // second kinematic pass to fill the contact pair array
-        // dataManager.m_contact.resize(contact_sum);
+        std::cout << "total contact: " << contact_sum << std::endl;
 
         contact_data.clear();
         contact_data.resize(contact_sum);
+
+        // ==============================================================================================================
+        // Kinematic Step 7
+        // Based on the generated num_arr data, fill in all contact pair data
+        // ==============================================================================================================
 
         // if the contact_sum is not 0, we perform the kinematic 2nd pass
         if (contact_sum != 0) {
@@ -249,7 +268,7 @@ void KinematicThread::operator()() {
                 .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
                 .launch(pos_data.data(), pos_data.size(), offset_data.data(), num_arr.data(), tolerance,
                         dataManager.radius, contact_data.data(), num_cd_each_sd, subdomain_decomp_gpu.data(),
-                        idx_track_sorted_gpu.data(), idx_hd_data.data(), n_each_sd.data(), n_each_sd.size(),
+                        idx_track_sorted_gpu.data(), idx_ht_data.data(), n_each_sd.data(), n_each_sd.size(),
                         contact_sum);
 
             GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -260,8 +279,7 @@ void KinematicThread::operator()() {
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexContact());
             dataManager.m_contact.assign(contact_data.begin(), contact_data.end());
             dataManager.m_offset.assign(offset_data.begin(), offset_data.end());
-            dataManager.m_idx.assign(idx_data.begin(), idx_data.end());
-            // dataManager.m_idx_hd.assign(idx_hd_data.begin(), idx_hd_data.end());
+            dataManager.m_idx.assign(cd_idx_data.begin(), cd_idx_data.end());
         }
 
         // notify the system that the contact data is now fresh
@@ -336,6 +354,13 @@ void DynamicThread::operator()() {
             JitHelper::buildProgram("SPHDynamicKernels", JitHelper::KERNEL_DIR / "SPHDynamicKernels.cu",
                                     std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
+        // ==============================================================================================================
+        // Dynamic Step 1
+        // Fill in all contact force terms in the contact pair data
+        // this means compute the contact force for each contact collision pair
+        // NOTE: now we have not REDUCE yet
+        // ==============================================================================================================
+
         int block_size = 1024;
         int num_thread = (block_size < contact_data.size()) ? block_size : contact_data.size();
         int num_block = (contact_data.size() % num_thread != 0) ? (contact_data.size() / num_thread + 1)
@@ -343,7 +368,7 @@ void DynamicThread::operator()() {
 
         // call dynamic first gpu pass
         // this pass will fill the contact pair data vector
-        dynamic_program.kernel("dynamic1stPass")
+        dynamic_program.kernel("dynamic1Pass")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(contact_data.data(), contact_data.size(), pos_data.data(), vel_data.data(), acc_data.data(),
@@ -355,7 +380,7 @@ void DynamicThread::operator()() {
         std::vector<contactData, sgps::ManagedAllocator<contactData>> inv_contact_data;
         inv_contact_data.resize(contact_data.size());
 
-        dynamic_program.kernel("dynamic2ndPass")
+        dynamic_program.kernel("dynamic2Pass")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(contact_data.data(), contact_data.size(), inv_contact_data.data());
@@ -365,10 +390,12 @@ void DynamicThread::operator()() {
 
         inv_contact_data.clear();
 
-        // TEST SECTION
-        // call dynamic second GPU pass
-        // this is SUPPOSED TO BE A CUB REDUCTION
-        // now using CPU
+        // ==============================================================================================================
+        // Dynamic Step 2
+        // Perform reduction to compute total force applied on each particle
+        // ==============================================================================================================
+
+        // TODO: replace this entire step with CUB
 
         // set up CPU data input
         // create a long array to reduce
@@ -394,13 +421,7 @@ void DynamicThread::operator()() {
         sortReduce(keys.data(), y_frcs.data(), key_reduced, y_reduced, keys.size(), count_digit(k_n));
         key_reduced.clear();
         sortReduce(keys.data(), z_frcs.data(), key_reduced, z_reduced, keys.size(), count_digit(k_n));
-        /*
-                std::cout << "key sz: " << keys.size() << std::endl;
-                std::cout << "key rd sz: " << key_reduced.size() << std::endl;
-                std::cout << "x sz: " << x_reduced.size() << std::endl;
-                std::cout << "y sz: " << y_reduced.size() << std::endl;
-                std::cout << "z sz: " << z_reduced.size() << std::endl;
-        */
+
         // transfer data to GPU
         std::vector<int, sgps::ManagedAllocator<int>> gpu_key_reduced;
         std::vector<float, sgps::ManagedAllocator<float>> gpu_x_reduced;
@@ -411,7 +432,11 @@ void DynamicThread::operator()() {
         gpu_x_reduced.assign(x_reduced.begin(), x_reduced.end());
         gpu_y_reduced.assign(y_reduced.begin(), y_reduced.end());
         gpu_z_reduced.assign(z_reduced.begin(), z_reduced.end());
-        // END TEST SECTION
+
+        // ==============================================================================================================
+        // Dynamic Step 3
+        // Assign computed acceleration data based on the reduced force computed on each particle
+        // ==============================================================================================================
 
         block_size = 1024;
         num_thread = (block_size < gpu_key_reduced.size()) ? block_size : gpu_key_reduced.size();
@@ -419,7 +444,7 @@ void DynamicThread::operator()() {
                                                                : (gpu_key_reduced.size() / num_thread);
 
         // call dynamic third gpu pass
-        dynamic_program.kernel("dynamic3rdPass")
+        dynamic_program.kernel("dynamic3Pass")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(gpu_key_reduced.data(), gpu_x_reduced.data(), gpu_y_reduced.data(), gpu_z_reduced.data(),
@@ -431,8 +456,12 @@ void DynamicThread::operator()() {
         num_thread = (block_size < k_n) ? block_size : k_n;
         num_block = (k_n % num_thread != 0) ? (k_n / num_thread + 1) : (k_n / num_thread);
 
-        // call dynamic second gpu pass
-        dynamic_program.kernel("dynamic4thPass")
+        // ==============================================================================================================
+        // Dynamic Step 4
+        // Final integration step to push the simulation one time step forward
+        // ==============================================================================================================
+
+        dynamic_program.kernel("dynamic4Pass")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), vel_data.data(), acc_data.data(), fix_data.data(), pos_data.size(), time_step,
@@ -463,12 +492,6 @@ void DynamicThread::operator()() {
             getParentSystem().setCurPrint(getParentSystem().getCurPrint() + 1);
         }
 
-        /*
-                if (getParentSystem().getPrintOut() == true) {
-                    getParentSystem().printCSV("test" + std::to_string(dynamicCounter) + ".csv", pos_data.data(),
-                                               pos_data.size(), vel_data.data(), acc_data.data());
-                }
-        */
         // notify the system that the position data is fresh
         // increment the dynamic thread
         getParentSystem().pos_data_isFresh = true;

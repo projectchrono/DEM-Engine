@@ -1,9 +1,15 @@
 #include <sph/datastruct.h>
-// *----------------------------------------
-// SPH - Kinematic kernels
+// =================================================================================================================
+// ========================================= START of Kinematic kernels ============================================
+// =================================================================================================================
+
+// =================================================================================================================
+// Kinematic 1st Pass, this pass identifies each particle into it's corresponding cd
+// the cd idx is stored in cd_idx
+// =================================================================================================================
 __global__ void kinematic1Pass(vector3* pos,
-                               int* idx_arr,
-                               int* idx_track_arr,
+                               int* cd_idx,
+                               int* idx_track,
                                int n,
                                float d_domain_x,
                                float d_domain_y,
@@ -20,7 +26,7 @@ __global__ void kinematic1Pass(vector3* pos,
         return;
     }
 
-    idx_track_arr[idx] = idx;
+    idx_track[idx] = idx;
 
     float dx_2_0 = int(pos[idx].x - (-domain_x / 2));
     float dy_2_0 = int(pos[idx].y - (-domain_y / 2));
@@ -30,15 +36,15 @@ __global__ void kinematic1Pass(vector3* pos,
     int y_idx = int(dy_2_0 / d_domain_x);
     int z_idx = int(dz_2_0 / d_domain_x);
 
-    idx_arr[idx] = z_idx * num_domain_x * num_domain_y + y_idx * num_domain_x + x_idx;
+    cd_idx[idx] = z_idx * num_domain_x * num_domain_y + y_idx * num_domain_x + x_idx;
 }
 
-// GPU header sweep to find the starting idx of each cell
-// if the cell is activated (there are particles in the current cell), fill two elements 'head idx' and 'tail
-// idx'
-// if the cell is not activated (there is not any particle in the current cell), fill two elements 'head idx' and 'tail
-// idx' with -1
-__global__ void kinematic2Pass(int* idx_sorted, int* idx_hd_data, int idx_size, int hd_size) {
+// =================================================================================================================
+// Kinematic 2nd Pass, this pass performs a header sweep to find the 'head' and 'tail' of each cd
+// if the cd is 'activated', there is(are) particle(s) in the cd - then [cdidx*2] = 'h' and [cdidx*2+1] = 't'
+// if the cd is 'inactivated', there is(are) not particle(s) in the cd - then [cdidx*2] = -1 and [cdidx*2+1] = -1
+// =================================================================================================================
+__global__ void kinematic2Pass(int* idx_sorted, int* idx_ht_data, int idx_size, int hd_size) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= idx_size) {
@@ -47,29 +53,33 @@ __global__ void kinematic2Pass(int* idx_sorted, int* idx_hd_data, int idx_size, 
 
     // marginal case handling
     if (idx == 0) {
-        idx_hd_data[idx_sorted[idx] * 2] = idx;
+        idx_ht_data[idx_sorted[idx] * 2] = idx;
         return;
     }
 
     if (idx == idx_size - 1) {
-        idx_hd_data[idx_sorted[idx] * 2 + 1] = idx;
+        idx_ht_data[idx_sorted[idx] * 2 + 1] = idx;
         return;
     }
 
     // examine the (current idx) and (current idx - 1)
     // here we already assumed that idx_sorted[idx] >= idx_sorted[idx-1] after radix sort
     if (idx_sorted[idx] != idx_sorted[idx - 1]) {
-        idx_hd_data[idx_sorted[idx - 1] * 2 + 1] = idx - 1;
-        idx_hd_data[idx_sorted[idx] * 2] = idx;
+        idx_ht_data[idx_sorted[idx - 1] * 2 + 1] = idx - 1;
+        idx_ht_data[idx_sorted[idx] * 2] = idx;
     }
 
     // examine the (current idx + 1) and (current idx)
     // here we already assumed that idx_sorted[idx+1] >= idx_sorted[idx] after radix sort
     if (idx_sorted[idx + 1] != idx_sorted[idx]) {
-        idx_hd_data[idx_sorted[idx] * 2 + 1] = idx;
-        idx_hd_data[idx_sorted[idx + 1] * 2] = idx + 1;
+        idx_ht_data[idx_sorted[idx] * 2 + 1] = idx;
+        idx_ht_data[idx_sorted[idx + 1] * 2] = idx + 1;
     }
 }
+
+// =================================================================================================================
+// Kinematic 3rd Pass, this pass compute total number of particles in each cd
+// =================================================================================================================
 
 __global__ void kinematic3Pass(int* idx_hd, int* subdomain_decomp, int num_cd_each_sd, int* n_each_sd, int n_sd) {
     int sd_idx = threadIdx.x;
@@ -88,6 +98,10 @@ __global__ void kinematic3Pass(int* idx_hd, int* subdomain_decomp, int num_cd_ea
     n_each_sd[sd_idx] = total;
 }
 
+// =================================================================================================================
+// Kinematic 4th Pass, this pass
+// =================================================================================================================
+
 __global__ void kinematic4Pass(vector3* pos,
                                int n,
                                float tolerance,
@@ -96,7 +110,7 @@ __global__ void kinematic4Pass(vector3* pos,
                                int num_cd_each_sd,
                                int* subdomain_decomp,
                                int* idx_track_sorted,
-                               int* idx_hd_data,
+                               int* idx_ht_data,
                                int* n_each_sd,
                                int n_sd) {
     __shared__ vector3 pos_sd[1024];  // request maximum capacity for the shared mem
@@ -117,8 +131,8 @@ __global__ void kinematic4Pass(vector3* pos,
         tot_in_sd = n_each_sd[sd_idx];
         for (int i = 0; i < num_cd_each_sd; i++) {
             int cd_idx = subdomain_decomp[sd_idx * num_cd_each_sd + i];
-            if (idx_hd_data[2 * cd_idx] != -1) {
-                cd_sz_track[i] = idx_hd_data[2 * cd_idx + 1] - idx_hd_data[2 * cd_idx] + 1;
+            if (idx_ht_data[2 * cd_idx] != -1) {
+                cd_sz_track[i] = idx_ht_data[2 * cd_idx + 1] - idx_ht_data[2 * cd_idx] + 1;
             } else {
                 cd_sz_track[i] = 0;
             }
@@ -136,9 +150,9 @@ __global__ void kinematic4Pass(vector3* pos,
                 cur_sz = cur_sz + cd_sz_track[j];
             }
 
-            if (idx_hd_data[2 * cd_idx] != -1) {
-                int cd_h = idx_hd_data[2 * cd_idx];
-                int cd_d = idx_hd_data[2 * cd_idx + 1];
+            if (idx_ht_data[2 * cd_idx] != -1) {
+                int cd_h = idx_ht_data[2 * cd_idx];
+                int cd_d = idx_ht_data[2 * cd_idx + 1];
 
                 for (int j = 0; j < (cd_d - cd_h + 1); j++) {
                     pos_sd[cur_sz + j] = pos[idx_track_sorted[cd_h + j]];
@@ -171,6 +185,10 @@ __global__ void kinematic4Pass(vector3* pos,
     res_arr[sd_idx * 1024 + idx] = count;
 }
 
+// =================================================================================================================
+// Kinematic 5th Pass, this pass
+// =================================================================================================================
+
 __global__ void kinematic5Pass(vector3* pos,
                                int n,
                                int* offset,
@@ -181,7 +199,7 @@ __global__ void kinematic5Pass(vector3* pos,
                                int num_cd_each_sd,
                                int* subdomain_decomp,
                                int* idx_track_sorted,
-                               int* idx_hd_data,
+                               int* idx_ht_data,
                                int* n_each_sd,
                                int n_sd,
                                int contact_sum) {
@@ -205,8 +223,8 @@ __global__ void kinematic5Pass(vector3* pos,
         tot_in_sd = n_each_sd[sd_idx];
         for (int i = 0; i < num_cd_each_sd; i++) {
             int cd_idx = subdomain_decomp[sd_idx * num_cd_each_sd + i];
-            if (idx_hd_data[2 * cd_idx] != -1) {
-                cd_sz_track[i] = idx_hd_data[2 * cd_idx + 1] - idx_hd_data[2 * cd_idx] + 1;
+            if (idx_ht_data[2 * cd_idx] != -1) {
+                cd_sz_track[i] = idx_ht_data[2 * cd_idx + 1] - idx_ht_data[2 * cd_idx] + 1;
             } else {
                 cd_sz_track[i] = 0;
             }
@@ -224,9 +242,9 @@ __global__ void kinematic5Pass(vector3* pos,
                 cur_sz = cur_sz + cd_sz_track[j];
             }
 
-            if (idx_hd_data[2 * cd_idx] != -1) {
-                int cd_h = idx_hd_data[2 * cd_idx];
-                int cd_d = idx_hd_data[2 * cd_idx + 1];
+            if (idx_ht_data[2 * cd_idx] != -1) {
+                int cd_h = idx_ht_data[2 * cd_idx];
+                int cd_d = idx_ht_data[2 * cd_idx + 1];
 
                 for (int j = 0; j < (cd_d - cd_h + 1); j++) {
                     pos_sd[cur_sz + j] = pos[idx_track_sorted[cd_h + j]];
@@ -264,5 +282,6 @@ __global__ void kinematic5Pass(vector3* pos,
     __syncthreads();
 }
 
-// END of Kinematic kernels
-// *----------------------------------------
+// =================================================================================================================
+// ========================================= END of Kinematic kernels ==============================================
+// =================================================================================================================
