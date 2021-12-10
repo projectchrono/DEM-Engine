@@ -58,10 +58,8 @@ int main(int argc, char* argv[]) {
 
                 vel_vec.push_back(vector3(0, 0, 0));
                 acc_vec.push_back(vector3(0, 0, 0));
-                if (k == 0)
-                    fix_vec.push_back(0);
-                if (k == 1)
-                    fix_vec.push_back(1);
+                fix_vec.push_back(0);
+
                 num_par++;
             }
         }
