@@ -136,7 +136,7 @@ void DEMSolver::decideDefaultBinSize() {
     }
 
     // What should be a default bin size?
-    m_binSize = 4.0 * smallest_radius;
+    m_binSize = 1.0 * smallest_radius;
 }
 
 int DEMSolver::generateJITResources() {

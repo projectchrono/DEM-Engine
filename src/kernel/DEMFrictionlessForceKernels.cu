@@ -18,7 +18,7 @@
 template <typename T1, typename T2>
 inline __device__ float3 calcNormalForce(T1 overlapDepth, T2 A2BX, T2 A2BY, T2 A2BZ, sgps::contact_t contact_type) {
     // A placeholder calculation
-    float F_mag = 1e15 * overlapDepth;
+    float F_mag = 1e17 * overlapDepth;
     return make_float3(-F_mag * A2BX, -F_mag * A2BY, -F_mag * A2BZ);
 }
 
@@ -54,7 +54,7 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
         // Take care of 2 bodies in order, bodyA first
         double AownerX, AownerY, AownerZ;
         sgps::oriQ_t AoriQ0, AoriQ1, AoriQ2, AoriQ3;
-        voxelID2Position<double, sgps::bodyID_t, sgps::subVoxelPos_t>(
+        voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
             AownerX, AownerY, AownerZ, granData->voxelID[bodyAOwner], granData->locX[bodyAOwner],
             granData->locY[bodyAOwner], granData->locZ[bodyAOwner], simParams->nvXp2, simParams->nvYp2,
             simParams->voxelSize, simParams->l);
@@ -68,7 +68,7 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
         // Then bodyB
         double BownerX, BownerY, BownerZ;
         sgps::oriQ_t BoriQ0, BoriQ1, BoriQ2, BoriQ3;
-        voxelID2Position<double, sgps::bodyID_t, sgps::subVoxelPos_t>(
+        voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
             BownerX, BownerY, BownerZ, granData->voxelID[bodyBOwner], granData->locX[bodyBOwner],
             granData->locY[bodyBOwner], granData->locZ[bodyBOwner], simParams->nvXp2, simParams->nvYp2,
             simParams->voxelSize, simParams->l);
@@ -102,6 +102,8 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
                 contactPntX, contactPntY, contactPntZ, AownerX, AownerY, AownerZ, AoriQ0, AoriQ1, AoriQ2, AoriQ3);
             granData->contactPointGeometryA[myContactID] = findLocalCoord<double>(
                 contactPntX, contactPntY, contactPntZ, BownerX, BownerY, BownerZ, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
+        } else {
+            granData->contactForces[myContactID] = make_float3(0, 0, 0);
         }
     }
 }

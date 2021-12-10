@@ -6,6 +6,7 @@
 #include <core/utils/ThreadManager.h>
 #include <core/utils/chpf/particle_writer.hpp>
 #include <granular/ApiSystem.h>
+#include <granular/HostSideHelpers.cpp>
 
 #include <cstdio>
 #include <time.h>
@@ -18,13 +19,13 @@ int main() {
     srand(time(NULL));
 
     // total number of random clump templates to generate
-    int num_template = 2;
+    int num_template = 10;
 
     int min_sphere = 1;
     int max_sphere = 1;
 
     float min_rad = 0.08;
-    float max_rad = 0.2;
+    float max_rad = 0.15;
 
     float min_relpos = -0.1;
     float max_relpos = 0.1;
@@ -43,17 +44,10 @@ int main() {
         std::vector<unsigned int> mat;
 
         // randomly generate clump template configurations
-
         // the relPos of a sphere is always seeded from one of the already-generated sphere
         float3 seed_pos = make_float3(0);
         for (int j = 0; j < num_sphere; j++) {
             radii.push_back(((float)rand() / RAND_MAX) * (max_rad - min_rad) + min_rad);
-            /*
-            if (i == 0)
-                radii.push_back(0.16138418018817902);
-            else
-                radii.push_back(0.16321393847465515);
-            */
             float3 tmp;
             if (j == 0) {
                 tmp.x = 0;
@@ -77,21 +71,25 @@ int main() {
         auto template_num = DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat);
     }
 
+    // generate initial clumps (in this case just polydisperse spheres)
+    auto input_xyz = DEMBoxGridSampler(make_float3(0), make_float3(1, 1, 1), 0.4);
+    unsigned int num_clumps = input_xyz.size();
     std::vector<unsigned int> input_template_num;
-    std::vector<float3> input_xyz;
     std::vector<float3> input_vel;
-
-    // show one for each template configuration
-    for (int i = 0; i < num_template; i++) {
-        input_template_num.push_back(i);
-        input_xyz.push_back(make_float3(i * 0.6, 0, 0));
-        float sgn_vel = (i % 2 == 0) ? 1.0 : -1.0;
-        input_vel.push_back(make_float3(sgn_vel * 50.0, 0, 0));
+    for (unsigned int i = 0; i < num_clumps; i++) {
+        input_template_num.push_back(i % num_template);
+        float3 vel;
+        vel.x = (float)rand() / RAND_MAX - 0.5;
+        vel.y = (float)rand() / RAND_MAX - 0.5;
+        vel.z = (float)rand() / RAND_MAX - 0.5;
+        vel = normalize(vel) * 50.0;
+        input_vel.push_back(vel);
     }
+
     DEM_sim.SetClumps(input_template_num, input_xyz);
     DEM_sim.SetClumpVels(input_vel);
 
-    DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, 1e-10);
+    DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, 3e-10);
 
     DEM_sim.CenterCoordSys();
     DEM_sim.SetTimeStepSize(1e-4);
@@ -99,13 +97,14 @@ int main() {
 
     DEM_sim.Initialize();
 
-    for (int i = 0; i < 20; i++) {
-        std::cout << "Iteration: " << i + 1 << std::endl;
-        DEM_sim.LaunchThreads();
+    for (int i = 0; i < 100; i++) {
+        std::cout << "Iteration: " << i << std::endl;
 
         char filename[100];
         sprintf(filename, "./DEMdemo_collide_output_%04d.csv", i);
         DEM_sim.WriteFileAsSpheres(std::string(filename));
+
+        DEM_sim.LaunchThreads();
     }
 
     std::cout << "DEMdemo_Collide exiting..." << std::endl;

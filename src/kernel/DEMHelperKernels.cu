@@ -95,6 +95,9 @@ template <typename T1>
 inline __device__ void normalizeVector3(T1& x, T1& y, T1& z) {
     T1 magnitude = sqrt(x * x + y * y + z * z);
     // TODO: Think about whether this is safe
+    if (magnitude < 1e-6) {
+        // printf("Caution!\n");
+    }
     x /= magnitude;
     y /= magnitude;
     z /= magnitude;
@@ -206,7 +209,7 @@ inline __device__ float3 findLocalCoord(T1 X,
                                         T1 Ox,
                                         T1 Oy,
                                         T1 Oz,
-                                        sgps::oriQ_t oriQ0,
+                                        sgps::oriQ_t AoriQ0,
                                         sgps::oriQ_t AoriQ1,
                                         sgps::oriQ_t AoriQ2,
                                         sgps::oriQ_t AoriQ3) {

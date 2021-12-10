@@ -11,6 +11,7 @@
 #include <cmath>
 #include <vector>
 #include <algorithm>
+#include <helper_math.cuh>
 
 namespace sgps {
 
@@ -18,6 +19,13 @@ template <typename T1>
 inline void displayArray(T1* arr, size_t n) {
     for (size_t i = 0; i < n; i++) {
         std::cout << arr[i] << " ";
+    }
+    std::cout << std::endl;
+}
+
+inline void displayFloat3(float3* arr, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        std::cout << "(" << arr[i].x << ", " << arr[i].y << ", " << arr[i].z << "), ";
     }
     std::cout << std::endl;
 }
@@ -60,7 +68,7 @@ inline void hostSortByKey(T1* keys, T2* vals, size_t n) {
 }
 
 template <typename T1>
-void hostScanForJumpsNum(T1* arr, size_t n, unsigned int minSegLen, size_t& total_found) {
+inline void hostScanForJumpsNum(T1* arr, size_t n, unsigned int minSegLen, size_t& total_found) {
     size_t i = 0;
     total_found = 0;
     while (i < n - 1) {
@@ -77,7 +85,7 @@ void hostScanForJumpsNum(T1* arr, size_t n, unsigned int minSegLen, size_t& tota
 
 // Tell each active bin where to find its touching spheres
 template <typename T1, typename T2, typename T3>
-void hostScanForJumps(T1* arr, T1* arr_elem, T2* jump_loc, T3* jump_len, size_t n, unsigned int minSegLen) {
+inline void hostScanForJumps(T1* arr, T1* arr_elem, T2* jump_loc, T3* jump_len, size_t n, unsigned int minSegLen) {
     size_t total_found = 0;
     T2 i = 0;
     unsigned int thisSegLen;
@@ -101,29 +109,45 @@ void hostScanForJumps(T1* arr, T1* arr_elem, T2* jump_loc, T3* jump_len, size_t 
 }
 
 // Note we assume the ``force'' here is actually acceleration written in terms of multiples of l
-template <typename T1>
-void hostCollectForces(bodyID_t* idA,
-                       bodyID_t* idB,
-                       float3* contactForces,
-                       float* clump_h2aX,
-                       float* clump_h2aY,
-                       float* clump_h2aZ,
-                       T1* ownerClumpBody,
-                       double h,
-                       size_t n) {
+inline void hostCollectForces(bodyID_t* idA,
+                              bodyID_t* idB,
+                              float3* contactForces,
+                              float* clump_h2aX,
+                              float* clump_h2aY,
+                              float* clump_h2aZ,
+                              bodyID_t* ownerClumpBody,
+                              double h,
+                              size_t n) {
     for (size_t i = 0; i < n; i++) {
         bodyID_t bodyA = idA[i];
         bodyID_t bodyB = idB[i];
-        T1 AOwner = ownerClumpBody[bodyA];
-        clump_h2aX[AOwner] += contactForces[i].x * h * h;
-        clump_h2aY[AOwner] += contactForces[i].y * h * h;
-        clump_h2aZ[AOwner] += contactForces[i].z * h * h;
+        bodyID_t AOwner = ownerClumpBody[bodyA];
+        clump_h2aX[AOwner] += (double)contactForces[i].x * h * h;
+        clump_h2aY[AOwner] += (double)contactForces[i].y * h * h;
+        clump_h2aZ[AOwner] += (double)contactForces[i].z * h * h;
 
-        T1 BOwner = ownerClumpBody[bodyB];
-        clump_h2aX[BOwner] += -contactForces[i].x * h * h;
-        clump_h2aY[BOwner] += -contactForces[i].y * h * h;
-        clump_h2aZ[BOwner] += -contactForces[i].z * h * h;
+        bodyID_t BOwner = ownerClumpBody[bodyB];
+        clump_h2aX[BOwner] += -(double)contactForces[i].x * h * h;
+        clump_h2aY[BOwner] += -(double)contactForces[i].y * h * h;
+        clump_h2aZ[BOwner] += -(double)contactForces[i].z * h * h;
     }
+}
+
+/// A light-weight grid sampler that can be used to generate the initial stage of the granular system
+inline std::vector<float3> DEMBoxGridSampler(float3 BoxCenter, float3 HalfDims, float GridSize) {
+    std::vector<float3> points;
+    for (float z = BoxCenter.z - HalfDims.z; z <= BoxCenter.z + HalfDims.z; z += GridSize) {
+        for (float y = BoxCenter.y - HalfDims.y; y <= BoxCenter.y + HalfDims.y; y += GridSize) {
+            for (float x = BoxCenter.x - HalfDims.x; x <= BoxCenter.x + HalfDims.x; x += GridSize) {
+                float3 xyz;
+                xyz.x = x;
+                xyz.y = y;
+                xyz.z = z;
+                points.push_back(xyz);
+            }
+        }
+    }
+    return points;
 }
 
 }  // namespace sgps

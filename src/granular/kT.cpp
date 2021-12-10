@@ -11,7 +11,7 @@
 #include <core/utils/chpf/particle_writer.hpp>
 #include <granular/GranularDefines.h>
 #include <granular/PhysicsSystem.h>
-#include <granular/HostSideHelpers.hpp>
+#include <granular/HostSideHelpers.cpp>
 #include <core/utils/JitHelper.h>
 
 namespace sgps {
@@ -22,15 +22,16 @@ int DEMKinematicThread::costlyProductionStep(int val) const {
 }
 
 inline void DEMKinematicThread::contactDetection() {
+    size_t blocks_needed_for_bodies = (simParams->nSpheresGM + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
     auto bin_occupation =
         JitHelper::buildProgram("DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
                                 std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
     bin_occupation.kernel("getNumberOfBinsEachSphereTouches")
         .instantiate()
-        .configure(dim3(1), dim3(simParams->nSpheresGM), sizeof(float) * TEST_SHARED_SIZE * 4, streamInfo.stream)
+        .configure(dim3(blocks_needed_for_bodies), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
+                   streamInfo.stream)
         .launch(simParams, granData, granTemplates);
-
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     hostPrefixScan<binsSphereTouches_t>(granData->numBinsSphereTouches, simParams->nSpheresGM + 1);
@@ -41,14 +42,20 @@ inline void DEMKinematicThread::contactDetection() {
 
     bin_occupation.kernel("populateBinSphereTouchingPairs")
         .instantiate()
-        .configure(dim3(1), dim3(simParams->nSpheresGM), sizeof(float) * TEST_SHARED_SIZE * 4, streamInfo.stream)
+        .configure(dim3(blocks_needed_for_bodies), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
+                   streamInfo.stream)
         .launch(simParams, granData, granTemplates);
-
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    // std::cout << "Unsorted bin IDs: ";
+    // displayArray<binID_t>(granData->binIDsEachSphereTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
+    // std::cout << "Corresponding sphere IDs: ";
+    // displayArray<bodyID_t>(granData->sphereIDsEachBinTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
 
     hostSortByKey<binID_t, bodyID_t>(granData->binIDsEachSphereTouches, granData->sphereIDsEachBinTouches,
                                      granData->numBinsSphereTouches[simParams->nSpheresGM]);
+    // std::cout << "Sorted bin IDs: ";
     // displayArray<binID_t>(granData->binIDsEachSphereTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
+    // std::cout << "Corresponding sphere IDs: ";
     // displayArray<bodyID_t>(granData->sphereIDsEachBinTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
 
     // TODO: use cub to do this. Probably one-two punch: first the number of jumps, then jump locations
@@ -85,15 +92,15 @@ inline void DEMKinematicThread::contactDetection() {
     // 1 extra element is given to numContactsInEachBin for an easier prefix scan. Therefore, its last element registers
     // the total number of contact pairs.
     numContactsInEachBin.resize(simParams->nActiveBins + 1);
-    size_t blocks_needed = (simParams->nActiveBins + NUM_BINS_PER_BLOCK - 1) / NUM_BINS_PER_BLOCK;
-    if (blocks_needed > 0) {
+    size_t blocks_needed_for_bins = (simParams->nActiveBins + NUM_BINS_PER_BLOCK - 1) / NUM_BINS_PER_BLOCK;
+    if (blocks_needed_for_bins > 0) {
         auto contact_detection =
             JitHelper::buildProgram("DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu",
                                     std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
         contact_detection.kernel("getNumberOfContactsEachBin")
             .instantiate()
-            .configure(dim3(blocks_needed), dim3(NUM_BINS_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
+            .configure(dim3(blocks_needed_for_bins), dim3(NUM_BINS_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
                        streamInfo.stream)
             .launch(simParams, granData, granTemplates);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -105,7 +112,7 @@ inline void DEMKinematicThread::contactDetection() {
 
         contact_detection.kernel("populateContactPairsEachBin")
             .instantiate()
-            .configure(dim3(blocks_needed), dim3(NUM_BINS_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
+            .configure(dim3(blocks_needed_for_bins), dim3(NUM_BINS_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
                        streamInfo.stream)
             .launch(simParams, granData, granTemplates);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -379,12 +386,12 @@ void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
     // 1 extra element is given to numBinsSphereTouches for easy prefix scanning
     TRACKED_VECTOR_RESIZE(numBinsSphereTouches, nSpheresGM + 1, "numBinsSphereTouches", 0);
     // The following several arrays will be larger than nSpheresGM, so here we only used an estimate
-    TRACKED_VECTOR_RESIZE(binIDsEachSphereTouches, nSpheresGM, "binIDsEachSphereTouches", 0);
-    TRACKED_VECTOR_RESIZE(sphereIDsEachBinTouches, nSpheresGM, "sphereIDsEachBinTouches", 0);
-    TRACKED_VECTOR_RESIZE(activeBinIDs, nSpheresGM, "activeBinIDs", 0);
-    TRACKED_VECTOR_RESIZE(sphereIDsLookUpTable, nSpheresGM, "sphereIDsLookUpTable", 0);
-    TRACKED_VECTOR_RESIZE(numSpheresBinTouches, nSpheresGM, "numSpheresBinTouches", 0);
-    TRACKED_VECTOR_RESIZE(numContactsInEachBin, nSpheresGM, "numContactsInEachBin", 0);
+    TRACKED_VECTOR_RESIZE(binIDsEachSphereTouches, 10000 * nSpheresGM, "binIDsEachSphereTouches", 0);
+    TRACKED_VECTOR_RESIZE(sphereIDsEachBinTouches, 10000 * nSpheresGM, "sphereIDsEachBinTouches", 0);
+    TRACKED_VECTOR_RESIZE(activeBinIDs, 10000 * nSpheresGM, "activeBinIDs", 0);
+    TRACKED_VECTOR_RESIZE(sphereIDsLookUpTable, 10000 * nSpheresGM, "sphereIDsLookUpTable", 0);
+    TRACKED_VECTOR_RESIZE(numSpheresBinTouches, 10000 * nSpheresGM, "numSpheresBinTouches", 0);
+    TRACKED_VECTOR_RESIZE(numContactsInEachBin, 10000 * nSpheresGM, "numContactsInEachBin", 0);
 
     // Resize to the length of the clump templates
     TRACKED_VECTOR_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);

@@ -28,7 +28,7 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
         sgps::bodyID_t myOwnerID = granData->ownerClumpBody[sphereID];
         sgps::clumpComponentOffset_t myCompOffset = granData->clumpComponentOffset[sphereID];
         double ownerX, ownerY, ownerZ;
-        voxelID2Position<double, sgps::bodyID_t, sgps::subVoxelPos_t>(
+        voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
             ownerX, ownerY, ownerZ, granData->voxelID[myOwnerID], granData->locX[myOwnerID], granData->locY[myOwnerID],
             granData->locZ[myOwnerID], simParams->nvXp2, simParams->nvYp2, simParams->voxelSize, simParams->l);
         float myRelPosX = CDRelPosX[myCompOffset];
@@ -39,8 +39,11 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
         double myBinX = (ownerX + (double)myRelPosX) / simParams->binSize;
         double myBinY = (ownerY + (double)myRelPosY) / simParams->binSize;
         double myBinZ = (ownerZ + (double)myRelPosZ) / simParams->binSize;
+        // printf("myBinXYZ: %f, %f, %f\n", ownerX, ownerY, ownerZ);
+        // printf("myVoxel: %lu\n", granData->voxelID[myOwnerID]);
         // How many bins my radius spans (with fractions)?
         double myRadiusSpan = (double)(CDRadii[myCompOffset]) / simParams->binSize;
+        // printf("myRadius: %f\n", myRadiusSpan);
         // Now, figure out how many bins I touch in each direction
         sgps::binsSphereTouches_t numX =
             (unsigned int)(myBinX + myRadiusSpan) - (unsigned int)(myBinX - myRadiusSpan) + 1;
@@ -81,7 +84,7 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
         // Get the offset of my spot where I should start writing back to the global bin--sphere pair registration array
         sgps::binsSphereTouches_t myReportOffset = granData->numBinsSphereTouches[sphereID];
         double ownerX, ownerY, ownerZ;
-        voxelID2Position<double, sgps::bodyID_t, sgps::subVoxelPos_t>(
+        voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
             ownerX, ownerY, ownerZ, granData->voxelID[myOwnerID], granData->locX[myOwnerID], granData->locY[myOwnerID],
             granData->locZ[myOwnerID], simParams->nvXp2, simParams->nvYp2, simParams->voxelSize, simParams->l);
         float myRelPosX = CDRelPosX[myCompOffset];
@@ -102,7 +105,7 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
                 for (unsigned int i = (unsigned int)(myBinX - myRadiusSpan); i <= (unsigned int)(myBinX + myRadiusSpan);
                      i++) {
                     thisBinID = (sgps::binID_t)i + (sgps::binID_t)j * simParams->nbX +
-                                (sgps::binID_t)k * (simParams->nbX * simParams->nbY);
+                                (sgps::binID_t)k * (sgps::binID_t)simParams->nbX * simParams->nbY;
                     granData->binIDsEachSphereTouches[myReportOffset] = thisBinID;
                     granData->sphereIDsEachBinTouches[myReportOffset] = sphereID;
                     myReportOffset++;
