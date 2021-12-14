@@ -36,7 +36,6 @@ class DEMKinematicThread {
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
 
-    int kinematicAverageTime;
     int costlyProductionStep(int) const;
 
     size_t m_approx_bytes_used = 0;
@@ -139,7 +138,6 @@ class DEMKinematicThread {
         GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
         GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataKT), cudaMemAttachGlobal));
         GPU_CALL(cudaMallocManaged(&granTemplates, sizeof(DEMTemplate), cudaMemAttachGlobal));
-        kinematicAverageTime = 0;
 
         // Get a device/stream ID to use from the GPU Manager
         streamInfo = pGpuDistributor->getAvailableStream();
@@ -157,8 +155,6 @@ class DEMKinematicThread {
         th.join();
         cudaStreamDestroy(streamInfo.stream);
     }
-
-    void setKinematicAverageTime(int val) { kinematicAverageTime = val; }
 
     // buffer exchange methods
     void setDestinationBufferPointers();
@@ -229,8 +225,8 @@ class DEMDynamicThread {
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
 
-    int dynamicAverageTime;  // time required in the consumption process; fake lag
-    int nDynamicCycles;
+    // The number of for iterations dT does for a specific user "run simulation" call
+    size_t nDynamicCycles;
 
     // Buffer arrays for storing info from the dT side.
     // kT modifies these arrays; dT uses them only.
@@ -347,7 +343,6 @@ class DEMDynamicThread {
         GPU_CALL(cudaMallocManaged(&granTemplates, sizeof(DEMTemplate), cudaMemAttachGlobal));
 
         nDynamicCycles = 0;
-        dynamicAverageTime = 0;
 
         // Get a device/stream ID to use from the GPU Manager
         streamInfo = pGpuDistributor->getAvailableStream();
@@ -366,8 +361,7 @@ class DEMDynamicThread {
         cudaStreamDestroy(streamInfo.stream);
     }
 
-    void setDynamicAverageTime(int val) { dynamicAverageTime = val; }
-    void setNDynamicCycles(int val) { nDynamicCycles = val; }
+    void setNDynamicCycles(size_t val) { nDynamicCycles = val; }
 
     // buffer exchange methods
     void setDestinationBufferPointers();

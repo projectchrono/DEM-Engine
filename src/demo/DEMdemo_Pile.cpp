@@ -112,7 +112,7 @@ int main() {
 
     for (int i = 0; i < 5; i++) {
         std::cout << "Iteration: " << i + 1 << std::endl;
-        aa.LaunchThreads();
+        aa.LaunchThreads(5e-5);
 
         // std::cout << aa.GetClumpVoxelID(0) << std::endl;
 

@@ -17,7 +17,7 @@
 namespace sgps {
 
 int DEMKinematicThread::costlyProductionStep(int val) const {
-    std::this_thread::sleep_for(std::chrono::milliseconds(kinematicAverageTime));
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
     return 2 * val + 1;
 }
 

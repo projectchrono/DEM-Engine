@@ -58,7 +58,7 @@ class ThreadManager {
     std::condition_variable cv_KinematicStartLock;
 
     ThreadManager() noexcept {
-        // that is, let dynamic advance into future as much as it wants
+        // that is, let dynamic advance into future as much as it wants, if it is -1
         dynamicRequestedUpdateFrequency = -1;
         stampLastUpdateOfDynamic = -1;
         currentStampOfDynamic = 0;

@@ -28,38 +28,41 @@ class DEMSolver {
     DEMSolver(float rad);
     virtual ~DEMSolver();
 
-    // Instruct the dimension of the ``world'', as well as the origin point of this ``world''. On initialization, this
-    // info will be used to figure out how to assign the num of voxels in each direction. If your ``useful'' domain is
-    // not box-shaped, then define a box that contains your domian. O is the coordinate of the left-bottom-front point
-    // of your simulation ``world''.
+    /// Instruct the dimension of the ``world'', as well as the origin point of this ``world''. On initialization, this
+    /// info will be used to figure out how to assign the num of voxels in each direction. If your ``useful'' domain is
+    /// not box-shaped, then define a box that contains your domian. O is the coordinate of the left-bottom-front point
+    /// of your simulation ``world''.
     void InstructBoxDomainDimension(float x, float y, float z, float3 O = make_float3(0));
 
-    // Explicitly instruct the number of voxels (as 2^{x,y,z}) along each direction, as well as the smallest unit length
-    // l. This is usually for test purposes, and will overwrite other size-related definitions of the big domain.
+    /// Explicitly instruct the number of voxels (as 2^{x,y,z}) along each direction, as well as the smallest unit
+    /// length l. This is usually for test purposes, and will overwrite other size-related definitions of the big
+    /// domain.
     void InstructBoxDomainNumVoxel(unsigned char x,
                                    unsigned char y,
                                    unsigned char z,
                                    float len_unit = 1e-10f,
                                    float3 O = make_float3(0));
 
-    // Set gravity
+    /// Set gravity
     void SetGravitationalAcceleration(float3 g);
-    // Set a constant time step size
+    /// Set a constant time step size
     void SetTimeStepSize(double ts_size);
+    /// Set the number of dT steps before it waits for a contact-pair info update from kT
+    void SetCDUpdateFreq(int freq) { updateFreq = freq; }
     // TODO: Implement an API that allows setting ts size through a list
 
-    // A convenient call that sets the origin of your coordinate system to be in the dead center of your simulation
-    // ``world''. Useful especially you feel like having this ``world'' large to safely hold everything, and don't quite
-    // care about the amount of accuracy lost by not fine-tuning the ``world'' size.
-    // Returns the coordinate of the left-bottom-front point of your simulation ``world'' after this operation.
+    /// A convenient call that sets the origin of your coordinate system to be in the dead center of your simulation
+    /// ``world''. Useful especially you feel like having this ``world'' large to safely hold everything, and don't
+    /// quite care about the amount of accuracy lost by not fine-tuning the ``world'' size. Returns the coordinate of
+    /// the left-bottom-front point of your simulation ``world'' after this operation.
     float3 CenterCoordSys();
 
     /// Set the ratio by which the radii of the spheres are expanded for the purpose of contact detection (safe, and
     /// creates false positives)
     void SetExpandFactor(float beta);
 
-    // Load possible clump types into the API-level cache.
-    // Return the index of the clump type just loaded.
+    /// Load possible clump types into the API-level cache.
+    /// Return the index of the clump type just loaded.
     unsigned int LoadClumpType(float mass,
                                float3 moi,
                                const std::vector<float>& sp_radii,
@@ -68,11 +71,11 @@ class DEMSolver {
     // TODO: need to overload with (vec_distinctSphereRadiiOffset_default_t spheres_component_type, vec_float3
     // location). If this method is called then corresponding sphere_types must have been defined via LoadSphereType.
 
-    // a simplified version of LoadClumpType: it's just a one-sphere clump
+    /// a simplified version of LoadClumpType: it's just a one-sphere clump
     unsigned int LoadClumpSimpleSphere(float mass, float radius, unsigned int material_id);
 
-    // Load possible materials into the API-level cache
-    // Return the index of the material type just loaded
+    /// Load possible materials into the API-level cache
+    /// Return the index of the material type just loaded
     unsigned int LoadMaterialType(float density, float E);
 
     /// Load input clumps (topology types and initial locations) on a per-pair basis
@@ -83,20 +86,21 @@ class DEMSolver {
     /// than the clump location vector then for the unassigned part) the initial velocity is assumed to be 0.
     void SetClumpVels(const std::vector<float3>& vel);
 
-    // Return the voxel ID of a clump by its numbering
+    /// Return the voxel ID of a clump by its numbering
     voxelID_t GetClumpVoxelID(unsigned int i) const;
 
-    // Write current simulation status to a file
-    // Write overlapping spheres, not clumps. It makes the file larger, but less trouble to visualize. Use for test
-    // purposes only.
+    /// Write current simulation status to a file
+    /// Write overlapping spheres, not clumps. It makes the file larger, but less trouble to visualize. Use for test
+    /// purposes only.
     void WriteFileAsSpheres(const std::string& outfilename) const;
 
     int Initialize();
 
-    int LaunchThreads();
+    /// Advance simulation by this amount of time
+    int LaunchThreads(double thisCallDuration);
 
-    // Copy the cached sim params to the GPU-accessible managed memory, so that they are picked up from the next ts of
-    // simulation. Usually used when you want to change simulation parameters after the system is already Intialized.
+    /// Copy the cached sim params to the GPU-accessible managed memory, so that they are picked up from the next ts of
+    /// simulation. Usually used when you want to change simulation parameters after the system is already Intialized.
     void UpdateSimParams();
 
     /*
@@ -191,10 +195,9 @@ class DEMSolver {
     std::vector<float3> m_input_clump_xyz;
     std::vector<float3> m_input_clump_vel;
 
+    // The number of dT steps before it waits for a kT update. The default value 1 means every dT step will wait for a
+    // newly produced contact-pair info (from kT) before proceeding.
     int updateFreq = 1;
-    int timeDynamicSide = 1;
-    int timeKinematicSide = 1;
-    int nDynamicCycles = 5;
 
     GpuManager* dTkT_GpuManager;
     ThreadManager* dTkT_InteractionManager;
@@ -218,6 +221,8 @@ class DEMSolver {
     // Warn users if the data types defined in GranularDefines.h do not blend well with the user inputs (such as when
     // the user inputs a huge amount of clump templates).
     void validateUserInputs();
+    // Compute the number of dT for cycles based on the amount of time the user wants to advance the simulation
+    inline size_t computeDTCycles(double thisCallDuration);
 };
 
 }  // namespace sgps

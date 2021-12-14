@@ -97,14 +97,14 @@ int main() {
 
     DEM_sim.Initialize();
 
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 20; i++) {
         std::cout << "Iteration: " << i << std::endl;
 
         char filename[100];
         sprintf(filename, "./DEMdemo_collide_output_%04d.csv", i);
         DEM_sim.WriteFileAsSpheres(std::string(filename));
 
-        DEM_sim.LaunchThreads();
+        DEM_sim.LaunchThreads(5e-4);
     }
 
     std::cout << "DEMdemo_Collide exiting..." << std::endl;

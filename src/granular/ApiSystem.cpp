@@ -23,11 +23,9 @@ DEMSolver::DEMSolver(float rad) {
     kT = new DEMKinematicThread(dTkT_InteractionManager, dTkT_GpuManager);
     dT = new DEMDynamicThread(dTkT_InteractionManager, dTkT_GpuManager);
 
-    dT->setDynamicAverageTime(timeDynamicSide);
-    dT->setNDynamicCycles(nDynamicCycles);
+    // dT->setNDynamicCycles(nDynamicCycles);
 
     kT->primeDynamic();
-    kT->setKinematicAverageTime(timeKinematicSide);
 }
 
 DEMSolver::~DEMSolver() {
@@ -313,6 +311,10 @@ int DEMSolver::Initialize() {
     return 0;
 }
 
+inline size_t DEMSolver::computeDTCycles(double thisCallDuration) {
+    return (size_t)std::round(thisCallDuration / m_ts_size);
+}
+
 /// Designed such that when (CPU-side) cached simulation data (about sim world, and clump templates) are updated by the
 /// user, they can call this method to transfer them to the GPU-side in mid-simulation.
 void DEMSolver::UpdateSimParams() {
@@ -330,9 +332,13 @@ void DEMSolver::waitOnThreads() {
     dT->resetUserCallStat();
 }
 
-int DEMSolver::LaunchThreads() {
+int DEMSolver::LaunchThreads(double thisCallDuration) {
     // Is it needed here??
     // dT->packDataPointers(kT->granData);
+
+    // Tell dT how many iterations to go
+    size_t nDTIters = computeDTCycles(thisCallDuration);
+    dT->setNDynamicCycles(nDTIters);
 
     dT->startThread();
     kT->startThread();

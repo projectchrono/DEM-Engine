@@ -390,7 +390,7 @@ void DEMDynamicThread::workerThread() {
             }
         }
 
-        for (int cycle = 0; cycle < nDynamicCycles; cycle++) {
+        for (size_t cycle = 0; cycle < nDynamicCycles; cycle++) {
             // if the produce is fresh, use it
             if (pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
                 {
@@ -476,7 +476,6 @@ void DEMDynamicThread::resetUserCallStat() {
 
 int DEMDynamicThread::localUse(int val) {
     cudaSetDevice(streamInfo.device);
-    // std::this_thread::sleep_for(std::chrono::milliseconds(dynamicAverageTime));
 
     // dynamicTestKernel<<<1, 1>>>();
     auto gpu_program =
