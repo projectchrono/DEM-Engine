@@ -14,7 +14,7 @@
 using namespace sgps;
 
 int main() {
-    DEMSolver aa(1.f);
+    DEMSolver DEM_sim;
 
     srand(time(NULL));
 
@@ -46,7 +46,7 @@ int main() {
     std::vector<unsigned int> mat_vec(3, 0);
     */
 
-    auto mat_type_1 = aa.LoadMaterialType(1, 10);
+    auto mat_type_1 = DEM_sim.LoadMaterialType(1, 10);
 
     for (int i = 0; i < num_template; i++) {
         // first decide the number of spheres that live in this clump
@@ -79,9 +79,9 @@ int main() {
         }
 
         // it returns the numbering of this clump template (although here we don't care)
-        auto template_num = aa.LoadClumpType(mass, MOI, radii, relPos, mat);
+        auto template_num = DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat);
     }
-    // auto num = aa.LoadClumpSimpleSphere(3, 1., 0);
+    // auto num = DEM_sim.LoadClumpSimpleSphere(3, 1., 0);
 
     std::vector<unsigned int> input_template_num;
     std::vector<float3> input_xyz;
@@ -97,28 +97,29 @@ int main() {
         int iz = i / (ticks * ticks);
         input_xyz.push_back(grid_size * make_float3(ix, iy, iz));
     }
-    aa.SetClumps(input_template_num, input_xyz);
+    DEM_sim.SetClumps(input_template_num, input_xyz);
 
-    aa.InstructBoxDomainNumVoxel(22, 21, 21, 1e-10);
-    // aa.InstructBoxDomainNumVoxel(11, 11, 10, 1e-10);
+    DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, 1e-10);
+    // DEM_sim.InstructBoxDomainNumVoxel(11, 11, 10, 1e-10);
 
-    aa.CenterCoordSys();
-    aa.SetTimeStepSize(1e-5);
-    aa.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    DEM_sim.CenterCoordSys();
+    DEM_sim.SetTimeStepSize(1e-5);
+    DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    DEM_sim.SetCDUpdateFreq(2);
 
-    aa.Initialize();
+    DEM_sim.Initialize();
 
-    aa.UpdateSimParams();  // Not needed; just testing if this function works...
+    DEM_sim.UpdateSimParams();  // Not needed; just testing if this function works...
 
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 50; i++) {
         std::cout << "Iteration: " << i + 1 << std::endl;
-        aa.LaunchThreads(5e-5);
+        DEM_sim.LaunchThreads(5e-3);
 
-        // std::cout << aa.GetClumpVoxelID(0) << std::endl;
+        // std::cout << DEM_sim.GetClumpVoxelID(0) << std::endl;
 
         char filename[100];
         sprintf(filename, "./test_gran_output_%04d.csv", i);
-        aa.WriteFileAsSpheres(std::string(filename));
+        DEM_sim.WriteFileAsSpheres(std::string(filename));
     }
 
     std::cout << "DEMdemo_Pile exiting..." << std::endl;

@@ -25,7 +25,7 @@ namespace sgps {
 
 class DEMSolver {
   public:
-    DEMSolver(float rad);
+    DEMSolver(unsigned int nGPUs = 2);
     virtual ~DEMSolver();
 
     /// Instruct the dimension of the ``world'', as well as the origin point of this ``world''. On initialization, this

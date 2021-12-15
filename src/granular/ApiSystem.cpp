@@ -14,11 +14,11 @@
 
 namespace sgps {
 
-DEMSolver::DEMSolver(float rad) {
+DEMSolver::DEMSolver(unsigned int nGPUs) {
     dTkT_InteractionManager = new ThreadManager();
-    dTkT_InteractionManager->dynamicRequestedUpdateFrequency = updateFreq;
+    // dTkT_InteractionManager->dynamicRequestedUpdateFrequency = updateFreq;
 
-    dTkT_GpuManager = new GpuManager(2);
+    dTkT_GpuManager = new GpuManager(nGPUs);
 
     kT = new DEMKinematicThread(dTkT_InteractionManager, dTkT_GpuManager);
     dT = new DEMDynamicThread(dTkT_InteractionManager, dTkT_GpuManager);
@@ -339,6 +339,9 @@ int DEMSolver::LaunchThreads(double thisCallDuration) {
     // Tell dT how many iterations to go
     size_t nDTIters = computeDTCycles(thisCallDuration);
     dT->setNDynamicCycles(nDTIters);
+
+    // Make sure dT kT understand the lock--waiting policy of this run
+    dTkT_InteractionManager->dynamicRequestedUpdateFrequency = updateFreq;
 
     dT->startThread();
     kT->startThread();

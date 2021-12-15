@@ -14,7 +14,7 @@
 using namespace sgps;
 
 int main() {
-    DEMSolver DEM_sim(1.f);
+    DEMSolver DEM_sim;
 
     srand(time(NULL));
 
@@ -94,6 +94,7 @@ int main() {
     DEM_sim.CenterCoordSys();
     DEM_sim.SetTimeStepSize(1e-4);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, 0));
+    DEM_sim.SetCDUpdateFreq(1);
 
     DEM_sim.Initialize();
 
