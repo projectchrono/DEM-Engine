@@ -24,11 +24,11 @@ int main() {
     int min_sphere = 1;
     int max_sphere = 1;
 
-    float min_rad = 0.08;
-    float max_rad = 0.15;
+    float min_rad = 0.008;
+    float max_rad = 0.015;
 
-    float min_relpos = -0.1;
-    float max_relpos = 0.1;
+    float min_relpos = -0.01;
+    float max_relpos = 0.01;
 
     auto mat_type_1 = DEM_sim.LoadMaterialType(1, 10);
 
@@ -72,40 +72,45 @@ int main() {
     }
 
     // generate initial clumps (in this case just polydisperse spheres)
-    auto input_xyz = DEMBoxGridSampler(make_float3(0), make_float3(1, 1, 1), 0.4);
+    float3 domain_center = make_float3(0);
+    float box_dim = 0.5;
+    auto input_xyz = DEMBoxGridSampler(make_float3(0), make_float3(box_dim), 0.1);
     unsigned int num_clumps = input_xyz.size();
     std::vector<unsigned int> input_template_num;
     std::vector<float3> input_vel;
     for (unsigned int i = 0; i < num_clumps; i++) {
         input_template_num.push_back(i % num_template);
+        // Make a initial vel vector pointing towards the center, engineer collisions
         float3 vel;
-        vel.x = (float)rand() / RAND_MAX - 0.5;
-        vel.y = (float)rand() / RAND_MAX - 0.5;
-        vel.z = (float)rand() / RAND_MAX - 0.5;
-        vel = normalize(vel) * 50.0;
+        vel = domain_center - input_xyz.at(i);
+        if (length(vel) > 1e-5) {
+            vel = normalize(vel) * 30.0;
+        } else {
+            vel = make_float3(0);
+        }
         input_vel.push_back(vel);
     }
 
     DEM_sim.SetClumps(input_template_num, input_xyz);
     DEM_sim.SetClumpVels(input_vel);
 
-    DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, 3e-10);
+    DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, 3e-11);
 
     DEM_sim.CenterCoordSys();
-    DEM_sim.SetTimeStepSize(1e-4);
+    DEM_sim.SetTimeStepSize(1e-5);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, 0));
     DEM_sim.SetCDUpdateFreq(1);
 
     DEM_sim.Initialize();
 
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 100; i++) {
         std::cout << "Iteration: " << i << std::endl;
 
         char filename[100];
         sprintf(filename, "./DEMdemo_collide_output_%04d.csv", i);
         DEM_sim.WriteFileAsSpheres(std::string(filename));
 
-        DEM_sim.LaunchThreads(5e-4);
+        DEM_sim.LaunchThreads(2.5e-4);
     }
 
     std::cout << "DEMdemo_Collide exiting..." << std::endl;

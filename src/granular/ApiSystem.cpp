@@ -213,6 +213,7 @@ int DEMSolver::generateJITResources() {
 
     // Figure out the initial profile/status of clumps, and related quantities, if need to
     nClumpBodies = m_input_clump_types.size();
+    std::cout << "The current number of clumps: " << nClumpBodies << std::endl;
 
     // now a quick hack using for loop
     // I'll have to change that to be more... efficient

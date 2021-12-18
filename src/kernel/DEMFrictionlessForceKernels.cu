@@ -18,7 +18,7 @@
 template <typename T1, typename T2>
 inline __device__ float3 calcNormalForce(T1 overlapDepth, T2 A2BX, T2 A2BY, T2 A2BZ, sgps::contact_t contact_type) {
     // A placeholder calculation
-    float F_mag = 1e17 * overlapDepth;
+    float F_mag = 1e18 * overlapDepth;
     return make_float3(-F_mag * A2BX, -F_mag * A2BY, -F_mag * A2BZ);
 }
 
