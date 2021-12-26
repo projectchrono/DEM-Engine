@@ -16,7 +16,7 @@ int main(int argc, char* argv[]) {
     // calculate number of particles on each direction
     int num_x = dim_x / (radius * 2 + gap);
     int num_y = dim_y / (radius * 2 + gap);
-    int num_z = 6;
+    int num_z = 2;
 
     // create position array of all particles
     std::vector<vector3> pos_vec;
@@ -31,11 +31,11 @@ int main(int argc, char* argv[]) {
     // sample all particles
     int num_par = 0;
     // sample the bottom layer
-    for (int j = 0; j < num_y; j++) {
-        for (int i = 0; i < num_x; i++) {
+    for (int j = 0; j < num_y / 8; j++) {
+        for (int i = 0; i < num_x / 8; i++) {
             float temp_z = -dim_z / 2 + radius;
-            pos_vec.push_back(vector3(-dim_x / 2 + i * (2 * radius + gap) + radius,
-                                      -dim_y / 2 + j * (2 * radius + gap) + radius, temp_z));
+            pos_vec.push_back(vector3(-dim_x / 8 + i * (2 * radius + gap) + radius,
+                                      -dim_y / 8 + j * (2 * radius + gap) + radius, temp_z));
             vel_vec.push_back(vector3(0, 0, 0));
             acc_vec.push_back(vector3(0, 0, 0));
             fix_vec.push_back(1);
@@ -45,17 +45,19 @@ int main(int argc, char* argv[]) {
 
     // sample a smaller domain for drop test
     for (int k = 1; k < num_z; k++) {
-        for (int j = 0; j < num_y / 2; j++) {
-            for (int i = 0; i < num_x / 2; i++) {
-                float temp_z = -dim_z / 2 + 2 * (radius + 2 * gap) * k + radius + gap;
+        for (int j = 0; j < num_y / 8; j++) {
+            for (int i = 0; i < num_x / 8; i++) {
+                float temp_z = -dim_z / 2 + 2 * (radius + 2 * gap) * (k) + radius + gap;
+                /*
                 if (k % 2 == 0) {
                     pos_vec.push_back(vector3(-dim_x / 4 + i * (2 * radius + gap) + radius,
                                               -dim_y / 4 + j * (2 * radius + gap) + radius, temp_z));
                 } else {
                     pos_vec.push_back(vector3(-dim_x / 4 + 2 * gap + i * (2 * radius + 2 * gap) + radius,
                                               -dim_y / 4 + 2 * gap + j * (2 * radius + 2 * gap) + radius, temp_z));
-                }
-
+                }*/
+                pos_vec.push_back(vector3(-dim_x / 8 + i * (2 * radius + gap) + radius,
+                                          -dim_y / 8 + j * (2 * radius + gap) + radius, temp_z));
                 vel_vec.push_back(vector3(0, 0, 0));
                 acc_vec.push_back(vector3(0, 0, 0));
                 fix_vec.push_back(0);

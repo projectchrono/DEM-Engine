@@ -226,19 +226,18 @@ void KinematicThread::operator()() {
                     n_each_sd.size());
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        std::vector<int, sgps::ManagedAllocator<int>> num_arr(n_each_sd.size() * 1024, -1);
+        std::vector<int, sgps::ManagedAllocator<int>> num_arr(n_each_sd.size() * 512, -1);
 
         // ==============================================================================================================
         // Kinematic Step 6
         // Compute total number of contacts for each particle
-        // Current we assume each SD has 1024 particles, if particle doesn't exists, give -1, if zero contact, give 0
+        // Current we assume each SD has 512 particles, if particle doesn't exists, give -1, if zero contact, give 0
         // Then compute total number of contacts
         // ==============================================================================================================
 
         num_block = n_each_sd.size();
         num_thread = 512;
 
-        // kinematic thread first pass
         kinematic_program.kernel("kinematic4Pass")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
@@ -270,7 +269,7 @@ void KinematicThread::operator()() {
             }
         }
 
-        std::cout << "total contact: " << contact_sum << std::endl;
+        // std::cout << "total contact: " << contact_sum << std::endl;
 
         contact_data.clear();
         contact_data.resize(contact_sum);
@@ -348,7 +347,6 @@ void DynamicThread::operator()() {
         if (getParentSystem().contact_data_isFresh == true) {
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexContact());
             contact_data.assign(dataManager.m_contact.begin(), dataManager.m_contact.end());
-            offset_data.assign(dataManager.m_offset.begin(), dataManager.m_offset.end());
         }
 
         // notify the system that the contact data is old
@@ -486,6 +484,11 @@ void DynamicThread::operator()() {
                     radius);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+        // TEST PRINT SECTION
+        output_collision_data(contact_data.data(), contact_data.size(),
+                              "ct/contact" + std::to_string(dynamicCounter) + ".csv");
+        // END TEST PRINT SECTION
 
         // copy data back to the dataManager
         {

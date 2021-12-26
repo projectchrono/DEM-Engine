@@ -3,10 +3,13 @@
 //  All rights reserved.
 
 #include <iostream>
+#include <fstream>
 #include <list>
+#include <ostream>
 #include <cmath>
 #include <vector>
 #include <algorithm>
+#include <sph/datastruct.h>
 #include "CpuAlgorithmHelper.h"
 using namespace std;
 void display(int* array, int size) {
@@ -193,6 +196,22 @@ std::vector<int> slice_global_sd(int X_SUB_NUM, int Y_SUB_NUM, int Z_SUB_NUM) {
         }
     }
     return res;
+}
+
+// output the collision data for debugging purposes
+void output_collision_data(contactData* contact_data, int contact_size, std::string filename) {
+    std::ofstream csvFile(filename);
+
+    csvFile << "pair_i,pair_j,frc_x,frc_y,frc_z" << std::endl;
+
+    // write particle data into csv file
+    for (int i = 0; i < contact_size; i++) {
+        csvFile << contact_data[i].contact_pair.x << "," << contact_data[i].contact_pair.y << ","
+                << contact_data[i].contact_force.x << "," << contact_data[i].contact_force.y << ","
+                << contact_data[i].contact_force.z << std::endl;
+    }
+
+    csvFile.close();
 }
 
 /*

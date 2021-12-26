@@ -4,6 +4,7 @@
 
 #include <vector>
 #include <algorithm>
+#include <sph/datastruct.h>
 
 #pragma once
 #ifndef SGPS_CPU_ALGORITHM
@@ -19,6 +20,9 @@ int count_digit(int number);
 
 // a test algorithm to slice obtain a std::vector indicating which cell is in that sd
 std::vector<int> slice_global_sd(int X_SUB_NUM, int Y_SUB_NUM, int Z_SUB_NUM);
+
+// output the collision data for debugging purposes
+void output_collision_data(contactData* contact_data, int contact_size, std::string filename);
 
 // helper function to look for cell idx from subdomain idx
 // std::vector<int>
