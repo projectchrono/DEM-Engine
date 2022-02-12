@@ -106,6 +106,10 @@ void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
     TRACKED_VECTOR_RESIZE(locX, nClumpBodies, "locX", 0);
     TRACKED_VECTOR_RESIZE(locY, nClumpBodies, "locY", 0);
     TRACKED_VECTOR_RESIZE(locZ, nClumpBodies, "locZ", 0);
+    TRACKED_VECTOR_RESIZE(oriQ0, nClumpBodies, "oriQ0", 1);
+    TRACKED_VECTOR_RESIZE(oriQ1, nClumpBodies, "oriQ1", 0);
+    TRACKED_VECTOR_RESIZE(oriQ2, nClumpBodies, "oriQ2", 0);
+    TRACKED_VECTOR_RESIZE(oriQ3, nClumpBodies, "oriQ3", 0);
     TRACKED_VECTOR_RESIZE(hvX, nClumpBodies, "hvX", 0);
     TRACKED_VECTOR_RESIZE(hvY, nClumpBodies, "hvY", 0);
     TRACKED_VECTOR_RESIZE(hvZ, nClumpBodies, "hvZ", 0);

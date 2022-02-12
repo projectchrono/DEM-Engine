@@ -16,8 +16,11 @@
  *
  */
 template <typename T1, typename T2>
-inline __device__ float3 calcNormalForce(T1 overlapDepth, T2 A2BX, T2 A2BY, T2 A2BZ, sgps::contact_t contact_type) {
-    // A placeholder calculation
+inline __device__ float3 calcNormalForce(const T1& overlapDepth,
+                                         const T2& A2BX,
+                                         const T2& A2BY,
+                                         const T2& A2BZ,
+                                         const sgps::contact_t& contact_type) {
     float F_mag = 1e18 * overlapDepth;
     return make_float3(-F_mag * A2BX, -F_mag * A2BY, -F_mag * A2BZ);
 }
@@ -61,7 +64,11 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
         float myRelPosX = CDRelPosX[bodyACompOffset];
         float myRelPosY = CDRelPosY[bodyACompOffset];
         float myRelPosZ = CDRelPosZ[bodyACompOffset];
-        applyOriQToVector3<float, float>(myRelPosX, myRelPosY, myRelPosZ);
+        AoriQ0 = granData->oriQ0[bodyAOwner];
+        AoriQ1 = granData->oriQ1[bodyAOwner];
+        AoriQ2 = granData->oriQ2[bodyAOwner];
+        AoriQ3 = granData->oriQ3[bodyAOwner];
+        applyOriQToVector3<float, float>(myRelPosX, myRelPosY, myRelPosZ, AoriQ0, AoriQ1, AoriQ2, AoriQ3);
         double bodyAX = AownerX + (double)myRelPosX;
         double bodyAY = AownerY + (double)myRelPosY;
         double bodyAZ = AownerZ + (double)myRelPosZ;
@@ -75,7 +82,11 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
         myRelPosX = CDRelPosX[bodyBCompOffset];
         myRelPosY = CDRelPosY[bodyBCompOffset];
         myRelPosZ = CDRelPosZ[bodyBCompOffset];
-        applyOriQToVector3<float, float>(myRelPosX, myRelPosY, myRelPosZ);
+        BoriQ0 = granData->oriQ0[bodyBOwner];
+        BoriQ1 = granData->oriQ1[bodyBOwner];
+        BoriQ2 = granData->oriQ2[bodyBOwner];
+        BoriQ3 = granData->oriQ3[bodyBOwner];
+        applyOriQToVector3<float, float>(myRelPosX, myRelPosY, myRelPosZ, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
         double bodyBX = BownerX + (double)myRelPosX;
         double bodyBY = BownerY + (double)myRelPosY;
         double bodyBZ = BownerZ + (double)myRelPosZ;

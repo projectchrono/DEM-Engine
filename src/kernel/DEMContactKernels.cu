@@ -52,7 +52,11 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
             float myRelPosX = CDRelPosX[compOffsets[i]];
             float myRelPosY = CDRelPosY[compOffsets[i]];
             float myRelPosZ = CDRelPosZ[compOffsets[i]];
-            applyOriQToVector3<float, float>(myRelPosX, myRelPosY, myRelPosZ);
+            float myOriQ0 = granData->oriQ0[ownerIDs[i]];
+            float myOriQ1 = granData->oriQ1[ownerIDs[i]];
+            float myOriQ2 = granData->oriQ2[ownerIDs[i]];
+            float myOriQ3 = granData->oriQ3[ownerIDs[i]];
+            applyOriQToVector3<float, float>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2, myOriQ3);
             bodyX[i] = ownerX + (double)myRelPosX;
             bodyY[i] = ownerY + (double)myRelPosY;
             bodyZ[i] = ownerZ + (double)myRelPosZ;
@@ -147,7 +151,11 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
             float myRelPosX = CDRelPosX[compOffsets[i]];
             float myRelPosY = CDRelPosY[compOffsets[i]];
             float myRelPosZ = CDRelPosZ[compOffsets[i]];
-            applyOriQToVector3<float, float>(myRelPosX, myRelPosY, myRelPosZ);
+            float myOriQ0 = granData->oriQ0[ownerIDs[i]];
+            float myOriQ1 = granData->oriQ1[ownerIDs[i]];
+            float myOriQ2 = granData->oriQ2[ownerIDs[i]];
+            float myOriQ3 = granData->oriQ3[ownerIDs[i]];
+            applyOriQToVector3<float, float>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2, myOriQ3);
             bodyX[i] = ownerX + (double)myRelPosX;
             bodyY[i] = ownerY + (double)myRelPosY;
             bodyZ[i] = ownerZ + (double)myRelPosZ;

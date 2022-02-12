@@ -81,8 +81,16 @@ inline __device__ void voxelID2Position(T1& X,
 }
 
 template <typename T1, typename T2>
-inline __device__ void applyOriQToVector3(T1& X, T1& Y, T1& Z) {
-    // Now does nothing
+inline __device__ void applyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Q0, const T2& Q1, const T2& Q2, const T2& Q3) {
+    T1 oldX = X;
+    T1 oldY = Y;
+    T1 oldZ = Z;
+    X = ((T2)2.0 * (Q0 * Q0 + Q1 * Q1) - (T2)1.0) * oldX + ((T2)2.0 * (Q1 * Q2 - Q0 * Q3)) * oldY +
+        ((T2)2.0 * (Q1 * Q3 + Q0 * Q2)) * oldZ;
+    Y = ((T2)2.0 * (Q1 * Q2 + Q0 * Q3)) * oldX + ((T2)2.0 * (Q0 * Q0 + Q2 * Q2) - (T2)1.0) * oldY +
+        ((T2)2.0 * (Q2 * Q3 - Q0 * Q1)) * oldZ;
+    Z = ((T2)2.0 * (Q1 * Q3 - Q0 * Q2)) * oldX + ((T2)2.0 * (Q2 * Q3 + Q0 * Q1)) * oldY +
+        ((T2)2.0 * (Q0 * Q0 + Q3 * Q3) - (T2)1.0) * oldZ;
 }
 
 template <typename T1>

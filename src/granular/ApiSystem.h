@@ -71,7 +71,7 @@ class DEMSolver {
     // TODO: need to overload with (vec_distinctSphereRadiiOffset_default_t spheres_component_type, vec_float3
     // location). If this method is called then corresponding sphere_types must have been defined via LoadSphereType.
 
-    /// a simplified version of LoadClumpType: it's just a one-sphere clump
+    /// A simplified version of LoadClumpType: it just loads a one-sphere clump template
     unsigned int LoadClumpSimpleSphere(float mass, float radius, unsigned int material_id);
 
     /// Load possible materials into the API-level cache
@@ -83,7 +83,7 @@ class DEMSolver {
     void SetClumps(const std::vector<unsigned int>& types, const std::vector<float3>& xyz);
 
     /// Load input clump initial velocities on a per-pair basis. If this is not called (or if this vector is shorter
-    /// than the clump location vector then for the unassigned part) the initial velocity is assumed to be 0.
+    /// than the clump location vector, then for the unassigned part) the initial velocity is assumed to be 0.
     void SetClumpVels(const std::vector<float3>& vel);
 
     /// Return the voxel ID of a clump by its numbering
