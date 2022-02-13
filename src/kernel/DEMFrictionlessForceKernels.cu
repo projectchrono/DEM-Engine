@@ -68,7 +68,7 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
         AoriQ1 = granData->oriQ1[bodyAOwner];
         AoriQ2 = granData->oriQ2[bodyAOwner];
         AoriQ3 = granData->oriQ3[bodyAOwner];
-        applyOriQToVector3<float, float>(myRelPosX, myRelPosY, myRelPosZ, AoriQ0, AoriQ1, AoriQ2, AoriQ3);
+        applyOriQ2Vector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, AoriQ0, AoriQ1, AoriQ2, AoriQ3);
         double bodyAX = AownerX + (double)myRelPosX;
         double bodyAY = AownerY + (double)myRelPosY;
         double bodyAZ = AownerZ + (double)myRelPosZ;
@@ -86,12 +86,12 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
         BoriQ1 = granData->oriQ1[bodyBOwner];
         BoriQ2 = granData->oriQ2[bodyBOwner];
         BoriQ3 = granData->oriQ3[bodyBOwner];
-        applyOriQToVector3<float, float>(myRelPosX, myRelPosY, myRelPosZ, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
+        applyOriQ2Vector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
         double bodyBX = BownerX + (double)myRelPosX;
         double bodyBY = BownerY + (double)myRelPosY;
         double bodyBZ = BownerZ + (double)myRelPosZ;
 
-        // Now compute the contact point to see if they are truely still in contact
+        // Now compute the contact point to see if they are truly still in contact
         double contactPntX, contactPntY, contactPntZ;
         float A2BX, A2BY, A2BZ;
         double overlapDepth;
@@ -109,9 +109,10 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
             sgps::contact_t contact_type = 0;
             granData->contactForces[myContactID] =
                 calcNormalForce<double, float>(overlapDepth, A2BX, A2BY, A2BZ, contact_type);
+            // Find the contact point in the local (body) frame
             granData->contactPointGeometryA[myContactID] = findLocalCoord<double>(
                 contactPntX, contactPntY, contactPntZ, AownerX, AownerY, AownerZ, AoriQ0, AoriQ1, AoriQ2, AoriQ3);
-            granData->contactPointGeometryA[myContactID] = findLocalCoord<double>(
+            granData->contactPointGeometryB[myContactID] = findLocalCoord<double>(
                 contactPntX, contactPntY, contactPntZ, BownerX, BownerY, BownerZ, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
         } else {
             granData->contactForces[myContactID] = make_float3(0, 0, 0);
