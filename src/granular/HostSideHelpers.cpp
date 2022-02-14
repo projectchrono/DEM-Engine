@@ -149,15 +149,15 @@ inline void hostCollectTorques(bodyID_t* idA,
                                size_t n,
                                double l) {
     float mass = 1.;
-    float MOI = 1.;
+    float MOI = 0.002;
     for (size_t i = 0; i < n; i++) {
         // First, recover true force
         float3 F = contactForces[i] * l * mass;
         // Then, compute alpha as torque/moi
         float3 CPA = contactLocA[i];
         float3 CPB = contactLocB[i];
-        float3 alphaA = cross(CPA, F) / 1.;
-        float3 alphaB = cross(CPB, -F) / 1.;
+        float3 alphaA = cross(CPA, F) / MOI;
+        float3 alphaB = cross(CPB, -F) / MOI;
 
         bodyID_t bodyA = idA[i];
         bodyID_t bodyB = idB[i];

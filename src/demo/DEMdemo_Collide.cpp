@@ -21,14 +21,14 @@ int main() {
     // total number of random clump templates to generate
     int num_template = 10;
 
-    int min_sphere = 1;
-    int max_sphere = 5;
+    int min_sphere = 2;
+    int max_sphere = 6;
 
-    float min_rad = 0.008;
-    float max_rad = 0.015;
+    float min_rad = 0.016;
+    float max_rad = 0.033;
 
-    float min_relpos = -0.01;
-    float max_relpos = 0.01;
+    float min_relpos = -0.025;
+    float max_relpos = 0.025;
 
     auto mat_type_1 = DEM_sim.LoadMaterialType(1, 10);
 
@@ -74,7 +74,7 @@ int main() {
     // generate initial clumps (in this case just polydisperse spheres)
     float3 domain_center = make_float3(0);
     float box_dim = 0.5;
-    auto input_xyz = DEMBoxGridSampler(make_float3(0), make_float3(box_dim), 0.1);
+    auto input_xyz = DEMBoxGridSampler(make_float3(0), make_float3(box_dim), 0.2);
     unsigned int num_clumps = input_xyz.size();
     std::vector<unsigned int> input_template_num;
     std::vector<float3> input_vel;

@@ -366,6 +366,13 @@ inline void DEMDynamicThread::calculateForces() {
                        granData->contactPointGeometryA, granData->contactPointGeometryB, granData->h2AlphaX,
                        granData->h2AlphaY, granData->h2AlphaZ, granData->ownerClumpBody, simParams->h,
                        simParams->nContactPairs, simParams->l);
+    // displayArray<float>(granData->oriQ0, simParams->nClumpBodies);
+    // displayArray<float>(granData->oriQ1, simParams->nClumpBodies);
+    // displayArray<float>(granData->oriQ2, simParams->nClumpBodies);
+    // displayArray<float>(granData->oriQ3, simParams->nClumpBodies);
+    // displayArray<float>(granData->h2AlphaX, simParams->nClumpBodies);
+    // displayArray<float>(granData->h2AlphaY, simParams->nClumpBodies);
+    // displayArray<float>(granData->h2AlphaZ, simParams->nClumpBodies);
 }
 
 inline void DEMDynamicThread::integrateClumpLinearMotions() {
