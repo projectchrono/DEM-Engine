@@ -29,6 +29,16 @@ void DEMDynamicThread::packDataPointers() {
     granData->hvX = hvX.data();
     granData->hvY = hvY.data();
     granData->hvZ = hvZ.data();
+    granData->oriQ0 = oriQ0.data();
+    granData->oriQ1 = oriQ1.data();
+    granData->oriQ2 = oriQ2.data();
+    granData->oriQ3 = oriQ3.data();
+    granData->hOmgBarX = hOmgBarX.data();
+    granData->hOmgBarY = hOmgBarY.data();
+    granData->hOmgBarZ = hOmgBarZ.data();
+    granData->h2AlphaX = h2AlphaX.data();
+    granData->h2AlphaY = h2AlphaY.data();
+    granData->h2AlphaZ = h2AlphaZ.data();
     granData->idGeometryA = idGeometryA.data();
     granData->idGeometryB = idGeometryB.data();
     granData->idGeometryA_buffer = idGeometryA_buffer.data();
@@ -113,9 +123,15 @@ void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
     TRACKED_VECTOR_RESIZE(hvX, nClumpBodies, "hvX", 0);
     TRACKED_VECTOR_RESIZE(hvY, nClumpBodies, "hvY", 0);
     TRACKED_VECTOR_RESIZE(hvZ, nClumpBodies, "hvZ", 0);
+    TRACKED_VECTOR_RESIZE(hOmgBarX, nClumpBodies, "hOmgBarX", 0);
+    TRACKED_VECTOR_RESIZE(hOmgBarY, nClumpBodies, "hOmgBarY", 0);
+    TRACKED_VECTOR_RESIZE(hOmgBarZ, nClumpBodies, "hOmgBarZ", 0);
     TRACKED_VECTOR_RESIZE(h2aX, nClumpBodies, "h2aX", 0);
     TRACKED_VECTOR_RESIZE(h2aY, nClumpBodies, "h2aY", 0);
     TRACKED_VECTOR_RESIZE(h2aZ, nClumpBodies, "h2aZ", 0);
+    TRACKED_VECTOR_RESIZE(h2AlphaX, nClumpBodies, "h2AlphaX", 0);
+    TRACKED_VECTOR_RESIZE(h2AlphaY, nClumpBodies, "h2AlphaY", 0);
+    TRACKED_VECTOR_RESIZE(h2AlphaZ, nClumpBodies, "h2AlphaZ", 0);
 
     // Resize to the number of spheres
     TRACKED_VECTOR_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
@@ -237,9 +253,15 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
         // std::cout << "Out voxel ID: " << voxelID.at(this_owner) << std::endl;
         // std::cout << "Out voxel ID XYZ: " << voxelIDX << ", " << voxelIDY << ", " << voxelIDZ << std::endl;
 
-        auto this_sp_deviation_x = relPosSphereX.at(clumpComponentOffset.at(i));
-        auto this_sp_deviation_y = relPosSphereY.at(clumpComponentOffset.at(i));
-        auto this_sp_deviation_z = relPosSphereZ.at(clumpComponentOffset.at(i));
+        float this_sp_deviation_x = relPosSphereX.at(clumpComponentOffset.at(i));
+        float this_sp_deviation_y = relPosSphereY.at(clumpComponentOffset.at(i));
+        float this_sp_deviation_z = relPosSphereZ.at(clumpComponentOffset.at(i));
+        float this_sp_rot_0 = oriQ0.at(this_owner);
+        float this_sp_rot_1 = oriQ1.at(this_owner);
+        float this_sp_rot_2 = oriQ2.at(this_owner);
+        float this_sp_rot_3 = oriQ3.at(this_owner);
+        hostApplyOriQ2Vector3<float, float>(this_sp_deviation_x, this_sp_deviation_y, this_sp_deviation_z,
+                                            this_sp_rot_0, this_sp_rot_1, this_sp_rot_2, this_sp_rot_3);
         posX.at(i) = voxelIDX * simParams->voxelSize + locX.at(this_owner) * simParams->l + this_sp_deviation_x +
                      simParams->LBFX;
         posY.at(i) = voxelIDY * simParams->voxelSize + locY.at(this_owner) * simParams->l + this_sp_deviation_y +
@@ -337,6 +359,13 @@ inline void DEMDynamicThread::calculateForces() {
     // displayArray<float>(granData->h2aX, simParams->nClumpBodies);
     // displayFloat3(granData->contactForces, simParams->nContactPairs);
     // std::cout << simParams->nContactPairs << std::endl;
+
+    // Calculate the torque on owner clumps from those body-wise forces
+    // TODO: Do it with CUB (but can we? Torque accumulation requires multiplying a local vector)
+    hostCollectTorques(granData->idGeometryA, granData->idGeometryB, granData->contactForces,
+                       granData->contactPointGeometryA, granData->contactPointGeometryB, granData->h2AlphaX,
+                       granData->h2AlphaY, granData->h2AlphaZ, granData->ownerClumpBody, simParams->h,
+                       simParams->nContactPairs, simParams->l);
 }
 
 inline void DEMDynamicThread::integrateClumpLinearMotions() {

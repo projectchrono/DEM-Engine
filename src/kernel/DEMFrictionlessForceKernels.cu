@@ -21,6 +21,7 @@ inline __device__ float3 calcNormalForce(const T1& overlapDepth,
                                          const T2& A2BY,
                                          const T2& A2BZ,
                                          const sgps::contact_t& contact_type) {
+    // Note this ad-hoc ``force'' is actually a fake acceleration written in terms of multiples of l
     float F_mag = 1e18 * overlapDepth;
     return make_float3(-F_mag * A2BX, -F_mag * A2BY, -F_mag * A2BZ);
 }

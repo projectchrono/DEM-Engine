@@ -22,7 +22,7 @@ int main() {
     int num_template = 10;
 
     int min_sphere = 1;
-    int max_sphere = 1;
+    int max_sphere = 5;
 
     float min_rad = 0.008;
     float max_rad = 0.015;
@@ -37,8 +37,8 @@ int main() {
         int num_sphere = rand() % (max_sphere - min_sphere + 1) + 1;
 
         // then allocate the clump template definition arrays
-        float mass = (float)rand() / RAND_MAX;
-        float3 MOI = make_float3((float)rand() / RAND_MAX, (float)rand() / RAND_MAX, (float)rand() / RAND_MAX);
+        float mass = 1.0;
+        float3 MOI = make_float3(1.0, 1.0, 1.0);
         std::vector<float> radii;
         std::vector<float3> relPos;
         std::vector<unsigned int> mat;
@@ -80,7 +80,7 @@ int main() {
     std::vector<float3> input_vel;
     for (unsigned int i = 0; i < num_clumps; i++) {
         input_template_num.push_back(i % num_template);
-        // Make a initial vel vector pointing towards the center, engineer collisions
+        // Make a initial vel vector pointing towards the center, manufacture collisions
         float3 vel;
         vel = domain_center - input_xyz.at(i);
         if (length(vel) > 1e-5) {

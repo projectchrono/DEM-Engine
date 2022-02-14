@@ -108,7 +108,8 @@ inline void hostScanForJumps(T1* arr, T1* arr_elem, T2* jump_loc, T3* jump_len, 
     }
 }
 
-// Note we assume the ``force'' here is actually acceleration written in terms of multiples of l
+// Note we assume the ``contact force'' here is actually acceleration written in terms of multiples of l
+// And we collect h2a, not force
 inline void hostCollectForces(bodyID_t* idA,
                               bodyID_t* idB,
                               float3* contactForces,
@@ -133,6 +134,45 @@ inline void hostCollectForces(bodyID_t* idA,
     }
 }
 
+// Note we assume the ``contact force'' here is actually acceleration written in terms of multiples of l
+// And we collect h2Alpha, not torque
+inline void hostCollectTorques(bodyID_t* idA,
+                               bodyID_t* idB,
+                               float3* contactForces,
+                               float3* contactLocA,
+                               float3* contactLocB,
+                               float* clump_h2AlphaX,
+                               float* clump_h2AlphaY,
+                               float* clump_h2AlphaZ,
+                               bodyID_t* ownerClumpBody,
+                               double h,
+                               size_t n,
+                               double l) {
+    float mass = 1.;
+    float MOI = 1.;
+    for (size_t i = 0; i < n; i++) {
+        // First, recover true force
+        float3 F = contactForces[i] * l * mass;
+        // Then, compute alpha as torque/moi
+        float3 CPA = contactLocA[i];
+        float3 CPB = contactLocB[i];
+        float3 alphaA = cross(CPA, F) / 1.;
+        float3 alphaB = cross(CPB, -F) / 1.;
+
+        bodyID_t bodyA = idA[i];
+        bodyID_t bodyB = idB[i];
+        bodyID_t AOwner = ownerClumpBody[bodyA];
+        clump_h2AlphaX[AOwner] += (double)alphaA.x * h * h;
+        clump_h2AlphaY[AOwner] += (double)alphaA.y * h * h;
+        clump_h2AlphaZ[AOwner] += (double)alphaA.z * h * h;
+
+        bodyID_t BOwner = ownerClumpBody[bodyB];
+        clump_h2AlphaX[BOwner] += (double)alphaB.x * h * h;
+        clump_h2AlphaY[BOwner] += (double)alphaB.y * h * h;
+        clump_h2AlphaZ[BOwner] += (double)alphaB.z * h * h;
+    }
+}
+
 /// A light-weight grid sampler that can be used to generate the initial stage of the granular system
 inline std::vector<float3> DEMBoxGridSampler(float3 BoxCenter, float3 HalfDims, float GridSize) {
     std::vector<float3> points;
@@ -148,6 +188,20 @@ inline std::vector<float3> DEMBoxGridSampler(float3 BoxCenter, float3 HalfDims, 
         }
     }
     return points;
+}
+
+/// Host version of applying a quaternion to a vector
+template <typename T1, typename T2>
+inline void hostApplyOriQ2Vector3(T1& X, T1& Y, T1& Z, const T2& Q0, const T2& Q1, const T2& Q2, const T2& Q3) {
+    T1 oldX = X;
+    T1 oldY = Y;
+    T1 oldZ = Z;
+    X = ((T2)2.0 * (Q0 * Q0 + Q1 * Q1) - (T2)1.0) * oldX + ((T2)2.0 * (Q1 * Q2 - Q0 * Q3)) * oldY +
+        ((T2)2.0 * (Q1 * Q3 + Q0 * Q2)) * oldZ;
+    Y = ((T2)2.0 * (Q1 * Q2 + Q0 * Q3)) * oldX + ((T2)2.0 * (Q0 * Q0 + Q2 * Q2) - (T2)1.0) * oldY +
+        ((T2)2.0 * (Q2 * Q3 - Q0 * Q1)) * oldZ;
+    Z = ((T2)2.0 * (Q1 * Q3 - Q0 * Q2)) * oldX + ((T2)2.0 * (Q2 * Q3 + Q0 * Q1)) * oldY +
+        ((T2)2.0 * (Q0 * Q0 + Q3 * Q3) - (T2)1.0) * oldZ;
 }
 
 }  // namespace sgps

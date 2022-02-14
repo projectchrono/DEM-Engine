@@ -18,7 +18,9 @@ namespace sgps {
 
 typedef uint16_t subVoxelPos_t;  ///< uint16 or uint32
 typedef uint64_t voxelID_t;
-typedef int oriQ_t;  // orientation quaternion data type
+// TODO: oriQ should be int (mapped to [-1,1]); applyOriQ2Vector3 and hostApplyOriQ2Vector3 need to be changed to make
+// that happen
+typedef float oriQ_t;
 typedef unsigned int bodyID_t;
 typedef unsigned int binID_t;
 typedef unsigned short int materialsOffset_t;
