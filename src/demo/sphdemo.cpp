@@ -45,8 +45,8 @@ int main(int argc, char* argv[]) {
 
     // sample a smaller domain for drop test
     for (int k = 1; k < num_z; k++) {
-        for (int j = 0; j < num_y / 8; j++) {
-            for (int i = 0; i < num_x / 8; i++) {
+        for (int j = 0; j < num_y / 2; j++) {
+            for (int i = 0; i < num_x / 2; i++) {
                 float temp_z = -dim_z / 2 + 2 * (radius + 2 * gap) * (k) + radius + gap;
                 /*
                 if (k % 2 == 0) {

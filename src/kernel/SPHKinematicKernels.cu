@@ -4,6 +4,443 @@
 // =================================================================================================================
 
 // =================================================================================================================
+// Kinematic 1st Step, this pass identifies number of BSDs touched by each particle
+// This kernel also fills the idx_track vector
+// =================================================================================================================
+__global__ void kinematicStep1(vector3* pos_data,
+                               int* num_BSD_data,
+                               int k_n,
+                               float radius,
+                               float d_domain_x,
+                               float d_domain_y,
+                               float d_domain_z,
+                               int num_domain_x,
+                               int num_domain_y,
+                               int num_domain_z,
+                               float domain_x,
+                               float domain_y,
+                               float domain_z) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx >= k_n) {
+        return;
+    }
+
+    float dx_2_0 = int(pos_data[idx].x - (-domain_x / 2));
+    float dy_2_0 = int(pos_data[idx].y - (-domain_y / 2));
+    float dz_2_0 = int(pos_data[idx].z - (-domain_z / 2));
+
+    int x_idx = int(dx_2_0 / d_domain_x);
+    int y_idx = int(dy_2_0 / d_domain_x);
+    int z_idx = int(dz_2_0 / d_domain_x);
+
+    // the mother BD idx which the current particle belongs to
+    int bd_idx = z_idx * num_domain_x * num_domain_y + y_idx * num_domain_x + x_idx;
+
+    // count how many BSD the current particle belongs to
+    int counter = 1;
+
+    // we need to check 26 BDs
+    for (int i = 0; i < 26; i++) {
+        int x_check_idx = x_idx;
+        int y_check_idx = y_idx;
+        int z_check_idx = z_idx;
+
+        switch (i) {
+            case 0:
+                x_check_idx = x_idx - 1;
+                y_check_idx = y_idx;
+                z_check_idx = z_idx;
+                break;
+            case 1:
+                x_check_idx = x_idx - 1;
+                y_check_idx = y_idx;
+                z_check_idx = z_idx - 1;
+                break;
+            case 2:
+                x_check_idx = x_idx - 1;
+                y_check_idx = y_idx;
+                z_check_idx = z_idx + 1;
+                break;
+            case 3:
+                x_check_idx = x_idx - 1;
+                y_check_idx = y_idx - 1;
+                z_check_idx = z_idx;
+                break;
+            case 4:
+                x_check_idx = x_idx - 1;
+                y_check_idx = y_idx - 1;
+                z_check_idx = z_idx - 1;
+                break;
+            case 5:
+                x_check_idx = x_idx - 1;
+                y_check_idx = y_idx - 1;
+                z_check_idx = z_idx + 1;
+                break;
+            case 6:
+                x_check_idx = x_idx - 1;
+                y_check_idx = y_idx + 1;
+                z_check_idx = z_idx;
+                break;
+            case 7:
+                x_check_idx = x_idx - 1;
+                y_check_idx = y_idx + 1;
+                z_check_idx = z_idx - 1;
+                break;
+            case 8:
+                x_check_idx = x_idx - 1;
+                y_check_idx = y_idx + 1;
+                z_check_idx = z_idx + 1;
+                break;
+            case 9:
+                x_check_idx = x_idx + 1;
+                y_check_idx = y_idx;
+                z_check_idx = z_idx;
+                break;
+            case 10:
+                x_check_idx = x_idx + 1;
+                y_check_idx = y_idx;
+                z_check_idx = z_idx - 1;
+                break;
+            case 11:
+                x_check_idx = x_idx + 1;
+                y_check_idx = y_idx;
+                z_check_idx = z_idx + 1;
+                break;
+            case 12:
+                x_check_idx = x_idx + 1;
+                y_check_idx = y_idx - 1;
+                z_check_idx = z_idx;
+                break;
+            case 13:
+                x_check_idx = x_idx + 1;
+                y_check_idx = y_idx - 1;
+                z_check_idx = z_idx - 1;
+                break;
+            case 14:
+                x_check_idx = x_idx + 1;
+                y_check_idx = y_idx - 1;
+                z_check_idx = z_idx + 1;
+                break;
+            case 15:
+                x_check_idx = x_idx + 1;
+                y_check_idx = y_idx + 1;
+                z_check_idx = z_idx;
+                break;
+            case 16:
+                x_check_idx = x_idx + 1;
+                y_check_idx = y_idx + 1;
+                z_check_idx = z_idx - 1;
+                break;
+            case 17:
+                x_check_idx = x_idx + 1;
+                y_check_idx = y_idx + 1;
+                z_check_idx = z_idx + 1;
+                break;
+            case 18:
+                x_check_idx = x_idx;
+                y_check_idx = y_idx;
+                z_check_idx = z_idx - 1;
+                break;
+            case 19:
+                x_check_idx = x_idx;
+                y_check_idx = y_idx;
+                z_check_idx = z_idx + 1;
+                break;
+            case 20:
+                x_check_idx = x_idx;
+                y_check_idx = y_idx - 1;
+                z_check_idx = z_idx;
+                break;
+            case 21:
+                x_check_idx = x_idx;
+                y_check_idx = y_idx - 1;
+                z_check_idx = z_idx - 1;
+                break;
+            case 22:
+                x_check_idx = x_idx;
+                y_check_idx = y_idx - 1;
+                z_check_idx = z_idx + 1;
+                break;
+            case 23:
+                x_check_idx = x_idx;
+                y_check_idx = y_idx + 1;
+                z_check_idx = z_idx;
+                break;
+            case 24:
+                x_check_idx = x_idx;
+                y_check_idx = y_idx + 1;
+                z_check_idx = z_idx - 1;
+                break;
+            case 25:
+                x_check_idx = x_idx;
+                y_check_idx = y_idx + 1;
+                z_check_idx = z_idx + 1;
+                break;
+        }
+
+        // check idx validality
+        if (x_check_idx < 0 || y_check_idx < 0 || z_check_idx < 0) {
+            continue;
+        }
+
+        if (x_check_idx >= num_domain_x || y_check_idx >= num_domain_y || z_check_idx >= num_domain_z) {
+            continue;
+        }
+
+        // expand the SD to BSD, and check whether the particle is in the current BSD
+        float BSD_x_start = x_check_idx * d_domain_x - 4 * radius;
+        float BSD_x_end = (x_check_idx + 1) * d_domain_x + 4 * radius;
+        float BSD_y_start = y_check_idx * d_domain_y - 4 * radius;
+        float BSD_y_end = (y_check_idx + 1) * d_domain_y + 4 * radius;
+        float BSD_z_start = z_check_idx * d_domain_z - 4 * radius;
+        float BSD_z_end = (z_check_idx + 1) * d_domain_z + 4 * radius;
+
+        if (dx_2_0 >= BSD_x_start && dx_2_0 < BSD_x_end) {
+            if (dy_2_0 >= BSD_y_start && dy_2_0 < BSD_y_end) {
+                if (dz_2_0 >= BSD_z_start && dz_2_0 < BSD_z_end) {
+                    counter++;
+                }
+            }
+        }
+    }
+
+    num_BSD_data[idx] = counter;
+
+    __syncthreads();
+}
+
+
+
+// =================================================================================================================
+// Kinematic 2nd Step, this pass identifies the exact index of BSDs touched by each particle
+// This kernel also fills the BSD_iden_idx which also identifies whether the particle is in buffer (0 is not in buffer, 1 is in buffer)
+// =================================================================================================================
+__global__ void kinematicStep2(vector3* pos_data,
+                               int* offset_BSD_data,
+                               int* BSD_iden_idx,
+                               int* BSD_idx,
+                               int* idx_track_data,
+                               int k_n,
+                               float TotLength,
+                               float radius,
+                               float d_domain_x,
+                               float d_domain_y,
+                               float d_domain_z,
+                               int num_domain_x,
+                               int num_domain_y,
+                               int num_domain_z,
+                               float domain_x,
+                               float domain_y,
+                               float domain_z) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx >= k_n) {
+        return;
+    }
+
+    int start_idx = offset_BSD_data[idx];
+    int length = 0;
+    if (idx != TotLength - 1){
+        length = offset_BSD_data[idx+1] - offset_BSD_data[idx];
+    }else{
+        length = TotLength - offset_BSD_data[idx-1];
+    }
+
+    float dx_2_0 = int(pos_data[idx].x - (-domain_x / 2));
+    float dy_2_0 = int(pos_data[idx].y - (-domain_y / 2));
+    float dz_2_0 = int(pos_data[idx].z - (-domain_z / 2));
+
+    int x_idx = int(dx_2_0 / d_domain_x);
+    int y_idx = int(dy_2_0 / d_domain_x);
+    int z_idx = int(dz_2_0 / d_domain_x);
+
+    // the mother BD idx which the current particle belongs to
+    int bd_idx = z_idx * num_domain_x * num_domain_y + y_idx * num_domain_x + x_idx;
+
+    // fill in mother BD index
+    BSD_idx[start_idx] = bd_idx;
+    BSD_iden_idx[start_idx] = 0;
+    idx_track_data[start_idx] = idx;
+
+    // we need to check 26 BDs
+
+    int counter = 1;
+    for (int i = 0; i < 26; i++) {
+        int x_check_idx = x_idx;
+        int y_check_idx = y_idx;
+        int z_check_idx = z_idx;
+
+        switch (i) {
+            case 0:
+                x_check_idx = x_idx - 1;
+                y_check_idx = y_idx;
+                z_check_idx = z_idx;
+                break;
+            case 1:
+                x_check_idx = x_idx - 1;
+                y_check_idx = y_idx;
+                z_check_idx = z_idx - 1;
+                break;
+            case 2:
+                x_check_idx = x_idx - 1;
+                y_check_idx = y_idx;
+                z_check_idx = z_idx + 1;
+                break;
+            case 3:
+                x_check_idx = x_idx - 1;
+                y_check_idx = y_idx - 1;
+                z_check_idx = z_idx;
+                break;
+            case 4:
+                x_check_idx = x_idx - 1;
+                y_check_idx = y_idx - 1;
+                z_check_idx = z_idx - 1;
+                break;
+            case 5:
+                x_check_idx = x_idx - 1;
+                y_check_idx = y_idx - 1;
+                z_check_idx = z_idx + 1;
+                break;
+            case 6:
+                x_check_idx = x_idx - 1;
+                y_check_idx = y_idx + 1;
+                z_check_idx = z_idx;
+                break;
+            case 7:
+                x_check_idx = x_idx - 1;
+                y_check_idx = y_idx + 1;
+                z_check_idx = z_idx - 1;
+                break;
+            case 8:
+                x_check_idx = x_idx - 1;
+                y_check_idx = y_idx + 1;
+                z_check_idx = z_idx + 1;
+                break;
+            case 9:
+                x_check_idx = x_idx + 1;
+                y_check_idx = y_idx;
+                z_check_idx = z_idx;
+                break;
+            case 10:
+                x_check_idx = x_idx + 1;
+                y_check_idx = y_idx;
+                z_check_idx = z_idx - 1;
+                break;
+            case 11:
+                x_check_idx = x_idx + 1;
+                y_check_idx = y_idx;
+                z_check_idx = z_idx + 1;
+                break;
+            case 12:
+                x_check_idx = x_idx + 1;
+                y_check_idx = y_idx - 1;
+                z_check_idx = z_idx;
+                break;
+            case 13:
+                x_check_idx = x_idx + 1;
+                y_check_idx = y_idx - 1;
+                z_check_idx = z_idx - 1;
+                break;
+            case 14:
+                x_check_idx = x_idx + 1;
+                y_check_idx = y_idx - 1;
+                z_check_idx = z_idx + 1;
+                break;
+            case 15:
+                x_check_idx = x_idx + 1;
+                y_check_idx = y_idx + 1;
+                z_check_idx = z_idx;
+                break;
+            case 16:
+                x_check_idx = x_idx + 1;
+                y_check_idx = y_idx + 1;
+                z_check_idx = z_idx - 1;
+                break;
+            case 17:
+                x_check_idx = x_idx + 1;
+                y_check_idx = y_idx + 1;
+                z_check_idx = z_idx + 1;
+                break;
+            case 18:
+                x_check_idx = x_idx;
+                y_check_idx = y_idx;
+                z_check_idx = z_idx - 1;
+                break;
+            case 19:
+                x_check_idx = x_idx;
+                y_check_idx = y_idx;
+                z_check_idx = z_idx + 1;
+                break;
+            case 20:
+                x_check_idx = x_idx;
+                y_check_idx = y_idx - 1;
+                z_check_idx = z_idx;
+                break;
+            case 21:
+                x_check_idx = x_idx;
+                y_check_idx = y_idx - 1;
+                z_check_idx = z_idx - 1;
+                break;
+            case 22:
+                x_check_idx = x_idx;
+                y_check_idx = y_idx - 1;
+                z_check_idx = z_idx + 1;
+                break;
+            case 23:
+                x_check_idx = x_idx;
+                y_check_idx = y_idx + 1;
+                z_check_idx = z_idx;
+                break;
+            case 24:
+                x_check_idx = x_idx;
+                y_check_idx = y_idx + 1;
+                z_check_idx = z_idx - 1;
+                break;
+            case 25:
+                x_check_idx = x_idx;
+                y_check_idx = y_idx + 1;
+                z_check_idx = z_idx + 1;
+                break;
+        }
+
+        // check idx validality
+        if (x_check_idx < 0 || y_check_idx < 0 || z_check_idx < 0) {
+            continue;
+        }
+
+        if (x_check_idx >= num_domain_x || y_check_idx >= num_domain_y || z_check_idx >= num_domain_z) {
+            continue;
+        }
+
+        // expand the SD to BSD, and check whether the particle is in the current BSD
+        float BSD_x_start = x_check_idx * d_domain_x - 4 * radius;
+        float BSD_x_end = (x_check_idx + 1) * d_domain_x + 4 * radius;
+        float BSD_y_start = y_check_idx * d_domain_y - 4 * radius;
+        float BSD_y_end = (y_check_idx + 1) * d_domain_y + 4 * radius;
+        float BSD_z_start = z_check_idx * d_domain_z - 4 * radius;
+        float BSD_z_end = (z_check_idx + 1) * d_domain_z + 4 * radius;
+
+        if (dx_2_0 >= BSD_x_start && dx_2_0 < BSD_x_end) {
+            if (dy_2_0 >= BSD_y_start && dy_2_0 < BSD_y_end) {
+                if (dz_2_0 >= BSD_z_start && dz_2_0 < BSD_z_end) {
+                    BSD_idx[start_idx + counter] = z_check_idx * num_domain_x * num_domain_y + y_check_idx * num_domain_x + x_check_idx;
+                    BSD_iden_idx[start_idx + counter] = 1;
+                    idx_track_data[start_idx + counter] = idx;
+                    counter++;
+                }
+            }
+        }
+    }
+    __syncthreads();
+
+
+}
+
+
+// ====================================== The OLD-YOUNG TERMINATOR ===============================
+
+// =================================================================================================================
 // Kinematic 1st Pass, this pass identifies each particle into it's corresponding cd
 // the cd idx is stored in cd_idx
 // =================================================================================================================

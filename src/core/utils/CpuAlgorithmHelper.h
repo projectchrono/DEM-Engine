@@ -10,6 +10,13 @@
 #ifndef SGPS_CPU_ALGORITHM
     #define SGPS_CPU_ALGORITHM
 
+// This function is designed to simulate the behavior of cub::DeviceRunLengthEncode
+// This function computes the total length of each BSD idx and output array of unique BSD idx.
+void deviceRunLength(int* idx_track_data_sorted,
+                     int n,
+                     std::vector<int>& unique_BSD_idx,
+                     std::vector<int>& length_BSD_idx);
+
 void sortReduce(int* key, float* val, std::vector<int>& key_reduced, std::vector<float>& val_reduced, int n, int max);
 
 void sortReduce(int* key, int* val, std::vector<int>& key_reduced, std::vector<int>& val_reduced, int n, int max);
@@ -23,6 +30,9 @@ std::vector<int> slice_global_sd(int X_SUB_NUM, int Y_SUB_NUM, int Z_SUB_NUM);
 
 // output the collision data for debugging purposes
 void output_collision_data(contactData* contact_data, int contact_size, std::string filename);
+
+// CPU Exclusive Prefix Scan
+void PrefixScanExclusive(int* arr, int n, int* prefixSum);
 
 // helper function to look for cell idx from subdomain idx
 // std::vector<int>

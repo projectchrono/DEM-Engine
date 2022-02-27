@@ -214,6 +214,45 @@ void output_collision_data(contactData* contact_data, int contact_size, std::str
     csvFile.close();
 }
 
+void deviceRunLength(int* idx_track_data_sorted,
+                     int n,
+                     std::vector<int>& unique_BSD_idx,
+                     std::vector<int>& length_BSD_idx) {
+    unique_BSD_idx.clear();
+    length_BSD_idx.clear();
+    if (n > 0) {
+        int counter = 1;
+        int prev_idx = idx_track_data_sorted[0];
+        for (int i = 1; i < n; i++) {
+            if (prev_idx == idx_track_data_sorted[i]) {
+                counter++;
+                prev_idx = idx_track_data_sorted[i];
+                if (i == n - 1) {
+                    length_BSD_idx.push_back(counter);
+                    unique_BSD_idx.push_back(prev_idx);
+                }
+            } else {
+                length_BSD_idx.push_back(counter);
+                unique_BSD_idx.push_back(prev_idx);
+                counter = 1;
+                prev_idx = idx_track_data_sorted[i];
+            }
+        }
+    } else {
+        return;
+    }
+}
+
+// CPU Exclusive Prefix Scan
+void PrefixScanExclusive(int* arr, int n, int* prefixSum) {
+    prefixSum[0] = 0;
+
+    // Adding present element
+    // with previous element
+    for (int i = 1; i < n; i++)
+        prefixSum[i] = prefixSum[i - 1] + arr[i - 1];
+}
+
 /*
 class SPH_Find_Cell2Sub_Exception : public exception {
     virtual const char* what() const throw() { return "SPH_Find_Cell2Sub_Exception happened"; }
