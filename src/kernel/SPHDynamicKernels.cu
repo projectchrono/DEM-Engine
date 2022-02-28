@@ -10,7 +10,7 @@
 // Dynamic 1st Pass, this pass compute the contact force of each contact pair
 // the computed force will be filled in contact_force field in each contact pair
 // =================================================================================================================
-__global__ void dynamic1Pass(contactData* gpu_pair_data,
+__global__ void dynamicStep1(contactData* gpu_pair_data,
                              int gpu_pair_n,
                              vector3* gpu_pos,
                              vector3* gpu_vel,
@@ -46,7 +46,7 @@ __global__ void dynamic1Pass(contactData* gpu_pair_data,
 // for the original contact_pair array, pair i_a and j_a will only appear once
 // this pass makes sure that (i_a,j_a) will be in one contact_pair element and (j_a,i_a) will be in one contact_pair
 // =================================================================================================================
-__global__ void dynamic2Pass(contactData* gpu_pair_data, int gpu_pair_n, contactData* inv_gpu_pair_data) {
+__global__ void dynamicStep2(contactData* gpu_pair_data, int gpu_pair_n, contactData* inv_gpu_pair_data) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= gpu_pair_n) {
@@ -64,7 +64,7 @@ __global__ void dynamic2Pass(contactData* gpu_pair_data, int gpu_pair_n, contact
 // Dynamic 3rd pass, this pass is intended to copy all reduced data into global memory gpu_acc
 // TODO: reconsider the necessity of existence of this kernel
 // =================================================================================================================
-__global__ void dynamic3Pass(int* key, float* x_reduced, float* y_reduced, float* z_reduced, int n, vector3* gpu_acc) {
+__global__ void dynamicStep3(int* key, float* x_reduced, float* y_reduced, float* z_reduced, int n, vector3* gpu_acc) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= n) {
@@ -82,7 +82,7 @@ __global__ void dynamic3Pass(int* key, float* x_reduced, float* y_reduced, float
 // this pass will integrate gpu_acc to gpu_vel to gpu_pos
 // and push simulation 1 step forward
 // =================================================================================================================
-__global__ void dynamic4Pass(vector3* gpu_pos,
+__global__ void dynamicStep4(vector3* gpu_pos,
                              vector3* gpu_vel,
                              vector3* gpu_acc,
                              char* gpu_fix,

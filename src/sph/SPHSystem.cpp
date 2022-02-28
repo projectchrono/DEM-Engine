@@ -397,11 +397,8 @@ void DynamicThread::operator()() {
 
         // ==============================================================================================================
         // Dynamic Step 1
-        // Fill in all contact force terms in the contact pair data
-        // this means compute the contact force for each contact collision pair
-        // NOTE: now we have not REDUCE yet
+        // Use GPU to fill in the contact forces in each pair of contactData element
         // ==============================================================================================================
-
         int block_size = 1024;
         int num_thread = (block_size < contact_data.size()) ? block_size : contact_data.size();
         int num_block = (contact_data.size() % num_thread != 0) ? (contact_data.size() / num_thread + 1)
@@ -409,19 +406,22 @@ void DynamicThread::operator()() {
 
         // call dynamic first gpu pass
         // this pass will fill the contact pair data vector
-        dynamic_program.kernel("dynamic1Pass")
+        dynamic_program.kernel("dynamicStep1")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(contact_data.data(), contact_data.size(), pos_data.data(), vel_data.data(), acc_data.data(),
                     fix_data.data(), radius);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        // call dynamic second gpu pass
-        // this pass will use gpu to generate another array full of inverse elements of contact_data
+        // ==============================================================================================================
+        // Dynamic Step 2
+        // Flattens the contact data array, this will duplicate each conllision pair into 2 entries
+        // A applies force on B + B applies force on A
+        // ==============================================================================================================
         std::vector<contactData, sgps::ManagedAllocator<contactData>> inv_contact_data;
         inv_contact_data.resize(contact_data.size());
 
-        dynamic_program.kernel("dynamic2Pass")
+        dynamic_program.kernel("dynamicStep2")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(contact_data.data(), contact_data.size(), inv_contact_data.data());
@@ -431,10 +431,11 @@ void DynamicThread::operator()() {
 
         inv_contact_data.clear();
 
-        // Dynamic Step 2
-        // Perform reduction to compute total force applied on each particle
-
-        // TODO: replace this entire step with CUB
+        // ==============================================================================================================
+        // Dynamic Step 3
+        // Reduce to Get Total Force Applies on Each Particle (CUB)
+        // TODO: This step is supposed to be done on CUB
+        // ==============================================================================================================
 
         // set up CPU data input
         // create a long array to reduce
@@ -472,15 +473,17 @@ void DynamicThread::operator()() {
         gpu_y_reduced.assign(y_reduced.begin(), y_reduced.end());
         gpu_z_reduced.assign(z_reduced.begin(), z_reduced.end());
 
+        // ==============================================================================================================
         // Dynamic Step 3
-        // Assign computed acceleration data based on the reduced force computed on each particle
+        // Compute accelerations on each particle
+        // ==============================================================================================================
         block_size = 1024;
         num_thread = (block_size < gpu_key_reduced.size()) ? block_size : gpu_key_reduced.size();
         num_block = (gpu_key_reduced.size() % num_thread != 0) ? (gpu_key_reduced.size() / num_thread + 1)
                                                                : (gpu_key_reduced.size() / num_thread);
 
         // call dynamic third gpu pass
-        dynamic_program.kernel("dynamic3Pass")
+        dynamic_program.kernel("dynamicStep3")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(gpu_key_reduced.data(), gpu_x_reduced.data(), gpu_y_reduced.data(), gpu_z_reduced.data(),
@@ -497,7 +500,7 @@ void DynamicThread::operator()() {
         // Final integration step to push the simulation one time step forward
         // ==============================================================================================================
 
-        dynamic_program.kernel("dynamic4Pass")
+        dynamic_program.kernel("dynamicStep4")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), vel_data.data(), acc_data.data(), fix_data.data(), pos_data.size(), time_step,
