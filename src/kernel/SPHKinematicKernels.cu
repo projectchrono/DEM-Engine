@@ -438,6 +438,160 @@ __global__ void kinematicStep2(vector3* pos_data,
 }
 
 
+// =================================================================================================================
+// Kinematic 5th Step, this is the 1st pass of the kinematic thread
+// We will use shared memory to store particle location data
+// the 1st pass is going to fill the num_col vector
+// =================================================================================================================
+
+__global__ void kinematicStep5(vector3* pos_data, // particle position data vector
+                               int k_n, // total number of particles
+                               float tolerance, // collision detection tolerance
+                               float radius,    // radius of the uni-radius particles
+                               int* idx_track_data_sorted, // sorted idx_track data
+                               int* BSD_iden_idx_sorted, // vector to indicate whether a particle is in buffer zone or not 
+                               int* offset_BSD_data,    // length the same as unique_BSD_idx
+                               int* length_BSD_data,    // length the same as unique_BSD_idx
+                               int* unique_BSD_idx,
+                               int* num_col,
+                               int unique_length) {
+    __shared__ vector3 pos_local[512];  // request maximum capacity for the shared mem
+    __shared__ int idx_local[512];   // request maximum capacity for track
+    __shared__ int iden_local[512];
+    __shared__ int tot_in_bsd;
+
+    int sd_idx = blockIdx.x;
+    int idx = threadIdx.x;
+
+    if (sd_idx >= unique_length) {
+        return;
+    }
+
+    if (threadIdx.x == 0) {
+        tot_in_bsd = length_BSD_data[sd_idx];
+        int start_idx = offset_BSD_data[sd_idx];
+        int end_idx = offset_BSD_data[sd_idx] + length_BSD_data[sd_idx];
+        for (int i = start_idx; i < end_idx; i++) {
+            pos_local[i-start_idx] = pos_data[idx_track_data_sorted[i]]; 
+            idx_local[i-start_idx] = idx_track_data_sorted[i];
+            iden_local[i-start_idx] = BSD_iden_idx_sorted[i];
+
+        }
+    }
+
+    __syncthreads();
+
+
+    int count = 0;
+
+    if (idx >= tot_in_bsd) {
+        return;
+    }
+
+
+    if (iden_local[idx] == 1){
+        return;
+    }
+
+    for (int i = 0; i < tot_in_bsd; i++) {
+        
+        if ((i != idx) && (idx_local[idx] < idx_local[i])) {
+            
+            float dist2 = (pos_local[i].x - pos_local[idx].x) * (pos_local[i].x - pos_local[idx].x) +
+                          (pos_local[i].y - pos_local[idx].y) * (pos_local[i].y - pos_local[idx].y) +
+                          (pos_local[i].z - pos_local[idx].z) * (pos_local[i].z - pos_local[idx].z);
+
+            if (dist2 <= (radius * 2 + tolerance) * (radius * 2 + tolerance)) {
+                count++;
+            }
+            
+        }
+        
+        
+    }
+
+    num_col[sd_idx * 512 + idx] = count;
+ 
+}
+
+// =================================================================================================================
+// Kinematic 5th Step, this is the 1st pass of the kinematic thread
+// We will use shared memory to store particle location data
+// the 1st pass is going to fill the num_col vector
+// =================================================================================================================
+
+__global__ void kinematicStep7(vector3* pos_data, // particle position data vector
+                               int k_n, // total number of particles
+                               float tolerance, // collision detection tolerance
+                               float radius,    // radius of the uni-radius particles
+                               int* idx_track_data_sorted, // sorted idx_track data
+                               int* BSD_iden_idx_sorted, // vector to indicate whether a particle is in buffer zone or not 
+                               int* offset_BSD_data,    // length the same as unique_BSD_idx
+                               int* length_BSD_data,    // length the same as unique_BSD_idx
+                               int* unique_BSD_idx,
+                               int* num_col,
+                               int unique_length,
+                               contactData* contact_data,
+                               int contact_n,
+                               int* num_col_offset) {
+    __shared__ vector3 pos_local[512];  // request maximum capacity for the shared mem
+    __shared__ int idx_local[512];   // request maximum capacity for track
+    __shared__ int iden_local[512];
+    __shared__ int tot_in_bsd;
+
+    int sd_idx = blockIdx.x;
+    int idx = threadIdx.x;
+
+    if (sd_idx >= unique_length) {
+        return;
+    }
+
+    if (threadIdx.x == 0) {
+        tot_in_bsd = length_BSD_data[sd_idx];
+        int start_idx = offset_BSD_data[sd_idx];
+        int end_idx = offset_BSD_data[sd_idx] + length_BSD_data[sd_idx];
+        for (int i = start_idx; i < end_idx; i++) {
+            pos_local[i-start_idx] = pos_data[idx_track_data_sorted[i]]; 
+            idx_local[i-start_idx] = idx_track_data_sorted[i];
+            iden_local[i-start_idx] = BSD_iden_idx_sorted[i];
+
+        }
+    }
+
+    __syncthreads();
+
+
+    int count = 0;
+
+    if (idx >= tot_in_bsd) {
+        return;
+    }
+
+
+    if (iden_local[idx] == 1){
+        return;
+    }
+
+    for (int i = 0; i < tot_in_bsd; i++) {
+        
+        if ((i != idx) && (idx_local[idx] < idx_local[i])) {
+            
+            float dist2 = (pos_local[i].x - pos_local[idx].x) * (pos_local[i].x - pos_local[idx].x) +
+                          (pos_local[i].y - pos_local[idx].y) * (pos_local[i].y - pos_local[idx].y) +
+                          (pos_local[i].z - pos_local[idx].z) * (pos_local[i].z - pos_local[idx].z);
+
+            if (dist2 <= (radius * 2 + tolerance) * (radius * 2 + tolerance)) {
+                contact_data[num_col_offset[sd_idx * 512 + idx] + count].contact_pair.x = idx_local[idx];
+                contact_data[num_col_offset[sd_idx * 512 + idx] + count].contact_pair.y = idx_local[i];
+                count++;
+            }
+            
+        } 
+    }
+ 
+}
+
+
 // ====================================== The OLD-YOUNG TERMINATOR ===============================
 
 // =================================================================================================================
