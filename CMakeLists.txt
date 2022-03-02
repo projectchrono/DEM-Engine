@@ -45,6 +45,8 @@ set(NVIDIAMathDir ${CMAKE_CURRENT_LIST_DIR}/thirdparty/nvidia_helper_math)
 # Global Configuration
 # ---------------------------------------------------------------------------- #
 
+include(cmake/CxxStdAutodetect.cmake)
+
 # The compiler will build against this C++ standard, if available.
 set(TargetCXXStandard "STD_AUTODETECT" CACHE STRING "The C++ standard used by the compiler")
 set_property(
@@ -63,8 +65,7 @@ elseif(TargetCXXStandard STREQUAL STD_CXX17)
 elseif(TargetCXXStandard STREQUAL STD_CXX20)
 	set(GLOBAL_cxxver 20 CACHE INTERNAL "")
 else()
-	message(SEND_ERROR "STD_AUTODETECT is not yet supported! Set TargetCXXStandard to an appropriate value to continue.")
-	# TODO: Perform C++ version autodetection based on the compiler ID
+	CxxStdAutodetect()	
 endif()
 
 
@@ -81,6 +82,7 @@ include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 add_subdirectory(src/core)
 add_subdirectory(src/granular)
 add_subdirectory(src/sph)
+#add_subdirectory(src/algorithms)
 
 # ---------------------------------------------------------------------------- #
 # Final Library Generation
