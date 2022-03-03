@@ -4,37 +4,43 @@
 
 message(STATUS "==== Configuring GPU Algorithm Components ====")
 
-set (algos_message "[algos]")
+set (algorithms_message "[algorithms]")
 
 
 
-add_library(algos OBJECT)
+add_library(algorithms OBJECT)
 
 target_include_directories(
-	algos	
+	algorithms	
 	PUBLIC ${ProjectIncludeRoot}
 	PUBLIC ${NVIDIAJitifyPath}
 	PUBLIC ${NVIDIAMathDir}
 )
 
 target_link_libraries(
-	algos
+	algorithms
 	PUBLIC CUB::CUB
 )
 
-set(algos_headers
-	# ${CMAKE_CURRENT_SOURCE_DIR}/example.cuh
-	${NVIDIAMathDir}/helper_math.h
+### HOST HEADERS ONLY (.h, .hpp) ###
+set(algorithms_interface
+	${CMAKE_CURRENT_SOURCE_DIR}/example.h # REPLACE ME WITH A REAL FILE
 )
 
-set(algos_sources
+### INTERNAL HEADERS ONLY (.h, .hpp, or .cuh) ###
+set(algorithms_headers
+	${NVIDIAMathDir}/helper_math.cuh
+)
+
+set(algorithms_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/example.cu # REPLACE ME WITH A REAL FILE
 )
 
 target_sources(
-	algos	
-	INTERFACE ${algos_headers}
-	PRIVATE ${algos_sources}
+	algorithms
+	INTERFACE ${algorithms_interface}
+	PRIVATE ${algorithms_headers}
+	PRIVATE ${algorithms_sources}
 )
 
 # Get a list of supported architectures
@@ -48,7 +54,7 @@ foreach(arch ${CUDASUP_ARCHITECTURES})
 endforeach()
 
 set_target_properties(
-	algos PROPERTIES 
+	algorithms PROPERTIES 
 	POSITION_INDEPENDENT_CODE True
 	CXX_STANDARD ${CXXSTD_SUPPORTED}
 	CUDA_ARCHITECTURES "${virtual_architectures}"
