@@ -1,4 +1,23 @@
+# Copyright (c) 2021, SBEL GPU Development Team
+# Copyright (c) 2021, University of Wisconsin - Madison
+# All rights reserved.
+
+# The original source code of this file was authored by Colin Vanden Heuvel
+# for this project and is also available under a permissive (Zlib) license.
+# https://gitlab.com/thepianoboy/cmake-nuggets
+
+
 # Fix Ninja Colors
+
+# Effects:
+#
+# Sets the appropriate compiler flag to produce color-highlighted diagnostic
+# messages when using the Ninja Generator. Results may vary if the output
+# medium is not a terminal.
+#
+# Supported compilers:
+# - GNU C++ Compiler
+# - LLVM Clang
 
 function(fix_ninja_colors)
 

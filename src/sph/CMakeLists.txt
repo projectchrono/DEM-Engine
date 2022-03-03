@@ -38,6 +38,6 @@ target_sources(
 set_target_properties(
 	sph PROPERTIES
 	POSITION_INDEPENDENT_CODE True
-	CXX_STANDARD ${GLOBAL_cxxver}
+	CXX_STANDARD ${CXXSTD_SUPPORTED}
 )
 

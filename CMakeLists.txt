@@ -57,17 +57,17 @@ set_property(
 
 # Convert the standard into something CMake will understand
 if(TargetCXXStandard STREQUAL STD_CXX11)
-	set(GLOBAL_cxxver 11 CACHE INTERNAL "")
+	set(CXXSTD_MAX 11)
 elseif(TargetCXXStandard STREQUAL STD_CXX14)
-	set(GLOBAL_cxxver 14 CACHE INTERNAL "")
+	set(CXXSTD_MAX 14)
 elseif(TargetCXXStandard STREQUAL STD_CXX17)
-	set(GLOBAL_cxxver 17 CACHE INTERNAL "")
+	set(CXXSTD_MAX 17)
 elseif(TargetCXXStandard STREQUAL STD_CXX20)
-	set(GLOBAL_cxxver 20 CACHE INTERNAL "")
+	set(CXXSTD_MAX 20)
 else()
-	CxxStdAutodetect()	
+	set(CXXSTD_MAX 20)
 endif()
-
+cxx_std_autodetect()
 
 # Allow the use of #include <> for project headers (allowing cleaner better relative pathing)
 set(ProjectIncludeRoot "${CMAKE_CURRENT_SOURCE_DIR}/src" "${CMAKE_CURRENT_BINARY_DIR}/src")
@@ -82,7 +82,7 @@ include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 add_subdirectory(src/core)
 add_subdirectory(src/granular)
 add_subdirectory(src/sph)
-#add_subdirectory(src/algorithms)
+add_subdirectory(src/algorithms)
 
 # ---------------------------------------------------------------------------- #
 # Final Library Generation
