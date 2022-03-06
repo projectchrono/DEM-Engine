@@ -117,6 +117,9 @@ class DEMSolver {
         float E;
     };
     std::vector<DEMMaterial> m_sp_materials;
+    // Materials info is processed at API level (on initialization) for generating proxy arrays
+    std::vector<float> m_k_proxy;
+    std::vector<float> m_g_proxy;
 
     // This is the cached clump structure information.
     // It will be massaged into kernels upon Initialize.
@@ -223,6 +226,8 @@ class DEMSolver {
     void validateUserInputs();
     // Compute the number of dT for cycles based on the amount of time the user wants to advance the simulation
     inline size_t computeDTCycles(double thisCallDuration);
+    // Prepare the material/contact proxy matrix force computation kernels
+    void figureOutMaterialProxies();
 };
 
 }  // namespace sgps

@@ -45,6 +45,11 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
     }
     __syncthreads();
 
+    // First, find relevant bodyIDs, then locate their owners... (how??)
+
+    // But, we will keep everything as is, and test in the end (when cub and jit are in place) how this treatment
+    // improves efficiency
+
     sgps::contactPairs_t myContactID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myContactID < simParams->nContactPairs) {
         // From a contact ID, grab relevant info on 2 contact bodies

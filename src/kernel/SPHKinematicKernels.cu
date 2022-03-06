@@ -210,11 +210,10 @@ __global__ void kinematicStep1(vector3* pos_data,
     __syncthreads();
 }
 
-
-
 // =================================================================================================================
 // Kinematic 2nd Step, this pass identifies the exact index of BSDs touched by each particle
-// This kernel also fills the BSD_iden_idx which also identifies whether the particle is in buffer (0 is not in buffer, 1 is in buffer)
+// This kernel also fills the BSD_iden_idx which also identifies whether the particle is in buffer (0 is not in buffer,
+// 1 is in buffer)
 // =================================================================================================================
 __global__ void kinematicStep2(vector3* pos_data,
                                int* offset_BSD_data,
@@ -241,10 +240,10 @@ __global__ void kinematicStep2(vector3* pos_data,
 
     int start_idx = offset_BSD_data[idx];
     int length = 0;
-    if (idx != TotLength - 1){
-        length = offset_BSD_data[idx+1] - offset_BSD_data[idx];
-    }else{
-        length = TotLength - offset_BSD_data[idx-1];
+    if (idx != TotLength - 1) {
+        length = offset_BSD_data[idx + 1] - offset_BSD_data[idx];
+    } else {
+        length = TotLength - offset_BSD_data[idx - 1];
     }
 
     float dx_2_0 = int(pos_data[idx].x - (-domain_x / 2));
@@ -424,7 +423,8 @@ __global__ void kinematicStep2(vector3* pos_data,
         if (dx_2_0 >= BSD_x_start && dx_2_0 < BSD_x_end) {
             if (dy_2_0 >= BSD_y_start && dy_2_0 < BSD_y_end) {
                 if (dz_2_0 >= BSD_z_start && dz_2_0 < BSD_z_end) {
-                    BSD_idx[start_idx + counter] = z_check_idx * num_domain_x * num_domain_y + y_check_idx * num_domain_x + x_check_idx;
+                    BSD_idx[start_idx + counter] =
+                        z_check_idx * num_domain_x * num_domain_y + y_check_idx * num_domain_x + x_check_idx;
                     BSD_iden_idx[start_idx + counter] = 1;
                     idx_track_data[start_idx + counter] = idx;
                     counter++;
@@ -433,10 +433,7 @@ __global__ void kinematicStep2(vector3* pos_data,
         }
     }
     __syncthreads();
-
-
 }
-
 
 // =================================================================================================================
 // Kinematic 5th Step, this is the 1st pass of the kinematic thread
@@ -444,19 +441,20 @@ __global__ void kinematicStep2(vector3* pos_data,
 // the 1st pass is going to fill the num_col vector
 // =================================================================================================================
 
-__global__ void kinematicStep5(vector3* pos_data, // particle position data vector
-                               int k_n, // total number of particles
-                               float tolerance, // collision detection tolerance
-                               float radius,    // radius of the uni-radius particles
-                               int* idx_track_data_sorted, // sorted idx_track data
-                               int* BSD_iden_idx_sorted, // vector to indicate whether a particle is in buffer zone or not 
-                               int* offset_BSD_data,    // length the same as unique_BSD_idx
-                               int* length_BSD_data,    // length the same as unique_BSD_idx
-                               int* unique_BSD_idx,
-                               int* num_col,
-                               int unique_length) {
+__global__ void kinematicStep5(
+    vector3* pos_data,           // particle position data vector
+    int k_n,                     // total number of particles
+    float tolerance,             // collision detection tolerance
+    float radius,                // radius of the uni-radius particles
+    int* idx_track_data_sorted,  // sorted idx_track data
+    int* BSD_iden_idx_sorted,    // vector to indicate whether a particle is in buffer zone or not
+    int* offset_BSD_data,        // length the same as unique_BSD_idx
+    int* length_BSD_data,        // length the same as unique_BSD_idx
+    int* unique_BSD_idx,
+    int* num_col,
+    int unique_length) {
     __shared__ vector3 pos_local[512];  // request maximum capacity for the shared mem
-    __shared__ int idx_local[512];   // request maximum capacity for track
+    __shared__ int idx_local[512];      // request maximum capacity for track
     __shared__ int iden_local[512];
     __shared__ int tot_in_bsd;
 
@@ -472,15 +470,13 @@ __global__ void kinematicStep5(vector3* pos_data, // particle position data vect
         int start_idx = offset_BSD_data[sd_idx];
         int end_idx = offset_BSD_data[sd_idx] + length_BSD_data[sd_idx];
         for (int i = start_idx; i < end_idx; i++) {
-            pos_local[i-start_idx] = pos_data[idx_track_data_sorted[i]]; 
-            idx_local[i-start_idx] = idx_track_data_sorted[i];
-            iden_local[i-start_idx] = BSD_iden_idx_sorted[i];
-
+            pos_local[i - start_idx] = pos_data[idx_track_data_sorted[i]];
+            idx_local[i - start_idx] = idx_track_data_sorted[i];
+            iden_local[i - start_idx] = BSD_iden_idx_sorted[i];
         }
     }
 
     __syncthreads();
-
 
     int count = 0;
 
@@ -488,15 +484,12 @@ __global__ void kinematicStep5(vector3* pos_data, // particle position data vect
         return;
     }
 
-
-    if (iden_local[idx] == 1){
+    if (iden_local[idx] == 1) {
         return;
     }
 
     for (int i = 0; i < tot_in_bsd; i++) {
-        
         if ((i != idx) && (idx_local[idx] < idx_local[i])) {
-            
             float dist2 = (pos_local[i].x - pos_local[idx].x) * (pos_local[i].x - pos_local[idx].x) +
                           (pos_local[i].y - pos_local[idx].y) * (pos_local[i].y - pos_local[idx].y) +
                           (pos_local[i].z - pos_local[idx].z) * (pos_local[i].z - pos_local[idx].z);
@@ -504,14 +497,10 @@ __global__ void kinematicStep5(vector3* pos_data, // particle position data vect
             if (dist2 <= (radius * 2 + tolerance) * (radius * 2 + tolerance)) {
                 count++;
             }
-            
         }
-        
-        
     }
 
     num_col[sd_idx * 512 + idx] = count;
- 
 }
 
 // =================================================================================================================
@@ -520,22 +509,23 @@ __global__ void kinematicStep5(vector3* pos_data, // particle position data vect
 // the 1st pass is going to fill the num_col vector
 // =================================================================================================================
 
-__global__ void kinematicStep7(vector3* pos_data, // particle position data vector
-                               int k_n, // total number of particles
-                               float tolerance, // collision detection tolerance
-                               float radius,    // radius of the uni-radius particles
-                               int* idx_track_data_sorted, // sorted idx_track data
-                               int* BSD_iden_idx_sorted, // vector to indicate whether a particle is in buffer zone or not 
-                               int* offset_BSD_data,    // length the same as unique_BSD_idx
-                               int* length_BSD_data,    // length the same as unique_BSD_idx
-                               int* unique_BSD_idx,
-                               int* num_col,
-                               int unique_length,
-                               contactData* contact_data,
-                               int contact_n,
-                               int* num_col_offset) {
+__global__ void kinematicStep7(
+    vector3* pos_data,           // particle position data vector
+    int k_n,                     // total number of particles
+    float tolerance,             // collision detection tolerance
+    float radius,                // radius of the uni-radius particles
+    int* idx_track_data_sorted,  // sorted idx_track data
+    int* BSD_iden_idx_sorted,    // vector to indicate whether a particle is in buffer zone or not
+    int* offset_BSD_data,        // length the same as unique_BSD_idx
+    int* length_BSD_data,        // length the same as unique_BSD_idx
+    int* unique_BSD_idx,
+    int* num_col,
+    int unique_length,
+    contactData* contact_data,
+    int contact_n,
+    int* num_col_offset) {
     __shared__ vector3 pos_local[512];  // request maximum capacity for the shared mem
-    __shared__ int idx_local[512];   // request maximum capacity for track
+    __shared__ int idx_local[512];      // request maximum capacity for track
     __shared__ int iden_local[512];
     __shared__ int tot_in_bsd;
 
@@ -551,15 +541,13 @@ __global__ void kinematicStep7(vector3* pos_data, // particle position data vect
         int start_idx = offset_BSD_data[sd_idx];
         int end_idx = offset_BSD_data[sd_idx] + length_BSD_data[sd_idx];
         for (int i = start_idx; i < end_idx; i++) {
-            pos_local[i-start_idx] = pos_data[idx_track_data_sorted[i]]; 
-            idx_local[i-start_idx] = idx_track_data_sorted[i];
-            iden_local[i-start_idx] = BSD_iden_idx_sorted[i];
-
+            pos_local[i - start_idx] = pos_data[idx_track_data_sorted[i]];
+            idx_local[i - start_idx] = idx_track_data_sorted[i];
+            iden_local[i - start_idx] = BSD_iden_idx_sorted[i];
         }
     }
 
     __syncthreads();
-
 
     int count = 0;
 
@@ -567,15 +555,12 @@ __global__ void kinematicStep7(vector3* pos_data, // particle position data vect
         return;
     }
 
-
-    if (iden_local[idx] == 1){
+    if (iden_local[idx] == 1) {
         return;
     }
 
     for (int i = 0; i < tot_in_bsd; i++) {
-        
         if ((i != idx) && (idx_local[idx] < idx_local[i])) {
-            
             float dist2 = (pos_local[i].x - pos_local[idx].x) * (pos_local[i].x - pos_local[idx].x) +
                           (pos_local[i].y - pos_local[idx].y) * (pos_local[i].y - pos_local[idx].y) +
                           (pos_local[i].z - pos_local[idx].z) * (pos_local[i].z - pos_local[idx].z);
@@ -585,12 +570,9 @@ __global__ void kinematicStep7(vector3* pos_data, // particle position data vect
                 contact_data[num_col_offset[sd_idx * 512 + idx] + count].contact_pair.y = idx_local[i];
                 count++;
             }
-            
-        } 
+        }
     }
- 
 }
-
 
 // ====================================== The OLD-YOUNG TERMINATOR ===============================
 

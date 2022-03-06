@@ -391,7 +391,8 @@ class DEMDynamicThread {
                                const std::vector<float3>& input_clump_vel,
                                const std::vector<float>& clumps_mass_types,
                                const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                               const std::vector<std::vector<float3>>& clumps_sp_location_types);
+                               const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                               const std::vector<std::vector<unsigned int>>& clumps_sp_mat_ids);
 
     // Put sim data array pointers in place
     void packDataPointers();
@@ -415,11 +416,8 @@ class DEMDynamicThread {
     // update clump-based acceleration array based on sphere-based force array
     void calculateForces();
 
-    // update clump pos and vel based on acceleration
-    void integrateClumpLinearMotions();
-
-    // update clump orientation and angvel based on ang-acceleration
-    void integrateClumpRotationalMotions();
+    // update clump pos/oriQ and vel/omega based on acceleration
+    void integrateClumpMotions();
 
     // Bring dT buffer array data to its working arrays
     void unpackMyBuffer();

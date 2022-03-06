@@ -136,6 +136,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
     // Resize to the number of spheres
     TRACKED_VECTOR_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
     TRACKED_VECTOR_RESIZE(clumpComponentOffset, nSpheresGM, "sphereRadiusOffset", 0);
+    TRACKED_VECTOR_RESIZE(materialTupleOffset, nSpheresGM, "materialTupleOffset", 0);
 
     // Resize to the length of the clump templates
     TRACKED_VECTOR_RESIZE(massClumpBody, nClumpTopo, "massClumpBody", 0);
@@ -168,7 +169,8 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
                                              const std::vector<float3>& input_clump_vel,
                                              const std::vector<float>& clumps_mass_types,
                                              const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                                             const std::vector<std::vector<float3>>& clumps_sp_location_types) {
+                                             const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                                             const std::vector<std::vector<unsigned int>>& clumps_sp_mat_ids) {
     // Use some temporary hacks to get the info in the managed mem
     // All the input vectors should have the same length, nClumpTopo
     unsigned int k = 0;
@@ -207,8 +209,10 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
         // std::endl;
         auto this_clump_no_sp_radii = clumps_sp_radii_types.at(type_of_this_clump);
         auto this_clump_no_sp_relPos = clumps_sp_location_types.at(type_of_this_clump);
+        auto this_clump_no_sp_mat_ids = clumps_sp_mat_ids.at(type_of_this_clump);
 
         for (size_t j = 0; j < this_clump_no_sp_radii.size(); j++) {
+            materialTupleOffset.at(k) = this_clump_no_sp_mat_ids.at(j);
             clumpComponentOffset.at(k) = prescans.at(type_of_this_clump) + j;
             ownerClumpBody.at(k) = i;
             k++;
@@ -375,7 +379,7 @@ inline void DEMDynamicThread::calculateForces() {
     // displayArray<float>(granData->h2AlphaZ, simParams->nClumpBodies);
 }
 
-inline void DEMDynamicThread::integrateClumpLinearMotions() {
+inline void DEMDynamicThread::integrateClumpMotions() {
     size_t blocks_needed_for_clumps = (simParams->nClumpBodies + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
     auto integrator =
         JitHelper::buildProgram("DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu",
@@ -387,8 +391,6 @@ inline void DEMDynamicThread::integrateClumpLinearMotions() {
 
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
-
-void DEMDynamicThread::integrateClumpRotationalMotions() {}
 
 void DEMDynamicThread::workerThread() {
     // Set the gpu for this thread
@@ -446,9 +448,7 @@ void DEMDynamicThread::workerThread() {
 
             calculateForces();
 
-            integrateClumpLinearMotions();
-
-            integrateClumpRotationalMotions();
+            integrateClumpMotions();
 
             // if it's the case, it's important at this point to let the kinematic know that this is the last dynamic
             // cycle; this is important otherwise the kinematic will hang waiting for communication swith the dynamic

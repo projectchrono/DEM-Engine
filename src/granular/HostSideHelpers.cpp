@@ -15,6 +15,17 @@
 
 namespace sgps {
 
+// In an upper-triangular matrix, given i and j and num_of_col, this function returns the index of the corresponding
+// flatten-ed non-zero entries. This function does not assume i <= j.
+template <typename T1>
+inline T1 locateMatPair(T1& i, T1& j, T1 dim) {
+    if (i <= j) {
+        return i * dim + j;
+    } else {
+        return j * dim + i;
+    }
+}
+
 template <typename T1>
 inline void displayArray(T1* arr, size_t n) {
     for (size_t i = 0; i < n; i++) {
@@ -202,6 +213,12 @@ inline void hostApplyOriQ2Vector3(T1& X, T1& Y, T1& Z, const T2& Q0, const T2& Q
         ((T2)2.0 * (Q2 * Q3 - Q0 * Q1)) * oldZ;
     Z = ((T2)2.0 * (Q1 * Q3 - Q0 * Q2)) * oldX + ((T2)2.0 * (Q2 * Q3 + Q0 * Q1)) * oldY +
         ((T2)2.0 * (Q0 * Q0 + Q3 * Q3) - (T2)1.0) * oldZ;
+}
+
+/// Calculate the contact params based on the 2 contact material types given
+inline void materialProxyMaterixCalculator(float& k, float& g, float& E1, float& d1, float& E2, float& d2) {
+    k = 50000000.;
+    g = 10000.;
 }
 
 }  // namespace sgps
