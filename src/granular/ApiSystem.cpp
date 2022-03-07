@@ -5,6 +5,7 @@
 #include <core/ApiVersion.h>
 #include <granular/ApiSystem.h>
 #include <granular/GranularDefines.h>
+#include <granular/HostSideHelpers.cpp>
 
 #include <iostream>
 #include <fstream>
@@ -137,6 +138,25 @@ void DEMSolver::decideDefaultBinSize() {
     m_binSize = 1.0 * smallest_radius;
 }
 
+void DEMSolver::figureOutMaterialProxies() {
+    // Use the info in m_sp_materials to populate API-side proxy arrays
+    // These arrays are later passed to kTdT in populateManagedArrays
+    unsigned int count = (1 + m_sp_materials.size()) * m_sp_materials.size() / 2;
+    m_k_proxy.resize(count);
+    m_g_proxy.resize(count);
+    for (unsigned int i = 0; i < m_sp_materials.size(); i++) {
+        for (unsigned int j = i; j < m_sp_materials.size(); j++) {
+            auto Mat1 = m_sp_materials.at(i);
+            auto Mat2 = m_sp_materials.at(j);
+            float k, g;
+            materialProxyMaterixCalculator(k, g, Mat1.E, Mat1.density, Mat2.E, Mat2.density);
+            unsigned int entry_num = locateMatPair<unsigned int>(i, j, m_sp_materials.size());
+            m_k_proxy.at(entry_num) = k;
+            m_g_proxy.at(entry_num) = g;
+        }
+    }
+}
+
 int DEMSolver::generateJITResources() {
     /*
     // Dan and Ruochun decided not to extract unique input values.
@@ -183,7 +203,9 @@ int DEMSolver::generateJITResources() {
     for (unsigned int i = 0; i < nDistinctClumpBodyTopologies_computed; i++) {
         nDistinctClumpComponents_computed += m_template_sp_radii.at(i).size();
     }
-    nMatTuples_computed = m_template_sp_mat_ids.size();
+    nMatTuples_computed = m_sp_materials.size();
+    // IF these "computed" numbers are larger than types like materialsOffset_t can hold, then we should error out and
+    // let the user re-compile (or, should we somehow change the header automatically?)
 
     // nDistinctSphereRadii_computed = m_template_sp_radii_types.size();
     // nDistinctSphereRelativePositions_computed = m_clumps_sp_location_types.size();
@@ -223,6 +245,10 @@ int DEMSolver::generateJITResources() {
         auto this_radii = m_template_sp_radii.at(this_type_num);
         nSpheresGM += this_radii.size();
     }
+
+    // Process the loaded materials
+    std::cout << "The number of material types: " << nMatTuples_computed << std::endl;
+    figureOutMaterialProxies();
 
     // Compile the kernels if there are some can be compiled now
 
@@ -267,7 +293,7 @@ void DEMSolver::initializeArrays() {
     // cached API-level simulation info.
     m_input_clump_vel.resize(m_input_clump_xyz.size(), make_float3(0));
     dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_template_mass,
-                              m_template_sp_radii, m_template_sp_relPos);
+                              m_template_sp_radii, m_template_sp_relPos, m_template_sp_mat_ids);
     kT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_template_mass,
                               m_template_sp_radii, m_template_sp_relPos);
 }
