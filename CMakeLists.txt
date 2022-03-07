@@ -30,7 +30,7 @@ find_package(CUDAToolkit REQUIRED)
 # Find CUB library (this might need to be done in source-level config)
 find_package(
 	CUB REQUIRED
-	PATHS ${CMAKE_CURRENT_LIST_DIR}/thirdparty/cub/cub
+	#PATHS ${CMAKE_CURRENT_LIST_DIR}/thirdparty/cub/cub
 )
 
 find_path(
