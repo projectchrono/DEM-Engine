@@ -29,6 +29,7 @@ typedef unsigned short int clumpComponentOffset_t;
 typedef double floatFine_t;
 // Contact type (sphere--sphere is 0, etc.)
 typedef unsigned char contact_t;
+typedef char scratch_t;  // Data type for DEM scratch-pad array
 
 // How many bin--sphere touch pairs can there be, tops? This type needs to be large enough to hold the result of a
 // prefix scan, but normally, it should be the same magnitude as bodyID_t.

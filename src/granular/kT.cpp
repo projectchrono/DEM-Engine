@@ -13,6 +13,7 @@
 #include <granular/PhysicsSystem.h>
 #include <granular/HostSideHelpers.cpp>
 #include <core/utils/JitHelper.h>
+#include <algorithms/DEMCubContactDetection.cu>
 
 namespace sgps {
 
@@ -21,7 +22,7 @@ int DEMKinematicThread::costlyProductionStep(int val) const {
     return 2 * val + 1;
 }
 
-inline void DEMKinematicThread::contactDetection() {
+inline void DEMKinematicThread::hostContactDetection() {
     size_t blocks_needed_for_bodies = (simParams->nSpheresGM + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
     auto bin_occupation =
         JitHelper::buildProgram("DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
@@ -35,6 +36,7 @@ inline void DEMKinematicThread::contactDetection() {
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     hostPrefixScan<binsSphereTouches_t>(granData->numBinsSphereTouches, simParams->nSpheresGM + 1);
+    // cubPrefixScan<binsSphereTouches_t>(granData->numBinsSphereTouches, simParams->nSpheresGM + 1);
     // displayArray<binsSphereTouches_t>(granData->numBinsSphereTouches, simParams->nSpheresGM + 1);
     // Resize those work arrays to be the size of the number of all sphere--bin pairs
     binIDsEachSphereTouches.resize(granData->numBinsSphereTouches[simParams->nSpheresGM]);
@@ -212,8 +214,9 @@ void DEMKinematicThread::workerThread() {
             // cudaStream_t currentStream;
             // cudaStreamCreate(&currentStream);pSchedSupport->dynamicShouldWait()
 
-            // TODO: crash on reaching conditioanl variable if the other thread is in kernel??
+            // Two versions here: the host version is just for debugging purposes
             contactDetection();
+            // hostContactDetection();
 
             /* for the reference
             for (int j = 0; j < N_MANUFACTURED_ITEMS; j++) {
