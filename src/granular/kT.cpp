@@ -215,8 +215,8 @@ void DEMKinematicThread::workerThread() {
             // cudaStreamCreate(&currentStream);pSchedSupport->dynamicShouldWait()
 
             // Two versions here: the host version is just for debugging purposes
-            contactDetection();
-            // hostContactDetection();
+            // contactDetection();
+            hostContactDetection();
 
             /* for the reference
             for (int j = 0; j < N_MANUFACTURED_ITEMS; j++) {

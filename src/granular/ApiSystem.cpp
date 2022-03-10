@@ -150,7 +150,7 @@ void DEMSolver::figureOutMaterialProxies() {
             auto Mat2 = m_sp_materials.at(j);
             float k, g;
             materialProxyMaterixCalculator(k, g, Mat1.E, Mat1.density, Mat2.E, Mat2.density);
-            unsigned int entry_num = locateMatPair<unsigned int>(i, j, m_sp_materials.size());
+            unsigned int entry_num = locateMatPair<unsigned int>(i, j);
             m_k_proxy.at(entry_num) = k;
             m_g_proxy.at(entry_num) = g;
         }
@@ -292,8 +292,8 @@ void DEMSolver::initializeArrays() {
     // Now that the CUDA-related functions and data types are JITCompiled, we can feed those GPU-side arrays with the
     // cached API-level simulation info.
     m_input_clump_vel.resize(m_input_clump_xyz.size(), make_float3(0));
-    dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_template_mass,
-                              m_template_sp_radii, m_template_sp_relPos, m_template_sp_mat_ids);
+    dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_template_sp_mat_ids,
+                              m_template_mass, m_template_sp_radii, m_template_sp_relPos, m_k_proxy, m_g_proxy);
     kT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_template_mass,
                               m_template_sp_radii, m_template_sp_relPos);
 }

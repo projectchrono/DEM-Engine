@@ -33,6 +33,15 @@ inline __device__ T1 mod_floor(const T1& a, const T2& b) {
     return ret;
 }
 
+// In an upper-triangular matrix, given i and j and num_of_col, this function returns the index of the corresponding
+// flatten-ed non-zero entries. This function does not assume i <= j.
+template <typename T1>
+inline __device__ T1 locateMatPair(const T1& i, const T1& j) {
+    if (i > j)
+        return locateMatPair(j, i);
+    return (1 + j) * j / 2 + i;
+}
+
 // Chops a long ID (typically voxelID) into XYZ components
 template <typename T1, typename T2>
 inline __device__ void IDChopper(T1& X,
@@ -214,6 +223,18 @@ getPointBinID(const double& X, const double& Y, const double& Z, const double& b
     T1 binIDY = Y / binSize;
     T1 binIDZ = Z / binSize;
     return binIDX + binIDY * nbX + binIDZ * nbX * nbY;
+}
+
+/**
+ * Template arguments:
+ *   - T1: the floating point accuracy level for the point coordinates
+ *
+ * Basic idea: calculate a vector that goes from B to A, and pack it as a float3
+ *
+ */
+template <typename T1>
+inline __device__ float3 vectorAB(const T1& AX, const T1& AY, const T1& AZ, const T1& BX, const T1& BY, const T1& BZ) {
+    return make_float3(AX - BX, AY - BY, AZ - BZ);
 }
 
 /**

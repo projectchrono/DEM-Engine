@@ -64,6 +64,8 @@ struct DEMTemplate {
     float* relPosSphereY;
     float* relPosSphereZ;
     // materialsOffset_t* materialTupleOffset;
+    float* kProxy;
+    float* gProxy;
 };
 
 // DEM material proxy, such that when they are used in force kernels, we can use these (which are associated with each
@@ -113,6 +115,7 @@ struct DEMDataDT {
     // The offset info that indexes into the template arrays
     bodyID_t* ownerClumpBody;
     clumpComponentOffset_t* clumpComponentOffset;
+    materialsOffset_t* materialTupleOffset;
 
     // dT-owned buffer pointers, for itself's usage
     size_t nContactPairs_buffer = 0;

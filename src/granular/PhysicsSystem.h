@@ -300,6 +300,10 @@ class DEMDynamicThread {
     std::vector<float, ManagedAllocator<float>> relPosSphereY;
     std::vector<float, ManagedAllocator<float>> relPosSphereZ;
 
+    // Stores the actual stiffness/damping, where the kernels will need offsets to index into them
+    std::vector<float, ManagedAllocator<float>> kProxy;
+    std::vector<float, ManagedAllocator<float>> gProxy;
+
     // Those are the large ones, ones that have the same length as the number of clumps
     // The mass offsets
     std::vector<clumpBodyInertiaOffset_t, ManagedAllocator<clumpBodyInertiaOffset_t>> inertiaPropOffsets;
@@ -423,10 +427,12 @@ class DEMDynamicThread {
     void populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
                                const std::vector<float3>& input_clump_xyz,
                                const std::vector<float3>& input_clump_vel,
+                               const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
                                const std::vector<float>& clumps_mass_types,
                                const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                const std::vector<std::vector<float3>>& clumps_sp_location_types,
-                               const std::vector<std::vector<unsigned int>>& clumps_sp_mat_ids);
+                               const std::vector<float>& mat_k,
+                               const std::vector<float>& mat_g);
 
     // Put sim data array pointers in place
     void packDataPointers();

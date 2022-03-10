@@ -50,12 +50,15 @@ void DEMDynamicThread::packDataPointers() {
     // The offset info that indexes into the template arrays
     granData->ownerClumpBody = ownerClumpBody.data();
     granData->clumpComponentOffset = clumpComponentOffset.data();
+    granData->materialTupleOffset = materialTupleOffset.data();
 
     // Template array pointers, which will be removed after JIT is fully functional
     granTemplates->radiiSphere = radiiSphere.data();
     granTemplates->relPosSphereX = relPosSphereX.data();
     granTemplates->relPosSphereY = relPosSphereY.data();
     granTemplates->relPosSphereZ = relPosSphereZ.data();
+    granTemplates->kProxy = kProxy.data();
+    granTemplates->gProxy = gProxy.data();
 }
 void DEMDynamicThread::packTransferPointers(DEMKinematicThread* kT) {
     // These are the pointers for sending data to dT
@@ -147,6 +150,8 @@ void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
     TRACKED_VECTOR_RESIZE(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
     TRACKED_VECTOR_RESIZE(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
     TRACKED_VECTOR_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
+    TRACKED_VECTOR_RESIZE(kProxy, (1 + nMatTuples) * nMatTuples / 2, "kProxy", 0);
+    TRACKED_VECTOR_RESIZE(gProxy, (1 + nMatTuples) * nMatTuples / 2, "gProxy", 0);
 
     // Arrays for contact info
     // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is 4n, and I
@@ -167,13 +172,23 @@ void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
 void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
                                              const std::vector<float3>& input_clump_xyz,
                                              const std::vector<float3>& input_clump_vel,
+                                             const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
                                              const std::vector<float>& clumps_mass_types,
                                              const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                              const std::vector<std::vector<float3>>& clumps_sp_location_types,
-                                             const std::vector<std::vector<unsigned int>>& clumps_sp_mat_ids) {
+                                             const std::vector<float>& mat_k,
+                                             const std::vector<float>& mat_g) {
     // Use some temporary hacks to get the info in the managed mem
-    // All the input vectors should have the same length, nClumpTopo
-    unsigned int k = 0;
+
+    // First, load in material property (upper-triangle) matrix
+    for (unsigned int i = 0; i < mat_k.size(); i++) {
+        kProxy.at(i) = mat_k.at(i);
+        gProxy.at(i) = mat_g.at(i);
+    }
+
+    // Then, load in clump type info
+    // This part should not be needed in the final version (due to being jitified)
+    size_t k = 0;
     std::vector<unsigned int> prescans;
 
     prescans.push_back(0);
@@ -198,6 +213,7 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
     }
     k = 0;
 
+    // Then, load in input clumps
     for (size_t i = 0; i < input_clump_types.size(); i++) {
         auto type_of_this_clump = input_clump_types.at(i);
         float3 LBF;
@@ -209,7 +225,7 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
         // std::endl;
         auto this_clump_no_sp_radii = clumps_sp_radii_types.at(type_of_this_clump);
         auto this_clump_no_sp_relPos = clumps_sp_location_types.at(type_of_this_clump);
-        auto this_clump_no_sp_mat_ids = clumps_sp_mat_ids.at(type_of_this_clump);
+        auto this_clump_no_sp_mat_ids = input_clumps_sp_mat_ids.at(type_of_this_clump);
 
         for (size_t j = 0; j < this_clump_no_sp_radii.size(); j++) {
             materialTupleOffset.at(k) = this_clump_no_sp_mat_ids.at(j);

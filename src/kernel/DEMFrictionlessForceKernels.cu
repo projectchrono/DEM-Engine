@@ -20,7 +20,9 @@ inline __device__ float3 calcNormalForce(const T1& overlapDepth,
                                          const T2& A2BX,
                                          const T2& A2BY,
                                          const T2& A2BZ,
-                                         const sgps::contact_t& contact_type) {
+                                         const sgps::contact_t& contact_type,
+                                         const float& k,
+                                         const float& g) {
     // Note this ad-hoc ``force'' is actually a fake acceleration written in terms of multiples of l
     float F_mag = 1e18 * overlapDepth;
     return make_float3(-F_mag * A2BX, -F_mag * A2BY, -F_mag * A2BZ);
@@ -59,10 +61,13 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
         sgps::bodyID_t bodyBOwner = granData->ownerClumpBody[bodyB];
         sgps::clumpComponentOffset_t bodyACompOffset = granData->clumpComponentOffset[bodyA];
         sgps::clumpComponentOffset_t bodyBCompOffset = granData->clumpComponentOffset[bodyB];
+        sgps::materialsOffset_t bodyAMatType = granData->materialTupleOffset[bodyA];
+        sgps::materialsOffset_t bodyBMatType = granData->materialTupleOffset[bodyB];
 
-        // Take care of 2 bodies in order, bodyA first
+        // Take care of 2 bodies in order, bodyA first, location and velocity
         double AownerX, AownerY, AownerZ;
         sgps::oriQ_t AoriQ0, AoriQ1, AoriQ2, AoriQ3;
+        float3 ALinVel;
         voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
             AownerX, AownerY, AownerZ, granData->voxelID[bodyAOwner], granData->locX[bodyAOwner],
             granData->locY[bodyAOwner], granData->locZ[bodyAOwner], simParams->nvXp2, simParams->nvYp2,
@@ -78,7 +83,9 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
         double bodyAX = AownerX + (double)myRelPosX;
         double bodyAY = AownerY + (double)myRelPosY;
         double bodyAZ = AownerZ + (double)myRelPosZ;
-        // Then bodyB
+        ALinVel.x = granData->hvX[bodyAOwner] * simParams->l / simParams->h;
+
+        // Then bodyB, location and velocity
         double BownerX, BownerY, BownerZ;
         sgps::oriQ_t BoriQ0, BoriQ1, BoriQ2, BoriQ3;
         voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
@@ -113,13 +120,24 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
 
             // Right now, only handles contact type 0, sphere--sphere
             sgps::contact_t contact_type = 0;
+            // Get k, g, etc. from the (upper-triangle) material property matrix
+            unsigned int matEntry = locateMatPair<unsigned int>(bodyAMatType, bodyBMatType);
+            float k = granTemplates->kProxy[matEntry];
+            float g = granTemplates->gProxy[matEntry];
+            // Find the contact point in the local (body), but global-axes-aligned frame
+            // float3 locCPA = findLocalCoord<double>(contactPntX, contactPntY, contactPntZ, AownerX, AownerY, AownerZ,
+            // AoriQ0, AoriQ1, AoriQ2, AoriQ3); float3 locCPB = findLocalCoord<double>(contactPntX, contactPntY,
+            // contactPntZ, BownerX, BownerY, BownerZ, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
+            float3 locCPA = vectorAB<float>(contactPntX, contactPntY, contactPntZ, AownerX, AownerY, AownerZ);
+            float3 locCPB = vectorAB<float>(contactPntX, contactPntY, contactPntZ, BownerX, BownerY, BownerZ);
+            // We also need velocity (linear + rotational) in global frame to be used in the damping terms
+
+            // Calculate contact force
             granData->contactForces[myContactID] =
-                calcNormalForce<double, float>(overlapDepth, A2BX, A2BY, A2BZ, contact_type);
-            // Find the contact point in the local (body) frame
-            granData->contactPointGeometryA[myContactID] = findLocalCoord<double>(
-                contactPntX, contactPntY, contactPntZ, AownerX, AownerY, AownerZ, AoriQ0, AoriQ1, AoriQ2, AoriQ3);
-            granData->contactPointGeometryB[myContactID] = findLocalCoord<double>(
-                contactPntX, contactPntY, contactPntZ, BownerX, BownerY, BownerZ, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
+                calcNormalForce<double, float>(overlapDepth, A2BX, A2BY, A2BZ, contact_type, k, g);
+            // Write hard-earned results back to global arrays
+            granData->contactPointGeometryA[myContactID] = locCPA;
+            granData->contactPointGeometryB[myContactID] = locCPB;
         } else {
             granData->contactForces[myContactID] = make_float3(0, 0, 0);
         }
