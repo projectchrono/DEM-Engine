@@ -19,6 +19,7 @@ namespace sgps {
 
 // Put sim data array pointers in place
 void DEMDynamicThread::packDataPointers() {
+    granData->inertiaPropOffsets = inertiaPropOffsets.data();
     granData->voxelID = voxelID.data();
     granData->locX = locX.data();
     granData->locY = locY.data();
@@ -57,6 +58,10 @@ void DEMDynamicThread::packDataPointers() {
     granTemplates->relPosSphereX = relPosSphereX.data();
     granTemplates->relPosSphereY = relPosSphereY.data();
     granTemplates->relPosSphereZ = relPosSphereZ.data();
+    granTemplates->massClumpBody = massClumpBody.data();
+    granTemplates->mmiXX = mmiXX.data();
+    granTemplates->mmiYY = mmiYY.data();
+    granTemplates->mmiZZ = mmiZZ.data();
     granTemplates->kProxy = kProxy.data();
     granTemplates->gProxy = gProxy.data();
 }
@@ -115,6 +120,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
     simParams->nMatTuples = nMatTuples;
 
     // Resize to the number of clumps
+    TRACKED_VECTOR_RESIZE(inertiaPropOffsets, nClumpBodies, "inertiaPropOffsets", 0);
     TRACKED_VECTOR_RESIZE(voxelID, nClumpBodies, "voxelID", 0);
     TRACKED_VECTOR_RESIZE(locX, nClumpBodies, "locX", 0);
     TRACKED_VECTOR_RESIZE(locY, nClumpBodies, "locY", 0);
@@ -174,6 +180,7 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
                                              const std::vector<float3>& input_clump_vel,
                                              const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
                                              const std::vector<float>& clumps_mass_types,
+                                             const std::vector<float3>& clumps_moi_types,
                                              const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                              const std::vector<std::vector<float3>>& clumps_sp_location_types,
                                              const std::vector<float>& mat_k,
@@ -186,8 +193,19 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
         gProxy.at(i) = mat_g.at(i);
     }
 
+    // Then load in clump mass and MOI
+    // Remember this part should be quite different in the final version (due to being jitified)
+    for (unsigned int i = 0; i < clumps_mass_types.size(); i++) {
+        massClumpBody.at(i) = clumps_mass_types.at(i);
+        float3 this_moi = clumps_moi_types.at(i);
+        mmiXX.at(i) = this_moi.x;
+        mmiYY.at(i) = this_moi.y;
+        mmiZZ.at(i) = this_moi.z;
+    }
+
     // Then, load in clump type info
-    // This part should not be needed in the final version (due to being jitified)
+    // Remember this part should be quite different in the final version (due to being jitified)
+
     size_t k = 0;
     std::vector<unsigned int> prescans;
 
@@ -216,6 +234,7 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
     // Then, load in input clumps
     for (size_t i = 0; i < input_clump_types.size(); i++) {
         auto type_of_this_clump = input_clump_types.at(i);
+        inertiaPropOffsets.at(i) = type_of_this_clump;
         float3 LBF;
         LBF.x = simParams->LBFX;
         LBF.y = simParams->LBFY;
@@ -366,7 +385,7 @@ inline void DEMDynamicThread::calculateForces() {
     // TODO: Consider if it is possible to do this step using CUB
     cal_force.kernel("calculateNormalContactForces")
         .instantiate()
-        .configure(dim3(blocks_needed_for_contacts), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
+        .configure(dim3(blocks_needed_for_contacts), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 5,
                    streamInfo.stream)
         .launch(simParams, granData, granTemplates);
 

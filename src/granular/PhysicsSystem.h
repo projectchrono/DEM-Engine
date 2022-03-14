@@ -68,8 +68,6 @@ class DEMKinematicThread {
     // A class that contains scratch pad and system status data
     DEMSolverStateData stateOfSolver_resources;
 
-    int costlyProductionStep(int) const;
-
     size_t m_approx_bytes_used = 0;
 
     // Set to true only when a user AdvanceSimulation call is finished. Set to false otherwise.
@@ -305,7 +303,7 @@ class DEMDynamicThread {
     std::vector<float, ManagedAllocator<float>> gProxy;
 
     // Those are the large ones, ones that have the same length as the number of clumps
-    // The mass offsets
+    // The mass/MOI offsets
     std::vector<clumpBodyInertiaOffset_t, ManagedAllocator<clumpBodyInertiaOffset_t>> inertiaPropOffsets;
 
     // The voxel ID (split into 3 parts, representing XYZ location)
@@ -429,6 +427,7 @@ class DEMDynamicThread {
                                const std::vector<float3>& input_clump_vel,
                                const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
                                const std::vector<float>& clumps_mass_types,
+                               const std::vector<float3>& clumps_moi_types,
                                const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                const std::vector<std::vector<float3>>& clumps_sp_location_types,
                                const std::vector<float>& mat_k,

@@ -34,6 +34,7 @@ set(algorithms_headers
 
 set(algorithms_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/example.cu # REPLACE ME WITH A REAL FILE
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubContactDetection.cu 
 )
 
 target_sources(

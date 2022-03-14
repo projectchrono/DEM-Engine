@@ -7,20 +7,18 @@
 #include <thread>
 
 // #include <cub/cub.cuh>
+// #include <core/utils/JitHelper.h>
 
 #include <core/ApiVersion.h>
 #include <core/utils/Macros.h>
-#include <core/utils/chpf/particle_writer.hpp>
 #include <granular/GranularDefines.h>
 #include <granular/PhysicsSystem.h>
-#include <core/utils/JitHelper.h>
-#include <granular/HostSideHelpers.cpp>
 
 namespace sgps {
 
+/*
 __host__ void DEMKinematicThread::contactDetection() {
 
-/*
     size_t blocks_needed_for_bodies = (simParams->nSpheresGM + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
     auto bin_occupation =
         JitHelper::buildProgram("DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
@@ -33,12 +31,12 @@ __host__ void DEMKinematicThread::contactDetection() {
         .launch(simParams, granData, granTemplates);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
+    
     // cubPrefixScan<binsSphereTouches_t>(granData->numBinsSphereTouches, simParams->nSpheresGM + 1);
     size_t temp_storage_bytes = 0;
     cub::DeviceScan::ExclusiveSum(NULL, temp_storage_bytes, granData->numBinsSphereTouches, granData->numBinsSphereTouches, simParams->nSpheresGM + 1);
-    GPU_CALL(cudaDeviceSynchronize());
-    GPU_CALL(cudaPeekAtLastError());
-
+    GPU_CALL(cudaDeviceSynchronize(streamInfo.stream));
+    
     // give CUB needed temporary storage on the device
     // void* d_scratch_space = (void*)stateOfSolver_resources.pDeviceMemoryScratchSpace(temp_storage_bytes);
     // cub::DeviceScan::ExclusiveSum(d_scratch_space, temp_storage_bytes, in_ptr, out_ptr, nSDs);
@@ -142,8 +140,7 @@ __host__ void DEMKinematicThread::contactDetection() {
         simParams->nContactPairs = 0;
     }
 
-*/
 }
-
+*/
 
 }

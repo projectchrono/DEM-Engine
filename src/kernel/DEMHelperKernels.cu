@@ -1,9 +1,40 @@
 // DEM device-side helper kernel collection
-#include <helper_math.cuh>
+//#include <thirdparty/nvidia_helper_math/helper_math.cuh>
+//#include <kernel/cuda_kernel_helper_math.cu>
 #include <granular/DataStructs.h>
 #include <granular/GranularDefines.h>
 
 // inline __device__ voxelID_t position2VoxelID
+
+////////////////////////////////////////////////////////////////////////////////
+// Weirdly, a few float3 and double3 operators are not in the cuda toolkit and I have difficulty including thridparty
+// cuda helper math here. Even if I can I suspect namespace problems. So they will for now just be defined here
+// manually.
+////////////////////////////////////////////////////////////////////////////////
+
+inline __device__ float3 cross(float3 a, float3 b) {
+    return make_float3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+}
+
+inline __device__ float3 operator+(float3 a, float3 b) {
+    return make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
+}
+
+inline __device__ float3 operator-(float3 a, float3 b) {
+    return make_float3(a.x - b.x, a.y - b.y, a.z - b.z);
+}
+
+inline __device__ float3 operator+(double3 a, double3 b) {
+    return make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
+}
+
+inline __device__ float3 operator-(double3 a, double3 b) {
+    return make_float3(a.x - b.x, a.y - b.y, a.z - b.z);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// A few helper functions specific to DEM module
+////////////////////////////////////////////////////////////////////////////////
 
 // Sign function
 template <typename T1>

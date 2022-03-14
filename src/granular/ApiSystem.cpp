@@ -293,7 +293,8 @@ void DEMSolver::initializeArrays() {
     // cached API-level simulation info.
     m_input_clump_vel.resize(m_input_clump_xyz.size(), make_float3(0));
     dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_template_sp_mat_ids,
-                              m_template_mass, m_template_sp_radii, m_template_sp_relPos, m_k_proxy, m_g_proxy);
+                              m_template_mass, m_template_moi, m_template_sp_radii, m_template_sp_relPos, m_k_proxy,
+                              m_g_proxy);
     kT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_template_mass,
                               m_template_sp_radii, m_template_sp_relPos);
 }

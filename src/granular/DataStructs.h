@@ -63,6 +63,10 @@ struct DEMTemplate {
     float* relPosSphereX;
     float* relPosSphereY;
     float* relPosSphereZ;
+    float* massClumpBody;
+    float* mmiXX;
+    float* mmiYY;
+    float* mmiZZ;
     // materialsOffset_t* materialTupleOffset;
     float* kProxy;
     float* gProxy;
@@ -77,6 +81,8 @@ struct DEMMaterialProxy {
 // A struct that holds pointers to data arrays that dT uses
 // For more details just look at PhysicsSystem.h
 struct DEMDataDT {
+    clumpBodyInertiaOffset_t* inertiaPropOffsets;
+
     voxelID_t* voxelID;
 
     subVoxelPos_t* locX;

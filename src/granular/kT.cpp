@@ -13,14 +13,8 @@
 #include <granular/PhysicsSystem.h>
 #include <granular/HostSideHelpers.cpp>
 #include <core/utils/JitHelper.h>
-#include <algorithms/DEMCubContactDetection.cu>
 
 namespace sgps {
-
-int DEMKinematicThread::costlyProductionStep(int val) const {
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    return 2 * val + 1;
-}
 
 inline void DEMKinematicThread::hostContactDetection() {
     size_t blocks_needed_for_bodies = (simParams->nSpheresGM + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
