@@ -45,10 +45,6 @@
     #define EXIT_WAIVED 2
 #endif
 
-#ifndef CUMATH_TINY_FLOAT
-    #define CUMATH_TINY_FLOAT 1e-6f
-#endif
-
 #ifndef __CUDACC__
     #include <cmath>
 #endif
@@ -925,7 +921,7 @@ inline __host__ __device__ uint4 max(uint4 a, uint4 b) {
 ////////////////////////////////////////////////////////////////////////////////
 
 inline __host__ __device__ bool Near(const float& a, const float& b) {
-    return fabs(a - b) < CUMATH_TINY_FLOAT;
+    return fabs(a - b) < 1e-6f;
 }
 
 // Float3 < is an element-wise comparison where x, y, z components are assigned priorities in that order.

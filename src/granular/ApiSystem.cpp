@@ -76,10 +76,11 @@ void DEMSolver::SetTimeStepSize(double ts_size) {
     m_ts_size = ts_size;
 }
 
-unsigned int DEMSolver::LoadMaterialType(float density, float E) {
+unsigned int DEMSolver::LoadMaterialType(float E, float nu, float density) {
     struct DEMMaterial a_material;
     a_material.density = density;
     a_material.E = E;
+    a_material.nu = nu;
 
     m_sp_materials.push_back(a_material);
     return m_sp_materials.size() - 1;
@@ -142,17 +143,17 @@ void DEMSolver::figureOutMaterialProxies() {
     // Use the info in m_sp_materials to populate API-side proxy arrays
     // These arrays are later passed to kTdT in populateManagedArrays
     unsigned int count = (1 + m_sp_materials.size()) * m_sp_materials.size() / 2;
-    m_k_proxy.resize(count);
-    m_g_proxy.resize(count);
+    m_E_proxy.resize(count);
+    m_G_proxy.resize(count);
     for (unsigned int i = 0; i < m_sp_materials.size(); i++) {
         for (unsigned int j = i; j < m_sp_materials.size(); j++) {
             auto Mat1 = m_sp_materials.at(i);
             auto Mat2 = m_sp_materials.at(j);
-            float k, g;
-            materialProxyMaterixCalculator(k, g, Mat1.E, Mat1.density, Mat2.E, Mat2.density);
+            float E_eff, G_eff;
+            materialProxyMaterixCalculator(E_eff, G_eff, Mat1.E, Mat1.nu, Mat2.E, Mat2.nu);
             unsigned int entry_num = locateMatPair<unsigned int>(i, j);
-            m_k_proxy.at(entry_num) = k;
-            m_g_proxy.at(entry_num) = g;
+            m_E_proxy.at(entry_num) = E_eff;
+            m_G_proxy.at(entry_num) = G_eff;
         }
     }
 }
@@ -293,8 +294,8 @@ void DEMSolver::initializeArrays() {
     // cached API-level simulation info.
     m_input_clump_vel.resize(m_input_clump_xyz.size(), make_float3(0));
     dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_template_sp_mat_ids,
-                              m_template_mass, m_template_moi, m_template_sp_radii, m_template_sp_relPos, m_k_proxy,
-                              m_g_proxy);
+                              m_template_mass, m_template_moi, m_template_sp_radii, m_template_sp_relPos, m_E_proxy,
+                              m_G_proxy);
     kT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_template_mass,
                               m_template_sp_radii, m_template_sp_relPos);
 }

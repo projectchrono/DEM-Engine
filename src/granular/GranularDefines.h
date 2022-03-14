@@ -15,6 +15,9 @@ namespace sgps {
 #define VOXEL_RES_POWER2 16
 #define WAIT_GRANULARITY_MS 1
 #define TEST_SHARED_SIZE 128
+#ifndef SGPS_DEM_TINY_FLOAT
+    #define SGPS_DEM_TINY_FLOAT 1e-6f
+#endif
 
 typedef uint16_t subVoxelPos_t;  ///< uint16 or uint32
 typedef uint64_t voxelID_t;
@@ -46,5 +49,19 @@ typedef unsigned int contactPairs_t;
 // typedef unsigned int distinctSphereRadiiOffset_default_t;
 
 // somehow add array materialsArray and radiiArray??
+
+// A few pre-computed constants
+#ifndef SGPS_TWO_OVER_THREE
+    #define SGPS_TWO_OVER_THREE 0.666666666666667
+#endif
+#ifndef SGPS_SQRT_FIVE_OVER_SIX
+    #define SGPS_SQRT_FIVE_OVER_SIX 0.912870929175277
+#endif
+#ifndef SGPS_PI
+    #define SGPS_PI 3.141592653589793
+#endif
+#ifndef SGPS_PI_SQUARED
+    #define SGPS_PI_SQUARED 9.869604401089358
+#endif
 
 }  // namespace sgps

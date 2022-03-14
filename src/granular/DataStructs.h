@@ -68,8 +68,8 @@ struct DEMTemplate {
     float* mmiYY;
     float* mmiZZ;
     // materialsOffset_t* materialTupleOffset;
-    float* kProxy;
-    float* gProxy;
+    float* EProxy;
+    float* GProxy;
 };
 
 // DEM material proxy, such that when they are used in force kernels, we can use these (which are associated with each

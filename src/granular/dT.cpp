@@ -62,8 +62,8 @@ void DEMDynamicThread::packDataPointers() {
     granTemplates->mmiXX = mmiXX.data();
     granTemplates->mmiYY = mmiYY.data();
     granTemplates->mmiZZ = mmiZZ.data();
-    granTemplates->kProxy = kProxy.data();
-    granTemplates->gProxy = gProxy.data();
+    granTemplates->EProxy = EProxy.data();
+    granTemplates->GProxy = GProxy.data();
 }
 void DEMDynamicThread::packTransferPointers(DEMKinematicThread* kT) {
     // These are the pointers for sending data to dT
@@ -156,8 +156,8 @@ void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
     TRACKED_VECTOR_RESIZE(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
     TRACKED_VECTOR_RESIZE(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
     TRACKED_VECTOR_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
-    TRACKED_VECTOR_RESIZE(kProxy, (1 + nMatTuples) * nMatTuples / 2, "kProxy", 0);
-    TRACKED_VECTOR_RESIZE(gProxy, (1 + nMatTuples) * nMatTuples / 2, "gProxy", 0);
+    TRACKED_VECTOR_RESIZE(EProxy, (1 + nMatTuples) * nMatTuples / 2, "EProxy", 0);
+    TRACKED_VECTOR_RESIZE(GProxy, (1 + nMatTuples) * nMatTuples / 2, "GProxy", 0);
 
     // Arrays for contact info
     // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is 4n, and I
@@ -189,8 +189,8 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
 
     // First, load in material property (upper-triangle) matrix
     for (unsigned int i = 0; i < mat_k.size(); i++) {
-        kProxy.at(i) = mat_k.at(i);
-        gProxy.at(i) = mat_g.at(i);
+        EProxy.at(i) = mat_k.at(i);
+        GProxy.at(i) = mat_g.at(i);
     }
 
     // Then load in clump mass and MOI
@@ -393,17 +393,19 @@ inline void DEMDynamicThread::calculateForces() {
 
     // Reflect those body-wise forces on their owner clumps
     // TODO: Do it with CUB
-    hostCollectForces(granData->idGeometryA, granData->idGeometryB, granData->contactForces, granData->h2aX,
-                      granData->h2aY, granData->h2aZ, granData->ownerClumpBody, simParams->h, simParams->nContactPairs);
+    hostCollectForces(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
+                      granData->contactForces, granData->h2aX, granData->h2aY, granData->h2aZ, granData->ownerClumpBody,
+                      granTemplates->massClumpBody, simParams->h, simParams->nContactPairs, simParams->l);
     // displayArray<float>(granData->h2aX, simParams->nClumpBodies);
     // displayFloat3(granData->contactForces, simParams->nContactPairs);
     // std::cout << simParams->nContactPairs << std::endl;
 
     // Calculate the torque on owner clumps from those body-wise forces
     // TODO: Do it with CUB (but can we? Torque accumulation requires multiplying a local vector)
-    hostCollectTorques(granData->idGeometryA, granData->idGeometryB, granData->contactForces,
-                       granData->contactPointGeometryA, granData->contactPointGeometryB, granData->h2AlphaX,
-                       granData->h2AlphaY, granData->h2AlphaZ, granData->ownerClumpBody, simParams->h,
+    hostCollectTorques(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
+                       granData->contactForces, granData->contactPointGeometryA, granData->contactPointGeometryB,
+                       granData->h2AlphaX, granData->h2AlphaY, granData->h2AlphaZ, granData->ownerClumpBody,
+                       granTemplates->mmiXX, granTemplates->mmiYY, granTemplates->mmiZZ, simParams->h,
                        simParams->nContactPairs, simParams->l);
     // displayArray<float>(granData->oriQ0, simParams->nClumpBodies);
     // displayArray<float>(granData->oriQ1, simParams->nClumpBodies);

@@ -16,7 +16,8 @@ using namespace sgps;
 int main() {
     DEMSolver DEM_sim;
 
-    srand(time(NULL));
+    // srand(time(NULL));
+    srand(777);
 
     // total number of random clump templates to generate
     int num_template = 10;
@@ -30,15 +31,15 @@ int main() {
     float min_relpos = -0.025;
     float max_relpos = 0.025;
 
-    auto mat_type_1 = DEM_sim.LoadMaterialType(1, 10);
+    auto mat_type_1 = DEM_sim.LoadMaterialType(1e8, 0.3);
 
     for (int i = 0; i < num_template; i++) {
         // first decide the number of spheres that live in this clump
         int num_sphere = rand() % (max_sphere - min_sphere + 1) + 1;
 
-        // then allocate the clump template definition arrays
-        float mass = 1.0;
-        float3 MOI = make_float3(1.0, 1.0, 1.0);
+        // then allocate the clump template definition arrays (all in SI)
+        float mass = 0.0001 * num_sphere;
+        float3 MOI = make_float3(2e-8 * num_sphere, 1.5e-8 * num_sphere, 2.5e-8 * num_sphere);
         std::vector<float> radii;
         std::vector<float3> relPos;
         std::vector<unsigned int> mat;

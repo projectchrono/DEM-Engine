@@ -1,36 +1,13 @@
 // DEM device-side helper kernel collection
 //#include <thirdparty/nvidia_helper_math/helper_math.cuh>
-//#include <kernel/cuda_kernel_helper_math.cu>
 #include <granular/DataStructs.h>
 #include <granular/GranularDefines.h>
 
+// I can only include CUDAMathHelpers.cu here and if I do it in other kernel files such as DEMBinSphereKernels.cu too,
+// there will be double-load problem where operators are re-defined. Is there a "pragma once" sort of thing here?
+#include <kernel/CUDAMathHelpers.cu>
+
 // inline __device__ voxelID_t position2VoxelID
-
-////////////////////////////////////////////////////////////////////////////////
-// Weirdly, a few float3 and double3 operators are not in the cuda toolkit and I have difficulty including thridparty
-// cuda helper math here. Even if I can I suspect namespace problems. So they will for now just be defined here
-// manually.
-////////////////////////////////////////////////////////////////////////////////
-
-inline __device__ float3 cross(float3 a, float3 b) {
-    return make_float3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
-}
-
-inline __device__ float3 operator+(float3 a, float3 b) {
-    return make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
-}
-
-inline __device__ float3 operator-(float3 a, float3 b) {
-    return make_float3(a.x - b.x, a.y - b.y, a.z - b.z);
-}
-
-inline __device__ float3 operator+(double3 a, double3 b) {
-    return make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
-}
-
-inline __device__ float3 operator-(double3 a, double3 b) {
-    return make_float3(a.x - b.x, a.y - b.y, a.z - b.z);
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 // A few helper functions specific to DEM module
@@ -192,15 +169,15 @@ inline __device__ void checkSpheresOverlap(const T1& XA,
     }
     // If getting this far, then 2 spheres have an intersection, let's calculate the intersection point
     overlap = true;
-    T1 A2BVecX = XB - XA;
-    T1 A2BVecY = YB - YA;
-    T1 A2BVecZ = ZB - ZA;
-    normalizeVector3<double>(A2BVecX, A2BVecY, A2BVecZ);
+    T1 B2AVecX = XA - XB;
+    T1 B2AVecY = YA - YB;
+    T1 B2AVecZ = ZA - ZB;
+    normalizeVector3<double>(B2AVecX, B2AVecY, B2AVecZ);
     T1 halfOverlapDepth = (radA + radB - sqrt(centerDist2)) / (T1)2;
-    // From center of A, towards center of B, move a distance of radA, then backtrack a bit, for half the overlap depth
-    CPX = XA + (radA - halfOverlapDepth) * A2BVecX;
-    CPY = YA + (radA - halfOverlapDepth) * A2BVecY;
-    CPZ = ZA + (radA - halfOverlapDepth) * A2BVecZ;
+    // From center of B, towards center of A, move a distance of radB, then backtrack a bit, for half the overlap depth
+    CPX = XB + (radB - halfOverlapDepth) * B2AVecX;
+    CPY = YB + (radB - halfOverlapDepth) * B2AVecY;
+    CPZ = ZB + (radB - halfOverlapDepth) * B2AVecZ;
 }
 
 /**
@@ -208,7 +185,7 @@ inline __device__ void checkSpheresOverlap(const T1& XA,
  *   - T1: the floating point accuracy level for contact point location/penetration depth
  *   - T2: the floating point accuracy level for the relative position of 2 bodies involved
  *
- * Basic idea: this is another version of checkSpheresOverlap which also gives the penetration length and bodyA's
+ * Basic idea: this is another version of checkSpheresOverlap which also gives the penetration length and bodyB's
  * outward contact normal
  *
  */
@@ -236,15 +213,15 @@ inline __device__ void checkSpheresOverlap(const T1& XA,
     }
     // If getting this far, then 2 spheres have an intersection, let's calculate the intersection point
     overlap = true;
-    normalX = XB - XA;
-    normalY = YB - YA;
-    normalZ = ZB - ZA;
+    normalX = XA - XB;
+    normalY = YA - YB;
+    normalZ = ZA - ZB;
     normalizeVector3<T2>(normalX, normalY, normalZ);
     overlapDepth = radA + radB - sqrt(centerDist2);
-    // From center of A, towards center of B, move a distance of radA, then backtrack a bit, for half the overlap depth
-    CPX = XA + (radA - overlapDepth / (T1)2) * normalX;
-    CPY = YA + (radA - overlapDepth / (T1)2) * normalY;
-    CPZ = ZA + (radA - overlapDepth / (T1)2) * normalZ;
+    // From center of B, towards center of A, move a distance of radB, then backtrack a bit, for half the overlap depth
+    CPX = XB + (radB - overlapDepth / (T1)2) * normalX;
+    CPY = YB + (radB - overlapDepth / (T1)2) * normalY;
+    CPZ = ZB + (radB - overlapDepth / (T1)2) * normalZ;
 }
 
 template <typename T1>

@@ -299,8 +299,8 @@ class DEMDynamicThread {
     std::vector<float, ManagedAllocator<float>> relPosSphereZ;
 
     // Stores the actual stiffness/damping, where the kernels will need offsets to index into them
-    std::vector<float, ManagedAllocator<float>> kProxy;
-    std::vector<float, ManagedAllocator<float>> gProxy;
+    std::vector<float, ManagedAllocator<float>> EProxy;
+    std::vector<float, ManagedAllocator<float>> GProxy;
 
     // Those are the large ones, ones that have the same length as the number of clumps
     // The mass/MOI offsets

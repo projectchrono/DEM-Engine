@@ -117,35 +117,40 @@ inline void hostScanForJumps(T1* arr, T1* arr_elem, T2* jump_loc, T3* jump_len, 
     }
 }
 
-// Note we assume the ``contact force'' here is actually acceleration written in terms of multiples of l
-// And we collect h2a, not force
-inline void hostCollectForces(bodyID_t* idA,
+// We collect h2a in fact, not force
+inline void hostCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
+                              bodyID_t* idA,
                               bodyID_t* idB,
                               float3* contactForces,
                               float* clump_h2aX,
                               float* clump_h2aY,
                               float* clump_h2aZ,
                               bodyID_t* ownerClumpBody,
+                              float* massClumpBody,
                               double h,
-                              size_t n) {
+                              size_t n,
+                              double l) {
     for (size_t i = 0; i < n; i++) {
         bodyID_t bodyA = idA[i];
         bodyID_t bodyB = idB[i];
         bodyID_t AOwner = ownerClumpBody[bodyA];
-        clump_h2aX[AOwner] += (double)contactForces[i].x * h * h;
-        clump_h2aY[AOwner] += (double)contactForces[i].y * h * h;
-        clump_h2aZ[AOwner] += (double)contactForces[i].z * h * h;
+        float AMass = massClumpBody[inertiaPropOffsets[AOwner]];
+        clump_h2aX[AOwner] += (double)contactForces[i].x / AMass / l * h * h;
+        clump_h2aY[AOwner] += (double)contactForces[i].y / AMass / l * h * h;
+        clump_h2aZ[AOwner] += (double)contactForces[i].z / AMass / l * h * h;
 
         bodyID_t BOwner = ownerClumpBody[bodyB];
-        clump_h2aX[BOwner] += -(double)contactForces[i].x * h * h;
-        clump_h2aY[BOwner] += -(double)contactForces[i].y * h * h;
-        clump_h2aZ[BOwner] += -(double)contactForces[i].z * h * h;
+        float BMass = massClumpBody[inertiaPropOffsets[BOwner]];
+        clump_h2aX[BOwner] += -(double)contactForces[i].x / BMass / l * h * h;
+        clump_h2aY[BOwner] += -(double)contactForces[i].y / BMass / l * h * h;
+        clump_h2aZ[BOwner] += -(double)contactForces[i].z / BMass / l * h * h;
     }
 }
 
 // Note we assume the ``contact force'' here is actually acceleration written in terms of multiples of l
 // And we collect h2Alpha, not torque
-inline void hostCollectTorques(bodyID_t* idA,
+inline void hostCollectTorques(clumpBodyInertiaOffset_t* inertiaPropOffsets,
+                               bodyID_t* idA,
                                bodyID_t* idB,
                                float3* contactForces,
                                float3* contactLocA,
@@ -154,28 +159,39 @@ inline void hostCollectTorques(bodyID_t* idA,
                                float* clump_h2AlphaY,
                                float* clump_h2AlphaZ,
                                bodyID_t* ownerClumpBody,
+                               float* mmiXX,
+                               float* mmiYY,
+                               float* mmiZZ,
                                double h,
                                size_t n,
                                double l) {
-    float mass = 1.;
-    float MOI = 0.002;
     for (size_t i = 0; i < n; i++) {
-        // First, recover true force
-        float3 F = contactForces[i] * l * mass;
+        // First, recover the force
+        float3 F = contactForces[i];
         // Then, compute alpha as torque/moi
         float3 CPA = contactLocA[i];
         float3 CPB = contactLocB[i];
-        float3 alphaA = cross(CPA, F) / MOI;
-        float3 alphaB = cross(CPB, -F) / MOI;
 
         bodyID_t bodyA = idA[i];
         bodyID_t bodyB = idB[i];
         bodyID_t AOwner = ownerClumpBody[bodyA];
+        bodyID_t BOwner = ownerClumpBody[bodyB];
+        clumpBodyInertiaOffset_t AMOIOffset = inertiaPropOffsets[AOwner];
+        clumpBodyInertiaOffset_t BMOIOffset = inertiaPropOffsets[BOwner];
+        float3 AMOI, BMOI;
+        AMOI.x = mmiXX[AMOIOffset];
+        AMOI.y = mmiYY[AMOIOffset];
+        AMOI.z = mmiZZ[AMOIOffset];
+        BMOI.x = mmiXX[BMOIOffset];
+        BMOI.y = mmiYY[BMOIOffset];
+        BMOI.z = mmiZZ[BMOIOffset];
+        float3 alphaA = cross(CPA, F) / AMOI;
+        float3 alphaB = cross(CPB, -F) / BMOI;
+
         clump_h2AlphaX[AOwner] += (double)alphaA.x * h * h;
         clump_h2AlphaY[AOwner] += (double)alphaA.y * h * h;
         clump_h2AlphaZ[AOwner] += (double)alphaA.z * h * h;
 
-        bodyID_t BOwner = ownerClumpBody[bodyB];
         clump_h2AlphaX[BOwner] += (double)alphaB.x * h * h;
         clump_h2AlphaY[BOwner] += (double)alphaB.y * h * h;
         clump_h2AlphaZ[BOwner] += (double)alphaB.z * h * h;
@@ -214,9 +230,16 @@ inline void hostApplyOriQ2Vector3(T1& X, T1& Y, T1& Z, const T2& Q0, const T2& Q
 }
 
 /// Calculate the contact params based on the 2 contact material types given
-inline void materialProxyMaterixCalculator(float& k, float& g, float& E1, float& d1, float& E2, float& d2) {
-    k = 50000000.;
-    g = 10000.;
+inline void materialProxyMaterixCalculator(float& E_eff,
+                                           float& G_eff,
+                                           const float& Y1,
+                                           const float& nu1,
+                                           const float& Y2,
+                                           const float& nu2) {
+    double invE = (1 - nu1 * nu1) / Y1 + (1 - nu2 * nu2) / Y2;
+    E_eff = 1. / invE;
+    double invG = 2 * (2 - nu1) * (1 + nu1) / Y1 + 2 * (2 - nu2) * (1 + nu2) / Y2;
+    G_eff = 1. / invG;
 }
 
 }  // namespace sgps

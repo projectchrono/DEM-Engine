@@ -74,9 +74,10 @@ class DEMSolver {
     /// A simplified version of LoadClumpType: it just loads a one-sphere clump template
     unsigned int LoadClumpSimpleSphere(float mass, float radius, unsigned int material_id);
 
-    /// Load possible materials into the API-level cache
-    /// Return the index of the material type just loaded
-    unsigned int LoadMaterialType(float density, float E);
+    /// Load materials properties (Young's modulus, Poisson's ratio and optionally density) into the API-level cache.
+    /// Return the index of the material type just loaded.
+    unsigned int LoadMaterialType(float E, float nu, float density);
+    unsigned int LoadMaterialType(float E, float nu) { return LoadMaterialType(E, nu, 1.f); }
 
     /// Load input clumps (topology types and initial locations) on a per-pair basis
     /// TODO: Add a overload that takes velocities too
@@ -115,11 +116,12 @@ class DEMSolver {
     struct DEMMaterial {
         float density;
         float E;
+        float nu;
     };
     std::vector<DEMMaterial> m_sp_materials;
     // Materials info is processed at API level (on initialization) for generating proxy arrays
-    std::vector<float> m_k_proxy;
-    std::vector<float> m_g_proxy;
+    std::vector<float> m_E_proxy;
+    std::vector<float> m_G_proxy;
 
     // This is the cached clump structure information.
     // It will be massaged into kernels upon Initialize.
