@@ -90,7 +90,7 @@ add_subdirectory(src/algorithms)
 
 add_library(
 	sbel_gpu_physics 
-	SHARED
+	STATIC
 	$<TARGET_OBJECTS:core>
 	$<TARGET_OBJECTS:granular>
 	$<TARGET_OBJECTS:sph>
@@ -108,6 +108,7 @@ set_target_properties(sbel_gpu_physics
 	PROPERTIES
 	INTERFACE_INCLUDE_DIRECTORIES "${CORE_INTERFACE} ${GRANULAR_INTERFACE} ${SPH_INTERFACE} ${ALGORITHMS_INTERFACE}"
 	INTERFACE_LINK_LIBRARIES "CUDA::cudart;CUDA::nvrtc"
+	LINKER_LANGUAGE CUDA
 )
 	
 add_subdirectory(src/demo)
