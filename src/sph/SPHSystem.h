@@ -1,6 +1,9 @@
 // SPH-DualGPU
 // SPH system base class header
 
+#ifndef SGPS_SPH_SYSTEM_H
+#define SGPS_SPH_SYSTEM_H
+
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -11,6 +14,7 @@
 #include <sph/datastruct.h>
 #include <mutex>
 #include <atomic>
+
 struct DataManager {
     float radius;
     std::vector<vector3, sgps::ManagedAllocator<vector3>> m_pos;  // particle locations
@@ -173,3 +177,5 @@ class SPHSystem {
     std::atomic<bool> wt_thread_busy;
     std::atomic<bool> wt_buffer_fresh;
 };
+
+#endif
