@@ -46,7 +46,7 @@ int main() {
     std::vector<unsigned int> mat_vec(3, 0);
     */
 
-    auto mat_type_1 = DEM_sim.LoadMaterialType(1, 10);
+    auto mat_type_1 = DEM_sim.LoadMaterialType(1e6, 0.3, 0.7);
 
     for (int i = 0; i < num_template; i++) {
         // first decide the number of spheres that live in this clump

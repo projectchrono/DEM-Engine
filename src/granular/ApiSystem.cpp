@@ -76,14 +76,28 @@ void DEMSolver::SetTimeStepSize(double ts_size) {
     m_ts_size = ts_size;
 }
 
-unsigned int DEMSolver::LoadMaterialType(float E, float nu, float density) {
+unsigned int DEMSolver::LoadMaterialType(float E, float nu, float CoR, float density) {
+    unsigned int mat_num = m_sp_materials.size();
+    if (CoR < SGPS_DEM_TINY_FLOAT) {
+        std::cout << "\nWARNING! Material type " << mat_num
+                  << " is set (or defaulted) to have 0 restitution. Please make sure this is intentional.\n"
+                  << std::endl;
+    }
+    if (CoR > 1.f) {
+        std::cout << "\nWARNING! Material type " << mat_num
+                  << " is set to have a restitution coefficient larger than 1. This is typically not physical and "
+                     "should destabilize the simulation.\n"
+                  << std::endl;
+    }
+
     struct DEMMaterial a_material;
     a_material.density = density;
     a_material.E = E;
     a_material.nu = nu;
+    a_material.CoR = CoR;
 
     m_sp_materials.push_back(a_material);
-    return m_sp_materials.size() - 1;
+    return mat_num;
 }
 
 unsigned int DEMSolver::LoadClumpType(float mass,
@@ -145,6 +159,7 @@ void DEMSolver::figureOutMaterialProxies() {
     unsigned int count = (1 + m_sp_materials.size()) * m_sp_materials.size() / 2;
     m_E_proxy.resize(count);
     m_G_proxy.resize(count);
+    m_CoR_proxy.resize(count);
     for (unsigned int i = 0; i < m_sp_materials.size(); i++) {
         for (unsigned int j = i; j < m_sp_materials.size(); j++) {
             auto Mat1 = m_sp_materials.at(i);
@@ -154,6 +169,7 @@ void DEMSolver::figureOutMaterialProxies() {
             unsigned int entry_num = locateMatPair<unsigned int>(i, j);
             m_E_proxy.at(entry_num) = E_eff;
             m_G_proxy.at(entry_num) = G_eff;
+            m_CoR_proxy.at(entry_num) = std::min(Mat1.CoR, Mat2.CoR);
         }
     }
 }
@@ -295,7 +311,7 @@ void DEMSolver::initializeArrays() {
     m_input_clump_vel.resize(m_input_clump_xyz.size(), make_float3(0));
     dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_template_sp_mat_ids,
                               m_template_mass, m_template_moi, m_template_sp_radii, m_template_sp_relPos, m_E_proxy,
-                              m_G_proxy);
+                              m_G_proxy, m_CoR_proxy);
     kT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_template_mass,
                               m_template_sp_radii, m_template_sp_relPos);
 }
@@ -340,6 +356,8 @@ int DEMSolver::Initialize() {
     return 0;
 }
 
+// TODO: it seems that for variable step size, it is the best not to do the computation of n cycles here; rather we
+// should use a while loop to control that loop in worker threads.
 inline size_t DEMSolver::computeDTCycles(double thisCallDuration) {
     return (size_t)std::round(thisCallDuration / m_ts_size);
 }

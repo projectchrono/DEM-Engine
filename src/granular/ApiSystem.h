@@ -74,10 +74,13 @@ class DEMSolver {
     /// A simplified version of LoadClumpType: it just loads a one-sphere clump template
     unsigned int LoadClumpSimpleSphere(float mass, float radius, unsigned int material_id);
 
-    /// Load materials properties (Young's modulus, Poisson's ratio and optionally density) into the API-level cache.
-    /// Return the index of the material type just loaded.
-    unsigned int LoadMaterialType(float E, float nu, float density);
-    unsigned int LoadMaterialType(float E, float nu) { return LoadMaterialType(E, nu, 1.f); }
+    /// Load materials properties (Young's modulus, Poisson's ratio, Coeff of Restitution and optionally density) into
+    /// the API-level cache. Return the index of the material type just loaded. If CoR is not given then it is assumed
+    /// 0; if density is not given then later calculating particle mass from density is not allowed (instead it has to
+    /// be explicitly given).
+    unsigned int LoadMaterialType(float E, float nu, float CoR, float density);
+    unsigned int LoadMaterialType(float E, float nu, float CoR) { return LoadMaterialType(E, nu, CoR, -1.f); }
+    unsigned int LoadMaterialType(float E, float nu) { return LoadMaterialType(E, nu, 0.f, -1.f); }
 
     /// Load input clumps (topology types and initial locations) on a per-pair basis
     /// TODO: Add a overload that takes velocities too
@@ -117,11 +120,13 @@ class DEMSolver {
         float density;
         float E;
         float nu;
+        float CoR;
     };
     std::vector<DEMMaterial> m_sp_materials;
     // Materials info is processed at API level (on initialization) for generating proxy arrays
     std::vector<float> m_E_proxy;
     std::vector<float> m_G_proxy;
+    std::vector<float> m_CoR_proxy;
 
     // This is the cached clump structure information.
     // It will be massaged into kernels upon Initialize.

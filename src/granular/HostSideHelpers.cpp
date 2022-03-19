@@ -133,22 +133,22 @@ inline void hostCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
     for (size_t i = 0; i < n; i++) {
         bodyID_t bodyA = idA[i];
         bodyID_t bodyB = idB[i];
+        const float3 F = contactForces[i];
         bodyID_t AOwner = ownerClumpBody[bodyA];
         float AMass = massClumpBody[inertiaPropOffsets[AOwner]];
-        clump_h2aX[AOwner] += (double)contactForces[i].x / AMass / l * h * h;
-        clump_h2aY[AOwner] += (double)contactForces[i].y / AMass / l * h * h;
-        clump_h2aZ[AOwner] += (double)contactForces[i].z / AMass / l * h * h;
+        clump_h2aX[AOwner] += (double)F.x / AMass / l * h * h;
+        clump_h2aY[AOwner] += (double)F.y / AMass / l * h * h;
+        clump_h2aZ[AOwner] += (double)F.z / AMass / l * h * h;
 
         bodyID_t BOwner = ownerClumpBody[bodyB];
         float BMass = massClumpBody[inertiaPropOffsets[BOwner]];
-        clump_h2aX[BOwner] += -(double)contactForces[i].x / BMass / l * h * h;
-        clump_h2aY[BOwner] += -(double)contactForces[i].y / BMass / l * h * h;
-        clump_h2aZ[BOwner] += -(double)contactForces[i].z / BMass / l * h * h;
+        clump_h2aX[BOwner] += -(double)F.x / BMass / l * h * h;
+        clump_h2aY[BOwner] += -(double)F.y / BMass / l * h * h;
+        clump_h2aZ[BOwner] += -(double)F.z / BMass / l * h * h;
     }
 }
 
-// Note we assume the ``contact force'' here is actually acceleration written in terms of multiples of l
-// And we collect h2Alpha, not torque
+// Note we collect h2Alpha, not torque
 inline void hostCollectTorques(clumpBodyInertiaOffset_t* inertiaPropOffsets,
                                bodyID_t* idA,
                                bodyID_t* idB,

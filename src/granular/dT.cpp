@@ -64,6 +64,7 @@ void DEMDynamicThread::packDataPointers() {
     granTemplates->mmiZZ = mmiZZ.data();
     granTemplates->EProxy = EProxy.data();
     granTemplates->GProxy = GProxy.data();
+    granTemplates->CoRProxy = CoRProxy.data();
 }
 void DEMDynamicThread::packTransferPointers(DEMKinematicThread* kT) {
     // These are the pointers for sending data to dT
@@ -158,6 +159,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
     TRACKED_VECTOR_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
     TRACKED_VECTOR_RESIZE(EProxy, (1 + nMatTuples) * nMatTuples / 2, "EProxy", 0);
     TRACKED_VECTOR_RESIZE(GProxy, (1 + nMatTuples) * nMatTuples / 2, "GProxy", 0);
+    TRACKED_VECTOR_RESIZE(CoRProxy, (1 + nMatTuples) * nMatTuples / 2, "CoRProxy", 0);
 
     // Arrays for contact info
     // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is 4n, and I
@@ -184,13 +186,15 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
                                              const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                              const std::vector<std::vector<float3>>& clumps_sp_location_types,
                                              const std::vector<float>& mat_k,
-                                             const std::vector<float>& mat_g) {
+                                             const std::vector<float>& mat_g,
+                                             const std::vector<float>& mat_CoR) {
     // Use some temporary hacks to get the info in the managed mem
 
     // First, load in material property (upper-triangle) matrix
     for (unsigned int i = 0; i < mat_k.size(); i++) {
         EProxy.at(i) = mat_k.at(i);
         GProxy.at(i) = mat_g.at(i);
+        CoRProxy.at(i) = mat_CoR.at(i);
     }
 
     // Then load in clump mass and MOI

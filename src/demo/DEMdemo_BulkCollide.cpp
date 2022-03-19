@@ -16,8 +16,8 @@ using namespace sgps;
 int main() {
     DEMSolver DEM_sim;
 
-    // srand(time(NULL));
-    srand(777);
+    srand(time(NULL));
+    // srand(4150);
 
     // total number of random clump templates to generate
     int num_template = 10;
@@ -31,15 +31,15 @@ int main() {
     float min_relpos = -0.025;
     float max_relpos = 0.025;
 
-    auto mat_type_1 = DEM_sim.LoadMaterialType(1e8, 0.3);
+    auto mat_type_1 = DEM_sim.LoadMaterialType(1e7, 0.3, 0.7);
 
     for (int i = 0; i < num_template; i++) {
         // first decide the number of spheres that live in this clump
         int num_sphere = rand() % (max_sphere - min_sphere + 1) + 1;
 
         // then allocate the clump template definition arrays (all in SI)
-        float mass = 0.0001 * num_sphere;
-        float3 MOI = make_float3(2e-8 * num_sphere, 1.5e-8 * num_sphere, 2.5e-8 * num_sphere);
+        float mass = 0.1 * num_sphere;
+        float3 MOI = make_float3(2e-5 * num_sphere, 1.5e-5 * num_sphere, 1.8e-5 * num_sphere);
         std::vector<float> radii;
         std::vector<float3> relPos;
         std::vector<unsigned int> mat;
@@ -74,8 +74,8 @@ int main() {
 
     // generate initial clumps (in this case just polydisperse spheres)
     float3 domain_center = make_float3(0);
-    float box_dim = 0.5;
-    auto input_xyz = DEMBoxGridSampler(make_float3(0), make_float3(box_dim), 0.2);
+    float box_dim = 0.35;
+    auto input_xyz = DEMBoxGridSampler(make_float3(0), make_float3(box_dim), 0.14);
     unsigned int num_clumps = input_xyz.size();
     std::vector<unsigned int> input_template_num;
     std::vector<float3> input_vel;
@@ -85,7 +85,7 @@ int main() {
         float3 vel;
         vel = domain_center - input_xyz.at(i);
         if (length(vel) > 1e-5) {
-            vel = normalize(vel) * 30.0;
+            vel = normalize(vel) * 0.1;
         } else {
             vel = make_float3(0);
         }
@@ -98,22 +98,22 @@ int main() {
     DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, 3e-11);
 
     DEM_sim.CenterCoordSys();
-    DEM_sim.SetTimeStepSize(1e-5);
+    DEM_sim.SetTimeStepSize(3e-6);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, 0));
     DEM_sim.SetCDUpdateFreq(1);
 
     DEM_sim.Initialize();
 
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 300; i++) {
         std::cout << "Iteration: " << i << std::endl;
 
         char filename[100];
         sprintf(filename, "./DEMdemo_collide_output_%04d.csv", i);
         DEM_sim.WriteFileAsSpheres(std::string(filename));
 
-        DEM_sim.LaunchThreads(2.5e-4);
+        DEM_sim.LaunchThreads(8e-3);
     }
 
-    std::cout << "DEMdemo_Collide exiting..." << std::endl;
+    std::cout << "DEMdemo_BulkCollide exiting..." << std::endl;
     return 0;
 }

@@ -169,10 +169,10 @@ inline __device__ void checkSpheresOverlap(const T1& XA,
     }
     // If getting this far, then 2 spheres have an intersection, let's calculate the intersection point
     overlap = true;
-    T1 B2AVecX = XA - XB;
-    T1 B2AVecY = YA - YB;
-    T1 B2AVecZ = ZA - ZB;
-    normalizeVector3<double>(B2AVecX, B2AVecY, B2AVecZ);
+    float B2AVecX = XA - XB;
+    float B2AVecY = YA - YB;
+    float B2AVecZ = ZA - ZB;
+    normalizeVector3<float>(B2AVecX, B2AVecY, B2AVecZ);
     T1 halfOverlapDepth = (radA + radB - sqrt(centerDist2)) / (T1)2;
     // From center of B, towards center of A, move a distance of radB, then backtrack a bit, for half the overlap depth
     CPX = XB + (radB - halfOverlapDepth) * B2AVecX;
