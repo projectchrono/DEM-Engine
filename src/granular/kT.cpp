@@ -34,13 +34,15 @@ inline void DEMKinematicThread::contactDetection() {
     // hostPrefixScan<binsSphereTouches_t>(granData->numBinsSphereTouches, simParams->nSpheresGM + 1);
     cubPrefixScan(granData->numBinsSphereTouches, granData->numBinsSphereTouchesScan, simParams->nSpheresGM, streamInfo,
                   stateOfSolver_resources);
-    // displayArray<binsSphereTouches_t>(granData->numBinsSphereTouches, simParams->nSpheresGM + 1);
+    stateOfSolver_resources.setTotalBinSphereTouchPairs(
+        (size_t)granData->numBinsSphereTouchesScan[simParams->nSpheresGM - 1] +
+        (size_t)granData->numBinsSphereTouches[simParams->nSpheresGM - 1]);
+    // displayArray<binsSphereTouches_t>(granData->numBinsSphereTouches, simParams->nSpheresGM);
+    // displayArray<binsSphereTouchesScan_t>(granData->numBinsSphereTouchesScan, simParams->nSpheresGM);
     // Resize those work arrays to be the size of the number of all sphere--bin pairs
     // After resize we need to reassign pointers in case they changed lengths
-    binIDsEachSphereTouches.resize((size_t)granData->numBinsSphereTouchesScan[simParams->nSpheresGM - 1] +
-                                   (size_t)granData->numBinsSphereTouches[simParams->nSpheresGM - 1]);
-    sphereIDsEachBinTouches.resize((size_t)granData->numBinsSphereTouchesScan[simParams->nSpheresGM - 1] +
-                                   (size_t)granData->numBinsSphereTouches[simParams->nSpheresGM - 1]);
+    binIDsEachSphereTouches.resize(stateOfSolver_resources.getTotalBinSphereTouchPairs());
+    sphereIDsEachBinTouches.resize(stateOfSolver_resources.getTotalBinSphereTouchPairs());
     granData->binIDsEachSphereTouches = binIDsEachSphereTouches.data();
     granData->sphereIDsEachBinTouches = sphereIDsEachBinTouches.data();
 
@@ -51,12 +53,13 @@ inline void DEMKinematicThread::contactDetection() {
         .launch(simParams, granData, granTemplates);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     // std::cout << "Unsorted bin IDs: ";
-    // displayArray<binID_t>(granData->binIDsEachSphereTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
+    // displayArray<binID_t>(granData->binIDsEachSphereTouches, stateOfSolver_resources.getTotalBinSphereTouchPairs());
     // std::cout << "Corresponding sphere IDs: ";
-    // displayArray<bodyID_t>(granData->sphereIDsEachBinTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
+    // displayArray<bodyID_t>(granData->sphereIDsEachBinTouches, stateOfSolver_resources.getTotalBinSphereTouchPairs());
 
     hostSortByKey<binID_t, bodyID_t>(granData->binIDsEachSphereTouches, granData->sphereIDsEachBinTouches,
-                                     granData->numBinsSphereTouches[simParams->nSpheresGM]);
+                                     stateOfSolver_resources.getTotalBinSphereTouchPairs());
+
     // std::cout << "Sorted bin IDs: ";
     // displayArray<binID_t>(granData->binIDsEachSphereTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
     // std::cout << "Corresponding sphere IDs: ";
@@ -69,7 +72,7 @@ inline void DEMKinematicThread::contactDetection() {
     // even that much, since there will be bins that suffice but has like 2 spheres in it, so they will finish rather
     // quickly); but is it easy to use CUB to ensure each jump has at least 2 relevant elements?
     hostScanForJumpsNum<binID_t>(granData->binIDsEachSphereTouches,
-                                 granData->numBinsSphereTouches[simParams->nSpheresGM], 2, simParams->nActiveBins);
+                                 stateOfSolver_resources.getTotalBinSphereTouchPairs(), 2, simParams->nActiveBins);
 
     // OK, 2 choices here: either use this array activeBinIDs to register active bin IDs (we need this info to rule out
     // double-count in CD), or screw the idea of activeBins, just give every bin a place in these following 2 arrays,
@@ -82,7 +85,7 @@ inline void DEMKinematicThread::contactDetection() {
     granData->numSpheresBinTouches = numSpheresBinTouches.data();
     hostScanForJumps<binID_t, binsSphereTouches_t, spheresBinTouches_t>(
         granData->binIDsEachSphereTouches, granData->activeBinIDs, granData->sphereIDsLookUpTable,
-        granData->numSpheresBinTouches, granData->numBinsSphereTouches[simParams->nSpheresGM], 2);
+        granData->numSpheresBinTouches, stateOfSolver_resources.getTotalBinSphereTouchPairs(), 2);
     // std::cout << "activeBinIDs: ";
     // displayArray<binID_t>(granData->activeBinIDs, simParams->nActiveBins);
     // std::cout << "numSpheresBinTouches: ";

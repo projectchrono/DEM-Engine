@@ -383,6 +383,8 @@ int DEMSolver::LaunchThreads(double thisCallDuration) {
     // Is it needed here??
     // dT->packDataPointers(kT->granData);
 
+    // TODO: Return if nSphere==0
+
     // Tell dT how many iterations to go
     size_t nDTIters = computeDTCycles(thisCallDuration);
     dT->setNDynamicCycles(nDTIters);

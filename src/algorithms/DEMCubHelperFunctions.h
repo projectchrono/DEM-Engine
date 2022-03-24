@@ -5,6 +5,7 @@
 #pragma once
 
 #include <granular/DataStructs.h>
+#include <granular/GranularStructs.h>
 #include <granular/GranularDefines.h>
 #include <core/utils/GpuManager.h>
 

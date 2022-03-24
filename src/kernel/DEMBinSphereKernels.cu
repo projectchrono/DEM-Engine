@@ -86,7 +86,7 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
         sgps::bodyID_t myOwnerID = granData->ownerClumpBody[sphereID];
         sgps::clumpComponentOffset_t myCompOffset = granData->clumpComponentOffset[sphereID];
         // Get the offset of my spot where I should start writing back to the global bin--sphere pair registration array
-        sgps::binsSphereTouches_t myReportOffset = granData->numBinsSphereTouches[sphereID];
+        sgps::binsSphereTouchesScan_t myReportOffset = granData->numBinsSphereTouchesScan[sphereID];
         double ownerX, ownerY, ownerZ;
         voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
             ownerX, ownerY, ownerZ, granData->voxelID[myOwnerID], granData->locX[myOwnerID], granData->locY[myOwnerID],

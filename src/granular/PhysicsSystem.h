@@ -17,6 +17,7 @@
 #include <core/utils/GpuError.h>
 
 #include <granular/GranularDefines.h>
+#include <granular/GranularStructs.h>
 #include <granular/DataStructs.h>
 
 namespace sgps {

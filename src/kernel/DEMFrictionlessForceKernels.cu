@@ -36,12 +36,8 @@ inline __device__ float3 calcNormalForce(const double& overlapDepth,
 
     // normal force (that A feels)
     // printf("overlapDepth: %f\n", overlapDepth);
-    // printf("kn: %f\n", kn);
-    // printf("projection: %f\n", projection);
-    // printf("gn: %f\n", gn);
-    // printf("Sn: %f\n", Sn);
-    // printf("kn * overlapDepth: %f\n", kn * overlapDepth);
-    // printf("gn * projection: %f\n", gn * projection);
+    // printf("kn * overlapDepth: %f\n", k_n * overlapDepth);
+    // printf("gn * projection: %f\n", gamma_n * projection);
     float3 force = (k_n * overlapDepth + gamma_n * projection) * B2A;
     return force;
 }

@@ -5,38 +5,11 @@
 #pragma once
 
 #include <granular/GranularDefines.h>
-#include <core/utils/ManagedAllocator.hpp>
 
 namespace sgps {
 // Structs defined here will be used by GPUs.
-
-/// <summary>
-/// DEMSolverStateData contains information that pertains the DEM solver, at a certain point in time. It also contains
-/// space allocated as system scratch pad.
-/// </summary>
-class DEMSolverStateData {
-  private:
-    size_t* pMaxNumberSpheresInAnyBin;
-
-    /// vector of unsigned int that lives on the device; used by CUB or by anybody else that needs scrap space.
-    /// Please pay attention to the type the vector stores.
-    std::vector<scratch_t, ManagedAllocator<scratch_t>> deviceScratchSpace;
-
-    /// current integration time step
-    float crntStepSize;  // DN: needs to be brought here from GranParams
-    float crntSimTime;   // DN: needs to be brought here from GranParams
-  public:
-    DEMSolverStateData() { cudaMallocManaged(&pMaxNumberSpheresInAnyBin, sizeof(size_t)); }
-    ~DEMSolverStateData() { cudaFree(pMaxNumberSpheresInAnyBin); }
-
-    /// return raw pointer to swath of device memory that is at least "sizeNeeded" large
-    inline scratch_t* allocateScratchSpace(size_t sizeNeeded) {
-        if (deviceScratchSpace.size() < sizeNeeded) {
-            deviceScratchSpace.resize(sizeNeeded);
-        }
-        return deviceScratchSpace.data();
-    }
-};
+// NOTE: All data structs here need to be simple enough to jitify. In general, if you need to include something that is
+// host specific (much more complex than GranularDefines, for example), then do it in GranularStructs.h.
 
 // A structure for storing simulation parameters
 struct DEMSimParams {
