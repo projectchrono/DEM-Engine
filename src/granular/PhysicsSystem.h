@@ -26,34 +26,6 @@ class DEMKinematicThread;
 class DEMDynamicThread;
 class DEMSolverStateData;
 
-/// <summary>
-/// DEMSolverStateData contains information that pertains the DEM solver, at a certain point in time. It also contains
-/// space allocated as system scratch pad.
-/// </summary>
-class DEMSolverStateData {
-  private:
-    unsigned int* pMaxNumberSpheresInAnyBin;
-
-    /// vector of unsigned int that lives on the device; used by CUB or by anybody else that needs scrap space.
-    /// Please pay attention to the type the vector stores.
-    std::vector<scratch_t, ManagedAllocator<scratch_t>> deviceScratchSpace;
-
-    /// current integration time step
-    float crntStepSize;  // DN: needs to be brought here from GranParams
-    float crntSimTime;   // DN: needs to be brought here from GranParams
-  public:
-    DEMSolverStateData() { cudaMallocManaged(&pMaxNumberSpheresInAnyBin, sizeof(size_t)); }
-    ~DEMSolverStateData() { cudaFree(pMaxNumberSpheresInAnyBin); }
-
-    /// return raw pointer to swath of device memory that is at least "sizeNeeded" large
-    inline scratch_t* allocateScratchSpace(size_t sizeNeeded) {
-        if (deviceScratchSpace.size() < sizeNeeded) {
-            deviceScratchSpace.resize(sizeNeeded, 0);
-        }
-        return deviceScratchSpace.data();
-    }
-};
-
 class DEMKinematicThread {
   protected:
     ThreadManager* pSchedSupport;
@@ -143,8 +115,10 @@ class DEMKinematicThread {
     std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> clumpComponentOffset;
 
     // A number of kT work arrays
-    // The number of bins each sphere touches (also serves as the container for the related prefix scan)
+    // The number of bins each sphere touches
     std::vector<binsSphereTouches_t, ManagedAllocator<binsSphereTouches_t>> numBinsSphereTouches;
+    // This array serves as the container for the prefix scan of numBinsSphereTouches
+    std::vector<binsSphereTouchesScan_t, ManagedAllocator<binsSphereTouchesScan_t>> numBinsSphereTouchesScan;
     // The IDs of those bins that touch each sphere
     std::vector<binID_t, ManagedAllocator<binID_t>> binIDsEachSphereTouches;
     // The company array of the previous one
@@ -256,6 +230,9 @@ class DEMDynamicThread {
 
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
+
+    // A class that contains scratch pad and system status data
+    DEMSolverStateData stateOfSolver_resources;
 
     // The number of for iterations dT does for a specific user "run simulation" call
     size_t nDynamicCycles;

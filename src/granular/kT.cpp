@@ -14,9 +14,11 @@
 #include <granular/HostSideHelpers.cpp>
 #include <core/utils/JitHelper.h>
 
+#include <algorithms/DEMCubHelperFunctions.h>
+
 namespace sgps {
 
-inline void DEMKinematicThread::hostContactDetection() {
+inline void DEMKinematicThread::contactDetection() {
     size_t blocks_needed_for_bodies = (simParams->nSpheresGM + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
     auto bin_occupation =
         JitHelper::buildProgram("DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
@@ -29,12 +31,16 @@ inline void DEMKinematicThread::hostContactDetection() {
         .launch(simParams, granData, granTemplates);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-    hostPrefixScan<binsSphereTouches_t>(granData->numBinsSphereTouches, simParams->nSpheresGM + 1);
-    // cubPrefixScan<binsSphereTouches_t>(granData->numBinsSphereTouches, simParams->nSpheresGM + 1);
+    // hostPrefixScan<binsSphereTouches_t>(granData->numBinsSphereTouches, simParams->nSpheresGM + 1);
+    cubPrefixScan(granData->numBinsSphereTouches, granData->numBinsSphereTouchesScan, simParams->nSpheresGM, streamInfo,
+                  stateOfSolver_resources);
     // displayArray<binsSphereTouches_t>(granData->numBinsSphereTouches, simParams->nSpheresGM + 1);
     // Resize those work arrays to be the size of the number of all sphere--bin pairs
-    binIDsEachSphereTouches.resize(granData->numBinsSphereTouches[simParams->nSpheresGM]);
-    sphereIDsEachBinTouches.resize(granData->numBinsSphereTouches[simParams->nSpheresGM]);
+    // After resize we need to reassign pointers in case they changed lengths
+    binIDsEachSphereTouches.resize((size_t)granData->numBinsSphereTouchesScan[simParams->nSpheresGM - 1] +
+                                   (size_t)granData->numBinsSphereTouches[simParams->nSpheresGM - 1]);
+    sphereIDsEachBinTouches.resize((size_t)granData->numBinsSphereTouchesScan[simParams->nSpheresGM - 1] +
+                                   (size_t)granData->numBinsSphereTouches[simParams->nSpheresGM - 1]);
     granData->binIDsEachSphereTouches = binIDsEachSphereTouches.data();
     granData->sphereIDsEachBinTouches = sphereIDsEachBinTouches.data();
 
@@ -209,8 +215,8 @@ void DEMKinematicThread::workerThread() {
             // cudaStreamCreate(&currentStream);pSchedSupport->dynamicShouldWait()
 
             // Two versions here: the host version is just for debugging purposes
-            // contactDetection();
-            hostContactDetection();
+            contactDetection();
+            // hostContactDetection();
 
             /* for the reference
             for (int j = 0; j < N_MANUFACTURED_ITEMS; j++) {
@@ -299,6 +305,7 @@ void DEMKinematicThread::packDataPointers() {
 
     // kT's own work arrays
     granData->numBinsSphereTouches = numBinsSphereTouches.data();
+    granData->numBinsSphereTouchesScan = numBinsSphereTouchesScan.data();
     granData->binIDsEachSphereTouches = binIDsEachSphereTouches.data();
     granData->sphereIDsEachBinTouches = sphereIDsEachBinTouches.data();
     granData->activeBinIDs = activeBinIDs.data();
@@ -390,8 +397,8 @@ void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
     // Resize to the number of spheres
     TRACKED_VECTOR_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
     TRACKED_VECTOR_RESIZE(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
-    // 1 extra element is given to numBinsSphereTouches for easy prefix scanning
-    TRACKED_VECTOR_RESIZE(numBinsSphereTouches, nSpheresGM + 1, "numBinsSphereTouches", 0);
+    TRACKED_VECTOR_RESIZE(numBinsSphereTouches, nSpheresGM, "numBinsSphereTouches", 0);
+    TRACKED_VECTOR_RESIZE(numBinsSphereTouchesScan, nSpheresGM, "numBinsSphereTouchesScan", 0);
     // The following several arrays will have variable sizes, so here we only used an estimate.
     // TODO: Find a good estimate.
     TRACKED_VECTOR_RESIZE(binIDsEachSphereTouches, nSpheresGM, "binIDsEachSphereTouches", 0);

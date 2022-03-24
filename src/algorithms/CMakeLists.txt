@@ -26,6 +26,7 @@ target_link_libraries(
 set(algorithms_interface
 	${CMAKE_CURRENT_SOURCE_DIR}/example.h # REPLACE ME WITH A REAL FILE
 	${CMAKE_CURRENT_SOURCE_DIR}/SPHCubHelperFunctions.h
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubHelperFunctions.h
 )
 
 ### INTERNAL HEADERS ONLY (.h, .hpp, or .cuh) ###
