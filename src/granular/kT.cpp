@@ -41,10 +41,12 @@ inline void DEMKinematicThread::contactDetection() {
     // displayArray<binsSphereTouchesScan_t>(granData->numBinsSphereTouchesScan, simParams->nSpheresGM);
     // Resize those work arrays to be the size of the number of all sphere--bin pairs
     // After resize we need to reassign pointers in case they changed lengths
-    binIDsEachSphereTouches.resize(stateOfSolver_resources.getTotalBinSphereTouchPairs());
-    sphereIDsEachBinTouches.resize(stateOfSolver_resources.getTotalBinSphereTouchPairs());
-    granData->binIDsEachSphereTouches = binIDsEachSphereTouches.data();
-    granData->sphereIDsEachBinTouches = sphereIDsEachBinTouches.data();
+    if (stateOfSolver_resources.getTotalBinSphereTouchPairs() > binIDsEachSphereTouches.size()) {
+        binIDsEachSphereTouches.resize(stateOfSolver_resources.getTotalBinSphereTouchPairs());
+        sphereIDsEachBinTouches.resize(stateOfSolver_resources.getTotalBinSphereTouchPairs());
+        granData->binIDsEachSphereTouches = binIDsEachSphereTouches.data();
+        granData->sphereIDsEachBinTouches = sphereIDsEachBinTouches.data();
+    }
 
     bin_occupation.kernel("populateBinSphereTouchingPairs")
         .instantiate()
@@ -59,11 +61,12 @@ inline void DEMKinematicThread::contactDetection() {
 
     hostSortByKey<binID_t, bodyID_t>(granData->binIDsEachSphereTouches, granData->sphereIDsEachBinTouches,
                                      stateOfSolver_resources.getTotalBinSphereTouchPairs());
-
+    // cubSortByKeys(granData->binIDsEachSphereTouches,
+    // granData->sphereIDsEachBinTouches,stateOfSolver_resources.getTotalBinSphereTouchPairs(),streamInfo,stateOfSolver_resources);
     // std::cout << "Sorted bin IDs: ";
-    // displayArray<binID_t>(granData->binIDsEachSphereTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
+    // displayArray<binID_t>(granData->binIDsEachSphereTouches, stateOfSolver_resources.getTotalBinSphereTouchPairs());
     // std::cout << "Corresponding sphere IDs: ";
-    // displayArray<bodyID_t>(granData->sphereIDsEachBinTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
+    // displayArray<bodyID_t>(granData->sphereIDsEachBinTouches, stateOfSolver_resources.getTotalBinSphereTouchPairs());
 
     // TODO: use cub to do this. Probably one-two punch: first the number of jumps, then jump locations
     // Search for bins that have at least 2 spheres living in.
@@ -139,36 +142,38 @@ inline void DEMKinematicThread::contactDetection() {
 }
 
 inline void DEMKinematicThread::unpackMyBuffer() {
-    cudaMemcpy(granData->voxelID, granData->voxelID_buffer, simParams->nClumpBodies * sizeof(voxelID_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->locX, granData->locX_buffer, simParams->nClumpBodies * sizeof(subVoxelPos_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->locY, granData->locY_buffer, simParams->nClumpBodies * sizeof(subVoxelPos_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->locZ, granData->locZ_buffer, simParams->nClumpBodies * sizeof(subVoxelPos_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->oriQ0, granData->oriQ0_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->oriQ1, granData->oriQ1_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->oriQ2, granData->oriQ2_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->oriQ3, granData->oriQ3_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
-               cudaMemcpyDeviceToDevice);
+    GPU_CALL(cudaMemcpy(granData->voxelID, granData->voxelID_buffer, simParams->nClumpBodies * sizeof(voxelID_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->locX, granData->locX_buffer, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->locY, granData->locY_buffer, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->locZ, granData->locZ_buffer, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->oriQ0, granData->oriQ0_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->oriQ1, granData->oriQ1_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->oriQ2, granData->oriQ2_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->oriQ3, granData->oriQ3_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
+                        cudaMemcpyDeviceToDevice));
 }
 
 inline void DEMKinematicThread::sendToTheirBuffer() {
-    cudaMemcpy(granData->pDTOwnedBuffer_nContactPairs, &(simParams->nContactPairs), sizeof(size_t),
-               cudaMemcpyDeviceToDevice);
+    GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_nContactPairs, &(simParams->nContactPairs), sizeof(size_t),
+                        cudaMemcpyDeviceToDevice));
     // Resize dT owned buffers before usage
-    pDTOwnedVector_idGeometryA->resize(simParams->nContactPairs);
-    pDTOwnedVector_idGeometryB->resize(simParams->nContactPairs);
-    granData->pDTOwnedBuffer_idGeometryA = pDTOwnedVector_idGeometryA->data();
-    granData->pDTOwnedBuffer_idGeometryB = pDTOwnedVector_idGeometryB->data();
-    cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA, simParams->nContactPairs * sizeof(bodyID_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->pDTOwnedBuffer_idGeometryB, granData->idGeometryB, simParams->nContactPairs * sizeof(bodyID_t),
-               cudaMemcpyDeviceToDevice);
+    if (simParams->nContactPairs > pDTOwnedVector_idGeometryA->size()) {
+        pDTOwnedVector_idGeometryA->resize(simParams->nContactPairs);
+        pDTOwnedVector_idGeometryB->resize(simParams->nContactPairs);
+        granData->pDTOwnedBuffer_idGeometryA = pDTOwnedVector_idGeometryA->data();
+        granData->pDTOwnedBuffer_idGeometryB = pDTOwnedVector_idGeometryB->data();
+    }
+    GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA,
+                        simParams->nContactPairs * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryB, granData->idGeometryB,
+                        simParams->nContactPairs * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
 }
 
 void DEMKinematicThread::workerThread() {

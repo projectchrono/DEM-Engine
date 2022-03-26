@@ -79,7 +79,7 @@ inline void hostSortByKey(T1* keys, T2* vals, size_t n) {
 template <typename T1>
 inline void hostScanForJumpsNum(T1* arr, size_t n, unsigned int minSegLen, size_t& total_found) {
     size_t i = 0;
-    total_found = 0;
+    size_t found = 0;
     while (i < n - 1) {
         size_t thisIndx = i;
         T1 thisItem = arr[i];
@@ -87,9 +87,10 @@ inline void hostScanForJumpsNum(T1* arr, size_t n, unsigned int minSegLen, size_
             i++;
         } while (arr[i] == thisItem && i < n - 1);
         if (i - thisIndx >= minSegLen || (i == n - 1 && i - thisIndx + 1 >= minSegLen && arr[i] == thisItem)) {
-            total_found++;
+            found++;
         }
     }
+    total_found = found;
 }
 
 // Tell each active bin where to find its touching spheres

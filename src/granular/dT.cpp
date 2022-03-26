@@ -334,35 +334,37 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
 }
 
 inline void DEMDynamicThread::unpackMyBuffer() {
-    cudaMemcpy(&(simParams->nContactPairs), &(granData->nContactPairs_buffer), sizeof(size_t),
-               cudaMemcpyDeviceToDevice);
+    GPU_CALL(cudaMemcpy(&(simParams->nContactPairs), &(granData->nContactPairs_buffer), sizeof(size_t),
+                        cudaMemcpyDeviceToDevice));
 
     // Need to resize those contact event-based arrays before usage
-    contactEventArraysResize(simParams->nContactPairs);
+    if (simParams->nContactPairs > idGeometryA.size()) {
+        contactEventArraysResize(simParams->nContactPairs);
+    }
 
-    cudaMemcpy(granData->idGeometryA, granData->idGeometryA_buffer, simParams->nContactPairs * sizeof(bodyID_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->idGeometryB, granData->idGeometryB_buffer, simParams->nContactPairs * sizeof(bodyID_t),
-               cudaMemcpyDeviceToDevice);
+    GPU_CALL(cudaMemcpy(granData->idGeometryA, granData->idGeometryA_buffer,
+                        simParams->nContactPairs * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->idGeometryB, granData->idGeometryB_buffer,
+                        simParams->nContactPairs * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
 }
 
 inline void DEMDynamicThread::sendToTheirBuffer() {
-    cudaMemcpy(granData->pKTOwnedBuffer_voxelID, granData->voxelID, simParams->nClumpBodies * sizeof(voxelID_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->pKTOwnedBuffer_locX, granData->locX, simParams->nClumpBodies * sizeof(subVoxelPos_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->pKTOwnedBuffer_locY, granData->locY, simParams->nClumpBodies * sizeof(subVoxelPos_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->pKTOwnedBuffer_locZ, granData->locZ, simParams->nClumpBodies * sizeof(subVoxelPos_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->pKTOwnedBuffer_oriQ0, granData->oriQ0, simParams->nClumpBodies * sizeof(oriQ_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->pKTOwnedBuffer_oriQ1, granData->oriQ1, simParams->nClumpBodies * sizeof(oriQ_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->pKTOwnedBuffer_oriQ2, granData->oriQ2, simParams->nClumpBodies * sizeof(oriQ_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->pKTOwnedBuffer_oriQ3, granData->oriQ3, simParams->nClumpBodies * sizeof(oriQ_t),
-               cudaMemcpyDeviceToDevice);
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_voxelID, granData->voxelID,
+                        simParams->nClumpBodies * sizeof(voxelID_t), cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_locX, granData->locX, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_locY, granData->locY, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_locZ, granData->locZ, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ0, granData->oriQ0, simParams->nClumpBodies * sizeof(oriQ_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ1, granData->oriQ1, simParams->nClumpBodies * sizeof(oriQ_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ2, granData->oriQ2, simParams->nClumpBodies * sizeof(oriQ_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ3, granData->oriQ3, simParams->nClumpBodies * sizeof(oriQ_t),
+                        cudaMemcpyDeviceToDevice));
 }
 
 inline void DEMDynamicThread::calculateForces() {
