@@ -35,7 +35,7 @@ __global__ void kinematicStep1(vector3* pos_data,
     int z_idx = int(dz_2_0 / d_domain_x);
 
     // the mother BD idx which the current particle belongs to
-    int bd_idx = z_idx * num_domain_x * num_domain_y + y_idx * num_domain_x + x_idx;
+    // int bd_idx = z_idx * num_domain_x * num_domain_y + y_idx * num_domain_x + x_idx;
 
     // count how many BSD the current particle belongs to
     int counter = 1;

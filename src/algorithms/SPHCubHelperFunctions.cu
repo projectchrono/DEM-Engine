@@ -100,9 +100,7 @@ void SumReduceByKeyCub(std::vector<int, sgps::ManagedAllocator<int>>& d_keys_in,
                        std::vector<float, sgps::ManagedAllocator<float>>& d_values_in,
                        std::vector<float, sgps::ManagedAllocator<float>>& d_aggregates_out) {
     d_unique_out.resize(d_keys_in.size());
-    d_aggregates_out.resize(d_keys_in.size());
-
-    CustomSum reduction_op;
+    d_aggregates_out.resize(d_values_in.size());
 
     std::vector<int, sgps::ManagedAllocator<int>> d_num_runs_out;
     d_num_runs_out.resize(1);
@@ -111,14 +109,14 @@ void SumReduceByKeyCub(std::vector<int, sgps::ManagedAllocator<int>>& d_keys_in,
     void* d_temp_storage = NULL;
     size_t temp_storage_bytes = 0;
     cub::DeviceReduce::ReduceByKey(d_temp_storage, temp_storage_bytes, d_keys_in.data(), d_unique_out.data(),
-                                   d_values_in.data(), d_aggregates_out.data(), d_num_runs_out.data(), reduction_op,
+                                   d_values_in.data(), d_aggregates_out.data(), d_num_runs_out.data(), cub::Sum(),
                                    d_keys_in.size());
     cudaDeviceSynchronize();
 
     // Allocate temporary storage
     cudaMalloc(&d_temp_storage, temp_storage_bytes);
     cub::DeviceReduce::ReduceByKey(d_temp_storage, temp_storage_bytes, d_keys_in.data(), d_unique_out.data(),
-                                   d_values_in.data(), d_aggregates_out.data(), d_num_runs_out.data(), reduction_op,
+                                   d_values_in.data(), d_aggregates_out.data(), d_num_runs_out.data(), cub::Sum(),
                                    d_keys_in.size());
     cudaDeviceSynchronize();
 

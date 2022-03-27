@@ -31,8 +31,8 @@ int main(int argc, char* argv[]) {
     // sample all particles
     int num_par = 0;
     // sample the bottom layer
-    for (int j = 0; j < num_y; j++) {
-        for (int i = 0; i < num_x; i++) {
+    for (int j = num_y / 16; j < num_y / 2; j++) {
+        for (int i = num_y / 16; i < num_x / 2; i++) {
             float temp_z = -dim_z / 2 + radius;
             pos_vec.push_back(vector3(-dim_x / 8 + i * (2 * radius + gap) + radius,
                                       -dim_y / 8 + j * (2 * radius + gap) + radius, temp_z));
@@ -45,8 +45,8 @@ int main(int argc, char* argv[]) {
 
     // sample a smaller domain for drop test
     for (int k = 1; k < num_z; k++) {
-        for (int j = 0; j < num_y; j++) {
-            for (int i = 0; i < num_x; i++) {
+        for (int j = num_y / 16; j < num_y / 2; j++) {
+            for (int i = num_y / 16; i < num_x / 2; i++) {
                 float temp_z = -dim_z / 2 + 2 * (radius + 2 * gap) * (k) + radius + gap;
                 /*
                 if (k % 2 == 0) {
@@ -97,5 +97,5 @@ int main(int argc, char* argv[]) {
     // initialize the SPHSystem
     system->initialize(radius, pos_vec, vel_vec, acc_vec, fix_vec, dim_x, dim_y, dim_z);
     system->setPrintOut(true, 2);
-    system->doStepDynamics(0.0025f, 3.0f);
+    system->doStepDynamics(0.0025f, 1.0f);
 }

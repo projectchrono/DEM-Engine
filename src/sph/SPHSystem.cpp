@@ -62,7 +62,7 @@ void SPHSystem::printCSV(std::string filename, vector3* pos_arr, int pos_n, vect
     // create file
     std::ofstream csvFile(filename);
 
-    csvFile << "x_pos,y_pos,z_pos,x_vel,y_vel,z_vel,x_acc,y_acc,z_acc" << std::endl;
+    csvFile << "x_pos,y_pos,z_pos,x_vel,y_vel,z_vel" << std::endl;
 
     // write particle data into csv file
     for (int i = 0; i < pos_n; i++) {
@@ -178,7 +178,7 @@ void KinematicThread::operator()() {
 
         int TotLength = offset_BSD_data[k_n - 1] + num_BSD_data[k_n - 1];
 
-        std::cout << "TotLength: " << TotLength << std::endl;
+        // std::cout << "TotLength: " << TotLength << std::endl;
 
         // ==============================================================================================================
         // Kinematic Step 2
@@ -242,7 +242,6 @@ void KinematicThread::operator()() {
         // (Kinematic First Pass)
         // ==============================================================================================================
 
-        // resize num_col_each_BSD to unique_BSD_idx and set all default values to -1
         num_col.clear();
         num_col.resize(unique_BSD_idx.size() * 512);
 
@@ -261,27 +260,12 @@ void KinematicThread::operator()() {
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        // compute total collision
-        // compute num_col_each_BSD
-
-        // TODO: Potential Performance Improvement
-
-        std::vector<int> num_col_each_BSD;
-
-        for (int i = 0; i < unique_BSD_idx.size(); i++) {
-            int col_sum_BSD = 0;
-            for (int j = 0; j < num_thread; j++) {
-                col_sum_BSD += num_col[i * num_thread + j];
-            }
-            num_col_each_BSD.push_back(col_sum_BSD);
-        }
-
         // ==============================================================================================================
         // Kinematic Step 6
         // Compute offsets for num_coll_each_bsd
         // This is supposed to be a CUB exclusive scan
         // ==============================================================================================================
-        std::vector<int, sgps::ManagedAllocator<int>> num_col_offset;  // the offset vec of num_col_each_BSD
+        std::vector<int, sgps::ManagedAllocator<int>> num_col_offset;
 
         PrefixScanExclusiveCub(num_col, num_col_offset);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -312,6 +296,10 @@ void KinematicThread::operator()() {
                     unique_BSD_idx.size(), contact_data.data(), contact_data.size(), num_col_offset.data());
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+        // for (int i = 0; i < contact_data.size(); i++) {
+        //     std::cout << contact_data[i].contact_pair.x << ", " << contact_data[i].contact_pair.y << std::endl;
+        // }
 
         // copy data back to the dataManager
         {
@@ -367,6 +355,7 @@ void DynamicThread::operator()() {
 
         if (getParentSystem().contact_data_isFresh == true) {
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexContact());
+            contact_data.clear();
             contact_data.assign(dataManager.m_contact.begin(), dataManager.m_contact.end());
         }
 
@@ -466,14 +455,52 @@ void DynamicThread::operator()() {
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         PairRadixSortAscendCub(keys, keys_sorted, z_frcs, z_frcs_sorted);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        /*
+                std::cout << "====================" << std::endl;
+                std::cout << "keys: ";
+                for (int i = 0; i < keys.size(); i++) {
+                    std::cout << keys[i] << ", ";
+                }
+                std::cout << std::endl;
 
+                std::cout << "z_frcs: ";
+                for (int i = 0; i < z_frcs.size(); i++) {
+                    std::cout << z_frcs[i] << ", ";
+                }
+                std::cout << std::endl;
+
+                std::cout << "keys_sorted: ";
+                for (int i = 0; i < keys_sorted.size(); i++) {
+                    std::cout << keys_sorted[i] << ", ";
+                }
+                std::cout << std::endl;
+
+                std::cout << "z_frcs_sorted: ";
+                for (int i = 0; i < z_frcs_sorted.size(); i++) {
+                    std::cout << z_frcs_sorted[i] << ", ";
+                }
+                std::cout << std::endl;
+        */
         SumReduceByKeyCub(keys_sorted, keys_reduced, x_frcs_sorted, x_frcs_reduced);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         SumReduceByKeyCub(keys_sorted, keys_reduced, y_frcs_sorted, y_frcs_reduced);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         SumReduceByKeyCub(keys_sorted, keys_reduced, z_frcs_sorted, z_frcs_reduced);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        /*
+                std::cout << "keys_reduced: ";
+                for (int i = 0; i < keys_reduced.size(); i++) {
+                    std::cout << keys_reduced[i] << ", ";
+                }
+                std::cout << std::endl;
+                std::cout << "z_frcs_reduced: ";
+                for (int i = 0; i < z_frcs_reduced.size(); i++) {
+                    std::cout << z_frcs_reduced[i] << ", ";
+                }
+                std::cout << std::endl;
 
+                std::cout << "====================" << std::endl;
+        */
         // ==============================================================================================================
         // Dynamic Step 3
         // Compute accelerations on each particle
