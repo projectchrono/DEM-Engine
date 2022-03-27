@@ -14,7 +14,6 @@ namespace sgps {
 #define NUM_BINS_PER_BLOCK 128
 #define NUM_BODIES_PER_BLOCK 512
 #define MAX_SPHERES_PER_BIN 16
-#define VOXEL_RES_POWER2 16
 #define WAIT_GRANULARITY_MS 1
 #define TEST_SHARED_SIZE 128
 #ifndef SGPS_DEM_TINY_FLOAT
@@ -22,6 +21,7 @@ namespace sgps {
 #endif
 
 typedef uint16_t subVoxelPos_t;  ///< uint16 or uint32
+const uint8_t VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * BITS_PER_BYTE;
 typedef uint64_t voxelID_t;
 // TODO: oriQ should be int (mapped to [-1,1]); applyOriQ2Vector3 and hostApplyOriQ2Vector3 need to be changed to make
 // that happen

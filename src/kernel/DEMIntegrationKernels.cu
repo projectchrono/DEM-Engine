@@ -20,19 +20,19 @@ inline __device__ void locateNewVoxel(sgps::voxelID_t& voxel,
                                       int64_t& locY_tmp,
                                       int64_t& locZ_tmp,
                                       sgps::DEMSimParams* simParams) {
-    // TODO: this int type explodes if VOXEL_RES_POWER2 >= 32. It in fact should be controlled by JITC.
-    int max_loc = (1 << VOXEL_RES_POWER2);
+    // can handle VOXEL_RES_POWER2 == 16 or 32
+    int64_t max_loc = ((int64_t)1 << sgps::VOXEL_RES_POWER2);
     sgps::voxelID_t voxelX;
     sgps::voxelID_t voxelY;
     sgps::voxelID_t voxelZ;
     IDChopper<sgps::voxelID_t, sgps::voxelID_t>(voxelX, voxelY, voxelZ, voxel, simParams->nvXp2, simParams->nvYp2);
 
-    voxelX += div_floor<int64_t, int>(locX_tmp, max_loc);
-    voxelY += div_floor<int64_t, int>(locY_tmp, max_loc);
-    voxelZ += div_floor<int64_t, int>(locZ_tmp, max_loc);
-    locX_tmp = mod_floor<int64_t, int>(locX_tmp, max_loc);
-    locY_tmp = mod_floor<int64_t, int>(locY_tmp, max_loc);
-    locZ_tmp = mod_floor<int64_t, int>(locZ_tmp, max_loc);
+    voxelX += div_floor<int64_t, int64_t>(locX_tmp, max_loc);
+    voxelY += div_floor<int64_t, int64_t>(locY_tmp, max_loc);
+    voxelZ += div_floor<int64_t, int64_t>(locZ_tmp, max_loc);
+    locX_tmp = mod_floor<int64_t, int64_t>(locX_tmp, max_loc);
+    locY_tmp = mod_floor<int64_t, int64_t>(locY_tmp, max_loc);
+    locZ_tmp = mod_floor<int64_t, int64_t>(locZ_tmp, max_loc);
 
     // TODO: Should add a check here where, if negative voxel component spotted, stop the simulation
 

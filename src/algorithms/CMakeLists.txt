@@ -38,6 +38,7 @@ set(algorithms_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/example.cu # REPLACE ME WITH A REAL FILE
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubContactDetection.cu 
 	${CMAKE_CURRENT_SOURCE_DIR}/SPHCubHelperFunctions.cu 
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubForceCollection.cu
 )
 
 target_sources(

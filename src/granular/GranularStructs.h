@@ -14,16 +14,21 @@ namespace sgps {
 
 /// <summary>
 /// DEMSolverStateData contains information that pertains the DEM solver, at a certain point in time. It also contains
-/// space allocated as system scratch pad.
+/// space allocated as system scratch pad and as thread temporary arrays.
 /// </summary>
 class DEMSolverStateData {
   private:
     size_t* pMaxNumberSpheresInAnyBin;
     size_t* pTotalBinSphereTouchPairs;  ///< Used in kT storing the number of total bin--sphere contact pairs
 
-    /// vector of unsigned int that lives on the device; used by CUB or by anybody else that needs scrap space.
+    /// The vector used by CUB or by anybody else that needs scratch space.
     /// Please pay attention to the type the vector stores.
     std::vector<scratch_t, ManagedAllocator<scratch_t>> deviceScratchSpace;
+
+    /// The vector used by threads when they need temporary arrays (very typically, for storing arrays outputted by cub
+    /// scan or reduce operations). If more than one temporary storage arrays are needed, use pointers to break this
+    /// array into pieces.
+    std::vector<scratch_t, ManagedAllocator<scratch_t>> threadTempVector;
 
     /// current integration time step
     float crntStepSize;  // DN: needs to be brought here from GranParams
@@ -44,6 +49,13 @@ class DEMSolverStateData {
             deviceScratchSpace.resize(sizeNeeded);
         }
         return deviceScratchSpace.data();
+    }
+
+    inline scratch_t* allocateTempVector(size_t sizeNeeded) {
+        if (threadTempVector.size() < sizeNeeded) {
+            threadTempVector.resize(sizeNeeded);
+        }
+        return threadTempVector.data();
     }
 
     /// store the number of total bin--sphere contact pairs

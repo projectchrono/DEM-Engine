@@ -15,6 +15,8 @@
 #include <granular/HostSideHelpers.cpp>
 #include <helper_math.cuh>
 
+#include <algorithms/DEMCubHelperFunctions.h>
+
 namespace sgps {
 
 // Put sim data array pointers in place

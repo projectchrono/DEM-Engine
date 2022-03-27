@@ -17,9 +17,10 @@ void cubPrefixScan(sgps::binsSphereTouches_t* d_in,
                    GpuManager::StreamInfo& streamInfo,
                    sgps::DEMSolverStateData& scratchPad) {
     size_t temp_storage_bytes = 0;
-    cub::DeviceScan::ExclusiveSum(NULL, temp_storage_bytes, d_in, d_out, n);
+    cub::DeviceScan::ExclusiveSum(NULL, temp_storage_bytes, d_in, d_out, n, streamInfo.stream, false);
+    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(temp_storage_bytes);
-    cub::DeviceScan::ExclusiveSum(d_scratch_space, temp_storage_bytes, d_in, d_out, n);
+    cub::DeviceScan::ExclusiveSum(d_scratch_space, temp_storage_bytes, d_in, d_out, n, streamInfo.stream, false);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 

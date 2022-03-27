@@ -23,4 +23,19 @@ void cubSortByKeys(sgps::binID_t* d_keys,
                    GpuManager::StreamInfo& streamInfo,
                    sgps::DEMSolverStateData& scratchPad);
 
+void cubCollectForces(sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets,
+                      sgps::bodyID_t* idA,
+                      sgps::bodyID_t* idB,
+                      float3* contactForces,
+                      float* clump_h2aX,
+                      float* clump_h2aY,
+                      float* clump_h2aZ,
+                      sgps::bodyID_t* ownerClumpBody,
+                      float* massClumpBody,
+                      double h,
+                      size_t n,
+                      double l,
+                      GpuManager::StreamInfo& streamInfo,
+                      sgps::DEMSolverStateData& scratchPad);
+
 }  // namespace sgps
