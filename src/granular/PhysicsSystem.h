@@ -335,6 +335,10 @@ class DEMDynamicThread {
     // Set to true only when a user AdvanceSimulation call is finished. Set to false otherwise.
     bool userCallDone = false;
 
+    // If true, dT needs to re-process idA- and idB-related data arrays before collecting forces, as those arrays are
+    // freshly obtained from kT.
+    bool contactPairArr_isFresh = true;
+
     // Sphere-related arrays in managed memory
     // Belonged-body ID (default unsigned int type)
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerClumpBody;

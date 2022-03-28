@@ -400,10 +400,15 @@ inline void DEMDynamicThread::calculateForces() {
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     // Reflect those body-wise forces on their owner clumps
-    // TODO: Do it with CUB
-    hostCollectForces(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
-                      granData->contactForces, granData->h2aX, granData->h2aY, granData->h2aZ, granData->ownerClumpBody,
-                      granTemplates->massClumpBody, simParams->h, simParams->nContactPairs, simParams->l);
+    // hostCollectForces(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
+    //                   granData->contactForces, granData->h2aX, granData->h2aY, granData->h2aZ,
+    //                   granData->ownerClumpBody, granTemplates->massClumpBody, simParams->h, simParams->nContactPairs,
+    //                   simParams->l);
+    cubCollectForces(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
+                     granData->contactForces, granData->h2aX, granData->h2aY, granData->h2aZ, granData->ownerClumpBody,
+                     granTemplates->massClumpBody, simParams->h, simParams->nContactPairs, simParams->nClumpBodies,
+                     simParams->l, contactPairArr_isFresh, streamInfo, stateOfSolver_resources,
+                     simParams->nDistinctClumpBodyTopologies);
     // displayArray<float>(granData->h2aX, simParams->nClumpBodies);
     // displayFloat3(granData->contactForces, simParams->nContactPairs);
     // std::cout << simParams->nContactPairs << std::endl;
@@ -465,6 +470,7 @@ void DEMDynamicThread::workerThread() {
             sendToTheirBuffer();
         }
         pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
+        contactPairArr_isFresh = true;
         pSchedSupport->schedulingStats.nKinematicUpdates++;
         // Signal the kinematic that it has data for a new work order.
         pSchedSupport->cv_KinematicCanProceed.notify_all();
@@ -485,6 +491,7 @@ void DEMDynamicThread::workerThread() {
                     std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
                     // std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_GRANULARITY_MS));
                     unpackMyBuffer();
+                    contactPairArr_isFresh = true;
                 }
                 // dT got the produce, now mark its buffer to be no longer fresh
                 pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
@@ -494,6 +501,10 @@ void DEMDynamicThread::workerThread() {
             calculateForces();
 
             integrateClumpMotions();
+
+            // calculateForces is done, set it to false
+            // will be set to true next time it receives an update from kT
+            contactPairArr_isFresh = false;
 
             // if it's the case, it's important at this point to let the kinematic know that this is the last dynamic
             // cycle; this is important otherwise the kinematic will hang waiting for communication swith the dynamic

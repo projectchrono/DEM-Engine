@@ -18,7 +18,7 @@ namespace sgps {
 /// </summary>
 class DEMSolverStateData {
   private:
-    size_t* pMaxNumberSpheresInAnyBin;
+    size_t* pForceCollectionRuns;       ///< Cub output of how many runs it executed for collecting forces
     size_t* pTotalBinSphereTouchPairs;  ///< Used in kT storing the number of total bin--sphere contact pairs
 
     /// The vector used by CUB or by anybody else that needs scratch space.
@@ -30,16 +30,23 @@ class DEMSolverStateData {
     /// array into pieces.
     std::vector<scratch_t, ManagedAllocator<scratch_t>> threadTempVector;
 
+    /// The vector used to cache some array (typically the result of some pre- or post-processing) which can potentially
+    /// be used across iterations.
+    std::vector<scratch_t, ManagedAllocator<scratch_t>> threadCachedVector;
+
+    // In theory you can keep going and invent more vectors here. But I feel this number is just enough for me to use
+    // conveniently.
+
     /// current integration time step
     float crntStepSize;  // DN: needs to be brought here from GranParams
     float crntSimTime;   // DN: needs to be brought here from GranParams
   public:
     DEMSolverStateData() {
-        cudaMallocManaged(&pMaxNumberSpheresInAnyBin, sizeof(size_t));
+        cudaMallocManaged(&pForceCollectionRuns, sizeof(size_t));
         cudaMallocManaged(&pTotalBinSphereTouchPairs, sizeof(size_t));
     }
     ~DEMSolverStateData() {
-        cudaFree(pMaxNumberSpheresInAnyBin);
+        cudaFree(pForceCollectionRuns);
         cudaFree(pTotalBinSphereTouchPairs);
     }
 
@@ -58,11 +65,21 @@ class DEMSolverStateData {
         return threadTempVector.data();
     }
 
+    inline scratch_t* allocateCachedVector(size_t sizeNeeded) {
+        if (threadCachedVector.size() < sizeNeeded) {
+            threadCachedVector.resize(sizeNeeded);
+        }
+        return threadCachedVector.data();
+    }
+
     /// store the number of total bin--sphere contact pairs
     inline void setTotalBinSphereTouchPairs(size_t n) { *pTotalBinSphereTouchPairs = n; }
 
     /// return the number of total bin--sphere contact pairs
     inline size_t getTotalBinSphereTouchPairs() { return *pTotalBinSphereTouchPairs; }
+
+    inline size_t getForceCollectionRuns() { return *pForceCollectionRuns; }
+    inline size_t* getForceCollectionRunsPointer() { return pForceCollectionRuns; }
 };
 
 }  // namespace sgps

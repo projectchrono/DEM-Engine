@@ -11,31 +11,34 @@
 
 namespace sgps {
 
-void cubPrefixScan(sgps::binsSphereTouches_t* d_in,
-                   sgps::binsSphereTouchesScan_t* d_out,
+void cubPrefixScan(binsSphereTouches_t* d_in,
+                   binsSphereTouchesScan_t* d_out,
                    size_t n,
                    GpuManager::StreamInfo& streamInfo,
-                   sgps::DEMSolverStateData& scratchPad);
+                   DEMSolverStateData& scratchPad);
 
-void cubSortByKeys(sgps::binID_t* d_keys,
-                   sgps::bodyID_t* d_vals,
+void cubSortByKeys(binID_t* d_keys,
+                   bodyID_t* d_vals,
                    size_t n,
                    GpuManager::StreamInfo& streamInfo,
-                   sgps::DEMSolverStateData& scratchPad);
+                   DEMSolverStateData& scratchPad);
 
-void cubCollectForces(sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets,
-                      sgps::bodyID_t* idA,
-                      sgps::bodyID_t* idB,
+void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
+                      bodyID_t* idA,
+                      bodyID_t* idB,
                       float3* contactForces,
                       float* clump_h2aX,
                       float* clump_h2aY,
                       float* clump_h2aZ,
-                      sgps::bodyID_t* ownerClumpBody,
+                      bodyID_t* ownerClumpBody,
                       float* massClumpBody,
                       double h,
-                      size_t n,
+                      size_t nContactPairs,
+                      size_t nClumps,
                       double l,
+                      bool contactPairArr_isFresh,
                       GpuManager::StreamInfo& streamInfo,
-                      sgps::DEMSolverStateData& scratchPad);
+                      DEMSolverStateData& scratchPad,
+                      clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies);
 
 }  // namespace sgps
