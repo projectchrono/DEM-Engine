@@ -374,6 +374,8 @@ inline void DEMDynamicThread::calculateForces() {
         simParams->nClumpBodies > simParams->nContactPairs ? simParams->nClumpBodies : simParams->nContactPairs;
     size_t blocks_needed_for_prep = (threads_needed_for_prep + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
     size_t blocks_needed_for_contacts = (simParams->nContactPairs + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
+
+    // TODO: this prep operation should just be done using a cudaMemset!
     auto prep_force =
         JitHelper::buildProgram("DEMPrepForceKernels", JitHelper::KERNEL_DIR / "DEMPrepForceKernels.cu",
                                 std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
@@ -405,9 +407,11 @@ inline void DEMDynamicThread::calculateForces() {
     //                   granData->ownerClumpBody, granTemplates->massClumpBody, simParams->h, simParams->nContactPairs,
     //                   simParams->l);
     cubCollectForces(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
-                     granData->contactForces, granData->h2aX, granData->h2aY, granData->h2aZ, granData->ownerClumpBody,
-                     granTemplates->massClumpBody, simParams->h, simParams->nContactPairs, simParams->nClumpBodies,
-                     simParams->l, contactPairArr_isFresh, streamInfo, stateOfSolver_resources,
+                     granData->contactForces, granData->contactPointGeometryA, granData->contactPointGeometryB,
+                     granData->h2aX, granData->h2aY, granData->h2aZ, granData->h2AlphaX, granData->h2AlphaY,
+                     granData->h2AlphaZ, granData->ownerClumpBody, granTemplates->massClumpBody, granTemplates->mmiXX,
+                     granTemplates->mmiYY, granTemplates->mmiZZ, simParams->h, simParams->nContactPairs,
+                     simParams->nClumpBodies, simParams->l, contactPairArr_isFresh, streamInfo, stateOfSolver_resources,
                      simParams->nDistinctClumpBodyTopologies);
     // displayArray<float>(granData->h2aX, simParams->nClumpBodies);
     // displayFloat3(granData->contactForces, simParams->nContactPairs);
@@ -415,11 +419,11 @@ inline void DEMDynamicThread::calculateForces() {
 
     // Calculate the torque on owner clumps from those body-wise forces
     // TODO: Do it with CUB (but can we? Torque accumulation requires multiplying a local vector)
-    hostCollectTorques(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
-                       granData->contactForces, granData->contactPointGeometryA, granData->contactPointGeometryB,
-                       granData->h2AlphaX, granData->h2AlphaY, granData->h2AlphaZ, granData->ownerClumpBody,
-                       granTemplates->mmiXX, granTemplates->mmiYY, granTemplates->mmiZZ, simParams->h,
-                       simParams->nContactPairs, simParams->l);
+    // hostCollectTorques(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
+    //                    granData->contactForces, granData->contactPointGeometryA, granData->contactPointGeometryB,
+    //                    granData->h2AlphaX, granData->h2AlphaY, granData->h2AlphaZ, granData->ownerClumpBody,
+    //                    granTemplates->mmiXX, granTemplates->mmiYY, granTemplates->mmiZZ, simParams->h,
+    //                    simParams->nContactPairs, simParams->l);
     // displayArray<float>(granData->oriQ0, simParams->nClumpBodies);
     // displayArray<float>(granData->oriQ1, simParams->nClumpBodies);
     // displayArray<float>(granData->oriQ2, simParams->nClumpBodies);

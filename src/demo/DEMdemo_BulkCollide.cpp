@@ -32,6 +32,8 @@ int main() {
     float max_relpos = 0.025;
 
     auto mat_type_1 = DEM_sim.LoadMaterialType(1e7, 0.3, 0.7);
+    // auto mat_type_2 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.9);
+    // auto mat_type_3 = DEM_sim.LoadMaterialType(1e9, 0.25, 0.5);
 
     for (int i = 0; i < num_template; i++) {
         // first decide the number of spheres that live in this clump

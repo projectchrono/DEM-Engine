@@ -24,11 +24,19 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
                       bodyID_t* idA,
                       bodyID_t* idB,
                       float3* contactForces,
+                      float3* contactPointA,
+                      float3* contactPointB,
                       float* clump_h2aX,
                       float* clump_h2aY,
                       float* clump_h2aZ,
+                      float* clump_h2AlphaX,
+                      float* clump_h2AlphaY,
+                      float* clump_h2AlphaZ,
                       bodyID_t* ownerClumpBody,
                       float* massClumpBody,
+                      float* mmiXX,
+                      float* mmiYY,
+                      float* mmiZZ,
                       double h,
                       size_t nContactPairs,
                       size_t nClumps,
@@ -39,14 +47,18 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
                       clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies) {
     // Preparation: allocate enough temp array memory and chop it to pieces, for the usage of cub operations. Note that
     // if contactPairArr_isFresh is false, then this allocation should not alter the size and content of the temp array
-    // space.
-    size_t cachedArraySize = 2 * (nContactPairs * sizeof(bodyID_t) + nContactPairs * sizeof(float));
+    // space, so the information in it can be used in the next iteration.
+    size_t cachedArraySize =
+        2 * (nContactPairs * sizeof(bodyID_t) + nContactPairs * sizeof(float) + nContactPairs * sizeof(float3));
     bodyID_t* idAOwner = (bodyID_t*)scratchPad.allocateCachedVector(cachedArraySize);
-    bodyID_t* idBOwner = (bodyID_t*)(idAOwner + nContactPairs * sizeof(bodyID_t));
-    float* massAOwner = (float*)(idBOwner + nContactPairs * sizeof(bodyID_t));
-    float* massBOwner = (float*)(massAOwner + nContactPairs * sizeof(float));
+    bodyID_t* idBOwner = (bodyID_t*)(idAOwner + nContactPairs);
+    float* massAOwner = (float*)(idBOwner + nContactPairs);
+    float* massBOwner = (float*)(massAOwner + nContactPairs);
+    float3* moiAOwner = (float3*)(massBOwner + nContactPairs);
+    float3* moiBOwner = (float3*)(moiAOwner + nContactPairs);
 
-    size_t blocks_needed_for_contacts = (nContactPairs + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
+    size_t blocks_needed_for_all_contacts = (2 * nContactPairs + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
+    size_t blocks_needed_for_half_contacts = (nContactPairs + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
     auto collect_force =
         JitHelper::buildProgram("DEMCollectForceKernels", JitHelper::KERNEL_DIR / "DEMCollectForceKernels.cu",
                                 std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
@@ -55,72 +67,75 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
         // for both A and B)
         collect_force.kernel("cashInOwnerIndex")
             .instantiate()
-            .configure(dim3(blocks_needed_for_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+            .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
             .launch(idAOwner, idA, ownerClumpBody, nContactPairs);
-
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         collect_force.kernel("cashInOwnerIndex")
             .instantiate()
-            .configure(dim3(blocks_needed_for_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+            .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
             .launch(idBOwner, idB, ownerClumpBody, nContactPairs);
-
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        // Secondly, prepare the owner mass array (nContactPairs * float) for usage in final reduction by key (do it for
-        // both A and B)
+        // Secondly, prepare the owner mass and moi arrays (nContactPairs * float/float3) for usage in final reduction
+        // by key (do it for both A and B)
         // TODO: massClumpBody is template and should be jitified
-        collect_force.kernel("cashInMassIndex")
+        collect_force.kernel("cashInMassMoiIndex")
             .instantiate()
-            .configure(dim3(blocks_needed_for_contacts), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE,
-                       streamInfo.stream)
-            .launch(massAOwner, inertiaPropOffsets, idAOwner, l, h, nContactPairs, massClumpBody,
-                    nDistinctClumpBodyTopologies);
-
-        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-
-        collect_force.kernel("cashInMassIndex")
-            .instantiate()
-            .configure(dim3(blocks_needed_for_contacts), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE,
-                       streamInfo.stream)
-            .launch(massBOwner, inertiaPropOffsets, idBOwner, l, h, nContactPairs, massClumpBody,
-                    nDistinctClumpBodyTopologies);
-
+            .configure(dim3(blocks_needed_for_all_contacts), dim3(NUM_BODIES_PER_BLOCK),
+                       sizeof(float) * TEST_SHARED_SIZE * 4, streamInfo.stream)
+            .launch(massAOwner, moiAOwner, inertiaPropOffsets, idAOwner, 2 * nContactPairs, massClumpBody, mmiXX, mmiYY,
+                    mmiZZ, nDistinctClumpBodyTopologies);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         // displayArray<bodyID_t>(idAOwner, nContactPairs);
     }
 
     // Thirdly, combine mass and force to get (contact pair-wise) acceleration, which will be reduced...
     // Note here allocated is temp vector, since unlike cached vectors, they cannot be reused in the next iteration
-    size_t tempArraySize = 2 * nContactPairs * sizeof(float3) + nClumps * sizeof(float3) + nClumps * sizeof(bodyID_t);
+    size_t tempArraySize = 2 * (nContactPairs * sizeof(float3) + nContactPairs * sizeof(float3)) +
+                           nClumps * sizeof(float3) + nClumps * sizeof(bodyID_t);
     float3* h2a_A = (float3*)scratchPad.allocateTempVector(tempArraySize);
-    float3* h2a_B = (float3*)(h2a_A + nContactPairs * sizeof(float3));
-    float3* forceOwner = (float3*)(h2a_B + nContactPairs * sizeof(float3));
-    bodyID_t* uniqueOwner = (bodyID_t*)(forceOwner + nClumps * sizeof(float3));
+    float3* h2a_B = (float3*)(h2a_A + nContactPairs);
+    float3* h2Alpha_A = (float3*)(h2a_B + nContactPairs);
+    float3* h2Alpha_B = (float3*)(h2Alpha_A + nContactPairs);
+    float3* accOwner = (float3*)(h2Alpha_B + nContactPairs);  // can store both linear and angular acceleration
+    bodyID_t* uniqueOwner = (bodyID_t*)(accOwner + nClumps);
     // collect accelerations for body A
     collect_force.kernel("elemDivide")
         .instantiate()
-        .configure(dim3(blocks_needed_for_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(h2a_A, contactForces, massAOwner, 1.f, nContactPairs);
+        .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+        .launch(h2a_A, contactForces, massAOwner, h * h / l, nContactPairs);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     // and don't forget body B
     collect_force.kernel("elemDivide")
         .instantiate()
-        .configure(dim3(blocks_needed_for_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(h2a_B, contactForces, massBOwner, -1.f, nContactPairs);
+        .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+        .launch(h2a_B, contactForces, massBOwner, -1. * h * h / l, nContactPairs);
+    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    // collect angular accelerations for body A
+    collect_force.kernel("elemCrossDivide")
+        .instantiate()
+        .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+        .launch(h2Alpha_A, contactPointA, contactForces, moiAOwner, h * h, nContactPairs);
+    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    // and don't forget body B
+    collect_force.kernel("elemCrossDivide")
+        .instantiate()
+        .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+        .launch(h2Alpha_B, contactPointB, contactForces, moiBOwner, -1. * h * h, nContactPairs);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     // Finally, do the reduction by key
     CubAdd reduction_op;
-    size_t temp_storage_bytes = 0;
-
-    cub::DeviceReduce::ReduceByKey(NULL, temp_storage_bytes, idAOwner, uniqueOwner, h2a_A, forceOwner,
-                                   scratchPad.getForceCollectionRunsPointer(), reduction_op, nContactPairs,
+    size_t cub_scratch_bytes = 0;
+    // reducing the acceleration
+    cub::DeviceReduce::ReduceByKey(NULL, cub_scratch_bytes, idAOwner, uniqueOwner, h2a_A, accOwner,
+                                   scratchPad.getForceCollectionRunsPointer(), reduction_op, 2 * nContactPairs,
                                    streamInfo.stream, false);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-    void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(temp_storage_bytes);
-    cub::DeviceReduce::ReduceByKey(d_scratch_space, temp_storage_bytes, idAOwner, uniqueOwner, h2a_A, forceOwner,
-                                   scratchPad.getForceCollectionRunsPointer(), reduction_op, nContactPairs,
+    void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
+    cub::DeviceReduce::ReduceByKey(d_scratch_space, cub_scratch_bytes, idAOwner, uniqueOwner, h2a_A, accOwner,
+                                   scratchPad.getForceCollectionRunsPointer(), reduction_op, 2 * nContactPairs,
                                    streamInfo.stream, false);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -129,17 +144,17 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
     collect_force.kernel("stashElem")
         .instantiate()
         .configure(dim3(blocks_needed_for_stashing), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(clump_h2aX, clump_h2aY, clump_h2aZ, uniqueOwner, forceOwner, scratchPad.getForceCollectionRuns());
+        .launch(clump_h2aX, clump_h2aY, clump_h2aZ, uniqueOwner, accOwner, scratchPad.getForceCollectionRuns());
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-    // don't forget do that for B too
-    cub::DeviceReduce::ReduceByKey(NULL, temp_storage_bytes, idBOwner, uniqueOwner, h2a_B, forceOwner,
-                                   scratchPad.getForceCollectionRunsPointer(), reduction_op, nContactPairs,
+    // reducing the angular acceleration
+    cub::DeviceReduce::ReduceByKey(NULL, cub_scratch_bytes, idAOwner, uniqueOwner, h2Alpha_A, accOwner,
+                                   scratchPad.getForceCollectionRunsPointer(), reduction_op, 2 * nContactPairs,
                                    streamInfo.stream, false);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-    d_scratch_space = (void*)scratchPad.allocateScratchSpace(temp_storage_bytes);
-    cub::DeviceReduce::ReduceByKey(d_scratch_space, temp_storage_bytes, idBOwner, uniqueOwner, h2a_B, forceOwner,
-                                   scratchPad.getForceCollectionRunsPointer(), reduction_op, nContactPairs,
+    d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
+    cub::DeviceReduce::ReduceByKey(d_scratch_space, cub_scratch_bytes, idAOwner, uniqueOwner, h2Alpha_A, accOwner,
+                                   scratchPad.getForceCollectionRunsPointer(), reduction_op, 2 * nContactPairs,
                                    streamInfo.stream, false);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -148,7 +163,8 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
     collect_force.kernel("stashElem")
         .instantiate()
         .configure(dim3(blocks_needed_for_stashing), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(clump_h2aX, clump_h2aY, clump_h2aZ, uniqueOwner, forceOwner, scratchPad.getForceCollectionRuns());
+        .launch(clump_h2AlphaX, clump_h2AlphaY, clump_h2AlphaZ, uniqueOwner, accOwner,
+                scratchPad.getForceCollectionRuns());
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
