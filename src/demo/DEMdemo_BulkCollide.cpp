@@ -41,7 +41,7 @@ int main() {
 
         // then allocate the clump template definition arrays (all in SI)
         float mass = 0.1 * num_sphere;
-        float3 MOI = make_float3(2e-5 * num_sphere, 1.5e-5 * num_sphere, 1.8e-5 * num_sphere);
+        float3 MOI = make_float3(2e-5 * num_sphere, 1.5e-5 * num_sphere, 1.8e-5 * num_sphere) * 2600.;
         std::vector<float> radii;
         std::vector<float3> relPos;
         std::vector<unsigned int> mat;
@@ -100,20 +100,21 @@ int main() {
     DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, 3e-11);
 
     DEM_sim.CenterCoordSys();
-    DEM_sim.SetTimeStepSize(3e-6);
+    DEM_sim.SetTimeStepSize(1e-5);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, 0));
-    DEM_sim.SetCDUpdateFreq(1);
+    DEM_sim.SetCDUpdateFreq(20);
+    DEM_sim.SetExpandFactor(1.1);
 
     DEM_sim.Initialize();
 
-    for (int i = 0; i < 300; i++) {
+    for (int i = 0; i < 500; i++) {
         std::cout << "Iteration: " << i << std::endl;
 
         char filename[100];
         sprintf(filename, "./DEMdemo_collide_output_%04d.csv", i);
         DEM_sim.WriteFileAsSpheres(std::string(filename));
 
-        DEM_sim.LaunchThreads(8e-3);
+        DEM_sim.LaunchThreads(1e-2);
     }
 
     std::cout << "DEMdemo_BulkCollide exiting..." << std::endl;

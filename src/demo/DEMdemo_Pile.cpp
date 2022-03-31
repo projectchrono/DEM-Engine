@@ -46,15 +46,15 @@ int main() {
     std::vector<unsigned int> mat_vec(3, 0);
     */
 
-    auto mat_type_1 = DEM_sim.LoadMaterialType(1e6, 0.3, 0.7);
+    auto mat_type_1 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.9);
 
     for (int i = 0; i < num_template; i++) {
         // first decide the number of spheres that live in this clump
         int num_sphere = rand() % (max_sphere - min_sphere + 1) + 1;
 
         // then allocate the clump template definition arrays
-        float mass = (float)rand() / RAND_MAX;
-        float3 MOI = make_float3((float)rand() / RAND_MAX, (float)rand() / RAND_MAX, (float)rand() / RAND_MAX);
+        float mass = 0.1 * num_sphere;
+        float3 MOI = make_float3(2e-5 * num_sphere, 1.5e-5 * num_sphere, 1.8e-5 * num_sphere) * 2600.;
         std::vector<float> radii;
         std::vector<float3> relPos;
         std::vector<unsigned int> mat;
@@ -105,13 +105,13 @@ int main() {
     DEM_sim.CenterCoordSys();
     DEM_sim.SetTimeStepSize(1e-5);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
-    DEM_sim.SetCDUpdateFreq(2);
+    DEM_sim.SetCDUpdateFreq(10);
 
     DEM_sim.Initialize();
 
     DEM_sim.UpdateSimParams();  // Not needed; just testing if this function works...
 
-    for (int i = 0; i < 50; i++) {
+    for (int i = 0; i < 200; i++) {
         std::cout << "Iteration: " << i + 1 << std::endl;
         DEM_sim.LaunchThreads(5e-3);
 

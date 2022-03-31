@@ -370,12 +370,11 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
 }
 
 inline void DEMDynamicThread::calculateForces() {
+    // reset force (acceleration) arrays for this time step and apply gravity
     size_t threads_needed_for_prep =
         simParams->nClumpBodies > simParams->nContactPairs ? simParams->nClumpBodies : simParams->nContactPairs;
     size_t blocks_needed_for_prep = (threads_needed_for_prep + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
-    size_t blocks_needed_for_contacts = (simParams->nContactPairs + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
 
-    // TODO: this prep operation should just be done using a cudaMemset!
     auto prep_force =
         JitHelper::buildProgram("DEMPrepForceKernels", JitHelper::KERNEL_DIR / "DEMPrepForceKernels.cu",
                                 std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
@@ -386,19 +385,33 @@ inline void DEMDynamicThread::calculateForces() {
                    streamInfo.stream)
         .launch(simParams, granData, granTemplates);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-    // displayFloat3(granData->contactForces, simParams->nContactPairs);
 
+    // TODO: is there a better way??? Like memset?
+    // GPU_CALL(cudaMemset(granData->contactForces, zeros, simParams->nContactPairs * sizeof(float3)));
+    // GPU_CALL(cudaMemset(granData->h2AlphaX, 0, simParams->nClumpBodies * sizeof(float)));
+    // GPU_CALL(cudaMemset(granData->h2AlphaY, 0, simParams->nClumpBodies * sizeof(float)));
+    // GPU_CALL(cudaMemset(granData->h2AlphaZ, 0, simParams->nClumpBodies * sizeof(float)));
+    // GPU_CALL(cudaMemset(granData->h2aX,
+    //                     (double)simParams->h * (double)simParams->h * (double)simParams->Gx / (double)simParams->l,
+    //                     simParams->nClumpBodies * sizeof(float)));
+    // GPU_CALL(cudaMemset(granData->h2aY,
+    //                     (double)simParams->h * (double)simParams->h * (double)simParams->Gy / (double)simParams->l,
+    //                     simParams->nClumpBodies * sizeof(float)));
+    // GPU_CALL(cudaMemset(granData->h2aZ,
+    //                     (double)simParams->h * (double)simParams->h * (double)simParams->Gz / (double)simParams->l,
+    //                     simParams->nClumpBodies * sizeof(float)));
+
+    size_t blocks_needed_for_contacts = (simParams->nContactPairs + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
     auto cal_force =
         JitHelper::buildProgram("DEMFrictionlessForceKernels", JitHelper::KERNEL_DIR / "DEMFrictionlessForceKernels.cu",
                                 std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
-    // TODO: Consider if it is possible to do this step using CUB
+    // a custom kernel to compute forces
     cal_force.kernel("calculateNormalContactForces")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 5,
                    streamInfo.stream)
         .launch(simParams, granData, granTemplates);
-
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     // Reflect those body-wise forces on their owner clumps
