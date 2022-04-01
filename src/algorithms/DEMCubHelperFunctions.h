@@ -14,13 +14,15 @@ namespace sgps {
 void cubPrefixScan(binsSphereTouches_t* d_in,
                    binsSphereTouchesScan_t* d_out,
                    size_t n,
-                   GpuManager::StreamInfo& streamInfo,
+                   cudaStream_t& this_stream,
                    DEMSolverStateData& scratchPad);
 
-void cubSortByKeys(binID_t* d_keys,
-                   bodyID_t* d_vals,
+void cubSortByKeys(binID_t* d_keys_in,
+                   binID_t* d_keys_out,
+                   bodyID_t* d_vals_in,
+                   bodyID_t* d_vals_out,
                    size_t n,
-                   GpuManager::StreamInfo& streamInfo,
+                   cudaStream_t& this_stream,
                    DEMSolverStateData& scratchPad);
 
 void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
@@ -45,7 +47,7 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
                       size_t nClumps,
                       double l,
                       bool contactPairArr_isFresh,
-                      GpuManager::StreamInfo& streamInfo,
+                      cudaStream_t& this_stream,
                       DEMSolverStateData& scratchPad,
                       clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies);
 

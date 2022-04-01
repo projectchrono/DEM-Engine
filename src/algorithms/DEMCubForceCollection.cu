@@ -42,7 +42,7 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
                       size_t nClumps,
                       double l,
                       bool contactPairArr_isFresh,
-                      GpuManager::StreamInfo& streamInfo,
+                      cudaStream_t& this_stream,
                       DEMSolverStateData& scratchPad,
                       clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies) {
     // Preparation: allocate enough temp array memory and chop it to pieces, for the usage of cub operations. Note that
@@ -67,15 +67,15 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
         // for both A and B)
         collect_force.kernel("cashInOwnerIndex")
             .instantiate()
-            .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+            .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, this_stream)
             .launch(idAOwner, idA, ownerClumpBody, nContactPairs);
-        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        GPU_CALL(cudaStreamSynchronize(this_stream));
 
         collect_force.kernel("cashInOwnerIndex")
             .instantiate()
-            .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+            .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, this_stream)
             .launch(idBOwner, idB, ownerClumpBody, nContactPairs);
-        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        GPU_CALL(cudaStreamSynchronize(this_stream));
 
         // Secondly, prepare the owner mass and moi arrays (nContactPairs * float/float3) for usage in final reduction
         // by key (do it for both A and B)
@@ -83,10 +83,10 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
         collect_force.kernel("cashInMassMoiIndex")
             .instantiate()
             .configure(dim3(blocks_needed_for_all_contacts), dim3(NUM_BODIES_PER_BLOCK),
-                       sizeof(float) * TEST_SHARED_SIZE * 4, streamInfo.stream)
+                       sizeof(float) * TEST_SHARED_SIZE * 4, this_stream)
             .launch(massAOwner, moiAOwner, inertiaPropOffsets, idAOwner, 2 * nContactPairs, massClumpBody, mmiXX, mmiYY,
                     mmiZZ, nDistinctClumpBodyTopologies);
-        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        GPU_CALL(cudaStreamSynchronize(this_stream));
         // displayArray<bodyID_t>(idAOwner, nContactPairs);
     }
 
@@ -103,27 +103,27 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
     // collect accelerations for body A
     collect_force.kernel("elemDivide")
         .instantiate()
-        .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+        .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(h2a_A, contactForces, massAOwner, h * h / l, nContactPairs);
-    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    GPU_CALL(cudaStreamSynchronize(this_stream));
     // and don't forget body B
     collect_force.kernel("elemDivide")
         .instantiate()
-        .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+        .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(h2a_B, contactForces, massBOwner, -1. * h * h / l, nContactPairs);
-    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    GPU_CALL(cudaStreamSynchronize(this_stream));
     // collect angular accelerations for body A
     collect_force.kernel("elemCrossDivide")
         .instantiate()
-        .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+        .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(h2Alpha_A, contactPointA, contactForces, moiAOwner, h * h, nContactPairs);
-    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    GPU_CALL(cudaStreamSynchronize(this_stream));
     // and don't forget body B
     collect_force.kernel("elemCrossDivide")
         .instantiate()
-        .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+        .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(h2Alpha_B, contactPointB, contactForces, moiBOwner, -1. * h * h, nContactPairs);
-    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    GPU_CALL(cudaStreamSynchronize(this_stream));
 
     // Finally, do the reduction by key
     CubAdd reduction_op;
@@ -131,41 +131,41 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
     // reducing the acceleration
     cub::DeviceReduce::ReduceByKey(NULL, cub_scratch_bytes, idAOwner, uniqueOwner, h2a_A, accOwner,
                                    scratchPad.getForceCollectionRunsPointer(), reduction_op, 2 * nContactPairs,
-                                   streamInfo.stream, false);
-    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+                                   this_stream, false);
+    GPU_CALL(cudaStreamSynchronize(this_stream));
     void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
     cub::DeviceReduce::ReduceByKey(d_scratch_space, cub_scratch_bytes, idAOwner, uniqueOwner, h2a_A, accOwner,
                                    scratchPad.getForceCollectionRunsPointer(), reduction_op, 2 * nContactPairs,
-                                   streamInfo.stream, false);
-    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+                                   this_stream, false);
+    GPU_CALL(cudaStreamSynchronize(this_stream));
 
     size_t blocks_needed_for_stashing =
         (scratchPad.getForceCollectionRuns() + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
     collect_force.kernel("stashElem")
         .instantiate()
-        .configure(dim3(blocks_needed_for_stashing), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+        .configure(dim3(blocks_needed_for_stashing), dim3(NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(clump_h2aX, clump_h2aY, clump_h2aZ, uniqueOwner, accOwner, scratchPad.getForceCollectionRuns());
-    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    GPU_CALL(cudaStreamSynchronize(this_stream));
 
     // reducing the angular acceleration
     cub::DeviceReduce::ReduceByKey(NULL, cub_scratch_bytes, idAOwner, uniqueOwner, h2Alpha_A, accOwner,
                                    scratchPad.getForceCollectionRunsPointer(), reduction_op, 2 * nContactPairs,
-                                   streamInfo.stream, false);
-    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+                                   this_stream, false);
+    GPU_CALL(cudaStreamSynchronize(this_stream));
     d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
     cub::DeviceReduce::ReduceByKey(d_scratch_space, cub_scratch_bytes, idAOwner, uniqueOwner, h2Alpha_A, accOwner,
                                    scratchPad.getForceCollectionRunsPointer(), reduction_op, 2 * nContactPairs,
-                                   streamInfo.stream, false);
-    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+                                   this_stream, false);
+    GPU_CALL(cudaStreamSynchronize(this_stream));
 
     blocks_needed_for_stashing =
         (scratchPad.getForceCollectionRuns() + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
     collect_force.kernel("stashElem")
         .instantiate()
-        .configure(dim3(blocks_needed_for_stashing), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+        .configure(dim3(blocks_needed_for_stashing), dim3(NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(clump_h2AlphaX, clump_h2AlphaY, clump_h2AlphaZ, uniqueOwner, accOwner,
                 scratchPad.getForceCollectionRuns());
-    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
 }  // namespace sgps

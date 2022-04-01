@@ -21,17 +21,18 @@ class DEMSolverStateData {
     size_t* pForceCollectionRuns;       ///< Cub output of how many runs it executed for collecting forces
     size_t* pTotalBinSphereTouchPairs;  ///< Used in kT storing the number of total bin--sphere contact pairs
 
-    /// The vector used by CUB or by anybody else that needs scratch space.
-    /// Please pay attention to the type the vector stores.
+    // The vector used by CUB or by anybody else that needs scratch space.
+    // Please pay attention to the type the vector stores.
     std::vector<scratch_t, ManagedAllocator<scratch_t>> threadScratchSpace;
 
-    /// The vector used by threads when they need temporary arrays (very typically, for storing arrays outputted by cub
-    /// scan or reduce operations). If more than one temporary storage arrays are needed, use pointers to break this
-    /// array into pieces.
+    // The vector used by threads when they need temporary arrays (very typically, for storing arrays outputted by cub
+    // scan or reduce operations). If more than one temporary storage arrays are needed, use pointers to break this
+    // array into pieces.
     std::vector<scratch_t, ManagedAllocator<scratch_t>> threadTempVector;
 
-    /// The vector used to cache some array (typically the result of some pre- or post-processing) which can potentially
-    /// be used across iterations.
+    // The vector used to cache some array (typically the result of some pre- or post-processing) which can potentially
+    // be used across iterations (on dT). Note that on kT, cached and temp arrays are not conceptually different, and
+    // are used in a rotational fashion to save memory space.
     std::vector<scratch_t, ManagedAllocator<scratch_t>> threadCachedVector;
 
     // In theory you can keep going and invent more vectors here. But I feel these I have here are just enough for me to

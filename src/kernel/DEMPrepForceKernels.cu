@@ -14,20 +14,12 @@ inline __device__ void cleanUpContactForces(size_t thisContact,
 
 inline __device__ void cleanUpAcc(size_t thisClump, sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData) {
     // Actually, h should be JITCed into the kernel itself
-    granData->h2aX[thisClump] = 0;
-    granData->h2aY[thisClump] = 0;
-    granData->h2aZ[thisClump] = 0;
+    granData->h2aX[thisClump] = simParams->h * simParams->h * simParams->Gx / simParams->l;
+    granData->h2aY[thisClump] = simParams->h * simParams->h * simParams->Gy / simParams->l;
+    granData->h2aZ[thisClump] = simParams->h * simParams->h * simParams->Gz / simParams->l;
     granData->h2AlphaX[thisClump] = 0;
     granData->h2AlphaY[thisClump] = 0;
     granData->h2AlphaZ[thisClump] = 0;
-}
-
-// Gravity creates no torque about CoM so we can do this
-inline __device__ void applyGravity(size_t thisClump, sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData) {
-    // Actually, l should be JITCed into the kernel itself
-    granData->h2aX[thisClump] += simParams->h * simParams->h * simParams->Gx / simParams->l;
-    granData->h2aY[thisClump] += simParams->h * simParams->h * simParams->Gy / simParams->l;
-    granData->h2aZ[thisClump] += simParams->h * simParams->h * simParams->Gz / simParams->l;
 }
 
 __global__ void prepareForceArrays(sgps::DEMSimParams* simParams,
@@ -39,6 +31,5 @@ __global__ void prepareForceArrays(sgps::DEMSimParams* simParams,
     }
     if (myID < simParams->nClumpBodies) {
         cleanUpAcc(myID, simParams, granData);
-        applyGravity(myID, simParams, granData);
     }
 }

@@ -424,8 +424,8 @@ inline void DEMDynamicThread::calculateForces() {
                      granData->h2aX, granData->h2aY, granData->h2aZ, granData->h2AlphaX, granData->h2AlphaY,
                      granData->h2AlphaZ, granData->ownerClumpBody, granTemplates->massClumpBody, granTemplates->mmiXX,
                      granTemplates->mmiYY, granTemplates->mmiZZ, simParams->h, simParams->nContactPairs,
-                     simParams->nClumpBodies, simParams->l, contactPairArr_isFresh, streamInfo, stateOfSolver_resources,
-                     simParams->nDistinctClumpBodyTopologies);
+                     simParams->nClumpBodies, simParams->l, contactPairArr_isFresh, streamInfo.stream,
+                     stateOfSolver_resources, simParams->nDistinctClumpBodyTopologies);
     // displayArray<float>(granData->h2aX, simParams->nClumpBodies);
     // displayFloat3(granData->contactForces, simParams->nContactPairs);
     // std::cout << simParams->nContactPairs << std::endl;

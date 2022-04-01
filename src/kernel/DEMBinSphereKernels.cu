@@ -5,6 +5,7 @@
 
 __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
                                                  sgps::DEMDataKT* granData,
+                                                 sgps::binsSphereTouches_t* numBinsSphereTouches,
                                                  sgps::DEMTemplate* granTemplates) {
     // __shared__ const distinctSphereRadii[@NUM_OF_THAT_ARR@] = {@THAT_ARR@};
     // TODO: These info should be jitfied not brought from global mem
@@ -55,14 +56,19 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
             (unsigned int)(myBinY + myRadiusSpan) - (unsigned int)(myBinY - myRadiusSpan) + 1;
         sgps::binsSphereTouches_t numZ =
             (unsigned int)(myBinZ + myRadiusSpan) - (unsigned int)(myBinZ - myRadiusSpan) + 1;
+        // TODO: Add an error message if numX * numY * numZ > MAX(binsSphereTouches_t)
+
         // Write the number of bins this sphere touches back to the global array
-        granData->numBinsSphereTouches[sphereID] = numX * numY * numZ;
+        numBinsSphereTouches[sphereID] = numX * numY * numZ;
         // printf("This sp takes num of bins: %u\n", numX * numY * numZ);
     }
 }
 
 __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
                                                sgps::DEMDataKT* granData,
+                                               sgps::binsSphereTouchesScan_t* numBinsSphereTouchesScan,
+                                               sgps::binID_t* binIDsEachSphereTouches,
+                                               sgps::bodyID_t* sphereIDsEachBinTouches,
                                                sgps::DEMTemplate* granTemplates) {
     // __shared__ const distinctSphereRadii[@NUM_OF_THAT_ARR@] = {@THAT_ARR@};
     // TODO: These info should be jitfied not brought from global mem
@@ -86,7 +92,7 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
         sgps::bodyID_t myOwnerID = granData->ownerClumpBody[sphereID];
         sgps::clumpComponentOffset_t myCompOffset = granData->clumpComponentOffset[sphereID];
         // Get the offset of my spot where I should start writing back to the global bin--sphere pair registration array
-        sgps::binsSphereTouchesScan_t myReportOffset = granData->numBinsSphereTouchesScan[sphereID];
+        sgps::binsSphereTouchesScan_t myReportOffset = numBinsSphereTouchesScan[sphereID];
         double ownerX, ownerY, ownerZ;
         voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
             ownerX, ownerY, ownerZ, granData->voxelID[myOwnerID], granData->locX[myOwnerID], granData->locY[myOwnerID],
@@ -114,8 +120,8 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
                      i++) {
                     thisBinID = (sgps::binID_t)i + (sgps::binID_t)j * simParams->nbX +
                                 (sgps::binID_t)k * (sgps::binID_t)simParams->nbX * simParams->nbY;
-                    granData->binIDsEachSphereTouches[myReportOffset] = thisBinID;
-                    granData->sphereIDsEachBinTouches[myReportOffset] = sphereID;
+                    binIDsEachSphereTouches[myReportOffset] = thisBinID;
+                    sphereIDsEachBinTouches[myReportOffset] = sphereID;
                     myReportOffset++;
                 }
             }
