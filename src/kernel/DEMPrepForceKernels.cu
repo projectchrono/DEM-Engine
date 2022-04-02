@@ -24,9 +24,10 @@ inline __device__ void cleanUpAcc(size_t thisClump, sgps::DEMSimParams* simParam
 
 __global__ void prepareForceArrays(sgps::DEMSimParams* simParams,
                                    sgps::DEMDataDT* granData,
+                                   size_t nContactPairs,
                                    sgps::DEMTemplate* granTemplates) {
     size_t myID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (myID < simParams->nContactPairs) {
+    if (myID < nContactPairs) {
         cleanUpContactForces(myID, simParams, granData);
     }
     if (myID < simParams->nClumpBodies) {

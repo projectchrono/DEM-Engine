@@ -19,6 +19,7 @@ namespace sgps {
 class DEMSolverStateDataDT {
   private:
     size_t* pForceCollectionRuns;  ///< Cub output of how many cub runs it executed for collecting forces (dT)
+    size_t* pNumContacts;          ///< Used in kT storing the number of total (potential) contact pairs
 
     // The vector used by CUB or by anybody else that needs scratch space.
     // Please pay attention to the type the vector stores.
@@ -40,8 +41,15 @@ class DEMSolverStateDataDT {
     float crntStepSize;  // DN: needs to be brought here from GranParams
     float crntSimTime;   // DN: needs to be brought here from GranParams
   public:
-    DEMSolverStateDataDT() { cudaMallocManaged(&pForceCollectionRuns, sizeof(size_t)); }
-    ~DEMSolverStateDataDT() { cudaFree(pForceCollectionRuns); }
+    DEMSolverStateDataDT() {
+        cudaMallocManaged(&pForceCollectionRuns, sizeof(size_t));
+        cudaMallocManaged(&pNumContacts, sizeof(size_t));
+        *pNumContacts = 0;
+    }
+    ~DEMSolverStateDataDT() {
+        cudaFree(pForceCollectionRuns);
+        cudaFree(pNumContacts);
+    }
 
     // Return raw pointer to swath of device memory that is at least "sizeNeeded" large
     inline scratch_t* allocateScratchSpace(size_t sizeNeeded) {
@@ -93,6 +101,10 @@ class DEMSolverStateDataDT {
     // inline void setForceCollectionRuns(size_t n) { *pForceCollectionRuns = n; }
     inline size_t getForceCollectionRuns() { return *pForceCollectionRuns; }
     inline size_t* getForceCollectionRunsPointer() { return pForceCollectionRuns; }
+
+    inline void setNumContacts(size_t n) { *pNumContacts = n; }
+    inline size_t getNumContacts() { return *pNumContacts; }
+    inline size_t* getNumContactsPointer() { return pNumContacts; }
 };
 
 /// <summary>
@@ -103,6 +115,7 @@ class DEMSolverStateDataKT {
   private:
     size_t* pNumBinSphereTouchPairs;  ///< Used in kT storing the number of total bin--sphere contact pairs
     size_t* pNumActiveBins;           ///< Used in kT storing the number of total "active" bins (in contact detection)
+    size_t* pNumContacts;             ///< Used in kT storing the number of total (potential) contact pairs
 
     // The vector used by CUB or by anybody else that needs scratch space.
     // Please pay attention to the type the vector stores.
@@ -114,6 +127,8 @@ class DEMSolverStateDataKT {
     std::vector<scratch_t, ManagedAllocator<scratch_t>> threadTempVector2;
     std::vector<scratch_t, ManagedAllocator<scratch_t>> threadTempVector3;
     std::vector<scratch_t, ManagedAllocator<scratch_t>> threadTempVector4;
+    std::vector<scratch_t, ManagedAllocator<scratch_t>> threadTempVector5;
+    std::vector<scratch_t, ManagedAllocator<scratch_t>> threadTempVector6;
     // In theory you can keep going and invent more vectors here. But I feel these I have here are just enough for me to
     // use conveniently.
 
@@ -121,10 +136,13 @@ class DEMSolverStateDataKT {
     DEMSolverStateDataKT() {
         cudaMallocManaged(&pNumBinSphereTouchPairs, sizeof(size_t));
         cudaMallocManaged(&pNumActiveBins, sizeof(size_t));
+        cudaMallocManaged(&pNumContacts, sizeof(size_t));
+        *pNumContacts = 0;
     }
     ~DEMSolverStateDataKT() {
         cudaFree(pNumBinSphereTouchPairs);
         cudaFree(pNumActiveBins);
+        cudaFree(pNumContacts);
     }
 
     // Return raw pointer to swath of device memory that is at least "sizeNeeded" large
@@ -160,6 +178,18 @@ class DEMSolverStateDataKT {
         }
         return threadTempVector4.data();
     }
+    inline scratch_t* allocateTempVector5(size_t sizeNeeded) {
+        if (threadTempVector5.size() < sizeNeeded) {
+            threadTempVector5.resize(sizeNeeded);
+        }
+        return threadTempVector5.data();
+    }
+    inline scratch_t* allocateTempVector6(size_t sizeNeeded) {
+        if (threadTempVector6.size() < sizeNeeded) {
+            threadTempVector6.resize(sizeNeeded);
+        }
+        return threadTempVector6.data();
+    }
 
     inline void setNumBinSphereTouchPairs(size_t n) { *pNumBinSphereTouchPairs = n; }
     inline size_t getNumBinSphereTouchPairs() { return *pNumBinSphereTouchPairs; }
@@ -168,6 +198,10 @@ class DEMSolverStateDataKT {
     inline void setNumActiveBins(size_t n) { *pNumActiveBins = n; }
     inline size_t getNumActiveBins() { return *pNumActiveBins; }
     inline size_t* getNumActiveBinsPointer() { return pNumActiveBins; }
+
+    inline void setNumContacts(size_t n) { *pNumContacts = n; }
+    inline size_t getNumContacts() { return *pNumContacts; }
+    inline size_t* getNumContactsPointer() { return pNumContacts; }
 };
 
 }  // namespace sgps

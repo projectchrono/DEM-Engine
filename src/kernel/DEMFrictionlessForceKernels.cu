@@ -44,6 +44,7 @@ inline __device__ float3 calcNormalForce(const double& overlapDepth,
 
 __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
                                              sgps::DEMDataDT* granData,
+                                             size_t nContactPairs,
                                              sgps::DEMTemplate* granTemplates) {
     // __shared__ const distinctSphereRadii[@NUM_OF_THAT_ARR@] = {@THAT_ARR@};
     // TODO: These info should be jitfied not brought from global mem
@@ -71,7 +72,7 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
     // improves efficiency
 
     sgps::contactPairs_t myContactID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (myContactID < simParams->nContactPairs) {
+    if (myContactID < nContactPairs) {
         // From a contact ID, grab relevant info on 2 contact bodies
         sgps::bodyID_t bodyA = granData->idGeometryA[myContactID];
         sgps::bodyID_t bodyB = granData->idGeometryB[myContactID];

@@ -8,12 +8,12 @@
 
 namespace sgps {
 // Structs defined here will be used by GPUs.
-// NOTE: All data structs here need to be simple enough to jitify. In general, if you need to include something that is
-// host specific (much more complex than GranularDefines, for example), then do it in GranularStructs.h.
+// NOTE: All data structs here need to be simple enough to jitify. In general, if you need to include something much
+// more complex than GranularDefines for example, then do it in GranularStructs.h.
 
 // A structure for storing simulation parameters. Note these simulation parameters should not change often (changes of
 // them usually lead to re-jitification). Those who change often (especially in each time step) should go into
-// DEMSolverStateData.
+// DEMSolverStateDataKT/DT.
 struct DEMSimParams {
     // Number of voxels in the X direction, expressed as a power of 2
     unsigned char nvXp2;
