@@ -12,10 +12,17 @@
 namespace sgps {
 
 void cubPrefixScan(binsSphereTouches_t* d_in,
-                   binsSphereTouchesScan_t* d_out,
+                   binSphereTouchPairs_t* d_out,
                    size_t n,
                    cudaStream_t& this_stream,
-                   DEMSolverStateData& scratchPad);
+                   DEMSolverStateDataKT& scratchPad);
+
+// template <typename T1, typename T2>
+// void cubPrefixScan(T1* d_in,
+//                    T2* d_out,
+//                    size_t n,
+//                    cudaStream_t& this_stream,
+//                    DEMSolverStateData& scratchPad);
 
 void cubSortByKeys(binID_t* d_keys_in,
                    binID_t* d_keys_out,
@@ -23,7 +30,22 @@ void cubSortByKeys(binID_t* d_keys_in,
                    bodyID_t* d_vals_out,
                    size_t n,
                    cudaStream_t& this_stream,
-                   DEMSolverStateData& scratchPad);
+                   DEMSolverStateDataKT& scratchPad);
+
+void cubUnique(binID_t* d_in,
+               binID_t* d_out,
+               size_t* d_num_out,
+               size_t n,
+               cudaStream_t& this_stream,
+               DEMSolverStateDataKT& scratchPad);
+
+void cubRunLengthEncode(binID_t* d_in,
+                        binID_t* d_unique_out,
+                        spheresBinTouches_t* d_counts_out,
+                        size_t* d_num_out,
+                        size_t n,
+                        cudaStream_t& this_stream,
+                        DEMSolverStateDataKT& scratchPad);
 
 void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
                       bodyID_t* idA,
@@ -48,7 +70,7 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
                       double l,
                       bool contactPairArr_isFresh,
                       cudaStream_t& this_stream,
-                      DEMSolverStateData& scratchPad,
+                      DEMSolverStateDataDT& scratchPad,
                       clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies);
 
 }  // namespace sgps

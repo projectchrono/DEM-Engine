@@ -6,6 +6,10 @@
 __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
                                            sgps::DEMDataKT* granData,
                                            sgps::bodyID_t* sphereIDsEachBinTouchesSorted,
+                                           sgps::binID_t* activeBinIDs,
+                                           sgps::spheresBinTouches_t* numSpheresBinTouches,
+                                           sgps::binSphereTouchPairs_t* sphereIDsLookUpTable,
+                                           size_t nActiveBins,
                                            sgps::DEMTemplate* granTemplates) {
     // __shared__ const distinctSphereRadii[@NUM_OF_THAT_ARR@] = {@THAT_ARR@};
     // TODO: These info should be jitfied not brought from global mem
@@ -26,7 +30,7 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
     // Only active bins got execute this...
     sgps::binID_t myActiveID = blockIdx.x * blockDim.x + threadIdx.x;
     // But I got a true bin ID
-    sgps::binID_t binID = granData->activeBinIDs[myActiveID];
+    sgps::binID_t binID = activeBinIDs[myActiveID];
     // I need to store all the sphereIDs that I am supposed to look into
     // A100 has about 164K shMem... these arrays really need to be small, or we can only fit a small number of bins in
     // one block
@@ -35,11 +39,11 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
     double bodyX[MAX_SPHERES_PER_BIN];
     double bodyY[MAX_SPHERES_PER_BIN];
     double bodyZ[MAX_SPHERES_PER_BIN];
-    if (myActiveID < simParams->nActiveBins) {
+    if (myActiveID < nActiveBins) {
         sgps::contactPairs_t contact_count = 0;
         // Grab the bodies that I care, put into local memory
-        sgps::spheresBinTouches_t nBodiesMeHandle = granData->numSpheresBinTouches[myActiveID];
-        sgps::binsSphereTouches_t myBodiesTableEntry = granData->sphereIDsLookUpTable[myActiveID];
+        sgps::spheresBinTouches_t nBodiesMeHandle = numSpheresBinTouches[myActiveID];
+        sgps::binSphereTouchPairs_t myBodiesTableEntry = sphereIDsLookUpTable[myActiveID];
         // printf("nBodies: %u\n", nBodiesMeHandle);
         for (sgps::spheresBinTouches_t i = 0; i < nBodiesMeHandle; i++) {
             sgps::bodyID_t bodyID = sphereIDsEachBinTouchesSorted[myBodiesTableEntry + i];
@@ -106,6 +110,10 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
 __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
                                             sgps::DEMDataKT* granData,
                                             sgps::bodyID_t* sphereIDsEachBinTouchesSorted,
+                                            sgps::binID_t* activeBinIDs,
+                                            sgps::spheresBinTouches_t* numSpheresBinTouches,
+                                            sgps::binSphereTouchPairs_t* sphereIDsLookUpTable,
+                                            size_t nActiveBins,
                                             sgps::DEMTemplate* granTemplates) {
     // __shared__ const distinctSphereRadii[@NUM_OF_THAT_ARR@] = {@THAT_ARR@};
     // TODO: These info should be jitfied not brought from global mem
@@ -126,7 +134,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
     // Only active bins got to execute this...
     sgps::binID_t myActiveID = blockIdx.x * blockDim.x + threadIdx.x;
     // But I got a true bin ID
-    sgps::binID_t binID = granData->activeBinIDs[myActiveID];
+    sgps::binID_t binID = activeBinIDs[myActiveID];
     // I need to store all the sphereIDs that I am supposed to look into
     // A100 has about 164K shMem... these arrays really need to be small, or we can only fit a small number of bins in
     // one block
@@ -136,10 +144,10 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
     double bodyX[MAX_SPHERES_PER_BIN];
     double bodyY[MAX_SPHERES_PER_BIN];
     double bodyZ[MAX_SPHERES_PER_BIN];
-    if (myActiveID < simParams->nActiveBins) {
+    if (myActiveID < nActiveBins) {
         // Grab the bodies that I care, put into local memory
-        sgps::spheresBinTouches_t nBodiesMeHandle = granData->numSpheresBinTouches[myActiveID];
-        sgps::binsSphereTouches_t myBodiesTableEntry = granData->sphereIDsLookUpTable[myActiveID];
+        sgps::spheresBinTouches_t nBodiesMeHandle = numSpheresBinTouches[myActiveID];
+        sgps::binSphereTouchPairs_t myBodiesTableEntry = sphereIDsLookUpTable[myActiveID];
         for (sgps::spheresBinTouches_t i = 0; i < nBodiesMeHandle; i++) {
             sgps::bodyID_t bodyID = sphereIDsEachBinTouchesSorted[myBodiesTableEntry + i];
             ownerIDs[i] = granData->ownerClumpBody[bodyID];

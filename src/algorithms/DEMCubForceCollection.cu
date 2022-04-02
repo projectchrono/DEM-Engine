@@ -43,18 +43,19 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
                       double l,
                       bool contactPairArr_isFresh,
                       cudaStream_t& this_stream,
-                      DEMSolverStateData& scratchPad,
+                      DEMSolverStateDataDT& scratchPad,
                       clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies) {
     // Preparation: allocate enough temp array memory and chop it to pieces, for the usage of cub operations. Note that
     // if contactPairArr_isFresh is false, then this allocation should not alter the size and content of the temp array
     // space, so the information in it can be used in the next iteration.
-    size_t cachedArraySize =
-        2 * (nContactPairs * sizeof(bodyID_t) + nContactPairs * sizeof(float) + nContactPairs * sizeof(float3));
-    bodyID_t* idAOwner = (bodyID_t*)scratchPad.allocateCachedVector(cachedArraySize);
+    size_t cachedArraySizeOwner = (size_t)2 * nContactPairs * sizeof(bodyID_t);
+    size_t cachedArraySizeMass = (size_t)2 * nContactPairs * sizeof(float);
+    size_t cachedArraySizeMOI = (size_t)2 * nContactPairs * sizeof(float3);
+    bodyID_t* idAOwner = (bodyID_t*)scratchPad.allocateCachedOwner(cachedArraySizeOwner);
     bodyID_t* idBOwner = (bodyID_t*)(idAOwner + nContactPairs);
-    float* massAOwner = (float*)(idBOwner + nContactPairs);
+    float* massAOwner = (float*)scratchPad.allocateCachedMass(cachedArraySizeMass);
     float* massBOwner = (float*)(massAOwner + nContactPairs);
-    float3* moiAOwner = (float3*)(massBOwner + nContactPairs);
+    float3* moiAOwner = (float3*)scratchPad.allocateCachedMOI(cachedArraySizeMOI);
     float3* moiBOwner = (float3*)(moiAOwner + nContactPairs);
 
     size_t blocks_needed_for_all_contacts = (2 * nContactPairs + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
@@ -92,14 +93,14 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
 
     // Thirdly, combine mass and force to get (contact pair-wise) acceleration, which will be reduced...
     // Note here allocated is temp vector, since unlike cached vectors, they cannot be reused in the next iteration
-    size_t tempArraySize = 2 * (nContactPairs * sizeof(float3) + nContactPairs * sizeof(float3)) +
-                           nClumps * sizeof(float3) + nClumps * sizeof(bodyID_t);
-    float3* h2a_A = (float3*)scratchPad.allocateTempVector(tempArraySize);
+    size_t tempArraySizeAcc = (size_t)2 * nContactPairs * sizeof(float3);
+    size_t tempArraySizeOwnerAcc = (size_t)nClumps * sizeof(float3);
+    size_t tempArraySizeOwner = (size_t)nClumps * sizeof(bodyID_t);
+    float3* h2a_A = (float3*)scratchPad.allocateTempVector1(tempArraySizeAcc);
     float3* h2a_B = (float3*)(h2a_A + nContactPairs);
-    float3* h2Alpha_A = (float3*)(h2a_B + nContactPairs);
-    float3* h2Alpha_B = (float3*)(h2Alpha_A + nContactPairs);
-    float3* accOwner = (float3*)(h2Alpha_B + nContactPairs);  // can store both linear and angular acceleration
-    bodyID_t* uniqueOwner = (bodyID_t*)(accOwner + nClumps);
+    float3* accOwner = (float3*)scratchPad.allocateTempVector2(
+        tempArraySizeOwnerAcc);  // can store both linear and angular acceleration
+    bodyID_t* uniqueOwner = (bodyID_t*)scratchPad.allocateTempVector3(tempArraySizeOwner);
     // collect accelerations for body A
     collect_force.kernel("elemDivide")
         .instantiate()
@@ -112,6 +113,30 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
         .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(h2a_B, contactForces, massBOwner, -1. * h * h / l, nContactPairs);
     GPU_CALL(cudaStreamSynchronize(this_stream));
+    CubAdd reduction_op;
+    size_t cub_scratch_bytes = 0;
+    // reducing the acceleration (2 * nContactPairs for both body A and B)
+    cub::DeviceReduce::ReduceByKey(NULL, cub_scratch_bytes, idAOwner, uniqueOwner, h2a_A, accOwner,
+                                   scratchPad.getForceCollectionRunsPointer(), reduction_op, 2 * nContactPairs,
+                                   this_stream, false);
+    GPU_CALL(cudaStreamSynchronize(this_stream));
+    void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
+    cub::DeviceReduce::ReduceByKey(d_scratch_space, cub_scratch_bytes, idAOwner, uniqueOwner, h2a_A, accOwner,
+                                   scratchPad.getForceCollectionRunsPointer(), reduction_op, 2 * nContactPairs,
+                                   this_stream, false);
+    GPU_CALL(cudaStreamSynchronize(this_stream));
+    // stash acceleration
+    size_t blocks_needed_for_stashing =
+        (scratchPad.getForceCollectionRuns() + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
+    collect_force.kernel("stashElem")
+        .instantiate()
+        .configure(dim3(blocks_needed_for_stashing), dim3(NUM_BODIES_PER_BLOCK), 0, this_stream)
+        .launch(clump_h2aX, clump_h2aY, clump_h2aZ, uniqueOwner, accOwner, scratchPad.getForceCollectionRuns());
+    GPU_CALL(cudaStreamSynchronize(this_stream));
+
+    // Then take care of angular accelerations
+    float3* h2Alpha_A = (float3*)(h2a_A);  // Memory spaces for accelerations can be reused
+    float3* h2Alpha_B = (float3*)(h2a_B);
     // collect angular accelerations for body A
     collect_force.kernel("elemCrossDivide")
         .instantiate()
@@ -124,30 +149,7 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
         .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(h2Alpha_B, contactPointB, contactForces, moiBOwner, -1. * h * h, nContactPairs);
     GPU_CALL(cudaStreamSynchronize(this_stream));
-
-    // Finally, do the reduction by key
-    CubAdd reduction_op;
-    size_t cub_scratch_bytes = 0;
-    // reducing the acceleration
-    cub::DeviceReduce::ReduceByKey(NULL, cub_scratch_bytes, idAOwner, uniqueOwner, h2a_A, accOwner,
-                                   scratchPad.getForceCollectionRunsPointer(), reduction_op, 2 * nContactPairs,
-                                   this_stream, false);
-    GPU_CALL(cudaStreamSynchronize(this_stream));
-    void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
-    cub::DeviceReduce::ReduceByKey(d_scratch_space, cub_scratch_bytes, idAOwner, uniqueOwner, h2a_A, accOwner,
-                                   scratchPad.getForceCollectionRunsPointer(), reduction_op, 2 * nContactPairs,
-                                   this_stream, false);
-    GPU_CALL(cudaStreamSynchronize(this_stream));
-
-    size_t blocks_needed_for_stashing =
-        (scratchPad.getForceCollectionRuns() + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
-    collect_force.kernel("stashElem")
-        .instantiate()
-        .configure(dim3(blocks_needed_for_stashing), dim3(NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(clump_h2aX, clump_h2aY, clump_h2aZ, uniqueOwner, accOwner, scratchPad.getForceCollectionRuns());
-    GPU_CALL(cudaStreamSynchronize(this_stream));
-
-    // reducing the angular acceleration
+    // reducing the angular acceleration (2 * nContactPairs for both body A and B)
     cub::DeviceReduce::ReduceByKey(NULL, cub_scratch_bytes, idAOwner, uniqueOwner, h2Alpha_A, accOwner,
                                    scratchPad.getForceCollectionRunsPointer(), reduction_op, 2 * nContactPairs,
                                    this_stream, false);
@@ -157,7 +159,7 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
                                    scratchPad.getForceCollectionRunsPointer(), reduction_op, 2 * nContactPairs,
                                    this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
-
+    // stash angular acceleration
     blocks_needed_for_stashing =
         (scratchPad.getForceCollectionRuns() + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
     collect_force.kernel("stashElem")

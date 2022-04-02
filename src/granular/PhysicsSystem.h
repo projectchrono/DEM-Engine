@@ -25,7 +25,8 @@ namespace sgps {
 // Implementation-level classes
 class DEMKinematicThread;
 class DEMDynamicThread;
-class DEMSolverStateData;
+class DEMSolverStateDataDT;
+class DEMSolverStateDataKT;
 
 class DEMKinematicThread {
   protected:
@@ -39,7 +40,7 @@ class DEMKinematicThread {
     GpuManager::StreamInfo streamInfo;
 
     // A class that contains scratch pad and system status data
-    DEMSolverStateData stateOfSolver_resources;
+    DEMSolverStateDataKT stateOfSolver_resources;
 
     size_t m_approx_bytes_used = 0;
 
@@ -119,16 +120,16 @@ class DEMKinematicThread {
     // The number of bins each sphere touches
     std::vector<binsSphereTouches_t, ManagedAllocator<binsSphereTouches_t>> numBinsSphereTouches;
     // This array serves as the container for the prefix scan of numBinsSphereTouches
-    std::vector<binsSphereTouchesScan_t, ManagedAllocator<binsSphereTouchesScan_t>> numBinsSphereTouchesScan;
+    std::vector<binSphereTouchPairs_t, ManagedAllocator<binSphereTouchPairs_t>> numBinsSphereTouchesScan;
     // The IDs of those bins that touch each sphere
     std::vector<binID_t, ManagedAllocator<binID_t>> binIDsEachSphereTouches;
     // The company array of the previous one
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> sphereIDsEachBinTouches;
     // Derived from binIDsEachSphereTouches we have the IDs of the active bins (have at least 2 spheres in it).
     std::vector<binID_t, ManagedAllocator<binID_t>> activeBinIDs;
-    // This following array is generated to instruct the kernel where to look in sphereIDsEachBinTouches to find this
-    // thread's (bin's) relevant sphere IDs.
-    std::vector<binsSphereTouches_t, ManagedAllocator<binsSphereTouches_t>> sphereIDsLookUpTable;
+    // This following array is generated to instruct the kernel where to look in sphereIDsEachBinTouchesScanSorted to
+    // find this thread's (bin's) relevant sphere IDs.
+    std::vector<binSphereTouchPairs_t, ManagedAllocator<binSphereTouchPairs_t>> sphereIDsLookUpTable;
     // And how far should this thread look into (number of spheres this bin touches)?
     std::vector<spheresBinTouches_t, ManagedAllocator<spheresBinTouches_t>> numSpheresBinTouches;
     // The number of contact pairs in each bin (also serves as the container for the related prefix scan)
@@ -233,7 +234,7 @@ class DEMDynamicThread {
     GpuManager::StreamInfo streamInfo;
 
     // A class that contains scratch pad and system status data
-    DEMSolverStateData stateOfSolver_resources;
+    DEMSolverStateDataDT stateOfSolver_resources;
 
     // The number of for iterations dT does for a specific user "run simulation" call
     size_t nDynamicCycles;

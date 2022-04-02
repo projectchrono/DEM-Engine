@@ -172,11 +172,11 @@ struct DEMDataKT {
 
     // Other kT's own work arrays
     binsSphereTouches_t* numBinsSphereTouches;
-    binsSphereTouchesScan_t* numBinsSphereTouchesScan;
+    binSphereTouchPairs_t* numBinsSphereTouchesScan;
     binID_t* binIDsEachSphereTouches;
     bodyID_t* sphereIDsEachBinTouches;
     binID_t* activeBinIDs;
-    binsSphereTouches_t* sphereIDsLookUpTable;
+    binSphereTouchPairs_t* sphereIDsLookUpTable;
     spheresBinTouches_t* numSpheresBinTouches;
     contactPairs_t* numContactsInEachBin;
 

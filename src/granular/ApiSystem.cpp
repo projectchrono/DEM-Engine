@@ -249,6 +249,7 @@ int DEMSolver::generateJITResources() {
         (uint64_t)(m_boxX / m_binSize + 1) * (uint64_t)(m_boxY / m_binSize + 1) * (uint64_t)(m_boxZ / m_binSize + 1);
     std::cout << "The edge length of a bin: " << m_binSize << std::endl;
     std::cout << "The total number of bins: " << num_bins << std::endl;
+    // TODO: should check if num_bins is larger than uint32, if uint32 is selected for storing binID
 
     // Figure out the initial profile/status of clumps, and related quantities, if need to
     nClumpBodies = m_input_clump_types.size();

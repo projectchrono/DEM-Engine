@@ -40,7 +40,7 @@ typedef char scratch_t;  // Data type for DEM scratch-pad array
 typedef unsigned short int binsSphereTouches_t;
 // This type needs to be large enough to hold the result of a prefix scan of the type binsSphereTouches_t; but normally,
 // it should be the same magnitude as bodyID_t.
-typedef unsigned int binsSphereTouchesScan_t;
+typedef unsigned int binSphereTouchPairs_t;
 // How many spheres a bin can touch, tops? This one will not double as a container for prefix scans, so we can assume it
 // will not be too large. We should keep it as small as possible, since in contact detection...
 typedef unsigned short int spheresBinTouches_t;
