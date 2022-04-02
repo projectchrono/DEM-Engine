@@ -22,14 +22,14 @@ int main() {
     // total number of random clump templates to generate
     int num_template = 10;
 
-    int min_sphere = 2;
-    int max_sphere = 6;
+    int min_sphere = 1;
+    int max_sphere = 5;
 
     float min_rad = 0.016;
-    float max_rad = 0.033;
+    float max_rad = 0.024;
 
-    float min_relpos = -0.025;
-    float max_relpos = 0.025;
+    float min_relpos = -0.015;
+    float max_relpos = 0.015;
 
     auto mat_type_1 = DEM_sim.LoadMaterialType(1e7, 0.3, 0.7);
     // auto mat_type_2 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.9);
@@ -76,8 +76,8 @@ int main() {
 
     // generate initial clumps (in this case just polydisperse spheres)
     float3 domain_center = make_float3(0);
-    float box_dim = 0.35;
-    auto input_xyz = DEMBoxGridSampler(make_float3(0), make_float3(box_dim), 0.14);
+    float box_dim = 6;  // box half-dimension
+    auto input_xyz = DEMBoxGridSampler(make_float3(0), make_float3(box_dim), 0.1);
     unsigned int num_clumps = input_xyz.size();
     std::vector<unsigned int> input_template_num;
     std::vector<float3> input_vel;
@@ -87,7 +87,7 @@ int main() {
         float3 vel;
         vel = domain_center - input_xyz.at(i);
         if (length(vel) > 1e-5) {
-            vel = normalize(vel) * 0.1;
+            vel = normalize(vel) * 0.5;
         } else {
             vel = make_float3(0);
         }
@@ -97,7 +97,7 @@ int main() {
     DEM_sim.SetClumps(input_template_num, input_xyz);
     DEM_sim.SetClumpVels(input_vel);
 
-    DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, 3e-11);
+    DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, 1.5e-10);
 
     DEM_sim.CenterCoordSys();
     DEM_sim.SetTimeStepSize(1e-5);
@@ -108,11 +108,10 @@ int main() {
     DEM_sim.Initialize();
 
     for (int i = 0; i < 500; i++) {
-        std::cout << "Iteration: " << i << std::endl;
-
         char filename[100];
         sprintf(filename, "./DEMdemo_collide_output_%04d.csv", i);
         DEM_sim.WriteFileAsSpheres(std::string(filename));
+        std::cout << "Iteration: " << i << std::endl;
 
         DEM_sim.LaunchThreads(1e-2);
     }

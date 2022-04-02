@@ -52,11 +52,6 @@ struct DEMSimParams {
     double h;
     // Sphere radii inflation ratio (for safer contact detection)
     float beta;
-    // Number of bins active
-    size_t nActiveBins = 0;
-    // Number of active contact pairs. kT figures this number out but it is dT that badly needs this number to do its
-    // work.
-    size_t nContactPairs = 0;
 };
 
 // The collection of pointers to DEM template arrays such as radiiSphere. This struct will become useless eventually as
@@ -170,15 +165,17 @@ struct DEMDataKT {
     bodyID_t* ownerClumpBody;
     clumpComponentOffset_t* clumpComponentOffset;
 
-    // Other kT's own work arrays
-    binsSphereTouches_t* numBinsSphereTouches;
-    binSphereTouchPairs_t* numBinsSphereTouchesScan;
-    binID_t* binIDsEachSphereTouches;
-    bodyID_t* sphereIDsEachBinTouches;
-    binID_t* activeBinIDs;
-    binSphereTouchPairs_t* sphereIDsLookUpTable;
-    spheresBinTouches_t* numSpheresBinTouches;
-    contactPairs_t* numContactsInEachBin;
+    // kT's own work arrays. Now these array pointers get assigned in contactDetection() which point to shared scratch
+    // spaces. No need to do forward declaration anymore. They are left here for reference, should contactDetection()
+    // need to be re-visited. 
+    // binsSphereTouches_t* numBinsSphereTouches; 
+    // binSphereTouchPairs_t* numBinsSphereTouchesScan; 
+    // binID_t* binIDsEachSphereTouches; 
+    // bodyID_t* sphereIDsEachBinTouches; 
+    // binID_t* activeBinIDs; 
+    // binSphereTouchPairs_t* sphereIDsLookUpTable; 
+    // spheresBinTouches_t* numSpheresBinTouches;
+    // contactPairs_t* numContactsInEachBin;
 
     // kT produces contact info, and stores it, temporarily
     bodyID_t* idGeometryA;

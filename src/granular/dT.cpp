@@ -10,7 +10,8 @@
 #include <core/utils/Macros.h>
 #include <core/utils/chpf/particle_writer.hpp>
 #include <granular/GranularDefines.h>
-#include <granular/PhysicsSystem.h>
+#include <granular/dT.h>
+#include <granular/kT.h>
 #include <core/utils/JitHelper.h>
 #include <granular/HostSideHelpers.cpp>
 #include <helper_math.cuh>
@@ -321,11 +322,11 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
 }
 
 inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
-    idGeometryA.resize(nContactPairs);
-    idGeometryB.resize(nContactPairs);
-    contactForces.resize(nContactPairs);
-    contactPointGeometryA.resize(nContactPairs);
-    contactPointGeometryB.resize(nContactPairs);
+    TRACKED_QUICK_VECTOR_RESIZE(idGeometryA, nContactPairs);
+    TRACKED_QUICK_VECTOR_RESIZE(idGeometryB, nContactPairs);
+    TRACKED_QUICK_VECTOR_RESIZE(contactForces, nContactPairs);
+    TRACKED_QUICK_VECTOR_RESIZE(contactPointGeometryA, nContactPairs);
+    TRACKED_QUICK_VECTOR_RESIZE(contactPointGeometryB, nContactPairs);
 
     // Re-pack pointers in case the arrays got reallocated
     granData->idGeometryA = idGeometryA.data();
@@ -433,7 +434,6 @@ inline void DEMDynamicThread::calculateForces() {
     // std::cout << stateOfSolver_resources.getNumContacts() << std::endl;
 
     // Calculate the torque on owner clumps from those body-wise forces
-    // TODO: Do it with CUB (but can we? Torque accumulation requires multiplying a local vector)
     // hostCollectTorques(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
     //                    granData->contactForces, granData->contactPointGeometryA, granData->contactPointGeometryB,
     //                    granData->h2AlphaX, granData->h2AlphaY, granData->h2AlphaZ, granData->ownerClumpBody,
@@ -587,20 +587,6 @@ void DEMDynamicThread::resetUserCallStat() {
     // Reset dT stats variables, making ready for next user call
     pSchedSupport->dynamicDone = false;
     pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
-}
-
-int DEMDynamicThread::localUse(int val) {
-    cudaSetDevice(streamInfo.device);
-
-    // dynamicTestKernel<<<1, 1>>>();
-    auto gpu_program =
-        JitHelper::buildProgram("gpuKernels", JitHelper::KERNEL_DIR / "gpuKernels.cu", std::vector<JitHelper::Header>(),
-                                {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
-
-    gpu_program.kernel("dynamicTestKernel").instantiate().configure(dim3(1), dim3(1), 0, streamInfo.stream).launch();
-    // cudaLaunchKernel((void*)&dynamicTestKernel, dim3(1), dim3(1), NULL, 0, streamInfo.stream);
-    cudaDeviceSynchronize();
-    return 2 * val;
 }
 
 }  // namespace sgps

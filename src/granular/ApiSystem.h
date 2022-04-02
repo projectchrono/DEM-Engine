@@ -9,7 +9,8 @@
 #include <cfloat>
 
 #include <core/ApiVersion.h>
-#include <granular/PhysicsSystem.h>
+#include <granular/kT.h>
+#include <granular/dT.h>
 #include <core/utils/ManagedAllocator.hpp>
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
