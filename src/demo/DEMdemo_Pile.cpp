@@ -46,10 +46,10 @@ int main() {
     std::vector<unsigned int> mat_vec(3, 0);
     */
 
-    auto mat_type_1 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.9);
+    auto mat_type_1 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.6);
 
     // First create clump type 0 for representing the ground
-    auto template_ground = DEM_sim.LoadClumpSimpleSphere(0.5, 0.1, mat_type_1);
+    auto template_ground = DEM_sim.LoadClumpSimpleSphere(0.5, 0.02, mat_type_1);
 
     // Then randomly create some clumps for piling up
     for (int i = 0; i < num_template; i++) {
@@ -58,7 +58,8 @@ int main() {
 
         // then allocate the clump template definition arrays (all in SI)
         float mass = 0.1 * (float)num_sphere;
-        float3 MOI = make_float3(2e-5 * (float)num_sphere, 1.5e-5 * (float)num_sphere, 1.8e-5 * (float)num_sphere) * 10.;
+        float3 MOI =
+            make_float3(2e-5 * (float)num_sphere, 1.5e-5 * (float)num_sphere, 1.8e-5 * (float)num_sphere) * 10.;
         std::vector<float> radii;
         std::vector<float3> relPos;
         std::vector<unsigned int> mat;
@@ -93,46 +94,47 @@ int main() {
 
     // generate ground clumps
     std::vector<unsigned int> input_template_num;
-    std::vector<unsigned char> family_code;
-    auto input_xyz = DEMBoxGridSampler(make_float3(0,0,-10.0), make_float3(20.,20.,0.001), 0.15);
+    std::vector<unsigned int> family_code;
+    auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, -5.0), make_float3(4., 4., 0.001), 3.);
     // Mark family 1 as fixed
-    family_code.insert(family_code.end(),input_xyz.size(),1);
-    input_template_num.insert(input_template_num.end(),input_xyz.size(),template_ground);
+    family_code.insert(family_code.end(), input_xyz.size(), 1);
+    input_template_num.insert(input_template_num.end(), input_xyz.size(), template_ground);
 
     // generate initial clumps for piling
     float3 domain_center = make_float3(0);
-    float box_dim = 3;  // box half-dimension
-    auto pile = DEMBoxGridSampler(make_float3(0), make_float3(box_dim), 0.1);
+    float sample_halfheight = 2.5;
+    float sample_halfwidth = 1.5;
+    auto pile =
+        DEMBoxGridSampler(domain_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight), 0.5);
     input_xyz.insert(input_xyz.end(), pile.begin(), pile.end());
     unsigned int num_clumps = pile.size();
     for (unsigned int i = 0; i < num_clumps; i++) {
-        input_template_num.push_back(i % (num_template-1) + 1);
+        input_template_num.push_back(i % (num_template) + 1);
         family_code.push_back(0);
     }
     DEM_sim.SetClumps(input_template_num, input_xyz);
     DEM_sim.SetClumpFamily(family_code);
 
-    DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, 1e-10);
+    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
     // DEM_sim.InstructBoxDomainNumVoxel(11, 11, 10, 1e-10);
 
     DEM_sim.CenterCoordSys();
     DEM_sim.SetTimeStepSize(1e-5);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEM_sim.SetCDUpdateFreq(10);
+    DEM_sim.SetExpandFactor(1.1);
 
     DEM_sim.Initialize();
 
     DEM_sim.UpdateSimParams();  // Not needed; just testing if this function works...
 
     for (int i = 0; i < 200; i++) {
-        std::cout << "Iteration: " << i + 1 << std::endl;
-        DEM_sim.LaunchThreads(5e-3);
-
-        // std::cout << DEM_sim.GetClumpVoxelID(0) << std::endl;
-
         char filename[100];
-        sprintf(filename, "./test_gran_output_%04d.csv", i);
+        sprintf(filename, "./DEMdemo_collide_output_%04d.csv", i);
         DEM_sim.WriteFileAsSpheres(std::string(filename));
+        std::cout << "Iteration: " << i << std::endl;
+        DEM_sim.LaunchThreads(5e-3);
     }
 
     std::cout << "DEMdemo_Pile exiting..." << std::endl;

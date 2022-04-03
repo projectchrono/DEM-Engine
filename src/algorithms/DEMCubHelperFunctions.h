@@ -13,17 +13,17 @@ namespace sgps {
 
 // This file should not be visible to gcc so it's difficult to make functions here templated. We probably have to bear
 // with writing each version of the same functions individually.
-void cubPrefixScan(binsSphereTouches_t* d_in,
-                   binSphereTouchPairs_t* d_out,
-                   size_t n,
-                   cudaStream_t& this_stream,
-                   DEMSolverStateDataKT& scratchPad);
+void cubPrefixScan_binSphere(binsSphereTouches_t* d_in,
+                             binSphereTouchPairs_t* d_out,
+                             size_t n,
+                             cudaStream_t& this_stream,
+                             DEMSolverStateDataKT& scratchPad);
 
-void cubPrefixScan(spheresBinTouches_t* d_in,
-                   contactPairs_t* d_out,
-                   size_t n,
-                   cudaStream_t& this_stream,
-                   DEMSolverStateDataKT& scratchPad);
+void cubPrefixScan_contacts(spheresBinTouches_t* d_in,
+                            contactPairs_t* d_out,
+                            size_t n,
+                            cudaStream_t& this_stream,
+                            DEMSolverStateDataKT& scratchPad);
 
 // template <typename T1, typename T2>
 // void cubPrefixScan(T1* d_in,

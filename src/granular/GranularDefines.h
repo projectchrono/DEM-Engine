@@ -32,9 +32,9 @@ typedef unsigned short int materialsOffset_t;
 typedef unsigned short int clumpBodyInertiaOffset_t;
 typedef unsigned short int clumpComponentOffset_t;
 typedef double floatFine_t;
-typedef unsigned char contact_t; ///< Contact type (sphere--sphere is 0, etc.)
-typedef unsigned char family_t; ///< Data type for clump presecription type (0 for not prescribed)
-typedef char scratch_t;  ///< Data type for DEM scratch-pad array
+typedef unsigned short int contact_t;  ///< Contact type (sphere--sphere is 0, etc.)
+typedef unsigned short int family_t;   ///< Data type for clump presecription type (0 for not prescribed)
+typedef char scratch_t;                ///< Data type for DEM scratch-pad array
 
 // How many bin--sphere touch pairs can there be for one sphere, tops? This type should not need to be large.
 typedef unsigned short int binsSphereTouches_t;
@@ -42,8 +42,8 @@ typedef unsigned short int binsSphereTouches_t;
 // it should be the same magnitude as bodyID_t.
 typedef unsigned int binSphereTouchPairs_t;
 // How many spheres a bin can touch, tops? We can assume it will not be too large to save GPU memory. Note this type
-// also doubles as the type for the number of contacts in a bin.
-typedef unsigned char spheresBinTouches_t;
+// also doubles as the type for the number of contacts in a bin. NOTE!! Seems uint8_t is not supported by CUB???
+typedef unsigned short int spheresBinTouches_t;
 // Need to be large enough to hold the number of total contact pairs. In general this number should be in the same
 // magnitude as bodyID_t.
 typedef unsigned int contactPairs_t;

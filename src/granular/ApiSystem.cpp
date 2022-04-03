@@ -287,7 +287,7 @@ void DEMSolver::SetClumpVels(const std::vector<float3>& vel) {
     m_input_clump_vel.insert(m_input_clump_vel.end(), vel.begin(), vel.end());
 }
 
-void DEMSolver::SetClumpFamily(const std::vector<unsigned char>& code) {
+void DEMSolver::SetClumpFamily(const std::vector<unsigned int>& code) {
     m_input_clump_family.insert(m_input_clump_family.end(), code.begin(), code.end());
 }
 
@@ -315,11 +315,11 @@ void DEMSolver::initializeArrays() {
     // cached API-level simulation info.
     m_input_clump_vel.resize(m_input_clump_xyz.size(), make_float3(0));
     m_input_clump_family.resize(m_input_clump_xyz.size(), 0);
-    dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel,m_input_clump_family, m_template_sp_mat_ids,
-                              m_template_mass, m_template_moi, m_template_sp_radii, m_template_sp_relPos, m_E_proxy,
-                              m_G_proxy, m_CoR_proxy);
-    kT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel,m_input_clump_family, m_template_mass,
-                              m_template_sp_radii, m_template_sp_relPos);
+    dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_input_clump_family,
+                              m_template_sp_mat_ids, m_template_mass, m_template_moi, m_template_sp_radii,
+                              m_template_sp_relPos, m_E_proxy, m_G_proxy, m_CoR_proxy);
+    kT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_input_clump_family,
+                              m_template_mass, m_template_sp_radii, m_template_sp_relPos);
 }
 
 void DEMSolver::packDataPointers() {

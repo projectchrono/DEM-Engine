@@ -18,11 +18,11 @@ namespace sgps {
 //                    cudaStream_t& this_stream,
 //                    DEMSolverStateData& scratchPad) {
 
-void cubPrefixScan(binsSphereTouches_t* d_in,
-                   binSphereTouchPairs_t* d_out,
-                   size_t n,
-                   cudaStream_t& this_stream,
-                   DEMSolverStateDataKT& scratchPad) {
+void cubPrefixScan_binSphere(binsSphereTouches_t* d_in,
+                             binSphereTouchPairs_t* d_out,
+                             size_t n,
+                             cudaStream_t& this_stream,
+                             DEMSolverStateDataKT& scratchPad) {
     size_t cub_scratch_bytes = 0;
     cub::DeviceScan::ExclusiveSum(NULL, cub_scratch_bytes, d_in, d_out, n, this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
@@ -31,11 +31,11 @@ void cubPrefixScan(binsSphereTouches_t* d_in,
     GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
-void cubPrefixScan(spheresBinTouches_t* d_in,
-                   contactPairs_t* d_out,
-                   size_t n,
-                   cudaStream_t& this_stream,
-                   DEMSolverStateDataKT& scratchPad) {
+void cubPrefixScan_contacts(spheresBinTouches_t* d_in,
+                            contactPairs_t* d_out,
+                            size_t n,
+                            cudaStream_t& this_stream,
+                            DEMSolverStateDataKT& scratchPad) {
     size_t cub_scratch_bytes = 0;
     cub::DeviceScan::ExclusiveSum(NULL, cub_scratch_bytes, d_in, d_out, n, this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));

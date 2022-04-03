@@ -43,8 +43,8 @@ void DEMKinematicThread::contactDetection() {
     CD_temp_arr_bytes = simParams->nSpheresGM * sizeof(binSphereTouchPairs_t);
     binSphereTouchPairs_t* numBinsSphereTouchesScan =
         (binSphereTouchPairs_t*)stateOfSolver_resources.allocateTempVector2(CD_temp_arr_bytes);
-    cubPrefixScan(numBinsSphereTouches, numBinsSphereTouchesScan, simParams->nSpheresGM, streamInfo.stream,
-                  stateOfSolver_resources);
+    cubPrefixScan_binSphere(numBinsSphereTouches, numBinsSphereTouchesScan, simParams->nSpheresGM, streamInfo.stream,
+                            stateOfSolver_resources);
     stateOfSolver_resources.setNumBinSphereTouchPairs((size_t)numBinsSphereTouchesScan[simParams->nSpheresGM - 1] +
                                                       (size_t)numBinsSphereTouches[simParams->nSpheresGM - 1]);
     // std::cout << stateOfSolver_resources.getNumBinSphereTouchPairs() << std::endl;
@@ -114,8 +114,8 @@ void DEMKinematicThread::contactDetection() {
     CD_temp_arr_bytes = stateOfSolver_resources.getNumActiveBins() * sizeof(binSphereTouchPairs_t);
     binSphereTouchPairs_t* sphereIDsLookUpTable =
         (binSphereTouchPairs_t*)stateOfSolver_resources.allocateTempVector4(CD_temp_arr_bytes);
-    cubPrefixScan(numSpheresBinTouches, sphereIDsLookUpTable, stateOfSolver_resources.getNumActiveBins(),
-                  streamInfo.stream, stateOfSolver_resources);
+    cubPrefixScan_binSphere(numSpheresBinTouches, sphereIDsLookUpTable, stateOfSolver_resources.getNumActiveBins(),
+                            streamInfo.stream, stateOfSolver_resources);
     // std::cout << "sphereIDsLookUpTable: ";
     // displayArray<binSphereTouchPairs_t>(sphereIDsLookUpTable, stateOfSolver_resources.getNumActiveBins());
 
@@ -145,8 +145,8 @@ void DEMKinematicThread::contactDetection() {
         CD_temp_arr_bytes = stateOfSolver_resources.getNumActiveBins() * sizeof(contactPairs_t);
         contactPairs_t* contactReportOffsets =
             (contactPairs_t*)stateOfSolver_resources.allocateTempVector6(CD_temp_arr_bytes);
-        cubPrefixScan(numContactsInEachBin, contactReportOffsets, stateOfSolver_resources.getNumActiveBins(),
-                      streamInfo.stream, stateOfSolver_resources);
+        cubPrefixScan_contacts(numContactsInEachBin, contactReportOffsets, stateOfSolver_resources.getNumActiveBins(),
+                               streamInfo.stream, stateOfSolver_resources);
         // displayArray<contactPairs_t>(contactReportOffsets, stateOfSolver_resources.getNumActiveBins());
 
         stateOfSolver_resources.setNumContacts(
@@ -443,7 +443,7 @@ void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
 void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
                                                const std::vector<float3>& input_clump_xyz,
                                                const std::vector<float3>& input_clump_vel,
-                                               const std::vector<unsigned char>& input_clump_family,
+                                               const std::vector<unsigned int>& input_clump_family,
                                                const std::vector<float>& clumps_mass_types,
                                                const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                                const std::vector<std::vector<float3>>& clumps_sp_location_types) {
