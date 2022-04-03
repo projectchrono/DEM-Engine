@@ -23,6 +23,7 @@ namespace sgps {
 // Put sim data array pointers in place
 void DEMDynamicThread::packDataPointers() {
     granData->inertiaPropOffsets = inertiaPropOffsets.data();
+    granData->familyID = familyID.data();
     granData->voxelID = voxelID.data();
     granData->locX = locX.data();
     granData->locY = locY.data();
@@ -125,6 +126,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
 
     // Resize to the number of clumps
     TRACKED_VECTOR_RESIZE(inertiaPropOffsets, nClumpBodies, "inertiaPropOffsets", 0);
+    TRACKED_VECTOR_RESIZE(familyID, nClumpBodies, "familyID", 0);
     TRACKED_VECTOR_RESIZE(voxelID, nClumpBodies, "voxelID", 0);
     TRACKED_VECTOR_RESIZE(locX, nClumpBodies, "locX", 0);
     TRACKED_VECTOR_RESIZE(locY, nClumpBodies, "locY", 0);
@@ -183,6 +185,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
 void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
                                              const std::vector<float3>& input_clump_xyz,
                                              const std::vector<float3>& input_clump_vel,
+                                             const std::vector<unsigned char>& input_clump_family,
                                              const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
                                              const std::vector<float>& clumps_mass_types,
                                              const std::vector<float3>& clumps_moi_types,
@@ -279,6 +282,9 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
         hvX.at(i) = vel_of_this_clump.x * simParams->h / simParams->l;
         hvY.at(i) = vel_of_this_clump.y * simParams->h / simParams->l;
         hvZ.at(i) = vel_of_this_clump.z * simParams->h / simParams->l;
+
+        // Set family code
+        familyID.at(i) = input_clump_family.at(i);
     }
 }
 
@@ -457,7 +463,6 @@ inline void DEMDynamicThread::integrateClumpMotions() {
         .instantiate()
         .configure(dim3(blocks_needed_for_clumps), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
         .launch(simParams, granData, granTemplates);
-
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 

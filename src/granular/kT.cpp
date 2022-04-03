@@ -313,6 +313,7 @@ void DEMKinematicThread::resetUserCallStat() {
 
 // Put sim data array pointers in place
 void DEMKinematicThread::packDataPointers() {
+    granData->familyID = familyID.data();
     granData->voxelID = voxelID.data();
     granData->locX = locX.data();
     granData->locY = locY.data();
@@ -400,6 +401,7 @@ void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
     simParams->nMatTuples = nMatTuples;
 
     // Resize to the number of clumps
+    TRACKED_VECTOR_RESIZE(familyID, nClumpBodies, "familyID", 0);
     TRACKED_VECTOR_RESIZE(voxelID, nClumpBodies, "voxelID", 0);
     TRACKED_VECTOR_RESIZE(locX, nClumpBodies, "locX", 0);
     TRACKED_VECTOR_RESIZE(locY, nClumpBodies, "locY", 0);
@@ -441,12 +443,13 @@ void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
 void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
                                                const std::vector<float3>& input_clump_xyz,
                                                const std::vector<float3>& input_clump_vel,
+                                               const std::vector<unsigned char>& input_clump_family,
                                                const std::vector<float>& clumps_mass_types,
                                                const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                                const std::vector<std::vector<float3>>& clumps_sp_location_types) {
     // Use some temporary hacks to get the info in the managed mem
     // All the input vectors should have the same length, nClumpTopo
-    unsigned int k = 0;
+    size_t k = 0;
     std::vector<unsigned int> prescans;
 
     prescans.push_back(0);
@@ -487,6 +490,7 @@ void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& 
             ownerClumpBody.at(k) = i;
             k++;
         }
+        familyID.at(i) = input_clump_family.at(i);
     }
 }
 

@@ -92,6 +92,9 @@ class DEMDynamicThread {
     // The mass/MOI offsets
     std::vector<clumpBodyInertiaOffset_t, ManagedAllocator<clumpBodyInertiaOffset_t>> inertiaPropOffsets;
 
+    // Clump's family identification code. Used in determining whether they can be contacts between two families, and whether a family has prescribed motions.
+    std::vector<family_t, ManagedAllocator<family_t>> familyID;
+
     // The voxel ID (split into 3 parts, representing XYZ location)
     std::vector<voxelID_t, ManagedAllocator<voxelID_t>> voxelID;
 
@@ -213,6 +216,7 @@ class DEMDynamicThread {
     void populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
                                const std::vector<float3>& input_clump_xyz,
                                const std::vector<float3>& input_clump_vel,
+                               const std::vector<unsigned char>& input_clump_family,
                                const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
                                const std::vector<float>& clumps_mass_types,
                                const std::vector<float3>& clumps_moi_types,

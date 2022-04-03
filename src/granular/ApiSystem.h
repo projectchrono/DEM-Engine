@@ -52,7 +52,7 @@ class DEMSolver {
     void SetCDUpdateFreq(int freq) { updateFreq = freq; }
     // TODO: Implement an API that allows setting ts size through a list
 
-    /// A convenient call that sets the origin of your coordinate system to be in the dead center of your simulation
+    /// A convenient call that sets the origin of your coordinate system to be in the very center of your simulation
     /// ``world''. Useful especially you feel like having this ``world'' large to safely hold everything, and don't
     /// quite care about the amount of accuracy lost by not fine-tuning the ``world'' size. Returns the coordinate of
     /// the left-bottom-front point of your simulation ``world'' after this operation.
@@ -90,6 +90,9 @@ class DEMSolver {
     /// Load input clump initial velocities on a per-pair basis. If this is not called (or if this vector is shorter
     /// than the clump location vector, then for the unassigned part) the initial velocity is assumed to be 0.
     void SetClumpVels(const std::vector<float3>& vel);
+
+    /// Instruct each clump the type of prescribed motion it should follow. If this is not called (or if this vector is shorter than the clump location vector, then for the unassigned part) those clumps are defaulted to type 0, which is following ``normal'' physics.
+    void SetClumpFamily(const std::vector<unsigned char>& code);
 
     /// Return the voxel ID of a clump by its numbering
     voxelID_t GetClumpVoxelID(unsigned int i) const;
@@ -205,6 +208,12 @@ class DEMSolver {
     std::vector<unsigned int> m_input_clump_types;
     std::vector<float3> m_input_clump_xyz;
     std::vector<float3> m_input_clump_vel;
+    // Specify the ``family'' code for each clump. Then you can specify if they should go with some prescribed motion or some special physics (for example, being fixed). The default behavior (without specification) for every family is using ``normal'' physics.
+    std::vector<unsigned char> m_input_clump_family;
+    // TODO: add APIs to allow specification of prescribed motions for each family. This information is only needed by dT.
+    // (Prescribed types: an added force as a function of sim time or location; prescribed velocity/angVel as a function; prescribed location as a function)
+    // TODO: add a interaction ``mask'', which clarifies the family codes that a family can interact with. This can be a bit slow to process but it only involves contact detection so needed by kT only, which it's acceptable even if it's somewhat slow.
+    // TODO: fixed particles should automatically attain status indicating they don't interact with each other.
 
     // The number of dT steps before it waits for a kT update. The default value 1 means every dT step will wait for a
     // newly produced contact-pair info (from kT) before proceeding.

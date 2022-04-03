@@ -83,6 +83,8 @@ struct DEMMaterialProxy {
 struct DEMDataDT {
     clumpBodyInertiaOffset_t* inertiaPropOffsets;
 
+    family_t* familyID;
+
     voxelID_t* voxelID;
 
     subVoxelPos_t* locX;
@@ -142,6 +144,7 @@ struct DEMDataDT {
 // A struct that holds pointers to data arrays that kT uses
 // For more details just look at PhysicsSystem.h
 struct DEMDataKT {
+    family_t* familyID;
     voxelID_t* voxelID;
     subVoxelPos_t* locX;
     subVoxelPos_t* locY;

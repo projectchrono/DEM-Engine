@@ -32,8 +32,8 @@ typedef unsigned short int materialsOffset_t;
 typedef unsigned short int clumpBodyInertiaOffset_t;
 typedef unsigned short int clumpComponentOffset_t;
 typedef double floatFine_t;
-// Contact type (sphere--sphere is 0, etc.)
-typedef unsigned char contact_t;
+typedef unsigned char contact_t; ///< Contact type (sphere--sphere is 0, etc.)
+typedef unsigned char family_t; ///< Data type for clump presecription type (0 for not prescribed)
 typedef char scratch_t;  ///< Data type for DEM scratch-pad array
 
 // How many bin--sphere touch pairs can there be for one sphere, tops? This type should not need to be large.

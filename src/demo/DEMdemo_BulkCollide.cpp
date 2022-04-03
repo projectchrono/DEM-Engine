@@ -40,8 +40,8 @@ int main() {
         int num_sphere = rand() % (max_sphere - min_sphere + 1) + 1;
 
         // then allocate the clump template definition arrays (all in SI)
-        float mass = 0.1 * num_sphere;
-        float3 MOI = make_float3(2e-5 * num_sphere, 1.5e-5 * num_sphere, 1.8e-5 * num_sphere) * 2600.;
+        float mass = 0.1 * (float)num_sphere;
+        float3 MOI = make_float3(2e-5 * (float)num_sphere, 1.5e-5 * (float)num_sphere, 1.8e-5 * (float)num_sphere) * 10.;
         std::vector<float> radii;
         std::vector<float3> relPos;
         std::vector<unsigned int> mat;
@@ -74,9 +74,9 @@ int main() {
         auto template_num = DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat);
     }
 
-    // generate initial clumps (in this case just polydisperse spheres)
+    // generate initial clumps 
     float3 domain_center = make_float3(0);
-    float box_dim = 6;  // box half-dimension
+    float box_dim = 0.1;  // box half-dimension
     auto input_xyz = DEMBoxGridSampler(make_float3(0), make_float3(box_dim), 0.1);
     unsigned int num_clumps = input_xyz.size();
     std::vector<unsigned int> input_template_num;
