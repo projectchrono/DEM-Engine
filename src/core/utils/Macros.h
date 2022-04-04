@@ -21,6 +21,16 @@ extern size_t m_approx_bytes_used;
         exit(1);                             \
     }
 
+#define TRACKED_QUICK_VECTOR_RESIZE(vec, newsize)              \
+    {                                                          \
+        size_t item_size = sizeof(decltype(vec)::value_type);  \
+        size_t old_size = vec.size();                          \
+        vec.resize(newsize);                                   \
+        size_t new_size = vec.size();                          \
+        size_t byte_delta = item_size * (new_size - old_size); \
+        m_approx_bytes_used += byte_delta;                     \
+    }
+
 #define TRACKED_VECTOR_RESIZE(vec, newsize, name, val)         \
     {                                                          \
         size_t item_size = sizeof(decltype(vec)::value_type);  \

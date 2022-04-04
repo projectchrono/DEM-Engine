@@ -24,7 +24,8 @@ target_link_libraries(
 
 ### HOST HEADERS ONLY (.h, .hpp) ###
 set(algorithms_interface
-	${CMAKE_CURRENT_SOURCE_DIR}/example.h # REPLACE ME WITH A REAL FILE
+	${CMAKE_CURRENT_SOURCE_DIR}/SPHCubHelperFunctions.h
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubHelperFunctions.h
 )
 
 ### INTERNAL HEADERS ONLY (.h, .hpp, or .cuh) ###
@@ -33,8 +34,9 @@ set(algorithms_headers
 )
 
 set(algorithms_sources
-	${CMAKE_CURRENT_SOURCE_DIR}/example.cu # REPLACE ME WITH A REAL FILE
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubContactDetection.cu 
+	${CMAKE_CURRENT_SOURCE_DIR}/SPHCubHelperFunctions.cu 
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubForceCollection.cu
 )
 
 target_sources(

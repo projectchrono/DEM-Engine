@@ -9,7 +9,8 @@
 #include <cfloat>
 
 #include <core/ApiVersion.h>
-#include <granular/PhysicsSystem.h>
+#include <granular/kT.h>
+#include <granular/dT.h>
 #include <core/utils/ManagedAllocator.hpp>
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
@@ -51,7 +52,7 @@ class DEMSolver {
     void SetCDUpdateFreq(int freq) { updateFreq = freq; }
     // TODO: Implement an API that allows setting ts size through a list
 
-    /// A convenient call that sets the origin of your coordinate system to be in the dead center of your simulation
+    /// A convenient call that sets the origin of your coordinate system to be in the very center of your simulation
     /// ``world''. Useful especially you feel like having this ``world'' large to safely hold everything, and don't
     /// quite care about the amount of accuracy lost by not fine-tuning the ``world'' size. Returns the coordinate of
     /// the left-bottom-front point of your simulation ``world'' after this operation.
@@ -74,10 +75,13 @@ class DEMSolver {
     /// A simplified version of LoadClumpType: it just loads a one-sphere clump template
     unsigned int LoadClumpSimpleSphere(float mass, float radius, unsigned int material_id);
 
-    /// Load materials properties (Young's modulus, Poisson's ratio and optionally density) into the API-level cache.
-    /// Return the index of the material type just loaded.
-    unsigned int LoadMaterialType(float E, float nu, float density);
-    unsigned int LoadMaterialType(float E, float nu) { return LoadMaterialType(E, nu, 1.f); }
+    /// Load materials properties (Young's modulus, Poisson's ratio, Coeff of Restitution and optionally density) into
+    /// the API-level cache. Return the index of the material type just loaded. If CoR is not given then it is assumed
+    /// 0; if density is not given then later calculating particle mass from density is not allowed (instead it has to
+    /// be explicitly given).
+    unsigned int LoadMaterialType(float E, float nu, float CoR, float density);
+    unsigned int LoadMaterialType(float E, float nu, float CoR) { return LoadMaterialType(E, nu, CoR, -1.f); }
+    unsigned int LoadMaterialType(float E, float nu) { return LoadMaterialType(E, nu, 0.f, -1.f); }
 
     /// Load input clumps (topology types and initial locations) on a per-pair basis
     /// TODO: Add a overload that takes velocities too
@@ -86,6 +90,11 @@ class DEMSolver {
     /// Load input clump initial velocities on a per-pair basis. If this is not called (or if this vector is shorter
     /// than the clump location vector, then for the unassigned part) the initial velocity is assumed to be 0.
     void SetClumpVels(const std::vector<float3>& vel);
+
+    /// Instruct each clump the type of prescribed motion it should follow. If this is not called (or if this vector is
+    /// shorter than the clump location vector, then for the unassigned part) those clumps are defaulted to type 0,
+    /// which is following ``normal'' physics.
+    void SetClumpFamily(const std::vector<unsigned int>& code);
 
     /// Return the voxel ID of a clump by its numbering
     voxelID_t GetClumpVoxelID(unsigned int i) const;
@@ -117,11 +126,13 @@ class DEMSolver {
         float density;
         float E;
         float nu;
+        float CoR;
     };
     std::vector<DEMMaterial> m_sp_materials;
     // Materials info is processed at API level (on initialization) for generating proxy arrays
     std::vector<float> m_E_proxy;
     std::vector<float> m_G_proxy;
+    std::vector<float> m_CoR_proxy;
 
     // This is the cached clump structure information.
     // It will be massaged into kernels upon Initialize.
@@ -199,6 +210,17 @@ class DEMSolver {
     std::vector<unsigned int> m_input_clump_types;
     std::vector<float3> m_input_clump_xyz;
     std::vector<float3> m_input_clump_vel;
+    // Specify the ``family'' code for each clump. Then you can specify if they should go with some prescribed motion or
+    // some special physics (for example, being fixed). The default behavior (without specification) for every family is
+    // using ``normal'' physics.
+    std::vector<unsigned int> m_input_clump_family;
+    // TODO: add APIs to allow specification of prescribed motions for each family. This information is only needed by
+    // dT. (Prescribed types: an added force as a function of sim time or location; prescribed velocity/angVel as a
+    // function; prescribed location as a function)
+    // TODO: add a interaction ``mask'', which clarifies the family codes that a family can interact with. This can be a
+    // bit slow to process but it only involves contact detection so needed by kT only, which it's acceptable even if
+    // it's somewhat slow.
+    // TODO: fixed particles should automatically attain status indicating they don't interact with each other.
 
     // The number of dT steps before it waits for a kT update. The default value 1 means every dT step will wait for a
     // newly produced contact-pair info (from kT) before proceeding.

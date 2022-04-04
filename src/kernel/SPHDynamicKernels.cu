@@ -30,14 +30,18 @@ __global__ void dynamicStep1(contactData* gpu_pair_data,
     float dist2 = dir_x * dir_x + dir_y * dir_y + dir_z * dir_z;
 
     if (dist2 < (2 * radius) * (2 * radius)) {
-        float coe = 700.f;
+        float coe = 300.f;
         float dist = sqrt(dist2);
-        float dist_inv = 1.0 / dist;
+
+        float dir_x_norm = dir_x / dist;
+        float dir_y_norm = dir_y / dist;
+        float dir_z_norm = dir_z / dist;
+
         float penetration = 2 * radius - dist;
         // fill in contact pair data with respect to the first element of the contact pair data
-        gpu_pair_data[idx].contact_force.x = dir_x * coe;
-        gpu_pair_data[idx].contact_force.y = dir_y * coe;
-        gpu_pair_data[idx].contact_force.z = dir_z * coe;
+        gpu_pair_data[idx].contact_force.x = dir_x_norm * penetration * coe;
+        gpu_pair_data[idx].contact_force.y = dir_y_norm * penetration * coe;
+        gpu_pair_data[idx].contact_force.z = dir_z_norm * penetration * coe;
     }
 }
 

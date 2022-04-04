@@ -19,10 +19,12 @@ target_link_libraries(
 )
 
 set(granular_headers
-	${CMAKE_CURRENT_SOURCE_DIR}/PhysicsSystem.h
+	${CMAKE_CURRENT_SOURCE_DIR}/kT.h
+	${CMAKE_CURRENT_SOURCE_DIR}/dT.h
 	${CMAKE_CURRENT_SOURCE_DIR}/ApiSystem.h
 	${CMAKE_CURRENT_SOURCE_DIR}/GranularDefines.h
 	${CMAKE_CURRENT_SOURCE_DIR}/DataStructs.h
+	${CMAKE_CURRENT_SOURCE_DIR}/GranularStructs.h
 	${CMAKE_CURRENT_SOURCE_DIR}/HostSideHelpers.cpp
 	${NVIDIAMathDir}/helper_math.h
 )

@@ -10,16 +10,20 @@
 #include <core/utils/Macros.h>
 #include <core/utils/chpf/particle_writer.hpp>
 #include <granular/GranularDefines.h>
-#include <granular/PhysicsSystem.h>
+#include <granular/dT.h>
+#include <granular/kT.h>
 #include <core/utils/JitHelper.h>
 #include <granular/HostSideHelpers.cpp>
 #include <helper_math.cuh>
+
+#include <algorithms/DEMCubHelperFunctions.h>
 
 namespace sgps {
 
 // Put sim data array pointers in place
 void DEMDynamicThread::packDataPointers() {
     granData->inertiaPropOffsets = inertiaPropOffsets.data();
+    granData->familyID = familyID.data();
     granData->voxelID = voxelID.data();
     granData->locX = locX.data();
     granData->locY = locY.data();
@@ -64,6 +68,7 @@ void DEMDynamicThread::packDataPointers() {
     granTemplates->mmiZZ = mmiZZ.data();
     granTemplates->EProxy = EProxy.data();
     granTemplates->GProxy = GProxy.data();
+    granTemplates->CoRProxy = CoRProxy.data();
 }
 void DEMDynamicThread::packTransferPointers(DEMKinematicThread* kT) {
     // These are the pointers for sending data to dT
@@ -121,6 +126,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
 
     // Resize to the number of clumps
     TRACKED_VECTOR_RESIZE(inertiaPropOffsets, nClumpBodies, "inertiaPropOffsets", 0);
+    TRACKED_VECTOR_RESIZE(familyID, nClumpBodies, "familyID", 0);
     TRACKED_VECTOR_RESIZE(voxelID, nClumpBodies, "voxelID", 0);
     TRACKED_VECTOR_RESIZE(locX, nClumpBodies, "locX", 0);
     TRACKED_VECTOR_RESIZE(locY, nClumpBodies, "locY", 0);
@@ -158,6 +164,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
     TRACKED_VECTOR_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
     TRACKED_VECTOR_RESIZE(EProxy, (1 + nMatTuples) * nMatTuples / 2, "EProxy", 0);
     TRACKED_VECTOR_RESIZE(GProxy, (1 + nMatTuples) * nMatTuples / 2, "GProxy", 0);
+    TRACKED_VECTOR_RESIZE(CoRProxy, (1 + nMatTuples) * nMatTuples / 2, "CoRProxy", 0);
 
     // Arrays for contact info
     // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is 4n, and I
@@ -178,19 +185,22 @@ void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
 void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
                                              const std::vector<float3>& input_clump_xyz,
                                              const std::vector<float3>& input_clump_vel,
+                                             const std::vector<unsigned int>& input_clump_family,
                                              const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
                                              const std::vector<float>& clumps_mass_types,
                                              const std::vector<float3>& clumps_moi_types,
                                              const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                              const std::vector<std::vector<float3>>& clumps_sp_location_types,
                                              const std::vector<float>& mat_k,
-                                             const std::vector<float>& mat_g) {
+                                             const std::vector<float>& mat_g,
+                                             const std::vector<float>& mat_CoR) {
     // Use some temporary hacks to get the info in the managed mem
 
     // First, load in material property (upper-triangle) matrix
     for (unsigned int i = 0; i < mat_k.size(); i++) {
         EProxy.at(i) = mat_k.at(i);
         GProxy.at(i) = mat_g.at(i);
+        CoRProxy.at(i) = mat_CoR.at(i);
     }
 
     // Then load in clump mass and MOI
@@ -272,6 +282,9 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
         hvX.at(i) = vel_of_this_clump.x * simParams->h / simParams->l;
         hvY.at(i) = vel_of_this_clump.y * simParams->h / simParams->l;
         hvZ.at(i) = vel_of_this_clump.z * simParams->h / simParams->l;
+
+        // Set family code
+        familyID.at(i) = input_clump_family.at(i);
     }
 }
 
@@ -315,11 +328,11 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
 }
 
 inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
-    idGeometryA.resize(nContactPairs);
-    idGeometryB.resize(nContactPairs);
-    contactForces.resize(nContactPairs);
-    contactPointGeometryA.resize(nContactPairs);
-    contactPointGeometryB.resize(nContactPairs);
+    TRACKED_QUICK_VECTOR_RESIZE(idGeometryA, nContactPairs);
+    TRACKED_QUICK_VECTOR_RESIZE(idGeometryB, nContactPairs);
+    TRACKED_QUICK_VECTOR_RESIZE(contactForces, nContactPairs);
+    TRACKED_QUICK_VECTOR_RESIZE(contactPointGeometryA, nContactPairs);
+    TRACKED_QUICK_VECTOR_RESIZE(contactPointGeometryB, nContactPairs);
 
     // Re-pack pointers in case the arrays got reallocated
     granData->idGeometryA = idGeometryA.data();
@@ -330,42 +343,46 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
 }
 
 inline void DEMDynamicThread::unpackMyBuffer() {
-    cudaMemcpy(&(simParams->nContactPairs), &(granData->nContactPairs_buffer), sizeof(size_t),
-               cudaMemcpyDeviceToDevice);
+    GPU_CALL(cudaMemcpy(stateOfSolver_resources.getNumContactsPointer(), &(granData->nContactPairs_buffer),
+                        sizeof(size_t), cudaMemcpyDeviceToDevice));
 
     // Need to resize those contact event-based arrays before usage
-    contactEventArraysResize(simParams->nContactPairs);
+    if (stateOfSolver_resources.getNumContacts() > idGeometryA.size()) {
+        contactEventArraysResize(stateOfSolver_resources.getNumContacts());
+    }
 
-    cudaMemcpy(granData->idGeometryA, granData->idGeometryA_buffer, simParams->nContactPairs * sizeof(bodyID_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->idGeometryB, granData->idGeometryB_buffer, simParams->nContactPairs * sizeof(bodyID_t),
-               cudaMemcpyDeviceToDevice);
+    GPU_CALL(cudaMemcpy(granData->idGeometryA, granData->idGeometryA_buffer,
+                        stateOfSolver_resources.getNumContacts() * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->idGeometryB, granData->idGeometryB_buffer,
+                        stateOfSolver_resources.getNumContacts() * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
 }
 
 inline void DEMDynamicThread::sendToTheirBuffer() {
-    cudaMemcpy(granData->pKTOwnedBuffer_voxelID, granData->voxelID, simParams->nClumpBodies * sizeof(voxelID_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->pKTOwnedBuffer_locX, granData->locX, simParams->nClumpBodies * sizeof(subVoxelPos_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->pKTOwnedBuffer_locY, granData->locY, simParams->nClumpBodies * sizeof(subVoxelPos_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->pKTOwnedBuffer_locZ, granData->locZ, simParams->nClumpBodies * sizeof(subVoxelPos_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->pKTOwnedBuffer_oriQ0, granData->oriQ0, simParams->nClumpBodies * sizeof(oriQ_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->pKTOwnedBuffer_oriQ1, granData->oriQ1, simParams->nClumpBodies * sizeof(oriQ_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->pKTOwnedBuffer_oriQ2, granData->oriQ2, simParams->nClumpBodies * sizeof(oriQ_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->pKTOwnedBuffer_oriQ3, granData->oriQ3, simParams->nClumpBodies * sizeof(oriQ_t),
-               cudaMemcpyDeviceToDevice);
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_voxelID, granData->voxelID,
+                        simParams->nClumpBodies * sizeof(voxelID_t), cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_locX, granData->locX, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_locY, granData->locY, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_locZ, granData->locZ, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ0, granData->oriQ0, simParams->nClumpBodies * sizeof(oriQ_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ1, granData->oriQ1, simParams->nClumpBodies * sizeof(oriQ_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ2, granData->oriQ2, simParams->nClumpBodies * sizeof(oriQ_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ3, granData->oriQ3, simParams->nClumpBodies * sizeof(oriQ_t),
+                        cudaMemcpyDeviceToDevice));
 }
 
 inline void DEMDynamicThread::calculateForces() {
-    size_t threads_needed_for_prep =
-        simParams->nClumpBodies > simParams->nContactPairs ? simParams->nClumpBodies : simParams->nContactPairs;
+    // reset force (acceleration) arrays for this time step and apply gravity
+    size_t threads_needed_for_prep = simParams->nClumpBodies > stateOfSolver_resources.getNumContacts()
+                                         ? simParams->nClumpBodies
+                                         : stateOfSolver_resources.getNumContacts();
     size_t blocks_needed_for_prep = (threads_needed_for_prep + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
-    size_t blocks_needed_for_contacts = (simParams->nContactPairs + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
+
     auto prep_force =
         JitHelper::buildProgram("DEMPrepForceKernels", JitHelper::KERNEL_DIR / "DEMPrepForceKernels.cu",
                                 std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
@@ -374,39 +391,60 @@ inline void DEMDynamicThread::calculateForces() {
         .instantiate()
         .configure(dim3(blocks_needed_for_prep), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
                    streamInfo.stream)
-        .launch(simParams, granData, granTemplates);
+        .launch(simParams, granData, stateOfSolver_resources.getNumContacts(), granTemplates);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-    // displayFloat3(granData->contactForces, simParams->nContactPairs);
 
+    // TODO: is there a better way??? Like memset?
+    // GPU_CALL(cudaMemset(granData->contactForces, zeros, stateOfSolver_resources.getNumContacts() * sizeof(float3)));
+    // GPU_CALL(cudaMemset(granData->h2AlphaX, 0, simParams->nClumpBodies * sizeof(float)));
+    // GPU_CALL(cudaMemset(granData->h2AlphaY, 0, simParams->nClumpBodies * sizeof(float)));
+    // GPU_CALL(cudaMemset(granData->h2AlphaZ, 0, simParams->nClumpBodies * sizeof(float)));
+    // GPU_CALL(cudaMemset(granData->h2aX,
+    //                     (double)simParams->h * (double)simParams->h * (double)simParams->Gx / (double)simParams->l,
+    //                     simParams->nClumpBodies * sizeof(float)));
+    // GPU_CALL(cudaMemset(granData->h2aY,
+    //                     (double)simParams->h * (double)simParams->h * (double)simParams->Gy / (double)simParams->l,
+    //                     simParams->nClumpBodies * sizeof(float)));
+    // GPU_CALL(cudaMemset(granData->h2aZ,
+    //                     (double)simParams->h * (double)simParams->h * (double)simParams->Gz / (double)simParams->l,
+    //                     simParams->nClumpBodies * sizeof(float)));
+
+    size_t blocks_needed_for_contacts =
+        (stateOfSolver_resources.getNumContacts() + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
     auto cal_force =
         JitHelper::buildProgram("DEMFrictionlessForceKernels", JitHelper::KERNEL_DIR / "DEMFrictionlessForceKernels.cu",
                                 std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
-    // TODO: Consider if it is possible to do this step using CUB
+    // a custom kernel to compute forces
     cal_force.kernel("calculateNormalContactForces")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 5,
                    streamInfo.stream)
-        .launch(simParams, granData, granTemplates);
-
+        .launch(simParams, granData, stateOfSolver_resources.getNumContacts(), granTemplates);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     // Reflect those body-wise forces on their owner clumps
-    // TODO: Do it with CUB
-    hostCollectForces(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
-                      granData->contactForces, granData->h2aX, granData->h2aY, granData->h2aZ, granData->ownerClumpBody,
-                      granTemplates->massClumpBody, simParams->h, simParams->nContactPairs, simParams->l);
+    // hostCollectForces(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
+    //                   granData->contactForces, granData->h2aX, granData->h2aY, granData->h2aZ,
+    //                   granData->ownerClumpBody, granTemplates->massClumpBody, simParams->h,
+    //                   stateOfSolver_resources.getNumContacts(),simParams->l);
+    cubCollectForces(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
+                     granData->contactForces, granData->contactPointGeometryA, granData->contactPointGeometryB,
+                     granData->h2aX, granData->h2aY, granData->h2aZ, granData->h2AlphaX, granData->h2AlphaY,
+                     granData->h2AlphaZ, granData->ownerClumpBody, granTemplates->massClumpBody, granTemplates->mmiXX,
+                     granTemplates->mmiYY, granTemplates->mmiZZ, simParams->h, stateOfSolver_resources.getNumContacts(),
+                     simParams->nClumpBodies, simParams->l, contactPairArr_isFresh, streamInfo.stream,
+                     stateOfSolver_resources, simParams->nDistinctClumpBodyTopologies);
     // displayArray<float>(granData->h2aX, simParams->nClumpBodies);
-    // displayFloat3(granData->contactForces, simParams->nContactPairs);
-    // std::cout << simParams->nContactPairs << std::endl;
+    // displayFloat3(granData->contactForces, stateOfSolver_resources.getNumContacts());
+    // std::cout << stateOfSolver_resources.getNumContacts() << std::endl;
 
     // Calculate the torque on owner clumps from those body-wise forces
-    // TODO: Do it with CUB (but can we? Torque accumulation requires multiplying a local vector)
-    hostCollectTorques(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
-                       granData->contactForces, granData->contactPointGeometryA, granData->contactPointGeometryB,
-                       granData->h2AlphaX, granData->h2AlphaY, granData->h2AlphaZ, granData->ownerClumpBody,
-                       granTemplates->mmiXX, granTemplates->mmiYY, granTemplates->mmiZZ, simParams->h,
-                       simParams->nContactPairs, simParams->l);
+    // hostCollectTorques(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
+    //                    granData->contactForces, granData->contactPointGeometryA, granData->contactPointGeometryB,
+    //                    granData->h2AlphaX, granData->h2AlphaY, granData->h2AlphaZ, granData->ownerClumpBody,
+    //                    granTemplates->mmiXX, granTemplates->mmiYY, granTemplates->mmiZZ, simParams->h,
+    //                    stateOfSolver_resources.getNumContacts(), simParams->l);
     // displayArray<float>(granData->oriQ0, simParams->nClumpBodies);
     // displayArray<float>(granData->oriQ1, simParams->nClumpBodies);
     // displayArray<float>(granData->oriQ2, simParams->nClumpBodies);
@@ -425,7 +463,6 @@ inline void DEMDynamicThread::integrateClumpMotions() {
         .instantiate()
         .configure(dim3(blocks_needed_for_clumps), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
         .launch(simParams, granData, granTemplates);
-
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
@@ -457,6 +494,7 @@ void DEMDynamicThread::workerThread() {
             sendToTheirBuffer();
         }
         pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
+        contactPairArr_isFresh = true;
         pSchedSupport->schedulingStats.nKinematicUpdates++;
         // Signal the kinematic that it has data for a new work order.
         pSchedSupport->cv_KinematicCanProceed.notify_all();
@@ -477,6 +515,7 @@ void DEMDynamicThread::workerThread() {
                     std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
                     // std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_GRANULARITY_MS));
                     unpackMyBuffer();
+                    contactPairArr_isFresh = true;
                 }
                 // dT got the produce, now mark its buffer to be no longer fresh
                 pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
@@ -486,6 +525,10 @@ void DEMDynamicThread::workerThread() {
             calculateForces();
 
             integrateClumpMotions();
+
+            // calculateForces is done, set it to false
+            // will be set to true next time it receives an update from kT
+            contactPairArr_isFresh = false;
 
             // if it's the case, it's important at this point to let the kinematic know that this is the last dynamic
             // cycle; this is important otherwise the kinematic will hang waiting for communication swith the dynamic
@@ -549,20 +592,6 @@ void DEMDynamicThread::resetUserCallStat() {
     // Reset dT stats variables, making ready for next user call
     pSchedSupport->dynamicDone = false;
     pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
-}
-
-int DEMDynamicThread::localUse(int val) {
-    cudaSetDevice(streamInfo.device);
-
-    // dynamicTestKernel<<<1, 1>>>();
-    auto gpu_program =
-        JitHelper::buildProgram("gpuKernels", JitHelper::KERNEL_DIR / "gpuKernels.cu", std::vector<JitHelper::Header>(),
-                                {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
-
-    gpu_program.kernel("dynamicTestKernel").instantiate().configure(dim3(1), dim3(1), 0, streamInfo.stream).launch();
-    // cudaLaunchKernel((void*)&dynamicTestKernel, dim3(1), dim3(1), NULL, 0, streamInfo.stream);
-    cudaDeviceSynchronize();
-    return 2 * val;
 }
 
 }  // namespace sgps

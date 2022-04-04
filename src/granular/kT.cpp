@@ -10,13 +10,23 @@
 #include <core/utils/Macros.h>
 #include <core/utils/chpf/particle_writer.hpp>
 #include <granular/GranularDefines.h>
-#include <granular/PhysicsSystem.h>
+#include <granular/kT.h>
+#include <granular/dT.h>
 #include <granular/HostSideHelpers.cpp>
 #include <core/utils/JitHelper.h>
 
+#include <algorithms/DEMCubHelperFunctions.h>
+
 namespace sgps {
 
-inline void DEMKinematicThread::hostContactDetection() {
+void DEMKinematicThread::contactDetection() {
+    // total bytes needed for temp arrays in contact detection
+    size_t CD_temp_arr_bytes = 0;
+
+    // 1st step: register the number of sphere--bin touching pairs for each sphere for further processing
+    CD_temp_arr_bytes = simParams->nSpheresGM * sizeof(binsSphereTouches_t);
+    binsSphereTouches_t* numBinsSphereTouches =
+        (binsSphereTouches_t*)stateOfSolver_resources.allocateTempVector1(CD_temp_arr_bytes);
     size_t blocks_needed_for_bodies = (simParams->nSpheresGM + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
     auto bin_occupation =
         JitHelper::buildProgram("DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
@@ -26,75 +36,97 @@ inline void DEMKinematicThread::hostContactDetection() {
         .instantiate()
         .configure(dim3(blocks_needed_for_bodies), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
                    streamInfo.stream)
-        .launch(simParams, granData, granTemplates);
+        .launch(simParams, granData, numBinsSphereTouches, granTemplates);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-    hostPrefixScan<binsSphereTouches_t>(granData->numBinsSphereTouches, simParams->nSpheresGM + 1);
-    // cubPrefixScan<binsSphereTouches_t>(granData->numBinsSphereTouches, simParams->nSpheresGM + 1);
-    // displayArray<binsSphereTouches_t>(granData->numBinsSphereTouches, simParams->nSpheresGM + 1);
-    // Resize those work arrays to be the size of the number of all sphere--bin pairs
-    binIDsEachSphereTouches.resize(granData->numBinsSphereTouches[simParams->nSpheresGM]);
-    sphereIDsEachBinTouches.resize(granData->numBinsSphereTouches[simParams->nSpheresGM]);
-    granData->binIDsEachSphereTouches = binIDsEachSphereTouches.data();
-    granData->sphereIDsEachBinTouches = sphereIDsEachBinTouches.data();
+    // 2nd step: prefix scan sphere--bin touching pairs
+    CD_temp_arr_bytes = simParams->nSpheresGM * sizeof(binSphereTouchPairs_t);
+    binSphereTouchPairs_t* numBinsSphereTouchesScan =
+        (binSphereTouchPairs_t*)stateOfSolver_resources.allocateTempVector2(CD_temp_arr_bytes);
+    cubPrefixScan_binSphere(numBinsSphereTouches, numBinsSphereTouchesScan, simParams->nSpheresGM, streamInfo.stream,
+                            stateOfSolver_resources);
+    stateOfSolver_resources.setNumBinSphereTouchPairs((size_t)numBinsSphereTouchesScan[simParams->nSpheresGM - 1] +
+                                                      (size_t)numBinsSphereTouches[simParams->nSpheresGM - 1]);
+    // std::cout << stateOfSolver_resources.getNumBinSphereTouchPairs() << std::endl;
+    // displayArray<binsSphereTouches_t>(numBinsSphereTouches, simParams->nSpheresGM);
+    // displayArray<binSphereTouchPairs_t>(numBinsSphereTouchesScan, simParams->nSpheresGM);
 
+    // 3rd step: use a custom kernel to figure out all sphere--bin touching pairs. Note numBinsSphereTouches can retire
+    // now so we allocate on temp vector 1 and use a new vector 3.
+    CD_temp_arr_bytes = stateOfSolver_resources.getNumBinSphereTouchPairs() * sizeof(binID_t);
+    binID_t* binIDsEachSphereTouches = (binID_t*)stateOfSolver_resources.allocateTempVector1(CD_temp_arr_bytes);
+    CD_temp_arr_bytes = stateOfSolver_resources.getNumBinSphereTouchPairs() * sizeof(bodyID_t);
+    bodyID_t* sphereIDsEachBinTouches = (bodyID_t*)stateOfSolver_resources.allocateTempVector3(CD_temp_arr_bytes);
     bin_occupation.kernel("populateBinSphereTouchingPairs")
         .instantiate()
         .configure(dim3(blocks_needed_for_bodies), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
                    streamInfo.stream)
-        .launch(simParams, granData, granTemplates);
+        .launch(simParams, granData, numBinsSphereTouchesScan, binIDsEachSphereTouches, sphereIDsEachBinTouches,
+                granTemplates);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     // std::cout << "Unsorted bin IDs: ";
-    // displayArray<binID_t>(granData->binIDsEachSphereTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
+    // displayArray<binID_t>(binIDsEachSphereTouches, stateOfSolver_resources.getNumBinSphereTouchPairs());
     // std::cout << "Corresponding sphere IDs: ";
-    // displayArray<bodyID_t>(granData->sphereIDsEachBinTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
+    // displayArray<bodyID_t>(sphereIDsEachBinTouches, stateOfSolver_resources.getNumBinSphereTouchPairs());
 
-    hostSortByKey<binID_t, bodyID_t>(granData->binIDsEachSphereTouches, granData->sphereIDsEachBinTouches,
-                                     granData->numBinsSphereTouches[simParams->nSpheresGM]);
+    // 4th step: allocate and populate SORTED binIDsEachSphereTouches and sphereIDsEachBinTouches. Note
+    // numBinsSphereTouchesScan can retire now so we allocate on vector 2 and use a new vector 4.
+    CD_temp_arr_bytes = stateOfSolver_resources.getNumBinSphereTouchPairs() * sizeof(bodyID_t);
+    bodyID_t* sphereIDsEachBinTouchesSorted = (bodyID_t*)stateOfSolver_resources.allocateTempVector2(CD_temp_arr_bytes);
+    CD_temp_arr_bytes = stateOfSolver_resources.getNumBinSphereTouchPairs() * sizeof(binID_t);
+    binID_t* binIDsEachSphereTouchesSorted = (binID_t*)stateOfSolver_resources.allocateTempVector4(CD_temp_arr_bytes);
+    // hostSortByKey<binID_t, bodyID_t>(granData->binIDsEachSphereTouches, granData->sphereIDsEachBinTouches,
+    //                                  stateOfSolver_resources.getNumBinSphereTouchPairs());
+    cubSortByKeys(binIDsEachSphereTouches, binIDsEachSphereTouchesSorted, sphereIDsEachBinTouches,
+                  sphereIDsEachBinTouchesSorted, stateOfSolver_resources.getNumBinSphereTouchPairs(), streamInfo.stream,
+                  stateOfSolver_resources);
     // std::cout << "Sorted bin IDs: ";
-    // displayArray<binID_t>(granData->binIDsEachSphereTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
+    // displayArray<binID_t>(binIDsEachSphereTouchesSorted, stateOfSolver_resources.getNumBinSphereTouchPairs());
     // std::cout << "Corresponding sphere IDs: ";
-    // displayArray<bodyID_t>(granData->sphereIDsEachBinTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
+    // displayArray<bodyID_t>(sphereIDsEachBinTouchesSorted, stateOfSolver_resources.getNumBinSphereTouchPairs());
 
-    // TODO: use cub to do this. Probably one-two punch: first the number of jumps, then jump locations
-    // Search for bins that have at least 2 spheres living in.
-    // TODO: Is it good to ensure that the bins are non-empty here? If we do it here, we can increase the occupation
-    // rate in the contact detection kernels, since it reduces the number of idle threads there (well, maybe this is not
-    // even that much, since there will be bins that suffice but has like 2 spheres in it, so they will finish rather
-    // quickly); but is it easy to use CUB to ensure each jump has at least 2 relevant elements?
-    hostScanForJumpsNum<binID_t>(granData->binIDsEachSphereTouches,
-                                 granData->numBinsSphereTouches[simParams->nSpheresGM], 2, simParams->nActiveBins);
-
-    // OK, 2 choices here: either use this array activeBinIDs to register active bin IDs (we need this info to rule out
-    // double-count in CD), or screw the idea of activeBins, just give every bin a place in these following 2 arrays,
-    // and quickly retire empty ones in kernels
-    activeBinIDs.resize(simParams->nActiveBins);
-    sphereIDsLookUpTable.resize(simParams->nActiveBins);
-    numSpheresBinTouches.resize(simParams->nActiveBins);
-    granData->activeBinIDs = activeBinIDs.data();
-    granData->sphereIDsLookUpTable = sphereIDsLookUpTable.data();
-    granData->numSpheresBinTouches = numSpheresBinTouches.data();
-    hostScanForJumps<binID_t, binsSphereTouches_t, spheresBinTouches_t>(
-        granData->binIDsEachSphereTouches, granData->activeBinIDs, granData->sphereIDsLookUpTable,
-        granData->numSpheresBinTouches, granData->numBinsSphereTouches[simParams->nSpheresGM], 2);
+    // 5th step: use DeviceRunLengthEncode to identify those active (that have bodies in them) bins.
+    // Also, binIDsEachSphereTouches is large enough for a unique scan because total sphere--bin pairs are more than
+    // active bins.
+    binID_t* binIDsUnique = (binID_t*)binIDsEachSphereTouches;
+    cubUnique(binIDsEachSphereTouchesSorted, binIDsUnique, stateOfSolver_resources.getNumActiveBinsPointer(),
+              stateOfSolver_resources.getNumBinSphereTouchPairs(), streamInfo.stream, stateOfSolver_resources);
+    // Allocate space for encoding output, and run it. Note the (unsorted) binIDsEachSphereTouches and
+    // sphereIDsEachBinTouches can retire now, so we allocate on temp vectors 1 and 3.
+    CD_temp_arr_bytes = stateOfSolver_resources.getNumActiveBins() * sizeof(binID_t);
+    binID_t* activeBinIDs = (binID_t*)stateOfSolver_resources.allocateTempVector1(CD_temp_arr_bytes);
+    CD_temp_arr_bytes = stateOfSolver_resources.getNumActiveBins() * sizeof(spheresBinTouches_t);
+    spheresBinTouches_t* numSpheresBinTouches =
+        (spheresBinTouches_t*)stateOfSolver_resources.allocateTempVector3(CD_temp_arr_bytes);
+    cubRunLengthEncode(binIDsEachSphereTouchesSorted, activeBinIDs, numSpheresBinTouches,
+                       stateOfSolver_resources.getNumActiveBinsPointer(),
+                       stateOfSolver_resources.getNumBinSphereTouchPairs(), streamInfo.stream, stateOfSolver_resources);
+    // std::cout << "numActiveBins: " << stateOfSolver_resources.getNumActiveBins() << std::endl;
     // std::cout << "activeBinIDs: ";
-    // displayArray<binID_t>(granData->activeBinIDs, simParams->nActiveBins);
+    // displayArray<binID_t>(activeBinIDs, stateOfSolver_resources.getNumActiveBins());
     // std::cout << "numSpheresBinTouches: ";
-    // displayArray<spheresBinTouches_t>(granData->numSpheresBinTouches, simParams->nActiveBins);
-    // std::cout << "binIDsEachSphereTouches: ";
-    // displayArray<binID_t>(granData->binIDsEachSphereTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
-    // std::cout << "sphereIDsLookUpTable: ";
-    // displayArray<binsSphereTouches_t>(granData->sphereIDsLookUpTable, simParams->nActiveBins);
-    // std::cout << "sphereIDsEachBinTouches: ";
-    // displayArray<bodyID_t>(granData->sphereIDsEachBinTouches, granData->numBinsSphereTouches[simParams->nSpheresGM]);
+    // displayArray<spheresBinTouches_t>(numSpheresBinTouches, stateOfSolver_resources.getNumActiveBins());
+    // std::cout << "binIDsEachSphereTouchesSorted: ";
+    // displayArray<binID_t>(binIDsEachSphereTouchesSorted, stateOfSolver_resources.getNumBinSphereTouchPairs());
 
-    // Now find the contact pairs. One-two punch: first find num of contacts in each bin, then pre-scan, then find the
-    // actual pair names, (then finally we remove the redundant pairs, through cub??)
-    // 1 extra element is given to numContactsInEachBin for an easier prefix scan. Therefore, its last element registers
-    // the total number of contact pairs.
-    numContactsInEachBin.resize(simParams->nActiveBins + 1);
-    granData->numContactsInEachBin = numContactsInEachBin.data();
-    size_t blocks_needed_for_bins = (simParams->nActiveBins + NUM_BINS_PER_BLOCK - 1) / NUM_BINS_PER_BLOCK;
+    // Then, scan to find the offsets that are used to index into sphereIDsEachBinTouchesSorted to obtain bin-wise
+    // spheres. Note binIDsEachSphereTouchesSorted can retire so we allocate on temp vector 4.
+    CD_temp_arr_bytes = stateOfSolver_resources.getNumActiveBins() * sizeof(binSphereTouchPairs_t);
+    binSphereTouchPairs_t* sphereIDsLookUpTable =
+        (binSphereTouchPairs_t*)stateOfSolver_resources.allocateTempVector4(CD_temp_arr_bytes);
+    cubPrefixScan_binSphere(numSpheresBinTouches, sphereIDsLookUpTable, stateOfSolver_resources.getNumActiveBins(),
+                            streamInfo.stream, stateOfSolver_resources);
+    // std::cout << "sphereIDsLookUpTable: ";
+    // displayArray<binSphereTouchPairs_t>(sphereIDsLookUpTable, stateOfSolver_resources.getNumActiveBins());
+
+    // 6th step: find the contact pairs. One-two punch: first find num of contacts in each bin, then prescan, then find
+    // the actual pair names. A new temp array is needed for this numContactsInEachBin. Note we assume the number of
+    // contact in each bin is the same level as the number of spheres in each bin (capped by the same data type).
+    CD_temp_arr_bytes = stateOfSolver_resources.getNumActiveBins() * sizeof(spheresBinTouches_t);
+    spheresBinTouches_t* numContactsInEachBin =
+        (spheresBinTouches_t*)stateOfSolver_resources.allocateTempVector5(CD_temp_arr_bytes);
+    size_t blocks_needed_for_bins =
+        (stateOfSolver_resources.getNumActiveBins() + NUM_BINS_PER_BLOCK - 1) / NUM_BINS_PER_BLOCK;
     if (blocks_needed_for_bins > 0) {
         auto contact_detection =
             JitHelper::buildProgram("DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu",
@@ -104,62 +136,77 @@ inline void DEMKinematicThread::hostContactDetection() {
             .instantiate()
             .configure(dim3(blocks_needed_for_bins), dim3(NUM_BINS_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
                        streamInfo.stream)
-            .launch(simParams, granData, granTemplates);
+            .launch(simParams, granData, sphereIDsEachBinTouchesSorted, activeBinIDs, numSpheresBinTouches,
+                    sphereIDsLookUpTable, numContactsInEachBin, stateOfSolver_resources.getNumActiveBins(),
+                    granTemplates);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        hostPrefixScan<contactPairs_t>(granData->numContactsInEachBin, simParams->nActiveBins + 1);
-        // displayArray<contactPairs_t>(granData->numContactsInEachBin, simParams->nActiveBins + 1);
-        idGeometryA.resize(granData->numContactsInEachBin[simParams->nActiveBins]);
-        idGeometryB.resize(granData->numContactsInEachBin[simParams->nActiveBins]);
-        granData->idGeometryA = idGeometryA.data();
-        granData->idGeometryB = idGeometryB.data();
+        // Prescan numContactsInEachBin to get the final contactReportOffsets. A new vector is needed.
+        CD_temp_arr_bytes = stateOfSolver_resources.getNumActiveBins() * sizeof(contactPairs_t);
+        contactPairs_t* contactReportOffsets =
+            (contactPairs_t*)stateOfSolver_resources.allocateTempVector6(CD_temp_arr_bytes);
+        cubPrefixScan_contacts(numContactsInEachBin, contactReportOffsets, stateOfSolver_resources.getNumActiveBins(),
+                               streamInfo.stream, stateOfSolver_resources);
+        // displayArray<contactPairs_t>(contactReportOffsets, stateOfSolver_resources.getNumActiveBins());
+
+        stateOfSolver_resources.setNumContacts(
+            (size_t)numContactsInEachBin[stateOfSolver_resources.getNumActiveBins() - 1] +
+            (size_t)contactReportOffsets[stateOfSolver_resources.getNumActiveBins() - 1]);
+        if (stateOfSolver_resources.getNumContacts() > idGeometryA.size()) {
+            TRACKED_QUICK_VECTOR_RESIZE(idGeometryA, stateOfSolver_resources.getNumContacts());
+            TRACKED_QUICK_VECTOR_RESIZE(idGeometryB, stateOfSolver_resources.getNumContacts());
+            granData->idGeometryA = idGeometryA.data();
+            granData->idGeometryB = idGeometryB.data();
+        }
 
         contact_detection.kernel("populateContactPairsEachBin")
             .instantiate()
             .configure(dim3(blocks_needed_for_bins), dim3(NUM_BINS_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
                        streamInfo.stream)
-            .launch(simParams, granData, granTemplates);
+            .launch(simParams, granData, sphereIDsEachBinTouchesSorted, activeBinIDs, numSpheresBinTouches,
+                    sphereIDsLookUpTable, contactReportOffsets, stateOfSolver_resources.getNumActiveBins(),
+                    granTemplates);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-        // displayArray<bodyID_t>(granData->idGeometryA, granData->numContactsInEachBin[simParams->nActiveBins]);
-        // displayArray<bodyID_t>(granData->idGeometryB, granData->numContactsInEachBin[simParams->nActiveBins]);
-
-        simParams->nContactPairs = granData->numContactsInEachBin[simParams->nActiveBins];
+        // displayArray<bodyID_t>(granData->idGeometryA, stateOfSolver_resources.getNumContacts());
+        // displayArray<bodyID_t>(granData->idGeometryB, stateOfSolver_resources.getNumContacts());
     } else {
-        simParams->nContactPairs = 0;
+        stateOfSolver_resources.setNumContacts(0);
     }
 }
 
 inline void DEMKinematicThread::unpackMyBuffer() {
-    cudaMemcpy(granData->voxelID, granData->voxelID_buffer, simParams->nClumpBodies * sizeof(voxelID_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->locX, granData->locX_buffer, simParams->nClumpBodies * sizeof(subVoxelPos_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->locY, granData->locY_buffer, simParams->nClumpBodies * sizeof(subVoxelPos_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->locZ, granData->locZ_buffer, simParams->nClumpBodies * sizeof(subVoxelPos_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->oriQ0, granData->oriQ0_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->oriQ1, granData->oriQ1_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->oriQ2, granData->oriQ2_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->oriQ3, granData->oriQ3_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
-               cudaMemcpyDeviceToDevice);
+    GPU_CALL(cudaMemcpy(granData->voxelID, granData->voxelID_buffer, simParams->nClumpBodies * sizeof(voxelID_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->locX, granData->locX_buffer, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->locY, granData->locY_buffer, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->locZ, granData->locZ_buffer, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->oriQ0, granData->oriQ0_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->oriQ1, granData->oriQ1_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->oriQ2, granData->oriQ2_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
+                        cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->oriQ3, granData->oriQ3_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
+                        cudaMemcpyDeviceToDevice));
 }
 
 inline void DEMKinematicThread::sendToTheirBuffer() {
-    cudaMemcpy(granData->pDTOwnedBuffer_nContactPairs, &(simParams->nContactPairs), sizeof(size_t),
-               cudaMemcpyDeviceToDevice);
+    GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_nContactPairs, stateOfSolver_resources.getNumContactsPointer(),
+                        sizeof(size_t), cudaMemcpyDeviceToDevice));
     // Resize dT owned buffers before usage
-    pDTOwnedVector_idGeometryA->resize(simParams->nContactPairs);
-    pDTOwnedVector_idGeometryB->resize(simParams->nContactPairs);
-    granData->pDTOwnedBuffer_idGeometryA = pDTOwnedVector_idGeometryA->data();
-    granData->pDTOwnedBuffer_idGeometryB = pDTOwnedVector_idGeometryB->data();
-    cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA, simParams->nContactPairs * sizeof(bodyID_t),
-               cudaMemcpyDeviceToDevice);
-    cudaMemcpy(granData->pDTOwnedBuffer_idGeometryB, granData->idGeometryB, simParams->nContactPairs * sizeof(bodyID_t),
-               cudaMemcpyDeviceToDevice);
+    if (stateOfSolver_resources.getNumContacts() > pDTOwnedVector_idGeometryA->size()) {
+        pDTOwnedVector_idGeometryA->resize(stateOfSolver_resources.getNumContacts());
+        pDTOwnedVector_idGeometryB->resize(stateOfSolver_resources.getNumContacts());
+        granData->pDTOwnedBuffer_idGeometryA = pDTOwnedVector_idGeometryA->data();
+        granData->pDTOwnedBuffer_idGeometryB = pDTOwnedVector_idGeometryB->data();
+    }
+    GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA,
+                        stateOfSolver_resources.getNumContacts() * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryB, granData->idGeometryB,
+                        stateOfSolver_resources.getNumContacts() * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
 }
 
 void DEMKinematicThread::workerThread() {
@@ -204,13 +251,7 @@ void DEMKinematicThread::workerThread() {
             // figure out the amount of shared mem
             // cudaDeviceGetAttribute.cudaDevAttrMaxSharedMemoryPerBlock
 
-            // produce something here; fake stuff for now
-            // cudaStream_t currentStream;
-            // cudaStreamCreate(&currentStream);pSchedSupport->dynamicShouldWait()
-
-            // Two versions here: the host version is just for debugging purposes
-            // contactDetection();
-            hostContactDetection();
+            contactDetection();
 
             /* for the reference
             for (int j = 0; j < N_MANUFACTURED_ITEMS; j++) {
@@ -272,6 +313,7 @@ void DEMKinematicThread::resetUserCallStat() {
 
 // Put sim data array pointers in place
 void DEMKinematicThread::packDataPointers() {
+    granData->familyID = familyID.data();
     granData->voxelID = voxelID.data();
     granData->locX = locX.data();
     granData->locY = locY.data();
@@ -296,15 +338,6 @@ void DEMKinematicThread::packDataPointers() {
     // The offset info that indexes into the template arrays
     granData->ownerClumpBody = ownerClumpBody.data();
     granData->clumpComponentOffset = clumpComponentOffset.data();
-
-    // kT's own work arrays
-    granData->numBinsSphereTouches = numBinsSphereTouches.data();
-    granData->binIDsEachSphereTouches = binIDsEachSphereTouches.data();
-    granData->sphereIDsEachBinTouches = sphereIDsEachBinTouches.data();
-    granData->activeBinIDs = activeBinIDs.data();
-    granData->sphereIDsLookUpTable = sphereIDsLookUpTable.data();
-    granData->numSpheresBinTouches = numSpheresBinTouches.data();
-    granData->numContactsInEachBin = numContactsInEachBin.data();
 
     // Template array pointers, which will be removed after JIT is fully functional
     granTemplates->radiiSphere = radiiSphere.data();
@@ -368,6 +401,7 @@ void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
     simParams->nMatTuples = nMatTuples;
 
     // Resize to the number of clumps
+    TRACKED_VECTOR_RESIZE(familyID, nClumpBodies, "familyID", 0);
     TRACKED_VECTOR_RESIZE(voxelID, nClumpBodies, "voxelID", 0);
     TRACKED_VECTOR_RESIZE(locX, nClumpBodies, "locX", 0);
     TRACKED_VECTOR_RESIZE(locY, nClumpBodies, "locY", 0);
@@ -390,16 +424,6 @@ void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
     // Resize to the number of spheres
     TRACKED_VECTOR_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
     TRACKED_VECTOR_RESIZE(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
-    // 1 extra element is given to numBinsSphereTouches for easy prefix scanning
-    TRACKED_VECTOR_RESIZE(numBinsSphereTouches, nSpheresGM + 1, "numBinsSphereTouches", 0);
-    // The following several arrays will have variable sizes, so here we only used an estimate.
-    // TODO: Find a good estimate.
-    TRACKED_VECTOR_RESIZE(binIDsEachSphereTouches, nSpheresGM, "binIDsEachSphereTouches", 0);
-    TRACKED_VECTOR_RESIZE(sphereIDsEachBinTouches, nSpheresGM, "sphereIDsEachBinTouches", 0);
-    TRACKED_VECTOR_RESIZE(activeBinIDs, nSpheresGM, "activeBinIDs", 0);
-    TRACKED_VECTOR_RESIZE(sphereIDsLookUpTable, nSpheresGM, "sphereIDsLookUpTable", 0);
-    TRACKED_VECTOR_RESIZE(numSpheresBinTouches, nSpheresGM, "numSpheresBinTouches", 0);
-    TRACKED_VECTOR_RESIZE(numContactsInEachBin, nSpheresGM, "numContactsInEachBin", 0);
 
     // Resize to the length of the clump templates
     TRACKED_VECTOR_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);
@@ -419,12 +443,13 @@ void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
 void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
                                                const std::vector<float3>& input_clump_xyz,
                                                const std::vector<float3>& input_clump_vel,
+                                               const std::vector<unsigned int>& input_clump_family,
                                                const std::vector<float>& clumps_mass_types,
                                                const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                                const std::vector<std::vector<float3>>& clumps_sp_location_types) {
     // Use some temporary hacks to get the info in the managed mem
     // All the input vectors should have the same length, nClumpTopo
-    unsigned int k = 0;
+    size_t k = 0;
     std::vector<unsigned int> prescans;
 
     prescans.push_back(0);
@@ -465,6 +490,7 @@ void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& 
             ownerClumpBody.at(k) = i;
             k++;
         }
+        familyID.at(i) = input_clump_family.at(i);
     }
 }
 

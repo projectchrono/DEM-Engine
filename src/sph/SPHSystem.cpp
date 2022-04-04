@@ -11,6 +11,7 @@
 #include <core/utils/GpuError.h>
 #include <core/utils/CpuAlgorithmHelper.h>
 #include "datastruct.h"
+#include <algorithms/SPHCubHelperFunctions.h>
 
 int X_SUB_NUM = 0;
 int Y_SUB_NUM = 0;
@@ -61,7 +62,7 @@ void SPHSystem::printCSV(std::string filename, vector3* pos_arr, int pos_n, vect
     // create file
     std::ofstream csvFile(filename);
 
-    csvFile << "x_pos,y_pos,z_pos,x_vel,y_vel,z_vel,x_acc,y_acc,z_acc" << std::endl;
+    csvFile << "x_pos,y_pos,z_pos,x_vel,y_vel,z_vel" << std::endl;
 
     // write particle data into csv file
     for (int i = 0; i < pos_n; i++) {
@@ -106,7 +107,7 @@ void KinematicThread::operator()() {
     int num_thread = (block_size < k_n) ? block_size : k_n;
     int num_block = (k_n % num_thread != 0) ? (k_n / num_thread + 1) : (k_n / num_thread);
 
-    // NEWLY PRESENTED VECTOR DATA - 02/21/2022
+    // initial vector declaration
     std::vector<int, sgps::ManagedAllocator<int>>
         num_BSD_data;  // vector stores the number of BSD each particle touches
     std::vector<int, sgps::ManagedAllocator<int>>
@@ -122,7 +123,6 @@ void KinematicThread::operator()() {
         BSD_iden_idx;  // BSD identification tracking vector, this vector identifies whether the current particle is in
                        // the buffer zone or in the actual SD (0 is not in buffer, 1 is in buffer)
     std::vector<int, sgps::ManagedAllocator<int>> num_col;  // number of collision - the output of kinematic 1st pass
-    // END NEWLY PRESENTED VECTOR DATA
 
     // intermediate variables declaration
 
@@ -172,9 +172,13 @@ void KinematicThread::operator()() {
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        PrefixScanExclusive(num_BSD_data.data(), k_n, offset_BSD_data.data());
+        PrefixScanExclusiveCub(num_BSD_data, offset_BSD_data);
+
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         int TotLength = offset_BSD_data[k_n - 1] + num_BSD_data[k_n - 1];
+
+        // std::cout << "TotLength: " << TotLength << std::endl;
 
         // ==============================================================================================================
         // Kinematic Step 2
@@ -203,44 +207,34 @@ void KinematicThread::operator()() {
         // 2nd: BSD_idx (key), BSD_iden_idx (value)
         // the output of this step will be BSD_idx_sorted, idx_track_data_sorted, and BSD_iden_idx_sorted
         // ==============================================================================================================
-        std::vector<int> BSD_idx_sorted;
-        std::vector<int> idx_track_data_sorted;
-        std::vector<int> BSD_iden_idx_sorted;
-        std::vector<int, sgps::ManagedAllocator<int>> BSD_idx_sorted_GPU;
-        std::vector<int, sgps::ManagedAllocator<int>> idx_track_data_sorted_GPU;
-        std::vector<int, sgps::ManagedAllocator<int>> BSD_iden_idx_sorted_GPU;
+        std::vector<int, sgps::ManagedAllocator<int>> BSD_idx_sorted;
+        std::vector<int, sgps::ManagedAllocator<int>> idx_track_data_sorted;
+        std::vector<int, sgps::ManagedAllocator<int>> BSD_iden_idx_sorted;
 
-        sortOnly(BSD_idx.data(), idx_track_data.data(), BSD_idx_sorted, idx_track_data_sorted, TotLength,
-                 count_digit(X_SUB_NUM * Y_SUB_NUM * Z_SUB_NUM));
+        PairRadixSortAscendCub(BSD_idx, BSD_idx_sorted, idx_track_data, idx_track_data_sorted);
 
-        sortOnly(BSD_idx.data(), BSD_iden_idx.data(), BSD_idx_sorted, BSD_iden_idx_sorted, TotLength,
-                 count_digit(X_SUB_NUM * Y_SUB_NUM * Z_SUB_NUM));
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        BSD_idx_sorted_GPU.assign(BSD_idx_sorted.begin(), BSD_idx_sorted.end());
-        idx_track_data_sorted_GPU.assign(idx_track_data_sorted.begin(), idx_track_data_sorted.end());
-        BSD_iden_idx_sorted_GPU.assign(BSD_iden_idx_sorted.begin(), BSD_iden_idx_sorted.end());
+        PairRadixSortAscendCub(BSD_idx, BSD_idx_sorted, BSD_iden_idx, BSD_iden_idx_sorted);
+
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // ==============================================================================================================
         // Kinematic Step 4
         // Compute BSD Offsets and Lengths
         // cub::DeviceRunLengthEncode::Encode​ and cub::ExclusiveScan need to be called
         // ==============================================================================================================
-        std::vector<int> unique_BSD_idx;
-        std::vector<int> length_BSD_idx;
-        std::vector<int> offset_BSD_idx;
-        std::vector<int, sgps::ManagedAllocator<int>> unique_BSD_idx_GPU;
-        std::vector<int, sgps::ManagedAllocator<int>> length_BSD_idx_GPU;
-        std::vector<int, sgps::ManagedAllocator<int>> offset_BSD_idx_GPU;
+        std::vector<int, sgps::ManagedAllocator<int>> unique_BSD_idx;
+        std::vector<int, sgps::ManagedAllocator<int>> length_BSD_idx;
+        std::vector<int, sgps::ManagedAllocator<int>> offset_BSD_idx;
 
-        deviceRunLength(BSD_idx_sorted.data(), BSD_idx_sorted.size(), unique_BSD_idx, length_BSD_idx);
+        RunLengthEncodeCub(BSD_idx_sorted, unique_BSD_idx, length_BSD_idx);
 
-        // perform exclusive prefix scan on length_BSD_idx
-        offset_BSD_idx.resize(length_BSD_idx.size());
-        PrefixScanExclusive(length_BSD_idx.data(), length_BSD_idx.size(), offset_BSD_idx.data());
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        unique_BSD_idx_GPU.assign(unique_BSD_idx.begin(), unique_BSD_idx.end());
-        length_BSD_idx_GPU.assign(length_BSD_idx.begin(), length_BSD_idx.end());
-        offset_BSD_idx_GPU.assign(offset_BSD_idx.begin(), offset_BSD_idx.end());
+        PrefixScanExclusiveCub(length_BSD_idx, offset_BSD_idx);
+
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // ==============================================================================================================
         // Kinematic Step 5
@@ -248,7 +242,6 @@ void KinematicThread::operator()() {
         // (Kinematic First Pass)
         // ==============================================================================================================
 
-        // resize num_col_each_BSD to unique_BSD_idx and set all default values to -1
         num_col.clear();
         num_col.resize(unique_BSD_idx.size() * 512);
 
@@ -261,33 +254,21 @@ void KinematicThread::operator()() {
         kinematic_program.kernel("kinematicStep5")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), (MAX_NUM_UNIT * UNIT_SHARED_SIZE), streamInfo.stream)
-            .launch(pos_data.data(), k_n, tolerance, radius, idx_track_data_sorted_GPU.data(),
-                    BSD_iden_idx_sorted_GPU.data(), offset_BSD_idx_GPU.data(), length_BSD_idx_GPU.data(),
-                    unique_BSD_idx_GPU.data(), num_col.data(), unique_BSD_idx_GPU.size());
+            .launch(pos_data.data(), k_n, tolerance, radius, idx_track_data_sorted.data(), BSD_iden_idx_sorted.data(),
+                    offset_BSD_idx.data(), length_BSD_idx.data(), unique_BSD_idx.data(), num_col.data(),
+                    unique_BSD_idx.size());
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-
-        // compute total collision
-        // compute num_col_each_BSD
-
-        std::vector<int> num_col_each_BSD;
-
-        for (int i = 0; i < unique_BSD_idx.size(); i++) {
-            int col_sum_BSD = 0;
-            for (int j = 0; j < num_thread; j++) {
-                col_sum_BSD += num_col[i * num_thread + j];
-            }
-            num_col_each_BSD.push_back(col_sum_BSD);
-        }
 
         // ==============================================================================================================
         // Kinematic Step 6
         // Compute offsets for num_coll_each_bsd
         // This is supposed to be a CUB exclusive scan
         // ==============================================================================================================
-        std::vector<int, sgps::ManagedAllocator<int>> num_col_offset;  // the offset vec of num_col_each_BSD
-        num_col_offset.resize(num_col.size());
-        PrefixScanExclusive(num_col.data(), num_col.size(), num_col_offset.data());
+        std::vector<int, sgps::ManagedAllocator<int>> num_col_offset;
+
+        PrefixScanExclusiveCub(num_col, num_col_offset);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         int tot_collision = num_col_offset[num_col_offset.size() - 1] + num_col[num_col.size() - 1];
 
@@ -310,12 +291,15 @@ void KinematicThread::operator()() {
         kinematic_program.kernel("kinematicStep7")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), (MAX_NUM_UNIT * UNIT_SHARED_SIZE), streamInfo.stream)
-            .launch(pos_data.data(), k_n, tolerance, radius, idx_track_data_sorted_GPU.data(),
-                    BSD_iden_idx_sorted_GPU.data(), offset_BSD_idx_GPU.data(), length_BSD_idx_GPU.data(),
-                    unique_BSD_idx_GPU.data(), num_col.data(), unique_BSD_idx_GPU.size(), contact_data.data(),
-                    contact_data.size(), num_col_offset.data());
+            .launch(pos_data.data(), k_n, tolerance, radius, idx_track_data_sorted.data(), BSD_iden_idx_sorted.data(),
+                    offset_BSD_idx.data(), length_BSD_idx.data(), unique_BSD_idx.data(), num_col.data(),
+                    unique_BSD_idx.size(), contact_data.data(), contact_data.size(), num_col_offset.data());
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+        // for (int i = 0; i < contact_data.size(); i++) {
+        //     std::cout << contact_data[i].contact_pair.x << ", " << contact_data[i].contact_pair.y << std::endl;
+        // }
 
         // copy data back to the dataManager
         {
@@ -371,6 +355,7 @@ void DynamicThread::operator()() {
 
         if (getParentSystem().contact_data_isFresh == true) {
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexContact());
+            contact_data.clear();
             contact_data.assign(dataManager.m_contact.begin(), dataManager.m_contact.end());
         }
 
@@ -439,10 +424,11 @@ void DynamicThread::operator()() {
 
         // set up CPU data input
         // create a long array to reduce
-        std::vector<int> keys;
-        std::vector<float> x_frcs;
-        std::vector<float> y_frcs;
-        std::vector<float> z_frcs;
+
+        std::vector<int, sgps::ManagedAllocator<int>> keys;
+        std::vector<float, sgps::ManagedAllocator<float>> x_frcs;
+        std::vector<float, sgps::ManagedAllocator<float>> y_frcs;
+        std::vector<float, sgps::ManagedAllocator<float>> z_frcs;
 
         for (int i = 0; i < contact_data.size(); i++) {
             keys.push_back(contact_data[i].contact_pair.x);
@@ -451,43 +437,85 @@ void DynamicThread::operator()() {
             z_frcs.push_back(contact_data[i].contact_force.z);
         }
 
-        std::vector<int> key_reduced;
-        std::vector<float> x_reduced;
-        std::vector<float> y_reduced;
-        std::vector<float> z_reduced;
+        std::vector<int, sgps::ManagedAllocator<int>> keys_sorted;
+        std::vector<int, sgps::ManagedAllocator<int>> keys_reduced;
 
-        sortReduce(keys.data(), x_frcs.data(), key_reduced, x_reduced, keys.size(), count_digit(k_n));
-        key_reduced.clear();
-        sortReduce(keys.data(), y_frcs.data(), key_reduced, y_reduced, keys.size(), count_digit(k_n));
-        key_reduced.clear();
-        sortReduce(keys.data(), z_frcs.data(), key_reduced, z_reduced, keys.size(), count_digit(k_n));
+        std::vector<float, sgps::ManagedAllocator<float>> x_frcs_sorted;
+        std::vector<float, sgps::ManagedAllocator<float>> x_frcs_reduced;
 
-        // transfer data to GPU
-        std::vector<int, sgps::ManagedAllocator<int>> gpu_key_reduced;
-        std::vector<float, sgps::ManagedAllocator<float>> gpu_x_reduced;
-        std::vector<float, sgps::ManagedAllocator<float>> gpu_y_reduced;
-        std::vector<float, sgps::ManagedAllocator<float>> gpu_z_reduced;
+        std::vector<float, sgps::ManagedAllocator<float>> y_frcs_sorted;
+        std::vector<float, sgps::ManagedAllocator<float>> y_frcs_reduced;
 
-        gpu_key_reduced.assign(key_reduced.begin(), key_reduced.end());
-        gpu_x_reduced.assign(x_reduced.begin(), x_reduced.end());
-        gpu_y_reduced.assign(y_reduced.begin(), y_reduced.end());
-        gpu_z_reduced.assign(z_reduced.begin(), z_reduced.end());
+        std::vector<float, sgps::ManagedAllocator<float>> z_frcs_sorted;
+        std::vector<float, sgps::ManagedAllocator<float>> z_frcs_reduced;
 
+        PairRadixSortAscendCub(keys, keys_sorted, x_frcs, x_frcs_sorted);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        PairRadixSortAscendCub(keys, keys_sorted, y_frcs, y_frcs_sorted);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        PairRadixSortAscendCub(keys, keys_sorted, z_frcs, z_frcs_sorted);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        /*
+                std::cout << "====================" << std::endl;
+                std::cout << "keys: ";
+                for (int i = 0; i < keys.size(); i++) {
+                    std::cout << keys[i] << ", ";
+                }
+                std::cout << std::endl;
+
+                std::cout << "z_frcs: ";
+                for (int i = 0; i < z_frcs.size(); i++) {
+                    std::cout << z_frcs[i] << ", ";
+                }
+                std::cout << std::endl;
+
+                std::cout << "keys_sorted: ";
+                for (int i = 0; i < keys_sorted.size(); i++) {
+                    std::cout << keys_sorted[i] << ", ";
+                }
+                std::cout << std::endl;
+
+                std::cout << "z_frcs_sorted: ";
+                for (int i = 0; i < z_frcs_sorted.size(); i++) {
+                    std::cout << z_frcs_sorted[i] << ", ";
+                }
+                std::cout << std::endl;
+        */
+        SumReduceByKeyCub(keys_sorted, keys_reduced, x_frcs_sorted, x_frcs_reduced);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        SumReduceByKeyCub(keys_sorted, keys_reduced, y_frcs_sorted, y_frcs_reduced);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        SumReduceByKeyCub(keys_sorted, keys_reduced, z_frcs_sorted, z_frcs_reduced);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        /*
+                std::cout << "keys_reduced: ";
+                for (int i = 0; i < keys_reduced.size(); i++) {
+                    std::cout << keys_reduced[i] << ", ";
+                }
+                std::cout << std::endl;
+                std::cout << "z_frcs_reduced: ";
+                for (int i = 0; i < z_frcs_reduced.size(); i++) {
+                    std::cout << z_frcs_reduced[i] << ", ";
+                }
+                std::cout << std::endl;
+
+                std::cout << "====================" << std::endl;
+        */
         // ==============================================================================================================
         // Dynamic Step 3
         // Compute accelerations on each particle
         // ==============================================================================================================
         block_size = 1024;
-        num_thread = (block_size < gpu_key_reduced.size()) ? block_size : gpu_key_reduced.size();
-        num_block = (gpu_key_reduced.size() % num_thread != 0) ? (gpu_key_reduced.size() / num_thread + 1)
-                                                               : (gpu_key_reduced.size() / num_thread);
+        num_thread = (block_size < keys_reduced.size()) ? block_size : keys_reduced.size();
+        num_block = (keys_reduced.size() % num_thread != 0) ? (keys_reduced.size() / num_thread + 1)
+                                                            : (keys_reduced.size() / num_thread);
 
         // call dynamic third gpu pass
         dynamic_program.kernel("dynamicStep3")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(gpu_key_reduced.data(), gpu_x_reduced.data(), gpu_y_reduced.data(), gpu_z_reduced.data(),
-                    gpu_key_reduced.size(), acc_data.data());
+            .launch(keys_reduced.data(), x_frcs_reduced.data(), y_frcs_reduced.data(), z_frcs_reduced.data(),
+                    keys_reduced.size(), acc_data.data());
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -507,11 +535,6 @@ void DynamicThread::operator()() {
                     radius);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-
-        // TEST PRINT SECTION
-        output_collision_data(contact_data.data(), contact_data.size(),
-                              "ct/contact" + std::to_string(dynamicCounter) + ".csv");
-        // END TEST PRINT SECTION
 
         // copy data back to the dataManager
         {

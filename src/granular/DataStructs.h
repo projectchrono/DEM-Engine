@@ -7,9 +7,13 @@
 #include <granular/GranularDefines.h>
 
 namespace sgps {
-// A structs defined here will be used by GPUs.
+// Structs defined here will be used by GPUs.
+// NOTE: All data structs here need to be simple enough to jitify. In general, if you need to include something much
+// more complex than GranularDefines for example, then do it in GranularStructs.h.
 
-// A structure for storing simulation parameters
+// A structure for storing simulation parameters. Note these simulation parameters should not change often (changes of
+// them usually lead to re-jitification). Those who change often (especially in each time step) should go into
+// DEMSolverStateDataKT/DT.
 struct DEMSimParams {
     // Number of voxels in the X direction, expressed as a power of 2
     unsigned char nvXp2;
@@ -48,11 +52,6 @@ struct DEMSimParams {
     double h;
     // Sphere radii inflation ratio (for safer contact detection)
     float beta;
-    // Number of bins active
-    size_t nActiveBins = 0;
-    // Number of active contact pairs. kT figures this number out but it is dT that badly needs this number to do its
-    // work.
-    size_t nContactPairs = 0;
 };
 
 // The collection of pointers to DEM template arrays such as radiiSphere. This struct will become useless eventually as
@@ -70,6 +69,7 @@ struct DEMTemplate {
     // materialsOffset_t* materialTupleOffset;
     float* EProxy;
     float* GProxy;
+    float* CoRProxy;
 };
 
 // DEM material proxy, such that when they are used in force kernels, we can use these (which are associated with each
@@ -82,6 +82,8 @@ struct DEMMaterialProxy {
 // For more details just look at PhysicsSystem.h
 struct DEMDataDT {
     clumpBodyInertiaOffset_t* inertiaPropOffsets;
+
+    family_t* familyID;
 
     voxelID_t* voxelID;
 
@@ -142,6 +144,7 @@ struct DEMDataDT {
 // A struct that holds pointers to data arrays that kT uses
 // For more details just look at PhysicsSystem.h
 struct DEMDataKT {
+    family_t* familyID;
     voxelID_t* voxelID;
     subVoxelPos_t* locX;
     subVoxelPos_t* locY;
@@ -165,14 +168,17 @@ struct DEMDataKT {
     bodyID_t* ownerClumpBody;
     clumpComponentOffset_t* clumpComponentOffset;
 
-    // Other kT's own work arrays
-    binsSphereTouches_t* numBinsSphereTouches;
-    binID_t* binIDsEachSphereTouches;
-    bodyID_t* sphereIDsEachBinTouches;
-    binID_t* activeBinIDs;
-    binsSphereTouches_t* sphereIDsLookUpTable;
-    spheresBinTouches_t* numSpheresBinTouches;
-    contactPairs_t* numContactsInEachBin;
+    // kT's own work arrays. Now these array pointers get assigned in contactDetection() which point to shared scratch
+    // spaces. No need to do forward declaration anymore. They are left here for reference, should contactDetection()
+    // need to be re-visited.
+    // binsSphereTouches_t* numBinsSphereTouches;
+    // binSphereTouchPairs_t* numBinsSphereTouchesScan;
+    // binID_t* binIDsEachSphereTouches;
+    // bodyID_t* sphereIDsEachBinTouches;
+    // binID_t* activeBinIDs;
+    // binSphereTouchPairs_t* sphereIDsLookUpTable;
+    // spheresBinTouches_t* numSpheresBinTouches;
+    // contactPairs_t* numContactsInEachBin;
 
     // kT produces contact info, and stores it, temporarily
     bodyID_t* idGeometryA;

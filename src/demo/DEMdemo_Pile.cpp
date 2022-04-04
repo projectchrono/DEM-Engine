@@ -19,16 +19,16 @@ int main() {
     srand(time(NULL));
 
     // total number of random clump templates to generate
-    int num_template = 27;
+    int num_template = 6;
 
     int min_sphere = 1;
     int max_sphere = 5;
 
-    float min_rad = 0.08;
-    float max_rad = 0.2;
+    float min_rad = 0.01;
+    float max_rad = 0.02;
 
-    float min_relpos = -0.1;
-    float max_relpos = 0.1;
+    float min_relpos = -0.01;
+    float max_relpos = 0.01;
 
     /*
     std::vector<float> radii_a_vec(3, .4);
@@ -46,29 +46,39 @@ int main() {
     std::vector<unsigned int> mat_vec(3, 0);
     */
 
-    auto mat_type_1 = DEM_sim.LoadMaterialType(1, 10);
+    auto mat_type_1 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.6);
 
+    // First create clump type 0 for representing the ground
+    auto template_ground = DEM_sim.LoadClumpSimpleSphere(0.5, 0.02, mat_type_1);
+
+    // Then randomly create some clumps for piling up
     for (int i = 0; i < num_template; i++) {
         // first decide the number of spheres that live in this clump
         int num_sphere = rand() % (max_sphere - min_sphere + 1) + 1;
 
-        // then allocate the clump template definition arrays
-        float mass = (float)rand() / RAND_MAX;
-        float3 MOI = make_float3((float)rand() / RAND_MAX, (float)rand() / RAND_MAX, (float)rand() / RAND_MAX);
+        // then allocate the clump template definition arrays (all in SI)
+        float mass = 0.1 * (float)num_sphere;
+        float3 MOI =
+            make_float3(2e-5 * (float)num_sphere, 1.5e-5 * (float)num_sphere, 1.8e-5 * (float)num_sphere) * 10.;
         std::vector<float> radii;
         std::vector<float3> relPos;
         std::vector<unsigned int> mat;
 
         // randomly generate clump template configurations
-
         // the relPos of a sphere is always seeded from one of the already-generated sphere
         float3 seed_pos = make_float3(0);
         for (int j = 0; j < num_sphere; j++) {
             radii.push_back(((float)rand() / RAND_MAX) * (max_rad - min_rad) + min_rad);
             float3 tmp;
-            tmp.x = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
-            tmp.y = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
-            tmp.z = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
+            if (j == 0) {
+                tmp.x = 0;
+                tmp.y = 0;
+                tmp.z = 0;
+            } else {
+                tmp.x = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
+                tmp.y = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
+                tmp.z = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
+            }
             tmp += seed_pos;
             relPos.push_back(tmp);
             mat.push_back(mat_type_1);
@@ -81,45 +91,50 @@ int main() {
         // it returns the numbering of this clump template (although here we don't care)
         auto template_num = DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat);
     }
-    // auto num = DEM_sim.LoadClumpSimpleSphere(3, 1., 0);
 
+    // generate ground clumps
     std::vector<unsigned int> input_template_num;
-    std::vector<float3> input_xyz;
+    std::vector<unsigned int> family_code;
+    auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, -5.0), make_float3(4., 4., 0.001), 3.);
+    // Mark family 1 as fixed
+    family_code.insert(family_code.end(), input_xyz.size(), 1);
+    input_template_num.insert(input_template_num.end(), input_xyz.size(), template_ground);
 
-    // show one for each template configuration
-    for (int i = 0; i < num_template; i++) {
-        input_template_num.push_back(i);
-
-        float grid_size = 1.0;
-        int ticks = 3;
-        int ix = i % ticks;
-        int iy = (i % (ticks * ticks)) / ticks;
-        int iz = i / (ticks * ticks);
-        input_xyz.push_back(grid_size * make_float3(ix, iy, iz));
+    // generate initial clumps for piling
+    float3 domain_center = make_float3(0);
+    float sample_halfheight = 2.5;
+    float sample_halfwidth = 1.5;
+    auto pile =
+        DEMBoxGridSampler(domain_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight), 0.5);
+    input_xyz.insert(input_xyz.end(), pile.begin(), pile.end());
+    unsigned int num_clumps = pile.size();
+    for (unsigned int i = 0; i < num_clumps; i++) {
+        input_template_num.push_back(i % (num_template) + 1);
+        family_code.push_back(0);
     }
     DEM_sim.SetClumps(input_template_num, input_xyz);
+    DEM_sim.SetClumpFamily(family_code);
 
-    DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, 1e-10);
+    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
     // DEM_sim.InstructBoxDomainNumVoxel(11, 11, 10, 1e-10);
 
     DEM_sim.CenterCoordSys();
     DEM_sim.SetTimeStepSize(1e-5);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
-    DEM_sim.SetCDUpdateFreq(2);
+    // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
+    DEM_sim.SetCDUpdateFreq(10);
+    DEM_sim.SetExpandFactor(1.1);
 
     DEM_sim.Initialize();
 
     DEM_sim.UpdateSimParams();  // Not needed; just testing if this function works...
 
-    for (int i = 0; i < 50; i++) {
-        std::cout << "Iteration: " << i + 1 << std::endl;
-        DEM_sim.LaunchThreads(5e-3);
-
-        // std::cout << DEM_sim.GetClumpVoxelID(0) << std::endl;
-
+    for (int i = 0; i < 200; i++) {
         char filename[100];
-        sprintf(filename, "./test_gran_output_%04d.csv", i);
+        sprintf(filename, "./DEMdemo_collide_output_%04d.csv", i);
         DEM_sim.WriteFileAsSpheres(std::string(filename));
+        std::cout << "Iteration: " << i << std::endl;
+        DEM_sim.LaunchThreads(5e-3);
     }
 
     std::cout << "DEMdemo_Pile exiting..." << std::endl;
