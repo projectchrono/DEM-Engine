@@ -23,7 +23,6 @@ const std::string& JitHelper::Header::getSource() {
     return _source;
 }
 
-
 void JitHelper::Header::substitute(const std::string& symbol, const std::string& value) {
     // find occurrences of `symbol` until there are none left
     for (size_t p = this->_source.find(symbol); p != std::string::npos; p = this->_source.find(symbol)) {
@@ -31,7 +30,6 @@ void JitHelper::Header::substitute(const std::string& symbol, const std::string&
         this->_source.replace(p, symbol.length(), value);
     }
 }
-
 
 jitify::Program JitHelper::buildProgram(const std::string& name,
                                         const std::filesystem::path& source,

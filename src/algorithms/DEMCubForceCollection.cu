@@ -88,7 +88,8 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
             .launch(massAOwner, moiAOwner, inertiaPropOffsets, idAOwner, 2 * nContactPairs, massClumpBody, mmiXX, mmiYY,
                     mmiZZ, nDistinctClumpBodyTopologies);
         GPU_CALL(cudaStreamSynchronize(this_stream));
-        // displayArray<bodyID_t>(idAOwner, nContactPairs);
+        // displayArray<bodyID_t>(idAOwner, nContactPairs>3?3:nContactPairs);
+        // displayArray<bodyID_t>(idBOwner, nContactPairs>3?3:nContactPairs);
     }
 
     // Thirdly, combine mass and force to get (contact pair-wise) acceleration, which will be reduced...
@@ -115,7 +116,8 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
     GPU_CALL(cudaStreamSynchronize(this_stream));
     CubAdd reduction_op;
     size_t cub_scratch_bytes = 0;
-    // reducing the acceleration (2 * nContactPairs for both body A and B)
+    // Reducing the acceleration (2 * nContactPairs for both body A and B)
+    // Note: to do this, idAOwner needs to be sorted along with h2a_A
     cub::DeviceReduce::ReduceByKey(NULL, cub_scratch_bytes, idAOwner, uniqueOwner, h2a_A, accOwner,
                                    scratchPad.getForceCollectionRunsPointer(), reduction_op, 2 * nContactPairs,
                                    this_stream, false);
@@ -149,7 +151,8 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
         .configure(dim3(blocks_needed_for_half_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(h2Alpha_B, contactPointB, contactForces, moiBOwner, -1. * h * h, nContactPairs);
     GPU_CALL(cudaStreamSynchronize(this_stream));
-    // reducing the angular acceleration (2 * nContactPairs for both body A and B)
+    // Reducing the angular acceleration (2 * nContactPairs for both body A and B)
+    // Note: to do this, idAOwner needs to be sorted along with h2Alpha_A
     cub::DeviceReduce::ReduceByKey(NULL, cub_scratch_bytes, idAOwner, uniqueOwner, h2Alpha_A, accOwner,
                                    scratchPad.getForceCollectionRunsPointer(), reduction_op, 2 * nContactPairs,
                                    this_stream, false);

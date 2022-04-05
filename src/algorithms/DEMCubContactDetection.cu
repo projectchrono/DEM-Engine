@@ -23,11 +23,18 @@ void cubPrefixScan_binSphere(binsSphereTouches_t* d_in,
                              size_t n,
                              cudaStream_t& this_stream,
                              DEMSolverStateDataKT& scratchPad) {
+    // NOTE!!! Why did I not use ExclusiveSum? I found that when for a cub scan operation, if the d_in and d_out are of
+    // different types, then cub defaults to use d_in type to store the scan result, but will switch to d_out type if
+    // there are too many items to scan. There is however, a region where cub does not choose to switch to d_out type,
+    // but d_in type is not big enough to store the scan result. This is very bad. I made a trick: use ExclusiveScan and
+    // (d_out type)0 as the initial value, and this forces cub to store results as d_out type.
     size_t cub_scratch_bytes = 0;
-    cub::DeviceScan::ExclusiveSum(NULL, cub_scratch_bytes, d_in, d_out, n, this_stream, false);
+    cub::DeviceScan::ExclusiveScan(NULL, cub_scratch_bytes, d_in, d_out, cub::Sum(), (binSphereTouchPairs_t)0, n,
+                                   this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
-    cub::DeviceScan::ExclusiveSum(d_scratch_space, cub_scratch_bytes, d_in, d_out, n, this_stream, false);
+    cub::DeviceScan::ExclusiveScan(d_scratch_space, cub_scratch_bytes, d_in, d_out, cub::Sum(),
+                                   (binSphereTouchPairs_t)0, n, this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
@@ -36,11 +43,18 @@ void cubPrefixScan_contacts(spheresBinTouches_t* d_in,
                             size_t n,
                             cudaStream_t& this_stream,
                             DEMSolverStateDataKT& scratchPad) {
+    // NOTE!!! Why did I not use ExclusiveSum? I found that when for a cub scan operation, if the d_in and d_out are of
+    // different types, then cub defaults to use d_in type to store the scan result, but will switch to d_out type if
+    // there are too many items to scan. There is however, a region where cub does not choose to switch to d_out type,
+    // but d_in type is not big enough to store the scan result. This is very bad. I made a trick: use ExclusiveScan and
+    // (d_out type)0 as the initial value, and this forces cub to store results as d_out type.
     size_t cub_scratch_bytes = 0;
-    cub::DeviceScan::ExclusiveSum(NULL, cub_scratch_bytes, d_in, d_out, n, this_stream, false);
+    cub::DeviceScan::ExclusiveScan(NULL, cub_scratch_bytes, d_in, d_out, cub::Sum(), (contactPairs_t)0, n, this_stream,
+                                   false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
-    cub::DeviceScan::ExclusiveSum(d_scratch_space, cub_scratch_bytes, d_in, d_out, n, this_stream, false);
+    cub::DeviceScan::ExclusiveScan(d_scratch_space, cub_scratch_bytes, d_in, d_out, cub::Sum(), (contactPairs_t)0, n,
+                                   this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 

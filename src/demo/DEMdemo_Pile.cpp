@@ -95,7 +95,9 @@ int main() {
     // generate ground clumps
     std::vector<unsigned int> input_template_num;
     std::vector<unsigned int> family_code;
-    auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, -5.0), make_float3(4., 4., 0.001), 3.);
+    // TODO: check high-overlap cases (e.g. small separation), make it work; also, fixed particles should by default do
+    // no CD with each other.
+    auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, -5.0), make_float3(4., 4., 0.001), 0.04);
     // Mark family 1 as fixed
     family_code.insert(family_code.end(), input_xyz.size(), 1);
     input_template_num.insert(input_template_num.end(), input_xyz.size(), template_ground);
@@ -105,7 +107,7 @@ int main() {
     float sample_halfheight = 2.5;
     float sample_halfwidth = 1.5;
     auto pile =
-        DEMBoxGridSampler(domain_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight), 0.5);
+        DEMBoxGridSampler(domain_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight), 0.3);
     input_xyz.insert(input_xyz.end(), pile.begin(), pile.end());
     unsigned int num_clumps = pile.size();
     for (unsigned int i = 0; i < num_clumps; i++) {

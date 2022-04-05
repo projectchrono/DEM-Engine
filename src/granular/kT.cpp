@@ -169,6 +169,8 @@ void DEMKinematicThread::contactDetection() {
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         // displayArray<bodyID_t>(granData->idGeometryA, stateOfSolver_resources.getNumContacts());
         // displayArray<bodyID_t>(granData->idGeometryB, stateOfSolver_resources.getNumContacts());
+
+        // TODO: Now, sort idGeometryAB by their owners. This is to increase dT shmem use rate.
     } else {
         stateOfSolver_resources.setNumContacts(0);
     }

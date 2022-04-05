@@ -108,13 +108,13 @@ int main() {
 
     DEM_sim.Initialize();
 
-    for (int i = 0; i < 500; i++) {
+    for (int i = 0; i < 100; i++) {
         char filename[100];
         sprintf(filename, "./DEMdemo_collide_output_%04d.csv", i);
         DEM_sim.WriteFileAsSpheres(std::string(filename));
         std::cout << "Iteration: " << i << std::endl;
 
-        DEM_sim.LaunchThreads(1e-2);
+        DEM_sim.LaunchThreads(5e-1);
     }
 
     std::cout << "DEMdemo_BulkCollide exiting..." << std::endl;
