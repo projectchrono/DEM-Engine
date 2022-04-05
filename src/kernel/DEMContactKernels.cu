@@ -5,7 +5,7 @@
 
 __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
                                            sgps::DEMDataKT* granData,
-                                           sgps::bodyID_t* sphereIDsEachBinTouchesSorted,
+                                           sgps::bodyID_t* sphereIDsEachBinTouches_sorted,
                                            sgps::binID_t* activeBinIDs,
                                            sgps::spheresBinTouches_t* numSpheresBinTouches,
                                            sgps::binSphereTouchPairs_t* sphereIDsLookUpTable,
@@ -47,7 +47,7 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
         sgps::binSphereTouchPairs_t myBodiesTableEntry = sphereIDsLookUpTable[myActiveID];
         // printf("nBodies: %u\n", nBodiesMeHandle);
         for (sgps::spheresBinTouches_t i = 0; i < nBodiesMeHandle; i++) {
-            sgps::bodyID_t bodyID = sphereIDsEachBinTouchesSorted[myBodiesTableEntry + i];
+            sgps::bodyID_t bodyID = sphereIDsEachBinTouches_sorted[myBodiesTableEntry + i];
             ownerIDs[i] = granData->ownerClumpBody[bodyID];
             compOffsets[i] = granData->clumpComponentOffset[bodyID];
             double ownerX, ownerY, ownerZ;
@@ -110,7 +110,7 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
 
 __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
                                             sgps::DEMDataKT* granData,
-                                            sgps::bodyID_t* sphereIDsEachBinTouchesSorted,
+                                            sgps::bodyID_t* sphereIDsEachBinTouches_sorted,
                                             sgps::binID_t* activeBinIDs,
                                             sgps::spheresBinTouches_t* numSpheresBinTouches,
                                             sgps::binSphereTouchPairs_t* sphereIDsLookUpTable,
@@ -151,7 +151,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
         sgps::spheresBinTouches_t nBodiesMeHandle = numSpheresBinTouches[myActiveID];
         sgps::binSphereTouchPairs_t myBodiesTableEntry = sphereIDsLookUpTable[myActiveID];
         for (sgps::spheresBinTouches_t i = 0; i < nBodiesMeHandle; i++) {
-            sgps::bodyID_t bodyID = sphereIDsEachBinTouchesSorted[myBodiesTableEntry + i];
+            sgps::bodyID_t bodyID = sphereIDsEachBinTouches_sorted[myBodiesTableEntry + i];
             ownerIDs[i] = granData->ownerClumpBody[bodyID];
             bodyIDs[i] = bodyID;
             compOffsets[i] = granData->clumpComponentOffset[bodyID];

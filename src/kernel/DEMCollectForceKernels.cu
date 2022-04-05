@@ -53,24 +53,65 @@ __global__ void cashInMassMoiIndex(float* massOwner,
 
 // TODO: make it a template
 // computes a ./ b
-__global__ void elemDivide(float3* out, float3* a, float* b, double modifier, size_t n) {
+__global__ void forceToAcc(float3* acc,
+                           float3* F,
+                           sgps::bodyID_t* owner,
+                           double modifier,
+                           size_t n,
+                           sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets,
+                           float* massClumpBody,
+                           sgps::clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies) {
+    extern __shared__ float ClumpMasses[];
+    if (threadIdx.x == 0) {
+        for (unsigned int i = 0; i < nDistinctClumpBodyTopologies; i++) {
+            ClumpMasses[i] = massClumpBody[i];
+        }
+    }
+    __syncthreads();
     size_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
-        auto num = a[myID] * modifier;
-        auto den = b[myID];
-        out[myID] = num / den;
+        sgps::bodyID_t thisOwnerID = owner[myID];
+        sgps::clumpBodyInertiaOffset_t myMassOffset = inertiaPropOffsets[thisOwnerID];
+        float myMass = ClumpMasses[myMassOffset];
+        acc[myID] = F[myID] * modifier / myMass;
     }
 }
 
 // TODO: make it a template
 // computes cross(a, b) ./ c
-__global__ void elemCrossDivide(float3* out, float3* a, float3* b, float3* c, double modifier, size_t n) {
+__global__ void forceToAngAcc(float3* angAcc,
+                              float3* cntPnt,
+                              float3* F,
+                              sgps::bodyID_t* owner,
+                              double modifier,
+                              size_t n,
+                              sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets,
+                              float* mmiXX,
+                              float* mmiYY,
+                              float* mmiZZ,
+                              sgps::clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies) {
+    extern __shared__ float moiX[];
+    float* moiY = moiX + TEST_SHARED_SIZE;
+    float* moiZ = moiY + TEST_SHARED_SIZE;
+    if (threadIdx.x == 0) {
+        for (unsigned int i = 0; i < nDistinctClumpBodyTopologies; i++) {
+            moiX[i] = mmiXX[i];
+            moiY[i] = mmiYY[i];
+            moiZ[i] = mmiZZ[i];
+        }
+    }
+    __syncthreads();
     size_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
-        auto num1 = a[myID];
-        auto num2 = b[myID] * modifier;
-        auto den = c[myID];
-        out[myID] = cross(num1, num2) / den;
+        sgps::bodyID_t thisOwnerID = owner[myID];
+        sgps::clumpBodyInertiaOffset_t myMassOffset = inertiaPropOffsets[thisOwnerID];
+        float3 moi;
+        moi.x = moiX[myMassOffset];
+        moi.y = moiY[myMassOffset];
+        moi.z = moiZ[myMassOffset];
+        auto myCntPnt = cntPnt[myID];
+        auto myF = F[myID] * modifier;
+        angAcc[myID] = cross(myCntPnt, myF) / moi;
     }
 }
 

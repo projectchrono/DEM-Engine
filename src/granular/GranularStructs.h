@@ -30,12 +30,12 @@ class DEMSolverStateDataDT {
     std::vector<scratch_t, ManagedAllocator<scratch_t>> threadTempVector1;
     std::vector<scratch_t, ManagedAllocator<scratch_t>> threadTempVector2;
     std::vector<scratch_t, ManagedAllocator<scratch_t>> threadTempVector3;
+    std::vector<scratch_t, ManagedAllocator<scratch_t>> threadTempVector4;
+    std::vector<scratch_t, ManagedAllocator<scratch_t>> threadTempVector5;
 
     // The vectors used to cache some array (typically the result of some pre- or post-processing) which can potentially
     // be used across iterations.
     std::vector<scratch_t, ManagedAllocator<scratch_t>> threadCachedOwner;
-    std::vector<scratch_t, ManagedAllocator<scratch_t>> threadCachedMass;
-    std::vector<scratch_t, ManagedAllocator<scratch_t>> threadCachedMOI;
 
     /// current integration time step
     float crntStepSize;  // DN: needs to be brought here from GranParams
@@ -78,24 +78,24 @@ class DEMSolverStateDataDT {
         }
         return threadTempVector3.data();
     }
+    inline scratch_t* allocateTempVector4(size_t sizeNeeded) {
+        if (threadTempVector4.size() < sizeNeeded) {
+            threadTempVector4.resize(sizeNeeded);
+        }
+        return threadTempVector4.data();
+    }
+    inline scratch_t* allocateTempVector5(size_t sizeNeeded) {
+        if (threadTempVector5.size() < sizeNeeded) {
+            threadTempVector5.resize(sizeNeeded);
+        }
+        return threadTempVector5.data();
+    }
 
     inline scratch_t* allocateCachedOwner(size_t sizeNeeded) {
         if (threadCachedOwner.size() < sizeNeeded) {
             threadCachedOwner.resize(sizeNeeded);
         }
         return threadCachedOwner.data();
-    }
-    inline scratch_t* allocateCachedMass(size_t sizeNeeded) {
-        if (threadCachedMass.size() < sizeNeeded) {
-            threadCachedMass.resize(sizeNeeded);
-        }
-        return threadCachedMass.data();
-    }
-    inline scratch_t* allocateCachedMOI(size_t sizeNeeded) {
-        if (threadCachedMOI.size() < sizeNeeded) {
-            threadCachedMOI.resize(sizeNeeded);
-        }
-        return threadCachedMOI.data();
     }
 
     // inline void setForceCollectionRuns(size_t n) { *pForceCollectionRuns = n; }
