@@ -46,7 +46,7 @@ int main() {
     DEM_sim.Initialize();
 
     for (int i = 0; i < 100; i++) {
-        std::cout << "Iteration: " << i << std::endl;
+        std::cout << "Frame: " << i << std::endl;
 
         char filename[100];
         sprintf(filename, "./DEMdemo_collide_output_%04d.csv", i);

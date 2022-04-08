@@ -112,11 +112,12 @@ int main() {
         char filename[100];
         sprintf(filename, "./DEMdemo_collide_output_%04d.csv", i);
         DEM_sim.WriteFileAsSpheres(std::string(filename));
-        std::cout << "Iteration: " << i << std::endl;
+        std::cout << "Frame: " << i << std::endl;
 
         DEM_sim.LaunchThreads(5e-1);
     }
 
     std::cout << "DEMdemo_BulkCollide exiting..." << std::endl;
+    // TODO: add end-game report APIs
     return 0;
 }

@@ -30,8 +30,6 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
 
     // Only active bins got execute this...
     sgps::binID_t myActiveID = blockIdx.x * blockDim.x + threadIdx.x;
-    // But I got a true bin ID
-    sgps::binID_t binID = activeBinIDs[myActiveID];
     // I need to store all the sphereIDs that I am supposed to look into
     // A100 has about 164K shMem... these arrays really need to be small, or we can only fit a small number of bins in
     // one block
@@ -41,6 +39,9 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
     double bodyY[MAX_SPHERES_PER_BIN];
     double bodyZ[MAX_SPHERES_PER_BIN];
     if (myActiveID < nActiveBins) {
+        // I got a true bin ID
+        sgps::binID_t binID = activeBinIDs[myActiveID];
+
         sgps::spheresBinTouches_t contact_count = 0;
         // Grab the bodies that I care, put into local memory
         sgps::spheresBinTouches_t nBodiesMeHandle = numSpheresBinTouches[myActiveID];
@@ -135,8 +136,6 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
 
     // Only active bins got to execute this...
     sgps::binID_t myActiveID = blockIdx.x * blockDim.x + threadIdx.x;
-    // But I got a true bin ID
-    sgps::binID_t binID = activeBinIDs[myActiveID];
     // I need to store all the sphereIDs that I am supposed to look into
     // A100 has about 164K shMem... these arrays really need to be small, or we can only fit a small number of bins in
     // one block
@@ -147,6 +146,9 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
     double bodyY[MAX_SPHERES_PER_BIN];
     double bodyZ[MAX_SPHERES_PER_BIN];
     if (myActiveID < nActiveBins) {
+        // But I got a true bin ID
+        sgps::binID_t binID = activeBinIDs[myActiveID];
+
         // Grab the bodies that I care, put into local memory
         sgps::spheresBinTouches_t nBodiesMeHandle = numSpheresBinTouches[myActiveID];
         sgps::binSphereTouchPairs_t myBodiesTableEntry = sphereIDsLookUpTable[myActiveID];

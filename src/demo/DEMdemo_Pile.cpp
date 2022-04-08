@@ -16,7 +16,7 @@ using namespace sgps;
 int main() {
     DEMSolver DEM_sim;
 
-    srand(time(NULL));
+    srand(759);
 
     // total number of random clump templates to generate
     int num_template = 6;
@@ -46,10 +46,11 @@ int main() {
     std::vector<unsigned int> mat_vec(3, 0);
     */
 
-    auto mat_type_1 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.6);
+    auto mat_type_1 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.2);
 
     // First create clump type 0 for representing the ground
-    auto template_ground = DEM_sim.LoadClumpSimpleSphere(0.5, 0.02, mat_type_1);
+    float ground_sp_r = 0.02;
+    auto template_ground = DEM_sim.LoadClumpSimpleSphere(0.5, ground_sp_r, mat_type_1);
 
     // Then randomly create some clumps for piling up
     for (int i = 0; i < num_template; i++) {
@@ -95,17 +96,17 @@ int main() {
     // generate ground clumps
     std::vector<unsigned int> input_template_num;
     std::vector<unsigned int> family_code;
-    auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, -5.0), make_float3(4.5, 4.5, 0.001), 0.03);
+    auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, -3.8), make_float3(4.95, 4.95, 0.001), ground_sp_r * 1.3);
     // Mark family 1 as fixed
     family_code.insert(family_code.end(), input_xyz.size(), 1);
     input_template_num.insert(input_template_num.end(), input_xyz.size(), template_ground);
 
     // generate initial clumps for piling
-    float3 domain_center = make_float3(0);
+    float3 sample_center = make_float3(0, 0, 3);
     float sample_halfheight = 5;
-    float sample_halfwidth = 1.5;
+    float sample_halfwidth = 0.7;
     auto pile =
-        DEMBoxGridSampler(domain_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight), 0.05);
+        DEMBoxGridSampler(sample_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight), 0.05);
     input_xyz.insert(input_xyz.end(), pile.begin(), pile.end());
     unsigned int num_clumps = pile.size();
     for (unsigned int i = 0; i < num_clumps; i++) {
@@ -122,9 +123,8 @@ int main() {
     DEM_sim.SetTimeStepSize(1e-5);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEM_sim.SetCDUpdateFreq(10);
-    DEM_sim.SetExpandFactor(1.1);
-
+    DEM_sim.SetCDUpdateFreq(1);
+    DEM_sim.SetExpandFactor(1.0);
     DEM_sim.Initialize();
 
     DEM_sim.UpdateSimParams();  // Not needed; just testing if this function works...
@@ -133,10 +133,11 @@ int main() {
         char filename[100];
         sprintf(filename, "./DEMdemo_collide_output_%04d.csv", i);
         DEM_sim.WriteFileAsSpheres(std::string(filename));
-        std::cout << "Iteration: " << i << std::endl;
-        DEM_sim.LaunchThreads(5e-3);
+        std::cout << "Frame: " << i << std::endl;
+        DEM_sim.LaunchThreads(3e-2);
     }
 
     std::cout << "DEMdemo_Pile exiting..." << std::endl;
+    // TODO: add end-game report APIs
     return 0;
 }
