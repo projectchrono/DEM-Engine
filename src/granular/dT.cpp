@@ -592,6 +592,7 @@ void DEMDynamicThread::resetUserCallStat() {
     // Reset dT stats variables, making ready for next user call
     pSchedSupport->dynamicDone = false;
     pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
+    contactPairArr_isFresh = true;
 }
 
 }  // namespace sgps

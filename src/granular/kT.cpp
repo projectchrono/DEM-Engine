@@ -159,6 +159,7 @@ void DEMKinematicThread::contactDetection() {
             granData->idGeometryA = idGeometryA.data();
             granData->idGeometryB = idGeometryB.data();
         }
+        // std::cout << "NumContacts: " << stateOfSolver_resources.getNumContacts() << std::endl;
 
         contact_detection.kernel("populateContactPairsEachBin")
             .instantiate()

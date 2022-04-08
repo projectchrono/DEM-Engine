@@ -16,6 +16,7 @@ SET(DEMOS
 		DEMdemo_Pile
 		DEMdemo_BulkCollide
 		DEMdemo_SingleSphereCollide
+		DEMdemo_Penetrate
 		sphdemo
 		hello_world
 )
