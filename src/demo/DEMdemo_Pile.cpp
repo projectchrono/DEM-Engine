@@ -120,11 +120,11 @@ int main() {
     // DEM_sim.InstructBoxDomainNumVoxel(11, 11, 10, 1e-10);
 
     DEM_sim.CenterCoordSys();
-    DEM_sim.SetTimeStepSize(1e-5);
+    DEM_sim.SetTimeStepSize(5e-6);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEM_sim.SetCDUpdateFreq(1);
-    DEM_sim.SetExpandFactor(1.0);
+    DEM_sim.SetCDUpdateFreq(5);
+    DEM_sim.SetExpandFactor(1.1);
     DEM_sim.Initialize();
 
     DEM_sim.UpdateSimParams();  // Not needed; just testing if this function works...

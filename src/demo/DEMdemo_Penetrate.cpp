@@ -42,7 +42,7 @@ int main() {
     std::vector<unsigned int> input_template_num;
     std::vector<unsigned int> family_code;
     std::vector<float3> input_vel;
-    auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, 0), make_float3(ground_sp_r * 3, ground_sp_r * 3, 0.001),
+    auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, 0), make_float3(ground_sp_r * 1, ground_sp_r * 1, 0.001),
                                        ground_sp_r * 1.2);
     // Mark family 1 as fixed
     family_code.insert(family_code.end(), input_xyz.size(), 1);
@@ -53,7 +53,7 @@ int main() {
     input_template_num.push_back(template_ball);
     input_xyz.push_back(make_float3(0, 0, ground_sp_r + ball_sp_r));
     family_code.push_back(0);
-    input_vel.push_back(make_float3(0.2, 0, 0));
+    input_vel.push_back(make_float3(0, 0, 0));
 
     DEM_sim.SetClumps(input_template_num, input_xyz);
     DEM_sim.SetClumpFamily(family_code);
@@ -65,7 +65,7 @@ int main() {
     DEM_sim.SetTimeStepSize(1e-5);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEM_sim.SetCDUpdateFreq(1);
+    DEM_sim.SetCDUpdateFreq(0);
     DEM_sim.SetExpandFactor(1.0);
     DEM_sim.Initialize();
 

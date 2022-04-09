@@ -422,6 +422,8 @@ inline void DEMDynamicThread::calculateForces() {
                    streamInfo.stream)
         .launch(simParams, granData, stateOfSolver_resources.getNumContacts(), granTemplates);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    // displayFloat3(granData->contactForces, stateOfSolver_resources.getNumContacts());
+    // std::cout << "===========================" << std::endl;
 
     // Reflect those body-wise forces on their owner clumps
     // hostCollectForces(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,

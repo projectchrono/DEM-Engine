@@ -222,9 +222,9 @@ class DEMSolver {
     // it's somewhat slow.
     // TODO: fixed particles should automatically attain status indicating they don't interact with each other.
 
-    // The number of dT steps before it waits for a kT update. The default value 1 means every dT step will wait for a
+    // The number of dT steps before it waits for a kT update. The default value 0 means every dT step will wait for a
     // newly produced contact-pair info (from kT) before proceeding.
-    int updateFreq = 1;
+    int updateFreq = 0;
 
     GpuManager* dTkT_GpuManager;
     ThreadManager* dTkT_InteractionManager;

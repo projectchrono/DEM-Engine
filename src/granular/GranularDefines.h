@@ -13,7 +13,7 @@ namespace sgps {
 #define N_MANUFACTURED_ITEMS 4
 #define NUM_BINS_PER_BLOCK 128
 #define NUM_BODIES_PER_BLOCK 512
-#define MAX_SPHERES_PER_BIN 64  // very tricky; should redo CD kernels to be block--bin based
+#define MAX_SPHERES_PER_BIN 32  // very tricky; should redo CD kernels to be block--bin based
 #define WAIT_GRANULARITY_MS 1
 #define TEST_SHARED_SIZE 128
 #ifndef SGPS_DEM_TINY_FLOAT

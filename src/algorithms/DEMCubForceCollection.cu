@@ -3,6 +3,7 @@
 //  All rights reserved.
 
 #include <cub/cub.cuh>
+// #include <thrust/sort.h>
 #include <core/utils/JitHelper.h>
 #include <helper_math.cuh>
 
@@ -13,10 +14,9 @@
 
 namespace sgps {
 
-struct CubAdd {
-    template <typename T>
-    CUB_RUNTIME_FUNCTION __forceinline__ T operator()(const T& a, const T& b) const {
-        return a + b;
+struct CubFloat3Add {
+    CUB_RUNTIME_FUNCTION __forceinline__ __device__ __host__ float3 operator()(const float3& a, const float3& b) const {
+        return ::make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
     }
 };
 
@@ -125,7 +125,7 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
         .launch(h2a_B, contactForces, idBOwner, -1. * h * h / l, nContactPairs, inertiaPropOffsets, massClumpBody,
                 nDistinctClumpBodyTopologies);
     GPU_CALL(cudaStreamSynchronize(this_stream));
-    CubAdd reduction_op;
+    CubFloat3Add float3_add_op;
     // Reducing the acceleration (2 * nContactPairs for both body A and B)
     // Note: to do this, idAOwner needs to be sorted along with h2a_A. So we sort first.
     size_t cub_scratch_bytes = 0;
@@ -138,12 +138,12 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // Then we reduce by key
     cub::DeviceReduce::ReduceByKey(NULL, cub_scratch_bytes, idAOwner_sorted, uniqueOwner, h2a_A_sorted, accOwner,
-                                   scratchPad.getForceCollectionRunsPointer(), reduction_op, nContactPairs * 2,
+                                   scratchPad.getForceCollectionRunsPointer(), float3_add_op, nContactPairs * 2,
                                    this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
     cub::DeviceReduce::ReduceByKey(d_scratch_space, cub_scratch_bytes, idAOwner_sorted, uniqueOwner, h2a_A_sorted,
-                                   accOwner, scratchPad.getForceCollectionRunsPointer(), reduction_op,
+                                   accOwner, scratchPad.getForceCollectionRunsPointer(), float3_add_op,
                                    nContactPairs * 2, this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // stash acceleration
@@ -189,12 +189,12 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // Then we reduce
     cub::DeviceReduce::ReduceByKey(NULL, cub_scratch_bytes, idAOwner_sorted, uniqueOwner, h2Alpha_A_sorted, accOwner,
-                                   scratchPad.getForceCollectionRunsPointer(), reduction_op, nContactPairs * 2,
+                                   scratchPad.getForceCollectionRunsPointer(), float3_add_op, nContactPairs * 2,
                                    this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
     cub::DeviceReduce::ReduceByKey(d_scratch_space, cub_scratch_bytes, idAOwner_sorted, uniqueOwner, h2Alpha_A_sorted,
-                                   accOwner, scratchPad.getForceCollectionRunsPointer(), reduction_op,
+                                   accOwner, scratchPad.getForceCollectionRunsPointer(), float3_add_op,
                                    nContactPairs * 2, this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // stash angular acceleration
