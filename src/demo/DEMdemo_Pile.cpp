@@ -96,8 +96,10 @@ int main() {
     // generate ground clumps
     std::vector<unsigned int> input_template_num;
     std::vector<unsigned int> family_code;
-    auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, -3.8), make_float3(4.95, 4.95, 0.001), ground_sp_r * 1.3);
-    // Mark family 1 as fixed
+    auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, -3.8), make_float3(5.2, 5.2, 0.001), ground_sp_r * 1.3);
+    // // generate domain bottom
+    // auto domain_bottom = DEMBoxGridSampler(make_float3(0, 0, -10.0), make_float3(5.2, 5.2, 0.001), ground_sp_r
+    // * 1.3); input_xyz.insert(input_xyz.end(), domain_bottom.begin(), domain_bottom.end()); Mark family 1 as fixed
     family_code.insert(family_code.end(), input_xyz.size(), 1);
     input_template_num.insert(input_template_num.end(), input_xyz.size(), template_ground);
 
@@ -124,7 +126,9 @@ int main() {
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEM_sim.SetCDUpdateFreq(5);
-    DEM_sim.SetExpandFactor(1.1);
+    // DEM_sim.SetExpandFactor(1e-3);
+    DEM_sim.SuggestExpandFactor(10.);
+    DEM_sim.SuggestExpandSafetyParam(2.);
     DEM_sim.Initialize();
 
     DEM_sim.UpdateSimParams();  // Not needed; just testing if this function works...

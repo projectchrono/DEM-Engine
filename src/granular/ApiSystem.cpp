@@ -17,7 +17,7 @@ namespace sgps {
 
 DEMSolver::DEMSolver(unsigned int nGPUs) {
     dTkT_InteractionManager = new ThreadManager();
-    // dTkT_InteractionManager->dynamicRequestedUpdateFrequency = updateFreq;
+    // dTkT_InteractionManager->dynamicRequestedUpdateFrequency = m_updateFreq;
 
     dTkT_GpuManager = new GpuManager(nGPUs);
 
@@ -66,6 +66,28 @@ float3 DEMSolver::CenterCoordSys() {
 
 void DEMSolver::SetExpandFactor(float beta) {
     m_expand_factor = beta;
+}
+
+void DEMSolver::SuggestExpandFactor(float max_vel, float max_time_per_CD) {
+    m_expand_factor = max_vel * max_time_per_CD;
+}
+
+void DEMSolver::SuggestExpandFactor(float max_vel) {
+    if (m_ts_size <= 0.0) {
+        SGPS_ERROR(
+            "Please set the constant time step size before calling this method, or supplying both the maximum expect "
+            "velocity AND maximum time between contact detections as arguments.");
+    }
+    if (m_updateFreq == 0) {
+        SGPS_ERROR(
+            "Please set contact detection frequency via SetCDUpdateFreq before calling this method, or supplying both "
+            "the maximum expect velocity AND maximum time between contact detections as arguments.");
+    }
+    DEMSolver::SuggestExpandFactor(max_vel, m_ts_size * m_updateFreq);
+}
+
+void DEMSolver::SuggestExpandSafetyParam(float param) {
+    m_expand_safety_param = param;
 }
 
 void DEMSolver::SetGravitationalAcceleration(float3 g) {
@@ -140,17 +162,16 @@ void DEMSolver::figureOutNV() {
 
 void DEMSolver::decideDefaultBinSize() {
     // find the smallest radius
-    float smallest_radius = FLT_MAX;
     for (auto elem : m_template_sp_radii) {
         for (auto radius : elem) {
-            if (radius < smallest_radius) {
-                smallest_radius = radius;
+            if (radius < m_smallest_radius) {
+                m_smallest_radius = radius;
             }
         }
     }
 
     // What should be a default bin size?
-    m_binSize = 1.0 * smallest_radius;
+    m_binSize = 1.0 * m_smallest_radius;
 }
 
 void DEMSolver::figureOutMaterialProxies() {
@@ -264,6 +285,15 @@ int DEMSolver::generateJITResources() {
         nSpheresGM += this_radii.size();
     }
 
+    // Enlarge the expand factor if the user tells us to
+    m_expand_factor *= m_expand_safety_param;
+    if (m_expand_factor > 0.0) {
+        std::cout << "All geometries are enlarged by " << m_expand_factor << " for contact detection purpose"
+                  << std::endl;
+        std::cout << "This in the case of smallest sphere, means expanding radius by "
+                  << (m_expand_factor / m_smallest_radius) * 100.0 << "%" << std::endl;
+    }
+
     // Process the loaded materials
     std::cout << "The number of material types: " << nMatTuples_computed << std::endl;
     figureOutMaterialProxies();
@@ -335,6 +365,25 @@ void DEMSolver::validateUserInputs() {
     if (m_sp_materials.size() == 0) {
         SGPS_ERROR("Before initializing the system, at least one material type should be loaded via LoadMaterialType.");
     }
+    if (m_ts_size <= 0.0 && ts_size_is_const) {
+        SGPS_ERROR(
+            "Time step size is set to be %f. Please supply a positive number via SetTimeStepSize, or define the "
+            "variable stepping properly.",
+            m_ts_size);
+    }
+    if (m_expand_factor <= 0.0 && m_updateFreq > 0) {
+        std::cout << "\nWARNING! You instructed that the physics can stretch " << m_updateFreq
+                  << " time steps into the future, but did not instruct the geometries to expand via "
+                     "SuggestExpandFactor. The contact detection procedure will likely fail to detect some contact "
+                     "events before it is too late, hindering the simulation accuracy and stability."
+                  << std::endl;
+    }
+    if (m_updateFreq < 0) {
+        std::cout << "\nWARNING! The physics of the granular system can drift into the future as much as it wants "
+                     "compared to contact detections, because SetCDUpdateFreq was called with a negative argument. "
+                     "Please make sure this is intended."
+                  << std::endl;
+    }
 
     // TODO: Add check for inputs sizes (nClumps, nSpheres, nMat, nTopo...)
 }
@@ -396,7 +445,7 @@ int DEMSolver::LaunchThreads(double thisCallDuration) {
     dT->setNDynamicCycles(nDTIters);
 
     // Make sure dT kT understand the lock--waiting policy of this run
-    dTkT_InteractionManager->dynamicRequestedUpdateFrequency = updateFreq;
+    dTkT_InteractionManager->dynamicRequestedUpdateFrequency = m_updateFreq;
 
     dT->startThread();
     kT->startThread();

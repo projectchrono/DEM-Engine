@@ -82,8 +82,6 @@ class DEMKinematicThread {
     // Those are the smaller ones, the unique, template ones. TODO: These should be jitified into kernels not brought
     // from global mem The distinct sphere radii values
     std::vector<float, ManagedAllocator<float>> radiiSphere;
-    // Radii times beta, expressed as the multiple of voxelSize, used only in contact detection (TODO: Remove this
-    // unused array) std::vector<unsigned int, ManagedAllocator<unsigned int>> inflatedRadiiVoxelRatio;
 
     // The distinct sphere local position (wrt CoM) values
     std::vector<float, ManagedAllocator<float>> relPosSphereX;
@@ -202,6 +200,9 @@ class DEMKinematicThread {
     void unpackMyBuffer();
     // Send produced data to dT-owned biffers
     void sendToTheirBuffer();
+
+    // Just-in-time compiled kernels
+
 };  // kT ends
 
 }  // namespace sgps

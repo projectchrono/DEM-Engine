@@ -15,7 +15,7 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
     __shared__ float CDRelPosZ[TEST_SHARED_SIZE];
     if (threadIdx.x == 0) {
         for (unsigned int i = 0; i < simParams->nDistinctClumpComponents; i++) {
-            CDRadii[i] = granTemplates->radiiSphere[i] * simParams->beta;
+            CDRadii[i] = granTemplates->radiiSphere[i] + simParams->beta;
             CDRelPosX[i] = granTemplates->relPosSphereX[i];
             CDRelPosY[i] = granTemplates->relPosSphereY[i];
             CDRelPosZ[i] = granTemplates->relPosSphereZ[i];
@@ -78,7 +78,7 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
     __shared__ float CDRelPosZ[TEST_SHARED_SIZE];
     if (threadIdx.x == 0) {
         for (unsigned int i = 0; i < simParams->nDistinctClumpComponents; i++) {
-            CDRadii[i] = granTemplates->radiiSphere[i] * simParams->beta;
+            CDRadii[i] = granTemplates->radiiSphere[i] + simParams->beta;
             CDRelPosX[i] = granTemplates->relPosSphereX[i];
             CDRelPosY[i] = granTemplates->relPosSphereY[i];
             CDRelPosZ[i] = granTemplates->relPosSphereZ[i];

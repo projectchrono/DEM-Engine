@@ -32,7 +32,7 @@ inline __device__ float3 calcNormalForce(const double& overlapDepth,
     float beta = loge / sqrt(loge * loge + SGPS_PI_SQUARED);
 
     const float k_n = SGPS_TWO_OVER_THREE * Sn;
-    const float gamma_n = 2. * SGPS_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
+    const float gamma_n = SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
 
     // normal force (that A feels)
     // printf("overlapDepth: %f\n", overlapDepth);
@@ -55,7 +55,7 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
     float* ClumpMasses = Radii + 4 * TEST_SHARED_SIZE;
     if (threadIdx.x == 0) {
         for (unsigned int i = 0; i < simParams->nDistinctClumpComponents; i++) {
-            Radii[i] = granTemplates->radiiSphere[i] * simParams->beta;
+            Radii[i] = granTemplates->radiiSphere[i] + simParams->beta;
             CDRelPosX[i] = granTemplates->relPosSphereX[i];
             CDRelPosY[i] = granTemplates->relPosSphereY[i];
             CDRelPosZ[i] = granTemplates->relPosSphereZ[i];

@@ -104,7 +104,7 @@ int main() {
     DEM_sim.SetTimeStepSize(1e-5);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, 0));
     DEM_sim.SetCDUpdateFreq(20);
-    DEM_sim.SetExpandFactor(1.1);
+    DEM_sim.SuggestExpandFactor(0.6, 1e-5 * 20);
 
     DEM_sim.Initialize();
 

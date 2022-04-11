@@ -64,12 +64,8 @@ int main() {
     DEM_sim.CenterCoordSys();
     DEM_sim.SetTimeStepSize(1e-5);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
-    // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEM_sim.SetCDUpdateFreq(0);
-    DEM_sim.SetExpandFactor(1.0);
     DEM_sim.Initialize();
-
-    DEM_sim.UpdateSimParams();  // Not needed; just testing if this function works...
 
     for (int i = 0; i < 200; i++) {
         char filename[100];
@@ -79,7 +75,7 @@ int main() {
         DEM_sim.LaunchThreads(3e-3);
     }
 
-    std::cout << "DEMdemo_Penetrate exiting..." << std::endl;
+    std::cout << "DEMdemo_Stack exiting..." << std::endl;
     // TODO: add end-game report APIs
     return 0;
 }

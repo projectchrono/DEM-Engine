@@ -50,7 +50,7 @@ struct DEMSimParams {
     float Gz;
     // Time step size
     double h;
-    // Sphere radii inflation ratio (for safer contact detection)
+    // Sphere radii/geometry thickness inflation amount (for safer contact detection)
     float beta;
 };
 
