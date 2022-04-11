@@ -33,16 +33,28 @@ void JitHelper::Header::substitute(const std::string& symbol, const std::string&
 
 jitify::Program JitHelper::buildProgram(const std::string& name,
                                         const std::filesystem::path& source,
-                                        std::vector<JitHelper::Header> headers,
+										std::unordered_map<std::string, std::string> substitutions,
+                                        // std::vector<JitHelper::Header> headers, // THIS PARAMETER PROBABLY WON'T EVER BE USED 
                                         std::vector<std::string> flags) {
     std::string code = name + "\n";
 
-    std::vector<std::string> header_code;
-    for (auto it = headers.begin(); it != headers.end(); it++) {
-        header_code.push_back(it->getSource());
-    }
+	// Generate block of substitution macros 
+	code.append("#ifndef SGPS_KERNEL_SUBSTITUTIONS\n");
+	code.append("#define SGPS_KERNEL_SUBSTITUTIONS\n");
+	for (auto& subst : substitutions) {
+		code.append("#define " + subst.first + " " + subst.second + "\n");
+	}
+	code.append("#endif\n");
 
     code.append(JitHelper::loadSourceFile(source));
 
+    std::vector<std::string> header_code;
+	// THIS BLOCK IS ONLY NEEDED IF THE headers PARAMETER IS USED 
+    /*
+	for (auto it = headers.begin(); it != headers.end(); it++) {
+        header_code.push_back(it->getSource());
+    }
+	*/
+	
     return kcache.program(code, header_code, flags);
 }

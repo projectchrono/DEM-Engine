@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include <jitify.hpp>
 
@@ -25,7 +26,7 @@ class JitHelper {
 
     static jitify::Program buildProgram(const std::string& name,
                                         const std::filesystem::path& source,
-                                        std::vector<Header> headers = std::vector<Header>(),
+										std::unordered_map<std::string, std::string>(),
                                         std::vector<std::string> flags = std::vector<std::string>());
 
     //// I'm pretty sure C++17 auto-converts this
