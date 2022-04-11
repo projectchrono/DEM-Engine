@@ -3,6 +3,8 @@
 
 #include <sph/SPHSystem.h>
 
+using namespace sgps;
+
 int main(int argc, char* argv[]) {
     // initialize particles in a cubic 10x10x10 domain
     float dim_x = 32;
@@ -30,10 +32,10 @@ int main(int argc, char* argv[]) {
     for (int j = 0 / 2; j < num_y / 2; j++) {
         for (int i = 0 / 2; i < num_x / 2; i++) {
             float temp_z = -dim_z / 2 + kernel_h;
-            pos_vec.push_back(float3(-dim_x / 8 + i * (2 * kernel_h + gap) + kernel_h,
-                                     -dim_y / 8 + j * (2 * kernel_h + gap) + kernel_h, temp_z));
-            vel_vec.push_back(float3(0, 0, 0));
-            acc_vec.push_back(float3(0, 0, 0));
+            pos_vec.push_back(make_float3(-dim_x / 8 + i * (2 * kernel_h + gap) + kernel_h,
+                                          -dim_y / 8 + j * (2 * kernel_h + gap) + kernel_h, temp_z));
+            vel_vec.push_back(make_float3(0, 0, 0));
+            acc_vec.push_back(make_float3(0, 0, 0));
             fix_vec.push_back(1);
             num_par++;
         }
@@ -45,10 +47,10 @@ int main(int argc, char* argv[]) {
             for (int i = 0; i < num_x / 4; i++) {
                 float temp_z = -dim_z / 2 + 2 * (kernel_h + 2 * gap) * (k) + kernel_h + gap;
 
-                pos_vec.push_back(float3(-dim_x / 16 + i * (2 * kernel_h + gap) + kernel_h,
-                                         -dim_y / 16 + j * (2 * kernel_h + gap) + kernel_h, temp_z));
-                vel_vec.push_back(float3(0, 0, 0));
-                acc_vec.push_back(float3(0, 0, 0));
+                pos_vec.push_back(make_float3(-dim_x / 16 + i * (2 * kernel_h + gap) + kernel_h,
+                                              -dim_y / 16 + j * (2 * kernel_h + gap) + kernel_h, temp_z));
+                vel_vec.push_back(make_float3(0, 0, 0));
+                acc_vec.push_back(make_float3(0, 0, 0));
                 fix_vec.push_back(0);
 
                 num_par++;
