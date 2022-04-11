@@ -383,9 +383,9 @@ inline void DEMDynamicThread::calculateForces() {
                                          : stateOfSolver_resources.getNumContacts();
     size_t blocks_needed_for_prep = (threads_needed_for_prep + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
 
-    auto prep_force =
-        JitHelper::buildProgram("DEMPrepForceKernels", JitHelper::KERNEL_DIR / "DEMPrepForceKernels.cu",
-                                std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+    auto prep_force = JitHelper::buildProgram("DEMPrepForceKernels", JitHelper::KERNEL_DIR / "DEMPrepForceKernels.cu",
+                                              std::unordered_map<std::string, std::string>(),
+                                              {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
     prep_force.kernel("prepareForceArrays")
         .instantiate()
@@ -411,9 +411,9 @@ inline void DEMDynamicThread::calculateForces() {
 
     size_t blocks_needed_for_contacts =
         (stateOfSolver_resources.getNumContacts() + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
-    auto cal_force =
-        JitHelper::buildProgram("DEMFrictionlessForceKernels", JitHelper::KERNEL_DIR / "DEMFrictionlessForceKernels.cu",
-                                std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+    auto cal_force = JitHelper::buildProgram(
+        "DEMFrictionlessForceKernels", JitHelper::KERNEL_DIR / "DEMFrictionlessForceKernels.cu",
+        std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
     // a custom kernel to compute forces
     cal_force.kernel("calculateNormalContactForces")
@@ -458,9 +458,9 @@ inline void DEMDynamicThread::calculateForces() {
 
 inline void DEMDynamicThread::integrateClumpMotions() {
     size_t blocks_needed_for_clumps = (simParams->nClumpBodies + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
-    auto integrator =
-        JitHelper::buildProgram("DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu",
-                                std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+    auto integrator = JitHelper::buildProgram(
+        "DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu",
+        std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
     integrator.kernel("integrateClumps")
         .instantiate()
         .configure(dim3(blocks_needed_for_clumps), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)

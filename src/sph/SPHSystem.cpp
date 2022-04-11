@@ -163,7 +163,7 @@ void KinematicThread::operator()() {
         // initiate JitHelper to perform JITC
         auto kinematic_program =
             JitHelper::buildProgram("SPHKinematicKernels", JitHelper::KERNEL_DIR / "SPHKinematicKernels.cu",
-                                    std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+                                    std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
         // ==============================================================================================================
         // Kinematic Step 1
@@ -463,7 +463,7 @@ void DynamicThread::operator()() {
 
         auto dynamic_program =
             JitHelper::buildProgram("SPHDynamicKernels", JitHelper::KERNEL_DIR / "SPHDynamicKernels.cu",
-                                    std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+                                    std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
         // Dynamic Step 1
         // Use GPU to fill in the contact forces in each pair of contactData element

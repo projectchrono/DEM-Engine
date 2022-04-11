@@ -28,9 +28,9 @@ void DEMKinematicThread::contactDetection() {
     binsSphereTouches_t* numBinsSphereTouches =
         (binsSphereTouches_t*)stateOfSolver_resources.allocateTempVector1(CD_temp_arr_bytes);
     size_t blocks_needed_for_bodies = (simParams->nSpheresGM + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
-    auto bin_occupation =
-        JitHelper::buildProgram("DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
-                                std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+    auto bin_occupation = JitHelper::buildProgram(
+        "DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
+        std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
     bin_occupation.kernel("getNumberOfBinsEachSphereTouches")
         .instantiate()
@@ -129,9 +129,9 @@ void DEMKinematicThread::contactDetection() {
     size_t blocks_needed_for_bins =
         (stateOfSolver_resources.getNumActiveBins() + NUM_BINS_PER_BLOCK - 1) / NUM_BINS_PER_BLOCK;
     if (blocks_needed_for_bins > 0) {
-        auto contact_detection =
-            JitHelper::buildProgram("DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu",
-                                    std::vector<JitHelper::Header>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+        auto contact_detection = JitHelper::buildProgram(
+            "DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu",
+            std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
         contact_detection.kernel("getNumberOfContactsEachBin")
             .instantiate()

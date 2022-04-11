@@ -24,10 +24,11 @@ class JitHelper {
         std::string _source;
     };
 
-    static jitify::Program buildProgram(const std::string& name,
-                                        const std::filesystem::path& source,
-										std::unordered_map<std::string, std::string>(),
-                                        std::vector<std::string> flags = std::vector<std::string>());
+    static jitify::Program buildProgram(
+        const std::string& name,
+        const std::filesystem::path& source,
+        std::unordered_map<std::string, std::string> substitutions = std::unordered_map<std::string, std::string>(),
+        std::vector<std::string> flags = std::vector<std::string>());
 
     //// I'm pretty sure C++17 auto-converts this
     // static jitify::Program buildProgram(
