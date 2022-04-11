@@ -16,16 +16,22 @@
 #include <atomic>
 
 struct DataManager {
-    float radius;
-    std::vector<vector3, sgps::ManagedAllocator<vector3>> m_pos;  // particle locations
-    std::vector<vector3, sgps::ManagedAllocator<vector3>> m_vel;  // particle velocities
-    std::vector<vector3, sgps::ManagedAllocator<vector3>> m_acc;  // particle accelerations
-    std::vector<char, sgps::ManagedAllocator<char>> m_fix;        // particle fixity
-    std::vector<int, sgps::ManagedAllocator<int>> m_idx;          // particle l2 domain idx
-    // std::vector<int, sgps::ManagedAllocator<int>> m_idx_hd;                   // particle l2 starting idx
-    std::vector<contactData, sgps::ManagedAllocator<contactData>> m_contact;  // contact pair data
+    float kernel_h;
+    float m;
+    float rho_0;
+    std::vector<float3, sgps::ManagedAllocator<float3>> m_pos;     // particle locations
+    std::vector<float3, sgps::ManagedAllocator<float3>> m_vel;     // particle velocities
+    std::vector<float3, sgps::ManagedAllocator<float3>> m_acc;     // particle accelerations
+    std::vector<char, sgps::ManagedAllocator<char>> m_fix;         // particle fixity
+    std::vector<int, sgps::ManagedAllocator<int>> m_idx;           // particle l2 domain idx
+    std::vector<int, sgps::ManagedAllocator<int>> m_offset;        // index offset array for the contact pair data
+    std::vector<float, sgps::ManagedAllocator<float>> m_rho;       // density of each particle location
+    std::vector<float, sgps::ManagedAllocator<float>> m_pressure;  // pressure associated with each particle
 
-    std::vector<int, sgps::ManagedAllocator<int>> m_offset;  // index offset array for the contact pair data
+    // collision data
+    std::vector<int, sgps::ManagedAllocator<int>> m_pair_i;        // i particle of collision pair
+    std::vector<int, sgps::ManagedAllocator<int>> m_pair_j;        // j particle of collision pair
+    std::vector<float3, sgps::ManagedAllocator<float3>> m_W_grad;  // w gradient for each collision pair
 };
 
 class SPHSystem;
@@ -135,10 +141,12 @@ class SPHSystem {
 
     // initialize the SPHSystem with pos as the particle positions
     // n as the total number of particles initialized in the SPHSystem
-    void initialize(float radius,
-                    std::vector<vector3>& pos,
-                    std::vector<vector3>& vel,
-                    std::vector<vector3>& acc,
+    void initialize(float kernel_h,
+                    float m,
+                    float rho_0,
+                    std::vector<float3>& pos,
+                    std::vector<float3>& vel,
+                    std::vector<float3>& acc,
                     std::vector<char>& fix,
                     float domain_x,
                     float domain_y,
@@ -148,8 +156,8 @@ class SPHSystem {
     void doStepDynamics(float time_step, float sim_time);
 
     // print particle file to csv for paraview visualization purposes
-    void printCSV(std::string filename, vector3* pos_arr, int pos_n, vector3* vel_arr, vector3* acc_arr);
-    void printCSV(std::string filename, vector3* pos_arr, int pos_n, vector3* vel_arr);
+    void printCSV(std::string filename, float3* pos_arr, int pos_n, float3* vel_arr, float3* acc_arr);
+    void printCSV(std::string filename, float3* pos_arr, int pos_n, float3* vel_arr);
 
     // dual gpu coordinations
     std::mutex& getMutexPos() { return mutex_lock_pos; }

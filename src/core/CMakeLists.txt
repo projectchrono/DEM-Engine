@@ -37,7 +37,6 @@ set(core_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuManager.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/Macros.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/chpf/particle_writer.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/utils/CpuAlgorithmHelper.h
 	${NVIDIAMathDir}/helper_math.h
 )
 
@@ -45,7 +44,6 @@ set(core_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/DebugInfo.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuManager.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/JitHelper.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/utils/CpuAlgorithmHelper.cpp
 )
 
 target_sources(
