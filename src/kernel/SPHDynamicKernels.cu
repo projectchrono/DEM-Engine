@@ -1,7 +1,7 @@
 // All Dynamic CUDA kernels for SPH in gpu-physics
 
 #include <sph/datastruct.h>
-
+#include <kernel/CUDAMathHelpers.cu>
 // =================================================================================================================
 // ========================================= START of Dynamic kernels ==============================================
 // =================================================================================================================
@@ -10,39 +10,27 @@
 // Dynamic 1st Pass, this pass compute the contact force of each contact pair
 // the computed force will be filled in contact_force field in each contact pair
 // =================================================================================================================
-__global__ void dynamicStep1(contactData* gpu_pair_data,
-                             int gpu_pair_n,
-                             vector3* gpu_pos,
-                             vector3* gpu_vel,
-                             vector3* gpu_acc,
-                             bool* gpu_fix,
-                             float radius) {
+__global__ void dynamicStep1(int* pair_i_data,
+                             int* pair_j_data,
+                             float* rho_data,
+                             float* pressure_data,
+                             float3* col_acc_data,
+                             float3* W_grad_data,
+                             int n_col,
+                             float kernel_h,
+                             float m) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (idx >= gpu_pair_n) {
+    if (idx >= n_col) {
         return;
     }
 
-    float dir_x = gpu_pos[gpu_pair_data[idx].contact_pair.x].x - gpu_pos[gpu_pair_data[idx].contact_pair.y].x;
-    float dir_y = gpu_pos[gpu_pair_data[idx].contact_pair.x].y - gpu_pos[gpu_pair_data[idx].contact_pair.y].y;
-    float dir_z = gpu_pos[gpu_pair_data[idx].contact_pair.x].z - gpu_pos[gpu_pair_data[idx].contact_pair.y].z;
+    int i_idx = pair_i_data[idx];
+    int j_idx = pair_j_data[idx];
 
-    float dist2 = dir_x * dir_x + dir_y * dir_y + dir_z * dir_z;
-
-    if (dist2 < (2 * radius) * (2 * radius)) {
-        float coe = 300.f;
-        float dist = sqrt(dist2);
-
-        float dir_x_norm = dir_x / dist;
-        float dir_y_norm = dir_y / dist;
-        float dir_z_norm = dir_z / dist;
-
-        float penetration = 2 * radius - dist;
-        // fill in contact pair data with respect to the first element of the contact pair data
-        gpu_pair_data[idx].contact_force.x = dir_x_norm * penetration * coe;
-        gpu_pair_data[idx].contact_force.y = dir_y_norm * penetration * coe;
-        gpu_pair_data[idx].contact_force.z = dir_z_norm * penetration * coe;
-    }
+    float coe = m * ((pressure_data[i_idx] / (rho_data[i_idx] * rho_data[i_idx])) +
+                     (pressure_data[j_idx] / (rho_data[j_idx] * rho_data[j_idx])));
+    col_acc_data[idx] = coe * W_grad_data[idx];
 }
 
 // =================================================================================================================
@@ -50,20 +38,62 @@ __global__ void dynamicStep1(contactData* gpu_pair_data,
 // for the original contact_pair array, pair i_a and j_a will only appear once
 // this pass makes sure that (i_a,j_a) will be in one contact_pair element and (j_a,i_a) will be in one contact_pair
 // =================================================================================================================
-__global__ void dynamicStep2(contactData* gpu_pair_data, int gpu_pair_n, contactData* inv_gpu_pair_data) {
+__global__ void dynamicStep2(int* pair_i_data,
+                             int* pair_j_data,
+                             float3* col_acc_data,
+                             int* inv_pair_i_data,
+                             float3* inv_col_acc_data,
+                             int n) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (idx >= gpu_pair_n) {
+    if (idx >= n) {
         return;
     }
 
-    inv_gpu_pair_data[idx].contact_pair.x = gpu_pair_data[idx].contact_pair.y;
-    inv_gpu_pair_data[idx].contact_pair.y = gpu_pair_data[idx].contact_pair.x;
-    inv_gpu_pair_data[idx].contact_force.x = -gpu_pair_data[idx].contact_force.x;
-    inv_gpu_pair_data[idx].contact_force.y = -gpu_pair_data[idx].contact_force.y;
-    inv_gpu_pair_data[idx].contact_force.z = -gpu_pair_data[idx].contact_force.z;
+    inv_pair_i_data[idx] = pair_j_data[idx];
+    inv_col_acc_data[idx].x = -col_acc_data[idx].x;
+    inv_col_acc_data[idx].y = -col_acc_data[idx].y;
+    inv_col_acc_data[idx].z = -col_acc_data[idx].z;
 }
 
+__global__ void dynamicStep4(int* pair_i_data_reduced, float3* col_acc_data_reduced, float3* acc_data, int n) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx >= n) {
+        return;
+    }
+
+    acc_data[pair_i_data_reduced[idx]] = col_acc_data_reduced[idx];
+}
+
+__global__ void dynamicStep5(float3* pos_data,
+                             float3* vel_data,
+                             float3* acc_data,
+                             char* fix_data,
+                             int n,
+                             float time_step,
+                             float kernel_h) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx >= n) {
+        return;
+    }
+
+    if (fix_data[idx] == 0) {
+        float grav = -9.8f;
+        acc_data[idx].z = acc_data[idx].z + grav;
+
+        vel_data[idx] = vel_data[idx] + acc_data[idx] * time_step;
+        pos_data[idx] = pos_data[idx] + vel_data[idx] * time_step;
+    }
+    __syncthreads();
+
+    acc_data[idx].x = 0.f;
+    acc_data[idx].y = 0.f;
+    acc_data[idx].z = 0.f;
+}
+
+/*
 // =================================================================================================================
 // Dynamic 3rd pass, this pass is intended to copy all reduced data into global memory gpu_acc
 // TODO: reconsider the necessity of existence of this kernel
@@ -92,7 +122,7 @@ __global__ void dynamicStep4(vector3* gpu_pos,
                              char* gpu_fix,
                              int gpu_n,
                              float time_step,
-                             float radius) {
+                             float kernel_h) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= gpu_n) {
@@ -117,6 +147,7 @@ __global__ void dynamicStep4(vector3* gpu_pos,
     gpu_acc[idx].y = 0.f;
     gpu_acc[idx].z = 0.f;
 }
+*/
 
 // =================================================================================================================
 // ========================================= END of Dynamic kernels ================================================
