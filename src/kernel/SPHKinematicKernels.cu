@@ -4,6 +4,37 @@
 // ========================================= START of Kinematic kernels ============================================
 // =================================================================================================================
 
+// All helper functions
+__device__ float W(float3 r, float h) {
+    float alpha_d = 3 / (2 * MATH_PI * h * h * h);
+    float R = sqrt(r.x * r.x + r.y * r.y + r.z * r.z) / h;
+
+    if (R >= 2) {
+        return 0;
+    } else if (R < 2 && R >= 1) {
+        return alpha_d * (1 / 6) * (2 - R) * (2 - R) * (2 - R);
+    } else {
+        return alpha_d * (2 / 3) - R * R + (1 / 2) * R * R * R;
+    }
+}
+
+__device__ float3 W_Grad(float3 r, float h) {
+    float alpha_d = 3 / (2 * MATH_PI * h * h * h);
+    float R = sqrt(r.x * r.x + r.y * r.y + r.z * r.z) / h;
+
+    float coe;
+    if (R >= 2) {
+        coe = 0;
+    } else if (R < 2 && R >= 1) {
+        coe = alpha_d * (1 / h) * (-0.5 * (2 - R) * (2 - R));
+    } else {
+        coe = alpha_d * (1 / h) * (-2 * R + (3 / 2) * R * R);
+    }
+    float3 r_normalized = r / sqrt(r.x * r.x + r.y * r.y + r.z * r.z);
+
+    return coe * r_normalized;
+}
+
 // =================================================================================================================
 // Kinematic 1st Step, this pass identifies number of BSDs touched by each particle
 // This kernel also fills the idx_track vector
@@ -567,14 +598,7 @@ __global__ void kinematicStep7(
 
                 float3 dir = pos_local[idx] - pos_local[i];
 
-                float r2 = dir.x * dir.x + dir.y * dir.y + dir.z * dir.z;
-
-                float h = kernel_h;
-                float n = -2 * exp(-r2 / (h * h)) / (h * h * h * h * h) / sqrt((MATH_PI) * (MATH_PI) * (MATH_PI));
-
-                W_grad_data[num_col_offset[sd_idx * 512 + idx] + count].x = n * dir.x;
-                W_grad_data[num_col_offset[sd_idx * 512 + idx] + count].y = n * dir.y;
-                W_grad_data[num_col_offset[sd_idx * 512 + idx] + count].z = n * dir.z;
+                W_grad_data[num_col_offset[sd_idx * 512 + idx] + count] = W_Grad(dir, kernel_h * 2);
 
                 count++;
             }
@@ -628,9 +652,8 @@ __global__ void kinematicStep9(float3* pos_data,
     for (int i = 0; i < len; i++) {
         int j_idx = j_data_sorted[start_idx + i];
         float3 dir = pos_data[i_idx] - pos_data[j_idx];
-        float r2 = dir.x * dir.x + dir.y * dir.y + dir.z * dir.z;
 
-        float w = 1.0 / ((h * sqrt(MATH_PI)) * (h * sqrt(MATH_PI)) * (h * sqrt(MATH_PI))) * exp(-r2 / (h * h));
+        float w = W(dir, 2 * h);
 
         rho_sum = rho_sum + m * w;
     }

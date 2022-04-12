@@ -70,7 +70,7 @@ void SPHSystem::printCSV(std::string filename, float3* pos_arr, int pos_n, float
     // write particle data into csv file
     for (int i = 0; i < pos_n; i++) {
         csvFile << pos_arr[i].x << "," << pos_arr[i].y << "," << pos_arr[i].z << "," << vel_arr[i].x << ","
-                << vel_arr[i].y << "," << vel_arr[i].z << "," << std::endl;
+                << vel_arr[i].y << "," << vel_arr[i].z << std::endl;
     }
 
     csvFile.close();
@@ -80,7 +80,7 @@ void SPHSystem::printCSV(std::string filename, float3* pos_arr, int pos_n, float
     // create file
     std::ofstream csvFile(filename);
 
-    csvFile << "x_pos,y_pos,z_pos,x_vel,y_vel,z_vel" << std::endl;
+    csvFile << "x_pos,y_pos,z_pos,x_vel,y_vel,z_vel,x_acc,y_acc,z_acc" << std::endl;
 
     // write particle data into csv file
     for (int i = 0; i < pos_n; i++) {
@@ -138,6 +138,11 @@ void KinematicThread::operator()() {
 
     std::vector<float3, sgps::ManagedAllocator<float3>> W_grad_data;  // local W grad data
 
+    // initiate JitHelper to perform JITC
+    auto kinematic_program = JitHelper::buildProgram(
+        "SPHKinematicKernels", JitHelper::KERNEL_DIR / "SPHKinematicKernels.cu",
+        std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+
     // intermediate variables declaration
 
     while (getParentSystem().curr_time < getParentSystem().sim_time) {
@@ -159,11 +164,6 @@ void KinematicThread::operator()() {
         float d_domain_x = getParentSystem().domain_x / X_SUB_NUM;
         float d_domain_y = getParentSystem().domain_y / Y_SUB_NUM;
         float d_domain_z = getParentSystem().domain_z / Z_SUB_NUM;
-
-        // initiate JitHelper to perform JITC
-        auto kinematic_program =
-            JitHelper::buildProgram("SPHKinematicKernels", JitHelper::KERNEL_DIR / "SPHKinematicKernels.cu",
-                                    std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
         // ==============================================================================================================
         // Kinematic Step 1
@@ -411,6 +411,10 @@ void DynamicThread::operator()() {
     float m;
     float rho_0;
 
+    auto dynamic_program = JitHelper::buildProgram("SPHDynamicKernels", JitHelper::KERNEL_DIR / "SPHDynamicKernels.cu",
+                                                   std::unordered_map<std::string, std::string>(),
+                                                   {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+
     // get total numer of particles
     int k_n;
     {
@@ -444,6 +448,11 @@ void DynamicThread::operator()() {
             W_grad_data.assign(dataManager.m_W_grad.begin(), dataManager.m_W_grad.end());
         }
 
+        /*
+                for (int i = 0; i < W_grad_data.size(); i++) {
+                    std::cout << W_grad_data[i].z << ",";
+                }
+        */
         // notify the system that the contact data is old
         getParentSystem().contact_data_isFresh = false;
 
@@ -457,13 +466,11 @@ void DynamicThread::operator()() {
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
             pos_data.assign(dataManager.m_pos.begin(), dataManager.m_pos.end());
             vel_data.assign(dataManager.m_vel.begin(), dataManager.m_vel.end());
-            acc_data.assign(dataManager.m_acc.begin(), dataManager.m_acc.end());
             fix_data.assign(dataManager.m_fix.begin(), dataManager.m_fix.end());
         }
 
-        auto dynamic_program =
-            JitHelper::buildProgram("SPHDynamicKernels", JitHelper::KERNEL_DIR / "SPHDynamicKernels.cu",
-                                    std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+        acc_data.clear();
+        acc_data.resize(pos_data.size());
 
         // Dynamic Step 1
         // Use GPU to fill in the contact forces in each pair of contactData element
@@ -600,11 +607,12 @@ void WriteOutThread::operator()() {
                 const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
                 wt_pos.assign(dataManager.m_pos.begin(), dataManager.m_pos.end());
                 wt_vel.assign(dataManager.m_vel.begin(), dataManager.m_vel.end());
+                wt_acc.assign(dataManager.m_acc.begin(), dataManager.m_acc.end());
                 getParentSystem().wt_buffer_fresh = false;
             }
 
             getParentSystem().printCSV("sph_folder/test" + std::to_string(writeOutCounter) + ".csv", wt_pos.data(),
-                                       wt_pos.size(), wt_vel.data());
+                                       wt_pos.size(), wt_vel.data(), wt_acc.data());
             getParentSystem().wt_thread_busy = false;
             writeOutCounter++;
             std::cout << "wo ct:" << writeOutCounter << std::endl;

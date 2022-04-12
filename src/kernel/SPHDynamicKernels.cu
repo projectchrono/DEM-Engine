@@ -30,7 +30,7 @@ __global__ void dynamicStep1(int* pair_i_data,
 
     float coe = m * ((pressure_data[i_idx] / (rho_data[i_idx] * rho_data[i_idx])) +
                      (pressure_data[j_idx] / (rho_data[j_idx] * rho_data[j_idx])));
-    col_acc_data[idx] = coe * W_grad_data[idx];
+    col_acc_data[idx] = -coe * W_grad_data[idx];
 }
 
 // =================================================================================================================
@@ -87,10 +87,6 @@ __global__ void dynamicStep5(float3* pos_data,
         pos_data[idx] = pos_data[idx] + vel_data[idx] * time_step;
     }
     __syncthreads();
-
-    acc_data[idx].x = 0.f;
-    acc_data[idx].y = 0.f;
-    acc_data[idx].z = 0.f;
 }
 
 /*
