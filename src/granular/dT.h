@@ -245,6 +245,9 @@ class DEMDynamicThread {
     // Reset userCallDone back to false
     void resetUserCallStat();
 
+    // Jitify dT kernels (at initialization) based on existing knowledge of this run
+    void jitifyKernels();
+
   private:
     // update clump-based acceleration array based on sphere-based force array
     void calculateForces();

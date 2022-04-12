@@ -13,7 +13,6 @@
 #include <granular/kT.h>
 #include <granular/dT.h>
 #include <granular/HostSideHelpers.cpp>
-#include <core/utils/JitHelper.h>
 
 #include <algorithms/DEMCubHelperFunctions.h>
 
@@ -28,11 +27,8 @@ void DEMKinematicThread::contactDetection() {
     binsSphereTouches_t* numBinsSphereTouches =
         (binsSphereTouches_t*)stateOfSolver_resources.allocateTempVector1(CD_temp_arr_bytes);
     size_t blocks_needed_for_bodies = (simParams->nSpheresGM + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
-    auto bin_occupation = JitHelper::buildProgram(
-        "DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
-        std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
-    bin_occupation.kernel("getNumberOfBinsEachSphereTouches")
+    bin_occupation->kernel("getNumberOfBinsEachSphereTouches")
         .instantiate()
         .configure(dim3(blocks_needed_for_bodies), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
                    streamInfo.stream)
@@ -57,7 +53,7 @@ void DEMKinematicThread::contactDetection() {
     binID_t* binIDsEachSphereTouches = (binID_t*)stateOfSolver_resources.allocateTempVector1(CD_temp_arr_bytes);
     CD_temp_arr_bytes = stateOfSolver_resources.getNumBinSphereTouchPairs() * sizeof(bodyID_t);
     bodyID_t* sphereIDsEachBinTouches = (bodyID_t*)stateOfSolver_resources.allocateTempVector3(CD_temp_arr_bytes);
-    bin_occupation.kernel("populateBinSphereTouchingPairs")
+    bin_occupation->kernel("populateBinSphereTouchingPairs")
         .instantiate()
         .configure(dim3(blocks_needed_for_bodies), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
                    streamInfo.stream)
@@ -496,6 +492,15 @@ void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& 
         }
         familyID.at(i) = input_clump_family.at(i);
     }
+}
+
+void DEMKinematicThread::jitifyKernels() {
+    // bin_occupation = JitHelper::buildProgram(
+    //     "DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
+    //     std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+    bin_occupation = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+        "DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
+        std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
 }
 
 void DEMKinematicThread::primeDynamic() {

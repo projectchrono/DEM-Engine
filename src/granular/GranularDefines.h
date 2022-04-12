@@ -7,9 +7,10 @@
 #include <stdint.h>
 
 namespace sgps {
-#ifndef BITS_PER_BYTE
-    #define BITS_PER_BYTE 8
+#ifndef SGPS_GET_VAR_NAME
+    #define SGPS_GET_VAR_NAME(Variable) (#Variable)
 #endif
+
 #define N_MANUFACTURED_ITEMS 4
 #define NUM_BINS_PER_BLOCK 128
 #define NUM_BODIES_PER_BLOCK 512
@@ -19,9 +20,12 @@ namespace sgps {
 #ifndef SGPS_DEM_TINY_FLOAT
     #define SGPS_DEM_TINY_FLOAT 1e-6f
 #endif
+#ifndef SGPS_BITS_PER_BYTE
+    #define SGPS_BITS_PER_BYTE 8
+#endif
 
 typedef uint16_t subVoxelPos_t;  ///< uint16 or uint32
-const uint8_t VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * BITS_PER_BYTE;
+const uint8_t VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * SGPS_BITS_PER_BYTE;
 typedef uint64_t voxelID_t;
 // TODO: oriQ should be int (mapped to [-1,1]); applyOriQ2Vector3 and hostApplyOriQ2Vector3 need to be changed to make
 // that happen
@@ -55,6 +59,7 @@ typedef unsigned int contactPairs_t;
 // somehow add array materialsArray and radiiArray??
 
 // A few pre-computed constants
+
 #ifndef SGPS_TWO_OVER_THREE
     #define SGPS_TWO_OVER_THREE 0.666666666666667
 #endif

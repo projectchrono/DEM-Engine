@@ -597,4 +597,6 @@ void DEMDynamicThread::resetUserCallStat() {
     contactPairArr_isFresh = true;
 }
 
+void DEMDynamicThread::jitifyKernels() {}
+
 }  // namespace sgps

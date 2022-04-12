@@ -20,6 +20,8 @@
 #include <granular/GranularStructs.h>
 #include <granular/DataStructs.h>
 
+#include <core/utils/JitHelper.h>
+
 namespace sgps {
 
 // Implementation-level classes
@@ -193,6 +195,9 @@ class DEMKinematicThread {
     void packDataPointers();
     void packTransferPointers(DEMDynamicThread* dT);
 
+    // Jitify kT kernels (at initialization) based on existing knowledge of this run
+    void jitifyKernels();
+
   private:
     // Contact detections
     void contactDetection();
@@ -202,6 +207,8 @@ class DEMKinematicThread {
     void sendToTheirBuffer();
 
     // Just-in-time compiled kernels
+    // jitify::Program bin_occupation = JitHelper::buildProgram("bin_occupation", " ");
+    std::shared_ptr<jitify::Program> bin_occupation;
 
 };  // kT ends
 

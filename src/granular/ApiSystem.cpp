@@ -37,9 +37,9 @@ DEMSolver::~DEMSolver() {
 }
 
 void DEMSolver::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned char z, float len_unit, float3 O) {
-    if (x + y + z != sizeof(voxelID_t) * BITS_PER_BYTE) {
+    if (x + y + z != sizeof(voxelID_t) * SGPS_BITS_PER_BYTE) {
         SGPS_ERROR("Please give voxel numbers (as powers of 2) along each direction such that they add up to %zu.",
-                   sizeof(voxelID_t) * BITS_PER_BYTE);
+                   sizeof(voxelID_t) * SGPS_BITS_PER_BYTE);
     }
     l = len_unit;
     nvXp2 = x;
@@ -195,7 +195,7 @@ void DEMSolver::figureOutMaterialProxies() {
     }
 }
 
-int DEMSolver::generateJITResources() {
+void DEMSolver::generateJITResources() {
     /*
     // Dan and Ruochun decided not to extract unique input values.
     // Instead, we trust users: we simply store all clump template info users give.
@@ -288,19 +288,15 @@ int DEMSolver::generateJITResources() {
     // Enlarge the expand factor if the user tells us to
     m_expand_factor *= m_expand_safety_param;
     if (m_expand_factor > 0.0) {
-        std::cout << "All geometries are enlarged by " << m_expand_factor << " for contact detection purpose"
+        std::cout << "All geometries are enlarged/thickened by " << m_expand_factor << " for contact detection purpose"
                   << std::endl;
-        std::cout << "This in the case of smallest sphere, means expanding radius by "
+        std::cout << "This in the case of smallest sphere, means enlarging radius by "
                   << (m_expand_factor / m_smallest_radius) * 100.0 << "%" << std::endl;
     }
 
     // Process the loaded materials
     std::cout << "The number of material types: " << nMatTuples_computed << std::endl;
     figureOutMaterialProxies();
-
-    // Compile the kernels if there are some can be compiled now
-
-    return 0;
 }
 
 void DEMSolver::SetClumps(const std::vector<unsigned int>& types, const std::vector<float3>& xyz) {
@@ -371,7 +367,7 @@ void DEMSolver::validateUserInputs() {
             "variable stepping properly.",
             m_ts_size);
     }
-    if (m_expand_factor <= 0.0 && m_updateFreq > 0) {
+    if (m_expand_factor * m_expand_safety_param <= 0.0 && m_updateFreq > 0) {
         std::cout << "\nWARNING! You instructed that the physics can stretch " << m_updateFreq
                   << " time steps into the future, but did not instruct the geometries to expand via "
                      "SuggestExpandFactor. The contact detection procedure will likely fail to detect some contact "
@@ -388,15 +384,20 @@ void DEMSolver::validateUserInputs() {
     // TODO: Add check for inputs sizes (nClumps, nSpheres, nMat, nTopo...)
 }
 
+void DEMSolver::jitifyKernels() {
+    kT->jitifyKernels();
+    dT->jitifyKernels();
+}
+
 // The method should be called after user inputs are in place, and before starting the simulation. It figures out a part
 // of the required simulation information such as the scale of the poblem domain, and makes sure these info live in
 // managed memory.
 int DEMSolver::Initialize() {
-    // Call the JIT compiler generator to make prep for this simulation.
-    generateJITResources();
-
     // A few checks first.
     validateUserInputs();
+
+    // Call the JIT compiler generator to make prep for this simulation.
+    generateJITResources();
 
     // Transfer some simulation params to implementation level
     transferSimParams();
@@ -406,6 +407,9 @@ int DEMSolver::Initialize() {
 
     // Put sim data array pointers in place
     packDataPointers();
+
+    // Compile some of the kernels
+    jitifyKernels();
 
     sys_initialized = true;
     return 0;

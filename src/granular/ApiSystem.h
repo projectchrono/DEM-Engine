@@ -249,7 +249,8 @@ class DEMSolver {
     DEMKinematicThread* kT;
     DEMDynamicThread* dT;
 
-    int generateJITResources();
+    void generateJITResources();
+    void jitifyKernels();
     // Figure out the unit length l and corresponding numbers of voxels along each direction, based on domain size X, Y,
     // Z
     void figureOutNV();

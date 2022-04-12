@@ -130,11 +130,11 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
     // Note: to do this, idAOwner needs to be sorted along with h2a_A. So we sort first.
     size_t cub_scratch_bytes = 0;
     cub::DeviceRadixSort::SortPairs(NULL, cub_scratch_bytes, idAOwner, idAOwner_sorted, h2a_A, h2a_A_sorted,
-                                    nContactPairs * 2, 0, sizeof(bodyID_t) * BITS_PER_BYTE, this_stream, false);
+                                    nContactPairs * 2, 0, sizeof(bodyID_t) * SGPS_BITS_PER_BYTE, this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
     cub::DeviceRadixSort::SortPairs(d_scratch_space, cub_scratch_bytes, idAOwner, idAOwner_sorted, h2a_A, h2a_A_sorted,
-                                    nContactPairs * 2, 0, sizeof(bodyID_t) * BITS_PER_BYTE, this_stream, false);
+                                    nContactPairs * 2, 0, sizeof(bodyID_t) * SGPS_BITS_PER_BYTE, this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // Then we reduce by key
     cub::DeviceReduce::ReduceByKey(NULL, cub_scratch_bytes, idAOwner_sorted, uniqueOwner, h2a_A_sorted, accOwner,
@@ -180,11 +180,11 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
     // Reducing the angular acceleration (2 * nContactPairs for both body A and B)
     // Note: to do this, idAOwner needs to be sorted along with h2Alpha_A. So we sort first.
     cub::DeviceRadixSort::SortPairs(NULL, cub_scratch_bytes, idAOwner, idAOwner_sorted, h2Alpha_A, h2Alpha_A_sorted,
-                                    nContactPairs * 2, 0, sizeof(bodyID_t) * BITS_PER_BYTE, this_stream, false);
+                                    nContactPairs * 2, 0, sizeof(bodyID_t) * SGPS_BITS_PER_BYTE, this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
     cub::DeviceRadixSort::SortPairs(d_scratch_space, cub_scratch_bytes, idAOwner, idAOwner_sorted, h2Alpha_A,
-                                    h2Alpha_A_sorted, nContactPairs * 2, 0, sizeof(bodyID_t) * BITS_PER_BYTE,
+                                    h2Alpha_A_sorted, nContactPairs * 2, 0, sizeof(bodyID_t) * SGPS_BITS_PER_BYTE,
                                     this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // Then we reduce
