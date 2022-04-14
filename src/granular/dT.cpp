@@ -88,6 +88,9 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                     float l,
                                     double voxelSize,
                                     double binSize,
+                                    binID_t nbX,
+                                    binID_t nbY,
+                                    binID_t nbZ,
                                     float3 LBFPoint,
                                     float3 G,
                                     double ts_size,
@@ -106,10 +109,9 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->Gz = G.z;
     simParams->h = ts_size;
     simParams->beta = expand_factor;
-    // Figure out how many bins there are in each direction
-    simParams->nbX = (binID_t)(voxelSize * (double)((size_t)1 << nvXp2) / binSize) + 1;
-    simParams->nbY = (binID_t)(voxelSize * (double)((size_t)1 << nvYp2) / binSize) + 1;
-    simParams->nbZ = (binID_t)(voxelSize * (double)((size_t)1 << nvZp2) / binSize) + 1;
+    simParams->nbX = nbX;
+    simParams->nbY = nbY;
+    simParams->nbZ = nbZ;
 }
 
 void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
@@ -599,6 +601,8 @@ void DEMDynamicThread::resetUserCallStat() {
     contactPairArr_isFresh = true;
 }
 
-void DEMDynamicThread::jitifyKernels() {}
+void DEMDynamicThread::jitifyKernels(std::unordered_map<std::string, std::string>& templateSubs,
+                                     std::unordered_map<std::string, std::string>& simParamSubs,
+                                     std::unordered_map<std::string, std::string>& familySubs) {}
 
 }  // namespace sgps

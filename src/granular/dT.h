@@ -201,6 +201,9 @@ class DEMDynamicThread {
                       float l,
                       double voxelSize,
                       double binSize,
+                      binID_t nbX,
+                      binID_t nbY,
+                      binID_t nbZ,
                       float3 LBFPoint,
                       float3 G,
                       double ts_size,
@@ -246,7 +249,9 @@ class DEMDynamicThread {
     void resetUserCallStat();
 
     // Jitify dT kernels (at initialization) based on existing knowledge of this run
-    void jitifyKernels();
+    void jitifyKernels(std::unordered_map<std::string, std::string>& templateSubs,
+                       std::unordered_map<std::string, std::string>& simParamSubs,
+                       std::unordered_map<std::string, std::string>& familySubs);
 
   private:
     // update clump-based acceleration array based on sphere-based force array

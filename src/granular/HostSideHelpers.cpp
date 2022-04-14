@@ -245,6 +245,7 @@ inline void materialProxyMaterixCalculator(float& E_eff,
     G_eff = 1. / invG;
 }
 
+/*
 inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap,
                                 DEMSimParams* simParams,
                                 DEMTemplate* granTemplates) {
@@ -262,6 +263,35 @@ inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& st
     strMap["_CDRelPosY_"] = CDRelPosY;
     strMap["_CDRelPosZ_"] = CDRelPosZ;
 }
+
+inline void equipSimParams(std::unordered_map<std::string, std::string>& strMap, DEMSimParams* simParams, DEMTemplate*
+granTemplates) { strMap["_nvXp2_"] = std::to_string(simParams->nvXp2); strMap["_nvYp2_"] =
+std::to_string(simParams->nvYp2); strMap["_nvZp2_"] = std::to_string(simParams->nvZp2);
+
+    strMap["_nbX_"] = std::to_string(simParams->nbX);
+    strMap["_nbY_"] = std::to_string(simParams->nbY);
+    strMap["_nbZ_"] = std::to_string(simParams->nbZ);
+
+    strMap["_l_"] = std::to_string(simParams->l);
+    strMap["_voxelSize_"] = std::to_string(simParams->voxelSize);
+    strMap["_binSize_"] = std::to_string(simParams->binSize);
+
+    strMap["_nClumpBodies_"] = std::to_string(simParams->nClumpBodies);
+    strMap["_nSpheresGM_"] = std::to_string(simParams->nSpheresGM);
+    strMap["_nDistinctClumpBodyTopologies_"] = std::to_string(simParams->nDistinctClumpBodyTopologies);
+    strMap["_nDistinctClumpComponents_"] = std::to_string(simParams->nDistinctClumpComponents);
+    strMap["_nMatTuples_"] = std::to_string(simParams->nMatTuples);
+
+    strMap["_LBFX_"] = std::to_string(simParams->LBFX);
+    strMap["_LBFY_"] = std::to_string(simParams->LBFY);
+    strMap["_LBFZ_"] = std::to_string(simParams->LBFZ);
+    strMap["_Gx_"] = std::to_string(simParams->Gx);
+    strMap["_Gy_"] = std::to_string(simParams->Gy);
+    strMap["_Gz_"] = std::to_string(simParams->Gz);
+
+    strMap["_beta_"] = std::to_string(simParams->beta);
+}
+*/
 
 }  // namespace sgps
 

@@ -363,6 +363,9 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
                                       float l,
                                       double voxelSize,
                                       double binSize,
+                                      binID_t nbX,
+                                      binID_t nbY,
+                                      binID_t nbZ,
                                       float3 LBFPoint,
                                       float3 G,
                                       double ts_size,
@@ -381,10 +384,9 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
     simParams->Gz = G.z;
     simParams->h = ts_size;
     simParams->beta = expand_factor;
-    // Figure out how many bins there are in each direction
-    simParams->nbX = (binID_t)(voxelSize * (double)((size_t)1 << nvXp2) / binSize) + 1;
-    simParams->nbY = (binID_t)(voxelSize * (double)((size_t)1 << nvYp2) / binSize) + 1;
-    simParams->nbZ = (binID_t)(voxelSize * (double)((size_t)1 << nvZp2) / binSize) + 1;
+    simParams->nbX = nbX;
+    simParams->nbY = nbY;
+    simParams->nbZ = nbZ;
 }
 
 void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
@@ -493,11 +495,13 @@ void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& 
     }
 }
 
-void DEMKinematicThread::jitifyKernels() {
+void DEMKinematicThread::jitifyKernels(std::unordered_map<std::string, std::string>& templateSubs,
+                                       std::unordered_map<std::string, std::string>& simParamSubs,
+                                       std::unordered_map<std::string, std::string>& familySubs) {
     // First one is bin_occupation kernels, which figure out the bin--sphere touch pairs
     {
-        std::unordered_map<std::string, std::string> boSubs;
-        equipClumpTemplates(boSubs, simParams, granTemplates);
+        std::unordered_map<std::string, std::string> boSubs = templateSubs;
+
         // bin_occupation = JitHelper::buildProgram(
         //     "DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
         //     std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});

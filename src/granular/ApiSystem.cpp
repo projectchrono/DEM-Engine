@@ -266,8 +266,13 @@ void DEMSolver::generateJITResources() {
     std::cout << "The length unit in this simulation is: " << l << std::endl;
     std::cout << "The edge length of a voxel: " << m_voxelSize << std::endl;
 
-    uint64_t num_bins =
-        (uint64_t)(m_boxX / m_binSize + 1) * (uint64_t)(m_boxY / m_binSize + 1) * (uint64_t)(m_boxZ / m_binSize + 1);
+    nbX = (binID_t)(m_voxelSize * (double)((size_t)1 << nvXp2) / m_binSize) + 1;
+    nbY = (binID_t)(m_voxelSize * (double)((size_t)1 << nvYp2) / m_binSize) + 1;
+    nbZ = (binID_t)(m_voxelSize * (double)((size_t)1 << nvZp2) / m_binSize) + 1;
+    uint64_t num_bins = (uint64_t)nbX * (uint64_t)nbY * (uint64_t)nbZ;
+    // It's better to compute num of bins this way, rather than...
+    // (uint64_t)(m_boxX / m_binSize + 1) * (uint64_t)(m_boxY / m_binSize + 1) * (uint64_t)(m_boxZ / m_binSize + 1);
+    // because the space bins and voxels can cover may be larger than the user-defined sim domain
     std::cout << "The edge length of a bin: " << m_binSize << std::endl;
     std::cout << "The total number of bins: " << num_bins << std::endl;
     // TODO: should check if num_bins is larger than uint32, if uint32 is selected for storing binID
@@ -325,8 +330,10 @@ void DEMSolver::WriteFileAsSpheres(const std::string& outfilename) const {
 /// Transfer (CPU-side) cached simulation data (about sim world) to the GPU-side. It is called automatically during
 /// system initialization.
 void DEMSolver::transferSimParams() {
-    dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, m_boxLBF, G, m_ts_size, m_expand_factor);
-    kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, m_boxLBF, G, m_ts_size, m_expand_factor);
+    dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
+                     m_expand_factor);
+    kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
+                     m_expand_factor);
 }
 
 /// Transfer (CPU-side) cached clump templates info and initial clump type/position info to GPU-side arrays
@@ -385,8 +392,11 @@ void DEMSolver::validateUserInputs() {
 }
 
 void DEMSolver::jitifyKernels() {
-    kT->jitifyKernels();
-    dT->jitifyKernels();
+    std::unordered_map<std::string, std::string> templateSubs, simParamSubs, familySubs;
+    equipClumpTemplates(templateSubs);
+    equipSimParams(simParamSubs);
+    kT->jitifyKernels(templateSubs, simParamSubs, familySubs);
+    dT->jitifyKernels(templateSubs, simParamSubs, familySubs);
 }
 
 // The method should be called after user inputs are in place, and before starting the simulation. It figures out a part
@@ -470,6 +480,55 @@ int DEMSolver::LaunchThreads(double thisCallDuration) {
     */
 
     return 0;
+}
+
+inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap) {
+    strMap["_nDistinctClumpBodyTopologies_"] = std::to_string(nDistinctClumpBodyTopologies_computed);
+    strMap["_nDistinctClumpComponents_"] = std::to_string(nDistinctClumpComponents_computed);
+    strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
+    std::string CDRadii, CDRelPosX, CDRelPosY, CDRelPosZ;
+    // loop through all templates to find in the JIT info
+    for (unsigned int i = 0; i < nDistinctClumpBodyTopologies_computed; i++) {
+        for (unsigned int j = 0; j < m_template_sp_radii.at(i).size(); j++) {
+            CDRadii += std::to_string(m_template_sp_radii.at(i).at(j) + m_expand_factor) + ",";
+            CDRelPosX += std::to_string(m_template_sp_relPos.at(i).at(j).x) + ",";
+            CDRelPosY += std::to_string(m_template_sp_relPos.at(i).at(j).y) + ",";
+            CDRelPosZ += std::to_string(m_template_sp_relPos.at(i).at(j).z) + ",";
+        }
+    }
+    strMap["_CDRadii_"] = CDRadii;
+    strMap["_CDRelPosX_"] = CDRelPosX;
+    strMap["_CDRelPosY_"] = CDRelPosY;
+    strMap["_CDRelPosZ_"] = CDRelPosZ;
+}
+
+inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::string>& strMap) {
+    strMap["_nvXp2_"] = std::to_string(nvXp2);
+    strMap["_nvYp2_"] = std::to_string(nvYp2);
+    strMap["_nvZp2_"] = std::to_string(nvZp2);
+
+    strMap["_nbX_"] = std::to_string(nbX);
+    strMap["_nbY_"] = std::to_string(nbY);
+    strMap["_nbZ_"] = std::to_string(nbZ);
+
+    strMap["_l_"] = std::to_string(l);
+    strMap["_voxelSize_"] = std::to_string(m_voxelSize);
+    strMap["_binSize_"] = std::to_string(m_binSize);
+
+    strMap["_nClumpBodies_"] = std::to_string(nClumpBodies);
+    strMap["_nSpheresGM_"] = std::to_string(nSpheresGM);
+    strMap["_nDistinctClumpBodyTopologies_"] = std::to_string(nDistinctClumpBodyTopologies_computed);
+    strMap["_nDistinctClumpComponents_"] = std::to_string(nDistinctClumpComponents_computed);
+    strMap["_nMatTuples_"] = std::to_string(nMatTuples_computed);
+
+    strMap["_LBFX_"] = std::to_string(m_boxLBF.x);
+    strMap["_LBFY_"] = std::to_string(m_boxLBF.y);
+    strMap["_LBFZ_"] = std::to_string(m_boxLBF.z);
+    strMap["_Gx_"] = std::to_string(G.x);
+    strMap["_Gy_"] = std::to_string(G.y);
+    strMap["_Gz_"] = std::to_string(G.z);
+
+    strMap["_beta_"] = std::to_string(m_expand_factor);
 }
 
 }  // namespace sgps

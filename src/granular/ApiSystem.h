@@ -168,11 +168,11 @@ class DEMSolver {
     std::vector<std::vector<distinctSphereRelativePositions_default_t>> m_clumps_sp_location_type_offset;
     */
 
-    // ``World'' size along X dir
+    // ``World'' size along X dir (user-defined)
     float m_boxX = 0.f;
-    // ``World'' size along Y dir
+    // ``World'' size along Y dir (user-defined)
     float m_boxY = 0.f;
-    // ``World'' size along Z dir
+    // ``World'' size along Z dir (user-defined)
     float m_boxZ = 0.f;
     // Origin of the ``world''
     float3 m_boxLBF = make_float3(0);
@@ -194,6 +194,10 @@ class DEMSolver {
     float l = FLT_MAX;
     // The edge length of a bin (for contact detection)
     double m_binSize;
+    // Number of bins on each direction
+    binID_t nbX;
+    binID_t nbY;
+    binID_t nbZ;
     // The amount at which all geometries inflate (for safer contact detection)
     float m_expand_factor = 0.f;
     // When the user suggests the expand factor without explicitly setting it, the ``just right'' amount of expansion is
@@ -271,6 +275,10 @@ class DEMSolver {
     inline size_t computeDTCycles(double thisCallDuration);
     // Prepare the material/contact proxy matrix force computation kernels
     void figureOutMaterialProxies();
+
+    // Some JIT packaging helpers
+    inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap);
+    inline void equipSimParams(std::unordered_map<std::string, std::string>& strMap);
 };
 
 }  // namespace sgps
