@@ -7,18 +7,22 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
                                                  sgps::DEMDataKT* granData,
                                                  sgps::binsSphereTouches_t* numBinsSphereTouches,
                                                  sgps::DEMTemplate* granTemplates) {
-    // __shared__ const distinctSphereRadii[@NUM_OF_THAT_ARR@] = {@THAT_ARR@};
-    // TODO: These info should be jitfied not brought from global mem
-    __shared__ float CDRadii[TEST_SHARED_SIZE];
-    __shared__ float CDRelPosX[TEST_SHARED_SIZE];
-    __shared__ float CDRelPosY[TEST_SHARED_SIZE];
-    __shared__ float CDRelPosZ[TEST_SHARED_SIZE];
-    if (threadIdx.x == 0) {
-        for (unsigned int i = 0; i < simParams->nDistinctClumpComponents; i++) {
-            CDRadii[i] = granTemplates->radiiSphere[i] + simParams->beta;
-            CDRelPosX[i] = granTemplates->relPosSphereX[i];
-            CDRelPosY[i] = granTemplates->relPosSphereY[i];
-            CDRelPosZ[i] = granTemplates->relPosSphereZ[i];
+    // CUDA does not support initializing shared arrays, so we have to manually load them
+    __shared__ float CDRadii[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosX[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosY[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosZ[_nDistinctClumpComponents_];
+    if (threadIdx.x < _nActiveLoadingThreads_) {
+        const float jitifiedCDRadii[_nDistinctClumpComponents_] = {_CDRadii_};
+        const float jitifiedCDRelPosX[_nDistinctClumpComponents_] = {_CDRelPosX_};
+        const float jitifiedCDRelPosY[_nDistinctClumpComponents_] = {_CDRelPosY_};
+        const float jitifiedCDRelPosZ[_nDistinctClumpComponents_] = {_CDRelPosZ_};
+        for (sgps::clumpComponentOffset_t i = threadIdx.x; i < _nDistinctClumpComponents_;
+             i += _nActiveLoadingThreads_) {
+            CDRadii[i] = jitifiedCDRadii[i];
+            CDRelPosX[i] = jitifiedCDRelPosX[i];
+            CDRelPosY[i] = jitifiedCDRelPosY[i];
+            CDRelPosZ[i] = jitifiedCDRelPosZ[i];
         }
     }
     __syncthreads();
@@ -70,18 +74,22 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
                                                sgps::binID_t* binIDsEachSphereTouches,
                                                sgps::bodyID_t* sphereIDsEachBinTouches,
                                                sgps::DEMTemplate* granTemplates) {
-    // __shared__ const distinctSphereRadii[@NUM_OF_THAT_ARR@] = {@THAT_ARR@};
-    // TODO: These info should be jitfied not brought from global mem
-    __shared__ float CDRadii[TEST_SHARED_SIZE];
-    __shared__ float CDRelPosX[TEST_SHARED_SIZE];
-    __shared__ float CDRelPosY[TEST_SHARED_SIZE];
-    __shared__ float CDRelPosZ[TEST_SHARED_SIZE];
-    if (threadIdx.x == 0) {
-        for (unsigned int i = 0; i < simParams->nDistinctClumpComponents; i++) {
-            CDRadii[i] = granTemplates->radiiSphere[i] + simParams->beta;
-            CDRelPosX[i] = granTemplates->relPosSphereX[i];
-            CDRelPosY[i] = granTemplates->relPosSphereY[i];
-            CDRelPosZ[i] = granTemplates->relPosSphereZ[i];
+    // CUDA does not support initializing shared arrays, so we have to manually load them
+    __shared__ float CDRadii[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosX[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosY[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosZ[_nDistinctClumpComponents_];
+    if (threadIdx.x < _nActiveLoadingThreads_) {
+        const float jitifiedCDRadii[_nDistinctClumpComponents_] = {_CDRadii_};
+        const float jitifiedCDRelPosX[_nDistinctClumpComponents_] = {_CDRelPosX_};
+        const float jitifiedCDRelPosY[_nDistinctClumpComponents_] = {_CDRelPosY_};
+        const float jitifiedCDRelPosZ[_nDistinctClumpComponents_] = {_CDRelPosZ_};
+        for (sgps::clumpComponentOffset_t i = threadIdx.x; i < _nDistinctClumpComponents_;
+             i += _nActiveLoadingThreads_) {
+            CDRadii[i] = jitifiedCDRadii[i];
+            CDRelPosX[i] = jitifiedCDRelPosX[i];
+            CDRelPosY[i] = jitifiedCDRelPosY[i];
+            CDRelPosZ[i] = jitifiedCDRelPosZ[i];
         }
     }
     __syncthreads();

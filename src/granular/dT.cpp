@@ -381,7 +381,8 @@ inline void DEMDynamicThread::calculateForces() {
     size_t threads_needed_for_prep = simParams->nClumpBodies > stateOfSolver_resources.getNumContacts()
                                          ? simParams->nClumpBodies
                                          : stateOfSolver_resources.getNumContacts();
-    size_t blocks_needed_for_prep = (threads_needed_for_prep + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
+    size_t blocks_needed_for_prep =
+        (threads_needed_for_prep + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
 
     auto prep_force = JitHelper::buildProgram("DEMPrepForceKernels", JitHelper::KERNEL_DIR / "DEMPrepForceKernels.cu",
                                               std::unordered_map<std::string, std::string>(),
@@ -389,8 +390,8 @@ inline void DEMDynamicThread::calculateForces() {
 
     prep_force.kernel("prepareForceArrays")
         .instantiate()
-        .configure(dim3(blocks_needed_for_prep), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
-                   streamInfo.stream)
+        .configure(dim3(blocks_needed_for_prep), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK),
+                   sizeof(float) * TEST_SHARED_SIZE * 4, streamInfo.stream)
         .launch(simParams, granData, stateOfSolver_resources.getNumContacts(), granTemplates);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -410,7 +411,7 @@ inline void DEMDynamicThread::calculateForces() {
     //                     simParams->nClumpBodies * sizeof(float)));
 
     size_t blocks_needed_for_contacts =
-        (stateOfSolver_resources.getNumContacts() + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
+        (stateOfSolver_resources.getNumContacts() + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
     auto cal_force = JitHelper::buildProgram(
         "DEMFrictionlessForceKernels", JitHelper::KERNEL_DIR / "DEMFrictionlessForceKernels.cu",
         std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
@@ -418,8 +419,8 @@ inline void DEMDynamicThread::calculateForces() {
     // a custom kernel to compute forces
     cal_force.kernel("calculateNormalContactForces")
         .instantiate()
-        .configure(dim3(blocks_needed_for_contacts), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 5,
-                   streamInfo.stream)
+        .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK),
+                   sizeof(float) * TEST_SHARED_SIZE * 5, streamInfo.stream)
         .launch(simParams, granData, stateOfSolver_resources.getNumContacts(), granTemplates);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     // displayFloat3(granData->contactForces, stateOfSolver_resources.getNumContacts());
@@ -457,13 +458,14 @@ inline void DEMDynamicThread::calculateForces() {
 }
 
 inline void DEMDynamicThread::integrateClumpMotions() {
-    size_t blocks_needed_for_clumps = (simParams->nClumpBodies + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
+    size_t blocks_needed_for_clumps =
+        (simParams->nClumpBodies + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
     auto integrator = JitHelper::buildProgram(
         "DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu",
         std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
     integrator.kernel("integrateClumps")
         .instantiate()
-        .configure(dim3(blocks_needed_for_clumps), dim3(NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+        .configure(dim3(blocks_needed_for_clumps), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
         .launch(simParams, granData, granTemplates);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }

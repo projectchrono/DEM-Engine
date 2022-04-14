@@ -13,6 +13,8 @@
 #include <algorithm>
 #include <helper_math.cuh>
 
+#include <granular/GranularDefines.h>
+
 namespace sgps {
 
 // In an upper-triangular matrix, given i and j and num_of_col, this function returns the index of the corresponding
@@ -241,6 +243,24 @@ inline void materialProxyMaterixCalculator(float& E_eff,
     E_eff = 1. / invE;
     double invG = 2 * (2 - nu1) * (1 + nu1) / Y1 + 2 * (2 - nu2) * (1 + nu2) / Y2;
     G_eff = 1. / invG;
+}
+
+inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap,
+                                DEMSimParams* simParams,
+                                DEMTemplate* granTemplates) {
+    strMap["_nDistinctClumpComponents_"] = std::to_string(simParams->nDistinctClumpComponents);
+    strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
+    std::string CDRadii, CDRelPosX, CDRelPosY, CDRelPosZ;
+    for (unsigned int i = 0; i < simParams->nDistinctClumpComponents; i++) {
+        CDRadii += std::to_string(granTemplates->radiiSphere[i] + simParams->beta) + ",";
+        CDRelPosX += std::to_string(granTemplates->relPosSphereX[i]) + ",";
+        CDRelPosY += std::to_string(granTemplates->relPosSphereY[i]) + ",";
+        CDRelPosZ += std::to_string(granTemplates->relPosSphereZ[i]) + ",";
+    }
+    strMap["_CDRadii_"] = CDRadii;
+    strMap["_CDRelPosX_"] = CDRelPosX;
+    strMap["_CDRelPosY_"] = CDRelPosY;
+    strMap["_CDRelPosZ_"] = CDRelPosZ;
 }
 
 }  // namespace sgps

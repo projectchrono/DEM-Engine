@@ -33,11 +33,11 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
     // I need to store all the sphereIDs that I am supposed to look into
     // A100 has about 164K shMem... these arrays really need to be small, or we can only fit a small number of bins in
     // one block
-    sgps::bodyID_t ownerIDs[MAX_SPHERES_PER_BIN];
-    sgps::clumpComponentOffset_t compOffsets[MAX_SPHERES_PER_BIN];
-    double bodyX[MAX_SPHERES_PER_BIN];
-    double bodyY[MAX_SPHERES_PER_BIN];
-    double bodyZ[MAX_SPHERES_PER_BIN];
+    sgps::bodyID_t ownerIDs[SGPS_DEM_MAX_SPHERES_PER_BIN];
+    sgps::clumpComponentOffset_t compOffsets[SGPS_DEM_MAX_SPHERES_PER_BIN];
+    double bodyX[SGPS_DEM_MAX_SPHERES_PER_BIN];
+    double bodyY[SGPS_DEM_MAX_SPHERES_PER_BIN];
+    double bodyZ[SGPS_DEM_MAX_SPHERES_PER_BIN];
     if (myActiveID < nActiveBins) {
         // I got a true bin ID
         sgps::binID_t binID = activeBinIDs[myActiveID];
@@ -139,12 +139,12 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
     // I need to store all the sphereIDs that I am supposed to look into
     // A100 has about 164K shMem... these arrays really need to be small, or we can only fit a small number of bins in
     // one block
-    sgps::bodyID_t ownerIDs[MAX_SPHERES_PER_BIN];
-    sgps::bodyID_t bodyIDs[MAX_SPHERES_PER_BIN];
-    sgps::clumpComponentOffset_t compOffsets[MAX_SPHERES_PER_BIN];
-    double bodyX[MAX_SPHERES_PER_BIN];
-    double bodyY[MAX_SPHERES_PER_BIN];
-    double bodyZ[MAX_SPHERES_PER_BIN];
+    sgps::bodyID_t ownerIDs[SGPS_DEM_MAX_SPHERES_PER_BIN];
+    sgps::bodyID_t bodyIDs[SGPS_DEM_MAX_SPHERES_PER_BIN];
+    sgps::clumpComponentOffset_t compOffsets[SGPS_DEM_MAX_SPHERES_PER_BIN];
+    double bodyX[SGPS_DEM_MAX_SPHERES_PER_BIN];
+    double bodyY[SGPS_DEM_MAX_SPHERES_PER_BIN];
+    double bodyZ[SGPS_DEM_MAX_SPHERES_PER_BIN];
     if (myActiveID < nActiveBins) {
         // But I got a true bin ID
         sgps::binID_t binID = activeBinIDs[myActiveID];

@@ -26,12 +26,12 @@ void DEMKinematicThread::contactDetection() {
     CD_temp_arr_bytes = simParams->nSpheresGM * sizeof(binsSphereTouches_t);
     binsSphereTouches_t* numBinsSphereTouches =
         (binsSphereTouches_t*)stateOfSolver_resources.allocateTempVector1(CD_temp_arr_bytes);
-    size_t blocks_needed_for_bodies = (simParams->nSpheresGM + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
+    size_t blocks_needed_for_bodies =
+        (simParams->nSpheresGM + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
 
     bin_occupation->kernel("getNumberOfBinsEachSphereTouches")
         .instantiate()
-        .configure(dim3(blocks_needed_for_bodies), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
-                   streamInfo.stream)
+        .configure(dim3(blocks_needed_for_bodies), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
         .launch(simParams, granData, numBinsSphereTouches, granTemplates);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -55,8 +55,7 @@ void DEMKinematicThread::contactDetection() {
     bodyID_t* sphereIDsEachBinTouches = (bodyID_t*)stateOfSolver_resources.allocateTempVector3(CD_temp_arr_bytes);
     bin_occupation->kernel("populateBinSphereTouchingPairs")
         .instantiate()
-        .configure(dim3(blocks_needed_for_bodies), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
-                   streamInfo.stream)
+        .configure(dim3(blocks_needed_for_bodies), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
         .launch(simParams, granData, numBinsSphereTouchesScan, binIDsEachSphereTouches, sphereIDsEachBinTouches,
                 granTemplates);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -123,7 +122,7 @@ void DEMKinematicThread::contactDetection() {
     spheresBinTouches_t* numContactsInEachBin =
         (spheresBinTouches_t*)stateOfSolver_resources.allocateTempVector5(CD_temp_arr_bytes);
     size_t blocks_needed_for_bins =
-        (stateOfSolver_resources.getNumActiveBins() + NUM_BINS_PER_BLOCK - 1) / NUM_BINS_PER_BLOCK;
+        (stateOfSolver_resources.getNumActiveBins() + SGPS_DEM_NUM_BINS_PER_BLOCK - 1) / SGPS_DEM_NUM_BINS_PER_BLOCK;
     if (blocks_needed_for_bins > 0) {
         auto contact_detection = JitHelper::buildProgram(
             "DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu",
@@ -131,8 +130,8 @@ void DEMKinematicThread::contactDetection() {
 
         contact_detection.kernel("getNumberOfContactsEachBin")
             .instantiate()
-            .configure(dim3(blocks_needed_for_bins), dim3(NUM_BINS_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
-                       streamInfo.stream)
+            .configure(dim3(blocks_needed_for_bins), dim3(SGPS_DEM_NUM_BINS_PER_BLOCK),
+                       sizeof(float) * TEST_SHARED_SIZE * 4, streamInfo.stream)
             .launch(simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
                     sphereIDsLookUpTable, numContactsInEachBin, stateOfSolver_resources.getNumActiveBins(),
                     granTemplates);
@@ -159,8 +158,8 @@ void DEMKinematicThread::contactDetection() {
 
         contact_detection.kernel("populateContactPairsEachBin")
             .instantiate()
-            .configure(dim3(blocks_needed_for_bins), dim3(NUM_BINS_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 4,
-                       streamInfo.stream)
+            .configure(dim3(blocks_needed_for_bins), dim3(SGPS_DEM_NUM_BINS_PER_BLOCK),
+                       sizeof(float) * TEST_SHARED_SIZE * 4, streamInfo.stream)
             .launch(simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
                     sphereIDsLookUpTable, contactReportOffsets, stateOfSolver_resources.getNumActiveBins(),
                     granTemplates);
@@ -495,12 +494,17 @@ void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& 
 }
 
 void DEMKinematicThread::jitifyKernels() {
-    // bin_occupation = JitHelper::buildProgram(
-    //     "DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
-    //     std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
-    bin_occupation = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-        "DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
-        std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+    // First one is bin_occupation kernels, which figure out the bin--sphere touch pairs
+    {
+        std::unordered_map<std::string, std::string> boSubs;
+        equipClumpTemplates(boSubs, simParams, granTemplates);
+        // bin_occupation = JitHelper::buildProgram(
+        //     "DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
+        //     std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
+        bin_occupation = std::make_shared<jitify::Program>(
+            std::move(JitHelper::buildProgram("DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
+                                              boSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+    }
 }
 
 void DEMKinematicThread::primeDynamic() {

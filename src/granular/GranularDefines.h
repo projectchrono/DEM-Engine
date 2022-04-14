@@ -5,16 +5,17 @@
 #pragma once
 #include <climits>
 #include <stdint.h>
+#include <algorithm>
+
+#define SGPS_DEM_MIN(a, b) ((a < b) ? a : b)
+#define SGPS_DEM_MAX(a, b) ((a > b) ? a : b)
 
 namespace sgps {
 #ifndef SGPS_GET_VAR_NAME
     #define SGPS_GET_VAR_NAME(Variable) (#Variable)
 #endif
 
-#define N_MANUFACTURED_ITEMS 4
-#define NUM_BINS_PER_BLOCK 128
-#define NUM_BODIES_PER_BLOCK 512
-#define MAX_SPHERES_PER_BIN 32  // very tricky; should redo CD kernels to be block--bin based
+#define SGPS_DEM_MAX_SPHERES_PER_BIN 32  // very tricky; should redo CD kernels to be block--bin based
 #define WAIT_GRANULARITY_MS 1
 #define TEST_SHARED_SIZE 128
 #ifndef SGPS_DEM_TINY_FLOAT
@@ -23,9 +24,12 @@ namespace sgps {
 #ifndef SGPS_BITS_PER_BYTE
     #define SGPS_BITS_PER_BYTE 8
 #endif
+#ifndef SGPS_CUDA_WARP_SIZE
+    #define SGPS_CUDA_WARP_SIZE 32
+#endif
 
 typedef uint16_t subVoxelPos_t;  ///< uint16 or uint32
-const uint8_t VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * SGPS_BITS_PER_BYTE;
+constexpr uint8_t VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * SGPS_BITS_PER_BYTE;
 typedef uint64_t voxelID_t;
 // TODO: oriQ should be int (mapped to [-1,1]); applyOriQ2Vector3 and hostApplyOriQ2Vector3 need to be changed to make
 // that happen
@@ -56,7 +60,12 @@ typedef unsigned int contactPairs_t;
 // typedef unsigned int distinctSphereRelativePositions_default_t;
 // typedef unsigned int distinctSphereRadiiOffset_default_t;
 
-// somehow add array materialsArray and radiiArray??
+#define SGPS_DEM_NUM_BINS_PER_BLOCK 128
+#define SGPS_DEM_NUM_BODIES_PER_BLOCK 512
+// It should generally just be the warp size. When a block is launched, at least min(these_numbers) threads will be
+// launched so the template loading is always safe.
+constexpr clumpComponentOffset_t NUM_ACTIVE_TEMPLATE_LOADING_THREADS =
+    SGPS_DEM_MIN(SGPS_DEM_MIN(SGPS_CUDA_WARP_SIZE, SGPS_DEM_NUM_BINS_PER_BLOCK), SGPS_DEM_NUM_BODIES_PER_BLOCK);
 
 // A few pre-computed constants
 

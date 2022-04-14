@@ -58,8 +58,10 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
     // float3* moiAOwner = (float3*)scratchPad.allocateCachedMOI(cachedArraySizeMOI);
     // float3* moiBOwner = (float3*)(moiAOwner + nContactPairs);
 
-    // size_t blocks_needed_for_twice_contacts = (2 * nContactPairs + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
-    size_t blocks_needed_for_contacts = (nContactPairs + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
+    // size_t blocks_needed_for_twice_contacts = (2 * nContactPairs + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) /
+    // SGPS_DEM_NUM_BODIES_PER_BLOCK;
+    size_t blocks_needed_for_contacts =
+        (nContactPairs + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
     auto collect_force = JitHelper::buildProgram(
         "DEMCollectForceKernels", JitHelper::KERNEL_DIR / "DEMCollectForceKernels.cu",
         std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
@@ -68,13 +70,13 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
         // for both A and B)
         collect_force.kernel("cashInOwnerIndex")
             .instantiate()
-            .configure(dim3(blocks_needed_for_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, this_stream)
+            .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
             .launch(idAOwner, idA, ownerClumpBody, nContactPairs);
         GPU_CALL(cudaStreamSynchronize(this_stream));
 
         collect_force.kernel("cashInOwnerIndex")
             .instantiate()
-            .configure(dim3(blocks_needed_for_contacts), dim3(NUM_BODIES_PER_BLOCK), 0, this_stream)
+            .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
             .launch(idBOwner, idB, ownerClumpBody, nContactPairs);
         GPU_CALL(cudaStreamSynchronize(this_stream));
         // displayArray<bodyID_t>(idAOwner, nContactPairs>3?3:nContactPairs);
@@ -85,7 +87,7 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
         // // by key (do it for both A and B)
         // collect_force.kernel("cashInMassMoiIndex")
         //     .instantiate()
-        //     .configure(dim3(blocks_needed_for_twice_contacts), dim3(NUM_BODIES_PER_BLOCK),
+        //     .configure(dim3(blocks_needed_for_twice_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK),
         //                sizeof(float) * TEST_SHARED_SIZE * 4, this_stream)
         //     .launch(massAOwner, moiAOwner, inertiaPropOffsets, idAOwner, 2 * nContactPairs, massClumpBody, mmiXX,
         //     mmiYY,
@@ -112,16 +114,16 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
     // collect accelerations for body A
     collect_force.kernel("forceToAcc")
         .instantiate()
-        .configure(dim3(blocks_needed_for_contacts), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE,
-                   this_stream)
+        .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK),
+                   sizeof(float) * TEST_SHARED_SIZE, this_stream)
         .launch(h2a_A, contactForces, idAOwner, h * h / l, nContactPairs, inertiaPropOffsets, massClumpBody,
                 nDistinctClumpBodyTopologies);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // and don't forget body B
     collect_force.kernel("forceToAcc")
         .instantiate()
-        .configure(dim3(blocks_needed_for_contacts), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE,
-                   this_stream)
+        .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK),
+                   sizeof(float) * TEST_SHARED_SIZE, this_stream)
         .launch(h2a_B, contactForces, idBOwner, -1. * h * h / l, nContactPairs, inertiaPropOffsets, massClumpBody,
                 nDistinctClumpBodyTopologies);
     GPU_CALL(cudaStreamSynchronize(this_stream));
@@ -148,10 +150,10 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // stash acceleration
     size_t blocks_needed_for_stashing =
-        (scratchPad.getForceCollectionRuns() + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
+        (scratchPad.getForceCollectionRuns() + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
     collect_force.kernel("stashElem")
         .instantiate()
-        .configure(dim3(blocks_needed_for_stashing), dim3(NUM_BODIES_PER_BLOCK), 0, this_stream)
+        .configure(dim3(blocks_needed_for_stashing), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(clump_h2aX, clump_h2aY, clump_h2aZ, uniqueOwner, accOwner, scratchPad.getForceCollectionRuns());
     GPU_CALL(cudaStreamSynchronize(this_stream));
 
@@ -164,16 +166,16 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
     // collect angular accelerations for body A
     collect_force.kernel("forceToAngAcc")
         .instantiate()
-        .configure(dim3(blocks_needed_for_contacts), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 3,
-                   this_stream)
+        .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK),
+                   sizeof(float) * TEST_SHARED_SIZE * 3, this_stream)
         .launch(h2Alpha_A, contactPointA, contactForces, idAOwner, h * h, nContactPairs, inertiaPropOffsets, mmiXX,
                 mmiYY, mmiZZ, nDistinctClumpBodyTopologies);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // and don't forget body B
     collect_force.kernel("forceToAngAcc")
         .instantiate()
-        .configure(dim3(blocks_needed_for_contacts), dim3(NUM_BODIES_PER_BLOCK), sizeof(float) * TEST_SHARED_SIZE * 3,
-                   this_stream)
+        .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK),
+                   sizeof(float) * TEST_SHARED_SIZE * 3, this_stream)
         .launch(h2Alpha_B, contactPointB, contactForces, idBOwner, -1. * h * h, nContactPairs, inertiaPropOffsets,
                 mmiXX, mmiYY, mmiZZ, nDistinctClumpBodyTopologies);
     GPU_CALL(cudaStreamSynchronize(this_stream));
@@ -199,10 +201,10 @@ void cubCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // stash angular acceleration
     blocks_needed_for_stashing =
-        (scratchPad.getForceCollectionRuns() + NUM_BODIES_PER_BLOCK - 1) / NUM_BODIES_PER_BLOCK;
+        (scratchPad.getForceCollectionRuns() + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
     collect_force.kernel("stashElem")
         .instantiate()
-        .configure(dim3(blocks_needed_for_stashing), dim3(NUM_BODIES_PER_BLOCK), 0, this_stream)
+        .configure(dim3(blocks_needed_for_stashing), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(clump_h2AlphaX, clump_h2AlphaY, clump_h2AlphaZ, uniqueOwner, accOwner,
                 scratchPad.getForceCollectionRuns());
     GPU_CALL(cudaStreamSynchronize(this_stream));
