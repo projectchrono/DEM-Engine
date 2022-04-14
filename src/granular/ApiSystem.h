@@ -279,6 +279,7 @@ class DEMSolver {
     // Some JIT packaging helpers
     inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap);
     inline void equipSimParams(std::unordered_map<std::string, std::string>& strMap);
+    inline void equipClumpMassMat(std::unordered_map<std::string, std::string>& strMap);
 };
 
 }  // namespace sgps

@@ -32,7 +32,7 @@ void DEMKinematicThread::contactDetection() {
     bin_occupation->kernel("getNumberOfBinsEachSphereTouches")
         .instantiate()
         .configure(dim3(blocks_needed_for_bodies), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(simParams, granData, numBinsSphereTouches, granTemplates);
+        .launch(granData, numBinsSphereTouches);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     // 2nd step: prefix scan sphere--bin touching pairs
@@ -56,8 +56,7 @@ void DEMKinematicThread::contactDetection() {
     bin_occupation->kernel("populateBinSphereTouchingPairs")
         .instantiate()
         .configure(dim3(blocks_needed_for_bodies), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(simParams, granData, numBinsSphereTouchesScan, binIDsEachSphereTouches, sphereIDsEachBinTouches,
-                granTemplates);
+        .launch(granData, numBinsSphereTouchesScan, binIDsEachSphereTouches, sphereIDsEachBinTouches);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     // std::cout << "Unsorted bin IDs: ";
     // displayArray<binID_t>(binIDsEachSphereTouches, stateOfSolver_resources.getNumBinSphereTouchPairs());
@@ -124,17 +123,11 @@ void DEMKinematicThread::contactDetection() {
     size_t blocks_needed_for_bins =
         (stateOfSolver_resources.getNumActiveBins() + SGPS_DEM_NUM_BINS_PER_BLOCK - 1) / SGPS_DEM_NUM_BINS_PER_BLOCK;
     if (blocks_needed_for_bins > 0) {
-        auto contact_detection = JitHelper::buildProgram(
-            "DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu",
-            std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
-
-        contact_detection.kernel("getNumberOfContactsEachBin")
+        contact_detection->kernel("getNumberOfContactsEachBin")
             .instantiate()
-            .configure(dim3(blocks_needed_for_bins), dim3(SGPS_DEM_NUM_BINS_PER_BLOCK),
-                       sizeof(float) * TEST_SHARED_SIZE * 4, streamInfo.stream)
-            .launch(simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
-                    sphereIDsLookUpTable, numContactsInEachBin, stateOfSolver_resources.getNumActiveBins(),
-                    granTemplates);
+            .configure(dim3(blocks_needed_for_bins), dim3(SGPS_DEM_NUM_BINS_PER_BLOCK), 0, streamInfo.stream)
+            .launch(granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches, sphereIDsLookUpTable,
+                    numContactsInEachBin, stateOfSolver_resources.getNumActiveBins());
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // Prescan numContactsInEachBin to get the final contactReportOffsets. A new vector is needed.
@@ -156,13 +149,11 @@ void DEMKinematicThread::contactDetection() {
         }
         // std::cout << "NumContacts: " << stateOfSolver_resources.getNumContacts() << std::endl;
 
-        contact_detection.kernel("populateContactPairsEachBin")
+        contact_detection->kernel("populateContactPairsEachBin")
             .instantiate()
-            .configure(dim3(blocks_needed_for_bins), dim3(SGPS_DEM_NUM_BINS_PER_BLOCK),
-                       sizeof(float) * TEST_SHARED_SIZE * 4, streamInfo.stream)
-            .launch(simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
-                    sphereIDsLookUpTable, contactReportOffsets, stateOfSolver_resources.getNumActiveBins(),
-                    granTemplates);
+            .configure(dim3(blocks_needed_for_bins), dim3(SGPS_DEM_NUM_BINS_PER_BLOCK), 0, streamInfo.stream)
+            .launch(granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches, sphereIDsLookUpTable,
+                    contactReportOffsets, stateOfSolver_resources.getNumActiveBins());
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         // displayArray<bodyID_t>(granData->idGeometryA, stateOfSolver_resources.getNumContacts());
         // displayArray<bodyID_t>(granData->idGeometryB, stateOfSolver_resources.getNumContacts());
@@ -495,19 +486,28 @@ void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& 
     }
 }
 
-void DEMKinematicThread::jitifyKernels(std::unordered_map<std::string, std::string>& templateSubs,
-                                       std::unordered_map<std::string, std::string>& simParamSubs,
-                                       std::unordered_map<std::string, std::string>& familySubs) {
+void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,
+                                       const std::unordered_map<std::string, std::string>& simParamSubs,
+                                       const std::unordered_map<std::string, std::string>& massMatSubs,
+                                       const std::unordered_map<std::string, std::string>& familySubs) {
     // First one is bin_occupation kernels, which figure out the bin--sphere touch pairs
     {
         std::unordered_map<std::string, std::string> boSubs = templateSubs;
-
+        boSubs.insert(simParamSubs.begin(), simParamSubs.end());
         // bin_occupation = JitHelper::buildProgram(
         //     "DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
         //     std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
         bin_occupation = std::make_shared<jitify::Program>(
             std::move(JitHelper::buildProgram("DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
                                               boSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+    }
+    // Then CD kernels
+    {
+        std::unordered_map<std::string, std::string> cdSubs = templateSubs;
+        cdSubs.insert(simParamSubs.begin(), simParamSubs.end());
+        contact_detection = std::make_shared<jitify::Program>(
+            std::move(JitHelper::buildProgram("DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu",
+                                              cdSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
 }
 

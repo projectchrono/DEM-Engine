@@ -199,9 +199,10 @@ class DEMKinematicThread {
     void packTransferPointers(DEMDynamicThread* dT);
 
     // Jitify kT kernels (at initialization) based on existing knowledge of this run
-    void jitifyKernels(std::unordered_map<std::string, std::string>& templateSubs,
-                       std::unordered_map<std::string, std::string>& simParamSubs,
-                       std::unordered_map<std::string, std::string>& familySubs);
+    void jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,
+                       const std::unordered_map<std::string, std::string>& simParamSubs,
+                       const std::unordered_map<std::string, std::string>& massMatSubs,
+                       const std::unordered_map<std::string, std::string>& familySubs);
 
   private:
     // Contact detections
@@ -214,6 +215,7 @@ class DEMKinematicThread {
     // Just-in-time compiled kernels
     // jitify::Program bin_occupation = JitHelper::buildProgram("bin_occupation", " ");
     std::shared_ptr<jitify::Program> bin_occupation;
+    std::shared_ptr<jitify::Program> contact_detection;
 
 };  // kT ends
 

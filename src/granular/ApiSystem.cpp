@@ -392,11 +392,12 @@ void DEMSolver::validateUserInputs() {
 }
 
 void DEMSolver::jitifyKernels() {
-    std::unordered_map<std::string, std::string> templateSubs, simParamSubs, familySubs;
+    std::unordered_map<std::string, std::string> templateSubs, simParamSubs, massMatSubs, familySubs;
     equipClumpTemplates(templateSubs);
     equipSimParams(simParamSubs);
-    kT->jitifyKernels(templateSubs, simParamSubs, familySubs);
-    dT->jitifyKernels(templateSubs, simParamSubs, familySubs);
+    equipClumpMassMat(massMatSubs);
+    kT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familySubs);
+    dT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familySubs);
 }
 
 // The method should be called after user inputs are in place, and before starting the simulation. It figures out a part
@@ -482,20 +483,34 @@ int DEMSolver::LaunchThreads(double thisCallDuration) {
     return 0;
 }
 
+inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::string>& strMap) {
+    strMap["_nDistinctClumpBodyTopologies_"] = std::to_string(nDistinctClumpBodyTopologies_computed);
+    strMap["_nDistinctClumpComponents_"] = std::to_string(nDistinctClumpComponents_computed);
+    strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
+    std::string CDRadii, CDRelPosX, CDRelPosY, CDRelPosZ, ClumpMasses;
+    // loop through all templates to find in the JIT info
+    for (unsigned int i = 0; i < nDistinctClumpBodyTopologies_computed; i++) {
+        ClumpMasses += to_string_with_precision(m_template_mass.at(i)) + ",";
+    }
+    strMap["_ClumpMasses_"] = ClumpMasses;
+}
+
 inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap) {
     strMap["_nDistinctClumpBodyTopologies_"] = std::to_string(nDistinctClumpBodyTopologies_computed);
     strMap["_nDistinctClumpComponents_"] = std::to_string(nDistinctClumpComponents_computed);
     strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
-    std::string CDRadii, CDRelPosX, CDRelPosY, CDRelPosZ;
+    std::string CDRadii, Radii, CDRelPosX, CDRelPosY, CDRelPosZ;
     // loop through all templates to find in the JIT info
     for (unsigned int i = 0; i < nDistinctClumpBodyTopologies_computed; i++) {
         for (unsigned int j = 0; j < m_template_sp_radii.at(i).size(); j++) {
-            CDRadii += std::to_string(m_template_sp_radii.at(i).at(j) + m_expand_factor) + ",";
-            CDRelPosX += std::to_string(m_template_sp_relPos.at(i).at(j).x) + ",";
-            CDRelPosY += std::to_string(m_template_sp_relPos.at(i).at(j).y) + ",";
-            CDRelPosZ += std::to_string(m_template_sp_relPos.at(i).at(j).z) + ",";
+            Radii += to_string_with_precision(m_template_sp_radii.at(i).at(j)) + ",";
+            CDRadii += to_string_with_precision(m_template_sp_radii.at(i).at(j) + m_expand_factor) + ",";
+            CDRelPosX += to_string_with_precision(m_template_sp_relPos.at(i).at(j).x) + ",";
+            CDRelPosY += to_string_with_precision(m_template_sp_relPos.at(i).at(j).y) + ",";
+            CDRelPosZ += to_string_with_precision(m_template_sp_relPos.at(i).at(j).z) + ",";
         }
     }
+    strMap["_Radii_"] = Radii;
     strMap["_CDRadii_"] = CDRadii;
     strMap["_CDRelPosX_"] = CDRelPosX;
     strMap["_CDRelPosY_"] = CDRelPosY;
@@ -511,9 +526,10 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_nbY_"] = std::to_string(nbY);
     strMap["_nbZ_"] = std::to_string(nbZ);
 
-    strMap["_l_"] = std::to_string(l);
-    strMap["_voxelSize_"] = std::to_string(m_voxelSize);
-    strMap["_binSize_"] = std::to_string(m_binSize);
+    // This l needs to be more accurate
+    strMap["_l_"] = to_string_with_precision(l, 17);
+    strMap["_voxelSize_"] = to_string_with_precision(m_voxelSize);
+    strMap["_binSize_"] = to_string_with_precision(m_binSize);
 
     strMap["_nClumpBodies_"] = std::to_string(nClumpBodies);
     strMap["_nSpheresGM_"] = std::to_string(nSpheresGM);
@@ -521,14 +537,14 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_nDistinctClumpComponents_"] = std::to_string(nDistinctClumpComponents_computed);
     strMap["_nMatTuples_"] = std::to_string(nMatTuples_computed);
 
-    strMap["_LBFX_"] = std::to_string(m_boxLBF.x);
-    strMap["_LBFY_"] = std::to_string(m_boxLBF.y);
-    strMap["_LBFZ_"] = std::to_string(m_boxLBF.z);
-    strMap["_Gx_"] = std::to_string(G.x);
-    strMap["_Gy_"] = std::to_string(G.y);
-    strMap["_Gz_"] = std::to_string(G.z);
+    strMap["_LBFX_"] = to_string_with_precision(m_boxLBF.x);
+    strMap["_LBFY_"] = to_string_with_precision(m_boxLBF.y);
+    strMap["_LBFZ_"] = to_string_with_precision(m_boxLBF.z);
+    strMap["_Gx_"] = to_string_with_precision(G.x);
+    strMap["_Gy_"] = to_string_with_precision(G.y);
+    strMap["_Gz_"] = to_string_with_precision(G.z);
 
-    strMap["_beta_"] = std::to_string(m_expand_factor);
+    strMap["_beta_"] = to_string_with_precision(m_expand_factor);
 }
 
 }  // namespace sgps

@@ -20,6 +20,8 @@
 #include <granular/GranularStructs.h>
 #include <granular/DataStructs.h>
 
+#include <core/utils/JitHelper.h>
+
 namespace sgps {
 
 // Implementation-level classes
@@ -249,9 +251,10 @@ class DEMDynamicThread {
     void resetUserCallStat();
 
     // Jitify dT kernels (at initialization) based on existing knowledge of this run
-    void jitifyKernels(std::unordered_map<std::string, std::string>& templateSubs,
-                       std::unordered_map<std::string, std::string>& simParamSubs,
-                       std::unordered_map<std::string, std::string>& familySubs);
+    void jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,
+                       const std::unordered_map<std::string, std::string>& simParamSubs,
+                       const std::unordered_map<std::string, std::string>& massMatSubs,
+                       const std::unordered_map<std::string, std::string>& familySubs);
 
   private:
     // update clump-based acceleration array based on sphere-based force array
@@ -266,6 +269,10 @@ class DEMDynamicThread {
     void sendToTheirBuffer();
     // Resize some work arrays based on the number of contact pairs provided by kT
     void contactEventArraysResize(size_t nContactPairs);
+
+    // Just-in-time compiled kernels
+    std::shared_ptr<jitify::Program> prep_force;
+    std::shared_ptr<jitify::Program> cal_force;
 };  // dT ends
 
 }  // namespace sgps

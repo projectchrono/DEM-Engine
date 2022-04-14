@@ -3,27 +3,29 @@
 #include <granular/GranularDefines.h>
 #include <kernel/DEMHelperKernels.cu>
 
-__global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
-                                           sgps::DEMDataKT* granData,
+__global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
                                            sgps::bodyID_t* sphereIDsEachBinTouches_sorted,
                                            sgps::binID_t* activeBinIDs,
                                            sgps::spheresBinTouches_t* numSpheresBinTouches,
                                            sgps::binSphereTouchPairs_t* sphereIDsLookUpTable,
                                            sgps::spheresBinTouches_t* numContactsInEachBin,
-                                           size_t nActiveBins,
-                                           sgps::DEMTemplate* granTemplates) {
-    // __shared__ const distinctSphereRadii[@NUM_OF_THAT_ARR@] = {@THAT_ARR@};
-    // TODO: These info should be jitfied not brought from global mem
-    __shared__ float CDRadii[TEST_SHARED_SIZE];
-    __shared__ float CDRelPosX[TEST_SHARED_SIZE];
-    __shared__ float CDRelPosY[TEST_SHARED_SIZE];
-    __shared__ float CDRelPosZ[TEST_SHARED_SIZE];
-    if (threadIdx.x == 0) {
-        for (unsigned int i = 0; i < simParams->nDistinctClumpComponents; i++) {
-            CDRadii[i] = granTemplates->radiiSphere[i] + simParams->beta;
-            CDRelPosX[i] = granTemplates->relPosSphereX[i];
-            CDRelPosY[i] = granTemplates->relPosSphereY[i];
-            CDRelPosZ[i] = granTemplates->relPosSphereZ[i];
+                                           size_t nActiveBins) {
+    // CUDA does not support initializing shared arrays, so we have to manually load them
+    __shared__ float CDRadii[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosX[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosY[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosZ[_nDistinctClumpComponents_];
+    if (threadIdx.x < _nActiveLoadingThreads_) {
+        const float jitifiedCDRadii[_nDistinctClumpComponents_] = {_CDRadii_};
+        const float jitifiedCDRelPosX[_nDistinctClumpComponents_] = {_CDRelPosX_};
+        const float jitifiedCDRelPosY[_nDistinctClumpComponents_] = {_CDRelPosY_};
+        const float jitifiedCDRelPosZ[_nDistinctClumpComponents_] = {_CDRelPosZ_};
+        for (sgps::clumpComponentOffset_t i = threadIdx.x; i < _nDistinctClumpComponents_;
+             i += _nActiveLoadingThreads_) {
+            CDRadii[i] = jitifiedCDRadii[i];
+            CDRelPosX[i] = jitifiedCDRelPosX[i];
+            CDRelPosY[i] = jitifiedCDRelPosY[i];
+            CDRelPosZ[i] = jitifiedCDRelPosZ[i];
         }
     }
     __syncthreads();
@@ -54,8 +56,7 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
             double ownerX, ownerY, ownerZ;
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[ownerIDs[i]], granData->locX[ownerIDs[i]],
-                granData->locY[ownerIDs[i]], granData->locZ[ownerIDs[i]], simParams->nvXp2, simParams->nvYp2,
-                simParams->voxelSize, simParams->l);
+                granData->locY[ownerIDs[i]], granData->locZ[ownerIDs[i]], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
             float myRelPosX = CDRelPosX[compOffsets[i]];
             float myRelPosY = CDRelPosY[compOffsets[i]];
             float myRelPosZ = CDRelPosZ[compOffsets[i]];
@@ -83,16 +84,16 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
                 checkSpheresOverlap<double>(bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], CDRadii[compOffsets[bodyA]],
                                             bodyX[bodyB], bodyY[bodyB], bodyZ[bodyB], CDRadii[compOffsets[bodyB]],
                                             contactPntX, contactPntY, contactPntZ, in_contact);
-                sgps::binID_t contactPntBin = getPointBinID<sgps::binID_t>(
-                    contactPntX, contactPntY, contactPntZ, simParams->binSize, simParams->nbX, simParams->nbY);
+                sgps::binID_t contactPntBin =
+                    getPointBinID<sgps::binID_t>(contactPntX, contactPntY, contactPntZ, _binSize_, _nbX_, _nbY_);
 
                 /*
-                printf("contactPntBin: %u, %u, %u\n", (unsigned int)(contactPntX/simParams->binSize),
-                                                        (unsigned int)(contactPntY/simParams->binSize),
-                                                        (unsigned int)(contactPntZ/simParams->binSize));
-                unsigned int ZZ = binID/(simParams->nbX*simParams->nbY);
-                unsigned int YY = binID%(simParams->nbX*simParams->nbY)/simParams->nbX;
-                unsigned int XX = binID%(simParams->nbX*simParams->nbY)%simParams->nbX;
+                printf("contactPntBin: %u, %u, %u\n", (unsigned int)(contactPntX/_binSize_),
+                                                        (unsigned int)(contactPntY/_binSize_),
+                                                        (unsigned int)(contactPntZ/_binSize_));
+                unsigned int ZZ = binID/(_nbX_*_nbY_);
+                unsigned int YY = binID%(_nbX_*_nbY_)/_nbX_;
+                unsigned int XX = binID%(_nbX_*_nbY_)%_nbX_;
                 printf("binID: %u, %u, %u\n", XX,YY,ZZ);
                 printf("bodyA: %f, %f, %f\n", bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA]);
                 printf("bodyB: %f, %f, %f\n", bodyX[bodyB], bodyY[bodyB], bodyZ[bodyB]);
@@ -109,27 +110,29 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
     }
 }
 
-__global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
-                                            sgps::DEMDataKT* granData,
+__global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
                                             sgps::bodyID_t* sphereIDsEachBinTouches_sorted,
                                             sgps::binID_t* activeBinIDs,
                                             sgps::spheresBinTouches_t* numSpheresBinTouches,
                                             sgps::binSphereTouchPairs_t* sphereIDsLookUpTable,
                                             sgps::contactPairs_t* contactReportOffsets,
-                                            size_t nActiveBins,
-                                            sgps::DEMTemplate* granTemplates) {
-    // __shared__ const distinctSphereRadii[@NUM_OF_THAT_ARR@] = {@THAT_ARR@};
-    // TODO: These info should be jitfied not brought from global mem
-    __shared__ float CDRadii[TEST_SHARED_SIZE];
-    __shared__ float CDRelPosX[TEST_SHARED_SIZE];
-    __shared__ float CDRelPosY[TEST_SHARED_SIZE];
-    __shared__ float CDRelPosZ[TEST_SHARED_SIZE];
-    if (threadIdx.x == 0) {
-        for (unsigned int i = 0; i < simParams->nDistinctClumpComponents; i++) {
-            CDRadii[i] = granTemplates->radiiSphere[i] + simParams->beta;
-            CDRelPosX[i] = granTemplates->relPosSphereX[i];
-            CDRelPosY[i] = granTemplates->relPosSphereY[i];
-            CDRelPosZ[i] = granTemplates->relPosSphereZ[i];
+                                            size_t nActiveBins) {
+    // CUDA does not support initializing shared arrays, so we have to manually load them
+    __shared__ float CDRadii[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosX[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosY[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosZ[_nDistinctClumpComponents_];
+    if (threadIdx.x < _nActiveLoadingThreads_) {
+        const float jitifiedCDRadii[_nDistinctClumpComponents_] = {_CDRadii_};
+        const float jitifiedCDRelPosX[_nDistinctClumpComponents_] = {_CDRelPosX_};
+        const float jitifiedCDRelPosY[_nDistinctClumpComponents_] = {_CDRelPosY_};
+        const float jitifiedCDRelPosZ[_nDistinctClumpComponents_] = {_CDRelPosZ_};
+        for (sgps::clumpComponentOffset_t i = threadIdx.x; i < _nDistinctClumpComponents_;
+             i += _nActiveLoadingThreads_) {
+            CDRadii[i] = jitifiedCDRadii[i];
+            CDRelPosX[i] = jitifiedCDRelPosX[i];
+            CDRelPosY[i] = jitifiedCDRelPosY[i];
+            CDRelPosZ[i] = jitifiedCDRelPosZ[i];
         }
     }
     __syncthreads();
@@ -160,8 +163,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
             double ownerX, ownerY, ownerZ;
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[ownerIDs[i]], granData->locX[ownerIDs[i]],
-                granData->locY[ownerIDs[i]], granData->locZ[ownerIDs[i]], simParams->nvXp2, simParams->nvYp2,
-                simParams->voxelSize, simParams->l);
+                granData->locY[ownerIDs[i]], granData->locZ[ownerIDs[i]], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
             float myRelPosX = CDRelPosX[compOffsets[i]];
             float myRelPosY = CDRelPosY[compOffsets[i]];
             float myRelPosZ = CDRelPosZ[compOffsets[i]];
@@ -192,8 +194,8 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
                 checkSpheresOverlap<double>(bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], CDRadii[compOffsets[bodyA]],
                                             bodyX[bodyB], bodyY[bodyB], bodyZ[bodyB], CDRadii[compOffsets[bodyB]],
                                             contactPntX, contactPntY, contactPntZ, in_contact);
-                sgps::binID_t contactPntBin = getPointBinID<sgps::binID_t>(
-                    contactPntX, contactPntY, contactPntZ, simParams->binSize, simParams->nbX, simParams->nbY);
+                sgps::binID_t contactPntBin =
+                    getPointBinID<sgps::binID_t>(contactPntX, contactPntY, contactPntZ, _binSize_, _nbX_, _nbY_);
 
                 if (in_contact && (contactPntBin == binID)) {
                     granData->idGeometryA[myReportOffset] = bodyIDs[bodyA];

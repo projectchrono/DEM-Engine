@@ -7,6 +7,7 @@
 
 #pragma once
 #include <iostream>
+#include <sstream>
 #include <list>
 #include <cmath>
 #include <vector>
@@ -245,18 +246,25 @@ inline void materialProxyMaterixCalculator(float& E_eff,
     G_eff = 1. / invG;
 }
 
+inline std::string to_string_with_precision(const double a_value, const unsigned int n = 10) {
+    std::ostringstream out;
+    out.precision(n);
+    out << std::fixed << a_value;
+    return out.str();
+}
+
 /*
 inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap,
                                 DEMSimParams* simParams,
                                 DEMTemplate* granTemplates) {
-    strMap["_nDistinctClumpComponents_"] = std::to_string(simParams->nDistinctClumpComponents);
-    strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
+    strMap["_nDistinctClumpComponents_"] = to_string_with_precision(simParams->nDistinctClumpComponents);
+    strMap["_nActiveLoadingThreads_"] = to_string_with_precision(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
     std::string CDRadii, CDRelPosX, CDRelPosY, CDRelPosZ;
     for (unsigned int i = 0; i < simParams->nDistinctClumpComponents; i++) {
-        CDRadii += std::to_string(granTemplates->radiiSphere[i] + simParams->beta) + ",";
-        CDRelPosX += std::to_string(granTemplates->relPosSphereX[i]) + ",";
-        CDRelPosY += std::to_string(granTemplates->relPosSphereY[i]) + ",";
-        CDRelPosZ += std::to_string(granTemplates->relPosSphereZ[i]) + ",";
+        CDRadii += to_string_with_precision(granTemplates->radiiSphere[i] + simParams->beta) + ",";
+        CDRelPosX += to_string_with_precision(granTemplates->relPosSphereX[i]) + ",";
+        CDRelPosY += to_string_with_precision(granTemplates->relPosSphereY[i]) + ",";
+        CDRelPosZ += to_string_with_precision(granTemplates->relPosSphereZ[i]) + ",";
     }
     strMap["_CDRadii_"] = CDRadii;
     strMap["_CDRelPosX_"] = CDRelPosX;
@@ -265,31 +273,31 @@ inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& st
 }
 
 inline void equipSimParams(std::unordered_map<std::string, std::string>& strMap, DEMSimParams* simParams, DEMTemplate*
-granTemplates) { strMap["_nvXp2_"] = std::to_string(simParams->nvXp2); strMap["_nvYp2_"] =
-std::to_string(simParams->nvYp2); strMap["_nvZp2_"] = std::to_string(simParams->nvZp2);
+granTemplates) { strMap["_nvXp2_"] = to_string_with_precision(simParams->nvXp2); strMap["_nvYp2_"] =
+to_string_with_precision(simParams->nvYp2); strMap["_nvZp2_"] = to_string_with_precision(simParams->nvZp2);
 
-    strMap["_nbX_"] = std::to_string(simParams->nbX);
-    strMap["_nbY_"] = std::to_string(simParams->nbY);
-    strMap["_nbZ_"] = std::to_string(simParams->nbZ);
+    strMap["_nbX_"] = to_string_with_precision(simParams->nbX);
+    strMap["_nbY_"] = to_string_with_precision(simParams->nbY);
+    strMap["_nbZ_"] = to_string_with_precision(simParams->nbZ);
 
-    strMap["_l_"] = std::to_string(simParams->l);
-    strMap["_voxelSize_"] = std::to_string(simParams->voxelSize);
-    strMap["_binSize_"] = std::to_string(simParams->binSize);
+    strMap["_l_"] = to_string_with_precision(simParams->l);
+    strMap["_voxelSize_"] = to_string_with_precision(simParams->voxelSize);
+    strMap["_binSize_"] = to_string_with_precision(simParams->binSize);
 
-    strMap["_nClumpBodies_"] = std::to_string(simParams->nClumpBodies);
-    strMap["_nSpheresGM_"] = std::to_string(simParams->nSpheresGM);
-    strMap["_nDistinctClumpBodyTopologies_"] = std::to_string(simParams->nDistinctClumpBodyTopologies);
-    strMap["_nDistinctClumpComponents_"] = std::to_string(simParams->nDistinctClumpComponents);
-    strMap["_nMatTuples_"] = std::to_string(simParams->nMatTuples);
+    strMap["_nClumpBodies_"] = to_string_with_precision(simParams->nClumpBodies);
+    strMap["_nSpheresGM_"] = to_string_with_precision(simParams->nSpheresGM);
+    strMap["_nDistinctClumpBodyTopologies_"] = to_string_with_precision(simParams->nDistinctClumpBodyTopologies);
+    strMap["_nDistinctClumpComponents_"] = to_string_with_precision(simParams->nDistinctClumpComponents);
+    strMap["_nMatTuples_"] = to_string_with_precision(simParams->nMatTuples);
 
-    strMap["_LBFX_"] = std::to_string(simParams->LBFX);
-    strMap["_LBFY_"] = std::to_string(simParams->LBFY);
-    strMap["_LBFZ_"] = std::to_string(simParams->LBFZ);
-    strMap["_Gx_"] = std::to_string(simParams->Gx);
-    strMap["_Gy_"] = std::to_string(simParams->Gy);
-    strMap["_Gz_"] = std::to_string(simParams->Gz);
+    strMap["_LBFX_"] = to_string_with_precision(simParams->LBFX);
+    strMap["_LBFY_"] = to_string_with_precision(simParams->LBFY);
+    strMap["_LBFZ_"] = to_string_with_precision(simParams->LBFZ);
+    strMap["_Gx_"] = to_string_with_precision(simParams->Gx);
+    strMap["_Gy_"] = to_string_with_precision(simParams->Gy);
+    strMap["_Gz_"] = to_string_with_precision(simParams->Gz);
 
-    strMap["_beta_"] = std::to_string(simParams->beta);
+    strMap["_beta_"] = to_string_with_precision(simParams->beta);
 }
 */
 

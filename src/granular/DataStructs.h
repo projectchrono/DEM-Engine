@@ -28,7 +28,7 @@ struct DEMSimParams {
     // Number of bins in the Z direction (actual number)
     binID_t nbZ;
     // Smallest length unit
-    float l;
+    double l;
     // Double-precision single voxel size
     double voxelSize;
     // The edge length of a bin (for contact detection)

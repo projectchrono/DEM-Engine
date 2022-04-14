@@ -46,22 +46,28 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
                                              sgps::DEMDataDT* granData,
                                              size_t nContactPairs,
                                              sgps::DEMTemplate* granTemplates) {
-    // __shared__ const distinctSphereRadii[@NUM_OF_THAT_ARR@] = {@THAT_ARR@};
-    // TODO: These info should be jitfied not brought from global mem
-    extern __shared__ float Radii[];
-    float* CDRelPosX = Radii + TEST_SHARED_SIZE;
-    float* CDRelPosY = Radii + 2 * TEST_SHARED_SIZE;
-    float* CDRelPosZ = Radii + 3 * TEST_SHARED_SIZE;
-    float* ClumpMasses = Radii + 4 * TEST_SHARED_SIZE;
-    if (threadIdx.x == 0) {
-        for (unsigned int i = 0; i < simParams->nDistinctClumpComponents; i++) {
-            Radii[i] = granTemplates->radiiSphere[i] + simParams->beta;
-            CDRelPosX[i] = granTemplates->relPosSphereX[i];
-            CDRelPosY[i] = granTemplates->relPosSphereY[i];
-            CDRelPosZ[i] = granTemplates->relPosSphereZ[i];
+    // CUDA does not support initializing shared arrays, so we have to manually load them
+    __shared__ float Radii[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosX[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosY[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosZ[_nDistinctClumpComponents_];
+    __shared__ float ClumpMasses[_nDistinctClumpBodyTopologies_];
+    if (threadIdx.x < _nActiveLoadingThreads_) {
+        const float jitifiedRadii[_nDistinctClumpComponents_] = {_Radii_};
+        const float jitifiedCDRelPosX[_nDistinctClumpComponents_] = {_CDRelPosX_};
+        const float jitifiedCDRelPosY[_nDistinctClumpComponents_] = {_CDRelPosY_};
+        const float jitifiedCDRelPosZ[_nDistinctClumpComponents_] = {_CDRelPosZ_};
+        const float jitifiedMass[_nDistinctClumpBodyTopologies_] = {_ClumpMasses_};
+        for (sgps::clumpBodyInertiaOffset_t i = threadIdx.x; i < _nDistinctClumpBodyTopologies_;
+             i += _nActiveLoadingThreads_) {
+            ClumpMasses[i] = jitifiedMass[i];
         }
-        for (unsigned int i = 0; i < simParams->nDistinctClumpBodyTopologies; i++) {
-            ClumpMasses[i] = granTemplates->massClumpBody[i];
+        for (sgps::clumpComponentOffset_t i = threadIdx.x; i < _nDistinctClumpComponents_;
+             i += _nActiveLoadingThreads_) {
+            Radii[i] = jitifiedRadii[i];
+            CDRelPosX[i] = jitifiedCDRelPosX[i];
+            CDRelPosY[i] = jitifiedCDRelPosY[i];
+            CDRelPosZ[i] = jitifiedCDRelPosZ[i];
         }
     }
     __syncthreads();
@@ -93,8 +99,7 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
         sgps::oriQ_t AoriQ0, AoriQ1, AoriQ2, AoriQ3;
         voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
             AOwnerPos.x, AOwnerPos.y, AOwnerPos.z, granData->voxelID[bodyAOwner], granData->locX[bodyAOwner],
-            granData->locY[bodyAOwner], granData->locZ[bodyAOwner], simParams->nvXp2, simParams->nvYp2,
-            simParams->voxelSize, simParams->l);
+            granData->locY[bodyAOwner], granData->locZ[bodyAOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
         myRelPos.x = CDRelPosX[bodyACompOffset];
         myRelPos.y = CDRelPosY[bodyACompOffset];
         myRelPos.z = CDRelPosZ[bodyACompOffset];
@@ -106,9 +111,9 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
         bodyAPos.x = AOwnerPos.x + (double)myRelPos.x;
         bodyAPos.y = AOwnerPos.y + (double)myRelPos.y;
         bodyAPos.z = AOwnerPos.z + (double)myRelPos.z;
-        ALinVel.x = granData->hvX[bodyAOwner] * simParams->l / simParams->h;
-        ALinVel.y = granData->hvY[bodyAOwner] * simParams->l / simParams->h;
-        ALinVel.z = granData->hvZ[bodyAOwner] * simParams->l / simParams->h;
+        ALinVel.x = granData->hvX[bodyAOwner] * _l_ / simParams->h;
+        ALinVel.y = granData->hvY[bodyAOwner] * _l_ / simParams->h;
+        ALinVel.z = granData->hvZ[bodyAOwner] * _l_ / simParams->h;
         ARotVel.x = granData->hOmgBarX[bodyAOwner] / simParams->h;
         ARotVel.y = granData->hOmgBarY[bodyAOwner] / simParams->h;
         ARotVel.z = granData->hOmgBarZ[bodyAOwner] / simParams->h;
@@ -119,8 +124,7 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
         sgps::oriQ_t BoriQ0, BoriQ1, BoriQ2, BoriQ3;
         voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
             BOwnerPos.x, BOwnerPos.y, BOwnerPos.z, granData->voxelID[bodyBOwner], granData->locX[bodyBOwner],
-            granData->locY[bodyBOwner], granData->locZ[bodyBOwner], simParams->nvXp2, simParams->nvYp2,
-            simParams->voxelSize, simParams->l);
+            granData->locY[bodyBOwner], granData->locZ[bodyBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
         myRelPos.x = CDRelPosX[bodyBCompOffset];
         myRelPos.y = CDRelPosY[bodyBCompOffset];
         myRelPos.z = CDRelPosZ[bodyBCompOffset];
@@ -132,9 +136,9 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
         bodyBPos.x = BOwnerPos.x + (double)myRelPos.x;
         bodyBPos.y = BOwnerPos.y + (double)myRelPos.y;
         bodyBPos.z = BOwnerPos.z + (double)myRelPos.z;
-        BLinVel.x = granData->hvX[bodyBOwner] * simParams->l / simParams->h;
-        BLinVel.y = granData->hvY[bodyBOwner] * simParams->l / simParams->h;
-        BLinVel.z = granData->hvZ[bodyBOwner] * simParams->l / simParams->h;
+        BLinVel.x = granData->hvX[bodyBOwner] * _l_ / simParams->h;
+        BLinVel.y = granData->hvY[bodyBOwner] * _l_ / simParams->h;
+        BLinVel.z = granData->hvZ[bodyBOwner] * _l_ / simParams->h;
         BRotVel.x = granData->hOmgBarX[bodyBOwner] / simParams->h;
         BRotVel.y = granData->hOmgBarY[bodyBOwner] / simParams->h;
         BRotVel.z = granData->hOmgBarZ[bodyBOwner] / simParams->h;

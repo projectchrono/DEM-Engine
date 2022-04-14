@@ -12,7 +12,6 @@
 #include <granular/GranularDefines.h>
 #include <granular/dT.h>
 #include <granular/kT.h>
-#include <core/utils/JitHelper.h>
 #include <granular/HostSideHelpers.cpp>
 #include <helper_math.cuh>
 
@@ -386,15 +385,10 @@ inline void DEMDynamicThread::calculateForces() {
     size_t blocks_needed_for_prep =
         (threads_needed_for_prep + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
 
-    auto prep_force = JitHelper::buildProgram("DEMPrepForceKernels", JitHelper::KERNEL_DIR / "DEMPrepForceKernels.cu",
-                                              std::unordered_map<std::string, std::string>(),
-                                              {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
-
-    prep_force.kernel("prepareForceArrays")
+    prep_force->kernel("prepareForceArrays")
         .instantiate()
-        .configure(dim3(blocks_needed_for_prep), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK),
-                   sizeof(float) * TEST_SHARED_SIZE * 4, streamInfo.stream)
-        .launch(simParams, granData, stateOfSolver_resources.getNumContacts(), granTemplates);
+        .configure(dim3(blocks_needed_for_prep), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+        .launch(simParams, granData, stateOfSolver_resources.getNumContacts());
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     // TODO: is there a better way??? Like memset?
@@ -414,15 +408,11 @@ inline void DEMDynamicThread::calculateForces() {
 
     size_t blocks_needed_for_contacts =
         (stateOfSolver_resources.getNumContacts() + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
-    auto cal_force = JitHelper::buildProgram(
-        "DEMFrictionlessForceKernels", JitHelper::KERNEL_DIR / "DEMFrictionlessForceKernels.cu",
-        std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
     // a custom kernel to compute forces
-    cal_force.kernel("calculateNormalContactForces")
+    cal_force->kernel("calculateNormalContactForces")
         .instantiate()
-        .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK),
-                   sizeof(float) * TEST_SHARED_SIZE * 5, streamInfo.stream)
+        .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
         .launch(simParams, granData, stateOfSolver_resources.getNumContacts(), granTemplates);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     // displayFloat3(granData->contactForces, stateOfSolver_resources.getNumContacts());
@@ -601,8 +591,27 @@ void DEMDynamicThread::resetUserCallStat() {
     contactPairArr_isFresh = true;
 }
 
-void DEMDynamicThread::jitifyKernels(std::unordered_map<std::string, std::string>& templateSubs,
-                                     std::unordered_map<std::string, std::string>& simParamSubs,
-                                     std::unordered_map<std::string, std::string>& familySubs) {}
+void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,
+                                     const std::unordered_map<std::string, std::string>& simParamSubs,
+                                     const std::unordered_map<std::string, std::string>& massMatSubs,
+                                     const std::unordered_map<std::string, std::string>& familySubs) {
+    // First one is bin_occupation kernels, which figure out the bin--sphere touch pairs
+    {
+        std::unordered_map<std::string, std::string> pfSubs = templateSubs;
+        pfSubs.insert(simParamSubs.begin(), simParamSubs.end());
+        prep_force = std::make_shared<jitify::Program>(
+            std::move(JitHelper::buildProgram("DEMPrepForceKernels", JitHelper::KERNEL_DIR / "DEMPrepForceKernels.cu",
+                                              pfSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+    }
+    // Then CD kernels
+    {
+        std::unordered_map<std::string, std::string> cfSubs = templateSubs;
+        cfSubs.insert(simParamSubs.begin(), simParamSubs.end());
+        cfSubs.insert(massMatSubs.begin(), massMatSubs.end());
+        cal_force = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMFrictionlessForceKernels", JitHelper::KERNEL_DIR / "DEMFrictionlessForceKernels.cu", cfSubs,
+            {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+    }
+}
 
 }  // namespace sgps
