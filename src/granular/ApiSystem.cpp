@@ -487,12 +487,18 @@ inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::st
     strMap["_nDistinctClumpBodyTopologies_"] = std::to_string(nDistinctClumpBodyTopologies_computed);
     strMap["_nDistinctClumpComponents_"] = std::to_string(nDistinctClumpComponents_computed);
     strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
-    std::string CDRadii, CDRelPosX, CDRelPosY, CDRelPosZ, ClumpMasses;
+    std::string ClumpMasses, moiX, moiY, moiZ;
     // loop through all templates to find in the JIT info
     for (unsigned int i = 0; i < nDistinctClumpBodyTopologies_computed; i++) {
         ClumpMasses += to_string_with_precision(m_template_mass.at(i)) + ",";
+        moiX += to_string_with_precision(m_template_moi.at(i).x) + ",";
+        moiY += to_string_with_precision(m_template_moi.at(i).y) + ",";
+        moiZ += to_string_with_precision(m_template_moi.at(i).z) + ",";
     }
     strMap["_ClumpMasses_"] = ClumpMasses;
+    strMap["_moiX_"] = moiX;
+    strMap["_moiY_"] = moiY;
+    strMap["_moiZ_"] = moiZ;
 }
 
 inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap) {

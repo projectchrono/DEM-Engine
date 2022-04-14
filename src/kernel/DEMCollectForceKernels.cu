@@ -22,18 +22,23 @@ __global__ void cashInMassMoiIndex(float* massOwner,
                                    float* massClumpBody,
                                    float* mmiXX,
                                    float* mmiYY,
-                                   float* mmiZZ,
-                                   sgps::clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies) {
-    extern __shared__ float ClumpMasses[];
-    float* moiX = ClumpMasses + TEST_SHARED_SIZE;
-    float* moiY = ClumpMasses + 2 * TEST_SHARED_SIZE;
-    float* moiZ = ClumpMasses + 3 * TEST_SHARED_SIZE;
-    if (threadIdx.x == 0) {
-        for (unsigned int i = 0; i < nDistinctClumpBodyTopologies; i++) {
-            ClumpMasses[i] = massClumpBody[i];
-            moiX[i] = mmiXX[i];
-            moiY[i] = mmiYY[i];
-            moiZ[i] = mmiZZ[i];
+                                   float* mmiZZ) {
+    // CUDA does not support initializing shared arrays, so we have to manually load them
+    __shared__ float moiX[_nDistinctClumpBodyTopologies_];
+    __shared__ float moiY[_nDistinctClumpBodyTopologies_];
+    __shared__ float moiZ[_nDistinctClumpBodyTopologies_];
+    __shared__ float ClumpMasses[_nDistinctClumpBodyTopologies_];
+    if (threadIdx.x < _nActiveLoadingThreads_) {
+        const float jitifiedMoiX[_nDistinctClumpBodyTopologies_] = {_moiX_};
+        const float jitifiedMoiY[_nDistinctClumpBodyTopologies_] = {_moiY_};
+        const float jitifiedMoiZ[_nDistinctClumpBodyTopologies_] = {_moiZ_};
+        const float jitifiedMass[_nDistinctClumpBodyTopologies_] = {_ClumpMasses_};
+        for (sgps::clumpBodyInertiaOffset_t i = threadIdx.x; i < _nDistinctClumpBodyTopologies_;
+             i += _nActiveLoadingThreads_) {
+            ClumpMasses[i] = jitifiedMass[i];
+            moiX[i] = jitifiedMoiX[i];
+            moiY[i] = jitifiedMoiY[i];
+            moiZ[i] = jitifiedMoiZ[i];
         }
     }
     __syncthreads();
@@ -59,12 +64,14 @@ __global__ void forceToAcc(float3* acc,
                            double modifier,
                            size_t n,
                            sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets,
-                           float* massClumpBody,
-                           sgps::clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies) {
-    extern __shared__ float ClumpMasses[];
-    if (threadIdx.x == 0) {
-        for (unsigned int i = 0; i < nDistinctClumpBodyTopologies; i++) {
-            ClumpMasses[i] = massClumpBody[i];
+                           float* massClumpBody) {
+    // CUDA does not support initializing shared arrays, so we have to manually load them
+    __shared__ float ClumpMasses[_nDistinctClumpBodyTopologies_];
+    if (threadIdx.x < _nActiveLoadingThreads_) {
+        const float jitifiedMass[_nDistinctClumpBodyTopologies_] = {_ClumpMasses_};
+        for (sgps::clumpBodyInertiaOffset_t i = threadIdx.x; i < _nDistinctClumpBodyTopologies_;
+             i += _nActiveLoadingThreads_) {
+            ClumpMasses[i] = jitifiedMass[i];
         }
     }
     __syncthreads();
@@ -88,16 +95,20 @@ __global__ void forceToAngAcc(float3* angAcc,
                               sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets,
                               float* mmiXX,
                               float* mmiYY,
-                              float* mmiZZ,
-                              sgps::clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies) {
-    extern __shared__ float moiX[];
-    float* moiY = moiX + TEST_SHARED_SIZE;
-    float* moiZ = moiY + TEST_SHARED_SIZE;
-    if (threadIdx.x == 0) {
-        for (unsigned int i = 0; i < nDistinctClumpBodyTopologies; i++) {
-            moiX[i] = mmiXX[i];
-            moiY[i] = mmiYY[i];
-            moiZ[i] = mmiZZ[i];
+                              float* mmiZZ) {
+    // CUDA does not support initializing shared arrays, so we have to manually load them
+    __shared__ float moiX[_nDistinctClumpBodyTopologies_];
+    __shared__ float moiY[_nDistinctClumpBodyTopologies_];
+    __shared__ float moiZ[_nDistinctClumpBodyTopologies_];
+    if (threadIdx.x < _nActiveLoadingThreads_) {
+        const float jitifiedMoiX[_nDistinctClumpBodyTopologies_] = {_moiX_};
+        const float jitifiedMoiY[_nDistinctClumpBodyTopologies_] = {_moiY_};
+        const float jitifiedMoiZ[_nDistinctClumpBodyTopologies_] = {_moiZ_};
+        for (sgps::clumpBodyInertiaOffset_t i = threadIdx.x; i < _nDistinctClumpBodyTopologies_;
+             i += _nActiveLoadingThreads_) {
+            moiX[i] = jitifiedMoiX[i];
+            moiY[i] = jitifiedMoiY[i];
+            moiZ[i] = jitifiedMoiZ[i];
         }
     }
     __syncthreads();

@@ -423,7 +423,7 @@ inline void DEMDynamicThread::calculateForces() {
     //                   granData->contactForces, granData->h2aX, granData->h2aY, granData->h2aZ,
     //                   granData->ownerClumpBody, granTemplates->massClumpBody, simParams->h,
     //                   stateOfSolver_resources.getNumContacts(),simParams->l);
-    cubCollectForces(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
+    cubCollectForces(collect_force, granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
                      granData->contactForces, granData->contactPointGeometryA, granData->contactPointGeometryB,
                      granData->h2aX, granData->h2aY, granData->h2aZ, granData->h2AlphaX, granData->h2AlphaY,
                      granData->h2AlphaZ, granData->ownerClumpBody, granTemplates->massClumpBody, granTemplates->mmiXX,
@@ -595,7 +595,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
                                      const std::unordered_map<std::string, std::string>& simParamSubs,
                                      const std::unordered_map<std::string, std::string>& massMatSubs,
                                      const std::unordered_map<std::string, std::string>& familySubs) {
-    // First one is bin_occupation kernels, which figure out the bin--sphere touch pairs
+    // First one is force array preparation kernels
     {
         std::unordered_map<std::string, std::string> pfSubs = templateSubs;
         pfSubs.insert(simParamSubs.begin(), simParamSubs.end());
@@ -603,7 +603,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
             std::move(JitHelper::buildProgram("DEMPrepForceKernels", JitHelper::KERNEL_DIR / "DEMPrepForceKernels.cu",
                                               pfSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
-    // Then CD kernels
+    // Then force calculation kernels
     {
         std::unordered_map<std::string, std::string> cfSubs = templateSubs;
         cfSubs.insert(simParamSubs.begin(), simParamSubs.end());
@@ -611,6 +611,14 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
         cal_force = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMFrictionlessForceKernels", JitHelper::KERNEL_DIR / "DEMFrictionlessForceKernels.cu", cfSubs,
             {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+    }
+    // Then force accumulation kernels
+    {
+        std::unordered_map<std::string, std::string> cfSubs = massMatSubs;
+        cfSubs.insert(simParamSubs.begin(), simParamSubs.end());
+        collect_force = std::make_shared<jitify::Program>(std::move(
+            JitHelper::buildProgram("DEMCollectForceKernels", JitHelper::KERNEL_DIR / "DEMCollectForceKernels.cu",
+                                    cfSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
 }
 

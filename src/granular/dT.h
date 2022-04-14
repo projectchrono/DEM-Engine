@@ -273,6 +273,7 @@ class DEMDynamicThread {
     // Just-in-time compiled kernels
     std::shared_ptr<jitify::Program> prep_force;
     std::shared_ptr<jitify::Program> cal_force;
+    std::shared_ptr<jitify::Program> collect_force;
 };  // dT ends
 
 }  // namespace sgps
