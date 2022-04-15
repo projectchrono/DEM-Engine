@@ -274,6 +274,7 @@ class DEMDynamicThread {
     std::shared_ptr<jitify::Program> prep_force;
     std::shared_ptr<jitify::Program> cal_force;
     std::shared_ptr<jitify::Program> collect_force;
+    std::shared_ptr<jitify::Program> integrator;
 };  // dT ends
 
 }  // namespace sgps

@@ -452,13 +452,10 @@ inline void DEMDynamicThread::calculateForces() {
 inline void DEMDynamicThread::integrateClumpMotions() {
     size_t blocks_needed_for_clumps =
         (simParams->nClumpBodies + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
-    auto integrator = JitHelper::buildProgram(
-        "DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu",
-        std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
-    integrator.kernel("integrateClumps")
+    integrator->kernel("integrateClumps")
         .instantiate()
         .configure(dim3(blocks_needed_for_clumps), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(simParams, granData, granTemplates);
+        .launch(granData);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
@@ -619,6 +616,13 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
         collect_force = std::make_shared<jitify::Program>(std::move(
             JitHelper::buildProgram("DEMCollectForceKernels", JitHelper::KERNEL_DIR / "DEMCollectForceKernels.cu",
                                     cfSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+    }
+    // Then integration kernels
+    {
+        std::unordered_map<std::string, std::string> intSubs = simParamSubs;
+        integrator = std::make_shared<jitify::Program>(std::move(
+            JitHelper::buildProgram("DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu",
+                                    intSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
 }
 

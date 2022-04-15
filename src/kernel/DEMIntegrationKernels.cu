@@ -5,9 +5,7 @@
 #include <kernel/DEMPrescribedIntegrationKernels.cu>
 
 // For now, write a custom kernel (instead of cub-based), and change it later
-inline __device__ void integrateVel(sgps::bodyID_t thisClump,
-                                    sgps::DEMSimParams* simParams,
-                                    sgps::DEMDataDT* granData) {
+inline __device__ void integrateVel(sgps::bodyID_t thisClump, sgps::DEMDataDT* granData) {
     // Even prescribed motion should leverage custom integrators, so we put the prescription condition at a ``inner''
     // location.
     sgps::family_t family_code = granData->familyID[thisClump];
@@ -29,17 +27,13 @@ inline __device__ void integrateVel(sgps::bodyID_t thisClump,
     }
 }
 
-inline __device__ void locateNewVoxel(sgps::voxelID_t& voxel,
-                                      int64_t& locX_tmp,
-                                      int64_t& locY_tmp,
-                                      int64_t& locZ_tmp,
-                                      sgps::DEMSimParams* simParams) {
+inline __device__ void locateNewVoxel(sgps::voxelID_t& voxel, int64_t& locX_tmp, int64_t& locY_tmp, int64_t& locZ_tmp) {
     // can handle VOXEL_RES_POWER2 == 16 or 32
     int64_t max_loc = ((int64_t)1 << sgps::VOXEL_RES_POWER2);
     sgps::voxelID_t voxelX;
     sgps::voxelID_t voxelY;
     sgps::voxelID_t voxelZ;
-    IDChopper<sgps::voxelID_t, sgps::voxelID_t>(voxelX, voxelY, voxelZ, voxel, simParams->nvXp2, simParams->nvYp2);
+    IDChopper<sgps::voxelID_t, sgps::voxelID_t>(voxelX, voxelY, voxelZ, voxel, _nvXp2_, _nvYp2_);
 
     voxelX += div_floor<int64_t, int64_t>(locX_tmp, max_loc);
     voxelY += div_floor<int64_t, int64_t>(locY_tmp, max_loc);
@@ -50,12 +44,10 @@ inline __device__ void locateNewVoxel(sgps::voxelID_t& voxel,
 
     // TODO: Should add a check here where, if negative voxel component spotted, stop the simulation
 
-    IDPacker<sgps::voxelID_t, sgps::voxelID_t>(voxel, voxelX, voxelY, voxelZ, simParams->nvXp2, simParams->nvYp2);
+    IDPacker<sgps::voxelID_t, sgps::voxelID_t>(voxel, voxelX, voxelY, voxelZ, _nvXp2_, _nvYp2_);
 }
 
-inline __device__ void integratePos(sgps::bodyID_t thisClump,
-                                    sgps::DEMSimParams* simParams,
-                                    sgps::DEMDataDT* granData) {
+inline __device__ void integratePos(sgps::bodyID_t thisClump, sgps::DEMDataDT* granData) {
     // Location accuracy is up to integer level anyway
     int64_t locX_tmp = (int64_t)granData->locX[thisClump];
     int64_t locY_tmp = (int64_t)granData->locY[thisClump];
@@ -72,7 +64,7 @@ inline __device__ void integratePos(sgps::bodyID_t thisClump,
         locY_tmp += granData->hvY[thisClump];
         locZ_tmp += granData->hvZ[thisClump];
         sgps::voxelID_t newVoxel = granData->voxelID[thisClump];
-        locateNewVoxel(newVoxel, locX_tmp, locY_tmp, locZ_tmp, simParams);
+        locateNewVoxel(newVoxel, locX_tmp, locY_tmp, locZ_tmp);
         granData->voxelID[thisClump] = newVoxel;
         granData->locX[thisClump] = locX_tmp;
         granData->locY[thisClump] = locY_tmp;
@@ -108,12 +100,10 @@ inline __device__ void integratePos(sgps::bodyID_t thisClump,
     }
 }
 
-__global__ void integrateClumps(sgps::DEMSimParams* simParams,
-                                sgps::DEMDataDT* granData,
-                                sgps::DEMTemplate* granTemplates) {
+__global__ void integrateClumps(sgps::DEMDataDT* granData) {
     sgps::bodyID_t thisClump = blockIdx.x * blockDim.x + threadIdx.x;
-    if (thisClump < simParams->nClumpBodies) {
-        integrateVel(thisClump, simParams, granData);
-        integratePos(thisClump, simParams, granData);
+    if (thisClump < _nClumpBodies_) {
+        integrateVel(thisClump, granData);
+        integratePos(thisClump, granData);
     }
 }
