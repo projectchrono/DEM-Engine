@@ -111,12 +111,12 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
         bodyAPos.x = AOwnerPos.x + (double)myRelPos.x;
         bodyAPos.y = AOwnerPos.y + (double)myRelPos.y;
         bodyAPos.z = AOwnerPos.z + (double)myRelPos.z;
-        ALinVel.x = granData->hvX[bodyAOwner] * _l_ / simParams->h;
-        ALinVel.y = granData->hvY[bodyAOwner] * _l_ / simParams->h;
-        ALinVel.z = granData->hvZ[bodyAOwner] * _l_ / simParams->h;
-        ARotVel.x = granData->hOmgBarX[bodyAOwner] / simParams->h;
-        ARotVel.y = granData->hOmgBarY[bodyAOwner] / simParams->h;
-        ARotVel.z = granData->hOmgBarZ[bodyAOwner] / simParams->h;
+        ALinVel.x = granData->vX[bodyAOwner];
+        ALinVel.y = granData->vY[bodyAOwner];
+        ALinVel.z = granData->vZ[bodyAOwner];
+        ARotVel.x = granData->omgBarX[bodyAOwner];
+        ARotVel.y = granData->omgBarY[bodyAOwner];
+        ARotVel.z = granData->omgBarZ[bodyAOwner];
 
         // Then bodyB, location and velocity
         float3 BLinVel, BRotVel;
@@ -136,12 +136,12 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
         bodyBPos.x = BOwnerPos.x + (double)myRelPos.x;
         bodyBPos.y = BOwnerPos.y + (double)myRelPos.y;
         bodyBPos.z = BOwnerPos.z + (double)myRelPos.z;
-        BLinVel.x = granData->hvX[bodyBOwner] * _l_ / simParams->h;
-        BLinVel.y = granData->hvY[bodyBOwner] * _l_ / simParams->h;
-        BLinVel.z = granData->hvZ[bodyBOwner] * _l_ / simParams->h;
-        BRotVel.x = granData->hOmgBarX[bodyBOwner] / simParams->h;
-        BRotVel.y = granData->hOmgBarY[bodyBOwner] / simParams->h;
-        BRotVel.z = granData->hOmgBarZ[bodyBOwner] / simParams->h;
+        BLinVel.x = granData->vX[bodyBOwner];
+        BLinVel.y = granData->vY[bodyBOwner];
+        BLinVel.z = granData->vZ[bodyBOwner];
+        BRotVel.x = granData->omgBarX[bodyBOwner];
+        BRotVel.y = granData->omgBarY[bodyBOwner];
+        BRotVel.z = granData->omgBarZ[bodyBOwner];
 
         // Now compute the contact point to see if they are truly still in contact
         double3 contactPnt;

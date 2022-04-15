@@ -27,22 +27,22 @@ void DEMDynamicThread::packDataPointers() {
     granData->locX = locX.data();
     granData->locY = locY.data();
     granData->locZ = locZ.data();
-    granData->h2aX = h2aX.data();
-    granData->h2aY = h2aY.data();
-    granData->h2aZ = h2aZ.data();
-    granData->hvX = hvX.data();
-    granData->hvY = hvY.data();
-    granData->hvZ = hvZ.data();
+    granData->aX = aX.data();
+    granData->aY = aY.data();
+    granData->aZ = aZ.data();
+    granData->vX = vX.data();
+    granData->vY = vY.data();
+    granData->vZ = vZ.data();
     granData->oriQ0 = oriQ0.data();
     granData->oriQ1 = oriQ1.data();
     granData->oriQ2 = oriQ2.data();
     granData->oriQ3 = oriQ3.data();
-    granData->hOmgBarX = hOmgBarX.data();
-    granData->hOmgBarY = hOmgBarY.data();
-    granData->hOmgBarZ = hOmgBarZ.data();
-    granData->h2AlphaX = h2AlphaX.data();
-    granData->h2AlphaY = h2AlphaY.data();
-    granData->h2AlphaZ = h2AlphaZ.data();
+    granData->omgBarX = omgBarX.data();
+    granData->omgBarY = omgBarY.data();
+    granData->omgBarZ = omgBarZ.data();
+    granData->alphaX = alphaX.data();
+    granData->alphaY = alphaY.data();
+    granData->alphaZ = alphaZ.data();
     granData->idGeometryA = idGeometryA.data();
     granData->idGeometryB = idGeometryB.data();
     granData->idGeometryA_buffer = idGeometryA_buffer.data();
@@ -113,6 +113,24 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->nbZ = nbZ;
 }
 
+float DEMDynamicThread::getKineticEnergy() {
+    // We can use temp vectors as we please. Allocate num_of_clumps floats.
+    size_t quarryTempSize = (size_t)simParams->nClumpBodies * sizeof(float);
+    float* KEArr = (float*)stateOfSolver_resources.allocateTempVector1(quarryTempSize);
+    size_t returnSize = sizeof(float);
+    float* KE = (float*)stateOfSolver_resources.allocateTempVector2(returnSize);
+    size_t blocks_needed_for_KE =
+        (simParams->nClumpBodies + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
+    quarry_stats->kernel("computeKE")
+        .instantiate()
+        .configure(dim3(blocks_needed_for_KE), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+        .launch(granData, KEArr);
+    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    // displayArray<float>(KEArr, simParams->nClumpBodies);
+    cubSum(KEArr, KE, simParams->nClumpBodies, streamInfo.stream, stateOfSolver_resources);
+    return *KE;
+}
+
 void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
                                              size_t nSpheresGM,
                                              unsigned int nClumpTopo,
@@ -136,18 +154,18 @@ void DEMDynamicThread::allocateManagedArrays(size_t nClumpBodies,
     TRACKED_VECTOR_RESIZE(oriQ1, nClumpBodies, "oriQ1", 0);
     TRACKED_VECTOR_RESIZE(oriQ2, nClumpBodies, "oriQ2", 0);
     TRACKED_VECTOR_RESIZE(oriQ3, nClumpBodies, "oriQ3", 0);
-    TRACKED_VECTOR_RESIZE(hvX, nClumpBodies, "hvX", 0);
-    TRACKED_VECTOR_RESIZE(hvY, nClumpBodies, "hvY", 0);
-    TRACKED_VECTOR_RESIZE(hvZ, nClumpBodies, "hvZ", 0);
-    TRACKED_VECTOR_RESIZE(hOmgBarX, nClumpBodies, "hOmgBarX", 0);
-    TRACKED_VECTOR_RESIZE(hOmgBarY, nClumpBodies, "hOmgBarY", 0);
-    TRACKED_VECTOR_RESIZE(hOmgBarZ, nClumpBodies, "hOmgBarZ", 0);
-    TRACKED_VECTOR_RESIZE(h2aX, nClumpBodies, "h2aX", 0);
-    TRACKED_VECTOR_RESIZE(h2aY, nClumpBodies, "h2aY", 0);
-    TRACKED_VECTOR_RESIZE(h2aZ, nClumpBodies, "h2aZ", 0);
-    TRACKED_VECTOR_RESIZE(h2AlphaX, nClumpBodies, "h2AlphaX", 0);
-    TRACKED_VECTOR_RESIZE(h2AlphaY, nClumpBodies, "h2AlphaY", 0);
-    TRACKED_VECTOR_RESIZE(h2AlphaZ, nClumpBodies, "h2AlphaZ", 0);
+    TRACKED_VECTOR_RESIZE(vX, nClumpBodies, "vX", 0);
+    TRACKED_VECTOR_RESIZE(vY, nClumpBodies, "vY", 0);
+    TRACKED_VECTOR_RESIZE(vZ, nClumpBodies, "vZ", 0);
+    TRACKED_VECTOR_RESIZE(omgBarX, nClumpBodies, "omgBarX", 0);
+    TRACKED_VECTOR_RESIZE(omgBarY, nClumpBodies, "omgBarY", 0);
+    TRACKED_VECTOR_RESIZE(omgBarZ, nClumpBodies, "omgBarZ", 0);
+    TRACKED_VECTOR_RESIZE(aX, nClumpBodies, "aX", 0);
+    TRACKED_VECTOR_RESIZE(aY, nClumpBodies, "aY", 0);
+    TRACKED_VECTOR_RESIZE(aZ, nClumpBodies, "aZ", 0);
+    TRACKED_VECTOR_RESIZE(alphaX, nClumpBodies, "alphaX", 0);
+    TRACKED_VECTOR_RESIZE(alphaY, nClumpBodies, "alphaY", 0);
+    TRACKED_VECTOR_RESIZE(alphaZ, nClumpBodies, "alphaZ", 0);
 
     // Resize to the number of spheres
     TRACKED_VECTOR_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
@@ -280,9 +298,9 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
 
         // Set initial velocity
         auto vel_of_this_clump = input_clump_vel.at(i);
-        hvX.at(i) = vel_of_this_clump.x * simParams->h / simParams->l;
-        hvY.at(i) = vel_of_this_clump.y * simParams->h / simParams->l;
-        hvZ.at(i) = vel_of_this_clump.z * simParams->h / simParams->l;
+        vX.at(i) = vel_of_this_clump.x;
+        vY.at(i) = vel_of_this_clump.y;
+        vZ.at(i) = vel_of_this_clump.z;
 
         // Set family code
         familyID.at(i) = input_clump_family.at(i);
@@ -393,16 +411,16 @@ inline void DEMDynamicThread::calculateForces() {
 
     // TODO: is there a better way??? Like memset?
     // GPU_CALL(cudaMemset(granData->contactForces, zeros, stateOfSolver_resources.getNumContacts() * sizeof(float3)));
-    // GPU_CALL(cudaMemset(granData->h2AlphaX, 0, simParams->nClumpBodies * sizeof(float)));
-    // GPU_CALL(cudaMemset(granData->h2AlphaY, 0, simParams->nClumpBodies * sizeof(float)));
-    // GPU_CALL(cudaMemset(granData->h2AlphaZ, 0, simParams->nClumpBodies * sizeof(float)));
-    // GPU_CALL(cudaMemset(granData->h2aX,
+    // GPU_CALL(cudaMemset(granData->alphaX, 0, simParams->nClumpBodies * sizeof(float)));
+    // GPU_CALL(cudaMemset(granData->alphaY, 0, simParams->nClumpBodies * sizeof(float)));
+    // GPU_CALL(cudaMemset(granData->alphaZ, 0, simParams->nClumpBodies * sizeof(float)));
+    // GPU_CALL(cudaMemset(granData->aX,
     //                     (double)simParams->h * (double)simParams->h * (double)simParams->Gx / (double)simParams->l,
     //                     simParams->nClumpBodies * sizeof(float)));
-    // GPU_CALL(cudaMemset(granData->h2aY,
+    // GPU_CALL(cudaMemset(granData->aY,
     //                     (double)simParams->h * (double)simParams->h * (double)simParams->Gy / (double)simParams->l,
     //                     simParams->nClumpBodies * sizeof(float)));
-    // GPU_CALL(cudaMemset(granData->h2aZ,
+    // GPU_CALL(cudaMemset(granData->aZ,
     //                     (double)simParams->h * (double)simParams->h * (double)simParams->Gz / (double)simParams->l,
     //                     simParams->nClumpBodies * sizeof(float)));
 
@@ -420,33 +438,33 @@ inline void DEMDynamicThread::calculateForces() {
 
     // Reflect those body-wise forces on their owner clumps
     // hostCollectForces(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
-    //                   granData->contactForces, granData->h2aX, granData->h2aY, granData->h2aZ,
+    //                   granData->contactForces, granData->aX, granData->aY, granData->aZ,
     //                   granData->ownerClumpBody, granTemplates->massClumpBody, simParams->h,
     //                   stateOfSolver_resources.getNumContacts(),simParams->l);
     cubCollectForces(collect_force, granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
                      granData->contactForces, granData->contactPointGeometryA, granData->contactPointGeometryB,
-                     granData->h2aX, granData->h2aY, granData->h2aZ, granData->h2AlphaX, granData->h2AlphaY,
-                     granData->h2AlphaZ, granData->ownerClumpBody, granTemplates->massClumpBody, granTemplates->mmiXX,
-                     granTemplates->mmiYY, granTemplates->mmiZZ, simParams->h, stateOfSolver_resources.getNumContacts(),
+                     granData->aX, granData->aY, granData->aZ, granData->alphaX, granData->alphaY, granData->alphaZ,
+                     granData->ownerClumpBody, granTemplates->massClumpBody, granTemplates->mmiXX, granTemplates->mmiYY,
+                     granTemplates->mmiZZ, simParams->h, stateOfSolver_resources.getNumContacts(),
                      simParams->nClumpBodies, simParams->l, contactPairArr_isFresh, streamInfo.stream,
                      stateOfSolver_resources, simParams->nDistinctClumpBodyTopologies);
-    // displayArray<float>(granData->h2aX, simParams->nClumpBodies);
+    // displayArray<float>(granData->aX, simParams->nClumpBodies);
     // displayFloat3(granData->contactForces, stateOfSolver_resources.getNumContacts());
     // std::cout << stateOfSolver_resources.getNumContacts() << std::endl;
 
     // Calculate the torque on owner clumps from those body-wise forces
     // hostCollectTorques(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
     //                    granData->contactForces, granData->contactPointGeometryA, granData->contactPointGeometryB,
-    //                    granData->h2AlphaX, granData->h2AlphaY, granData->h2AlphaZ, granData->ownerClumpBody,
+    //                    granData->alphaX, granData->alphaY, granData->alphaZ, granData->ownerClumpBody,
     //                    granTemplates->mmiXX, granTemplates->mmiYY, granTemplates->mmiZZ, simParams->h,
     //                    stateOfSolver_resources.getNumContacts(), simParams->l);
     // displayArray<float>(granData->oriQ0, simParams->nClumpBodies);
     // displayArray<float>(granData->oriQ1, simParams->nClumpBodies);
     // displayArray<float>(granData->oriQ2, simParams->nClumpBodies);
     // displayArray<float>(granData->oriQ3, simParams->nClumpBodies);
-    // displayArray<float>(granData->h2AlphaX, simParams->nClumpBodies);
-    // displayArray<float>(granData->h2AlphaY, simParams->nClumpBodies);
-    // displayArray<float>(granData->h2AlphaZ, simParams->nClumpBodies);
+    // displayArray<float>(granData->alphaX, simParams->nClumpBodies);
+    // displayArray<float>(granData->alphaY, simParams->nClumpBodies);
+    // displayArray<float>(granData->alphaZ, simParams->nClumpBodies);
 }
 
 inline void DEMDynamicThread::integrateClumpMotions() {
@@ -455,7 +473,7 @@ inline void DEMDynamicThread::integrateClumpMotions() {
     integrator->kernel("integrateClumps")
         .instantiate()
         .configure(dim3(blocks_needed_for_clumps), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData);
+        .launch(granData, simParams->h);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
@@ -623,6 +641,14 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
         integrator = std::make_shared<jitify::Program>(std::move(
             JitHelper::buildProgram("DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu",
                                     intSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+    }
+    // Then quarrying kernels
+    {
+        std::unordered_map<std::string, std::string> qSubs = massMatSubs;
+        qSubs.insert(simParamSubs.begin(), simParamSubs.end());
+        quarry_stats = std::make_shared<jitify::Program>(
+            std::move(JitHelper::buildProgram("DEMQuarryKernels", JitHelper::KERNEL_DIR / "DEMQuarryKernels.cu", qSubs,
+                                              {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
 }
 

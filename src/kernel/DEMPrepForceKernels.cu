@@ -6,20 +6,18 @@
 inline __device__ void cleanUpContactForces(size_t thisContact,
                                             sgps::DEMSimParams* simParams,
                                             sgps::DEMDataDT* granData) {
-    // Actually, h should be JITCed into the kernel itself
     granData->contactForces[thisContact].x = 0;
     granData->contactForces[thisContact].y = 0;
     granData->contactForces[thisContact].z = 0;
 }
 
 inline __device__ void cleanUpAcc(size_t thisClump, sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData) {
-    // Actually, h should be JITCed into the kernel itself
-    granData->h2aX[thisClump] = simParams->h * simParams->h * _Gx_ / _l_;
-    granData->h2aY[thisClump] = simParams->h * simParams->h * _Gy_ / _l_;
-    granData->h2aZ[thisClump] = simParams->h * simParams->h * _Gz_ / _l_;
-    granData->h2AlphaX[thisClump] = 0;
-    granData->h2AlphaY[thisClump] = 0;
-    granData->h2AlphaZ[thisClump] = 0;
+    granData->aX[thisClump] = _Gx_;
+    granData->aY[thisClump] = _Gy_;
+    granData->aZ[thisClump] = _Gz_;
+    granData->alphaX[thisClump] = 0;
+    granData->alphaY[thisClump] = 0;
+    granData->alphaZ[thisClump] = 0;
 }
 
 __global__ void prepareForceArrays(sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData, size_t nContactPairs) {

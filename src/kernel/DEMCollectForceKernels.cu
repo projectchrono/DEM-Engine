@@ -18,11 +18,7 @@ __global__ void cashInMassMoiIndex(float* massOwner,
                                    float3* moiOwner,
                                    sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets,
                                    sgps::bodyID_t* idOwner,
-                                   size_t nContactPairs,
-                                   float* massClumpBody,
-                                   float* mmiXX,
-                                   float* mmiYY,
-                                   float* mmiZZ) {
+                                   size_t nContactPairs) {
     // CUDA does not support initializing shared arrays, so we have to manually load them
     __shared__ float moiX[_nDistinctClumpBodyTopologies_];
     __shared__ float moiY[_nDistinctClumpBodyTopologies_];
@@ -56,15 +52,13 @@ __global__ void cashInMassMoiIndex(float* massOwner,
     }
 }
 
-// TODO: make it a template
 // computes a ./ b
 __global__ void forceToAcc(float3* acc,
                            float3* F,
                            sgps::bodyID_t* owner,
                            double modifier,
                            size_t n,
-                           sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets,
-                           float* massClumpBody) {
+                           sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets) {
     // CUDA does not support initializing shared arrays, so we have to manually load them
     __shared__ float ClumpMasses[_nDistinctClumpBodyTopologies_];
     if (threadIdx.x < _nActiveLoadingThreads_) {
@@ -84,7 +78,6 @@ __global__ void forceToAcc(float3* acc,
     }
 }
 
-// TODO: make it a template
 // computes cross(a, b) ./ c
 __global__ void forceToAngAcc(float3* angAcc,
                               float3* cntPnt,
@@ -92,10 +85,7 @@ __global__ void forceToAngAcc(float3* angAcc,
                               sgps::bodyID_t* owner,
                               double modifier,
                               size_t n,
-                              sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets,
-                              float* mmiXX,
-                              float* mmiYY,
-                              float* mmiZZ) {
+                              sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets) {
     // CUDA does not support initializing shared arrays, so we have to manually load them
     __shared__ float moiX[_nDistinctClumpBodyTopologies_];
     __shared__ float moiY[_nDistinctClumpBodyTopologies_];

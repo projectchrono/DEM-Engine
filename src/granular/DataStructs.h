@@ -96,21 +96,21 @@ struct DEMDataDT {
     oriQ_t* oriQ2;
     oriQ_t* oriQ3;
 
-    float* hvX;
-    float* hvY;
-    float* hvZ;
+    float* vX;
+    float* vY;
+    float* vZ;
 
-    float* hOmgBarX;
-    float* hOmgBarY;
-    float* hOmgBarZ;
+    float* omgBarX;
+    float* omgBarY;
+    float* omgBarZ;
 
-    float* h2aX;
-    float* h2aY;
-    float* h2aZ;
+    float* aX;
+    float* aY;
+    float* aZ;
 
-    float* h2AlphaX;
-    float* h2AlphaY;
-    float* h2AlphaZ;
+    float* alphaX;
+    float* alphaY;
+    float* alphaZ;
 
     bodyID_t* idGeometryA;
     bodyID_t* idGeometryB;

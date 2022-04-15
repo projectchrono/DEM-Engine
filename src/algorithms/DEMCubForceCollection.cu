@@ -109,17 +109,17 @@ void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
     float3* accOwner = (float3*)scratchPad.allocateTempVector4(
         tempArraySizeOwnerAcc);  // can store both linear and angular acceleration
     bodyID_t* uniqueOwner = (bodyID_t*)scratchPad.allocateTempVector5(tempArraySizeOwner);
-    // collect accelerations for body A
+    // collect accelerations for body A (modifier used to be h * h / l when we stored acc as h^2*acc)
     collect_force->kernel("forceToAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(h2a_A, contactForces, idAOwner, h * h / l, nContactPairs, inertiaPropOffsets, massClumpBody);
+        .launch(h2a_A, contactForces, idAOwner, 1.0, nContactPairs, inertiaPropOffsets);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // and don't forget body B
     collect_force->kernel("forceToAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(h2a_B, contactForces, idBOwner, -1. * h * h / l, nContactPairs, inertiaPropOffsets, massClumpBody);
+        .launch(h2a_B, contactForces, idBOwner, -1.0, nContactPairs, inertiaPropOffsets);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     CubFloat3Add float3_add_op;
     // Reducing the acceleration (2 * nContactPairs for both body A and B)
@@ -157,19 +157,17 @@ void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
     float3* h2Alpha_B = (float3*)(h2a_B);
     float3* h2Alpha_A_sorted = (float3*)(h2a_A_sorted);
     // float3* h2Alpha_B_sorted = (float3*)(h2a_B_sorted);
-    // collect angular accelerations for body A
+    // collect angular accelerations for body A (modifier used to be h * h when we stored acc as h^2*acc)
     collect_force->kernel("forceToAngAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(h2Alpha_A, contactPointA, contactForces, idAOwner, h * h, nContactPairs, inertiaPropOffsets, mmiXX,
-                mmiYY, mmiZZ);
+        .launch(h2Alpha_A, contactPointA, contactForces, idAOwner, 1.0, nContactPairs, inertiaPropOffsets);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // and don't forget body B
     collect_force->kernel("forceToAngAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(h2Alpha_B, contactPointB, contactForces, idBOwner, -1. * h * h, nContactPairs, inertiaPropOffsets,
-                mmiXX, mmiYY, mmiZZ);
+        .launch(h2Alpha_B, contactPointB, contactForces, idBOwner, -1.0, nContactPairs, inertiaPropOffsets);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // Reducing the angular acceleration (2 * nContactPairs for both body A and B)
     // Note: to do this, idAOwner needs to be sorted along with h2Alpha_A. So we sort first.

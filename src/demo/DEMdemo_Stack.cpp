@@ -72,6 +72,9 @@ int main() {
         sprintf(filename, "./DEMdemo_collide_output_%04d.csv", i);
         DEM_sim.WriteFileAsSpheres(std::string(filename));
         std::cout << "Frame: " << i << std::endl;
+        // Seems that after user call, both thread are chilling, not responding; have to resolve it...
+        // float KE = DEM_sim.GetTotalKineticEnergy();
+        // std::cout << "Total kinetic energy: " << KE << std::endl;
         DEM_sim.LaunchThreads(3e-3);
     }
 

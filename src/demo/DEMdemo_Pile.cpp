@@ -138,6 +138,8 @@ int main() {
         sprintf(filename, "./DEMdemo_collide_output_%04d.csv", i);
         DEM_sim.WriteFileAsSpheres(std::string(filename));
         std::cout << "Frame: " << i << std::endl;
+        // float KE = DEM_sim.GetTotalKineticEnergy();
+        // std::cout << "Total kinetic energy: " << KE << std::endl;
         DEM_sim.LaunchThreads(3e-2);
     }
 

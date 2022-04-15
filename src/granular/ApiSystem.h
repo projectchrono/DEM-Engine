@@ -108,6 +108,11 @@ class DEMSolver {
     /// Return the voxel ID of a clump by its numbering
     voxelID_t GetClumpVoxelID(unsigned int i) const;
 
+    /// Return total kinetic energy of all clumps
+    float GetTotalKineticEnergy() const;
+    /// Return the kinetic energy of all clumps in a set of families
+    // TODO: float GetTotalKineticEnergy(std::vector<unsigned int> families) const;
+
     /// Write current simulation status to a file
     /// Write overlapping spheres, not clumps. It makes the file larger, but less trouble to visualize. Use for test
     /// purposes only.

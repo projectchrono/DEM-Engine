@@ -5,12 +5,12 @@
 template <typename T1, typename T2>
 inline __device__ void applyPrescribedVel(bool& LinPrescribed,
                                           bool& RotPrescribed,
-                                          T1& hvX,
-                                          T1& hvY,
-                                          T1& hvZ,
-                                          T2& hOmgBarX,
-                                          T2& hOmgBarY,
-                                          T2& hOmgBarZ,
+                                          T1& vX,
+                                          T1& vY,
+                                          T1& vZ,
+                                          T2& omgBarX,
+                                          T2& omgBarY,
+                                          T2& omgBarZ,
                                           sgps::family_t family) {
     // TODO: implement real prescription cases via JITC
     switch (family) {
@@ -19,12 +19,12 @@ inline __device__ void applyPrescribedVel(bool& LinPrescribed,
             RotPrescribed = false;
             break;
         case 1:
-            hvX = 0;
-            hvY = 0;
-            hvZ = 0;
-            hOmgBarX = 0;
-            hOmgBarY = 0;
-            hOmgBarZ = 0;
+            vX = 0;
+            vY = 0;
+            vZ = 0;
+            omgBarX = 0;
+            omgBarY = 0;
+            omgBarZ = 0;
             LinPrescribed = true;
             RotPrescribed = true;
             break;

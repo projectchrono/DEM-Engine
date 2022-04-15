@@ -152,6 +152,13 @@ voxelID_t DEMSolver::GetClumpVoxelID(unsigned int i) const {
     return dT->voxelID.at(i);
 }
 
+float DEMSolver::GetTotalKineticEnergy() const {
+    if (nClumpBodies == 0) {
+        return 0.0;
+    }
+    return dT->getKineticEnergy();
+}
+
 void DEMSolver::figureOutNV() {
     if (m_boxX <= 0.f || m_boxY <= 0.f || m_boxZ <= 0.f) {
         SGPS_ERROR(
@@ -484,8 +491,6 @@ int DEMSolver::LaunchThreads(double thisCallDuration) {
 }
 
 inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::string>& strMap) {
-    strMap["_nDistinctClumpBodyTopologies_"] = std::to_string(nDistinctClumpBodyTopologies_computed);
-    strMap["_nDistinctClumpComponents_"] = std::to_string(nDistinctClumpComponents_computed);
     strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
     std::string ClumpMasses, moiX, moiY, moiZ;
     // loop through all templates to find in the JIT info
@@ -502,8 +507,6 @@ inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::st
 }
 
 inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap) {
-    strMap["_nDistinctClumpBodyTopologies_"] = std::to_string(nDistinctClumpBodyTopologies_computed);
-    strMap["_nDistinctClumpComponents_"] = std::to_string(nDistinctClumpComponents_computed);
     strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
     std::string CDRadii, Radii, CDRelPosX, CDRelPosY, CDRelPosZ;
     // loop through all templates to find in the JIT info

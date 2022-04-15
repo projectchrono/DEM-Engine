@@ -112,25 +112,25 @@ class DEMDynamicThread {
     std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ2;
     std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ3;
 
-    // Linear velocity times ts size, as a multiple of l
-    std::vector<float, ManagedAllocator<float>> hvX;
-    std::vector<float, ManagedAllocator<float>> hvY;
-    std::vector<float, ManagedAllocator<float>> hvZ;
+    // Linear velocity
+    std::vector<float, ManagedAllocator<float>> vX;
+    std::vector<float, ManagedAllocator<float>> vY;
+    std::vector<float, ManagedAllocator<float>> vZ;
 
-    // The angular velocity times ts size: h*omega
-    std::vector<float, ManagedAllocator<float>> hOmgBarX;
-    std::vector<float, ManagedAllocator<float>> hOmgBarY;
-    std::vector<float, ManagedAllocator<float>> hOmgBarZ;
+    // The angular velocity
+    std::vector<float, ManagedAllocator<float>> omgBarX;
+    std::vector<float, ManagedAllocator<float>> omgBarY;
+    std::vector<float, ManagedAllocator<float>> omgBarZ;
 
-    // Linear acceleration times h^2, as a multiple of l
-    std::vector<float, ManagedAllocator<float>> h2aX;
-    std::vector<float, ManagedAllocator<float>> h2aY;
-    std::vector<float, ManagedAllocator<float>> h2aZ;
+    // Linear acceleration
+    std::vector<float, ManagedAllocator<float>> aX;
+    std::vector<float, ManagedAllocator<float>> aY;
+    std::vector<float, ManagedAllocator<float>> aZ;
 
-    // Angular acceleration times h^2
-    std::vector<float, ManagedAllocator<float>> h2AlphaX;
-    std::vector<float, ManagedAllocator<float>> h2AlphaY;
-    std::vector<float, ManagedAllocator<float>> h2AlphaZ;
+    // Angular acceleration
+    std::vector<float, ManagedAllocator<float>> alphaX;
+    std::vector<float, ManagedAllocator<float>> alphaY;
+    std::vector<float, ManagedAllocator<float>> alphaZ;
 
     // Contact pair/location, for dT's personal use!!
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA;
@@ -211,6 +211,9 @@ class DEMDynamicThread {
                       double ts_size,
                       float expand_factor);
 
+    // Compute total KE of all clumps
+    float getKineticEnergy();
+
     // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
     void allocateManagedArrays(size_t nClumpBodies,
                                size_t nSpheresGM,
@@ -275,6 +278,7 @@ class DEMDynamicThread {
     std::shared_ptr<jitify::Program> cal_force;
     std::shared_ptr<jitify::Program> collect_force;
     std::shared_ptr<jitify::Program> integrator;
+    std::shared_ptr<jitify::Program> quarry_stats;
 };  // dT ends
 
 }  // namespace sgps

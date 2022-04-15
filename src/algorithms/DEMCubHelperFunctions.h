@@ -55,6 +55,8 @@ void cubRunLengthEncode(binID_t* d_in,
                         cudaStream_t& this_stream,
                         DEMSolverStateDataKT& scratchPad);
 
+void cubSum(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateDataDT& scratchPad);
+
 void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
                       clumpBodyInertiaOffset_t* inertiaPropOffsets,
                       bodyID_t* idA,
