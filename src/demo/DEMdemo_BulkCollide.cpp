@@ -95,7 +95,7 @@ int main() {
         input_vel.push_back(vel);
     }
 
-    DEM_sim.SetClumps(input_template_num, input_xyz);
+    DEM_sim.AddClumps(input_template_num, input_xyz);
     DEM_sim.SetClumpVels(input_vel);
 
     DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, 1.5e-10);

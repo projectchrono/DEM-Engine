@@ -73,7 +73,7 @@ void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
                       bodyID_t* ownerClumpBody,
                       const size_t nContactPairs,
                       const size_t nClumps,
-                      bool& contactPairArr_isFresh,
+                      bool contactPairArr_isFresh,
                       cudaStream_t& this_stream,
                       DEMSolverStateDataDT& scratchPad);
 

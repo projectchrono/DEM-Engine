@@ -44,7 +44,7 @@ inline __device__ float3 calcNormalForce(const double& overlapDepth,
 
 __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
                                              sgps::DEMDataDT* granData,
-                                             const size_t nContactPairs,
+                                             size_t nContactPairs,
                                              sgps::DEMTemplate* granTemplates) {
     // CUDA does not support initializing shared arrays, so we have to manually load them
     __shared__ float Radii[_nDistinctClumpComponents_];

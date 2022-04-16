@@ -3,7 +3,7 @@
 //  All rights reserved.
 
 #pragma once
-#include <climits>
+#include <limits>
 #include <stdint.h>
 #include <algorithm>
 
@@ -17,7 +17,6 @@ namespace sgps {
 
 #define SGPS_DEM_MAX_SPHERES_PER_BIN 32  // very tricky; should redo CD kernels to be block--bin based
 #define WAIT_GRANULARITY_MS 1
-#define TEST_SHARED_SIZE 128
 #ifndef SGPS_DEM_TINY_FLOAT
     #define SGPS_DEM_TINY_FLOAT 1e-6f
 #endif
@@ -29,8 +28,8 @@ namespace sgps {
 #endif
 
 typedef uint16_t subVoxelPos_t;  ///< uint16 or uint32
-constexpr uint8_t SGPS_DEM_VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * SGPS_BITS_PER_BYTE;
-constexpr int64_t SGPS_DEM_MAX_SUBVOXEL = (int64_t)1 << SGPS_DEM_VOXEL_RES_POWER2;
+constexpr uint8_t DEM_VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * SGPS_BITS_PER_BYTE;
+constexpr int64_t DEM_MAX_SUBVOXEL = (int64_t)1 << DEM_VOXEL_RES_POWER2;
 
 typedef uint64_t voxelID_t;
 // TODO: oriQ should be int (mapped to [-1,1]); applyOriQ2Vector3 and hostApplyOriQ2Vector3 need to be changed to make
@@ -41,6 +40,7 @@ typedef unsigned int binID_t;
 typedef unsigned short int materialsOffset_t;
 typedef unsigned short int clumpBodyInertiaOffset_t;
 typedef unsigned short int clumpComponentOffset_t;
+typedef unsigned int objComponentOffset_t;
 typedef double floatFine_t;
 typedef unsigned short int contact_t;  ///< Contact type (sphere--sphere is 0, etc.)
 typedef unsigned short int family_t;   ///< Data type for clump presecription type (0 for not prescribed)
@@ -83,5 +83,11 @@ constexpr clumpComponentOffset_t NUM_ACTIVE_TEMPLATE_LOADING_THREADS =
 #ifndef SGPS_PI_SQUARED
     #define SGPS_PI_SQUARED 9.869604401089358
 #endif
+
+// Some enums...
+// External object type
+enum class DEM_EXTERN_OBJ { CLUMP, PLANE, SPHERE, PLATE };
+// Friction mode
+enum class DEM_FRICTION_MODE { FRICTIONLESS, MULTI_STEP };
 
 }  // namespace sgps

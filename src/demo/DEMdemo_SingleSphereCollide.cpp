@@ -30,7 +30,7 @@ int main() {
     float sphPos = 1.2f;
     input_xyz.push_back(make_float3(-sphPos, 0, 0));
     input_xyz.push_back(make_float3(sphPos, 0, 0));
-    DEM_sim.SetClumps(input_clump_type, input_xyz);
+    DEM_sim.AddClumps(input_clump_type, input_xyz);
 
     input_vel.push_back(make_float3(1.f, 0, 0));
     input_vel.push_back(make_float3(-1.f, 0, 0));

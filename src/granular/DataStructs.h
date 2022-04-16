@@ -38,7 +38,7 @@ struct DEMSimParams {
     bodyID_t nSpheresGM;
     // Number of the templates (or say the ``types'') of clumps and spheres
     clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies;
-    clumpComponentOffset_t nDistinctClumpComponents;
+    clumpComponentOffset_t nDistinctClumpComponents;  ///< Does not include `big' clump's (external object's) components
     materialsOffset_t nMatTuples;
     // Coordinate of the left-bottom-front point of the simulation ``world''
     float LBFX;

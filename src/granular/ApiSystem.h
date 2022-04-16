@@ -17,6 +17,7 @@
 #include <core/utils/Macros.h>
 #include <helper_math.cuh>
 #include <granular/GranularDefines.h>
+#include <granular/Boundaries.h>
 
 namespace sgps {
 
@@ -94,7 +95,7 @@ class DEMSolver {
 
     /// Load input clumps (topology types and initial locations) on a per-pair basis
     /// TODO: Add a overload that takes velocities too
-    void SetClumps(const std::vector<unsigned int>& types, const std::vector<float3>& xyz);
+    void AddClumps(const std::vector<unsigned int>& types, const std::vector<float3>& xyz);
 
     /// Load input clump initial velocities on a per-pair basis. If this is not called (or if this vector is shorter
     /// than the clump location vector, then for the unassigned part) the initial velocity is assumed to be 0.
@@ -104,6 +105,10 @@ class DEMSolver {
     /// shorter than the clump location vector, then for the unassigned part) those clumps are defaulted to type 0,
     /// which is following ``normal'' physics.
     void SetClumpFamily(const std::vector<unsigned int>& code);
+
+    /// Add an (analytical or clump-represented) external object to the simulation system
+    std::shared_ptr<DEMExternObj> AddExternalObject();
+    std::shared_ptr<DEMExternObj> AddExternalObject(DEM_EXTERN_OBJ obj_type);
 
     /// Return the voxel ID of a clump by its numbering
     voxelID_t GetClumpVoxelID(unsigned int i) const;
@@ -155,6 +160,9 @@ class DEMSolver {
     std::vector<std::vector<unsigned int>> m_template_sp_mat_ids;
     std::vector<std::vector<float>> m_template_sp_radii;
     std::vector<std::vector<float3>> m_template_sp_relPos;
+
+    // Shared pointers to external objects cached at the API system
+    std::vector<std::shared_ptr<DEMExternObj>> cachedExternObjs;
 
     /*
     // Dan and Ruochun decided NOT to extract unique input values.

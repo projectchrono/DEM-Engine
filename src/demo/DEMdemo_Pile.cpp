@@ -104,8 +104,8 @@ int main() {
     input_template_num.insert(input_template_num.end(), input_xyz.size(), template_ground);
 
     // generate initial clumps for piling
-    float3 sample_center = make_float3(0, 0, 3);
-    float sample_halfheight = 5;
+    float3 sample_center = make_float3(0, 0, -1);
+    float sample_halfheight = 2;
     float sample_halfwidth = 0.7;
     auto pile =
         DEMBoxGridSampler(sample_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight), 0.05);
@@ -115,7 +115,7 @@ int main() {
         input_template_num.push_back(i % (num_template) + 1);
         family_code.push_back(0);
     }
-    DEM_sim.SetClumps(input_template_num, input_xyz);
+    DEM_sim.AddClumps(input_template_num, input_xyz);
     DEM_sim.SetClumpFamily(family_code);
 
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);

@@ -36,7 +36,7 @@ void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
                       bodyID_t* ownerClumpBody,
                       const size_t nContactPairs,
                       const size_t nClumps,
-                      bool& contactPairArr_isFresh,
+                      bool contactPairArr_isFresh,
                       cudaStream_t& this_stream,
                       DEMSolverStateDataDT& scratchPad) {
     // Preparation: allocate enough temp array memory and chop it to pieces, for the usage of cub operations. Note that
@@ -93,45 +93,48 @@ void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
     size_t tempArraySizeAcc_sorted = (size_t)2 * nContactPairs * sizeof(float3);
     size_t tempArraySizeOwnerAcc = (size_t)nClumps * sizeof(float3);
     size_t tempArraySizeOwner = (size_t)nClumps * sizeof(bodyID_t);
-    float3* h2a_A = (float3*)scratchPad.allocateTempVector1(tempArraySizeAcc);
-    float3* h2a_B = (float3*)(h2a_A + nContactPairs);
-    float3* h2a_A_sorted = (float3*)scratchPad.allocateTempVector2(tempArraySizeAcc_sorted);
-    // float3* h2a_B_sorted = (float3*)(h2a_A_sorted  + nContactPairs);
+    float3* acc_A = (float3*)scratchPad.allocateTempVector1(tempArraySizeAcc);
+    float3* acc_B = (float3*)(acc_A + nContactPairs);
+    float3* acc_A_sorted = (float3*)scratchPad.allocateTempVector2(tempArraySizeAcc_sorted);
+    // float3* acc_B_sorted = (float3*)(acc_A_sorted  + nContactPairs);
     bodyID_t* idAOwner_sorted = (bodyID_t*)scratchPad.allocateTempVector3(cachedArraySizeOwner);
     // bodyID_t* idBOwner_sorted = (bodyID_t*)(idAOwner_sorted + nContactPairs);
     float3* accOwner = (float3*)scratchPad.allocateTempVector4(
         tempArraySizeOwnerAcc);  // can store both linear and angular acceleration
     bodyID_t* uniqueOwner = (bodyID_t*)scratchPad.allocateTempVector5(tempArraySizeOwner);
     // collect accelerations for body A (modifier used to be h * h / l when we stored acc as h^2*acc)
+    // NOTE!! The modifier passed in needs to be 1.f, not 1.0. Somtimes 1.0 got converted to 0.f with the kernel call.
     collect_force->kernel("forceToAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(h2a_A, contactForces, idAOwner, 1.0, nContactPairs, inertiaPropOffsets);
+        .launch(acc_A, contactForces, idAOwner, 1.f, nContactPairs, inertiaPropOffsets);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // and don't forget body B
     collect_force->kernel("forceToAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(h2a_B, contactForces, idBOwner, -1.0, nContactPairs, inertiaPropOffsets);
+        .launch(acc_B, contactForces, idBOwner, -1.f, nContactPairs, inertiaPropOffsets);
     GPU_CALL(cudaStreamSynchronize(this_stream));
+    // displayFloat3(acc_A, 2 * nContactPairs);
+    // displayFloat3(contactForces, nContactPairs);
     CubFloat3Add float3_add_op;
     // Reducing the acceleration (2 * nContactPairs for both body A and B)
-    // Note: to do this, idAOwner needs to be sorted along with h2a_A. So we sort first.
+    // Note: to do this, idAOwner needs to be sorted along with acc_A. So we sort first.
     size_t cub_scratch_bytes = 0;
-    cub::DeviceRadixSort::SortPairs(NULL, cub_scratch_bytes, idAOwner, idAOwner_sorted, h2a_A, h2a_A_sorted,
+    cub::DeviceRadixSort::SortPairs(NULL, cub_scratch_bytes, idAOwner, idAOwner_sorted, acc_A, acc_A_sorted,
                                     nContactPairs * 2, 0, sizeof(bodyID_t) * SGPS_BITS_PER_BYTE, this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
-    cub::DeviceRadixSort::SortPairs(d_scratch_space, cub_scratch_bytes, idAOwner, idAOwner_sorted, h2a_A, h2a_A_sorted,
+    cub::DeviceRadixSort::SortPairs(d_scratch_space, cub_scratch_bytes, idAOwner, idAOwner_sorted, acc_A, acc_A_sorted,
                                     nContactPairs * 2, 0, sizeof(bodyID_t) * SGPS_BITS_PER_BYTE, this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // Then we reduce by key
-    cub::DeviceReduce::ReduceByKey(NULL, cub_scratch_bytes, idAOwner_sorted, uniqueOwner, h2a_A_sorted, accOwner,
+    cub::DeviceReduce::ReduceByKey(NULL, cub_scratch_bytes, idAOwner_sorted, uniqueOwner, acc_A_sorted, accOwner,
                                    scratchPad.getForceCollectionRunsPointer(), float3_add_op, nContactPairs * 2,
                                    this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
-    cub::DeviceReduce::ReduceByKey(d_scratch_space, cub_scratch_bytes, idAOwner_sorted, uniqueOwner, h2a_A_sorted,
+    cub::DeviceReduce::ReduceByKey(d_scratch_space, cub_scratch_bytes, idAOwner_sorted, uniqueOwner, acc_A_sorted,
                                    accOwner, scratchPad.getForceCollectionRunsPointer(), float3_add_op,
                                    nContactPairs * 2, this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
@@ -143,42 +146,45 @@ void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
         .configure(dim3(blocks_needed_for_stashing), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(clump_aX, clump_aY, clump_aZ, uniqueOwner, accOwner, scratchPad.getForceCollectionRuns());
     GPU_CALL(cudaStreamSynchronize(this_stream));
+    // displayArray<float>(clump_aX, nClumps);
+    // displayArray<float>(clump_aY, nClumps);
+    // displayArray<float>(clump_aZ, nClumps);
 
     // =====================================================
     // Then take care of angular accelerations
-    float3* h2Alpha_A = (float3*)(h2a_A);  // Memory spaces for accelerations can be reused
-    float3* h2Alpha_B = (float3*)(h2a_B);
-    float3* h2Alpha_A_sorted = (float3*)(h2a_A_sorted);
-    // float3* h2Alpha_B_sorted = (float3*)(h2a_B_sorted);
+    float3* alpha_A = (float3*)(acc_A);  // Memory spaces for accelerations can be reused
+    float3* alpha_B = (float3*)(acc_B);
+    float3* alpha_A_sorted = (float3*)(acc_A_sorted);
+    // float3* alpha_B_sorted = (float3*)(acc_B_sorted);
     // collect angular accelerations for body A (modifier used to be h * h when we stored acc as h^2*acc)
     collect_force->kernel("forceToAngAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(h2Alpha_A, contactPointA, contactForces, idAOwner, 1.0, nContactPairs, inertiaPropOffsets);
+        .launch(alpha_A, contactPointA, contactForces, idAOwner, 1.f, nContactPairs, inertiaPropOffsets);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // and don't forget body B
     collect_force->kernel("forceToAngAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(h2Alpha_B, contactPointB, contactForces, idBOwner, -1.0, nContactPairs, inertiaPropOffsets);
+        .launch(alpha_B, contactPointB, contactForces, idBOwner, -1.f, nContactPairs, inertiaPropOffsets);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // Reducing the angular acceleration (2 * nContactPairs for both body A and B)
-    // Note: to do this, idAOwner needs to be sorted along with h2Alpha_A. So we sort first.
-    cub::DeviceRadixSort::SortPairs(NULL, cub_scratch_bytes, idAOwner, idAOwner_sorted, h2Alpha_A, h2Alpha_A_sorted,
+    // Note: to do this, idAOwner needs to be sorted along with alpha_A. So we sort first.
+    cub::DeviceRadixSort::SortPairs(NULL, cub_scratch_bytes, idAOwner, idAOwner_sorted, alpha_A, alpha_A_sorted,
                                     nContactPairs * 2, 0, sizeof(bodyID_t) * SGPS_BITS_PER_BYTE, this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
-    cub::DeviceRadixSort::SortPairs(d_scratch_space, cub_scratch_bytes, idAOwner, idAOwner_sorted, h2Alpha_A,
-                                    h2Alpha_A_sorted, nContactPairs * 2, 0, sizeof(bodyID_t) * SGPS_BITS_PER_BYTE,
+    cub::DeviceRadixSort::SortPairs(d_scratch_space, cub_scratch_bytes, idAOwner, idAOwner_sorted, alpha_A,
+                                    alpha_A_sorted, nContactPairs * 2, 0, sizeof(bodyID_t) * SGPS_BITS_PER_BYTE,
                                     this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // Then we reduce
-    cub::DeviceReduce::ReduceByKey(NULL, cub_scratch_bytes, idAOwner_sorted, uniqueOwner, h2Alpha_A_sorted, accOwner,
+    cub::DeviceReduce::ReduceByKey(NULL, cub_scratch_bytes, idAOwner_sorted, uniqueOwner, alpha_A_sorted, accOwner,
                                    scratchPad.getForceCollectionRunsPointer(), float3_add_op, nContactPairs * 2,
                                    this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
-    cub::DeviceReduce::ReduceByKey(d_scratch_space, cub_scratch_bytes, idAOwner_sorted, uniqueOwner, h2Alpha_A_sorted,
+    cub::DeviceReduce::ReduceByKey(d_scratch_space, cub_scratch_bytes, idAOwner_sorted, uniqueOwner, alpha_A_sorted,
                                    accOwner, scratchPad.getForceCollectionRunsPointer(), float3_add_op,
                                    nContactPairs * 2, this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));

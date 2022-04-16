@@ -116,8 +116,11 @@ class DEMKinematicThread {
     // Belonged-body ID (default unsigned int type)
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerClumpBody;
 
-    // The ID that maps this sphere's radius and relPos
+    // The ID that maps this sphere's radius and relPos, when this sphere is a clump's component
     std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> clumpComponentOffset;
+
+    // The ID that maps this sphere's radius and relPos, when this sphere is an external object's component
+    std::vector<objComponentOffset_t, ManagedAllocator<objComponentOffset_t>> objComponentOffset;
 
   public:
     friend class DEMSolver;

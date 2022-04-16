@@ -48,7 +48,7 @@ void DEMSolver::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsi
     m_boxLBF = O;
 
     // Calculating ``world'' size by the input nvXp2 and l
-    m_voxelSize = (double)((size_t)1 << SGPS_DEM_VOXEL_RES_POWER2) * (double)l;
+    m_voxelSize = (double)((size_t)1 << DEM_VOXEL_RES_POWER2) * (double)l;
     m_boxX = m_voxelSize * (double)((size_t)1 << x);
     m_boxY = m_voxelSize * (double)((size_t)1 << y);
     m_boxZ = m_voxelSize * (double)((size_t)1 << z);
@@ -146,6 +146,19 @@ unsigned int DEMSolver::LoadClumpSimpleSphere(float mass, float radius, unsigned
     float3 pos = make_float3(0);
     return LoadClumpType(mass, I, std::vector<float>(1, radius), std::vector<float3>(1, pos),
                          std::vector<unsigned int>(1, material_id));
+}
+
+std::shared_ptr<DEMExternObj> DEMSolver::AddExternalObject() {
+    DEMExternObj an_obj;
+    std::shared_ptr<DEMExternObj> ptr = std::make_shared<DEMExternObj>(std::move(an_obj));
+    cachedExternObjs.push_back(ptr);
+    return cachedExternObjs.back();
+}
+
+std::shared_ptr<DEMExternObj> DEMSolver::AddExternalObject(DEM_EXTERN_OBJ obj_type) {
+    std::shared_ptr<DEMExternObj> ptr = AddExternalObject();
+    ptr->types.push_back(obj_type);
+    return ptr;
 }
 
 voxelID_t DEMSolver::GetClumpVoxelID(unsigned int i) const {
@@ -311,9 +324,9 @@ void DEMSolver::generateJITResources() {
     figureOutMaterialProxies();
 }
 
-void DEMSolver::SetClumps(const std::vector<unsigned int>& types, const std::vector<float3>& xyz) {
+void DEMSolver::AddClumps(const std::vector<unsigned int>& types, const std::vector<float3>& xyz) {
     if (types.size() != xyz.size()) {
-        SGPS_ERROR("Arrays in the call SetClumps must all have the same length.");
+        SGPS_ERROR("Arrays in the call AddClumps must all have the same length.");
     }
 
     // clump_xyz are effectively the xyz of the CoM

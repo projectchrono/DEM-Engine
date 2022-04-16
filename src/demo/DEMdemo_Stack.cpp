@@ -55,7 +55,7 @@ int main() {
     family_code.push_back(0);
     input_vel.push_back(make_float3(0, 0, 0));
 
-    DEM_sim.SetClumps(input_template_num, input_xyz);
+    DEM_sim.AddClumps(input_template_num, input_xyz);
     DEM_sim.SetClumpFamily(family_code);
     DEM_sim.SetClumpVels(input_vel);
 
