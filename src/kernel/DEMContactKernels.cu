@@ -9,7 +9,7 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
                                            sgps::spheresBinTouches_t* numSpheresBinTouches,
                                            sgps::binSphereTouchPairs_t* sphereIDsLookUpTable,
                                            sgps::spheresBinTouches_t* numContactsInEachBin,
-                                           size_t nActiveBins) {
+                                           const size_t nActiveBins) {
     // CUDA does not support initializing shared arrays, so we have to manually load them
     __shared__ float CDRadii[_nDistinctClumpComponents_];
     __shared__ float CDRelPosX[_nDistinctClumpComponents_];
@@ -116,7 +116,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
                                             sgps::spheresBinTouches_t* numSpheresBinTouches,
                                             sgps::binSphereTouchPairs_t* sphereIDsLookUpTable,
                                             sgps::contactPairs_t* contactReportOffsets,
-                                            size_t nActiveBins) {
+                                            const size_t nActiveBins) {
     // CUDA does not support initializing shared arrays, so we have to manually load them
     __shared__ float CDRadii[_nDistinctClumpComponents_];
     __shared__ float CDRelPosX[_nDistinctClumpComponents_];

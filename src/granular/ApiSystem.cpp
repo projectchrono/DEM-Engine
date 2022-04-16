@@ -48,7 +48,7 @@ void DEMSolver::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsi
     m_boxLBF = O;
 
     // Calculating ``world'' size by the input nvXp2 and l
-    m_voxelSize = (double)((size_t)1 << VOXEL_RES_POWER2) * (double)l;
+    m_voxelSize = (double)((size_t)1 << SGPS_DEM_VOXEL_RES_POWER2) * (double)l;
     m_boxX = m_voxelSize * (double)((size_t)1 << x);
     m_boxY = m_voxelSize * (double)((size_t)1 << y);
     m_boxZ = m_voxelSize * (double)((size_t)1 << z);

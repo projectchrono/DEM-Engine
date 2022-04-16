@@ -444,10 +444,8 @@ inline void DEMDynamicThread::calculateForces() {
     cubCollectForces(collect_force, granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
                      granData->contactForces, granData->contactPointGeometryA, granData->contactPointGeometryB,
                      granData->aX, granData->aY, granData->aZ, granData->alphaX, granData->alphaY, granData->alphaZ,
-                     granData->ownerClumpBody, granTemplates->massClumpBody, granTemplates->mmiXX, granTemplates->mmiYY,
-                     granTemplates->mmiZZ, simParams->h, stateOfSolver_resources.getNumContacts(),
-                     simParams->nClumpBodies, simParams->l, contactPairArr_isFresh, streamInfo.stream,
-                     stateOfSolver_resources, simParams->nDistinctClumpBodyTopologies);
+                     granData->ownerClumpBody, stateOfSolver_resources.getNumContacts(), simParams->nClumpBodies,
+                     contactPairArr_isFresh, streamInfo.stream, stateOfSolver_resources);
     // displayArray<float>(granData->aX, simParams->nClumpBodies);
     // displayFloat3(granData->contactForces, stateOfSolver_resources.getNumContacts());
     // std::cout << stateOfSolver_resources.getNumContacts() << std::endl;

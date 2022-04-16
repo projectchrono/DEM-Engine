@@ -4,9 +4,9 @@
 #include <kernel/DEMHelperKernels.cu>
 
 __global__ void cashInOwnerIndex(sgps::bodyID_t* idOwner,
-                                 sgps::bodyID_t* id,
-                                 sgps::bodyID_t* ownerClumpBody,
-                                 size_t nContactPairs) {
+                                 const sgps::bodyID_t* id,
+                                 const sgps::bodyID_t* ownerClumpBody,
+                                 const size_t nContactPairs) {
     size_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContactPairs) {
         sgps::bodyID_t thisBodyID = id[myID];
@@ -54,11 +54,11 @@ __global__ void cashInMassMoiIndex(float* massOwner,
 
 // computes a ./ b
 __global__ void forceToAcc(float3* acc,
-                           float3* F,
-                           sgps::bodyID_t* owner,
-                           double modifier,
-                           size_t n,
-                           sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets) {
+                           const float3* F,
+                           const sgps::bodyID_t* owner,
+                           const float modifier,
+                           const size_t n,
+                           const sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets) {
     // CUDA does not support initializing shared arrays, so we have to manually load them
     __shared__ float ClumpMasses[_nDistinctClumpBodyTopologies_];
     if (threadIdx.x < _nActiveLoadingThreads_) {
@@ -80,12 +80,12 @@ __global__ void forceToAcc(float3* acc,
 
 // computes cross(a, b) ./ c
 __global__ void forceToAngAcc(float3* angAcc,
-                              float3* cntPnt,
-                              float3* F,
-                              sgps::bodyID_t* owner,
-                              double modifier,
-                              size_t n,
-                              sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets) {
+                              const float3* cntPnt,
+                              const float3* F,
+                              const sgps::bodyID_t* owner,
+                              const float modifier,
+                              const size_t n,
+                              const sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets) {
     // CUDA does not support initializing shared arrays, so we have to manually load them
     __shared__ float moiX[_nDistinctClumpBodyTopologies_];
     __shared__ float moiY[_nDistinctClumpBodyTopologies_];
@@ -117,7 +117,12 @@ __global__ void forceToAngAcc(float3* angAcc,
 }
 
 // Place information to an array based on an index array and a value array
-__global__ void stashElem(float* out1, float* out2, float* out3, sgps::bodyID_t* index, float3* value, size_t n) {
+__global__ void stashElem(float* out1,
+                          float* out2,
+                          float* out3,
+                          const sgps::bodyID_t* index,
+                          const float3* value,
+                          const size_t n) {
     size_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
         // my_index is unique, no race condition

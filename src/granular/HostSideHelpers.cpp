@@ -126,9 +126,9 @@ inline void hostCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
                               bodyID_t* idA,
                               bodyID_t* idB,
                               float3* contactForces,
-                              float* clump_h2aX,
-                              float* clump_h2aY,
-                              float* clump_h2aZ,
+                              float* clump_aX,
+                              float* clump_aY,
+                              float* clump_aZ,
                               bodyID_t* ownerClumpBody,
                               float* massClumpBody,
                               double h,
@@ -140,15 +140,15 @@ inline void hostCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
         const float3 F = contactForces[i];
         bodyID_t AOwner = ownerClumpBody[bodyA];
         float AMass = massClumpBody[inertiaPropOffsets[AOwner]];
-        clump_h2aX[AOwner] += (double)F.x / AMass / l * h * h;
-        clump_h2aY[AOwner] += (double)F.y / AMass / l * h * h;
-        clump_h2aZ[AOwner] += (double)F.z / AMass / l * h * h;
+        clump_aX[AOwner] += (double)F.x / AMass / l * h * h;
+        clump_aY[AOwner] += (double)F.y / AMass / l * h * h;
+        clump_aZ[AOwner] += (double)F.z / AMass / l * h * h;
 
         bodyID_t BOwner = ownerClumpBody[bodyB];
         float BMass = massClumpBody[inertiaPropOffsets[BOwner]];
-        clump_h2aX[BOwner] += -(double)F.x / BMass / l * h * h;
-        clump_h2aY[BOwner] += -(double)F.y / BMass / l * h * h;
-        clump_h2aZ[BOwner] += -(double)F.z / BMass / l * h * h;
+        clump_aX[BOwner] += -(double)F.x / BMass / l * h * h;
+        clump_aY[BOwner] += -(double)F.y / BMass / l * h * h;
+        clump_aZ[BOwner] += -(double)F.z / BMass / l * h * h;
     }
 }
 
@@ -159,9 +159,9 @@ inline void hostCollectTorques(clumpBodyInertiaOffset_t* inertiaPropOffsets,
                                float3* contactForces,
                                float3* contactLocA,
                                float3* contactLocB,
-                               float* clump_h2AlphaX,
-                               float* clump_h2AlphaY,
-                               float* clump_h2AlphaZ,
+                               float* clump_alphaX,
+                               float* clump_alphaY,
+                               float* clump_alphaZ,
                                bodyID_t* ownerClumpBody,
                                float* mmiXX,
                                float* mmiYY,
@@ -192,13 +192,13 @@ inline void hostCollectTorques(clumpBodyInertiaOffset_t* inertiaPropOffsets,
         float3 alphaA = cross(CPA, F) / AMOI;
         float3 alphaB = cross(CPB, -F) / BMOI;
 
-        clump_h2AlphaX[AOwner] += (double)alphaA.x * h * h;
-        clump_h2AlphaY[AOwner] += (double)alphaA.y * h * h;
-        clump_h2AlphaZ[AOwner] += (double)alphaA.z * h * h;
+        clump_alphaX[AOwner] += (double)alphaA.x * h * h;
+        clump_alphaY[AOwner] += (double)alphaA.y * h * h;
+        clump_alphaZ[AOwner] += (double)alphaA.z * h * h;
 
-        clump_h2AlphaX[BOwner] += (double)alphaB.x * h * h;
-        clump_h2AlphaY[BOwner] += (double)alphaB.y * h * h;
-        clump_h2AlphaZ[BOwner] += (double)alphaB.z * h * h;
+        clump_alphaX[BOwner] += (double)alphaB.x * h * h;
+        clump_alphaY[BOwner] += (double)alphaB.y * h * h;
+        clump_alphaZ[BOwner] += (double)alphaB.z * h * h;
     }
 }
 

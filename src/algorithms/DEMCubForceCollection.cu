@@ -27,25 +27,18 @@ void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
                       float3* contactForces,
                       float3* contactPointA,
                       float3* contactPointB,
-                      float* clump_h2aX,
-                      float* clump_h2aY,
-                      float* clump_h2aZ,
-                      float* clump_h2AlphaX,
-                      float* clump_h2AlphaY,
-                      float* clump_h2AlphaZ,
+                      float* clump_aX,
+                      float* clump_aY,
+                      float* clump_aZ,
+                      float* clump_alphaX,
+                      float* clump_alphaY,
+                      float* clump_alphaZ,
                       bodyID_t* ownerClumpBody,
-                      float* massClumpBody,
-                      float* mmiXX,
-                      float* mmiYY,
-                      float* mmiZZ,
-                      const double h,
                       const size_t nContactPairs,
                       const size_t nClumps,
-                      const double l,
-                      bool contactPairArr_isFresh,
+                      bool& contactPairArr_isFresh,
                       cudaStream_t& this_stream,
-                      DEMSolverStateDataDT& scratchPad,
-                      clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies) {
+                      DEMSolverStateDataDT& scratchPad) {
     // Preparation: allocate enough temp array memory and chop it to pieces, for the usage of cub operations. Note that
     // if contactPairArr_isFresh is false, then this allocation should not alter the size and content of the temp array
     // space, so the information in it can be used in the next iteration.
@@ -148,7 +141,7 @@ void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
     collect_force->kernel("stashElem")
         .instantiate()
         .configure(dim3(blocks_needed_for_stashing), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(clump_h2aX, clump_h2aY, clump_h2aZ, uniqueOwner, accOwner, scratchPad.getForceCollectionRuns());
+        .launch(clump_aX, clump_aY, clump_aZ, uniqueOwner, accOwner, scratchPad.getForceCollectionRuns());
     GPU_CALL(cudaStreamSynchronize(this_stream));
 
     // =====================================================
@@ -195,8 +188,7 @@ void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
     collect_force->kernel("stashElem")
         .instantiate()
         .configure(dim3(blocks_needed_for_stashing), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(clump_h2AlphaX, clump_h2AlphaY, clump_h2AlphaZ, uniqueOwner, accOwner,
-                scratchPad.getForceCollectionRuns());
+        .launch(clump_alphaX, clump_alphaY, clump_alphaZ, uniqueOwner, accOwner, scratchPad.getForceCollectionRuns());
     GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
