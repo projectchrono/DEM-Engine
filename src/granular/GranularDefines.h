@@ -85,8 +85,6 @@ constexpr clumpComponentOffset_t NUM_ACTIVE_TEMPLATE_LOADING_THREADS =
 #endif
 
 // Some enums...
-// External object type
-enum class DEM_EXTERN_OBJ { CLUMP, PLANE, SPHERE, PLATE };
 // Friction mode
 enum class DEM_FRICTION_MODE { FRICTIONLESS, MULTI_STEP };
 

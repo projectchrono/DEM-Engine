@@ -155,10 +155,26 @@ std::shared_ptr<DEMExternObj> DEMSolver::AddExternalObject() {
     return cachedExternObjs.back();
 }
 
-std::shared_ptr<DEMExternObj> DEMSolver::AddExternalObject(DEM_EXTERN_OBJ obj_type) {
+std::shared_ptr<DEMExternObj> DEMSolver::AddBCPlane(const float3 pos, const float3 normal) {
     std::shared_ptr<DEMExternObj> ptr = AddExternalObject();
-    ptr->types.push_back(obj_type);
+    ptr->AddPlane(pos, normal);
     return ptr;
+}
+
+void DEMSolver::ClearCache() {
+    cachedExternObjs.clear();
+
+    m_template_mass.clear();
+    m_template_moi.clear();
+    m_template_sp_radii.clear();
+    m_template_sp_relPos.clear();
+    m_template_sp_mat_ids.clear();
+    m_sp_materials.clear();
+
+    m_input_clump_types.clear();
+    m_input_clump_xyz.clear();
+    m_input_clump_vel.clear();
+    m_input_clump_family.clear();
 }
 
 voxelID_t DEMSolver::GetClumpVoxelID(unsigned int i) const {

@@ -108,7 +108,10 @@ class DEMSolver {
 
     /// Add an (analytical or clump-represented) external object to the simulation system
     std::shared_ptr<DEMExternObj> AddExternalObject();
-    std::shared_ptr<DEMExternObj> AddExternalObject(DEM_EXTERN_OBJ obj_type);
+    std::shared_ptr<DEMExternObj> AddBCPlane(const float3 pos, const float3 normal);
+
+    /// Remove host-side cached vectors (so you can re-define them, and then re-initialize system)
+    void ClearCache();
 
     /// Return the voxel ID of a clump by its numbering
     voxelID_t GetClumpVoxelID(unsigned int i) const;
