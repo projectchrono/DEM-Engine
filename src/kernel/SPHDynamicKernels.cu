@@ -28,9 +28,11 @@ __global__ void dynamicStep1(int* pair_i_data,
     int i_idx = pair_i_data[idx];
     int j_idx = pair_j_data[idx];
 
-    float coe = m * ((pressure_data[i_idx] / (rho_data[i_idx] * rho_data[i_idx])) +
-                     (pressure_data[j_idx] / (rho_data[j_idx] * rho_data[j_idx])));
-    col_acc_data[idx] = -coe * W_grad_data[idx];
+    if (rho_data[i_idx] != 0 && rho_data[j_idx] != 0) {
+        float coe = m * ((pressure_data[i_idx] / (rho_data[i_idx] * rho_data[i_idx])) +
+                         (pressure_data[j_idx] / (rho_data[j_idx] * rho_data[j_idx])));
+        col_acc_data[idx] = -coe * W_grad_data[idx];
+    }
 }
 
 // =================================================================================================================
@@ -83,8 +85,13 @@ __global__ void dynamicStep5(float3* pos_data,
         float grav = -9.8f;
         acc_data[idx].z = acc_data[idx].z + grav;
 
-        vel_data[idx] = vel_data[idx] + acc_data[idx] * time_step;
-        pos_data[idx] = pos_data[idx] + vel_data[idx] * time_step;
+        vel_data[idx].x = vel_data[idx].x + acc_data[idx].x * time_step;
+        vel_data[idx].y = vel_data[idx].y + acc_data[idx].y * time_step;
+        vel_data[idx].z = vel_data[idx].z + acc_data[idx].z * time_step;
+
+        pos_data[idx].x = pos_data[idx].x + vel_data[idx].x * time_step;
+        pos_data[idx].y = pos_data[idx].y + vel_data[idx].y * time_step;
+        pos_data[idx].z = pos_data[idx].z + vel_data[idx].z * time_step;
     }
     __syncthreads();
 }

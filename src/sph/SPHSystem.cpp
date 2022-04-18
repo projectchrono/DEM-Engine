@@ -76,6 +76,26 @@ void SPHSystem::printCSV(std::string filename, float3* pos_arr, int pos_n, float
     csvFile.close();
 }
 
+void SPHSystem::printCSV(std::string filename,
+                         float3* pos_arr,
+                         int pos_n,
+                         float3* vel_arr,
+                         float* rho_arr,
+                         float* pressure_arr) {
+    // create file
+    std::ofstream csvFile(filename);
+
+    csvFile << "x_pos,y_pos,z_pos,x_vel,y_vel,z_vel,rho,pressure" << std::endl;
+
+    // write particle data into csv file
+    for (int i = 0; i < pos_n; i++) {
+        csvFile << pos_arr[i].x << "," << pos_arr[i].y << "," << pos_arr[i].z << "," << vel_arr[i].x << ","
+                << vel_arr[i].y << "," << vel_arr[i].z << "," << rho_arr[i] << "," << pressure_arr[i] << std::endl;
+    }
+
+    csvFile.close();
+}
+
 void SPHSystem::printCSV(std::string filename, float3* pos_arr, int pos_n, float3* vel_arr, float3* acc_arr) {
     // create file
     std::ofstream csvFile(filename);
@@ -411,6 +431,19 @@ void DynamicThread::operator()() {
     float m;
     float rho_0;
 
+    // Dynamic Step 2, flatenning related vectors
+    std::vector<int, sgps::ManagedAllocator<int>> inv_pair_i_data;
+    std::vector<float3, sgps::ManagedAllocator<float3>> inv_col_acc_data;
+
+    std::vector<int, sgps::ManagedAllocator<int>> flat_pair_i_data;
+    std::vector<float3, sgps::ManagedAllocator<float3>> flat_col_acc_data;
+
+    // Dynamic Step 3, sort and reduce vectors
+    std::vector<int, sgps::ManagedAllocator<int>> pair_i_data_sorted;
+    std::vector<float3, sgps::ManagedAllocator<float3>> col_acc_data_sorted;
+    std::vector<int, sgps::ManagedAllocator<int>> pair_i_data_reduced;
+    std::vector<float3, sgps::ManagedAllocator<float3>> col_acc_data_reduced;
+
     auto dynamic_program = JitHelper::buildProgram("SPHDynamicKernels", JitHelper::KERNEL_DIR / "SPHDynamicKernels.cu",
                                                    std::unordered_map<std::string, std::string>(),
                                                    {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
@@ -439,6 +472,10 @@ void DynamicThread::operator()() {
         float time_step = getParentSystem().time_step;
 
         if (getParentSystem().contact_data_isFresh == true) {
+            pair_i_data.clear();
+            pair_j_data.clear();
+            pressure_data.clear();
+            W_grad_data.clear();
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexContact());
             pair_i_data.assign(dataManager.m_pair_i.begin(), dataManager.m_pair_i.end());
             pair_j_data.assign(dataManager.m_pair_j.begin(), dataManager.m_pair_j.end());
@@ -464,6 +501,10 @@ void DynamicThread::operator()() {
 
         {
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
+            pos_data.clear();
+            vel_data.clear();
+            fix_data.clear();
+
             pos_data.assign(dataManager.m_pos.begin(), dataManager.m_pos.end());
             vel_data.assign(dataManager.m_vel.begin(), dataManager.m_vel.end());
             fix_data.assign(dataManager.m_fix.begin(), dataManager.m_fix.end());
@@ -479,6 +520,7 @@ void DynamicThread::operator()() {
         int num_block = (pair_i_data.size() % num_thread != 0) ? (pair_i_data.size() / num_thread + 1)
                                                                : (pair_i_data.size() / num_thread);
 
+        col_acc_data.clear();
         col_acc_data.resize(pair_i_data.size());
 
         // call dynamic first gpu pass
@@ -493,9 +535,8 @@ void DynamicThread::operator()() {
         // Dynamic Step 2
         // Flattens the contact data array, this will duplicate each conllision pair into 2 entries
         // A applies force on B + B applies force on A
-
-        std::vector<int, sgps::ManagedAllocator<int>> inv_pair_i_data;
-        std::vector<float3, sgps::ManagedAllocator<float3>> inv_col_acc_data;
+        inv_pair_i_data.clear();
+        inv_col_acc_data.clear();
         inv_pair_i_data.resize(pair_i_data.size());
         inv_col_acc_data.resize(col_acc_data.size());
 
@@ -506,8 +547,8 @@ void DynamicThread::operator()() {
                     inv_col_acc_data.data(), pair_i_data.size());
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        std::vector<int, sgps::ManagedAllocator<int>> flat_pair_i_data;
-        std::vector<float3, sgps::ManagedAllocator<float3>> flat_col_acc_data;
+        flat_pair_i_data.clear();
+        flat_col_acc_data.clear();
 
         flat_pair_i_data.insert(flat_pair_i_data.end(), pair_i_data.begin(), pair_i_data.end());
         flat_pair_i_data.insert(flat_pair_i_data.end(), inv_pair_i_data.begin(), inv_pair_i_data.end());
@@ -518,10 +559,10 @@ void DynamicThread::operator()() {
         // Dynamic Step 3
         // Reduce to Get Total Force Applies on Each Particle (CUB)
 
-        std::vector<int, sgps::ManagedAllocator<int>> pair_i_data_sorted;
-        std::vector<float3, sgps::ManagedAllocator<float3>> col_acc_data_sorted;
-        std::vector<int, sgps::ManagedAllocator<int>> pair_i_data_reduced;
-        std::vector<float3, sgps::ManagedAllocator<float3>> col_acc_data_reduced;
+        pair_i_data_sorted.clear();
+        col_acc_data_sorted.clear();
+        pair_i_data_reduced.clear();
+        col_acc_data_reduced.clear();
 
         // sort
         PairRadixSortAscendCub(flat_pair_i_data, pair_i_data_sorted, flat_col_acc_data, col_acc_data_sorted);
@@ -602,14 +643,21 @@ void WriteOutThread::operator()() {
             std::vector<float3> wt_pos;
             std::vector<float3> wt_vel;
             std::vector<float3> wt_acc;
+            std::vector<float> wt_rho;
+            std::vector<float> wt_pressure;
 
             {
                 const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
                 wt_pos.assign(dataManager.m_pos.begin(), dataManager.m_pos.end());
                 wt_vel.assign(dataManager.m_vel.begin(), dataManager.m_vel.end());
                 wt_acc.assign(dataManager.m_acc.begin(), dataManager.m_acc.end());
+                wt_rho.assign(dataManager.m_rho.begin(), dataManager.m_rho.end());
+                wt_pressure.assign(dataManager.m_pressure.begin(), dataManager.m_pressure.end());
                 getParentSystem().wt_buffer_fresh = false;
             }
+
+            // getParentSystem().printCSV("sph_folder/test" + std::to_string(writeOutCounter) + ".csv", wt_pos.data(),
+            //                            wt_pos.size(), wt_vel.data(), wt_rho.data(), wt_pressure.data());
 
             getParentSystem().printCSV("sph_folder/test" + std::to_string(writeOutCounter) + ".csv", wt_pos.data(),
                                        wt_pos.size(), wt_vel.data(), wt_acc.data());

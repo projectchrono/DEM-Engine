@@ -8,14 +8,18 @@
 __device__ float W(float3 r, float h) {
     float alpha_d = 3 / (2 * MATH_PI * h * h * h);
     float R = sqrt(r.x * r.x + r.y * r.y + r.z * r.z) / h;
+    float res = 0;
 
     if (R >= 2) {
-        return 0;
+        res = 0;
     } else if (R < 2 && R >= 1) {
-        return alpha_d * (1 / 6) * (2 - R) * (2 - R) * (2 - R);
+        res = alpha_d * (1.0f / 6.0f) * (2 - R) * (2 - R) * (2 - R);
     } else {
-        return alpha_d * (2 / 3) - R * R + (1 / 2) * R * R * R;
+        res = alpha_d * (2 / 3) - R * R + (1 / 2) * R * R * R;
     }
+
+    // printf("%f", res);
+    return res;
 }
 
 __device__ float3 W_Grad(float3 r, float h) {
@@ -654,9 +658,11 @@ __global__ void kinematicStep9(float3* pos_data,
         float3 dir = pos_data[i_idx] - pos_data[j_idx];
 
         float w = W(dir, 2 * h);
-
+        // printf("%f", w);
         rho_sum = rho_sum + m * w;
     }
+
+    __syncthreads();
 
     rho_data[i_idx] = rho_sum;
     pressure_data[i_idx] = 100 * (rho_sum - rho_0);
