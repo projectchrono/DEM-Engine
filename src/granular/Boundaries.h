@@ -16,7 +16,7 @@ namespace sgps {
 /// External object type
 /// Note all of them are `shell', not solid objects. If you need a solid cylinder for example, then use one CYLINDER as
 /// the side plus 2 CIRCLE as the ends to emulate it. Please be sure to set OUTWARD CYLINDER normal in this case.
-enum class DEM_EXTERN_OBJ { CLUMP, PLANE, SPHERE, PLATE, CIRCLE, CYLINDER, CYL_INF, CONE, CONE_INF };
+enum class DEM_OBJ_COMPONENT { CLUMP, PLANE, SPHERE, PLATE, CIRCLE, CYLINDER, CYL_INF, CONE, CONE_INF };
 /// Normal type: inward or outward?
 enum class DEM_OBJ_NORMAL { INWARD, OUTWARD };
 
@@ -46,7 +46,7 @@ struct DEMPlaneParams_t {
 /// Customized finite Plate defined by center of the plate, normal and y dim
 struct DEMPlateParams_t {
     float3 normal;
-    float3 plate_center;
+    float3 center;
     float h_dim_x;
     float h_dim_y;
 };
@@ -85,53 +85,44 @@ class DEMObjComponent {
 /// API-(Host-)side struct that holds cached user-input external objects
 struct DEMExternObj {
     // Component object types
-    std::vector<DEM_EXTERN_OBJ> types;
-    // Component object normal direction, defaulting to inward. If this object is topologically a plane then this param
-    // is meaningless, since its normal is determined by its rotation.
-    std::vector<DEM_OBJ_NORMAL> normals;
+    std::vector<DEM_OBJ_COMPONENT> types;
     // Family code (used in prescribing its motions etc.)
     family_t family_code = std::numeric_limits<family_t>::max();  ///< Means it is default to the `fixed' family
-    // Initial locations
-    std::vector<float3> init_pos;
-    // Some float3 quantity that is representitive of an obj's initial orientation (such as plane normal)
-    std::vector<float3> init_rot;
-    // Some float quantity that is representitive of an obj's size (e.g. for a cylinder, top radius)
-    std::vector<float> size_1;
-    // Some float quantity that is representitive of an obj's size (e.g. for a cylinder, bottom radius)
-    std::vector<float> size_2;
-    // Some float quantity that is representitive of an obj's size (e.g. for a cylinder, its length)
-    std::vector<float> size_3;
+    // Obj's CoM initial position
+    float3 init_pos = make_float3(0);
+    // Obj's initial orientation quaternion
+    float4 init_oriQ = make_float4(1.f, 0.f, 0.f, 0.f);
     // The (big) clump types that are a part of this extern obj. Note these types of big clumps have components whose
     // offset IDs are managed by objComponentOffset, not clumpComponentOffset.
     std::vector<unsigned int> clump_types;
 
+    union DEMAnalEntParams {
+        DEMPlateParams_t plate_params;
+        DEMPlaneParams_t plane_params;
+    };
+    std::vector<DEMAnalEntParams> entity_params;
+
     /// Define object contact family number
     void SetFamily(const unsigned int code) { family_code = code; }
 
-    /// Define primitive components that define this external object. Other Add????? methods are its wrappers. Returns
-    /// the offset to this component just added in this external object.
-    size_t AddComponent(const DEM_EXTERN_OBJ type,
-                        const float3 pos,
-                        const float3 rot = make_float3(0),
-                        const float d1 = 0.f,
-                        const float d2 = 0.f,
-                        const float d3 = 0.f,
-                        const DEM_OBJ_NORMAL normal = DEM_OBJ_NORMAL::INWARD) {
-        types.push_back(type);
-        normals.push_back(normal);
-        init_pos.push_back(pos);
-        init_rot.push_back(rot);
-        size_1.push_back(d1);
-        size_2.push_back(d2);
-        size_3.push_back(d3);
-        return types.size() - 1;
-    }
     /// Add a plane with infinite size
-    size_t AddPlane(const float3 pos, const float3 normal) { return AddComponent(DEM_EXTERN_OBJ::PLANE, pos, normal); }
+    void AddPlane(const float3 pos, const float3 normal) {
+        types.push_back(DEM_OBJ_COMPONENT::PLANE);
+        DEMAnalEntParams params;
+        params.plane_params.position = pos;
+        params.plane_params.normal = normal;
+        entity_params.push_back(params);
+    }
     /// Assuming the normal you specified is the z-direction and that normal vector originates from the pos point you
     /// input. Then specify the dimensions along x- and y-axes to define the plate's area.
-    size_t AddPlate(const float3 pos, const float3 normal, const float xdim, const float ydim) {
-        return AddComponent(DEM_EXTERN_OBJ::PLATE, pos, normal, xdim, ydim);
+    void AddPlate(const float3 pos, const float3 normal, const float xdim, const float ydim) {
+        types.push_back(DEM_OBJ_COMPONENT::PLATE);
+        DEMAnalEntParams params;
+        params.plate_params.center = pos;
+        params.plate_params.normal = normal;
+        params.plate_params.h_dim_x = xdim / 2.0;
+        params.plate_params.h_dim_y = ydim / 2.0;
+        entity_params.push_back(params);
     }
 };
 

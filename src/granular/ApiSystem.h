@@ -110,6 +110,15 @@ class DEMSolver {
     std::shared_ptr<DEMExternObj> AddExternalObject();
     std::shared_ptr<DEMExternObj> AddBCPlane(const float3 pos, const float3 normal);
 
+    // Add content to the flattened analytical component array
+    size_t AddAnalCompTemplate(const DEM_OBJ_COMPONENT type,
+                               const float3 pos,
+                               const float3 rot = make_float3(0),
+                               const float d1 = 0.f,
+                               const float d2 = 0.f,
+                               const float d3 = 0.f,
+                               const DEM_OBJ_NORMAL normal = DEM_OBJ_NORMAL::INWARD);
+
     /// Remove host-side cached vectors (so you can re-define them, and then re-initialize system)
     void ClearCache();
 
@@ -166,6 +175,24 @@ class DEMSolver {
 
     // Shared pointers to external objects cached at the API system
     std::vector<std::shared_ptr<DEMExternObj>> cachedExternObjs;
+
+    // Flattened (analytical) object component definition arrays, potentially jitifiable
+    // Initial locations of this obj's components relative to obj's CoM
+    std::vector<float3> m_anal_comp_pos;
+    // Some float3 quantity that is representitive of an component's initial orientation (such as plane normal, and its
+    // meaning can vary ammong types)
+    std::vector<float3> m_anal_comp_rot;
+    // Some float quantity that is representitive of an component's size (e.g. for a cylinder, top radius)
+    std::vector<float> m_anal_size_1;
+    // Some float quantity that is representitive of an component's size (e.g. for a cylinder, bottom radius)
+    std::vector<float> m_anal_size_2;
+    // Some float quantity that is representitive of an component's size (e.g. for a cylinder, its length)
+    std::vector<float> m_anal_size_3;
+    // Component object types
+    std::vector<DEM_OBJ_COMPONENT> m_anal_types;
+    // Component object normal direction, defaulting to inward. If this object is topologically a plane then this param
+    // is meaningless, since its normal is determined by its rotation.
+    std::vector<DEM_OBJ_NORMAL> m_anal_normals;
 
     /*
     // Dan and Ruochun decided NOT to extract unique input values.
@@ -243,6 +270,8 @@ class DEMSolver {
     unsigned int nDistinctClumpComponents_computed;
     unsigned int nDistinctClumpBodyTopologies_computed;
     unsigned int nMatTuples_computed;
+    unsigned int nAnalEntities_computed;
+    unsigned int nClumpEntities_computed;
 
     // cached state vectors such as the types and locations/velocities of the initial clumps to fill the sim domain with
     std::vector<unsigned int> m_input_clump_types;
@@ -291,6 +320,8 @@ class DEMSolver {
     inline size_t computeDTCycles(double thisCallDuration);
     // Prepare the material/contact proxy matrix force computation kernels
     void figureOutMaterialProxies();
+    // Figure out info about external objects/clump templates and whether they can be jitified
+    void figureOutJitifiability();
 
     // Some JIT packaging helpers
     inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap);

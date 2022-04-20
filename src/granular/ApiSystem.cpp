@@ -12,6 +12,8 @@
 #include <thread>
 #include <chrono>
 #include <cstring>
+#include <limits>
+#include <algorithm>
 
 namespace sgps {
 
@@ -163,6 +165,13 @@ std::shared_ptr<DEMExternObj> DEMSolver::AddBCPlane(const float3 pos, const floa
 
 void DEMSolver::ClearCache() {
     cachedExternObjs.clear();
+    m_anal_comp_pos.clear();
+    m_anal_comp_rot.clear();
+    m_anal_size_1.clear();
+    m_anal_size_2.clear();
+    m_anal_size_3.clear();
+    m_anal_types.clear();
+    m_anal_normals.clear();
 
     m_template_mass.clear();
     m_template_moi.clear();
@@ -228,6 +237,64 @@ void DEMSolver::figureOutMaterialProxies() {
             m_G_proxy.at(entry_num) = G_eff;
             m_CoR_proxy.at(entry_num) = std::min(Mat1.CoR, Mat2.CoR);
         }
+    }
+}
+
+size_t DEMSolver::AddAnalCompTemplate(const DEM_OBJ_COMPONENT type,
+                                      const float3 pos,
+                                      const float3 rot,
+                                      const float d1,
+                                      const float d2,
+                                      const float d3,
+                                      const DEM_OBJ_NORMAL normal) {
+    m_anal_types.push_back(type);
+    m_anal_comp_pos.push_back(pos);
+    m_anal_comp_rot.push_back(rot);
+    m_anal_size_1.push_back(d1);
+    m_anal_size_2.push_back(d2);
+    m_anal_size_3.push_back(d3);
+    m_anal_normals.push_back(normal);
+    return m_anal_types.size() - 1;
+}
+
+void DEMSolver::figureOutJitifiability() {
+    // How many clump tempaltes are there? Is there one too large to jitify?
+
+    // How many analytical entities are there?
+    nAnalEntities_computed = 0;
+    nClumpEntities_computed = 0;
+    for (auto ext_obj : cachedExternObjs) {
+        unsigned int this_num_anal_ent = 0;
+        unsigned int this_num_clump_ent = 0;
+        auto comp_params = ext_obj->entity_params;
+        auto comp_clump_types = ext_obj->clump_types;
+
+        for (unsigned int i = 0; i < ext_obj->types.size(); i++) {
+            // CLUMP type should not be included b/c clumps are treated differently than analytical entities
+            if (ext_obj->types.at(i) != DEM_OBJ_COMPONENT::CLUMP) {
+                auto param = comp_params.at(this_num_anal_ent);
+                this_num_anal_ent++;
+                switch (ext_obj->types.at(i)) {
+                    case DEM_OBJ_COMPONENT::PLANE:
+                        AddAnalCompTemplate(DEM_OBJ_COMPONENT::PLANE, param.plane_params.position,
+                                            param.plane_params.normal);
+                        break;
+                    case DEM_OBJ_COMPONENT::PLATE:
+                        AddAnalCompTemplate(DEM_OBJ_COMPONENT::PLATE, param.plate_params.center,
+                                            param.plate_params.normal, param.plate_params.h_dim_x,
+                                            param.plate_params.h_dim_y);
+                        break;
+                    default:
+                        SGPS_ERROR("There is at least one analytical boundary that has a type not supported.");
+                }
+            } else {
+                auto clump_type = comp_clump_types.at(this_num_clump_ent);
+                this_num_clump_ent++;
+                // TODO: give this clump a owner in the long owner array, and pop_front the clump_type array
+            }
+        }
+        nAnalEntities_computed += this_num_anal_ent;
+        nClumpEntities_computed += this_num_clump_ent;
     }
 }
 
@@ -335,6 +402,9 @@ void DEMSolver::generateJITResources() {
                   << (m_expand_factor / m_smallest_radius) * 100.0 << "%" << std::endl;
     }
 
+    // Figure out info about external objects/clump templates and whether they can be jitified
+    figureOutJitifiability();
+
     // Process the loaded materials
     std::cout << "The number of material types: " << nMatTuples_computed << std::endl;
     figureOutMaterialProxies();
@@ -355,6 +425,13 @@ void DEMSolver::SetClumpVels(const std::vector<float3>& vel) {
 }
 
 void DEMSolver::SetClumpFamily(const std::vector<unsigned int>& code) {
+    if (any_of(code.begin(), code.end(), [](unsigned int i) { return i >= std::numeric_limits<family_t>::max(); })) {
+        std::cout << "\nWARNING! Family number " << std::numeric_limits<family_t>::max()
+                  << " (or anything larger than that) is reserved for completely fixed boundaries. Using it on your "
+                     "simulation entities will make them fixed, regardless of your specification.\nYou can change "
+                     "family_t if you indeed need more families to work with.\n"
+                  << std::endl;
+    }
     m_input_clump_family.insert(m_input_clump_family.end(), code.begin(), code.end());
 }
 
