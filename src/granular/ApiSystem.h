@@ -111,13 +111,14 @@ class DEMSolver {
     std::shared_ptr<DEMExternObj> AddBCPlane(const float3 pos, const float3 normal);
 
     // Add content to the flattened analytical component array
-    size_t AddAnalCompTemplate(const DEM_OBJ_COMPONENT type,
-                               const float3 pos,
-                               const float3 rot = make_float3(0),
-                               const float d1 = 0.f,
-                               const float d2 = 0.f,
-                               const float d3 = 0.f,
-                               const DEM_OBJ_NORMAL normal = DEM_OBJ_NORMAL::INWARD);
+    unsigned int AddAnalCompTemplate(const DEM_OBJ_COMPONENT type,
+                                     unsigned int owner,
+                                     const float3 pos,
+                                     const float3 rot = make_float3(0),
+                                     const float d1 = 0.f,
+                                     const float d2 = 0.f,
+                                     const float d3 = 0.f,
+                                     const DEM_OBJ_NORMAL normal = DEM_OBJ_NORMAL::INWARD);
 
     /// Remove host-side cached vectors (so you can re-define them, and then re-initialize system)
     void ClearCache();
@@ -177,6 +178,7 @@ class DEMSolver {
     std::vector<std::shared_ptr<DEMExternObj>> cachedExternObjs;
 
     // Flattened (analytical) object component definition arrays, potentially jitifiable
+    std::vector<unsigned int> m_anal_owner;
     // Initial locations of this obj's components relative to obj's CoM
     std::vector<float3> m_anal_comp_pos;
     // Some float3 quantity that is representitive of an component's initial orientation (such as plane normal, and its
@@ -193,6 +195,11 @@ class DEMSolver {
     // Component object normal direction, defaulting to inward. If this object is topologically a plane then this param
     // is meaningless, since its normal is determined by its rotation.
     std::vector<DEM_OBJ_NORMAL> m_anal_normals;
+    // Extra clumps are those loaded by adding external object. They typically consist of many spheres (~thousands).
+    std::vector<unsigned int> m_extra_clump_type;
+    // Extra clumps' owners' ID will be appended to those added thru normal AddClump, and are consistent with external
+    // obj IDs
+    std::vector<unsigned int> m_extra_clump_owner;
 
     /*
     // Dan and Ruochun decided NOT to extract unique input values.
@@ -237,6 +244,8 @@ class DEMSolver {
     float l = FLT_MAX;
     // The edge length of a bin (for contact detection)
     double m_binSize;
+    // Total number of bins
+    uint64_t m_num_bins;
     // Number of bins on each direction
     binID_t nbX;
     binID_t nbY;
@@ -251,8 +260,15 @@ class DEMSolver {
 
     // Total number of spheres
     size_t nSpheresGM;
-    // Total number of clump bodies
-    size_t nClumpBodies;
+    // Total number of bodies
+    size_t nOwnerBodies;
+    // Number of loaded clumps
+    size_t nOwnerClumps = 0;
+    // Number of loaded external objects
+    size_t nExtObj = 0;
+    // Number of loaded triangle-represented (mesh) objects
+    size_t nTriEntities = 0;
+    // nExtObj + nOwnerClumps + nTriEntities == nOwnerBodies
 
     float sphereUU;
 
@@ -271,7 +287,6 @@ class DEMSolver {
     unsigned int nDistinctClumpBodyTopologies_computed;
     unsigned int nMatTuples_computed;
     unsigned int nAnalEntities_computed;
-    unsigned int nClumpEntities_computed;
 
     // cached state vectors such as the types and locations/velocities of the initial clumps to fill the sim domain with
     std::vector<unsigned int> m_input_clump_types;
@@ -322,6 +337,8 @@ class DEMSolver {
     void figureOutMaterialProxies();
     // Figure out info about external objects/clump templates and whether they can be jitified
     void figureOutJitifiability();
+    // Report simulation stats at initialization
+    inline void reportInitStats() const;
 
     // Some JIT packaging helpers
     inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap);

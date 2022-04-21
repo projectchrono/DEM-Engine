@@ -37,14 +37,14 @@ typedef uint64_t voxelID_t;
 typedef float oriQ_t;
 typedef unsigned int bodyID_t;
 typedef unsigned int binID_t;
-typedef unsigned short int materialsOffset_t;
-typedef unsigned short int clumpBodyInertiaOffset_t;
-typedef unsigned short int clumpComponentOffset_t;
-typedef unsigned int objComponentOffset_t;
+typedef uint8_t materialsOffset_t;
+typedef uint8_t clumpBodyInertiaOffset_t;
+typedef uint8_t clumpComponentOffset_t;
+typedef unsigned short int clumpComponentOffsetExt_t;  ///< Extended component offset type for non-jitified part
 typedef double floatFine_t;
-typedef unsigned short int contact_t;  ///< Contact type (sphere--sphere is 0, etc.)
-typedef unsigned short int family_t;   ///< Data type for clump presecription type (0 for not prescribed)
-typedef char scratch_t;                ///< Data type for DEM scratch-pad array
+typedef uint8_t contact_t;  ///< Contact type (sphere--sphere is 0, etc.)
+typedef uint8_t family_t;   ///< Data type for clump presecription type (0 for not prescribed)
+typedef char scratch_t;     ///< Data type for DEM scratch-pad array
 
 // How many bin--sphere touch pairs can there be for one sphere, tops? This type should not need to be large.
 typedef unsigned short int binsSphereTouches_t;

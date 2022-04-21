@@ -130,6 +130,16 @@ void DEMKinematicThread::contactDetection() {
                     numContactsInEachBin, stateOfSolver_resources.getNumActiveBins());
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
+        // TODO: sphere should have jitified and non-jitified part. Use a component ID > max_comp_id to signal bringing
+        // data from global memory.
+        // TODO: Add tri--sphere CD kernel (if mesh support is to be added). This kernel integrates tri--boundary CD.
+        // Note triangle facets can have jitified (many bodies of the same type) and non-jitified (a big meshed body)
+        // part. Use a component ID > max_comp_id to signal bringing data from global memory.
+        // TODO: Add tri--tri CD kernel (in the far future, should mesh-rerpesented geometry to be supported). This
+        // kernel integrates tri--boundary CD.
+        // TODO: remember that boundary types are either all jitified or non-jitified. In principal, they should be all
+        // jitified.
+
         // Prescan numContactsInEachBin to get the final contactReportOffsets. A new vector is needed.
         CD_temp_arr_bytes = stateOfSolver_resources.getNumActiveBins() * sizeof(contactPairs_t);
         contactPairs_t* contactReportOffsets =
@@ -165,21 +175,21 @@ void DEMKinematicThread::contactDetection() {
 }
 
 inline void DEMKinematicThread::unpackMyBuffer() {
-    GPU_CALL(cudaMemcpy(granData->voxelID, granData->voxelID_buffer, simParams->nClumpBodies * sizeof(voxelID_t),
+    GPU_CALL(cudaMemcpy(granData->voxelID, granData->voxelID_buffer, simParams->nOwnerBodies * sizeof(voxelID_t),
                         cudaMemcpyDeviceToDevice));
-    GPU_CALL(cudaMemcpy(granData->locX, granData->locX_buffer, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+    GPU_CALL(cudaMemcpy(granData->locX, granData->locX_buffer, simParams->nOwnerBodies * sizeof(subVoxelPos_t),
                         cudaMemcpyDeviceToDevice));
-    GPU_CALL(cudaMemcpy(granData->locY, granData->locY_buffer, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+    GPU_CALL(cudaMemcpy(granData->locY, granData->locY_buffer, simParams->nOwnerBodies * sizeof(subVoxelPos_t),
                         cudaMemcpyDeviceToDevice));
-    GPU_CALL(cudaMemcpy(granData->locZ, granData->locZ_buffer, simParams->nClumpBodies * sizeof(subVoxelPos_t),
+    GPU_CALL(cudaMemcpy(granData->locZ, granData->locZ_buffer, simParams->nOwnerBodies * sizeof(subVoxelPos_t),
                         cudaMemcpyDeviceToDevice));
-    GPU_CALL(cudaMemcpy(granData->oriQ0, granData->oriQ0_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
+    GPU_CALL(cudaMemcpy(granData->oriQ0, granData->oriQ0_buffer, simParams->nOwnerBodies * sizeof(oriQ_t),
                         cudaMemcpyDeviceToDevice));
-    GPU_CALL(cudaMemcpy(granData->oriQ1, granData->oriQ1_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
+    GPU_CALL(cudaMemcpy(granData->oriQ1, granData->oriQ1_buffer, simParams->nOwnerBodies * sizeof(oriQ_t),
                         cudaMemcpyDeviceToDevice));
-    GPU_CALL(cudaMemcpy(granData->oriQ2, granData->oriQ2_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
+    GPU_CALL(cudaMemcpy(granData->oriQ2, granData->oriQ2_buffer, simParams->nOwnerBodies * sizeof(oriQ_t),
                         cudaMemcpyDeviceToDevice));
-    GPU_CALL(cudaMemcpy(granData->oriQ3, granData->oriQ3_buffer, simParams->nClumpBodies * sizeof(oriQ_t),
+    GPU_CALL(cudaMemcpy(granData->oriQ3, granData->oriQ3_buffer, simParams->nOwnerBodies * sizeof(oriQ_t),
                         cudaMemcpyDeviceToDevice));
 }
 
@@ -380,38 +390,38 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
     simParams->nbZ = nbZ;
 }
 
-void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
+void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
                                                size_t nSpheresGM,
                                                unsigned int nClumpTopo,
                                                unsigned int nClumpComponents,
                                                unsigned int nMatTuples) {
     // Sizes of these arrays
     simParams->nSpheresGM = nSpheresGM;
-    simParams->nClumpBodies = nClumpBodies;
+    simParams->nOwnerBodies = nOwnerBodies;
     simParams->nDistinctClumpBodyTopologies = nClumpTopo;
     simParams->nDistinctClumpComponents = nClumpComponents;
     simParams->nMatTuples = nMatTuples;
 
     // Resize to the number of clumps
-    TRACKED_VECTOR_RESIZE(familyID, nClumpBodies, "familyID", 0);
-    TRACKED_VECTOR_RESIZE(voxelID, nClumpBodies, "voxelID", 0);
-    TRACKED_VECTOR_RESIZE(locX, nClumpBodies, "locX", 0);
-    TRACKED_VECTOR_RESIZE(locY, nClumpBodies, "locY", 0);
-    TRACKED_VECTOR_RESIZE(locZ, nClumpBodies, "locZ", 0);
-    TRACKED_VECTOR_RESIZE(oriQ0, nClumpBodies, "oriQ0", 1);
-    TRACKED_VECTOR_RESIZE(oriQ1, nClumpBodies, "oriQ1", 0);
-    TRACKED_VECTOR_RESIZE(oriQ2, nClumpBodies, "oriQ2", 0);
-    TRACKED_VECTOR_RESIZE(oriQ3, nClumpBodies, "oriQ3", 0);
+    TRACKED_VECTOR_RESIZE(familyID, nOwnerBodies, "familyID", 0);
+    TRACKED_VECTOR_RESIZE(voxelID, nOwnerBodies, "voxelID", 0);
+    TRACKED_VECTOR_RESIZE(locX, nOwnerBodies, "locX", 0);
+    TRACKED_VECTOR_RESIZE(locY, nOwnerBodies, "locY", 0);
+    TRACKED_VECTOR_RESIZE(locZ, nOwnerBodies, "locZ", 0);
+    TRACKED_VECTOR_RESIZE(oriQ0, nOwnerBodies, "oriQ0", 1);
+    TRACKED_VECTOR_RESIZE(oriQ1, nOwnerBodies, "oriQ1", 0);
+    TRACKED_VECTOR_RESIZE(oriQ2, nOwnerBodies, "oriQ2", 0);
+    TRACKED_VECTOR_RESIZE(oriQ3, nOwnerBodies, "oriQ3", 0);
 
     // Transfer buffer arrays
-    TRACKED_VECTOR_RESIZE(voxelID_buffer, nClumpBodies, "voxelID_buffer", 0);
-    TRACKED_VECTOR_RESIZE(locX_buffer, nClumpBodies, "locX_buffer", 0);
-    TRACKED_VECTOR_RESIZE(locY_buffer, nClumpBodies, "locY_buffer", 0);
-    TRACKED_VECTOR_RESIZE(locZ_buffer, nClumpBodies, "locZ_buffer", 0);
-    TRACKED_VECTOR_RESIZE(oriQ0_buffer, nClumpBodies, "oriQ0_buffer", 0);
-    TRACKED_VECTOR_RESIZE(oriQ1_buffer, nClumpBodies, "oriQ1_buffer", 0);
-    TRACKED_VECTOR_RESIZE(oriQ2_buffer, nClumpBodies, "oriQ2_buffer", 0);
-    TRACKED_VECTOR_RESIZE(oriQ3_buffer, nClumpBodies, "oriQ3_buffer", 0);
+    TRACKED_VECTOR_RESIZE(voxelID_buffer, nOwnerBodies, "voxelID_buffer", 0);
+    TRACKED_VECTOR_RESIZE(locX_buffer, nOwnerBodies, "locX_buffer", 0);
+    TRACKED_VECTOR_RESIZE(locY_buffer, nOwnerBodies, "locY_buffer", 0);
+    TRACKED_VECTOR_RESIZE(locZ_buffer, nOwnerBodies, "locZ_buffer", 0);
+    TRACKED_VECTOR_RESIZE(oriQ0_buffer, nOwnerBodies, "oriQ0_buffer", 0);
+    TRACKED_VECTOR_RESIZE(oriQ1_buffer, nOwnerBodies, "oriQ1_buffer", 0);
+    TRACKED_VECTOR_RESIZE(oriQ2_buffer, nOwnerBodies, "oriQ2_buffer", 0);
+    TRACKED_VECTOR_RESIZE(oriQ3_buffer, nOwnerBodies, "oriQ3_buffer", 0);
 
     // Resize to the number of spheres
     TRACKED_VECTOR_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
@@ -428,8 +438,8 @@ void DEMKinematicThread::allocateManagedArrays(size_t nClumpBodies,
     // The following several arrays will have variable sizes, so here we only used an estimate. My estimate of total
     // contact pairs is 4n, and I think the max is 6n (although I can't prove it). Note the estimate should be large
     // enough to decrease the number of reallocations in the simulation, but not too large that eats too much memory.
-    TRACKED_VECTOR_RESIZE(idGeometryA, nClumpBodies * 4, "idGeometryA", 0);
-    TRACKED_VECTOR_RESIZE(idGeometryB, nClumpBodies * 4, "idGeometryB", 0);
+    TRACKED_VECTOR_RESIZE(idGeometryA, nOwnerBodies * 4, "idGeometryA", 0);
+    TRACKED_VECTOR_RESIZE(idGeometryB, nOwnerBodies * 4, "idGeometryB", 0);
 }
 
 void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,

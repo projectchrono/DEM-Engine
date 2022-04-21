@@ -101,7 +101,7 @@ inline __device__ void integratePos(sgps::bodyID_t thisClump, sgps::DEMDataDT* g
 
 __global__ void integrateClumps(sgps::DEMDataDT* granData, double h) {
     sgps::bodyID_t thisClump = blockIdx.x * blockDim.x + threadIdx.x;
-    if (thisClump < _nClumpBodies_) {
+    if (thisClump < _nOwnerBodies_) {
         integrateVel(thisClump, granData, h);
         integratePos(thisClump, granData, h);
     }

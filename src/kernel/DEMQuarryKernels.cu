@@ -23,7 +23,7 @@ __global__ void computeKE(sgps::DEMDataDT* granData, float* KE) {
     }
     __syncthreads();
     sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (myID < _nClumpBodies_) {
+    if (myID < _nOwnerBodies_) {
         sgps::clumpBodyInertiaOffset_t myMassOffset = granData->inertiaPropOffsets[myID];
         float myMass = ClumpMasses[myMassOffset];
         float myMOIX = moiX[myMassOffset];

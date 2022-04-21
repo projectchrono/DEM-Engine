@@ -284,7 +284,7 @@ to_string_with_precision(simParams->nvYp2); strMap["_nvZp2_"] = to_string_with_p
     strMap["_voxelSize_"] = to_string_with_precision(simParams->voxelSize);
     strMap["_binSize_"] = to_string_with_precision(simParams->binSize);
 
-    strMap["_nClumpBodies_"] = to_string_with_precision(simParams->nClumpBodies);
+    strMap["_nOwnerBodies_"] = to_string_with_precision(simParams->nOwnerBodies);
     strMap["_nSpheresGM_"] = to_string_with_precision(simParams->nSpheresGM);
     strMap["_nDistinctClumpBodyTopologies_"] = to_string_with_precision(simParams->nDistinctClumpBodyTopologies);
     strMap["_nDistinctClumpComponents_"] = to_string_with_precision(simParams->nDistinctClumpComponents);

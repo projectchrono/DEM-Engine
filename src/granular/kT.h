@@ -81,14 +81,38 @@ class DEMKinematicThread {
 
     // Managed arrays for dT's personal use (not transfer buffer)
 
-    // Those are the smaller ones, the unique, template ones. TODO: These should be jitified into kernels not brought
-    // from global mem The distinct sphere radii values
+    // Those are the template array of the unique component information. Note that these arrays may be thousands-element
+    // long, and only a part of it is jitified. The jitified part of it is typically the frequently used clump and maybe
+    // triangle tempates; the other part may be the components for a few large clump bodies which are not frequently
+    // used. Component sphere's radius
     std::vector<float, ManagedAllocator<float>> radiiSphere;
-
     // The distinct sphere local position (wrt CoM) values
     std::vector<float, ManagedAllocator<float>> relPosSphereX;
     std::vector<float, ManagedAllocator<float>> relPosSphereY;
     std::vector<float, ManagedAllocator<float>> relPosSphereZ;
+
+    // Triangles (templates) are given a special place (unlike other analytical shapes), b/c we expect them to appear
+    // frequently as meshes.
+    std::vector<float3, ManagedAllocator<float3>> relPosNode1;
+    std::vector<float3, ManagedAllocator<float3>> relPosNode2;
+    std::vector<float3, ManagedAllocator<float3>> relPosNode3;
+
+    // External object's components may need the following arrays to store some extra defining features of them. We
+    // assume there are usually not too many of them in a simulation. Relative position w.r.t. the owner. For example,
+    // the following 3 arrays may hold center points for plates, or tip positions for cones.
+    std::vector<float, ManagedAllocator<float>> relPosEntityX;
+    std::vector<float, ManagedAllocator<float>> relPosEntityY;
+    std::vector<float, ManagedAllocator<float>> relPosEntityZ;
+    // Some orientation specifiers. For example, the following 3 arrays may hold normal vectors for planes, or center
+    // axis vectors for cylinders.
+    std::vector<float, ManagedAllocator<float>> oriEntityX;
+    std::vector<float, ManagedAllocator<float>> oriEntityY;
+    std::vector<float, ManagedAllocator<float>> oriEntityZ;
+    // Some size specifiers. For example, the following 3 arrays may hold top, bottom and length information for finite
+    // cylinders.
+    std::vector<float, ManagedAllocator<float>> sizeEntity1;
+    std::vector<float, ManagedAllocator<float>> sizeEntity2;
+    std::vector<float, ManagedAllocator<float>> sizeEntity3;
 
     // The voxel ID (split into 3 parts, representing XYZ location)
     std::vector<voxelID_t, ManagedAllocator<voxelID_t>> voxelID;
@@ -113,20 +137,20 @@ class DEMKinematicThread {
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB;
 
     // Sphere-related arrays in managed memory
-    // Owner body ID, when this sphere is a clump's component
+    // Owner body ID of this component
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerClumpBody;
-    // The ID that maps this sphere's radius and relPos, when this sphere is a clump's component
+    // The ID that maps this sphere component's geometry-defining parameters, when this component is jitified
     std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> clumpComponentOffset;
-
-    // Owner body ID, when this sphere is an external object's component
-    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerObj;
-    // The ID that maps this sphere's radius and relPos, when this sphere is an external object's component
-    std::vector<objComponentOffset_t, ManagedAllocator<objComponentOffset_t>> objComponentOffset;
-    // External object's components have their templated info here in these arrays
-    std::vector<float, ManagedAllocator<float>> radiiSphere_ext;
-    std::vector<float, ManagedAllocator<float>> relPosSphereX_ext;
-    std::vector<float, ManagedAllocator<float>> relPosSphereY_ext;
-    std::vector<float, ManagedAllocator<float>> relPosSphereZ_ext;
+    // The ID that maps this sphere component's geometry-defining parameters, when this component is not jitified (too
+    // many templates)
+    std::vector<clumpComponentOffsetExt_t, ManagedAllocator<clumpComponentOffsetExt_t>> clumpComponentOffsetExt;
+    // The ID that maps this triangle component's geometry-defining parameters, when this component is jitified
+    std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> triComponentOffset;
+    // The ID that maps this triangle component's geometry-defining parameters, when this component is not jitified (too
+    // many templates)
+    std::vector<clumpComponentOffsetExt_t, ManagedAllocator<clumpComponentOffsetExt_t>> triComponentOffsetExt;
+    // The ID that maps this analytical entity component's geometry-defining parameters, when this component is jitified
+    std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> analComponentOffset;
 
   public:
     friend class DEMSolver;
@@ -173,7 +197,7 @@ class DEMKinematicThread {
     void resetUserCallStat();
 
     // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
-    void allocateManagedArrays(size_t nClumpBodies,
+    void allocateManagedArrays(size_t nOwnerBodies,
                                size_t nSpheresGM,
                                unsigned int nClumpTopo,
                                unsigned int nClumpComponents,

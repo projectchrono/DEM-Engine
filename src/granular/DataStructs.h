@@ -34,7 +34,7 @@ struct DEMSimParams {
     // The edge length of a bin (for contact detection)
     double binSize;
     // Number of clumps and spheres
-    bodyID_t nClumpBodies;
+    bodyID_t nOwnerBodies;
     bodyID_t nSpheresGM;
     // Number of the templates (or say the ``types'') of clumps and spheres
     clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies;

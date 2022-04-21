@@ -16,7 +16,7 @@ namespace sgps {
 /// External object type
 /// Note all of them are `shell', not solid objects. If you need a solid cylinder for example, then use one CYLINDER as
 /// the side plus 2 CIRCLE as the ends to emulate it. Please be sure to set OUTWARD CYLINDER normal in this case.
-enum class DEM_OBJ_COMPONENT { CLUMP, PLANE, SPHERE, PLATE, CIRCLE, CYLINDER, CYL_INF, CONE, CONE_INF };
+enum class DEM_OBJ_COMPONENT { CLUMP, PLANE, SPHERE, PLATE, CIRCLE, CYLINDER, CYL_INF, CONE, CONE_INF, TRIANGLE };
 /// Normal type: inward or outward?
 enum class DEM_OBJ_NORMAL { INWARD, OUTWARD };
 
@@ -70,8 +70,8 @@ class DEMObjComponent {
     // std::vector<scratch_t, ManagedAllocator<scratch_t>> something;
 
     union {
-        ManagedAllocator<DEMPlateParams_t> plate_params;
-        ManagedAllocator<DEMPlaneParams_t> plane_params;
+        ManagedAllocator<DEMPlateParams_t> plate;
+        ManagedAllocator<DEMPlaneParams_t> plane;
     };
 
     DEMObjComponent() {
@@ -92,15 +92,29 @@ struct DEMExternObj {
     float3 init_pos = make_float3(0);
     // Obj's initial orientation quaternion
     float4 init_oriQ = make_float4(1.f, 0.f, 0.f, 0.f);
-    // The (big) clump types that are a part of this extern obj. Note these types of big clumps have components whose
-    // offset IDs are managed by objComponentOffset, not clumpComponentOffset.
-    std::vector<unsigned int> clump_types;
+    // The (big) clump types that are a part of this extern obj. Note an external object should at most have one clump
+    // as its component.
+    unsigned int clump_type;
+    // Flag for having loaded more than one clump
+    bool clump_defined = false;
 
     union DEMAnalEntParams {
-        DEMPlateParams_t plate_params;
-        DEMPlaneParams_t plane_params;
+        DEMPlateParams_t plate;
+        DEMPlaneParams_t plane;
     };
     std::vector<DEMAnalEntParams> entity_params;
+
+    /// Add a clump (using loaded clump template number) as a component to this external object
+    void AddClumpType(unsigned int type) {
+        if (clump_defined) {
+            std::cout << "\nWARNING! Each external object can contain no more than one clump. When you load the second "
+                         "one, the first one is overwritten."
+                      << std::endl;
+        }
+        types.push_back(DEM_OBJ_COMPONENT::CLUMP);
+        clump_type = type;
+        clump_defined = true;
+    }
 
     /// Define object contact family number
     void SetFamily(const unsigned int code) { family_code = code; }
@@ -109,8 +123,8 @@ struct DEMExternObj {
     void AddPlane(const float3 pos, const float3 normal) {
         types.push_back(DEM_OBJ_COMPONENT::PLANE);
         DEMAnalEntParams params;
-        params.plane_params.position = pos;
-        params.plane_params.normal = normal;
+        params.plane.position = pos;
+        params.plane.normal = normal;
         entity_params.push_back(params);
     }
     /// Assuming the normal you specified is the z-direction and that normal vector originates from the pos point you
@@ -118,10 +132,10 @@ struct DEMExternObj {
     void AddPlate(const float3 pos, const float3 normal, const float xdim, const float ydim) {
         types.push_back(DEM_OBJ_COMPONENT::PLATE);
         DEMAnalEntParams params;
-        params.plate_params.center = pos;
-        params.plate_params.normal = normal;
-        params.plate_params.h_dim_x = xdim / 2.0;
-        params.plate_params.h_dim_y = ydim / 2.0;
+        params.plate.center = pos;
+        params.plate.normal = normal;
+        params.plate.h_dim_x = xdim / 2.0;
+        params.plate.h_dim_y = ydim / 2.0;
         entity_params.push_back(params);
     }
 };

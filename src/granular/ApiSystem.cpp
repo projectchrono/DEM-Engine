@@ -191,7 +191,7 @@ voxelID_t DEMSolver::GetClumpVoxelID(unsigned int i) const {
 }
 
 float DEMSolver::GetTotalKineticEnergy() const {
-    if (nClumpBodies == 0) {
+    if (nOwnerBodies == 0) {
         return 0.0;
     }
     return dT->getKineticEnergy();
@@ -240,14 +240,18 @@ void DEMSolver::figureOutMaterialProxies() {
     }
 }
 
-size_t DEMSolver::AddAnalCompTemplate(const DEM_OBJ_COMPONENT type,
-                                      const float3 pos,
-                                      const float3 rot,
-                                      const float d1,
-                                      const float d2,
-                                      const float d3,
-                                      const DEM_OBJ_NORMAL normal) {
+unsigned int DEMSolver::AddAnalCompTemplate(const DEM_OBJ_COMPONENT type,
+                                            unsigned int owner,
+                                            const float3 pos,
+                                            const float3 rot,
+                                            const float d1,
+                                            const float d2,
+                                            const float d3,
+                                            const DEM_OBJ_NORMAL normal) {
+    // TODO: from here, represent types with uint8_t numbers
+    // TODO: from here, represent normals with uint8_t numbers
     m_anal_types.push_back(type);
+    m_anal_owner.push_back(owner);
     m_anal_comp_pos.push_back(pos);
     m_anal_comp_rot.push_back(rot);
     m_anal_size_1.push_back(d1);
@@ -260,15 +264,14 @@ size_t DEMSolver::AddAnalCompTemplate(const DEM_OBJ_COMPONENT type,
 void DEMSolver::figureOutJitifiability() {
     // How many clump tempaltes are there? Is there one too large to jitify?
 
-    // How many analytical entities are there?
+    // How many triangle tempaltes are there? Is there one too large to jitify?
+
+    // How many analytical entities are there? (those entities are always jitified)
+    nExtObj = cachedExternObjs.size();
     nAnalEntities_computed = 0;
-    nClumpEntities_computed = 0;
     for (auto ext_obj : cachedExternObjs) {
         unsigned int this_num_anal_ent = 0;
-        unsigned int this_num_clump_ent = 0;
         auto comp_params = ext_obj->entity_params;
-        auto comp_clump_types = ext_obj->clump_types;
-
         for (unsigned int i = 0; i < ext_obj->types.size(); i++) {
             // CLUMP type should not be included b/c clumps are treated differently than analytical entities
             if (ext_obj->types.at(i) != DEM_OBJ_COMPONENT::CLUMP) {
@@ -276,26 +279,44 @@ void DEMSolver::figureOutJitifiability() {
                 this_num_anal_ent++;
                 switch (ext_obj->types.at(i)) {
                     case DEM_OBJ_COMPONENT::PLANE:
-                        AddAnalCompTemplate(DEM_OBJ_COMPONENT::PLANE, param.plane_params.position,
-                                            param.plane_params.normal);
+                        AddAnalCompTemplate(DEM_OBJ_COMPONENT::PLANE, i, param.plane.position, param.plane.normal);
                         break;
                     case DEM_OBJ_COMPONENT::PLATE:
-                        AddAnalCompTemplate(DEM_OBJ_COMPONENT::PLATE, param.plate_params.center,
-                                            param.plate_params.normal, param.plate_params.h_dim_x,
-                                            param.plate_params.h_dim_y);
+                        AddAnalCompTemplate(DEM_OBJ_COMPONENT::PLATE, i, param.plate.center, param.plate.normal,
+                                            param.plate.h_dim_x, param.plate.h_dim_y);
                         break;
                     default:
                         SGPS_ERROR("There is at least one analytical boundary that has a type not supported.");
                 }
             } else {
-                auto clump_type = comp_clump_types.at(this_num_clump_ent);
-                this_num_clump_ent++;
-                // TODO: give this clump a owner in the long owner array, and pop_front the clump_type array
+                m_extra_clump_type.push_back(ext_obj->clump_type);
+                m_extra_clump_owner.push_back(i);
+                // Remember the clumps in AddExternalObject-loaded entities contributes to total spheres
+                nSpheresGM += m_template_sp_radii.at(ext_obj->clump_type).size();
             }
         }
         nAnalEntities_computed += this_num_anal_ent;
-        nClumpEntities_computed += this_num_clump_ent;
     }
+}
+
+inline void DEMSolver::reportInitStats() const {
+    std::cout << "The dimension of the simulation world: " << m_boxX << ", " << m_boxY << ", " << m_boxZ << std::endl;
+    std::cout << "The length unit in this simulation is: " << l << std::endl;
+    std::cout << "The edge length of a voxel: " << m_voxelSize << std::endl;
+
+    std::cout << "The edge length of a bin: " << m_binSize << std::endl;
+    std::cout << "The total number of bins: " << m_num_bins << std::endl;
+
+    std::cout << "The current number of clumps: " << nOwnerBodies << std::endl;
+
+    if (m_expand_factor > 0.0) {
+        std::cout << "All geometries are enlarged/thickened by " << m_expand_factor << " for contact detection purpose"
+                  << std::endl;
+        std::cout << "This in the case of smallest sphere, means enlarging radius by "
+                  << (m_expand_factor / m_smallest_radius) * 100.0 << "%" << std::endl;
+    }
+
+    std::cout << "The number of material types: " << nMatTuples_computed << std::endl;
 }
 
 void DEMSolver::generateJITResources() {
@@ -365,24 +386,18 @@ void DEMSolver::generateJITResources() {
         figureOutNV();
     }
     decideDefaultBinSize();
-    std::cout << "The dimension of the simulation world: " << m_boxX << ", " << m_boxY << ", " << m_boxZ << std::endl;
-    std::cout << "The length unit in this simulation is: " << l << std::endl;
-    std::cout << "The edge length of a voxel: " << m_voxelSize << std::endl;
 
     nbX = (binID_t)(m_voxelSize * (double)((size_t)1 << nvXp2) / m_binSize) + 1;
     nbY = (binID_t)(m_voxelSize * (double)((size_t)1 << nvYp2) / m_binSize) + 1;
     nbZ = (binID_t)(m_voxelSize * (double)((size_t)1 << nvZp2) / m_binSize) + 1;
-    uint64_t num_bins = (uint64_t)nbX * (uint64_t)nbY * (uint64_t)nbZ;
+    m_num_bins = (uint64_t)nbX * (uint64_t)nbY * (uint64_t)nbZ;
     // It's better to compute num of bins this way, rather than...
     // (uint64_t)(m_boxX / m_binSize + 1) * (uint64_t)(m_boxY / m_binSize + 1) * (uint64_t)(m_boxZ / m_binSize + 1);
     // because the space bins and voxels can cover may be larger than the user-defined sim domain
-    std::cout << "The edge length of a bin: " << m_binSize << std::endl;
-    std::cout << "The total number of bins: " << num_bins << std::endl;
-    // TODO: should check if num_bins is larger than uint32, if uint32 is selected for storing binID
+    // TODO: should check if m_num_bins is larger than uint32, if uint32 is selected for storing binID
 
     // Figure out the initial profile/status of clumps, and related quantities, if need to
-    nClumpBodies = m_input_clump_types.size();
-    std::cout << "The current number of clumps: " << nClumpBodies << std::endl;
+    nOwnerClumps = m_input_clump_types.size();
 
     // now a quick hack using for loop
     // I'll have to change that to be more... efficient
@@ -395,19 +410,16 @@ void DEMSolver::generateJITResources() {
 
     // Enlarge the expand factor if the user tells us to
     m_expand_factor *= m_expand_safety_param;
-    if (m_expand_factor > 0.0) {
-        std::cout << "All geometries are enlarged/thickened by " << m_expand_factor << " for contact detection purpose"
-                  << std::endl;
-        std::cout << "This in the case of smallest sphere, means enlarging radius by "
-                  << (m_expand_factor / m_smallest_radius) * 100.0 << "%" << std::endl;
-    }
 
     // Figure out info about external objects/clump templates and whether they can be jitified
     figureOutJitifiability();
 
     // Process the loaded materials
-    std::cout << "The number of material types: " << nMatTuples_computed << std::endl;
     figureOutMaterialProxies();
+
+    nOwnerBodies = nExtObj + nOwnerClumps + nTriEntities;
+    // Notify the user simulation stats
+    reportInitStats();
 }
 
 void DEMSolver::AddClumps(const std::vector<unsigned int>& types, const std::vector<float3>& xyz) {
@@ -429,7 +441,7 @@ void DEMSolver::SetClumpFamily(const std::vector<unsigned int>& code) {
         std::cout << "\nWARNING! Family number " << std::numeric_limits<family_t>::max()
                   << " (or anything larger than that) is reserved for completely fixed boundaries. Using it on your "
                      "simulation entities will make them fixed, regardless of your specification.\nYou can change "
-                     "family_t if you indeed need more families to work with.\n"
+                     "family_t if you indeed need more families to work with."
                   << std::endl;
     }
     m_input_clump_family.insert(m_input_clump_family.end(), code.begin(), code.end());
@@ -452,9 +464,9 @@ void DEMSolver::transferSimParams() {
 /// Transfer (CPU-side) cached clump templates info and initial clump type/position info to GPU-side arrays
 void DEMSolver::initializeArrays() {
     // Resize managed arrays based on the statistical data we had from the previous step
-    dT->allocateManagedArrays(nClumpBodies, nSpheresGM, nDistinctClumpBodyTopologies_computed,
+    dT->allocateManagedArrays(nOwnerBodies, nSpheresGM, nDistinctClumpBodyTopologies_computed,
                               nDistinctClumpComponents_computed, nMatTuples_computed);
-    kT->allocateManagedArrays(nClumpBodies, nSpheresGM, nDistinctClumpBodyTopologies_computed,
+    kT->allocateManagedArrays(nOwnerBodies, nSpheresGM, nDistinctClumpBodyTopologies_computed,
                               nDistinctClumpComponents_computed, nMatTuples_computed);
 
     // Now that the CUDA-related functions and data types are JITCompiled, we can feed those GPU-side arrays with the
@@ -646,7 +658,7 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_voxelSize_"] = to_string_with_precision(m_voxelSize);
     strMap["_binSize_"] = to_string_with_precision(m_binSize);
 
-    strMap["_nClumpBodies_"] = std::to_string(nClumpBodies);
+    strMap["_nOwnerBodies_"] = std::to_string(nOwnerBodies);
     strMap["_nSpheresGM_"] = std::to_string(nSpheresGM);
     strMap["_nDistinctClumpBodyTopologies_"] = std::to_string(nDistinctClumpBodyTopologies_computed);
     strMap["_nDistinctClumpComponents_"] = std::to_string(nDistinctClumpComponents_computed);
