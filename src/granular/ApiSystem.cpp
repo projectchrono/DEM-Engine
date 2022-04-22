@@ -102,7 +102,7 @@ void DEMSolver::SetTimeStepSize(double ts_size) {
 
 unsigned int DEMSolver::LoadMaterialType(float E, float nu, float CoR, float density) {
     unsigned int mat_num = m_sp_materials.size();
-    if (CoR < SGPS_DEM_TINY_FLOAT) {
+    if (CoR < DEM_TINY_FLOAT) {
         std::cout << "\nWARNING! Material type " << mat_num
                   << " is set (or defaulted) to have 0 restitution. Please make sure this is intentional.\n"
                   << std::endl;
@@ -164,6 +164,14 @@ std::shared_ptr<DEMExternObj> DEMSolver::AddBCPlane(const float3 pos, const floa
 }
 
 void DEMSolver::ClearCache() {
+    nSpheresGM = 0;
+    nTriGM = 0;
+    nAnalGM = 0;
+    nOwnerBodies = 0;
+    nOwnerClumps = 0;
+    nExtObj = 0;
+    nTriEntities = 0;
+
     cachedExternObjs.clear();
     m_anal_comp_pos.clear();
     m_anal_comp_rot.clear();
@@ -240,16 +248,14 @@ void DEMSolver::figureOutMaterialProxies() {
     }
 }
 
-unsigned int DEMSolver::AddAnalCompTemplate(const DEM_OBJ_COMPONENT type,
+unsigned int DEMSolver::AddAnalCompTemplate(const objType_t type,
                                             unsigned int owner,
                                             const float3 pos,
                                             const float3 rot,
                                             const float d1,
                                             const float d2,
                                             const float d3,
-                                            const DEM_OBJ_NORMAL normal) {
-    // TODO: from here, represent types with uint8_t numbers
-    // TODO: from here, represent normals with uint8_t numbers
+                                            const objNormal_t normal) {
     m_anal_types.push_back(type);
     m_anal_owner.push_back(owner);
     m_anal_comp_pos.push_back(pos);
@@ -268,7 +274,6 @@ void DEMSolver::figureOutJitifiability() {
 
     // How many analytical entities are there? (those entities are always jitified)
     nExtObj = cachedExternObjs.size();
-    nAnalEntities_computed = 0;
     for (auto ext_obj : cachedExternObjs) {
         unsigned int this_num_anal_ent = 0;
         auto comp_params = ext_obj->entity_params;
@@ -279,10 +284,10 @@ void DEMSolver::figureOutJitifiability() {
                 this_num_anal_ent++;
                 switch (ext_obj->types.at(i)) {
                     case DEM_OBJ_COMPONENT::PLANE:
-                        AddAnalCompTemplate(DEM_OBJ_COMPONENT::PLANE, i, param.plane.position, param.plane.normal);
+                        AddAnalCompTemplate(DEM_ENTITY_TYPE_PLANE, i, param.plane.position, param.plane.normal);
                         break;
                     case DEM_OBJ_COMPONENT::PLATE:
-                        AddAnalCompTemplate(DEM_OBJ_COMPONENT::PLATE, i, param.plate.center, param.plate.normal,
+                        AddAnalCompTemplate(DEM_ENTITY_TYPE_PLATE, i, param.plate.center, param.plate.normal,
                                             param.plate.h_dim_x, param.plate.h_dim_y);
                         break;
                     default:
@@ -295,7 +300,7 @@ void DEMSolver::figureOutJitifiability() {
                 nSpheresGM += m_template_sp_radii.at(ext_obj->clump_type).size();
             }
         }
-        nAnalEntities_computed += this_num_anal_ent;
+        nAnalGM += this_num_anal_ent;
     }
 }
 
@@ -401,7 +406,6 @@ void DEMSolver::generateJITResources() {
 
     // now a quick hack using for loop
     // I'll have to change that to be more... efficient
-    nSpheresGM = 0;
     for (size_t i = 0; i < m_input_clump_types.size(); i++) {
         auto this_type_num = m_input_clump_types.at(i);
         auto this_radii = m_template_sp_radii.at(this_type_num);
@@ -517,12 +521,13 @@ void DEMSolver::validateUserInputs() {
 }
 
 void DEMSolver::jitifyKernels() {
-    std::unordered_map<std::string, std::string> templateSubs, simParamSubs, massMatSubs, familySubs;
+    std::unordered_map<std::string, std::string> templateSubs, simParamSubs, massMatSubs, familySubs, analGeoSubs;
     equipClumpTemplates(templateSubs);
     equipSimParams(simParamSubs);
     equipClumpMassMat(massMatSubs);
-    kT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familySubs);
-    dT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familySubs);
+    equipAnalGeoTemplates(analGeoSubs);
+    kT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familySubs, analGeoSubs);
+    dT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familySubs, analGeoSubs);
 }
 
 // The method should be called after user inputs are in place, and before starting the simulation. It figures out a part
@@ -608,6 +613,42 @@ int DEMSolver::LaunchThreads(double thisCallDuration) {
     return 0;
 }
 
+inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std::string>& strMap) {
+    std::string objOwner = " ", objType = " ", objNormal = " ", objRelPosX = " ", objRelPosY = " ", objRelPosZ = " ",
+                objRotX = " ", objRotY = " ", objRotZ = " ", objSize1 = " ", objSize2 = " ", objSize3 = " ";
+    for (unsigned int i = 0; i < nAnalGM; i++) {
+        // External objects will be owners, and their IDs are follwoing template-loaded simulation clumps
+        unsigned int myOwner = nOwnerClumps + m_anal_owner[i];
+        objOwner += std::to_string(myOwner);
+        objType += std::to_string(m_anal_types[i]);
+        objNormal += std::to_string(m_anal_normals[i]);
+        objRelPosX += to_string_with_precision(m_anal_comp_pos[i].x);
+        objRelPosY += to_string_with_precision(m_anal_comp_pos[i].y);
+        objRelPosZ += to_string_with_precision(m_anal_comp_pos[i].z);
+        objRotX += to_string_with_precision(m_anal_comp_rot[i].x);
+        objRotY += to_string_with_precision(m_anal_comp_rot[i].y);
+        objRotZ += to_string_with_precision(m_anal_comp_rot[i].z);
+        objSize1 += to_string_with_precision(m_anal_size_1[i]);
+        objSize2 += to_string_with_precision(m_anal_size_2[i]);
+        objSize3 += to_string_with_precision(m_anal_size_3[i]);
+    }
+    strMap["_objOwner_"] = objOwner;
+    strMap["_objType_"] = objType;
+    strMap["_objNormal_"] = objNormal;
+
+    strMap["_objRelPosX_"] = objRelPosX;
+    strMap["_objRelPosY_"] = objRelPosY;
+    strMap["_objRelPosZ_"] = objRelPosZ;
+
+    strMap["_objRotX_"] = objRotX;
+    strMap["_objRotY_"] = objRotY;
+    strMap["_objRotZ_"] = objRotZ;
+
+    strMap["_objSize1_"] = objSize1;
+    strMap["_objSize2_"] = objSize2;
+    strMap["_objSize3_"] = objSize3;
+}
+
 inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::string>& strMap) {
     strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
     std::string ClumpMasses, moiX, moiY, moiZ;
@@ -658,6 +699,9 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_voxelSize_"] = to_string_with_precision(m_voxelSize);
     strMap["_binSize_"] = to_string_with_precision(m_binSize);
 
+    strMap["_nAnalGM_"] = std::to_string(nAnalGM);
+    unsigned int nAnalGMSafe = (nAnalGM > 0) ? nAnalGM : 1;
+    strMap["_nAnalGMSafe_"] = std::to_string(nAnalGMSafe);
     strMap["_nOwnerBodies_"] = std::to_string(nOwnerBodies);
     strMap["_nSpheresGM_"] = std::to_string(nSpheresGM);
     strMap["_nDistinctClumpBodyTopologies_"] = std::to_string(nDistinctClumpBodyTopologies_computed);

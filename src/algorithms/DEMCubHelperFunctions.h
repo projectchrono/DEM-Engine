@@ -19,6 +19,12 @@ void cubPrefixScan_binSphere(binsSphereTouches_t* d_in,
                              cudaStream_t& this_stream,
                              DEMSolverStateDataKT& scratchPad);
 
+void cubPrefixScan_sphereGeo(objID_t* d_in,
+                             binSphereTouchPairs_t* d_out,
+                             size_t n,
+                             cudaStream_t& this_stream,
+                             DEMSolverStateDataKT& scratchPad);
+
 void cubPrefixScan_contacts(spheresBinTouches_t* d_in,
                             contactPairs_t* d_out,
                             size_t n,

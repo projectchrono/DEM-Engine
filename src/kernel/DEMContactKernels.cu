@@ -70,7 +70,7 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
             bodyZ[i] = ownerZ + (double)myRelPosZ;
         }
 
-        for (sgps::spheresBinTouches_t bodyA = 0; bodyA < nBodiesMeHandle - 1; bodyA++) {
+        for (sgps::spheresBinTouches_t bodyA = 0; bodyA < nBodiesMeHandle; bodyA++) {
             for (sgps::spheresBinTouches_t bodyB = bodyA + 1; bodyB < nBodiesMeHandle; bodyB++) {
                 // For 2 bodies to be considered in contact, the contact point must be in this bin (to avoid
                 // double-counting), and they do not belong to the same clump
@@ -116,6 +116,8 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
                                             sgps::spheresBinTouches_t* numSpheresBinTouches,
                                             sgps::binSphereTouchPairs_t* sphereIDsLookUpTable,
                                             sgps::contactPairs_t* contactReportOffsets,
+                                            sgps::bodyID_t* idSphA,
+                                            sgps::bodyID_t* idSphB,
                                             size_t nActiveBins) {
     // CUDA does not support initializing shared arrays, so we have to manually load them
     __shared__ float CDRadii[_nDistinctClumpComponents_];
@@ -180,7 +182,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
         // Get my offset for writing back to the global arrays that contain contact pair info
         sgps::contactPairs_t myReportOffset = contactReportOffsets[myActiveID];
 
-        for (sgps::spheresBinTouches_t bodyA = 0; bodyA < nBodiesMeHandle - 1; bodyA++) {
+        for (sgps::spheresBinTouches_t bodyA = 0; bodyA < nBodiesMeHandle; bodyA++) {
             for (sgps::spheresBinTouches_t bodyB = bodyA + 1; bodyB < nBodiesMeHandle; bodyB++) {
                 // For 2 bodies to be considered in contact, the contact point must be in this bin (to avoid
                 // double-counting), and they do not belong to the same clump
@@ -198,8 +200,8 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
                     getPointBinID<sgps::binID_t>(contactPntX, contactPntY, contactPntZ, _binSize_, _nbX_, _nbY_);
 
                 if (in_contact && (contactPntBin == binID)) {
-                    granData->idGeometryA[myReportOffset] = bodyIDs[bodyA];
-                    granData->idGeometryB[myReportOffset] = bodyIDs[bodyB];
+                    idSphA[myReportOffset] = bodyIDs[bodyA];
+                    idSphB[myReportOffset] = bodyIDs[bodyB];
                     myReportOffset++;
                 }
             }

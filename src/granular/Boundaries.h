@@ -110,8 +110,9 @@ struct DEMExternObj {
             std::cout << "\nWARNING! Each external object can contain no more than one clump. When you load the second "
                          "one, the first one is overwritten."
                       << std::endl;
+        } else {
+            types.push_back(DEM_OBJ_COMPONENT::CLUMP);
         }
-        types.push_back(DEM_OBJ_COMPONENT::CLUMP);
         clump_type = type;
         clump_defined = true;
     }

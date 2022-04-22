@@ -235,7 +235,8 @@ class DEMKinematicThread {
     void jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,
                        const std::unordered_map<std::string, std::string>& simParamSubs,
                        const std::unordered_map<std::string, std::string>& massMatSubs,
-                       const std::unordered_map<std::string, std::string>& familySubs);
+                       const std::unordered_map<std::string, std::string>& familySubs,
+                       const std::unordered_map<std::string, std::string>& analGeoSubs);
 
   private:
     // Contact detections

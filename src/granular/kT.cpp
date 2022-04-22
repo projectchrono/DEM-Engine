@@ -26,13 +26,17 @@ void DEMKinematicThread::contactDetection() {
     CD_temp_arr_bytes = simParams->nSpheresGM * sizeof(binsSphereTouches_t);
     binsSphereTouches_t* numBinsSphereTouches =
         (binsSphereTouches_t*)stateOfSolver_resources.allocateTempVector1(CD_temp_arr_bytes);
+    // This kernel is also tasked to find how many analytical objects each sphere touches
+    // We'll use a new vector 3 to store this
+    CD_temp_arr_bytes = simParams->nSpheresGM * sizeof(objID_t);
+    objID_t* numAnalGeoSphereTouches = (objID_t*)stateOfSolver_resources.allocateTempVector3(CD_temp_arr_bytes);
     size_t blocks_needed_for_bodies =
         (simParams->nSpheresGM + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
 
     bin_occupation->kernel("getNumberOfBinsEachSphereTouches")
         .instantiate()
         .configure(dim3(blocks_needed_for_bodies), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData, numBinsSphereTouches);
+        .launch(granData, numBinsSphereTouches, numAnalGeoSphereTouches);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     // 2nd step: prefix scan sphere--bin touching pairs
@@ -43,12 +47,26 @@ void DEMKinematicThread::contactDetection() {
                             stateOfSolver_resources);
     stateOfSolver_resources.setNumBinSphereTouchPairs((size_t)numBinsSphereTouchesScan[simParams->nSpheresGM - 1] +
                                                       (size_t)numBinsSphereTouches[simParams->nSpheresGM - 1]);
+    // The same process is done for sphere--analytical geometry pairs as well. Use vector 4 for this.
+    CD_temp_arr_bytes = simParams->nSpheresGM * sizeof(binSphereTouchPairs_t);
+    binSphereTouchPairs_t* numAnalGeoSphereTouchesScan =
+        (binSphereTouchPairs_t*)stateOfSolver_resources.allocateTempVector4(CD_temp_arr_bytes);
+    cubPrefixScan_sphereGeo(numAnalGeoSphereTouches, numAnalGeoSphereTouchesScan, simParams->nSpheresGM,
+                            streamInfo.stream, stateOfSolver_resources);
+    stateOfSolver_resources.setNumContacts((size_t)numAnalGeoSphereTouches[simParams->nSpheresGM - 1] +
+                                           (size_t)numAnalGeoSphereTouchesScan[simParams->nSpheresGM - 1]);
+    if (stateOfSolver_resources.getNumContacts() > idGeometryA.size()) {
+        TRACKED_QUICK_VECTOR_RESIZE(idGeometryA, stateOfSolver_resources.getNumContacts());
+        TRACKED_QUICK_VECTOR_RESIZE(idGeometryB, stateOfSolver_resources.getNumContacts());
+        granData->idGeometryA = idGeometryA.data();
+        granData->idGeometryB = idGeometryB.data();
+    }
     // std::cout << stateOfSolver_resources.getNumBinSphereTouchPairs() << std::endl;
     // displayArray<binsSphereTouches_t>(numBinsSphereTouches, simParams->nSpheresGM);
     // displayArray<binSphereTouchPairs_t>(numBinsSphereTouchesScan, simParams->nSpheresGM);
 
     // 3rd step: use a custom kernel to figure out all sphere--bin touching pairs. Note numBinsSphereTouches can retire
-    // now so we allocate on temp vector 1 and use a new vector 3.
+    // now so we allocate on temp vector 1 and re-use vector 3.
     CD_temp_arr_bytes = stateOfSolver_resources.getNumBinSphereTouchPairs() * sizeof(binID_t);
     binID_t* binIDsEachSphereTouches = (binID_t*)stateOfSolver_resources.allocateTempVector1(CD_temp_arr_bytes);
     CD_temp_arr_bytes = stateOfSolver_resources.getNumBinSphereTouchPairs() * sizeof(bodyID_t);
@@ -56,7 +74,8 @@ void DEMKinematicThread::contactDetection() {
     bin_occupation->kernel("populateBinSphereTouchingPairs")
         .instantiate()
         .configure(dim3(blocks_needed_for_bodies), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData, numBinsSphereTouchesScan, binIDsEachSphereTouches, sphereIDsEachBinTouches);
+        .launch(granData, numBinsSphereTouchesScan, numAnalGeoSphereTouchesScan, binIDsEachSphereTouches,
+                sphereIDsEachBinTouches, granData->idGeometryA, granData->idGeometryB);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     // std::cout << "Unsorted bin IDs: ";
     // displayArray<binID_t>(binIDsEachSphereTouches, stateOfSolver_resources.getNumBinSphereTouchPairs());
@@ -64,7 +83,7 @@ void DEMKinematicThread::contactDetection() {
     // displayArray<bodyID_t>(sphereIDsEachBinTouches, stateOfSolver_resources.getNumBinSphereTouchPairs());
 
     // 4th step: allocate and populate SORTED binIDsEachSphereTouches and sphereIDsEachBinTouches. Note
-    // numBinsSphereTouchesScan can retire now so we allocate on vector 2 and use a new vector 4.
+    // numBinsSphereTouchesScan can retire now so we allocate on vector 2 and re-use vector 4.
     CD_temp_arr_bytes = stateOfSolver_resources.getNumBinSphereTouchPairs() * sizeof(bodyID_t);
     bodyID_t* sphereIDsEachBinTouches_sorted =
         (bodyID_t*)stateOfSolver_resources.allocateTempVector2(CD_temp_arr_bytes);
@@ -148,9 +167,11 @@ void DEMKinematicThread::contactDetection() {
                                streamInfo.stream, stateOfSolver_resources);
         // displayArray<contactPairs_t>(contactReportOffsets, stateOfSolver_resources.getNumActiveBins());
 
-        stateOfSolver_resources.setNumContacts(
-            (size_t)numContactsInEachBin[stateOfSolver_resources.getNumActiveBins() - 1] +
-            (size_t)contactReportOffsets[stateOfSolver_resources.getNumActiveBins() - 1]);
+        // Add sphere--sphere contacts together with sphere--analytical geometry contacts
+        size_t nSphereGeoContact = stateOfSolver_resources.getNumContacts();
+        size_t nSphereSphereContact = (size_t)numContactsInEachBin[stateOfSolver_resources.getNumActiveBins() - 1] +
+                                      (size_t)contactReportOffsets[stateOfSolver_resources.getNumActiveBins() - 1];
+        stateOfSolver_resources.setNumContacts(nSphereSphereContact + nSphereGeoContact);
         if (stateOfSolver_resources.getNumContacts() > idGeometryA.size()) {
             TRACKED_QUICK_VECTOR_RESIZE(idGeometryA, stateOfSolver_resources.getNumContacts());
             TRACKED_QUICK_VECTOR_RESIZE(idGeometryB, stateOfSolver_resources.getNumContacts());
@@ -159,11 +180,14 @@ void DEMKinematicThread::contactDetection() {
         }
         // std::cout << "NumContacts: " << stateOfSolver_resources.getNumContacts() << std::endl;
 
+        // Sphere--sphere contact pairs go after sphere--anal-geo contacts
+        bodyID_t* idSphA = (granData->idGeometryA + nSphereGeoContact);
+        bodyID_t* idSphB = (granData->idGeometryB + nSphereGeoContact);
         contact_detection->kernel("populateContactPairsEachBin")
             .instantiate()
             .configure(dim3(blocks_needed_for_bins), dim3(SGPS_DEM_NUM_BINS_PER_BLOCK), 0, streamInfo.stream)
             .launch(granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches, sphereIDsLookUpTable,
-                    contactReportOffsets, stateOfSolver_resources.getNumActiveBins());
+                    contactReportOffsets, idSphA, idSphB, stateOfSolver_resources.getNumActiveBins());
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         // displayArray<bodyID_t>(granData->idGeometryA, stateOfSolver_resources.getNumContacts());
         // displayArray<bodyID_t>(granData->idGeometryB, stateOfSolver_resources.getNumContacts());
@@ -499,11 +523,13 @@ void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& 
 void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,
                                        const std::unordered_map<std::string, std::string>& simParamSubs,
                                        const std::unordered_map<std::string, std::string>& massMatSubs,
-                                       const std::unordered_map<std::string, std::string>& familySubs) {
+                                       const std::unordered_map<std::string, std::string>& familySubs,
+                                       const std::unordered_map<std::string, std::string>& analGeoSubs) {
     // First one is bin_occupation kernels, which figure out the bin--sphere touch pairs
     {
         std::unordered_map<std::string, std::string> boSubs = templateSubs;
         boSubs.insert(simParamSubs.begin(), simParamSubs.end());
+        boSubs.insert(analGeoSubs.begin(), analGeoSubs.end());
         // bin_occupation = JitHelper::buildProgram(
         //     "DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
         //     std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});

@@ -6,6 +6,7 @@
 #include <limits>
 #include <stdint.h>
 #include <algorithm>
+#include <cmath>
 
 #define SGPS_DEM_MIN(a, b) ((a < b) ? a : b)
 #define SGPS_DEM_MAX(a, b) ((a > b) ? a : b)
@@ -17,9 +18,7 @@ namespace sgps {
 
 #define SGPS_DEM_MAX_SPHERES_PER_BIN 32  // very tricky; should redo CD kernels to be block--bin based
 #define WAIT_GRANULARITY_MS 1
-#ifndef SGPS_DEM_TINY_FLOAT
-    #define SGPS_DEM_TINY_FLOAT 1e-6f
-#endif
+const float DEM_TINY_FLOAT = 1e-6f;
 #ifndef SGPS_BITS_PER_BYTE
     #define SGPS_BITS_PER_BYTE 8
 #endif
@@ -37,6 +36,8 @@ typedef uint64_t voxelID_t;
 typedef float oriQ_t;
 typedef unsigned int bodyID_t;
 typedef unsigned int binID_t;
+typedef unsigned int triID_t;
+typedef uint8_t objID_t;
 typedef uint8_t materialsOffset_t;
 typedef uint8_t clumpBodyInertiaOffset_t;
 typedef uint8_t clumpComponentOffset_t;
@@ -48,8 +49,8 @@ typedef char scratch_t;     ///< Data type for DEM scratch-pad array
 
 // How many bin--sphere touch pairs can there be for one sphere, tops? This type should not need to be large.
 typedef unsigned short int binsSphereTouches_t;
-// This type needs to be large enough to hold the result of a prefix scan of the type binsSphereTouches_t; but normally,
-// it should be the same magnitude as bodyID_t.
+// This type needs to be large enough to hold the result of a prefix scan of the type binsSphereTouches_t (and objID_t);
+// but normally, it should be the same magnitude as bodyID_t.
 typedef unsigned int binSphereTouchPairs_t;
 // How many spheres a bin can touch, tops? We can assume it will not be too large to save GPU memory. Note this type
 // also doubles as the type for the number of contacts in a bin. NOTE!! Seems uint8_t is not supported by CUB???
@@ -83,6 +84,12 @@ constexpr clumpComponentOffset_t NUM_ACTIVE_TEMPLATE_LOADING_THREADS =
 #ifndef SGPS_PI_SQUARED
     #define SGPS_PI_SQUARED 9.869604401089358
 #endif
+typedef uint8_t objType_t;
+typedef bool objNormal_t;
+const objType_t DEM_ENTITY_TYPE_PLANE = 0;
+const objType_t DEM_ENTITY_TYPE_PLATE = 1;
+const objNormal_t DEM_ENTITY_NORMAL_INWARD = 0;
+const objNormal_t DEM_ENTITY_NORMAL_OUTWARD = 1;
 
 // Some enums...
 // Friction mode

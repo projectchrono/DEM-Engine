@@ -111,14 +111,14 @@ class DEMSolver {
     std::shared_ptr<DEMExternObj> AddBCPlane(const float3 pos, const float3 normal);
 
     // Add content to the flattened analytical component array
-    unsigned int AddAnalCompTemplate(const DEM_OBJ_COMPONENT type,
+    unsigned int AddAnalCompTemplate(const objType_t type,
                                      unsigned int owner,
                                      const float3 pos,
                                      const float3 rot = make_float3(0),
                                      const float d1 = 0.f,
                                      const float d2 = 0.f,
                                      const float d3 = 0.f,
-                                     const DEM_OBJ_NORMAL normal = DEM_OBJ_NORMAL::INWARD);
+                                     const objNormal_t normal = DEM_ENTITY_NORMAL_INWARD);
 
     /// Remove host-side cached vectors (so you can re-define them, and then re-initialize system)
     void ClearCache();
@@ -178,6 +178,7 @@ class DEMSolver {
     std::vector<std::shared_ptr<DEMExternObj>> cachedExternObjs;
 
     // Flattened (analytical) object component definition arrays, potentially jitifiable
+    // These extra analytical entities' owners' ID will be appended to those added thru normal AddClump
     std::vector<unsigned int> m_anal_owner;
     // Initial locations of this obj's components relative to obj's CoM
     std::vector<float3> m_anal_comp_pos;
@@ -191,10 +192,10 @@ class DEMSolver {
     // Some float quantity that is representitive of an component's size (e.g. for a cylinder, its length)
     std::vector<float> m_anal_size_3;
     // Component object types
-    std::vector<DEM_OBJ_COMPONENT> m_anal_types;
+    std::vector<objType_t> m_anal_types;
     // Component object normal direction, defaulting to inward. If this object is topologically a plane then this param
     // is meaningless, since its normal is determined by its rotation.
-    std::vector<DEM_OBJ_NORMAL> m_anal_normals;
+    std::vector<objNormal_t> m_anal_normals;
     // Extra clumps are those loaded by adding external object. They typically consist of many spheres (~thousands).
     std::vector<unsigned int> m_extra_clump_type;
     // Extra clumps' owners' ID will be appended to those added thru normal AddClump, and are consistent with external
@@ -259,18 +260,24 @@ class DEMSolver {
     float m_expand_safety_param = 1.f;
 
     // Total number of spheres
-    size_t nSpheresGM;
-    // Total number of bodies
-    size_t nOwnerBodies;
+    size_t nSpheresGM = 0;
+    // Total number of triangle facets
+    size_t nTriGM = 0;
+    // Number of analytical entites (as components of some external objects)
+    unsigned int nAnalGM = 0;
+    // Total number of owner bodies
+    size_t nOwnerBodies = 0;
     // Number of loaded clumps
     size_t nOwnerClumps = 0;
     // Number of loaded external objects
-    size_t nExtObj = 0;
+    unsigned int nExtObj = 0;
     // Number of loaded triangle-represented (mesh) objects
     size_t nTriEntities = 0;
     // nExtObj + nOwnerClumps + nTriEntities == nOwnerBodies
 
-    float sphereUU;
+    unsigned int nDistinctClumpComponents_computed;
+    unsigned int nDistinctClumpBodyTopologies_computed;
+    unsigned int nMatTuples_computed;
 
     // Whether the number of voxels and length unit l is explicitly given by the user.
     bool explicit_nv_override = false;
@@ -282,11 +289,6 @@ class DEMSolver {
     // Right now, the following two are integrated into one, in nDistinctClumpComponents
     // unsigned int nDistinctSphereRadii_computed;
     // unsigned int nDistinctSphereRelativePositions_computed;
-
-    unsigned int nDistinctClumpComponents_computed;
-    unsigned int nDistinctClumpBodyTopologies_computed;
-    unsigned int nMatTuples_computed;
-    unsigned int nAnalEntities_computed;
 
     // cached state vectors such as the types and locations/velocities of the initial clumps to fill the sim domain with
     std::vector<unsigned int> m_input_clump_types;
@@ -344,6 +346,7 @@ class DEMSolver {
     inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap);
     inline void equipSimParams(std::unordered_map<std::string, std::string>& strMap);
     inline void equipClumpMassMat(std::unordered_map<std::string, std::string>& strMap);
+    inline void equipAnalGeoTemplates(std::unordered_map<std::string, std::string>& strMap);
 };
 
 }  // namespace sgps

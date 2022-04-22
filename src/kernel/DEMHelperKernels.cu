@@ -19,6 +19,11 @@ inline __device__ int sgn(const T1& val) {
     return (T1(0) < val) - (val < T1(0));
 }
 
+template <typename T1>
+inline __device__ T1 dot3(const T1& x1, const T1& x2, const T1& x3, const T1& y1, const T1& y2, const T1& y3) {
+    return x1 * y1 + x2 * y2 + x3 * y3;
+}
+
 // Integer division that rounds towards -infty
 template <typename T1, typename T2>
 inline __device__ T1 div_floor(const T1& a, const T2& b) {
@@ -121,7 +126,7 @@ template <typename T1>
 inline __device__ void normalizeVector3(T1& x, T1& y, T1& z) {
     T1 magnitude = sqrt(x * x + y * y + z * z);
     // TODO: Think about whether this is safe
-    if (magnitude < 1e-6) {
+    if (magnitude < sgps::DEM_TINY_FLOAT) {
         // printf("Caution!\n");
     }
     x /= magnitude;
@@ -272,4 +277,43 @@ inline __device__ float3 findLocalCoord(const T1& X,
     // To find the contact point in the local (body) frame, just apply inverse quaternion to OP vector in global frame
     applyOriQ2Vector3<float, sgps::oriQ_t>(locX, locY, locZ, oriQ0, -oriQ1, -oriQ2, -oriQ3);
     return make_float3(locX, locY, locZ);
+}
+
+template <typename T1>
+inline __device__ bool checkSphereEntityOverlap(const T1& xA,
+                                                const T1& yA,
+                                                const T1& zA,
+                                                const T1& radA,
+                                                const sgps::objType_t& typeB,
+                                                const T1& xB,
+                                                const T1& yB,
+                                                const T1& zB,
+                                                const T1& dirxB,
+                                                const T1& diryB,
+                                                const T1& dirzB,
+                                                const T1& size1B,
+                                                const T1& size2B,
+                                                const T1& size3B,
+                                                const bool& normalB,
+                                                const float& beta4Entity) {
+    switch (typeB) {
+        case (sgps::DEM_ENTITY_TYPE_PLANE): {
+            const T1 plane2sphX = xA - xB;
+            const T1 plane2sphY = yA - yB;
+            const T1 plane2sphZ = zA - zB;
+            // Plane is directional, and the direction is given by plane rotation
+            const T1 dist = dot3<T1>(plane2sphX, plane2sphY, plane2sphZ, dirxB, diryB, dirzB);
+            if (dist > radA + beta4Entity) {
+                return false;
+            }
+            return true;
+            break;
+        }
+        case (sgps::DEM_ENTITY_TYPE_PLATE): {
+            return false;
+            break;
+        }
+        default:
+            return false;
+    }
 }
