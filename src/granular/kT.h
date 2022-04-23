@@ -62,6 +62,7 @@ class DEMKinematicThread {
     // side.
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>>* pDTOwnedVector_idGeometryA;
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>>* pDTOwnedVector_idGeometryB;
+    std::vector<contact_t, ManagedAllocator<contact_t>>* pDTOwnedVector_contactType;
 
     // Buffer arrays for storing info from the dT side.
     // dT modifies these arrays; kT uses them only.
@@ -135,6 +136,7 @@ class DEMKinematicThread {
     // kT computed contact pair info
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA;
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB;
+    std::vector<contact_t, ManagedAllocator<contact_t>> contactType;
 
     // Sphere-related arrays in managed memory
     // Owner body ID of this component
@@ -245,6 +247,8 @@ class DEMKinematicThread {
     void unpackMyBuffer();
     // Send produced data to dT-owned biffers
     void sendToTheirBuffer();
+    // Resize contact storage arrays based on the number of contact pairs
+    void contactEventArraysResize(size_t nContactPairs);
 
     // Just-in-time compiled kernels
     // jitify::Program bin_occupation = JitHelper::buildProgram("bin_occupation", " ");

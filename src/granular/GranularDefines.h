@@ -43,9 +43,7 @@ typedef uint8_t clumpBodyInertiaOffset_t;
 typedef uint8_t clumpComponentOffset_t;
 typedef unsigned short int clumpComponentOffsetExt_t;  ///< Extended component offset type for non-jitified part
 typedef double floatFine_t;
-typedef uint8_t contact_t;  ///< Contact type (sphere--sphere is 0, etc.)
-typedef uint8_t family_t;   ///< Data type for clump presecription type (0 for not prescribed)
-typedef char scratch_t;     ///< Data type for DEM scratch-pad array
+typedef char scratch_t;  ///< Data type for DEM scratch-pad array
 
 // How many bin--sphere touch pairs can there be for one sphere, tops? This type should not need to be large.
 typedef unsigned short int binsSphereTouches_t;
@@ -90,6 +88,12 @@ const objType_t DEM_ENTITY_TYPE_PLANE = 0;
 const objType_t DEM_ENTITY_TYPE_PLATE = 1;
 const objNormal_t DEM_ENTITY_NORMAL_INWARD = 0;
 const objNormal_t DEM_ENTITY_NORMAL_OUTWARD = 1;
+
+typedef uint8_t contact_t;  ///< Contact type (sphere--sphere is 1, etc.)
+typedef uint8_t family_t;   ///< Data type for clump presecription type (0 for not prescribed)
+const contact_t DEM_NOT_A_CONTACT = 0;
+const contact_t DEM_SPHERE_SPHERE_CONTACT = 1;
+const contact_t DEM_SPHERE_PLANE_CONTACT = 2;
 
 // Some enums...
 // Friction mode

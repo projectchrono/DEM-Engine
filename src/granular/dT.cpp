@@ -45,8 +45,11 @@ void DEMDynamicThread::packDataPointers() {
     granData->alphaZ = alphaZ.data();
     granData->idGeometryA = idGeometryA.data();
     granData->idGeometryB = idGeometryB.data();
+    granData->contactType = contactType.data();
+
     granData->idGeometryA_buffer = idGeometryA_buffer.data();
     granData->idGeometryB_buffer = idGeometryB_buffer.data();
+    granData->contactType_buffer = contactType_buffer.data();
     granData->contactForces = contactForces.data();
     granData->contactPointGeometryA = contactPointGeometryA.data();
     granData->contactPointGeometryB = contactPointGeometryB.data();
@@ -186,19 +189,21 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     TRACKED_VECTOR_RESIZE(CoRProxy, (1 + nMatTuples) * nMatTuples / 2, "CoRProxy", 0);
 
     // Arrays for contact info
-    // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is 4n, and I
+    // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is 2n, and I
     // think the max is 6n (although I can't prove it). Note the estimate should be large enough to decrease the number
     // of reallocations in the simulation, but not too large that eats too much memory.
-    TRACKED_VECTOR_RESIZE(idGeometryA, nOwnerBodies * 4, "idGeometryA", 0);
-    TRACKED_VECTOR_RESIZE(idGeometryB, nOwnerBodies * 4, "idGeometryB", 0);
-    TRACKED_VECTOR_RESIZE(contactForces, nOwnerBodies * 4, "contactForces", make_float3(0));
-    TRACKED_VECTOR_RESIZE(contactPointGeometryA, nOwnerBodies * 4, "contactPointGeometryA", make_float3(0));
-    TRACKED_VECTOR_RESIZE(contactPointGeometryB, nOwnerBodies * 4, "contactPointGeometryB", make_float3(0));
+    TRACKED_VECTOR_RESIZE(idGeometryA, nOwnerBodies * 2, "idGeometryA", 0);
+    TRACKED_VECTOR_RESIZE(idGeometryB, nOwnerBodies * 2, "idGeometryB", 0);
+    TRACKED_VECTOR_RESIZE(contactForces, nOwnerBodies * 2, "contactForces", make_float3(0));
+    TRACKED_VECTOR_RESIZE(contactType, nOwnerBodies * 2, "contactType", DEM_NOT_A_CONTACT);
+    TRACKED_VECTOR_RESIZE(contactPointGeometryA, nOwnerBodies * 2, "contactPointGeometryA", make_float3(0));
+    TRACKED_VECTOR_RESIZE(contactPointGeometryB, nOwnerBodies * 2, "contactPointGeometryB", make_float3(0));
 
     // Transfer buffer arrays
     // The following several arrays will have variable sizes, so here we only used an estimate.
-    TRACKED_VECTOR_RESIZE(idGeometryA_buffer, nOwnerBodies * 4, "idGeometryA_buffer", 0);
-    TRACKED_VECTOR_RESIZE(idGeometryB_buffer, nOwnerBodies * 4, "idGeometryB_buffer", 0);
+    TRACKED_VECTOR_RESIZE(idGeometryA_buffer, nOwnerBodies * 2, "idGeometryA_buffer", 0);
+    TRACKED_VECTOR_RESIZE(idGeometryB_buffer, nOwnerBodies * 2, "idGeometryB_buffer", 0);
+    TRACKED_VECTOR_RESIZE(contactType_buffer, nOwnerBodies * 2, "contactType_buffer", DEM_NOT_A_CONTACT);
 }
 
 void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
@@ -349,6 +354,7 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
 inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     TRACKED_QUICK_VECTOR_RESIZE(idGeometryA, nContactPairs);
     TRACKED_QUICK_VECTOR_RESIZE(idGeometryB, nContactPairs);
+    TRACKED_QUICK_VECTOR_RESIZE(contactType, nContactPairs);
     TRACKED_QUICK_VECTOR_RESIZE(contactForces, nContactPairs);
     TRACKED_QUICK_VECTOR_RESIZE(contactPointGeometryA, nContactPairs);
     TRACKED_QUICK_VECTOR_RESIZE(contactPointGeometryB, nContactPairs);
@@ -356,6 +362,7 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     // Re-pack pointers in case the arrays got reallocated
     granData->idGeometryA = idGeometryA.data();
     granData->idGeometryB = idGeometryB.data();
+    granData->contactType = contactType.data();
     granData->contactForces = contactForces.data();
     granData->contactPointGeometryA = contactPointGeometryA.data();
     granData->contactPointGeometryB = contactPointGeometryB.data();
@@ -374,6 +381,8 @@ inline void DEMDynamicThread::unpackMyBuffer() {
                         stateOfSolver_resources.getNumContacts() * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     GPU_CALL(cudaMemcpy(granData->idGeometryB, granData->idGeometryB_buffer,
                         stateOfSolver_resources.getNumContacts() * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->contactType, granData->contactType_buffer,
+                        stateOfSolver_resources.getNumContacts() * sizeof(contact_t), cudaMemcpyDeviceToDevice));
 }
 
 inline void DEMDynamicThread::sendToTheirBuffer() {

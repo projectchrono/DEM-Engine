@@ -1,6 +1,6 @@
 // DEM bin--sphere relations-related custom kernels
 #include <granular/DataStructs.h>
-// #include <granular/GranularDefines.h>
+#include <granular/GranularDefines.h>
 #include <kernel/DEMHelperKernels.cu>
 
 __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMDataKT* granData,
@@ -84,13 +84,13 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMDataKT* granData,
 
         // Each sphere entity should also check if it overlaps with an analytical boundary-type geometry
         for (sgps::objID_t objB = 0; objB < _nAnalGM_; objB++) {
-            bool in_contact;
-            in_contact = checkSphereEntityOverlap<double>(myPosX, myPosY, myPosZ, CDRadii[myCompOffset], objType[objB],
-                                                          objRelPosX[objB], objRelPosY[objB], objRelPosZ[objB],
-                                                          objRotX[objB], objRotY[objB], objRotZ[objB], objSize1[objB],
-                                                          objSize2[objB], objSize3[objB], objNormal[objB], _beta_);
+            sgps::contact_t contact_type;
+            contact_type = checkSphereEntityOverlap<double>(
+                myPosX, myPosY, myPosZ, CDRadii[myCompOffset], objType[objB], objRelPosX[objB], objRelPosY[objB],
+                objRelPosZ[objB], objRotX[objB], objRotY[objB], objRotZ[objB], objSize1[objB], objSize2[objB],
+                objSize3[objB], objNormal[objB], _beta_);
 
-            if (in_contact) {
+            if (contact_type) {
                 contact_count++;
             }
         }
@@ -104,7 +104,8 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMDataKT* granData,
                                                sgps::binID_t* binIDsEachSphereTouches,
                                                sgps::bodyID_t* sphereIDsEachBinTouches,
                                                sgps::bodyID_t* idGeoA,
-                                               sgps::bodyID_t* idGeoB) {
+                                               sgps::bodyID_t* idGeoB,
+                                               sgps::contact_t* contactType) {
     // CUDA does not support initializing shared arrays, so we have to manually load them
     __shared__ float CDRadii[_nDistinctClumpComponents_];
     __shared__ float CDRelPosX[_nDistinctClumpComponents_];
@@ -182,15 +183,16 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMDataKT* granData,
 
         // Each sphere entity should also check if it overlaps with an analytical boundary-type geometry
         for (sgps::objID_t objB = 0; objB < _nAnalGM_; objB++) {
-            bool in_contact;
-            in_contact = checkSphereEntityOverlap<double>(myPosX, myPosY, myPosZ, CDRadii[myCompOffset], objType[objB],
-                                                          objRelPosX[objB], objRelPosY[objB], objRelPosZ[objB],
-                                                          objRotX[objB], objRotY[objB], objRotZ[objB], objSize1[objB],
-                                                          objSize2[objB], objSize3[objB], objNormal[objB], _beta_);
+            sgps::contact_t contact_type;
+            contact_type = checkSphereEntityOverlap<double>(
+                myPosX, myPosY, myPosZ, CDRadii[myCompOffset], objType[objB], objRelPosX[objB], objRelPosY[objB],
+                objRelPosZ[objB], objRotX[objB], objRotY[objB], objRotZ[objB], objSize1[objB], objSize2[objB],
+                objSize3[objB], objNormal[objB], _beta_);
 
-            if (in_contact) {
+            if (contact_type) {
                 idGeoA[mySphereGeoReportOffset] = sphereID;
                 idGeoB[mySphereGeoReportOffset] = objB;
+                contactType[mySphereGeoReportOffset] = contact_type;
                 mySphereGeoReportOffset++;
             }
         }

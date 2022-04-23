@@ -280,22 +280,22 @@ inline __device__ float3 findLocalCoord(const T1& X,
 }
 
 template <typename T1>
-inline __device__ bool checkSphereEntityOverlap(const T1& xA,
-                                                const T1& yA,
-                                                const T1& zA,
-                                                const T1& radA,
-                                                const sgps::objType_t& typeB,
-                                                const T1& xB,
-                                                const T1& yB,
-                                                const T1& zB,
-                                                const T1& dirxB,
-                                                const T1& diryB,
-                                                const T1& dirzB,
-                                                const T1& size1B,
-                                                const T1& size2B,
-                                                const T1& size3B,
-                                                const bool& normalB,
-                                                const float& beta4Entity) {
+inline __device__ sgps::contact_t checkSphereEntityOverlap(const T1& xA,
+                                                           const T1& yA,
+                                                           const T1& zA,
+                                                           const T1& radA,
+                                                           const sgps::objType_t& typeB,
+                                                           const T1& xB,
+                                                           const T1& yB,
+                                                           const T1& zB,
+                                                           const T1& dirxB,
+                                                           const T1& diryB,
+                                                           const T1& dirzB,
+                                                           const T1& size1B,
+                                                           const T1& size2B,
+                                                           const T1& size3B,
+                                                           const bool& normalB,
+                                                           const float& beta4Entity) {
     switch (typeB) {
         case (sgps::DEM_ENTITY_TYPE_PLANE): {
             const T1 plane2sphX = xA - xB;
@@ -304,16 +304,16 @@ inline __device__ bool checkSphereEntityOverlap(const T1& xA,
             // Plane is directional, and the direction is given by plane rotation
             const T1 dist = dot3<T1>(plane2sphX, plane2sphY, plane2sphZ, dirxB, diryB, dirzB);
             if (dist > radA + beta4Entity) {
-                return false;
+                return sgps::DEM_NOT_A_CONTACT;
             }
-            return true;
+            return sgps::DEM_SPHERE_PLANE_CONTACT;
             break;
         }
         case (sgps::DEM_ENTITY_TYPE_PLATE): {
-            return false;
+            return sgps::DEM_NOT_A_CONTACT;
             break;
         }
         default:
-            return false;
+            return sgps::DEM_NOT_A_CONTACT;
     }
 }

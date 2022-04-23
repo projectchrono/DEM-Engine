@@ -614,23 +614,24 @@ int DEMSolver::LaunchThreads(double thisCallDuration) {
 }
 
 inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std::string>& strMap) {
+    // Some sim systems can have 0 boundary entities in them. In this case, we have to ensure jitification does not fail
     std::string objOwner = " ", objType = " ", objNormal = " ", objRelPosX = " ", objRelPosY = " ", objRelPosZ = " ",
                 objRotX = " ", objRotY = " ", objRotZ = " ", objSize1 = " ", objSize2 = " ", objSize3 = " ";
     for (unsigned int i = 0; i < nAnalGM; i++) {
-        // External objects will be owners, and their IDs are follwoing template-loaded simulation clumps
+        // External objects will be owners, and their IDs are following template-loaded simulation clumps
         unsigned int myOwner = nOwnerClumps + m_anal_owner[i];
-        objOwner += std::to_string(myOwner);
-        objType += std::to_string(m_anal_types[i]);
-        objNormal += std::to_string(m_anal_normals[i]);
-        objRelPosX += to_string_with_precision(m_anal_comp_pos[i].x);
-        objRelPosY += to_string_with_precision(m_anal_comp_pos[i].y);
-        objRelPosZ += to_string_with_precision(m_anal_comp_pos[i].z);
-        objRotX += to_string_with_precision(m_anal_comp_rot[i].x);
-        objRotY += to_string_with_precision(m_anal_comp_rot[i].y);
-        objRotZ += to_string_with_precision(m_anal_comp_rot[i].z);
-        objSize1 += to_string_with_precision(m_anal_size_1[i]);
-        objSize2 += to_string_with_precision(m_anal_size_2[i]);
-        objSize3 += to_string_with_precision(m_anal_size_3[i]);
+        objOwner += std::to_string(myOwner) + ",";
+        objType += std::to_string(m_anal_types[i]) + ",";
+        objNormal += std::to_string(m_anal_normals[i]) + ",";
+        objRelPosX += to_string_with_precision(m_anal_comp_pos[i].x) + ",";
+        objRelPosY += to_string_with_precision(m_anal_comp_pos[i].y) + ",";
+        objRelPosZ += to_string_with_precision(m_anal_comp_pos[i].z) + ",";
+        objRotX += to_string_with_precision(m_anal_comp_rot[i].x) + ",";
+        objRotY += to_string_with_precision(m_anal_comp_rot[i].y) + ",";
+        objRotZ += to_string_with_precision(m_anal_comp_rot[i].z) + ",";
+        objSize1 += to_string_with_precision(m_anal_size_1[i]) + ",";
+        objSize2 += to_string_with_precision(m_anal_size_2[i]) + ",";
+        objSize3 += to_string_with_precision(m_anal_size_3[i]) + ",";
     }
     strMap["_objOwner_"] = objOwner;
     strMap["_objType_"] = objType;
@@ -700,6 +701,7 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_binSize_"] = to_string_with_precision(m_binSize);
 
     strMap["_nAnalGM_"] = std::to_string(nAnalGM);
+    // Some sim systems can have 0 boundary entities in them. In this case, we have to ensure jitification does not fail
     unsigned int nAnalGMSafe = (nAnalGM > 0) ? nAnalGM : 1;
     strMap["_nAnalGMSafe_"] = std::to_string(nAnalGMSafe);
     strMap["_nOwnerBodies_"] = std::to_string(nOwnerBodies);

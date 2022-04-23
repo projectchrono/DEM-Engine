@@ -114,6 +114,7 @@ struct DEMDataDT {
 
     bodyID_t* idGeometryA;
     bodyID_t* idGeometryB;
+    contact_t* contactType;
 
     // Some dT's own work array pointers
     float3* contactForces;
@@ -129,6 +130,7 @@ struct DEMDataDT {
     size_t nContactPairs_buffer = 0;
     bodyID_t* idGeometryA_buffer;
     bodyID_t* idGeometryB_buffer;
+    contact_t* contactType_buffer;
 
     // pointer to remote buffer where kinematic thread stores work-order data provided by the dynamic thread
     voxelID_t* pKTOwnedBuffer_voxelID = NULL;
@@ -183,11 +185,13 @@ struct DEMDataKT {
     // kT produces contact info, and stores it, temporarily
     bodyID_t* idGeometryA;
     bodyID_t* idGeometryB;
+    contact_t* contactType;
 
     // data pointers that is kT's transfer destination
     size_t* pDTOwnedBuffer_nContactPairs = NULL;
     bodyID_t* pDTOwnedBuffer_idGeometryA = NULL;
     bodyID_t* pDTOwnedBuffer_idGeometryB = NULL;
+    contact_t* pDTOwnedBuffer_contactType = NULL;
 };
 
 // typedef DEMDataDT* DEMDataDTPtr;

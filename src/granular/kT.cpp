@@ -18,6 +18,17 @@
 
 namespace sgps {
 
+inline void DEMKinematicThread::contactEventArraysResize(size_t nContactPairs) {
+    TRACKED_QUICK_VECTOR_RESIZE(idGeometryA, nContactPairs);
+    TRACKED_QUICK_VECTOR_RESIZE(idGeometryB, nContactPairs);
+    TRACKED_QUICK_VECTOR_RESIZE(contactType, nContactPairs);
+
+    // Re-pack pointers in case the arrays got reallocated
+    granData->idGeometryA = idGeometryA.data();
+    granData->idGeometryB = idGeometryB.data();
+    granData->contactType = contactType.data();
+}
+
 void DEMKinematicThread::contactDetection() {
     // total bytes needed for temp arrays in contact detection
     size_t CD_temp_arr_bytes = 0;
@@ -56,10 +67,7 @@ void DEMKinematicThread::contactDetection() {
     stateOfSolver_resources.setNumContacts((size_t)numAnalGeoSphereTouches[simParams->nSpheresGM - 1] +
                                            (size_t)numAnalGeoSphereTouchesScan[simParams->nSpheresGM - 1]);
     if (stateOfSolver_resources.getNumContacts() > idGeometryA.size()) {
-        TRACKED_QUICK_VECTOR_RESIZE(idGeometryA, stateOfSolver_resources.getNumContacts());
-        TRACKED_QUICK_VECTOR_RESIZE(idGeometryB, stateOfSolver_resources.getNumContacts());
-        granData->idGeometryA = idGeometryA.data();
-        granData->idGeometryB = idGeometryB.data();
+        contactEventArraysResize(stateOfSolver_resources.getNumContacts());
     }
     // std::cout << stateOfSolver_resources.getNumBinSphereTouchPairs() << std::endl;
     // displayArray<binsSphereTouches_t>(numBinsSphereTouches, simParams->nSpheresGM);
@@ -71,11 +79,12 @@ void DEMKinematicThread::contactDetection() {
     binID_t* binIDsEachSphereTouches = (binID_t*)stateOfSolver_resources.allocateTempVector1(CD_temp_arr_bytes);
     CD_temp_arr_bytes = stateOfSolver_resources.getNumBinSphereTouchPairs() * sizeof(bodyID_t);
     bodyID_t* sphereIDsEachBinTouches = (bodyID_t*)stateOfSolver_resources.allocateTempVector3(CD_temp_arr_bytes);
+    // This kernel is also responsible of figuring out sphere--analytical geometry pairs
     bin_occupation->kernel("populateBinSphereTouchingPairs")
         .instantiate()
         .configure(dim3(blocks_needed_for_bodies), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
         .launch(granData, numBinsSphereTouchesScan, numAnalGeoSphereTouchesScan, binIDsEachSphereTouches,
-                sphereIDsEachBinTouches, granData->idGeometryA, granData->idGeometryB);
+                sphereIDsEachBinTouches, granData->idGeometryA, granData->idGeometryB, granData->contactType);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     // std::cout << "Unsorted bin IDs: ";
     // displayArray<binID_t>(binIDsEachSphereTouches, stateOfSolver_resources.getNumBinSphereTouchPairs());
@@ -173,16 +182,17 @@ void DEMKinematicThread::contactDetection() {
                                       (size_t)contactReportOffsets[stateOfSolver_resources.getNumActiveBins() - 1];
         stateOfSolver_resources.setNumContacts(nSphereSphereContact + nSphereGeoContact);
         if (stateOfSolver_resources.getNumContacts() > idGeometryA.size()) {
-            TRACKED_QUICK_VECTOR_RESIZE(idGeometryA, stateOfSolver_resources.getNumContacts());
-            TRACKED_QUICK_VECTOR_RESIZE(idGeometryB, stateOfSolver_resources.getNumContacts());
-            granData->idGeometryA = idGeometryA.data();
-            granData->idGeometryB = idGeometryB.data();
+            contactEventArraysResize(stateOfSolver_resources.getNumContacts());
         }
         // std::cout << "NumContacts: " << stateOfSolver_resources.getNumContacts() << std::endl;
 
         // Sphere--sphere contact pairs go after sphere--anal-geo contacts
         bodyID_t* idSphA = (granData->idGeometryA + nSphereGeoContact);
         bodyID_t* idSphB = (granData->idGeometryB + nSphereGeoContact);
+        // In next kernel call, all contacts registered there will be sphere--sphere contacts
+        GPU_CALL(cudaMemset((void*)(granData->contactType + nSphereGeoContact), DEM_SPHERE_SPHERE_CONTACT,
+                            nSphereSphereContact * sizeof(contact_t)));
+        // Then fill in those contacts
         contact_detection->kernel("populateContactPairsEachBin")
             .instantiate()
             .configure(dim3(blocks_needed_for_bins), dim3(SGPS_DEM_NUM_BINS_PER_BLOCK), 0, streamInfo.stream)
@@ -224,13 +234,17 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
     if (stateOfSolver_resources.getNumContacts() > pDTOwnedVector_idGeometryA->size()) {
         pDTOwnedVector_idGeometryA->resize(stateOfSolver_resources.getNumContacts());
         pDTOwnedVector_idGeometryB->resize(stateOfSolver_resources.getNumContacts());
+        pDTOwnedVector_contactType->resize(stateOfSolver_resources.getNumContacts());
         granData->pDTOwnedBuffer_idGeometryA = pDTOwnedVector_idGeometryA->data();
         granData->pDTOwnedBuffer_idGeometryB = pDTOwnedVector_idGeometryB->data();
+        granData->pDTOwnedBuffer_contactType = pDTOwnedVector_contactType->data();
     }
     GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA,
                         stateOfSolver_resources.getNumContacts() * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryB, granData->idGeometryB,
                         stateOfSolver_resources.getNumContacts() * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactType, granData->contactType,
+                        stateOfSolver_resources.getNumContacts() * sizeof(contact_t), cudaMemcpyDeviceToDevice));
 }
 
 void DEMKinematicThread::workerThread() {
@@ -348,6 +362,7 @@ void DEMKinematicThread::packDataPointers() {
     granData->oriQ3 = oriQ3.data();
     granData->idGeometryA = idGeometryA.data();
     granData->idGeometryB = idGeometryB.data();
+    granData->contactType = contactType.data();
 
     // for kT, those state vectors are fed by dT, so each has a buffer
     granData->voxelID_buffer = voxelID_buffer.data();
@@ -375,11 +390,13 @@ void DEMKinematicThread::packTransferPointers(DEMDynamicThread* dT) {
     granData->pDTOwnedBuffer_nContactPairs = &(dT->granData->nContactPairs_buffer);
     granData->pDTOwnedBuffer_idGeometryA = dT->granData->idGeometryA_buffer;
     granData->pDTOwnedBuffer_idGeometryB = dT->granData->idGeometryB_buffer;
+    granData->pDTOwnedBuffer_contactType = dT->granData->contactType_buffer;
     // We need to resize dT owned buffer arrays from kT side (because the contact number is not known beforehand), so
     // the pointers to geometry id buffers need to be registered as well. It is a bummer, but I don't know if there is a
     // better solution.
     pDTOwnedVector_idGeometryA = &(dT->idGeometryA_buffer);
     pDTOwnedVector_idGeometryB = &(dT->idGeometryB_buffer);
+    pDTOwnedVector_contactType = &(dT->contactType_buffer);
 }
 
 void DEMKinematicThread::setSimParams(unsigned char nvXp2,
@@ -460,10 +477,11 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
 
     // Arrays for kT produced contact info
     // The following several arrays will have variable sizes, so here we only used an estimate. My estimate of total
-    // contact pairs is 4n, and I think the max is 6n (although I can't prove it). Note the estimate should be large
+    // contact pairs is 2n, and I think the max is 6n (although I can't prove it). Note the estimate should be large
     // enough to decrease the number of reallocations in the simulation, but not too large that eats too much memory.
-    TRACKED_VECTOR_RESIZE(idGeometryA, nOwnerBodies * 4, "idGeometryA", 0);
-    TRACKED_VECTOR_RESIZE(idGeometryB, nOwnerBodies * 4, "idGeometryB", 0);
+    TRACKED_VECTOR_RESIZE(idGeometryA, nOwnerBodies * 2, "idGeometryA", 0);
+    TRACKED_VECTOR_RESIZE(idGeometryB, nOwnerBodies * 2, "idGeometryB", 0);
+    TRACKED_VECTOR_RESIZE(contactType, nOwnerBodies * 2, "contactType", DEM_NOT_A_CONTACT);
 }
 
 void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
