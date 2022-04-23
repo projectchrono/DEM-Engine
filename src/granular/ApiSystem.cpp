@@ -157,9 +157,11 @@ std::shared_ptr<DEMExternObj> DEMSolver::AddExternalObject() {
     return cachedExternObjs.back();
 }
 
-std::shared_ptr<DEMExternObj> DEMSolver::AddBCPlane(const float3 pos, const float3 normal) {
+std::shared_ptr<DEMExternObj> DEMSolver::AddBCPlane(const float3 pos,
+                                                    const float3 normal,
+                                                    const unsigned int material) {
     std::shared_ptr<DEMExternObj> ptr = AddExternalObject();
-    ptr->AddPlane(pos, normal);
+    ptr->AddPlane(pos, normal, material);
     return ptr;
 }
 
@@ -249,6 +251,7 @@ void DEMSolver::figureOutMaterialProxies() {
 }
 
 unsigned int DEMSolver::AddAnalCompTemplate(const objType_t type,
+                                            const unsigned int material,
                                             unsigned int owner,
                                             const float3 pos,
                                             const float3 rot,
@@ -257,6 +260,7 @@ unsigned int DEMSolver::AddAnalCompTemplate(const objType_t type,
                                             const float d3,
                                             const objNormal_t normal) {
     m_anal_types.push_back(type);
+    m_anal_materials.push_back(material);
     m_anal_owner.push_back(owner);
     m_anal_comp_pos.push_back(pos);
     m_anal_comp_rot.push_back(rot);
@@ -274,9 +278,12 @@ void DEMSolver::figureOutJitifiability() {
 
     // How many analytical entities are there? (those entities are always jitified)
     nExtObj = cachedExternObjs.size();
+    unsigned int thisExtObj = 0;
     for (auto ext_obj : cachedExternObjs) {
         unsigned int this_num_anal_ent = 0;
         auto comp_params = ext_obj->entity_params;
+        auto comp_mat = ext_obj->materials;
+        m_input_ext_obj_xyz.push_back(ext_obj->init_pos);
         for (unsigned int i = 0; i < ext_obj->types.size(); i++) {
             // CLUMP type should not be included b/c clumps are treated differently than analytical entities
             if (ext_obj->types.at(i) != DEM_OBJ_COMPONENT::CLUMP) {
@@ -284,23 +291,25 @@ void DEMSolver::figureOutJitifiability() {
                 this_num_anal_ent++;
                 switch (ext_obj->types.at(i)) {
                     case DEM_OBJ_COMPONENT::PLANE:
-                        AddAnalCompTemplate(DEM_ENTITY_TYPE_PLANE, i, param.plane.position, param.plane.normal);
+                        AddAnalCompTemplate(DEM_ENTITY_TYPE_PLANE, comp_mat.at(i), thisExtObj, param.plane.position,
+                                            param.plane.normal);
                         break;
                     case DEM_OBJ_COMPONENT::PLATE:
-                        AddAnalCompTemplate(DEM_ENTITY_TYPE_PLATE, i, param.plate.center, param.plate.normal,
-                                            param.plate.h_dim_x, param.plate.h_dim_y);
+                        AddAnalCompTemplate(DEM_ENTITY_TYPE_PLATE, comp_mat.at(i), thisExtObj, param.plate.center,
+                                            param.plate.normal, param.plate.h_dim_x, param.plate.h_dim_y);
                         break;
                     default:
                         SGPS_ERROR("There is at least one analytical boundary that has a type not supported.");
                 }
             } else {
                 m_extra_clump_type.push_back(ext_obj->clump_type);
-                m_extra_clump_owner.push_back(i);
+                m_extra_clump_owner.push_back(thisExtObj);
                 // Remember the clumps in AddExternalObject-loaded entities contributes to total spheres
                 nSpheresGM += m_template_sp_radii.at(ext_obj->clump_type).size();
             }
         }
         nAnalGM += this_num_anal_ent;
+        thisExtObj++;
     }
 }
 
@@ -468,18 +477,20 @@ void DEMSolver::transferSimParams() {
 /// Transfer (CPU-side) cached clump templates info and initial clump type/position info to GPU-side arrays
 void DEMSolver::initializeArrays() {
     // Resize managed arrays based on the statistical data we had from the previous step
-    dT->allocateManagedArrays(nOwnerBodies, nSpheresGM, nDistinctClumpBodyTopologies_computed,
-                              nDistinctClumpComponents_computed, nMatTuples_computed);
-    kT->allocateManagedArrays(nOwnerBodies, nSpheresGM, nDistinctClumpBodyTopologies_computed,
-                              nDistinctClumpComponents_computed, nMatTuples_computed);
+    dT->allocateManagedArrays(nOwnerBodies, nOwnerClumps, nExtObj, nTriEntities, nSpheresGM, nTriGM, nAnalGM,
+                              nDistinctClumpBodyTopologies_computed, nDistinctClumpComponents_computed,
+                              nMatTuples_computed);
+    kT->allocateManagedArrays(nOwnerBodies, nOwnerClumps, nExtObj, nTriEntities, nSpheresGM, nTriGM, nAnalGM,
+                              nDistinctClumpBodyTopologies_computed, nDistinctClumpComponents_computed,
+                              nMatTuples_computed);
 
     // Now that the CUDA-related functions and data types are JITCompiled, we can feed those GPU-side arrays with the
     // cached API-level simulation info.
     m_input_clump_vel.resize(m_input_clump_xyz.size(), make_float3(0));
     m_input_clump_family.resize(m_input_clump_xyz.size(), 0);
     dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_input_clump_family,
-                              m_template_sp_mat_ids, m_template_mass, m_template_moi, m_template_sp_radii,
-                              m_template_sp_relPos, m_E_proxy, m_G_proxy, m_CoR_proxy);
+                              m_input_ext_obj_xyz, m_template_sp_mat_ids, m_template_mass, m_template_moi,
+                              m_template_sp_radii, m_template_sp_relPos, m_E_proxy, m_G_proxy, m_CoR_proxy);
     kT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_input_clump_family,
                               m_template_mass, m_template_sp_radii, m_template_sp_relPos);
 }
@@ -615,26 +626,29 @@ int DEMSolver::LaunchThreads(double thisCallDuration) {
 
 inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std::string>& strMap) {
     // Some sim systems can have 0 boundary entities in them. In this case, we have to ensure jitification does not fail
-    std::string objOwner = " ", objType = " ", objNormal = " ", objRelPosX = " ", objRelPosY = " ", objRelPosZ = " ",
-                objRotX = " ", objRotY = " ", objRotZ = " ", objSize1 = " ", objSize2 = " ", objSize3 = " ";
+    std::string objOwner = " ", objType = " ", objMat = " ", objNormal = " ", objRelPosX = " ", objRelPosY = " ",
+                objRelPosZ = " ", objRotX = " ", objRotY = " ", objRotZ = " ", objSize1 = " ", objSize2 = " ",
+                objSize3 = " ";
     for (unsigned int i = 0; i < nAnalGM; i++) {
         // External objects will be owners, and their IDs are following template-loaded simulation clumps
-        unsigned int myOwner = nOwnerClumps + m_anal_owner[i];
+        bodyID_t myOwner = nOwnerClumps + m_anal_owner.at(i);
         objOwner += std::to_string(myOwner) + ",";
-        objType += std::to_string(m_anal_types[i]) + ",";
-        objNormal += std::to_string(m_anal_normals[i]) + ",";
-        objRelPosX += to_string_with_precision(m_anal_comp_pos[i].x) + ",";
-        objRelPosY += to_string_with_precision(m_anal_comp_pos[i].y) + ",";
-        objRelPosZ += to_string_with_precision(m_anal_comp_pos[i].z) + ",";
-        objRotX += to_string_with_precision(m_anal_comp_rot[i].x) + ",";
-        objRotY += to_string_with_precision(m_anal_comp_rot[i].y) + ",";
-        objRotZ += to_string_with_precision(m_anal_comp_rot[i].z) + ",";
-        objSize1 += to_string_with_precision(m_anal_size_1[i]) + ",";
-        objSize2 += to_string_with_precision(m_anal_size_2[i]) + ",";
-        objSize3 += to_string_with_precision(m_anal_size_3[i]) + ",";
+        objType += std::to_string(m_anal_types.at(i)) + ",";
+        objMat += std::to_string(m_anal_materials.at(i)) + ",";
+        objNormal += std::to_string(m_anal_normals.at(i)) + ",";
+        objRelPosX += to_string_with_precision(m_anal_comp_pos.at(i).x) + ",";
+        objRelPosY += to_string_with_precision(m_anal_comp_pos.at(i).y) + ",";
+        objRelPosZ += to_string_with_precision(m_anal_comp_pos.at(i).z) + ",";
+        objRotX += to_string_with_precision(m_anal_comp_rot.at(i).x) + ",";
+        objRotY += to_string_with_precision(m_anal_comp_rot.at(i).y) + ",";
+        objRotZ += to_string_with_precision(m_anal_comp_rot.at(i).z) + ",";
+        objSize1 += to_string_with_precision(m_anal_size_1.at(i)) + ",";
+        objSize2 += to_string_with_precision(m_anal_size_2.at(i)) + ",";
+        objSize3 += to_string_with_precision(m_anal_size_3.at(i)) + ",";
     }
     strMap["_objOwner_"] = objOwner;
     strMap["_objType_"] = objType;
+    strMap["_objMaterial_"] = objMat;
     strMap["_objNormal_"] = objNormal;
 
     strMap["_objRelPosX_"] = objRelPosX;

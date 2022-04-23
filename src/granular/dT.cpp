@@ -135,13 +135,23 @@ float DEMDynamicThread::getKineticEnergy() {
 }
 
 void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
+                                             size_t nOwnerClumps,
+                                             unsigned int nExtObj,
+                                             size_t nTriEntities,
                                              size_t nSpheresGM,
+                                             size_t nTriGM,
+                                             unsigned int nAnalGM,
                                              unsigned int nClumpTopo,
                                              unsigned int nClumpComponents,
                                              unsigned int nMatTuples) {
     // Sizes of these arrays
     simParams->nSpheresGM = nSpheresGM;
+    simParams->nTriGM = nTriGM;
+    simParams->nAnalGM = nAnalGM;
     simParams->nOwnerBodies = nOwnerBodies;
+    simParams->nOwnerClumps = nOwnerClumps;
+    simParams->nExtObj = nExtObj;
+    simParams->nTriEntities = nTriEntities;
     simParams->nDistinctClumpBodyTopologies = nClumpTopo;
     simParams->nDistinctClumpComponents = nClumpComponents;
     simParams->nMatTuples = nMatTuples;
@@ -210,6 +220,7 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
                                              const std::vector<float3>& input_clump_xyz,
                                              const std::vector<float3>& input_clump_vel,
                                              const std::vector<unsigned int>& input_clump_family,
+                                             const std::vector<float3>& input_ext_obj_xyz,
                                              const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
                                              const std::vector<float>& clumps_mass_types,
                                              const std::vector<float3>& clumps_moi_types,
@@ -266,13 +277,13 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
     k = 0;
 
     // Then, load in input clumps
-    for (size_t i = 0; i < input_clump_types.size(); i++) {
+    float3 LBF;
+    LBF.x = simParams->LBFX;
+    LBF.y = simParams->LBFY;
+    LBF.z = simParams->LBFZ;
+    for (size_t i = 0; i < simParams->nOwnerClumps; i++) {
         auto type_of_this_clump = input_clump_types.at(i);
         inertiaPropOffsets.at(i) = type_of_this_clump;
-        float3 LBF;
-        LBF.x = simParams->LBFX;
-        LBF.y = simParams->LBFY;
-        LBF.z = simParams->LBFZ;
         auto this_CoM_coord = input_clump_xyz.at(i) - LBF;
         // std::cout << "CoM position: " << this_CoM_coord.x << ", " << this_CoM_coord.y << ", " << this_CoM_coord.z <<
         // std::endl;
@@ -309,6 +320,23 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
 
         // Set family code
         familyID.at(i) = input_clump_family.at(i);
+    }
+
+    // Load in initial positions for the owners of those external objects
+    // They go after clump owners
+    size_t offset_for_ext_obj = simParams->nOwnerClumps;
+    for (size_t i = offset_for_ext_obj; i < offset_for_ext_obj + input_ext_obj_xyz.size(); i++) {
+        auto this_CoM_coord = input_ext_obj_xyz.at(i) - LBF;
+        voxelID_t voxelNumX = (double)this_CoM_coord.x / simParams->voxelSize;
+        voxelID_t voxelNumY = (double)this_CoM_coord.y / simParams->voxelSize;
+        voxelID_t voxelNumZ = (double)this_CoM_coord.z / simParams->voxelSize;
+        locX.at(i) = ((double)this_CoM_coord.x - (double)voxelNumX * simParams->voxelSize) / simParams->l;
+        locY.at(i) = ((double)this_CoM_coord.y - (double)voxelNumY * simParams->voxelSize) / simParams->l;
+        locZ.at(i) = ((double)this_CoM_coord.z - (double)voxelNumZ * simParams->voxelSize) / simParams->l;
+
+        voxelID.at(i) += voxelNumX;
+        voxelID.at(i) += voxelNumY << simParams->nvXp2;
+        voxelID.at(i) += voxelNumZ << (simParams->nvXp2 + simParams->nvYp2);
     }
 }
 
@@ -631,6 +659,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
         std::unordered_map<std::string, std::string> cfSubs = templateSubs;
         cfSubs.insert(simParamSubs.begin(), simParamSubs.end());
         cfSubs.insert(massMatSubs.begin(), massMatSubs.end());
+        cfSubs.insert(analGeoSubs.begin(), analGeoSubs.end());
         cal_force = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMFrictionlessForceKernels", JitHelper::KERNEL_DIR / "DEMFrictionlessForceKernels.cu", cfSubs,
             {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));

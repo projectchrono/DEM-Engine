@@ -432,13 +432,23 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
 }
 
 void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
+                                               size_t nOwnerClumps,
+                                               unsigned int nExtObj,
+                                               size_t nTriEntities,
                                                size_t nSpheresGM,
+                                               size_t nTriGM,
+                                               unsigned int nAnalGM,
                                                unsigned int nClumpTopo,
                                                unsigned int nClumpComponents,
                                                unsigned int nMatTuples) {
     // Sizes of these arrays
     simParams->nSpheresGM = nSpheresGM;
+    simParams->nTriGM = nTriGM;
+    simParams->nAnalGM = nAnalGM;
     simParams->nOwnerBodies = nOwnerBodies;
+    simParams->nOwnerClumps = nOwnerClumps;
+    simParams->nExtObj = nExtObj;
+    simParams->nTriEntities = nTriEntities;
     simParams->nDistinctClumpBodyTopologies = nClumpTopo;
     simParams->nDistinctClumpComponents = nClumpComponents;
     simParams->nMatTuples = nMatTuples;
@@ -519,12 +529,13 @@ void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& 
     }
     k = 0;
 
-    for (size_t i = 0; i < input_clump_types.size(); i++) {
+    float3 LBF;
+    LBF.x = simParams->LBFX;
+    LBF.y = simParams->LBFY;
+    LBF.z = simParams->LBFZ;
+    for (size_t i = 0; i < simParams->nOwnerClumps; i++) {
         auto type_of_this_clump = input_clump_types.at(i);
-        float3 LBF;
-        LBF.x = simParams->LBFX;
-        LBF.y = simParams->LBFY;
-        LBF.z = simParams->LBFZ;
+
         auto this_CoM_coord = input_clump_xyz.at(i) - LBF;
         auto this_clump_no_sp_radii = clumps_sp_radii_types.at(type_of_this_clump);
         auto this_clump_no_sp_relPos = clumps_sp_location_types.at(type_of_this_clump);

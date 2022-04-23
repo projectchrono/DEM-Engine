@@ -33,9 +33,15 @@ struct DEMSimParams {
     double voxelSize;
     // The edge length of a bin (for contact detection)
     double binSize;
-    // Number of clumps and spheres
-    bodyID_t nOwnerBodies;
+    // Number of clumps, spheres, triangles, mesh-represented objects, analytical components, external objs...
     bodyID_t nSpheresGM;
+    triID_t nTriGM;
+    objID_t nAnalGM;
+    bodyID_t nOwnerBodies;
+    bodyID_t nOwnerClumps;
+    objID_t nExtObj;
+    triID_t nTriEntities;
+
     // Number of the templates (or say the ``types'') of clumps and spheres
     clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies;
     clumpComponentOffset_t nDistinctClumpComponents;  ///< Does not include `big' clump's (external object's) components

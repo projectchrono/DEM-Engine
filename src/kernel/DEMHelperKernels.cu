@@ -156,7 +156,7 @@ HamiltonProduct(T1& A1, T1& B1, T1& C1, T1& D1, const T1& a2, const T1& b2, cons
  *
  */
 template <typename T1>
-inline __device__ void checkSpheresOverlap(const T1& XA,
+inline __device__ bool checkSpheresOverlap(const T1& XA,
                                            const T1& YA,
                                            const T1& ZA,
                                            const T1& radA,
@@ -166,15 +166,12 @@ inline __device__ void checkSpheresOverlap(const T1& XA,
                                            const T1& radB,
                                            T1& CPX,
                                            T1& CPY,
-                                           T1& CPZ,
-                                           bool& overlap) {
+                                           T1& CPZ) {
     T1 centerDist2 = distSquared<T1>(XA, YA, ZA, XB, YB, ZB);
     if (centerDist2 > (radA + radB) * (radA + radB)) {
-        overlap = false;
-        return;
+        return false;
     }
     // If getting this far, then 2 spheres have an intersection, let's calculate the intersection point
-    overlap = true;
     float B2AVecX = XA - XB;
     float B2AVecY = YA - YB;
     float B2AVecZ = ZA - ZB;
@@ -184,6 +181,7 @@ inline __device__ void checkSpheresOverlap(const T1& XA,
     CPX = XB + (radB - halfOverlapDepth) * B2AVecX;
     CPY = YB + (radB - halfOverlapDepth) * B2AVecY;
     CPZ = ZB + (radB - halfOverlapDepth) * B2AVecZ;
+    return true;
 }
 
 /**
@@ -196,7 +194,7 @@ inline __device__ void checkSpheresOverlap(const T1& XA,
  *
  */
 template <typename T1, typename T2>
-inline __device__ void checkSpheresOverlap(const T1& XA,
+inline __device__ bool checkSpheresOverlap(const T1& XA,
                                            const T1& YA,
                                            const T1& ZA,
                                            const T1& radA,
@@ -210,15 +208,12 @@ inline __device__ void checkSpheresOverlap(const T1& XA,
                                            T2& normalX,
                                            T2& normalY,
                                            T2& normalZ,
-                                           T1& overlapDepth,
-                                           bool& overlap) {
+                                           T1& overlapDepth) {
     T1 centerDist2 = distSquared<T1>(XA, YA, ZA, XB, YB, ZB);
     if (centerDist2 > (radA + radB) * (radA + radB)) {
-        overlap = false;
-        return;
+        return false;
     }
     // If getting this far, then 2 spheres have an intersection, let's calculate the intersection point
-    overlap = true;
     normalX = XA - XB;
     normalY = YA - YB;
     normalZ = ZA - ZB;
@@ -228,6 +223,7 @@ inline __device__ void checkSpheresOverlap(const T1& XA,
     CPX = XB + (radB - overlapDepth / (T1)2) * normalX;
     CPY = YB + (radB - overlapDepth / (T1)2) * normalY;
     CPZ = ZB + (radB - overlapDepth / (T1)2) * normalZ;
+    return true;
 }
 
 template <typename T1>
@@ -306,6 +302,62 @@ inline __device__ sgps::contact_t checkSphereEntityOverlap(const T1& xA,
             if (dist > radA + beta4Entity) {
                 return sgps::DEM_NOT_A_CONTACT;
             }
+            return sgps::DEM_SPHERE_PLANE_CONTACT;
+            break;
+        }
+        case (sgps::DEM_ENTITY_TYPE_PLATE): {
+            return sgps::DEM_NOT_A_CONTACT;
+            break;
+        }
+        default:
+            return sgps::DEM_NOT_A_CONTACT;
+    }
+}
+
+// Another version of checkSphereEntityOverlap which gives contact point and contact normal
+template <typename T1, typename T2>
+inline __device__ sgps::contact_t checkSphereEntityOverlap(const T1& xA,
+                                                           const T1& yA,
+                                                           const T1& zA,
+                                                           const T1& radA,
+                                                           const sgps::objType_t& typeB,
+                                                           const T1& xB,
+                                                           const T1& yB,
+                                                           const T1& zB,
+                                                           const T1& dirxB,
+                                                           const T1& diryB,
+                                                           const T1& dirzB,
+                                                           const T1& size1B,
+                                                           const T1& size2B,
+                                                           const T1& size3B,
+                                                           const bool& normalB,
+                                                           const float& beta4Entity,
+                                                           T1& CPX,
+                                                           T1& CPY,
+                                                           T1& CPZ,
+                                                           T2& normalX,
+                                                           T2& normalY,
+                                                           T2& normalZ,
+                                                           T1& overlapDepth) {
+    switch (typeB) {
+        case (sgps::DEM_ENTITY_TYPE_PLANE): {
+            const T1 plane2sphX = xA - xB;
+            const T1 plane2sphY = yA - yB;
+            const T1 plane2sphZ = zA - zB;
+            // Plane is directional, and the direction is given by plane rotation
+            const T1 dist = dot3<T1>(plane2sphX, plane2sphY, plane2sphZ, dirxB, diryB, dirzB);
+            overlapDepth = (radA + beta4Entity - dist) / 2.0;
+            if (overlapDepth < 0.0) {
+                return sgps::DEM_NOT_A_CONTACT;
+            }
+            // From sphere center, go along negative plane normal for (dist + overlapDepth)
+            CPX = xA - dirxB * (dist + overlapDepth);
+            CPY = yA - diryB * (dist + overlapDepth);
+            CPZ = zA - dirzB * (dist + overlapDepth);
+            // Contact normal (B to A) is the same as plane normal
+            normalX = dirxB;
+            normalY = diryB;
+            normalZ = dirzB;
             return sgps::DEM_SPHERE_PLANE_CONTACT;
             break;
         }

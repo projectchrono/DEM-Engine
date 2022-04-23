@@ -86,6 +86,8 @@ class DEMObjComponent {
 struct DEMExternObj {
     // Component object types
     std::vector<DEM_OBJ_COMPONENT> types;
+    // Component object materials
+    std::vector<unsigned int> materials;
     // Family code (used in prescribing its motions etc.)
     family_t family_code = std::numeric_limits<family_t>::max();  ///< Means it is default to the `fixed' family
     // Obj's CoM initial position
@@ -121,20 +123,28 @@ struct DEMExternObj {
     void SetFamily(const unsigned int code) { family_code = code; }
 
     /// Add a plane with infinite size
-    void AddPlane(const float3 pos, const float3 normal) {
+    void AddPlane(const float3 pos, const float3 normal, const unsigned int material) {
         types.push_back(DEM_OBJ_COMPONENT::PLANE);
+        materials.push_back(material);
         DEMAnalEntParams params;
         params.plane.position = pos;
-        params.plane.normal = normal;
+        float3 unit_normal = normalize(normal);
+        params.plane.normal = unit_normal;
         entity_params.push_back(params);
     }
     /// Assuming the normal you specified is the z-direction and that normal vector originates from the pos point you
     /// input. Then specify the dimensions along x- and y-axes to define the plate's area.
-    void AddPlate(const float3 pos, const float3 normal, const float xdim, const float ydim) {
+    void AddPlate(const float3 pos,
+                  const float3 normal,
+                  const float xdim,
+                  const float ydim,
+                  const unsigned int material) {
         types.push_back(DEM_OBJ_COMPONENT::PLATE);
+        materials.push_back(material);
         DEMAnalEntParams params;
         params.plate.center = pos;
-        params.plate.normal = normal;
+        float3 unit_normal = normalize(normal);
+        params.plate.normal = unit_normal;
         params.plate.h_dim_x = xdim / 2.0;
         params.plate.h_dim_y = ydim / 2.0;
         entity_params.push_back(params);

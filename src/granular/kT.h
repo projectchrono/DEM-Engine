@@ -200,7 +200,12 @@ class DEMKinematicThread {
 
     // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
     void allocateManagedArrays(size_t nOwnerBodies,
+                               size_t nOwnerClumps,
+                               unsigned int nExtObj,
+                               size_t nTriEntities,
                                size_t nSpheresGM,
+                               size_t nTriGM,
+                               unsigned int nAnalGM,
                                unsigned int nClumpTopo,
                                unsigned int nClumpComponents,
                                unsigned int nMatTuples);

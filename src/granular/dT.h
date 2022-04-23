@@ -251,7 +251,12 @@ class DEMDynamicThread {
 
     // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
     void allocateManagedArrays(size_t nOwnerBodies,
+                               size_t nOwnerClumps,
+                               unsigned int nExtObj,
+                               size_t nTriEntities,
                                size_t nSpheresGM,
+                               size_t nTriGM,
+                               unsigned int nAnalGM,
                                unsigned int nClumpTopo,
                                unsigned int nClumpComponents,
                                unsigned int nMatTuples);
@@ -261,6 +266,7 @@ class DEMDynamicThread {
                                const std::vector<float3>& input_clump_xyz,
                                const std::vector<float3>& input_clump_vel,
                                const std::vector<unsigned int>& input_clump_family,
+                               const std::vector<float3>& input_ext_obj_xyz,
                                const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
                                const std::vector<float>& clumps_mass_types,
                                const std::vector<float3>& clumps_moi_types,

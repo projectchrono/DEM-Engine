@@ -120,11 +120,11 @@ int main() {
 
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
     // DEM_sim.InstructBoxDomainNumVoxel(11, 11, 10, 1e-10);
-    DEM_sim.AddBCPlane(make_float3(0, 9, 0), make_float3(0, -1, 0));
-    DEM_sim.AddBCPlane(make_float3(0, -9, 0), make_float3(0, 1, 0));
-    DEM_sim.AddBCPlane(make_float3(9, 0, 0), make_float3(-1, 0, 0));
+    DEM_sim.AddBCPlane(make_float3(0, 9, 0), make_float3(0, -1, 0), mat_type_1);
+    DEM_sim.AddBCPlane(make_float3(0, -9, 0), make_float3(0, 1, 0), mat_type_1);
+    DEM_sim.AddBCPlane(make_float3(9, 0, 0), make_float3(-1, 0, 0), mat_type_1);
     std::shared_ptr<DEMExternObj> plane_a = DEM_sim.AddExternalObject();
-    plane_a->AddPlane(make_float3(-9, 0, 0), make_float3(1, 0, 0));
+    plane_a->AddPlane(make_float3(-9, 0, 0), make_float3(1, 0, 0), mat_type_1);
 
     DEM_sim.CenterCoordSys();
     DEM_sim.SetTimeStepSize(5e-6);

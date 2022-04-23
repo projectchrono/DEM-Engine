@@ -108,10 +108,14 @@ class DEMSolver {
 
     /// Add an (analytical or clump-represented) external object to the simulation system
     std::shared_ptr<DEMExternObj> AddExternalObject();
-    std::shared_ptr<DEMExternObj> AddBCPlane(const float3 pos, const float3 normal);
+    std::shared_ptr<DEMExternObj> AddBCPlane(const float3 pos, const float3 normal, const unsigned int material);
 
     // Add content to the flattened analytical component array
+    // Note that analytical component is big different in that they each has a position in the jitified analytical
+    // templates, insteads of like a clump, has an extra ComponentOffset array points it to the right jitified template
+    // location.
     unsigned int AddAnalCompTemplate(const objType_t type,
+                                     const unsigned int material,
                                      unsigned int owner,
                                      const float3 pos,
                                      const float3 rot = make_float3(0),
@@ -180,6 +184,8 @@ class DEMSolver {
     // Flattened (analytical) object component definition arrays, potentially jitifiable
     // These extra analytical entities' owners' ID will be appended to those added thru normal AddClump
     std::vector<unsigned int> m_anal_owner;
+    // Material types of these analytical geometries
+    std::vector<materialsOffset_t> m_anal_materials;
     // Initial locations of this obj's components relative to obj's CoM
     std::vector<float3> m_anal_comp_pos;
     // Some float3 quantity that is representitive of an component's initial orientation (such as plane normal, and its
@@ -201,6 +207,7 @@ class DEMSolver {
     // Extra clumps' owners' ID will be appended to those added thru normal AddClump, and are consistent with external
     // obj IDs
     std::vector<unsigned int> m_extra_clump_owner;
+    std::vector<float3> m_extra_clump_xyz;
 
     /*
     // Dan and Ruochun decided NOT to extract unique input values.
@@ -293,6 +300,7 @@ class DEMSolver {
     // cached state vectors such as the types and locations/velocities of the initial clumps to fill the sim domain with
     std::vector<unsigned int> m_input_clump_types;
     std::vector<float3> m_input_clump_xyz;
+    // std::vector<float4> m_input_clump_rot;
     std::vector<float3> m_input_clump_vel;
     // Specify the ``family'' code for each clump. Then you can specify if they should go with some prescribed motion or
     // some special physics (for example, being fixed). The default behavior (without specification) for every family is
@@ -305,6 +313,10 @@ class DEMSolver {
     // bit slow to process but it only involves contact detection so needed by kT only, which it's acceptable even if
     // it's somewhat slow.
     // TODO: fixed particles should automatically attain status indicating they don't interact with each other.
+
+    // Unlike clumps, external objects do not have _types (each is its own type), but
+    std::vector<float3> m_input_ext_obj_xyz;
+    // std::vector<float4> m_input_ext_obj_rot;
 
     // The number of dT steps before it waits for a kT update. The default value 0 means every dT step will wait for a
     // newly produced contact-pair info (from kT) before proceeding.

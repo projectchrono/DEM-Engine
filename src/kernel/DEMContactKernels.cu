@@ -81,9 +81,9 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
                 double contactPntY;
                 double contactPntZ;
                 bool in_contact;
-                checkSpheresOverlap<double>(bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], CDRadii[compOffsets[bodyA]],
-                                            bodyX[bodyB], bodyY[bodyB], bodyZ[bodyB], CDRadii[compOffsets[bodyB]],
-                                            contactPntX, contactPntY, contactPntZ, in_contact);
+                in_contact = checkSpheresOverlap<double>(
+                    bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], CDRadii[compOffsets[bodyA]], bodyX[bodyB], bodyY[bodyB],
+                    bodyZ[bodyB], CDRadii[compOffsets[bodyB]], contactPntX, contactPntY, contactPntZ);
                 sgps::binID_t contactPntBin =
                     getPointBinID<sgps::binID_t>(contactPntX, contactPntY, contactPntZ, _binSize_, _nbX_, _nbY_);
 
@@ -193,9 +193,9 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
                 double contactPntY;
                 double contactPntZ;
                 bool in_contact;
-                checkSpheresOverlap<double>(bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], CDRadii[compOffsets[bodyA]],
-                                            bodyX[bodyB], bodyY[bodyB], bodyZ[bodyB], CDRadii[compOffsets[bodyB]],
-                                            contactPntX, contactPntY, contactPntZ, in_contact);
+                in_contact = checkSpheresOverlap<double>(
+                    bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], CDRadii[compOffsets[bodyA]], bodyX[bodyB], bodyY[bodyB],
+                    bodyZ[bodyB], CDRadii[compOffsets[bodyB]], contactPntX, contactPntY, contactPntZ);
                 sgps::binID_t contactPntBin =
                     getPointBinID<sgps::binID_t>(contactPntX, contactPntY, contactPntZ, _binSize_, _nbX_, _nbY_);
 
