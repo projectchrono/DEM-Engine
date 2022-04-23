@@ -203,8 +203,6 @@ void DEMKinematicThread::contactDetection() {
         // displayArray<bodyID_t>(granData->idGeometryB, stateOfSolver_resources.getNumContacts());
 
         // TODO: Now, sort idGeometryAB by their owners. This is to increase dT shmem use rate.
-    } else {
-        stateOfSolver_resources.setNumContacts(0);
     }
 }
 

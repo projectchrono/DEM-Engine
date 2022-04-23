@@ -192,7 +192,7 @@ class DEMDynamicThread {
     // many templates)
     std::vector<clumpComponentOffsetExt_t, ManagedAllocator<clumpComponentOffsetExt_t>> triComponentOffsetExt;
     // The ID that maps this analytical entity component's geometry-defining parameters, when this component is jitified
-    std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> analComponentOffset;
+    // std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> analComponentOffset;
 
     // The ID that maps this entity's material
     std::vector<materialsOffset_t, ManagedAllocator<materialsOffset_t>> materialTupleOffset;
@@ -267,6 +267,7 @@ class DEMDynamicThread {
                                const std::vector<float3>& input_clump_vel,
                                const std::vector<unsigned int>& input_clump_family,
                                const std::vector<float3>& input_ext_obj_xyz,
+                               const std::vector<unsigned int>& input_ext_obj_family,
                                const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
                                const std::vector<float>& clumps_mass_types,
                                const std::vector<float3>& clumps_moi_types,

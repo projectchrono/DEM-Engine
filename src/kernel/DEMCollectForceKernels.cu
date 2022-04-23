@@ -6,11 +6,19 @@
 __global__ void cashInOwnerIndex(sgps::bodyID_t* idOwner,
                                  sgps::bodyID_t* id,
                                  sgps::bodyID_t* ownerClumpBody,
+                                 sgps::contact_t* contactType,
                                  size_t nContactPairs) {
+    const sgps::bodyID_t objOwner[_nAnalGMSafe_] = {_objOwner_};
     size_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContactPairs) {
         sgps::bodyID_t thisBodyID = id[myID];
-        idOwner[myID] = ownerClumpBody[thisBodyID];
+        sgps::contact_t thisCntType = contactType[myID];
+        if (thisCntType == sgps::DEM_SPHERE_SPHERE_CONTACT) {
+            idOwner[myID] = ownerClumpBody[thisBodyID];
+        } else {
+            // This is a sphere--analytical geometry contactm its owner is jitified
+            idOwner[myID] = objOwner[thisBodyID];
+        }
     }
 }
 

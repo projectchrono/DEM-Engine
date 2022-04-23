@@ -221,6 +221,7 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
                                              const std::vector<float3>& input_clump_vel,
                                              const std::vector<unsigned int>& input_clump_family,
                                              const std::vector<float3>& input_ext_obj_xyz,
+                                             const std::vector<unsigned int>& input_ext_obj_family,
                                              const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
                                              const std::vector<float>& clumps_mass_types,
                                              const std::vector<float3>& clumps_moi_types,
@@ -238,9 +239,9 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
         CoRProxy.at(i) = mat_CoR.at(i);
     }
 
-    // Then load in clump mass and MOI
-    // Remember this part should be quite different in the final version (due to being jitified)
-    for (unsigned int i = 0; i < clumps_mass_types.size(); i++) {
+    // Then load in clump mass and MOI (only nDistinctClumpBodyTopologies interations; clumps_mass_types array may have
+    // more elements appended to the end of it for ext obj's mass info)
+    for (unsigned int i = 0; i < simParams->nDistinctClumpBodyTopologies; i++) {
         massClumpBody.at(i) = clumps_mass_types.at(i);
         float3 this_moi = clumps_moi_types.at(i);
         mmiXX.at(i) = this_moi.x;
@@ -322,21 +323,30 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
         familyID.at(i) = input_clump_family.at(i);
     }
 
-    // Load in initial positions for the owners of those external objects
+    // Load in initial positions and mass properties for the owners of those external objects
     // They go after clump owners
     size_t offset_for_ext_obj = simParams->nOwnerClumps;
-    for (size_t i = offset_for_ext_obj; i < offset_for_ext_obj + input_ext_obj_xyz.size(); i++) {
+    unsigned int offset_for_ext_obj_mass = simParams->nDistinctClumpBodyTopologies;
+    for (size_t i = 0; i < simParams->nExtObj; i++) {
+        inertiaPropOffsets.at(i + offset_for_ext_obj) = i + offset_for_ext_obj_mass;
         auto this_CoM_coord = input_ext_obj_xyz.at(i) - LBF;
         voxelID_t voxelNumX = (double)this_CoM_coord.x / simParams->voxelSize;
         voxelID_t voxelNumY = (double)this_CoM_coord.y / simParams->voxelSize;
         voxelID_t voxelNumZ = (double)this_CoM_coord.z / simParams->voxelSize;
-        locX.at(i) = ((double)this_CoM_coord.x - (double)voxelNumX * simParams->voxelSize) / simParams->l;
-        locY.at(i) = ((double)this_CoM_coord.y - (double)voxelNumY * simParams->voxelSize) / simParams->l;
-        locZ.at(i) = ((double)this_CoM_coord.z - (double)voxelNumZ * simParams->voxelSize) / simParams->l;
+        locX.at(i + offset_for_ext_obj) =
+            ((double)this_CoM_coord.x - (double)voxelNumX * simParams->voxelSize) / simParams->l;
+        locY.at(i + offset_for_ext_obj) =
+            ((double)this_CoM_coord.y - (double)voxelNumY * simParams->voxelSize) / simParams->l;
+        locZ.at(i + offset_for_ext_obj) =
+            ((double)this_CoM_coord.z - (double)voxelNumZ * simParams->voxelSize) / simParams->l;
 
-        voxelID.at(i) += voxelNumX;
-        voxelID.at(i) += voxelNumY << simParams->nvXp2;
-        voxelID.at(i) += voxelNumZ << (simParams->nvXp2 + simParams->nvYp2);
+        voxelID.at(i + offset_for_ext_obj) += voxelNumX;
+        voxelID.at(i + offset_for_ext_obj) += voxelNumY << simParams->nvXp2;
+        voxelID.at(i + offset_for_ext_obj) += voxelNumZ << (simParams->nvXp2 + simParams->nvYp2);
+        // TODO: and initial rot?
+        // TODO: and initial vel?
+
+        familyID.at(i + offset_for_ext_obj) = input_ext_obj_family.at(i);
     }
 }
 
@@ -479,10 +489,11 @@ inline void DEMDynamicThread::calculateForces() {
     //                   granData->ownerClumpBody, granTemplates->massClumpBody, simParams->h,
     //                   stateOfSolver_resources.getNumContacts(),simParams->l);
     cubCollectForces(collect_force, granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
-                     granData->contactForces, granData->contactPointGeometryA, granData->contactPointGeometryB,
-                     granData->aX, granData->aY, granData->aZ, granData->alphaX, granData->alphaY, granData->alphaZ,
-                     granData->ownerClumpBody, stateOfSolver_resources.getNumContacts(), simParams->nOwnerBodies,
-                     contactPairArr_isFresh, streamInfo.stream, stateOfSolver_resources);
+                     granData->contactType, granData->contactForces, granData->contactPointGeometryA,
+                     granData->contactPointGeometryB, granData->aX, granData->aY, granData->aZ, granData->alphaX,
+                     granData->alphaY, granData->alphaZ, granData->ownerClumpBody,
+                     stateOfSolver_resources.getNumContacts(), simParams->nOwnerBodies, contactPairArr_isFresh,
+                     streamInfo.stream, stateOfSolver_resources);
     // displayArray<float>(granData->aX, simParams->nOwnerBodies);
     // displayFloat3(granData->contactForces, stateOfSolver_resources.getNumContacts());
     // std::cout << stateOfSolver_resources.getNumContacts() << std::endl;
@@ -668,6 +679,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     {
         std::unordered_map<std::string, std::string> cfSubs = massMatSubs;
         cfSubs.insert(simParamSubs.begin(), simParamSubs.end());
+        cfSubs.insert(analGeoSubs.begin(), analGeoSubs.end());
         collect_force = std::make_shared<jitify::Program>(std::move(
             JitHelper::buildProgram("DEMCollectForceKernels", JitHelper::KERNEL_DIR / "DEMCollectForceKernels.cu",
                                     cfSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));

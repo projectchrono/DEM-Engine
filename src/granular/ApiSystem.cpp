@@ -280,10 +280,18 @@ void DEMSolver::figureOutJitifiability() {
     nExtObj = cachedExternObjs.size();
     unsigned int thisExtObj = 0;
     for (auto ext_obj : cachedExternObjs) {
+        // Load mass and MOI properties into arrays waiting to be transfered to kTdT. Note this must be done after user
+        // loads all clump templates, as ext obj's mass info is `appended' to clump mass arrays
+        m_template_mass.push_back(ext_obj->mass);
+        m_template_moi.push_back(ext_obj->MOI);
+
+        // Then load this ext obj's components
         unsigned int this_num_anal_ent = 0;
         auto comp_params = ext_obj->entity_params;
         auto comp_mat = ext_obj->materials;
         m_input_ext_obj_xyz.push_back(ext_obj->init_pos);
+        m_input_ext_obj_family.push_back(ext_obj->family_code);
+        // TODO: allow orientation input for ext obj
         for (unsigned int i = 0; i < ext_obj->types.size(); i++) {
             // CLUMP type should not be included b/c clumps are treated differently than analytical entities
             if (ext_obj->types.at(i) != DEM_OBJ_COMPONENT::CLUMP) {
@@ -486,11 +494,10 @@ void DEMSolver::initializeArrays() {
 
     // Now that the CUDA-related functions and data types are JITCompiled, we can feed those GPU-side arrays with the
     // cached API-level simulation info.
-    m_input_clump_vel.resize(m_input_clump_xyz.size(), make_float3(0));
-    m_input_clump_family.resize(m_input_clump_xyz.size(), 0);
     dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_input_clump_family,
-                              m_input_ext_obj_xyz, m_template_sp_mat_ids, m_template_mass, m_template_moi,
-                              m_template_sp_radii, m_template_sp_relPos, m_E_proxy, m_G_proxy, m_CoR_proxy);
+                              m_input_ext_obj_xyz, m_input_ext_obj_family, m_template_sp_mat_ids, m_template_mass,
+                              m_template_moi, m_template_sp_radii, m_template_sp_relPos, m_E_proxy, m_G_proxy,
+                              m_CoR_proxy);
     kT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_input_clump_family,
                               m_template_mass, m_template_sp_radii, m_template_sp_relPos);
 }
@@ -505,6 +512,10 @@ void DEMSolver::packDataPointers() {
 }
 
 void DEMSolver::validateUserInputs() {
+    // First match the length of input clump arrays, for those input arrays that we don't force the user to specify
+    m_input_clump_vel.resize(m_input_clump_xyz.size(), make_float3(0));
+    m_input_clump_family.resize(m_input_clump_xyz.size(), 0);
+
     if (m_sp_materials.size() == 0) {
         SGPS_ERROR("Before initializing the system, at least one material type should be loaded via LoadMaterialType.");
     }
@@ -665,10 +676,11 @@ inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std
 }
 
 inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::string>& strMap) {
-    strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
     std::string ClumpMasses, moiX, moiY, moiZ;
-    // loop through all templates to find in the JIT info
-    for (unsigned int i = 0; i < nDistinctClumpBodyTopologies_computed; i++) {
+    // Loop through all templates to find in the JIT info
+    // Note m_template_mass's size may be large than nDistinctClumpBodyTopologies because of the ext obj mass entries
+    // appended to that array
+    for (unsigned int i = 0; i < m_template_mass.size(); i++) {
         ClumpMasses += to_string_with_precision(m_template_mass.at(i)) + ",";
         moiX += to_string_with_precision(m_template_moi.at(i).x) + ",";
         moiY += to_string_with_precision(m_template_moi.at(i).y) + ",";
@@ -681,7 +693,6 @@ inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::st
 }
 
 inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap) {
-    strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
     std::string CDRadii, Radii, CDRelPosX, CDRelPosY, CDRelPosZ;
     // loop through all templates to find in the JIT info
     for (unsigned int i = 0; i < nDistinctClumpBodyTopologies_computed; i++) {
@@ -714,6 +725,7 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_voxelSize_"] = to_string_with_precision(m_voxelSize);
     strMap["_binSize_"] = to_string_with_precision(m_binSize);
 
+    strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
     strMap["_nAnalGM_"] = std::to_string(nAnalGM);
     // Some sim systems can have 0 boundary entities in them. In this case, we have to ensure jitification does not fail
     unsigned int nAnalGMSafe = (nAnalGM > 0) ? nAnalGM : 1;

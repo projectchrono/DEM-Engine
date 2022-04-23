@@ -171,12 +171,48 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
             sgps::objID_t bodyB = granData->idGeometryB[myContactID];
             sgps::bodyID_t bodyBOwner = objOwner[bodyB];
             bodyBMatType = objMaterial[bodyB];
+            BOwnerMass = ClumpMasses[granData->inertiaPropOffsets[bodyBOwner]];
             // TODO: fix these...
-            BOwnerMass = 10000.f;
             BRadius = 10000.f;
+            float3 myRelPos, bodyBRot;
+            sgps::oriQ_t BoriQ0, BoriQ1, BoriQ2, BoriQ3;
+
+            voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
+                BOwnerPos.x, BOwnerPos.y, BOwnerPos.z, granData->voxelID[bodyBOwner], granData->locX[bodyBOwner],
+                granData->locY[bodyBOwner], granData->locZ[bodyBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
+            myRelPos.x = objRelPosX[bodyB];
+            myRelPos.y = objRelPosY[bodyB];
+            myRelPos.z = objRelPosZ[bodyB];
+            BoriQ0 = granData->oriQ0[bodyBOwner];
+            BoriQ1 = granData->oriQ1[bodyBOwner];
+            BoriQ2 = granData->oriQ2[bodyBOwner];
+            BoriQ3 = granData->oriQ3[bodyBOwner];
+            applyOriQ2Vector3<float, sgps::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
+            bodyBPos.x = BOwnerPos.x + (double)myRelPos.x;
+            bodyBPos.y = BOwnerPos.y + (double)myRelPos.y;
+            bodyBPos.z = BOwnerPos.z + (double)myRelPos.z;
+
+            // B's orientation (such as plane normal) is rotated with its owner too
+            bodyBRot.x = objRotX[bodyB];
+            bodyBRot.y = objRotY[bodyB];
+            bodyBRot.z = objRotZ[bodyB];
+            applyOriQ2Vector3<float, sgps::oriQ_t>(bodyBRot.x, bodyBRot.y, bodyBRot.z, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
+
+            BLinVel.x = granData->vX[bodyBOwner];
+            BLinVel.y = granData->vY[bodyBOwner];
+            BLinVel.z = granData->vZ[bodyBOwner];
+            BRotVel.x = granData->omgBarX[bodyBOwner];
+            BRotVel.y = granData->omgBarY[bodyBOwner];
+            BRotVel.z = granData->omgBarZ[bodyBOwner];
+
+            // Note for this test on dT side we don't enlarge entities
+            myContactType = checkSphereEntityOverlap<double>(
+                bodyAPos.x, bodyAPos.y, bodyAPos.z, ARadius, objType[bodyB], bodyBPos.x, bodyBPos.y, bodyBPos.z,
+                bodyBRot.x, bodyBRot.y, bodyBRot.z, objSize1[bodyB], objSize2[bodyB], objSize3[bodyB], objNormal[bodyB],
+                0.0, contactPnt.x, contactPnt.y, contactPnt.z, B2A.x, B2A.y, B2A.z, overlapDepth);
         }
 
-        if (myContactType) {
+        if (myContactType != sgps::DEM_NOT_A_CONTACT) {
             // Instead of add the force to a body-based register, we store it in event-based register, and use CUB to
             // reduce them afterwards
             // atomicAdd(granData->bodyForceX + bodyA, -force * B2AX);

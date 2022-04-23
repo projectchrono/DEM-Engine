@@ -94,6 +94,10 @@ struct DEMExternObj {
     float3 init_pos = make_float3(0);
     // Obj's initial orientation quaternion
     float4 init_oriQ = make_float4(1.f, 0.f, 0.f, 0.f);
+    // Obj's mass (huge by default)
+    float mass = 1e20;
+    // Obj's MOI (huge by default)
+    float3 MOI = make_float3(1e20);
     // The (big) clump types that are a part of this extern obj. Note an external object should at most have one clump
     // as its component.
     unsigned int clump_type;
@@ -121,6 +125,12 @@ struct DEMExternObj {
 
     /// Define object contact family number
     void SetFamily(const unsigned int code) { family_code = code; }
+
+    /// Define object mass and MOI
+    void SetMassMOI(const float input_mass, const float3 input_MOI) {
+        mass = input_mass;
+        MOI = input_MOI;
+    }
 
     /// Add a plane with infinite size
     void AddPlane(const float3 pos, const float3 normal, const unsigned int material) {

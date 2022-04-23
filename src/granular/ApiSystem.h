@@ -317,6 +317,7 @@ class DEMSolver {
     // Unlike clumps, external objects do not have _types (each is its own type), but
     std::vector<float3> m_input_ext_obj_xyz;
     // std::vector<float4> m_input_ext_obj_rot;
+    std::vector<unsigned int> m_input_ext_obj_family;
 
     // The number of dT steps before it waits for a kT update. The default value 0 means every dT step will wait for a
     // newly produced contact-pair info (from kT) before proceeding.

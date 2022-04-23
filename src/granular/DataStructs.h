@@ -40,7 +40,7 @@ struct DEMSimParams {
     bodyID_t nOwnerBodies;
     bodyID_t nOwnerClumps;
     objID_t nExtObj;
-    triID_t nTriEntities;
+    bodyID_t nTriEntities;
 
     // Number of the templates (or say the ``types'') of clumps and spheres
     clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies;

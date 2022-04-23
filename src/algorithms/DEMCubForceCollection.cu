@@ -24,6 +24,7 @@ void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
                       clumpBodyInertiaOffset_t* inertiaPropOffsets,
                       bodyID_t* idA,
                       bodyID_t* idB,
+                      contact_t* contactType,
                       float3* contactForces,
                       float3* contactPointA,
                       float3* contactPointB,
@@ -62,13 +63,13 @@ void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
         collect_force->kernel("cashInOwnerIndex")
             .instantiate()
             .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-            .launch(idAOwner, idA, ownerClumpBody, nContactPairs);
+            .launch(idAOwner, idA, ownerClumpBody, contactType, nContactPairs);
         GPU_CALL(cudaStreamSynchronize(this_stream));
 
         collect_force->kernel("cashInOwnerIndex")
             .instantiate()
             .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-            .launch(idBOwner, idB, ownerClumpBody, nContactPairs);
+            .launch(idBOwner, idB, ownerClumpBody, contactType, nContactPairs);
         GPU_CALL(cudaStreamSynchronize(this_stream));
         // displayArray<bodyID_t>(idAOwner, nContactPairs>3?3:nContactPairs);
         // displayArray<bodyID_t>(idBOwner, nContactPairs>3?3:nContactPairs);
