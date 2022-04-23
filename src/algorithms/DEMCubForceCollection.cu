@@ -60,19 +60,22 @@ void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
     if (contactPairArr_isFresh) {
         // First step, prepare the owner ID array (nContactPairs * bodyID_t) for usage in final reduction by key (do it
         // for both A and B)
-        collect_force->kernel("cashInOwnerIndex")
+        // Note for A, it is always a sphere or a triangle
+        collect_force->kernel("cashInOwnerIndexA")
             .instantiate()
             .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
             .launch(idAOwner, idA, ownerClumpBody, contactType, nContactPairs);
         GPU_CALL(cudaStreamSynchronize(this_stream));
 
-        collect_force->kernel("cashInOwnerIndex")
+        // But for B, it can be sphere, triangle or some analytical geometries
+        collect_force->kernel("cashInOwnerIndexB")
             .instantiate()
             .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
             .launch(idBOwner, idB, ownerClumpBody, contactType, nContactPairs);
         GPU_CALL(cudaStreamSynchronize(this_stream));
-        // displayArray<bodyID_t>(idAOwner, nContactPairs>3?3:nContactPairs);
-        // displayArray<bodyID_t>(idBOwner, nContactPairs>3?3:nContactPairs);
+        // displayArray<bodyID_t>(idAOwner, nContactPairs);
+        // displayArray<bodyID_t>(idBOwner, nContactPairs);
+        // displayArray<contact_t>(contactType, nContactPairs);
 
         // // Secondly, prepare the owner mass and moi arrays (nContactPairs * float/float3) for usage in final
         // reduction

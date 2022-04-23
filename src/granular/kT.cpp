@@ -86,6 +86,10 @@ void DEMKinematicThread::contactDetection() {
         .launch(granData, numBinsSphereTouchesScan, numAnalGeoSphereTouchesScan, binIDsEachSphereTouches,
                 sphereIDsEachBinTouches, granData->idGeometryA, granData->idGeometryB, granData->contactType);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    // std::cout << "idGeometryB: ";
+    // displayArray<bodyID_t>(granData->idGeometryB, stateOfSolver_resources.getNumContacts());
+    // std::cout << "contactType: ";
+    // displayArray<contact_t>(granData->contactType, stateOfSolver_resources.getNumContacts());
     // std::cout << "Unsorted bin IDs: ";
     // displayArray<binID_t>(binIDsEachSphereTouches, stateOfSolver_resources.getNumBinSphereTouchPairs());
     // std::cout << "Corresponding sphere IDs: ";

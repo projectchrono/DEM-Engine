@@ -47,15 +47,14 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
     __shared__ float CDRelPosX[_nDistinctClumpComponents_];
     __shared__ float CDRelPosY[_nDistinctClumpComponents_];
     __shared__ float CDRelPosZ[_nDistinctClumpComponents_];
-    __shared__ float ClumpMasses[_nDistinctClumpBodyTopologies_];
+    __shared__ float ClumpMasses[_nTotalBodyTopologies_];
     if (threadIdx.x < _nActiveLoadingThreads_) {
         const float jitifiedRadii[_nDistinctClumpComponents_] = {_Radii_};
         const float jitifiedCDRelPosX[_nDistinctClumpComponents_] = {_CDRelPosX_};
         const float jitifiedCDRelPosY[_nDistinctClumpComponents_] = {_CDRelPosY_};
         const float jitifiedCDRelPosZ[_nDistinctClumpComponents_] = {_CDRelPosZ_};
-        const float jitifiedMass[_nDistinctClumpBodyTopologies_] = {_ClumpMasses_};
-        for (sgps::clumpBodyInertiaOffset_t i = threadIdx.x; i < _nDistinctClumpBodyTopologies_;
-             i += _nActiveLoadingThreads_) {
+        const float jitifiedMass[_nTotalBodyTopologies_] = {_ClumpMasses_};
+        for (sgps::clumpBodyInertiaOffset_t i = threadIdx.x; i < _nTotalBodyTopologies_; i += _nActiveLoadingThreads_) {
             ClumpMasses[i] = jitifiedMass[i];
         }
         for (sgps::clumpComponentOffset_t i = threadIdx.x; i < _nDistinctClumpComponents_;

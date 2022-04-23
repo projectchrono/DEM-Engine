@@ -30,14 +30,14 @@ inline T1 locateMatPair(const T1& i, const T1& j) {
 template <typename T1>
 inline void displayArray(T1* arr, size_t n) {
     for (size_t i = 0; i < n; i++) {
-        std::cout << arr[i] << " ";
+        std::cout << +(arr[i]) << " ";
     }
     std::cout << std::endl;
 }
 
 inline void displayFloat3(float3* arr, size_t n) {
     for (size_t i = 0; i < n; i++) {
-        std::cout << "(" << arr[i].x << ", " << arr[i].y << ", " << arr[i].z << "), ";
+        std::cout << "(" << +(arr[i].x) << ", " << +(arr[i].y) << ", " << +(arr[i].z) << "), ";
     }
     std::cout << std::endl;
 }
@@ -286,7 +286,7 @@ to_string_with_precision(simParams->nvYp2); strMap["_nvZp2_"] = to_string_with_p
 
     strMap["_nOwnerBodies_"] = to_string_with_precision(simParams->nOwnerBodies);
     strMap["_nSpheresGM_"] = to_string_with_precision(simParams->nSpheresGM);
-    strMap["_nDistinctClumpBodyTopologies_"] = to_string_with_precision(simParams->nDistinctClumpBodyTopologies);
+    strMap["_nTotalBodyTopologies_"] = to_string_with_precision(simParams->nDistinctClumpBodyTopologies);
     strMap["_nDistinctClumpComponents_"] = to_string_with_precision(simParams->nDistinctClumpComponents);
     strMap["_nMatTuples_"] = to_string_with_precision(simParams->nMatTuples);
 

@@ -283,7 +283,7 @@ class DEMSolver {
     // nExtObj + nOwnerClumps + nTriEntities == nOwnerBodies
 
     unsigned int nDistinctClumpComponents_computed;
-    unsigned int nDistinctClumpBodyTopologies_computed;
+    unsigned int nDistinctClumpBodyTopologies;
     unsigned int nMatTuples_computed;
 
     // Whether the number of voxels and length unit l is explicitly given by the user.

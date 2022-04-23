@@ -374,7 +374,7 @@ void DEMSolver::generateJITResources() {
         m_clumps_sp_location_type_offset.push_back(sp_location_type_offset);
     }
 
-    nDistinctClumpBodyTopologies_computed = m_template_mass_types.size();
+    nDistinctClumpBodyTopologies = m_template_mass_types.size();
     nMatTuples_computed = m_sp_materials.size();
 
     nDistinctSphereRadii_computed = m_template_sp_radii_types.size();
@@ -383,8 +383,8 @@ void DEMSolver::generateJITResources() {
 
     // Compile the magic number header.
     nDistinctClumpComponents_computed = 0;
-    nDistinctClumpBodyTopologies_computed = m_template_mass.size();
-    for (unsigned int i = 0; i < nDistinctClumpBodyTopologies_computed; i++) {
+    nDistinctClumpBodyTopologies = m_template_mass.size();
+    for (unsigned int i = 0; i < nDistinctClumpBodyTopologies; i++) {
         nDistinctClumpComponents_computed += m_template_sp_radii.at(i).size();
     }
     nMatTuples_computed = m_sp_materials.size();
@@ -393,7 +393,7 @@ void DEMSolver::generateJITResources() {
 
     // nDistinctSphereRadii_computed = m_template_sp_radii_types.size();
     // nDistinctSphereRelativePositions_computed = m_clumps_sp_location_types.size();
-    // std::cout << nDistinctClumpBodyTopologies_computed << std::endl;
+    // std::cout << nDistinctClumpBodyTopologies << std::endl;
     // std::cout << nDistinctSphereRadii_computed << std::endl;
     // std::cout << nDistinctSphereRelativePositions_computed << std::endl;
     // for (int i = 0; i < m_clumps_sp_location_type_offset.size(); i++) {
@@ -486,11 +486,9 @@ void DEMSolver::transferSimParams() {
 void DEMSolver::initializeArrays() {
     // Resize managed arrays based on the statistical data we had from the previous step
     dT->allocateManagedArrays(nOwnerBodies, nOwnerClumps, nExtObj, nTriEntities, nSpheresGM, nTriGM, nAnalGM,
-                              nDistinctClumpBodyTopologies_computed, nDistinctClumpComponents_computed,
-                              nMatTuples_computed);
+                              nDistinctClumpBodyTopologies, nDistinctClumpComponents_computed, nMatTuples_computed);
     kT->allocateManagedArrays(nOwnerBodies, nOwnerClumps, nExtObj, nTriEntities, nSpheresGM, nTriGM, nAnalGM,
-                              nDistinctClumpBodyTopologies_computed, nDistinctClumpComponents_computed,
-                              nMatTuples_computed);
+                              nDistinctClumpBodyTopologies, nDistinctClumpComponents_computed, nMatTuples_computed);
 
     // Now that the CUDA-related functions and data types are JITCompiled, we can feed those GPU-side arrays with the
     // cached API-level simulation info.
@@ -657,6 +655,7 @@ inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std
         objSize2 += to_string_with_precision(m_anal_size_2.at(i)) + ",";
         objSize3 += to_string_with_precision(m_anal_size_3.at(i)) + ",";
     }
+
     strMap["_objOwner_"] = objOwner;
     strMap["_objType_"] = objType;
     strMap["_objMaterial_"] = objMat;
@@ -695,7 +694,7 @@ inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::st
 inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap) {
     std::string CDRadii, Radii, CDRelPosX, CDRelPosY, CDRelPosZ;
     // loop through all templates to find in the JIT info
-    for (unsigned int i = 0; i < nDistinctClumpBodyTopologies_computed; i++) {
+    for (unsigned int i = 0; i < nDistinctClumpBodyTopologies; i++) {
         for (unsigned int j = 0; j < m_template_sp_radii.at(i).size(); j++) {
             Radii += to_string_with_precision(m_template_sp_radii.at(i).at(j)) + ",";
             CDRadii += to_string_with_precision(m_template_sp_radii.at(i).at(j) + m_expand_factor) + ",";
@@ -732,7 +731,8 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_nAnalGMSafe_"] = std::to_string(nAnalGMSafe);
     strMap["_nOwnerBodies_"] = std::to_string(nOwnerBodies);
     strMap["_nSpheresGM_"] = std::to_string(nSpheresGM);
-    strMap["_nDistinctClumpBodyTopologies_"] = std::to_string(nDistinctClumpBodyTopologies_computed);
+    // nTotalBodyTopologies includes clump topologies and ext obj topologies
+    strMap["_nTotalBodyTopologies_"] = std::to_string(nDistinctClumpBodyTopologies + nExtObj);
     strMap["_nDistinctClumpComponents_"] = std::to_string(nDistinctClumpComponents_computed);
     strMap["_nMatTuples_"] = std::to_string(nMatTuples_computed);
 

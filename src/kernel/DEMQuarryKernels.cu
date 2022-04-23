@@ -4,17 +4,16 @@
 
 __global__ void computeKE(sgps::DEMDataDT* granData, float* KE) {
     // CUDA does not support initializing shared arrays, so we have to manually load them
-    __shared__ float ClumpMasses[_nDistinctClumpBodyTopologies_];
-    __shared__ float moiX[_nDistinctClumpBodyTopologies_];
-    __shared__ float moiY[_nDistinctClumpBodyTopologies_];
-    __shared__ float moiZ[_nDistinctClumpBodyTopologies_];
+    __shared__ float ClumpMasses[_nTotalBodyTopologies_];
+    __shared__ float moiX[_nTotalBodyTopologies_];
+    __shared__ float moiY[_nTotalBodyTopologies_];
+    __shared__ float moiZ[_nTotalBodyTopologies_];
     if (threadIdx.x < _nActiveLoadingThreads_) {
-        const float jitifiedMass[_nDistinctClumpBodyTopologies_] = {_ClumpMasses_};
-        const float jitifiedMoiX[_nDistinctClumpBodyTopologies_] = {_moiX_};
-        const float jitifiedMoiY[_nDistinctClumpBodyTopologies_] = {_moiY_};
-        const float jitifiedMoiZ[_nDistinctClumpBodyTopologies_] = {_moiZ_};
-        for (sgps::clumpBodyInertiaOffset_t i = threadIdx.x; i < _nDistinctClumpBodyTopologies_;
-             i += _nActiveLoadingThreads_) {
+        const float jitifiedMass[_nTotalBodyTopologies_] = {_ClumpMasses_};
+        const float jitifiedMoiX[_nTotalBodyTopologies_] = {_moiX_};
+        const float jitifiedMoiY[_nTotalBodyTopologies_] = {_moiY_};
+        const float jitifiedMoiZ[_nTotalBodyTopologies_] = {_moiZ_};
+        for (sgps::clumpBodyInertiaOffset_t i = threadIdx.x; i < _nTotalBodyTopologies_; i += _nActiveLoadingThreads_) {
             ClumpMasses[i] = jitifiedMass[i];
             moiX[i] = jitifiedMoiX[i];
             moiY[i] = jitifiedMoiY[i];

@@ -25,8 +25,9 @@ int main() {
     std::vector<float3> input_xyz;
     std::vector<float3> input_vel;
     std::vector<unsigned int> input_clump_type(2, sph_type_1);
+    // std::vector<unsigned int> input_clump_type(1, sph_type_1);
 
-    // Inputs are just 2 spheres
+    // Inputs are just 1 sphere
     float sphPos = 1.2f;
     input_xyz.push_back(make_float3(-sphPos, 0, 0));
     input_xyz.push_back(make_float3(sphPos, 0, 0));
@@ -36,12 +37,17 @@ int main() {
     input_vel.push_back(make_float3(-1.f, 0, 0));
     DEM_sim.SetClumpVels(input_vel);
 
+    DEM_sim.AddBCPlane(make_float3(0, 0, -1.25), make_float3(0, 0, 1), mat_type_1);
+
     DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, 3e-11);
 
     DEM_sim.CenterCoordSys();
-    DEM_sim.SetTimeStepSize(1e-4);
-    DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, 0));
-    DEM_sim.SetCDUpdateFreq(0);
+    DEM_sim.SetTimeStepSize(2e-5);
+    DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    // Velocity not to exceed 3.0
+    DEM_sim.SetCDUpdateFreq(10);
+    DEM_sim.SuggestExpandFactor(3.);
+    DEM_sim.SuggestExpandSafetyParam(2.);
 
     DEM_sim.Initialize();
 

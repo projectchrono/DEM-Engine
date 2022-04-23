@@ -471,6 +471,10 @@ inline void DEMDynamicThread::calculateForces() {
     //                     (double)simParams->h * (double)simParams->h * (double)simParams->Gz / (double)simParams->l,
     //                     simParams->nOwnerBodies * sizeof(float)));
 
+    // displayArray<bodyID_t>(granData->idGeometryA, stateOfSolver_resources.getNumContacts());
+    // displayArray<bodyID_t>(granData->idGeometryB, stateOfSolver_resources.getNumContacts());
+    // displayArray<contact_t>(granData->contactType, stateOfSolver_resources.getNumContacts());
+
     size_t blocks_needed_for_contacts =
         (stateOfSolver_resources.getNumContacts() + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
 
