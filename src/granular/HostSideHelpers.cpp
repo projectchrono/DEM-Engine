@@ -253,54 +253,6 @@ inline std::string to_string_with_precision(const double a_value, const unsigned
     return out.str();
 }
 
-/*
-inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap,
-                                DEMSimParams* simParams,
-                                DEMTemplate* granTemplates) {
-    strMap["_nDistinctClumpComponents_"] = to_string_with_precision(simParams->nDistinctClumpComponents);
-    strMap["_nActiveLoadingThreads_"] = to_string_with_precision(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
-    std::string CDRadii, CDRelPosX, CDRelPosY, CDRelPosZ;
-    for (unsigned int i = 0; i < simParams->nDistinctClumpComponents; i++) {
-        CDRadii += to_string_with_precision(granTemplates->radiiSphere[i] + simParams->beta) + ",";
-        CDRelPosX += to_string_with_precision(granTemplates->relPosSphereX[i]) + ",";
-        CDRelPosY += to_string_with_precision(granTemplates->relPosSphereY[i]) + ",";
-        CDRelPosZ += to_string_with_precision(granTemplates->relPosSphereZ[i]) + ",";
-    }
-    strMap["_CDRadii_"] = CDRadii;
-    strMap["_CDRelPosX_"] = CDRelPosX;
-    strMap["_CDRelPosY_"] = CDRelPosY;
-    strMap["_CDRelPosZ_"] = CDRelPosZ;
-}
-
-inline void equipSimParams(std::unordered_map<std::string, std::string>& strMap, DEMSimParams* simParams, DEMTemplate*
-granTemplates) { strMap["_nvXp2_"] = to_string_with_precision(simParams->nvXp2); strMap["_nvYp2_"] =
-to_string_with_precision(simParams->nvYp2); strMap["_nvZp2_"] = to_string_with_precision(simParams->nvZp2);
-
-    strMap["_nbX_"] = to_string_with_precision(simParams->nbX);
-    strMap["_nbY_"] = to_string_with_precision(simParams->nbY);
-    strMap["_nbZ_"] = to_string_with_precision(simParams->nbZ);
-
-    strMap["_l_"] = to_string_with_precision(simParams->l);
-    strMap["_voxelSize_"] = to_string_with_precision(simParams->voxelSize);
-    strMap["_binSize_"] = to_string_with_precision(simParams->binSize);
-
-    strMap["_nOwnerBodies_"] = to_string_with_precision(simParams->nOwnerBodies);
-    strMap["_nSpheresGM_"] = to_string_with_precision(simParams->nSpheresGM);
-    strMap["_nTotalBodyTopologies_"] = to_string_with_precision(simParams->nDistinctClumpBodyTopologies);
-    strMap["_nDistinctClumpComponents_"] = to_string_with_precision(simParams->nDistinctClumpComponents);
-    strMap["_nMatTuples_"] = to_string_with_precision(simParams->nMatTuples);
-
-    strMap["_LBFX_"] = to_string_with_precision(simParams->LBFX);
-    strMap["_LBFY_"] = to_string_with_precision(simParams->LBFY);
-    strMap["_LBFZ_"] = to_string_with_precision(simParams->LBFZ);
-    strMap["_Gx_"] = to_string_with_precision(simParams->Gx);
-    strMap["_Gy_"] = to_string_with_precision(simParams->Gy);
-    strMap["_Gz_"] = to_string_with_precision(simParams->Gz);
-
-    strMap["_beta_"] = to_string_with_precision(simParams->beta);
-}
-*/
-
 }  // namespace sgps
 
 #endif

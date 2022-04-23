@@ -27,7 +27,7 @@ int main() {
     std::vector<unsigned int> input_clump_type(2, sph_type_1);
     // std::vector<unsigned int> input_clump_type(1, sph_type_1);
 
-    // Inputs are just 1 sphere
+    // Inputs are just 2 sphere
     float sphPos = 1.2f;
     input_xyz.push_back(make_float3(-sphPos, 0, 0));
     input_xyz.push_back(make_float3(sphPos, 0, 0));
