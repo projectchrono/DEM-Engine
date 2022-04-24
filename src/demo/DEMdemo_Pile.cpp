@@ -60,7 +60,7 @@ int main() {
         // then allocate the clump template definition arrays (all in SI)
         float mass = 0.1 * (float)num_sphere;
         float3 MOI =
-            make_float3(2e-5 * (float)num_sphere, 1.5e-5 * (float)num_sphere, 1.8e-5 * (float)num_sphere) * 10.;
+            make_float3(2e-5 * (float)num_sphere, 1.5e-5 * (float)num_sphere, 1.8e-5 * (float)num_sphere) * 50.;
         std::vector<float> radii;
         std::vector<float3> relPos;
         std::vector<unsigned int> mat;
@@ -96,7 +96,7 @@ int main() {
     // generate ground clumps
     std::vector<unsigned int> input_template_num;
     std::vector<unsigned int> family_code;
-    auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, -3.8), make_float3(5.2, 5.2, 0.001), ground_sp_r * 1.3);
+    auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, -3.8), make_float3(5.0, 5.0, 0.001), ground_sp_r * 1.3);
     // // generate domain bottom
     // auto domain_bottom = DEMBoxGridSampler(make_float3(0, 0, -10.0), make_float3(5.2, 5.2, 0.001), ground_sp_r
     // * 1.3); input_xyz.insert(input_xyz.end(), domain_bottom.begin(), domain_bottom.end()); Mark family 1 as fixed

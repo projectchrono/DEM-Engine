@@ -248,7 +248,7 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMDataKT* granData,
 
             if (contact_type) {
                 idGeoA[mySphereGeoReportOffset] = sphereID;
-                idGeoB[mySphereGeoReportOffset] = objB;
+                idGeoB[mySphereGeoReportOffset] = (sgps::bodyID_t)objB;
                 contactType[mySphereGeoReportOffset] = contact_type;
                 mySphereGeoReportOffset++;
             }

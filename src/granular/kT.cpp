@@ -491,9 +491,9 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     // The following several arrays will have variable sizes, so here we only used an estimate. My estimate of total
     // contact pairs is 2n, and I think the max is 6n (although I can't prove it). Note the estimate should be large
     // enough to decrease the number of reallocations in the simulation, but not too large that eats too much memory.
-    TRACKED_VECTOR_RESIZE(idGeometryA, nOwnerBodies * 2, "idGeometryA", 0);
-    TRACKED_VECTOR_RESIZE(idGeometryB, nOwnerBodies * 2, "idGeometryB", 0);
-    TRACKED_VECTOR_RESIZE(contactType, nOwnerBodies * 2, "contactType", DEM_NOT_A_CONTACT);
+    TRACKED_VECTOR_RESIZE(idGeometryA, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryA", 0);
+    TRACKED_VECTOR_RESIZE(idGeometryB, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryB", 0);
+    TRACKED_VECTOR_RESIZE(contactType, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactType", DEM_NOT_A_CONTACT);
 }
 
 void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,

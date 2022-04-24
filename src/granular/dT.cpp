@@ -202,18 +202,21 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is 2n, and I
     // think the max is 6n (although I can't prove it). Note the estimate should be large enough to decrease the number
     // of reallocations in the simulation, but not too large that eats too much memory.
-    TRACKED_VECTOR_RESIZE(idGeometryA, nOwnerBodies * 2, "idGeometryA", 0);
-    TRACKED_VECTOR_RESIZE(idGeometryB, nOwnerBodies * 2, "idGeometryB", 0);
-    TRACKED_VECTOR_RESIZE(contactForces, nOwnerBodies * 2, "contactForces", make_float3(0));
-    TRACKED_VECTOR_RESIZE(contactType, nOwnerBodies * 2, "contactType", DEM_NOT_A_CONTACT);
-    TRACKED_VECTOR_RESIZE(contactPointGeometryA, nOwnerBodies * 2, "contactPointGeometryA", make_float3(0));
-    TRACKED_VECTOR_RESIZE(contactPointGeometryB, nOwnerBodies * 2, "contactPointGeometryB", make_float3(0));
+    TRACKED_VECTOR_RESIZE(idGeometryA, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryA", 0);
+    TRACKED_VECTOR_RESIZE(idGeometryB, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryB", 0);
+    TRACKED_VECTOR_RESIZE(contactForces, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactForces", make_float3(0));
+    TRACKED_VECTOR_RESIZE(contactType, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactType", DEM_NOT_A_CONTACT);
+    TRACKED_VECTOR_RESIZE(contactPointGeometryA, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactPointGeometryA",
+                          make_float3(0));
+    TRACKED_VECTOR_RESIZE(contactPointGeometryB, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactPointGeometryB",
+                          make_float3(0));
 
     // Transfer buffer arrays
     // The following several arrays will have variable sizes, so here we only used an estimate.
-    TRACKED_VECTOR_RESIZE(idGeometryA_buffer, nOwnerBodies * 2, "idGeometryA_buffer", 0);
-    TRACKED_VECTOR_RESIZE(idGeometryB_buffer, nOwnerBodies * 2, "idGeometryB_buffer", 0);
-    TRACKED_VECTOR_RESIZE(contactType_buffer, nOwnerBodies * 2, "contactType_buffer", DEM_NOT_A_CONTACT);
+    TRACKED_VECTOR_RESIZE(idGeometryA_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryA_buffer", 0);
+    TRACKED_VECTOR_RESIZE(idGeometryB_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryB_buffer", 0);
+    TRACKED_VECTOR_RESIZE(contactType_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactType_buffer",
+                          DEM_NOT_A_CONTACT);
 }
 
 void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,

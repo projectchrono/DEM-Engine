@@ -63,6 +63,7 @@ typedef unsigned int contactPairs_t;
 
 #define SGPS_DEM_NUM_BINS_PER_BLOCK 128
 #define SGPS_DEM_NUM_BODIES_PER_BLOCK 512
+#define SGPS_DEM_INIT_CNT_MULTIPLIER 6
 // It should generally just be the warp size. When a block is launched, at least min(these_numbers) threads will be
 // launched so the template loading is always safe.
 constexpr clumpComponentOffset_t NUM_ACTIVE_TEMPLATE_LOADING_THREADS =
