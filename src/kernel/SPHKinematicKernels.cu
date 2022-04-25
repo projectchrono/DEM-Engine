@@ -55,20 +55,21 @@ __global__ void kinematicStep1(float3* pos_data,
                                int num_domain_z,
                                float domain_x,
                                float domain_y,
-                               float domain_z) {
+                               float domain_z,
+			                   float buffer_width) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= k_n) {
         return;
     }
 
-    float dx_2_0 = int(pos_data[idx].x - (-domain_x / 2));
-    float dy_2_0 = int(pos_data[idx].y - (-domain_y / 2));
-    float dz_2_0 = int(pos_data[idx].z - (-domain_z / 2));
+    float dx_2_0 = pos_data[idx].x - (-domain_x / 2);
+    float dy_2_0 = pos_data[idx].y - (-domain_y / 2);
+    float dz_2_0 = pos_data[idx].z - (-domain_z / 2);
 
     int x_idx = int(dx_2_0 / d_domain_x);
-    int y_idx = int(dy_2_0 / d_domain_x);
-    int z_idx = int(dz_2_0 / d_domain_x);
+    int y_idx = int(dy_2_0 / d_domain_y);
+    int z_idx = int(dz_2_0 / d_domain_z);
 
     // the mother BD idx which the current particle belongs to
     // int bd_idx = z_idx * num_domain_x * num_domain_y + y_idx * num_domain_x + x_idx;
@@ -215,7 +216,7 @@ __global__ void kinematicStep1(float3* pos_data,
                 break;
         }
 
-        // check idx validality
+	    // check idx validality
         if (x_check_idx < 0 || y_check_idx < 0 || z_check_idx < 0) {
             continue;
         }
@@ -225,12 +226,12 @@ __global__ void kinematicStep1(float3* pos_data,
         }
 
         // expand the SD to BSD, and check whether the particle is in the current BSD
-        float BSD_x_start = x_check_idx * d_domain_x - 4 * kernel_h;
-        float BSD_x_end = (x_check_idx + 1) * d_domain_x + 4 * kernel_h;
-        float BSD_y_start = y_check_idx * d_domain_y - 4 * kernel_h;
-        float BSD_y_end = (y_check_idx + 1) * d_domain_y + 4 * kernel_h;
-        float BSD_z_start = z_check_idx * d_domain_z - 4 * kernel_h;
-        float BSD_z_end = (z_check_idx + 1) * d_domain_z + 4 * kernel_h;
+        float BSD_x_start =  x_check_idx      * d_domain_x - buffer_width * kernel_h;
+        float BSD_x_end   = (x_check_idx + 1) * d_domain_x + buffer_width * kernel_h;
+	    float BSD_y_start =  y_check_idx      * d_domain_y - buffer_width * kernel_h;
+        float BSD_y_end   = (y_check_idx + 1) * d_domain_y + buffer_width * kernel_h;
+        float BSD_z_start =  z_check_idx      * d_domain_z - buffer_width * kernel_h;
+        float BSD_z_end   = (z_check_idx + 1) * d_domain_z + buffer_width * kernel_h;
 
         if (dx_2_0 >= BSD_x_start && dx_2_0 < BSD_x_end) {
             if (dy_2_0 >= BSD_y_start && dy_2_0 < BSD_y_end) {
@@ -267,7 +268,8 @@ __global__ void kinematicStep2(float3* pos_data,
                                int num_domain_z,
                                float domain_x,
                                float domain_y,
-                               float domain_z) {
+                               float domain_z,
+			                   float buffer_width) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= k_n) {
@@ -276,13 +278,13 @@ __global__ void kinematicStep2(float3* pos_data,
 
     int start_idx = offset_BSD_data[idx];
 
-    float dx_2_0 = int(pos_data[idx].x - (-domain_x / 2));
-    float dy_2_0 = int(pos_data[idx].y - (-domain_y / 2));
-    float dz_2_0 = int(pos_data[idx].z - (-domain_z / 2));
+    float dx_2_0 = pos_data[idx].x - (-domain_x / 2);
+    float dy_2_0 = pos_data[idx].y - (-domain_y / 2);
+    float dz_2_0 = pos_data[idx].z - (-domain_z / 2);
 
     int x_idx = int(dx_2_0 / d_domain_x);
-    int y_idx = int(dy_2_0 / d_domain_x);
-    int z_idx = int(dz_2_0 / d_domain_x);
+    int y_idx = int(dy_2_0 / d_domain_y);
+    int z_idx = int(dz_2_0 / d_domain_z);
 
     // the mother BD idx which the current particle belongs to
     int bd_idx = z_idx * num_domain_x * num_domain_y + y_idx * num_domain_x + x_idx;
@@ -443,12 +445,12 @@ __global__ void kinematicStep2(float3* pos_data,
         }
 
         // expand the SD to BSD, and check whether the particle is in the current BSD
-        float BSD_x_start = x_check_idx * d_domain_x - 4 * kernel_h;
-        float BSD_x_end = (x_check_idx + 1) * d_domain_x + 4 * kernel_h;
-        float BSD_y_start = y_check_idx * d_domain_y - 4 * kernel_h;
-        float BSD_y_end = (y_check_idx + 1) * d_domain_y + 4 * kernel_h;
-        float BSD_z_start = z_check_idx * d_domain_z - 4 * kernel_h;
-        float BSD_z_end = (z_check_idx + 1) * d_domain_z + 4 * kernel_h;
+        float BSD_x_start =  x_check_idx      * d_domain_x - buffer_width * kernel_h;
+        float BSD_x_end   = (x_check_idx + 1) * d_domain_x + buffer_width * kernel_h;
+        float BSD_y_start =  y_check_idx      * d_domain_y - buffer_width * kernel_h;
+        float BSD_y_end   = (y_check_idx + 1) * d_domain_y + buffer_width * kernel_h;
+        float BSD_z_start =  z_check_idx      * d_domain_z - buffer_width * kernel_h;
+        float BSD_z_end   = (z_check_idx + 1) * d_domain_z + buffer_width * kernel_h;
 
         if (dx_2_0 >= BSD_x_start && dx_2_0 < BSD_x_end) {
             if (dy_2_0 >= BSD_y_start && dy_2_0 < BSD_y_end) {

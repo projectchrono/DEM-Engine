@@ -6,19 +6,23 @@
 using namespace sgps;
 
 int main(int argc, char* argv[]) {
-    // initialize particles in a cubic 10x10x10 domain
-    float dim_x = 32;
-    float dim_y = 32;
-    float dim_z = 8;
+    // initialize domain (boundary)
+    float dim_x = 16;
+    float dim_y = 16;
+    float dim_z = 16;
+
+    float fluid_dim_x = 16;
+    float fluid_dim_y = 16;
+    float fluid_dim_z = 8;
 
     // set particle kernel_h
-    float kernel_h = 0.2;
-    float gap = 0.02;
+    float kernel_h = 0.5;
 
     // calculate number of particles on each direction
-    int num_x = dim_x / (kernel_h * 2 + gap);
-    int num_y = dim_y / (kernel_h * 2 + gap);
-    int num_z = 20;
+    int num_x = (int)(dim_x / kernel_h);
+    int num_y = (int)(dim_y / kernel_h);
+    int num_z = (int)(dim_z / kernel_h);
+    int num_boundary = 3;
 
     // create position array of all particles
     std::vector<float3> pos_vec;
@@ -28,65 +32,81 @@ int main(int argc, char* argv[]) {
 
     // sample a box frame
     int num_par = 0;
-    // sample the bottom layer
-    for (int j = 0; j < num_y / 2; j++) {
-        for (int i = 0; i < num_x / 2; i++) {
-            float temp_z = -dim_z / 2 + kernel_h;
-            pos_vec.push_back(
-                make_float3(-dim_x / 2 + i * (2 * kernel_h + gap), -dim_y / 2 + j * (2 * kernel_h + gap), temp_z));
-            vel_vec.push_back(make_float3(0, 0, 0));
-            acc_vec.push_back(make_float3(0, 0, 0));
-            fix_vec.push_back(1);
-            num_par++;
+    // sample the bottom boundary layers
+    for (int j = 0; j < num_y + 2 * num_boundary; j++) {
+        for (int i = 0; i < num_x + 2 * num_boundary; i++) {
+            for (int k = 0; k < num_boundary; k++) {
+                float x_offset = -dim_x / 2 - kernel_h / 2 - 2 * kernel_h;
+                float y_offset = -dim_y / 2 - kernel_h / 2 - 2 * kernel_h;
+                float z_offset = -dim_z / 2 - kernel_h / 2;
+                pos_vec.push_back(
+                    make_float3(x_offset + i * kernel_h, y_offset + j * kernel_h, z_offset - k * kernel_h));
+                vel_vec.push_back(make_float3(0, 0, 0));
+                acc_vec.push_back(make_float3(0, 0, 0));
+                fix_vec.push_back(1);
+                num_par++;
+            }
         }
     }
-
+    // side walls in y direction (perpendicular to y axis)
     for (int j = 0; j < num_z; j++) {
-        for (int i = 0; i < num_x / 2 - 2; i++) {
-            pos_vec.push_back(make_float3(-dim_x / 2 + (i + 1) * (2 * kernel_h + gap), -dim_y / 2,
-                                          -dim_z / 2 + kernel_h + (j + 1) * (2 * kernel_h + gap)));
-            vel_vec.push_back(make_float3(0, 0, 0));
-            acc_vec.push_back(make_float3(0, 0, 0));
-            fix_vec.push_back(1);
-            num_par++;
+        for (int i = 0; i < num_x + 2 * num_boundary; i++) {
+            for (int k = 0; k < 3; k++) {
+                float x_offset = -dim_x / 2 - kernel_h / 2 - 2 * kernel_h;
+                float y_offset = -dim_y / 2 - kernel_h / 2 - 2 * kernel_h;
+                float z_offset = -dim_z / 2 + kernel_h / 2;
+                pos_vec.push_back(
+                    make_float3(x_offset + i * kernel_h, y_offset + k * kernel_h, z_offset + j * kernel_h));
+                vel_vec.push_back(make_float3(0, 0, 0));
+                acc_vec.push_back(make_float3(0, 0, 0));
+                fix_vec.push_back(1);
+                num_par++;
+                y_offset = dim_y / 2 + kernel_h / 2;
 
-            pos_vec.push_back(make_float3(-dim_x / 2 + (i + 1) * (2 * kernel_h + gap) + kernel_h,
-                                          -dim_y / 2 + (num_y / 2 - 1) * (2 * kernel_h + gap),
-                                          -dim_z / 2 + kernel_h + (j + 1) * (2 * kernel_h + gap)));
-            vel_vec.push_back(make_float3(0, 0, 0));
-            acc_vec.push_back(make_float3(0, 0, 0));
-            fix_vec.push_back(1);
-            num_par++;
+                pos_vec.push_back(
+                    make_float3(x_offset + i * kernel_h, y_offset + k * kernel_h, z_offset + j * kernel_h));
+                vel_vec.push_back(make_float3(0, 0, 0));
+                acc_vec.push_back(make_float3(0, 0, 0));
+                fix_vec.push_back(1);
+                num_par++;
+            }
         }
     }
-
+    // side walls in x direction (perpendicular to x axis)
     for (int j = 0; j < num_z; j++) {
-        for (int i = 0; i < num_y / 2 - 2; i++) {
-            pos_vec.push_back(make_float3(-dim_x / 2, -dim_y / 2 + (i + 1) * (2 * kernel_h + gap),
-                                          -dim_z / 2 + kernel_h + (j + 1) * (2 * kernel_h + gap)));
-            vel_vec.push_back(make_float3(0, 0, 0));
-            acc_vec.push_back(make_float3(0, 0, 0));
-            fix_vec.push_back(1);
-            num_par++;
+        for (int i = 0; i < num_y; i++) {
+            for (int k = 0; k < 3; k++) {
+                float x_offset = -dim_x / 2 - kernel_h / 2 - 2 * kernel_h;
+                float y_offset = -dim_y / 2 + kernel_h / 2;
+                float z_offset = -dim_z / 2 + kernel_h / 2;
+                pos_vec.push_back(
+                    make_float3(x_offset + k * kernel_h, y_offset + i * kernel_h, z_offset + j * kernel_h));
+                vel_vec.push_back(make_float3(0, 0, 0));
+                acc_vec.push_back(make_float3(0, 0, 0));
+                fix_vec.push_back(1);
+                num_par++;
+                x_offset = dim_y / 2 + kernel_h / 2;
 
-            pos_vec.push_back(make_float3(-dim_x / 2 + (num_x / 2 - 1) * (2 * kernel_h + gap),
-                                          -dim_y / 2 + (i + 1) * (2 * kernel_h + gap),
-                                          -dim_z / 2 + kernel_h + (j + 1) * (2 * kernel_h + gap)));
-            vel_vec.push_back(make_float3(0, 0, 0));
-            acc_vec.push_back(make_float3(0, 0, 0));
-            fix_vec.push_back(1);
-            num_par++;
+                pos_vec.push_back(
+                    make_float3(x_offset + k * kernel_h, y_offset + i * kernel_h, z_offset + j * kernel_h));
+                vel_vec.push_back(make_float3(0, 0, 0));
+                acc_vec.push_back(make_float3(0, 0, 0));
+                fix_vec.push_back(1);
+                num_par++;
+            }
         }
     }
 
     // sample a smaller domain for drop test
-    for (int k = 1; k < 5; k++) {
-        for (int j = 0; j < num_y / 4; j++) {
-            for (int i = 0; i < num_x / 4; i++) {
-                float temp_z = -dim_z / 2 + 2 * (kernel_h + 2 * gap) * (k) + kernel_h + gap;
+    for (int j = 0; j < (int)(fluid_dim_z / kernel_h); j++) {
+        for (int i = 0; i < (int)(fluid_dim_y / kernel_h); i++) {
+            for (int k = 0; k < (int)(fluid_dim_x / kernel_h); k++) {
+                float x_offset = -fluid_dim_x / 2 + kernel_h / 2;
+                float y_offset = -fluid_dim_y / 2 + kernel_h / 2;
+                float z_offset = -dim_z / 2 + kernel_h / 2;
 
-                pos_vec.push_back(make_float3(-dim_x / 2 + i * (2 * kernel_h + gap) + 6 * kernel_h,
-                                              -dim_y / 2 + j * (2 * kernel_h + gap) + 6 * kernel_h, temp_z));
+                pos_vec.push_back(
+                    make_float3(x_offset + k * kernel_h, y_offset + i * kernel_h, z_offset + j * kernel_h));
                 vel_vec.push_back(make_float3(0, 0, 0));
                 acc_vec.push_back(make_float3(0, 0, 0));
                 fix_vec.push_back(0);
@@ -103,9 +123,11 @@ int main(int argc, char* argv[]) {
 
     // create SPHSystem
     SPHSystem* system = new SPHSystem(gpu_distributor);
+    float rho = 1000;
 
     // initialize the SPHSystem
-    system->initialize(kernel_h, 33.5103, 1000, pos_vec, vel_vec, acc_vec, fix_vec, dim_x, dim_y, dim_z);
+    system->initialize(kernel_h, rho * kernel_h*kernel_h*kernel_h, rho, pos_vec, vel_vec, acc_vec, fix_vec, dim_x, dim_y, dim_z);
+    system->printCSV("sph_folder/test" + std::to_string(0) + ".csv", pos_vec.data(), num_par, vel_vec.data(), acc_vec.data());
     system->setPrintOut(true, 100);
     system->doStepDynamics(1e-5, 0.5f);
 }

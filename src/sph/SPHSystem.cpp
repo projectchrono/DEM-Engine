@@ -33,14 +33,15 @@ void SPHSystem::initialize(float kernel_h,
     dataManager.m_vel.assign(vel.begin(), vel.end());
     dataManager.m_acc.assign(acc.begin(), acc.end());
     dataManager.m_fix.assign(fix.begin(), fix.end());
-    this->domain_x = domain_x;
-    this->domain_y = domain_y;
-    this->domain_z = domain_z;
+    this->domain_x = domain_x + 5 * kernel_h;
+    this->domain_y = domain_y + 5 * kernel_h;
+    this->domain_z = domain_z + 5 * kernel_h;
 
     // redeclare the number of subdomain to be size/4 (4 is the BSD side length)
-    X_SUB_NUM = domain_x / 4;
-    Y_SUB_NUM = domain_y / 4;
-    Z_SUB_NUM = domain_z / 4;
+    X_SUB_NUM = (int)(domain_x / kernel_h) / 4 + 2;
+    Y_SUB_NUM = (int)(domain_y / kernel_h) / 4 + 2;
+    Z_SUB_NUM = (int)(domain_z / kernel_h) / 4 + 2;
+    printf("BSD num: %d, %d, %d\n", X_SUB_NUM, Y_SUB_NUM, Z_SUB_NUM);
 }
 
 void SPHSystem::doStepDynamics(float time_step, float sim_time) {
@@ -166,7 +167,7 @@ void KinematicThread::operator()() {
     // intermediate variables declaration
 
     while (getParentSystem().curr_time < getParentSystem().sim_time) {
-        float tolerance = 0.05;
+        float tolerance = kernel_h / 10;
 
         // for each step, the kinematic thread needs to do two passes
         // first pass - look for 'number' of potential contacts
@@ -184,6 +185,9 @@ void KinematicThread::operator()() {
         float d_domain_x = getParentSystem().domain_x / X_SUB_NUM;
         float d_domain_y = getParentSystem().domain_y / Y_SUB_NUM;
         float d_domain_z = getParentSystem().domain_z / Z_SUB_NUM;
+        float buffer_width = 2;
+
+        printf("d_domain: %f, %f, %f\n", d_domain_x, d_domain_y, d_domain_z);
 
         // ==============================================================================================================
         // Kinematic Step 1
@@ -202,7 +206,7 @@ void KinematicThread::operator()() {
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), num_BSD_data.data(), k_n, kernel_h, d_domain_x, d_domain_y, d_domain_z, X_SUB_NUM,
                     Y_SUB_NUM, Z_SUB_NUM, getParentSystem().domain_x, getParentSystem().domain_y,
-                    getParentSystem().domain_z);
+                    getParentSystem().domain_z, buffer_width);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -212,7 +216,7 @@ void KinematicThread::operator()() {
 
         int TotLength = offset_BSD_data[k_n - 1] + num_BSD_data[k_n - 1];
 
-        // std::cout << "TotLength: " << TotLength << std::endl;
+        std::cout << "TotLength: " << TotLength << std::endl;
 
         // ==============================================================================================================
         // Kinematic Step 2
@@ -229,7 +233,7 @@ void KinematicThread::operator()() {
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), offset_BSD_data.data(), BSD_iden_idx.data(), BSD_idx.data(), idx_track_data.data(),
                     k_n, TotLength, kernel_h, d_domain_x, d_domain_y, d_domain_z, X_SUB_NUM, Y_SUB_NUM, Z_SUB_NUM,
-                    getParentSystem().domain_x, getParentSystem().domain_y, getParentSystem().domain_z);
+                    getParentSystem().domain_x, getParentSystem().domain_y, getParentSystem().domain_z, buffer_width);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -660,7 +664,7 @@ void WriteOutThread::operator()() {
             //                            wt_pos.size(), wt_vel.data(), wt_rho.data(), wt_pressure.data());
 
             getParentSystem().printCSV("sph_folder/test" + std::to_string(writeOutCounter) + ".csv", wt_pos.data(),
-                                       wt_pos.size(), wt_vel.data(), wt_acc.data());
+                                       wt_pos.size(), wt_vel.data(), wt_rho.data(), wt_pressure.data());
             getParentSystem().wt_thread_busy = false;
             writeOutCounter++;
             std::cout << "wo ct:" << writeOutCounter << std::endl;
