@@ -23,8 +23,8 @@ DEMSolver::DEMSolver(unsigned int nGPUs) {
 
     dTkT_GpuManager = new GpuManager(nGPUs);
 
-    kT = new DEMKinematicThread(dTkT_InteractionManager, dTkT_GpuManager);
     dT = new DEMDynamicThread(dTkT_InteractionManager, dTkT_GpuManager);
+    kT = new DEMKinematicThread(dTkT_InteractionManager, dTkT_GpuManager, dT);
 
     // dT->setNDynamicCycles(nDynamicCycles);
 

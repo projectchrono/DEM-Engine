@@ -29,6 +29,16 @@ inline void DEMKinematicThread::contactEventArraysResize(size_t nContactPairs) {
     granData->contactType = contactType.data();
 }
 
+inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
+    // This memory usage is not tracked... How can I track the size changes on my friend's end??
+    dT->idGeometryA_buffer.resize(nContactPairs);
+    dT->idGeometryB_buffer.resize(nContactPairs);
+    dT->contactType_buffer.resize(nContactPairs);
+    granData->pDTOwnedBuffer_idGeometryA = dT->idGeometryA_buffer.data();
+    granData->pDTOwnedBuffer_idGeometryB = dT->idGeometryB_buffer.data();
+    granData->pDTOwnedBuffer_contactType = dT->contactType_buffer.data();
+}
+
 void DEMKinematicThread::contactDetection() {
     // total bytes needed for temp arrays in contact detection
     size_t CD_temp_arr_bytes = 0;
@@ -233,13 +243,8 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
     GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_nContactPairs, stateOfSolver_resources.getNumContactsPointer(),
                         sizeof(size_t), cudaMemcpyDeviceToDevice));
     // Resize dT owned buffers before usage
-    if (stateOfSolver_resources.getNumContacts() > pDTOwnedVector_idGeometryA->size()) {
-        pDTOwnedVector_idGeometryA->resize(stateOfSolver_resources.getNumContacts());
-        pDTOwnedVector_idGeometryB->resize(stateOfSolver_resources.getNumContacts());
-        pDTOwnedVector_contactType->resize(stateOfSolver_resources.getNumContacts());
-        granData->pDTOwnedBuffer_idGeometryA = pDTOwnedVector_idGeometryA->data();
-        granData->pDTOwnedBuffer_idGeometryB = pDTOwnedVector_idGeometryB->data();
-        granData->pDTOwnedBuffer_contactType = pDTOwnedVector_contactType->data();
+    if (stateOfSolver_resources.getNumContacts() > dT->idGeometryA_buffer.size()) {
+        transferArraysResize(stateOfSolver_resources.getNumContacts());
     }
     GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA,
                         stateOfSolver_resources.getNumContacts() * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
@@ -393,12 +398,6 @@ void DEMKinematicThread::packTransferPointers(DEMDynamicThread* dT) {
     granData->pDTOwnedBuffer_idGeometryA = dT->granData->idGeometryA_buffer;
     granData->pDTOwnedBuffer_idGeometryB = dT->granData->idGeometryB_buffer;
     granData->pDTOwnedBuffer_contactType = dT->granData->contactType_buffer;
-    // We need to resize dT owned buffer arrays from kT side (because the contact number is not known beforehand), so
-    // the pointers to geometry id buffers need to be registered as well. It is a bummer, but I don't know if there is a
-    // better solution.
-    pDTOwnedVector_idGeometryA = &(dT->idGeometryA_buffer);
-    pDTOwnedVector_idGeometryB = &(dT->idGeometryB_buffer);
-    pDTOwnedVector_contactType = &(dT->contactType_buffer);
 }
 
 void DEMKinematicThread::setSimParams(unsigned char nvXp2,

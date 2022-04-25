@@ -37,6 +37,9 @@ class DEMKinematicThread {
     // The std::thread that binds to this instance
     std::thread th;
 
+    // Friend system DEMDynamicThread
+    DEMDynamicThread* dT;
+
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
 
@@ -57,12 +60,6 @@ class DEMKinematicThread {
 
     // Pointers to clump template data. In the end, the use of this struct should be replaced by JIT.
     DEMTemplate* granTemplates;
-
-    // The pointers to dT owned buffer arrays themselves. The sole purpose of these pointers are for resizing on kT
-    // side.
-    std::vector<bodyID_t, ManagedAllocator<bodyID_t>>* pDTOwnedVector_idGeometryA;
-    std::vector<bodyID_t, ManagedAllocator<bodyID_t>>* pDTOwnedVector_idGeometryB;
-    std::vector<contact_t, ManagedAllocator<contact_t>>* pDTOwnedVector_contactType;
 
     // Buffer arrays for storing info from the dT side.
     // dT modifies these arrays; kT uses them only.
@@ -158,7 +155,7 @@ class DEMKinematicThread {
     friend class DEMSolver;
     friend class DEMDynamicThread;
 
-    DEMKinematicThread(ThreadManager* pSchedSup, GpuManager* pGpuDist)
+    DEMKinematicThread(ThreadManager* pSchedSup, GpuManager* pGpuDist, DEMDynamicThread* dT)
         : pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
         GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
         GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataKT), cudaMemAttachGlobal));
@@ -166,6 +163,9 @@ class DEMKinematicThread {
 
         // Get a device/stream ID to use from the GPU Manager
         streamInfo = pGpuDistributor->getAvailableStream();
+
+        // My friend dT
+        this->dT = dT;
 
         pSchedSupport->kinematicShouldJoin = false;
         pSchedSupport->kinematicStarted = false;
@@ -254,6 +254,8 @@ class DEMKinematicThread {
     void sendToTheirBuffer();
     // Resize contact storage arrays based on the number of contact pairs
     void contactEventArraysResize(size_t nContactPairs);
+    // Resize dT's buffer arrays based on the number of contact pairs
+    inline void transferArraysResize(size_t nContactPairs);
 
     // Just-in-time compiled kernels
     // jitify::Program bin_occupation = JitHelper::buildProgram("bin_occupation", " ");

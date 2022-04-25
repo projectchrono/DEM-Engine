@@ -407,6 +407,11 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     granData->contactForces = contactForces.data();
     granData->contactPointGeometryA = contactPointGeometryA.data();
     granData->contactPointGeometryB = contactPointGeometryB.data();
+
+    // Note that my buffer array sizes may have been changed by kT, so I need to repack those pointers too
+    granData->idGeometryA_buffer = idGeometryA_buffer.data();
+    granData->idGeometryB_buffer = idGeometryB_buffer.data();
+    granData->contactType_buffer = contactType_buffer.data();
 }
 
 inline void DEMDynamicThread::unpackMyBuffer() {
@@ -414,7 +419,8 @@ inline void DEMDynamicThread::unpackMyBuffer() {
                         sizeof(size_t), cudaMemcpyDeviceToDevice));
 
     // Need to resize those contact event-based arrays before usage
-    if (stateOfSolver_resources.getNumContacts() > idGeometryA.size()) {
+    if (stateOfSolver_resources.getNumContacts() > idGeometryA.size() ||
+        stateOfSolver_resources.getNumContacts() > idGeometryA_buffer.size()) {
         contactEventArraysResize(stateOfSolver_resources.getNumContacts());
     }
 
