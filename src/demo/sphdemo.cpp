@@ -126,8 +126,10 @@ int main(int argc, char* argv[]) {
     float rho = 1000;
 
     // initialize the SPHSystem
-    system->initialize(kernel_h, rho * kernel_h*kernel_h*kernel_h, rho, pos_vec, vel_vec, acc_vec, fix_vec, dim_x, dim_y, dim_z);
-    system->printCSV("sph_folder/test" + std::to_string(0) + ".csv", pos_vec.data(), num_par, vel_vec.data(), acc_vec.data());
+    system->initialize(kernel_h, rho * kernel_h * kernel_h * kernel_h, rho, pos_vec, vel_vec, acc_vec, fix_vec, dim_x,
+                       dim_y, dim_z);
+    system->printCSV("sph_folder/test" + std::to_string(0) + ".csv", pos_vec.data(), num_par, vel_vec.data(),
+                     acc_vec.data());
     system->setPrintOut(true, 100);
     system->doStepDynamics(1e-5, 0.5f);
 }

@@ -167,7 +167,7 @@ class DEMSolver {
     std::vector<DEMMaterial> m_sp_materials;
     // Materials info is processed at API level (on initialization) for generating proxy arrays
     std::vector<float> m_E_proxy;
-    std::vector<float> m_G_proxy;
+    std::vector<float> m_nu_proxy;
     std::vector<float> m_CoR_proxy;
 
     // This is the cached clump structure information.

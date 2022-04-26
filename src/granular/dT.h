@@ -111,7 +111,7 @@ class DEMDynamicThread {
 
     // Stores the actual stiffness/damping, where the kernels will need offsets to index into them
     std::vector<float, ManagedAllocator<float>> EProxy;
-    std::vector<float, ManagedAllocator<float>> GProxy;
+    std::vector<float, ManagedAllocator<float>> nuProxy;
     std::vector<float, ManagedAllocator<float>> CoRProxy;
 
     // Those are the large ones, ones that have the same length as the number of clumps
@@ -273,8 +273,8 @@ class DEMDynamicThread {
                                const std::vector<float3>& clumps_moi_types,
                                const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                const std::vector<std::vector<float3>>& clumps_sp_location_types,
-                               const std::vector<float>& mat_k,
-                               const std::vector<float>& mat_g,
+                               const std::vector<float>& mat_E,
+                               const std::vector<float>& mat_nu,
                                const std::vector<float>& mat_CoR);
 
     // Put sim data array pointers in place

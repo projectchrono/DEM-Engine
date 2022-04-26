@@ -275,6 +275,39 @@ inline __device__ float3 findLocalCoord(const T1& X,
     return make_float3(locX, locY, locZ);
 }
 
+/// Calculate the contact params based on the 2 contact material types given
+template <typename T1>
+inline void matProxy2ContactParam(T1& E_eff,
+                                  T1& G_eff,
+                                  T1& CoR,
+                                  const T1& Y1,
+                                  const T1& nu1,
+                                  const T1& CoR1,
+                                  const T1& Y2,
+                                  const T1& nu2,
+                                  const T1& CoR2) {
+    T1 invE = (1. - nu1 * nu1) / Y1 + (1. - nu2 * nu2) / Y2;
+    E_eff = 1. / invE;
+    T1 invG = 2. * (2. - nu1) * (1. + nu1) / Y1 + 2. * (2. - nu2) * (1. + nu2) / Y2;
+    G_eff = 1. / invG;
+    CoR = min(CoR1, CoR2);
+}
+
+/// Calculate the contact params based on the 2 contact material types given (frictionless version)
+template <typename T1>
+inline void matProxy2ContactParam(T1& E_eff,
+                                  T1& CoR,
+                                  const T1& Y1,
+                                  const T1& nu1,
+                                  const T1& CoR1,
+                                  const T1& Y2,
+                                  const T1& nu2,
+                                  const T1& CoR2) {
+    T1 invE = (1. - nu1 * nu1) / Y1 + (1. - nu2 * nu2) / Y2;
+    E_eff = 1. / invE;
+    CoR = min(CoR1, CoR2);
+}
+
 template <typename T1>
 inline __device__ sgps::contact_t checkSphereEntityOverlap(const T1& xA,
                                                            const T1& yA,

@@ -69,7 +69,7 @@ void DEMDynamicThread::packDataPointers() {
     granTemplates->mmiYY = mmiYY.data();
     granTemplates->mmiZZ = mmiZZ.data();
     granTemplates->EProxy = EProxy.data();
-    granTemplates->GProxy = GProxy.data();
+    granTemplates->nuProxy = nuProxy.data();
     granTemplates->CoRProxy = CoRProxy.data();
 }
 void DEMDynamicThread::packTransferPointers(DEMKinematicThread* kT) {
@@ -195,7 +195,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     TRACKED_VECTOR_RESIZE(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
     TRACKED_VECTOR_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
     TRACKED_VECTOR_RESIZE(EProxy, (1 + nMatTuples) * nMatTuples / 2, "EProxy", 0);
-    TRACKED_VECTOR_RESIZE(GProxy, (1 + nMatTuples) * nMatTuples / 2, "GProxy", 0);
+    TRACKED_VECTOR_RESIZE(nuProxy, (1 + nMatTuples) * nMatTuples / 2, "nuProxy", 0);
     TRACKED_VECTOR_RESIZE(CoRProxy, (1 + nMatTuples) * nMatTuples / 2, "CoRProxy", 0);
 
     // Arrays for contact info
@@ -230,15 +230,15 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
                                              const std::vector<float3>& clumps_moi_types,
                                              const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                              const std::vector<std::vector<float3>>& clumps_sp_location_types,
-                                             const std::vector<float>& mat_k,
-                                             const std::vector<float>& mat_g,
+                                             const std::vector<float>& mat_E,
+                                             const std::vector<float>& mat_nu,
                                              const std::vector<float>& mat_CoR) {
     // Use some temporary hacks to get the info in the managed mem
 
     // First, load in material property (upper-triangle) matrix
-    for (unsigned int i = 0; i < mat_k.size(); i++) {
-        EProxy.at(i) = mat_k.at(i);
-        GProxy.at(i) = mat_g.at(i);
+    for (unsigned int i = 0; i < mat_E.size(); i++) {
+        EProxy.at(i) = mat_E.at(i);
+        nuProxy.at(i) = mat_nu.at(i);
         CoRProxy.at(i) = mat_CoR.at(i);
     }
 
@@ -491,7 +491,7 @@ inline void DEMDynamicThread::calculateForces() {
     cal_force->kernel("calculateNormalContactForces")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(simParams, granData, stateOfSolver_resources.getNumContacts(), granTemplates);
+        .launch(simParams, granData, stateOfSolver_resources.getNumContacts());
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     // displayFloat3(granData->contactForces, stateOfSolver_resources.getNumContacts());
     // std::cout << "===========================" << std::endl;

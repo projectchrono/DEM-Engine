@@ -232,21 +232,15 @@ void DEMSolver::decideDefaultBinSize() {
 void DEMSolver::figureOutMaterialProxies() {
     // Use the info in m_sp_materials to populate API-side proxy arrays
     // These arrays are later passed to kTdT in populateManagedArrays
-    unsigned int count = (1 + m_sp_materials.size()) * m_sp_materials.size() / 2;
+    unsigned int count = m_sp_materials.size();
     m_E_proxy.resize(count);
-    m_G_proxy.resize(count);
+    m_nu_proxy.resize(count);
     m_CoR_proxy.resize(count);
-    for (unsigned int i = 0; i < m_sp_materials.size(); i++) {
-        for (unsigned int j = i; j < m_sp_materials.size(); j++) {
-            auto Mat1 = m_sp_materials.at(i);
-            auto Mat2 = m_sp_materials.at(j);
-            float E_eff, G_eff;
-            materialProxyMaterixCalculator(E_eff, G_eff, Mat1.E, Mat1.nu, Mat2.E, Mat2.nu);
-            unsigned int entry_num = locateMatPair<unsigned int>(i, j);
-            m_E_proxy.at(entry_num) = E_eff;
-            m_G_proxy.at(entry_num) = G_eff;
-            m_CoR_proxy.at(entry_num) = std::min(Mat1.CoR, Mat2.CoR);
-        }
+    for (unsigned int i = 0; i < count; i++) {
+        auto Mat = m_sp_materials.at(i);
+        m_E_proxy.at(i) = Mat.E;
+        m_nu_proxy.at(i) = Mat.nu;
+        m_CoR_proxy.at(i) = Mat.CoR;
     }
 }
 
@@ -494,7 +488,7 @@ void DEMSolver::initializeArrays() {
     // cached API-level simulation info.
     dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_input_clump_family,
                               m_input_ext_obj_xyz, m_input_ext_obj_family, m_template_sp_mat_ids, m_template_mass,
-                              m_template_moi, m_template_sp_radii, m_template_sp_relPos, m_E_proxy, m_G_proxy,
+                              m_template_moi, m_template_sp_radii, m_template_sp_relPos, m_E_proxy, m_nu_proxy,
                               m_CoR_proxy);
     kT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_input_clump_family,
                               m_template_mass, m_template_sp_radii, m_template_sp_relPos);
@@ -675,7 +669,7 @@ inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std
 }
 
 inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::string>& strMap) {
-    std::string ClumpMasses, moiX, moiY, moiZ;
+    std::string ClumpMasses, moiX, moiY, moiZ, E_proxy, nu_proxy, CoR_proxy;
     // Loop through all templates to find in the JIT info
     // Note m_template_mass's size may be large than nDistinctClumpBodyTopologies because of the ext obj mass entries
     // appended to that array
@@ -685,10 +679,18 @@ inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::st
         moiY += to_string_with_precision(m_template_moi.at(i).y) + ",";
         moiZ += to_string_with_precision(m_template_moi.at(i).z) + ",";
     }
+    for (unsigned int i = 0; i < nMatTuples_computed; i++) {
+        E_proxy += to_string_with_precision(m_E_proxy.at(i)) + ",";
+        nu_proxy += to_string_with_precision(m_nu_proxy.at(i)) + ",";
+        CoR_proxy += to_string_with_precision(m_CoR_proxy.at(i)) + ",";
+    }
     strMap["_ClumpMasses_"] = ClumpMasses;
     strMap["_moiX_"] = moiX;
     strMap["_moiY_"] = moiY;
     strMap["_moiZ_"] = moiZ;
+    strMap["_EProxy_"] = E_proxy;
+    strMap["_nuProxy_"] = nu_proxy;
+    strMap["_CoRProxy_"] = CoR_proxy;
 }
 
 inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap) {

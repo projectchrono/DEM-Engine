@@ -46,7 +46,8 @@ int main() {
     std::vector<unsigned int> mat_vec(3, 0);
     */
 
-    auto mat_type_1 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.2);
+    auto mat_type_1 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.3);
+    auto mat_type_2 = DEM_sim.LoadMaterialType(1e9, 0.3, 0.7);
 
     // First create clump type 0 for representing the ground
     float ground_sp_r = 0.02;
@@ -120,11 +121,11 @@ int main() {
 
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
     // DEM_sim.InstructBoxDomainNumVoxel(11, 11, 10, 1e-10);
-    DEM_sim.AddBCPlane(make_float3(0, 4.5, 0), make_float3(0, -1, 0), mat_type_1);
-    DEM_sim.AddBCPlane(make_float3(0, -4.5, 0), make_float3(0, 1, 0), mat_type_1);
-    DEM_sim.AddBCPlane(make_float3(4.5, 0, 0), make_float3(-1, 0, 0), mat_type_1);
+    DEM_sim.AddBCPlane(make_float3(0, 4.5, 0), make_float3(0, -1, 0), mat_type_2);
+    DEM_sim.AddBCPlane(make_float3(0, -4.5, 0), make_float3(0, 1, 0), mat_type_2);
+    DEM_sim.AddBCPlane(make_float3(4.5, 0, 0), make_float3(-1, 0, 0), mat_type_2);
     std::shared_ptr<DEMExternObj> plane_a = DEM_sim.AddExternalObject();
-    plane_a->AddPlane(make_float3(-4.5, 0, 0), make_float3(1, 0, 0), mat_type_1);
+    plane_a->AddPlane(make_float3(-4.5, 0, 0), make_float3(1, 0, 0), mat_type_2);
 
     DEM_sim.CenterCoordSys();
     DEM_sim.SetTimeStepSize(5e-6);

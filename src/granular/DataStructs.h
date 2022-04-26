@@ -74,7 +74,7 @@ struct DEMTemplate {
     float* mmiZZ;
     // materialsOffset_t* materialTupleOffset;
     float* EProxy;
-    float* GProxy;
+    float* nuProxy;
     float* CoRProxy;
 };
 

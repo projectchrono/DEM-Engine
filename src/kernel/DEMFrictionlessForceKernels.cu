@@ -40,8 +40,7 @@ inline __device__ float3 calcNormalForce(const double& overlapDepth,
 
 __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
                                              sgps::DEMDataDT* granData,
-                                             size_t nContactPairs,
-                                             sgps::DEMTemplate* granTemplates) {
+                                             size_t nContactPairs) {
     // CUDA does not support initializing shared arrays, so we have to manually load them
     __shared__ float Radii[_nDistinctClumpComponents_];
     __shared__ float CDRelPosX[_nDistinctClumpComponents_];
@@ -65,6 +64,10 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
             CDRelPosZ[i] = jitifiedCDRelPosZ[i];
         }
     }
+    const float EProxy[_nMatTuples_] = {_EProxy_};
+    const float nuProxy[_nMatTuples_] = {_nuProxy_};
+    const float CoRProxy[_nMatTuples_] = {_CoRProxy_};
+
     const sgps::objType_t objType[_nAnalGMSafe_] = {_objType_};
     const sgps::bodyID_t objOwner[_nAnalGMSafe_] = {_objOwner_};
     const bool objNormal[_nAnalGMSafe_] = {_objNormal_};
@@ -218,10 +221,9 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
             // atomicAdd(granData->bodyForceX + bodyB, force * B2AX);
 
             // Get k, g, etc. from the (upper-triangle) material property matrix
-            unsigned int matEntry = locateMatPair<unsigned int>(bodyAMatType, bodyBMatType);
-            float E = granTemplates->EProxy[matEntry];
-            // float G = granTemplates->GProxy[matEntry];
-            float CoR = granTemplates->CoRProxy[matEntry];
+            float E, CoR;
+            matProxy2ContactParam<float>(E, CoR, EProxy[bodyAMatType], nuProxy[bodyAMatType], CoRProxy[bodyAMatType],
+                                         EProxy[bodyBMatType], nuProxy[bodyBMatType], CoRProxy[bodyBMatType]);
 
             // Find the contact point in the local (body), but global-axes-aligned frame
             // float3 locCPA = findLocalCoord<double>(contactPntX, contactPntY, contactPntZ, AOwnerX, AOwnerY, AOwnerZ,
