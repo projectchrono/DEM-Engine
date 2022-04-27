@@ -16,7 +16,7 @@ int main(int argc, char* argv[]) {
     float fluid_dim_z = 8;
 
     // set particle kernel_h
-    float kernel_h = 0.5;
+    float kernel_h = 1.0;
 
     // calculate number of particles on each direction
     int num_x = (int)(dim_x / kernel_h);
@@ -131,5 +131,5 @@ int main(int argc, char* argv[]) {
     system->printCSV("sph_folder/test" + std::to_string(0) + ".csv", pos_vec.data(), num_par, vel_vec.data(),
                      acc_vec.data());
     system->setPrintOut(true, 100);
-    system->doStepDynamics(1e-5, 0.5f);
+    system->doStepDynamics(1e-5, 2e-5f);
 }

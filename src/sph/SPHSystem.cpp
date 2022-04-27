@@ -338,35 +338,46 @@ void KinematicThread::operator()() {
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
+        // std::vector<int> host_vec(pair_i_data.size());
+        // std::vector<int> host_vec2(pair_i_data.size());
+        // std::vector<float3> host_vec3(pair_i_data.size());
+        // cudaMemcpy(host_vec.data(), pair_i_data.data(), sizeof(int)*host_vec.size(), cudaMemcpyDeviceToHost);
+        // cudaMemcpy(host_vec2.data(), pair_j_data.data(), sizeof(int)*host_vec.size(), cudaMemcpyDeviceToHost);
+        // cudaMemcpy(host_vec3.data(), W_grad_data.data(), sizeof(float3)*host_vec.size(), cudaMemcpyDeviceToHost);
+        // for (int i = 0; i < host_vec.size(); i++) {
+        //     std::cout << host_vec[i] << " " << host_vec2[i] << " "
+        //     << host_vec3[i].x << " " << host_vec3[i].y << " " << host_vec3[i].z << std::endl;
+        // }
+
         // ================================================================================
         // Kinematic Step 8
         // Flateen the collision pair array to prepare for rho/pressure/W_grad computation
         // Sort all pairs and compute rho/pressure/W_grad
         // ================================================================================
-        std::vector<int, sgps::ManagedAllocator<int>> inv_pair_i_data;
-        std::vector<int, sgps::ManagedAllocator<int>> inv_pair_j_data;
-        inv_pair_i_data.resize(pair_i_data.size());
-        inv_pair_j_data.resize(pair_j_data.size());
+        // std::vector<int, sgps::ManagedAllocator<int>> inv_pair_i_data;
+        // std::vector<int, sgps::ManagedAllocator<int>> inv_pair_j_data;
+        // inv_pair_i_data.resize(pair_i_data.size());
+        // inv_pair_j_data.resize(pair_j_data.size());
 
-        num_thread = 1024;
-        num_block = (pair_i_data.size() % num_thread != 0) ? (pair_i_data.size() / num_thread + 1)
-                                                           : (pair_i_data.size() / num_thread);
+        // num_thread = 1024;
+        // num_block = (pair_i_data.size() % num_thread != 0) ? (pair_i_data.size() / num_thread + 1)
+        //                                                    : (pair_i_data.size() / num_thread);
 
-        kinematic_program.kernel("kinematicStep8")
-            .instantiate()
-            .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(pair_i_data.data(), pair_j_data.data(), inv_pair_i_data.data(), inv_pair_j_data.data(),
-                    pair_i_data.size());
-        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        // kinematic_program.kernel("kinematicStep8")
+        //     .instantiate()
+        //     .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
+        //     .launch(pair_i_data.data(), pair_j_data.data(), inv_pair_i_data.data(), inv_pair_j_data.data(),
+        //             pair_i_data.size());
+        // GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        // reuse two inv vectors
-        inv_pair_i_data.insert(inv_pair_i_data.end(), pair_i_data.begin(), pair_i_data.end());
-        inv_pair_j_data.insert(inv_pair_j_data.end(), pair_j_data.begin(), pair_j_data.end());
+        // // reuse two inv vectors
+        // inv_pair_i_data.insert(inv_pair_i_data.end(), pair_i_data.begin(), pair_i_data.end());
+        // inv_pair_j_data.insert(inv_pair_j_data.end(), pair_j_data.begin(), pair_j_data.end());
 
         std::vector<int, sgps::ManagedAllocator<int>> i_data_sorted;
         std::vector<int, sgps::ManagedAllocator<int>> j_data_sorted;
 
-        PairRadixSortAscendCub(inv_pair_i_data, i_data_sorted, inv_pair_j_data, j_data_sorted);
+        PairRadixSortAscendCub(pair_i_data, i_data_sorted, pair_j_data, j_data_sorted);
 
         std::vector<int, sgps::ManagedAllocator<int>> i_unique;
         std::vector<int, sgps::ManagedAllocator<int>> i_length;
@@ -388,6 +399,17 @@ void KinematicThread::operator()() {
             .launch(pos_data.data(), rho_data.data(), pressure_data.data(), i_unique.data(), i_offset.data(),
                     i_length.data(), j_data_sorted.data(), i_unique.size(), kernel_h, m, rho_0);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+        // std::vector<int> host_vec(i_unique.size());
+        // std::vector<float> host_vec2(pressure_data.size());
+        // std::vector<float> host_vec3(rho_data.size());
+        // cudaMemcpy(host_vec.data(), i_unique.data(), sizeof(int)*host_vec.size(), cudaMemcpyDeviceToHost);
+        // cudaMemcpy(host_vec2.data(), pressure_data.data(), sizeof(int)*host_vec.size(), cudaMemcpyDeviceToHost);
+        // cudaMemcpy(host_vec3.data(), rho_data.data(), sizeof(float)*host_vec.size(), cudaMemcpyDeviceToHost);
+        // for (int i = 0; i < host_vec.size(); i++) {
+        //     std::cout << host_vec[i] << " " << host_vec2[i] << " "
+        //     << host_vec3[i] << std::endl;
+        // }
 
         // copy data back to the dataManager
         {

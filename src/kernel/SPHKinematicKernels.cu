@@ -6,21 +6,38 @@
 
 // All helper functions
 __device__ float W(float3 r, float h) {
-    float alpha_d = 3 / (2 * MATH_PI * h * h * h);
-    float R = sqrt(r.x * r.x + r.y * r.y + r.z * r.z) / h;
-    float res = 0;
+    float invh = 1.0 / h;
+    float alpha_d = 0.25 / MATH_PI * invh * invh * invh;
+    float R = sqrt(r.x * r.x + r.y * r.y + r.z * r.z) * invh;
+    float res = 0.0;
 
     if (R >= 2) {
-        res = 0;
+        res = 0.0;
     } else if (R < 2 && R >= 1) {
-        res = alpha_d * (1.0f / 6.0f) * (2 - R) * (2 - R) * (2 - R);
+        res = alpha_d * (2 - R) * (2 - R) * (2 - R);
     } else {
-        res = alpha_d * (2 / 3) - R * R + (1 / 2) * R * R * R;
+        res = alpha_d * ((2 - R) * (2 - R) * (2 - R) - 4 * (1 - R) *  (1 - R) * (1 - R));
     }
 
     // printf("%f", res);
     return res;
 }
+// __device__ float W(float3 r, float h) {
+//     float alpha_d = 3 / (2 * MATH_PI * h * h * h);
+//     float R = sqrt(r.x * r.x + r.y * r.y + r.z * r.z) / h;
+//     float res = 0;
+//
+//     if (R >= 2) {
+//         res = 0;
+//     } else if (R < 2 && R >= 1) {
+//         res = alpha_d * (1.0f / 6.0f) * (2 - R) * (2 - R) * (2 - R);
+//     } else {
+//         res = alpha_d * (2 / 3) - R * R + (1 / 2) * R * R * R;
+//     }
+//
+//     // printf("%f", res);
+//     return res;
+// }
 
 __device__ float3 W_Grad(float3 r, float h) {
     float alpha_d = 3 / (2 * MATH_PI * h * h * h);
@@ -38,6 +55,25 @@ __device__ float3 W_Grad(float3 r, float h) {
 
     return coe * r_normalized;
 }
+
+// __device__ float3 W_Grad(float3 r, float h) {
+//     float invh = 1.0 / h;
+//     float d = sqrt(r.x * r.x + r.y * r.y + r.z * r.z);
+//     float R = d * invh;
+//     float3 alpha_d = 0.75 / MATH_PI * invh * invh * invh * invh * invh * r;
+//
+//     float3 coe;
+//     if (R < 1e-8 || R >= 2) {
+//         return 0.0 * r;
+//     }
+//     else if (R < 2 && R >= 1) {
+//         coe = alpha_d * (-R + 4.0 - 4.0 / R);
+//     } else {
+//         coe = alpha_d * (3.0 * R - 4.0);
+//     }
+//
+//     return coe;
+// }
 
 // =================================================================================================================
 // Kinematic 1st Step, this pass identifies number of BSDs touched by each particle
@@ -499,6 +535,7 @@ __global__ void kinematicStep5(
 
     if (threadIdx.x == 0) {
         tot_in_bsd = length_BSD_data[sd_idx];
+        printf("bsd_idx: %d, tot_in_bsd: %d\n", sd_idx, tot_in_bsd);
         int start_idx = offset_BSD_data[sd_idx];
         int end_idx = offset_BSD_data[sd_idx] + length_BSD_data[sd_idx];
         for (int i = start_idx; i < end_idx; i++) {
@@ -521,14 +558,12 @@ __global__ void kinematicStep5(
     }
 
     for (int i = 0; i < tot_in_bsd; i++) {
-        if ((i != idx) && (idx_local[idx] < idx_local[i])) {
-            float dist2 = (pos_local[i].x - pos_local[idx].x) * (pos_local[i].x - pos_local[idx].x) +
-                          (pos_local[i].y - pos_local[idx].y) * (pos_local[i].y - pos_local[idx].y) +
-                          (pos_local[i].z - pos_local[idx].z) * (pos_local[i].z - pos_local[idx].z);
+        float dist2 = (pos_local[i].x - pos_local[idx].x) * (pos_local[i].x - pos_local[idx].x) +
+                      (pos_local[i].y - pos_local[idx].y) * (pos_local[i].y - pos_local[idx].y) +
+                      (pos_local[i].z - pos_local[idx].z) * (pos_local[i].z - pos_local[idx].z);
 
-            if (dist2 <= (kernel_h * 2 + tolerance) * (kernel_h * 2 + tolerance)) {
-                count++;
-            }
+        if (dist2 <= (kernel_h * 2 + tolerance) * (kernel_h * 2 + tolerance)) {
+            count++;
         }
     }
 
@@ -593,21 +628,19 @@ __global__ void kinematicStep7(
     }
 
     for (int i = 0; i < tot_in_bsd; i++) {
-        if ((i != idx) && (idx_local[idx] < idx_local[i])) {
-            float dist2 = (pos_local[i].x - pos_local[idx].x) * (pos_local[i].x - pos_local[idx].x) +
-                          (pos_local[i].y - pos_local[idx].y) * (pos_local[i].y - pos_local[idx].y) +
-                          (pos_local[i].z - pos_local[idx].z) * (pos_local[i].z - pos_local[idx].z);
+        float dist2 = (pos_local[i].x - pos_local[idx].x) * (pos_local[i].x - pos_local[idx].x) +
+                      (pos_local[i].y - pos_local[idx].y) * (pos_local[i].y - pos_local[idx].y) +
+                      (pos_local[i].z - pos_local[idx].z) * (pos_local[i].z - pos_local[idx].z);
 
-            if (dist2 <= (kernel_h * 2 + tolerance) * (kernel_h * 2 + tolerance)) {
-                pair_i_data[num_col_offset[sd_idx * 512 + idx] + count] = idx_local[idx];
-                pair_j_data[num_col_offset[sd_idx * 512 + idx] + count] = idx_local[i];
+        if (dist2 <= (kernel_h * 2 + tolerance) * (kernel_h * 2 + tolerance)) {
+            pair_i_data[num_col_offset[sd_idx * 512 + idx] + count] = idx_local[idx];
+            pair_j_data[num_col_offset[sd_idx * 512 + idx] + count] = idx_local[i];
 
-                float3 dir = pos_local[idx] - pos_local[i];
+            float3 dir = pos_local[idx] - pos_local[i];
 
-                W_grad_data[num_col_offset[sd_idx * 512 + idx] + count] = W_Grad(dir, kernel_h * 2);
+            W_grad_data[num_col_offset[sd_idx * 512 + idx] + count] = W_Grad(dir, kernel_h);
 
-                count++;
-            }
+            count++;
         }
     }
 }
@@ -659,7 +692,7 @@ __global__ void kinematicStep9(float3* pos_data,
         int j_idx = j_data_sorted[start_idx + i];
         float3 dir = pos_data[i_idx] - pos_data[j_idx];
 
-        float w = W(dir, 2 * h);
+        float w = W(dir, h);
         // printf("%f", w);
         rho_sum = rho_sum + m * w;
     }
