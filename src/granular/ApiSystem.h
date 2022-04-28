@@ -106,6 +106,10 @@ class DEMSolver {
     /// which is following ``normal'' physics.
     void SetClumpFamily(const std::vector<unsigned int>& code);
 
+    /// Instruct the solver that the 2 input families should not have contacts (ignored if such a pair is encountered in
+    /// contact detection). These 2 families can be the same (not contact within members of this family).
+    void SetFamilyNoContact(unsigned int ID1, unsigned int ID2);
+
     /// Add an (analytical or clump-represented) external object to the simulation system
     std::shared_ptr<DEMExternObj> AddExternalObject();
     std::shared_ptr<DEMExternObj> AddBCPlane(const float3 pos, const float3 normal, const unsigned int material);
@@ -116,7 +120,7 @@ class DEMSolver {
     // location.
     unsigned int AddAnalCompTemplate(const objType_t type,
                                      const unsigned int material,
-                                     unsigned int owner,
+                                     const unsigned int owner,
                                      const float3 pos,
                                      const float3 rot = make_float3(0),
                                      const float d1 = 0.f,
@@ -285,6 +289,7 @@ class DEMSolver {
     unsigned int nDistinctClumpComponents_computed;
     unsigned int nDistinctClumpBodyTopologies;
     unsigned int nMatTuples_computed;
+    unsigned int nDistinctFamilies;
 
     // Whether the number of voxels and length unit l is explicitly given by the user.
     bool explicit_nv_override = false;
@@ -306,12 +311,21 @@ class DEMSolver {
     // some special physics (for example, being fixed). The default behavior (without specification) for every family is
     // using ``normal'' physics.
     std::vector<unsigned int> m_input_clump_family;
+
+    struct familyPair_t {
+        unsigned int ID1;
+        unsigned int ID2;
+    };
+    // Cached user-input no-contact family pairs
+    std::vector<familyPair_t> m_input_no_contact_pairs;
     // TODO: add APIs to allow specification of prescribed motions for each family. This information is only needed by
     // dT. (Prescribed types: an added force as a function of sim time or location; prescribed velocity/angVel as a
     // function; prescribed location as a function)
-    // TODO: add a interaction ``mask'', which clarifies the family codes that a family can interact with. This can be a
-    // bit slow to process but it only involves contact detection so needed by kT only, which it's acceptable even if
-    // it's somewhat slow.
+    // Upper-triangular interaction `mask' matrix, which clarifies the family codes that a family can interact with.
+    // This is needed by kT only.
+    std::vector<notStupidBool_t> m_family_mask_matrix;
+    // Host-side mapping array that maps like this: map.[user family number] = (corresponding impl-level family number)
+    std::unordered_map<unsigned int, family_t> m_family_user_impl_map;
     // TODO: fixed particles should automatically attain status indicating they don't interact with each other.
 
     // Unlike clumps, external objects do not have _types (each is its own type), but
@@ -351,9 +365,11 @@ class DEMSolver {
     // Prepare the material/contact proxy matrix force computation kernels
     void figureOutMaterialProxies();
     // Figure out info about external objects/clump templates and whether they can be jitified
-    void figureOutJitifiability();
+    void preprocessExternObjs();
     // Report simulation stats at initialization
     inline void reportInitStats() const;
+    // Based on user input, prepare family_mask_matrix (family contact map matrix)
+    void figureOutFamilyMasks();
 
     // Some JIT packaging helpers
     inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap);

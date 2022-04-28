@@ -24,7 +24,7 @@ inline __device__ float3 calcNormalForce(const double& overlapDepth,
     float sqrt_Rd = sqrt(overlapDepth * (ARadius * BRadius) / (ARadius + BRadius));
     const float Sn = 2. * E * sqrt_Rd;
 
-    const float loge = (CoR < sgps::DEM_TINY_FLOAT) ? log(sgps::DEM_TINY_FLOAT) : log(CoR);
+    const float loge = (CoR < SGPS_DEM_TINY_FLOAT) ? log(SGPS_DEM_TINY_FLOAT) : log(CoR);
     float beta = loge / sqrt(loge * loge + SGPS_PI_SQUARED);
 
     const float k_n = SGPS_TWO_OVER_THREE * Sn;

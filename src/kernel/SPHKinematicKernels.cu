@@ -16,7 +16,7 @@ __device__ float W(float3 r, float h) {
     } else if (R < 2 && R >= 1) {
         res = alpha_d * (2 - R) * (2 - R) * (2 - R);
     } else {
-        res = alpha_d * ((2 - R) * (2 - R) * (2 - R) - 4 * (1 - R) *  (1 - R) * (1 - R));
+        res = alpha_d * ((2 - R) * (2 - R) * (2 - R) - 4 * (1 - R) * (1 - R) * (1 - R));
     }
 
     // printf("%f", res);

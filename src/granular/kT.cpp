@@ -496,9 +496,9 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
 }
 
 void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
-                                               const std::vector<float3>& input_clump_xyz,
-                                               const std::vector<float3>& input_clump_vel,
                                                const std::vector<unsigned int>& input_clump_family,
+                                               const std::vector<unsigned int>& input_ext_obj_family,
+                                               const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
                                                const std::vector<float>& clumps_mass_types,
                                                const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                                const std::vector<std::vector<float3>>& clumps_sp_location_types) {
@@ -537,7 +537,7 @@ void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& 
     for (size_t i = 0; i < simParams->nOwnerClumps; i++) {
         auto type_of_this_clump = input_clump_types.at(i);
 
-        auto this_CoM_coord = input_clump_xyz.at(i) - LBF;
+        // auto this_CoM_coord = input_clump_xyz.at(i) - LBF; // kT don't have to init owner xyz
         auto this_clump_no_sp_radii = clumps_sp_radii_types.at(type_of_this_clump);
         auto this_clump_no_sp_relPos = clumps_sp_location_types.at(type_of_this_clump);
 
@@ -546,7 +546,15 @@ void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& 
             ownerClumpBody.at(k) = i;
             k++;
         }
-        familyID.at(i) = input_clump_family.at(i);
+
+        family_t this_family_num = family_user_impl_map.at(input_clump_family.at(i));
+        familyID.at(i) = this_family_num;
+    }
+
+    size_t offset_for_ext_obj = simParams->nOwnerClumps;
+    for (size_t i = 0; i < simParams->nExtObj; i++) {
+        family_t this_family_num = family_user_impl_map.at(input_ext_obj_family.at(i));
+        familyID.at(i + offset_for_ext_obj) = this_family_num;
     }
 }
 

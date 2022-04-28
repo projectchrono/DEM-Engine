@@ -18,7 +18,12 @@ namespace sgps {
 
 #define SGPS_DEM_MAX_SPHERES_PER_BIN 32  // very tricky; should redo CD kernels to be block--bin based
 #define WAIT_GRANULARITY_MS 1
-const float DEM_TINY_FLOAT = 1e-6f;
+#ifndef SGPS_DEM_TINY_FLOAT
+    #define SGPS_DEM_TINY_FLOAT 1e-12
+#endif
+#ifndef SGPS_DEM_HUGE_FLOAT
+    #define SGPS_DEM_HUGE_FLOAT 1e15
+#endif
 #ifndef SGPS_BITS_PER_BYTE
     #define SGPS_BITS_PER_BYTE 8
 #endif
@@ -90,11 +95,14 @@ const objType_t DEM_ENTITY_TYPE_PLATE = 1;
 const objNormal_t DEM_ENTITY_NORMAL_INWARD = 0;
 const objNormal_t DEM_ENTITY_NORMAL_OUTWARD = 1;
 
-typedef uint8_t contact_t;  ///< Contact type (sphere--sphere is 1, etc.)
-typedef uint8_t family_t;   ///< Data type for clump presecription type (0 for not prescribed)
+typedef uint8_t notStupidBool_t;  ///< Ad-hoc bool (array) type used on the host side
+typedef uint8_t contact_t;        ///< Contact type (sphere--sphere is 1, etc.)
+typedef uint8_t family_t;         ///< Data type for clump presecription type (0 for not prescribed)
 const contact_t DEM_NOT_A_CONTACT = 0;
 const contact_t DEM_SPHERE_SPHERE_CONTACT = 1;
 const contact_t DEM_SPHERE_PLANE_CONTACT = 2;
+const notStupidBool_t DEM_DONT_PREVENT_CONTACT = 0;
+const notStupidBool_t DEM_PREVENT_CONTACT = 1;
 
 // Some enums...
 // Friction mode

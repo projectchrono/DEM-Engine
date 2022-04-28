@@ -225,6 +225,7 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
                                              const std::vector<unsigned int>& input_clump_family,
                                              const std::vector<float3>& input_ext_obj_xyz,
                                              const std::vector<unsigned int>& input_ext_obj_family,
+                                             const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
                                              const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
                                              const std::vector<float>& clumps_mass_types,
                                              const std::vector<float3>& clumps_moi_types,
@@ -323,15 +324,16 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
         vZ.at(i) = vel_of_this_clump.z;
 
         // Set family code
-        familyID.at(i) = input_clump_family.at(i);
+        family_t this_family_num = family_user_impl_map.at(input_clump_family.at(i));
+        familyID.at(i) = this_family_num;
     }
 
     // Load in initial positions and mass properties for the owners of those external objects
     // They go after clump owners
     size_t offset_for_ext_obj = simParams->nOwnerClumps;
-    unsigned int offset_for_ext_obj_mass = simParams->nDistinctClumpBodyTopologies;
+    unsigned int offset_for_ext_obj_mass_template = simParams->nDistinctClumpBodyTopologies;
     for (size_t i = 0; i < simParams->nExtObj; i++) {
-        inertiaPropOffsets.at(i + offset_for_ext_obj) = i + offset_for_ext_obj_mass;
+        inertiaPropOffsets.at(i + offset_for_ext_obj) = i + offset_for_ext_obj_mass_template;
         auto this_CoM_coord = input_ext_obj_xyz.at(i) - LBF;
         voxelID_t voxelNumX = (double)this_CoM_coord.x / simParams->voxelSize;
         voxelID_t voxelNumY = (double)this_CoM_coord.y / simParams->voxelSize;
@@ -349,7 +351,8 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
         // TODO: and initial rot?
         // TODO: and initial vel?
 
-        familyID.at(i + offset_for_ext_obj) = input_ext_obj_family.at(i);
+        family_t this_family_num = family_user_impl_map.at(input_ext_obj_family.at(i));
+        familyID.at(i + offset_for_ext_obj) = this_family_num;
     }
 }
 

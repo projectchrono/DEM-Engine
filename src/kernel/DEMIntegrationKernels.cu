@@ -81,7 +81,7 @@ inline __device__ void integratePos(sgps::bodyID_t thisClump, sgps::DEMDataDT* g
         // TODO: Why not just store omgBar, not hOmgBar (it's even better for integer representation purposes)
         // TODO: Talk with Dan about this (is he insisting this because it has implications in rA?)
         double theta = 0.5 * h * len;  // 0.5*dt*len, delta rotation
-        if (len > 1.0e-12) {
+        if (len > SGPS_DEM_TINY_FLOAT) {
             deltaQ0 = cos(theta);
             double s = sin(theta) / len;
             deltaQ1 *= s;

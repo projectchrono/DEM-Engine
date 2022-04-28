@@ -268,6 +268,7 @@ class DEMDynamicThread {
                                const std::vector<unsigned int>& input_clump_family,
                                const std::vector<float3>& input_ext_obj_xyz,
                                const std::vector<unsigned int>& input_ext_obj_family,
+                               const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
                                const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
                                const std::vector<float>& clumps_mass_types,
                                const std::vector<float3>& clumps_moi_types,

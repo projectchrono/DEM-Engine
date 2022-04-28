@@ -126,9 +126,9 @@ template <typename T1>
 inline __device__ void normalizeVector3(T1& x, T1& y, T1& z) {
     T1 magnitude = sqrt(x * x + y * y + z * z);
     // TODO: Think about whether this is safe
-    if (magnitude < sgps::DEM_TINY_FLOAT) {
-        // printf("Caution!\n");
-    }
+    // if (magnitude < SGPS_DEM_TINY_FLOAT) {
+    //     printf("Caution!\n");
+    // }
     x /= magnitude;
     y /= magnitude;
     z /= magnitude;

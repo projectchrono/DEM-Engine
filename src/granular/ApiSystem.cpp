@@ -102,7 +102,7 @@ void DEMSolver::SetTimeStepSize(double ts_size) {
 
 unsigned int DEMSolver::LoadMaterialType(float E, float nu, float CoR, float density) {
     unsigned int mat_num = m_sp_materials.size();
-    if (CoR < DEM_TINY_FLOAT) {
+    if (CoR < SGPS_DEM_TINY_FLOAT) {
         std::cout << "\nWARNING! Material type " << mat_num
                   << " is set (or defaulted) to have 0 restitution. Please make sure this is intentional.\n"
                   << std::endl;
@@ -165,6 +165,13 @@ std::shared_ptr<DEMExternObj> DEMSolver::AddBCPlane(const float3 pos,
     return ptr;
 }
 
+void DEMSolver::SetFamilyNoContact(unsigned int ID1, unsigned int ID2) {
+    familyPair_t a_pair;
+    a_pair.ID1 = ID1;
+    a_pair.ID2 = ID2;
+    m_input_no_contact_pairs.push_back(a_pair);
+}
+
 void DEMSolver::ClearCache() {
     nSpheresGM = 0;
     nTriGM = 0;
@@ -194,6 +201,8 @@ void DEMSolver::ClearCache() {
     m_input_clump_xyz.clear();
     m_input_clump_vel.clear();
     m_input_clump_family.clear();
+    m_family_mask_matrix.clear();
+    m_family_user_impl_map.clear();
 }
 
 voxelID_t DEMSolver::GetClumpVoxelID(unsigned int i) const {
@@ -246,7 +255,7 @@ void DEMSolver::figureOutMaterialProxies() {
 
 unsigned int DEMSolver::AddAnalCompTemplate(const objType_t type,
                                             const unsigned int material,
-                                            unsigned int owner,
+                                            const unsigned int owner,
                                             const float3 pos,
                                             const float3 rot,
                                             const float d1,
@@ -265,7 +274,7 @@ unsigned int DEMSolver::AddAnalCompTemplate(const objType_t type,
     return m_anal_types.size() - 1;
 }
 
-void DEMSolver::figureOutJitifiability() {
+void DEMSolver::preprocessExternObjs() {
     // How many clump tempaltes are there? Is there one too large to jitify?
 
     // How many triangle tempaltes are there? Is there one too large to jitify?
@@ -312,6 +321,44 @@ void DEMSolver::figureOutJitifiability() {
         }
         nAnalGM += this_num_anal_ent;
         thisExtObj++;
+    }
+}
+
+void DEMSolver::figureOutFamilyMasks() {
+    // Figure out the unique family numbers
+    std::vector<unsigned int> unique_clump_families = hostUniqueVector<unsigned int>(m_input_clump_family);
+    std::vector<unsigned int> unique_ext_obj_families = hostUniqueVector<unsigned int>(m_input_ext_obj_family);
+    unique_clump_families.insert(unique_clump_families.end(), unique_ext_obj_families.begin(),
+                                 unique_ext_obj_families.end());
+    // TODO: find the uniques for triangle input families as well
+    std::vector<unsigned int> unique_families = hostUniqueVector<unsigned int>(unique_clump_families);
+    unsigned int max_family_num = *(std::max_element(unique_families.begin(), unique_families.end()));
+
+    nDistinctFamilies = unique_families.size();
+    if (nDistinctFamilies > std::numeric_limits<family_t>::max()) {
+        SGPS_ERROR(
+            "You have %d families, however per data type restriction, there can be no more than %d. If such so many "
+            "families are indeed needed, please redefine family_t.",
+            nDistinctFamilies, std::numeric_limits<family_t>::max());
+    }
+
+    // Build the user--internal family number map (user can define family number however they want, but our
+    // implementation-level numbers always start at 0)
+    for (family_t i = 0; i < nDistinctFamilies; i++) {
+        m_family_user_impl_map[unique_families.at(i)] = i;
+    }
+
+    // At this point, we know the size of the mask matrix, and we init it as all-allow
+    m_family_mask_matrix.resize((nDistinctFamilies + 1) * nDistinctFamilies / 2, DEM_DONT_PREVENT_CONTACT);
+
+    // Then we figure out the masks
+    for (auto a_pair : m_input_no_contact_pairs) {
+        // Convert user-input pairs into impl-level pairs
+        unsigned int implID1 = m_family_user_impl_map[a_pair.ID1];
+        unsigned int implID2 = m_family_user_impl_map[a_pair.ID2];
+        // Now fill in the mask matrix
+        unsigned int posInMat = locateMatPair<unsigned int>(implID1, implID2);
+        m_family_mask_matrix.at(posInMat) = DEM_PREVENT_CONTACT;
     }
 }
 
@@ -427,10 +474,13 @@ void DEMSolver::generateJITResources() {
     m_expand_factor *= m_expand_safety_param;
 
     // Figure out info about external objects/clump templates and whether they can be jitified
-    figureOutJitifiability();
+    preprocessExternObjs();
 
     // Process the loaded materials
     figureOutMaterialProxies();
+
+    // Based on user input, prepare family_mask_matrix (family contact map matrix)
+    figureOutFamilyMasks();
 
     nOwnerBodies = nExtObj + nOwnerClumps + nTriEntities;
     // Notify the user simulation stats
@@ -452,6 +502,7 @@ void DEMSolver::SetClumpVels(const std::vector<float3>& vel) {
 }
 
 void DEMSolver::SetClumpFamily(const std::vector<unsigned int>& code) {
+    /*
     if (any_of(code.begin(), code.end(), [](unsigned int i) { return i >= std::numeric_limits<family_t>::max(); })) {
         std::cout << "\nWARNING! Family number " << std::numeric_limits<family_t>::max()
                   << " (or anything larger than that) is reserved for completely fixed boundaries. Using it on your "
@@ -459,6 +510,7 @@ void DEMSolver::SetClumpFamily(const std::vector<unsigned int>& code) {
                      "family_t if you indeed need more families to work with."
                   << std::endl;
     }
+    */
     m_input_clump_family.insert(m_input_clump_family.end(), code.begin(), code.end());
 }
 
@@ -487,10 +539,10 @@ void DEMSolver::initializeArrays() {
     // Now that the CUDA-related functions and data types are JITCompiled, we can feed those GPU-side arrays with the
     // cached API-level simulation info.
     dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_input_clump_family,
-                              m_input_ext_obj_xyz, m_input_ext_obj_family, m_template_sp_mat_ids, m_template_mass,
-                              m_template_moi, m_template_sp_radii, m_template_sp_relPos, m_E_proxy, m_nu_proxy,
-                              m_CoR_proxy);
-    kT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_input_clump_family,
+                              m_input_ext_obj_xyz, m_input_ext_obj_family, m_family_user_impl_map,
+                              m_template_sp_mat_ids, m_template_mass, m_template_moi, m_template_sp_radii,
+                              m_template_sp_relPos, m_E_proxy, m_nu_proxy, m_CoR_proxy);
+    kT->populateManagedArrays(m_input_clump_types, m_input_clump_family, m_input_ext_obj_family, m_family_user_impl_map,
                               m_template_mass, m_template_sp_radii, m_template_sp_relPos);
 }
 

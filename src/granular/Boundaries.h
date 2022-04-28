@@ -89,15 +89,15 @@ struct DEMExternObj {
     // Component object materials
     std::vector<unsigned int> materials;
     // Family code (used in prescribing its motions etc.)
-    family_t family_code = std::numeric_limits<family_t>::max();  ///< Means it is default to the `fixed' family
+    unsigned int family_code = std::numeric_limits<family_t>::max();  ///< Means it is default to the `fixed' family
     // Obj's CoM initial position
     float3 init_pos = make_float3(0);
     // Obj's initial orientation quaternion
     float4 init_oriQ = make_float4(1.f, 0.f, 0.f, 0.f);
     // Obj's mass (huge by default)
-    float mass = 1e20;
+    float mass = SGPS_DEM_HUGE_FLOAT;
     // Obj's MOI (huge by default)
-    float3 MOI = make_float3(1e20);
+    float3 MOI = make_float3(SGPS_DEM_HUGE_FLOAT);
     // The (big) clump types that are a part of this extern obj. Note an external object should at most have one clump
     // as its component.
     unsigned int clump_type;

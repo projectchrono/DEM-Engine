@@ -18,8 +18,8 @@
 
 namespace sgps {
 
-// In an upper-triangular matrix, given i and j and num_of_col, this function returns the index of the corresponding
-// flatten-ed non-zero entries. This function does not assume i <= j.
+// In an upper-triangular matrix, given i and j, this function returns the index of the corresponding flatten-ed
+// non-zero entries. This function does not assume i <= j.
 template <typename T1>
 inline T1 locateMatPair(const T1& i, const T1& j) {
     if (i > j)
@@ -119,6 +119,14 @@ inline void hostScanForJumps(T1* arr, T1* arr_elem, T2* jump_loc, T3* jump_len, 
             total_found++;
         }
     }
+}
+
+template <typename T1>
+std::vector<T1> hostUniqueVector(const std::vector<T1>& vec) {
+    std::vector<T1> unique_vec(vec);
+    auto tmp_it = std::unique(unique_vec.begin(), unique_vec.end());
+    unique_vec.resize(std::distance(unique_vec.begin(), tmp_it));
+    return unique_vec;
 }
 
 // We collect h2a in fact, not force
