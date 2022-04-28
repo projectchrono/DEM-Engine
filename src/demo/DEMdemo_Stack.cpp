@@ -58,8 +58,9 @@ int main() {
     DEM_sim.AddClumps(input_template_num, input_xyz);
     DEM_sim.SetClumpFamily(family_code);
     DEM_sim.SetClumpVels(input_vel);
-    // Family 1 (ground) particles have no contact among each other
+    // Family 1 (ground) particles have no contact among each other, and fixed
     DEM_sim.SetFamilyNoContact(1, 1);
+    DEM_sim.SetFamilyFixed(1);
 
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
 

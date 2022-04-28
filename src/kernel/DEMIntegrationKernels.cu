@@ -4,15 +4,56 @@
 #include <granular/GranularDefines.h>
 #include <kernel/DEMPrescribedIntegrationKernels.cu>
 
+// Apply presecibed velocity and report whether the ``true'' physics should be skipped, rather than added on top of that
+template <typename T1, typename T2>
+inline __device__ void applyPrescribedVel(bool& LinPrescribed,
+                                          bool& RotPrescribed,
+                                          T1& vX,
+                                          T1& vY,
+                                          T1& vZ,
+                                          T2& omgBarX,
+                                          T2& omgBarY,
+                                          T2& omgBarZ,
+                                          const sgps::family_t& family,
+                                          const float& t) {
+    switch (family) {
+        _velPrescriptionStrategy_;
+        default:
+            LinPrescribed = false;
+            RotPrescribed = false;
+    }
+}
+
+// Apply presecibed location and report whether the ``true'' physics should be skipped, rather than added on top of that
+template <typename T1, typename T2>
+inline __device__ void applyPrescribedPos(bool& LinPrescribed,
+                                          bool& RotPrescribed,
+                                          T1& X,
+                                          T1& Y,
+                                          T1& Z,
+                                          T2& ori0,
+                                          T2& ori1,
+                                          T2& ori2,
+                                          T2& ori3,
+                                          const sgps::family_t& family,
+                                          const float& t) {
+    switch (family) {
+        _posPrescriptionStrategy_;
+        default:
+            LinPrescribed = false;
+            RotPrescribed = false;
+    }
+}
+
 // For now, write a custom kernel (instead of cub-based), and change it later
-inline __device__ void integrateVel(sgps::bodyID_t thisClump, sgps::DEMDataDT* granData, double h) {
+inline __device__ void integrateVel(sgps::bodyID_t thisClump, sgps::DEMDataDT* granData, double h, double t) {
     // Even prescribed motion should leverage custom integrators, so we put the prescription condition at a ``inner''
     // location.
     sgps::family_t family_code = granData->familyID[thisClump];
-    bool LinPrescribed, RotPrescribed;
+    bool LinPrescribed = false, RotPrescribed = false;
     applyPrescribedVel<float, float>(LinPrescribed, RotPrescribed, granData->vX[thisClump], granData->vY[thisClump],
                                      granData->vZ[thisClump], granData->omgBarX[thisClump],
-                                     granData->omgBarY[thisClump], granData->omgBarZ[thisClump], family_code);
+                                     granData->omgBarY[thisClump], granData->omgBarZ[thisClump], family_code, (float)t);
 
     if (!LinPrescribed) {
         granData->vX[thisClump] += granData->aX[thisClump] * h;
@@ -46,17 +87,17 @@ inline __device__ void locateNewVoxel(sgps::voxelID_t& voxel, int64_t& locX_tmp,
     IDPacker<sgps::voxelID_t, sgps::voxelID_t>(voxel, voxelX, voxelY, voxelZ, _nvXp2_, _nvYp2_);
 }
 
-inline __device__ void integratePos(sgps::bodyID_t thisClump, sgps::DEMDataDT* granData, double h) {
+inline __device__ void integratePos(sgps::bodyID_t thisClump, sgps::DEMDataDT* granData, double h, double t) {
     // Location accuracy is up to integer level anyway
     int64_t locX_tmp = (int64_t)granData->locX[thisClump];
     int64_t locY_tmp = (int64_t)granData->locY[thisClump];
     int64_t locZ_tmp = (int64_t)granData->locZ[thisClump];
 
     sgps::family_t family_code = granData->familyID[thisClump];
-    bool LinPrescribed, RotPrescribed;
-    applyPrescribedPos<int64_t, sgps::oriQ_t>(LinPrescribed, RotPrescribed, locX_tmp, locY_tmp, locZ_tmp,
-                                              granData->oriQ0[thisClump], granData->oriQ1[thisClump],
-                                              granData->oriQ2[thisClump], granData->oriQ3[thisClump], family_code);
+    bool LinPrescribed = false, RotPrescribed = false;
+    applyPrescribedPos<int64_t, sgps::oriQ_t>(
+        LinPrescribed, RotPrescribed, locX_tmp, locY_tmp, locZ_tmp, granData->oriQ0[thisClump],
+        granData->oriQ1[thisClump], granData->oriQ2[thisClump], granData->oriQ3[thisClump], family_code, (float)t);
 
     if (!LinPrescribed) {
         locX_tmp += (int64_t)((double)granData->vX[thisClump] / _l_ * h);
@@ -99,10 +140,10 @@ inline __device__ void integratePos(sgps::bodyID_t thisClump, sgps::DEMDataDT* g
     }
 }
 
-__global__ void integrateClumps(sgps::DEMDataDT* granData, double h) {
+__global__ void integrateClumps(sgps::DEMDataDT* granData, double h, double t) {
     sgps::bodyID_t thisClump = blockIdx.x * blockDim.x + threadIdx.x;
     if (thisClump < _nOwnerBodies_) {
-        integrateVel(thisClump, granData, h);
-        integratePos(thisClump, granData, h);
+        integrateVel(thisClump, granData, h, t);
+        integratePos(thisClump, granData, h, t);
     }
 }

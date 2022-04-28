@@ -100,7 +100,23 @@ void DEMSolver::SetTimeStepSize(double ts_size) {
     m_ts_size = ts_size;
 }
 
-void DEMSolver::SetFamilyFixed(unsigned int ID) {}
+void DEMSolver::SetFamilyFixed(unsigned int ID) {
+    familyPrescription_t preInfo;
+    preInfo.family = ID;
+    preInfo.linVelX = "0";
+    preInfo.linVelY = "0";
+    preInfo.linVelZ = "0";
+    preInfo.rotVelX = "0";
+    preInfo.rotVelY = "0";
+    preInfo.rotVelZ = "0";
+    preInfo.linVelPrescribed = true;
+    preInfo.rotVelPrescribed = true;
+    preInfo.rotPosPrescribed = true;
+    preInfo.linPosPrescribed = true;
+    preInfo.used = true;
+
+    m_input_family_prescription.push_back(preInfo);
+}
 
 unsigned int DEMSolver::LoadMaterialType(float E, float nu, float CoR, float density) {
     unsigned int mat_num = m_sp_materials.size();
@@ -354,13 +370,60 @@ void DEMSolver::figureOutFamilyMasks() {
     m_family_mask_matrix.resize((nDistinctFamilies + 1) * nDistinctFamilies / 2, DEM_DONT_PREVENT_CONTACT);
 
     // Then we figure out the masks
-    for (auto a_pair : m_input_no_contact_pairs) {
+    for (const auto& a_pair : m_input_no_contact_pairs) {
         // Convert user-input pairs into impl-level pairs
         unsigned int implID1 = m_family_user_impl_map.at(a_pair.ID1);
         unsigned int implID2 = m_family_user_impl_map.at(a_pair.ID2);
         // Now fill in the mask matrix
         unsigned int posInMat = locateMatPair<unsigned int>(implID1, implID2);
         m_family_mask_matrix.at(posInMat) = DEM_PREVENT_CONTACT;
+    }
+
+    // Then, figure out each family's prescription info and put it into an (impl family number-based) array
+    // Multiple user prescription input entries can work on the same array entry
+    m_unique_family_prescription.resize(nDistinctFamilies);
+    for (const auto& preInfo : m_input_family_prescription) {
+        unsigned int user_family = preInfo.family;
+        if (m_family_user_impl_map.find(user_family) == m_family_user_impl_map.end()) {
+            if (user_family != DEM_RESERVED_FAMILY_NUM) {
+                std::cout << "\nWARNING! Family number " << user_family
+                          << " is instructed to have prescribed motion, but no entity is associated with this family."
+                          << std::endl;
+            }
+            continue;
+        }
+
+        auto& this_family_info = m_unique_family_prescription.at(m_family_user_impl_map.at(preInfo.family));
+
+        this_family_info.used = true;
+        this_family_info.family = m_family_user_impl_map.at(preInfo.family);
+        if (preInfo.linPosX != "none")
+            this_family_info.linPosX = preInfo.linPosX;
+        if (preInfo.linPosY != "none")
+            this_family_info.linPosY = preInfo.linPosY;
+        if (preInfo.linPosZ != "none")
+            this_family_info.linPosZ = preInfo.linPosZ;
+        if (preInfo.oriQ != "none")
+            this_family_info.oriQ = preInfo.oriQ;
+        if (preInfo.linVelX != "none")
+            this_family_info.linVelX = preInfo.linVelX;
+        if (preInfo.linVelY != "none")
+            this_family_info.linVelY = preInfo.linVelY;
+        if (preInfo.linVelZ != "none")
+            this_family_info.linVelZ = preInfo.linVelZ;
+        if (preInfo.rotVelX != "none")
+            this_family_info.rotVelX = preInfo.rotVelX;
+        if (preInfo.rotVelY != "none")
+            this_family_info.rotVelY = preInfo.rotVelY;
+        if (preInfo.rotVelZ != "none")
+            this_family_info.rotVelZ = preInfo.rotVelZ;
+        this_family_info.linVelPrescribed = this_family_info.linVelPrescribed || preInfo.linVelPrescribed;
+        this_family_info.rotVelPrescribed = this_family_info.rotVelPrescribed || preInfo.rotVelPrescribed;
+        this_family_info.rotPosPrescribed = this_family_info.rotPosPrescribed || preInfo.rotPosPrescribed;
+        this_family_info.linPosPrescribed = this_family_info.linPosPrescribed || preInfo.linPosPrescribed;
+
+        this_family_info.externPos = this_family_info.externPos || preInfo.externPos;
+        this_family_info.externVel = this_family_info.externVel || preInfo.externVel;
     }
 }
 
@@ -504,15 +567,14 @@ void DEMSolver::SetClumpVels(const std::vector<float3>& vel) {
 }
 
 void DEMSolver::SetClumpFamily(const std::vector<unsigned int>& code) {
-    /*
-    if (any_of(code.begin(), code.end(), [](unsigned int i) { return i >= std::numeric_limits<family_t>::max(); })) {
-        std::cout << "\nWARNING! Family number " << std::numeric_limits<family_t>::max()
-                  << " (or anything larger than that) is reserved for completely fixed boundaries. Using it on your "
+    if (any_of(code.begin(), code.end(), [](unsigned int i) { return i >= DEM_RESERVED_FAMILY_NUM; })) {
+        std::cout << "\nWARNING! Family number " << DEM_RESERVED_FAMILY_NUM
+                  << " is reserved for completely fixed boundaries. Using it on your "
                      "simulation entities will make them fixed, regardless of your specification.\nYou can change "
                      "family_t if you indeed need more families to work with."
                   << std::endl;
     }
-    */
+
     m_input_clump_family.insert(m_input_clump_family.end(), code.begin(), code.end());
 }
 
@@ -561,6 +623,8 @@ void DEMSolver::validateUserInputs() {
     // First match the length of input clump arrays, for those input arrays that we don't force the user to specify
     m_input_clump_vel.resize(m_input_clump_xyz.size(), make_float3(0));
     m_input_clump_family.resize(m_input_clump_xyz.size(), 0);
+    // Fix the reserved family
+    SetFamilyFixed(DEM_RESERVED_FAMILY_NUM);
 
     if (m_sp_materials.size() == 0) {
         SGPS_ERROR("Before initializing the system, at least one material type should be loaded via LoadMaterialType.");
@@ -684,7 +748,50 @@ int DEMSolver::LaunchThreads(double thisCallDuration) {
     return 0;
 }
 
-inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::string, std::string>& strMap) {}
+inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::string, std::string>& strMap) {
+    std::string velStr = " ", posStr = " ";
+    for (const auto& preInfo : m_unique_family_prescription) {
+        if (!preInfo.used) {
+            continue;
+        }
+        velStr += "case " + std::to_string(preInfo.family) + ": {";
+        posStr += "case " + std::to_string(preInfo.family) + ": {";
+        if (!preInfo.externVel) {
+            if (preInfo.linVelX != "none")
+                velStr += "vX = " + preInfo.linVelX + ";";
+            if (preInfo.linVelY != "none")
+                velStr += "vY = " + preInfo.linVelY + ";";
+            if (preInfo.linVelZ != "none")
+                velStr += "vZ = " + preInfo.linVelZ + ";";
+            if (preInfo.rotVelX != "none")
+                velStr += "omgBarX = " + preInfo.rotVelX + ";";
+            if (preInfo.rotVelY != "none")
+                velStr += "omgBarY = " + preInfo.rotVelY + ";";
+            if (preInfo.rotVelZ != "none")
+                velStr += "omgBarZ = " + preInfo.rotVelZ + ";";
+            velStr += "LinPrescribed = " + std::to_string(preInfo.linVelPrescribed) + ";";
+            velStr += "RotPrescribed = " + std::to_string(preInfo.rotVelPrescribed) + ";";
+        }  // TODO: add externVel==True case, loading from external vectors
+        velStr += "break; }";
+        if (!preInfo.externPos) {
+            if (preInfo.linPosX != "none")
+                posStr += "X = " + preInfo.linPosX + ";";
+            if (preInfo.linPosY != "none")
+                posStr += "Y = " + preInfo.linPosY + ";";
+            if (preInfo.linPosZ != "none")
+                posStr += "Z = " + preInfo.linPosZ + ";";
+            if (preInfo.oriQ != "none") {
+                posStr += "float4 myOriQ = " + preInfo.oriQ + ";";
+                posStr += "ori0 = myOriQ.x; ori1 = myOriQ.y; ori2 = myOriQ.z; ori3 = myOriQ.w;";
+            }
+            posStr += "LinPrescribed = " + std::to_string(preInfo.linPosPrescribed) + ";";
+            posStr += "RotPrescribed = " + std::to_string(preInfo.rotPosPrescribed) + ";";
+        }  // TODO: add externPos==True case, loading from external vectors
+        posStr += "break; }";
+    }
+    strMap["_velPrescriptionStrategy_"] = velStr;
+    strMap["_posPrescriptionStrategy_"] = posStr;
+}
 
 inline void DEMSolver::equipFamilyMasks(std::unordered_map<std::string, std::string>& strMap) {
     std::string maskMat;

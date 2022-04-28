@@ -89,7 +89,7 @@ struct DEMExternObj {
     // Component object materials
     std::vector<unsigned int> materials;
     // Family code (used in prescribing its motions etc.)
-    unsigned int family_code = std::numeric_limits<family_t>::max();  ///< Means it is default to the `fixed' family
+    unsigned int family_code = DEM_RESERVED_FAMILY_NUM;  ///< Means it is default to the `fixed' family
     // Obj's CoM initial position
     float3 init_pos = make_float3(0);
     // Obj's initial orientation quaternion

@@ -170,6 +170,9 @@ class DEMDynamicThread {
 
     size_t m_approx_bytes_used = 0;
 
+    // Time elapsed in current simulation
+    double timeElapsed = 0.0;
+
     // Set to true only when a user AdvanceSimulation call is finished. Set to false otherwise.
     bool userCallDone = false;
 

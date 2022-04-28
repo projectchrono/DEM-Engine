@@ -12,6 +12,7 @@
 #define SGPS_DEM_MAX(a, b) ((a > b) ? a : b)
 
 namespace sgps {
+
 #ifndef SGPS_GET_VAR_NAME
     #define SGPS_GET_VAR_NAME(Variable) (#Variable)
 #endif
@@ -29,6 +30,20 @@ namespace sgps {
 #endif
 #ifndef SGPS_CUDA_WARP_SIZE
     #define SGPS_CUDA_WARP_SIZE 32
+#endif
+
+// A few pre-computed constants
+#ifndef SGPS_TWO_OVER_THREE
+    #define SGPS_TWO_OVER_THREE 0.666666666666667
+#endif
+#ifndef SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX
+    #define SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX 1.825741858350554
+#endif
+#ifndef SGPS_PI
+    #define SGPS_PI 3.141592653589793
+#endif
+#ifndef SGPS_PI_SQUARED
+    #define SGPS_PI_SQUARED 9.869604401089358
 #endif
 
 typedef uint16_t subVoxelPos_t;  ///< uint16 or uint32
@@ -49,6 +64,9 @@ typedef uint8_t clumpComponentOffset_t;
 typedef unsigned short int clumpComponentOffsetExt_t;  ///< Extended component offset type for non-jitified part
 typedef double floatFine_t;
 typedef char scratch_t;  ///< Data type for DEM scratch-pad array
+// typedef unsigned int stateVectors_default_t; // what's this for??
+// typedef unsigned int distinctSphereRelativePositions_default_t;
+// typedef unsigned int distinctSphereRadiiOffset_default_t;
 
 // How many bin--sphere touch pairs can there be for one sphere, tops? This type should not need to be large.
 typedef unsigned short int binsSphereTouches_t;
@@ -62,9 +80,12 @@ typedef unsigned short int spheresBinTouches_t;
 // magnitude as bodyID_t.
 typedef unsigned int contactPairs_t;
 
-// typedef unsigned int stateVectors_default_t; // what's this for??
-// typedef unsigned int distinctSphereRelativePositions_default_t;
-// typedef unsigned int distinctSphereRadiiOffset_default_t;
+typedef uint8_t notStupidBool_t;  ///< Ad-hoc bool (array) type
+typedef uint8_t contact_t;        ///< Contact type (sphere--sphere is 1, etc.)
+typedef uint8_t family_t;         ///< Data type for clump presecription type (0 for not prescribed etc)
+
+typedef uint8_t objType_t;
+typedef bool objNormal_t;
 
 #define SGPS_DEM_NUM_BINS_PER_BLOCK 128
 #define SGPS_DEM_NUM_BODIES_PER_BLOCK 512
@@ -74,35 +95,18 @@ typedef unsigned int contactPairs_t;
 constexpr clumpComponentOffset_t NUM_ACTIVE_TEMPLATE_LOADING_THREADS =
     SGPS_DEM_MIN(SGPS_DEM_MIN(SGPS_CUDA_WARP_SIZE, SGPS_DEM_NUM_BINS_PER_BLOCK), SGPS_DEM_NUM_BODIES_PER_BLOCK);
 
-// A few pre-computed constants
-
-#ifndef SGPS_TWO_OVER_THREE
-    #define SGPS_TWO_OVER_THREE 0.666666666666667
-#endif
-#ifndef SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX
-    #define SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX 1.825741858350554
-#endif
-#ifndef SGPS_PI
-    #define SGPS_PI 3.141592653589793
-#endif
-#ifndef SGPS_PI_SQUARED
-    #define SGPS_PI_SQUARED 9.869604401089358
-#endif
-typedef uint8_t objType_t;
-typedef bool objNormal_t;
 const objType_t DEM_ENTITY_TYPE_PLANE = 0;
 const objType_t DEM_ENTITY_TYPE_PLATE = 1;
 const objNormal_t DEM_ENTITY_NORMAL_INWARD = 0;
 const objNormal_t DEM_ENTITY_NORMAL_OUTWARD = 1;
 
-typedef uint8_t notStupidBool_t;  ///< Ad-hoc bool (array) type
-typedef uint8_t contact_t;        ///< Contact type (sphere--sphere is 1, etc.)
-typedef uint8_t family_t;         ///< Data type for clump presecription type (0 for not prescribed etc)
 const contact_t DEM_NOT_A_CONTACT = 0;
 const contact_t DEM_SPHERE_SPHERE_CONTACT = 1;
 const contact_t DEM_SPHERE_PLANE_CONTACT = 2;
 const notStupidBool_t DEM_DONT_PREVENT_CONTACT = 0;
 const notStupidBool_t DEM_PREVENT_CONTACT = 1;
+
+constexpr unsigned int DEM_RESERVED_FAMILY_NUM = ((unsigned int)1 << (sizeof(family_t) * SGPS_BITS_PER_BYTE)) - 1;
 
 // Some enums...
 // Friction mode

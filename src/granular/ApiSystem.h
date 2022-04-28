@@ -337,6 +337,36 @@ class DEMSolver {
     // std::vector<float4> m_input_ext_obj_rot;
     std::vector<unsigned int> m_input_ext_obj_family;
 
+    struct familyPrescription_t {
+        unsigned int family;
+        std::string linPosX = "none";
+        std::string linPosY = "none";
+        std::string linPosZ = "none";
+        std::string linVelX = "none";
+        std::string linVelY = "none";
+        std::string linVelZ = "none";
+
+        std::string oriQ = "none";
+        std::string rotVelX = "none";
+        std::string rotVelY = "none";
+        std::string rotVelZ = "none";
+        // Is this prescribed motion dictating the motion of the entities (true), or just added on top of the true
+        // physics (false)
+        bool linVelPrescribed = false;
+        bool rotVelPrescribed = false;
+        bool rotPosPrescribed = false;
+        bool linPosPrescribed = false;
+        // This family will receive external updates of velocity and position (overwrites analytical prescription)
+        bool externVel = false;
+        bool externPos = false;
+        // A switch to mark if there is any prescription going on for this family at all
+        bool used = false;
+    };
+    // User-input prescribed motion
+    std::vector<familyPrescription_t> m_input_family_prescription;
+    // Processed unique family prescription info
+    std::vector<familyPrescription_t> m_unique_family_prescription;
+
     // The number of dT steps before it waits for a kT update. The default value 0 means every dT step will wait for a
     // newly produced contact-pair info (from kT) before proceeding.
     int m_updateFreq = 0;

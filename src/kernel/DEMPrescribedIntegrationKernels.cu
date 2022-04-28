@@ -29,14 +29,8 @@ inline __device__ void applyPrescribedVel(bool& LinPrescribed,
             RotPrescribed = true;
             break;
         default:
-            vX = 0;
-            vY = 0;
-            vZ = 0;
-            omgBarX = 0;
-            omgBarY = 0;
-            omgBarZ = 0;
-            LinPrescribed = true;
-            RotPrescribed = true;
+            LinPrescribed = false;
+            RotPrescribed = false;
     }
 }
 
@@ -63,7 +57,7 @@ inline __device__ void applyPrescribedPos(bool& LinPrescribed,
             RotPrescribed = true;
             break;
         default:
-            LinPrescribed = true;
-            RotPrescribed = true;
+            LinPrescribed = false;
+            RotPrescribed = false;
     }
 }

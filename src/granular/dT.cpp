@@ -535,7 +535,7 @@ inline void DEMDynamicThread::integrateClumpMotions() {
     integrator->kernel("integrateClumps")
         .instantiate()
         .configure(dim3(blocks_needed_for_clumps), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData, simParams->h);
+        .launch(granData, simParams->h, timeElapsed);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
@@ -598,6 +598,9 @@ void DEMDynamicThread::workerThread() {
             calculateForces();
 
             integrateClumpMotions();
+
+            // TODO: make changes for variable time step size cases
+            timeElapsed += simParams->h;
 
             // calculateForces is done, set it to false
             // will be set to true next time it receives an update from kT
@@ -704,6 +707,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     // Then integration kernels
     {
         std::unordered_map<std::string, std::string> intSubs = simParamSubs;
+        intSubs.insert(familyPrescribeSubs.begin(), familyPrescribeSubs.end());
         integrator = std::make_shared<jitify::Program>(std::move(
             JitHelper::buildProgram("DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu",
                                     intSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
