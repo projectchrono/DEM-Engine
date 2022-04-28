@@ -561,13 +561,15 @@ void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& 
 void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,
                                        const std::unordered_map<std::string, std::string>& simParamSubs,
                                        const std::unordered_map<std::string, std::string>& massMatSubs,
-                                       const std::unordered_map<std::string, std::string>& familySubs,
+                                       const std::unordered_map<std::string, std::string>& familyMaskSubs,
+                                       const std::unordered_map<std::string, std::string>& familyPrescribeSubs,
                                        const std::unordered_map<std::string, std::string>& analGeoSubs) {
     // First one is bin_occupation kernels, which figure out the bin--sphere touch pairs
     {
         std::unordered_map<std::string, std::string> boSubs = templateSubs;
         boSubs.insert(simParamSubs.begin(), simParamSubs.end());
         boSubs.insert(analGeoSubs.begin(), analGeoSubs.end());
+        boSubs.insert(familyMaskSubs.begin(), familyMaskSubs.end());
         // bin_occupation = JitHelper::buildProgram(
         //     "DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
         //     std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
@@ -579,6 +581,7 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
     {
         std::unordered_map<std::string, std::string> cdSubs = templateSubs;
         cdSubs.insert(simParamSubs.begin(), simParamSubs.end());
+        cdSubs.insert(familyMaskSubs.begin(), familyMaskSubs.end());
         contact_detection = std::make_shared<jitify::Program>(
             std::move(JitHelper::buildProgram("DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu",
                                               cdSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));

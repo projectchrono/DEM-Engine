@@ -24,6 +24,9 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMDataKT* granData,
             CDRelPosZ[i] = jitifiedCDRelPosZ[i];
         }
     }
+
+    const bool familyMasks[_nFamilyMaskEntries_] = {_familyMasks_};
+
     const sgps::objType_t objType[_nAnalGMSafe_] = {_objType_};
     const sgps::bodyID_t objOwner[_nAnalGMSafe_] = {_objOwner_};
     const bool objNormal[_nAnalGMSafe_] = {_objNormal_};
@@ -43,11 +46,14 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMDataKT* granData,
     if (sphereID < _nSpheresGM_) {
         // Register sphere--analytical geometry contacts
         sgps::objID_t contact_count = 0;
+        // Sphere's family ID
+        unsigned int sphFamilyNum;
         double myPosX, myPosY, myPosZ;
         double myRadius;
         {
             // My sphere voxel ID and my relPos
             sgps::bodyID_t myOwnerID = granData->ownerClumpBody[sphereID];
+            sphFamilyNum = granData->familyID[myOwnerID];
             sgps::clumpComponentOffset_t myCompOffset = granData->clumpComponentOffset[sphereID];
             double ownerX, ownerY, ownerZ;
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
@@ -92,6 +98,14 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMDataKT* granData,
         for (sgps::objID_t objB = 0; objB < _nAnalGM_; objB++) {
             sgps::contact_t contact_type;
             sgps::bodyID_t objBOwner = objOwner[objB];
+            // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
+            unsigned int objFamilyNum = granData->familyID[objBOwner];
+            unsigned int maskMatID =
+                locateMatPair<unsigned int>((unsigned int)sphFamilyNum, (unsigned int)objFamilyNum);
+            // If marked no contact, skip ths iteration
+            if (familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
+                continue;
+            }
             double ownerX, ownerY, ownerZ;
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[objBOwner], granData->locX[objBOwner],
@@ -151,6 +165,9 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMDataKT* granData,
             CDRelPosZ[i] = jitifiedCDRelPosZ[i];
         }
     }
+
+    const bool familyMasks[_nFamilyMaskEntries_] = {_familyMasks_};
+
     const sgps::objType_t objType[_nAnalGMSafe_] = {_objType_};
     const sgps::bodyID_t objOwner[_nAnalGMSafe_] = {_objOwner_};
     const bool objNormal[_nAnalGMSafe_] = {_objNormal_};
@@ -169,10 +186,12 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMDataKT* granData,
     if (sphereID < _nSpheresGM_) {
         double myPosX, myPosY, myPosZ;
         double myRadius;
+        unsigned int sphFamilyNum;
         sgps::binSphereTouchPairs_t mySphereGeoReportOffset = numAnalGeoSphereTouchesScan[sphereID];
         {
             // My sphere voxel ID and my relPos
             sgps::bodyID_t myOwnerID = granData->ownerClumpBody[sphereID];
+            sphFamilyNum = granData->familyID[myOwnerID];
             sgps::clumpComponentOffset_t myCompOffset = granData->clumpComponentOffset[sphereID];
             // Get the offset of my spot where I should start writing back to the global bin--sphere pair registration
             // array
@@ -221,6 +240,13 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMDataKT* granData,
         for (sgps::objID_t objB = 0; objB < _nAnalGM_; objB++) {
             sgps::contact_t contact_type;
             sgps::bodyID_t objBOwner = objOwner[objB];
+            // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
+            unsigned int objFamilyNum = granData->familyID[objBOwner];
+            unsigned int maskMatID = locateMatPair<unsigned int>(sphFamilyNum, objFamilyNum);
+            // If marked no contact, skip ths iteration
+            if (familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
+                continue;
+            }
             double ownerX, ownerY, ownerZ;
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[objBOwner], granData->locX[objBOwner],

@@ -100,6 +100,8 @@ void DEMSolver::SetTimeStepSize(double ts_size) {
     m_ts_size = ts_size;
 }
 
+void DEMSolver::SetFamilyFixed(unsigned int ID) {}
+
 unsigned int DEMSolver::LoadMaterialType(float E, float nu, float CoR, float density) {
     unsigned int mat_num = m_sp_materials.size();
     if (CoR < SGPS_DEM_TINY_FLOAT) {
@@ -354,8 +356,8 @@ void DEMSolver::figureOutFamilyMasks() {
     // Then we figure out the masks
     for (auto a_pair : m_input_no_contact_pairs) {
         // Convert user-input pairs into impl-level pairs
-        unsigned int implID1 = m_family_user_impl_map[a_pair.ID1];
-        unsigned int implID2 = m_family_user_impl_map[a_pair.ID2];
+        unsigned int implID1 = m_family_user_impl_map.at(a_pair.ID1);
+        unsigned int implID2 = m_family_user_impl_map.at(a_pair.ID2);
         // Now fill in the mask matrix
         unsigned int posInMat = locateMatPair<unsigned int>(implID1, implID2);
         m_family_mask_matrix.at(posInMat) = DEM_PREVENT_CONTACT;
@@ -587,13 +589,16 @@ void DEMSolver::validateUserInputs() {
 }
 
 void DEMSolver::jitifyKernels() {
-    std::unordered_map<std::string, std::string> templateSubs, simParamSubs, massMatSubs, familySubs, analGeoSubs;
+    std::unordered_map<std::string, std::string> templateSubs, simParamSubs, massMatSubs, familyMaskSubs,
+        familyPrescribeSubs, analGeoSubs;
     equipClumpTemplates(templateSubs);
     equipSimParams(simParamSubs);
     equipClumpMassMat(massMatSubs);
     equipAnalGeoTemplates(analGeoSubs);
-    kT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familySubs, analGeoSubs);
-    dT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familySubs, analGeoSubs);
+    equipFamilyMasks(familyMaskSubs);
+    equipFamilyPrescribedMotions(familyPrescribeSubs);
+    kT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familyMaskSubs, familyPrescribeSubs, analGeoSubs);
+    dT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familyMaskSubs, familyPrescribeSubs, analGeoSubs);
 }
 
 // The method should be called after user inputs are in place, and before starting the simulation. It figures out a part
@@ -677,6 +682,17 @@ int DEMSolver::LaunchThreads(double thisCallDuration) {
     */
 
     return 0;
+}
+
+inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::string, std::string>& strMap) {}
+
+inline void DEMSolver::equipFamilyMasks(std::unordered_map<std::string, std::string>& strMap) {
+    std::string maskMat;
+    strMap["_nFamilyMaskEntries_"] = std::to_string(m_family_mask_matrix.size());
+    for (unsigned int i = 0; i < m_family_mask_matrix.size(); i++) {
+        maskMat += std::to_string(m_family_mask_matrix.at(i)) + ",";
+    }
+    strMap["_familyMasks_"] = maskMat;
 }
 
 inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std::string>& strMap) {

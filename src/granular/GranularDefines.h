@@ -95,9 +95,9 @@ const objType_t DEM_ENTITY_TYPE_PLATE = 1;
 const objNormal_t DEM_ENTITY_NORMAL_INWARD = 0;
 const objNormal_t DEM_ENTITY_NORMAL_OUTWARD = 1;
 
-typedef uint8_t notStupidBool_t;  ///< Ad-hoc bool (array) type used on the host side
+typedef uint8_t notStupidBool_t;  ///< Ad-hoc bool (array) type
 typedef uint8_t contact_t;        ///< Contact type (sphere--sphere is 1, etc.)
-typedef uint8_t family_t;         ///< Data type for clump presecription type (0 for not prescribed)
+typedef uint8_t family_t;         ///< Data type for clump presecription type (0 for not prescribed etc)
 const contact_t DEM_NOT_A_CONTACT = 0;
 const contact_t DEM_SPHERE_SPHERE_CONTACT = 1;
 const contact_t DEM_SPHERE_PLANE_CONTACT = 2;

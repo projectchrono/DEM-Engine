@@ -28,6 +28,9 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
             CDRelPosZ[i] = jitifiedCDRelPosZ[i];
         }
     }
+
+    const bool familyMasks[_nFamilyMaskEntries_] = {_familyMasks_};
+
     __syncthreads();
 
     // Only active bins got execute this...
@@ -40,6 +43,7 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
     double bodyX[SGPS_DEM_MAX_SPHERES_PER_BIN];
     double bodyY[SGPS_DEM_MAX_SPHERES_PER_BIN];
     double bodyZ[SGPS_DEM_MAX_SPHERES_PER_BIN];
+    sgps::family_t ownerFamily[SGPS_DEM_MAX_SPHERES_PER_BIN];
     if (myActiveID < nActiveBins) {
         // I got a true bin ID
         sgps::binID_t binID = activeBinIDs[myActiveID];
@@ -52,6 +56,7 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
         for (sgps::spheresBinTouches_t i = 0; i < nBodiesMeHandle; i++) {
             sgps::bodyID_t bodyID = sphereIDsEachBinTouches_sorted[myBodiesTableEntry + i];
             ownerIDs[i] = granData->ownerClumpBody[bodyID];
+            ownerFamily[i] = granData->familyID[ownerIDs[i]];
             compOffsets[i] = granData->clumpComponentOffset[bodyID];
             double ownerX, ownerY, ownerZ;
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
@@ -76,6 +81,15 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
                 // double-counting), and they do not belong to the same clump
                 if (ownerIDs[bodyA] == ownerIDs[bodyB])
                     continue;
+
+                // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
+                unsigned int bodyAFamily = ownerFamily[ownerIDs[bodyA]];
+                unsigned int bodyBFamily = ownerFamily[ownerIDs[bodyB]];
+                unsigned int maskMatID = locateMatPair<unsigned int>(bodyAFamily, bodyBFamily);
+                // If marked no contact, skip ths iteration
+                if (familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
+                    continue;
+                }
 
                 double contactPntX;
                 double contactPntY;
@@ -137,6 +151,9 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
             CDRelPosZ[i] = jitifiedCDRelPosZ[i];
         }
     }
+
+    const bool familyMasks[_nFamilyMaskEntries_] = {_familyMasks_};
+
     __syncthreads();
 
     // Only active bins got to execute this...
@@ -150,6 +167,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
     double bodyX[SGPS_DEM_MAX_SPHERES_PER_BIN];
     double bodyY[SGPS_DEM_MAX_SPHERES_PER_BIN];
     double bodyZ[SGPS_DEM_MAX_SPHERES_PER_BIN];
+    sgps::family_t ownerFamily[SGPS_DEM_MAX_SPHERES_PER_BIN];
     if (myActiveID < nActiveBins) {
         // But I got a true bin ID
         sgps::binID_t binID = activeBinIDs[myActiveID];
@@ -160,6 +178,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
         for (sgps::spheresBinTouches_t i = 0; i < nBodiesMeHandle; i++) {
             sgps::bodyID_t bodyID = sphereIDsEachBinTouches_sorted[myBodiesTableEntry + i];
             ownerIDs[i] = granData->ownerClumpBody[bodyID];
+            ownerFamily[i] = granData->familyID[ownerIDs[i]];
             bodyIDs[i] = bodyID;
             compOffsets[i] = granData->clumpComponentOffset[bodyID];
             double ownerX, ownerY, ownerZ;
@@ -188,6 +207,15 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
                 // double-counting), and they do not belong to the same clump
                 if (ownerIDs[bodyA] == ownerIDs[bodyB])
                     continue;
+
+                // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
+                unsigned int bodyAFamily = ownerFamily[ownerIDs[bodyA]];
+                unsigned int bodyBFamily = ownerFamily[ownerIDs[bodyB]];
+                unsigned int maskMatID = locateMatPair<unsigned int>(bodyAFamily, bodyBFamily);
+                // If marked no contact, skip ths iteration
+                if (familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
+                    continue;
+                }
 
                 double contactPntX;
                 double contactPntY;

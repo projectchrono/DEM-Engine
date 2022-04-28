@@ -106,9 +106,12 @@ class DEMSolver {
     /// which is following ``normal'' physics.
     void SetClumpFamily(const std::vector<unsigned int>& code);
 
-    /// Instruct the solver that the 2 input families should not have contacts (ignored if such a pair is encountered in
-    /// contact detection). These 2 families can be the same (not contact within members of this family).
+    /// Instruct the solver that the 2 input families should not have contacts (a.k.a. ignored, if such a pair is
+    /// encountered in contact detection). These 2 families can be the same (not contact within members of this family).
     void SetFamilyNoContact(unsigned int ID1, unsigned int ID2);
+
+    /// Mark all entities in this family to be fixed
+    void SetFamilyFixed(unsigned int ID);
 
     /// Add an (analytical or clump-represented) external object to the simulation system
     std::shared_ptr<DEMExternObj> AddExternalObject();
@@ -324,7 +327,8 @@ class DEMSolver {
     // Upper-triangular interaction `mask' matrix, which clarifies the family codes that a family can interact with.
     // This is needed by kT only.
     std::vector<notStupidBool_t> m_family_mask_matrix;
-    // Host-side mapping array that maps like this: map.[user family number] = (corresponding impl-level family number)
+    // Host-side mapping array that maps like this: map.at(user family number) = (corresponding impl-level family
+    // number)
     std::unordered_map<unsigned int, family_t> m_family_user_impl_map;
     // TODO: fixed particles should automatically attain status indicating they don't interact with each other.
 
@@ -376,6 +380,8 @@ class DEMSolver {
     inline void equipSimParams(std::unordered_map<std::string, std::string>& strMap);
     inline void equipClumpMassMat(std::unordered_map<std::string, std::string>& strMap);
     inline void equipAnalGeoTemplates(std::unordered_map<std::string, std::string>& strMap);
+    inline void equipFamilyMasks(std::unordered_map<std::string, std::string>& strMap);
+    inline void equipFamilyPrescribedMotions(std::unordered_map<std::string, std::string>& strMap);
 };
 
 }  // namespace sgps
