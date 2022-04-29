@@ -16,25 +16,28 @@ using namespace sgps;
 int main() {
     DEMSolver DEM_sim;
 
-    srand(time(NULL));
-    // srand(4150);
+    srand(42);
 
     // total number of random clump templates to generate
-    int num_template = 10;
+    int num_template = 6;
 
     int min_sphere = 1;
     int max_sphere = 5;
 
-    float min_rad = 0.016;
-    float max_rad = 0.024;
+    float min_rad = 0.01;
+    float max_rad = 0.02;
 
-    float min_relpos = -0.015;
-    float max_relpos = 0.015;
+    float min_relpos = -0.01;
+    float max_relpos = 0.01;
 
-    auto mat_type_1 = DEM_sim.LoadMaterialType(1e7, 0.3, 0.7);
-    // auto mat_type_2 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.9);
-    // auto mat_type_3 = DEM_sim.LoadMaterialType(1e9, 0.25, 0.5);
+    auto mat_type_sand = DEM_sim.LoadMaterialType(1e8, 0.3, 0.8);
+    auto mat_type_drum = DEM_sim.LoadMaterialType(1e9, 0.3, 0.9);
 
+    // First create a clump type for representing the drum
+    float drum_sp_r = 0.02;
+    auto template_drum = DEM_sim.LoadClumpSimpleSphere(0.5, drum_sp_r, mat_type_drum);
+
+    // Then randomly create some clumps for piling up
     for (int i = 0; i < num_template; i++) {
         // first decide the number of spheres that live in this clump
         int num_sphere = rand() % (max_sphere - min_sphere + 1) + 1;
@@ -42,7 +45,7 @@ int main() {
         // then allocate the clump template definition arrays (all in SI)
         float mass = 0.1 * (float)num_sphere;
         float3 MOI =
-            make_float3(2e-5 * (float)num_sphere, 1.5e-5 * (float)num_sphere, 1.8e-5 * (float)num_sphere) * 10.;
+            make_float3(2e-5 * (float)num_sphere, 1.5e-5 * (float)num_sphere, 1.8e-5 * (float)num_sphere) * 50.;
         std::vector<float> radii;
         std::vector<float3> relPos;
         std::vector<unsigned int> mat;
@@ -64,7 +67,7 @@ int main() {
             }
             tmp += seed_pos;
             relPos.push_back(tmp);
-            mat.push_back(mat_type_1);
+            mat.push_back(mat_type_sand);
 
             // seed relPos from one of the previously generated spheres
             int choose_from = rand() % (j + 1);
@@ -75,49 +78,41 @@ int main() {
         auto template_num = DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat);
     }
 
-    // generate initial clumps
-    float3 domain_center = make_float3(0);
-    float box_dim = 6;  // box half-dimension
-    auto input_xyz = DEMBoxGridSampler(make_float3(0), make_float3(box_dim), 0.1);
-    unsigned int num_clumps = input_xyz.size();
     std::vector<unsigned int> input_template_num;
-    std::vector<float3> input_vel;
-    for (unsigned int i = 0; i < num_clumps; i++) {
-        input_template_num.push_back(i % num_template);
-        // Make a initial vel vector pointing towards the center, manufacture collisions
-        float3 vel;
-        vel = domain_center - input_xyz.at(i);
-        if (length(vel) > 1e-5) {
-            vel = normalize(vel) * 0.5;
-        } else {
-            vel = make_float3(0);
-        }
-        input_vel.push_back(vel);
-    }
+    std::vector<unsigned int> family_code;
 
-    DEM_sim.AddClumps(input_template_num, input_xyz);
-    DEM_sim.SetClumpVels(input_vel);
-
-    DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, 1.5e-10);
+    // generate drum clumps
+    float3 CylCenter = make_float3(0, 0, 0);
+    float3 CylAxis = make_float3(1, 0, 0);
+    float CylRad = 0.2;
+    float CylHeight = 0.1;
+    float SideIncr = 0.03;
+    unsigned int NumRows = 300;
+    auto Drum = DEMCylSurfSampler(CylCenter, CylAxis, CylRad, CylHeight, SideIncr, NumRows);
+    // Drum is family 1
+    family_code.insert(family_code.end(), Drum.size(), 1);
+    // TODO: finish it!!
+    DEM_sim.SetFamilyPrescribedLinVel(1, "0", "0", "0");
+    input_template_num.insert(input_template_num.end(), Drum.size(), template_drum);
 
     DEM_sim.CenterCoordSys();
-    DEM_sim.SetTimeStepSize(1e-5);
-    DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, 0));
-    DEM_sim.SetCDUpdateFreq(20);
-    DEM_sim.SuggestExpandFactor(0.6, 1e-5 * 20);
-
+    DEM_sim.SetTimeStepSize(5e-6);
+    DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
+    DEM_sim.SetCDUpdateFreq(5);
+    // DEM_sim.SetExpandFactor(1e-3);
+    DEM_sim.SuggestExpandFactor(10.);
+    DEM_sim.SuggestExpandSafetyParam(2.);
     DEM_sim.Initialize();
 
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 200; i++) {
         char filename[100];
         sprintf(filename, "./DEMdemo_collide_output_%04d.csv", i);
-        DEM_sim.WriteFileAsSpheres(std::string(filename));
         std::cout << "Frame: " << i << std::endl;
-
-        DEM_sim.LaunchThreads(5e-1);
+        DEM_sim.LaunchThreads(3e-2);
     }
 
-    std::cout << "DEMdemo_BulkCollide exiting..." << std::endl;
+    std::cout << "DEMdemo_Drum exiting..." << std::endl;
     // TODO: add end-game report APIs
     return 0;
 }

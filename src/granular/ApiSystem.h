@@ -112,6 +112,15 @@ class DEMSolver {
 
     /// Mark all entities in this family to be fixed
     void SetFamilyFixed(unsigned int ID);
+    ///
+    void SetFamilyPrescribedLinVel(unsigned int ID,
+                                   const std::string& velX,
+                                   const std::string& velY,
+                                   const std::string& velZ);
+    ///
+    void SetFamilyPrescribedPosition(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
+    ///
+    void SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula);
 
     /// Add an (analytical or clump-represented) external object to the simulation system
     std::shared_ptr<DEMExternObj> AddExternalObject();

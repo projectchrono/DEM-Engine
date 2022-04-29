@@ -106,6 +106,7 @@ const contact_t DEM_SPHERE_PLANE_CONTACT = 2;
 const notStupidBool_t DEM_DONT_PREVENT_CONTACT = 0;
 const notStupidBool_t DEM_PREVENT_CONTACT = 1;
 
+const unsigned int DEM_DEFAULT_CLUMP_FAMILY_NUM = 0;
 constexpr unsigned int DEM_RESERVED_FAMILY_NUM = ((unsigned int)1 << (sizeof(family_t) * SGPS_BITS_PER_BYTE)) - 1;
 
 // Some enums...

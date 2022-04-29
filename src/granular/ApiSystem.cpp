@@ -118,6 +118,42 @@ void DEMSolver::SetFamilyFixed(unsigned int ID) {
     m_input_family_prescription.push_back(preInfo);
 }
 
+void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
+                                          const std::string& velX,
+                                          const std::string& velY,
+                                          const std::string& velZ) {
+    familyPrescription_t preInfo;
+    preInfo.family = ID;
+    preInfo.linVelX = velX;
+    preInfo.linVelY = velY;
+    preInfo.linVelZ = velZ;
+    // Both rot and lin vel are fixed. Use other methods if this is not intended.
+    preInfo.linVelPrescribed = true;
+    preInfo.rotVelPrescribed = true;
+    preInfo.used = true;
+
+    m_input_family_prescription.push_back(preInfo);
+}
+
+void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
+                                            const std::string& X,
+                                            const std::string& Y,
+                                            const std::string& Z) {
+    familyPrescription_t preInfo;
+    preInfo.family = ID;
+    preInfo.linPosX = X;
+    preInfo.linPosY = Y;
+    preInfo.linPosZ = Z;
+    // Both rot and lin pos are fixed. Use other methods if this is not intended.
+    preInfo.rotPosPrescribed = true;
+    preInfo.linPosPrescribed = true;
+    preInfo.used = true;
+
+    m_input_family_prescription.push_back(preInfo);
+}
+
+void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula) {}
+
 unsigned int DEMSolver::LoadMaterialType(float E, float nu, float CoR, float density) {
     unsigned int mat_num = m_sp_materials.size();
     if (CoR < SGPS_DEM_TINY_FLOAT) {
@@ -355,10 +391,11 @@ void DEMSolver::figureOutFamilyMasks() {
     nDistinctFamilies = unique_families.size();
     if (nDistinctFamilies > std::numeric_limits<family_t>::max()) {
         SGPS_ERROR(
-            "You have %d families, however per data type restriction, there can be no more than %d. If such so many "
+            "You have %d families, however per data type restriction, there can be no more than %d. If so many "
             "families are indeed needed, please redefine family_t.",
             nDistinctFamilies, std::numeric_limits<family_t>::max());
     }
+    // displayArray<unsigned int>(unique_families.data(), unique_families.size());
 
     // Build the user--internal family number map (user can define family number however they want, but our
     // implementation-level numbers always start at 0)
@@ -378,6 +415,7 @@ void DEMSolver::figureOutFamilyMasks() {
         unsigned int posInMat = locateMatPair<unsigned int>(implID1, implID2);
         m_family_mask_matrix.at(posInMat) = DEM_PREVENT_CONTACT;
     }
+    // displayArray<notStupidBool_t>(m_family_mask_matrix.data(), m_family_mask_matrix.size());
 
     // Then, figure out each family's prescription info and put it into an (impl family number-based) array
     // Multiple user prescription input entries can work on the same array entry
@@ -393,10 +431,10 @@ void DEMSolver::figureOutFamilyMasks() {
             continue;
         }
 
-        auto& this_family_info = m_unique_family_prescription.at(m_family_user_impl_map.at(preInfo.family));
+        auto& this_family_info = m_unique_family_prescription.at(m_family_user_impl_map.at(user_family));
 
         this_family_info.used = true;
-        this_family_info.family = m_family_user_impl_map.at(preInfo.family);
+        this_family_info.family = m_family_user_impl_map.at(user_family);
         if (preInfo.linPosX != "none")
             this_family_info.linPosX = preInfo.linPosX;
         if (preInfo.linPosY != "none")
@@ -622,7 +660,11 @@ void DEMSolver::packDataPointers() {
 void DEMSolver::validateUserInputs() {
     // First match the length of input clump arrays, for those input arrays that we don't force the user to specify
     m_input_clump_vel.resize(m_input_clump_xyz.size(), make_float3(0));
-    m_input_clump_family.resize(m_input_clump_xyz.size(), 0);
+    if (m_input_clump_family.size() < m_input_clump_xyz.size()) {
+        std::cout << "\nWARNING! Some clumps do not have their family numbers specified, so defaulted to "
+                  << DEM_DEFAULT_CLUMP_FAMILY_NUM << std::endl;
+    }
+    m_input_clump_family.resize(m_input_clump_xyz.size(), DEM_DEFAULT_CLUMP_FAMILY_NUM);
     // Fix the reserved family
     SetFamilyFixed(DEM_RESERVED_FAMILY_NUM);
 

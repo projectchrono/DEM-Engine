@@ -14,9 +14,10 @@ SET(LIBRARIES
 
 SET(DEMOS
 		DEMdemo_Pile
-		DEMdemo_BulkCollide
+		DEMdemo_Sieve
 		DEMdemo_SingleSphereCollide
 		DEMdemo_Stack
+		DEMdemo_Drum
 		sphdemo
 		hello_world
 )

@@ -60,6 +60,13 @@ inline void elemSwap(T1* x, T1* y) {
     *y = tmp;
 }
 
+/// Rotate a vector about an unit axis by an angle
+inline float3 Rodrigues(const float3 vec, const float3 axis, const float theta) {
+    float3 res;
+    res = vec * cos(theta) + cross(axis, vec) * sin(theta) + axis * dot(axis, vec) * (1. - cos(theta));
+    return res;
+}
+
 template <typename T1, typename T2>
 inline void hostSortByKey(T1* keys, T2* vals, size_t n) {
     // Just bubble sort it
@@ -210,7 +217,7 @@ inline void hostCollectTorques(clumpBodyInertiaOffset_t* inertiaPropOffsets,
     }
 }
 
-/// A light-weight grid sampler that can be used to generate the initial stage of the granular system
+/// A light-weight grid/box sampler that can be used to generate the initial stage of the granular system
 inline std::vector<float3> DEMBoxGridSampler(float3 BoxCenter, float3 HalfDims, float GridSize) {
     std::vector<float3> points;
     for (float z = BoxCenter.z - HalfDims.z; z <= BoxCenter.z + HalfDims.z; z += GridSize) {
@@ -223,6 +230,46 @@ inline std::vector<float3> DEMBoxGridSampler(float3 BoxCenter, float3 HalfDims, 
                 points.push_back(xyz);
             }
         }
+    }
+    return points;
+}
+
+/// A light-weight sampler that generates a shell made of particles that resembles a cylindrical surface
+inline std::vector<float3> DEMCylSurfSampler(float3 CylCenter,
+                                             float3 CylAxis,
+                                             float CylRad,
+                                             float CylHeight,
+                                             float SideIncr,
+                                             unsigned int NumRows) {
+    std::vector<float3> points;
+    double RadIncr = 2.0 * SGPS_PI / (double)(NumRows);
+    if (RadIncr >= SGPS_PI / 4.) {
+        std::cout << "\nWARNING! You may want to increase the resolution of the cylindrical surface you generated."
+                  << std::endl;
+    }
+    float3 UnitCylAxis = normalize(CylAxis);
+    float3 RadDir;
+    {
+        float3 PerpVec1, PerpVec2;
+        PerpVec1.x = -UnitCylAxis.z;
+        PerpVec1.y = 0.f;
+        PerpVec1.z = UnitCylAxis.x;
+        PerpVec2.x = UnitCylAxis.y;
+        PerpVec2.y = -UnitCylAxis.x;
+        PerpVec2.z = 0.f;
+        RadDir = cross(PerpVec1, PerpVec2);
+        RadDir = normalize(RadDir);
+    }
+    for (unsigned int i = 0; i < NumRows; i++) {
+        std::vector<float3> thisRow;
+        float3 thisRowSt = CylCenter + UnitCylAxis * (CylHeight / 2.) + RadDir * CylRad;
+        for (float d = 0.; d <= CylHeight; d += SideIncr) {
+            float3 point;
+            point = thisRowSt + UnitCylAxis * (-d);
+            thisRow.push_back(point);
+        }
+        points.insert(points.end(), thisRow.begin(), thisRow.end());
+        RadDir = Rodrigues(RadDir, UnitCylAxis, RadIncr);
     }
     return points;
 }

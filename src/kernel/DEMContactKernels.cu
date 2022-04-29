@@ -83,8 +83,8 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
                     continue;
 
                 // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
-                unsigned int bodyAFamily = ownerFamily[ownerIDs[bodyA]];
-                unsigned int bodyBFamily = ownerFamily[ownerIDs[bodyB]];
+                unsigned int bodyAFamily = ownerFamily[bodyA];
+                unsigned int bodyBFamily = ownerFamily[bodyB];
                 unsigned int maskMatID = locateMatPair<unsigned int>(bodyAFamily, bodyBFamily);
                 // If marked no contact, skip ths iteration
                 if (familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
@@ -209,8 +209,8 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
                     continue;
 
                 // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
-                unsigned int bodyAFamily = ownerFamily[ownerIDs[bodyA]];
-                unsigned int bodyBFamily = ownerFamily[ownerIDs[bodyB]];
+                unsigned int bodyAFamily = ownerFamily[bodyA];
+                unsigned int bodyBFamily = ownerFamily[bodyB];
                 unsigned int maskMatID = locateMatPair<unsigned int>(bodyAFamily, bodyBFamily);
                 // If marked no contact, skip ths iteration
                 if (familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {

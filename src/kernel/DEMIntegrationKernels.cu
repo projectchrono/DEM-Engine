@@ -2,7 +2,6 @@
 #include <granular/DataStructs.h>
 #include <kernel/DEMHelperKernels.cu>
 #include <granular/GranularDefines.h>
-#include <kernel/DEMPrescribedIntegrationKernels.cu>
 
 // Apply presecibed velocity and report whether the ``true'' physics should be skipped, rather than added on top of that
 template <typename T1, typename T2>
