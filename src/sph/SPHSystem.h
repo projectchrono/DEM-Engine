@@ -159,6 +159,7 @@ class SPHSystem {
     // print particle file to csv for paraview visualization purposes
     void printCSV(std::string filename, float3* pos_arr, int pos_n, float3* vel_arr, float3* acc_arr);
     void printCSV(std::string filename, float3* pos_arr, int pos_n, float3* vel_arr);
+    void printCSV(std::string filename, float3* pos_arr, int pos_n);
     void printCSV(std::string filename,
                   float3* pos_arr,
                   int pos_n,

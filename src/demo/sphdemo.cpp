@@ -131,5 +131,5 @@ int main(int argc, char* argv[]) {
     system->printCSV("sph_folder/test" + std::to_string(0) + ".csv", pos_vec.data(), num_par, vel_vec.data(),
                      acc_vec.data());
     system->setPrintOut(true, 100);
-    system->doStepDynamics(1e-5, 2e-5f);
+    system->doStepDynamics(1e-4, 1.f);
 }

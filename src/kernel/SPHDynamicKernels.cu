@@ -93,6 +93,9 @@ __global__ void dynamicStep5(float3* pos_data,
         pos_data[idx].y = pos_data[idx].y + vel_data[idx].y * time_step;
         pos_data[idx].z = pos_data[idx].z + vel_data[idx].z * time_step;
     }
+
+    acc_data[idx] = make_float3(0.f, 0.f, 0.f);
+
     __syncthreads();
 }
 

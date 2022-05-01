@@ -77,6 +77,20 @@ void SPHSystem::printCSV(std::string filename, float3* pos_arr, int pos_n, float
     csvFile.close();
 }
 
+void SPHSystem::printCSV(std::string filename, float3* pos_arr, int pos_n) {
+    // create file
+    std::ofstream csvFile(filename);
+
+    csvFile << "x_pos,y_pos,z_pos,x_vel,y_vel,z_vel" << std::endl;
+
+    // write particle data into csv file
+    for (int i = 0; i < pos_n; i++) {
+        csvFile << pos_arr[i].x << "," << pos_arr[i].y << "," << pos_arr[i].z << "," << std::endl;
+    }
+
+    csvFile.close();
+}
+
 void SPHSystem::printCSV(std::string filename,
                          float3* pos_arr,
                          int pos_n,
@@ -187,7 +201,7 @@ void KinematicThread::operator()() {
         float d_domain_z = getParentSystem().domain_z / Z_SUB_NUM;
         float buffer_width = 2;
 
-        printf("d_domain: %f, %f, %f\n", d_domain_x, d_domain_y, d_domain_z);
+        // printf("d_domain: %f, %f, %f\n", d_domain_x, d_domain_y, d_domain_z);
 
         // ==============================================================================================================
         // Kinematic Step 1
@@ -414,6 +428,14 @@ void KinematicThread::operator()() {
         // copy data back to the dataManager
         {
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexContact());
+
+            dataManager.m_pair_i.clear();
+            dataManager.m_pair_j.clear();
+            dataManager.m_rho.clear();
+            dataManager.m_pressure.clear();
+            dataManager.m_offset.clear();
+            dataManager.m_W_grad.clear();
+
             dataManager.m_pair_i.assign(pair_i_data.begin(), pair_i_data.end());
             dataManager.m_pair_j.assign(pair_j_data.begin(), pair_j_data.end());
             dataManager.m_rho.assign(rho_data.begin(), rho_data.end());
@@ -498,24 +520,20 @@ void DynamicThread::operator()() {
         float time_step = getParentSystem().time_step;
 
         if (getParentSystem().contact_data_isFresh == true) {
+            const std::lock_guard<std::mutex> lock(getParentSystem().getMutexContact());
             pair_i_data.clear();
             pair_j_data.clear();
             pressure_data.clear();
             W_grad_data.clear();
-            const std::lock_guard<std::mutex> lock(getParentSystem().getMutexContact());
+            rho_data.clear();
+
             pair_i_data.assign(dataManager.m_pair_i.begin(), dataManager.m_pair_i.end());
             pair_j_data.assign(dataManager.m_pair_j.begin(), dataManager.m_pair_j.end());
-
             rho_data.assign(dataManager.m_rho.begin(), dataManager.m_rho.end());
             pressure_data.assign(dataManager.m_pressure.begin(), dataManager.m_pressure.end());
             W_grad_data.assign(dataManager.m_W_grad.begin(), dataManager.m_W_grad.end());
         }
 
-        /*
-                for (int i = 0; i < W_grad_data.size(); i++) {
-                    std::cout << W_grad_data[i].z << ",";
-                }
-        */
         // notify the system that the contact data is old
         getParentSystem().contact_data_isFresh = false;
 
@@ -525,19 +543,22 @@ void DynamicThread::operator()() {
             continue;
         }
 
-        {
+        // only bring in position/velocity/fixity/acceleration data into the system when this is the first cycle
+        if (dynamicCounter == 0) {
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
             pos_data.clear();
             vel_data.clear();
             fix_data.clear();
+            acc_data.clear();
 
             pos_data.assign(dataManager.m_pos.begin(), dataManager.m_pos.end());
             vel_data.assign(dataManager.m_vel.begin(), dataManager.m_vel.end());
             fix_data.assign(dataManager.m_fix.begin(), dataManager.m_fix.end());
+            acc_data.assign(dataManager.m_acc.begin(), dataManager.m_acc.end());
         }
 
-        acc_data.clear();
-        acc_data.resize(pos_data.size());
+        // getParentSystem().printCSV("sph_folder/dy-pre-test" + std::to_string(dynamicCounter + 1) + ".csv",
+        //                            pos_data.data(), pos_data.size());
 
         // Dynamic Step 1
         // Use GPU to fill in the contact forces in each pair of contactData element
@@ -627,11 +648,15 @@ void DynamicThread::operator()() {
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // copy data back to the dataManager
+
         {
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
+
+            dataManager.m_pos.clear();
+            dataManager.m_vel.clear();
+
             dataManager.m_pos.assign(pos_data.begin(), pos_data.end());
             dataManager.m_vel.assign(vel_data.begin(), vel_data.end());
-            dataManager.m_acc.assign(acc_data.begin(), acc_data.end());
         }
 
         if (getParentSystem().getPrintOut() == true &&
@@ -685,7 +710,7 @@ void WriteOutThread::operator()() {
             // getParentSystem().printCSV("sph_folder/test" + std::to_string(writeOutCounter) + ".csv", wt_pos.data(),
             //                            wt_pos.size(), wt_vel.data(), wt_rho.data(), wt_pressure.data());
 
-            getParentSystem().printCSV("sph_folder/test" + std::to_string(writeOutCounter) + ".csv", wt_pos.data(),
+            getParentSystem().printCSV("sph_folder/test" + std::to_string(writeOutCounter + 1) + ".csv", wt_pos.data(),
                                        wt_pos.size(), wt_vel.data(), wt_rho.data(), wt_pressure.data());
             getParentSystem().wt_thread_busy = false;
             writeOutCounter++;
