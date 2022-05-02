@@ -83,15 +83,15 @@ __global__ void dynamicStep5(float3* pos_data,
 
     if (fix_data[idx] == 0) {
         float grav = -9.8f;
-        acc_data[idx].z = acc_data[idx].z + grav;
+        acc_data[idx].z += grav;
 
-        vel_data[idx].x = vel_data[idx].x + acc_data[idx].x * time_step;
-        vel_data[idx].y = vel_data[idx].y + acc_data[idx].y * time_step;
-        vel_data[idx].z = vel_data[idx].z + acc_data[idx].z * time_step;
+        vel_data[idx].x += acc_data[idx].x * time_step;
+        vel_data[idx].y += acc_data[idx].y * time_step;
+        vel_data[idx].z += acc_data[idx].z * time_step;
 
-        pos_data[idx].x = pos_data[idx].x + vel_data[idx].x * time_step;
-        pos_data[idx].y = pos_data[idx].y + vel_data[idx].y * time_step;
-        pos_data[idx].z = pos_data[idx].z + vel_data[idx].z * time_step;
+        pos_data[idx].x += vel_data[idx].x * time_step;
+        pos_data[idx].y += vel_data[idx].y * time_step;
+        pos_data[idx].z += vel_data[idx].z * time_step;
     }
 
     acc_data[idx] = make_float3(0.f, 0.f, 0.f);

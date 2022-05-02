@@ -7,6 +7,7 @@
 #include <core/utils/JitHelper.h>
 #include <thread>
 #include <vector>
+#include <algorithm>
 #include <chrono>
 #include <core/utils/GpuError.h>
 #include "datastruct.h"
@@ -428,14 +429,6 @@ void KinematicThread::operator()() {
         // copy data back to the dataManager
         {
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexContact());
-
-            dataManager.m_pair_i.clear();
-            dataManager.m_pair_j.clear();
-            dataManager.m_rho.clear();
-            dataManager.m_pressure.clear();
-            dataManager.m_offset.clear();
-            dataManager.m_W_grad.clear();
-
             dataManager.m_pair_i.assign(pair_i_data.begin(), pair_i_data.end());
             dataManager.m_pair_j.assign(pair_j_data.begin(), pair_j_data.end());
             dataManager.m_rho.assign(rho_data.begin(), rho_data.end());
@@ -508,6 +501,18 @@ void DynamicThread::operator()() {
 
     while (getParentSystem().curr_time < getParentSystem().sim_time) {
         // Touch the CUDA context before the Kernel is accessed
+        if (dynamicCounter == 0) {
+            const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
+            // Initialize pos, fix_data, they only need to be initialized once
+            pos_data.assign(dataManager.m_pos.begin(), dataManager.m_pos.end());
+            vel_data.assign(dataManager.m_vel.begin(), dataManager.m_vel.end());
+            fix_data.assign(dataManager.m_fix.begin(), dataManager.m_fix.end());
+        }
+        else {
+            // Initialize vel, it needs to be reset to zeros every time step
+            vel_data.resize(pos_data.size());
+            std::fill(vel_data.begin(), vel_data.end(), make_float3(0.0, 0.0, 0.0));
+        }
 
         // Option 1:
         // std::vector<int, sgps::ManagedAllocator<int>> num_arr(dataManager.m_pos.size(), -1);
@@ -520,15 +525,14 @@ void DynamicThread::operator()() {
         float time_step = getParentSystem().time_step;
 
         if (getParentSystem().contact_data_isFresh == true) {
-            const std::lock_guard<std::mutex> lock(getParentSystem().getMutexContact());
             pair_i_data.clear();
             pair_j_data.clear();
             pressure_data.clear();
             W_grad_data.clear();
-            rho_data.clear();
-
+            const std::lock_guard<std::mutex> lock(getParentSystem().getMutexContact());
             pair_i_data.assign(dataManager.m_pair_i.begin(), dataManager.m_pair_i.end());
             pair_j_data.assign(dataManager.m_pair_j.begin(), dataManager.m_pair_j.end());
+
             rho_data.assign(dataManager.m_rho.begin(), dataManager.m_rho.end());
             pressure_data.assign(dataManager.m_pressure.begin(), dataManager.m_pressure.end());
             W_grad_data.assign(dataManager.m_W_grad.begin(), dataManager.m_W_grad.end());
@@ -542,23 +546,6 @@ void DynamicThread::operator()() {
         if (contact_size == 0) {
             continue;
         }
-
-        // only bring in position/velocity/fixity/acceleration data into the system when this is the first cycle
-        if (dynamicCounter == 0) {
-            const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
-            pos_data.clear();
-            vel_data.clear();
-            fix_data.clear();
-            acc_data.clear();
-
-            pos_data.assign(dataManager.m_pos.begin(), dataManager.m_pos.end());
-            vel_data.assign(dataManager.m_vel.begin(), dataManager.m_vel.end());
-            fix_data.assign(dataManager.m_fix.begin(), dataManager.m_fix.end());
-            acc_data.assign(dataManager.m_acc.begin(), dataManager.m_acc.end());
-        }
-
-        // getParentSystem().printCSV("sph_folder/dy-pre-test" + std::to_string(dynamicCounter + 1) + ".csv",
-        //                            pos_data.data(), pos_data.size());
 
         // Dynamic Step 1
         // Use GPU to fill in the contact forces in each pair of contactData element
@@ -582,26 +569,26 @@ void DynamicThread::operator()() {
         // Dynamic Step 2
         // Flattens the contact data array, this will duplicate each conllision pair into 2 entries
         // A applies force on B + B applies force on A
-        inv_pair_i_data.clear();
-        inv_col_acc_data.clear();
-        inv_pair_i_data.resize(pair_i_data.size());
-        inv_col_acc_data.resize(col_acc_data.size());
+        // inv_pair_i_data.clear();
+        // inv_col_acc_data.clear();
+        // inv_pair_i_data.resize(pair_i_data.size());
+        // inv_col_acc_data.resize(col_acc_data.size());
 
-        dynamic_program.kernel("dynamicStep2")
-            .instantiate()
-            .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(pair_i_data.data(), pair_j_data.data(), col_acc_data.data(), inv_pair_i_data.data(),
-                    inv_col_acc_data.data(), pair_i_data.size());
-        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        // dynamic_program.kernel("dynamicStep2")
+        //     .instantiate()
+        //     .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
+        //     .launch(pair_i_data.data(), pair_j_data.data(), col_acc_data.data(), inv_pair_i_data.data(),
+        //             inv_col_acc_data.data(), pair_i_data.size());
+        // GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        flat_pair_i_data.clear();
-        flat_col_acc_data.clear();
+        // flat_pair_i_data.clear();
+        // flat_col_acc_data.clear();
 
-        flat_pair_i_data.insert(flat_pair_i_data.end(), pair_i_data.begin(), pair_i_data.end());
-        flat_pair_i_data.insert(flat_pair_i_data.end(), inv_pair_i_data.begin(), inv_pair_i_data.end());
+        // flat_pair_i_data.insert(flat_pair_i_data.end(), pair_i_data.begin(), pair_i_data.end());
+        // flat_pair_i_data.insert(flat_pair_i_data.end(), inv_pair_i_data.begin(), inv_pair_i_data.end());
 
-        flat_col_acc_data.insert(flat_col_acc_data.end(), col_acc_data.begin(), col_acc_data.end());
-        flat_col_acc_data.insert(flat_col_acc_data.end(), inv_col_acc_data.begin(), inv_col_acc_data.end());
+        // flat_col_acc_data.insert(flat_col_acc_data.end(), col_acc_data.begin(), col_acc_data.end());
+        // flat_col_acc_data.insert(flat_col_acc_data.end(), inv_col_acc_data.begin(), inv_col_acc_data.end());
 
         // Dynamic Step 3
         // Reduce to Get Total Force Applies on Each Particle (CUB)
@@ -612,7 +599,7 @@ void DynamicThread::operator()() {
         col_acc_data_reduced.clear();
 
         // sort
-        PairRadixSortAscendCub(flat_pair_i_data, pair_i_data_sorted, flat_col_acc_data, col_acc_data_sorted);
+        PairRadixSortAscendCub(pair_i_data, pair_i_data_sorted, col_acc_data, col_acc_data_sorted);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // reduce
@@ -620,16 +607,16 @@ void DynamicThread::operator()() {
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // Dynamic Step 4
-        block_size = 1024;
-        num_thread = (block_size < pair_i_data_reduced.size()) ? block_size : pair_i_data_reduced.size();
-        num_block = (pair_i_data_reduced.size() % num_thread != 0) ? (pair_i_data_reduced.size() / num_thread + 1)
-                                                                   : (pair_i_data_reduced.size() / num_thread);
-        dynamic_program.kernel("dynamicStep4")
-            .instantiate()
-            .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(pair_i_data_reduced.data(), col_acc_data_reduced.data(), acc_data.data(),
-                    pair_i_data_reduced.size());
-        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        // block_size = 1024;
+        // num_thread = (block_size < pair_i_data_reduced.size()) ? block_size : pair_i_data_reduced.size();
+        // num_block = (pair_i_data_reduced.size() % num_thread != 0) ? (pair_i_data_reduced.size() / num_thread + 1)
+        //                                                            : (pair_i_data_reduced.size() / num_thread);
+        // dynamic_program.kernel("dynamicStep4")
+        //     .instantiate()
+        //     .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
+        //     .launch(pair_i_data_reduced.data(), col_acc_data_reduced.data(), acc_data.data(),
+        //             pair_i_data_reduced.size());
+        // GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // Dynamic Step 5
         // Final integration step to push the simulation one time step forward
@@ -642,21 +629,17 @@ void DynamicThread::operator()() {
         dynamic_program.kernel("dynamicStep5")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(pos_data.data(), vel_data.data(), acc_data.data(), fix_data.data(), pos_data.size(), time_step,
+            .launch(pos_data.data(), vel_data.data(), col_acc_data_reduced.data(), fix_data.data(), pos_data.size(), time_step,
                     kernel_h);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // copy data back to the dataManager
-
         {
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
-
-            dataManager.m_pos.clear();
-            dataManager.m_vel.clear();
-
             dataManager.m_pos.assign(pos_data.begin(), pos_data.end());
             dataManager.m_vel.assign(vel_data.begin(), vel_data.end());
+            dataManager.m_acc.assign(col_acc_data_reduced.begin(), col_acc_data_reduced.end());
         }
 
         if (getParentSystem().getPrintOut() == true &&
