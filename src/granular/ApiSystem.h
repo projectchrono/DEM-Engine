@@ -59,6 +59,9 @@ class DEMSolver {
     /// the left-bottom-front point of your simulation ``world'' after this operation.
     float3 CenterCoordSys();
 
+    // Instruct the solver to save time by using frictionless contact model
+    void UseFrictionlessModel(bool useFrictionless = true);
+
     /// (Explicitly) set the amount by which the radii of the spheres (and the thickness of the boundaries) are expanded
     /// for the purpose of contact detection (safe, and creates false positives).
     void SetExpandFactor(float beta);

@@ -66,6 +66,11 @@ float3 DEMSolver::CenterCoordSys() {
     return O;
 }
 
+void DEMSolver::UseFrictionlessModel(bool useFrictionless) {
+    kT->useFrictionlessModel(useFrictionless);
+    dT->useFrictionlessModel(useFrictionless);
+}
+
 void DEMSolver::SetExpandFactor(float beta) {
     m_expand_factor = beta;
 }

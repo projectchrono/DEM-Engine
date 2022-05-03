@@ -356,6 +356,10 @@ void DEMKinematicThread::resetUserCallStat() {
     pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = false;
 }
 
+void DEMKinematicThread::useFrictionlessModel(bool useFrictionless) {
+    isFrictionless = useFrictionless;
+}
+
 // Put sim data array pointers in place
 void DEMKinematicThread::packDataPointers() {
     granData->familyID = familyID.data();

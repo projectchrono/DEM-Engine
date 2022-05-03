@@ -35,8 +35,8 @@ int main() {
     auto mat_type_2 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.3);
 
     // First create clump type 0 for representing the sieve
-    float ground_sp_r = 0.05;
-    auto template_ground = DEM_sim.LoadClumpSimpleSphere(5.0, ground_sp_r, mat_type_1);
+    float sieve_sp_r = 0.05;
+    auto template_sieve = DEM_sim.LoadClumpSimpleSphere(5.0, sieve_sp_r, mat_type_1);
 
     for (int i = 0; i < num_template; i++) {
         // first decide the number of spheres that live in this clump
@@ -82,20 +82,21 @@ int main() {
     std::vector<unsigned int> family_code;
 
     // generate sieve clumps
-    auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, -1.5), make_float3(5.0, 5.0, 0.001), ground_sp_r * 2.0);
+    auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, 0), make_float3(5.0, 5.0, 0.001), sieve_sp_r * 2.0);
     // The sieve is family 1
     family_code.insert(family_code.end(), input_xyz.size(), 1);
-    DEM_sim.SetFamilyPrescribedLinVel(1, "0", "0", "sin(2 * SGPS_PI * t)");
-    // No contact within the sieve particles
+    DEM_sim.SetFamilyPrescribedLinVel(1, "0", "0", "(t > 1.0) ? sin(2.0 * SGPS_PI * (t - 1.0)) : 0");
+    // No contact within family 1
     DEM_sim.SetFamilyNoContact(1, 1);
-    input_template_num.insert(input_template_num.end(), input_xyz.size(), template_ground);
+    input_template_num.insert(input_template_num.end(), input_xyz.size(), template_sieve);
 
-    // generate initial clumps for piling
-    float3 sample_center = make_float3(0, 0, 0);
-    float sample_halfheight = 1.;
+    // float sample_halfheight = 1.;
+    float sample_halfheight = 0.15;
     float sample_halfwidth = 2.;
+    // generate initial clumps for piling
+    float3 sample_center = make_float3(0, 0, sample_halfheight + sieve_sp_r + 0.07);
     auto pile =
-        DEMBoxGridSampler(sample_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight), 0.05);
+        DEMBoxGridSampler(sample_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight), 0.07);
     input_xyz.insert(input_xyz.end(), pile.begin(), pile.end());
     unsigned int num_clumps = pile.size();
     for (unsigned int i = 0; i < num_clumps; i++) {
@@ -128,7 +129,7 @@ int main() {
 
     DEM_sim.Initialize();
 
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 200; i++) {
         char filename[100];
         sprintf(filename, "./DEMdemo_collide_output_%04d.csv", i);
         DEM_sim.WriteFileAsSpheres(std::string(filename));

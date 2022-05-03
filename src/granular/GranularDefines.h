@@ -64,7 +64,6 @@ typedef uint8_t clumpComponentOffset_t;
 typedef unsigned short int clumpComponentOffsetExt_t;  ///< Extended component offset type for non-jitified part
 typedef double floatFine_t;
 typedef char scratch_t;  ///< Data type for DEM scratch-pad array
-// typedef unsigned int stateVectors_default_t; // what's this for??
 // typedef unsigned int distinctSphereRelativePositions_default_t;
 // typedef unsigned int distinctSphereRadiiOffset_default_t;
 
@@ -82,7 +81,7 @@ typedef unsigned int contactPairs_t;
 
 typedef uint8_t notStupidBool_t;  ///< Ad-hoc bool (array) type
 typedef uint8_t contact_t;        ///< Contact type (sphere--sphere is 1, etc.)
-typedef uint8_t family_t;         ///< Data type for clump presecription type (0 for not prescribed etc)
+typedef uint8_t family_t;         ///< Data type for clump presecription type
 
 typedef uint8_t objType_t;
 typedef bool objNormal_t;

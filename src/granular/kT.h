@@ -151,6 +151,8 @@ class DEMKinematicThread {
     // The ID that maps this analytical entity component's geometry-defining parameters, when this component is jitified
     // std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> analComponentOffset;
 
+    bool isFrictionless = false;
+
   public:
     friend class DEMSolver;
     friend class DEMDynamicThread;
@@ -237,6 +239,9 @@ class DEMKinematicThread {
     // Put sim data array pointers in place
     void packDataPointers();
     void packTransferPointers(DEMDynamicThread* dT);
+
+    // Contact model is frictionless
+    void useFrictionlessModel(bool useFrictionless);
 
     // Jitify kT kernels (at initialization) based on existing knowledge of this run
     void jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,

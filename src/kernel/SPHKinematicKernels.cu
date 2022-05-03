@@ -16,7 +16,7 @@ __device__ float W(float3 r, float h) {
     } else if (R < 2 && R >= 1) {
         res = alpha_d * (2 - R) * (2 - R) * (2 - R);
     } else {
-        res = alpha_d * ((2 - R) * (2 - R) * (2 - R) - 4 * (1 - R) *  (1 - R) * (1 - R));
+        res = alpha_d * ((2 - R) * (2 - R) * (2 - R) - 4 * (1 - R) * (1 - R) * (1 - R));
     }
 
     // printf("%f", res);
@@ -32,8 +32,7 @@ __device__ float3 W_Grad(float3 r, float h) {
     float3 coe;
     if (R < 1e-8 || R >= 2) {
         return 0.0 * r;
-    }
-    else if (R < 2 && R >= 1) {
+    } else if (R < 2 && R >= 1) {
         coe = alpha_d * (-R + 4.0 - 4.0 / R);
     } else {
         coe = alpha_d * (3.0 * R - 4.0);

@@ -15,6 +15,7 @@ using namespace sgps;
 
 int main() {
     DEMSolver DEM_sim;
+    DEM_sim.UseFrictionlessModel();
 
     srand(759);
 

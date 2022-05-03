@@ -48,7 +48,6 @@ inline __device__ T1 mod_floor(const T1& a, const T2& b) {
 
 // In an upper-triangular matrix, given i and j and num_of_col, this function returns the index of the corresponding
 // flatten-ed non-zero entries. This function does not assume i <= j.
-// TODO: use this for interaction map
 template <typename T1>
 inline __device__ T1 locateMatPair(const T1& i, const T1& j) {
     if (i > j)

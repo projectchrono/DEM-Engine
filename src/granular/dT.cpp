@@ -194,9 +194,9 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     TRACKED_VECTOR_RESIZE(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
     TRACKED_VECTOR_RESIZE(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
     TRACKED_VECTOR_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
-    TRACKED_VECTOR_RESIZE(EProxy, (1 + nMatTuples) * nMatTuples / 2, "EProxy", 0);
-    TRACKED_VECTOR_RESIZE(nuProxy, (1 + nMatTuples) * nMatTuples / 2, "nuProxy", 0);
-    TRACKED_VECTOR_RESIZE(CoRProxy, (1 + nMatTuples) * nMatTuples / 2, "CoRProxy", 0);
+    TRACKED_VECTOR_RESIZE(EProxy, nMatTuples, "EProxy", 0);
+    TRACKED_VECTOR_RESIZE(nuProxy, nMatTuples, "nuProxy", 0);
+    TRACKED_VECTOR_RESIZE(CoRProxy, nMatTuples, "CoRProxy", 0);
 
     // Arrays for contact info
     // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is 2n, and I
@@ -236,7 +236,7 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
                                              const std::vector<float>& mat_CoR) {
     // Use some temporary hacks to get the info in the managed mem
 
-    // First, load in material property (upper-triangle) matrix
+    // First, load in material properties
     for (unsigned int i = 0; i < mat_E.size(); i++) {
         EProxy.at(i) = mat_E.at(i);
         nuProxy.at(i) = mat_nu.at(i);
@@ -658,6 +658,10 @@ void DEMDynamicThread::startThread() {
 bool DEMDynamicThread::isUserCallDone() {
     // return true if done, false if not
     return userCallDone;
+}
+
+void DEMDynamicThread::useFrictionlessModel(bool useFrictionless) {
+    isFrictionless = useFrictionless;
 }
 
 void DEMDynamicThread::resetUserCallStat() {

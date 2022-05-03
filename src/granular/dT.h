@@ -200,6 +200,8 @@ class DEMDynamicThread {
     // The ID that maps this entity's material
     std::vector<materialsOffset_t, ManagedAllocator<materialsOffset_t>> materialTupleOffset;
 
+    bool isFrictionless = false;
+
   public:
     friend class DEMSolver;
     friend class DEMKinematicThread;
@@ -251,6 +253,9 @@ class DEMDynamicThread {
 
     // Compute total KE of all clumps
     float getKineticEnergy();
+
+    // Contact model is frictionless
+    void useFrictionlessModel(bool useFrictionless);
 
     // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
     void allocateManagedArrays(size_t nOwnerBodies,
