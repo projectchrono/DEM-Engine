@@ -383,6 +383,9 @@ class DEMSolver {
     // newly produced contact-pair info (from kT) before proceeding.
     int m_updateFreq = 0;
 
+    // The contact model is frictionless, or not. It affects jitification.
+    bool m_isFrictionless = false;
+
     GpuManager* dTkT_GpuManager;
     ThreadManager* dTkT_InteractionManager;
     DEMKinematicThread* kT;

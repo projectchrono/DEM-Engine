@@ -27,7 +27,7 @@ set(granular_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/GranularStructs.h
 	${CMAKE_CURRENT_SOURCE_DIR}/Boundaries.h
 	${CMAKE_CURRENT_SOURCE_DIR}/HostSideHelpers.cpp
-	${NVIDIAMathDir}/helper_math.h
+	${NVIDIAMathDir}/helper_math.cuh
 )
 
 set(granular_sources

@@ -538,6 +538,7 @@ void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& 
     LBF.x = simParams->LBFX;
     LBF.y = simParams->LBFY;
     LBF.z = simParams->LBFZ;
+    // float3 LBF = make_float3(simParams->LBFX, simParams->LBFY, simParams->LBFZ);
     for (size_t i = 0; i < simParams->nOwnerClumps; i++) {
         auto type_of_this_clump = input_clump_types.at(i);
 

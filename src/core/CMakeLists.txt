@@ -37,7 +37,7 @@ set(core_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuManager.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/Macros.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/chpf/particle_writer.hpp
-	${NVIDIAMathDir}/helper_math.h
+	${NVIDIAMathDir}/helper_math.cuh
 )
 
 set(core_sources

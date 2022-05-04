@@ -8,13 +8,16 @@
 #include <granular/ApiSystem.h>
 #include <granular/HostSideHelpers.cpp>
 
+#include <filesystem>
 #include <cstdio>
 #include <time.h>
 
 using namespace sgps;
+using namespace std::filesystem;
 
 int main() {
     DEMSolver DEM_sim;
+    DEM_sim.UseFrictionlessModel();
 
     // srand(time(NULL));
     srand(4150);
@@ -51,11 +54,14 @@ int main() {
 
     DEM_sim.Initialize();
 
+    path out_dir = current_path();
+    out_dir += "/DEMdemo_SingleSphereCollide";
+    create_directory(out_dir);
     for (int i = 0; i < 100; i++) {
         std::cout << "Frame: " << i << std::endl;
 
         char filename[100];
-        sprintf(filename, "./DEMdemo_collide_output_%04d.csv", i);
+        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
         DEM_sim.WriteFileAsSpheres(std::string(filename));
 
         DEM_sim.LaunchThreads(1e-2);

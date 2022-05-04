@@ -67,6 +67,7 @@ float3 DEMSolver::CenterCoordSys() {
 }
 
 void DEMSolver::UseFrictionlessModel(bool useFrictionless) {
+    m_isFrictionless = useFrictionless;
     kT->useFrictionlessModel(useFrictionless);
     dT->useFrictionlessModel(useFrictionless);
 }
@@ -430,7 +431,7 @@ void DEMSolver::figureOutFamilyMasks() {
         if (m_family_user_impl_map.find(user_family) == m_family_user_impl_map.end()) {
             if (user_family != DEM_RESERVED_FAMILY_NUM) {
                 std::cout << "\nWARNING! Family number " << user_family
-                          << " is instructed to have prescribed motion, but no entity is associated with this family."
+                          << " is instructed to have prescribed motion, but no entity is associated with this family.\n"
                           << std::endl;
             }
             continue;
@@ -614,7 +615,7 @@ void DEMSolver::SetClumpFamily(const std::vector<unsigned int>& code) {
         std::cout << "\nWARNING! Family number " << DEM_RESERVED_FAMILY_NUM
                   << " is reserved for completely fixed boundaries. Using it on your "
                      "simulation entities will make them fixed, regardless of your specification.\nYou can change "
-                     "family_t if you indeed need more families to work with."
+                     "family_t if you indeed need more families to work with.\n"
                   << std::endl;
     }
 
@@ -667,7 +668,8 @@ void DEMSolver::validateUserInputs() {
     m_input_clump_vel.resize(m_input_clump_xyz.size(), make_float3(0));
     if (m_input_clump_family.size() < m_input_clump_xyz.size()) {
         std::cout << "\nWARNING! Some clumps do not have their family numbers specified, so defaulted to "
-                  << DEM_DEFAULT_CLUMP_FAMILY_NUM << std::endl;
+                  << DEM_DEFAULT_CLUMP_FAMILY_NUM << "\n"
+                  << std::endl;
     }
     m_input_clump_family.resize(m_input_clump_xyz.size(), DEM_DEFAULT_CLUMP_FAMILY_NUM);
     // Fix the reserved family
@@ -686,13 +688,13 @@ void DEMSolver::validateUserInputs() {
         std::cout << "\nWARNING! You instructed that the physics can stretch " << m_updateFreq
                   << " time steps into the future, but did not instruct the geometries to expand via "
                      "SuggestExpandFactor. The contact detection procedure will likely fail to detect some contact "
-                     "events before it is too late, hindering the simulation accuracy and stability."
+                     "events before it is too late, hindering the simulation accuracy and stability.\n"
                   << std::endl;
     }
     if (m_updateFreq < 0) {
         std::cout << "\nWARNING! The physics of the granular system can drift into the future as much as it wants "
                      "compared to contact detections, because SetCDUpdateFreq was called with a negative argument. "
-                     "Please make sure this is intended."
+                     "Please make sure this is intended.\n"
                   << std::endl;
     }
 
