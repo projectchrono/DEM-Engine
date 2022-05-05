@@ -130,6 +130,6 @@ int main(int argc, char* argv[]) {
                        dim_y, dim_z);
     system->printCSV("sph_folder/test" + std::to_string(0) + ".csv", pos_vec.data(), num_par, vel_vec.data(),
                      acc_vec.data());
-    system->setPrintOut(true, 50);
-    system->doStepDynamics(1e-3, 5.f);
+    // system->setPrintOut(true, 100);
+    system->doStepDynamics(5e-4, 1.f);
 }
