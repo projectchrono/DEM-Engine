@@ -176,6 +176,7 @@ void KinematicThread::operator()() {
     std::vector<float, sgps::ManagedAllocator<float>> pressure_data;  // local presusre dataf
 
     std::vector<float3, sgps::ManagedAllocator<float3>> W_grad_data;  // local W grad data
+    std::vector<int, sgps::ManagedAllocator<int>> temp_storage;       // temp storage space for cub functions 
 
     // initiate JitHelper to perform JITC
     auto kinematic_program = JitHelper::buildProgram(
@@ -231,7 +232,7 @@ void KinematicThread::operator()() {
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        PrefixScanExclusiveCub(num_BSD_data, offset_BSD_data);
+        PrefixScanExclusiveCub(num_BSD_data, offset_BSD_data, temp_storage);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -273,11 +274,11 @@ void KinematicThread::operator()() {
         std::vector<int, sgps::ManagedAllocator<int>> idx_track_data_sorted;
         std::vector<int, sgps::ManagedAllocator<int>> BSD_iden_idx_sorted;
 
-        PairRadixSortAscendCub(BSD_idx, BSD_idx_sorted, idx_track_data, idx_track_data_sorted);
+        PairRadixSortAscendCub(BSD_idx, BSD_idx_sorted, idx_track_data, idx_track_data_sorted, temp_storage);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        PairRadixSortAscendCub(BSD_idx, BSD_idx_sorted, BSD_iden_idx, BSD_iden_idx_sorted);
+        PairRadixSortAscendCub(BSD_idx, BSD_idx_sorted, BSD_iden_idx, BSD_iden_idx_sorted, temp_storage);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -290,11 +291,11 @@ void KinematicThread::operator()() {
         std::vector<int, sgps::ManagedAllocator<int>> length_BSD_idx;
         std::vector<int, sgps::ManagedAllocator<int>> offset_BSD_idx;
 
-        RunLengthEncodeCub(BSD_idx_sorted, unique_BSD_idx, length_BSD_idx);
+        RunLengthEncodeCub(BSD_idx_sorted, unique_BSD_idx, length_BSD_idx, temp_storage);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        PrefixScanExclusiveCub(length_BSD_idx, offset_BSD_idx);
+        PrefixScanExclusiveCub(length_BSD_idx, offset_BSD_idx, temp_storage);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -330,7 +331,7 @@ void KinematicThread::operator()() {
         // ==============================================================================================================
         std::vector<int, sgps::ManagedAllocator<int>> num_col_offset;
 
-        PrefixScanExclusiveCub(num_col, num_col_offset);
+        PrefixScanExclusiveCub(num_col, num_col_offset, temp_storage);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         int tot_collision = num_col_offset[num_col_offset.size() - 1] + num_col[num_col.size() - 1];
@@ -378,16 +379,16 @@ void KinematicThread::operator()() {
         std::vector<int, sgps::ManagedAllocator<int>> i_data_sorted_1;
         std::vector<int, sgps::ManagedAllocator<int>> j_data_sorted_1;
 
-        PairRadixSortAscendCub(pair_i_data, i_data_sorted_1, pair_j_data, j_data_sorted_1);
+        PairRadixSortAscendCub(pair_i_data, i_data_sorted_1, pair_j_data, j_data_sorted_1, temp_storage);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         std::vector<int, sgps::ManagedAllocator<int>> i_unique;
         std::vector<int, sgps::ManagedAllocator<int>> i_length;
         std::vector<int, sgps::ManagedAllocator<int>> i_offset;
 
-        RunLengthEncodeCub(i_data_sorted_1, i_unique, i_length);
+        RunLengthEncodeCub(i_data_sorted_1, i_unique, i_length, temp_storage);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-        PrefixScanExclusiveCub(i_length, i_offset);
+        PrefixScanExclusiveCub(i_length, i_offset, temp_storage);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // initialize density and pressure vectors
@@ -433,16 +434,16 @@ void KinematicThread::operator()() {
         std::vector<int, sgps::ManagedAllocator<int>> i_data_sorted_2;
         std::vector<int, sgps::ManagedAllocator<int>> j_data_sorted_2;
 
-        PairRadixSortAscendCub(pair_j_data, j_data_sorted_2, pair_i_data, i_data_sorted_2);
+        PairRadixSortAscendCub(pair_j_data, j_data_sorted_2, pair_i_data, i_data_sorted_2, temp_storage);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         std::vector<int, sgps::ManagedAllocator<int>> j_unique;
         std::vector<int, sgps::ManagedAllocator<int>> j_length;
         std::vector<int, sgps::ManagedAllocator<int>> j_offset;
 
-        RunLengthEncodeCub(j_data_sorted_2, j_unique, j_length);
+        RunLengthEncodeCub(j_data_sorted_2, j_unique, j_length, temp_storage);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-        PrefixScanExclusiveCub(j_length, j_offset);
+        PrefixScanExclusiveCub(j_length, j_offset, temp_storage);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         num_thread = 512;
@@ -550,6 +551,7 @@ void DynamicThread::operator()() {
     std::vector<float3, sgps::ManagedAllocator<float3>> vel_data;
     std::vector<float3, sgps::ManagedAllocator<float3>> acc_data;
     std::vector<char, sgps::ManagedAllocator<char>> fix_data;
+    std::vector<float3, sgps::ManagedAllocator<float3>> temp_storage;
     float kernel_h;
     float m;
     float rho_0;
@@ -662,11 +664,11 @@ void DynamicThread::operator()() {
         std::vector<float3, sgps::ManagedAllocator<float3>> col_acc_data_reduced_1;
 
         // sort
-        PairRadixSortAscendCub(pair_i_data, pair_i_data_sorted_1, col_acc_data, col_acc_data_sorted_1);
+        PairRadixSortAscendCub(pair_i_data, pair_i_data_sorted_1, col_acc_data, col_acc_data_sorted_1, temp_storage);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // reduce
-        SumReduceByKeyCub(pair_i_data_sorted_1, pair_i_data_reduced_1, col_acc_data_sorted_1, col_acc_data_reduced_1);
+        SumReduceByKeyCub(pair_i_data_sorted_1, pair_i_data_reduced_1, col_acc_data_sorted_1, col_acc_data_reduced_1, temp_storage);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         block_size = 1024;
@@ -717,11 +719,11 @@ void DynamicThread::operator()() {
         std::vector<float3, sgps::ManagedAllocator<float3>> col_acc_data_reduced_2;
 
         // sort
-        PairRadixSortAscendCub(pair_j_data, pair_j_data_sorted_2, col_acc_data, col_acc_data_sorted_2);
+        PairRadixSortAscendCub(pair_j_data, pair_j_data_sorted_2, col_acc_data, col_acc_data_sorted_2, temp_storage);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // reduce
-        SumReduceByKeyCub(pair_j_data_sorted_2, pair_j_data_reduced_2, col_acc_data_sorted_2, col_acc_data_reduced_2);
+        SumReduceByKeyCub(pair_j_data_sorted_2, pair_j_data_reduced_2, col_acc_data_sorted_2, col_acc_data_reduced_2, temp_storage);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         block_size = 1024;
