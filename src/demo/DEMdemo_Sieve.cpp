@@ -9,7 +9,7 @@
 #include <granular/HostSideHelpers.cpp>
 
 #include <cstdio>
-#include <time.h>
+#include <chrono>
 
 using namespace sgps;
 using namespace std::filesystem;
@@ -133,14 +133,19 @@ int main() {
     path out_dir = current_path();
     out_dir += "/DEMdemo_Sieve";
     create_directory(out_dir);
+
+    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < 200; i++) {
-        char filename[100];
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-        DEM_sim.WriteFileAsSpheres(std::string(filename));
-        std::cout << "Frame: " << i << std::endl;
+        // char filename[100];
+        // sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
+        // DEM_sim.WriteFileAsSpheres(std::string(filename));
+        // std::cout << "Frame: " << i << std::endl;
 
         DEM_sim.LaunchThreads(1.0 / 20.);
     }
+    std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+    std::cout << time_sec.count() << " seconds" << std::endl;
 
     std::cout << "DEMdemo_Sieve exiting..." << std::endl;
     // TODO: add end-game report APIs

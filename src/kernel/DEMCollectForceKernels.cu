@@ -20,7 +20,8 @@ __global__ void cashInOwnerIndexB(sgps::bodyID_t* idOwner,
                                   sgps::bodyID_t* ownerClumpBody,
                                   sgps::contact_t* contactType,
                                   size_t nContactPairs) {
-    const sgps::bodyID_t objOwner[_nAnalGMSafe_] = {_objOwner_};
+    const sgps::bodyID_t objOwner[] = {_objOwner_};
+
     sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContactPairs) {
         sgps::bodyID_t thisBodyID = id[myID];
@@ -39,24 +40,11 @@ __global__ void cashInMassMoiIndex(float* massOwner,
                                    sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets,
                                    sgps::bodyID_t* idOwner,
                                    size_t nContactPairs) {
-    // CUDA does not support initializing shared arrays, so we have to manually load them
-    __shared__ float moiX[_nTotalBodyTopologies_];
-    __shared__ float moiY[_nTotalBodyTopologies_];
-    __shared__ float moiZ[_nTotalBodyTopologies_];
-    __shared__ float ClumpMasses[_nTotalBodyTopologies_];
-    if (threadIdx.x < _nActiveLoadingThreads_) {
-        const float jitifiedMoiX[_nTotalBodyTopologies_] = {_moiX_};
-        const float jitifiedMoiY[_nTotalBodyTopologies_] = {_moiY_};
-        const float jitifiedMoiZ[_nTotalBodyTopologies_] = {_moiZ_};
-        const float jitifiedMass[_nTotalBodyTopologies_] = {_ClumpMasses_};
-        for (sgps::clumpBodyInertiaOffset_t i = threadIdx.x; i < _nTotalBodyTopologies_; i += _nActiveLoadingThreads_) {
-            ClumpMasses[i] = jitifiedMass[i];
-            moiX[i] = jitifiedMoiX[i];
-            moiY[i] = jitifiedMoiY[i];
-            moiZ[i] = jitifiedMoiZ[i];
-        }
-    }
-    __syncthreads();
+    // _nTotalBodyTopologies_  elements are in these arrays
+    const float moiX[] = {_moiX_};
+    const float moiY[] = {_moiY_};
+    const float moiZ[] = {_moiZ_};
+    const float ClumpMasses[] = {_ClumpMasses_};
 
     sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContactPairs) {
@@ -78,15 +66,9 @@ __global__ void forceToAcc(float3* acc,
                            float modifier,
                            size_t n,
                            sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets) {
-    // CUDA does not support initializing shared arrays, so we have to manually load them
-    __shared__ float ClumpMasses[_nTotalBodyTopologies_];
-    if (threadIdx.x < _nActiveLoadingThreads_) {
-        const float jitifiedMass[_nTotalBodyTopologies_] = {_ClumpMasses_};
-        for (sgps::clumpBodyInertiaOffset_t i = threadIdx.x; i < _nTotalBodyTopologies_; i += _nActiveLoadingThreads_) {
-            ClumpMasses[i] = jitifiedMass[i];
-        }
-    }
-    __syncthreads();
+    // _nTotalBodyTopologies_  elements are in these arrays
+    const float ClumpMasses[] = {_ClumpMasses_};
+
     sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
         sgps::bodyID_t thisOwnerID = owner[myID];
@@ -104,21 +86,11 @@ __global__ void forceToAngAcc(float3* angAcc,
                               float modifier,
                               size_t n,
                               sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets) {
-    // CUDA does not support initializing shared arrays, so we have to manually load them
-    __shared__ float moiX[_nTotalBodyTopologies_];
-    __shared__ float moiY[_nTotalBodyTopologies_];
-    __shared__ float moiZ[_nTotalBodyTopologies_];
-    if (threadIdx.x < _nActiveLoadingThreads_) {
-        const float jitifiedMoiX[_nTotalBodyTopologies_] = {_moiX_};
-        const float jitifiedMoiY[_nTotalBodyTopologies_] = {_moiY_};
-        const float jitifiedMoiZ[_nTotalBodyTopologies_] = {_moiZ_};
-        for (sgps::clumpBodyInertiaOffset_t i = threadIdx.x; i < _nTotalBodyTopologies_; i += _nActiveLoadingThreads_) {
-            moiX[i] = jitifiedMoiX[i];
-            moiY[i] = jitifiedMoiY[i];
-            moiZ[i] = jitifiedMoiZ[i];
-        }
-    }
-    __syncthreads();
+    // _nTotalBodyTopologies_  elements are in these arrays
+    const float moiX[] = {_moiX_};
+    const float moiY[] = {_moiY_};
+    const float moiZ[] = {_moiZ_};
+
     sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
         sgps::bodyID_t thisOwnerID = owner[myID];

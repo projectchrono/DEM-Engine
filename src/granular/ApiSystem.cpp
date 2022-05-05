@@ -844,7 +844,7 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
 
 inline void DEMSolver::equipFamilyMasks(std::unordered_map<std::string, std::string>& strMap) {
     std::string maskMat;
-    strMap["_nFamilyMaskEntries_"] = std::to_string(m_family_mask_matrix.size());
+    // strMap["_nFamilyMaskEntries_"] = std::to_string(m_family_mask_matrix.size());
     for (unsigned int i = 0; i < m_family_mask_matrix.size(); i++) {
         maskMat += std::to_string(m_family_mask_matrix.at(i)) + ",";
     }
@@ -950,17 +950,9 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_voxelSize_"] = to_string_with_precision(m_voxelSize);
     strMap["_binSize_"] = to_string_with_precision(m_binSize);
 
-    strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
     strMap["_nAnalGM_"] = std::to_string(nAnalGM);
-    // Some sim systems can have 0 boundary entities in them. In this case, we have to ensure jitification does not fail
-    unsigned int nAnalGMSafe = (nAnalGM > 0) ? nAnalGM : 1;
-    strMap["_nAnalGMSafe_"] = std::to_string(nAnalGMSafe);
     strMap["_nOwnerBodies_"] = std::to_string(nOwnerBodies);
     strMap["_nSpheresGM_"] = std::to_string(nSpheresGM);
-    // nTotalBodyTopologies includes clump topologies and ext obj topologies
-    strMap["_nTotalBodyTopologies_"] = std::to_string(nDistinctClumpBodyTopologies + nExtObj);
-    strMap["_nDistinctClumpComponents_"] = std::to_string(nDistinctClumpComponents_computed);
-    strMap["_nMatTuples_"] = std::to_string(nMatTuples_computed);
 
     strMap["_LBFX_"] = to_string_with_precision(m_boxLBF.x);
     strMap["_LBFY_"] = to_string_with_precision(m_boxLBF.y);
@@ -968,8 +960,17 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_Gx_"] = to_string_with_precision(G.x);
     strMap["_Gy_"] = to_string_with_precision(G.y);
     strMap["_Gz_"] = to_string_with_precision(G.z);
-
     strMap["_beta_"] = to_string_with_precision(m_expand_factor);
+
+    // Some constants that are no longer used in kernels
+    // Some sim systems can have 0 boundary entities in them. In this case, we have to ensure jitification does not fail
+    // unsigned int nAnalGMSafe = (nAnalGM > 0) ? nAnalGM : 1;
+    // strMap["_nAnalGMSafe_"] = std::to_string(nAnalGMSafe);
+    // strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
+    // nTotalBodyTopologies includes clump topologies and ext obj topologies
+    // strMap["_nTotalBodyTopologies_"] = std::to_string(nDistinctClumpBodyTopologies + nExtObj);
+    // strMap["_nDistinctClumpComponents_"] = std::to_string(nDistinctClumpComponents_computed);
+    // strMap["_nMatTuples_"] = std::to_string(nMatTuples_computed);
 }
 
 }  // namespace sgps

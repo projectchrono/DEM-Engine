@@ -6,40 +6,28 @@
 __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMDataKT* granData,
                                                  sgps::binsSphereTouches_t* numBinsSphereTouches,
                                                  sgps::objID_t* numAnalGeoSphereTouches) {
-    // CUDA does not support initializing shared arrays, so we have to manually load them
-    __shared__ float CDRadii[_nDistinctClumpComponents_];
-    __shared__ float CDRelPosX[_nDistinctClumpComponents_];
-    __shared__ float CDRelPosY[_nDistinctClumpComponents_];
-    __shared__ float CDRelPosZ[_nDistinctClumpComponents_];
-    if (threadIdx.x < _nActiveLoadingThreads_) {
-        const float jitifiedCDRadii[_nDistinctClumpComponents_] = {_CDRadii_};
-        const float jitifiedCDRelPosX[_nDistinctClumpComponents_] = {_CDRelPosX_};
-        const float jitifiedCDRelPosY[_nDistinctClumpComponents_] = {_CDRelPosY_};
-        const float jitifiedCDRelPosZ[_nDistinctClumpComponents_] = {_CDRelPosZ_};
-        for (sgps::clumpComponentOffset_t i = threadIdx.x; i < _nDistinctClumpComponents_;
-             i += _nActiveLoadingThreads_) {
-            CDRadii[i] = jitifiedCDRadii[i];
-            CDRelPosX[i] = jitifiedCDRelPosX[i];
-            CDRelPosY[i] = jitifiedCDRelPosY[i];
-            CDRelPosZ[i] = jitifiedCDRelPosZ[i];
-        }
-    }
+    // _nDistinctClumpComponents_ elements are in these arrays
+    const float CDRadii[] = {_CDRadii_};
+    const float CDRelPosX[] = {_CDRelPosX_};
+    const float CDRelPosY[] = {_CDRelPosY_};
+    const float CDRelPosZ[] = {_CDRelPosZ_};
 
-    const bool familyMasks[_nFamilyMaskEntries_] = {_familyMasks_};
+    // _nFamilyMaskEntries_ elements are in this array
+    const bool familyMasks[] = {_familyMasks_};
 
-    const sgps::objType_t objType[_nAnalGMSafe_] = {_objType_};
-    const sgps::bodyID_t objOwner[_nAnalGMSafe_] = {_objOwner_};
-    const bool objNormal[_nAnalGMSafe_] = {_objNormal_};
-    const float objRelPosX[_nAnalGMSafe_] = {_objRelPosX_};
-    const float objRelPosY[_nAnalGMSafe_] = {_objRelPosY_};
-    const float objRelPosZ[_nAnalGMSafe_] = {_objRelPosZ_};
-    const float objRotX[_nAnalGMSafe_] = {_objRotX_};
-    const float objRotY[_nAnalGMSafe_] = {_objRotY_};
-    const float objRotZ[_nAnalGMSafe_] = {_objRotZ_};
-    const float objSize1[_nAnalGMSafe_] = {_objSize1_};
-    const float objSize2[_nAnalGMSafe_] = {_objSize2_};
-    const float objSize3[_nAnalGMSafe_] = {_objSize3_};
-    __syncthreads();
+    // _nAnalGM_ elements are in these arrays
+    const sgps::objType_t objType[] = {_objType_};
+    const sgps::bodyID_t objOwner[] = {_objOwner_};
+    const bool objNormal[] = {_objNormal_};
+    const float objRelPosX[] = {_objRelPosX_};
+    const float objRelPosY[] = {_objRelPosY_};
+    const float objRelPosZ[] = {_objRelPosZ_};
+    const float objRotX[] = {_objRotX_};
+    const float objRotY[] = {_objRotY_};
+    const float objRotZ[] = {_objRotZ_};
+    const float objSize1[] = {_objSize1_};
+    const float objSize2[] = {_objSize2_};
+    const float objSize3[] = {_objSize3_};
 
     sgps::bodyID_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -147,40 +135,28 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMDataKT* granData,
                                                sgps::bodyID_t* idGeoA,
                                                sgps::bodyID_t* idGeoB,
                                                sgps::contact_t* contactType) {
-    // CUDA does not support initializing shared arrays, so we have to manually load them
-    __shared__ float CDRadii[_nDistinctClumpComponents_];
-    __shared__ float CDRelPosX[_nDistinctClumpComponents_];
-    __shared__ float CDRelPosY[_nDistinctClumpComponents_];
-    __shared__ float CDRelPosZ[_nDistinctClumpComponents_];
-    if (threadIdx.x < _nActiveLoadingThreads_) {
-        const float jitifiedCDRadii[_nDistinctClumpComponents_] = {_CDRadii_};
-        const float jitifiedCDRelPosX[_nDistinctClumpComponents_] = {_CDRelPosX_};
-        const float jitifiedCDRelPosY[_nDistinctClumpComponents_] = {_CDRelPosY_};
-        const float jitifiedCDRelPosZ[_nDistinctClumpComponents_] = {_CDRelPosZ_};
-        for (sgps::clumpComponentOffset_t i = threadIdx.x; i < _nDistinctClumpComponents_;
-             i += _nActiveLoadingThreads_) {
-            CDRadii[i] = jitifiedCDRadii[i];
-            CDRelPosX[i] = jitifiedCDRelPosX[i];
-            CDRelPosY[i] = jitifiedCDRelPosY[i];
-            CDRelPosZ[i] = jitifiedCDRelPosZ[i];
-        }
-    }
+    //  elements are in these arrays
+    const float CDRadii[] = {_CDRadii_};
+    const float CDRelPosX[] = {_CDRelPosX_};
+    const float CDRelPosY[] = {_CDRelPosY_};
+    const float CDRelPosZ[] = {_CDRelPosZ_};
 
-    const bool familyMasks[_nFamilyMaskEntries_] = {_familyMasks_};
+    // _nFamilyMaskEntries_ elements are in this array
+    const bool familyMasks[] = {_familyMasks_};
 
-    const sgps::objType_t objType[_nAnalGMSafe_] = {_objType_};
-    const sgps::bodyID_t objOwner[_nAnalGMSafe_] = {_objOwner_};
-    const bool objNormal[_nAnalGMSafe_] = {_objNormal_};
-    const float objRelPosX[_nAnalGMSafe_] = {_objRelPosX_};
-    const float objRelPosY[_nAnalGMSafe_] = {_objRelPosY_};
-    const float objRelPosZ[_nAnalGMSafe_] = {_objRelPosZ_};
-    const float objRotX[_nAnalGMSafe_] = {_objRotX_};
-    const float objRotY[_nAnalGMSafe_] = {_objRotY_};
-    const float objRotZ[_nAnalGMSafe_] = {_objRotZ_};
-    const float objSize1[_nAnalGMSafe_] = {_objSize1_};
-    const float objSize2[_nAnalGMSafe_] = {_objSize2_};
-    const float objSize3[_nAnalGMSafe_] = {_objSize3_};
-    __syncthreads();
+    // _nAnalGM_ elements are in these arrays
+    const sgps::objType_t objType[] = {_objType_};
+    const sgps::bodyID_t objOwner[] = {_objOwner_};
+    const bool objNormal[] = {_objNormal_};
+    const float objRelPosX[] = {_objRelPosX_};
+    const float objRelPosY[] = {_objRelPosY_};
+    const float objRelPosZ[] = {_objRelPosZ_};
+    const float objRotX[] = {_objRotX_};
+    const float objRotY[] = {_objRotY_};
+    const float objRotZ[] = {_objRotZ_};
+    const float objSize1[] = {_objSize1_};
+    const float objSize2[] = {_objSize2_};
+    const float objSize3[] = {_objSize3_};
 
     sgps::bodyID_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;
     if (sphereID < _nSpheresGM_) {

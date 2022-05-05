@@ -41,52 +41,32 @@ inline __device__ float3 calcNormalForce(const double& overlapDepth,
 __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
                                              sgps::DEMDataDT* granData,
                                              size_t nContactPairs) {
-    // CUDA does not support initializing shared arrays, so we have to manually load them
-    __shared__ float Radii[_nDistinctClumpComponents_];
-    __shared__ float CDRelPosX[_nDistinctClumpComponents_];
-    __shared__ float CDRelPosY[_nDistinctClumpComponents_];
-    __shared__ float CDRelPosZ[_nDistinctClumpComponents_];
-    __shared__ float ClumpMasses[_nTotalBodyTopologies_];
-    if (threadIdx.x < _nActiveLoadingThreads_) {
-        const float jitifiedRadii[_nDistinctClumpComponents_] = {_Radii_};
-        const float jitifiedCDRelPosX[_nDistinctClumpComponents_] = {_CDRelPosX_};
-        const float jitifiedCDRelPosY[_nDistinctClumpComponents_] = {_CDRelPosY_};
-        const float jitifiedCDRelPosZ[_nDistinctClumpComponents_] = {_CDRelPosZ_};
-        const float jitifiedMass[_nTotalBodyTopologies_] = {_ClumpMasses_};
-        for (sgps::clumpBodyInertiaOffset_t i = threadIdx.x; i < _nTotalBodyTopologies_; i += _nActiveLoadingThreads_) {
-            ClumpMasses[i] = jitifiedMass[i];
-        }
-        for (sgps::clumpComponentOffset_t i = threadIdx.x; i < _nDistinctClumpComponents_;
-             i += _nActiveLoadingThreads_) {
-            Radii[i] = jitifiedRadii[i];
-            CDRelPosX[i] = jitifiedCDRelPosX[i];
-            CDRelPosY[i] = jitifiedCDRelPosY[i];
-            CDRelPosZ[i] = jitifiedCDRelPosZ[i];
-        }
-    }
-    const float EProxy[_nMatTuples_] = {_EProxy_};
-    const float nuProxy[_nMatTuples_] = {_nuProxy_};
-    const float CoRProxy[_nMatTuples_] = {_CoRProxy_};
+    // _nTotalBodyTopologies_ or _nDistinctClumpComponents_ elements are in these arrays
+    const float Radii[] = {_Radii_};
+    const float CDRelPosX[] = {_CDRelPosX_};
+    const float CDRelPosY[] = {_CDRelPosY_};
+    const float CDRelPosZ[] = {_CDRelPosZ_};
+    const float ClumpMasses[] = {_ClumpMasses_};
 
-    const sgps::objType_t objType[_nAnalGMSafe_] = {_objType_};
-    const sgps::bodyID_t objOwner[_nAnalGMSafe_] = {_objOwner_};
-    const bool objNormal[_nAnalGMSafe_] = {_objNormal_};
-    const sgps::materialsOffset_t objMaterial[_nAnalGMSafe_] = {_objMaterial_};
-    const float objRelPosX[_nAnalGMSafe_] = {_objRelPosX_};
-    const float objRelPosY[_nAnalGMSafe_] = {_objRelPosY_};
-    const float objRelPosZ[_nAnalGMSafe_] = {_objRelPosZ_};
-    const float objRotX[_nAnalGMSafe_] = {_objRotX_};
-    const float objRotY[_nAnalGMSafe_] = {_objRotY_};
-    const float objRotZ[_nAnalGMSafe_] = {_objRotZ_};
-    const float objSize1[_nAnalGMSafe_] = {_objSize1_};
-    const float objSize2[_nAnalGMSafe_] = {_objSize2_};
-    const float objSize3[_nAnalGMSafe_] = {_objSize3_};
-    __syncthreads();
+    // _nMatTuples_ elements are in these arrays
+    const float EProxy[] = {_EProxy_};
+    const float nuProxy[] = {_nuProxy_};
+    const float CoRProxy[] = {_CoRProxy_};
 
-    // First, find relevant bodyIDs, then locate their owners... (how??)
-
-    // But, we will keep everything as is, and test in the end (when cub and jit are in place) how this treatment
-    // improves efficiency
+    // _nAnalGM_ elements are in these arrays
+    const sgps::objType_t objType[] = {_objType_};
+    const sgps::bodyID_t objOwner[] = {_objOwner_};
+    const bool objNormal[] = {_objNormal_};
+    const sgps::materialsOffset_t objMaterial[] = {_objMaterial_};
+    const float objRelPosX[] = {_objRelPosX_};
+    const float objRelPosY[] = {_objRelPosY_};
+    const float objRelPosZ[] = {_objRelPosZ_};
+    const float objRotX[] = {_objRotX_};
+    const float objRotY[] = {_objRotY_};
+    const float objRotZ[] = {_objRotZ_};
+    const float objSize1[] = {_objSize1_};
+    const float objSize2[] = {_objSize2_};
+    const float objSize3[] = {_objSize3_};
 
     sgps::contactPairs_t myContactID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myContactID < nContactPairs) {
