@@ -164,6 +164,7 @@ class SPHSystem {
                   float3* pos_arr,
                   int pos_n,
                   float3* vel_arr,
+                  float3* acc_arr,
                   float* rho_arr,
                   float* pressure_arr);
 

@@ -35,30 +35,7 @@ __global__ void dynamicStep1(int* pair_i_data,
     }
 }
 
-// =================================================================================================================
-// Dynamic 2nd pass, this pass is intended to flaten the array
-// for the original contact_pair array, pair i_a and j_a will only appear once
-// this pass makes sure that (i_a,j_a) will be in one contact_pair element and (j_a,i_a) will be in one contact_pair
-// =================================================================================================================
-__global__ void dynamicStep2(int* pair_i_data,
-                             int* pair_j_data,
-                             float3* col_acc_data,
-                             int* inv_pair_i_data,
-                             float3* inv_col_acc_data,
-                             int n) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (idx >= n) {
-        return;
-    }
-
-    inv_pair_i_data[idx] = pair_j_data[idx];
-    inv_col_acc_data[idx].x = -col_acc_data[idx].x;
-    inv_col_acc_data[idx].y = -col_acc_data[idx].y;
-    inv_col_acc_data[idx].z = -col_acc_data[idx].z;
-}
-
-__global__ void dynamicStep4(int* pair_i_data_reduced, float3* col_acc_data_reduced, float3* acc_data, int n) {
+__global__ void dynamicStep2(int* pair_i_data_reduced, float3* col_acc_data_reduced, float3* acc_data, int n) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= n) {
@@ -67,6 +44,30 @@ __global__ void dynamicStep4(int* pair_i_data_reduced, float3* col_acc_data_redu
 
     acc_data[pair_i_data_reduced[idx]] = col_acc_data_reduced[idx];
 }
+
+__global__ void dynamicStep3(float3* col_acc_data, int n) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx >= n) {
+        return;
+    }
+
+    col_acc_data[idx].x = -col_acc_data[idx].x;
+    col_acc_data[idx].y = -col_acc_data[idx].y;
+    col_acc_data[idx].z = -col_acc_data[idx].z;
+}
+
+__global__ void dynamicStep4(int* pair_j_data_reduced, float3* col_acc_data_reduced, float3* acc_data, int n) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx >= n) {
+        return;
+    }
+
+    acc_data[pair_j_data_reduced[idx]] = col_acc_data_reduced[idx];
+}
+
+// ===========================================
 
 __global__ void dynamicStep5(float3* pos_data,
                              float3* vel_data,
@@ -92,9 +93,9 @@ __global__ void dynamicStep5(float3* pos_data,
         pos_data[idx].x += vel_data[idx].x * time_step;
         pos_data[idx].y += vel_data[idx].y * time_step;
         pos_data[idx].z += vel_data[idx].z * time_step;
+    } else {
+        acc_data[idx] = make_float3(0.f, 0.f, 0.f);
     }
-
-    acc_data[idx] = make_float3(0.f, 0.f, 0.f);
 
     __syncthreads();
 }

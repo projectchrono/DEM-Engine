@@ -488,6 +488,7 @@ __global__ void kinematicStep5(
     int* num_col,
     int unique_length) {
     __shared__ float3 pos_local[512];  // request maximum capacity for the shared mem
+    __shared__ int idx_local[512];     // request maximum capacity for track
     __shared__ int iden_local[512];
     __shared__ int tot_in_bsd;
 
@@ -505,6 +506,7 @@ __global__ void kinematicStep5(
         int end_idx = offset_BSD_data[sd_idx] + length_BSD_data[sd_idx];
         for (int i = start_idx; i < end_idx; i++) {
             pos_local[i - start_idx] = pos_data[idx_track_data_sorted[i]];
+            idx_local[i - start_idx] = idx_track_data_sorted[i];
             iden_local[i - start_idx] = BSD_iden_idx_sorted[i];
         }
     }
@@ -522,12 +524,14 @@ __global__ void kinematicStep5(
     }
 
     for (int i = 0; i < tot_in_bsd; i++) {
-        float dist2 = (pos_local[i].x - pos_local[idx].x) * (pos_local[i].x - pos_local[idx].x) +
-                      (pos_local[i].y - pos_local[idx].y) * (pos_local[i].y - pos_local[idx].y) +
-                      (pos_local[i].z - pos_local[idx].z) * (pos_local[i].z - pos_local[idx].z);
+        if (idx_local[idx] < idx_local[i]) {
+            float dist2 = (pos_local[i].x - pos_local[idx].x) * (pos_local[i].x - pos_local[idx].x) +
+                          (pos_local[i].y - pos_local[idx].y) * (pos_local[i].y - pos_local[idx].y) +
+                          (pos_local[i].z - pos_local[idx].z) * (pos_local[i].z - pos_local[idx].z);
 
-        if (dist2 <= (kernel_h * 2 + tolerance) * (kernel_h * 2 + tolerance)) {
-            count++;
+            if (dist2 <= (kernel_h * 2 + tolerance) * (kernel_h * 2 + tolerance)) {
+                count++;
+            }
         }
     }
 
@@ -535,7 +539,7 @@ __global__ void kinematicStep5(
 }
 
 // =================================================================================================================
-// Kinematic 5th Step, this is the 1st pass of the kinematic thread
+// Kinematic 7th Step, this is the 2nd pass of the kinematic thread
 // We will use shared memory to store particle location data
 // the 1st pass is going to fill the num_col vector
 // =================================================================================================================
@@ -592,44 +596,26 @@ __global__ void kinematicStep7(
     }
 
     for (int i = 0; i < tot_in_bsd; i++) {
-        float dist2 = (pos_local[i].x - pos_local[idx].x) * (pos_local[i].x - pos_local[idx].x) +
-                      (pos_local[i].y - pos_local[idx].y) * (pos_local[i].y - pos_local[idx].y) +
-                      (pos_local[i].z - pos_local[idx].z) * (pos_local[i].z - pos_local[idx].z);
+        if (idx_local[idx] < idx_local[i]) {
+            float dist2 = (pos_local[i].x - pos_local[idx].x) * (pos_local[i].x - pos_local[idx].x) +
+                          (pos_local[i].y - pos_local[idx].y) * (pos_local[i].y - pos_local[idx].y) +
+                          (pos_local[i].z - pos_local[idx].z) * (pos_local[i].z - pos_local[idx].z);
 
-        if (dist2 <= (kernel_h * 2 + tolerance) * (kernel_h * 2 + tolerance)) {
-            pair_i_data[num_col_offset[sd_idx * 512 + idx] + count] = idx_local[idx];
-            pair_j_data[num_col_offset[sd_idx * 512 + idx] + count] = idx_local[i];
+            if (dist2 <= (kernel_h * 2 + tolerance) * (kernel_h * 2 + tolerance)) {
+                pair_i_data[num_col_offset[sd_idx * 512 + idx] + count] = idx_local[idx];
+                pair_j_data[num_col_offset[sd_idx * 512 + idx] + count] = idx_local[i];
 
-            float3 dir = pos_local[idx] - pos_local[i];
+                float3 dir = pos_local[idx] - pos_local[i];
 
-            W_grad_data[num_col_offset[sd_idx * 512 + idx] + count] = W_Grad(dir, kernel_h);
+                W_grad_data[num_col_offset[sd_idx * 512 + idx] + count] = W_Grad(dir, kernel_h);
 
-            count++;
+                count++;
+            }
         }
     }
 }
 
-// =================================================================================================================
-// Kinematic 8th Step, this is the 1st pass of the kinematic thread
-// We will use shared memory to store particle location data
-// the 1st pass is going to fill the num_col vector
-// =================================================================================================================
-
-__global__ void kinematicStep8(int* pair_i_data, int* pair_j_data, int* inv_pair_i_data, int* inv_pair_j_data, int n) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (idx >= n) {
-        return;
-    }
-
-    inv_pair_i_data[idx] = pair_j_data[idx];
-    inv_pair_j_data[idx] = pair_i_data[idx];
-}
-
-// pos_data.data(), rho_data.data(), pressure_data.data(), i_unique.data(), i_offset.data(),
-// j_data_sorted.data(), i_unique.size()
-
-__global__ void kinematicStep9(float3* pos_data,
+__global__ void kinematicStep8(float3* pos_data,
                                float* rho_data,
                                float* pressure_data,
                                int* i_unique,
@@ -657,12 +643,59 @@ __global__ void kinematicStep9(float3* pos_data,
         float3 dir = pos_data[i_idx] - pos_data[j_idx];
 
         float w = W(dir, h);
-        // printf("%f", w);
         rho_sum = rho_sum + m * w;
     }
 
     __syncthreads();
 
     rho_data[i_idx] = rho_sum;
-    pressure_data[i_idx] = 100 * (rho_sum - rho_0);
+}
+
+__global__ void kinematicStep9(float3* pos_data,
+                               float* rho_data,
+                               float* pressure_data,
+                               int* j_unique,
+                               int* j_offset,
+                               int* j_length,
+                               int* i_data_sorted,
+                               int n_unique,
+                               float h,
+                               float m,
+                               float rho_0) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx >= n_unique) {
+        return;
+    }
+
+    int j_idx = j_unique[idx];
+    int start_idx = j_offset[idx];
+    int len = j_length[idx];
+
+    float rho_sum = 0;
+
+    for (int i = 0; i < len; i++) {
+        int i_idx = i_data_sorted[start_idx + i];
+        float3 dir = pos_data[j_idx] - pos_data[i_idx];
+
+        float w = W(dir, h);
+        rho_sum = rho_sum + m * w;
+    }
+
+    __syncthreads();
+
+    rho_data[j_idx] = rho_data[j_idx] + rho_sum;
+}
+
+__global__ void
+kinematicStep10(float3* pos_data, float* rho_data, float* pressure_data, int n_sample, float h, float m, float rho_0) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx >= n_sample) {
+        return;
+    }
+
+    float w_self = W(make_float3(0.0, 0.0, 0.0), h);
+    rho_data[idx] = rho_data[idx] + m * w_self;
+    pressure_data[idx] = 100 * (rho_data[idx] - rho_0);
 }
