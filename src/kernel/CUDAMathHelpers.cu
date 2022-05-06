@@ -71,3 +71,11 @@ inline __host__ __device__ void operator/=(float3& a, float b) {
     a.y /= b;
     a.z /= b;
 }
+
+// Cause an error inside a kernel
+#define SGPS_DEM_ABORT_KERNEL(...) \
+    {                              \
+        printf(__VA_ARGS__);       \
+        __threadfence();           \
+        cub::ThreadTrap();         \
+    }

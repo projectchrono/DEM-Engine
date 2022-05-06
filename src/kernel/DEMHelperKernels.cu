@@ -46,13 +46,22 @@ inline __device__ T1 mod_floor(const T1& a, const T2& b) {
     return ret;
 }
 
-// In an upper-triangular matrix, given i and j and num_of_col, this function returns the index of the corresponding
-// flatten-ed non-zero entries. This function does not assume i <= j.
+// In an upper-triangular (including the diagonal part) matrix, given i and j, this function returns the index of the
+// corresponding flatten-ed non-zero entries (col-major like in matlab). This function does not assume i <= j. It is
+// used in locating masks that maps the contact between families.
 template <typename T1>
-inline __device__ T1 locateMatPair(const T1& i, const T1& j) {
+inline __device__ T1 locateMaskPair(const T1& i, const T1& j) {
     if (i > j)
-        return locateMatPair(j, i);
+        return locateMaskPair(j, i);
     return (1 + j) * j / 2 + i;
+}
+
+// Magic function that converts an index of a flatten-ed upper-triangular matrix (EXCLUDING the diagonal) to its
+// corresponding i and j. It is ROW-major. It is used to map contact pair numbers in a bin.
+template <typename T1>
+inline __device__ void recoverCntPair(T1& i, T1& j, const T1& ind, const T1& n) {
+    i = n - 2 - (T1)(sqrt((float)(4 * n * (n - 1) - 7 - 8 * ind)) / 2.0 - 0.5);
+    j = ind + i + 1 + (n - i) * ((n - i) - 1) / 2 - n * (n - 1) / 2;
 }
 
 // Chops a long ID (typically voxelID) into XYZ components

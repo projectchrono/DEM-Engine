@@ -20,7 +20,8 @@ __global__ void cashInOwnerIndexB(sgps::bodyID_t* idOwner,
                                   sgps::bodyID_t* ownerClumpBody,
                                   sgps::contact_t* contactType,
                                   size_t nContactPairs) {
-    const sgps::bodyID_t objOwner[] = {_objOwner_};
+    // May have analytical entities in it
+    const sgps::bodyID_t objOwner[_nAnalGMSafe_] = {_objOwner_};
 
     sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContactPairs) {

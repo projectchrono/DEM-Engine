@@ -103,6 +103,8 @@ int main() {
     // auto domain_bottom = DEMBoxGridSampler(make_float3(0, 0, -10.0), make_float3(5.2, 5.2, 0.001), ground_sp_r
     // * 1.3); input_xyz.insert(input_xyz.end(), domain_bottom.begin(), domain_bottom.end()); Mark family 1 as fixed
     family_code.insert(family_code.end(), input_xyz.size(), 1);
+    DEM_sim.SetFamilyNoContact(1, 1);
+    DEM_sim.SetFamilyFixed(1);
     input_template_num.insert(input_template_num.end(), input_xyz.size(), template_ground);
 
     // generate initial clumps for piling
@@ -122,6 +124,8 @@ int main() {
 
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
     // DEM_sim.InstructBoxDomainNumVoxel(11, 11, 10, 1e-10);
+
+    // Planes are all defaulted to fixed
     DEM_sim.AddBCPlane(make_float3(0, 4.5, 0), make_float3(0, -1, 0), mat_type_2);
     DEM_sim.AddBCPlane(make_float3(0, -4.5, 0), make_float3(0, 1, 0), mat_type_2);
     DEM_sim.AddBCPlane(make_float3(4.5, 0, 0), make_float3(-1, 0, 0), mat_type_2);

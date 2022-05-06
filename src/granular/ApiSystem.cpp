@@ -418,7 +418,7 @@ void DEMSolver::figureOutFamilyMasks() {
         unsigned int implID1 = m_family_user_impl_map.at(a_pair.ID1);
         unsigned int implID2 = m_family_user_impl_map.at(a_pair.ID2);
         // Now fill in the mask matrix
-        unsigned int posInMat = locateMatPair<unsigned int>(implID1, implID2);
+        unsigned int posInMat = locateMaskPair<unsigned int>(implID1, implID2);
         m_family_mask_matrix.at(posInMat) = DEM_PREVENT_CONTACT;
     }
     // displayArray<notStupidBool_t>(m_family_mask_matrix.data(), m_family_mask_matrix.size());
@@ -844,7 +844,7 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
 
 inline void DEMSolver::equipFamilyMasks(std::unordered_map<std::string, std::string>& strMap) {
     std::string maskMat;
-    // strMap["_nFamilyMaskEntries_"] = std::to_string(m_family_mask_matrix.size());
+    strMap["_nFamilyMaskEntries_"] = std::to_string(m_family_mask_matrix.size());
     for (unsigned int i = 0; i < m_family_mask_matrix.size(); i++) {
         maskMat += std::to_string(m_family_mask_matrix.at(i)) + ",";
     }
@@ -962,15 +962,15 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_Gz_"] = to_string_with_precision(G.z);
     strMap["_beta_"] = to_string_with_precision(m_expand_factor);
 
-    // Some constants that are no longer used in kernels
+    // Some constants that we should consider using or not using
     // Some sim systems can have 0 boundary entities in them. In this case, we have to ensure jitification does not fail
-    // unsigned int nAnalGMSafe = (nAnalGM > 0) ? nAnalGM : 1;
-    // strMap["_nAnalGMSafe_"] = std::to_string(nAnalGMSafe);
-    // strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
+    unsigned int nAnalGMSafe = (nAnalGM > 0) ? nAnalGM : 1;
+    strMap["_nAnalGMSafe_"] = std::to_string(nAnalGMSafe);
+    strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
     // nTotalBodyTopologies includes clump topologies and ext obj topologies
-    // strMap["_nTotalBodyTopologies_"] = std::to_string(nDistinctClumpBodyTopologies + nExtObj);
-    // strMap["_nDistinctClumpComponents_"] = std::to_string(nDistinctClumpComponents_computed);
-    // strMap["_nMatTuples_"] = std::to_string(nMatTuples_computed);
+    strMap["_nTotalBodyTopologies_"] = std::to_string(nDistinctClumpBodyTopologies + nExtObj);
+    strMap["_nDistinctClumpComponents_"] = std::to_string(nDistinctClumpComponents_computed);
+    strMap["_nMatTuples_"] = std::to_string(nMatTuples_computed);
 }
 
 }  // namespace sgps

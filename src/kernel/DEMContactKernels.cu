@@ -3,6 +3,8 @@
 #include <granular/GranularDefines.h>
 #include <kernel/DEMHelperKernels.cu>
 
+#include <cub/util_ptx.cuh>
+
 __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
                                            sgps::bodyID_t* sphereIDsEachBinTouches_sorted,
                                            sgps::binID_t* activeBinIDs,
@@ -10,14 +12,30 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
                                            sgps::binSphereTouchPairs_t* sphereIDsLookUpTable,
                                            sgps::spheresBinTouches_t* numContactsInEachBin,
                                            size_t nActiveBins) {
-    // _nDistinctClumpComponents_ elements are in these arrays
-    const float CDRadii[] = {_CDRadii_};
-    const float CDRelPosX[] = {_CDRelPosX_};
-    const float CDRelPosY[] = {_CDRelPosY_};
-    const float CDRelPosZ[] = {_CDRelPosZ_};
-
-    // _nFamilyMaskEntries_ elements are in this array
-    const bool familyMasks[] = {_familyMasks_};
+    // CUDA does not support initializing shared arrays, so we have to manually load them
+    __shared__ float CDRadii[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosX[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosY[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosZ[_nDistinctClumpComponents_];
+    __shared__ bool familyMasks[_nFamilyMaskEntries_];
+    if (threadIdx.x < _nActiveLoadingThreads_) {
+        const float jitifiedCDRadii[_nDistinctClumpComponents_] = {_CDRadii_};
+        const float jitifiedCDRelPosX[_nDistinctClumpComponents_] = {_CDRelPosX_};
+        const float jitifiedCDRelPosY[_nDistinctClumpComponents_] = {_CDRelPosY_};
+        const float jitifiedCDRelPosZ[_nDistinctClumpComponents_] = {_CDRelPosZ_};
+        const bool jitifiedFamilyMasks[_nFamilyMaskEntries_] = {_familyMasks_};
+        for (sgps::clumpComponentOffset_t i = threadIdx.x; i < _nDistinctClumpComponents_;
+             i += _nActiveLoadingThreads_) {
+            CDRadii[i] = jitifiedCDRadii[i];
+            CDRelPosX[i] = jitifiedCDRelPosX[i];
+            CDRelPosY[i] = jitifiedCDRelPosY[i];
+            CDRelPosZ[i] = jitifiedCDRelPosZ[i];
+        }
+        for (unsigned int i = threadIdx.x; i < _nFamilyMaskEntries_; i += _nActiveLoadingThreads_) {
+            familyMasks[i] = jitifiedFamilyMasks[i];
+        }
+    }
+    __syncthreads();
 
     // Only active bins got execute this...
     sgps::binID_t myActiveID = blockIdx.x * blockDim.x + threadIdx.x;
@@ -37,6 +55,11 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
         sgps::spheresBinTouches_t contact_count = 0;
         // Grab the bodies that I care, put into local memory
         sgps::spheresBinTouches_t nBodiesMeHandle = numSpheresBinTouches[myActiveID];
+        if (nBodiesMeHandle > SGPS_DEM_MAX_SPHERES_PER_BIN) {
+            SGPS_DEM_ABORT_KERNEL("Bin %u contains %u sphere components, exceeding maximum allowance (%u)\n",
+                                  myActiveID, nBodiesMeHandle, SGPS_DEM_MAX_SPHERES_PER_BIN);
+        }
+
         sgps::binSphereTouchPairs_t myBodiesTableEntry = sphereIDsLookUpTable[myActiveID];
         // printf("nBodies: %u\n", nBodiesMeHandle);
         for (sgps::spheresBinTouches_t i = 0; i < nBodiesMeHandle; i++) {
@@ -71,7 +94,7 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
                 // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
                 unsigned int bodyAFamily = ownerFamily[bodyA];
                 unsigned int bodyBFamily = ownerFamily[bodyB];
-                unsigned int maskMatID = locateMatPair<unsigned int>(bodyAFamily, bodyBFamily);
+                unsigned int maskMatID = locateMaskPair<unsigned int>(bodyAFamily, bodyBFamily);
                 // If marked no contact, skip ths iteration
                 if (familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
                     continue;
@@ -119,14 +142,30 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
                                             sgps::bodyID_t* idSphA,
                                             sgps::bodyID_t* idSphB,
                                             size_t nActiveBins) {
-    // _nDistinctClumpComponents_ elements are in these arrays
-    const float CDRadii[] = {_CDRadii_};
-    const float CDRelPosX[] = {_CDRelPosX_};
-    const float CDRelPosY[] = {_CDRelPosY_};
-    const float CDRelPosZ[] = {_CDRelPosZ_};
-
-    // _nFamilyMaskEntries_ elements are in this array
-    const bool familyMasks[] = {_familyMasks_};
+    // CUDA does not support initializing shared arrays, so we have to manually load them
+    __shared__ float CDRadii[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosX[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosY[_nDistinctClumpComponents_];
+    __shared__ float CDRelPosZ[_nDistinctClumpComponents_];
+    __shared__ bool familyMasks[_nFamilyMaskEntries_];
+    if (threadIdx.x < _nActiveLoadingThreads_) {
+        const float jitifiedCDRadii[_nDistinctClumpComponents_] = {_CDRadii_};
+        const float jitifiedCDRelPosX[_nDistinctClumpComponents_] = {_CDRelPosX_};
+        const float jitifiedCDRelPosY[_nDistinctClumpComponents_] = {_CDRelPosY_};
+        const float jitifiedCDRelPosZ[_nDistinctClumpComponents_] = {_CDRelPosZ_};
+        const bool jitifiedFamilyMasks[_nFamilyMaskEntries_] = {_familyMasks_};
+        for (sgps::clumpComponentOffset_t i = threadIdx.x; i < _nDistinctClumpComponents_;
+             i += _nActiveLoadingThreads_) {
+            CDRadii[i] = jitifiedCDRadii[i];
+            CDRelPosX[i] = jitifiedCDRelPosX[i];
+            CDRelPosY[i] = jitifiedCDRelPosY[i];
+            CDRelPosZ[i] = jitifiedCDRelPosZ[i];
+        }
+        for (unsigned int i = threadIdx.x; i < _nFamilyMaskEntries_; i += _nActiveLoadingThreads_) {
+            familyMasks[i] = jitifiedFamilyMasks[i];
+        }
+    }
+    __syncthreads();
 
     // Only active bins got to execute this...
     sgps::binID_t myActiveID = blockIdx.x * blockDim.x + threadIdx.x;
@@ -183,7 +222,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
                 // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
                 unsigned int bodyAFamily = ownerFamily[bodyA];
                 unsigned int bodyBFamily = ownerFamily[bodyB];
-                unsigned int maskMatID = locateMatPair<unsigned int>(bodyAFamily, bodyBFamily);
+                unsigned int maskMatID = locateMaskPair<unsigned int>(bodyAFamily, bodyBFamily);
                 // If marked no contact, skip ths iteration
                 if (familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
                     continue;

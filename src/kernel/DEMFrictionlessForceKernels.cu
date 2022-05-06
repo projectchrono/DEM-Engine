@@ -54,19 +54,19 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
     const float CoRProxy[] = {_CoRProxy_};
 
     // _nAnalGM_ elements are in these arrays
-    const sgps::objType_t objType[] = {_objType_};
-    const sgps::bodyID_t objOwner[] = {_objOwner_};
-    const bool objNormal[] = {_objNormal_};
-    const sgps::materialsOffset_t objMaterial[] = {_objMaterial_};
-    const float objRelPosX[] = {_objRelPosX_};
-    const float objRelPosY[] = {_objRelPosY_};
-    const float objRelPosZ[] = {_objRelPosZ_};
-    const float objRotX[] = {_objRotX_};
-    const float objRotY[] = {_objRotY_};
-    const float objRotZ[] = {_objRotZ_};
-    const float objSize1[] = {_objSize1_};
-    const float objSize2[] = {_objSize2_};
-    const float objSize3[] = {_objSize3_};
+    const sgps::objType_t objType[_nAnalGMSafe_] = {_objType_};
+    const sgps::bodyID_t objOwner[_nAnalGMSafe_] = {_objOwner_};
+    const bool objNormal[_nAnalGMSafe_] = {_objNormal_};
+    const sgps::materialsOffset_t objMaterial[_nAnalGMSafe_] = {_objMaterial_};
+    const float objRelPosX[_nAnalGMSafe_] = {_objRelPosX_};
+    const float objRelPosY[_nAnalGMSafe_] = {_objRelPosY_};
+    const float objRelPosZ[_nAnalGMSafe_] = {_objRelPosZ_};
+    const float objRotX[_nAnalGMSafe_] = {_objRotX_};
+    const float objRotY[_nAnalGMSafe_] = {_objRotY_};
+    const float objRotZ[_nAnalGMSafe_] = {_objRotZ_};
+    const float objSize1[_nAnalGMSafe_] = {_objSize1_};
+    const float objSize2[_nAnalGMSafe_] = {_objSize2_};
+    const float objSize3[_nAnalGMSafe_] = {_objSize3_};
 
     sgps::contactPairs_t myContactID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myContactID < nContactPairs) {

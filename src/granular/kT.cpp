@@ -587,9 +587,9 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
         std::unordered_map<std::string, std::string> cdSubs = templateSubs;
         cdSubs.insert(simParamSubs.begin(), simParamSubs.end());
         cdSubs.insert(familyMaskSubs.begin(), familyMaskSubs.end());
-        contact_detection = std::make_shared<jitify::Program>(
-            std::move(JitHelper::buildProgram("DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu",
-                                              cdSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+        contact_detection = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu", cdSubs,
+            {"-I" + (JitHelper::KERNEL_DIR / "..").string(), "-I/opt/apps/cuda/x86_64/11.6.0/default/include"})));
     }
 }
 

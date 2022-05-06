@@ -21,9 +21,9 @@ namespace sgps {
 // In an upper-triangular matrix, given i and j, this function returns the index of the corresponding flatten-ed
 // non-zero entries. This function does not assume i <= j.
 template <typename T1>
-inline T1 locateMatPair(const T1& i, const T1& j) {
+inline T1 locateMaskPair(const T1& i, const T1& j) {
     if (i > j)
-        return locateMatPair(j, i);
+        return locateMaskPair(j, i);
     return (1 + j) * j / 2 + i;
 }
 
