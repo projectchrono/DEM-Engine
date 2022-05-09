@@ -7,18 +7,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sstream>
+#include <exception>
 
 extern size_t m_approx_bytes_used;
 
-#define SGPS_ERROR(...)                      \
-    {                                        \
-        char error_message[255];             \
-        sprintf(error_message, __VA_ARGS__); \
-        printf("ERROR!");                    \
-        printf("\n%s", error_message);       \
-        printf("\n%s", __func__);            \
-        printf(": EXITING SGPS SIM.\n");     \
-        exit(1);                             \
+#define SGPS_ERROR(...)                                          \
+    {                                                            \
+        char error_message[255];                                 \
+        sprintf(error_message, __VA_ARGS__);                     \
+        printf("ERROR!");                                        \
+        printf("\n%s", error_message);                           \
+        printf("\n%s", __func__);                                \
+        throw std::runtime_error("\nEXITING SGPS SIMULATION\n"); \
     }
 
 #define TRACKED_QUICK_VECTOR_RESIZE(vec, newsize)              \

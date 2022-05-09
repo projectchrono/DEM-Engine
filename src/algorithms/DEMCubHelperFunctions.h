@@ -8,60 +8,21 @@
 #include <granular/GranularStructs.h>
 #include <granular/GranularDefines.h>
 #include <core/utils/GpuManager.h>
+#include <core/utils/ManagedAllocator.hpp>
 
 namespace sgps {
 
-// This file should not be visible to gcc so it's difficult to make functions here templated. We probably have to bear
-// with writing each version of the same functions individually.
-void cubPrefixScan_binSphere(binsSphereTouches_t* d_in,
-                             binSphereTouchPairs_t* d_out,
-                             size_t n,
-                             cudaStream_t& this_stream,
-                             DEMSolverStateDataKT& scratchPad);
+void cubDEMSum(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateDataDT& scratchPad);
 
-void cubPrefixScan_sphereGeo(objID_t* d_in,
-                             binSphereTouchPairs_t* d_out,
-                             size_t n,
-                             cudaStream_t& this_stream,
-                             DEMSolverStateDataKT& scratchPad);
-
-void cubPrefixScan_contacts(spheresBinTouches_t* d_in,
-                            contactPairs_t* d_out,
-                            size_t n,
-                            cudaStream_t& this_stream,
-                            DEMSolverStateDataKT& scratchPad);
-
-// template <typename T1, typename T2>
-// void cubPrefixScan(T1* d_in,
-//                    T2* d_out,
-//                    size_t n,
-//                    cudaStream_t& this_stream,
-//                    DEMSolverStateData& scratchPad);
-
-void cubSortByKeys(binID_t* d_keys_in,
-                   binID_t* d_keys_out,
-                   bodyID_t* d_vals_in,
-                   bodyID_t* d_vals_out,
-                   size_t n,
-                   cudaStream_t& this_stream,
-                   DEMSolverStateDataKT& scratchPad);
-
-void cubUnique(binID_t* d_in,
-               binID_t* d_out,
-               size_t* d_num_out,
-               size_t n,
-               cudaStream_t& this_stream,
-               DEMSolverStateDataKT& scratchPad);
-
-void cubRunLengthEncode(binID_t* d_in,
-                        binID_t* d_unique_out,
-                        spheresBinTouches_t* d_counts_out,
-                        size_t* d_num_out,
-                        size_t n,
-                        cudaStream_t& this_stream,
-                        DEMSolverStateDataKT& scratchPad);
-
-void cubSum(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateDataDT& scratchPad);
+void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation,
+                      std::shared_ptr<jitify::Program>& contact_detection,
+                      DEMDataKT* granData,
+                      DEMSimParams* simParams,
+                      std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& idGeometryA,
+                      std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& idGeometryB,
+                      std::vector<contact_t, ManagedAllocator<contact_t>>& contactType,
+                      cudaStream_t& this_stream,
+                      DEMSolverStateDataKT& scratchPad);
 
 void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
                       clumpBodyInertiaOffset_t* inertiaPropOffsets,

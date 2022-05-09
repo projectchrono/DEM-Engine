@@ -252,14 +252,10 @@ class DEMKinematicThread {
                        const std::unordered_map<std::string, std::string>& analGeoSubs);
 
   private:
-    // Contact detections
-    void contactDetection();
     // Bring kT buffer array data to its working arrays
     void unpackMyBuffer();
     // Send produced data to dT-owned biffers
     void sendToTheirBuffer();
-    // Resize contact storage arrays based on the number of contact pairs
-    void contactEventArraysResize(size_t nContactPairs);
     // Resize dT's buffer arrays based on the number of contact pairs
     inline void transferArraysResize(size_t nContactPairs);
 

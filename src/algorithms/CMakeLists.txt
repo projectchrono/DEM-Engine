@@ -37,6 +37,8 @@ set(algorithms_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubWrappers.cu 
 	${CMAKE_CURRENT_SOURCE_DIR}/SPHCubHelperFunctions.cu 
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubForceCollection.cu
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubUtilities.cu
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubContactDetection.cu
 )
 
 target_sources(

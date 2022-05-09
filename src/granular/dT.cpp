@@ -130,7 +130,7 @@ float DEMDynamicThread::getKineticEnergy() {
         .launch(granData, KEArr);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     // displayArray<float>(KEArr, simParams->nOwnerBodies);
-    cubSum(KEArr, KE, simParams->nOwnerBodies, streamInfo.stream, stateOfSolver_resources);
+    cubDEMSum(KEArr, KE, simParams->nOwnerBodies, streamInfo.stream, stateOfSolver_resources);
     return *KE;
 }
 
