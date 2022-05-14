@@ -488,7 +488,7 @@ inline void DEMSolver::reportInitStats() const {
 
     if (m_expand_factor > 0.0) {
         SGPS_DEM_INFO("All geometries are enlarged/thickened by %.9g for contact detection purpose", m_expand_factor);
-        SGPS_DEM_INFO("This in the case of smallest sphere, means enlarging radius by %.9g/%",
+        SGPS_DEM_INFO("This in the case of smallest sphere, means enlarging radius by %.9g%%",
                       (m_expand_factor / m_smallest_radius) * 100.0);
     }
 
