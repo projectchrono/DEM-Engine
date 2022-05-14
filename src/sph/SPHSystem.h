@@ -20,6 +20,7 @@ struct DataManager {
     float kernel_h;
     float m;
     float rho_0;
+    float c;
     std::vector<float3, sgps::ManagedAllocator<float3>> m_pos;     // particle locations
     std::vector<float3, sgps::ManagedAllocator<float3>> m_vel;     // particle velocities
     std::vector<float3, sgps::ManagedAllocator<float3>> m_acc;     // particle accelerations
@@ -145,9 +146,11 @@ class SPHSystem {
     void initialize(float kernel_h,
                     float m,
                     float rho_0,
+                    float c,
                     std::vector<float3>& pos,
                     std::vector<float3>& vel,
                     std::vector<float3>& acc,
+                    std::vector<float>& pres,
                     std::vector<char>& fix,
                     float domain_x,
                     float domain_y,

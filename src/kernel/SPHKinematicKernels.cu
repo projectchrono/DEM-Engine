@@ -622,6 +622,7 @@ __global__ void kinematicStep8(float3* pos_data,
                                int* i_offset,
                                int* i_length,
                                int* j_data_sorted,
+                               char* fix_data,
                                int n_unique,
                                float h,
                                float m,
@@ -635,6 +636,11 @@ __global__ void kinematicStep8(float3* pos_data,
     int i_idx = i_unique[idx];
     int start_idx = i_offset[idx];
     int len = i_length[idx];
+
+    if (fix_data[i_idx] == 1) {
+        rho_data[i_idx] = rho_0;
+        return;
+    }
 
     float rho_sum = 0;
 
@@ -658,6 +664,7 @@ __global__ void kinematicStep9(float3* pos_data,
                                int* j_offset,
                                int* j_length,
                                int* i_data_sorted,
+                               char* fix_data,
                                int n_unique,
                                float h,
                                float m,
@@ -671,6 +678,11 @@ __global__ void kinematicStep9(float3* pos_data,
     int j_idx = j_unique[idx];
     int start_idx = j_offset[idx];
     int len = j_length[idx];
+
+    if (fix_data[j_idx] == 1) {
+        rho_data[j_idx] = rho_0;
+        return;
+    }
 
     float rho_sum = 0;
 
@@ -687,15 +699,22 @@ __global__ void kinematicStep9(float3* pos_data,
     rho_data[j_idx] = rho_data[j_idx] + rho_sum;
 }
 
-__global__ void
-kinematicStep10(float3* pos_data, float* rho_data, float* pressure_data, int n_sample, float h, float m, float rho_0) {
+__global__ void kinematicStep10(float3* pos_data,
+                                float* rho_data,
+                                float* pressure_data,
+                                char* fix_data,
+                                int n_sample,
+                                float h,
+                                float m,
+                                float rho_0,
+                                float c) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (idx >= n_sample) {
+    if (idx >= n_sample || fix_data[idx] == 1) {
         return;
     }
 
     float w_self = W(make_float3(0.0, 0.0, 0.0), h);
     rho_data[idx] = rho_data[idx] + m * w_self;
-    pressure_data[idx] = 100 * (rho_data[idx] - rho_0);
+    pressure_data[idx] = c * c * (rho_data[idx] - rho_0);
 }
