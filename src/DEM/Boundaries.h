@@ -8,7 +8,7 @@
 #include <limits>
 
 #include <helper_math.cuh>
-#include <granular/GranularDefines.h>
+#include <DEM/DEMDefines.h>
 #include <core/utils/ManagedAllocator.hpp>
 
 namespace sgps {

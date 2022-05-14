@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <granular/GranularDefines.h>
+#include <DEM/DEMDefines.h>
 #include <core/utils/ManagedAllocator.hpp>
 
 namespace sgps {

@@ -8,8 +8,8 @@
 #include <helper_math.cuh>
 #include <core/utils/Macros.h>
 
-#include <algorithms/DEMCubHelperFunctions.h>
-#include <granular/HostSideHelpers.cpp>
+#include <algorithms/DEMCubBasedSubroutines.h>
+#include <DEM/HostSideHelpers.cpp>
 
 #include <algorithms/DEMCubWrappers.cu>
 

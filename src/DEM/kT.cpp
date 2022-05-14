@@ -9,12 +9,12 @@
 #include <core/ApiVersion.h>
 #include <core/utils/Macros.h>
 #include <core/utils/chpf/particle_writer.hpp>
-#include <granular/GranularDefines.h>
-#include <granular/kT.h>
-#include <granular/dT.h>
-#include <granular/HostSideHelpers.cpp>
+#include <DEM/kT.h>
+#include <DEM/dT.h>
+#include <DEM/HostSideHelpers.cpp>
+#include <DEM/DEMDefines.h>
 
-#include <algorithms/DEMCubHelperFunctions.h>
+#include <algorithms/DEMCubBasedSubroutines.h>
 
 namespace sgps {
 

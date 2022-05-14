@@ -1,7 +1,6 @@
 // DEM force computation related custom kernels
 //#include <thirdparty/nvidia_helper_math/helper_math.cuh>
-#include <granular/DataStructs.h>
-#include <granular/GranularDefines.h>
+#include <DEM/DEMDefines.h>
 #include <kernel/DEMHelperKernels.cu>
 
 // Calculate the frictionless force between 2 bodies, return as a float3

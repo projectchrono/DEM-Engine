@@ -1,5 +1,4 @@
-#include <granular/DataStructs.h>
-#include <granular/GranularDefines.h>
+#include <DEM/DEMDefines.h>
 
 ////////////////////////////////////////////////////////////////////////////////
 // Weirdly, a few float3 and double3 operators are not in the cuda toolkit and I have difficulty including thridparty

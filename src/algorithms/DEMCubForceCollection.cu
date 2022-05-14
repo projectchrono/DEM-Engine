@@ -7,8 +7,8 @@
 #include <core/utils/JitHelper.h>
 #include <helper_math.cuh>
 
-#include <algorithms/DEMCubHelperFunctions.h>
-#include <granular/HostSideHelpers.cpp>
+#include <algorithms/DEMCubBasedSubroutines.h>
+#include <DEM/HostSideHelpers.cpp>
 
 #include <core/utils/GpuError.h>
 

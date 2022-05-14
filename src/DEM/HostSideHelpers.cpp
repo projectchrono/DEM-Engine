@@ -14,7 +14,7 @@
 #include <algorithm>
 #include <helper_math.cuh>
 
-#include <granular/GranularDefines.h>
+#include <DEM/DEMDefines.h>
 
 namespace sgps {
 
@@ -217,7 +217,7 @@ inline void hostCollectTorques(clumpBodyInertiaOffset_t* inertiaPropOffsets,
     }
 }
 
-/// A light-weight grid/box sampler that can be used to generate the initial stage of the granular system
+/// A light-weight grid/box sampler that can be used to generate the initial stage of the DEM system
 inline std::vector<float3> DEMBoxGridSampler(float3 BoxCenter, float3 HalfDims, float GridSize) {
     std::vector<float3> points;
     for (float z = BoxCenter.z - HalfDims.z; z <= BoxCenter.z + HalfDims.z; z += GridSize) {

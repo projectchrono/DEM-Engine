@@ -1,6 +1,5 @@
 // DEM contact detection-related custom kernels
-#include <granular/DataStructs.h>
-#include <granular/GranularDefines.h>
+#include <DEM/DEMDefines.h>
 #include <kernel/DEMHelperKernels.cu>
 
 // #include <cub/block/block_load.cuh>

@@ -3,9 +3,9 @@
 //  All rights reserved.
 
 #include <core/ApiVersion.h>
-#include <granular/ApiSystem.h>
-#include <granular/GranularDefines.h>
-#include <granular/HostSideHelpers.cpp>
+#include <DEM/ApiSystem.h>
+#include <DEM/DEMDefines.h>
+#include <DEM/HostSideHelpers.cpp>
 
 #include <iostream>
 #include <fstream>
@@ -692,7 +692,7 @@ void DEMSolver::validateUserInputs() {
                   << std::endl;
     }
     if (m_updateFreq < 0) {
-        std::cout << "\nWARNING! The physics of the granular system can drift into the future as much as it wants "
+        std::cout << "\nWARNING! The physics of the DEM system can drift into the future as much as it wants "
                      "compared to contact detections, because SetCDUpdateFreq was called with a negative argument. "
                      "Please make sure this is intended.\n"
                   << std::endl;
@@ -756,7 +756,7 @@ void DEMSolver::UpdateSimParams() {
 
 void DEMSolver::waitOnThreads() {
     while (!(kT->isUserCallDone() & dT->isUserCallDone())) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_GRANULARITY_MS));
+        std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_DEMITY_MS));
     }
     // Reset UserDone to false, make ready for the next user AdvanceSim call.
     kT->resetUserCallStat();

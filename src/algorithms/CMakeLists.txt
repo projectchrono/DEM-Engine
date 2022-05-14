@@ -25,7 +25,7 @@ target_link_libraries(
 ### HOST HEADERS ONLY (.h, .hpp) ###
 set(algorithms_interface
 	${CMAKE_CURRENT_SOURCE_DIR}/SPHCubHelperFunctions.h
-	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubHelperFunctions.h
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubBasedSubroutines.h
 )
 
 ### INTERNAL HEADERS ONLY (.h, .hpp, or .cuh) ###

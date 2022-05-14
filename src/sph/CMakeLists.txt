@@ -2,7 +2,7 @@
 # Copyright (c) 2021, University of Wisconsin - Madison
 # All rights reserved.
 
-message(STATUS "==== Building Granular Components ====")
+message(STATUS "==== Building DEM Components ====")
 
 add_library(sph OBJECT)
 

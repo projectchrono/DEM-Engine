@@ -4,9 +4,8 @@
 
 #pragma once
 
-#include <granular/DataStructs.h>
-#include <granular/GranularStructs.h>
-#include <granular/GranularDefines.h>
+#include <DEM/DEMStructs.h>
+#include <DEM/DEMDefines.h>
 #include <core/utils/GpuManager.h>
 #include <core/utils/ManagedAllocator.hpp>
 

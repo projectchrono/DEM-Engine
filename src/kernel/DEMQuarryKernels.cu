@@ -1,6 +1,5 @@
 // DEM kernels used for quarrying (statistical) information from the current simulation system
-#include <granular/DataStructs.h>
-#include <granular/GranularDefines.h>
+#include <DEM/DEMDefines.h>
 
 __global__ void computeKE(sgps::DEMDataDT* granData, float* KE) {
     // _nTotalBodyTopologies_  elements are in these arrays

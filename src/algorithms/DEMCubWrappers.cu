@@ -4,7 +4,7 @@
 
 #include <cub/cub.cuh>
 #include <core/utils/JitHelper.h>
-#include <granular/GranularDefines.h>
+#include <DEM/DEMDefines.h>
 
 #include <core/utils/GpuError.h>
 

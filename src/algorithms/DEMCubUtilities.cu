@@ -4,7 +4,7 @@
 
 #include <cub/cub.cuh>
 #include <core/utils/JitHelper.h>
-#include <algorithms/DEMCubHelperFunctions.h>
+#include <algorithms/DEMCubBasedSubroutines.h>
 
 #include <core/utils/GpuError.h>
 

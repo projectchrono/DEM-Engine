@@ -1,6 +1,5 @@
 // DEM force computation related custom kernels
-#include <granular/DataStructs.h>
-#include <granular/GranularDefines.h>
+#include <DEM/DEMDefines.h>
 #include <kernel/DEMHelperKernels.cu>
 
 __global__ void cashInOwnerIndexA(sgps::bodyID_t* idOwner,

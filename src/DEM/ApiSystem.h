@@ -9,15 +9,15 @@
 #include <cfloat>
 
 #include <core/ApiVersion.h>
-#include <granular/kT.h>
-#include <granular/dT.h>
+#include <DEM/kT.h>
+#include <DEM/dT.h>
 #include <core/utils/ManagedAllocator.hpp>
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
 #include <core/utils/Macros.h>
 #include <helper_math.cuh>
-#include <granular/GranularDefines.h>
-#include <granular/Boundaries.h>
+#include <DEM/DEMDefines.h>
+#include <DEM/Boundaries.h>
 
 namespace sgps {
 
@@ -406,7 +406,7 @@ class DEMSolver {
     void initializeArrays();
     // Pack array pointers to a struct so they can be easily used as kernel arguments
     void packDataPointers();
-    // Warn users if the data types defined in GranularDefines.h do not blend well with the user inputs (such as when
+    // Warn users if the data types defined in DEMDefines.h do not blend well with the user inputs (such as when
     // the user inputs a huge amount of clump templates).
     void validateUserInputs();
     // Compute the number of dT for cycles based on the amount of time the user wants to advance the simulation

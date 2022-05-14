@@ -5,8 +5,8 @@
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <core/utils/chpf/particle_writer.hpp>
-#include <granular/ApiSystem.h>
-#include <granular/HostSideHelpers.cpp>
+#include <DEM/ApiSystem.h>
+#include <DEM/HostSideHelpers.cpp>
 
 #include <cstdio>
 #include <chrono>

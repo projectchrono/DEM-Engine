@@ -80,7 +80,7 @@ include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 # ---------------------------------------------------------------------------- #
 
 add_subdirectory(src/core)
-add_subdirectory(src/granular)
+add_subdirectory(src/DEM)
 add_subdirectory(src/sph)
 add_subdirectory(src/algorithms)
 
@@ -92,21 +92,21 @@ add_library(
 	sbel_gpu_physics 
 	STATIC
 	$<TARGET_OBJECTS:core>
-	$<TARGET_OBJECTS:granular>
+	$<TARGET_OBJECTS:DEM>
 	$<TARGET_OBJECTS:sph>
 	$<TARGET_OBJECTS:algorithms>
 )
 
 # Extract include directories from the object bundles
 get_target_property(CORE_INTERFACE core INTERFACE_INCLUDE_DIRECTORIES)
-get_target_property(GRANULAR_INTERFACE granular INTERFACE_INCLUDE_DIRECTORIES)
+get_target_property(DEM_INTERFACE DEM INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(SPH_INTERFACE sph INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(ALGORITHMS_INTERFACE algorithms INTERFACE_INCLUDE_DIRECTORIES)
 
 # Attach include directories to the top-level library target
 set_target_properties(sbel_gpu_physics
 	PROPERTIES
-	INTERFACE_INCLUDE_DIRECTORIES "${CORE_INTERFACE};${GRANULAR_INTERFACE};${SPH_INTERFACE};${ALGORITHMS_INTERFACE}"
+	INTERFACE_INCLUDE_DIRECTORIES "${CORE_INTERFACE};${DEM_INTERFACE};${SPH_INTERFACE};${ALGORITHMS_INTERFACE}"
 	INTERFACE_LINK_LIBRARIES "CUDA::cudart;CUDA::nvrtc"
 	LINKER_LANGUAGE CUDA
 )

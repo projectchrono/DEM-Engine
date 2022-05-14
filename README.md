@@ -1,5 +1,5 @@
 # SBEL GPU Physics Solvers
-_An internally-licensed implementation of GPU-based FSI and Granular solvers_
+_An internally-licensed implementation of GPU-based FSI and DEM solvers_
 
 ### Licensing
 
@@ -14,7 +14,7 @@ New authors should add their name to the file `CONTRIBUTORS.md` rather than indi
 
 #### Notes on code included from Project Chrono
 
-This project exists independently of Chrono (for now) so developers should be sure to include the appropriate BSD license header on any code which is sourced from Chrono::FSI, Chrono::GPU(Granular), or other parts of Chrono.
+This project exists independently of Chrono (for now) so developers should be sure to include the appropriate BSD license header on any code which is sourced from Chrono::FSI, Chrono::GPU(DEM), or other parts of Chrono.
 
 > #### SAMPLE header for files sourced from Chrono
 > ```

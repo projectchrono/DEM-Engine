@@ -16,9 +16,8 @@
 #include <helper_math.cuh>
 #include <core/utils/GpuError.h>
 
-#include <granular/GranularDefines.h>
-#include <granular/GranularStructs.h>
-#include <granular/DataStructs.h>
+#include <DEM/DEMDefines.h>
+#include <DEM/DEMStructs.h>
 
 #include <core/utils/JitHelper.h>
 
@@ -56,7 +55,6 @@ class DEMDynamicThread {
     std::vector<contact_t, ManagedAllocator<contact_t>> contactType_buffer;
 
     // Pointers to simulation params-related arrays
-    // Check DataStructs.h for details
     DEMSimParams* simParams;
 
     // Pointers to those data arrays defined below, stored in a struct

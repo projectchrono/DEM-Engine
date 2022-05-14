@@ -1,7 +1,6 @@
 // DEM device-side helper kernel collection
 //#include <thirdparty/nvidia_helper_math/helper_math.cuh>
-#include <granular/DataStructs.h>
-#include <granular/GranularDefines.h>
+#include <DEM/DEMDefines.h>
 
 // I can only include CUDAMathHelpers.cu here and if I do it in other kernel files such as DEMBinSphereKernels.cu too,
 // there will be double-load problem where operators are re-defined. Is there a "pragma once" sort of thing here?

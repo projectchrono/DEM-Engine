@@ -1,7 +1,6 @@
 // DEM integration related custom kernels
-#include <granular/DataStructs.h>
 #include <kernel/DEMHelperKernels.cu>
-#include <granular/GranularDefines.h>
+#include <DEM/DEMDefines.h>
 
 // Apply presecibed velocity and report whether the ``true'' physics should be skipped, rather than added on top of that
 template <typename T1, typename T2>

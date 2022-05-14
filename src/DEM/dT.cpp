@@ -9,13 +9,13 @@
 #include <core/ApiVersion.h>
 #include <core/utils/Macros.h>
 #include <core/utils/chpf/particle_writer.hpp>
-#include <granular/GranularDefines.h>
-#include <granular/dT.h>
-#include <granular/kT.h>
-#include <granular/HostSideHelpers.cpp>
+#include <DEM/dT.h>
+#include <DEM/kT.h>
+#include <DEM/HostSideHelpers.cpp>
 #include <helper_math.cuh>
+#include <DEM/DEMDefines.h>
 
-#include <algorithms/DEMCubHelperFunctions.h>
+#include <algorithms/DEMCubBasedSubroutines.h>
 
 namespace sgps {
 
@@ -586,7 +586,7 @@ void DEMDynamicThread::workerThread() {
                 {
                     // acquire lock and use the content of the dynamic-owned transfer buffer
                     std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
-                    // std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_GRANULARITY_MS));
+                    // std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_DEMITY_MS));
                     unpackMyBuffer();
                     contactPairArr_isFresh = true;
                 }

@@ -3,13 +3,89 @@
 //  All rights reserved.
 
 #pragma once
+#include <limits>
+#include <stdint.h>
+#include <algorithm>
+#include <cmath>
 
-#include <granular/GranularDefines.h>
+#include <DEM/VariableTypes.h>
+
+#define SGPS_DEM_MIN(a, b) ((a < b) ? a : b)
+#define SGPS_DEM_MAX(a, b) ((a > b) ? a : b)
 
 namespace sgps {
+
+#ifndef SGPS_GET_VAR_NAME
+    #define SGPS_GET_VAR_NAME(Variable) (#Variable)
+#endif
+
+#define SGPS_DEM_MAX_SPHERES_PER_BIN 32  ///< Can't be too large since one thread processes one bin
+#define WAIT_DEMITY_MS 1
+#ifndef SGPS_DEM_TINY_FLOAT
+    #define SGPS_DEM_TINY_FLOAT 1e-12
+#endif
+#ifndef SGPS_DEM_HUGE_FLOAT
+    #define SGPS_DEM_HUGE_FLOAT 1e15
+#endif
+#ifndef SGPS_BITS_PER_BYTE
+    #define SGPS_BITS_PER_BYTE 8
+#endif
+#ifndef SGPS_CUDA_WARP_SIZE
+    #define SGPS_CUDA_WARP_SIZE 32
+#endif
+
+// A few pre-computed constants
+#ifndef SGPS_TWO_OVER_THREE
+    #define SGPS_TWO_OVER_THREE 0.666666666666667
+#endif
+#ifndef SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX
+    #define SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX 1.825741858350554
+#endif
+#ifndef SGPS_PI
+    #define SGPS_PI 3.141592653589793
+#endif
+#ifndef SGPS_PI_SQUARED
+    #define SGPS_PI_SQUARED 9.869604401089358
+#endif
+
+constexpr uint8_t DEM_VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * SGPS_BITS_PER_BYTE;
+constexpr int64_t DEM_MAX_SUBVOXEL = (int64_t)1 << DEM_VOXEL_RES_POWER2;
+
+#define SGPS_DEM_NUM_BINS_PER_BLOCK 128
+#define SGPS_DEM_NUM_BODIES_PER_BLOCK 512
+#define SGPS_DEM_INIT_CNT_MULTIPLIER 4
+// It should generally just be the warp size. When a block is launched, at least min(these_numbers) threads will be
+// launched so the template loading is always safe.
+constexpr clumpComponentOffset_t NUM_ACTIVE_TEMPLATE_LOADING_THREADS =
+    SGPS_DEM_MIN(SGPS_DEM_MIN(SGPS_CUDA_WARP_SIZE, SGPS_DEM_NUM_BINS_PER_BLOCK), SGPS_DEM_NUM_BODIES_PER_BLOCK);
+
+const objType_t DEM_ENTITY_TYPE_PLANE = 0;
+const objType_t DEM_ENTITY_TYPE_PLATE = 1;
+const objNormal_t DEM_ENTITY_NORMAL_INWARD = 0;
+const objNormal_t DEM_ENTITY_NORMAL_OUTWARD = 1;
+
+const contact_t DEM_NOT_A_CONTACT = 0;
+const contact_t DEM_SPHERE_SPHERE_CONTACT = 1;
+const contact_t DEM_SPHERE_PLANE_CONTACT = 2;
+const notStupidBool_t DEM_DONT_PREVENT_CONTACT = 0;
+const notStupidBool_t DEM_PREVENT_CONTACT = 1;
+
+const unsigned int DEM_DEFAULT_CLUMP_FAMILY_NUM = 0;
+constexpr unsigned int DEM_RESERVED_FAMILY_NUM = ((unsigned int)1 << (sizeof(family_t) * SGPS_BITS_PER_BYTE)) - 1;
+
+// Some enums...
+// Friction mode
+enum class DEM_FRICTION_MODE { FRICTIONLESS, MULTI_STEP };
+// Verbosity
+enum DEM_VERBOSITY { QUIET = 0, ERRORS = 10, WARNINGS = 20, INFO = 30, DEBUG = 40 };
+
+// =============================================================================
+// NOW START DEFINING SOME GPU-SIDE DATA STRUCTURES
+// =============================================================================
+
 // Structs defined here will be used by GPUs.
 // NOTE: All data structs here need to be simple enough to jitify. In general, if you need to include something much
-// more complex than GranularDefines for example, then do it in GranularStructs.h.
+// more complex than DEMDefines for example, then do it in DEMStructs.h.
 
 // A structure for storing simulation parameters. Note these simulation parameters should not change often (changes of
 // them usually lead to re-jitification). Those who change often (especially in each time step) should go into
