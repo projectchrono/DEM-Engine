@@ -38,10 +38,14 @@ DEMSolver::~DEMSolver() {
     delete dTkT_GpuManager;
 }
 
+void DEMSolver::SetVerbosity(DEM_VERBOSITY verbose) {
+    verbosity = verbose;
+}
+
 void DEMSolver::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned char z, float len_unit, float3 O) {
     if (x + y + z != sizeof(voxelID_t) * SGPS_BITS_PER_BYTE) {
-        SGPS_ERROR("Please give voxel numbers (as powers of 2) along each direction such that they add up to %zu.",
-                   sizeof(voxelID_t) * SGPS_BITS_PER_BYTE);
+        SGPS_DEM_ERROR("Please give voxel numbers (as powers of 2) along each direction such that they add up to %zu.",
+                       sizeof(voxelID_t) * SGPS_BITS_PER_BYTE);
     }
     l = len_unit;
     nvXp2 = x;
@@ -82,12 +86,12 @@ void DEMSolver::SuggestExpandFactor(float max_vel, float max_time_per_CD) {
 
 void DEMSolver::SuggestExpandFactor(float max_vel) {
     if (m_ts_size <= 0.0) {
-        SGPS_ERROR(
+        SGPS_DEM_ERROR(
             "Please set the constant time step size before calling this method, or supplying both the maximum expect "
             "velocity AND maximum time between contact detections as arguments.");
     }
     if (m_updateFreq == 0) {
-        SGPS_ERROR(
+        SGPS_DEM_ERROR(
             "Please set contact detection frequency via SetCDUpdateFreq before calling this method, or supplying both "
             "the maximum expect velocity AND maximum time between contact detections as arguments.");
     }
@@ -163,15 +167,15 @@ void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string
 unsigned int DEMSolver::LoadMaterialType(float E, float nu, float CoR, float density) {
     unsigned int mat_num = m_sp_materials.size();
     if (CoR < SGPS_DEM_TINY_FLOAT) {
-        std::cout << "\nWARNING! Material type " << mat_num
-                  << " is set (or defaulted) to have 0 restitution. Please make sure this is intentional.\n"
-                  << std::endl;
+        SGPS_DEM_WARNING(
+            "Material type %u is set (or defaulted) to have 0 restitution. Please make sure this is intentional.",
+            mat_num);
     }
     if (CoR > 1.f) {
-        std::cout << "\nWARNING! Material type " << mat_num
-                  << " is set to have a restitution coefficient larger than 1. This is typically not physical and "
-                     "should destabilize the simulation.\n"
-                  << std::endl;
+        SGPS_DEM_WARNING(
+            "Material type %u is set to have a restitution coefficient larger than 1. This is typically not physical "
+            "and should destabilize the simulation.",
+            mat_num);
     }
 
     struct DEMMaterial a_material;
@@ -191,7 +195,7 @@ unsigned int DEMSolver::LoadClumpType(float mass,
                                       const std::vector<unsigned int>& sp_material_ids) {
     auto len = sp_radii.size();
     if (len != sp_locations_xyz.size() || len != sp_material_ids.size()) {
-        SGPS_ERROR("Arrays defining a clump topology type must all have the same length.");
+        SGPS_DEM_ERROR("Arrays defining a clump topology type must all have the same length.");
     }
 
     m_template_mass.push_back(mass);
@@ -278,7 +282,7 @@ float DEMSolver::GetTotalKineticEnergy() const {
 
 void DEMSolver::figureOutNV() {
     if (m_boxX <= 0.f || m_boxY <= 0.f || m_boxZ <= 0.f) {
-        SGPS_ERROR(
+        SGPS_DEM_ERROR(
             "The size of the simulation world is set to be (or default to be) %f by %f by %f. It is impossibly small.",
             m_boxX, m_boxY, m_boxZ);
     }
@@ -370,7 +374,7 @@ void DEMSolver::preprocessExternObjs() {
                                             param.plate.normal, param.plate.h_dim_x, param.plate.h_dim_y);
                         break;
                     default:
-                        SGPS_ERROR("There is at least one analytical boundary that has a type not supported.");
+                        SGPS_DEM_ERROR("There is at least one analytical boundary that has a type not supported.");
                 }
             } else {
                 m_extra_clump_type.push_back(ext_obj->clump_type);
@@ -396,8 +400,8 @@ void DEMSolver::figureOutFamilyMasks() {
 
     nDistinctFamilies = unique_families.size();
     if (nDistinctFamilies > std::numeric_limits<family_t>::max()) {
-        SGPS_ERROR(
-            "You have %d families, however per data type restriction, there can be no more than %d. If so many "
+        SGPS_DEM_ERROR(
+            "You have %u families, however per data type restriction, there can be no more than %u. If so many "
             "families are indeed needed, please redefine family_t.",
             nDistinctFamilies, std::numeric_limits<family_t>::max());
     }
@@ -430,9 +434,10 @@ void DEMSolver::figureOutFamilyMasks() {
         unsigned int user_family = preInfo.family;
         if (m_family_user_impl_map.find(user_family) == m_family_user_impl_map.end()) {
             if (user_family != DEM_RESERVED_FAMILY_NUM) {
-                std::cout << "\nWARNING! Family number " << user_family
-                          << " is instructed to have prescribed motion, but no entity is associated with this family.\n"
-                          << std::endl;
+                SGPS_DEM_WARNING(
+                    "Family number %u is instructed to have prescribed motion, but no entity is associated with this "
+                    "family.",
+                    user_family);
             }
             continue;
         }
@@ -472,23 +477,22 @@ void DEMSolver::figureOutFamilyMasks() {
 }
 
 inline void DEMSolver::reportInitStats() const {
-    std::cout << "The dimension of the simulation world: " << m_boxX << ", " << m_boxY << ", " << m_boxZ << std::endl;
-    std::cout << "The length unit in this simulation is: " << l << std::endl;
-    std::cout << "The edge length of a voxel: " << m_voxelSize << std::endl;
+    SGPS_DEM_INFO("The dimension of the simulation world: %.17g, %.17g, %.17g", m_boxX, m_boxY, m_boxZ);
+    SGPS_DEM_INFO("The length unit in this simulation is: %.17g", l);
+    SGPS_DEM_INFO("The edge length of a voxel: %.17g", m_voxelSize);
 
-    std::cout << "The edge length of a bin: " << m_binSize << std::endl;
-    std::cout << "The total number of bins: " << m_num_bins << std::endl;
+    SGPS_DEM_INFO("The edge length of a bin: %.17g", m_binSize);
+    SGPS_DEM_INFO("The total number of bins: %zu", m_num_bins);
 
-    std::cout << "The current number of clumps: " << nOwnerBodies << std::endl;
+    SGPS_DEM_INFO("The current number of clumps: %zu", nOwnerBodies);
 
     if (m_expand_factor > 0.0) {
-        std::cout << "All geometries are enlarged/thickened by " << m_expand_factor << " for contact detection purpose"
-                  << std::endl;
-        std::cout << "This in the case of smallest sphere, means enlarging radius by "
-                  << (m_expand_factor / m_smallest_radius) * 100.0 << "%" << std::endl;
+        SGPS_DEM_INFO("All geometries are enlarged/thickened by %.9g for contact detection purpose", m_expand_factor);
+        SGPS_DEM_INFO("This in the case of smallest sphere, means enlarging radius by %.9g/%",
+                      (m_expand_factor / m_smallest_radius) * 100.0);
     }
 
-    std::cout << "The number of material types: " << nMatTuples_computed << std::endl;
+    SGPS_DEM_INFO("The number of material types: %u", nMatTuples_computed);
 }
 
 void DEMSolver::generateJITResources() {
@@ -598,7 +602,7 @@ void DEMSolver::generateJITResources() {
 
 void DEMSolver::AddClumps(const std::vector<unsigned int>& types, const std::vector<float3>& xyz) {
     if (types.size() != xyz.size()) {
-        SGPS_ERROR("Arrays in the call AddClumps must all have the same length.");
+        SGPS_DEM_ERROR("Arrays in the call AddClumps must all have the same length.");
     }
 
     // clump_xyz are effectively the xyz of the CoM
@@ -612,11 +616,11 @@ void DEMSolver::SetClumpVels(const std::vector<float3>& vel) {
 
 void DEMSolver::SetClumpFamily(const std::vector<unsigned int>& code) {
     if (any_of(code.begin(), code.end(), [](unsigned int i) { return i >= DEM_RESERVED_FAMILY_NUM; })) {
-        std::cout << "\nWARNING! Family number " << DEM_RESERVED_FAMILY_NUM
-                  << " is reserved for completely fixed boundaries. Using it on your "
-                     "simulation entities will make them fixed, regardless of your specification.\nYou can change "
-                     "family_t if you indeed need more families to work with.\n"
-                  << std::endl;
+        SGPS_DEM_WARNING(
+            "Family number %u is reserved for completely fixed boundaries. Using it on your simulation entities will "
+            "make them fixed, regardless of your specification.\nYou can change family_t if you indeed need more "
+            "families to work with.",
+            DEM_RESERVED_FAMILY_NUM);
     }
 
     m_input_clump_family.insert(m_input_clump_family.end(), code.begin(), code.end());
@@ -627,8 +631,11 @@ void DEMSolver::WriteFileAsSpheres(const std::string& outfilename) const {
     dT->WriteCsvAsSpheres(ptFile);
 }
 
-/// Transfer (CPU-side) cached simulation data (about sim world) to the GPU-side. It is called automatically during
-/// system initialization.
+void DEMSolver::transferSolverParams() {
+    kT->verbosity = verbosity;
+    dT->verbosity = verbosity;
+}
+
 void DEMSolver::transferSimParams() {
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
                      m_expand_factor);
@@ -636,7 +643,6 @@ void DEMSolver::transferSimParams() {
                      m_expand_factor);
 }
 
-/// Transfer (CPU-side) cached clump templates info and initial clump type/position info to GPU-side arrays
 void DEMSolver::initializeArrays() {
     // Resize managed arrays based on the statistical data we had from the previous step
     dT->allocateManagedArrays(nOwnerBodies, nOwnerClumps, nExtObj, nTriEntities, nSpheresGM, nTriGM, nAnalGM,
@@ -667,35 +673,35 @@ void DEMSolver::validateUserInputs() {
     // First match the length of input clump arrays, for those input arrays that we don't force the user to specify
     m_input_clump_vel.resize(m_input_clump_xyz.size(), make_float3(0));
     if (m_input_clump_family.size() < m_input_clump_xyz.size()) {
-        std::cout << "\nWARNING! Some clumps do not have their family numbers specified, so defaulted to "
-                  << DEM_DEFAULT_CLUMP_FAMILY_NUM << "\n"
-                  << std::endl;
+        SGPS_DEM_WARNING("Some clumps do not have their family numbers specified, so defaulted to %u",
+                         DEM_DEFAULT_CLUMP_FAMILY_NUM);
     }
     m_input_clump_family.resize(m_input_clump_xyz.size(), DEM_DEFAULT_CLUMP_FAMILY_NUM);
     // Fix the reserved family
     SetFamilyFixed(DEM_RESERVED_FAMILY_NUM);
 
     if (m_sp_materials.size() == 0) {
-        SGPS_ERROR("Before initializing the system, at least one material type should be loaded via LoadMaterialType.");
+        SGPS_DEM_ERROR(
+            "Before initializing the system, at least one material type should be loaded via LoadMaterialType.");
     }
     if (m_ts_size <= 0.0 && ts_size_is_const) {
-        SGPS_ERROR(
+        SGPS_DEM_ERROR(
             "Time step size is set to be %f. Please supply a positive number via SetTimeStepSize, or define the "
             "variable stepping properly.",
             m_ts_size);
     }
     if (m_expand_factor * m_expand_safety_param <= 0.0 && m_updateFreq > 0) {
-        std::cout << "\nWARNING! You instructed that the physics can stretch " << m_updateFreq
-                  << " time steps into the future, but did not instruct the geometries to expand via "
-                     "SuggestExpandFactor. The contact detection procedure will likely fail to detect some contact "
-                     "events before it is too late, hindering the simulation accuracy and stability.\n"
-                  << std::endl;
+        SGPS_DEM_WARNING(
+            "You instructed that the physics can stretch %u time steps into the future, but did not instruct the "
+            "geometries to expand via SuggestExpandFactor. The contact detection procedure will likely fail to detect "
+            "some contact events before it is too late, hindering the simulation accuracy and stability.",
+            m_updateFreq);
     }
     if (m_updateFreq < 0) {
-        std::cout << "\nWARNING! The physics of the DEM system can drift into the future as much as it wants "
-                     "compared to contact detections, because SetCDUpdateFreq was called with a negative argument. "
-                     "Please make sure this is intended.\n"
-                  << std::endl;
+        SGPS_DEM_WARNING(
+            "The physics of the DEM system can drift into the future as much as it wants compared to contact "
+            "detections, because SetCDUpdateFreq was called with a negative argument. Please make sure this is "
+            "intended.");
     }
 
     // TODO: Add check for inputs sizes (nClumps, nSpheres, nMat, nTopo...)
@@ -723,6 +729,9 @@ int DEMSolver::Initialize() {
 
     // Call the JIT compiler generator to make prep for this simulation.
     generateJITResources();
+
+    // Transfer some user-specified solver preference/instructions to workers
+    transferSolverParams();
 
     // Transfer some simulation params to implementation level
     transferSimParams();

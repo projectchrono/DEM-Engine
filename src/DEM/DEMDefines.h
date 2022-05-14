@@ -14,6 +14,9 @@
 #define SGPS_DEM_MAX(a, b) ((a > b) ? a : b)
 
 namespace sgps {
+// =============================================================================
+// NOW DEFINING CONSTANTS USED BY THE DEM MODULE
+// =============================================================================
 
 #ifndef SGPS_GET_VAR_NAME
     #define SGPS_GET_VAR_NAME(Variable) (#Variable)
@@ -77,10 +80,10 @@ constexpr unsigned int DEM_RESERVED_FAMILY_NUM = ((unsigned int)1 << (sizeof(fam
 // Friction mode
 enum class DEM_FRICTION_MODE { FRICTIONLESS, MULTI_STEP };
 // Verbosity
-enum DEM_VERBOSITY { QUIET = 0, ERRORS = 10, WARNINGS = 20, INFO = 30, DEBUG = 40 };
+enum DEM_VERBOSITY { QUIET = 0, ERROR = 10, WARNING = 20, INFO = 30, DEBUG = 40 };
 
 // =============================================================================
-// NOW START DEFINING SOME GPU-SIDE DATA STRUCTURES
+// NOW DEFINING SOME GPU-SIDE DATA STRUCTURES
 // =============================================================================
 
 // Structs defined here will be used by GPUs.
@@ -278,5 +281,46 @@ struct DEMDataKT {
 
 // typedef DEMDataDT* DEMDataDTPtr;
 // typedef DEMSimParams* DEMSimParamsPtr;
+
+// =============================================================================
+// NOW DEFINING MACRO COMMANDS USED BY THE DEM MODULE
+// =============================================================================
+
+#define SGPS_DEM_ERROR(...)                                      \
+    {                                                            \
+        if (verbosity >= DEM_VERBOSITY::ERROR) {                 \
+            char error_message[256];                             \
+            sprintf(error_message, __VA_ARGS__);                 \
+            printf("\nERROR! ");                                 \
+            printf("%s", error_message);                         \
+            printf("\n%s", __func__);                            \
+        }                                                        \
+        throw std::runtime_error("\nEXITING SGPS SIMULATION\n"); \
+    }
+
+#define SGPS_DEM_WARNING(...)                      \
+    {                                              \
+        if (verbosity >= DEM_VERBOSITY::WARNING) { \
+            printf("\nWARNING! ");                 \
+            printf(__VA_ARGS__);                   \
+            printf("\n");                          \
+        }                                          \
+    }
+
+#define SGPS_DEM_INFO(...)                      \
+    {                                           \
+        if (verbosity >= DEM_VERBOSITY::INFO) { \
+            printf(__VA_ARGS__);                \
+            printf("\n");                       \
+        }                                       \
+    }
+
+#define SGPS_DEM_DEBUG_PRINTF(...)               \
+    {                                            \
+        if (verbosity >= DEM_VERBOSITY::DEBUG) { \
+            printf(__VA_ARGS__);                 \
+            printf("\n");                        \
+        }                                        \
+    }
 
 }  // namespace sgps

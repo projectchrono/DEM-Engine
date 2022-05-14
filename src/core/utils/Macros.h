@@ -13,7 +13,7 @@ extern size_t m_approx_bytes_used;
 
 #define SGPS_ERROR(...)                                          \
     {                                                            \
-        char error_message[255];                                 \
+        char error_message[256];                                 \
         sprintf(error_message, __VA_ARGS__);                     \
         printf("ERROR!");                                        \
         printf("\n%s", error_message);                           \

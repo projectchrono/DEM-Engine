@@ -34,6 +34,9 @@ class DEMDynamicThread {
     ThreadManager* pSchedSupport;
     GpuManager* pGpuDistributor;
 
+    // dT verbosity
+    DEM_VERBOSITY verbosity = INFO;
+
     // The std::thread that binds to this instance
     std::thread th;
 

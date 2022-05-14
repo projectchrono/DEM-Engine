@@ -11,6 +11,8 @@
 #include <DEM/DEMDefines.h>
 #include <core/utils/ManagedAllocator.hpp>
 
+extern sgps::DEM_VERBOSITY verbosity;
+
 namespace sgps {
 
 /// External object type
@@ -113,9 +115,9 @@ struct DEMExternObj {
     /// Add a clump (using loaded clump template number) as a component to this external object
     void AddClumpType(unsigned int type) {
         if (clump_defined) {
-            std::cout << "\nWARNING! Each external object can contain no more than one clump. When you load the second "
-                         "one, the first one is overwritten.\n"
-                      << std::endl;
+            SGPS_DEM_WARNING(
+                "Each external object can contain no more than one clump. When you load the second one, the first one "
+                "is overwritten.");
         } else {
             types.push_back(DEM_OBJ_COMPONENT::CLUMP);
         }

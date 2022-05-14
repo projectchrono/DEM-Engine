@@ -543,9 +543,11 @@ void DEMDynamicThread::workerThread() {
     // Set the gpu for this thread
     cudaSetDevice(streamInfo.device);
     cudaStreamCreate(&streamInfo.stream);
-    int totGPU;
-    cudaGetDeviceCount(&totGPU);
-    printf("Total device: %d\n", totGPU);
+    {
+        int totGPU;
+        cudaGetDeviceCount(&totGPU);
+        SGPS_DEM_INFO("Number of total active devices: %d", totGPU);
+    }
 
     while (!pSchedSupport->dynamicShouldJoin) {
         {

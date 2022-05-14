@@ -30,6 +30,9 @@ class DEMSolver {
     DEMSolver(unsigned int nGPUs = 2);
     virtual ~DEMSolver();
 
+    /// Set output detail level
+    void SetVerbosity(DEM_VERBOSITY verbose);
+
     /// Instruct the dimension of the ``world'', as well as the origin point of this ``world''. On initialization, this
     /// info will be used to figure out how to assign the num of voxels in each direction. If your ``useful'' domain is
     /// not box-shaped, then define a box that contains your domian. O is the coordinate of the left-bottom-front point
@@ -175,6 +178,9 @@ class DEMSolver {
     */
 
   private:
+    // Verbosity
+    DEM_VERBOSITY verbosity = INFO;
+
     // This is the cached material information.
     // It will be massaged into the managed memory upon Initialize().
     struct DEMMaterial {
@@ -393,31 +399,33 @@ class DEMSolver {
 
     void generateJITResources();
     void jitifyKernels();
-    // Figure out the unit length l and corresponding numbers of voxels along each direction, based on domain size X, Y,
-    // Z
+    /// Figure out the unit length l and numbers of voxels along each direction, based on domain size X, Y, Z
     void figureOutNV();
-    // Set the default bin (for contact detection) size to be the same of the smallest sphere
+    /// Set the default bin (for contact detection) size to be the same of the smallest sphere
     void decideDefaultBinSize();
-    // Transfer cached sim params to dT (and kT?)
+    /// Transfer cached solver preferences/instructions to dT and kT
+    void transferSolverParams();
+    /// Transfer (CPU-side) cached simulation data (about sim world) to the GPU-side. It is called automatically during
+    /// system initialization.
     void transferSimParams();
-    // Wait for kT and dT until they are done with the work and a signal is give by them, then the ApiSystem can go on.
+    /// Wait for kT and dT until they are done with the work and a signal is give by them, then the ApiSystem can go on.
     void waitOnThreads();
-    // Allocate and populate kT dT managed arrays.
+    /// Transfer (CPU-side) cached clump templates info and initial clump type/position info to GPU-side arrays
     void initializeArrays();
-    // Pack array pointers to a struct so they can be easily used as kernel arguments
+    /// Pack array pointers to a struct so they can be easily used as kernel arguments
     void packDataPointers();
-    // Warn users if the data types defined in DEMDefines.h do not blend well with the user inputs (such as when
-    // the user inputs a huge amount of clump templates).
+    /// Warn users if the data types defined in DEMDefines.h do not blend well with the user inputs (such as when
+    /// the user inputs a huge amount of clump templates).
     void validateUserInputs();
-    // Compute the number of dT for cycles based on the amount of time the user wants to advance the simulation
+    /// Compute the number of dT for cycles based on the amount of time the user wants to advance the simulation
     inline size_t computeDTCycles(double thisCallDuration);
-    // Prepare the material/contact proxy matrix force computation kernels
+    /// Prepare the material/contact proxy matrix force computation kernels
     void figureOutMaterialProxies();
-    // Figure out info about external objects/clump templates and whether they can be jitified
+    /// Figure out info about external objects/clump templates and whether they can be jitified
     void preprocessExternObjs();
-    // Report simulation stats at initialization
+    /// Report simulation stats at initialization
     inline void reportInitStats() const;
-    // Based on user input, prepare family_mask_matrix (family contact map matrix)
+    /// Based on user input, prepare family_mask_matrix (family contact map matrix)
     void figureOutFamilyMasks();
 
     // Some JIT packaging helpers

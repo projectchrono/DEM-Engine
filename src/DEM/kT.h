@@ -33,6 +33,9 @@ class DEMKinematicThread {
     ThreadManager* pSchedSupport;
     GpuManager* pGpuDistributor;
 
+    // kT verbosity
+    DEM_VERBOSITY verbosity = INFO;
+
     // The std::thread that binds to this instance
     std::thread th;
 

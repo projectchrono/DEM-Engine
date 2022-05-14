@@ -243,10 +243,6 @@ inline std::vector<float3> DEMCylSurfSampler(float3 CylCenter,
                                              unsigned int NumRows) {
     std::vector<float3> points;
     double RadIncr = 2.0 * SGPS_PI / (double)(NumRows);
-    if (RadIncr >= SGPS_PI / 4.) {
-        std::cout << "\nWARNING! You may want to increase the resolution of the cylindrical surface you generated.\n"
-                  << std::endl;
-    }
     float3 UnitCylAxis = normalize(CylAxis);
     float3 RadDir;
     {
