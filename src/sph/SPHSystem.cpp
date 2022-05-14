@@ -21,9 +21,11 @@ int Z_SUB_NUM = 0;
 void SPHSystem::initialize(float kernel_h,
                            float m,
                            float rho_0,
+                           float c,
                            std::vector<float3>& pos,
                            std::vector<float3>& vel,
                            std::vector<float3>& acc,
+                           std::vector<float>& pres,
                            std::vector<char>& fix,
                            float domain_x,
                            float domain_y,
@@ -31,9 +33,11 @@ void SPHSystem::initialize(float kernel_h,
     dataManager.kernel_h = kernel_h;
     dataManager.m = m;
     dataManager.rho_0 = rho_0;
+    dataManager.c = c;
     dataManager.m_pos.assign(pos.begin(), pos.end());
     dataManager.m_vel.assign(vel.begin(), vel.end());
     dataManager.m_acc.assign(acc.begin(), acc.end());
+    dataManager.m_pressure.assign(pres.begin(), pres.end());
     dataManager.m_fix.assign(fix.begin(), fix.end());
     this->domain_x = domain_x + 5 * kernel_h;
     this->domain_y = domain_y + 5 * kernel_h;
@@ -140,12 +144,14 @@ void KinematicThread::operator()() {
     float kernel_h;
     float m;
     float rho_0;
+    float c;
     {
         const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
         k_n = dataManager.m_pos.size();
         kernel_h = dataManager.kernel_h;
         m = dataManager.m;
         rho_0 = dataManager.rho_0;
+        c = dataManager.c;
     }
 
     // set number of blocks and number of threads in each block
@@ -177,6 +183,7 @@ void KinematicThread::operator()() {
 
     std::vector<float3, sgps::ManagedAllocator<float3>> W_grad_data;  // local W grad data
     std::vector<int, sgps::ManagedAllocator<int>> temp_storage;       // temp storage space for cub functions 
+    std::vector<char, sgps::ManagedAllocator<char>> fix_data;
 
     // initiate JitHelper to perform JITC
     auto kinematic_program = JitHelper::buildProgram(
@@ -187,6 +194,11 @@ void KinematicThread::operator()() {
 
     while (getParentSystem().curr_time < getParentSystem().sim_time) {
         float tolerance = kernel_h / 10;
+        if (kinematicCounter == 0) {
+            const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
+            fix_data.assign(dataManager.m_fix.begin(), dataManager.m_fix.end());
+            pressure_data.assign(dataManager.m_pressure.begin(), dataManager.m_pressure.end());
+        }
 
         // for each step, the kinematic thread needs to do two passes
         // first pass - look for 'number' of potential contacts
@@ -392,11 +404,9 @@ void KinematicThread::operator()() {
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // initialize density and pressure vectors
+        rho_data.clear();
         rho_data.resize(pos_data.size());
         rho_data.shrink_to_fit();
-
-        pressure_data.resize(pos_data.size());
-        pressure_data.shrink_to_fit();
 
         num_thread = 512;
         num_block =
@@ -406,7 +416,7 @@ void KinematicThread::operator()() {
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), rho_data.data(), pressure_data.data(), i_unique.data(), i_offset.data(),
-                    i_length.data(), j_data_sorted_1.data(), i_unique.size(), kernel_h, m, rho_0);
+                    i_length.data(), j_data_sorted_1.data(), fix_data.data(), i_unique.size(), kernel_h, m, rho_0);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // clear kinematic step 8 data
@@ -454,7 +464,7 @@ void KinematicThread::operator()() {
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), rho_data.data(), pressure_data.data(), j_unique.data(), j_offset.data(),
-                    j_length.data(), i_data_sorted_2.data(), j_unique.size(), kernel_h, m, rho_0);
+                    j_length.data(), i_data_sorted_2.data(), fix_data.data(), j_unique.size(), kernel_h, m, rho_0);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // clear kinematic step 8 data
@@ -485,7 +495,7 @@ void KinematicThread::operator()() {
         kinematic_program.kernel("kinematicStep10")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(pos_data.data(), rho_data.data(), pressure_data.data(), pos_data.size(), kernel_h, m, rho_0);
+            .launch(pos_data.data(), rho_data.data(), pressure_data.data(), fix_data.data(), pos_data.size(), kernel_h, m, rho_0, c);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // copy data back to the dataManager
