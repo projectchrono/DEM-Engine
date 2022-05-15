@@ -65,6 +65,14 @@ class DEMSolver {
     // Instruct the solver to save time by using frictionless contact model
     void UseFrictionlessModel(bool useFrictionless = true);
 
+    /// Instruct the solver if contact pair arrays should be sorted before usage
+    void SetSortContactPairs(bool use_sort);
+
+    /// Instruct the solver if to adopt a contact force calculation strategy where a thread takes care of multiple
+    /// contacts in the hope that more shared memory is leveraged. This should make simulations with balanced per-sphere
+    /// contact numbers faster.
+    void UseCompactForceKernel(bool use_compact);
+
     /// (Explicitly) set the amount by which the radii of the spheres (and the thickness of the boundaries) are expanded
     /// for the purpose of contact detection (safe, and creates false positives).
     void SetExpandFactor(float beta);
@@ -178,8 +186,14 @@ class DEMSolver {
     */
 
   private:
+    // A number of behavior-related variables
     // Verbosity
     DEM_VERBOSITY verbosity = INFO;
+    // If true, kT should sort contact arrays then transfer them to dT
+    bool kT_should_sort = true;
+    // If true, dT should adopt a contact force calculation strategy where a thread takes care of multiple contacts so
+    // shared memory is leveraged
+    bool use_compact_sweep_force_strat = true;
 
     // This is the cached material information.
     // It will be massaged into the managed memory upon Initialize().
@@ -403,7 +417,7 @@ class DEMSolver {
     void figureOutNV();
     /// Set the default bin (for contact detection) size to be the same of the smallest sphere
     void decideDefaultBinSize();
-    /// Transfer cached solver preferences/instructions to dT and kT
+    /// Transfer cached solver preferences/instructions to dT and kT.
     void transferSolverParams();
     /// Transfer (CPU-side) cached simulation data (about sim world) to the GPU-side. It is called automatically during
     /// system initialization.

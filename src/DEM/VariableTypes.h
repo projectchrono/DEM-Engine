@@ -20,7 +20,7 @@ typedef uint8_t materialsOffset_t;
 typedef uint8_t clumpBodyInertiaOffset_t;
 typedef uint8_t clumpComponentOffset_t;
 typedef unsigned short int clumpComponentOffsetExt_t;  ///< Extended component offset type for non-jitified part
-typedef double floatFine_t;
+typedef double realFine_t;
 typedef char scratch_t;  ///< Data type for DEM scratch-pad array
 // typedef unsigned int distinctSphereRelativePositions_default_t;
 // typedef unsigned int distinctSphereRadiiOffset_default_t;

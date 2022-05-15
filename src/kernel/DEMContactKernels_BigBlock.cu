@@ -6,7 +6,6 @@
 // #include <cub/block/block_store.cuh>
 #include <cub/block/block_reduce.cuh>
 #include <cub/block/block_scan.cuh>
-// "-I/opt/apps/cuda/x86_64/11.6.0/default/include"
 
 __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
                                            sgps::bodyID_t* sphereIDsEachBinTouches_sorted,

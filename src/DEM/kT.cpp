@@ -104,8 +104,8 @@ void DEMKinematicThread::workerThread() {
             // figure out the amount of shared mem
             // cudaDeviceGetAttribute.cudaDevAttrMaxSharedMemoryPerBlock
 
-            contactDetection(bin_occupation, contact_detection, granData, simParams, idGeometryA, idGeometryB,
-                             contactType, streamInfo.stream, stateOfSolver_resources);
+            contactDetection(bin_occupation, contact_detection, granData, simParams, solverFlags, idGeometryA,
+                             idGeometryB, contactType, streamInfo.stream, stateOfSolver_resources);
 
             /* for the reference
             for (int j = 0; j < N_MANUFACTURED_ITEMS; j++) {

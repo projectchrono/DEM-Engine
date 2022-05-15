@@ -204,4 +204,12 @@ class DEMSolverStateDataKT {
     inline size_t* getNumContactsPointer() { return pNumContacts; }
 };
 
+struct SolverFlags {
+    // Sort contact pair arrays before sending to kT
+    bool should_sort_pairs = true;
+    // Whether to adopt a contact force calculation strategy where a thread takes care of multiple contacts so shared
+    // memory is leveraged
+    bool use_compact_force_kernel = true;
+};
+
 }  // namespace sgps

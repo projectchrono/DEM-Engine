@@ -37,6 +37,9 @@ class DEMDynamicThread {
     // dT verbosity
     DEM_VERBOSITY verbosity = INFO;
 
+    // Some behavior-related flags
+    SolverFlags solverFlags;
+
     // The std::thread that binds to this instance
     std::thread th;
 

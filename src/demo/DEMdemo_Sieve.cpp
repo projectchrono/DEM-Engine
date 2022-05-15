@@ -17,8 +17,7 @@ using namespace std::filesystem;
 int main() {
     DEMSolver DEM_sim;
 
-    srand(time(NULL));
-    // srand(4150);
+    srand(759);
 
     // total number of random clump templates to generate
     int num_template = 10;
@@ -124,9 +123,9 @@ int main() {
     DEM_sim.CenterCoordSys();
     DEM_sim.SetTimeStepSize(5e-6);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
-    DEM_sim.SetCDUpdateFreq(10);
-    DEM_sim.SuggestExpandFactor(10.0, 5e-6 * 10);
-    DEM_sim.SuggestExpandSafetyParam(2.);
+    DEM_sim.SetCDUpdateFreq(20);
+    DEM_sim.SuggestExpandFactor(10.0, 5e-6 * 20);
+    DEM_sim.SuggestExpandSafetyParam(1.5);
 
     DEM_sim.Initialize();
 

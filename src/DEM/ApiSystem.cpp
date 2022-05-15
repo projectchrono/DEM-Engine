@@ -42,6 +42,20 @@ void DEMSolver::SetVerbosity(DEM_VERBOSITY verbose) {
     verbosity = verbose;
 }
 
+void DEMSolver::SetSortContactPairs(bool use_sort) {
+    kT_should_sort = use_sort;
+}
+
+void DEMSolver::UseCompactForceKernel(bool use_compact) {
+    // This method works only if kT sort contact arrays first
+    if (use_compact) {
+        kT_should_sort = use_compact;
+        use_compact_sweep_force_strat = use_compact;
+    } else {
+        use_compact_sweep_force_strat = use_compact;
+    }
+}
+
 void DEMSolver::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned char z, float len_unit, float3 O) {
     if (x + y + z != sizeof(voxelID_t) * SGPS_BITS_PER_BYTE) {
         SGPS_DEM_ERROR("Please give voxel numbers (as powers of 2) along each direction such that they add up to %zu.",
@@ -631,9 +645,15 @@ void DEMSolver::WriteFileAsSpheres(const std::string& outfilename) const {
     dT->WriteCsvAsSpheres(ptFile);
 }
 
+// This is generally used to pass individual instructions on how the solver should behave
 void DEMSolver::transferSolverParams() {
     kT->verbosity = verbosity;
     dT->verbosity = verbosity;
+
+    kT->solverFlags.should_sort_pairs = kT_should_sort;
+
+    kT->solverFlags.use_compact_force_kernel = use_compact_sweep_force_strat;
+    dT->solverFlags.use_compact_force_kernel = use_compact_sweep_force_strat;
 }
 
 void DEMSolver::transferSimParams() {

@@ -40,6 +40,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation,
                       std::shared_ptr<jitify::Program>& contact_detection,
                       DEMDataKT* granData,
                       DEMSimParams* simParams,
+                      SolverFlags& solverFlags,
                       std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& idGeometryA,
                       std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& idGeometryB,
                       std::vector<contact_t, ManagedAllocator<contact_t>>& contactType,
@@ -219,13 +220,30 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation,
     }
 
     // Now, sort idGeometryAB by their owners. This is to increase dT shmem use rate.
-    {
-        // All temp vectors are free now. But vector 2 and 4 tend to be long anyway, so we use them in this step
-        // Sort based on idGeometryA. TODO: But do I have to SortByKey twice?? Can I zip these value arrays together??
-        CD_temp_arr_bytes = scratchPad.getNumContacts() * sizeof(bodyID_t);
-        bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector2(CD_temp_arr_bytes);
-        bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector4(CD_temp_arr_bytes);
+    if (solverFlags.should_sort_pairs) {
+        // All temp vectors are free now, and all of them are fairly long...
+        size_t cnt_arr_bytes = scratchPad.getNumContacts() * sizeof(contact_t);
+        contact_t* contactType_sorted = (contact_t*)scratchPad.allocateTempVector1(cnt_arr_bytes);
+        size_t id_arr_bytes = scratchPad.getNumContacts() * sizeof(bodyID_t);
+        bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector2(id_arr_bytes);
+        bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector3(id_arr_bytes);
+
+        // TODO: But do I have to SortByKey twice?? Can I zip these value arrays together??
+        cubDEMSortByKeys<bodyID_t, bodyID_t, DEMSolverStateDataKT>(
+            granData->idGeometryA, idA_sorted, granData->idGeometryB, idB_sorted, scratchPad.getNumContacts(),
+            this_stream, scratchPad);
+        cubDEMSortByKeys<bodyID_t, contact_t, DEMSolverStateDataKT>(
+            granData->idGeometryA, idA_sorted, granData->contactType, contactType_sorted, scratchPad.getNumContacts(),
+            this_stream, scratchPad);
+
+        // Copy back to idGeometry arrays
+        GPU_CALL(cudaMemcpy(granData->idGeometryA, idA_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
+        GPU_CALL(cudaMemcpy(granData->idGeometryB, idB_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
+        GPU_CALL(cudaMemcpy(granData->contactType, contactType_sorted, cnt_arr_bytes, cudaMemcpyDeviceToDevice));
     }
+
+    // Now, given the dT force kernel size, how many contacts should each thread takes care so idA can be resonably
+    // cached in shared memory? if (solverFlags.use_compact_force_kernel) {}
 }
 
 }  // namespace sgps

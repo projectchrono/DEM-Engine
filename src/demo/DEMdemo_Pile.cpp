@@ -17,7 +17,7 @@ using namespace std::filesystem;
 int main() {
     DEMSolver DEM_sim;
 
-    srand(759);
+    srand(time(NULL));
 
     // total number of random clump templates to generate
     int num_template = 6;

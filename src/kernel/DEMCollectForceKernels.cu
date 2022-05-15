@@ -29,7 +29,7 @@ __global__ void cashInOwnerIndexB(sgps::bodyID_t* idOwner,
         if (thisCntType == sgps::DEM_SPHERE_SPHERE_CONTACT) {
             idOwner[myID] = ownerClumpBody[thisBodyID];
         } else {
-            // This is a sphere--analytical geometry contactm its owner is jitified
+            // This is a sphere--analytical geometry contact, its owner is jitified
             idOwner[myID] = objOwner[thisBodyID];
         }
     }
