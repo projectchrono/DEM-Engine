@@ -652,8 +652,8 @@ void DEMSolver::transferSolverParams() {
 
     kT->solverFlags.should_sort_pairs = kT_should_sort;
 
+    // Whether dT should use_compact_force_kernel is instructed by kT
     kT->solverFlags.use_compact_force_kernel = use_compact_sweep_force_strat;
-    dT->solverFlags.use_compact_force_kernel = use_compact_sweep_force_strat;
 }
 
 void DEMSolver::transferSimParams() {
@@ -785,7 +785,7 @@ void DEMSolver::UpdateSimParams() {
 
 void DEMSolver::waitOnThreads() {
     while (!(kT->isUserCallDone() & dT->isUserCallDone())) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_DEMITY_MS));
+        std::this_thread::sleep_for(std::chrono::milliseconds(SGPS_DEM_WAIT_GRANULARITY_MS));
     }
     // Reset UserDone to false, make ready for the next user AdvanceSim call.
     kT->resetUserCallStat();

@@ -7,16 +7,12 @@
 #include <algorithms/DEMCubBasedSubroutines.h>
 
 #include <core/utils/GpuError.h>
+#include <algorithms/DEMCubWrappers.cu>
 
 namespace sgps {
 
-void cubDEMSum(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateDataDT& scratchPad) {
-    size_t cub_scratch_bytes = 0;
-    cub::DeviceReduce::Sum(NULL, cub_scratch_bytes, d_in, d_out, n, this_stream, false);
-    GPU_CALL(cudaStreamSynchronize(this_stream));
-    void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
-    cub::DeviceReduce::Sum(d_scratch_space, cub_scratch_bytes, d_in, d_out, n, this_stream, false);
-    GPU_CALL(cudaStreamSynchronize(this_stream));
+void sumReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateDataDT& scratchPad) {
+    cubDEMSum<float, DEMSolverStateDataDT>(d_in, d_out, n, this_stream, scratchPad);
 }
 
 }  // namespace sgps

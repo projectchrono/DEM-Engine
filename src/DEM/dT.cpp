@@ -124,13 +124,13 @@ float DEMDynamicThread::getKineticEnergy() {
     float* KE = (float*)stateOfSolver_resources.allocateTempVector2(returnSize);
     size_t blocks_needed_for_KE =
         (simParams->nOwnerBodies + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
-    quarry_stats->kernel("computeKE")
+    quarry_stats_kernels->kernel("computeKE")
         .instantiate()
         .configure(dim3(blocks_needed_for_KE), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
         .launch(granData, KEArr);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     // displayArray<float>(KEArr, simParams->nOwnerBodies);
-    cubDEMSum(KEArr, KE, simParams->nOwnerBodies, streamInfo.stream, stateOfSolver_resources);
+    sumReduce(KEArr, KE, simParams->nOwnerBodies, streamInfo.stream, stateOfSolver_resources);
     return *KE;
 }
 
@@ -462,7 +462,7 @@ inline void DEMDynamicThread::calculateForces() {
     size_t blocks_needed_for_prep =
         (threads_needed_for_prep + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
 
-    prep_force->kernel("prepareForceArrays")
+    prep_force_kernels->kernel("prepareForceArrays")
         .instantiate()
         .configure(dim3(blocks_needed_for_prep), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
         .launch(simParams, granData, stateOfSolver_resources.getNumContacts());
@@ -491,7 +491,7 @@ inline void DEMDynamicThread::calculateForces() {
         (stateOfSolver_resources.getNumContacts() + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
 
     // a custom kernel to compute forces
-    cal_force->kernel("calculateNormalContactForces")
+    cal_force_kernels->kernel("calculateNormalContactForces")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
         .launch(simParams, granData, stateOfSolver_resources.getNumContacts());
@@ -504,12 +504,12 @@ inline void DEMDynamicThread::calculateForces() {
     //                   granData->contactForces, granData->aX, granData->aY, granData->aZ,
     //                   granData->ownerClumpBody, granTemplates->massClumpBody, simParams->h,
     //                   stateOfSolver_resources.getNumContacts(),simParams->l);
-    cubCollectForces(collect_force, granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
-                     granData->contactType, granData->contactForces, granData->contactPointGeometryA,
-                     granData->contactPointGeometryB, granData->aX, granData->aY, granData->aZ, granData->alphaX,
-                     granData->alphaY, granData->alphaZ, granData->ownerClumpBody,
-                     stateOfSolver_resources.getNumContacts(), simParams->nOwnerBodies, contactPairArr_isFresh,
-                     streamInfo.stream, stateOfSolver_resources);
+    collectForces(collect_force_kernels, granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
+                  granData->contactType, granData->contactForces, granData->contactPointGeometryA,
+                  granData->contactPointGeometryB, granData->aX, granData->aY, granData->aZ, granData->alphaX,
+                  granData->alphaY, granData->alphaZ, granData->ownerClumpBody,
+                  stateOfSolver_resources.getNumContacts(), simParams->nOwnerBodies, contactPairArr_isFresh,
+                  streamInfo.stream, stateOfSolver_resources);
     // displayArray<float>(granData->aX, simParams->nOwnerBodies);
     // displayFloat3(granData->contactForces, stateOfSolver_resources.getNumContacts());
     // std::cout << stateOfSolver_resources.getNumContacts() << std::endl;
@@ -532,7 +532,7 @@ inline void DEMDynamicThread::calculateForces() {
 inline void DEMDynamicThread::integrateClumpMotions() {
     size_t blocks_needed_for_clumps =
         (simParams->nOwnerBodies + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
-    integrator->kernel("integrateClumps")
+    integrator_kernels->kernel("integrateClumps")
         .instantiate()
         .configure(dim3(blocks_needed_for_clumps), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
         .launch(granData, simParams->h, timeElapsed);
@@ -588,7 +588,7 @@ void DEMDynamicThread::workerThread() {
                 {
                     // acquire lock and use the content of the dynamic-owned transfer buffer
                     std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
-                    // std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_DEMITY_MS));
+                    // std::this_thread::sleep_for(std::chrono::milliseconds(SGPS_DEM_WAIT_GRANULARITY_MS));
                     unpackMyBuffer();
                     contactPairArr_isFresh = true;
                 }
@@ -687,7 +687,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     {
         std::unordered_map<std::string, std::string> pfSubs = templateSubs;
         pfSubs.insert(simParamSubs.begin(), simParamSubs.end());
-        prep_force = std::make_shared<jitify::Program>(
+        prep_force_kernels = std::make_shared<jitify::Program>(
             std::move(JitHelper::buildProgram("DEMPrepForceKernels", JitHelper::KERNEL_DIR / "DEMPrepForceKernels.cu",
                                               pfSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
@@ -697,7 +697,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
         cfSubs.insert(simParamSubs.begin(), simParamSubs.end());
         cfSubs.insert(massMatSubs.begin(), massMatSubs.end());
         cfSubs.insert(analGeoSubs.begin(), analGeoSubs.end());
-        cal_force = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+        cal_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMFrictionlessForceKernels", JitHelper::KERNEL_DIR / "DEMFrictionlessForceKernels.cu", cfSubs,
             {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
@@ -706,7 +706,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
         std::unordered_map<std::string, std::string> cfSubs = massMatSubs;
         cfSubs.insert(simParamSubs.begin(), simParamSubs.end());
         cfSubs.insert(analGeoSubs.begin(), analGeoSubs.end());
-        collect_force = std::make_shared<jitify::Program>(std::move(
+        collect_force_kernels = std::make_shared<jitify::Program>(std::move(
             JitHelper::buildProgram("DEMCollectForceKernels", JitHelper::KERNEL_DIR / "DEMCollectForceKernels.cu",
                                     cfSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
@@ -714,7 +714,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     {
         std::unordered_map<std::string, std::string> intSubs = simParamSubs;
         intSubs.insert(familyPrescribeSubs.begin(), familyPrescribeSubs.end());
-        integrator = std::make_shared<jitify::Program>(std::move(
+        integrator_kernels = std::make_shared<jitify::Program>(std::move(
             JitHelper::buildProgram("DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu",
                                     intSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
@@ -722,7 +722,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     {
         std::unordered_map<std::string, std::string> qSubs = massMatSubs;
         qSubs.insert(simParamSubs.begin(), simParamSubs.end());
-        quarry_stats = std::make_shared<jitify::Program>(
+        quarry_stats_kernels = std::make_shared<jitify::Program>(
             std::move(JitHelper::buildProgram("DEMQuarryKernels", JitHelper::KERNEL_DIR / "DEMQuarryKernels.cu", qSubs,
                                               {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }

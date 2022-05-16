@@ -9,13 +9,14 @@
 #include <DEM/HostSideHelpers.cpp>
 
 #include <cstdio>
-#include <time.h>
+#include <chrono>
 
 using namespace sgps;
 using namespace std::filesystem;
 
 int main() {
     DEMSolver DEM_sim;
+    DEM_sim.SetVerbosity(INFO_STEP_STATS);
 
     srand(time(NULL));
 
@@ -147,6 +148,8 @@ int main() {
     path out_dir = current_path();
     out_dir += "/DEMdemo_Pile";
     create_directory(out_dir);
+
+    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < 200; i++) {
         char filename[100];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
@@ -156,6 +159,9 @@ int main() {
         // std::cout << "Total kinetic energy: " << KE << std::endl;
         DEM_sim.LaunchThreads(3e-2);
     }
+    std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+    std::cout << time_sec.count() << " seconds" << std::endl;
 
     std::cout << "DEMdemo_Pile exiting..." << std::endl;
     // TODO: add end-game report APIs

@@ -23,7 +23,7 @@ namespace sgps {
 #endif
 
 #define SGPS_DEM_MAX_SPHERES_PER_BIN 32  ///< Can't be too large since one thread processes one bin
-#define WAIT_DEMITY_MS 1
+#define SGPS_DEM_WAIT_GRANULARITY_MS 1
 #ifndef SGPS_DEM_TINY_FLOAT
     #define SGPS_DEM_TINY_FLOAT 1e-12
 #endif
@@ -80,7 +80,7 @@ constexpr unsigned int DEM_RESERVED_FAMILY_NUM = ((unsigned int)1 << (sizeof(fam
 // Friction mode
 enum class DEM_FRICTION_MODE { FRICTIONLESS, MULTI_STEP };
 // Verbosity
-enum DEM_VERBOSITY { QUIET = 0, ERROR = 10, WARNING = 20, INFO = 30, DEBUG = 40 };
+enum DEM_VERBOSITY { QUIET = 0, ERROR = 10, WARNING = 20, INFO = 30, INFO_STEP_STATS = 32, DEBUG = 40 };
 
 // =============================================================================
 // NOW DEFINING SOME GPU-SIDE DATA STRUCTURES
@@ -313,6 +313,14 @@ struct DEMDataKT {
             printf(__VA_ARGS__);                \
             printf("\n");                       \
         }                                       \
+    }
+
+#define SGPS_DEM_INFO_STEP_STATS(...)                      \
+    {                                                      \
+        if (verbosity >= DEM_VERBOSITY::INFO_STEP_STATS) { \
+            printf(__VA_ARGS__);                           \
+            printf("\n");                                  \
+        }                                                  \
     }
 
 #define SGPS_DEM_DEBUG_PRINTF(...)               \

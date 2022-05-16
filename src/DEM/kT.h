@@ -264,9 +264,9 @@ class DEMKinematicThread {
     inline void transferArraysResize(size_t nContactPairs);
 
     // Just-in-time compiled kernels
-    // jitify::Program bin_occupation = JitHelper::buildProgram("bin_occupation", " ");
-    std::shared_ptr<jitify::Program> bin_occupation;
-    std::shared_ptr<jitify::Program> contact_detection;
+    // jitify::Program bin_occupation_kernels = JitHelper::buildProgram("bin_occupation_kernels", " ");
+    std::shared_ptr<jitify::Program> bin_occupation_kernels;
+    std::shared_ptr<jitify::Program> contact_detection_kernels;
 
 };  // kT ends
 

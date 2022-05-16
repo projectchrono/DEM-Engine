@@ -36,11 +36,12 @@ inline void contactEventArraysResize(size_t nContactPairs,
     granData->contactType = contactType.data();
 }
 
-void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation,
-                      std::shared_ptr<jitify::Program>& contact_detection,
+void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
+                      std::shared_ptr<jitify::Program>& contact_detection_kernels,
                       DEMDataKT* granData,
                       DEMSimParams* simParams,
                       SolverFlags& solverFlags,
+                      DEM_VERBOSITY& verbosity,
                       std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& idGeometryA,
                       std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& idGeometryB,
                       std::vector<contact_t, ManagedAllocator<contact_t>>& contactType,
@@ -59,7 +60,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation,
     size_t blocks_needed_for_bodies =
         (simParams->nSpheresGM + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
 
-    bin_occupation->kernel("getNumberOfBinsEachSphereTouches")
+    bin_occupation_kernels->kernel("getNumberOfBinsEachSphereTouches")
         .instantiate()
         .configure(dim3(blocks_needed_for_bodies), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(granData, numBinsSphereTouches, numAnalGeoSphereTouches);
@@ -95,7 +96,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation,
     CD_temp_arr_bytes = scratchPad.getNumBinSphereTouchPairs() * sizeof(bodyID_t);
     bodyID_t* sphereIDsEachBinTouches = (bodyID_t*)scratchPad.allocateTempVector3(CD_temp_arr_bytes);
     // This kernel is also responsible of figuring out sphere--analytical geometry pairs
-    bin_occupation->kernel("populateBinSphereTouchingPairs")
+    bin_occupation_kernels->kernel("populateBinSphereTouchingPairs")
         .instantiate()
         .configure(dim3(blocks_needed_for_bodies), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(granData, numBinsSphereTouchesScan, numAnalGeoSphereTouchesScan, binIDsEachSphereTouches,
@@ -168,7 +169,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation,
     size_t blocks_needed_for_bins =
         (scratchPad.getNumActiveBins() + SGPS_DEM_NUM_BINS_PER_BLOCK - 1) / SGPS_DEM_NUM_BINS_PER_BLOCK;
     if (blocks_needed_for_bins > 0) {
-        contact_detection->kernel("getNumberOfContactsEachBin")
+        contact_detection_kernels->kernel("getNumberOfContactsEachBin")
             .instantiate()
             .configure(dim3(blocks_needed_for_bins), dim3(SGPS_DEM_NUM_BINS_PER_BLOCK), 0, this_stream)
             .launch(granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches, sphereIDsLookUpTable,
@@ -209,7 +210,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation,
         GPU_CALL(cudaMemset((void*)(granData->contactType + nSphereGeoContact), DEM_SPHERE_SPHERE_CONTACT,
                             nSphereSphereContact * sizeof(contact_t)));
         // Then fill in those contacts
-        contact_detection->kernel("populateContactPairsEachBin")
+        contact_detection_kernels->kernel("populateContactPairsEachBin")
             .instantiate()
             .configure(dim3(blocks_needed_for_bins), dim3(SGPS_DEM_NUM_BINS_PER_BLOCK), 0, this_stream)
             .launch(granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches, sphereIDsLookUpTable,
@@ -242,8 +243,20 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation,
         GPU_CALL(cudaMemcpy(granData->contactType, contactType_sorted, cnt_arr_bytes, cudaMemcpyDeviceToDevice));
     }
 
-    // Now, given the dT force kernel size, how many contacts should each thread takes care so idA can be resonably
-    // cached in shared memory? if (solverFlags.use_compact_force_kernel) {}
+    // Now, given the dT force kernel size, how many contacts should each thread takes care of so idA can be resonably
+    // cached in shared memory?
+    if (solverFlags.use_compact_force_kernel && solverFlags.should_sort_pairs) {
+        // Figure out how many contacts an item in idA array typically has
+        size_t unique_arr_bytes = (size_t)simParams->nSpheresGM * sizeof(bodyID_t);
+        bodyID_t* unique_arr = (bodyID_t*)scratchPad.allocateTempVector1(unique_arr_bytes);
+        size_t* num_unique_idA = (size_t*)scratchPad.allocateTempVector2(sizeof(size_t));
+        cubDEMUnique<bodyID_t, DEMSolverStateDataKT>(granData->idGeometryA, unique_arr, num_unique_idA,
+                                                     scratchPad.getNumContacts(), this_stream, scratchPad);
+        double avg_cnts_per_geo =
+            (*num_unique_idA > 0) ? (double)scratchPad.getNumContacts() / (double)(*num_unique_idA) : 0.0;
+
+        SGPS_DEM_INFO_STEP_STATS("Average number of contacts for each geometry: %.9g", avg_cnts_per_geo);
+    }
 }
 
 }  // namespace sgps

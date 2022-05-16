@@ -331,11 +331,11 @@ class DEMDynamicThread {
     void contactEventArraysResize(size_t nContactPairs);
 
     // Just-in-time compiled kernels
-    std::shared_ptr<jitify::Program> prep_force;
-    std::shared_ptr<jitify::Program> cal_force;
-    std::shared_ptr<jitify::Program> collect_force;
-    std::shared_ptr<jitify::Program> integrator;
-    std::shared_ptr<jitify::Program> quarry_stats;
+    std::shared_ptr<jitify::Program> prep_force_kernels;
+    std::shared_ptr<jitify::Program> cal_force_kernels;
+    std::shared_ptr<jitify::Program> collect_force_kernels;
+    std::shared_ptr<jitify::Program> integrator_kernels;
+    std::shared_ptr<jitify::Program> quarry_stats_kernels;
 };  // dT ends
 
 }  // namespace sgps

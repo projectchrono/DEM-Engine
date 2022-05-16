@@ -20,26 +20,26 @@ struct CubFloat3Add {
     }
 };
 
-void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
-                      clumpBodyInertiaOffset_t* inertiaPropOffsets,
-                      bodyID_t* idA,
-                      bodyID_t* idB,
-                      contact_t* contactType,
-                      float3* contactForces,
-                      float3* contactPointA,
-                      float3* contactPointB,
-                      float* clump_aX,
-                      float* clump_aY,
-                      float* clump_aZ,
-                      float* clump_alphaX,
-                      float* clump_alphaY,
-                      float* clump_alphaZ,
-                      bodyID_t* ownerClumpBody,
-                      const size_t nContactPairs,
-                      const size_t nClumps,
-                      bool contactPairArr_isFresh,
-                      cudaStream_t& this_stream,
-                      DEMSolverStateDataDT& scratchPad) {
+void collectForces(std::shared_ptr<jitify::Program>& collect_force_kernels,
+                   clumpBodyInertiaOffset_t* inertiaPropOffsets,
+                   bodyID_t* idA,
+                   bodyID_t* idB,
+                   contact_t* contactType,
+                   float3* contactForces,
+                   float3* contactPointA,
+                   float3* contactPointB,
+                   float* clump_aX,
+                   float* clump_aY,
+                   float* clump_aZ,
+                   float* clump_alphaX,
+                   float* clump_alphaY,
+                   float* clump_alphaZ,
+                   bodyID_t* ownerClumpBody,
+                   const size_t nContactPairs,
+                   const size_t nClumps,
+                   bool contactPairArr_isFresh,
+                   cudaStream_t& this_stream,
+                   DEMSolverStateDataDT& scratchPad) {
     // Preparation: allocate enough temp array memory and chop it to pieces, for the usage of cub operations. Note that
     // if contactPairArr_isFresh is false, then this allocation should not alter the size and content of the temp array
     // space, so the information in it can be used in the next iteration.
@@ -61,14 +61,14 @@ void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
         // First step, prepare the owner ID array (nContactPairs * bodyID_t) for usage in final reduction by key (do it
         // for both A and B)
         // Note for A, it is always a sphere or a triangle
-        collect_force->kernel("cashInOwnerIndexA")
+        collect_force_kernels->kernel("cashInOwnerIndexA")
             .instantiate()
             .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
             .launch(idAOwner, idA, ownerClumpBody, contactType, nContactPairs);
         GPU_CALL(cudaStreamSynchronize(this_stream));
 
         // But for B, it can be sphere, triangle or some analytical geometries
-        collect_force->kernel("cashInOwnerIndexB")
+        collect_force_kernels->kernel("cashInOwnerIndexB")
             .instantiate()
             .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
             .launch(idBOwner, idB, ownerClumpBody, contactType, nContactPairs);
@@ -80,7 +80,7 @@ void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
         // // Secondly, prepare the owner mass and moi arrays (nContactPairs * float/float3) for usage in final
         // reduction
         // // by key (do it for both A and B)
-        // collect_force->kernel("cashInMassMoiIndex")
+        // collect_force_kernels->kernel("cashInMassMoiIndex")
         //     .instantiate()
         //     .configure(dim3(blocks_needed_for_twice_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK),
         //                sizeof(float) * TEST_SHARED_SIZE * 4, this_stream)
@@ -108,13 +108,13 @@ void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
     bodyID_t* uniqueOwner = (bodyID_t*)scratchPad.allocateTempVector5(tempArraySizeOwner);
     // collect accelerations for body A (modifier used to be h * h / l when we stored acc as h^2*acc)
     // NOTE!! The modifier passed in needs to be 1.f, not 1.0. Somtimes 1.0 got converted to 0.f with the kernel call.
-    collect_force->kernel("forceToAcc")
+    collect_force_kernels->kernel("forceToAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(acc_A, contactForces, idAOwner, 1.f, nContactPairs, inertiaPropOffsets);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // and don't forget body B
-    collect_force->kernel("forceToAcc")
+    collect_force_kernels->kernel("forceToAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(acc_B, contactForces, idBOwner, -1.f, nContactPairs, inertiaPropOffsets);
@@ -145,7 +145,7 @@ void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
     // stash acceleration
     size_t blocks_needed_for_stashing =
         (scratchPad.getForceCollectionRuns() + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
-    collect_force->kernel("stashElem")
+    collect_force_kernels->kernel("stashElem")
         .instantiate()
         .configure(dim3(blocks_needed_for_stashing), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(clump_aX, clump_aY, clump_aZ, uniqueOwner, accOwner, scratchPad.getForceCollectionRuns());
@@ -161,13 +161,13 @@ void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
     float3* alpha_A_sorted = (float3*)(acc_A_sorted);
     // float3* alpha_B_sorted = (float3*)(acc_B_sorted);
     // collect angular accelerations for body A (modifier used to be h * h when we stored acc as h^2*acc)
-    collect_force->kernel("forceToAngAcc")
+    collect_force_kernels->kernel("forceToAngAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(alpha_A, contactPointA, contactForces, idAOwner, 1.f, nContactPairs, inertiaPropOffsets);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // and don't forget body B
-    collect_force->kernel("forceToAngAcc")
+    collect_force_kernels->kernel("forceToAngAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(alpha_B, contactPointB, contactForces, idBOwner, -1.f, nContactPairs, inertiaPropOffsets);
@@ -195,7 +195,7 @@ void cubCollectForces(std::shared_ptr<jitify::Program>& collect_force,
     // stash angular acceleration
     blocks_needed_for_stashing =
         (scratchPad.getForceCollectionRuns() + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
-    collect_force->kernel("stashElem")
+    collect_force_kernels->kernel("stashElem")
         .instantiate()
         .configure(dim3(blocks_needed_for_stashing), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(clump_alphaX, clump_alphaY, clump_alphaZ, uniqueOwner, accOwner, scratchPad.getForceCollectionRuns());
