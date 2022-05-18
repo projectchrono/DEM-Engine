@@ -48,18 +48,18 @@ inline void DEMKinematicThread::unpackMyBuffer() {
 }
 
 inline void DEMKinematicThread::sendToTheirBuffer() {
-    GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_nContactPairs, stateOfSolver_resources.getNumContactsPointer(),
-                        sizeof(size_t), cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_nContactPairs, stateOfSolver_resources.pNumContacts, sizeof(size_t),
+                        cudaMemcpyDeviceToDevice));
     // Resize dT owned buffers before usage
-    if (stateOfSolver_resources.getNumContacts() > dT->idGeometryA_buffer.size()) {
-        transferArraysResize(stateOfSolver_resources.getNumContacts());
+    if (*stateOfSolver_resources.pNumContacts > dT->idGeometryA_buffer.size()) {
+        transferArraysResize(*stateOfSolver_resources.pNumContacts);
     }
     GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA,
-                        stateOfSolver_resources.getNumContacts() * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+                        (*stateOfSolver_resources.pNumContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryB, granData->idGeometryB,
-                        stateOfSolver_resources.getNumContacts() * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+                        (*stateOfSolver_resources.pNumContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactType, granData->contactType,
-                        stateOfSolver_resources.getNumContacts() * sizeof(contact_t), cudaMemcpyDeviceToDevice));
+                        (*stateOfSolver_resources.pNumContacts) * sizeof(contact_t), cudaMemcpyDeviceToDevice));
 }
 
 void DEMKinematicThread::workerThread() {

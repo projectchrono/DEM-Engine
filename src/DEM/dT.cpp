@@ -418,21 +418,21 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
 }
 
 inline void DEMDynamicThread::unpackMyBuffer() {
-    GPU_CALL(cudaMemcpy(stateOfSolver_resources.getNumContactsPointer(), &(granData->nContactPairs_buffer),
-                        sizeof(size_t), cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(stateOfSolver_resources.pNumContacts, &(granData->nContactPairs_buffer), sizeof(size_t),
+                        cudaMemcpyDeviceToDevice));
 
     // Need to resize those contact event-based arrays before usage
-    if (stateOfSolver_resources.getNumContacts() > idGeometryA.size() ||
-        stateOfSolver_resources.getNumContacts() > idGeometryA_buffer.size()) {
-        contactEventArraysResize(stateOfSolver_resources.getNumContacts());
+    if (*stateOfSolver_resources.pNumContacts > idGeometryA.size() ||
+        *stateOfSolver_resources.pNumContacts > idGeometryA_buffer.size()) {
+        contactEventArraysResize(*stateOfSolver_resources.pNumContacts);
     }
 
     GPU_CALL(cudaMemcpy(granData->idGeometryA, granData->idGeometryA_buffer,
-                        stateOfSolver_resources.getNumContacts() * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+                        *stateOfSolver_resources.pNumContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     GPU_CALL(cudaMemcpy(granData->idGeometryB, granData->idGeometryB_buffer,
-                        stateOfSolver_resources.getNumContacts() * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+                        *stateOfSolver_resources.pNumContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     GPU_CALL(cudaMemcpy(granData->contactType, granData->contactType_buffer,
-                        stateOfSolver_resources.getNumContacts() * sizeof(contact_t), cudaMemcpyDeviceToDevice));
+                        *stateOfSolver_resources.pNumContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
 }
 
 inline void DEMDynamicThread::sendToTheirBuffer() {
@@ -456,20 +456,20 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
 
 inline void DEMDynamicThread::calculateForces() {
     // reset force (acceleration) arrays for this time step and apply gravity
-    size_t threads_needed_for_prep = simParams->nOwnerBodies > stateOfSolver_resources.getNumContacts()
+    size_t threads_needed_for_prep = simParams->nOwnerBodies > *stateOfSolver_resources.pNumContacts
                                          ? simParams->nOwnerBodies
-                                         : stateOfSolver_resources.getNumContacts();
+                                         : *stateOfSolver_resources.pNumContacts;
     size_t blocks_needed_for_prep =
         (threads_needed_for_prep + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
 
     prep_force_kernels->kernel("prepareForceArrays")
         .instantiate()
         .configure(dim3(blocks_needed_for_prep), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(simParams, granData, stateOfSolver_resources.getNumContacts());
+        .launch(simParams, granData, *stateOfSolver_resources.pNumContacts);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     // TODO: is there a better way??? Like memset?
-    // GPU_CALL(cudaMemset(granData->contactForces, zeros, stateOfSolver_resources.getNumContacts() * sizeof(float3)));
+    // GPU_CALL(cudaMemset(granData->contactForces, zeros, *stateOfSolver_resources.pNumContacts * sizeof(float3)));
     // GPU_CALL(cudaMemset(granData->alphaX, 0, simParams->nOwnerBodies * sizeof(float)));
     // GPU_CALL(cudaMemset(granData->alphaY, 0, simParams->nOwnerBodies * sizeof(float)));
     // GPU_CALL(cudaMemset(granData->alphaZ, 0, simParams->nOwnerBodies * sizeof(float)));
@@ -483,43 +483,38 @@ inline void DEMDynamicThread::calculateForces() {
     //                     (double)simParams->h * (double)simParams->h * (double)simParams->Gz / (double)simParams->l,
     //                     simParams->nOwnerBodies * sizeof(float)));
 
-    // displayArray<bodyID_t>(granData->idGeometryA, stateOfSolver_resources.getNumContacts());
-    // displayArray<bodyID_t>(granData->idGeometryB, stateOfSolver_resources.getNumContacts());
-    // displayArray<contact_t>(granData->contactType, stateOfSolver_resources.getNumContacts());
-
     size_t blocks_needed_for_contacts =
-        (stateOfSolver_resources.getNumContacts() + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
+        (*stateOfSolver_resources.pNumContacts + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
 
     // a custom kernel to compute forces
     cal_force_kernels->kernel("calculateNormalContactForces")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(simParams, granData, stateOfSolver_resources.getNumContacts());
+        .launch(simParams, granData, *stateOfSolver_resources.pNumContacts);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-    // displayFloat3(granData->contactForces, stateOfSolver_resources.getNumContacts());
+    // displayFloat3(granData->contactForces, *stateOfSolver_resources.pNumContacts);
     // std::cout << "===========================" << std::endl;
 
     // Reflect those body-wise forces on their owner clumps
     // hostCollectForces(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
     //                   granData->contactForces, granData->aX, granData->aY, granData->aZ,
     //                   granData->ownerClumpBody, granTemplates->massClumpBody, simParams->h,
-    //                   stateOfSolver_resources.getNumContacts(),simParams->l);
+    //                   *stateOfSolver_resources.pNumContacts,simParams->l);
     collectForces(collect_force_kernels, granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
                   granData->contactType, granData->contactForces, granData->contactPointGeometryA,
                   granData->contactPointGeometryB, granData->aX, granData->aY, granData->aZ, granData->alphaX,
-                  granData->alphaY, granData->alphaZ, granData->ownerClumpBody,
-                  stateOfSolver_resources.getNumContacts(), simParams->nOwnerBodies, contactPairArr_isFresh,
-                  streamInfo.stream, stateOfSolver_resources);
+                  granData->alphaY, granData->alphaZ, granData->ownerClumpBody, *stateOfSolver_resources.pNumContacts,
+                  simParams->nOwnerBodies, contactPairArr_isFresh, streamInfo.stream, stateOfSolver_resources);
     // displayArray<float>(granData->aX, simParams->nOwnerBodies);
-    // displayFloat3(granData->contactForces, stateOfSolver_resources.getNumContacts());
-    // std::cout << stateOfSolver_resources.getNumContacts() << std::endl;
+    // displayFloat3(granData->contactForces, *stateOfSolver_resources.pNumContacts);
+    // std::cout << *stateOfSolver_resources.pNumContacts << std::endl;
 
     // Calculate the torque on owner clumps from those body-wise forces
     // hostCollectTorques(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
     //                    granData->contactForces, granData->contactPointGeometryA, granData->contactPointGeometryB,
     //                    granData->alphaX, granData->alphaY, granData->alphaZ, granData->ownerClumpBody,
     //                    granTemplates->mmiXX, granTemplates->mmiYY, granTemplates->mmiZZ, simParams->h,
-    //                    stateOfSolver_resources.getNumContacts(), simParams->l);
+    //                    *stateOfSolver_resources.pNumContacts, simParams->l);
     // displayArray<float>(granData->oriQ0, simParams->nOwnerBodies);
     // displayArray<float>(granData->oriQ1, simParams->nOwnerBodies);
     // displayArray<float>(granData->oriQ2, simParams->nOwnerBodies);

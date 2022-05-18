@@ -72,6 +72,26 @@ inline void cubDEMRunLengthEncode(T1* d_in,
     GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
+template <typename T1, typename T2, typename T3, typename T4>
+inline void cubDEMReduceByKeys(T1* d_keys_in,
+                               T1* d_unique_out,
+                               T2* d_vals_in,
+                               T2* d_aggregates_out,
+                               size_t* d_num_out,
+                               T3& reduce_op,
+                               size_t n,
+                               cudaStream_t& this_stream,
+                               T4& scratchPad) {
+    size_t cub_scratch_bytes = 0;
+    cub::DeviceReduce::ReduceByKey(NULL, cub_scratch_bytes, d_keys_in, d_unique_out, d_vals_in, d_aggregates_out,
+                                   d_num_out, reduce_op, n, this_stream, false);
+    GPU_CALL(cudaStreamSynchronize(this_stream));
+    void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
+    cub::DeviceReduce::ReduceByKey(d_scratch_space, cub_scratch_bytes, d_keys_in, d_unique_out, d_vals_in,
+                                   d_aggregates_out, d_num_out, reduce_op, n, this_stream, false);
+    GPU_CALL(cudaStreamSynchronize(this_stream));
+}
+
 template <typename T1, typename T2>
 void cubDEMSum(T1* d_in, T1* d_out, size_t n, cudaStream_t& this_stream, T2& scratchPad) {
     size_t cub_scratch_bytes = 0;

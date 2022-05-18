@@ -18,9 +18,6 @@ namespace sgps {
 /// </summary>
 class DEMSolverStateDataDT {
   private:
-    size_t* pForceCollectionRuns;  ///< Cub output of how many cub runs it executed for collecting forces (dT)
-    size_t* pNumContacts;          ///< Used in kT storing the number of total (potential) contact pairs
-
     // The vector used by CUB or by anybody else that needs scratch space.
     // Please pay attention to the type the vector stores.
     std::vector<scratch_t, ManagedAllocator<scratch_t>> threadScratchSpace;
@@ -37,17 +34,20 @@ class DEMSolverStateDataDT {
     // be used across iterations.
     std::vector<scratch_t, ManagedAllocator<scratch_t>> threadCachedOwner;
 
-    /// current integration time step
-    float crntStepSize;  // DN: needs to be brought here from GranParams
-    float crntSimTime;   // DN: needs to be brought here from GranParams
   public:
+    // Temp size_t variables that can be reused
+    size_t* pTempSizeVar1;
+
+    // Number of contacts in this CD step
+    size_t* pNumContacts;
+
     DEMSolverStateDataDT() {
-        cudaMallocManaged(&pForceCollectionRuns, sizeof(size_t));
+        cudaMallocManaged(&pTempSizeVar1, sizeof(size_t));
         cudaMallocManaged(&pNumContacts, sizeof(size_t));
         *pNumContacts = 0;
     }
     ~DEMSolverStateDataDT() {
-        cudaFree(pForceCollectionRuns);
+        cudaFree(pTempSizeVar1);
         cudaFree(pNumContacts);
     }
 
@@ -59,7 +59,7 @@ class DEMSolverStateDataDT {
         return threadScratchSpace.data();
     }
 
-    // Better way to write this???
+    // TODO: Better way to write this???
     inline scratch_t* allocateTempVector1(size_t sizeNeeded) {
         if (threadTempVector1.size() < sizeNeeded) {
             threadTempVector1.resize(sizeNeeded);
@@ -97,14 +97,6 @@ class DEMSolverStateDataDT {
         }
         return threadCachedOwner.data();
     }
-
-    // inline void setForceCollectionRuns(size_t n) { *pForceCollectionRuns = n; }
-    inline size_t getForceCollectionRuns() { return *pForceCollectionRuns; }
-    inline size_t* getForceCollectionRunsPointer() { return pForceCollectionRuns; }
-
-    inline void setNumContacts(size_t n) { *pNumContacts = n; }
-    inline size_t getNumContacts() { return *pNumContacts; }
-    inline size_t* getNumContactsPointer() { return pNumContacts; }
 };
 
 /// <summary>
@@ -113,10 +105,6 @@ class DEMSolverStateDataDT {
 /// </summary>
 class DEMSolverStateDataKT {
   private:
-    size_t* pNumBinSphereTouchPairs;  ///< Used in kT storing the number of total bin--sphere contact pairs
-    size_t* pNumActiveBins;           ///< Used in kT storing the number of total "active" bins (in contact detection)
-    size_t* pNumContacts;             ///< Used in kT storing the number of total (potential) contact pairs
-
     // The vector used by CUB or by anybody else that needs scratch space.
     // Please pay attention to the type the vector stores.
     std::vector<scratch_t, ManagedAllocator<scratch_t>> threadScratchSpace;
@@ -133,15 +121,16 @@ class DEMSolverStateDataKT {
     // use conveniently.
 
   public:
+    // Temp size_t variables that can be reused
     size_t* pTempSizeVar1;
     size_t* pTempSizeVar2;
 
+    // Number of contacts in this CD step
+    size_t* pNumContacts;
     // Number of contacts in the previous CD step
     size_t* pNumPrevContacts;
 
     DEMSolverStateDataKT() {
-        cudaMallocManaged(&pNumBinSphereTouchPairs, sizeof(size_t));
-        cudaMallocManaged(&pNumActiveBins, sizeof(size_t));
         cudaMallocManaged(&pNumContacts, sizeof(size_t));
         cudaMallocManaged(&pTempSizeVar1, sizeof(size_t));
         cudaMallocManaged(&pTempSizeVar2, sizeof(size_t));
@@ -150,8 +139,6 @@ class DEMSolverStateDataKT {
         *pNumPrevContacts = 0;
     }
     ~DEMSolverStateDataKT() {
-        cudaFree(pNumBinSphereTouchPairs);
-        cudaFree(pNumActiveBins);
         cudaFree(pNumContacts);
         cudaFree(pTempSizeVar1);
         cudaFree(pTempSizeVar2);
@@ -166,7 +153,7 @@ class DEMSolverStateDataKT {
         return threadScratchSpace.data();
     }
 
-    // Better way to write this???
+    // TODO: Better way to write this???
     inline scratch_t* allocateTempVector1(size_t sizeNeeded) {
         if (threadTempVector1.size() < sizeNeeded) {
             threadTempVector1.resize(sizeNeeded);
@@ -203,18 +190,6 @@ class DEMSolverStateDataKT {
         }
         return threadTempVector6.data();
     }
-
-    inline void setNumBinSphereTouchPairs(size_t n) { *pNumBinSphereTouchPairs = n; }
-    inline size_t getNumBinSphereTouchPairs() { return *pNumBinSphereTouchPairs; }
-    inline size_t* getNumBinSphereTouchPairsPointer() { return pNumBinSphereTouchPairs; }
-
-    inline void setNumActiveBins(size_t n) { *pNumActiveBins = n; }
-    inline size_t getNumActiveBins() { return *pNumActiveBins; }
-    inline size_t* getNumActiveBinsPointer() { return pNumActiveBins; }
-
-    inline void setNumContacts(size_t n) { *pNumContacts = n; }
-    inline size_t getNumContacts() { return *pNumContacts; }
-    inline size_t* getNumContactsPointer() { return pNumContacts; }
 };
 
 struct SolverFlags {
