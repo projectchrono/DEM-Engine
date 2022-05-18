@@ -17,7 +17,6 @@ __global__ void dynamicStep1(int* pair_i_data,
                              float3* col_acc_data,
                              float3* W_grad_data,
                              int n_col,
-                             float kernel_h,
                              float m) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -74,8 +73,7 @@ __global__ void dynamicStep5(float3* pos_data,
                              float3* acc_data,
                              char* fix_data,
                              int n,
-                             float time_step,
-                             float kernel_h) {
+                             float time_step) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= n) {
@@ -96,8 +94,6 @@ __global__ void dynamicStep5(float3* pos_data,
     } else {
         acc_data[idx] = make_float3(0.f, 0.f, 0.f);
     }
-
-    __syncthreads();
 }
 
 /*

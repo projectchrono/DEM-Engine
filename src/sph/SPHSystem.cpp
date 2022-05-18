@@ -44,9 +44,9 @@ void SPHSystem::initialize(float kernel_h,
     this->domain_z = domain_z + 5 * kernel_h;
 
     // redeclare the number of subdomain to be size/4 (4 is the BSD side length)
-    X_SUB_NUM = (int)(domain_x / kernel_h) / 4 + 2;
-    Y_SUB_NUM = (int)(domain_y / kernel_h) / 4 + 2;
-    Z_SUB_NUM = (int)(domain_z / kernel_h) / 4 + 2;
+    X_SUB_NUM = (int)(this->domain_x / kernel_h) / 2 + 2;
+    Y_SUB_NUM = (int)(this->domain_y / kernel_h) / 2 + 2;
+    Z_SUB_NUM = (int)(this->domain_z / kernel_h) / 2 + 2;
     printf("BSD num: %d, %d, %d\n", X_SUB_NUM, Y_SUB_NUM, Z_SUB_NUM);
 }
 
@@ -193,7 +193,6 @@ void KinematicThread::operator()() {
     // intermediate variables declaration
 
     while (getParentSystem().curr_time < getParentSystem().sim_time) {
-        float tolerance = kernel_h / 10;
         if (kinematicCounter == 0) {
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
             fix_data.assign(dataManager.m_fix.begin(), dataManager.m_fix.end());
@@ -216,7 +215,8 @@ void KinematicThread::operator()() {
         float d_domain_x = getParentSystem().domain_x / X_SUB_NUM;
         float d_domain_y = getParentSystem().domain_y / Y_SUB_NUM;
         float d_domain_z = getParentSystem().domain_z / Z_SUB_NUM;
-        float buffer_width = 2;
+        float multiplier = 1.33;
+        float buffer_width = 2.0;
 
         // printf("d_domain: %f, %f, %f\n", d_domain_x, d_domain_y, d_domain_z);
 
@@ -238,7 +238,7 @@ void KinematicThread::operator()() {
         kinematic_program.kernel("kinematicStep1")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(pos_data.data(), num_BSD_data.data(), k_n, kernel_h, d_domain_x, d_domain_y, d_domain_z, X_SUB_NUM,
+            .launch(pos_data.data(), num_BSD_data.data(), k_n, multiplier * kernel_h, d_domain_x, d_domain_y, d_domain_z, X_SUB_NUM,
                     Y_SUB_NUM, Z_SUB_NUM, getParentSystem().domain_x, getParentSystem().domain_y,
                     getParentSystem().domain_z, buffer_width);
 
@@ -269,7 +269,7 @@ void KinematicThread::operator()() {
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), offset_BSD_data.data(), BSD_iden_idx.data(), BSD_idx.data(), idx_track_data.data(),
-                    k_n, TotLength, kernel_h, d_domain_x, d_domain_y, d_domain_z, X_SUB_NUM, Y_SUB_NUM, Z_SUB_NUM,
+                    k_n, TotLength, multiplier * kernel_h, d_domain_x, d_domain_y, d_domain_z, X_SUB_NUM, Y_SUB_NUM, Z_SUB_NUM,
                     getParentSystem().domain_x, getParentSystem().domain_y, getParentSystem().domain_z, buffer_width);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -330,9 +330,9 @@ void KinematicThread::operator()() {
         kinematic_program.kernel("kinematicStep5")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), (MAX_NUM_UNIT * UNIT_SHARED_SIZE), streamInfo.stream)
-            .launch(pos_data.data(), k_n, tolerance, kernel_h, idx_track_data_sorted.data(), BSD_iden_idx_sorted.data(),
+            .launch(pos_data.data(), k_n, multiplier * kernel_h, idx_track_data_sorted.data(), BSD_iden_idx_sorted.data(),
                     offset_BSD_idx.data(), length_BSD_idx.data(), unique_BSD_idx.data(), num_col.data(),
-                    unique_BSD_idx.size());
+                    unique_BSD_idx.size(), buffer_width);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -374,10 +374,10 @@ void KinematicThread::operator()() {
         kinematic_program.kernel("kinematicStep7")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), (MAX_NUM_UNIT * UNIT_SHARED_SIZE), streamInfo.stream)
-            .launch(pos_data.data(), k_n, tolerance, kernel_h, idx_track_data_sorted.data(), BSD_iden_idx_sorted.data(),
+            .launch(pos_data.data(), k_n, multiplier * kernel_h, idx_track_data_sorted.data(), BSD_iden_idx_sorted.data(),
                     offset_BSD_idx.data(), length_BSD_idx.data(), unique_BSD_idx.data(), num_col.data(),
                     unique_BSD_idx.size(), pair_i_data.data(), pair_j_data.data(), num_col_offset.data(),
-                    W_grad_data.data());
+                    W_grad_data.data(), buffer_width);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -416,7 +416,7 @@ void KinematicThread::operator()() {
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), rho_data.data(), pressure_data.data(), i_unique.data(), i_offset.data(),
-                    i_length.data(), j_data_sorted_1.data(), fix_data.data(), i_unique.size(), kernel_h, m, rho_0);
+                    i_length.data(), j_data_sorted_1.data(), fix_data.data(), i_unique.size(), multiplier * kernel_h, m, rho_0);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // clear kinematic step 8 data
@@ -464,7 +464,7 @@ void KinematicThread::operator()() {
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), rho_data.data(), pressure_data.data(), j_unique.data(), j_offset.data(),
-                    j_length.data(), i_data_sorted_2.data(), fix_data.data(), j_unique.size(), kernel_h, m, rho_0);
+                    j_length.data(), i_data_sorted_2.data(), fix_data.data(), j_unique.size(), multiplier * kernel_h, m, rho_0);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // clear kinematic step 8 data
@@ -495,7 +495,7 @@ void KinematicThread::operator()() {
         kinematic_program.kernel("kinematicStep10")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(pos_data.data(), rho_data.data(), pressure_data.data(), fix_data.data(), pos_data.size(), kernel_h, m, rho_0, c);
+            .launch(rho_data.data(), pressure_data.data(), fix_data.data(), pos_data.size(), multiplier * kernel_h, m, rho_0, c);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // copy data back to the dataManager
@@ -578,7 +578,6 @@ void DynamicThread::operator()() {
     {
         const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
         k_n = dataManager.m_pos.size();
-        kernel_h = dataManager.kernel_h;
         m = dataManager.m;
         rho_0 = dataManager.rho_0;
     }
@@ -661,7 +660,7 @@ void DynamicThread::operator()() {
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pair_i_data.data(), pair_j_data.data(), rho_data.data(), pressure_data.data(), col_acc_data.data(),
-                    W_grad_data.data(), pair_i_data.size(), kernel_h, m);
+                    W_grad_data.data(), pair_i_data.size(), m);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // ==============================================================================================================
@@ -773,8 +772,7 @@ void DynamicThread::operator()() {
         dynamic_program.kernel("dynamicStep5")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(pos_data.data(), vel_data.data(), acc_data.data(), fix_data.data(), pos_data.size(), time_step,
-                    kernel_h);
+            .launch(pos_data.data(), vel_data.data(), acc_data.data(), fix_data.data(), pos_data.size(), time_step);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -796,7 +794,7 @@ void DynamicThread::operator()() {
         }
 
         if (dynamicCounter % 50 == 0) {
-            getParentSystem().printCSV("sph_folder/test" + std::to_string(write_out_count + 1) + ".csv",
+            getParentSystem().printCSV("sph_folder/test" + std::to_string(write_out_count) + ".csv",
                                        pos_data.data(), pos_data.size(), vel_data.data(), acc_data.data(),
                                        rho_data.data(), pressure_data.data());
             write_out_count = write_out_count + 1;

@@ -246,7 +246,6 @@ __global__ void kinematicStep1(float3* pos_data,
 
     num_BSD_data[idx] = counter;
 
-    __syncthreads();
 }
 
 // =================================================================================================================
@@ -466,7 +465,6 @@ __global__ void kinematicStep2(float3* pos_data,
             }
         }
     }
-    __syncthreads();
 }
 
 // =================================================================================================================
@@ -478,7 +476,6 @@ __global__ void kinematicStep2(float3* pos_data,
 __global__ void kinematicStep5(
     float3* pos_data,            // particle position data vector
     int k_n,                     // total number of particles
-    float tolerance,             // collision detection tolerance
     float kernel_h,              // kernel_h of the uni-kernel_h particles
     int* idx_track_data_sorted,  // sorted idx_track data
     int* BSD_iden_idx_sorted,    // vector to indicate whether a particle is in buffer zone or not
@@ -486,7 +483,8 @@ __global__ void kinematicStep5(
     int* length_BSD_data,        // length the same as unique_BSD_idx
     int* unique_BSD_idx,
     int* num_col,
-    int unique_length) {
+    int unique_length,
+    float buffer_width) {
     __shared__ float3 pos_local[512];  // request maximum capacity for the shared mem
     __shared__ int idx_local[512];     // request maximum capacity for track
     __shared__ int iden_local[512];
@@ -529,7 +527,7 @@ __global__ void kinematicStep5(
                           (pos_local[i].y - pos_local[idx].y) * (pos_local[i].y - pos_local[idx].y) +
                           (pos_local[i].z - pos_local[idx].z) * (pos_local[i].z - pos_local[idx].z);
 
-            if (dist2 <= (kernel_h * 2 + tolerance) * (kernel_h * 2 + tolerance)) {
+            if (dist2 <= kernel_h * buffer_width * kernel_h * buffer_width) {
                 count++;
             }
         }
@@ -547,7 +545,6 @@ __global__ void kinematicStep5(
 __global__ void kinematicStep7(
     float3* pos_data,            // particle position data vector
     int k_n,                     // total number of particles
-    float tolerance,             // collision detection tolerance
     float kernel_h,              // kernel_h of the uni-kernel_h particles
     int* idx_track_data_sorted,  // sorted idx_track data
     int* BSD_iden_idx_sorted,    // vector to indicate whether a particle is in buffer zone or not
@@ -559,7 +556,8 @@ __global__ void kinematicStep7(
     int* pair_i_data,
     int* pair_j_data,
     int* num_col_offset,
-    float3* W_grad_data) {
+    float3* W_grad_data,
+    float buffer_width) {
     __shared__ float3 pos_local[512];  // request maximum capacity for the shared mem
     __shared__ int idx_local[512];     // request maximum capacity for track
     __shared__ int iden_local[512];
@@ -574,6 +572,7 @@ __global__ void kinematicStep7(
 
     if (threadIdx.x == 0) {
         tot_in_bsd = length_BSD_data[sd_idx];
+        // printf("tot_in_bsd: %d\n", tot_in_bsd);
         int start_idx = offset_BSD_data[sd_idx];
         int end_idx = offset_BSD_data[sd_idx] + length_BSD_data[sd_idx];
         for (int i = start_idx; i < end_idx; i++) {
@@ -601,7 +600,7 @@ __global__ void kinematicStep7(
                           (pos_local[i].y - pos_local[idx].y) * (pos_local[i].y - pos_local[idx].y) +
                           (pos_local[i].z - pos_local[idx].z) * (pos_local[i].z - pos_local[idx].z);
 
-            if (dist2 <= (kernel_h * 2 + tolerance) * (kernel_h * 2 + tolerance)) {
+            if (dist2 <= kernel_h * buffer_width * kernel_h * buffer_width) {
                 pair_i_data[num_col_offset[sd_idx * 512 + idx] + count] = idx_local[idx];
                 pair_j_data[num_col_offset[sd_idx * 512 + idx] + count] = idx_local[i];
 
@@ -651,9 +650,6 @@ __global__ void kinematicStep8(float3* pos_data,
         float w = W(dir, h);
         rho_sum = rho_sum + m * w;
     }
-
-    __syncthreads();
-
     rho_data[i_idx] = rho_sum;
 }
 
@@ -694,13 +690,10 @@ __global__ void kinematicStep9(float3* pos_data,
         rho_sum = rho_sum + m * w;
     }
 
-    __syncthreads();
-
     rho_data[j_idx] = rho_data[j_idx] + rho_sum;
 }
 
-__global__ void kinematicStep10(float3* pos_data,
-                                float* rho_data,
+__global__ void kinematicStep10(float* rho_data,
                                 float* pressure_data,
                                 char* fix_data,
                                 int n_sample,
@@ -716,5 +709,5 @@ __global__ void kinematicStep10(float3* pos_data,
 
     float w_self = W(make_float3(0.0, 0.0, 0.0), h);
     rho_data[idx] = rho_data[idx] + m * w_self;
-    pressure_data[idx] = c * c * (rho_data[idx] - rho_0);
+    pressure_data[idx] = c * c * (rho_data[idx] - rho_0) + 0.05 * c * c * rho_0;
 }

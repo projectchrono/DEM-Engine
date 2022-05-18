@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
     int num_par = 0;
     float rho = 1000;
     float gravity = 9.8;
-    float c = 5.0 * sqrt(gravity * fluid_dim_z);
+    float c = 2.0 * sqrt(gravity * fluid_dim_z);
     // sample the bottom boundary layers
     for (int j = 0; j < num_y + 2 * num_boundary; j++) {
         for (int i = 0; i < num_x + 2 * num_boundary; i++) {
