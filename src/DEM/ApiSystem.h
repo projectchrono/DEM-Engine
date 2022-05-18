@@ -65,12 +65,11 @@ class DEMSolver {
     // Instruct the solver to save time by using frictionless contact model
     void UseFrictionlessModel(bool useFrictionless = true);
 
-    /// Instruct the solver if contact pair arrays should be sorted before usage
+    /// Instruct the solver if contact pair arrays should be sorted before usage. This is needed if frictional model is
+    /// in use.
     void SetSortContactPairs(bool use_sort);
 
-    /// Instruct the solver if to adopt a contact force calculation strategy where a thread takes care of multiple
-    /// contacts in the hope that more shared memory is leveraged. This should make simulations with balanced per-sphere
-    /// contact numbers faster.
+    // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
     void UseCompactForceKernel(bool use_compact);
 
     /// (Explicitly) set the amount by which the radii of the spheres (and the thickness of the boundaries) are expanded
@@ -191,9 +190,8 @@ class DEMSolver {
     DEM_VERBOSITY verbosity = INFO;
     // If true, kT should sort contact arrays then transfer them to dT
     bool kT_should_sort = true;
-    // If true, dT should adopt a contact force calculation strategy where a thread takes care of multiple contacts so
-    // shared memory is leveraged
-    bool use_compact_sweep_force_strat = true;
+    // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
+    bool use_compact_sweep_force_strat = false;
 
     // This is the cached material information.
     // It will be massaged into the managed memory upon Initialize().

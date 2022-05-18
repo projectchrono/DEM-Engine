@@ -56,6 +56,7 @@ constexpr int64_t DEM_MAX_SUBVOXEL = (int64_t)1 << DEM_VOXEL_RES_POWER2;
 
 #define SGPS_DEM_NUM_BINS_PER_BLOCK 128
 #define SGPS_DEM_NUM_BODIES_PER_BLOCK 512
+#define SGPS_DEM_MAX_THREADS_PER_BLOCK 1024
 #define SGPS_DEM_INIT_CNT_MULTIPLIER 4
 // It should generally just be the warp size. When a block is launched, at least min(these_numbers) threads will be
 // launched so the template loading is always safe.
@@ -90,9 +91,7 @@ enum DEM_VERBOSITY { QUIET = 0, ERROR = 10, WARNING = 20, INFO = 30, INFO_STEP_S
 // NOTE: All data structs here need to be simple enough to jitify. In general, if you need to include something much
 // more complex than DEMDefines for example, then do it in DEMStructs.h.
 
-// A structure for storing simulation parameters. Note these simulation parameters should not change often (changes of
-// them usually lead to re-jitification). Those who change often (especially in each time step) should go into
-// DEMSolverStateDataKT/DT.
+// A structure for storing simulation parameters.
 struct DEMSimParams {
     // Number of voxels in the X direction, expressed as a power of 2
     unsigned char nvXp2;
@@ -271,6 +270,9 @@ struct DEMDataKT {
     bodyID_t* idGeometryA;
     bodyID_t* idGeometryB;
     contact_t* contactType;
+    bodyID_t* previous_idGeometryA;
+    bodyID_t* previous_idGeometryB;
+    contact_t* previous_contactType;
 
     // data pointers that is kT's transfer destination
     size_t* pDTOwnedBuffer_nContactPairs = NULL;
@@ -303,7 +305,7 @@ struct DEMDataKT {
         if (verbosity >= DEM_VERBOSITY::WARNING) { \
             printf("\nWARNING! ");                 \
             printf(__VA_ARGS__);                   \
-            printf("\n");                          \
+            printf("\n\n");                        \
         }                                          \
     }
 
@@ -328,6 +330,13 @@ struct DEMDataKT {
         if (verbosity >= DEM_VERBOSITY::DEBUG) { \
             printf(__VA_ARGS__);                 \
             printf("\n");                        \
+        }                                        \
+    }
+
+#define SGPS_DEM_DEBUG_EXEC(...)                 \
+    {                                            \
+        if (verbosity >= DEM_VERBOSITY::DEBUG) { \
+            __VA_ARGS__;                         \
         }                                        \
     }
 

@@ -38,6 +38,7 @@ inline void contactEventArraysResize(size_t nContactPairs,
 
 void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                       std::shared_ptr<jitify::Program>& contact_detection_kernels,
+                      std::shared_ptr<jitify::Program>& history_kernels,
                       DEMDataKT* granData,
                       DEMSimParams* simParams,
                       SolverFlags& solverFlags,
@@ -218,30 +219,98 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
         GPU_CALL(cudaStreamSynchronize(this_stream));
         // displayArray<bodyID_t>(granData->idGeometryA, scratchPad.getNumContacts());
         // displayArray<bodyID_t>(granData->idGeometryB, scratchPad.getNumContacts());
-    }
 
-    // Now, sort idGeometryAB by their owners. This is to increase dT shmem use rate.
-    if (solverFlags.should_sort_pairs) {
-        // All temp vectors are free now, and all of them are fairly long...
-        size_t cnt_arr_bytes = scratchPad.getNumContacts() * sizeof(contact_t);
-        contact_t* contactType_sorted = (contact_t*)scratchPad.allocateTempVector1(cnt_arr_bytes);
-        size_t id_arr_bytes = scratchPad.getNumContacts() * sizeof(bodyID_t);
-        bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector2(id_arr_bytes);
-        bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector3(id_arr_bytes);
+    }  // End of bin-wise contact detection subroutine
 
-        // TODO: But do I have to SortByKey twice?? Can I zip these value arrays together??
-        cubDEMSortByKeys<bodyID_t, bodyID_t, DEMSolverStateDataKT>(
-            granData->idGeometryA, idA_sorted, granData->idGeometryB, idB_sorted, scratchPad.getNumContacts(),
-            this_stream, scratchPad);
-        cubDEMSortByKeys<bodyID_t, contact_t, DEMSolverStateDataKT>(
-            granData->idGeometryA, idA_sorted, granData->contactType, contactType_sorted, scratchPad.getNumContacts(),
-            this_stream, scratchPad);
+    // Now, sort idGeometryAB by their owners. Needed for identifying persistent contacts in frictional models.
+    if (scratchPad.getNumContacts() > 0) {
+        if ((!solverFlags.isFrictionless) || solverFlags.should_sort_pairs) {
+            // All temp vectors are free now, and all of them are fairly long...
+            size_t cnt_arr_bytes = scratchPad.getNumContacts() * sizeof(contact_t);
+            contact_t* contactType_sorted = (contact_t*)scratchPad.allocateTempVector1(cnt_arr_bytes);
+            size_t id_arr_bytes = scratchPad.getNumContacts() * sizeof(bodyID_t);
+            bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector2(id_arr_bytes);
+            bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector3(id_arr_bytes);
 
-        // Copy back to idGeometry arrays
-        GPU_CALL(cudaMemcpy(granData->idGeometryA, idA_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
-        GPU_CALL(cudaMemcpy(granData->idGeometryB, idB_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
-        GPU_CALL(cudaMemcpy(granData->contactType, contactType_sorted, cnt_arr_bytes, cudaMemcpyDeviceToDevice));
-    }
+            // TODO: But do I have to SortByKey twice?? Can I zip these value arrays together??
+            cubDEMSortByKeys<bodyID_t, bodyID_t, DEMSolverStateDataKT>(
+                granData->idGeometryA, idA_sorted, granData->idGeometryB, idB_sorted, scratchPad.getNumContacts(),
+                this_stream, scratchPad);
+            cubDEMSortByKeys<bodyID_t, contact_t, DEMSolverStateDataKT>(
+                granData->idGeometryA, idA_sorted, granData->contactType, contactType_sorted,
+                scratchPad.getNumContacts(), this_stream, scratchPad);
+
+            // Copy back to idGeometry arrays
+            GPU_CALL(cudaMemcpy(granData->idGeometryA, idA_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
+            GPU_CALL(cudaMemcpy(granData->idGeometryB, idB_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
+            GPU_CALL(cudaMemcpy(granData->contactType, contactType_sorted, cnt_arr_bytes, cudaMemcpyDeviceToDevice));
+            SGPS_DEM_DEBUG_PRINTF("New contact IDs (A):");
+            SGPS_DEM_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryA, scratchPad.getNumContacts()));
+            SGPS_DEM_DEBUG_PRINTF("New contact IDs (B):");
+            SGPS_DEM_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryB, scratchPad.getNumContacts()));
+            SGPS_DEM_DEBUG_PRINTF("New contact types:");
+            SGPS_DEM_DEBUG_EXEC(displayArray<contact_t>(granData->contactType, scratchPad.getNumContacts()));
+
+            // For frictional models, construct the persistent contact map
+            if (!solverFlags.isFrictionless) {
+                // First, identify the new and old idA run-length
+                size_t run_length_bytes = (size_t)simParams->nSpheresGM * sizeof(geoSphereTouches_t);
+                geoSphereTouches_t* new_idA_runlength =
+                    (geoSphereTouches_t*)scratchPad.allocateTempVector1(run_length_bytes);
+                size_t unique_id_bytes = (size_t)simParams->nSpheresGM * sizeof(bodyID_t);
+                bodyID_t* unique_new_idA = (bodyID_t*)scratchPad.allocateTempVector2(unique_id_bytes);
+                size_t* pNumUniqueNewA = scratchPad.pTempSizeVar1;
+                cubDEMRunLengthEncode<bodyID_t, geoSphereTouches_t, DEMSolverStateDataKT>(
+                    granData->idGeometryA, unique_new_idA, new_idA_runlength, pNumUniqueNewA,
+                    scratchPad.getNumContacts(), this_stream, scratchPad);
+
+                geoSphereTouches_t* old_idA_runlength =
+                    (geoSphereTouches_t*)scratchPad.allocateTempVector3(run_length_bytes);
+                bodyID_t* unique_old_idA = (bodyID_t*)scratchPad.allocateTempVector4(unique_id_bytes);
+                size_t* pNumUniqueOldA = scratchPad.pTempSizeVar2;
+                cubDEMRunLengthEncode<bodyID_t, geoSphereTouches_t, DEMSolverStateDataKT>(
+                    granData->previous_idGeometryA, unique_old_idA, old_idA_runlength, pNumUniqueOldA,
+                    *(scratchPad.pNumPrevContacts), this_stream, scratchPad);
+
+                // Then, add zeros to run-length arrays such that even if a sphereID is not present in idA, it has a
+                // place in the run-length arrays that indicates 0 run-length
+                geoSphereTouches_t* new_idA_runlength_full =
+                    (geoSphereTouches_t*)scratchPad.allocateTempVector5(run_length_bytes);
+                geoSphereTouches_t* old_idA_runlength_full =
+                    (geoSphereTouches_t*)scratchPad.allocateTempVector6(run_length_bytes);
+                GPU_CALL(cudaMemset((void*)new_idA_runlength_full, 0, run_length_bytes));
+                GPU_CALL(cudaMemset((void*)old_idA_runlength_full, 0, run_length_bytes));
+                size_t blocks_needed_for_mapping =
+                    (*pNumUniqueNewA + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) / SGPS_DEM_MAX_THREADS_PER_BLOCK;
+                if (blocks_needed_for_mapping > 0) {
+                    history_kernels->kernel("fillRunLengthArray")
+                        .instantiate()
+                        .configure(dim3(blocks_needed_for_mapping), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0,
+                                   this_stream)
+                        .launch(new_idA_runlength_full, unique_new_idA, new_idA_runlength, *pNumUniqueNewA);
+                }
+
+                blocks_needed_for_mapping =
+                    (*pNumUniqueOldA + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) / SGPS_DEM_MAX_THREADS_PER_BLOCK;
+                if (blocks_needed_for_mapping > 0) {
+                    history_kernels->kernel("fillRunLengthArray")
+                        .instantiate()
+                        .configure(dim3(blocks_needed_for_mapping), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0,
+                                   this_stream)
+                        .launch(old_idA_runlength_full, unique_old_idA, old_idA_runlength, *pNumUniqueOldA);
+                }
+                SGPS_DEM_DEBUG_PRINTF("Unique contact IDs (A):");
+                SGPS_DEM_DEBUG_EXEC(displayArray<bodyID_t>(unique_new_idA, *pNumUniqueNewA));
+                SGPS_DEM_DEBUG_PRINTF("Unique contacts run-length:");
+                SGPS_DEM_DEBUG_EXEC(displayArray<geoSphereTouches_t>(new_idA_runlength, *pNumUniqueNewA));
+
+                // Then, prescan to find run-length offsets, in preparation for custom kernel
+
+                // Then, each thread will scan a sphere, if this sphere has non-zero run-length in both new and old idA,
+                // manually store the mapping
+            }
+        }
+    }  // End of contact sorting--mapping subroutine
 
     // Now, given the dT force kernel size, how many contacts should each thread takes care of so idA can be resonably
     // cached in shared memory?
@@ -255,8 +324,13 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
         double avg_cnts_per_geo =
             (*num_unique_idA > 0) ? (double)scratchPad.getNumContacts() / (double)(*num_unique_idA) : 0.0;
 
-        SGPS_DEM_INFO_STEP_STATS("Average number of contacts for each geometry: %.9g", avg_cnts_per_geo);
+        SGPS_DEM_DEBUG_PRINTF("Average number of contacts for each geometry: %.9g", avg_cnts_per_geo);
     }
+
+    // Finally, don't forget to store the number of contacts for the next iteration, even if there is 0 contacts (in
+    // that case, mapping will not be constructed, but we don't have to worry b/c in the next iteration, simply no work
+    // will be done for the old array and every contact will be new)
+    *(scratchPad.pNumPrevContacts) = scratchPad.getNumContacts();
 }
 
 }  // namespace sgps

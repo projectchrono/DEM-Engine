@@ -133,16 +133,29 @@ class DEMSolverStateDataKT {
     // use conveniently.
 
   public:
+    size_t* pTempSizeVar1;
+    size_t* pTempSizeVar2;
+
+    // Number of contacts in the previous CD step
+    size_t* pNumPrevContacts;
+
     DEMSolverStateDataKT() {
         cudaMallocManaged(&pNumBinSphereTouchPairs, sizeof(size_t));
         cudaMallocManaged(&pNumActiveBins, sizeof(size_t));
         cudaMallocManaged(&pNumContacts, sizeof(size_t));
+        cudaMallocManaged(&pTempSizeVar1, sizeof(size_t));
+        cudaMallocManaged(&pTempSizeVar2, sizeof(size_t));
+        cudaMallocManaged(&pNumPrevContacts, sizeof(size_t));
         *pNumContacts = 0;
+        *pNumPrevContacts = 0;
     }
     ~DEMSolverStateDataKT() {
         cudaFree(pNumBinSphereTouchPairs);
         cudaFree(pNumActiveBins);
         cudaFree(pNumContacts);
+        cudaFree(pTempSizeVar1);
+        cudaFree(pTempSizeVar2);
+        cudaFree(pNumPrevContacts);
     }
 
     // Return raw pointer to swath of device memory that is at least "sizeNeeded" large
@@ -209,7 +222,10 @@ struct SolverFlags {
     bool should_sort_pairs = true;
     // Whether to adopt a contact force calculation strategy where a thread takes care of multiple contacts so shared
     // memory is leveraged
-    bool use_compact_force_kernel = true;
+    // NOTE: This is not implemented
+    bool use_compact_force_kernel = false;
+    // This run is frictionless
+    bool isFrictionless = false;
 };
 
 }  // namespace sgps

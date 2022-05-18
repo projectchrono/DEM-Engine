@@ -15,6 +15,7 @@ void sumReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, D
 
 void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                       std::shared_ptr<jitify::Program>& contact_detection_kernels,
+                      std::shared_ptr<jitify::Program>& history_kernels,
                       DEMDataKT* granData,
                       DEMSimParams* simParams,
                       SolverFlags& solverFlags,

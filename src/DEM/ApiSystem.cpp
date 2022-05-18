@@ -46,6 +46,7 @@ void DEMSolver::SetSortContactPairs(bool use_sort) {
     kT_should_sort = use_sort;
 }
 
+// NOTE: compact force calculation (in the hope to use shared memory) is not implemented
 void DEMSolver::UseCompactForceKernel(bool use_compact) {
     // This method works only if kT sort contact arrays first
     if (use_compact) {
@@ -86,8 +87,6 @@ float3 DEMSolver::CenterCoordSys() {
 
 void DEMSolver::UseFrictionlessModel(bool useFrictionless) {
     m_isFrictionless = useFrictionless;
-    kT->useFrictionlessModel(useFrictionless);
-    dT->useFrictionlessModel(useFrictionless);
 }
 
 void DEMSolver::SetExpandFactor(float beta) {
@@ -650,9 +649,13 @@ void DEMSolver::transferSolverParams() {
     kT->verbosity = verbosity;
     dT->verbosity = verbosity;
 
+    // Transfer frictionless-ness
+    kT->solverFlags.isFrictionless = m_isFrictionless;
+    dT->solverFlags.isFrictionless = m_isFrictionless;
+
     kT->solverFlags.should_sort_pairs = kT_should_sort;
 
-    // Whether dT should use_compact_force_kernel is instructed by kT
+    // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
     kT->solverFlags.use_compact_force_kernel = use_compact_sweep_force_strat;
 }
 

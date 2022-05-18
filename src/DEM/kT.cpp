@@ -104,8 +104,8 @@ void DEMKinematicThread::workerThread() {
             // figure out the amount of shared mem
             // cudaDeviceGetAttribute.cudaDevAttrMaxSharedMemoryPerBlock
 
-            contactDetection(bin_occupation_kernels, contact_detection_kernels, granData, simParams, solverFlags,
-                             verbosity, idGeometryA, idGeometryB, contactType, streamInfo.stream,
+            contactDetection(bin_occupation_kernels, contact_detection_kernels, history_kernels, granData, simParams,
+                             solverFlags, verbosity, idGeometryA, idGeometryB, contactType, streamInfo.stream,
                              stateOfSolver_resources);
 
             /* for the reference
@@ -166,10 +166,6 @@ void DEMKinematicThread::resetUserCallStat() {
     pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = false;
 }
 
-void DEMKinematicThread::useFrictionlessModel(bool useFrictionless) {
-    isFrictionless = useFrictionless;
-}
-
 // Put sim data array pointers in place
 void DEMKinematicThread::packDataPointers() {
     granData->familyID = familyID.data();
@@ -184,6 +180,9 @@ void DEMKinematicThread::packDataPointers() {
     granData->idGeometryA = idGeometryA.data();
     granData->idGeometryB = idGeometryB.data();
     granData->contactType = contactType.data();
+    granData->previous_idGeometryA = previous_idGeometryA.data();
+    granData->previous_idGeometryB = previous_idGeometryB.data();
+    granData->previous_contactType = previous_contactType.data();
 
     // for kT, those state vectors are fed by dT, so each has a buffer
     granData->voxelID_buffer = voxelID_buffer.data();
@@ -307,6 +306,20 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     TRACKED_VECTOR_RESIZE(idGeometryA, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryA", 0);
     TRACKED_VECTOR_RESIZE(idGeometryB, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryB", 0);
     TRACKED_VECTOR_RESIZE(contactType, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactType", DEM_NOT_A_CONTACT);
+    if (!solverFlags.isFrictionless) {
+        TRACKED_VECTOR_RESIZE(previous_idGeometryA, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "previous_idGeometryA",
+                              0);
+        // In the first iteration, if the this array is all-zero then the run-length is a huge number. I know cub don't
+        // usually care about overflow so it should be no problem even if no treatment is applied, but let's just
+        // randomize the init state of this array so no surprises ever happen.
+        for (size_t i = 0; i < previous_idGeometryA.size(); i++) {
+            previous_idGeometryA.at(i) = (i / SGPS_DEM_INIT_CNT_MULTIPLIER) + (i % SGPS_DEM_INIT_CNT_MULTIPLIER);
+        }
+        TRACKED_VECTOR_RESIZE(previous_idGeometryB, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "previous_idGeometryB",
+                              0);
+        TRACKED_VECTOR_RESIZE(previous_contactType, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "previous_contactType",
+                              DEM_NOT_A_CONTACT);
+    }
 }
 
 void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
@@ -400,6 +413,13 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
         contact_detection_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu", cdSubs,
             {"-I" + (JitHelper::KERNEL_DIR / "..").string(), "-I/opt/apps/cuda/x86_64/11.6.0/default/include"})));
+    }
+    // Then contact history mapping kernels
+    {
+        std::unordered_map<std::string, std::string> hSubs;
+        history_kernels = std::make_shared<jitify::Program>(std::move(
+            JitHelper::buildProgram("DEMHistoryMappingKernels", JitHelper::KERNEL_DIR / "DEMHistoryMappingKernels.cu",
+                                    hSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
 }
 

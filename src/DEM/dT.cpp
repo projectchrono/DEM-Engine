@@ -662,10 +662,6 @@ bool DEMDynamicThread::isUserCallDone() {
     return userCallDone;
 }
 
-void DEMDynamicThread::useFrictionlessModel(bool useFrictionless) {
-    isFrictionless = useFrictionless;
-}
-
 void DEMDynamicThread::resetUserCallStat() {
     userCallDone = false;
     // Reset last kT-side data receiving cycle time stamp.

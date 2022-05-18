@@ -139,6 +139,12 @@ class DEMKinematicThread {
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB;
     std::vector<contact_t, ManagedAllocator<contact_t>> contactType;
 
+    // Contact pair info at the previous time step. This is needed by dT so persistent contacts are identified in
+    // frictional models.
+    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> previous_idGeometryA;
+    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> previous_idGeometryB;
+    std::vector<contact_t, ManagedAllocator<contact_t>> previous_contactType;
+
     // Sphere-related arrays in managed memory
     // Owner body ID of this component
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerClumpBody;
@@ -154,8 +160,6 @@ class DEMKinematicThread {
     std::vector<clumpComponentOffsetExt_t, ManagedAllocator<clumpComponentOffsetExt_t>> triComponentOffsetExt;
     // The ID that maps this analytical entity component's geometry-defining parameters, when this component is jitified
     // std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> analComponentOffset;
-
-    bool isFrictionless = false;
 
   public:
     friend class DEMSolver;
@@ -244,9 +248,6 @@ class DEMKinematicThread {
     void packDataPointers();
     void packTransferPointers(DEMDynamicThread* dT);
 
-    // Contact model is frictionless
-    void useFrictionlessModel(bool useFrictionless);
-
     // Jitify kT kernels (at initialization) based on existing knowledge of this run
     void jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,
                        const std::unordered_map<std::string, std::string>& simParamSubs,
@@ -267,6 +268,7 @@ class DEMKinematicThread {
     // jitify::Program bin_occupation_kernels = JitHelper::buildProgram("bin_occupation_kernels", " ");
     std::shared_ptr<jitify::Program> bin_occupation_kernels;
     std::shared_ptr<jitify::Program> contact_detection_kernels;
+    std::shared_ptr<jitify::Program> history_kernels;
 
 };  // kT ends
 

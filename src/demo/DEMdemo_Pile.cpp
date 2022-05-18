@@ -16,7 +16,7 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEM_sim;
-    DEM_sim.SetVerbosity(INFO_STEP_STATS);
+    DEM_sim.SetVerbosity(INFO);
 
     srand(time(NULL));
 
@@ -137,7 +137,7 @@ int main() {
     DEM_sim.SetTimeStepSize(5e-6);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEM_sim.SetCDUpdateFreq(5);
+    DEM_sim.SetCDUpdateFreq(20);
     // DEM_sim.SetExpandFactor(1e-3);
     DEM_sim.SuggestExpandFactor(10.);
     DEM_sim.SuggestExpandSafetyParam(2.);
@@ -157,7 +157,7 @@ int main() {
         std::cout << "Frame: " << i << std::endl;
         // float KE = DEM_sim.GetTotalKineticEnergy();
         // std::cout << "Total kinetic energy: " << KE << std::endl;
-        DEM_sim.LaunchThreads(3e-2);
+        DEM_sim.LaunchThreads(5e-2);
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
