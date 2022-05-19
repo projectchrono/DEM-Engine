@@ -105,7 +105,8 @@ void DEMKinematicThread::workerThread() {
             // cudaDeviceGetAttribute.cudaDevAttrMaxSharedMemoryPerBlock
 
             contactDetection(bin_occupation_kernels, contact_detection_kernels, history_kernels, granData, simParams,
-                             solverFlags, verbosity, idGeometryA, idGeometryB, contactType, streamInfo.stream,
+                             solverFlags, verbosity, idGeometryA, idGeometryB, contactType, previous_idGeometryA,
+                             previous_idGeometryB, previous_contactType, contactMapping, streamInfo.stream,
                              stateOfSolver_resources);
 
             /* for the reference
@@ -183,6 +184,7 @@ void DEMKinematicThread::packDataPointers() {
     granData->previous_idGeometryA = previous_idGeometryA.data();
     granData->previous_idGeometryB = previous_idGeometryB.data();
     granData->previous_contactType = previous_contactType.data();
+    granData->contactMapping = contactMapping.data();
 
     // for kT, those state vectors are fed by dT, so each has a buffer
     granData->voxelID_buffer = voxelID_buffer.data();
@@ -309,16 +311,12 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     if (!solverFlags.isFrictionless) {
         TRACKED_VECTOR_RESIZE(previous_idGeometryA, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "previous_idGeometryA",
                               0);
-        // In the first iteration, if the this array is all-zero then the run-length is a huge number. I know cub don't
-        // usually care about overflow so it should be no problem even if no treatment is applied, but let's just
-        // randomize the init state of this array so no surprises ever happen.
-        for (size_t i = 0; i < previous_idGeometryA.size(); i++) {
-            previous_idGeometryA.at(i) = (i / SGPS_DEM_INIT_CNT_MULTIPLIER) + (i % SGPS_DEM_INIT_CNT_MULTIPLIER);
-        }
         TRACKED_VECTOR_RESIZE(previous_idGeometryB, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "previous_idGeometryB",
                               0);
         TRACKED_VECTOR_RESIZE(previous_contactType, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "previous_contactType",
                               DEM_NOT_A_CONTACT);
+        TRACKED_VECTOR_RESIZE(contactMapping, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactMapping",
+                              DEM_NULL_MAPPING_PARTNER);
     }
 }
 

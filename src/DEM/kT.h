@@ -144,6 +144,7 @@ class DEMKinematicThread {
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> previous_idGeometryA;
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> previous_idGeometryB;
     std::vector<contact_t, ManagedAllocator<contact_t>> previous_contactType;
+    std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>> contactMapping;
 
     // Sphere-related arrays in managed memory
     // Owner body ID of this component

@@ -46,6 +46,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                       std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& idGeometryA,
                       std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& idGeometryB,
                       std::vector<contact_t, ManagedAllocator<contact_t>>& contactType,
+                      std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& previous_idGeometryA,
+                      std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& previous_idGeometryB,
+                      std::vector<contact_t, ManagedAllocator<contact_t>>& previous_contactType,
+                      std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>>& contactMapping,
                       cudaStream_t& this_stream,
                       DEMSolverStateDataKT& scratchPad) {
     // total bytes needed for temp arrays in contact detection
@@ -188,8 +192,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
         contactPairs_t* contactReportOffsets = (contactPairs_t*)scratchPad.allocateTempVector6(CD_temp_arr_bytes);
         cubDEMPrefixScan<spheresBinTouches_t, contactPairs_t, DEMSolverStateDataKT>(
             numContactsInEachBin, contactReportOffsets, *pNumActiveBins, this_stream, scratchPad);
-        SGPS_DEM_DEBUG_PRINTF("Contact report offsets:");
-        SGPS_DEM_DEBUG_EXEC(displayArray<contactPairs_t>(contactReportOffsets, *pNumActiveBins));
+        // SGPS_DEM_DEBUG_PRINTF("Contact report offsets:");
+        // SGPS_DEM_DEBUG_EXEC(displayArray<contactPairs_t>(contactReportOffsets, *pNumActiveBins));
 
         // Add sphere--sphere contacts together with sphere--analytical geometry contacts
         size_t nSphereGeoContact = *scratchPad.pNumContacts;
@@ -220,8 +224,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
     if (*scratchPad.pNumContacts > 0) {
         if ((!solverFlags.isFrictionless) || solverFlags.should_sort_pairs) {
             // All temp vectors are free now, and all of them are fairly long...
-            size_t cnt_arr_bytes = (*scratchPad.pNumContacts) * sizeof(contact_t);
-            contact_t* contactType_sorted = (contact_t*)scratchPad.allocateTempVector1(cnt_arr_bytes);
+            size_t type_arr_bytes = (*scratchPad.pNumContacts) * sizeof(contact_t);
+            contact_t* contactType_sorted = (contact_t*)scratchPad.allocateTempVector1(type_arr_bytes);
             size_t id_arr_bytes = (*scratchPad.pNumContacts) * sizeof(bodyID_t);
             bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector2(id_arr_bytes);
             bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector3(id_arr_bytes);
@@ -237,21 +241,27 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
             // Copy back to idGeometry arrays
             GPU_CALL(cudaMemcpy(granData->idGeometryA, idA_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
             GPU_CALL(cudaMemcpy(granData->idGeometryB, idB_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
-            GPU_CALL(cudaMemcpy(granData->contactType, contactType_sorted, cnt_arr_bytes, cudaMemcpyDeviceToDevice));
-            SGPS_DEM_DEBUG_PRINTF("New contact IDs (A):");
-            SGPS_DEM_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryA, *scratchPad.pNumContacts));
-            SGPS_DEM_DEBUG_PRINTF("New contact IDs (B):");
-            SGPS_DEM_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryB, *scratchPad.pNumContacts));
-            SGPS_DEM_DEBUG_PRINTF("New contact types:");
-            SGPS_DEM_DEBUG_EXEC(displayArray<contact_t>(granData->contactType, *scratchPad.pNumContacts));
+            GPU_CALL(cudaMemcpy(granData->contactType, contactType_sorted, type_arr_bytes, cudaMemcpyDeviceToDevice));
+            // SGPS_DEM_DEBUG_PRINTF("New contact IDs (A):");
+            // SGPS_DEM_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryA, *scratchPad.pNumContacts));
+            // SGPS_DEM_DEBUG_PRINTF("New contact IDs (B):");
+            // SGPS_DEM_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryB, *scratchPad.pNumContacts));
+            // SGPS_DEM_DEBUG_PRINTF("New contact types:");
+            // SGPS_DEM_DEBUG_EXEC(displayArray<contact_t>(granData->contactType, *scratchPad.pNumContacts));
 
             // For frictional models, construct the persistent contact map
             if (!solverFlags.isFrictionless) {
+                // This CD run and previous CD run could have different number of spheres in them. We pick the larger
+                // number to refer in building the persistent contact map to avoid potential problems.
+                size_t nSpheresSafe = (simParams->nSpheresGM > *scratchPad.pNumPrevSpheres)
+                                          ? simParams->nSpheresGM
+                                          : *scratchPad.pNumPrevSpheres;
+
                 // First, identify the new and old idA run-length
-                size_t run_length_bytes = (size_t)simParams->nSpheresGM * sizeof(geoSphereTouches_t);
+                size_t run_length_bytes = nSpheresSafe * sizeof(geoSphereTouches_t);
                 geoSphereTouches_t* new_idA_runlength =
                     (geoSphereTouches_t*)scratchPad.allocateTempVector1(run_length_bytes);
-                size_t unique_id_bytes = (size_t)simParams->nSpheresGM * sizeof(bodyID_t);
+                size_t unique_id_bytes = nSpheresSafe * sizeof(bodyID_t);
                 bodyID_t* unique_new_idA = (bodyID_t*)scratchPad.allocateTempVector2(unique_id_bytes);
                 size_t* pNumUniqueNewA = scratchPad.pTempSizeVar1;
                 cubDEMRunLengthEncode<bodyID_t, geoSphereTouches_t, DEMSolverStateDataKT>(
@@ -293,15 +303,57 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                                    this_stream)
                         .launch(old_idA_runlength_full, unique_old_idA, old_idA_runlength, *pNumUniqueOldA);
                 }
-                SGPS_DEM_DEBUG_PRINTF("Unique contact IDs (A):");
-                SGPS_DEM_DEBUG_EXEC(displayArray<bodyID_t>(unique_new_idA, *pNumUniqueNewA));
-                SGPS_DEM_DEBUG_PRINTF("Unique contacts run-length:");
-                SGPS_DEM_DEBUG_EXEC(displayArray<geoSphereTouches_t>(new_idA_runlength, *pNumUniqueNewA));
+                // SGPS_DEM_DEBUG_PRINTF("Unique contact IDs (A):");
+                // SGPS_DEM_DEBUG_EXEC(displayArray<bodyID_t>(unique_new_idA, *pNumUniqueNewA));
+                // SGPS_DEM_DEBUG_PRINTF("Unique contacts run-length:");
+                // SGPS_DEM_DEBUG_EXEC(displayArray<geoSphereTouches_t>(new_idA_runlength, *pNumUniqueNewA));
 
-                // Then, prescan to find run-length offsets, in preparation for custom kernel
+                // Then, prescan to find run-length offsets, in preparation for custom kernels
+                size_t scanned_runlength_bytes = nSpheresSafe * sizeof(contactPairs_t);
+                contactPairs_t* new_idA_scanned_runlength =
+                    (contactPairs_t*)scratchPad.allocateTempVector1(scanned_runlength_bytes);
+                contactPairs_t* old_idA_scanned_runlength =
+                    (contactPairs_t*)scratchPad.allocateTempVector2(scanned_runlength_bytes);
+                cubDEMPrefixScan<geoSphereTouches_t, contactPairs_t, DEMSolverStateDataKT>(
+                    new_idA_runlength_full, new_idA_scanned_runlength, nSpheresSafe, this_stream, scratchPad);
+                cubDEMPrefixScan<geoSphereTouches_t, contactPairs_t, DEMSolverStateDataKT>(
+                    old_idA_runlength_full, old_idA_scanned_runlength, nSpheresSafe, this_stream, scratchPad);
 
                 // Then, each thread will scan a sphere, if this sphere has non-zero run-length in both new and old idA,
-                // manually store the mapping
+                // manually store the mapping. This mapping's elemental values are the indices of the corresponding
+                // contacts in the previous contact array.
+                if (*scratchPad.pNumContacts > contactMapping.size()) {
+                    contactMapping.resize(*scratchPad.pNumContacts);
+                    granData->contactMapping = contactMapping.data();
+                }
+                blocks_needed_for_mapping =
+                    (nSpheresSafe + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
+                if (blocks_needed_for_mapping > 0) {
+                    history_kernels->kernel("buildPersistentMap")
+                        .instantiate()
+                        .configure(dim3(blocks_needed_for_mapping), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
+                        .launch(new_idA_runlength_full, old_idA_runlength_full, new_idA_scanned_runlength,
+                                old_idA_scanned_runlength, granData->contactMapping, granData, nSpheresSafe);
+                }
+                SGPS_DEM_DEBUG_PRINTF("Contact mapping:");
+                SGPS_DEM_DEBUG_EXEC(displayArray<contactPairs_t>(granData->contactMapping, *scratchPad.pNumContacts));
+
+                // Finally, copy new contact array to old contact array for the record
+                if (*scratchPad.pNumContacts > previous_idGeometryA.size()) {
+                    previous_idGeometryA.resize(*scratchPad.pNumContacts);
+                    previous_idGeometryB.resize(*scratchPad.pNumContacts);
+                    previous_contactType.resize(*scratchPad.pNumContacts);
+
+                    granData->previous_idGeometryA = previous_idGeometryA.data();
+                    granData->previous_idGeometryB = previous_idGeometryB.data();
+                    granData->previous_contactType = previous_contactType.data();
+                }
+                GPU_CALL(cudaMemcpy(granData->previous_idGeometryA, granData->idGeometryA, id_arr_bytes,
+                                    cudaMemcpyDeviceToDevice));
+                GPU_CALL(cudaMemcpy(granData->previous_idGeometryB, granData->idGeometryB, id_arr_bytes,
+                                    cudaMemcpyDeviceToDevice));
+                GPU_CALL(cudaMemcpy(granData->previous_contactType, granData->contactType, type_arr_bytes,
+                                    cudaMemcpyDeviceToDevice));
             }
         }
     }  // End of contact sorting--mapping subroutine
@@ -325,6 +377,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
     // that case, mapping will not be constructed, but we don't have to worry b/c in the next iteration, simply no work
     // will be done for the old array and every contact will be new)
     *scratchPad.pNumPrevContacts = *scratchPad.pNumContacts;
+    *scratchPad.pNumPrevSpheres = simParams->nSpheresGM;
 }
 
 }  // namespace sgps

@@ -74,6 +74,11 @@ const contact_t DEM_SPHERE_PLANE_CONTACT = 2;
 const notStupidBool_t DEM_DONT_PREVENT_CONTACT = 0;
 const notStupidBool_t DEM_PREVENT_CONTACT = 1;
 
+// This ID marks that this is a new contact, not present when we did contact detection last time
+// TODO: half max add half max... so stupid... Better way?? numeric_limit won't work...
+const contactPairs_t DEM_NULL_MAPPING_PARTNER = ((size_t)1 << (sizeof(contactPairs_t) * SGPS_BITS_PER_BYTE - 1)) +
+                                                ((size_t)1 << (sizeof(contactPairs_t) * SGPS_BITS_PER_BYTE - 1)) - 1;
+
 const unsigned int DEM_DEFAULT_CLUMP_FAMILY_NUM = 0;
 constexpr unsigned int DEM_RESERVED_FAMILY_NUM = ((unsigned int)1 << (sizeof(family_t) * SGPS_BITS_PER_BYTE)) - 1;
 
@@ -273,6 +278,7 @@ struct DEMDataKT {
     bodyID_t* previous_idGeometryA;
     bodyID_t* previous_idGeometryB;
     contact_t* previous_contactType;
+    contactPairs_t* contactMapping;
 
     // data pointers that is kT's transfer destination
     size_t* pDTOwnedBuffer_nContactPairs = NULL;

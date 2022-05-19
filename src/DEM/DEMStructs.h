@@ -129,20 +129,25 @@ class DEMSolverStateDataKT {
     size_t* pNumContacts;
     // Number of contacts in the previous CD step
     size_t* pNumPrevContacts;
+    // Number of spheres in the previous CD step (in case user added/removed clumps from the system)
+    size_t* pNumPrevSpheres;
 
     DEMSolverStateDataKT() {
         cudaMallocManaged(&pNumContacts, sizeof(size_t));
         cudaMallocManaged(&pTempSizeVar1, sizeof(size_t));
         cudaMallocManaged(&pTempSizeVar2, sizeof(size_t));
         cudaMallocManaged(&pNumPrevContacts, sizeof(size_t));
+        cudaMallocManaged(&pNumPrevSpheres, sizeof(size_t));
         *pNumContacts = 0;
         *pNumPrevContacts = 0;
+        *pNumPrevSpheres = 0;
     }
     ~DEMSolverStateDataKT() {
         cudaFree(pNumContacts);
         cudaFree(pTempSizeVar1);
         cudaFree(pTempSizeVar2);
         cudaFree(pNumPrevContacts);
+        cudaFree(pNumPrevSpheres);
     }
 
     // Return raw pointer to swath of device memory that is at least "sizeNeeded" large

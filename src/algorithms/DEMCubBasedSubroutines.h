@@ -23,6 +23,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                       std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& idGeometryA,
                       std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& idGeometryB,
                       std::vector<contact_t, ManagedAllocator<contact_t>>& contactType,
+                      std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& previous_idGeometryA,
+                      std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& previous_idGeometryB,
+                      std::vector<contact_t, ManagedAllocator<contact_t>>& previous_contactType,
+                      std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>>& contactMapping,
                       cudaStream_t& this_stream,
                       DEMSolverStateDataKT& scratchPad);
 
