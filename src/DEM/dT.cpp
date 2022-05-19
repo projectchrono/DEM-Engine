@@ -46,10 +46,13 @@ void DEMDynamicThread::packDataPointers() {
     granData->idGeometryA = idGeometryA.data();
     granData->idGeometryB = idGeometryB.data();
     granData->contactType = contactType.data();
+    granData->contactMapping = contactMapping.data();
 
     granData->idGeometryA_buffer = idGeometryA_buffer.data();
     granData->idGeometryB_buffer = idGeometryB_buffer.data();
     granData->contactType_buffer = contactType_buffer.data();
+    granData->contactMapping_buffer = contactMapping_buffer.data();
+
     granData->contactForces = contactForces.data();
     granData->contactPointGeometryA = contactPointGeometryA.data();
     granData->contactPointGeometryB = contactPointGeometryB.data();
@@ -210,6 +213,10 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
                           make_float3(0));
     TRACKED_VECTOR_RESIZE(contactPointGeometryB, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactPointGeometryB",
                           make_float3(0));
+    if (!solverFlags.isFrictionless) {
+        TRACKED_VECTOR_RESIZE(contactMapping, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactMapping",
+                              DEM_NULL_MAPPING_PARTNER);
+    }
 
     // Transfer buffer arrays
     // The following several arrays will have variable sizes, so here we only used an estimate.
@@ -217,6 +224,10 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     TRACKED_VECTOR_RESIZE(idGeometryB_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryB_buffer", 0);
     TRACKED_VECTOR_RESIZE(contactType_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactType_buffer",
                           DEM_NOT_A_CONTACT);
+    if (!solverFlags.isFrictionless) {
+        TRACKED_VECTOR_RESIZE(contactMapping_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactMapping",
+                              DEM_NULL_MAPPING_PARTNER);
+    }
 }
 
 void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
@@ -415,6 +426,13 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     granData->idGeometryA_buffer = idGeometryA_buffer.data();
     granData->idGeometryB_buffer = idGeometryB_buffer.data();
     granData->contactType_buffer = contactType_buffer.data();
+
+    // If not frictionless then contact history map needs to be updated
+    if (!solverFlags.isFrictionless) {
+        TRACKED_QUICK_VECTOR_RESIZE(contactMapping, nContactPairs);
+        granData->contactMapping = contactMapping.data();
+        granData->contactMapping_buffer = contactMapping_buffer.data();
+    }
 }
 
 inline void DEMDynamicThread::unpackMyBuffer() {
@@ -433,6 +451,10 @@ inline void DEMDynamicThread::unpackMyBuffer() {
                         *stateOfSolver_resources.pNumContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     GPU_CALL(cudaMemcpy(granData->contactType, granData->contactType_buffer,
                         *stateOfSolver_resources.pNumContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
+    if (!solverFlags.isFrictionless) {
+        GPU_CALL(cudaMemcpy(granData->contactMapping, granData->contactMapping_buffer,
+                            *stateOfSolver_resources.pNumContacts * sizeof(contactPairs_t), cudaMemcpyDeviceToDevice));
+    }
 }
 
 inline void DEMDynamicThread::sendToTheirBuffer() {

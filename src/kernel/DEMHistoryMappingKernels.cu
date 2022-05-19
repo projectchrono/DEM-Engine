@@ -22,10 +22,10 @@ __global__ void buildPersistentMap(sgps::geoSphereTouches_t* new_idA_runlength_f
                                    size_t nSpheresSafe) {
     sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nSpheresSafe) {
-        // If this idA has non-zero runlength both in old and new: a potential persistent sphere
         sgps::geoSphereTouches_t new_cnt_count = new_idA_runlength_full[myID];
         sgps::geoSphereTouches_t old_cnt_count = old_idA_runlength_full[myID];
-        if (new_cnt_count > 0 && old_cnt_count > 0) {
+        // If this idA has non-zero runlength in new: a potential persistent sphere
+        if (new_cnt_count > 0) {
             // Where should I start looking? Grab the offset.
             sgps::contactPairs_t new_cnt_offset = new_idA_scanned_runlength[myID];
             sgps::contactPairs_t old_cnt_offset = old_idA_scanned_runlength[myID];
@@ -52,6 +52,7 @@ __global__ void buildPersistentMap(sgps::geoSphereTouches_t* new_idA_runlength_f
                         break;
                     }
                 }
+                // If old_cnt_offset == 0, it is automatically DEM_NULL_MAPPING_PARTNER
                 mapping[this_contact] = my_partner;
             }
         }

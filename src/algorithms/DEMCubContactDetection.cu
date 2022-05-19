@@ -335,8 +335,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                         .launch(new_idA_runlength_full, old_idA_runlength_full, new_idA_scanned_runlength,
                                 old_idA_scanned_runlength, granData->contactMapping, granData, nSpheresSafe);
                 }
-                SGPS_DEM_DEBUG_PRINTF("Contact mapping:");
-                SGPS_DEM_DEBUG_EXEC(displayArray<contactPairs_t>(granData->contactMapping, *scratchPad.pNumContacts));
+                // SGPS_DEM_DEBUG_PRINTF("Contact mapping:");
+                // SGPS_DEM_DEBUG_EXEC(displayArray<contactPairs_t>(granData->contactMapping,
+                // *scratchPad.pNumContacts));
 
                 // Finally, copy new contact array to old contact array for the record
                 if (*scratchPad.pNumContacts > previous_idGeometryA.size()) {

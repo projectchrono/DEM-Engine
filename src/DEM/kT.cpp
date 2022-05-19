@@ -26,6 +26,11 @@ inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
     granData->pDTOwnedBuffer_idGeometryA = dT->idGeometryA_buffer.data();
     granData->pDTOwnedBuffer_idGeometryB = dT->idGeometryB_buffer.data();
     granData->pDTOwnedBuffer_contactType = dT->contactType_buffer.data();
+
+    if (!solverFlags.isFrictionless) {
+        dT->contactMapping_buffer.resize(nContactPairs);
+        granData->pDTOwnedBuffer_contactMapping = dT->contactMapping_buffer.data();
+    }
 }
 
 inline void DEMKinematicThread::unpackMyBuffer() {
@@ -60,6 +65,11 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
                         (*stateOfSolver_resources.pNumContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactType, granData->contactType,
                         (*stateOfSolver_resources.pNumContacts) * sizeof(contact_t), cudaMemcpyDeviceToDevice));
+    if (!solverFlags.isFrictionless) {
+        GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactMapping, granData->contactMapping,
+                            (*stateOfSolver_resources.pNumContacts) * sizeof(contactPairs_t),
+                            cudaMemcpyDeviceToDevice));
+    }
 }
 
 void DEMKinematicThread::workerThread() {
@@ -210,9 +220,10 @@ void DEMKinematicThread::packDataPointers() {
 void DEMKinematicThread::packTransferPointers(DEMDynamicThread* dT) {
     // Set the pointers to dT owned buffers
     granData->pDTOwnedBuffer_nContactPairs = &(dT->granData->nContactPairs_buffer);
-    granData->pDTOwnedBuffer_idGeometryA = dT->granData->idGeometryA_buffer;
-    granData->pDTOwnedBuffer_idGeometryB = dT->granData->idGeometryB_buffer;
-    granData->pDTOwnedBuffer_contactType = dT->granData->contactType_buffer;
+    granData->pDTOwnedBuffer_idGeometryA = dT->idGeometryA_buffer.data();
+    granData->pDTOwnedBuffer_idGeometryB = dT->idGeometryB_buffer.data();
+    granData->pDTOwnedBuffer_contactType = dT->contactType_buffer.data();
+    granData->pDTOwnedBuffer_contactMapping = dT->contactMapping_buffer.data();
 }
 
 void DEMKinematicThread::setSimParams(unsigned char nvXp2,

@@ -55,10 +55,11 @@ class DEMDynamicThread {
     // Buffer arrays for storing info from the dT side.
     // kT modifies these arrays; dT uses them only.
 
-    // dT gets contact pair/location info from kT
+    // dT gets contact pair/location/history map info from kT
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA_buffer;
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB_buffer;
     std::vector<contact_t, ManagedAllocator<contact_t>> contactType_buffer;
+    std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>> contactMapping_buffer;
 
     // Pointers to simulation params-related arrays
     DEMSimParams* simParams;
@@ -164,6 +165,7 @@ class DEMDynamicThread {
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA;
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB;
     std::vector<contact_t, ManagedAllocator<contact_t>> contactType;
+    std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>> contactMapping;
 
     // Some of dT's own work arrays
     // Force of each contact event. It is the force that bodyA feels.

@@ -76,8 +76,9 @@ const notStupidBool_t DEM_PREVENT_CONTACT = 1;
 
 // This ID marks that this is a new contact, not present when we did contact detection last time
 // TODO: half max add half max... so stupid... Better way?? numeric_limit won't work...
-const contactPairs_t DEM_NULL_MAPPING_PARTNER = ((size_t)1 << (sizeof(contactPairs_t) * SGPS_BITS_PER_BYTE - 1)) +
-                                                ((size_t)1 << (sizeof(contactPairs_t) * SGPS_BITS_PER_BYTE - 1)) - 1;
+constexpr contactPairs_t DEM_NULL_MAPPING_PARTNER = ((size_t)1 << (sizeof(contactPairs_t) * SGPS_BITS_PER_BYTE - 1)) +
+                                                    ((size_t)1 << (sizeof(contactPairs_t) * SGPS_BITS_PER_BYTE - 1)) -
+                                                    1;
 
 const unsigned int DEM_DEFAULT_CLUMP_FAMILY_NUM = 0;
 constexpr unsigned int DEM_RESERVED_FAMILY_NUM = ((unsigned int)1 << (sizeof(family_t) * SGPS_BITS_PER_BYTE)) - 1;
@@ -204,6 +205,7 @@ struct DEMDataDT {
     bodyID_t* idGeometryA;
     bodyID_t* idGeometryB;
     contact_t* contactType;
+    contactPairs_t* contactMapping;
 
     // Some dT's own work array pointers
     float3* contactForces;
@@ -220,6 +222,7 @@ struct DEMDataDT {
     bodyID_t* idGeometryA_buffer;
     bodyID_t* idGeometryB_buffer;
     contact_t* contactType_buffer;
+    contactPairs_t* contactMapping_buffer;
 
     // pointer to remote buffer where kinematic thread stores work-order data provided by the dynamic thread
     voxelID_t* pKTOwnedBuffer_voxelID = NULL;
@@ -285,6 +288,7 @@ struct DEMDataKT {
     bodyID_t* pDTOwnedBuffer_idGeometryA = NULL;
     bodyID_t* pDTOwnedBuffer_idGeometryB = NULL;
     contact_t* pDTOwnedBuffer_contactType = NULL;
+    contactPairs_t* pDTOwnedBuffer_contactMapping = NULL;
 };
 
 // typedef DEMDataDT* DEMDataDTPtr;
