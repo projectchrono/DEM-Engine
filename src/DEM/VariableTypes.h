@@ -36,7 +36,8 @@ typedef unsigned short int spheresBinTouches_t;
 // Need to be large enough to hold the number of total contact pairs. In general this number should be in the same
 // magnitude as bodyID_t.
 typedef unsigned int contactPairs_t;
-// How many other entities can a sphere touch, tops?
+// How many other entities can a sphere touch, tops? It does not need to be large unless you have spheres that have
+// magnitudes of difference in size, which you should preferrably avoid.
 typedef unsigned short int geoSphereTouches_t;
 
 typedef uint8_t notStupidBool_t;  ///< Ad-hoc bool (array) type

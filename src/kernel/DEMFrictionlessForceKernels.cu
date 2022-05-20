@@ -37,9 +37,7 @@ inline __device__ float3 calcNormalForce(const double& overlapDepth,
     return force;
 }
 
-__global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
-                                             sgps::DEMDataDT* granData,
-                                             size_t nContactPairs) {
+__global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData, size_t nContactPairs) {
     // _nTotalBodyTopologies_ or _nDistinctClumpComponents_ elements are in these arrays
     const float Radii[] = {_Radii_};
     const float CDRelPosX[] = {_CDRelPosX_};
@@ -196,8 +194,6 @@ __global__ void calculateNormalContactForces(sgps::DEMSimParams* simParams,
         if (myContactType != sgps::DEM_NOT_A_CONTACT) {
             // Instead of add the force to a body-based register, we store it in event-based register, and use CUB to
             // reduce them afterwards
-            // atomicAdd(granData->bodyForceX + bodyA, -force * B2AX);
-            // atomicAdd(granData->bodyForceX + bodyB, force * B2AX);
 
             // Get k, g, etc. from the (upper-triangle) material property matrix
             float E, CoR;

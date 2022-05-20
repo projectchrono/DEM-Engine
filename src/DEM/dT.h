@@ -69,7 +69,6 @@ class DEMDynamicThread {
 
     // Pointers to clump template data. In the end, the use of this struct should be replaced by JIT.
     DEMTemplate* granTemplates;
-    DEMMaterialProxy* matProxy;
 
     // Body-related arrays in managed memory, for dT's personal use (not transfer buffer)
 
@@ -118,6 +117,8 @@ class DEMDynamicThread {
     std::vector<float, ManagedAllocator<float>> EProxy;
     std::vector<float, ManagedAllocator<float>> nuProxy;
     std::vector<float, ManagedAllocator<float>> CoRProxy;
+    std::vector<float, ManagedAllocator<float>> muProxy;
+    std::vector<float, ManagedAllocator<float>> CrrProxy;
 
     // Those are the large ones, ones that have the same length as the number of clumps
     // The mass/MOI offsets
@@ -285,7 +286,9 @@ class DEMDynamicThread {
                                const std::vector<std::vector<float3>>& clumps_sp_location_types,
                                const std::vector<float>& mat_E,
                                const std::vector<float>& mat_nu,
-                               const std::vector<float>& mat_CoR);
+                               const std::vector<float>& mat_CoR,
+                               const std::vector<float>& mat_mu,
+                               const std::vector<float>& mat_Crr);
 
     // Put sim data array pointers in place
     void packDataPointers();

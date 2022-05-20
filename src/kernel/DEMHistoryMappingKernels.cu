@@ -52,7 +52,7 @@ __global__ void buildPersistentMap(sgps::geoSphereTouches_t* new_idA_runlength_f
                         break;
                     }
                 }
-                // If old_cnt_offset == 0, it is automatically DEM_NULL_MAPPING_PARTNER
+                // If old_cnt_count == 0, it is automatically DEM_NULL_MAPPING_PARTNER
                 mapping[this_contact] = my_partner;
             }
         }

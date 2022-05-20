@@ -163,20 +163,20 @@ HamiltonProduct(T1& A1, T1& B1, T1& C1, T1& D1, const T1& a2, const T1& b2, cons
  *
  */
 template <typename T1>
-inline __device__ bool checkSpheresOverlap(const T1& XA,
-                                           const T1& YA,
-                                           const T1& ZA,
-                                           const T1& radA,
-                                           const T1& XB,
-                                           const T1& YB,
-                                           const T1& ZB,
-                                           const T1& radB,
-                                           T1& CPX,
-                                           T1& CPY,
-                                           T1& CPZ) {
+inline __device__ sgps::contact_t checkSpheresOverlap(const T1& XA,
+                                                      const T1& YA,
+                                                      const T1& ZA,
+                                                      const T1& radA,
+                                                      const T1& XB,
+                                                      const T1& YB,
+                                                      const T1& ZB,
+                                                      const T1& radB,
+                                                      T1& CPX,
+                                                      T1& CPY,
+                                                      T1& CPZ) {
     T1 centerDist2 = distSquared<T1>(XA, YA, ZA, XB, YB, ZB);
     if (centerDist2 > (radA + radB) * (radA + radB)) {
-        return false;
+        return sgps::DEM_NOT_A_CONTACT;
     }
     // If getting this far, then 2 spheres have an intersection, let's calculate the intersection point
     float B2AVecX = XA - XB;
@@ -188,7 +188,7 @@ inline __device__ bool checkSpheresOverlap(const T1& XA,
     CPX = XB + (radB - halfOverlapDepth) * B2AVecX;
     CPY = YB + (radB - halfOverlapDepth) * B2AVecY;
     CPZ = ZB + (radB - halfOverlapDepth) * B2AVecZ;
-    return true;
+    return sgps::DEM_SPHERE_SPHERE_CONTACT;
 }
 
 /**
@@ -201,24 +201,24 @@ inline __device__ bool checkSpheresOverlap(const T1& XA,
  *
  */
 template <typename T1, typename T2>
-inline __device__ bool checkSpheresOverlap(const T1& XA,
-                                           const T1& YA,
-                                           const T1& ZA,
-                                           const T1& radA,
-                                           const T1& XB,
-                                           const T1& YB,
-                                           const T1& ZB,
-                                           const T1& radB,
-                                           T1& CPX,
-                                           T1& CPY,
-                                           T1& CPZ,
-                                           T2& normalX,
-                                           T2& normalY,
-                                           T2& normalZ,
-                                           T1& overlapDepth) {
+inline __device__ sgps::contact_t checkSpheresOverlap(const T1& XA,
+                                                      const T1& YA,
+                                                      const T1& ZA,
+                                                      const T1& radA,
+                                                      const T1& XB,
+                                                      const T1& YB,
+                                                      const T1& ZB,
+                                                      const T1& radB,
+                                                      T1& CPX,
+                                                      T1& CPY,
+                                                      T1& CPZ,
+                                                      T2& normalX,
+                                                      T2& normalY,
+                                                      T2& normalZ,
+                                                      T1& overlapDepth) {
     T1 centerDist2 = distSquared<T1>(XA, YA, ZA, XB, YB, ZB);
     if (centerDist2 > (radA + radB) * (radA + radB)) {
-        return false;
+        return sgps::DEM_NOT_A_CONTACT;
     }
     // If getting this far, then 2 spheres have an intersection, let's calculate the intersection point
     normalX = XA - XB;
@@ -230,7 +230,7 @@ inline __device__ bool checkSpheresOverlap(const T1& XA,
     CPX = XB + (radB - overlapDepth / (T1)2) * normalX;
     CPY = YB + (radB - overlapDepth / (T1)2) * normalY;
     CPZ = ZB + (radB - overlapDepth / (T1)2) * normalZ;
-    return true;
+    return sgps::DEM_SPHERE_SPHERE_CONTACT;
 }
 
 template <typename T1>
@@ -287,17 +287,25 @@ template <typename T1>
 inline void matProxy2ContactParam(T1& E_eff,
                                   T1& G_eff,
                                   T1& CoR,
+                                  T1& mu,
+                                  T1& Crr,
                                   const T1& Y1,
                                   const T1& nu1,
                                   const T1& CoR1,
+                                  const T1& mu1,
+                                  const T1& Crr1,
                                   const T1& Y2,
                                   const T1& nu2,
-                                  const T1& CoR2) {
+                                  const T1& CoR2,
+                                  const T1& mu2,
+                                  const T1& Crr2) {
     T1 invE = (1. - nu1 * nu1) / Y1 + (1. - nu2 * nu2) / Y2;
     E_eff = 1. / invE;
     T1 invG = 2. * (2. - nu1) * (1. + nu1) / Y1 + 2. * (2. - nu2) * (1. + nu2) / Y2;
     G_eff = 1. / invG;
     CoR = min(CoR1, CoR2);
+    mu = max(mu1, mu2);
+    Crr = max(Crr1, Crr2);
 }
 
 /// Calculate the contact params based on the 2 contact material types given (frictionless version)
@@ -343,11 +351,9 @@ inline __device__ sgps::contact_t checkSphereEntityOverlap(const T1& xA,
                 return sgps::DEM_NOT_A_CONTACT;
             }
             return sgps::DEM_SPHERE_PLANE_CONTACT;
-            break;
         }
         case (sgps::DEM_ENTITY_TYPE_PLATE): {
             return sgps::DEM_NOT_A_CONTACT;
-            break;
         }
         default:
             return sgps::DEM_NOT_A_CONTACT;
@@ -399,11 +405,9 @@ inline __device__ sgps::contact_t checkSphereEntityOverlap(const T1& xA,
             normalY = diryB;
             normalZ = dirzB;
             return sgps::DEM_SPHERE_PLANE_CONTACT;
-            break;
         }
         case (sgps::DEM_ENTITY_TYPE_PLATE): {
             return sgps::DEM_NOT_A_CONTACT;
-            break;
         }
         default:
             return sgps::DEM_NOT_A_CONTACT;

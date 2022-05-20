@@ -17,6 +17,7 @@
 #include <core/utils/Macros.h>
 #include <helper_math.cuh>
 #include <DEM/DEMDefines.h>
+#include <DEM/DEMStructs.h>
 #include <DEM/Boundaries.h>
 
 namespace sgps {
@@ -98,13 +99,20 @@ class DEMSolver {
     /// A simplified version of LoadClumpType: it just loads a one-sphere clump template
     unsigned int LoadClumpSimpleSphere(float mass, float radius, unsigned int material_id);
 
-    /// Load materials properties (Young's modulus, Poisson's ratio, Coeff of Restitution and optionally density) into
-    /// the API-level cache. Return the index of the material type just loaded. If CoR is not given then it is assumed
-    /// 0; if density is not given then later calculating particle mass from density is not allowed (instead it has to
-    /// be explicitly given).
-    unsigned int LoadMaterialType(float E, float nu, float CoR, float density);
-    unsigned int LoadMaterialType(float E, float nu, float CoR) { return LoadMaterialType(E, nu, CoR, -1.f); }
-    unsigned int LoadMaterialType(float E, float nu) { return LoadMaterialType(E, nu, 0.f, -1.f); }
+    /// Load materials properties (Young's modulus, Poisson's ratio, Coeff of Restitution...) into
+    /// the API-level cache. Return the index of the material type just loaded. If rho is not given then later
+    /// calculating particle mass from rho is not allowed (instead it has to be explicitly given).
+    unsigned int LoadMaterialType(const DEMMaterial& mat);
+    unsigned int LoadMaterialType(float E, float nu, float CoR, float mu, float Crr, float rho);
+    unsigned int LoadMaterialType(float E, float nu, float CoR, float rho) {
+        return LoadMaterialType(E, nu, CoR, 0.5, 0.01, rho);
+    }
+    unsigned int LoadMaterialType(float E, float nu, float CoR, float mu, float Crr) {
+        return LoadMaterialType(E, nu, CoR, mu, Crr, -1.f);
+    }
+    unsigned int LoadMaterialType(float E, float nu, float CoR) {
+        return LoadMaterialType(E, nu, CoR, 0.5, 0.01, -1.f);
+    }
 
     /// Load input clumps (topology types and initial locations) on a per-pair basis
     /// TODO: Add a overload that takes velocities too
@@ -195,17 +203,13 @@ class DEMSolver {
 
     // This is the cached material information.
     // It will be massaged into the managed memory upon Initialize().
-    struct DEMMaterial {
-        float density;
-        float E;
-        float nu;
-        float CoR;
-    };
     std::vector<DEMMaterial> m_sp_materials;
     // Materials info is processed at API level (on initialization) for generating proxy arrays
     std::vector<float> m_E_proxy;
     std::vector<float> m_nu_proxy;
     std::vector<float> m_CoR_proxy;
+    std::vector<float> m_mu_proxy;
+    std::vector<float> m_Crr_proxy;
 
     // This is the cached clump structure information.
     // It will be massaged into kernels upon Initialize.

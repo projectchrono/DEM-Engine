@@ -208,4 +208,13 @@ struct SolverFlags {
     bool isFrictionless = false;
 };
 
+struct DEMMaterial {
+    float rho = -1.f;  // Density
+    float E = 1e8;     // Young's modulus
+    float nu = 0.3;    // Poission's ratio
+    float CoR = 0.5;   // Coeff of Restitution
+    float mu = 0.5;    // Static friction coeff
+    float Crr = 0.01;  // Rolling resistance coeff
+};
+
 }  // namespace sgps

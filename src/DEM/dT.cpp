@@ -74,6 +74,8 @@ void DEMDynamicThread::packDataPointers() {
     granTemplates->EProxy = EProxy.data();
     granTemplates->nuProxy = nuProxy.data();
     granTemplates->CoRProxy = CoRProxy.data();
+    granTemplates->muProxy = muProxy.data();
+    granTemplates->CrrProxy = CrrProxy.data();
 }
 void DEMDynamicThread::packTransferPointers(DEMKinematicThread* kT) {
     // These are the pointers for sending data to dT
@@ -200,6 +202,8 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     TRACKED_VECTOR_RESIZE(EProxy, nMatTuples, "EProxy", 0);
     TRACKED_VECTOR_RESIZE(nuProxy, nMatTuples, "nuProxy", 0);
     TRACKED_VECTOR_RESIZE(CoRProxy, nMatTuples, "CoRProxy", 0);
+    TRACKED_VECTOR_RESIZE(muProxy, nMatTuples, "CoRProxy", 0);
+    TRACKED_VECTOR_RESIZE(CrrProxy, nMatTuples, "CoRProxy", 0);
 
     // Arrays for contact info
     // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is 2n, and I
@@ -244,7 +248,9 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
                                              const std::vector<std::vector<float3>>& clumps_sp_location_types,
                                              const std::vector<float>& mat_E,
                                              const std::vector<float>& mat_nu,
-                                             const std::vector<float>& mat_CoR) {
+                                             const std::vector<float>& mat_CoR,
+                                             const std::vector<float>& mat_mu,
+                                             const std::vector<float>& mat_Crr) {
     // Use some temporary hacks to get the info in the managed mem
 
     // First, load in material properties
@@ -252,6 +258,8 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
         EProxy.at(i) = mat_E.at(i);
         nuProxy.at(i) = mat_nu.at(i);
         CoRProxy.at(i) = mat_CoR.at(i);
+        muProxy.at(i) = mat_mu.at(i);
+        CrrProxy.at(i) = mat_Crr.at(i);
     }
 
     // Then load in clump mass and MOI (only nDistinctClumpBodyTopologies interations; clumps_mass_types array may have
@@ -509,7 +517,7 @@ inline void DEMDynamicThread::calculateForces() {
         (*stateOfSolver_resources.pNumContacts + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
 
     // a custom kernel to compute forces
-    cal_force_kernels->kernel("calculateNormalContactForces")
+    cal_force_kernels->kernel("calculateContactForces")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
         .launch(simParams, granData, *stateOfSolver_resources.pNumContacts);
@@ -705,14 +713,21 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
                                               pfSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
     // Then force calculation kernels
+    // Depending on frictionless-ness, we may want jitify different versions of kernels
     {
         std::unordered_map<std::string, std::string> cfSubs = templateSubs;
         cfSubs.insert(simParamSubs.begin(), simParamSubs.end());
         cfSubs.insert(massMatSubs.begin(), massMatSubs.end());
         cfSubs.insert(analGeoSubs.begin(), analGeoSubs.end());
-        cal_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMFrictionlessForceKernels", JitHelper::KERNEL_DIR / "DEMFrictionlessForceKernels.cu", cfSubs,
-            {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+        if (solverFlags.isFrictionless) {
+            cal_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+                "DEMFrictionlessForceKernels", JitHelper::KERNEL_DIR / "DEMFrictionlessForceKernels.cu", cfSubs,
+                {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+        } else {
+            cal_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+                "DEMFrictionalForceKernels", JitHelper::KERNEL_DIR / "DEMFrictionalForceKernels.cu", cfSubs,
+                {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+        }
     }
     // Then force accumulation kernels
     {

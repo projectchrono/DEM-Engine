@@ -177,28 +177,32 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
 
 void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula) {}
 
-unsigned int DEMSolver::LoadMaterialType(float E, float nu, float CoR, float density) {
+unsigned int DEMSolver::LoadMaterialType(const DEMMaterial& mat) {
     unsigned int mat_num = m_sp_materials.size();
-    if (CoR < SGPS_DEM_TINY_FLOAT) {
-        SGPS_DEM_WARNING(
-            "Material type %u is set (or defaulted) to have 0 restitution. Please make sure this is intentional.",
-            mat_num);
+    if (mat.CoR < SGPS_DEM_TINY_FLOAT) {
+        SGPS_DEM_WARNING("Material type %u is set to have 0 restitution. Please make sure this is intentional.",
+                         mat_num);
     }
-    if (CoR > 1.f) {
+    if (mat.CoR > 1.f) {
         SGPS_DEM_WARNING(
             "Material type %u is set to have a restitution coefficient larger than 1. This is typically not physical "
             "and should destabilize the simulation.",
             mat_num);
     }
+    m_sp_materials.push_back(mat);
+    return mat_num;
+}
 
+unsigned int DEMSolver::LoadMaterialType(float E, float nu, float CoR, float mu, float Crr, float rho) {
     struct DEMMaterial a_material;
-    a_material.density = density;
+    a_material.rho = rho;
     a_material.E = E;
     a_material.nu = nu;
     a_material.CoR = CoR;
+    a_material.mu = mu;
+    a_material.Crr = Crr;
 
-    m_sp_materials.push_back(a_material);
-    return mat_num;
+    return LoadMaterialType(a_material);
 }
 
 unsigned int DEMSolver::LoadClumpType(float mass,
@@ -322,11 +326,15 @@ void DEMSolver::figureOutMaterialProxies() {
     m_E_proxy.resize(count);
     m_nu_proxy.resize(count);
     m_CoR_proxy.resize(count);
+    m_mu_proxy.resize(count);
+    m_Crr_proxy.resize(count);
     for (unsigned int i = 0; i < count; i++) {
         auto Mat = m_sp_materials.at(i);
         m_E_proxy.at(i) = Mat.E;
         m_nu_proxy.at(i) = Mat.nu;
         m_CoR_proxy.at(i) = Mat.CoR;
+        m_mu_proxy.at(i) = Mat.mu;
+        m_Crr_proxy.at(i) = Mat.Crr;
     }
 }
 
@@ -506,6 +514,12 @@ inline void DEMSolver::reportInitStats() const {
     }
 
     SGPS_DEM_INFO("The number of material types: %u", nMatTuples_computed);
+    if (m_isFrictionless) {
+        SGPS_DEM_INFO("This run uses frictionless solver setup");
+    } else {
+        SGPS_DEM_INFO("This run uses frictional solver setup");
+    }
+    // TODO: The solver model, is it user-specified or internally defined?
 }
 
 void DEMSolver::generateJITResources() {
@@ -678,7 +692,7 @@ void DEMSolver::initializeArrays() {
     dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_input_clump_family,
                               m_input_ext_obj_xyz, m_input_ext_obj_family, m_family_user_impl_map,
                               m_template_sp_mat_ids, m_template_mass, m_template_moi, m_template_sp_radii,
-                              m_template_sp_relPos, m_E_proxy, m_nu_proxy, m_CoR_proxy);
+                              m_template_sp_relPos, m_E_proxy, m_nu_proxy, m_CoR_proxy, m_mu_proxy, m_Crr_proxy);
     kT->populateManagedArrays(m_input_clump_types, m_input_clump_family, m_input_ext_obj_family, m_family_user_impl_map,
                               m_template_mass, m_template_sp_radii, m_template_sp_relPos);
 }
@@ -925,7 +939,7 @@ inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std
 }
 
 inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::string>& strMap) {
-    std::string ClumpMasses, moiX, moiY, moiZ, E_proxy, nu_proxy, CoR_proxy;
+    std::string ClumpMasses, moiX, moiY, moiZ, E_proxy, nu_proxy, CoR_proxy, mu_proxy, Crr_proxy;
     // Loop through all templates to find in the JIT info
     // Note m_template_mass's size may be large than nDistinctClumpBodyTopologies because of the ext obj mass entries
     // appended to that array
@@ -939,6 +953,8 @@ inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::st
         E_proxy += to_string_with_precision(m_E_proxy.at(i)) + ",";
         nu_proxy += to_string_with_precision(m_nu_proxy.at(i)) + ",";
         CoR_proxy += to_string_with_precision(m_CoR_proxy.at(i)) + ",";
+        mu_proxy += to_string_with_precision(m_mu_proxy.at(i)) + ",";
+        Crr_proxy += to_string_with_precision(m_Crr_proxy.at(i)) + ",";
     }
     strMap["_ClumpMasses_"] = ClumpMasses;
     strMap["_moiX_"] = moiX;
@@ -947,6 +963,8 @@ inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::st
     strMap["_EProxy_"] = E_proxy;
     strMap["_nuProxy_"] = nu_proxy;
     strMap["_CoRProxy_"] = CoR_proxy;
+    strMap["_muProxy_"] = mu_proxy;
+    strMap["_CrrProxy_"] = Crr_proxy;
 }
 
 inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap) {
