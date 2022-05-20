@@ -182,7 +182,7 @@ void KinematicThread::operator()() {
     std::vector<float, sgps::ManagedAllocator<float>> pressure_data;  // local presusre dataf
 
     std::vector<float3, sgps::ManagedAllocator<float3>> W_grad_data;  // local W grad data
-    std::vector<int, sgps::ManagedAllocator<int>> temp_storage;       // temp storage space for cub functions 
+    std::vector<int, sgps::ManagedAllocator<int>> temp_storage;       // temp storage space for cub functions
     std::vector<char, sgps::ManagedAllocator<char>> fix_data;
 
     // initiate JitHelper to perform JITC
@@ -238,8 +238,8 @@ void KinematicThread::operator()() {
         kinematic_program.kernel("kinematicStep1")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(pos_data.data(), num_BSD_data.data(), k_n, multiplier * kernel_h, d_domain_x, d_domain_y, d_domain_z, X_SUB_NUM,
-                    Y_SUB_NUM, Z_SUB_NUM, getParentSystem().domain_x, getParentSystem().domain_y,
+            .launch(pos_data.data(), num_BSD_data.data(), k_n, multiplier * kernel_h, d_domain_x, d_domain_y,
+                    d_domain_z, X_SUB_NUM, Y_SUB_NUM, Z_SUB_NUM, getParentSystem().domain_x, getParentSystem().domain_y,
                     getParentSystem().domain_z, buffer_width);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -269,8 +269,9 @@ void KinematicThread::operator()() {
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), offset_BSD_data.data(), BSD_iden_idx.data(), BSD_idx.data(), idx_track_data.data(),
-                    k_n, TotLength, multiplier * kernel_h, d_domain_x, d_domain_y, d_domain_z, X_SUB_NUM, Y_SUB_NUM, Z_SUB_NUM,
-                    getParentSystem().domain_x, getParentSystem().domain_y, getParentSystem().domain_z, buffer_width);
+                    k_n, TotLength, multiplier * kernel_h, d_domain_x, d_domain_y, d_domain_z, X_SUB_NUM, Y_SUB_NUM,
+                    Z_SUB_NUM, getParentSystem().domain_x, getParentSystem().domain_y, getParentSystem().domain_z,
+                    buffer_width);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -330,9 +331,9 @@ void KinematicThread::operator()() {
         kinematic_program.kernel("kinematicStep5")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), (MAX_NUM_UNIT * UNIT_SHARED_SIZE), streamInfo.stream)
-            .launch(pos_data.data(), k_n, multiplier * kernel_h, idx_track_data_sorted.data(), BSD_iden_idx_sorted.data(),
-                    offset_BSD_idx.data(), length_BSD_idx.data(), unique_BSD_idx.data(), num_col.data(),
-                    unique_BSD_idx.size(), buffer_width);
+            .launch(pos_data.data(), k_n, multiplier * kernel_h, idx_track_data_sorted.data(),
+                    BSD_iden_idx_sorted.data(), offset_BSD_idx.data(), length_BSD_idx.data(), unique_BSD_idx.data(),
+                    num_col.data(), unique_BSD_idx.size(), buffer_width);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -374,10 +375,10 @@ void KinematicThread::operator()() {
         kinematic_program.kernel("kinematicStep7")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), (MAX_NUM_UNIT * UNIT_SHARED_SIZE), streamInfo.stream)
-            .launch(pos_data.data(), k_n, multiplier * kernel_h, idx_track_data_sorted.data(), BSD_iden_idx_sorted.data(),
-                    offset_BSD_idx.data(), length_BSD_idx.data(), unique_BSD_idx.data(), num_col.data(),
-                    unique_BSD_idx.size(), pair_i_data.data(), pair_j_data.data(), num_col_offset.data(),
-                    W_grad_data.data(), buffer_width);
+            .launch(pos_data.data(), k_n, multiplier * kernel_h, idx_track_data_sorted.data(),
+                    BSD_iden_idx_sorted.data(), offset_BSD_idx.data(), length_BSD_idx.data(), unique_BSD_idx.data(),
+                    num_col.data(), unique_BSD_idx.size(), pair_i_data.data(), pair_j_data.data(),
+                    num_col_offset.data(), W_grad_data.data(), buffer_width);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -416,7 +417,8 @@ void KinematicThread::operator()() {
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), rho_data.data(), pressure_data.data(), i_unique.data(), i_offset.data(),
-                    i_length.data(), j_data_sorted_1.data(), fix_data.data(), i_unique.size(), multiplier * kernel_h, m, rho_0);
+                    i_length.data(), j_data_sorted_1.data(), fix_data.data(), i_unique.size(), multiplier * kernel_h, m,
+                    rho_0);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // clear kinematic step 8 data
@@ -464,7 +466,8 @@ void KinematicThread::operator()() {
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), rho_data.data(), pressure_data.data(), j_unique.data(), j_offset.data(),
-                    j_length.data(), i_data_sorted_2.data(), fix_data.data(), j_unique.size(), multiplier * kernel_h, m, rho_0);
+                    j_length.data(), i_data_sorted_2.data(), fix_data.data(), j_unique.size(), multiplier * kernel_h, m,
+                    rho_0);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // clear kinematic step 8 data
@@ -495,7 +498,8 @@ void KinematicThread::operator()() {
         kinematic_program.kernel("kinematicStep10")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(rho_data.data(), pressure_data.data(), fix_data.data(), pos_data.size(), multiplier * kernel_h, m, rho_0, c);
+            .launch(rho_data.data(), pressure_data.data(), fix_data.data(), pos_data.size(), multiplier * kernel_h, m,
+                    rho_0, c);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // copy data back to the dataManager
@@ -565,9 +569,6 @@ void DynamicThread::operator()() {
     float kernel_h;
     float m;
     float rho_0;
-
-    // TODO: temp write out data
-    int write_out_count = 0;
 
     auto dynamic_program = JitHelper::buildProgram("SPHDynamicKernels", JitHelper::KERNEL_DIR / "SPHDynamicKernels.cu",
                                                    std::unordered_map<std::string, std::string>(),
@@ -677,7 +678,8 @@ void DynamicThread::operator()() {
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // reduce
-        SumReduceByKeyCub(pair_i_data_sorted_1, pair_i_data_reduced_1, col_acc_data_sorted_1, col_acc_data_reduced_1, temp_storage);
+        SumReduceByKeyCub(pair_i_data_sorted_1, pair_i_data_reduced_1, col_acc_data_sorted_1, col_acc_data_reduced_1,
+                          temp_storage);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         block_size = 1024;
@@ -732,7 +734,8 @@ void DynamicThread::operator()() {
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // reduce
-        SumReduceByKeyCub(pair_j_data_sorted_2, pair_j_data_reduced_2, col_acc_data_sorted_2, col_acc_data_reduced_2, temp_storage);
+        SumReduceByKeyCub(pair_j_data_sorted_2, pair_j_data_reduced_2, col_acc_data_sorted_2, col_acc_data_reduced_2,
+                          temp_storage);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         block_size = 1024;
@@ -793,13 +796,6 @@ void DynamicThread::operator()() {
             dataManager.m_acc.assign(acc_data.begin(), acc_data.end());
         }
 
-        if (dynamicCounter % 50 == 0) {
-            getParentSystem().printCSV("sph_folder/test" + std::to_string(write_out_count) + ".csv",
-                                       pos_data.data(), pos_data.size(), vel_data.data(), acc_data.data(),
-                                       rho_data.data(), pressure_data.data());
-            write_out_count = write_out_count + 1;
-        }
-
         if (getParentSystem().getPrintOut() == true &&
             getParentSystem().getCurPrint() == getParentSystem().getStepPrint() - 1) {
             while (getParentSystem().wt_thread_busy == true) {
@@ -838,19 +834,23 @@ void WriteOutThread::operator()() {
             std::vector<float> wt_rho;
             std::vector<float> wt_pressure;
 
+            // acquire locks to copy position/velocity/acceleration data from datamanager
             {
                 const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
                 wt_pos.assign(dataManager.m_pos.begin(), dataManager.m_pos.end());
                 wt_vel.assign(dataManager.m_vel.begin(), dataManager.m_vel.end());
                 wt_acc.assign(dataManager.m_acc.begin(), dataManager.m_acc.end());
+            }
+
+            // acquire locks to copy density/pressure data from datamanager
+            {
+                const std::lock_guard<std::mutex> lock(getParentSystem().getMutexContact());
                 wt_rho.assign(dataManager.m_rho.begin(), dataManager.m_rho.end());
                 wt_pressure.assign(dataManager.m_pressure.begin(), dataManager.m_pressure.end());
                 getParentSystem().wt_buffer_fresh = false;
             }
 
-            // getParentSystem().printCSV("sph_folder/test" + std::to_string(writeOutCounter) + ".csv", wt_pos.data(),
-            //                            wt_pos.size(), wt_vel.data(), wt_rho.data(), wt_pressure.data());
-
+            // write into a folder called sph_folder, this folder needs to be created before running demos
             getParentSystem().printCSV("sph_folder/test" + std::to_string(writeOutCounter + 1) + ".csv", wt_pos.data(),
                                        wt_pos.size(), wt_vel.data(), wt_acc.data(), wt_rho.data(), wt_pressure.data());
             getParentSystem().wt_thread_busy = false;
