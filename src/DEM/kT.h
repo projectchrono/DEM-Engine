@@ -100,8 +100,9 @@ class DEMKinematicThread {
     std::vector<float3, ManagedAllocator<float3>> relPosNode3;
 
     // External object's components may need the following arrays to store some extra defining features of them. We
-    // assume there are usually not too many of them in a simulation. Relative position w.r.t. the owner. For example,
-    // the following 3 arrays may hold center points for plates, or tip positions for cones.
+    // assume there are usually not too many of them in a simulation.
+    // Relative position w.r.t. the owner. For example, the following 3 arrays may hold center points for plates, or tip
+    // positions for cones.
     std::vector<float, ManagedAllocator<float>> relPosEntityX;
     std::vector<float, ManagedAllocator<float>> relPosEntityY;
     std::vector<float, ManagedAllocator<float>> relPosEntityZ;

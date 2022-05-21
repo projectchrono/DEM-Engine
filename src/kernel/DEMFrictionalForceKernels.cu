@@ -209,6 +209,8 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             granData->contactForces[myContactID] = force;
         } else {
             granData->contactForces[myContactID] = make_float3(0, 0, 0);
+            // The contact is no longer active, so we need to destroy its contact history recording
+            granData->contactHistory[myContactID] = make_float3(0, 0, 0);
         }
     }
 }

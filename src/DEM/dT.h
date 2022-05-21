@@ -166,7 +166,7 @@ class DEMDynamicThread {
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA;
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB;
     std::vector<contact_t, ManagedAllocator<contact_t>> contactType;
-    std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>> contactMapping;
+    // std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>> contactMapping;
 
     // Some of dT's own work arrays
     // Force of each contact event. It is the force that bodyA feels.
@@ -174,6 +174,12 @@ class DEMDynamicThread {
     // Local position of contact point of contact w.r.t. the reference frame of body A and B
     std::vector<float3, ManagedAllocator<float3>> contactPointGeometryA;
     std::vector<float3, ManagedAllocator<float3>> contactPointGeometryB;
+    // Contact history: how much did the contact point move on the geometry surface compared to when the contact first
+    // emerged?
+    // TODO: If it's that the contact point moves from a component of a clump to another component, history will also be
+    // destroyed; this is not physical, but also, considering the contact history tends to be miniscule, this is
+    // probably not a big problem either.
+    std::vector<float3, ManagedAllocator<float3>> contactHistory;
 
     size_t m_approx_bytes_used = 0;
 
@@ -317,11 +323,14 @@ class DEMDynamicThread {
                        const std::unordered_map<std::string, std::string>& analGeoSubs);
 
   private:
+    // Migrate contact history to fit the structure of the newly received contact array
+    inline void migrateContactHistory();
+
     // update clump-based acceleration array based on sphere-based force array
-    void calculateForces();
+    inline void calculateForces();
 
     // update clump pos/oriQ and vel/omega based on acceleration
-    void integrateClumpMotions();
+    inline void integrateClumpMotions();
 
     // Bring dT buffer array data to its working arrays
     void unpackMyBuffer();

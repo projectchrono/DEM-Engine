@@ -46,7 +46,6 @@ void DEMDynamicThread::packDataPointers() {
     granData->idGeometryA = idGeometryA.data();
     granData->idGeometryB = idGeometryB.data();
     granData->contactType = contactType.data();
-    granData->contactMapping = contactMapping.data();
 
     granData->idGeometryA_buffer = idGeometryA_buffer.data();
     granData->idGeometryB_buffer = idGeometryB_buffer.data();
@@ -56,6 +55,7 @@ void DEMDynamicThread::packDataPointers() {
     granData->contactForces = contactForces.data();
     granData->contactPointGeometryA = contactPointGeometryA.data();
     granData->contactPointGeometryB = contactPointGeometryB.data();
+    granData->contactHistory = contactHistory.data();
 
     // The offset info that indexes into the template arrays
     granData->ownerClumpBody = ownerClumpBody.data();
@@ -202,8 +202,8 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     TRACKED_VECTOR_RESIZE(EProxy, nMatTuples, "EProxy", 0);
     TRACKED_VECTOR_RESIZE(nuProxy, nMatTuples, "nuProxy", 0);
     TRACKED_VECTOR_RESIZE(CoRProxy, nMatTuples, "CoRProxy", 0);
-    TRACKED_VECTOR_RESIZE(muProxy, nMatTuples, "CoRProxy", 0);
-    TRACKED_VECTOR_RESIZE(CrrProxy, nMatTuples, "CoRProxy", 0);
+    TRACKED_VECTOR_RESIZE(muProxy, nMatTuples, "muProxy", 0);
+    TRACKED_VECTOR_RESIZE(CrrProxy, nMatTuples, "CrrProxy", 0);
 
     // Arrays for contact info
     // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is 2n, and I
@@ -212,15 +212,13 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     TRACKED_VECTOR_RESIZE(idGeometryA, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryA", 0);
     TRACKED_VECTOR_RESIZE(idGeometryB, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryB", 0);
     TRACKED_VECTOR_RESIZE(contactForces, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactForces", make_float3(0));
+    TRACKED_VECTOR_RESIZE(contactHistory, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactHistory",
+                          make_float3(0));
     TRACKED_VECTOR_RESIZE(contactType, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactType", DEM_NOT_A_CONTACT);
     TRACKED_VECTOR_RESIZE(contactPointGeometryA, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactPointGeometryA",
                           make_float3(0));
     TRACKED_VECTOR_RESIZE(contactPointGeometryB, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactPointGeometryB",
                           make_float3(0));
-    if (!solverFlags.isFrictionless) {
-        TRACKED_VECTOR_RESIZE(contactMapping, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactMapping",
-                              DEM_NULL_MAPPING_PARTNER);
-    }
 
     // Transfer buffer arrays
     // The following several arrays will have variable sizes, so here we only used an estimate.
@@ -434,16 +432,16 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     granData->idGeometryA_buffer = idGeometryA_buffer.data();
     granData->idGeometryB_buffer = idGeometryB_buffer.data();
     granData->contactType_buffer = contactType_buffer.data();
-
-    // If not frictionless then contact history map needs to be updated
+    // If not frictionless, then contact history map needs to be updated in case kT made modifications
     if (!solverFlags.isFrictionless) {
-        TRACKED_QUICK_VECTOR_RESIZE(contactMapping, nContactPairs);
-        granData->contactMapping = contactMapping.data();
         granData->contactMapping_buffer = contactMapping_buffer.data();
     }
 }
 
 inline void DEMDynamicThread::unpackMyBuffer() {
+    // Make a note on the contact number of the previous time step
+    *stateOfSolver_resources.pNumPrevContacts = *stateOfSolver_resources.pNumContacts;
+
     GPU_CALL(cudaMemcpy(stateOfSolver_resources.pNumContacts, &(granData->nContactPairs_buffer), sizeof(size_t),
                         cudaMemcpyDeviceToDevice));
 
@@ -460,8 +458,12 @@ inline void DEMDynamicThread::unpackMyBuffer() {
     GPU_CALL(cudaMemcpy(granData->contactType, granData->contactType_buffer,
                         *stateOfSolver_resources.pNumContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
     if (!solverFlags.isFrictionless) {
-        GPU_CALL(cudaMemcpy(granData->contactMapping, granData->contactMapping_buffer,
-                            *stateOfSolver_resources.pNumContacts * sizeof(contactPairs_t), cudaMemcpyDeviceToDevice));
+        // Note we don't have to use dedicated memory space for unpacking contactMapping_buffer contents, because we
+        // only use it once per kT update, at the time of unpacking. So let us just use a temp vector to store it.
+        size_t mapping_bytes = (*stateOfSolver_resources.pNumContacts) * sizeof(contactPairs_t);
+        granData->contactMapping = (contactPairs_t*)stateOfSolver_resources.allocateTempVector1(mapping_bytes);
+        GPU_CALL(cudaMemcpy(granData->contactMapping, granData->contactMapping_buffer, mapping_bytes,
+                            cudaMemcpyDeviceToDevice));
     }
 }
 
@@ -484,17 +486,68 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
                         cudaMemcpyDeviceToDevice));
 }
 
+inline void DEMDynamicThread::migrateContactHistory() {
+    // Use this newHistory to store temporarily the rearranged contact history
+    size_t mapping_bytes = (*stateOfSolver_resources.pNumContacts) * sizeof(contactPairs_t);
+    contactPairs_t* newHistory = (contactPairs_t*)stateOfSolver_resources.allocateTempVector2(mapping_bytes);
+
+    // A sentry array is here to see if there exist a contact that dT thinks it's alive but kT doesn't map it to the new
+    // history array
+    size_t sentry_bytes = (*stateOfSolver_resources.pNumPrevContacts) * sizeof(notStupidBool_t);
+    notStupidBool_t* contactSentry = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector3(sentry_bytes);
+    // GPU_CALL(cudaMemset(contactSentry, 0, sentry_bytes));
+    size_t blocks_needed_for_rearrange =
+        (*stateOfSolver_resources.pNumPrevContacts + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) /
+        SGPS_DEM_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed_for_rearrange > 0) {
+        prep_force_kernels->kernel("markAliveContacts")
+            .instantiate()
+            .configure(dim3(blocks_needed_for_rearrange), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+            .launch(granData->contactHistory, contactSentry, *stateOfSolver_resources.pNumPrevContacts);
+    }
+
+    blocks_needed_for_rearrange =
+        (*stateOfSolver_resources.pNumContacts + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) / SGPS_DEM_MAX_THREADS_PER_BLOCK;
+    if (blocks_needed_for_rearrange > 0) {
+        prep_force_kernels->kernel("rearrangeContactHistory")
+            .instantiate()
+            .configure(dim3(blocks_needed_for_rearrange), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+            .launch(granData->contactMapping, granData->contactHistory, newHistory, contactSentry,
+                    *stateOfSolver_resources.pNumContacts);
+    }
+
+    // Take a look, does the sentry indicate that there is an `alive' contact got lost?
+    if (*stateOfSolver_resources.pNumPrevContacts > 0) {
+        notStupidBool_t* lostContact =
+            (notStupidBool_t*)stateOfSolver_resources.allocateTempVector4(sizeof(notStupidBool_t));
+        flagMaxReduce(contactSentry, lostContact, *stateOfSolver_resources.pNumPrevContacts, streamInfo.stream,
+                      stateOfSolver_resources);
+        if (*lostContact) {
+            SGPS_DEM_WARNING(
+                "At least one contact is active at time %.9g on dT, but it is not detected on kT, therefore being "
+                "removed unexpectedly!");
+        }
+    }
+
+    // Copy new history back to history array (after resizing the `main' history array)
+    if (*stateOfSolver_resources.pNumContacts > contactHistory.size()) {
+        TRACKED_QUICK_VECTOR_RESIZE(contactHistory, *stateOfSolver_resources.pNumContacts);
+    }
+    GPU_CALL(cudaMemcpy(granData->contactHistory, newHistory, *stateOfSolver_resources.pNumContacts,
+                        cudaMemcpyDeviceToDevice));
+}
+
 inline void DEMDynamicThread::calculateForces() {
     // reset force (acceleration) arrays for this time step and apply gravity
     size_t threads_needed_for_prep = simParams->nOwnerBodies > *stateOfSolver_resources.pNumContacts
                                          ? simParams->nOwnerBodies
                                          : *stateOfSolver_resources.pNumContacts;
     size_t blocks_needed_for_prep =
-        (threads_needed_for_prep + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
+        (threads_needed_for_prep + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) / SGPS_DEM_MAX_THREADS_PER_BLOCK;
 
     prep_force_kernels->kernel("prepareForceArrays")
         .instantiate()
-        .configure(dim3(blocks_needed_for_prep), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+        .configure(dim3(blocks_needed_for_prep), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
         .launch(simParams, granData, *stateOfSolver_resources.pNumContacts);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -515,43 +568,47 @@ inline void DEMDynamicThread::calculateForces() {
 
     size_t blocks_needed_for_contacts =
         (*stateOfSolver_resources.pNumContacts + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
+    // If no contact then we don't have to calculate forces. Note there might still be forces, coming from prescription
+    // or other sources.
+    if (blocks_needed_for_contacts > 0) {
+        // a custom kernel to compute forces
+        cal_force_kernels->kernel("calculateContactForces")
+            .instantiate()
+            .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+            .launch(simParams, granData, *stateOfSolver_resources.pNumContacts);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        // displayFloat3(granData->contactForces, *stateOfSolver_resources.pNumContacts);
+        // std::cout << "===========================" << std::endl;
 
-    // a custom kernel to compute forces
-    cal_force_kernels->kernel("calculateContactForces")
-        .instantiate()
-        .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(simParams, granData, *stateOfSolver_resources.pNumContacts);
-    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-    // displayFloat3(granData->contactForces, *stateOfSolver_resources.pNumContacts);
-    // std::cout << "===========================" << std::endl;
+        // Reflect those body-wise forces on their owner clumps
+        // hostCollectForces(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
+        //                   granData->contactForces, granData->aX, granData->aY, granData->aZ,
+        //                   granData->ownerClumpBody, granTemplates->massClumpBody, simParams->h,
+        //                   *stateOfSolver_resources.pNumContacts,simParams->l);
+        collectForces(collect_force_kernels, granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
+                      granData->contactType, granData->contactForces, granData->contactPointGeometryA,
+                      granData->contactPointGeometryB, granData->aX, granData->aY, granData->aZ, granData->alphaX,
+                      granData->alphaY, granData->alphaZ, granData->ownerClumpBody,
+                      *stateOfSolver_resources.pNumContacts, simParams->nOwnerBodies, contactPairArr_isFresh,
+                      streamInfo.stream, stateOfSolver_resources);
+        // displayArray<float>(granData->aX, simParams->nOwnerBodies);
+        // displayFloat3(granData->contactForces, *stateOfSolver_resources.pNumContacts);
+        // std::cout << *stateOfSolver_resources.pNumContacts << std::endl;
 
-    // Reflect those body-wise forces on their owner clumps
-    // hostCollectForces(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
-    //                   granData->contactForces, granData->aX, granData->aY, granData->aZ,
-    //                   granData->ownerClumpBody, granTemplates->massClumpBody, simParams->h,
-    //                   *stateOfSolver_resources.pNumContacts,simParams->l);
-    collectForces(collect_force_kernels, granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
-                  granData->contactType, granData->contactForces, granData->contactPointGeometryA,
-                  granData->contactPointGeometryB, granData->aX, granData->aY, granData->aZ, granData->alphaX,
-                  granData->alphaY, granData->alphaZ, granData->ownerClumpBody, *stateOfSolver_resources.pNumContacts,
-                  simParams->nOwnerBodies, contactPairArr_isFresh, streamInfo.stream, stateOfSolver_resources);
-    // displayArray<float>(granData->aX, simParams->nOwnerBodies);
-    // displayFloat3(granData->contactForces, *stateOfSolver_resources.pNumContacts);
-    // std::cout << *stateOfSolver_resources.pNumContacts << std::endl;
-
-    // Calculate the torque on owner clumps from those body-wise forces
-    // hostCollectTorques(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
-    //                    granData->contactForces, granData->contactPointGeometryA, granData->contactPointGeometryB,
-    //                    granData->alphaX, granData->alphaY, granData->alphaZ, granData->ownerClumpBody,
-    //                    granTemplates->mmiXX, granTemplates->mmiYY, granTemplates->mmiZZ, simParams->h,
-    //                    *stateOfSolver_resources.pNumContacts, simParams->l);
-    // displayArray<float>(granData->oriQ0, simParams->nOwnerBodies);
-    // displayArray<float>(granData->oriQ1, simParams->nOwnerBodies);
-    // displayArray<float>(granData->oriQ2, simParams->nOwnerBodies);
-    // displayArray<float>(granData->oriQ3, simParams->nOwnerBodies);
-    // displayArray<float>(granData->alphaX, simParams->nOwnerBodies);
-    // displayArray<float>(granData->alphaY, simParams->nOwnerBodies);
-    // displayArray<float>(granData->alphaZ, simParams->nOwnerBodies);
+        // Calculate the torque on owner clumps from those body-wise forces
+        // hostCollectTorques(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
+        //                    granData->contactForces, granData->contactPointGeometryA, granData->contactPointGeometryB,
+        //                    granData->alphaX, granData->alphaY, granData->alphaZ, granData->ownerClumpBody,
+        //                    granTemplates->mmiXX, granTemplates->mmiYY, granTemplates->mmiZZ, simParams->h,
+        //                    *stateOfSolver_resources.pNumContacts, simParams->l);
+        // displayArray<float>(granData->oriQ0, simParams->nOwnerBodies);
+        // displayArray<float>(granData->oriQ1, simParams->nOwnerBodies);
+        // displayArray<float>(granData->oriQ2, simParams->nOwnerBodies);
+        // displayArray<float>(granData->oriQ3, simParams->nOwnerBodies);
+        // displayArray<float>(granData->alphaX, simParams->nOwnerBodies);
+        // displayArray<float>(granData->alphaY, simParams->nOwnerBodies);
+        // displayArray<float>(granData->alphaZ, simParams->nOwnerBodies);
+    }
 }
 
 inline void DEMDynamicThread::integrateClumpMotions() {
@@ -587,7 +644,7 @@ void DEMDynamicThread::workerThread() {
             }
         }
 
-        // At the beginning of each user call, send kT a work order, b/c dT need results from CD to proceed. After this
+        // At the beginning of each user call, send kT a work order, b/c dT needs results from CD to proceed. After this
         // one instance, kT and dT may work in an async fashion.
         {
             std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
@@ -608,18 +665,24 @@ void DEMDynamicThread::workerThread() {
         }
 
         for (size_t cycle = 0; cycle < nDynamicCycles; cycle++) {
-            // if the produce is fresh, use it
+            // If the produce is fresh, use it
             if (pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
                 {
-                    // acquire lock and use the content of the dynamic-owned transfer buffer
+                    // Acquire lock and use the content of the dynamic-owned transfer buffer
                     std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
-                    // std::this_thread::sleep_for(std::chrono::milliseconds(SGPS_DEM_WAIT_GRANULARITY_MS));
                     unpackMyBuffer();
+                    // Leave myself a mental note that I just obtained new produce from kT
                     contactPairArr_isFresh = true;
                 }
                 // dT got the produce, now mark its buffer to be no longer fresh
                 pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
                 pSchedSupport->stampLastUpdateOfDynamic = cycle;
+
+                // If this is a frictional run, then when contacts are received, we need to migrate the contact history
+                // info, to match the structure of the new contact array
+                if (!solverFlags.isFrictionless) {
+                    migrateContactHistory();
+                }
             }
 
             calculateForces();

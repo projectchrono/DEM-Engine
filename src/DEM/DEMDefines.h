@@ -207,6 +207,7 @@ struct DEMDataDT {
     float3* contactForces;
     float3* contactPointGeometryA;
     float3* contactPointGeometryB;
+    float3* contactHistory;
 
     // The offset info that indexes into the template arrays
     bodyID_t* ownerClumpBody;

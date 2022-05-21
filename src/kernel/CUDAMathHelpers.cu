@@ -14,6 +14,10 @@ inline __device__ float dot(float3 a, float3 b) {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
+inline __device__ float length(float3 v) {
+    return sqrt(dot(v, v));
+}
+
 // Addition and subtraction
 
 inline __device__ float3 operator+(float3 a, float3 b) {

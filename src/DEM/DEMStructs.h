@@ -40,15 +40,20 @@ class DEMSolverStateDataDT {
 
     // Number of contacts in this CD step
     size_t* pNumContacts;
+    // Number of contacts in the previous CD step
+    size_t* pNumPrevContacts;
 
     DEMSolverStateDataDT() {
         cudaMallocManaged(&pTempSizeVar1, sizeof(size_t));
         cudaMallocManaged(&pNumContacts, sizeof(size_t));
+        cudaMallocManaged(&pNumPrevContacts, sizeof(size_t));
         *pNumContacts = 0;
+        *pNumPrevContacts = 0;
     }
     ~DEMSolverStateDataDT() {
         cudaFree(pTempSizeVar1);
         cudaFree(pNumContacts);
+        cudaFree(pNumPrevContacts);
     }
 
     // Return raw pointer to swath of device memory that is at least "sizeNeeded" large

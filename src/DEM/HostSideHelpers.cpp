@@ -284,19 +284,6 @@ inline void hostApplyOriQ2Vector3(T1& X, T1& Y, T1& Z, const T2& Q0, const T2& Q
         ((T2)2.0 * (Q0 * Q0 + Q3 * Q3) - (T2)1.0) * oldZ;
 }
 
-/// Calculate the contact params based on the 2 contact material types given
-inline void materialProxyMaterixCalculator(float& E_eff,
-                                           float& G_eff,
-                                           const float& Y1,
-                                           const float& nu1,
-                                           const float& Y2,
-                                           const float& nu2) {
-    double invE = (1 - nu1 * nu1) / Y1 + (1 - nu2 * nu2) / Y2;
-    E_eff = 1. / invE;
-    double invG = 2 * (2 - nu1) * (1 + nu1) / Y1 + 2 * (2 - nu2) * (1 + nu2) / Y2;
-    G_eff = 1. / invG;
-}
-
 inline std::string to_string_with_precision(const double a_value, const unsigned int n = 10) {
     std::ostringstream out;
     out.precision(n);

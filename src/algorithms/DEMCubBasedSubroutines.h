@@ -13,6 +13,12 @@ namespace sgps {
 
 void sumReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateDataDT& scratchPad);
 
+void flagMaxReduce(notStupidBool_t* d_in,
+                   notStupidBool_t* d_out,
+                   size_t n,
+                   cudaStream_t& this_stream,
+                   DEMSolverStateDataDT& scratchPad);
+
 void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                       std::shared_ptr<jitify::Program>& contact_detection_kernels,
                       std::shared_ptr<jitify::Program>& history_kernels,
