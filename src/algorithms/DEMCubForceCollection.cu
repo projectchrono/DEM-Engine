@@ -22,26 +22,26 @@ struct CubFloat3Add {
     }
 };
 
-void collectForces(std::shared_ptr<jitify::Program>& collect_force_kernels,
-                   clumpBodyInertiaOffset_t* inertiaPropOffsets,
-                   bodyID_t* idA,
-                   bodyID_t* idB,
-                   contact_t* contactType,
-                   float3* contactForces,
-                   float3* contactPointA,
-                   float3* contactPointB,
-                   float* clump_aX,
-                   float* clump_aY,
-                   float* clump_aZ,
-                   float* clump_alphaX,
-                   float* clump_alphaY,
-                   float* clump_alphaZ,
-                   bodyID_t* ownerClumpBody,
-                   const size_t nContactPairs,
-                   const size_t nClumps,
-                   bool contactPairArr_isFresh,
-                   cudaStream_t& this_stream,
-                   DEMSolverStateDataDT& scratchPad) {
+void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernels,
+                          clumpBodyInertiaOffset_t* inertiaPropOffsets,
+                          bodyID_t* idA,
+                          bodyID_t* idB,
+                          contact_t* contactType,
+                          float3* contactForces,
+                          float3* contactPointA,
+                          float3* contactPointB,
+                          float* clump_aX,
+                          float* clump_aY,
+                          float* clump_aZ,
+                          float* clump_alphaX,
+                          float* clump_alphaY,
+                          float* clump_alphaZ,
+                          bodyID_t* ownerClumpBody,
+                          const size_t nContactPairs,
+                          const size_t nClumps,
+                          bool contactPairArr_isFresh,
+                          cudaStream_t& this_stream,
+                          DEMSolverStateDataDT& scratchPad) {
     // Preparation: allocate enough temp array memory and chop it to pieces, for the usage of cub operations. Note that
     // if contactPairArr_isFresh is false, then this allocation should not alter the size and content of the temp array
     // space, so the information in it can be used in the next iteration.

@@ -44,7 +44,7 @@ inline __device__ void applyPrescribedPos(bool& LinPrescribed,
 }
 
 // For now, write a custom kernel (instead of cub-based), and change it later
-inline __device__ void integrateVel(sgps::bodyID_t thisClump, sgps::DEMDataDT* granData, double h, double t) {
+inline __device__ void integrateVel(sgps::bodyID_t thisClump, sgps::DEMDataDT* granData, float h, double t) {
     // Even prescribed motion should leverage custom integrators, so we put the prescription condition at a ``inner''
     // location.
     sgps::family_t family_code = granData->familyID[thisClump];
@@ -85,7 +85,7 @@ inline __device__ void locateNewVoxel(sgps::voxelID_t& voxel, int64_t& locX_tmp,
     IDPacker<sgps::voxelID_t, sgps::voxelID_t>(voxel, voxelX, voxelY, voxelZ, _nvXp2_, _nvYp2_);
 }
 
-inline __device__ void integratePos(sgps::bodyID_t thisClump, sgps::DEMDataDT* granData, double h, double t) {
+inline __device__ void integratePos(sgps::bodyID_t thisClump, sgps::DEMDataDT* granData, float h, double t) {
     // Location accuracy is up to integer level anyway
     int64_t locX_tmp = (int64_t)granData->locX[thisClump];
     int64_t locY_tmp = (int64_t)granData->locY[thisClump];
@@ -138,7 +138,7 @@ inline __device__ void integratePos(sgps::bodyID_t thisClump, sgps::DEMDataDT* g
     }
 }
 
-__global__ void integrateClumps(sgps::DEMDataDT* granData, double h, double t) {
+__global__ void integrateClumps(sgps::DEMDataDT* granData, float h, double t) {
     sgps::bodyID_t thisClump = blockIdx.x * blockDim.x + threadIdx.x;
     if (thisClump < _nOwnerBodies_) {
         integrateVel(thisClump, granData, h, t);

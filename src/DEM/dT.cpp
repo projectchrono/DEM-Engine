@@ -488,8 +488,8 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
 
 inline void DEMDynamicThread::migrateContactHistory() {
     // Use this newHistory to store temporarily the rearranged contact history
-    size_t mapping_bytes = (*stateOfSolver_resources.pNumContacts) * sizeof(contactPairs_t);
-    contactPairs_t* newHistory = (contactPairs_t*)stateOfSolver_resources.allocateTempVector2(mapping_bytes);
+    size_t history_arr_bytes = (*stateOfSolver_resources.pNumContacts) * sizeof(float3);
+    float3* newHistory = (float3*)stateOfSolver_resources.allocateTempVector2(history_arr_bytes);
 
     // A sentry array is here to see if there exist a contact that dT thinks it's alive but kT doesn't map it to the new
     // history array
@@ -504,6 +504,7 @@ inline void DEMDynamicThread::migrateContactHistory() {
             .instantiate()
             .configure(dim3(blocks_needed_for_rearrange), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
             .launch(granData->contactHistory, contactSentry, *stateOfSolver_resources.pNumPrevContacts);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 
     blocks_needed_for_rearrange =
@@ -514,6 +515,7 @@ inline void DEMDynamicThread::migrateContactHistory() {
             .configure(dim3(blocks_needed_for_rearrange), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
             .launch(granData->contactMapping, granData->contactHistory, newHistory, contactSentry,
                     *stateOfSolver_resources.pNumContacts);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 
     // Take a look, does the sentry indicate that there is an `alive' contact got lost?
@@ -522,18 +524,32 @@ inline void DEMDynamicThread::migrateContactHistory() {
             (notStupidBool_t*)stateOfSolver_resources.allocateTempVector4(sizeof(notStupidBool_t));
         flagMaxReduce(contactSentry, lostContact, *stateOfSolver_resources.pNumPrevContacts, streamInfo.stream,
                       stateOfSolver_resources);
-        if (*lostContact) {
-            SGPS_DEM_WARNING(
+        if (*lostContact && solverFlags.isAsync) {
+            SGPS_DEM_INFO_STEP_WARN(
                 "At least one contact is active at time %.9g on dT, but it is not detected on kT, therefore being "
-                "removed unexpectedly!");
+                "removed unexpectedly!",
+                timeElapsed);
+            SGPS_DEM_DEBUG_PRINTF("New contact A:");
+            SGPS_DEM_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryA, *stateOfSolver_resources.pNumContacts));
+            SGPS_DEM_DEBUG_PRINTF("New contact B:");
+            SGPS_DEM_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryB, *stateOfSolver_resources.pNumContacts));
+            SGPS_DEM_DEBUG_PRINTF("Old contact history:");
+            SGPS_DEM_DEBUG_EXEC(displayFloat3(granData->contactHistory, *stateOfSolver_resources.pNumPrevContacts));
+            SGPS_DEM_DEBUG_PRINTF("History mapping:");
+            SGPS_DEM_DEBUG_EXEC(
+                displayArray<contactPairs_t>(granData->contactMapping, *stateOfSolver_resources.pNumContacts));
+            SGPS_DEM_DEBUG_PRINTF("Sentry:");
+            SGPS_DEM_DEBUG_EXEC(
+                displayArray<notStupidBool_t>(contactSentry, *stateOfSolver_resources.pNumPrevContacts));
         }
     }
 
     // Copy new history back to history array (after resizing the `main' history array)
     if (*stateOfSolver_resources.pNumContacts > contactHistory.size()) {
         TRACKED_QUICK_VECTOR_RESIZE(contactHistory, *stateOfSolver_resources.pNumContacts);
+        granData->contactHistory = contactHistory.data();
     }
-    GPU_CALL(cudaMemcpy(granData->contactHistory, newHistory, *stateOfSolver_resources.pNumContacts,
+    GPU_CALL(cudaMemcpy(granData->contactHistory, newHistory, (*stateOfSolver_resources.pNumContacts) * sizeof(float3),
                         cudaMemcpyDeviceToDevice));
 }
 
@@ -585,12 +601,12 @@ inline void DEMDynamicThread::calculateForces() {
         //                   granData->contactForces, granData->aX, granData->aY, granData->aZ,
         //                   granData->ownerClumpBody, granTemplates->massClumpBody, simParams->h,
         //                   *stateOfSolver_resources.pNumContacts,simParams->l);
-        collectForces(collect_force_kernels, granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
-                      granData->contactType, granData->contactForces, granData->contactPointGeometryA,
-                      granData->contactPointGeometryB, granData->aX, granData->aY, granData->aZ, granData->alphaX,
-                      granData->alphaY, granData->alphaZ, granData->ownerClumpBody,
-                      *stateOfSolver_resources.pNumContacts, simParams->nOwnerBodies, contactPairArr_isFresh,
-                      streamInfo.stream, stateOfSolver_resources);
+        collectContactForces(collect_force_kernels, granData->inertiaPropOffsets, granData->idGeometryA,
+                             granData->idGeometryB, granData->contactType, granData->contactForces,
+                             granData->contactPointGeometryA, granData->contactPointGeometryB, granData->aX,
+                             granData->aY, granData->aZ, granData->alphaX, granData->alphaY, granData->alphaZ,
+                             granData->ownerClumpBody, *stateOfSolver_resources.pNumContacts, simParams->nOwnerBodies,
+                             contactPairArr_isFresh, streamInfo.stream, stateOfSolver_resources);
         // displayArray<float>(granData->aX, simParams->nOwnerBodies);
         // displayFloat3(granData->contactForces, *stateOfSolver_resources.pNumContacts);
         // std::cout << *stateOfSolver_resources.pNumContacts << std::endl;
@@ -717,10 +733,10 @@ void DEMDynamicThread::workerThread() {
             // std::cout << "dT Total contact pairs: " << granData->nContactPairs_buffer << std::endl;
             // std::cout << "Dynamic side values. Cycle: " << cycle << std::endl;
 
-            // dynamic wrapped up one cycle
+            // Dynamic wrapped up one cycle
             pSchedSupport->currentStampOfDynamic++;
 
-            // check if we need to wait; i.e., if dynamic drifted too much into future, then we must wait a bit before
+            // Check if we need to wait; i.e., if dynamic drifted too much into future, then we must wait a bit before
             // the next cycle begins
             if (pSchedSupport->dynamicShouldWait()) {
                 // wait for a signal from the kinematic to indicate that

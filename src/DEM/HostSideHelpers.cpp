@@ -146,7 +146,7 @@ inline void hostCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
                               float* clump_aZ,
                               bodyID_t* ownerClumpBody,
                               float* massClumpBody,
-                              double h,
+                              float h,
                               size_t n,
                               double l) {
     for (size_t i = 0; i < n; i++) {
@@ -181,7 +181,7 @@ inline void hostCollectTorques(clumpBodyInertiaOffset_t* inertiaPropOffsets,
                                float* mmiXX,
                                float* mmiYY,
                                float* mmiZZ,
-                               double h,
+                               float h,
                                size_t n,
                                double l) {
     for (size_t i = 0; i < n; i++) {

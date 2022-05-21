@@ -89,23 +89,23 @@ void DEMKinematicThread::workerThread() {
                 break;
             }
         }
-        // run a while loop producing stuff in each iteration;
-        // once produced, it should be made available to the dynamic via memcpy
+        // Run a while loop producing stuff in each iteration; once produced, it should be made available to the dynamic
+        // via memcpy
         while (!pSchedSupport->dynamicDone) {
-            // before producing something, a new work order should be in place. Wait on
+            // Before producing something, a new work order should be in place. Wait on
             // it
             if (!pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh) {
                 pSchedSupport->schedulingStats.nTimesKinematicHeldBack++;
                 std::unique_lock<std::mutex> lock(pSchedSupport->kinematicCanProceed);
 
                 while (!pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh) {
-                    // loop to avoid spurious wakeups
+                    // Loop to avoid spurious wakeups
                     pSchedSupport->cv_KinematicCanProceed.wait(lock);
                 }
 
-                // getting here means that new "work order" data has been provided
+                // Getting here means that new "work order" data has been provided
                 {
-                    // acquire lock and get the work order
+                    // Acquire lock and get the work order
                     std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
                     unpackMyBuffer();
                 }
@@ -136,8 +136,8 @@ void DEMKinematicThread::workerThread() {
             }
             */
 
-            // make it clear that the data for most recent work order has
-            // been used, in case there is interest in updating it
+            // Make it clear that the data for most recent work order has been used, in case there is interest in
+            // updating it
             pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = false;
 
             {

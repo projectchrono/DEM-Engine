@@ -16,6 +16,8 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEM_sim;
+    DEM_sim.UseFrictionlessModel(false);
+    DEM_sim.SetVerbosity(DEBUG);
 
     srand(759);
 
@@ -69,6 +71,10 @@ int main() {
     DEM_sim.SetTimeStepSize(1e-5);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEM_sim.SetCDUpdateFreq(0);
+    // DEM_sim.SetCDUpdateFreq(10);
+    // DEM_sim.SuggestExpandFactor(3.);
+    // DEM_sim.SuggestExpandSafetyParam(2.);
+
     DEM_sim.Initialize();
 
     path out_dir = current_path();

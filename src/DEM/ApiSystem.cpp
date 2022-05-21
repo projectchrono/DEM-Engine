@@ -667,6 +667,12 @@ void DEMSolver::transferSolverParams() {
     kT->solverFlags.isFrictionless = m_isFrictionless;
     dT->solverFlags.isFrictionless = m_isFrictionless;
 
+    // Tell kT and dT if this run is async
+    kT->solverFlags.isAsync = !(m_updateFreq == 0);
+    dT->solverFlags.isAsync = !(m_updateFreq == 0);
+    // Make sure dT kT understand the lock--waiting policy of this run
+    dTkT_InteractionManager->dynamicRequestedUpdateFrequency = m_updateFreq;
+
     kT->solverFlags.should_sort_pairs = kT_should_sort;
 
     // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
@@ -797,6 +803,7 @@ inline size_t DEMSolver::computeDTCycles(double thisCallDuration) {
 void DEMSolver::UpdateSimParams() {
     // TODO: transferSimParams() only transfers sim world info, not clump template info. Clump info transformation is
     // now in populateManagedArrays! Need to resolve that.
+    transferSolverParams();
     transferSimParams();
 }
 
@@ -818,9 +825,6 @@ int DEMSolver::LaunchThreads(double thisCallDuration) {
     // Tell dT how many iterations to go
     size_t nDTIters = computeDTCycles(thisCallDuration);
     dT->setNDynamicCycles(nDTIters);
-
-    // Make sure dT kT understand the lock--waiting policy of this run
-    dTkT_InteractionManager->dynamicRequestedUpdateFrequency = m_updateFreq;
 
     dT->startThread();
     kT->startThread();

@@ -87,7 +87,17 @@ constexpr unsigned int DEM_RESERVED_FAMILY_NUM = ((unsigned int)1 << (sizeof(fam
 // Friction mode
 enum class DEM_FRICTION_MODE { FRICTIONLESS, MULTI_STEP };
 // Verbosity
-enum DEM_VERBOSITY { QUIET = 0, ERROR = 10, WARNING = 20, INFO = 30, INFO_STEP_STATS = 32, DEBUG = 40 };
+enum DEM_VERBOSITY {
+    QUIET = 0,
+    ERROR = 10,
+    WARNING = 20,
+    INFO = 30,
+    INFO_STEP_STATS = 32,
+    INFO_STEP_WARN = 35,
+    DEBUG = 40
+};
+// Stepping method
+enum class DEM_TIME_INTEGRATOR { FORWARD_EULER, CENTERED_DIFFERENCE, EXTENDED_TAYLOR, CHUNG };
 
 // =============================================================================
 // NOW DEFINING SOME GPU-SIDE DATA STRUCTURES
@@ -139,9 +149,11 @@ struct DEMSimParams {
     float Gy;
     float Gz;
     // Time step size
-    double h;
+    float h;
     // Sphere radii/geometry thickness inflation amount (for safer contact detection)
     float beta;
+    // Stepping method
+    DEM_TIME_INTEGRATOR stepping = DEM_TIME_INTEGRATOR::FORWARD_EULER;
 };
 
 // The collection of pointers to DEM template arrays such as radiiSphere. This struct will become useless eventually as
@@ -330,6 +342,14 @@ struct DEMDataKT {
             printf(__VA_ARGS__);                           \
             printf("\n");                                  \
         }                                                  \
+    }
+
+#define SGPS_DEM_INFO_STEP_WARN(...)                      \
+    {                                                     \
+        if (verbosity >= DEM_VERBOSITY::INFO_STEP_WARN) { \
+            printf(__VA_ARGS__);                          \
+            printf("\n");                                 \
+        }                                                 \
     }
 
 #define SGPS_DEM_DEBUG_PRINTF(...)               \

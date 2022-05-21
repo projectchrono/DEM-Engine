@@ -211,6 +211,8 @@ struct SolverFlags {
     bool use_compact_force_kernel = false;
     // This run is frictionless
     bool isFrictionless = false;
+    // This run uses contact detection in an async fashion
+    bool isAsync = true;
 };
 
 struct DEMMaterial {

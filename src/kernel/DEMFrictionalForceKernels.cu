@@ -38,7 +38,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
         sgps::contact_t myContactType = granData->contactType[myContactID];
         // Allocate the registers needed
         double3 contactPnt;
-        float3 B2A;  // Unit vector pointing from body B to body A
+        float3 B2A;  // Unit vector pointing from body B to body A (contact normal)
         double overlapDepth;
         double3 AOwnerPos, bodyAPos, BOwnerPos, bodyBPos;
         float3 ALinVel, ARotVel, BLinVel, BRotVel;
@@ -159,18 +159,25 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
         }
 
         if (myContactType != sgps::DEM_NOT_A_CONTACT) {
-            float E_A = EProxy[bodyAMatType];
-            float nu_A = nuProxy[bodyAMatType];
-            float CoR_A = CoRProxy[bodyAMatType];
-            float mu_A = muProxy[bodyAMatType];
-            float Crr_A = CrrProxy[bodyAMatType];
-            float E_B = EProxy[bodyBMatType];
-            float nu_B = nuProxy[bodyBMatType];
-            float CoR_B = CoRProxy[bodyBMatType];
-            float mu_B = muProxy[bodyBMatType];
-            float Crr_B = CrrProxy[bodyBMatType];
-
-            float3 velB2A, force;
+            // Material properties and time (user referrable)
+            float E, G, CoR, mu, Crr, h;
+            {
+                h = simParams->h;
+                float E_A = EProxy[bodyAMatType];
+                float nu_A = nuProxy[bodyAMatType];
+                float CoR_A = CoRProxy[bodyAMatType];
+                float mu_A = muProxy[bodyAMatType];
+                float Crr_A = CrrProxy[bodyAMatType];
+                float E_B = EProxy[bodyBMatType];
+                float nu_B = nuProxy[bodyBMatType];
+                float CoR_B = CoRProxy[bodyBMatType];
+                float mu_B = muProxy[bodyBMatType];
+                float Crr_B = CrrProxy[bodyBMatType];
+                matProxy2ContactParam<float>(E, G, CoR, mu, Crr, E_A, nu_A, CoR_A, mu_A, Crr_A, E_B, nu_B, CoR_B, mu_B,
+                                             Crr_B);
+            }
+            // Variables that we need to report back (user referrable)
+            float3 velB2A, delta_tan, force;
             {
                 float3 locCPA = contactPnt - AOwnerPos;
                 float3 locCPB = contactPnt - BOwnerPos;
@@ -178,35 +185,61 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
                 granData->contactPointGeometryB[myContactID] = locCPB;
                 // We also need the relative velocity between A and B in global frame to use in the damping terms
                 velB2A = (ALinVel + cross(ARotVel, locCPA)) - (BLinVel + cross(BRotVel, locCPB));
+                delta_tan = granData->contactHistory[myContactID];
             }
 
-            // The following part is jitifiable
+            // The following part, the force model, is user-specifiable
             {
-                float E, G, CoR, mu, Crr;
-                matProxy2ContactParam<float>(E, G, CoR, mu, Crr, E_A, nu_A, CoR_A, mu_A, Crr_A, E_B, nu_B, CoR_B, mu_B,
-                                             Crr_B);
+                // A few re-usables
+                float mass_eff, sqrt_Rd, beta;
+                float3 vrel_tan;
 
                 // Normal force part
-                const float projection = dot(velB2A, B2A);
-                float3 vrel_tan = velB2A - projection * B2A;
+                {
+                    const float projection = dot(velB2A, B2A);
+                    vrel_tan = velB2A - projection * B2A;
 
-                const float mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
-                float sqrt_Rd = sqrt(overlapDepth * (ARadius * BRadius) / (ARadius + BRadius));
-                const float Sn = 2. * E * sqrt_Rd;
+                    mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
+                    sqrt_Rd = sqrt(overlapDepth * (ARadius * BRadius) / (ARadius + BRadius));
+                    const float Sn = 2. * E * sqrt_Rd;
 
-                const float loge = (CoR < SGPS_DEM_TINY_FLOAT) ? log(SGPS_DEM_TINY_FLOAT) : log(CoR);
-                float beta = loge / sqrt(loge * loge + SGPS_PI_SQUARED);
+                    const float loge = (CoR < SGPS_DEM_TINY_FLOAT) ? log(SGPS_DEM_TINY_FLOAT) : log(CoR);
+                    beta = loge / sqrt(loge * loge + SGPS_PI_SQUARED);
 
-                const float k_n = SGPS_TWO_OVER_THREE * Sn;
-                const float gamma_n = SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
+                    const float k_n = SGPS_TWO_OVER_THREE * Sn;
+                    const float gamma_n = SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
 
-                force = (k_n * overlapDepth + gamma_n * projection) * B2A;
+                    force = (k_n * overlapDepth + gamma_n * projection) * B2A;
+                }
 
                 // Tangential force part
+                {
+                    {
+                        delta_tan += h * vrel_tan;
+                        const float disp_proj = dot(delta_tan, B2A);
+                        delta_tan -= disp_proj * B2A;
+                    }
+                    const float kt = 8. * G * sqrt_Rd;
+                    const float gt = -SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
+                    float3 tangent_force = -kt * delta_tan - gt * vrel_tan;
+                    const float ft = length(tangent_force);
+                    if (ft > SGPS_DEM_TINY_FLOAT) {
+                        const float ft_max = length(force) * mu;
+                        if (ft > ft_max) {
+                            tangent_force = (ft_max / ft) * tangent_force;
+                            delta_tan = (tangent_force + gt * vrel_tan) / (-kt);
+                        }
+                    } else {
+                        tangent_force = make_float3(0, 0, 0);
+                    }
+                    // Use force to collect tangent_force
+                    force += tangent_force;
+                }
             }
 
-            // Write hard-earned force value back to global memory
+            // Write hard-earned values back to global memory
             granData->contactForces[myContactID] = force;
+            granData->contactHistory[myContactID] = delta_tan;
         } else {
             granData->contactForces[myContactID] = make_float3(0, 0, 0);
             // The contact is no longer active, so we need to destroy its contact history recording
