@@ -92,25 +92,25 @@ class DEMSolver {
                                float3 moi,
                                const std::vector<float>& sp_radii,
                                const std::vector<float3>& sp_locations_xyz,
-                               const std::vector<unsigned int>& sp_material_ids);
+                               const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials);
     // TODO: need to overload with (vec_distinctSphereRadiiOffset_default_t spheres_component_type, vec_float3
     // location). If this method is called then corresponding sphere_types must have been defined via LoadSphereType.
 
     /// A simplified version of LoadClumpType: it just loads a one-sphere clump template
-    unsigned int LoadClumpSimpleSphere(float mass, float radius, unsigned int material_id);
+    unsigned int LoadClumpSimpleSphere(float mass, float radius, const std::shared_ptr<DEMMaterial>& material);
 
     /// Load materials properties (Young's modulus, Poisson's ratio, Coeff of Restitution...) into
     /// the API-level cache. Return the index of the material type just loaded. If rho is not given then later
     /// calculating particle mass from rho is not allowed (instead it has to be explicitly given).
-    unsigned int LoadMaterialType(const DEMMaterial& mat);
-    unsigned int LoadMaterialType(float E, float nu, float CoR, float mu, float Crr, float rho);
-    unsigned int LoadMaterialType(float E, float nu, float CoR, float rho) {
+    std::shared_ptr<DEMMaterial> LoadMaterialType(DEMMaterial& mat);
+    std::shared_ptr<DEMMaterial> LoadMaterialType(float E, float nu, float CoR, float mu, float Crr, float rho);
+    std::shared_ptr<DEMMaterial> LoadMaterialType(float E, float nu, float CoR, float rho) {
         return LoadMaterialType(E, nu, CoR, 0.5, 0.01, rho);
     }
-    unsigned int LoadMaterialType(float E, float nu, float CoR, float mu, float Crr) {
+    std::shared_ptr<DEMMaterial> LoadMaterialType(float E, float nu, float CoR, float mu, float Crr) {
         return LoadMaterialType(E, nu, CoR, mu, Crr, -1.f);
     }
-    unsigned int LoadMaterialType(float E, float nu, float CoR) {
+    std::shared_ptr<DEMMaterial> LoadMaterialType(float E, float nu, float CoR) {
         return LoadMaterialType(E, nu, CoR, 0.5, 0.01, -1.f);
     }
 
@@ -129,7 +129,7 @@ class DEMSolver {
 
     /// Instruct the solver that the 2 input families should not have contacts (a.k.a. ignored, if such a pair is
     /// encountered in contact detection). These 2 families can be the same (not contact within members of this family).
-    void SetFamilyNoContact(unsigned int ID1, unsigned int ID2);
+    void DisableContactBetweenFamilies(unsigned int ID1, unsigned int ID2);
 
     /// Mark all entities in this family to be fixed
     void SetFamilyFixed(unsigned int ID);
@@ -145,14 +145,16 @@ class DEMSolver {
 
     /// Add an (analytical or clump-represented) external object to the simulation system
     std::shared_ptr<DEMExternObj> AddExternalObject();
-    std::shared_ptr<DEMExternObj> AddBCPlane(const float3 pos, const float3 normal, const unsigned int material);
+    std::shared_ptr<DEMExternObj> AddBCPlane(const float3 pos,
+                                             const float3 normal,
+                                             const std::shared_ptr<DEMMaterial>& material);
 
     // Add content to the flattened analytical component array
     // Note that analytical component is big different in that they each has a position in the jitified analytical
     // templates, insteads of like a clump, has an extra ComponentOffset array points it to the right jitified template
     // location.
     unsigned int AddAnalCompTemplate(const objType_t type,
-                                     const unsigned int material,
+                                     const std::shared_ptr<DEMMaterial>& material,
                                      const unsigned int owner,
                                      const float3 pos,
                                      const float3 rot = make_float3(0),
@@ -203,7 +205,7 @@ class DEMSolver {
 
     // This is the cached material information.
     // It will be massaged into the managed memory upon Initialize().
-    std::vector<DEMMaterial> m_sp_materials;
+    std::vector<std::shared_ptr<DEMMaterial>> m_loaded_sp_materials;
     // Materials info is processed at API level (on initialization) for generating proxy arrays
     std::vector<float> m_E_proxy;
     std::vector<float> m_nu_proxy;

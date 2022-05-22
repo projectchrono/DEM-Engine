@@ -177,23 +177,23 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
 
 void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula) {}
 
-unsigned int DEMSolver::LoadMaterialType(const DEMMaterial& mat) {
-    unsigned int mat_num = m_sp_materials.size();
+std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterialType(DEMMaterial& mat) {
     if (mat.CoR < SGPS_DEM_TINY_FLOAT) {
         SGPS_DEM_WARNING("Material type %u is set to have 0 restitution. Please make sure this is intentional.",
-                         mat_num);
+                         m_loaded_sp_materials.size());
     }
     if (mat.CoR > 1.f) {
         SGPS_DEM_WARNING(
             "Material type %u is set to have a restitution coefficient larger than 1. This is typically not physical "
             "and should destabilize the simulation.",
-            mat_num);
+            m_loaded_sp_materials.size());
     }
-    m_sp_materials.push_back(mat);
-    return mat_num;
+    std::shared_ptr<DEMMaterial> ptr = std::make_shared<DEMMaterial>(std::move(mat));
+    m_loaded_sp_materials.push_back(ptr);
+    return m_loaded_sp_materials.back();
 }
 
-unsigned int DEMSolver::LoadMaterialType(float E, float nu, float CoR, float mu, float Crr, float rho) {
+std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterialType(float E, float nu, float CoR, float mu, float Crr, float rho) {
     struct DEMMaterial a_material;
     a_material.rho = rho;
     a_material.E = E;
@@ -209,9 +209,9 @@ unsigned int DEMSolver::LoadClumpType(float mass,
                                       float3 moi,
                                       const std::vector<float>& sp_radii,
                                       const std::vector<float3>& sp_locations_xyz,
-                                      const std::vector<unsigned int>& sp_material_ids) {
+                                      const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
     auto len = sp_radii.size();
-    if (len != sp_locations_xyz.size() || len != sp_material_ids.size()) {
+    if (len != sp_locations_xyz.size() || len != sp_materials.size()) {
         SGPS_DEM_ERROR("Arrays defining a clump topology type must all have the same length.");
     }
 
@@ -219,16 +219,25 @@ unsigned int DEMSolver::LoadClumpType(float mass,
     m_template_moi.push_back(moi);
     m_template_sp_radii.push_back(sp_radii);
     m_template_sp_relPos.push_back(sp_locations_xyz);
-    m_template_sp_mat_ids.push_back(sp_material_ids);
+
+    // m_template_sp_mat_ids is an array of ints that represent the indices of the material array
+    std::vector<unsigned int> this_clump_sp_mat_ids;
+    for (const std::shared_ptr<DEMMaterial>& this_material : sp_materials) {
+        this_clump_sp_mat_ids.push_back(stash_material_in_templates(m_loaded_sp_materials, this_material));
+    }
+    m_template_sp_mat_ids.push_back(this_clump_sp_mat_ids);
+    SGPS_DEM_DEBUG_EXEC(printf("Input clump No.%d has material types: ", m_template_mass.size() - 1);
+                        for (unsigned int i = 0; i < this_clump_sp_mat_ids.size();
+                             i++) { printf("%d, ", this_clump_sp_mat_ids.at(i)); } printf("\n"););
 
     return m_template_mass.size() - 1;
 }
 
-unsigned int DEMSolver::LoadClumpSimpleSphere(float mass, float radius, unsigned int material_id) {
+unsigned int DEMSolver::LoadClumpSimpleSphere(float mass, float radius, const std::shared_ptr<DEMMaterial>& material) {
     float3 I = make_float3(2.0 / 5.0 * mass * radius * radius);
     float3 pos = make_float3(0);
     return LoadClumpType(mass, I, std::vector<float>(1, radius), std::vector<float3>(1, pos),
-                         std::vector<unsigned int>(1, material_id));
+                         std::vector<std::shared_ptr<DEMMaterial>>(1, material));
 }
 
 std::shared_ptr<DEMExternObj> DEMSolver::AddExternalObject() {
@@ -240,13 +249,13 @@ std::shared_ptr<DEMExternObj> DEMSolver::AddExternalObject() {
 
 std::shared_ptr<DEMExternObj> DEMSolver::AddBCPlane(const float3 pos,
                                                     const float3 normal,
-                                                    const unsigned int material) {
+                                                    const std::shared_ptr<DEMMaterial>& material) {
     std::shared_ptr<DEMExternObj> ptr = AddExternalObject();
     ptr->AddPlane(pos, normal, material);
     return ptr;
 }
 
-void DEMSolver::SetFamilyNoContact(unsigned int ID1, unsigned int ID2) {
+void DEMSolver::DisableContactBetweenFamilies(unsigned int ID1, unsigned int ID2) {
     familyPair_t a_pair;
     a_pair.ID1 = ID1;
     a_pair.ID2 = ID2;
@@ -276,7 +285,7 @@ void DEMSolver::ClearCache() {
     m_template_sp_radii.clear();
     m_template_sp_relPos.clear();
     m_template_sp_mat_ids.clear();
-    m_sp_materials.clear();
+    m_loaded_sp_materials.clear();
 
     m_input_clump_types.clear();
     m_input_clump_xyz.clear();
@@ -320,26 +329,26 @@ void DEMSolver::decideDefaultBinSize() {
 }
 
 void DEMSolver::figureOutMaterialProxies() {
-    // Use the info in m_sp_materials to populate API-side proxy arrays
+    // Use the info in m_loaded_sp_materials to populate API-side proxy arrays
     // These arrays are later passed to kTdT in populateManagedArrays
-    unsigned int count = m_sp_materials.size();
+    unsigned int count = m_loaded_sp_materials.size();
     m_E_proxy.resize(count);
     m_nu_proxy.resize(count);
     m_CoR_proxy.resize(count);
     m_mu_proxy.resize(count);
     m_Crr_proxy.resize(count);
     for (unsigned int i = 0; i < count; i++) {
-        auto Mat = m_sp_materials.at(i);
-        m_E_proxy.at(i) = Mat.E;
-        m_nu_proxy.at(i) = Mat.nu;
-        m_CoR_proxy.at(i) = Mat.CoR;
-        m_mu_proxy.at(i) = Mat.mu;
-        m_Crr_proxy.at(i) = Mat.Crr;
+        std::shared_ptr<DEMMaterial>& Mat = m_loaded_sp_materials.at(i);
+        m_E_proxy.at(i) = Mat->E;
+        m_nu_proxy.at(i) = Mat->nu;
+        m_CoR_proxy.at(i) = Mat->CoR;
+        m_mu_proxy.at(i) = Mat->mu;
+        m_Crr_proxy.at(i) = Mat->Crr;
     }
 }
 
 unsigned int DEMSolver::AddAnalCompTemplate(const objType_t type,
-                                            const unsigned int material,
+                                            const std::shared_ptr<DEMMaterial>& material,
                                             const unsigned int owner,
                                             const float3 pos,
                                             const float3 rot,
@@ -348,7 +357,7 @@ unsigned int DEMSolver::AddAnalCompTemplate(const objType_t type,
                                             const float d3,
                                             const objNormal_t normal) {
     m_anal_types.push_back(type);
-    m_anal_materials.push_back(material);
+    m_anal_materials.push_back(stash_material_in_templates(m_loaded_sp_materials, material));
     m_anal_owner.push_back(owner);
     m_anal_comp_pos.push_back(pos);
     m_anal_comp_rot.push_back(rot);
@@ -356,6 +365,7 @@ unsigned int DEMSolver::AddAnalCompTemplate(const objType_t type,
     m_anal_size_2.push_back(d2);
     m_anal_size_3.push_back(d3);
     m_anal_normals.push_back(normal);
+
     return m_anal_types.size() - 1;
 }
 
@@ -556,7 +566,7 @@ void DEMSolver::generateJITResources() {
     }
 
     nDistinctClumpBodyTopologies = m_template_mass_types.size();
-    nMatTuples_computed = m_sp_materials.size();
+    nMatTuples_computed = m_loaded_sp_materials.size();
 
     nDistinctSphereRadii_computed = m_template_sp_radii_types.size();
     nDistinctSphereRelativePositions_computed = m_clumps_sp_location_types.size();
@@ -568,7 +578,7 @@ void DEMSolver::generateJITResources() {
     for (unsigned int i = 0; i < nDistinctClumpBodyTopologies; i++) {
         nDistinctClumpComponents_computed += m_template_sp_radii.at(i).size();
     }
-    nMatTuples_computed = m_sp_materials.size();
+    nMatTuples_computed = m_loaded_sp_materials.size();
     // IF these "computed" numbers are larger than types like materialsOffset_t can hold, then we should error out and
     // let the user re-compile (or, should we somehow change the header automatically?)
 
@@ -723,7 +733,7 @@ void DEMSolver::validateUserInputs() {
     // Fix the reserved family
     SetFamilyFixed(DEM_RESERVED_FAMILY_NUM);
 
-    if (m_sp_materials.size() == 0) {
+    if (m_loaded_sp_materials.size() == 0) {
         SGPS_DEM_ERROR(
             "Before initializing the system, at least one material type should be loaded via LoadMaterialType.");
     }

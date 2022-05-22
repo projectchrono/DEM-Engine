@@ -49,7 +49,7 @@ int main() {
             make_float3(2e-5 * (float)num_sphere, 1.5e-5 * (float)num_sphere, 1.8e-5 * (float)num_sphere) * 50.;
         std::vector<float> radii;
         std::vector<float3> relPos;
-        std::vector<unsigned int> mat;
+        std::vector<std::shared_ptr<DEMMaterial>> mat;
 
         // randomly generate clump template configurations
         // the relPos of a sphere is always seeded from one of the already-generated sphere

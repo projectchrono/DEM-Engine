@@ -17,7 +17,7 @@ using namespace std::filesystem;
 int main() {
     DEMSolver DEM_sim;
     // DEM_sim.SetVerbosity(INFO);
-    DEM_sim.SetVerbosity(INFO_STEP_WARN);
+    DEM_sim.SetVerbosity(DEBUG);
 
     srand(759);
 
@@ -50,7 +50,7 @@ int main() {
             make_float3(2e-5 * (float)num_sphere, 1.5e-5 * (float)num_sphere, 1.8e-5 * (float)num_sphere) * 50.;
         std::vector<float> radii;
         std::vector<float3> relPos;
-        std::vector<unsigned int> mat;
+        std::vector<std::shared_ptr<DEMMaterial>> mat;
 
         // randomly generate clump template configurations
         // the relPos of a sphere is always seeded from one of the already-generated sphere
@@ -87,9 +87,9 @@ int main() {
     auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, 0), make_float3(5.0, 5.0, 0.001), sieve_sp_r * 2.0);
     // The sieve is family 1
     family_code.insert(family_code.end(), input_xyz.size(), 1);
-    DEM_sim.SetFamilyPrescribedLinVel(1, "0", "0", "(t > 1.0) ? sin(5.0 * SGPS_PI * (t - 1.0)) : 0");
+    DEM_sim.SetFamilyPrescribedLinVel(1, "0", "0", "(t > 1.0) ? 2.0 * sin(5.0 * SGPS_PI * (t - 1.0)) : 0");
     // No contact within family 1
-    DEM_sim.SetFamilyNoContact(1, 1);
+    DEM_sim.DisableContactBetweenFamilies(1, 1);
     input_template_num.insert(input_template_num.end(), input_xyz.size(), template_sieve);
 
     // float sample_halfheight = 1.;
@@ -116,7 +116,7 @@ int main() {
     BCs->AddPlane(make_float3(0, 0, 10.0), make_float3(0, 0, -1), mat_type_2);
     DEM_sim.SetFamilyFixed(2);  // BCs are fixed!
     // BC family does not interact with the sieve
-    DEM_sim.SetFamilyNoContact(1, 2);
+    DEM_sim.DisableContactBetweenFamilies(1, 2);
 
     DEM_sim.AddClumps(input_template_num, input_xyz);
     DEM_sim.SetClumpFamily(family_code);
@@ -127,7 +127,7 @@ int main() {
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEM_sim.SetCDUpdateFreq(20);
     DEM_sim.SuggestExpandFactor(10.0, 5e-6 * 20);
-    DEM_sim.SuggestExpandSafetyParam(8.);
+    DEM_sim.SuggestExpandSafetyParam(1.5);
 
     DEM_sim.Initialize();
 
@@ -136,7 +136,7 @@ int main() {
     create_directory(out_dir);
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < 300; i++) {
+    for (int i = 0; i < 400; i++) {
         char filename[100];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
         DEM_sim.WriteFileAsSpheres(std::string(filename));

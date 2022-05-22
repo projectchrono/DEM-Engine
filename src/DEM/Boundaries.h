@@ -9,6 +9,7 @@
 
 #include <helper_math.cuh>
 #include <DEM/DEMDefines.h>
+#include <DEM/DEMStructs.h>
 #include <core/utils/ManagedAllocator.hpp>
 
 extern sgps::DEM_VERBOSITY verbosity;
@@ -89,7 +90,7 @@ struct DEMExternObj {
     // Component object types
     std::vector<DEM_OBJ_COMPONENT> types;
     // Component object materials
-    std::vector<unsigned int> materials;
+    std::vector<std::shared_ptr<DEMMaterial>> materials;
     // Family code (used in prescribing its motions etc.)
     unsigned int family_code = DEM_RESERVED_FAMILY_NUM;  ///< Means it is default to the `fixed' family
     // Obj's CoM initial position
@@ -135,7 +136,7 @@ struct DEMExternObj {
     }
 
     /// Add a plane with infinite size
-    void AddPlane(const float3 pos, const float3 normal, const unsigned int material) {
+    void AddPlane(const float3 pos, const float3 normal, const std::shared_ptr<DEMMaterial>& material) {
         types.push_back(DEM_OBJ_COMPONENT::PLANE);
         materials.push_back(material);
         DEMAnalEntParams params;
@@ -150,7 +151,7 @@ struct DEMExternObj {
                   const float3 normal,
                   const float xdim,
                   const float ydim,
-                  const unsigned int material) {
+                  const std::shared_ptr<DEMMaterial>& material) {
         types.push_back(DEM_OBJ_COMPONENT::PLATE);
         materials.push_back(material);
         DEMAnalEntParams params;

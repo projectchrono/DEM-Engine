@@ -66,7 +66,7 @@ int main() {
             make_float3(2e-5 * (float)num_sphere, 1.5e-5 * (float)num_sphere, 1.8e-5 * (float)num_sphere) * 50.;
         std::vector<float> radii;
         std::vector<float3> relPos;
-        std::vector<unsigned int> mat;
+        std::vector<std::shared_ptr<DEMMaterial>> mat;
 
         // randomly generate clump template configurations
         // the relPos of a sphere is always seeded from one of the already-generated sphere
@@ -104,7 +104,7 @@ int main() {
     // auto domain_bottom = DEMBoxGridSampler(make_float3(0, 0, -10.0), make_float3(5.2, 5.2, 0.001), ground_sp_r
     // * 1.3); input_xyz.insert(input_xyz.end(), domain_bottom.begin(), domain_bottom.end()); Mark family 1 as fixed
     family_code.insert(family_code.end(), input_xyz.size(), 1);
-    DEM_sim.SetFamilyNoContact(1, 1);
+    DEM_sim.DisableContactBetweenFamilies(1, 1);
     DEM_sim.SetFamilyFixed(1);
     input_template_num.insert(input_template_num.end(), input_xyz.size(), template_ground);
 
