@@ -100,7 +100,7 @@ class DEMSolver {
     unsigned int LoadClumpSimpleSphere(float mass, float radius, const std::shared_ptr<DEMMaterial>& material);
 
     /// Load materials properties (Young's modulus, Poisson's ratio, Coeff of Restitution...) into
-    /// the API-level cache. Return the index of the material type just loaded. If rho is not given then later
+    /// the API-level cache. Return the ptr of the material type just loaded. If rho is not given then later
     /// calculating particle mass from rho is not allowed (instead it has to be explicitly given).
     std::shared_ptr<DEMMaterial> LoadMaterialType(DEMMaterial& mat);
     std::shared_ptr<DEMMaterial> LoadMaterialType(float E, float nu, float CoR, float mu, float Crr, float rho);
@@ -118,13 +118,13 @@ class DEMSolver {
     /// TODO: Add a overload that takes velocities too
     void AddClumps(const std::vector<unsigned int>& types, const std::vector<float3>& xyz);
 
-    /// Load input clump initial velocities on a per-pair basis. If this is not called (or if this vector is shorter
+    /// Load input clump initial velocities on a per-body basis. If this is not called (or if this vector is shorter
     /// than the clump location vector, then for the unassigned part) the initial velocity is assumed to be 0.
     void SetClumpVels(const std::vector<float3>& vel);
 
     /// Instruct each clump the type of prescribed motion it should follow. If this is not called (or if this vector is
     /// shorter than the clump location vector, then for the unassigned part) those clumps are defaulted to type 0,
-    /// which is following ``normal'' physics.
+    /// which is following `normal' physics.
     void SetClumpFamily(const std::vector<unsigned int>& code);
 
     /// Instruct the solver that the 2 input families should not have contacts (a.k.a. ignored, if such a pair is
@@ -138,6 +138,16 @@ class DEMSolver {
                                    const std::string& velX,
                                    const std::string& velY,
                                    const std::string& velZ);
+
+    /// Change all entities with family number ID_from to have a new number ID_to, when the condition defined by the
+    /// string is satisfied by the entities in question. This should be called before initialization, and will be baked
+    /// into the solver, so the conditions will be checked and changes applied every time step.
+    void ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const std::string& condition);
+
+    /// Change all entities with family number ID_from to have a new number ID_to, immediately. This is callable when kT
+    /// and dT are hanging, not when they are actively working, or the behavior is not defined.
+    void ChangeFamilyNow(unsigned int ID_from, unsigned int ID_to);
+
     ///
     void SetFamilyPrescribedPosition(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
     ///
@@ -202,6 +212,8 @@ class DEMSolver {
     bool kT_should_sort = true;
     // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
     bool use_compact_sweep_force_strat = false;
+    // If true, the solvers may need to do a per-step sweep to apply family number changes
+    bool m_famnum_change_conditionally = false;
 
     // This is the cached material information.
     // It will be massaged into the managed memory upon Initialize().
@@ -355,6 +367,10 @@ class DEMSolver {
         unsigned int ID1;
         unsigned int ID2;
     };
+    // Change family number from ID1 to ID2 when conditions are met
+    std::vector<familyPair_t> m_family_change_pairs;
+    // Corrsponding family number changing conditions
+    std::vector<std::string> m_family_change_conditions;
     // Cached user-input no-contact family pairs
     std::vector<familyPair_t> m_input_no_contact_pairs;
     // TODO: add APIs to allow specification of prescribed motions for each family. This information is only needed by
@@ -453,6 +469,7 @@ class DEMSolver {
     inline void equipAnalGeoTemplates(std::unordered_map<std::string, std::string>& strMap);
     inline void equipFamilyMasks(std::unordered_map<std::string, std::string>& strMap);
     inline void equipFamilyPrescribedMotions(std::unordered_map<std::string, std::string>& strMap);
+    inline void equipFamilyOnFlyChanges(std::unordered_map<std::string, std::string>& strMap);
 };
 
 }  // namespace sgps

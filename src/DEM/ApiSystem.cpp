@@ -141,6 +141,19 @@ void DEMSolver::SetFamilyFixed(unsigned int ID) {
     m_input_family_prescription.push_back(preInfo);
 }
 
+void DEMSolver::ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const std::string& condition) {
+    // If one such user call is made, then the solver needs to prepare for per-step family number-changing sweeps
+    m_famnum_change_conditionally = true;
+    familyPair_t a_pair;
+    a_pair.ID1 = ID_from;
+    a_pair.ID2 = ID_to;
+
+    m_family_change_pairs.push_back(a_pair);
+    m_family_change_conditions.push_back(condition);
+}
+
+void DEMSolver::ChangeFamilyNow(unsigned int ID_from, unsigned int ID_to) {}
+
 void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
                                           const std::string& velX,
                                           const std::string& velY,
@@ -263,6 +276,7 @@ void DEMSolver::DisableContactBetweenFamilies(unsigned int ID1, unsigned int ID2
 }
 
 void DEMSolver::ClearCache() {
+    // TODO: Must be missing some...
     nSpheresGM = 0;
     nTriGM = 0;
     nAnalGM = 0;
@@ -293,6 +307,12 @@ void DEMSolver::ClearCache() {
     m_input_clump_family.clear();
     m_family_mask_matrix.clear();
     m_family_user_impl_map.clear();
+
+    m_famnum_change_conditionally = false;
+    m_family_change_pairs.clear();
+    m_family_change_conditions.clear();
+
+    m_input_family_prescription.clear();
 }
 
 voxelID_t DEMSolver::GetClumpVoxelID(unsigned int i) const {
@@ -683,6 +703,10 @@ void DEMSolver::transferSolverParams() {
     // Make sure dT kT understand the lock--waiting policy of this run
     dTkT_InteractionManager->dynamicRequestedUpdateFrequency = m_updateFreq;
 
+    // Tell kT and dT whether the user enforeced potential on-the-fly family number changes
+    kT->solverFlags.canFamilyChange = m_famnum_change_conditionally;
+    dT->solverFlags.canFamilyChange = m_famnum_change_conditionally;
+
     kT->solverFlags.should_sort_pairs = kT_should_sort;
 
     // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
@@ -762,15 +786,18 @@ void DEMSolver::validateUserInputs() {
 
 void DEMSolver::jitifyKernels() {
     std::unordered_map<std::string, std::string> templateSubs, simParamSubs, massMatSubs, familyMaskSubs,
-        familyPrescribeSubs, analGeoSubs;
+        familyPrescribeSubs, familyChanges, analGeoSubs;
     equipClumpTemplates(templateSubs);
     equipSimParams(simParamSubs);
     equipClumpMassMat(massMatSubs);
     equipAnalGeoTemplates(analGeoSubs);
     equipFamilyMasks(familyMaskSubs);
     equipFamilyPrescribedMotions(familyPrescribeSubs);
-    kT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familyMaskSubs, familyPrescribeSubs, analGeoSubs);
-    dT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familyMaskSubs, familyPrescribeSubs, analGeoSubs);
+    equipFamilyOnFlyChanges(familyChanges);
+    kT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familyMaskSubs, familyPrescribeSubs, familyChanges,
+                      analGeoSubs);
+    dT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familyMaskSubs, familyPrescribeSubs, familyChanges,
+                      analGeoSubs);
 }
 
 // The method should be called after user inputs are in place, and before starting the simulation. It figures out a part
@@ -855,6 +882,26 @@ int DEMSolver::LaunchThreads(double thisCallDuration) {
     */
 
     return 0;
+}
+
+inline void DEMSolver::equipFamilyOnFlyChanges(std::unordered_map<std::string, std::string>& strMap) {
+    std::string condStr = " ";
+    unsigned int n_rules = m_family_change_pairs.size();
+    for (unsigned int i = 0; i < n_rules; i++) {
+        // The conditions will be handled by a series of if statements
+        std::string cond = "if (family_code == " + std::to_string(m_family_change_pairs.at(i).ID1) +
+                           ") { bool shouldMakeChange = false;";
+        std::string user_str = replace_pattern(m_family_change_conditions.at(i), "return", "shouldMakeChange = ");
+        user_str = replace_pattern(user_str, "\n", "");
+        cond += user_str;
+        cond += "if (shouldMakeChange) {granData->familyID[thisClump] = " +
+                std::to_string(m_family_change_pairs.at(i).ID2) + ";}";
+        cond += "}";
+        condStr += cond;
+    }
+
+    strMap["_nRulesOfChange_"] = std::to_string(n_rules);
+    strMap["_familyChangeRules_"] = condStr;
 }
 
 inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::string, std::string>& strMap) {

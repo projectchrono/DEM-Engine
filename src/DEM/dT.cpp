@@ -380,8 +380,15 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
     std::vector<float> posY(simParams->nSpheresGM, 0);
     std::vector<float> posZ(simParams->nSpheresGM, 0);
     std::vector<float> spRadii(simParams->nSpheresGM, 0);
-    for (unsigned int i = 0; i < simParams->nSpheresGM; i++) {
+    size_t num_output_spheres = 0;
+    for (size_t i = 0; i < simParams->nSpheresGM; i++) {
         auto this_owner = ownerClumpBody.at(i);
+        unsigned int this_family = familyID.at(this_owner);
+        // TODO: Right now, just don't output the reserved family. Will add proper output flags to wT.
+        if (this_family == DEM_RESERVED_FAMILY_NUM) {
+            continue;
+        }
+
         voxelID_t voxelIDX =
             voxelID.at(this_owner) & (((voxelID_t)1 << simParams->nvXp2) - 1);  // & operation here equals modulo
         voxelID_t voxelIDY = (voxelID.at(this_owner) >> simParams->nvXp2) & (((voxelID_t)1 << simParams->nvYp2) - 1);
@@ -408,7 +415,13 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
         // std::cout << "Sphere Pos: " << posX.at(i) << ", " << posY.at(i) << ", " << posZ.at(i) << std::endl;
 
         spRadii.at(i) = radiiSphere.at(clumpComponentOffset.at(i));
+
+        num_output_spheres++;
     }
+    posX.resize(num_output_spheres);
+    posY.resize(num_output_spheres);
+    posZ.resize(num_output_spheres);
+    spRadii.resize(num_output_spheres);
     pw.write(ptFile, ParticleFormatWriter::CompressionType::NONE, posX, posY, posZ, spRadii);
 }
 
@@ -637,6 +650,18 @@ inline void DEMDynamicThread::integrateClumpMotions() {
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
+inline void DEMDynamicThread::routineChecks() {
+    if (solverFlags.canFamilyChange) {
+        size_t blocks_needed_for_clumps =
+            (simParams->nOwnerBodies + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
+        mod_kernels->kernel("applyFamilyChanges")
+            .instantiate()
+            .configure(dim3(blocks_needed_for_clumps), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+            .launch(granData, simParams->h, timeElapsed);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    }
+}
+
 void DEMDynamicThread::workerThread() {
     // Set the gpu for this thread
     cudaSetDevice(streamInfo.device);
@@ -702,7 +727,7 @@ void DEMDynamicThread::workerThread() {
             }
 
             calculateForces();
-
+            routineChecks();
             integrateClumpMotions();
 
             // TODO: make changes for variable time step size cases
@@ -782,6 +807,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
                                      const std::unordered_map<std::string, std::string>& massMatSubs,
                                      const std::unordered_map<std::string, std::string>& familyMaskSubs,
                                      const std::unordered_map<std::string, std::string>& familyPrescribeSubs,
+                                     const std::unordered_map<std::string, std::string>& familyChanges,
                                      const std::unordered_map<std::string, std::string>& analGeoSubs) {
     // First one is force array preparation kernels
     {
@@ -824,6 +850,15 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
         integrator_kernels = std::make_shared<jitify::Program>(std::move(
             JitHelper::buildProgram("DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu",
                                     intSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+    }
+    // Then kernels that are... wildcards, which make on-the-fly changes to solver data
+    if (solverFlags.canFamilyChange) {
+        std::unordered_map<std::string, std::string> modSubs = simParamSubs;
+        modSubs.insert(massMatSubs.begin(), massMatSubs.end());
+        modSubs.insert(familyChanges.begin(), familyChanges.end());
+        mod_kernels = std::make_shared<jitify::Program>(
+            std::move(JitHelper::buildProgram("DEMModeratorKernels", JitHelper::KERNEL_DIR / "DEMModeratorKernels.cu",
+                                              modSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
     // Then quarrying kernels
     {

@@ -400,6 +400,7 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
                                        const std::unordered_map<std::string, std::string>& massMatSubs,
                                        const std::unordered_map<std::string, std::string>& familyMaskSubs,
                                        const std::unordered_map<std::string, std::string>& familyPrescribeSubs,
+                                       const std::unordered_map<std::string, std::string>& familyChanges,
                                        const std::unordered_map<std::string, std::string>& analGeoSubs) {
     // First one is bin_occupation_kernels kernels, which figure out the bin--sphere touch pairs
     {

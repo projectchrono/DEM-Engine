@@ -184,7 +184,7 @@ class DEMDynamicThread {
     size_t m_approx_bytes_used = 0;
 
     // Time elapsed in current simulation
-    double timeElapsed = 0.0;
+    float timeElapsed = 0.f;
 
     // Set to true only when a user AdvanceSimulation call is finished. Set to false otherwise.
     bool userCallDone = false;
@@ -320,6 +320,7 @@ class DEMDynamicThread {
                        const std::unordered_map<std::string, std::string>& massMatSubs,
                        const std::unordered_map<std::string, std::string>& familyMaskSubs,
                        const std::unordered_map<std::string, std::string>& familyPrescribeSubs,
+                       const std::unordered_map<std::string, std::string>& familyChanges,
                        const std::unordered_map<std::string, std::string>& analGeoSubs);
 
   private:
@@ -331,6 +332,10 @@ class DEMDynamicThread {
 
     // update clump pos/oriQ and vel/omega based on acceleration
     inline void integrateClumpMotions();
+
+    // Some per-step checks/modification, done before integration, but after force calculation (thus sort of in the
+    // mid-step stage)
+    inline void routineChecks();
 
     // Bring dT buffer array data to its working arrays
     void unpackMyBuffer();
@@ -345,6 +350,7 @@ class DEMDynamicThread {
     std::shared_ptr<jitify::Program> collect_force_kernels;
     std::shared_ptr<jitify::Program> integrator_kernels;
     std::shared_ptr<jitify::Program> quarry_stats_kernels;
+    std::shared_ptr<jitify::Program> mod_kernels;
 };  // dT ends
 
 }  // namespace sgps

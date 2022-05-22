@@ -16,8 +16,8 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEM_sim;
-    // DEM_sim.SetVerbosity(INFO);
-    DEM_sim.SetVerbosity(DEBUG);
+    DEM_sim.SetVerbosity(INFO);
+    // DEM_sim.SetVerbosity(DEBUG);
 
     srand(759);
 

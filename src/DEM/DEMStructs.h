@@ -213,6 +213,8 @@ struct SolverFlags {
     bool isFrictionless = false;
     // This run uses contact detection in an async fashion
     bool isAsync = true;
+    // If family number can potentially change during the simulation (because of user intervention)
+    bool canFamilyChange = false;
 };
 
 struct DEMMaterial {

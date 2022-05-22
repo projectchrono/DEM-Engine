@@ -12,6 +12,7 @@
 #include <cmath>
 #include <vector>
 #include <algorithm>
+#include <regex>
 #include <helper_math.cuh>
 
 #include <DEM/DEMDefines.h>
@@ -100,6 +101,11 @@ inline unsigned int stash_material_in_templates(std::vector<std::shared_ptr<DEMM
         loaded_materials.push_back(this_material);
         return loaded_materials.size() - 1;
     }
+}
+
+/// Replace all instances of a certain pattern from a string then return it
+inline std::string replace_pattern(const std::string& in, const std::string& from, const std::string& to) {
+    return std::regex_replace(in, std::regex(from), to);
 }
 
 /// Rotate a vector about an unit axis by an angle
