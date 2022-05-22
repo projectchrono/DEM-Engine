@@ -387,12 +387,17 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
     size_t num_output_spheres = 0;
 
     // TODO: Let wT handle this
-    const unsigned int no_write_family = familyNumberMap.at(DEM_RESERVED_FAMILY_NUM);
+    unsigned int no_write_family;
+    bool exist_no_write_family = false;
+    if (familyNumberMap.find(DEM_RESERVED_FAMILY_NUM) != familyNumberMap.end()) {
+        no_write_family = familyNumberMap.at(DEM_RESERVED_FAMILY_NUM);
+        exist_no_write_family = true;
+    }
     for (size_t i = 0; i < simParams->nSpheresGM; i++) {
         auto this_owner = ownerClumpBody.at(i);
         unsigned int this_family = familyID.at(this_owner);
         // TODO: Right now, just don't output the reserved family. Will add proper output flags to wT.
-        if (this_family == no_write_family) {
+        if (this_family == no_write_family && exist_no_write_family) {
             continue;
         }
 
