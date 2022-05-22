@@ -44,6 +44,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
         float3 ALinVel, ARotVel, BLinVel, BRotVel;
         float AOwnerMass, ARadius, BOwnerMass, BRadius;
         sgps::materialsOffset_t bodyAMatType, bodyBMatType;
+        // sgps::family_t AOwnerFamily, BOwnerFamily;
         // Take care of 2 bodies in order, bodyA first, grab location and velocity to local cache
         // We know in this kernel, bodyA will be a sphere; bodyB can be something else
         {
@@ -53,6 +54,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             bodyAMatType = granData->materialTupleOffset[bodyA];
             AOwnerMass = ClumpMasses[granData->inertiaPropOffsets[bodyAOwner]];
             ARadius = Radii[bodyACompOffset];
+            // AOwnerFamily = granData->familyID[bodyAOwner];
             float3 myRelPos;
             sgps::oriQ_t AoriQ0, AoriQ1, AoriQ2, AoriQ3;
 
@@ -86,6 +88,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             bodyBMatType = granData->materialTupleOffset[bodyB];
             BOwnerMass = ClumpMasses[granData->inertiaPropOffsets[bodyBOwner]];
             BRadius = Radii[bodyBCompOffset];
+            // BOwnerFamily = granData->familyID[bodyBOwner];
             float3 myRelPos;
             sgps::oriQ_t BoriQ0, BoriQ1, BoriQ2, BoriQ3;
 
@@ -189,53 +192,8 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             }
 
             // The following part, the force model, is user-specifiable
-            {
-                // A few re-usables
-                float mass_eff, sqrt_Rd, beta;
-                float3 vrel_tan;
-
-                // Normal force part
-                {
-                    const float projection = dot(velB2A, B2A);
-                    vrel_tan = velB2A - projection * B2A;
-
-                    mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
-                    sqrt_Rd = sqrt(overlapDepth * (ARadius * BRadius) / (ARadius + BRadius));
-                    const float Sn = 2. * E * sqrt_Rd;
-
-                    const float loge = (CoR < SGPS_DEM_TINY_FLOAT) ? log(SGPS_DEM_TINY_FLOAT) : log(CoR);
-                    beta = loge / sqrt(loge * loge + SGPS_PI_SQUARED);
-
-                    const float k_n = SGPS_TWO_OVER_THREE * Sn;
-                    const float gamma_n = SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
-
-                    force = (k_n * overlapDepth + gamma_n * projection) * B2A;
-                }
-
-                // Tangential force part
-                {
-                    {
-                        delta_tan += h * vrel_tan;
-                        const float disp_proj = dot(delta_tan, B2A);
-                        delta_tan -= disp_proj * B2A;
-                    }
-                    const float kt = 8. * G * sqrt_Rd;
-                    const float gt = -SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
-                    float3 tangent_force = -kt * delta_tan - gt * vrel_tan;
-                    const float ft = length(tangent_force);
-                    if (ft > SGPS_DEM_TINY_FLOAT) {
-                        const float ft_max = length(force) * mu;
-                        if (ft > ft_max) {
-                            tangent_force = (ft_max / ft) * tangent_force;
-                            delta_tan = (tangent_force + gt * vrel_tan) / (-kt);
-                        }
-                    } else {
-                        tangent_force = make_float3(0, 0, 0);
-                    }
-                    // Use force to collect tangent_force
-                    force += tangent_force;
-                }
-            }
+            // NOTE!! "force" and "delta_tan" must be properly set by this piece of code
+            { _frictionalForceModel_; }
 
             // Write hard-earned values back to global memory
             granData->contactForces[myContactID] = force;

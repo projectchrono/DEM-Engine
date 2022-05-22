@@ -18,6 +18,7 @@ SET(DEMOS
 		DEMdemo_SingleSphereCollide
 		DEMdemo_Stack
 		DEMdemo_Drum
+		DEMdemo_GameOfLife
 		sphdemo
 		hello_world
 )

@@ -213,6 +213,11 @@ class DEMDynamicThread {
     // The ID that maps this entity's material
     std::vector<materialsOffset_t, ManagedAllocator<materialsOffset_t>> materialTupleOffset;
 
+    // dT's copy of family map
+    // This maps like this: map.at(user family number) = (corresponding impl-level family number)
+    // TODO: Host side OK? And should this be given to wT? It should.
+    std::unordered_map<unsigned int, family_t> familyNumberMap;
+
   public:
     friend class DEMSolver;
     friend class DEMKinematicThread;
@@ -320,8 +325,9 @@ class DEMDynamicThread {
                        const std::unordered_map<std::string, std::string>& massMatSubs,
                        const std::unordered_map<std::string, std::string>& familyMaskSubs,
                        const std::unordered_map<std::string, std::string>& familyPrescribeSubs,
-                       const std::unordered_map<std::string, std::string>& familyChanges,
-                       const std::unordered_map<std::string, std::string>& analGeoSubs);
+                       const std::unordered_map<std::string, std::string>& familyChangesSubs,
+                       const std::unordered_map<std::string, std::string>& analGeoSubs,
+                       const std::unordered_map<std::string, std::string>& forceModelSubs);
 
   private:
     // Migrate contact history to fit the structure of the newly received contact array

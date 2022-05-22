@@ -28,7 +28,7 @@ DEMSolver::DEMSolver(unsigned int nGPUs) {
 
     // dT->setNDynamicCycles(nDynamicCycles);
 
-    kT->primeDynamic();
+    // kT->primeDynamic();
 }
 
 DEMSolver::~DEMSolver() {
@@ -87,6 +87,9 @@ float3 DEMSolver::CenterCoordSys() {
 
 void DEMSolver::UseFrictionlessModel(bool useFrictionless) {
     m_isFrictionless = useFrictionless;
+    if (useFrictionless && (!m_user_defined_force_model)) {
+        m_force_model = DEM_HERTZIAN_FORCE_MODEL_FRICTIONLESS();
+    }
 }
 
 void DEMSolver::SetExpandFactor(float beta) {
@@ -153,6 +156,11 @@ void DEMSolver::ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const
 }
 
 void DEMSolver::ChangeFamilyNow(unsigned int ID_from, unsigned int ID_to) {}
+
+void DEMSolver::DefineContactForceModel(const std::string& model) {
+    m_force_model = model;
+    m_user_defined_force_model = true;
+}
 
 void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
                                           const std::string& velX,
@@ -536,6 +544,7 @@ inline void DEMSolver::reportInitStats() const {
     SGPS_DEM_INFO("The total number of bins: %zu", m_num_bins);
 
     SGPS_DEM_INFO("The current number of clumps: %zu", nOwnerBodies);
+    SGPS_DEM_INFO("The current number of families: %u", nDistinctFamilies);
 
     if (m_expand_factor > 0.0) {
         SGPS_DEM_INFO("All geometries are enlarged/thickened by %.9g for contact detection purpose", m_expand_factor);
@@ -786,18 +795,19 @@ void DEMSolver::validateUserInputs() {
 
 void DEMSolver::jitifyKernels() {
     std::unordered_map<std::string, std::string> templateSubs, simParamSubs, massMatSubs, familyMaskSubs,
-        familyPrescribeSubs, familyChanges, analGeoSubs;
+        familyPrescribeSubs, familyChangesSubs, analGeoSubs, forceModelSubs;
     equipClumpTemplates(templateSubs);
     equipSimParams(simParamSubs);
     equipClumpMassMat(massMatSubs);
     equipAnalGeoTemplates(analGeoSubs);
     equipFamilyMasks(familyMaskSubs);
     equipFamilyPrescribedMotions(familyPrescribeSubs);
-    equipFamilyOnFlyChanges(familyChanges);
-    kT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familyMaskSubs, familyPrescribeSubs, familyChanges,
+    equipFamilyOnFlyChanges(familyChangesSubs);
+    equipForceModel(forceModelSubs);
+    kT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familyMaskSubs, familyPrescribeSubs, familyChangesSubs,
                       analGeoSubs);
-    dT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familyMaskSubs, familyPrescribeSubs, familyChanges,
-                      analGeoSubs);
+    dT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familyMaskSubs, familyPrescribeSubs, familyChangesSubs,
+                      analGeoSubs, forceModelSubs);
 }
 
 // The method should be called after user inputs are in place, and before starting the simulation. It figures out a part
@@ -863,6 +873,8 @@ int DEMSolver::LaunchThreads(double thisCallDuration) {
     size_t nDTIters = computeDTCycles(thisCallDuration);
     dT->setNDynamicCycles(nDTIters);
 
+    kT->primeDynamic();
+
     dT->startThread();
     kT->startThread();
 
@@ -884,18 +896,28 @@ int DEMSolver::LaunchThreads(double thisCallDuration) {
     return 0;
 }
 
+inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::string>& strMap) {
+    // Jitfied contents cannot have comments or it confuses the compiler, we remove comments, then remove all '\n', it
+    // should be enough
+    std::string model = compact_code(m_force_model);
+    strMap["_frictionalForceModel_"] = model;
+}
+
 inline void DEMSolver::equipFamilyOnFlyChanges(std::unordered_map<std::string, std::string>& strMap) {
     std::string condStr = " ";
     unsigned int n_rules = m_family_change_pairs.size();
     for (unsigned int i = 0; i < n_rules; i++) {
+        // User family num and internal family num are not the same
+        // Convert user-input pairs into impl-level pairs
+        unsigned int implID1 = m_family_user_impl_map.at(m_family_change_pairs.at(i).ID1);
+        unsigned int implID2 = m_family_user_impl_map.at(m_family_change_pairs.at(i).ID2);
+
         // The conditions will be handled by a series of if statements
-        std::string cond = "if (family_code == " + std::to_string(m_family_change_pairs.at(i).ID1) +
-                           ") { bool shouldMakeChange = false;";
+        std::string cond = "if (family_code == " + std::to_string(implID1) + ") { bool shouldMakeChange = false;";
         std::string user_str = replace_pattern(m_family_change_conditions.at(i), "return", "shouldMakeChange = ");
-        user_str = replace_pattern(user_str, "\n", "");
+        user_str = compact_code(user_str);
         cond += user_str;
-        cond += "if (shouldMakeChange) {granData->familyID[thisClump] = " +
-                std::to_string(m_family_change_pairs.at(i).ID2) + ";}";
+        cond += "if (shouldMakeChange) {granData->familyID[thisClump] = " + std::to_string(implID2) + ";}";
         cond += "}";
         condStr += cond;
     }

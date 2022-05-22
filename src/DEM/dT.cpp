@@ -87,6 +87,7 @@ void DEMDynamicThread::packTransferPointers(DEMKinematicThread* kT) {
     granData->pKTOwnedBuffer_oriQ1 = kT->granData->oriQ1_buffer;
     granData->pKTOwnedBuffer_oriQ2 = kT->granData->oriQ2_buffer;
     granData->pKTOwnedBuffer_oriQ3 = kT->granData->oriQ3_buffer;
+    granData->pKTOwnedBuffer_familyID = kT->granData->familyID_buffer;
 }
 
 void DEMDynamicThread::setSimParams(unsigned char nvXp2,
@@ -270,6 +271,9 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& in
         mmiZZ.at(i) = this_moi.z;
     }
 
+    // dT will need this family number map, store it
+    familyNumberMap = family_user_impl_map;
+
     // Then, load in clump type info
     // Remember this part should be quite different in the final version (due to being jitified)
 
@@ -381,11 +385,14 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
     std::vector<float> posZ(simParams->nSpheresGM, 0);
     std::vector<float> spRadii(simParams->nSpheresGM, 0);
     size_t num_output_spheres = 0;
+
+    // TODO: Let wT handle this
+    const unsigned int no_write_family = familyNumberMap.at(DEM_RESERVED_FAMILY_NUM);
     for (size_t i = 0; i < simParams->nSpheresGM; i++) {
         auto this_owner = ownerClumpBody.at(i);
         unsigned int this_family = familyID.at(this_owner);
         // TODO: Right now, just don't output the reserved family. Will add proper output flags to wT.
-        if (this_family == DEM_RESERVED_FAMILY_NUM) {
+        if (this_family == no_write_family) {
             continue;
         }
 
@@ -406,15 +413,15 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
         float this_sp_rot_3 = oriQ3.at(this_owner);
         hostApplyOriQ2Vector3<float, float>(this_sp_deviation_x, this_sp_deviation_y, this_sp_deviation_z,
                                             this_sp_rot_0, this_sp_rot_1, this_sp_rot_2, this_sp_rot_3);
-        posX.at(i) = voxelIDX * simParams->voxelSize + locX.at(this_owner) * simParams->l + this_sp_deviation_x +
-                     simParams->LBFX;
-        posY.at(i) = voxelIDY * simParams->voxelSize + locY.at(this_owner) * simParams->l + this_sp_deviation_y +
-                     simParams->LBFY;
-        posZ.at(i) = voxelIDZ * simParams->voxelSize + locZ.at(this_owner) * simParams->l + this_sp_deviation_z +
-                     simParams->LBFZ;
+        posX.at(num_output_spheres) = voxelIDX * simParams->voxelSize + locX.at(this_owner) * simParams->l +
+                                      this_sp_deviation_x + simParams->LBFX;
+        posY.at(num_output_spheres) = voxelIDY * simParams->voxelSize + locY.at(this_owner) * simParams->l +
+                                      this_sp_deviation_y + simParams->LBFY;
+        posZ.at(num_output_spheres) = voxelIDZ * simParams->voxelSize + locZ.at(this_owner) * simParams->l +
+                                      this_sp_deviation_z + simParams->LBFZ;
         // std::cout << "Sphere Pos: " << posX.at(i) << ", " << posY.at(i) << ", " << posZ.at(i) << std::endl;
 
-        spRadii.at(i) = radiiSphere.at(clumpComponentOffset.at(i));
+        spRadii.at(num_output_spheres) = radiiSphere.at(clumpComponentOffset.at(i));
 
         num_output_spheres++;
     }
@@ -497,6 +504,13 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
                         cudaMemcpyDeviceToDevice));
     GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ3, granData->oriQ3, simParams->nOwnerBodies * sizeof(oriQ_t),
                         cudaMemcpyDeviceToDevice));
+
+    // Family number is a typical changable quantity on-the-fly. If this flag is on, dT is responsible for sending this
+    // info to kT.
+    if (solverFlags.canFamilyChange) {
+        GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_familyID, granData->familyID,
+                            simParams->nOwnerBodies * sizeof(family_t), cudaMemcpyDeviceToDevice));
+    }
 }
 
 inline void DEMDynamicThread::migrateContactHistory() {
@@ -807,8 +821,9 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
                                      const std::unordered_map<std::string, std::string>& massMatSubs,
                                      const std::unordered_map<std::string, std::string>& familyMaskSubs,
                                      const std::unordered_map<std::string, std::string>& familyPrescribeSubs,
-                                     const std::unordered_map<std::string, std::string>& familyChanges,
-                                     const std::unordered_map<std::string, std::string>& analGeoSubs) {
+                                     const std::unordered_map<std::string, std::string>& familyChangesSubs,
+                                     const std::unordered_map<std::string, std::string>& analGeoSubs,
+                                     const std::unordered_map<std::string, std::string>& forceModelSubs) {
     // First one is force array preparation kernels
     {
         std::unordered_map<std::string, std::string> pfSubs = templateSubs;
@@ -824,6 +839,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
         cfSubs.insert(simParamSubs.begin(), simParamSubs.end());
         cfSubs.insert(massMatSubs.begin(), massMatSubs.end());
         cfSubs.insert(analGeoSubs.begin(), analGeoSubs.end());
+        cfSubs.insert(forceModelSubs.begin(), forceModelSubs.end());
         if (solverFlags.isFrictionless) {
             cal_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
                 "DEMFrictionlessForceKernels", JitHelper::KERNEL_DIR / "DEMFrictionlessForceKernels.cu", cfSubs,
@@ -855,7 +871,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     if (solverFlags.canFamilyChange) {
         std::unordered_map<std::string, std::string> modSubs = simParamSubs;
         modSubs.insert(massMatSubs.begin(), massMatSubs.end());
-        modSubs.insert(familyChanges.begin(), familyChanges.end());
+        modSubs.insert(familyChangesSubs.begin(), familyChangesSubs.end());
         mod_kernels = std::make_shared<jitify::Program>(
             std::move(JitHelper::buildProgram("DEMModeratorKernels", JitHelper::KERNEL_DIR / "DEMModeratorKernels.cu",
                                               modSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));

@@ -242,6 +242,7 @@ struct DEMDataDT {
     oriQ_t* pKTOwnedBuffer_oriQ1 = NULL;
     oriQ_t* pKTOwnedBuffer_oriQ2 = NULL;
     oriQ_t* pKTOwnedBuffer_oriQ3 = NULL;
+    family_t* pKTOwnedBuffer_familyID = NULL;
 };
 
 // A struct that holds pointers to data arrays that kT uses
@@ -266,6 +267,7 @@ struct DEMDataKT {
     oriQ_t* oriQ1_buffer;
     oriQ_t* oriQ2_buffer;
     oriQ_t* oriQ3_buffer;
+    family_t* familyID_buffer;
 
     // The offset info that indexes into the template arrays
     bodyID_t* ownerClumpBody;

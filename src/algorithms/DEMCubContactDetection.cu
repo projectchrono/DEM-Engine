@@ -194,6 +194,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
             numContactsInEachBin, contactReportOffsets, *pNumActiveBins, this_stream, scratchPad);
         // SGPS_DEM_DEBUG_PRINTF("Contact report offsets:");
         // SGPS_DEM_DEBUG_EXEC(displayArray<contactPairs_t>(contactReportOffsets, *pNumActiveBins));
+        // SGPS_DEM_DEBUG_PRINTF("Family number:");
+        // SGPS_DEM_DEBUG_EXEC(displayArray<family_t>(granData->familyID, simParams->nOwnerBodies));
 
         // Add sphere--sphere contacts together with sphere--analytical geometry contacts
         size_t nSphereGeoContact = *scratchPad.pNumContacts;

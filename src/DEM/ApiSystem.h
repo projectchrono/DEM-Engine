@@ -19,6 +19,7 @@
 #include <DEM/DEMDefines.h>
 #include <DEM/DEMStructs.h>
 #include <DEM/Boundaries.h>
+#include <DEM/DEMModels.h>
 
 namespace sgps {
 
@@ -153,6 +154,9 @@ class DEMSolver {
     ///
     void SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula);
 
+    /// Define a custom contact force model by a string
+    void DefineContactForceModel(const std::string& model);
+
     /// Add an (analytical or clump-represented) external object to the simulation system
     std::shared_ptr<DEMExternObj> AddExternalObject();
     std::shared_ptr<DEMExternObj> AddBCPlane(const float3 pos,
@@ -214,6 +218,10 @@ class DEMSolver {
     bool use_compact_sweep_force_strat = false;
     // If true, the solvers may need to do a per-step sweep to apply family number changes
     bool m_famnum_change_conditionally = false;
+
+    // Force model, as a string
+    std::string m_force_model = DEM_HERTZIAN_FORCE_MODEL();
+    bool m_user_defined_force_model = false;
 
     // This is the cached material information.
     // It will be massaged into the managed memory upon Initialize().
@@ -470,6 +478,7 @@ class DEMSolver {
     inline void equipFamilyMasks(std::unordered_map<std::string, std::string>& strMap);
     inline void equipFamilyPrescribedMotions(std::unordered_map<std::string, std::string>& strMap);
     inline void equipFamilyOnFlyChanges(std::unordered_map<std::string, std::string>& strMap);
+    inline void equipForceModel(std::unordered_map<std::string, std::string>& strMap);
 };
 
 }  // namespace sgps

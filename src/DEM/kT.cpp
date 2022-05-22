@@ -50,6 +50,12 @@ inline void DEMKinematicThread::unpackMyBuffer() {
                         cudaMemcpyDeviceToDevice));
     GPU_CALL(cudaMemcpy(granData->oriQ3, granData->oriQ3_buffer, simParams->nOwnerBodies * sizeof(oriQ_t),
                         cudaMemcpyDeviceToDevice));
+
+    // Family number is a typical changable quantity on-the-fly. If this flag is on, kT received changes from dT.
+    if (solverFlags.canFamilyChange) {
+        GPU_CALL(cudaMemcpy(granData->familyID, granData->familyID_buffer, simParams->nOwnerBodies * sizeof(family_t),
+                            cudaMemcpyDeviceToDevice));
+    }
 }
 
 inline void DEMKinematicThread::sendToTheirBuffer() {
@@ -205,6 +211,7 @@ void DEMKinematicThread::packDataPointers() {
     granData->oriQ1_buffer = oriQ1_buffer.data();
     granData->oriQ2_buffer = oriQ2_buffer.data();
     granData->oriQ3_buffer = oriQ3_buffer.data();
+    granData->familyID_buffer = familyID_buffer.data();
 
     // The offset info that indexes into the template arrays
     granData->ownerClumpBody = ownerClumpBody.data();
@@ -300,6 +307,7 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     TRACKED_VECTOR_RESIZE(oriQ1_buffer, nOwnerBodies, "oriQ1_buffer", 0);
     TRACKED_VECTOR_RESIZE(oriQ2_buffer, nOwnerBodies, "oriQ2_buffer", 0);
     TRACKED_VECTOR_RESIZE(oriQ3_buffer, nOwnerBodies, "oriQ3_buffer", 0);
+    TRACKED_VECTOR_RESIZE(familyID_buffer, nOwnerBodies, "familyID_buffer", 0);
 
     // Resize to the number of spheres
     TRACKED_VECTOR_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
@@ -400,7 +408,7 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
                                        const std::unordered_map<std::string, std::string>& massMatSubs,
                                        const std::unordered_map<std::string, std::string>& familyMaskSubs,
                                        const std::unordered_map<std::string, std::string>& familyPrescribeSubs,
-                                       const std::unordered_map<std::string, std::string>& familyChanges,
+                                       const std::unordered_map<std::string, std::string>& familyChangesSubs,
                                        const std::unordered_map<std::string, std::string>& analGeoSubs) {
     // First one is bin_occupation_kernels kernels, which figure out the bin--sphere touch pairs
     {
@@ -435,10 +443,10 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
 
 void DEMKinematicThread::primeDynamic() {
     // transfer produce to dynamic buffer
-    // cudaMemcpy(pDTOwnedBuffer_voxelID, voxelID.data(), N_INPUT_ITEMS * sizeof(voxelID_t),
-    //            cudaMemcpyDeviceToDevice);
-    pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = true;
-    pSchedSupport->schedulingStats.nDynamicUpdates++;
+    // dT need an update from kT before it can do anything, so need to wait for that, so
+    // dynamicOwned_Prod2ConsBuffer_isFresh needs to be initially false
+    pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
+    // pSchedSupport->schedulingStats.nDynamicUpdates++;
 }
 
 }  // namespace sgps

@@ -80,6 +80,7 @@ class DEMKinematicThread {
     std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ1_buffer;
     std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ2_buffer;
     std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ3_buffer;
+    std::vector<family_t, ManagedAllocator<family_t>> familyID_buffer;
 
     // Managed arrays for dT's personal use (not transfer buffer)
 
@@ -256,7 +257,7 @@ class DEMKinematicThread {
                        const std::unordered_map<std::string, std::string>& massMatSubs,
                        const std::unordered_map<std::string, std::string>& familyMaskSubs,
                        const std::unordered_map<std::string, std::string>& familyPrescribeSubs,
-                       const std::unordered_map<std::string, std::string>& familyChanges,
+                       const std::unordered_map<std::string, std::string>& familyChangesSubs,
                        const std::unordered_map<std::string, std::string>& analGeoSubs);
 
   private:

@@ -108,6 +108,52 @@ inline std::string replace_pattern(const std::string& in, const std::string& fro
     return std::regex_replace(in, std::regex(from), to);
 }
 
+/// Sachin Gupta's work on removing comments from a piece of code, from
+/// https://www.geeksforgeeks.org/remove-comments-given-cc-program/
+inline std::string remove_comments(const std::string& prgm) {
+    size_t n = prgm.length();
+    std::string res;
+
+    // Flags to indicate that single line and multiple line comments
+    // have started or not.
+    bool s_cmt = false;
+    bool m_cmt = false;
+
+    // Traverse the given program
+    for (size_t i = 0; i < n; i++) {
+        // If single line comment flag is on, then check for end of it
+        if (s_cmt == true && prgm[i] == '\n')
+            s_cmt = false;
+
+        // If multiple line comment is on, then check for end of it
+        else if (m_cmt == true && prgm[i] == '*' && prgm[i + 1] == '/')
+            m_cmt = false, i++;
+
+        // If this character is in a comment, ignore it
+        else if (s_cmt || m_cmt)
+            continue;
+
+        // Check for beginning of comments and set the appropriate flags
+        else if (prgm[i] == '/' && prgm[i + 1] == '/')
+            s_cmt = true, i++;
+        else if (prgm[i] == '/' && prgm[i + 1] == '*')
+            m_cmt = true, i++;
+
+        // If current character is a non-comment character, append it to res
+        else
+            res += prgm[i];
+    }
+    return res;
+}
+
+/// Remove comments and newlines from a piece of code, making it suitable for jitification in the framework of SGPS
+inline std::string compact_code(const std::string& prgm) {
+    std::string res;
+    res = remove_comments(prgm);
+    res = replace_pattern(res, "\n", "");
+    return res;
+}
+
 /// Rotate a vector about an unit axis by an angle
 inline float3 Rodrigues(const float3 vec, const float3 axis, const float theta) {
     float3 res;
@@ -179,6 +225,8 @@ inline void hostScanForJumps(T1* arr, T1* arr_elem, T2* jump_loc, T3* jump_len, 
 template <typename T1>
 std::vector<T1> hostUniqueVector(const std::vector<T1>& vec) {
     std::vector<T1> unique_vec(vec);
+    // Need sort first!
+    std::sort(unique_vec.begin(), unique_vec.end());
     auto tmp_it = std::unique(unique_vec.begin(), unique_vec.end());
     unique_vec.resize(std::distance(unique_vec.begin(), tmp_it));
     return unique_vec;

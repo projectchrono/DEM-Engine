@@ -3,40 +3,6 @@
 #include <DEM/DEMDefines.h>
 #include <kernel/DEMHelperKernels.cu>
 
-// Calculate the frictionless force between 2 bodies, return as a float3
-// Assumes B2A vector is normalized
-inline __device__ float3 calcNormalForce(const double& overlapDepth,
-                                         const float3& B2A,
-                                         const float3& velB2A,
-                                         const float& ARadius,
-                                         const float& BRadius,
-                                         const float& AOwnerMass,
-                                         const float& BOwnerMass,
-                                         const sgps::contact_t& contact_type,
-                                         const float& E,
-                                         const float& CoR) {
-    // normal component of relative velocity
-    const float projection = dot(velB2A, B2A);
-    float3 vrel_tan = velB2A - projection * B2A;  // May want to report this for tangent force calculation
-
-    const float mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
-    float sqrt_Rd = sqrt(overlapDepth * (ARadius * BRadius) / (ARadius + BRadius));
-    const float Sn = 2. * E * sqrt_Rd;
-
-    const float loge = (CoR < SGPS_DEM_TINY_FLOAT) ? log(SGPS_DEM_TINY_FLOAT) : log(CoR);
-    float beta = loge / sqrt(loge * loge + SGPS_PI_SQUARED);
-
-    const float k_n = SGPS_TWO_OVER_THREE * Sn;
-    const float gamma_n = SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
-
-    // normal force (that A feels)
-    // printf("overlapDepth: %f\n", overlapDepth);
-    // printf("kn * overlapDepth: %f\n", k_n * overlapDepth);
-    // printf("gn * projection: %f\n", gamma_n * projection);
-    float3 force = (k_n * overlapDepth + gamma_n * projection) * B2A;
-    return force;
-}
-
 __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData, size_t nContactPairs) {
     // _nTotalBodyTopologies_ or _nDistinctClumpComponents_ elements are in these arrays
     const float Radii[] = {_Radii_};
@@ -77,6 +43,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
         float3 ALinVel, ARotVel, BLinVel, BRotVel;
         float AOwnerMass, ARadius, BOwnerMass, BRadius;
         sgps::materialsOffset_t bodyAMatType, bodyBMatType;
+        sgps::family_t AOwnerFamily, BOwnerFamily;
         // Take care of 2 bodies in order, bodyA first, grab location and velocity to local cache
         // We know in this kernel, bodyA will be a sphere; bodyB can be something else
         {
@@ -86,6 +53,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             bodyAMatType = granData->materialTupleOffset[bodyA];
             AOwnerMass = ClumpMasses[granData->inertiaPropOffsets[bodyAOwner]];
             ARadius = Radii[bodyACompOffset];
+            AOwnerFamily = granData->familyID[bodyAOwner];
             float3 myRelPos;
             sgps::oriQ_t AoriQ0, AoriQ1, AoriQ2, AoriQ3;
 
@@ -119,6 +87,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             bodyBMatType = granData->materialTupleOffset[bodyB];
             BOwnerMass = ClumpMasses[granData->inertiaPropOffsets[bodyBOwner]];
             BRadius = Radii[bodyBCompOffset];
+            BOwnerFamily = granData->familyID[bodyBOwner];
             float3 myRelPos;
             sgps::oriQ_t BoriQ0, BoriQ1, BoriQ2, BoriQ3;
 
@@ -192,29 +161,36 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
         }
 
         if (myContactType != sgps::DEM_NOT_A_CONTACT) {
-            // Instead of add the force to a body-based register, we store it in event-based register, and use CUB to
-            // reduce them afterwards
+            // Material properties and time (user referrable)
+            float E, CoR, h;
+            {
+                h = simParams->h;
+                matProxy2ContactParam<float>(E, CoR, EProxy[bodyAMatType], nuProxy[bodyAMatType],
+                                             CoRProxy[bodyAMatType], EProxy[bodyBMatType], nuProxy[bodyBMatType],
+                                             CoRProxy[bodyBMatType]);
+            }
+            // Variables that we need to report back (user referrable)
+            float3 velB2A, delta_tan, force;
+            {
+                // Find the contact point in the local (body), but global-axes-aligned frame
+                // float3 locCPA = findLocalCoord<double>(contactPntX, contactPntY, contactPntZ, AOwnerX, AOwnerY,
+                // AOwnerZ, AoriQ0, AoriQ1, AoriQ2, AoriQ3); float3 locCPB = findLocalCoord<double>(contactPntX,
+                // contactPntY, contactPntZ, BOwnerX, BOwnerY, BOwnerZ, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
+                float3 locCPA = contactPnt - AOwnerPos;
+                float3 locCPB = contactPnt - BOwnerPos;
+                granData->contactPointGeometryA[myContactID] = locCPA;
+                granData->contactPointGeometryB[myContactID] = locCPB;
+                // We also need the relative velocity between A and B in global frame to use in the damping terms
+                velB2A = (ALinVel + cross(ARotVel, locCPA)) - (BLinVel + cross(BRotVel, locCPB));
+                delta_tan = granData->contactHistory[myContactID];
+            }
 
-            // Get k, g, etc. from the (upper-triangle) material property matrix
-            float E, CoR;
-            matProxy2ContactParam<float>(E, CoR, EProxy[bodyAMatType], nuProxy[bodyAMatType], CoRProxy[bodyAMatType],
-                                         EProxy[bodyBMatType], nuProxy[bodyBMatType], CoRProxy[bodyBMatType]);
+            // The following part, the force model, is user-specifiable
+            // NOTE!! "force" must be properly set by this piece of code
+            { _frictionalForceModel_; }
 
-            // Find the contact point in the local (body), but global-axes-aligned frame
-            // float3 locCPA = findLocalCoord<double>(contactPntX, contactPntY, contactPntZ, AOwnerX, AOwnerY, AOwnerZ,
-            // AoriQ0, AoriQ1, AoriQ2, AoriQ3); float3 locCPB = findLocalCoord<double>(contactPntX, contactPntY,
-            // contactPntZ, BOwnerX, BOwnerY, BOwnerZ, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
-            float3 locCPA = contactPnt - AOwnerPos;
-            float3 locCPB = contactPnt - BOwnerPos;
-            // We also need the relative velocity between A and B in global frame to use in the damping terms
-            float3 velB2A = (ALinVel + cross(ARotVel, locCPA)) - (BLinVel + cross(BRotVel, locCPB));
-
-            // Calculate contact force
-            granData->contactForces[myContactID] = calcNormalForce(overlapDepth, B2A, velB2A, ARadius, BRadius,
-                                                                   AOwnerMass, BOwnerMass, myContactType, E, CoR);
-            // Write hard-earned results back to global arrays
-            granData->contactPointGeometryA[myContactID] = locCPA;
-            granData->contactPointGeometryB[myContactID] = locCPB;
+            // Write hard-earned values back to global memory
+            granData->contactForces[myContactID] = force;
         } else {
             granData->contactForces[myContactID] = make_float3(0, 0, 0);
         }
