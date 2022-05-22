@@ -27,7 +27,7 @@ inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
     granData->pDTOwnedBuffer_idGeometryB = dT->idGeometryB_buffer.data();
     granData->pDTOwnedBuffer_contactType = dT->contactType_buffer.data();
 
-    if (!solverFlags.isFrictionless) {
+    if (!solverFlags.isHistoryless) {
         dT->contactMapping_buffer.resize(nContactPairs);
         granData->pDTOwnedBuffer_contactMapping = dT->contactMapping_buffer.data();
     }
@@ -71,7 +71,7 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
                         (*stateOfSolver_resources.pNumContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactType, granData->contactType,
                         (*stateOfSolver_resources.pNumContacts) * sizeof(contact_t), cudaMemcpyDeviceToDevice));
-    if (!solverFlags.isFrictionless) {
+    if (!solverFlags.isHistoryless) {
         GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactMapping, granData->contactMapping,
                             (*stateOfSolver_resources.pNumContacts) * sizeof(contactPairs_t),
                             cudaMemcpyDeviceToDevice));
@@ -327,7 +327,7 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     TRACKED_VECTOR_RESIZE(idGeometryA, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryA", 0);
     TRACKED_VECTOR_RESIZE(idGeometryB, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryB", 0);
     TRACKED_VECTOR_RESIZE(contactType, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactType", DEM_NOT_A_CONTACT);
-    if (!solverFlags.isFrictionless) {
+    if (!solverFlags.isHistoryless) {
         TRACKED_VECTOR_RESIZE(previous_idGeometryA, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "previous_idGeometryA",
                               0);
         TRACKED_VECTOR_RESIZE(previous_idGeometryB, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "previous_idGeometryB",

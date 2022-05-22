@@ -71,7 +71,7 @@ inline std::string DEM_HERTZIAN_FORCE_MODEL() {
     return model;
 }
 
-inline std::string DEM_HERTZIAN_FORCE_MODEL_FRICTIONLESS() {
+inline std::string DEM_HERTZIAN_FORCE_MODEL_HISTORYLESS() {
     std::string model;
     model =
         R"V0G0N(

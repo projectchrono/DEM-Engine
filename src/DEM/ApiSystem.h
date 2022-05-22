@@ -64,11 +64,14 @@ class DEMSolver {
     /// the left-bottom-front point of your simulation ``world'' after this operation.
     float3 CenterCoordSys();
 
-    // Instruct the solver to save time by using frictionless contact model
-    void UseFrictionlessModel(bool useFrictionless = true);
+    /// Explicitly instruct the bin size (for contact detection) that the solver should use
+    void InstructBinSize(double bin_size);
 
-    /// Instruct the solver if contact pair arrays should be sorted before usage. This is needed if frictional model is
-    /// in use.
+    /// Instruct the solver to save time by using historyless contact model
+    void UseHistorylessModel(bool useHistoryless = true);
+
+    /// Instruct the solver if contact pair arrays should be sorted before usage. This is needed if history-based model
+    /// is in use.
     void SetSortContactPairs(bool use_sort);
 
     // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
@@ -222,6 +225,9 @@ class DEMSolver {
     // Force model, as a string
     std::string m_force_model = DEM_HERTZIAN_FORCE_MODEL();
     bool m_user_defined_force_model = false;
+
+    // User explicitly set a bin size to use
+    bool m_use_user_instructed_bin_size = false;
 
     // This is the cached material information.
     // It will be massaged into the managed memory upon Initialize().
@@ -431,8 +437,8 @@ class DEMSolver {
     // newly produced contact-pair info (from kT) before proceeding.
     int m_updateFreq = 0;
 
-    // The contact model is frictionless, or not. It affects jitification.
-    bool m_isFrictionless = false;
+    // The contact model is historyless, or not. It affects jitification.
+    bool m_isHistoryless = false;
 
     GpuManager* dTkT_GpuManager;
     ThreadManager* dTkT_InteractionManager;

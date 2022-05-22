@@ -21,7 +21,7 @@ using namespace std::filesystem;
 int main() {
     DEMSolver DEM_sim;
     DEM_sim.SetVerbosity(INFO);
-    DEM_sim.UseFrictionlessModel(true);
+    DEM_sim.UseHistorylessModel(true);
 
     srand(777);
 
@@ -30,7 +30,11 @@ int main() {
 
     float grid_size = 1.0;
     float r = (1.45 * grid_size) / 2.0;
-    float world_size = 100.0;
+    float world_size = 2500.0;
+    unsigned int n_init = 4000;
+
+    // Bin size can be somewhat large
+    DEM_sim.InstructBinSize(grid_size * 3.0);
 
     auto template_sphere = DEM_sim.LoadClumpSimpleSphere(1.0, r, mat_type_1);
 
@@ -41,13 +45,43 @@ int main() {
     auto input_xyz =
         DEMBoxGridSampler(make_float3(0, 0, 0), make_float3(world_size / 2.0, world_size / 2.0, 0.001), grid_size);
     unsigned int num_cells = input_xyz.size();
+    // Number cells per row
+    unsigned int num_row = std::round(std::sqrt(num_cells));
 
     // Use code DEM_RESERVED_FAMILY_NUM to represent dead cells
     family_code.insert(family_code.end(), input_xyz.size(), DEM_RESERVED_FAMILY_NUM);
-    // But mark some of them to be alive (family 0). 8 cells in a row seems to be a good start.
-    unsigned int offset = num_cells / 2;
-    for (int i = 0; i < 8; i++) {
-        family_code.at(offset + i) = 0;
+
+    // Init patterns adding...
+    {
+        for (unsigned int i = 0; i < n_init; i++) {
+            unsigned int offset = 0;
+
+            while (offset < 5 * num_row || offset > (num_row - 5) * num_row) {
+                offset = rand() % num_cells;
+            }
+            // Mark some of them to be alive (family 0). 8 cells in a row seems to be a good start.
+            for (int j = 0; j < 8; j++) {
+                family_code.at(offset + j) = 0;
+            }
+        }
+
+        for (unsigned int i = 0; i < n_init; i++) {
+            unsigned int offset = 0;
+
+            while (offset < 5 * num_row || offset > (num_row - 5) * num_row) {
+                offset = rand() % num_cells;
+            }
+            // Another interesting one is the spaceship pattern
+            family_code.at(offset) = 0;
+            family_code.at(offset + 1) = 0;
+            family_code.at(offset + 2) = 0;
+            family_code.at(offset + 3) = 0;
+            family_code.at(offset + num_row - 1) = 0;
+            family_code.at(offset + num_row + 3) = 0;
+            family_code.at(offset + 2 * num_row + 3) = 0;
+            family_code.at(offset + 3 * num_row - 1) = 0;
+            family_code.at(offset + 3 * num_row + 2) = 0;
+        }
     }
 
     input_template_num.insert(input_template_num.end(), input_xyz.size(), template_sphere);
@@ -90,7 +124,7 @@ int main() {
     create_directory(out_dir);
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 3000; i++) {
         char filename[100];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
         DEM_sim.WriteFileAsSpheres(std::string(filename));

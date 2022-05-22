@@ -209,8 +209,8 @@ struct SolverFlags {
     // memory is leveraged
     // NOTE: This is not implemented
     bool use_compact_force_kernel = false;
-    // This run is frictionless
-    bool isFrictionless = false;
+    // This run is historyless
+    bool isHistoryless = false;
     // This run uses contact detection in an async fashion
     bool isAsync = true;
     // If family number can potentially change during the simulation (because of user intervention)

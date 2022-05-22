@@ -222,9 +222,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
 
     }  // End of bin-wise contact detection subroutine
 
-    // Now, sort idGeometryAB by their owners. Needed for identifying persistent contacts in frictional models.
+    // Now, sort idGeometryAB by their owners. Needed for identifying persistent contacts in history-based models.
     if (*scratchPad.pNumContacts > 0) {
-        if ((!solverFlags.isFrictionless) || solverFlags.should_sort_pairs) {
+        if ((!solverFlags.isHistoryless) || solverFlags.should_sort_pairs) {
             // All temp vectors are free now, and all of them are fairly long...
             size_t type_arr_bytes = (*scratchPad.pNumContacts) * sizeof(contact_t);
             contact_t* contactType_sorted = (contact_t*)scratchPad.allocateTempVector1(type_arr_bytes);
@@ -251,8 +251,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
             // SGPS_DEM_DEBUG_PRINTF("New contact types:");
             // SGPS_DEM_DEBUG_EXEC(displayArray<contact_t>(granData->contactType, *scratchPad.pNumContacts));
 
-            // For frictional models, construct the persistent contact map
-            if (!solverFlags.isFrictionless) {
+            // For history-based models, construct the persistent contact map
+            if (!solverFlags.isHistoryless) {
                 // This CD run and previous CD run could have different number of spheres in them. We pick the larger
                 // number to refer in building the persistent contact map to avoid potential problems.
                 size_t nSpheresSafe = (simParams->nSpheresGM > *scratchPad.pNumPrevSpheres)

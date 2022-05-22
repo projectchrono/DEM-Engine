@@ -308,7 +308,7 @@ inline void matProxy2ContactParam(T1& E_eff,
     Crr = max(Crr1, Crr2);
 }
 
-/// Calculate the contact params based on the 2 contact material types given (frictionless version)
+/// Calculate the contact params based on the 2 contact material types given (historyless version)
 template <typename T1>
 inline void matProxy2ContactParam(T1& E_eff,
                                   T1& CoR,

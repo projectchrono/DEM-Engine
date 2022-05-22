@@ -85,10 +85,10 @@ float3 DEMSolver::CenterCoordSys() {
     return O;
 }
 
-void DEMSolver::UseFrictionlessModel(bool useFrictionless) {
-    m_isFrictionless = useFrictionless;
-    if (useFrictionless && (!m_user_defined_force_model)) {
-        m_force_model = DEM_HERTZIAN_FORCE_MODEL_FRICTIONLESS();
+void DEMSolver::UseHistorylessModel(bool useHistoryless) {
+    m_isHistoryless = useHistoryless;
+    if (useHistoryless && (!m_user_defined_force_model)) {
+        m_force_model = DEM_HERTZIAN_FORCE_MODEL_HISTORYLESS();
     }
 }
 
@@ -116,6 +116,11 @@ void DEMSolver::SuggestExpandFactor(float max_vel) {
 
 void DEMSolver::SuggestExpandSafetyParam(float param) {
     m_expand_safety_param = param;
+}
+
+void DEMSolver::InstructBinSize(double bin_size) {
+    m_use_user_instructed_bin_size = true;
+    m_binSize = bin_size;
 }
 
 void DEMSolver::SetGravitationalAcceleration(float3 g) {
@@ -352,8 +357,10 @@ void DEMSolver::decideDefaultBinSize() {
         }
     }
 
-    // What should be a default bin size?
-    m_binSize = 1.0 * m_smallest_radius;
+    // TODO: What should be a default bin size?
+    if (!m_use_user_instructed_bin_size) {
+        m_binSize = 1.0 * m_smallest_radius;
+    }
 }
 
 void DEMSolver::figureOutMaterialProxies() {
@@ -553,10 +560,10 @@ inline void DEMSolver::reportInitStats() const {
     }
 
     SGPS_DEM_INFO("The number of material types: %u", nMatTuples_computed);
-    if (m_isFrictionless) {
-        SGPS_DEM_INFO("This run uses frictionless solver setup");
+    if (m_isHistoryless) {
+        SGPS_DEM_INFO("This run uses historyless solver setup");
     } else {
-        SGPS_DEM_INFO("This run uses frictional solver setup");
+        SGPS_DEM_INFO("This run uses history-based solver setup");
     }
     // TODO: The solver model, is it user-specified or internally defined?
 }
@@ -702,9 +709,9 @@ void DEMSolver::transferSolverParams() {
     kT->verbosity = verbosity;
     dT->verbosity = verbosity;
 
-    // Transfer frictionless-ness
-    kT->solverFlags.isFrictionless = m_isFrictionless;
-    dT->solverFlags.isFrictionless = m_isFrictionless;
+    // Transfer historyless-ness
+    kT->solverFlags.isHistoryless = m_isHistoryless;
+    dT->solverFlags.isHistoryless = m_isHistoryless;
 
     // Tell kT and dT if this run is async
     kT->solverFlags.isAsync = !(m_updateFreq == 0);
@@ -900,7 +907,7 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     // Jitfied contents cannot have comments or it confuses the compiler, we remove comments, then remove all '\n', it
     // should be enough
     std::string model = compact_code(m_force_model);
-    strMap["_frictionalForceModel_"] = model;
+    strMap["_DEMForceModel_"] = model;
 }
 
 inline void DEMSolver::equipFamilyOnFlyChanges(std::unordered_map<std::string, std::string>& strMap) {

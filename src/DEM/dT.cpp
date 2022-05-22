@@ -227,7 +227,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     TRACKED_VECTOR_RESIZE(idGeometryB_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryB_buffer", 0);
     TRACKED_VECTOR_RESIZE(contactType_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactType_buffer",
                           DEM_NOT_A_CONTACT);
-    if (!solverFlags.isFrictionless) {
+    if (!solverFlags.isHistoryless) {
         TRACKED_VECTOR_RESIZE(contactMapping_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactMapping",
                               DEM_NULL_MAPPING_PARTNER);
     }
@@ -457,8 +457,8 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     granData->idGeometryA_buffer = idGeometryA_buffer.data();
     granData->idGeometryB_buffer = idGeometryB_buffer.data();
     granData->contactType_buffer = contactType_buffer.data();
-    // If not frictionless, then contact history map needs to be updated in case kT made modifications
-    if (!solverFlags.isFrictionless) {
+    // If not historyless, then contact history map needs to be updated in case kT made modifications
+    if (!solverFlags.isHistoryless) {
         granData->contactMapping_buffer = contactMapping_buffer.data();
     }
 }
@@ -482,7 +482,7 @@ inline void DEMDynamicThread::unpackMyBuffer() {
                         *stateOfSolver_resources.pNumContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     GPU_CALL(cudaMemcpy(granData->contactType, granData->contactType_buffer,
                         *stateOfSolver_resources.pNumContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
-    if (!solverFlags.isFrictionless) {
+    if (!solverFlags.isHistoryless) {
         // Note we don't have to use dedicated memory space for unpacking contactMapping_buffer contents, because we
         // only use it once per kT update, at the time of unpacking. So let us just use a temp vector to store it.
         size_t mapping_bytes = (*stateOfSolver_resources.pNumContacts) * sizeof(contactPairs_t);
@@ -738,9 +738,9 @@ void DEMDynamicThread::workerThread() {
                 pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
                 pSchedSupport->stampLastUpdateOfDynamic = cycle;
 
-                // If this is a frictional run, then when contacts are received, we need to migrate the contact history
-                // info, to match the structure of the new contact array
-                if (!solverFlags.isFrictionless) {
+                // If this is a history-based run, then when contacts are received, we need to migrate the contact
+                // history info, to match the structure of the new contact array
+                if (!solverFlags.isHistoryless) {
                     migrateContactHistory();
                 }
             }
@@ -838,20 +838,20 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
                                               pfSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
     // Then force calculation kernels
-    // Depending on frictionless-ness, we may want jitify different versions of kernels
+    // Depending on historyless-ness, we may want jitify different versions of kernels
     {
         std::unordered_map<std::string, std::string> cfSubs = templateSubs;
         cfSubs.insert(simParamSubs.begin(), simParamSubs.end());
         cfSubs.insert(massMatSubs.begin(), massMatSubs.end());
         cfSubs.insert(analGeoSubs.begin(), analGeoSubs.end());
         cfSubs.insert(forceModelSubs.begin(), forceModelSubs.end());
-        if (solverFlags.isFrictionless) {
+        if (solverFlags.isHistoryless) {
             cal_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-                "DEMFrictionlessForceKernels", JitHelper::KERNEL_DIR / "DEMFrictionlessForceKernels.cu", cfSubs,
+                "DEMHistorylessForceKernels", JitHelper::KERNEL_DIR / "DEMHistorylessForceKernels.cu", cfSubs,
                 {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
         } else {
             cal_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-                "DEMFrictionalForceKernels", JitHelper::KERNEL_DIR / "DEMFrictionalForceKernels.cu", cfSubs,
+                "DEMHistoryBasedForceKernels", JitHelper::KERNEL_DIR / "DEMHistoryBasedForceKernels.cu", cfSubs,
                 {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
         }
     }

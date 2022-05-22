@@ -142,7 +142,7 @@ class DEMKinematicThread {
     std::vector<contact_t, ManagedAllocator<contact_t>> contactType;
 
     // Contact pair info at the previous time step. This is needed by dT so persistent contacts are identified in
-    // frictional models.
+    // history-based models.
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> previous_idGeometryA;
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> previous_idGeometryB;
     std::vector<contact_t, ManagedAllocator<contact_t>> previous_contactType;
