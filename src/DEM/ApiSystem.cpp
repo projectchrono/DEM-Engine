@@ -85,11 +85,28 @@ float3 DEMSolver::CenterCoordSys() {
     return O;
 }
 
-void DEMSolver::UseHistorylessModel(bool useHistoryless) {
+void DEMSolver::DefineContactForceModel(const std::string& model) {
+    m_force_model = model;
+    m_user_defined_force_model = true;
+}
+
+void DEMSolver::SetSolverHistoryless(bool useHistoryless) {
     m_isHistoryless = useHistoryless;
-    if (useHistoryless && (!m_user_defined_force_model)) {
-        m_force_model = DEM_HERTZIAN_FORCE_MODEL_HISTORYLESS();
-    }
+    SGPS_DEM_WARNING(
+        "Solver is manually set to be in historyless mode. This will require a compatible force model.\nThe user can "
+        "pick from the stock frictionless models, or define their own.");
+}
+
+void DEMSolver::UseFrictionalHertziaModel() {
+    m_isHistoryless = false;
+    m_force_model = DEM_HERTZIAN_FORCE_MODEL();
+    m_user_defined_force_model = false;
+}
+
+void DEMSolver::UseFrictionlessHertzianModel() {
+    m_isHistoryless = true;
+    m_force_model = DEM_HERTZIAN_FORCE_MODEL_HISTORYLESS();
+    m_user_defined_force_model = false;
 }
 
 void DEMSolver::SetExpandFactor(float beta) {
@@ -161,11 +178,6 @@ void DEMSolver::ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const
 }
 
 void DEMSolver::ChangeFamilyNow(unsigned int ID_from, unsigned int ID_to) {}
-
-void DEMSolver::DefineContactForceModel(const std::string& model) {
-    m_force_model = model;
-    m_user_defined_force_model = true;
-}
 
 void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
                                           const std::string& velX,

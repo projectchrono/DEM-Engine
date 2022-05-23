@@ -67,8 +67,14 @@ class DEMSolver {
     /// Explicitly instruct the bin size (for contact detection) that the solver should use
     void InstructBinSize(double bin_size);
 
-    /// Instruct the solver to save time by using historyless contact model
-    void UseHistorylessModel(bool useHistoryless = true);
+    /// Manually instruct the solver to save time by using historyless contact model (usually not needed to call)
+    void SetSolverHistoryless(bool useHistoryless = true);
+
+    /// Instruct the solver to use frictonal (history-based) Hertzian contact force model
+    void UseFrictionalHertziaModel();
+
+    /// Instruct the solver to use frictonless Hertzian contact force model
+    void UseFrictionlessHertzianModel();
 
     /// Instruct the solver if contact pair arrays should be sorted before usage. This is needed if history-based model
     /// is in use.

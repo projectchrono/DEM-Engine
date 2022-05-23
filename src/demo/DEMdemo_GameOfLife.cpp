@@ -21,7 +21,7 @@ using namespace std::filesystem;
 int main() {
     DEMSolver DEM_sim;
     DEM_sim.SetVerbosity(INFO);
-    DEM_sim.UseHistorylessModel(true);
+    DEM_sim.SetSolverHistoryless(true);
 
     srand(777);
 

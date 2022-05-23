@@ -16,6 +16,7 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEM_sim;
+    DEM_sim.UseFrictionalHertziaModel();
     DEM_sim.SetVerbosity(INFO);
 
     srand(time(NULL));

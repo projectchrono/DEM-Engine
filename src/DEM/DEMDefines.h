@@ -85,7 +85,7 @@ constexpr unsigned int DEM_RESERVED_FAMILY_NUM = ((unsigned int)1 << (sizeof(fam
 
 // Some enums...
 // Friction mode
-enum class DEM_FRICTION_MODE { HISTORYLESS, MULTI_STEP };
+enum class DEM_FRICTION_MODE { FRICTIONLESS, MULTI_STEP };
 // Verbosity
 enum DEM_VERBOSITY {
     QUIET = 0,
