@@ -70,7 +70,7 @@ class DEMSolver {
     void SetSolverHistoryless(bool useHistoryless = true);
 
     /// Instruct the solver to use frictonal (history-based) Hertzian contact force model
-    void UseFrictionalHertziaModel();
+    void UseFrictionalHertzianModel();
 
     /// Instruct the solver to use frictonless Hertzian contact force model
     void UseFrictionlessHertzianModel();

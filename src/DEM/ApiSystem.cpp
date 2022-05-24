@@ -97,7 +97,7 @@ void DEMSolver::SetSolverHistoryless(bool useHistoryless) {
         "pick from the stock frictionless models, or define their own.");
 }
 
-void DEMSolver::UseFrictionalHertziaModel() {
+void DEMSolver::UseFrictionalHertzianModel() {
     m_isHistoryless = false;
     m_force_model = DEM_HERTZIAN_FORCE_MODEL();
     m_user_defined_force_model = false;
@@ -105,7 +105,7 @@ void DEMSolver::UseFrictionalHertziaModel() {
 
 void DEMSolver::UseFrictionlessHertzianModel() {
     m_isHistoryless = true;
-    m_force_model = DEM_HERTZIAN_FORCE_MODEL_HISTORYLESS();
+    m_force_model = DEM_HERTZIAN_FORCE_MODEL_FRICTIONLESS();
     m_user_defined_force_model = false;
 }
 
