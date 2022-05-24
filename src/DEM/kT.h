@@ -210,6 +210,8 @@ class DEMKinematicThread {
     bool isUserCallDone();
     // Reset userCallDone back to false
     void resetUserCallStat();
+    // Return the approximate RAM usage
+    size_t estimateMemUsage() const;
 
     // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
     void allocateManagedArrays(size_t nOwnerBodies,

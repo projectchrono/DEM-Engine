@@ -14,7 +14,6 @@
 #include <core/utils/ManagedAllocator.hpp>
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
-#include <core/utils/Macros.h>
 #include <helper_math.cuh>
 #include <DEM/DEMDefines.h>
 #include <DEM/DEMStructs.h>

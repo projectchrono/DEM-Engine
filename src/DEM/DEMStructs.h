@@ -6,6 +6,8 @@
 
 #include <DEM/DEMDefines.h>
 #include <core/utils/ManagedAllocator.hpp>
+#include <sstream>
+#include <exception>
 
 namespace sgps {
 // Structs defined here will be used by some host classes in DEM.
@@ -202,6 +204,117 @@ class DEMSolverStateDataKT {
     }
 };
 
+inline std::string pretty_format_bytes(size_t bytes) {
+    // set up byte prefixes
+    constexpr size_t KIBI = 1024;
+    constexpr size_t MEBI = KIBI * KIBI;
+    constexpr size_t GIBI = KIBI * KIBI * KIBI;
+    float gibival = float(bytes) / GIBI;
+    float mebival = float(bytes) / MEBI;
+    float kibival = float(bytes) / KIBI;
+    std::stringstream ret;
+    if (gibival > 1) {
+        ret << gibival << " GiB";
+    } else if (mebival > 1) {
+        ret << mebival << " MiB";
+    } else if (kibival > 1) {
+        ret << kibival << " KiB";
+    } else {
+        ret << bytes << " B";
+    }
+    return ret.str();
+}
+
+// =============================================================================
+// NOW DEFINING MACRO COMMANDS USED BY THE DEM MODULE
+// =============================================================================
+
+#define SGPS_DEM_ERROR(...)                                      \
+    {                                                            \
+        if (verbosity >= DEM_VERBOSITY::ERROR) {                 \
+            char error_message[256];                             \
+            sprintf(error_message, __VA_ARGS__);                 \
+            printf("\nERROR! ");                                 \
+            printf("%s", error_message);                         \
+            printf("\n%s", __func__);                            \
+        }                                                        \
+        throw std::runtime_error("\nEXITING SGPS SIMULATION\n"); \
+    }
+
+#define SGPS_DEM_WARNING(...)                      \
+    {                                              \
+        if (verbosity >= DEM_VERBOSITY::WARNING) { \
+            printf("\nWARNING! ");                 \
+            printf(__VA_ARGS__);                   \
+            printf("\n\n");                        \
+        }                                          \
+    }
+
+#define SGPS_DEM_INFO(...)                      \
+    {                                           \
+        if (verbosity >= DEM_VERBOSITY::INFO) { \
+            printf(__VA_ARGS__);                \
+            printf("\n");                       \
+        }                                       \
+    }
+
+#define SGPS_DEM_INFO_STEP_STATS(...)                      \
+    {                                                      \
+        if (verbosity >= DEM_VERBOSITY::INFO_STEP_STATS) { \
+            printf(__VA_ARGS__);                           \
+            printf("\n");                                  \
+        }                                                  \
+    }
+
+#define SGPS_DEM_INFO_STEP_WARN(...)                      \
+    {                                                     \
+        if (verbosity >= DEM_VERBOSITY::INFO_STEP_WARN) { \
+            printf(__VA_ARGS__);                          \
+            printf("\n");                                 \
+        }                                                 \
+    }
+
+#define SGPS_DEM_DEBUG_PRINTF(...)               \
+    {                                            \
+        if (verbosity >= DEM_VERBOSITY::DEBUG) { \
+            printf(__VA_ARGS__);                 \
+            printf("\n");                        \
+        }                                        \
+    }
+
+#define SGPS_DEM_DEBUG_EXEC(...)                 \
+    {                                            \
+        if (verbosity >= DEM_VERBOSITY::DEBUG) { \
+            __VA_ARGS__;                         \
+        }                                        \
+    }
+
+#define SGPS_DEM_TRACKED_RESIZE_NOPRINT(vec, newsize)          \
+    {                                                          \
+        size_t item_size = sizeof(decltype(vec)::value_type);  \
+        size_t old_size = vec.size();                          \
+        vec.resize(newsize);                                   \
+        size_t new_size = vec.size();                          \
+        size_t byte_delta = item_size * (new_size - old_size); \
+        m_approx_bytes_used += byte_delta;                     \
+    }
+
+#define SGPS_DEM_TRACKED_RESIZE(vec, newsize, name, val)                                                          \
+    {                                                                                                             \
+        size_t item_size = sizeof(decltype(vec)::value_type);                                                     \
+        size_t old_size = vec.size();                                                                             \
+        vec.resize(newsize, val);                                                                                 \
+        size_t new_size = vec.size();                                                                             \
+        size_t byte_delta = item_size * (new_size - old_size);                                                    \
+        m_approx_bytes_used += byte_delta;                                                                        \
+        SGPS_DEM_INFO_STEP_STATS("Resizing vector %s, old size %zu, new size %zu, byte delta %s", name, old_size, \
+                                 new_size, pretty_format_bytes(byte_delta).c_str());                              \
+    }
+
+// =============================================================================
+// NOW SOME HOST-SIDE SIMPLE STRUCTS USED BY THE DEM MODULE
+// =============================================================================
+
 struct SolverFlags {
     // Sort contact pair arrays before sending to kT
     bool should_sort_pairs = true;
@@ -213,7 +326,7 @@ struct SolverFlags {
     bool isHistoryless = false;
     // This run uses contact detection in an async fashion
     bool isAsync = true;
-    // If family number can potentially change during the simulation (because of user intervention)
+    // If family number can potentially change (at each time step) during the simulation, because of user intervention
     bool canFamilyChange = false;
 };
 

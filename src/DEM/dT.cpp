@@ -7,7 +7,6 @@
 #include <thread>
 
 #include <core/ApiVersion.h>
-#include <core/utils/Macros.h>
 #include <core/utils/chpf/particle_writer.hpp>
 #include <DEM/dT.h>
 #include <DEM/kT.h>
@@ -163,73 +162,74 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     simParams->nMatTuples = nMatTuples;
 
     // Resize to the number of clumps
-    TRACKED_VECTOR_RESIZE(inertiaPropOffsets, nOwnerBodies, "inertiaPropOffsets", 0);
-    TRACKED_VECTOR_RESIZE(familyID, nOwnerBodies, "familyID", 0);
-    TRACKED_VECTOR_RESIZE(voxelID, nOwnerBodies, "voxelID", 0);
-    TRACKED_VECTOR_RESIZE(locX, nOwnerBodies, "locX", 0);
-    TRACKED_VECTOR_RESIZE(locY, nOwnerBodies, "locY", 0);
-    TRACKED_VECTOR_RESIZE(locZ, nOwnerBodies, "locZ", 0);
-    TRACKED_VECTOR_RESIZE(oriQ0, nOwnerBodies, "oriQ0", 1);
-    TRACKED_VECTOR_RESIZE(oriQ1, nOwnerBodies, "oriQ1", 0);
-    TRACKED_VECTOR_RESIZE(oriQ2, nOwnerBodies, "oriQ2", 0);
-    TRACKED_VECTOR_RESIZE(oriQ3, nOwnerBodies, "oriQ3", 0);
-    TRACKED_VECTOR_RESIZE(vX, nOwnerBodies, "vX", 0);
-    TRACKED_VECTOR_RESIZE(vY, nOwnerBodies, "vY", 0);
-    TRACKED_VECTOR_RESIZE(vZ, nOwnerBodies, "vZ", 0);
-    TRACKED_VECTOR_RESIZE(omgBarX, nOwnerBodies, "omgBarX", 0);
-    TRACKED_VECTOR_RESIZE(omgBarY, nOwnerBodies, "omgBarY", 0);
-    TRACKED_VECTOR_RESIZE(omgBarZ, nOwnerBodies, "omgBarZ", 0);
-    TRACKED_VECTOR_RESIZE(aX, nOwnerBodies, "aX", 0);
-    TRACKED_VECTOR_RESIZE(aY, nOwnerBodies, "aY", 0);
-    TRACKED_VECTOR_RESIZE(aZ, nOwnerBodies, "aZ", 0);
-    TRACKED_VECTOR_RESIZE(alphaX, nOwnerBodies, "alphaX", 0);
-    TRACKED_VECTOR_RESIZE(alphaY, nOwnerBodies, "alphaY", 0);
-    TRACKED_VECTOR_RESIZE(alphaZ, nOwnerBodies, "alphaZ", 0);
+    SGPS_DEM_TRACKED_RESIZE(inertiaPropOffsets, nOwnerBodies, "inertiaPropOffsets", 0);
+    SGPS_DEM_TRACKED_RESIZE(familyID, nOwnerBodies, "familyID", 0);
+    SGPS_DEM_TRACKED_RESIZE(voxelID, nOwnerBodies, "voxelID", 0);
+    SGPS_DEM_TRACKED_RESIZE(locX, nOwnerBodies, "locX", 0);
+    SGPS_DEM_TRACKED_RESIZE(locY, nOwnerBodies, "locY", 0);
+    SGPS_DEM_TRACKED_RESIZE(locZ, nOwnerBodies, "locZ", 0);
+    SGPS_DEM_TRACKED_RESIZE(oriQ0, nOwnerBodies, "oriQ0", 1);
+    SGPS_DEM_TRACKED_RESIZE(oriQ1, nOwnerBodies, "oriQ1", 0);
+    SGPS_DEM_TRACKED_RESIZE(oriQ2, nOwnerBodies, "oriQ2", 0);
+    SGPS_DEM_TRACKED_RESIZE(oriQ3, nOwnerBodies, "oriQ3", 0);
+    SGPS_DEM_TRACKED_RESIZE(vX, nOwnerBodies, "vX", 0);
+    SGPS_DEM_TRACKED_RESIZE(vY, nOwnerBodies, "vY", 0);
+    SGPS_DEM_TRACKED_RESIZE(vZ, nOwnerBodies, "vZ", 0);
+    SGPS_DEM_TRACKED_RESIZE(omgBarX, nOwnerBodies, "omgBarX", 0);
+    SGPS_DEM_TRACKED_RESIZE(omgBarY, nOwnerBodies, "omgBarY", 0);
+    SGPS_DEM_TRACKED_RESIZE(omgBarZ, nOwnerBodies, "omgBarZ", 0);
+    SGPS_DEM_TRACKED_RESIZE(aX, nOwnerBodies, "aX", 0);
+    SGPS_DEM_TRACKED_RESIZE(aY, nOwnerBodies, "aY", 0);
+    SGPS_DEM_TRACKED_RESIZE(aZ, nOwnerBodies, "aZ", 0);
+    SGPS_DEM_TRACKED_RESIZE(alphaX, nOwnerBodies, "alphaX", 0);
+    SGPS_DEM_TRACKED_RESIZE(alphaY, nOwnerBodies, "alphaY", 0);
+    SGPS_DEM_TRACKED_RESIZE(alphaZ, nOwnerBodies, "alphaZ", 0);
 
     // Resize to the number of spheres
-    TRACKED_VECTOR_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
-    TRACKED_VECTOR_RESIZE(clumpComponentOffset, nSpheresGM, "sphereRadiusOffset", 0);
-    TRACKED_VECTOR_RESIZE(materialTupleOffset, nSpheresGM, "materialTupleOffset", 0);
+    SGPS_DEM_TRACKED_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
+    SGPS_DEM_TRACKED_RESIZE(clumpComponentOffset, nSpheresGM, "sphereRadiusOffset", 0);
+    SGPS_DEM_TRACKED_RESIZE(materialTupleOffset, nSpheresGM, "materialTupleOffset", 0);
 
     // Resize to the length of the clump templates
-    TRACKED_VECTOR_RESIZE(massClumpBody, nClumpTopo, "massClumpBody", 0);
-    TRACKED_VECTOR_RESIZE(mmiXX, nClumpTopo, "mmiXX", 0);
-    TRACKED_VECTOR_RESIZE(mmiYY, nClumpTopo, "mmiYY", 0);
-    TRACKED_VECTOR_RESIZE(mmiZZ, nClumpTopo, "mmiZZ", 0);
-    TRACKED_VECTOR_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);
-    TRACKED_VECTOR_RESIZE(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
-    TRACKED_VECTOR_RESIZE(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
-    TRACKED_VECTOR_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
-    TRACKED_VECTOR_RESIZE(EProxy, nMatTuples, "EProxy", 0);
-    TRACKED_VECTOR_RESIZE(nuProxy, nMatTuples, "nuProxy", 0);
-    TRACKED_VECTOR_RESIZE(CoRProxy, nMatTuples, "CoRProxy", 0);
-    TRACKED_VECTOR_RESIZE(muProxy, nMatTuples, "muProxy", 0);
-    TRACKED_VECTOR_RESIZE(CrrProxy, nMatTuples, "CrrProxy", 0);
+    SGPS_DEM_TRACKED_RESIZE(massClumpBody, nClumpTopo, "massClumpBody", 0);
+    SGPS_DEM_TRACKED_RESIZE(mmiXX, nClumpTopo, "mmiXX", 0);
+    SGPS_DEM_TRACKED_RESIZE(mmiYY, nClumpTopo, "mmiYY", 0);
+    SGPS_DEM_TRACKED_RESIZE(mmiZZ, nClumpTopo, "mmiZZ", 0);
+    SGPS_DEM_TRACKED_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);
+    SGPS_DEM_TRACKED_RESIZE(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
+    SGPS_DEM_TRACKED_RESIZE(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
+    SGPS_DEM_TRACKED_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
+    SGPS_DEM_TRACKED_RESIZE(EProxy, nMatTuples, "EProxy", 0);
+    SGPS_DEM_TRACKED_RESIZE(nuProxy, nMatTuples, "nuProxy", 0);
+    SGPS_DEM_TRACKED_RESIZE(CoRProxy, nMatTuples, "CoRProxy", 0);
+    SGPS_DEM_TRACKED_RESIZE(muProxy, nMatTuples, "muProxy", 0);
+    SGPS_DEM_TRACKED_RESIZE(CrrProxy, nMatTuples, "CrrProxy", 0);
 
     // Arrays for contact info
     // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is 2n, and I
     // think the max is 6n (although I can't prove it). Note the estimate should be large enough to decrease the number
     // of reallocations in the simulation, but not too large that eats too much memory.
-    TRACKED_VECTOR_RESIZE(idGeometryA, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryA", 0);
-    TRACKED_VECTOR_RESIZE(idGeometryB, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryB", 0);
-    TRACKED_VECTOR_RESIZE(contactForces, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactForces", make_float3(0));
-    TRACKED_VECTOR_RESIZE(contactHistory, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactHistory",
-                          make_float3(0));
-    TRACKED_VECTOR_RESIZE(contactType, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactType", DEM_NOT_A_CONTACT);
-    TRACKED_VECTOR_RESIZE(contactPointGeometryA, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactPointGeometryA",
-                          make_float3(0));
-    TRACKED_VECTOR_RESIZE(contactPointGeometryB, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactPointGeometryB",
-                          make_float3(0));
+    SGPS_DEM_TRACKED_RESIZE(idGeometryA, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryA", 0);
+    SGPS_DEM_TRACKED_RESIZE(idGeometryB, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryB", 0);
+    SGPS_DEM_TRACKED_RESIZE(contactForces, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactForces",
+                            make_float3(0));
+    SGPS_DEM_TRACKED_RESIZE(contactHistory, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactHistory",
+                            make_float3(0));
+    SGPS_DEM_TRACKED_RESIZE(contactType, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactType", DEM_NOT_A_CONTACT);
+    SGPS_DEM_TRACKED_RESIZE(contactPointGeometryA, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactPointGeometryA",
+                            make_float3(0));
+    SGPS_DEM_TRACKED_RESIZE(contactPointGeometryB, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactPointGeometryB",
+                            make_float3(0));
 
     // Transfer buffer arrays
     // The following several arrays will have variable sizes, so here we only used an estimate.
-    TRACKED_VECTOR_RESIZE(idGeometryA_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryA_buffer", 0);
-    TRACKED_VECTOR_RESIZE(idGeometryB_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryB_buffer", 0);
-    TRACKED_VECTOR_RESIZE(contactType_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactType_buffer",
-                          DEM_NOT_A_CONTACT);
+    SGPS_DEM_TRACKED_RESIZE(idGeometryA_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryA_buffer", 0);
+    SGPS_DEM_TRACKED_RESIZE(idGeometryB_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryB_buffer", 0);
+    SGPS_DEM_TRACKED_RESIZE(contactType_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactType_buffer",
+                            DEM_NOT_A_CONTACT);
     if (!solverFlags.isHistoryless) {
-        TRACKED_VECTOR_RESIZE(contactMapping_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactMapping",
-                              DEM_NULL_MAPPING_PARTNER);
+        SGPS_DEM_TRACKED_RESIZE(contactMapping_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactMapping",
+                                DEM_NULL_MAPPING_PARTNER);
     }
 }
 
@@ -438,12 +438,12 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
 }
 
 inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
-    TRACKED_QUICK_VECTOR_RESIZE(idGeometryA, nContactPairs);
-    TRACKED_QUICK_VECTOR_RESIZE(idGeometryB, nContactPairs);
-    TRACKED_QUICK_VECTOR_RESIZE(contactType, nContactPairs);
-    TRACKED_QUICK_VECTOR_RESIZE(contactForces, nContactPairs);
-    TRACKED_QUICK_VECTOR_RESIZE(contactPointGeometryA, nContactPairs);
-    TRACKED_QUICK_VECTOR_RESIZE(contactPointGeometryB, nContactPairs);
+    SGPS_DEM_TRACKED_RESIZE_NOPRINT(idGeometryA, nContactPairs);
+    SGPS_DEM_TRACKED_RESIZE_NOPRINT(idGeometryB, nContactPairs);
+    SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactType, nContactPairs);
+    SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactForces, nContactPairs);
+    SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactPointGeometryA, nContactPairs);
+    SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactPointGeometryB, nContactPairs);
 
     // Re-pack pointers in case the arrays got reallocated
     granData->idGeometryA = idGeometryA.data();
@@ -578,7 +578,7 @@ inline void DEMDynamicThread::migrateContactHistory() {
 
     // Copy new history back to history array (after resizing the `main' history array)
     if (*stateOfSolver_resources.pNumContacts > contactHistory.size()) {
-        TRACKED_QUICK_VECTOR_RESIZE(contactHistory, *stateOfSolver_resources.pNumContacts);
+        SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactHistory, *stateOfSolver_resources.pNumContacts);
         granData->contactHistory = contactHistory.data();
     }
     GPU_CALL(cudaMemcpy(granData->contactHistory, newHistory, (*stateOfSolver_resources.pNumContacts) * sizeof(float3),
@@ -819,6 +819,10 @@ void DEMDynamicThread::resetUserCallStat() {
     pSchedSupport->dynamicDone = false;
     pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
     contactPairArr_isFresh = true;
+}
+
+size_t DEMDynamicThread::estimateMemUsage() const {
+    return m_approx_bytes_used;
 }
 
 void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,

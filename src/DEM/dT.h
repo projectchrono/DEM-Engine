@@ -318,6 +318,8 @@ class DEMDynamicThread {
     bool isUserCallDone();
     // Reset userCallDone back to false
     void resetUserCallStat();
+    // Return the approximate RAM usage
+    size_t estimateMemUsage() const;
 
     // Jitify dT kernels (at initialization) based on existing knowledge of this run
     void jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,

@@ -6,7 +6,6 @@
 // #include <thrust/sort.h>
 #include <core/utils/JitHelper.h>
 #include <helper_math.cuh>
-#include <core/utils/Macros.h>
 
 #include <algorithms/DEMCubBasedSubroutines.h>
 #include <DEM/HostSideHelpers.cpp>
@@ -23,9 +22,9 @@ inline void contactEventArraysResize(size_t nContactPairs,
                                      std::vector<contact_t, ManagedAllocator<contact_t>>& contactType,
                                      DEMDataKT* granData) {
     // TODO: not tracked? Gotta do something on it
-    // TRACKED_QUICK_VECTOR_RESIZE(idGeometryA, nContactPairs);
-    // TRACKED_QUICK_VECTOR_RESIZE(idGeometryB, nContactPairs);
-    // TRACKED_QUICK_VECTOR_RESIZE(contactType, nContactPairs);
+    // SGPS_DEM_TRACKED_RESIZE_NOPRINT(idGeometryA, nContactPairs);
+    // SGPS_DEM_TRACKED_RESIZE_NOPRINT(idGeometryB, nContactPairs);
+    // SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactType, nContactPairs);
     idGeometryA.resize(nContactPairs);
     idGeometryB.resize(nContactPairs);
     contactType.resize(nContactPairs);

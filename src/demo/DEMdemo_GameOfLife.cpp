@@ -31,7 +31,7 @@ int main() {
     float grid_size = 1.0;
     float r = (1.45 * grid_size) / 2.0;
     float world_size = 2500.0;
-    unsigned int n_init = 4000;
+    unsigned int n_init = 10000;
 
     // Bin size can be somewhat large
     DEM_sim.InstructBinSize(grid_size * 3.0);
@@ -99,7 +99,8 @@ int main() {
     DEM_sim.DisableContactBetweenFamilies(DEM_RESERVED_FAMILY_NUM, DEM_RESERVED_FAMILY_NUM);
 
     // The rule for changing family numbers is simple: you die, move to DEM_RESERVED_FAMILY_NUM; live, move to 0. And
-    // then, family DEM_RESERVED_FAMILY_NUM will not be outputted. Dead to alive: if you have 3 alive neighbours
+    // then, family DEM_RESERVED_FAMILY_NUM will not be outputted.
+    // Dead to alive: if you have 3 alive neighbours
     DEM_sim.ChangeFamilyWhen(
         DEM_RESERVED_FAMILY_NUM, 0,
         "float my_neighbours = length(acc * mass); return (my_neighbours > 2.9) && (my_neighbours < 3.1);");
