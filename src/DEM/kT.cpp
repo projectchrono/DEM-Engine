@@ -344,7 +344,7 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     }
 }
 
-void DEMKinematicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
+void DEMKinematicThread::populateManagedArrays(const std::vector<clumpBodyInertiaOffset_t>& input_clump_types,
                                                const std::vector<unsigned int>& input_clump_family,
                                                const std::vector<unsigned int>& input_ext_obj_family,
                                                const std::unordered_map<unsigned int, family_t>& family_user_impl_map,

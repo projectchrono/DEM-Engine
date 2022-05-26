@@ -8,6 +8,7 @@
 #include <core/utils/ManagedAllocator.hpp>
 #include <sstream>
 #include <exception>
+#include <helper_math.cuh>
 
 namespace sgps {
 // Structs defined here will be used by some host classes in DEM.
@@ -337,6 +338,24 @@ struct DEMMaterial {
     float CoR = 0.5;   // Coeff of Restitution
     float mu = 0.5;    // Static friction coeff
     float Crr = 0.01;  // Rolling resistance coeff
+};
+
+// A struct that defines a `clump' (one of the core concepts of this solver). A clump is typically small which consists
+// of several sphere components, but it can be as large as having thousands of spheres.
+struct DEMClumpTemplate {
+    float mass;
+    float3 MOI;
+    std::vector<float> radii;
+    std::vector<float3> relPos;
+    std::vector<std::shared_ptr<DEMMaterial>> materials;
+    unsigned int nComp = 0;  // Number of components
+    // Position of this clump's CoM, in the frame which is used to report the positions of this clump's component
+    // spheres. It is usually all 0, unless the user specifies it, in which case we need to process relPos such that
+    // when the system is initialized, everything is still in the clump's CoM frame.
+    float3 CoM = make_float3(0);
+    // Each clump template will have a unique mark number. When clumps are loaded to the system, this mark will help
+    // find their type offset.
+    unsigned int mark;
 };
 
 }  // namespace sgps

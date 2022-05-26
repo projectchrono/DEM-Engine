@@ -32,7 +32,7 @@ class DEMSolver {
     virtual ~DEMSolver();
 
     /// Set output detail level
-    void SetVerbosity(DEM_VERBOSITY verbose);
+    void SetVerbosity(DEM_VERBOSITY verbose) { verbosity = verbose; }
 
     /// Instruct the dimension of the ``world'', as well as the origin point of this ``world''. On initialization, this
     /// info will be used to figure out how to assign the num of voxels in each direction. If your ``useful'' domain is
@@ -50,21 +50,30 @@ class DEMSolver {
                                    float3 O = make_float3(0));
 
     /// Set gravity
-    void SetGravitationalAcceleration(float3 g);
+    void SetGravitationalAcceleration(float3 g) { G = g; }
     /// Set a constant time step size
-    void SetTimeStepSize(double ts_size);
+    void SetTimeStepSize(double ts_size) { m_ts_size = ts_size; }
     /// Set the number of dT steps before it waits for a contact-pair info update from kT
     void SetCDUpdateFreq(int freq) { m_updateFreq = freq; }
     // TODO: Implement an API that allows setting ts size through a list
 
     /// A convenient call that sets the origin of your coordinate system to be in the very center of your simulation
-    /// ``world''. Useful especially you feel like having this ``world'' large to safely hold everything, and don't
-    /// quite care about the amount of accuracy lost by not fine-tuning the ``world'' size. Returns the coordinate of
-    /// the left-bottom-front point of your simulation ``world'' after this operation.
+    /// `world'. Useful especially you feel like having this `world' large to safely hold everything, and don't
+    /// quite care about the amount of accuracy lost by not fine-tuning the `world' size. Returns the coordinate of
+    /// the left-bottom-front point of your simulation `world' after this operation.
     float3 CenterCoordSys();
 
     /// Explicitly instruct the bin size (for contact detection) that the solver should use
-    void InstructBinSize(double bin_size);
+    void InstructBinSize(double bin_size) {
+        m_use_user_instructed_bin_size = true;
+        m_binSize = bin_size;
+    }
+
+    /// Explicitly instruct the sizes for the arrays at initialization time. This is useful when the number of owners
+    /// tends to change (especially gradually increase) frequently in the simulation, by reducing the need for
+    /// reallocation. Note however, whatever instruction the user gives here it won't affect the correctness of the
+    /// simulation, since if the arrays are not long enough they will always be auto-resized.
+    void InstructNumOwners(size_t numOwners) { m_instructed_num_owners = numOwners; }
 
     /// Manually instruct the solver to save time by using historyless contact model (usually not needed to call)
     void SetSolverHistoryless(bool useHistoryless = true);
@@ -77,36 +86,44 @@ class DEMSolver {
 
     /// Instruct the solver if contact pair arrays should be sorted before usage. This is needed if history-based model
     /// is in use.
-    void SetSortContactPairs(bool use_sort);
+    void SetSortContactPairs(bool use_sort) { kT_should_sort = use_sort; }
 
     // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
     void UseCompactForceKernel(bool use_compact);
 
     /// (Explicitly) set the amount by which the radii of the spheres (and the thickness of the boundaries) are expanded
     /// for the purpose of contact detection (safe, and creates false positives).
-    void SetExpandFactor(float beta);
+    void SetExpandFactor(float beta) { m_expand_factor = beta; }
     /// Input the maximum expected particle velocity and simulation time per contact detection (a.k.a per kT run), to
     /// help the solver automatically select a expand factor.
-    void SuggestExpandFactor(float max_vel, float max_time_per_CD);
+    void SuggestExpandFactor(float max_vel, float max_time_per_CD) { m_expand_factor = max_vel * max_time_per_CD; }
     /// If using constant step size and the step size is set, then inputting only the max expected velocity is fine.
     void SuggestExpandFactor(float max_vel);
     /// Further enlarge the safety perimeter needed by the input amount. Large number means even safer contact detection
     /// (missing no contacts), but creates more false positives, and risks leading to more bodies in a bin than a block
     /// can handle.
-    void SuggestExpandSafetyParam(float param);
+    void SuggestExpandSafetyParam(float param) { m_expand_safety_param = param; }
 
-    /// Load possible clump types into the API-level cache.
-    /// Return the index of the clump type just loaded.
-    unsigned int LoadClumpType(float mass,
-                               float3 moi,
-                               const std::vector<float>& sp_radii,
-                               const std::vector<float3>& sp_locations_xyz,
-                               const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials);
-    // TODO: need to overload with (vec_distinctSphereRadiiOffset_default_t spheres_component_type, vec_float3
-    // location). If this method is called then corresponding sphere_types must have been defined via LoadSphereType.
+    /// Load possible clump types into the API-level cache
+    /// Return the shared ptr to the clump type just loaded
+    std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
+                                                    float3 moi,
+                                                    const std::vector<float>& sp_radii,
+                                                    const std::vector<float3>& sp_locations_xyz,
+                                                    const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials);
+    /// An overload of LoadClumpType where all components use the same material
+    std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
+                                                    float3 moi,
+                                                    const std::vector<float>& sp_radii,
+                                                    const std::vector<float3>& sp_locations_xyz,
+                                                    const std::shared_ptr<DEMMaterial>& sp_material);
+    /// An overload of LoadClumpType where the user builds the DEMClumpTemplate struct themselves then supply it
+    std::shared_ptr<DEMClumpTemplate> LoadClumpType(DEMClumpTemplate& clump);
 
     /// A simplified version of LoadClumpType: it just loads a one-sphere clump template
-    unsigned int LoadClumpSimpleSphere(float mass, float radius, const std::shared_ptr<DEMMaterial>& material);
+    std::shared_ptr<DEMClumpTemplate> LoadClumpSimpleSphere(float mass,
+                                                            float radius,
+                                                            const std::shared_ptr<DEMMaterial>& material);
 
     /// Load materials properties (Young's modulus, Poisson's ratio, Coeff of Restitution...) into
     /// the API-level cache. Return the ptr of the material type just loaded. If rho is not given then later
@@ -124,8 +141,8 @@ class DEMSolver {
     }
 
     /// Load input clumps (topology types and initial locations) on a per-pair basis
-    /// TODO: Add a overload that takes velocities too
     void AddClumps(const std::vector<unsigned int>& types, const std::vector<float3>& xyz);
+    void AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& types, const std::vector<float3>& xyz);
 
     /// Load input clump initial velocities on a per-body basis. If this is not called (or if this vector is shorter
     /// than the clump location vector, then for the unassigned part) the initial velocity is assumed to be 0.
@@ -134,10 +151,11 @@ class DEMSolver {
     /// Instruct each clump the type of prescribed motion it should follow. If this is not called (or if this vector is
     /// shorter than the clump location vector, then for the unassigned part) those clumps are defaulted to type 0,
     /// which is following `normal' physics.
-    void SetClumpFamily(const std::vector<unsigned int>& code);
+    void SetClumpFamilies(const std::vector<unsigned int>& code);
 
     /// Instruct the solver that the 2 input families should not have contacts (a.k.a. ignored, if such a pair is
-    /// encountered in contact detection). These 2 families can be the same (not contact within members of this family).
+    /// encountered in contact detection). These 2 families can be the same (which means no contact within members of
+    /// that family).
     void DisableContactBetweenFamilies(unsigned int ID1, unsigned int ID2);
 
     /// Mark all entities in this family to be fixed
@@ -244,8 +262,10 @@ class DEMSolver {
     std::vector<float> m_mu_proxy;
     std::vector<float> m_Crr_proxy;
 
-    // This is the cached clump structure information.
-    // It will be massaged into kernels upon Initialize.
+    // This is the cached clump structure information. Note although not stated explicitly, those are only `clump'
+    // templates, not including triangles, analytical geometries etc.
+    std::vector<std::shared_ptr<DEMClumpTemplate>> m_templates;
+    // Clump templates will be flatten and transferred into kernels upon Initialize()
     std::vector<float> m_template_mass;
     std::vector<float3> m_template_moi;
     std::vector<std::vector<unsigned int>> m_template_sp_mat_ids;
@@ -253,7 +273,7 @@ class DEMSolver {
     std::vector<std::vector<float3>> m_template_sp_relPos;
 
     // Shared pointers to external objects cached at the API system
-    std::vector<std::shared_ptr<DEMExternObj>> cachedExternObjs;
+    std::vector<std::shared_ptr<DEMExternObj>> cached_extern_objs;
 
     // Flattened (analytical) object component definition arrays, potentially jitifiable
     // These extra analytical entities' owners' ID will be appended to those added thru normal AddClump
@@ -262,14 +282,14 @@ class DEMSolver {
     std::vector<materialsOffset_t> m_anal_materials;
     // Initial locations of this obj's components relative to obj's CoM
     std::vector<float3> m_anal_comp_pos;
-    // Some float3 quantity that is representitive of an component's initial orientation (such as plane normal, and its
-    // meaning can vary ammong types)
+    // Some float3 quantity that is representitive of a component's initial orientation (such as plane normal, and its
+    // meaning can vary among different types)
     std::vector<float3> m_anal_comp_rot;
-    // Some float quantity that is representitive of an component's size (e.g. for a cylinder, top radius)
+    // Some float quantity that is representitive of a component's size (e.g. for a cylinder, top radius)
     std::vector<float> m_anal_size_1;
-    // Some float quantity that is representitive of an component's size (e.g. for a cylinder, bottom radius)
+    // Some float quantity that is representitive of a component's size (e.g. for a cylinder, bottom radius)
     std::vector<float> m_anal_size_2;
-    // Some float quantity that is representitive of an component's size (e.g. for a cylinder, its length)
+    // Some float quantity that is representitive of a component's size (e.g. for a cylinder, its length)
     std::vector<float> m_anal_size_3;
     // Component object types
     std::vector<objType_t> m_anal_types;
@@ -277,7 +297,7 @@ class DEMSolver {
     // is meaningless, since its normal is determined by its rotation.
     std::vector<objNormal_t> m_anal_normals;
     // Extra clumps are those loaded by adding external object. They typically consist of many spheres (~thousands).
-    std::vector<unsigned int> m_extra_clump_type;
+    std::vector<clumpBodyInertiaOffset_t> m_extra_clump_type;
     // Extra clumps' owners' ID will be appended to those added thru normal AddClump, and are consistent with external
     // obj IDs
     std::vector<unsigned int> m_extra_clump_owner;
@@ -356,12 +376,17 @@ class DEMSolver {
     size_t nTriEntities = 0;
     // nExtObj + nOwnerClumps + nTriEntities == nOwnerBodies
 
-    unsigned int nDistinctClumpComponents_computed;
+    // The number of user-estimated (max) number of owners that will be present in the simulation. If 0, then the arrays
+    // will just be resized at intialization based on the input size.
+    size_t m_instructed_num_owners = 0;
+
+    unsigned int nDistinctClumpComponents;
     unsigned int nDistinctClumpBodyTopologies;
+    unsigned int nDistinctMassProperties;
     unsigned int nMatTuples_computed;
     unsigned int nDistinctFamilies;
 
-    // Whether the number of voxels and length unit l is explicitly given by the user.
+    // Whether the number of voxels and length unit l is explicitly given by the user
     bool explicit_nv_override = false;
     // Whether the GPU-side systems have been initialized
     bool sys_initialized = false;
@@ -372,8 +397,11 @@ class DEMSolver {
     // unsigned int nDistinctSphereRadii_computed;
     // unsigned int nDistinctSphereRelativePositions_computed;
 
-    // cached state vectors such as the types and locations/velocities of the initial clumps to fill the sim domain with
-    std::vector<unsigned int> m_input_clump_types;
+    // Cached state vectors such as the types and locations/velocities of the initial clumps to fill the sim domain
+    // with. User managed arrays usually use unsigned int to represent integers and ensure safety; however
+    // m_input_clump_types tends to be long and should use _t definition. Same goes for m_extra_clump_type, but not
+    // user-input family number, because that number can be anything.
+    std::vector<clumpBodyInertiaOffset_t> m_input_clump_types;
     std::vector<float3> m_input_clump_xyz;
     // std::vector<float4> m_input_clump_rot;
     std::vector<float3> m_input_clump_vel;
@@ -403,7 +431,7 @@ class DEMSolver {
     std::unordered_map<unsigned int, family_t> m_family_user_impl_map;
     // TODO: fixed particles should automatically attain status indicating they don't interact with each other.
 
-    // Unlike clumps, external objects do not have _types (each is its own type), but
+    // Unlike clumps, external objects do not have _types (each is its own type)
     std::vector<float3> m_input_ext_obj_xyz;
     // std::vector<float4> m_input_ext_obj_rot;
     std::vector<unsigned int> m_input_ext_obj_family;
@@ -450,7 +478,11 @@ class DEMSolver {
     DEMKinematicThread* kT;
     DEMDynamicThread* dT;
 
+    /// Pre-process some user inputs so we acquire the knowledge on how to jitify the kernels
     void generateJITResources();
+    /// Flatten cached clump templates (from ClumpTemplate structs to float arrays)
+    void preprocessClumpTemplates();
+    /// Jitify GPU kernels, based on pre-processed user inputs
     void jitifyKernels();
     /// Figure out the unit length l and numbers of voxels along each direction, based on domain size X, Y, Z
     void figureOutNV();

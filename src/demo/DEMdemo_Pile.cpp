@@ -56,6 +56,9 @@ int main() {
     float ground_sp_r = 0.02;
     auto template_ground = DEM_sim.LoadClumpSimpleSphere(0.5, ground_sp_r, mat_type_1);
 
+    // Make an array to store these generated clump templates
+    std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
+
     // Then randomly create some clumps for piling up
     for (int i = 0; i < num_template; i++) {
         // first decide the number of spheres that live in this clump
@@ -93,36 +96,47 @@ int main() {
             seed_pos = relPos.at(choose_from);
         }
 
-        // it returns the numbering of this clump template (although here we don't care)
-        auto template_num = DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat);
+        // LoadClumpType returns a shared_ptr that points to this template so you may modify it. Also, material can be
+        // vector or a material shared ptr, and in the latter case it will just be applied to all component spheres this
+        // clump has.
+        auto clump_ptr = DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat_type_1);
+        // DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat);
     }
 
-    // generate ground clumps
-    std::vector<unsigned int> input_template_num;
+    // Generate ground clumps
+    std::vector<std::shared_ptr<DEMClumpTemplate>> input_ground_clump_type;
     std::vector<unsigned int> family_code;
-    auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, -3.8), make_float3(5.0, 5.0, 0.001), ground_sp_r * 1.3);
-    // // generate domain bottom
+    auto input_ground_xyz = DEMBoxGridSampler(make_float3(0, 0, -3.8), make_float3(5.0, 5.0, 0.001), ground_sp_r * 1.3);
+    // Generate domain bottom
     // auto domain_bottom = DEMBoxGridSampler(make_float3(0, 0, -10.0), make_float3(5.2, 5.2, 0.001), ground_sp_r
-    // * 1.3); input_xyz.insert(input_xyz.end(), domain_bottom.begin(), domain_bottom.end()); Mark family 1 as fixed
-    family_code.insert(family_code.end(), input_xyz.size(), 1);
+    // * 1.3); input_ground_xyz.insert(input_ground_xyz.end(), domain_bottom.begin(), domain_bottom.end()); Mark family
+    // 1 as fixed
+    family_code.insert(family_code.end(), input_ground_xyz.size(), 1);
     DEM_sim.DisableContactBetweenFamilies(1, 1);
     DEM_sim.SetFamilyFixed(1);
-    input_template_num.insert(input_template_num.end(), input_xyz.size(), template_ground);
+    input_ground_clump_type.insert(input_ground_clump_type.end(), input_ground_xyz.size(), template_ground);
+    DEM_sim.AddClumps(input_ground_clump_type, input_ground_xyz);
 
-    // generate initial clumps for piling
+    // Generate initial clumps for piling
+    // Clump template register array does not need to be a shared_ptr<DEMClumpTemplate> array. It can be an integer
+    // array where each element just refers to the number of a clump template you loaded, determined by the order thet
+    // were loaded. Of course, in our case, this means the second template, the third and so on.
+    std::vector<unsigned int> input_pile_template_type;
     float3 sample_center = make_float3(0, 0, -1);
     float sample_halfheight = 2;
     float sample_halfwidth = 0.7;
-    auto pile =
+    auto input_pile_xyz =
         DEMBoxGridSampler(sample_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight), 0.05);
-    input_xyz.insert(input_xyz.end(), pile.begin(), pile.end());
-    unsigned int num_clumps = pile.size();
+    unsigned int num_clumps = input_pile_xyz.size();
     for (unsigned int i = 0; i < num_clumps; i++) {
-        input_template_num.push_back(i % (num_template) + 1);
+        input_pile_template_type.push_back(i % num_template + 1);
         family_code.push_back(0);
     }
-    DEM_sim.AddClumps(input_template_num, input_xyz);
-    DEM_sim.SetClumpFamily(family_code);
+    // Calling AddClumps a second time will just add more clumps to the system, appending to the existing ones
+    DEM_sim.AddClumps(input_pile_template_type, input_pile_xyz);
+
+    // Assign family numbers to all families
+    DEM_sim.SetClumpFamilies(family_code);
 
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
     // DEM_sim.InstructBoxDomainNumVoxel(11, 11, 10, 1e-10);

@@ -40,6 +40,8 @@ int main() {
     float sieve_sp_r = 0.05;
     auto template_sieve = DEM_sim.LoadClumpSimpleSphere(5.0, sieve_sp_r, mat_type_1);
 
+    // An array to store these generated clump templates
+    std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
     for (int i = 0; i < num_template; i++) {
         // first decide the number of spheres that live in this clump
         int num_sphere = rand() % (max_sphere - min_sphere + 1) + 1;
@@ -77,10 +79,10 @@ int main() {
         }
 
         // it returns the numbering of this clump template (although here we don't care)
-        auto template_num = DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat);
+        clump_types.push_back(DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat));
     }
 
-    std::vector<unsigned int> input_template_num;
+    std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_type;
     std::vector<unsigned int> family_code;
 
     // generate sieve clumps
@@ -90,7 +92,7 @@ int main() {
     DEM_sim.SetFamilyPrescribedLinVel(1, "0", "0", "(t > 1.0) ? 2.0 * sin(5.0 * SGPS_PI * (t - 1.0)) : 0");
     // No contact within family 1
     DEM_sim.DisableContactBetweenFamilies(1, 1);
-    input_template_num.insert(input_template_num.end(), input_xyz.size(), template_sieve);
+    input_template_type.insert(input_template_type.end(), input_xyz.size(), template_sieve);
 
     // float sample_halfheight = 1.;
     float sample_halfheight = 0.15;
@@ -101,8 +103,9 @@ int main() {
         DEMBoxGridSampler(sample_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight), 0.07);
     input_xyz.insert(input_xyz.end(), pile.begin(), pile.end());
     unsigned int num_clumps = pile.size();
+    // Casually select from generated clump types
     for (unsigned int i = 0; i < num_clumps; i++) {
-        input_template_num.push_back(i % (num_template) + 1);
+        input_template_type.push_back(clump_types.at(i % num_template));
         family_code.push_back(0);
     }
 
@@ -118,8 +121,8 @@ int main() {
     // BC family does not interact with the sieve
     DEM_sim.DisableContactBetweenFamilies(1, 2);
 
-    DEM_sim.AddClumps(input_template_num, input_xyz);
-    DEM_sim.SetClumpFamily(family_code);
+    DEM_sim.AddClumps(input_template_type, input_xyz);
+    DEM_sim.SetClumpFamilies(family_code);
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
 
     DEM_sim.CenterCoordSys();

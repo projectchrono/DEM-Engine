@@ -42,24 +42,24 @@ int main() {
     auto template_ball = DEM_sim.LoadClumpSimpleSphere(0.5, ball_sp_r, mat_type_1);
 
     // generate ground clumps
-    std::vector<unsigned int> input_template_num;
+    std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_type;
     std::vector<unsigned int> family_code;
     std::vector<float3> input_vel;
     auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, 0), make_float3(ground_sp_r * 1, ground_sp_r * 1, 0.001),
                                        ground_sp_r * 1.2);
     // Mark family 1 as fixed
     family_code.insert(family_code.end(), input_xyz.size(), 1);
-    input_template_num.insert(input_template_num.end(), input_xyz.size(), template_ground);
+    input_template_type.insert(input_template_type.end(), input_xyz.size(), template_ground);
     input_vel.insert(input_vel.end(), input_xyz.size(), make_float3(0, 0, 0));
 
     // Add a ball rolling
-    input_template_num.push_back(template_ball);
+    input_template_type.push_back(template_ball);
     input_xyz.push_back(make_float3(0, 0, ground_sp_r + ball_sp_r));
     family_code.push_back(0);
     input_vel.push_back(make_float3(0, 0, 0));
 
-    DEM_sim.AddClumps(input_template_num, input_xyz);
-    DEM_sim.SetClumpFamily(family_code);
+    DEM_sim.AddClumps(input_template_type, input_xyz);
+    DEM_sim.SetClumpFamilies(family_code);
     DEM_sim.SetClumpVels(input_vel);
     // Family 1 (ground) particles have no contact among each other, and fixed
     DEM_sim.DisableContactBetweenFamilies(1, 1);

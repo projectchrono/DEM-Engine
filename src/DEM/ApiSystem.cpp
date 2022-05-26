@@ -38,14 +38,6 @@ DEMSolver::~DEMSolver() {
     delete dTkT_GpuManager;
 }
 
-void DEMSolver::SetVerbosity(DEM_VERBOSITY verbose) {
-    verbosity = verbose;
-}
-
-void DEMSolver::SetSortContactPairs(bool use_sort) {
-    kT_should_sort = use_sort;
-}
-
 // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
 void DEMSolver::UseCompactForceKernel(bool use_compact) {
     // This method works only if kT sort contact arrays first
@@ -68,7 +60,7 @@ void DEMSolver::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsi
     nvZp2 = z;
     m_boxLBF = O;
 
-    // Calculating ``world'' size by the input nvXp2 and l
+    // Calculating `world' size by the input nvXp2 and l
     m_voxelSize = (double)((size_t)1 << DEM_VOXEL_RES_POWER2) * (double)l;
     m_boxX = m_voxelSize * (double)((size_t)1 << x);
     m_boxY = m_voxelSize * (double)((size_t)1 << y);
@@ -92,9 +84,11 @@ void DEMSolver::DefineContactForceModel(const std::string& model) {
 
 void DEMSolver::SetSolverHistoryless(bool useHistoryless) {
     m_isHistoryless = useHistoryless;
-    SGPS_DEM_WARNING(
-        "Solver is manually set to be in historyless mode. This will require a compatible force model.\nThe user can "
-        "pick from the stock frictionless models, or define their own.");
+    if (useHistoryless) {
+        SGPS_DEM_WARNING(
+            "Solver is manually set to be in historyless mode. This will require a compatible force model.\nThe user "
+            "can pick from the stock frictionless models, or define their own.");
+    }
 }
 
 void DEMSolver::UseFrictionalHertzianModel() {
@@ -109,14 +103,6 @@ void DEMSolver::UseFrictionlessHertzianModel() {
     m_user_defined_force_model = false;
 }
 
-void DEMSolver::SetExpandFactor(float beta) {
-    m_expand_factor = beta;
-}
-
-void DEMSolver::SuggestExpandFactor(float max_vel, float max_time_per_CD) {
-    m_expand_factor = max_vel * max_time_per_CD;
-}
-
 void DEMSolver::SuggestExpandFactor(float max_vel) {
     if (m_ts_size <= 0.0) {
         SGPS_DEM_ERROR(
@@ -129,23 +115,6 @@ void DEMSolver::SuggestExpandFactor(float max_vel) {
             "the maximum expect velocity AND maximum time between contact detections as arguments.");
     }
     DEMSolver::SuggestExpandFactor(max_vel, m_ts_size * m_updateFreq);
-}
-
-void DEMSolver::SuggestExpandSafetyParam(float param) {
-    m_expand_safety_param = param;
-}
-
-void DEMSolver::InstructBinSize(double bin_size) {
-    m_use_user_instructed_bin_size = true;
-    m_binSize = bin_size;
-}
-
-void DEMSolver::SetGravitationalAcceleration(float3 g) {
-    G = g;
-}
-
-void DEMSolver::SetTimeStepSize(double ts_size) {
-    m_ts_size = ts_size;
 }
 
 void DEMSolver::SetFamilyFixed(unsigned int ID) {
@@ -243,35 +212,51 @@ std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterialType(float E, float nu, floa
     return LoadMaterialType(a_material);
 }
 
-unsigned int DEMSolver::LoadClumpType(float mass,
-                                      float3 moi,
-                                      const std::vector<float>& sp_radii,
-                                      const std::vector<float3>& sp_locations_xyz,
-                                      const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
-    auto len = sp_radii.size();
-    if (len != sp_locations_xyz.size() || len != sp_materials.size()) {
-        SGPS_DEM_ERROR("Arrays defining a clump topology type must all have the same length.");
+std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clump) {
+    if (clump.nComp != clump.radii.size() || clump.nComp != clump.relPos.size() ||
+        clump.nComp != clump.materials.size()) {
+        SGPS_DEM_ERROR(
+            "Radii, relative positions and material arrays defining a clump topology, must all have the same "
+            "length.\nIf you constructed a DEMClumpTemplate struct yourself, you may need to set nComp manually.");
     }
+    // Print the mark to this clump template
+    unsigned int offset = m_templates.size();
+    clump.mark = offset;
 
-    m_template_mass.push_back(mass);
-    m_template_moi.push_back(moi);
-    m_template_sp_radii.push_back(sp_radii);
-    m_template_sp_relPos.push_back(sp_locations_xyz);
-
-    // m_template_sp_mat_ids is an array of ints that represent the indices of the material array
-    std::vector<unsigned int> this_clump_sp_mat_ids;
-    for (const std::shared_ptr<DEMMaterial>& this_material : sp_materials) {
-        this_clump_sp_mat_ids.push_back(stash_material_in_templates(m_loaded_sp_materials, this_material));
-    }
-    m_template_sp_mat_ids.push_back(this_clump_sp_mat_ids);
-    SGPS_DEM_DEBUG_EXEC(printf("Input clump No.%d has material types: ", m_template_mass.size() - 1);
-                        for (unsigned int i = 0; i < this_clump_sp_mat_ids.size();
-                             i++) { printf("%d, ", this_clump_sp_mat_ids.at(i)); } printf("\n"););
-
-    return m_template_mass.size() - 1;
+    std::shared_ptr<DEMClumpTemplate> ptr = std::make_shared<DEMClumpTemplate>(std::move(clump));
+    m_templates.push_back(ptr);
+    return m_templates.back();
 }
 
-unsigned int DEMSolver::LoadClumpSimpleSphere(float mass, float radius, const std::shared_ptr<DEMMaterial>& material) {
+std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(
+    float mass,
+    float3 moi,
+    const std::vector<float>& sp_radii,
+    const std::vector<float3>& sp_locations_xyz,
+    const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
+    DEMClumpTemplate clump;
+    clump.mass = mass;
+    clump.MOI = moi;
+    clump.radii = sp_radii;
+    clump.relPos = sp_locations_xyz;
+    clump.materials = sp_materials;
+    clump.nComp = sp_radii.size();
+    return LoadClumpType(clump);
+}
+
+std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(float mass,
+                                                           float3 moi,
+                                                           const std::vector<float>& sp_radii,
+                                                           const std::vector<float3>& sp_locations_xyz,
+                                                           const std::shared_ptr<DEMMaterial>& sp_material) {
+    unsigned int num_comp = sp_radii.size();
+    std::vector<std::shared_ptr<DEMMaterial>> sp_materials(num_comp, sp_material);
+    return LoadClumpType(mass, moi, sp_radii, sp_locations_xyz, sp_materials);
+}
+
+std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpSimpleSphere(float mass,
+                                                                   float radius,
+                                                                   const std::shared_ptr<DEMMaterial>& material) {
     float3 I = make_float3(2.0 / 5.0 * mass * radius * radius);
     float3 pos = make_float3(0);
     return LoadClumpType(mass, I, std::vector<float>(1, radius), std::vector<float3>(1, pos),
@@ -281,8 +266,8 @@ unsigned int DEMSolver::LoadClumpSimpleSphere(float mass, float radius, const st
 std::shared_ptr<DEMExternObj> DEMSolver::AddExternalObject() {
     DEMExternObj an_obj;
     std::shared_ptr<DEMExternObj> ptr = std::make_shared<DEMExternObj>(std::move(an_obj));
-    cachedExternObjs.push_back(ptr);
-    return cachedExternObjs.back();
+    cached_extern_objs.push_back(ptr);
+    return cached_extern_objs.back();
 }
 
 std::shared_ptr<DEMExternObj> DEMSolver::AddBCPlane(const float3 pos,
@@ -310,7 +295,7 @@ void DEMSolver::ClearCache() {
     nExtObj = 0;
     nTriEntities = 0;
 
-    cachedExternObjs.clear();
+    cached_extern_objs.clear();
     m_anal_comp_pos.clear();
     m_anal_comp_rot.clear();
     m_anal_size_1.clear();
@@ -338,6 +323,7 @@ void DEMSolver::ClearCache() {
     m_family_change_conditions.clear();
 
     m_input_family_prescription.clear();
+    m_unique_family_prescription.clear();
 }
 
 voxelID_t DEMSolver::GetClumpVoxelID(unsigned int i) const {
@@ -422,9 +408,9 @@ void DEMSolver::preprocessExternObjs() {
     // How many triangle tempaltes are there? Is there one too large to jitify?
 
     // How many analytical entities are there? (those entities are always jitified)
-    nExtObj = cachedExternObjs.size();
+    nExtObj = cached_extern_objs.size();
     unsigned int thisExtObj = 0;
-    for (auto ext_obj : cachedExternObjs) {
+    for (auto ext_obj : cached_extern_objs) {
         // Load mass and MOI properties into arrays waiting to be transfered to kTdT. Note this must be done after user
         // loads all clump templates, as ext obj's mass info is `appended' to clump mass arrays
         m_template_mass.push_back(ext_obj->mass);
@@ -573,11 +559,31 @@ inline void DEMSolver::reportInitStats() const {
 
     SGPS_DEM_INFO("The number of material types: %u", nMatTuples_computed);
     if (m_isHistoryless) {
-        SGPS_DEM_INFO("This run uses historyless solver setup");
+        SGPS_DEM_INFO("This run uses HISTORYLESS solver setup");
     } else {
-        SGPS_DEM_INFO("This run uses history-based solver setup");
+        SGPS_DEM_INFO("This run uses HISTORY-BASED solver setup");
     }
     // TODO: The solver model, is it user-specified or internally defined?
+}
+
+void DEMSolver::preprocessClumpTemplates() {
+    for (const auto& clump : m_templates) {
+        m_template_mass.push_back(clump->mass);
+        m_template_moi.push_back(clump->MOI);
+        m_template_sp_radii.push_back(clump->radii);
+        // TODO: If CoM is not all-0, then relPos should be massaged here
+        m_template_sp_relPos.push_back(clump->relPos);
+
+        // m_template_sp_mat_ids is an array of ints that represent the indices of the material array
+        std::vector<unsigned int> this_clump_sp_mat_ids;
+        for (const std::shared_ptr<DEMMaterial>& this_material : clump->materials) {
+            this_clump_sp_mat_ids.push_back(stash_material_in_templates(m_loaded_sp_materials, this_material));
+        }
+        m_template_sp_mat_ids.push_back(this_clump_sp_mat_ids);
+        SGPS_DEM_DEBUG_EXEC(printf("Input clump No.%d has material types: ", m_template_mass.size() - 1);
+                            for (unsigned int i = 0; i < this_clump_sp_mat_ids.size();
+                                 i++) { printf("%d, ", this_clump_sp_mat_ids.at(i)); } printf("\n"););
+    }
 }
 
 void DEMSolver::generateJITResources() {
@@ -620,29 +626,33 @@ void DEMSolver::generateJITResources() {
     nDistinctSphereRelativePositions_computed = m_clumps_sp_location_types.size();
     */
 
-    // Compile the magic number header.
-    nDistinctClumpComponents_computed = 0;
+    // Flatten cached clump templates (from ClumpTemplate structs to float arrays), make ready for transferring to kTdT
+    preprocessClumpTemplates();
+    nDistinctClumpComponents = 0;
     nDistinctClumpBodyTopologies = m_template_mass.size();
     for (unsigned int i = 0; i < nDistinctClumpBodyTopologies; i++) {
-        nDistinctClumpComponents_computed += m_template_sp_radii.at(i).size();
+        nDistinctClumpComponents += m_template_sp_radii.at(i).size();
     }
+
+    // Figure out info about external objects/clump templates and whether they can be jitified
+    preprocessExternObjs();
+
+    // Process the loaded materials. The pre-process of external objects and clumps could add more materials, so this
+    // call need to go after those pre-process ones.
+    figureOutMaterialProxies();
+
+    // Based on user input, prepare family_mask_matrix (family contact map matrix)
+    figureOutFamilyMasks();
+
+    // nDistinctMassProperties will be larger than nDistinctClumpBodyTopologies, b/c of the external objects got
+    // appended to the mass/MOI arrays
+    nDistinctMassProperties = m_template_mass.size();
+    // Also, external objects may introduce more material types
     nMatTuples_computed = m_loaded_sp_materials.size();
-    // IF these "computed" numbers are larger than types like materialsOffset_t can hold, then we should error out and
+    // If these `computed' numbers are larger than types like materialsOffset_t can hold, then we should error out and
     // let the user re-compile (or, should we somehow change the header automatically?)
 
-    // nDistinctSphereRadii_computed = m_template_sp_radii_types.size();
-    // nDistinctSphereRelativePositions_computed = m_clumps_sp_location_types.size();
-    // std::cout << nDistinctClumpBodyTopologies << std::endl;
-    // std::cout << nDistinctSphereRadii_computed << std::endl;
-    // std::cout << nDistinctSphereRelativePositions_computed << std::endl;
-    // for (int i = 0; i < m_clumps_sp_location_type_offset.size(); i++) {
-    //     for (int j = 0; j < m_clumps_sp_location_type_offset.at(i).size(); j++) {
-    //        std::cout << m_clumps_sp_location_type_offset.at(i).at(j) << " ";
-    //    }
-    //    std::cout << std::endl;
-    // }
-
-    // Figure out the parameters related to the simulation ``world'', if need to
+    // Figure out the parameters related to the simulation `world', if need to
     if (!explicit_nv_override) {
         figureOutNV();
     }
@@ -671,35 +681,49 @@ void DEMSolver::generateJITResources() {
     // Enlarge the expand factor if the user tells us to
     m_expand_factor *= m_expand_safety_param;
 
-    // Figure out info about external objects/clump templates and whether they can be jitified
-    preprocessExternObjs();
-
-    // Process the loaded materials
-    figureOutMaterialProxies();
-
-    // Based on user input, prepare family_mask_matrix (family contact map matrix)
-    figureOutFamilyMasks();
-
+    // How many owners we have, finally?
     nOwnerBodies = nExtObj + nOwnerClumps + nTriEntities;
+
     // Notify the user simulation stats
     reportInitStats();
 }
 
-void DEMSolver::AddClumps(const std::vector<unsigned int>& types, const std::vector<float3>& xyz) {
-    if (types.size() != xyz.size()) {
+void DEMSolver::AddClumps(const std::vector<unsigned int>& type_marks, const std::vector<float3>& xyz) {
+    if (type_marks.size() != xyz.size()) {
         SGPS_DEM_ERROR("Arrays in the call AddClumps must all have the same length.");
     }
-
-    // clump_xyz are effectively the xyz of the CoM
-    m_input_clump_types.insert(m_input_clump_types.end(), types.begin(), types.end());
+    size_t num_old = m_input_clump_types.size();
+    size_t num_new = type_marks.size();
+    m_input_clump_types.resize(num_old + num_new);
+    for (size_t i = 0; i < num_new; i++) {
+        // Check if there is a template that got a mark that is too large
+        if (type_marks.at(i) > std::numeric_limits<clumpBodyInertiaOffset_t>::max()) {
+            SGPS_DEM_ERROR(
+                "A clump is set to be of template No.%u, and this is larger than the max allowance, %u.\nYou can try "
+                "re-defining clumpBodyInertiaOffset_t if indeed more templates are needed.",
+                type_marks.at(i), std::numeric_limits<clumpBodyInertiaOffset_t>::max());
+        }
+        m_input_clump_types.at(num_old + i) = type_marks.at(i);
+    }
+    // clump_xyz are the xyz of the CoM
     m_input_clump_xyz.insert(m_input_clump_xyz.end(), xyz.begin(), xyz.end());
+}
+
+void DEMSolver::AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& types, const std::vector<float3>& xyz) {
+    // We don't load shared ptr to cache arrays, it's too large; besides, by this time the clump template must have been
+    // loaded, so storing its offset in the template cache array is fine.
+    std::vector<unsigned int> type_marks(types.size());
+    for (size_t i = 0; i < types.size(); i++) {
+        type_marks.at(i) = types.at(i)->mark;
+    }
+    AddClumps(type_marks, xyz);
 }
 
 void DEMSolver::SetClumpVels(const std::vector<float3>& vel) {
     m_input_clump_vel.insert(m_input_clump_vel.end(), vel.begin(), vel.end());
 }
 
-void DEMSolver::SetClumpFamily(const std::vector<unsigned int>& code) {
+void DEMSolver::SetClumpFamilies(const std::vector<unsigned int>& code) {
     if (any_of(code.begin(), code.end(), [](unsigned int i) { return i >= DEM_RESERVED_FAMILY_NUM; })) {
         SGPS_DEM_WARNING(
             "Family number %u is reserved for completely fixed boundaries. Using it on your simulation entities will "
@@ -751,9 +775,9 @@ void DEMSolver::transferSimParams() {
 void DEMSolver::initializeArrays() {
     // Resize managed arrays based on the statistical data we had from the previous step
     dT->allocateManagedArrays(nOwnerBodies, nOwnerClumps, nExtObj, nTriEntities, nSpheresGM, nTriGM, nAnalGM,
-                              nDistinctClumpBodyTopologies, nDistinctClumpComponents_computed, nMatTuples_computed);
+                              nDistinctClumpBodyTopologies, nDistinctClumpComponents, nMatTuples_computed);
     kT->allocateManagedArrays(nOwnerBodies, nOwnerClumps, nExtObj, nTriEntities, nSpheresGM, nTriGM, nAnalGM,
-                              nDistinctClumpBodyTopologies, nDistinctClumpComponents_computed, nMatTuples_computed);
+                              nDistinctClumpBodyTopologies, nDistinctClumpComponents, nMatTuples_computed);
 
     // Now that the CUDA-related functions and data types are JITCompiled, we can feed those GPU-side arrays with the
     // cached API-level simulation info.
@@ -1043,8 +1067,8 @@ inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std
 inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::string>& strMap) {
     std::string ClumpMasses, moiX, moiY, moiZ, E_proxy, nu_proxy, CoR_proxy, mu_proxy, Crr_proxy;
     // Loop through all templates to find in the JIT info
-    // Note m_template_mass's size may be large than nDistinctClumpBodyTopologies because of the ext obj mass entries
-    // appended to that array
+    // Note m_template_mass's size is nDistinctMassProperties, and it may be large than nDistinctClumpBodyTopologies
+    // because of the ext obj mass entries appended to that array
     for (unsigned int i = 0; i < m_template_mass.size(); i++) {
         ClumpMasses += to_string_with_precision(m_template_mass.at(i)) + ",";
         moiX += to_string_with_precision(m_template_moi.at(i).x) + ",";
@@ -1071,7 +1095,7 @@ inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::st
 
 inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap) {
     std::string CDRadii, Radii, CDRelPosX, CDRelPosY, CDRelPosZ;
-    // loop through all templates to find in the JIT info
+    // Loop through all templates to find in the JIT info
     for (unsigned int i = 0; i < nDistinctClumpBodyTopologies; i++) {
         for (unsigned int j = 0; j < m_template_sp_radii.at(i).size(); j++) {
             Radii += to_string_with_precision(m_template_sp_radii.at(i).at(j)) + ",";
@@ -1121,7 +1145,7 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
     // nTotalBodyTopologies includes clump topologies and ext obj topologies
     strMap["_nTotalBodyTopologies_"] = std::to_string(nDistinctClumpBodyTopologies + nExtObj);
-    strMap["_nDistinctClumpComponents_"] = std::to_string(nDistinctClumpComponents_computed);
+    strMap["_nDistinctClumpComponents_"] = std::to_string(nDistinctClumpComponents);
     strMap["_nMatTuples_"] = std::to_string(nMatTuples_computed);
 }
 

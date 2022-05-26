@@ -38,7 +38,7 @@ int main() {
 
     auto template_sphere = DEM_sim.LoadClumpSimpleSphere(1.0, r, mat_type_1);
 
-    std::vector<unsigned int> input_template_num;
+    std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_num;
     std::vector<unsigned int> family_code;
 
     // Generate a flat layer of particles in this periodic domain
@@ -111,7 +111,7 @@ int main() {
         "float my_neighbours = length(acc * mass); return (my_neighbours < 4.9) || (my_neighbours > 6.1);");
 
     DEM_sim.AddClumps(input_template_num, input_xyz);
-    DEM_sim.SetClumpFamily(family_code);
+    DEM_sim.SetClumpFamilies(family_code);
     DEM_sim.InstructBoxDomainNumVoxel(22, 22, 20, (world_size + grid_size) / std::pow(2, 16) / std::pow(2, 22));
 
     DEM_sim.CenterCoordSys();

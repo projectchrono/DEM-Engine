@@ -38,7 +38,9 @@ int main() {
     float drum_sp_r = 0.02;
     auto template_drum = DEM_sim.LoadClumpSimpleSphere(0.5, drum_sp_r, mat_type_drum);
 
-    // Then randomly create some clumps for piling up
+    // An array to store these generated clump templates
+    std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
+    // Then randomly create some clumps for filling the drum
     for (int i = 0; i < num_template; i++) {
         // first decide the number of spheres that live in this clump
         int num_sphere = rand() % (max_sphere - min_sphere + 1) + 1;
@@ -76,10 +78,10 @@ int main() {
         }
 
         // it returns the numbering of this clump template (although here we don't care)
-        auto template_num = DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat);
+        clump_types.push_back(DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat));
     }
 
-    std::vector<unsigned int> input_template_num;
+    std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_type;
     std::vector<unsigned int> family_code;
 
     // generate drum clumps
@@ -94,7 +96,7 @@ int main() {
     family_code.insert(family_code.end(), Drum.size(), 1);
     // TODO: finish it!!
     DEM_sim.SetFamilyPrescribedLinVel(1, "0", "0", "0");
-    input_template_num.insert(input_template_num.end(), Drum.size(), template_drum);
+    input_template_type.insert(input_template_type.end(), Drum.size(), template_drum);
 
     DEM_sim.CenterCoordSys();
     DEM_sim.SetTimeStepSize(5e-6);

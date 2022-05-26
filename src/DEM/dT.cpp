@@ -233,7 +233,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     }
 }
 
-void DEMDynamicThread::populateManagedArrays(const std::vector<unsigned int>& input_clump_types,
+void DEMDynamicThread::populateManagedArrays(const std::vector<clumpBodyInertiaOffset_t>& input_clump_types,
                                              const std::vector<float3>& input_clump_xyz,
                                              const std::vector<float3>& input_clump_vel,
                                              const std::vector<unsigned int>& input_clump_family,
