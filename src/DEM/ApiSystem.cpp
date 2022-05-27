@@ -287,6 +287,7 @@ void DEMSolver::DisableContactBetweenFamilies(unsigned int ID1, unsigned int ID2
 
 void DEMSolver::ClearCache() {
     // TODO: Must be missing some...
+    // TODO: Use swap or reassignment to release the memory
     nSpheresGM = 0;
     nTriGM = 0;
     nAnalGM = 0;
@@ -567,6 +568,29 @@ inline void DEMSolver::reportInitStats() const {
 }
 
 void DEMSolver::preprocessClumpTemplates() {
+    // A sort based on the number of components of each clump type is needed, so larger clumps are near the end of the
+    // array, so we can always jitify the smaller clumps, and leave larger ones in global memory
+    std::sort(m_templates.begin(), m_templates.end(),
+              [](auto& left, auto& right) { return left->nComp < right->nComp; });
+    // A mapping is needed to transform the user-defined clump type array so that it matches the new, rearranged clump
+    // template array
+    std::unordered_map<clumpBodyInertiaOffset_t, clumpBodyInertiaOffset_t> old_mark_to_new;
+    for (unsigned int i = 0; i < m_templates.size(); i++) {
+        old_mark_to_new[m_templates.at(i)->mark] = i;
+        SGPS_DEM_DEBUG_PRINTF("Clump template re-order: %u->%u, nComp: %u", m_templates.at(i)->mark, i,
+                              m_templates.at(i)->nComp);
+    }
+    for (unsigned int i = 0; i < m_input_clump_types.size(); i++) {
+        m_input_clump_types.at(i) = old_mark_to_new.at(m_input_clump_types.at(i));
+    }
+    // If the user then add more clumps to the system (without adding templates, which mandates a re-initialization),
+    // mapping again is not needed, because now we redefine each template's mark to be the same as their current
+    // position in template array
+    for (unsigned int i = 0; i < m_templates.size(); i++) {
+        m_templates.at(i)->mark = i;
+    }
+
+    // Now we can flatten clump template and make ready for transfer
     for (const auto& clump : m_templates) {
         m_template_mass.push_back(clump->mass);
         m_template_moi.push_back(clump->MOI);
@@ -628,14 +652,34 @@ void DEMSolver::generateJITResources() {
 
     // Flatten cached clump templates (from ClumpTemplate structs to float arrays), make ready for transferring to kTdT
     preprocessClumpTemplates();
-    nDistinctClumpComponents = 0;
+    bool unable_jitify_all = false;
     nDistinctClumpBodyTopologies = m_template_mass.size();
+    nDistinctClumpComponents = 0;
     for (unsigned int i = 0; i < nDistinctClumpBodyTopologies; i++) {
         nDistinctClumpComponents += m_template_sp_radii.at(i).size();
+        // Keep an eye on if the accumulated DistinctClumpComponents gets too many
+        if ((!unable_jitify_all) && (nDistinctClumpComponents > SGPS_DEM_THRESHOLD_TOO_MANY_SPHERE_COMP ||
+                                     m_template_sp_radii.at(i).size() > SGPS_DEM_THRESHOLD_BIG_CLUMP)) {
+            nJitifiableClumpTopo = i;
+            unable_jitify_all = true;
+        }
+    }
+    if (unable_jitify_all) {
+        SGPS_DEM_WARNING(
+            "There are %u clump templates loaded, but only %u are jitifiable due to some of the clumps are big and/or "
+            "there are many types of clumps.\nThis is expected if there are external objects represented by spherical "
+            "decomposition.",
+            nDistinctClumpBodyTopologies, nJitifiableClumpTopo);
     }
 
     // Figure out info about external objects/clump templates and whether they can be jitified
     preprocessExternObjs();
+    if (nAnalGM > SGPS_DEM_THRESHOLD_TOO_MANY_ANAL_GEO) {
+        SGPS_DEM_WARNING(
+            "%u analytical geometries are loaded. Because all analytical geometries are jitified, this is a relatively "
+            "large amount.\nIf just-in-time compilation fails or kernels run slowly, this could be a cause.",
+            nAnalGM);
+    }
 
     // Process the loaded materials. The pre-process of external objects and clumps could add more materials, so this
     // call need to go after those pre-process ones.
@@ -696,13 +740,6 @@ void DEMSolver::AddClumps(const std::vector<unsigned int>& type_marks, const std
     size_t num_new = type_marks.size();
     m_input_clump_types.resize(num_old + num_new);
     for (size_t i = 0; i < num_new; i++) {
-        // Check if there is a template that got a mark that is too large
-        if (type_marks.at(i) > std::numeric_limits<clumpBodyInertiaOffset_t>::max()) {
-            SGPS_DEM_ERROR(
-                "A clump is set to be of template No.%u, and this is larger than the max allowance, %u.\nYou can try "
-                "re-defining clumpBodyInertiaOffset_t if indeed more templates are needed.",
-                type_marks.at(i), std::numeric_limits<clumpBodyInertiaOffset_t>::max());
-        }
         m_input_clump_types.at(num_old + i) = type_marks.at(i);
     }
     // clump_xyz are the xyz of the CoM
@@ -806,7 +843,7 @@ void DEMSolver::validateUserInputs() {
                          DEM_DEFAULT_CLUMP_FAMILY_NUM);
     }
     m_input_clump_family.resize(m_input_clump_xyz.size(), DEM_DEFAULT_CLUMP_FAMILY_NUM);
-    // Fix the reserved family
+    // Fix the reserved family (reserved family number is in user family, not in impl family)
     SetFamilyFixed(DEM_RESERVED_FAMILY_NUM);
 
     if (m_loaded_sp_materials.size() == 0) {
@@ -818,6 +855,16 @@ void DEMSolver::validateUserInputs() {
             "Time step size is set to be %f. Please supply a positive number via SetTimeStepSize, or define the "
             "variable stepping properly.",
             m_ts_size);
+    }
+    if (m_templates.size() == 0) {
+        SGPS_DEM_ERROR("Before initializing the system, at least one clump type should be defined via LoadClumpType.");
+    }
+    if (m_templates.size() >= std::numeric_limits<clumpBodyInertiaOffset_t>::max()) {
+        SGPS_DEM_ERROR(
+            "%u clump templates are loaded, but the max allowance is %u (No.%u is reserved).\nThis many clump "
+            "templates are not recommended but if they are indeed needed, you can redefine clumpBodyInertiaOffset_t.",
+            m_templates.size(), std::numeric_limits<clumpBodyInertiaOffset_t>::max() - 1,
+            std::numeric_limits<clumpBodyInertiaOffset_t>::max());
     }
     if (m_expand_factor * m_expand_safety_param <= 0.0 && m_updateFreq > 0) {
         SGPS_DEM_WARNING(
@@ -833,7 +880,9 @@ void DEMSolver::validateUserInputs() {
             "intended.");
     }
 
-    // TODO: Add check for inputs sizes (nClumps, nSpheres, nMat, nTopo...)
+    if (m_user_defined_force_model) {
+        // TODO: See if this user model makes sense
+    }
 }
 
 void DEMSolver::jitifyKernels() {
@@ -857,11 +906,14 @@ void DEMSolver::jitifyKernels() {
 // of the required simulation information such as the scale of the poblem domain, and makes sure these info live in
 // managed memory.
 int DEMSolver::Initialize() {
-    // A few checks first.
+    // A few checks first
     validateUserInputs();
 
-    // Call the JIT compiler generator to make prep for this simulation.
+    // Call the JIT compiler generator to make prep for this simulation
     generateJITResources();
+
+    // Modify user inputs before passing to impl-level systems when needed, based on what we learn from the previous
+    // step
 
     // Transfer some user-specified solver preference/instructions to workers
     transferSolverParams();
@@ -1095,7 +1147,7 @@ inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::st
 
 inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap) {
     std::string CDRadii, Radii, CDRelPosX, CDRelPosY, CDRelPosZ;
-    // Loop through all templates to find in the JIT info
+    // Loop through all templates to find the JIT info to jitify
     for (unsigned int i = 0; i < nDistinctClumpBodyTopologies; i++) {
         for (unsigned int j = 0; j < m_template_sp_radii.at(i).size(); j++) {
             Radii += to_string_with_precision(m_template_sp_radii.at(i).at(j)) + ",";

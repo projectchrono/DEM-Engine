@@ -275,8 +275,7 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<clumpBodyInertiaO
     familyNumberMap = family_user_impl_map;
 
     // Then, load in clump type info
-    // Remember this part should be quite different in the final version (due to being jitified)
-
+    // All flattened to single arrays, so a prescans is needed so we know each input clump's component offsets
     size_t k = 0;
     std::vector<unsigned int> prescans;
 

@@ -100,7 +100,7 @@ int main() {
         // vector or a material shared ptr, and in the latter case it will just be applied to all component spheres this
         // clump has.
         auto clump_ptr = DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat_type_1);
-        // DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat);
+        clump_types.push_back(clump_ptr);
     }
 
     // Generate ground clumps
@@ -118,24 +118,22 @@ int main() {
     DEM_sim.AddClumps(input_ground_clump_type, input_ground_xyz);
 
     // Generate initial clumps for piling
-    // Clump template register array does not need to be a shared_ptr<DEMClumpTemplate> array. It can be an integer
-    // array where each element just refers to the number of a clump template you loaded, determined by the order thet
-    // were loaded. Of course, in our case, this means the second template, the third and so on.
-    std::vector<unsigned int> input_pile_template_type;
+    std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
     float3 sample_center = make_float3(0, 0, -1);
     float sample_halfheight = 2;
     float sample_halfwidth = 0.7;
     auto input_pile_xyz =
         DEMBoxGridSampler(sample_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight), 0.05);
     unsigned int num_clumps = input_pile_xyz.size();
+    // Casually select from generated clump types
     for (unsigned int i = 0; i < num_clumps; i++) {
-        input_pile_template_type.push_back(i % num_template + 1);
+        input_pile_template_type.push_back(clump_types.at(i % num_template));
         family_code.push_back(0);
     }
     // Calling AddClumps a second time will just add more clumps to the system, appending to the existing ones
     DEM_sim.AddClumps(input_pile_template_type, input_pile_xyz);
 
-    // Assign family numbers to all families
+    // Assign family numbers to all particles
     DEM_sim.SetClumpFamilies(family_code);
 
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);

@@ -2,6 +2,9 @@
 //  Copyright (c) 2021, University of Wisconsin - Madison
 //  All rights reserved.
 
+#ifndef SGPS_DEM_MISC_DEFINES
+#define SGPS_DEM_MISC_DEFINES
+
 #pragma once
 #include <limits>
 #include <stdint.h>
@@ -58,6 +61,13 @@ constexpr int64_t DEM_MAX_SUBVOXEL = (int64_t)1 << DEM_VOXEL_RES_POWER2;
 #define SGPS_DEM_NUM_BODIES_PER_BLOCK 512
 #define SGPS_DEM_MAX_THREADS_PER_BLOCK 1024
 #define SGPS_DEM_INIT_CNT_MULTIPLIER 4
+// If there are more than this number of analytical geometry, we may have difficulty jitify them all
+#define SGPS_DEM_THRESHOLD_TOO_MANY_ANAL_GEO 64
+// If a clump has more than this number of sphere components, it is automatically considered a non-jitifiable big clump
+#define SGPS_DEM_THRESHOLD_BIG_CLUMP 256
+// If there are more than this number of sphere components across all clumps (excluding the clumps that are considered
+// big clumps), then some of them may have to stay in global memory, rather than being jitified
+#define SGPS_DEM_THRESHOLD_TOO_MANY_SPHERE_COMP 512
 // It should generally just be the warp size. When a block is launched, at least min(these_numbers) threads will be
 // launched so the template loading is always safe.
 constexpr clumpComponentOffset_t NUM_ACTIVE_TEMPLATE_LOADING_THREADS =
@@ -79,9 +89,14 @@ const notStupidBool_t DEM_PREVENT_CONTACT = 1;
 constexpr contactPairs_t DEM_NULL_MAPPING_PARTNER = ((size_t)1 << (sizeof(contactPairs_t) * SGPS_BITS_PER_BYTE - 1)) +
                                                     ((size_t)1 << (sizeof(contactPairs_t) * SGPS_BITS_PER_BYTE - 1)) -
                                                     1;
-
+// Default (user) clump family number
 const unsigned int DEM_DEFAULT_CLUMP_FAMILY_NUM = 0;
+// Reserved (user) clump family number which is always used for fixities
 constexpr unsigned int DEM_RESERVED_FAMILY_NUM = ((unsigned int)1 << (sizeof(family_t) * SGPS_BITS_PER_BYTE)) - 1;
+// Reserved clump template mark number used to indicate that this clump template is not jitified, therefore need to
+// bring it from global memory
+constexpr clumpBodyInertiaOffset_t DEM_RESERVED_CLUMP_TYPE_MARK =
+    ((size_t)1 << (sizeof(clumpBodyInertiaOffset_t) * SGPS_BITS_PER_BYTE)) - 1;
 
 // Some enums...
 // Friction mode
@@ -135,6 +150,9 @@ struct DEMSimParams {
     bodyID_t nOwnerClumps;
     objID_t nExtObj;
     bodyID_t nTriEntities;
+    // Number of clump spheres/triangle facets that we managed to jitify into the kernels
+    bodyID_t nSpheresJitified;
+    triID_t nTriJitified;
 
     // Number of the templates (or say the ``types'') of clumps and spheres
     clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies;
@@ -306,3 +324,5 @@ struct DEMDataKT {
 // typedef DEMSimParams* DEMSimParamsPtr;
 
 }  // namespace sgps
+
+#endif

@@ -78,7 +78,7 @@ int main() {
             seed_pos = relPos.at(choose_from);
         }
 
-        // it returns the numbering of this clump template (although here we don't care)
+        // LoadClumpType returns the pointer to this clump template we just loaded
         clump_types.push_back(DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat));
     }
 

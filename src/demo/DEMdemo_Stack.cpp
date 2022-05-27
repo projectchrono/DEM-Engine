@@ -21,36 +21,34 @@ int main() {
 
     srand(759);
 
-    // total number of random clump templates to generate
-    int num_template = 6;
-
-    int min_sphere = 1;
-    int max_sphere = 5;
-
-    float min_rad = 0.01;
-    float max_rad = 0.02;
-
-    float min_relpos = -0.01;
-    float max_relpos = 0.01;
-
     auto mat_type_1 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.2);
 
-    // First create clump type 0 for representing the ground
     float ground_sp_r = 0.03;
     float ball_sp_r = 0.015;
-    auto template_ground = DEM_sim.LoadClumpSimpleSphere(0.5, ground_sp_r, mat_type_1);
+    float3 Orig = make_float3(0, 0, 0);
+
+    // The ground is a big clump that has many sphere components
+    auto ground_comp_xyz =
+        DEMBoxGridSampler(Orig, make_float3(ground_sp_r * 50, ground_sp_r * 50, 0.001), ground_sp_r * 1.2);
+    unsigned int num_ground_comp = ground_comp_xyz.size();
+    std::cout << "The ground has " << num_ground_comp << " spheres" << std::endl;
+    auto template_ground = DEM_sim.LoadClumpType(
+        1000.0, make_float3(10, 10, 10), std::vector<float>(num_ground_comp, ground_sp_r), ground_comp_xyz, mat_type_1);
+
+    // A ball sits on the ground...
     auto template_ball = DEM_sim.LoadClumpSimpleSphere(0.5, ball_sp_r, mat_type_1);
 
-    // generate ground clumps
+    // Clump initial profile
+    std::vector<float3> input_xyz;
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_type;
     std::vector<unsigned int> family_code;
     std::vector<float3> input_vel;
-    auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, 0), make_float3(ground_sp_r * 1, ground_sp_r * 1, 0.001),
-                                       ground_sp_r * 1.2);
-    // Mark family 1 as fixed
-    family_code.insert(family_code.end(), input_xyz.size(), 1);
-    input_template_type.insert(input_template_type.end(), input_xyz.size(), template_ground);
-    input_vel.insert(input_vel.end(), input_xyz.size(), make_float3(0, 0, 0));
+
+    // Mark family 1 ground
+    family_code.push_back(1);
+    input_xyz.push_back(Orig);
+    input_template_type.push_back(template_ground);
+    input_vel.push_back(make_float3(0, 0, 0));
 
     // Add a ball rolling
     input_template_type.push_back(template_ball);
@@ -65,7 +63,7 @@ int main() {
     DEM_sim.DisableContactBetweenFamilies(1, 1);
     DEM_sim.SetFamilyFixed(1);
 
-    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
+    DEM_sim.InstructBoxDomainNumVoxel(22, 22, 20, 7.5e-11);
 
     DEM_sim.CenterCoordSys();
     DEM_sim.SetTimeStepSize(1e-5);
@@ -77,6 +75,7 @@ int main() {
 
     DEM_sim.Initialize();
 
+    /*
     path out_dir = current_path();
     out_dir += "/DEMdemo_Stack";
     create_directory(out_dir);
@@ -93,5 +92,7 @@ int main() {
 
     std::cout << "DEMdemo_Stack exiting..." << std::endl;
     // TODO: add end-game report APIs
+    */
+
     return 0;
 }

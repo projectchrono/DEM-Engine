@@ -2,6 +2,9 @@
 //  Copyright (c) 2021, University of Wisconsin - Madison
 //  All rights reserved.
 
+#ifndef SGPS_DEM_HOST_STRUCTS
+#define SGPS_DEM_HOST_STRUCTS
+
 #pragma once
 
 #include <DEM/DEMDefines.h>
@@ -356,6 +359,10 @@ struct DEMClumpTemplate {
     // Each clump template will have a unique mark number. When clumps are loaded to the system, this mark will help
     // find their type offset.
     unsigned int mark;
+    // Whether this is a big clump, which will not be jitified and treated differently
+    bool isBigClump = false;
 };
 
 }  // namespace sgps
+
+#endif

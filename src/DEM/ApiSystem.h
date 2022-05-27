@@ -386,6 +386,9 @@ class DEMSolver {
     unsigned int nMatTuples_computed;
     unsigned int nDistinctFamilies;
 
+    // This many clump template can be jitified, and the rest need to exist in global memory
+    unsigned int nJitifiableClumpTopo;
+
     // Whether the number of voxels and length unit l is explicitly given by the user
     bool explicit_nv_override = false;
     // Whether the GPU-side systems have been initialized
@@ -402,6 +405,7 @@ class DEMSolver {
     // m_input_clump_types tends to be long and should use _t definition. Same goes for m_extra_clump_type, but not
     // user-input family number, because that number can be anything.
     std::vector<clumpBodyInertiaOffset_t> m_input_clump_types;
+    // Some input clump initial profiles
     std::vector<float3> m_input_clump_xyz;
     // std::vector<float4> m_input_clump_rot;
     std::vector<float3> m_input_clump_vel;
