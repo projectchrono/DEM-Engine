@@ -185,26 +185,6 @@ struct DEMSimParams {
     DEM_TIME_INTEGRATOR stepping = DEM_TIME_INTEGRATOR::FORWARD_EULER;
 };
 
-// The collection of pointers to DEM template arrays such as radiiSphere. This struct will become useless eventually as
-// the string substitution in JIT comes into play.
-struct DEMTemplate {
-    // unsigned int* inflatedRadiiVoxelRatio;
-    float* radiiSphere;
-    float* relPosSphereX;
-    float* relPosSphereY;
-    float* relPosSphereZ;
-    float* massOwnerBody;
-    float* mmiXX;
-    float* mmiYY;
-    float* mmiZZ;
-    // materialsOffset_t* materialTupleOffset;
-    float* EProxy;
-    float* nuProxy;
-    float* CoRProxy;
-    float* muProxy;
-    float* CrrProxy;
-};
-
 // A struct that holds pointers to data arrays that dT uses
 // For more details just look at PhysicsSystem.h
 struct DEMDataDT {
@@ -253,6 +233,7 @@ struct DEMDataDT {
     // The offset info that indexes into the template arrays
     bodyID_t* ownerClumpBody;
     clumpComponentOffset_t* clumpComponentOffset;
+    clumpComponentOffsetExt_t* clumpComponentOffsetExt;
     materialsOffset_t* materialTupleOffset;
 
     // dT-owned buffer pointers, for itself's usage
@@ -272,6 +253,22 @@ struct DEMDataDT {
     oriQ_t* pKTOwnedBuffer_oriQ2 = NULL;
     oriQ_t* pKTOwnedBuffer_oriQ3 = NULL;
     family_t* pKTOwnedBuffer_familyID = NULL;
+
+    // The collection of pointers to DEM template arrays such as radiiSphere, still useful when there are template info
+    // not directly jitified into the kernels
+    float* radiiSphere;
+    float* relPosSphereX;
+    float* relPosSphereY;
+    float* relPosSphereZ;
+    float* massOwnerBody;
+    float* mmiXX;
+    float* mmiYY;
+    float* mmiZZ;
+    float* EProxy;
+    float* nuProxy;
+    float* CoRProxy;
+    float* muProxy;
+    float* CrrProxy;
 };
 
 // A struct that holds pointers to data arrays that kT uses
@@ -301,6 +298,7 @@ struct DEMDataKT {
     // The offset info that indexes into the template arrays
     bodyID_t* ownerClumpBody;
     clumpComponentOffset_t* clumpComponentOffset;
+    clumpComponentOffsetExt_t* clumpComponentOffsetExt;
 
     // kT's own work arrays. Now these array pointers get assigned in contactDetection() which point to shared scratch
     // spaces. No need to do forward declaration anymore. They are left here for reference, should contactDetection()
@@ -329,6 +327,13 @@ struct DEMDataKT {
     bodyID_t* pDTOwnedBuffer_idGeometryB = NULL;
     contact_t* pDTOwnedBuffer_contactType = NULL;
     contactPairs_t* pDTOwnedBuffer_contactMapping = NULL;
+
+    // The collection of pointers to DEM template arrays such as radiiSphere, still useful when there are template info
+    // not directly jitified into the kernels
+    float* radiiSphere;
+    float* relPosSphereX;
+    float* relPosSphereY;
+    float* relPosSphereZ;
 };
 
 // typedef DEMDataDT* DEMDataDTPtr;

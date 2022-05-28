@@ -67,7 +67,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
     bin_occupation_kernels->kernel("getNumberOfBinsEachSphereTouches")
         .instantiate()
         .configure(dim3(blocks_needed_for_bodies), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(granData, numBinsSphereTouches, numAnalGeoSphereTouches);
+        .launch(simParams, granData, numBinsSphereTouches, numAnalGeoSphereTouches);
     GPU_CALL(cudaStreamSynchronize(this_stream));
 
     // 2nd step: prefix scan sphere--bin touching pairs
@@ -104,7 +104,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
     bin_occupation_kernels->kernel("populateBinSphereTouchingPairs")
         .instantiate()
         .configure(dim3(blocks_needed_for_bodies), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(granData, numBinsSphereTouchesScan, numAnalGeoSphereTouchesScan, binIDsEachSphereTouches,
+        .launch(simParams, granData, numBinsSphereTouchesScan, numAnalGeoSphereTouchesScan, binIDsEachSphereTouches,
                 sphereIDsEachBinTouches, granData->idGeometryA, granData->idGeometryB, granData->contactType);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // std::cout << "Unsorted bin IDs: ";
@@ -172,8 +172,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
         contact_detection_kernels->kernel("getNumberOfContactsEachBin")
             .instantiate()
             .configure(dim3(blocks_needed_for_bins), dim3(SGPS_DEM_NUM_BINS_PER_BLOCK), 0, this_stream)
-            .launch(granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches, sphereIDsLookUpTable,
-                    numContactsInEachBin, *pNumActiveBins);
+            .launch(simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
+                    sphereIDsLookUpTable, numContactsInEachBin, *pNumActiveBins);
         GPU_CALL(cudaStreamSynchronize(this_stream));
 
         // TODO: sphere should have jitified and non-jitified part. Use a component ID > max_comp_id to signal bringing
@@ -215,8 +215,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
         contact_detection_kernels->kernel("populateContactPairsEachBin")
             .instantiate()
             .configure(dim3(blocks_needed_for_bins), dim3(SGPS_DEM_NUM_BINS_PER_BLOCK), 0, this_stream)
-            .launch(granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches, sphereIDsLookUpTable,
-                    contactReportOffsets, idSphA, idSphB, *pNumActiveBins);
+            .launch(simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
+                    sphereIDsLookUpTable, contactReportOffsets, idSphA, idSphB, *pNumActiveBins);
         GPU_CALL(cudaStreamSynchronize(this_stream));
 
     }  // End of bin-wise contact detection subroutine

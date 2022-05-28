@@ -62,9 +62,6 @@ class DEMKinematicThread {
     // Pointers to those data arrays defined below, stored in a struct
     DEMDataKT* granData;
 
-    // Pointers to clump template data. In the end, the use of this struct should be replaced by JIT.
-    DEMTemplate* granTemplates;
-
     // Buffer arrays for storing info from the dT side.
     // dT modifies these arrays; kT uses them only.
 
@@ -172,7 +169,6 @@ class DEMKinematicThread {
         : pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
         GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
         GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataKT), cudaMemAttachGlobal));
-        GPU_CALL(cudaMallocManaged(&granTemplates, sizeof(DEMTemplate), cudaMemAttachGlobal));
 
         // Get a device/stream ID to use from the GPU Manager
         streamInfo = pGpuDistributor->getAvailableStream();
@@ -257,6 +253,7 @@ class DEMKinematicThread {
 
     // Jitify kT kernels (at initialization) based on existing knowledge of this run
     void jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,
+                       const std::unordered_map<std::string, std::string>& templateAcqSubs,
                        const std::unordered_map<std::string, std::string>& simParamSubs,
                        const std::unordered_map<std::string, std::string>& massMatSubs,
                        const std::unordered_map<std::string, std::string>& familyMaskSubs,

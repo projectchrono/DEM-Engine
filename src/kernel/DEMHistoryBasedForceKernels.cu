@@ -48,12 +48,18 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
         // Take care of 2 bodies in order, bodyA first, grab location and velocity to local cache
         // We know in this kernel, bodyA will be a sphere; bodyB can be something else
         {
-            sgps::bodyID_t bodyA = granData->idGeometryA[myContactID];
-            sgps::bodyID_t bodyAOwner = granData->ownerClumpBody[bodyA];
-            sgps::clumpComponentOffset_t bodyACompOffset = granData->clumpComponentOffset[bodyA];
-            bodyAMatType = granData->materialTupleOffset[bodyA];
+            sgps::bodyID_t sphereID = granData->idGeometryA[myContactID];
+            sgps::bodyID_t bodyAOwner = granData->ownerClumpBody[sphereID];
+
+            float myRelPosX, myRelPosY, myRelPosZ, myRadius;
+            // Get my component offset info from either jitified arrays or global memory
+            // Outputs myRelPosXYZ, myRadius
+            // Use an input named exactly `sphereID' which is the id of this sphere component
+            { _componentAcqStrat_; }
+
+            bodyAMatType = granData->materialTupleOffset[sphereID];
             AOwnerMass = MassProperties[granData->inertiaPropOffsets[bodyAOwner]];
-            ARadius = Radii[bodyACompOffset];
+
             // AOwnerFamily = granData->familyID[bodyAOwner];
             float3 myRelPos;
             sgps::oriQ_t AoriQ0, AoriQ1, AoriQ2, AoriQ3;
@@ -61,33 +67,37 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 AOwnerPos.x, AOwnerPos.y, AOwnerPos.z, granData->voxelID[bodyAOwner], granData->locX[bodyAOwner],
                 granData->locY[bodyAOwner], granData->locZ[bodyAOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            myRelPos.x = CDRelPosX[bodyACompOffset];
-            myRelPos.y = CDRelPosY[bodyACompOffset];
-            myRelPos.z = CDRelPosZ[bodyACompOffset];
+
             AoriQ0 = granData->oriQ0[bodyAOwner];
             AoriQ1 = granData->oriQ1[bodyAOwner];
             AoriQ2 = granData->oriQ2[bodyAOwner];
             AoriQ3 = granData->oriQ3[bodyAOwner];
-            applyOriQ2Vector3<float, sgps::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, AoriQ0, AoriQ1, AoriQ2, AoriQ3);
-            bodyAPos.x = AOwnerPos.x + (double)myRelPos.x;
-            bodyAPos.y = AOwnerPos.y + (double)myRelPos.y;
-            bodyAPos.z = AOwnerPos.z + (double)myRelPos.z;
+            applyOriQ2Vector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, AoriQ0, AoriQ1, AoriQ2, AoriQ3);
+            bodyAPos.x = AOwnerPos.x + (double)myRelPosX;
+            bodyAPos.y = AOwnerPos.y + (double)myRelPosY;
+            bodyAPos.z = AOwnerPos.z + (double)myRelPosZ;
             ALinVel.x = granData->vX[bodyAOwner];
             ALinVel.y = granData->vY[bodyAOwner];
             ALinVel.z = granData->vZ[bodyAOwner];
             ARotVel.x = granData->omgBarX[bodyAOwner];
             ARotVel.y = granData->omgBarY[bodyAOwner];
             ARotVel.z = granData->omgBarZ[bodyAOwner];
+            ARadius = myRadius;
         }
 
         // Then bodyB, location and velocity
         if (myContactType == sgps::DEM_SPHERE_SPHERE_CONTACT) {
-            sgps::bodyID_t bodyB = granData->idGeometryB[myContactID];
-            sgps::bodyID_t bodyBOwner = granData->ownerClumpBody[bodyB];
-            sgps::clumpComponentOffset_t bodyBCompOffset = granData->clumpComponentOffset[bodyB];
-            bodyBMatType = granData->materialTupleOffset[bodyB];
+            sgps::bodyID_t sphereID = granData->idGeometryB[myContactID];
+            sgps::bodyID_t bodyBOwner = granData->ownerClumpBody[sphereID];
+
+            float myRelPosX, myRelPosY, myRelPosZ, myRadius;
+            // Get my component offset info from either jitified arrays or global memory
+            // Outputs myRelPosXYZ, myRadius
+            // Use an input named exactly `sphereID' which is the id of this sphere component
+            { _componentAcqStrat_; }
+
+            bodyBMatType = granData->materialTupleOffset[sphereID];
             BOwnerMass = MassProperties[granData->inertiaPropOffsets[bodyBOwner]];
-            BRadius = Radii[bodyBCompOffset];
             // BOwnerFamily = granData->familyID[bodyBOwner];
             float3 myRelPos;
             sgps::oriQ_t BoriQ0, BoriQ1, BoriQ2, BoriQ3;
@@ -95,23 +105,22 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 BOwnerPos.x, BOwnerPos.y, BOwnerPos.z, granData->voxelID[bodyBOwner], granData->locX[bodyBOwner],
                 granData->locY[bodyBOwner], granData->locZ[bodyBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            myRelPos.x = CDRelPosX[bodyBCompOffset];
-            myRelPos.y = CDRelPosY[bodyBCompOffset];
-            myRelPos.z = CDRelPosZ[bodyBCompOffset];
             BoriQ0 = granData->oriQ0[bodyBOwner];
             BoriQ1 = granData->oriQ1[bodyBOwner];
             BoriQ2 = granData->oriQ2[bodyBOwner];
             BoriQ3 = granData->oriQ3[bodyBOwner];
-            applyOriQ2Vector3<float, sgps::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
-            bodyBPos.x = BOwnerPos.x + (double)myRelPos.x;
-            bodyBPos.y = BOwnerPos.y + (double)myRelPos.y;
-            bodyBPos.z = BOwnerPos.z + (double)myRelPos.z;
+            applyOriQ2Vector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
+            bodyBPos.x = BOwnerPos.x + (double)myRelPosX;
+            bodyBPos.y = BOwnerPos.y + (double)myRelPosY;
+            bodyBPos.z = BOwnerPos.z + (double)myRelPosZ;
             BLinVel.x = granData->vX[bodyBOwner];
             BLinVel.y = granData->vY[bodyBOwner];
             BLinVel.z = granData->vZ[bodyBOwner];
             BRotVel.x = granData->omgBarX[bodyBOwner];
             BRotVel.y = granData->omgBarY[bodyBOwner];
             BRotVel.z = granData->omgBarZ[bodyBOwner];
+            BRadius = myRadius;
+
             myContactType = checkSpheresOverlap<double, float>(
                 bodyAPos.x, bodyAPos.y, bodyAPos.z, ARadius, bodyBPos.x, bodyBPos.y, bodyBPos.z, BRadius, contactPnt.x,
                 contactPnt.y, contactPnt.z, B2A.x, B2A.y, B2A.z, overlapDepth);
@@ -123,23 +132,24 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             BOwnerMass = MassProperties[granData->inertiaPropOffsets[bodyBOwner]];
             // TODO: fix these...
             BRadius = 10000.f;
-            float3 myRelPos, bodyBRot;
+            float myRelPosX, myRelPosY, myRelPosZ;
+            float3 bodyBRot;
             sgps::oriQ_t BoriQ0, BoriQ1, BoriQ2, BoriQ3;
 
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 BOwnerPos.x, BOwnerPos.y, BOwnerPos.z, granData->voxelID[bodyBOwner], granData->locX[bodyBOwner],
                 granData->locY[bodyBOwner], granData->locZ[bodyBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            myRelPos.x = objRelPosX[bodyB];
-            myRelPos.y = objRelPosY[bodyB];
-            myRelPos.z = objRelPosZ[bodyB];
+            myRelPosX = objRelPosX[bodyB];
+            myRelPosY = objRelPosY[bodyB];
+            myRelPosZ = objRelPosZ[bodyB];
             BoriQ0 = granData->oriQ0[bodyBOwner];
             BoriQ1 = granData->oriQ1[bodyBOwner];
             BoriQ2 = granData->oriQ2[bodyBOwner];
             BoriQ3 = granData->oriQ3[bodyBOwner];
-            applyOriQ2Vector3<float, sgps::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
-            bodyBPos.x = BOwnerPos.x + (double)myRelPos.x;
-            bodyBPos.y = BOwnerPos.y + (double)myRelPos.y;
-            bodyBPos.z = BOwnerPos.z + (double)myRelPos.z;
+            applyOriQ2Vector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
+            bodyBPos.x = BOwnerPos.x + (double)myRelPosX;
+            bodyBPos.y = BOwnerPos.y + (double)myRelPosY;
+            bodyBPos.z = BOwnerPos.z + (double)myRelPosZ;
 
             // B's orientation (such as plane normal) is rotated with its owner too
             bodyBRot.x = objRotX[bodyB];

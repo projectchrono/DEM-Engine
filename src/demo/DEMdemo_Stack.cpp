@@ -75,11 +75,10 @@ int main() {
 
     DEM_sim.Initialize();
 
-    /*
     path out_dir = current_path();
     out_dir += "/DEMdemo_Stack";
     create_directory(out_dir);
-    for (int i = 0; i < 200; i++) {
+    for (int i = 0; i < 100; i++) {
         char filename[100];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
         DEM_sim.WriteFileAsSpheres(std::string(filename));
@@ -92,7 +91,6 @@ int main() {
 
     std::cout << "DEMdemo_Stack exiting..." << std::endl;
     // TODO: add end-game report APIs
-    */
 
     return 0;
 }

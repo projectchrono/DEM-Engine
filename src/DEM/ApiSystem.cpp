@@ -899,9 +899,10 @@ void DEMSolver::postJITResourceGenSanityCheck() {
 }
 
 void DEMSolver::jitifyKernels() {
-    std::unordered_map<std::string, std::string> templateSubs, simParamSubs, massMatSubs, familyMaskSubs,
-        familyPrescribeSubs, familyChangesSubs, analGeoSubs, forceModelSubs;
+    std::unordered_map<std::string, std::string> templateSubs, templateAcqSubs, simParamSubs, massMatSubs,
+        familyMaskSubs, familyPrescribeSubs, familyChangesSubs, analGeoSubs, forceModelSubs;
     equipClumpTemplates(templateSubs);
+    equipClumpTemplateAcquisition(templateAcqSubs);
     equipSimParams(simParamSubs);
     equipClumpMassMat(massMatSubs);
     equipAnalGeoTemplates(analGeoSubs);
@@ -909,10 +910,10 @@ void DEMSolver::jitifyKernels() {
     equipFamilyPrescribedMotions(familyPrescribeSubs);
     equipFamilyOnFlyChanges(familyChangesSubs);
     equipForceModel(forceModelSubs);
-    kT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familyMaskSubs, familyPrescribeSubs, familyChangesSubs,
-                      analGeoSubs);
-    dT->jitifyKernels(templateSubs, simParamSubs, massMatSubs, familyMaskSubs, familyPrescribeSubs, familyChangesSubs,
-                      analGeoSubs, forceModelSubs);
+    kT->jitifyKernels(templateSubs, templateAcqSubs, simParamSubs, massMatSubs, familyMaskSubs, familyPrescribeSubs,
+                      familyChangesSubs, analGeoSubs);
+    dT->jitifyKernels(templateSubs, templateAcqSubs, simParamSubs, massMatSubs, familyMaskSubs, familyPrescribeSubs,
+                      familyChangesSubs, analGeoSubs, forceModelSubs);
 }
 
 // The method should be called after user inputs are in place, and before starting the simulation. It figures out a part
@@ -1156,6 +1157,19 @@ inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::st
     strMap["_CoRProxy_"] = CoR_proxy;
     strMap["_muProxy_"] = mu_proxy;
     strMap["_CrrProxy_"] = Crr_proxy;
+}
+
+inline void DEMSolver::equipClumpTemplateAcquisition(std::unordered_map<std::string, std::string>& strMap) {
+    // This part is different depending on whether we have clump templates that are in global memory only
+    std::string componentAcqStrat;
+    if (nJitifiableClumpTopo == nDistinctClumpBodyTopologies) {
+        // In this case, all clump templates can be jitified
+        componentAcqStrat = compact_code(DEM_CLUMP_COMPONENT_ACQUISITION_ALL_JITIFIED());
+    } else if (nJitifiableClumpTopo < nDistinctClumpBodyTopologies) {
+        // In this case, some clump templates are in the global memory
+        componentAcqStrat = compact_code(DEM_CLUMP_COMPONENT_ACQUISITION_PARTIALLY_JITIFIED());
+    }
+    strMap["_componentAcqStrat_"] = componentAcqStrat;
 }
 
 inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap) {

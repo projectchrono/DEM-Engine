@@ -4,7 +4,8 @@
 
 #include <cub/util_ptx.cuh>
 
-__global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
+__global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
+                                           sgps::DEMDataKT* granData,
                                            sgps::bodyID_t* sphereIDsEachBinTouches_sorted,
                                            sgps::binID_t* activeBinIDs,
                                            sgps::spheresBinTouches_t* numSpheresBinTouches,
@@ -12,20 +13,20 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
                                            sgps::spheresBinTouches_t* numContactsInEachBin,
                                            size_t nActiveBins) {
     // CUDA does not support initializing shared arrays, so we have to manually load them
-    __shared__ float CDRadii[_nJitifiableClumpComponents_];
+    __shared__ float Radii[_nJitifiableClumpComponents_];
     __shared__ float CDRelPosX[_nJitifiableClumpComponents_];
     __shared__ float CDRelPosY[_nJitifiableClumpComponents_];
     __shared__ float CDRelPosZ[_nJitifiableClumpComponents_];
     __shared__ bool familyMasks[_nFamilyMaskEntries_];
     if (threadIdx.x < _nActiveLoadingThreads_) {
-        const float jitifiedCDRadii[_nJitifiableClumpComponents_] = {_CDRadii_};
+        const float jitifiedCDRadii[_nJitifiableClumpComponents_] = {_Radii_};
         const float jitifiedCDRelPosX[_nJitifiableClumpComponents_] = {_CDRelPosX_};
         const float jitifiedCDRelPosY[_nJitifiableClumpComponents_] = {_CDRelPosY_};
         const float jitifiedCDRelPosZ[_nJitifiableClumpComponents_] = {_CDRelPosZ_};
         const bool jitifiedFamilyMasks[_nFamilyMaskEntries_] = {_familyMasks_};
         for (sgps::clumpComponentOffset_t i = threadIdx.x; i < _nJitifiableClumpComponents_;
              i += _nActiveLoadingThreads_) {
-            CDRadii[i] = jitifiedCDRadii[i];
+            Radii[i] = jitifiedCDRadii[i];
             CDRelPosX[i] = jitifiedCDRelPosX[i];
             CDRelPosY[i] = jitifiedCDRelPosY[i];
             CDRelPosZ[i] = jitifiedCDRelPosZ[i];
@@ -42,7 +43,7 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
     // A100 has about 164K shMem... these arrays really need to be small, or we can only fit a small number of bins in
     // one block
     sgps::bodyID_t ownerIDs[SGPS_DEM_MAX_SPHERES_PER_BIN];
-    sgps::clumpComponentOffset_t compOffsets[SGPS_DEM_MAX_SPHERES_PER_BIN];
+    float radii[SGPS_DEM_MAX_SPHERES_PER_BIN];
     double bodyX[SGPS_DEM_MAX_SPHERES_PER_BIN];
     double bodyY[SGPS_DEM_MAX_SPHERES_PER_BIN];
     double bodyZ[SGPS_DEM_MAX_SPHERES_PER_BIN];
@@ -62,17 +63,23 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
         sgps::binSphereTouchPairs_t myBodiesTableEntry = sphereIDsLookUpTable[myActiveID];
         // printf("nBodies: %u\n", nBodiesMeHandle);
         for (sgps::spheresBinTouches_t i = 0; i < nBodiesMeHandle; i++) {
-            sgps::bodyID_t bodyID = sphereIDsEachBinTouches_sorted[myBodiesTableEntry + i];
-            ownerIDs[i] = granData->ownerClumpBody[bodyID];
+            sgps::bodyID_t sphereID = sphereIDsEachBinTouches_sorted[myBodiesTableEntry + i];
+            ownerIDs[i] = granData->ownerClumpBody[sphereID];
             ownerFamily[i] = granData->familyID[ownerIDs[i]];
-            compOffsets[i] = granData->clumpComponentOffset[bodyID];
             double ownerX, ownerY, ownerZ;
+            float myRelPosX, myRelPosY, myRelPosZ, myRadius;
+
+            // Get my component offset info from either jitified arrays or global memory
+            // Outputs myRelPosXYZ, myRadius (in CD kernels, radius needs to be expanded)
+            // Use an input named exactly `sphereID' which is the id of this sphere component
+            {
+                _componentAcqStrat_;
+                myRadius += simParams->beta;
+            }
+
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[ownerIDs[i]], granData->locX[ownerIDs[i]],
                 granData->locY[ownerIDs[i]], granData->locZ[ownerIDs[i]], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            float myRelPosX = CDRelPosX[compOffsets[i]];
-            float myRelPosY = CDRelPosY[compOffsets[i]];
-            float myRelPosZ = CDRelPosZ[compOffsets[i]];
             float myOriQ0 = granData->oriQ0[ownerIDs[i]];
             float myOriQ1 = granData->oriQ1[ownerIDs[i]];
             float myOriQ2 = granData->oriQ2[ownerIDs[i]];
@@ -81,6 +88,7 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
             bodyX[i] = ownerX + (double)myRelPosX;
             bodyY[i] = ownerY + (double)myRelPosY;
             bodyZ[i] = ownerZ + (double)myRelPosZ;
+            radii[i] = myRadius;
         }
 
         for (sgps::spheresBinTouches_t bodyA = 0; bodyA < nBodiesMeHandle; bodyA++) {
@@ -103,9 +111,9 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
                 double contactPntY;
                 double contactPntZ;
                 bool in_contact;
-                in_contact = checkSpheresOverlap<double>(
-                    bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], CDRadii[compOffsets[bodyA]], bodyX[bodyB], bodyY[bodyB],
-                    bodyZ[bodyB], CDRadii[compOffsets[bodyB]], contactPntX, contactPntY, contactPntZ);
+                in_contact = checkSpheresOverlap<double>(bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], radii[bodyA],
+                                                         bodyX[bodyB], bodyY[bodyB], bodyZ[bodyB], radii[bodyB],
+                                                         contactPntX, contactPntY, contactPntZ);
                 sgps::binID_t contactPntBin =
                     getPointBinID<sgps::binID_t>(contactPntX, contactPntY, contactPntZ, _binSize_, _nbX_, _nbY_);
 
@@ -132,7 +140,8 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
     }
 }
 
-__global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
+__global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
+                                            sgps::DEMDataKT* granData,
                                             sgps::bodyID_t* sphereIDsEachBinTouches_sorted,
                                             sgps::binID_t* activeBinIDs,
                                             sgps::spheresBinTouches_t* numSpheresBinTouches,
@@ -142,20 +151,20 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
                                             sgps::bodyID_t* idSphB,
                                             size_t nActiveBins) {
     // CUDA does not support initializing shared arrays, so we have to manually load them
-    __shared__ float CDRadii[_nJitifiableClumpComponents_];
+    __shared__ float Radii[_nJitifiableClumpComponents_];
     __shared__ float CDRelPosX[_nJitifiableClumpComponents_];
     __shared__ float CDRelPosY[_nJitifiableClumpComponents_];
     __shared__ float CDRelPosZ[_nJitifiableClumpComponents_];
     __shared__ bool familyMasks[_nFamilyMaskEntries_];
     if (threadIdx.x < _nActiveLoadingThreads_) {
-        const float jitifiedCDRadii[_nJitifiableClumpComponents_] = {_CDRadii_};
+        const float jitifiedCDRadii[_nJitifiableClumpComponents_] = {_Radii_};
         const float jitifiedCDRelPosX[_nJitifiableClumpComponents_] = {_CDRelPosX_};
         const float jitifiedCDRelPosY[_nJitifiableClumpComponents_] = {_CDRelPosY_};
         const float jitifiedCDRelPosZ[_nJitifiableClumpComponents_] = {_CDRelPosZ_};
         const bool jitifiedFamilyMasks[_nFamilyMaskEntries_] = {_familyMasks_};
         for (sgps::clumpComponentOffset_t i = threadIdx.x; i < _nJitifiableClumpComponents_;
              i += _nActiveLoadingThreads_) {
-            CDRadii[i] = jitifiedCDRadii[i];
+            Radii[i] = jitifiedCDRadii[i];
             CDRelPosX[i] = jitifiedCDRelPosX[i];
             CDRelPosY[i] = jitifiedCDRelPosY[i];
             CDRelPosZ[i] = jitifiedCDRelPosZ[i];
@@ -173,7 +182,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
     // one block
     sgps::bodyID_t ownerIDs[SGPS_DEM_MAX_SPHERES_PER_BIN];
     sgps::bodyID_t bodyIDs[SGPS_DEM_MAX_SPHERES_PER_BIN];
-    sgps::clumpComponentOffset_t compOffsets[SGPS_DEM_MAX_SPHERES_PER_BIN];
+    float radii[SGPS_DEM_MAX_SPHERES_PER_BIN];
     double bodyX[SGPS_DEM_MAX_SPHERES_PER_BIN];
     double bodyY[SGPS_DEM_MAX_SPHERES_PER_BIN];
     double bodyZ[SGPS_DEM_MAX_SPHERES_PER_BIN];
@@ -186,18 +195,24 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
         sgps::spheresBinTouches_t nBodiesMeHandle = numSpheresBinTouches[myActiveID];
         sgps::binSphereTouchPairs_t myBodiesTableEntry = sphereIDsLookUpTable[myActiveID];
         for (sgps::spheresBinTouches_t i = 0; i < nBodiesMeHandle; i++) {
-            sgps::bodyID_t bodyID = sphereIDsEachBinTouches_sorted[myBodiesTableEntry + i];
-            ownerIDs[i] = granData->ownerClumpBody[bodyID];
+            sgps::bodyID_t sphereID = sphereIDsEachBinTouches_sorted[myBodiesTableEntry + i];
+            ownerIDs[i] = granData->ownerClumpBody[sphereID];
             ownerFamily[i] = granData->familyID[ownerIDs[i]];
-            bodyIDs[i] = bodyID;
-            compOffsets[i] = granData->clumpComponentOffset[bodyID];
+            bodyIDs[i] = sphereID;
             double ownerX, ownerY, ownerZ;
+            float myRelPosX, myRelPosY, myRelPosZ, myRadius;
+
+            // Get my component offset info from either jitified arrays or global memory
+            // Outputs myRelPosXYZ, myRadius (in CD kernels, radius needs to be expanded)
+            // Use an input named exactly `sphereID' which is the id of this sphere component
+            {
+                _componentAcqStrat_;
+                myRadius += simParams->beta;
+            }
+
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[ownerIDs[i]], granData->locX[ownerIDs[i]],
                 granData->locY[ownerIDs[i]], granData->locZ[ownerIDs[i]], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            float myRelPosX = CDRelPosX[compOffsets[i]];
-            float myRelPosY = CDRelPosY[compOffsets[i]];
-            float myRelPosZ = CDRelPosZ[compOffsets[i]];
             float myOriQ0 = granData->oriQ0[ownerIDs[i]];
             float myOriQ1 = granData->oriQ1[ownerIDs[i]];
             float myOriQ2 = granData->oriQ2[ownerIDs[i]];
@@ -206,6 +221,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
             bodyX[i] = ownerX + (double)myRelPosX;
             bodyY[i] = ownerY + (double)myRelPosY;
             bodyZ[i] = ownerZ + (double)myRelPosZ;
+            radii[i] = myRadius;
         }
 
         // Get my offset for writing back to the global arrays that contain contact pair info
@@ -231,9 +247,9 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
                 double contactPntY;
                 double contactPntZ;
                 bool in_contact;
-                in_contact = checkSpheresOverlap<double>(
-                    bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], CDRadii[compOffsets[bodyA]], bodyX[bodyB], bodyY[bodyB],
-                    bodyZ[bodyB], CDRadii[compOffsets[bodyB]], contactPntX, contactPntY, contactPntZ);
+                in_contact = checkSpheresOverlap<double>(bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], radii[bodyA],
+                                                         bodyX[bodyB], bodyY[bodyB], bodyZ[bodyB], radii[bodyB],
+                                                         contactPntX, contactPntY, contactPntZ);
                 sgps::binID_t contactPntBin =
                     getPointBinID<sgps::binID_t>(contactPntX, contactPntY, contactPntZ, _binSize_, _nbX_, _nbY_);
 

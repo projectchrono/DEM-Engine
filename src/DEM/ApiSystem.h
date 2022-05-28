@@ -359,7 +359,7 @@ class DEMSolver {
     binID_t nbZ;
     // The amount at which all geometries inflate (for safer contact detection)
     float m_expand_factor = 0.f;
-    // When the user suggests the expand factor without explicitly setting it, the ``just right'' amount of expansion is
+    // When the user suggests the expand factor without explicitly setting it, the `just right' amount of expansion is
     // multiplied by this expand_safety_param, so the geometries over-expand for CD purposes. This creates more false
     // positives, and risks leading to more bodies in a bin than a block can handle, but helps prevent contacts being
     // left undiscovered by CD.
@@ -526,6 +526,7 @@ class DEMSolver {
 
     // Some JIT packaging helpers
     inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap);
+    inline void equipClumpTemplateAcquisition(std::unordered_map<std::string, std::string>& strMap);
     inline void equipSimParams(std::unordered_map<std::string, std::string>& strMap);
     inline void equipClumpMassMat(std::unordered_map<std::string, std::string>& strMap);
     inline void equipAnalGeoTemplates(std::unordered_map<std::string, std::string>& strMap);

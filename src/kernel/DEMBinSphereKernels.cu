@@ -2,11 +2,12 @@
 #include <DEM/DEMDefines.h>
 #include <kernel/DEMHelperKernels.cu>
 
-__global__ void getNumberOfBinsEachSphereTouches(sgps::DEMDataKT* granData,
+__global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
+                                                 sgps::DEMDataKT* granData,
                                                  sgps::binsSphereTouches_t* numBinsSphereTouches,
                                                  sgps::objID_t* numAnalGeoSphereTouches) {
     // _nJitifiableClumpComponents_ elements are in these arrays
-    const float CDRadii[] = {_CDRadii_};
+    const float Radii[] = {_Radii_};
     const float CDRelPosX[] = {_CDRelPosX_};
     const float CDRelPosY[] = {_CDRelPosY_};
     const float CDRelPosZ[] = {_CDRelPosZ_};
@@ -41,14 +42,20 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMDataKT* granData,
             // My sphere voxel ID and my relPos
             sgps::bodyID_t myOwnerID = granData->ownerClumpBody[sphereID];
             sphFamilyNum = granData->familyID[myOwnerID];
-            sgps::clumpComponentOffset_t myCompOffset = granData->clumpComponentOffset[sphereID];
+            float myRelPosX, myRelPosY, myRelPosZ;
             double ownerX, ownerY, ownerZ;
+
+            // Get my component offset info from either jitified arrays or global memory
+            // Outputs myRelPosXYZ, myRadius (in CD kernels, radius needs to be expanded)
+            // Use an input named exactly `sphereID' which is the id of this sphere component
+            {
+                _componentAcqStrat_;
+                myRadius += simParams->beta;
+            }
+
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[myOwnerID], granData->locX[myOwnerID],
                 granData->locY[myOwnerID], granData->locZ[myOwnerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            float myRelPosX = CDRelPosX[myCompOffset];
-            float myRelPosY = CDRelPosY[myCompOffset];
-            float myRelPosZ = CDRelPosZ[myCompOffset];
             const float myOriQ0 = granData->oriQ0[myOwnerID];
             const float myOriQ1 = granData->oriQ1[myOwnerID];
             const float myOriQ2 = granData->oriQ2[myOwnerID];
@@ -61,10 +68,7 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMDataKT* granData,
             double myBinX = myPosX / _binSize_;
             double myBinY = myPosY / _binSize_;
             double myBinZ = myPosZ / _binSize_;
-            // printf("myBinXYZ: %f, %f, %f\n", ownerX, ownerY, ownerZ);
-            // printf("myVoxel: %lu\n", granData->voxelID[myOwnerID]);
             // How many bins my radius spans (with fractions)?
-            myRadius = (double)CDRadii[myCompOffset];
             double myRadiusSpan = myRadius / _binSize_;
             // printf("myRadius: %f\n", myRadiusSpan);
             // Now, figure out how many bins I touch in each direction
@@ -116,7 +120,7 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMDataKT* granData,
             double objBPosZ = ownerZ + (double)objBRelPosZ;
             contact_type = checkSphereEntityOverlap<double>(
                 myPosX, myPosY, myPosZ, myRadius, objType[objB], objBPosX, objBPosY, objBPosZ, objBRotX, objBRotY,
-                objBRotZ, objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], _beta_);
+                objBRotZ, objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], simParams->beta);
 
             if (contact_type) {
                 contact_count++;
@@ -126,7 +130,8 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMDataKT* granData,
     }
 }
 
-__global__ void populateBinSphereTouchingPairs(sgps::DEMDataKT* granData,
+__global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
+                                               sgps::DEMDataKT* granData,
                                                sgps::binSphereTouchPairs_t* numBinsSphereTouchesScan,
                                                sgps::binSphereTouchPairs_t* numAnalGeoSphereTouchesScan,
                                                sgps::binID_t* binIDsEachSphereTouches,
@@ -135,7 +140,7 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMDataKT* granData,
                                                sgps::bodyID_t* idGeoB,
                                                sgps::contact_t* contactType) {
     //  elements are in these arrays
-    const float CDRadii[] = {_CDRadii_};
+    const float Radii[] = {_Radii_};
     const float CDRelPosX[] = {_CDRelPosX_};
     const float CDRelPosY[] = {_CDRelPosY_};
     const float CDRelPosZ[] = {_CDRelPosZ_};
@@ -167,18 +172,23 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMDataKT* granData,
             // My sphere voxel ID and my relPos
             sgps::bodyID_t myOwnerID = granData->ownerClumpBody[sphereID];
             sphFamilyNum = granData->familyID[myOwnerID];
-            sgps::clumpComponentOffset_t myCompOffset = granData->clumpComponentOffset[sphereID];
+            float myRelPosX, myRelPosY, myRelPosZ;
+            double ownerX, ownerY, ownerZ;
+
+            // Get my component offset info from either jitified arrays or global memory
+            // Outputs myRelPosXYZ, myRadius (in CD kernels, radius needs to be expanded)
+            // Use an input named exactly `sphereID' which is the id of this sphere component
+            {
+                _componentAcqStrat_;
+                myRadius += simParams->beta;
+            }
+
             // Get the offset of my spot where I should start writing back to the global bin--sphere pair registration
             // array
             sgps::binSphereTouchPairs_t myReportOffset = numBinsSphereTouchesScan[sphereID];
-
-            double ownerX, ownerY, ownerZ;
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[myOwnerID], granData->locX[myOwnerID],
                 granData->locY[myOwnerID], granData->locZ[myOwnerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            float myRelPosX = CDRelPosX[myCompOffset];
-            float myRelPosY = CDRelPosY[myCompOffset];
-            float myRelPosZ = CDRelPosZ[myCompOffset];
             const float myOriQ0 = granData->oriQ0[myOwnerID];
             const float myOriQ1 = granData->oriQ1[myOwnerID];
             const float myOriQ2 = granData->oriQ2[myOwnerID];
@@ -192,7 +202,6 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMDataKT* granData,
             double myBinY = myPosY / _binSize_;
             double myBinZ = myPosZ / _binSize_;
             // How many bins my radius spans (with fractions)?
-            myRadius = (double)CDRadii[myCompOffset];
             double myRadiusSpan = myRadius / _binSize_;
             // Now, write the IDs of those bins that I touch, back to the global memory
             sgps::binID_t thisBinID;
@@ -245,7 +254,7 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMDataKT* granData,
             double objBPosZ = ownerZ + (double)objBRelPosZ;
             contact_type = checkSphereEntityOverlap<double>(
                 myPosX, myPosY, myPosZ, myRadius, objType[objB], objBPosX, objBPosY, objBPosZ, objBRotX, objBRotY,
-                objBRotZ, objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], _beta_);
+                objBRotZ, objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], simParams->beta);
 
             if (contact_type) {
                 idGeoA[mySphereGeoReportOffset] = sphereID;

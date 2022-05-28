@@ -59,23 +59,25 @@ void DEMDynamicThread::packDataPointers() {
     // The offset info that indexes into the template arrays
     granData->ownerClumpBody = ownerClumpBody.data();
     granData->clumpComponentOffset = clumpComponentOffset.data();
+    granData->clumpComponentOffsetExt = clumpComponentOffsetExt.data();
     granData->materialTupleOffset = materialTupleOffset.data();
 
-    // Template array pointers, which will be removed after JIT is fully functional
-    granTemplates->radiiSphere = radiiSphere.data();
-    granTemplates->relPosSphereX = relPosSphereX.data();
-    granTemplates->relPosSphereY = relPosSphereY.data();
-    granTemplates->relPosSphereZ = relPosSphereZ.data();
-    granTemplates->massOwnerBody = massOwnerBody.data();
-    granTemplates->mmiXX = mmiXX.data();
-    granTemplates->mmiYY = mmiYY.data();
-    granTemplates->mmiZZ = mmiZZ.data();
-    granTemplates->EProxy = EProxy.data();
-    granTemplates->nuProxy = nuProxy.data();
-    granTemplates->CoRProxy = CoRProxy.data();
-    granTemplates->muProxy = muProxy.data();
-    granTemplates->CrrProxy = CrrProxy.data();
+    // Template array pointers
+    granData->radiiSphere = radiiSphere.data();
+    granData->relPosSphereX = relPosSphereX.data();
+    granData->relPosSphereY = relPosSphereY.data();
+    granData->relPosSphereZ = relPosSphereZ.data();
+    granData->massOwnerBody = massOwnerBody.data();
+    granData->mmiXX = mmiXX.data();
+    granData->mmiYY = mmiYY.data();
+    granData->mmiZZ = mmiZZ.data();
+    granData->EProxy = EProxy.data();
+    granData->nuProxy = nuProxy.data();
+    granData->CoRProxy = CoRProxy.data();
+    granData->muProxy = muProxy.data();
+    granData->CrrProxy = CrrProxy.data();
 }
+
 void DEMDynamicThread::packTransferPointers(DEMKinematicThread* kT) {
     // These are the pointers for sending data to dT
     granData->pKTOwnedBuffer_voxelID = kT->granData->voxelID_buffer;
@@ -305,7 +307,6 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<inertiaOffset_t>&
             relPosSphereZ.at(k) = loc.z;
             k++;
         }
-        // std::cout << "sphere location types: " << elem.x << ", " << elem.y << ", " << elem.z << std::endl;
     }
     k = 0;
 
@@ -430,9 +431,11 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
         // std::cout << "Out voxel ID: " << voxelID.at(this_owner) << std::endl;
         // std::cout << "Out voxel ID XYZ: " << voxelIDX << ", " << voxelIDY << ", " << voxelIDZ << std::endl;
 
-        float this_sp_deviation_x = relPosSphereX.at(clumpComponentOffset.at(i));
-        float this_sp_deviation_y = relPosSphereY.at(clumpComponentOffset.at(i));
-        float this_sp_deviation_z = relPosSphereZ.at(clumpComponentOffset.at(i));
+        // Must use clumpComponentOffsetExt, b/c clumpComponentOffset may not be a faithful representation of clump
+        // component offset numbers
+        float this_sp_deviation_x = relPosSphereX.at(clumpComponentOffsetExt.at(i));
+        float this_sp_deviation_y = relPosSphereY.at(clumpComponentOffsetExt.at(i));
+        float this_sp_deviation_z = relPosSphereZ.at(clumpComponentOffsetExt.at(i));
         float this_sp_rot_0 = oriQ0.at(this_owner);
         float this_sp_rot_1 = oriQ1.at(this_owner);
         float this_sp_rot_2 = oriQ2.at(this_owner);
@@ -447,7 +450,7 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
                                       this_sp_deviation_z + simParams->LBFZ;
         // std::cout << "Sphere Pos: " << posX.at(i) << ", " << posY.at(i) << ", " << posZ.at(i) << std::endl;
 
-        spRadii.at(num_output_spheres) = radiiSphere.at(clumpComponentOffset.at(i));
+        spRadii.at(num_output_spheres) = radiiSphere.at(clumpComponentOffsetExt.at(i));
 
         num_output_spheres++;
     }
@@ -652,7 +655,7 @@ inline void DEMDynamicThread::calculateForces() {
         // Reflect those body-wise forces on their owner clumps
         // hostCollectForces(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
         //                   granData->contactForces, granData->aX, granData->aY, granData->aZ,
-        //                   granData->ownerClumpBody, granTemplates->massOwnerBody, simParams->h,
+        //                   granData->ownerClumpBody, granData->massOwnerBody, simParams->h,
         //                   *stateOfSolver_resources.pNumContacts,simParams->l);
         collectContactForces(collect_force_kernels, granData->inertiaPropOffsets, granData->idGeometryA,
                              granData->idGeometryB, granData->contactType, granData->contactForces,
@@ -668,7 +671,7 @@ inline void DEMDynamicThread::calculateForces() {
         // hostCollectTorques(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
         //                    granData->contactForces, granData->contactPointGeometryA, granData->contactPointGeometryB,
         //                    granData->alphaX, granData->alphaY, granData->alphaZ, granData->ownerClumpBody,
-        //                    granTemplates->mmiXX, granTemplates->mmiYY, granTemplates->mmiZZ, simParams->h,
+        //                    granData->mmiXX, granData->mmiYY, granData->mmiZZ, simParams->h,
         //                    *stateOfSolver_resources.pNumContacts, simParams->l);
         // displayArray<float>(granData->oriQ0, simParams->nOwnerBodies);
         // displayArray<float>(granData->oriQ1, simParams->nOwnerBodies);
@@ -847,6 +850,7 @@ size_t DEMDynamicThread::estimateMemUsage() const {
 }
 
 void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,
+                                     const std::unordered_map<std::string, std::string>& templateAcqSubs,
                                      const std::unordered_map<std::string, std::string>& simParamSubs,
                                      const std::unordered_map<std::string, std::string>& massMatSubs,
                                      const std::unordered_map<std::string, std::string>& familyMaskSubs,
@@ -866,6 +870,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     // Depending on historyless-ness, we may want jitify different versions of kernels
     {
         std::unordered_map<std::string, std::string> cfSubs = templateSubs;
+        cfSubs.insert(templateAcqSubs.begin(), templateAcqSubs.end());
         cfSubs.insert(simParamSubs.begin(), simParamSubs.end());
         cfSubs.insert(massMatSubs.begin(), massMatSubs.end());
         cfSubs.insert(analGeoSubs.begin(), analGeoSubs.end());

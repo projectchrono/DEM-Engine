@@ -55,6 +55,7 @@ inline std::string DEM_HERTZIAN_FORCE_MODEL() {
             float3 tangent_force = -kt * delta_tan - gt * vrel_tan;
             const float ft = length(tangent_force);
             if (ft > SGPS_DEM_TINY_FLOAT) {
+                // Reverse-engineer to get tangential displacement
                 const float ft_max = length(force) * mu;
                 if (ft > ft_max) {
                     tangent_force = (ft_max / ft) * tangent_force;
@@ -77,7 +78,7 @@ inline std::string DEM_HERTZIAN_FORCE_MODEL_FRICTIONLESS() {
         R"V0G0N(
         // normal component of relative velocity
         const float projection = dot(velB2A, B2A);
-        float3 vrel_tan = velB2A - projection * B2A;  // May want to report this for tangent force calculation
+        float3 vrel_tan = velB2A - projection * B2A; 
 
         const float mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
         float sqrt_Rd = sqrt(overlapDepth * (ARadius * BRadius) / (ARadius + BRadius));
@@ -96,6 +97,42 @@ inline std::string DEM_HERTZIAN_FORCE_MODEL_FRICTIONLESS() {
         force = (k_n * overlapDepth + gamma_n * projection) * B2A;
     )V0G0N";
 
+    return model;
+}
+
+inline std::string DEM_CLUMP_COMPONENT_ACQUISITION_ALL_JITIFIED() {
+    std::string model;
+    model =
+        R"V0G0N(
+        sgps::clumpComponentOffset_t myCompOffset = granData->clumpComponentOffset[sphereID];
+        myRelPosX = CDRelPosX[myCompOffset];
+        myRelPosY = CDRelPosY[myCompOffset];
+        myRelPosZ = CDRelPosZ[myCompOffset];
+        myRadius = Radii[myCompOffset];
+    )V0G0N";
+    return model;
+}
+
+inline std::string DEM_CLUMP_COMPONENT_ACQUISITION_PARTIALLY_JITIFIED() {
+    std::string model;
+    model =
+        R"V0G0N(
+        sgps::clumpComponentOffset_t myCompOffset = granData->clumpComponentOffset[sphereID];
+        if (myCompOffset != sgps::DEM_RESERVED_CLUMP_COMPONENT_OFFSET) {
+            myRelPosX = CDRelPosX[myCompOffset];
+            myRelPosY = CDRelPosY[myCompOffset];
+            myRelPosZ = CDRelPosZ[myCompOffset];
+            myRadius = Radii[myCompOffset];
+        } else {
+            // Look for my components in global memory
+            sgps::clumpComponentOffsetExt_t myCompOffsetExt = granData->clumpComponentOffsetExt[sphereID];
+            myRelPosX = granData->relPosSphereX[myCompOffsetExt];
+            myRelPosY = granData->relPosSphereY[myCompOffsetExt];
+            myRelPosZ = granData->relPosSphereZ[myCompOffsetExt];
+            // Global memory's radiiSphere is not already expanded for CD purposes
+            myRadius = granData->radiiSphere[myCompOffsetExt];
+        }
+    )V0G0N";
     return model;
 }
 

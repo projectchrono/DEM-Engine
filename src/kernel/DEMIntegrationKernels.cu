@@ -2,7 +2,7 @@
 #include <kernel/DEMHelperKernels.cu>
 #include <DEM/DEMDefines.h>
 
-// Apply presecibed velocity and report whether the ``true'' physics should be skipped, rather than added on top of that
+// Apply presecibed velocity and report whether the `true' physics should be skipped, rather than added on top of that
 template <typename T1, typename T2>
 inline __device__ void applyPrescribedVel(bool& LinPrescribed,
                                           bool& RotPrescribed,
@@ -22,7 +22,7 @@ inline __device__ void applyPrescribedVel(bool& LinPrescribed,
     }
 }
 
-// Apply presecibed location and report whether the ``true'' physics should be skipped, rather than added on top of that
+// Apply presecibed location and report whether the `true' physics should be skipped, rather than added on top of that
 template <typename T1, typename T2>
 inline __device__ void applyPrescribedPos(bool& LinPrescribed,
                                           bool& RotPrescribed,

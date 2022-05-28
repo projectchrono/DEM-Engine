@@ -219,14 +219,15 @@ void DEMKinematicThread::packDataPointers() {
     // The offset info that indexes into the template arrays
     granData->ownerClumpBody = ownerClumpBody.data();
     granData->clumpComponentOffset = clumpComponentOffset.data();
+    granData->clumpComponentOffsetExt = clumpComponentOffsetExt.data();
 
-    // Template array pointers, which will be removed after JIT is fully functional
-    granTemplates->radiiSphere = radiiSphere.data();
-    granTemplates->relPosSphereX = relPosSphereX.data();
-    granTemplates->relPosSphereY = relPosSphereY.data();
-    granTemplates->relPosSphereZ = relPosSphereZ.data();
-    // granTemplates->inflatedRadiiVoxelRatio = inflatedRadiiVoxelRatio.data();
+    // Template array pointers
+    granData->radiiSphere = radiiSphere.data();
+    granData->relPosSphereX = relPosSphereX.data();
+    granData->relPosSphereY = relPosSphereY.data();
+    granData->relPosSphereZ = relPosSphereZ.data();
 }
+
 void DEMKinematicThread::packTransferPointers(DEMDynamicThread* dT) {
     // Set the pointers to dT owned buffers
     granData->pDTOwnedBuffer_nContactPairs = &(dT->granData->nContactPairs_buffer);
@@ -370,7 +371,6 @@ void DEMKinematicThread::populateManagedArrays(const std::vector<inertiaOffset_t
     for (auto elem : clumps_sp_radii_types) {
         for (auto radius : elem) {
             radiiSphere.at(k) = radius;
-            // inflatedRadiiVoxelRatio.at(k) = (unsigned int)(radius * simParams->beta / simParams->voxelSize) + 1;
             k++;
         }
         prescans.push_back(k);
@@ -385,7 +385,6 @@ void DEMKinematicThread::populateManagedArrays(const std::vector<inertiaOffset_t
             relPosSphereZ.at(k) = loc.z;
             k++;
         }
-        // std::cout << "sphere location types: " << elem.x << ", " << elem.y << ", " << elem.z << std::endl;
     }
     k = 0;
 
@@ -429,6 +428,7 @@ void DEMKinematicThread::populateManagedArrays(const std::vector<inertiaOffset_t
 }
 
 void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,
+                                       const std::unordered_map<std::string, std::string>& templateAcqSubs,
                                        const std::unordered_map<std::string, std::string>& simParamSubs,
                                        const std::unordered_map<std::string, std::string>& massMatSubs,
                                        const std::unordered_map<std::string, std::string>& familyMaskSubs,
@@ -438,6 +438,7 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
     // First one is bin_occupation_kernels kernels, which figure out the bin--sphere touch pairs
     {
         std::unordered_map<std::string, std::string> boSubs = templateSubs;
+        boSubs.insert(templateAcqSubs.begin(), templateAcqSubs.end());
         boSubs.insert(simParamSubs.begin(), simParamSubs.end());
         boSubs.insert(analGeoSubs.begin(), analGeoSubs.end());
         boSubs.insert(familyMaskSubs.begin(), familyMaskSubs.end());
@@ -451,6 +452,7 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
     // Then CD kernels
     {
         std::unordered_map<std::string, std::string> cdSubs = templateSubs;
+        cdSubs.insert(templateAcqSubs.begin(), templateAcqSubs.end());
         cdSubs.insert(simParamSubs.begin(), simParamSubs.end());
         cdSubs.insert(familyMaskSubs.begin(), familyMaskSubs.end());
         contact_detection_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(

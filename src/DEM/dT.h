@@ -67,9 +67,6 @@ class DEMDynamicThread {
     // Pointers to those data arrays defined below, stored in a struct
     DEMDataDT* granData;
 
-    // Pointers to clump template data. In the end, the use of this struct should be replaced by JIT.
-    DEMTemplate* granTemplates;
-
     // Body-related arrays in managed memory, for dT's personal use (not transfer buffer)
 
     // Those are the smaller ones, the unique, template ones
@@ -225,7 +222,6 @@ class DEMDynamicThread {
         : pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
         GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
         GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataDT), cudaMemAttachGlobal));
-        GPU_CALL(cudaMallocManaged(&granTemplates, sizeof(DEMTemplate), cudaMemAttachGlobal));
 
         nDynamicCycles = 0;
 
@@ -324,6 +320,7 @@ class DEMDynamicThread {
 
     // Jitify dT kernels (at initialization) based on existing knowledge of this run
     void jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,
+                       const std::unordered_map<std::string, std::string>& templateAcqSubs,
                        const std::unordered_map<std::string, std::string>& simParamSubs,
                        const std::unordered_map<std::string, std::string>& massMatSubs,
                        const std::unordered_map<std::string, std::string>& familyMaskSubs,
