@@ -72,10 +72,9 @@ class DEMDynamicThread {
 
     // Body-related arrays in managed memory, for dT's personal use (not transfer buffer)
 
-    // Those are the smaller ones, the unique, template ones. TODO: These should be jitified into kernels not brought
-    // from global mem.
+    // Those are the smaller ones, the unique, template ones
     // The mass values
-    std::vector<float, ManagedAllocator<float>> massClumpBody;
+    std::vector<float, ManagedAllocator<float>> massOwnerBody;
 
     // The components of MOI values
     std::vector<float, ManagedAllocator<float>> mmiXX;
@@ -278,8 +277,10 @@ class DEMDynamicThread {
                                size_t nSpheresGM,
                                size_t nTriGM,
                                unsigned int nAnalGM,
+                               unsigned int nMassProperties,
                                unsigned int nClumpTopo,
                                unsigned int nClumpComponents,
+                               unsigned int nJitifiableClumpComponents,
                                unsigned int nMatTuples);
 
     // Data type TBD, should come from JITCed headers

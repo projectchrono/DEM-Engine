@@ -3,11 +3,11 @@
 #include <DEM/DEMDefines.h>
 
 __global__ void applyFamilyChanges(sgps::DEMDataDT* granData, float h, float t) {
-    // _nTotalBodyTopologies_  elements are in these arrays
+    // _nDistinctMassProperties_  elements are in these arrays
     const float moiX[] = {_moiX_};
     const float moiY[] = {_moiY_};
     const float moiZ[] = {_moiZ_};
-    const float ClumpMasses[] = {_ClumpMasses_};
+    const float MassProperties[] = {_MassProperties_};
 
     sgps::bodyID_t thisClump = blockIdx.x * blockDim.x + threadIdx.x;
     if (thisClump < _nOwnerBodies_) {
@@ -17,7 +17,7 @@ __global__ void applyFamilyChanges(sgps::DEMDataDT* granData, float h, float t) 
         float mass;
         sgps::family_t family_code = granData->familyID[thisClump];
         sgps::clumpBodyInertiaOffset_t myMassOffset = granData->inertiaPropOffsets[thisClump];
-        mass = ClumpMasses[myMassOffset];
+        mass = MassProperties[myMassOffset];
         voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
             pos.x, pos.y, pos.z, granData->voxelID[thisClump], granData->locX[thisClump], granData->locY[thisClump],
             granData->locZ[thisClump], _nvXp2_, _nvYp2_, _voxelSize_, _l_);

@@ -40,11 +40,11 @@ __global__ void cashInMassMoiIndex(float* massOwner,
                                    sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets,
                                    sgps::bodyID_t* idOwner,
                                    size_t nContactPairs) {
-    // _nTotalBodyTopologies_  elements are in these arrays
+    // _nDistinctMassProperties_  elements are in these arrays
     const float moiX[] = {_moiX_};
     const float moiY[] = {_moiY_};
     const float moiZ[] = {_moiZ_};
-    const float ClumpMasses[] = {_ClumpMasses_};
+    const float MassProperties[] = {_MassProperties_};
 
     sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContactPairs) {
@@ -54,7 +54,7 @@ __global__ void cashInMassMoiIndex(float* massOwner,
         moi.x = moiX[myMassOffset];
         moi.y = moiY[myMassOffset];
         moi.z = moiZ[myMassOffset];
-        massOwner[myID] = ClumpMasses[myMassOffset];
+        massOwner[myID] = MassProperties[myMassOffset];
         moiOwner[myID] = moi;
     }
 }
@@ -66,14 +66,14 @@ __global__ void forceToAcc(float3* acc,
                            float modifier,
                            size_t n,
                            sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets) {
-    // _nTotalBodyTopologies_  elements are in these arrays
-    const float ClumpMasses[] = {_ClumpMasses_};
+    // _nDistinctMassProperties_  elements are in these arrays
+    const float MassProperties[] = {_MassProperties_};
 
     sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
         sgps::bodyID_t thisOwnerID = owner[myID];
         sgps::clumpBodyInertiaOffset_t myMassOffset = inertiaPropOffsets[thisOwnerID];
-        float myMass = ClumpMasses[myMassOffset];
+        float myMass = MassProperties[myMassOffset];
         acc[myID] = F[myID] * modifier / myMass;
     }
 }
@@ -86,7 +86,7 @@ __global__ void forceToAngAcc(float3* angAcc,
                               float modifier,
                               size_t n,
                               sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets) {
-    // _nTotalBodyTopologies_  elements are in these arrays
+    // _nDistinctMassProperties_  elements are in these arrays
     const float moiX[] = {_moiX_};
     const float moiY[] = {_moiY_};
     const float moiZ[] = {_moiZ_};

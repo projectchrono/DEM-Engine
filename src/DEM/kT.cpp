@@ -275,8 +275,10 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
                                                size_t nSpheresGM,
                                                size_t nTriGM,
                                                unsigned int nAnalGM,
+                                               unsigned int nMassProperties,
                                                unsigned int nClumpTopo,
                                                unsigned int nClumpComponents,
+                                               unsigned int nJitifiableClumpComponents,
                                                unsigned int nMatTuples) {
     // Sizes of these arrays
     simParams->nSpheresGM = nSpheresGM;
@@ -286,7 +288,9 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     simParams->nOwnerClumps = nOwnerClumps;
     simParams->nExtObj = nExtObj;
     simParams->nTriEntities = nTriEntities;
+    simParams->nDistinctMassProperties = nMassProperties;
     simParams->nDistinctClumpBodyTopologies = nClumpTopo;
+    simParams->nJitifiableClumpComponents = nJitifiableClumpComponents;
     simParams->nDistinctClumpComponents = nClumpComponents;
     simParams->nMatTuples = nMatTuples;
 

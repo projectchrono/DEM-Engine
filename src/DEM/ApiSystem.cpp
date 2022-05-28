@@ -304,6 +304,8 @@ void DEMSolver::ClearCache() {
     m_anal_size_3.clear();
     m_anal_types.clear();
     m_anal_normals.clear();
+    m_extra_clump_type.clear();
+    m_extra_clump_owner.clear();
 
     m_template_mass.clear();
     m_template_moi.clear();
@@ -378,78 +380,6 @@ void DEMSolver::figureOutMaterialProxies() {
         m_CoR_proxy.at(i) = Mat->CoR;
         m_mu_proxy.at(i) = Mat->mu;
         m_Crr_proxy.at(i) = Mat->Crr;
-    }
-}
-
-unsigned int DEMSolver::AddAnalCompTemplate(const objType_t type,
-                                            const std::shared_ptr<DEMMaterial>& material,
-                                            const unsigned int owner,
-                                            const float3 pos,
-                                            const float3 rot,
-                                            const float d1,
-                                            const float d2,
-                                            const float d3,
-                                            const objNormal_t normal) {
-    m_anal_types.push_back(type);
-    m_anal_materials.push_back(stash_material_in_templates(m_loaded_sp_materials, material));
-    m_anal_owner.push_back(owner);
-    m_anal_comp_pos.push_back(pos);
-    m_anal_comp_rot.push_back(rot);
-    m_anal_size_1.push_back(d1);
-    m_anal_size_2.push_back(d2);
-    m_anal_size_3.push_back(d3);
-    m_anal_normals.push_back(normal);
-
-    return m_anal_types.size() - 1;
-}
-
-void DEMSolver::preprocessExternObjs() {
-    // How many clump tempaltes are there? Is there one too large to jitify?
-
-    // How many triangle tempaltes are there? Is there one too large to jitify?
-
-    // How many analytical entities are there? (those entities are always jitified)
-    nExtObj = cached_extern_objs.size();
-    unsigned int thisExtObj = 0;
-    for (auto ext_obj : cached_extern_objs) {
-        // Load mass and MOI properties into arrays waiting to be transfered to kTdT. Note this must be done after user
-        // loads all clump templates, as ext obj's mass info is `appended' to clump mass arrays
-        m_template_mass.push_back(ext_obj->mass);
-        m_template_moi.push_back(ext_obj->MOI);
-
-        // Then load this ext obj's components
-        unsigned int this_num_anal_ent = 0;
-        auto comp_params = ext_obj->entity_params;
-        auto comp_mat = ext_obj->materials;
-        m_input_ext_obj_xyz.push_back(ext_obj->init_pos);
-        m_input_ext_obj_family.push_back(ext_obj->family_code);
-        // TODO: allow orientation input for ext obj
-        for (unsigned int i = 0; i < ext_obj->types.size(); i++) {
-            // CLUMP type should not be included b/c clumps are treated differently than analytical entities
-            if (ext_obj->types.at(i) != DEM_OBJ_COMPONENT::CLUMP) {
-                auto param = comp_params.at(this_num_anal_ent);
-                this_num_anal_ent++;
-                switch (ext_obj->types.at(i)) {
-                    case DEM_OBJ_COMPONENT::PLANE:
-                        AddAnalCompTemplate(DEM_ENTITY_TYPE_PLANE, comp_mat.at(i), thisExtObj, param.plane.position,
-                                            param.plane.normal);
-                        break;
-                    case DEM_OBJ_COMPONENT::PLATE:
-                        AddAnalCompTemplate(DEM_ENTITY_TYPE_PLATE, comp_mat.at(i), thisExtObj, param.plate.center,
-                                            param.plate.normal, param.plate.h_dim_x, param.plate.h_dim_y);
-                        break;
-                    default:
-                        SGPS_DEM_ERROR("There is at least one analytical boundary that has a type not supported.");
-                }
-            } else {
-                m_extra_clump_type.push_back(ext_obj->clump_type);
-                m_extra_clump_owner.push_back(thisExtObj);
-                // Remember the clumps in AddExternalObject-loaded entities contributes to total spheres
-                nSpheresGM += m_template_sp_radii.at(ext_obj->clump_type).size();
-            }
-        }
-        nAnalGM += this_num_anal_ent;
-        thisExtObj++;
     }
 }
 
@@ -558,7 +488,7 @@ inline void DEMSolver::reportInitStats() const {
                       (m_expand_factor / m_smallest_radius) * 100.0);
     }
 
-    SGPS_DEM_INFO("The number of material types: %u", nMatTuples_computed);
+    SGPS_DEM_INFO("The number of material types: %u", nMatTuples);
     if (m_isHistoryless) {
         SGPS_DEM_INFO("This run uses HISTORYLESS solver setup");
     } else {
@@ -610,6 +540,74 @@ void DEMSolver::preprocessClumpTemplates() {
     }
 }
 
+unsigned int DEMSolver::AddAnalCompTemplate(const objType_t type,
+                                            const std::shared_ptr<DEMMaterial>& material,
+                                            const unsigned int owner,
+                                            const float3 pos,
+                                            const float3 rot,
+                                            const float d1,
+                                            const float d2,
+                                            const float d3,
+                                            const objNormal_t normal) {
+    m_anal_types.push_back(type);
+    m_anal_materials.push_back(stash_material_in_templates(m_loaded_sp_materials, material));
+    m_anal_owner.push_back(owner);
+    m_anal_comp_pos.push_back(pos);
+    m_anal_comp_rot.push_back(rot);
+    m_anal_size_1.push_back(d1);
+    m_anal_size_2.push_back(d2);
+    m_anal_size_3.push_back(d3);
+    m_anal_normals.push_back(normal);
+
+    return m_anal_types.size() - 1;
+}
+
+void DEMSolver::preprocessAnalyticalObjs() {
+    // How many clump tempaltes are there? Is there one too large to jitify?
+
+    // How many triangle tempaltes are there? Is there one too large to jitify?
+
+    // How many analytical entities are there? (those entities are always jitified)
+    nExtObj = cached_extern_objs.size();
+    unsigned int thisExtObj = 0;
+    for (auto ext_obj : cached_extern_objs) {
+        // Load mass and MOI properties into arrays waiting to be transfered to kTdT. Note this must be done after user
+        // loads all clump templates, as ext obj's mass info is `appended' to clump mass arrays
+        m_template_mass.push_back(ext_obj->mass);
+        m_template_moi.push_back(ext_obj->MOI);
+
+        // TODO: If CoM is not all-0, all components should be offsetted
+        // float3 CoM = ext_obj->CoM;
+        // float4 CoM_oriQ = ext_obj->CoM_oriQ;
+
+        // Then load this ext obj's components
+        unsigned int this_num_anal_ent = 0;
+        auto comp_params = ext_obj->entity_params;
+        auto comp_mat = ext_obj->materials;
+        m_input_ext_obj_xyz.push_back(ext_obj->init_pos);
+        m_input_ext_obj_family.push_back(ext_obj->family_code);
+        // TODO: allow orientation input for ext obj
+        for (unsigned int i = 0; i < ext_obj->types.size(); i++) {
+            auto param = comp_params.at(this_num_anal_ent);
+            this_num_anal_ent++;
+            switch (ext_obj->types.at(i)) {
+                case DEM_OBJ_COMPONENT::PLANE:
+                    AddAnalCompTemplate(DEM_ENTITY_TYPE_PLANE, comp_mat.at(i), thisExtObj, param.plane.position,
+                                        param.plane.normal);
+                    break;
+                case DEM_OBJ_COMPONENT::PLATE:
+                    AddAnalCompTemplate(DEM_ENTITY_TYPE_PLATE, comp_mat.at(i), thisExtObj, param.plate.center,
+                                        param.plate.normal, param.plate.h_dim_x, param.plate.h_dim_y);
+                    break;
+                default:
+                    SGPS_DEM_ERROR("There is at least one analytical boundary that has a type not supported.");
+            }
+        }
+        nAnalGM += this_num_anal_ent;
+        thisExtObj++;
+    }
+}
+
 void DEMSolver::generateJITResources() {
     /*
     // Dan and Ruochun decided not to extract unique input values.
@@ -644,7 +642,7 @@ void DEMSolver::generateJITResources() {
     }
 
     nDistinctClumpBodyTopologies = m_template_mass_types.size();
-    nMatTuples_computed = m_loaded_sp_materials.size();
+    nMatTuples = m_loaded_sp_materials.size();
 
     nDistinctSphereRadii_computed = m_template_sp_radii_types.size();
     nDistinctSphereRelativePositions_computed = m_clumps_sp_location_types.size();
@@ -652,15 +650,19 @@ void DEMSolver::generateJITResources() {
 
     // Flatten cached clump templates (from ClumpTemplate structs to float arrays), make ready for transferring to kTdT
     preprocessClumpTemplates();
+    // Right after, figure out the jitifiablity of clump templates. Loading external objects will not introduce more
+    // clump templates, so we can safely do it here.
     bool unable_jitify_all = false;
     nDistinctClumpBodyTopologies = m_template_mass.size();
     nDistinctClumpComponents = 0;
+    nJitifiableClumpComponents = 0;
     for (unsigned int i = 0; i < nDistinctClumpBodyTopologies; i++) {
         nDistinctClumpComponents += m_template_sp_radii.at(i).size();
         // Keep an eye on if the accumulated DistinctClumpComponents gets too many
         if ((!unable_jitify_all) && (nDistinctClumpComponents > SGPS_DEM_THRESHOLD_TOO_MANY_SPHERE_COMP ||
                                      m_template_sp_radii.at(i).size() > SGPS_DEM_THRESHOLD_BIG_CLUMP)) {
             nJitifiableClumpTopo = i;
+            nJitifiableClumpComponents = nDistinctClumpComponents - m_template_sp_radii.at(i).size();
             unable_jitify_all = true;
         }
     }
@@ -670,10 +672,13 @@ void DEMSolver::generateJITResources() {
             "there are many types of clumps.\nThis is expected if there are external objects represented by spherical "
             "decomposition.",
             nDistinctClumpBodyTopologies, nJitifiableClumpTopo);
+    } else {
+        nJitifiableClumpTopo = nDistinctClumpBodyTopologies;
+        nJitifiableClumpComponents = nDistinctClumpComponents;
     }
 
     // Figure out info about external objects/clump templates and whether they can be jitified
-    preprocessExternObjs();
+    preprocessAnalyticalObjs();
     if (nAnalGM > SGPS_DEM_THRESHOLD_TOO_MANY_ANAL_GEO) {
         SGPS_DEM_WARNING(
             "%u analytical geometries are loaded. Because all analytical geometries are jitified, this is a relatively "
@@ -692,7 +697,7 @@ void DEMSolver::generateJITResources() {
     // appended to the mass/MOI arrays
     nDistinctMassProperties = m_template_mass.size();
     // Also, external objects may introduce more material types
-    nMatTuples_computed = m_loaded_sp_materials.size();
+    nMatTuples = m_loaded_sp_materials.size();
     // If these `computed' numbers are larger than types like materialsOffset_t can hold, then we should error out and
     // let the user re-compile (or, should we somehow change the header automatically?)
 
@@ -714,8 +719,7 @@ void DEMSolver::generateJITResources() {
     // Figure out the initial profile/status of clumps, and related quantities, if need to
     nOwnerClumps = m_input_clump_types.size();
 
-    // now a quick hack using for loop
-    // I'll have to change that to be more... efficient
+    // Remember that m_input_clump_types stores clump type number, not their shared ptr, to save some memory space
     for (size_t i = 0; i < m_input_clump_types.size(); i++) {
         auto this_type_num = m_input_clump_types.at(i);
         auto this_radii = m_template_sp_radii.at(this_type_num);
@@ -812,9 +816,11 @@ void DEMSolver::transferSimParams() {
 void DEMSolver::initializeArrays() {
     // Resize managed arrays based on the statistical data we had from the previous step
     dT->allocateManagedArrays(nOwnerBodies, nOwnerClumps, nExtObj, nTriEntities, nSpheresGM, nTriGM, nAnalGM,
-                              nDistinctClumpBodyTopologies, nDistinctClumpComponents, nMatTuples_computed);
+                              nDistinctMassProperties, nDistinctClumpBodyTopologies, nDistinctClumpComponents,
+                              nJitifiableClumpComponents, nMatTuples);
     kT->allocateManagedArrays(nOwnerBodies, nOwnerClumps, nExtObj, nTriEntities, nSpheresGM, nTriGM, nAnalGM,
-                              nDistinctClumpBodyTopologies, nDistinctClumpComponents, nMatTuples_computed);
+                              nDistinctMassProperties, nDistinctClumpBodyTopologies, nDistinctClumpComponents,
+                              nJitifiableClumpComponents, nMatTuples);
 
     // Now that the CUDA-related functions and data types are JITCompiled, we can feed those GPU-side arrays with the
     // cached API-level simulation info.
@@ -1117,24 +1123,24 @@ inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std
 }
 
 inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::string>& strMap) {
-    std::string ClumpMasses, moiX, moiY, moiZ, E_proxy, nu_proxy, CoR_proxy, mu_proxy, Crr_proxy;
+    std::string MassProperties, moiX, moiY, moiZ, E_proxy, nu_proxy, CoR_proxy, mu_proxy, Crr_proxy;
     // Loop through all templates to find in the JIT info
     // Note m_template_mass's size is nDistinctMassProperties, and it may be large than nDistinctClumpBodyTopologies
     // because of the ext obj mass entries appended to that array
     for (unsigned int i = 0; i < m_template_mass.size(); i++) {
-        ClumpMasses += to_string_with_precision(m_template_mass.at(i)) + ",";
+        MassProperties += to_string_with_precision(m_template_mass.at(i)) + ",";
         moiX += to_string_with_precision(m_template_moi.at(i).x) + ",";
         moiY += to_string_with_precision(m_template_moi.at(i).y) + ",";
         moiZ += to_string_with_precision(m_template_moi.at(i).z) + ",";
     }
-    for (unsigned int i = 0; i < nMatTuples_computed; i++) {
+    for (unsigned int i = 0; i < nMatTuples; i++) {
         E_proxy += to_string_with_precision(m_E_proxy.at(i)) + ",";
         nu_proxy += to_string_with_precision(m_nu_proxy.at(i)) + ",";
         CoR_proxy += to_string_with_precision(m_CoR_proxy.at(i)) + ",";
         mu_proxy += to_string_with_precision(m_mu_proxy.at(i)) + ",";
         Crr_proxy += to_string_with_precision(m_Crr_proxy.at(i)) + ",";
     }
-    strMap["_ClumpMasses_"] = ClumpMasses;
+    strMap["_MassProperties_"] = MassProperties;
     strMap["_moiX_"] = moiX;
     strMap["_moiY_"] = moiY;
     strMap["_moiZ_"] = moiZ;
@@ -1147,8 +1153,8 @@ inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::st
 
 inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap) {
     std::string CDRadii, Radii, CDRelPosX, CDRelPosY, CDRelPosZ;
-    // Loop through all templates to find the JIT info to jitify
-    for (unsigned int i = 0; i < nDistinctClumpBodyTopologies; i++) {
+    // Loop through all clump templates to find the JIT info to jitify
+    for (unsigned int i = 0; i < nJitifiableClumpTopo; i++) {
         for (unsigned int j = 0; j < m_template_sp_radii.at(i).size(); j++) {
             Radii += to_string_with_precision(m_template_sp_radii.at(i).at(j)) + ",";
             CDRadii += to_string_with_precision(m_template_sp_radii.at(i).at(j) + m_expand_factor) + ",";
@@ -1196,9 +1202,9 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_nAnalGMSafe_"] = std::to_string(nAnalGMSafe);
     strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
     // nTotalBodyTopologies includes clump topologies and ext obj topologies
-    strMap["_nTotalBodyTopologies_"] = std::to_string(nDistinctClumpBodyTopologies + nExtObj);
-    strMap["_nDistinctClumpComponents_"] = std::to_string(nDistinctClumpComponents);
-    strMap["_nMatTuples_"] = std::to_string(nMatTuples_computed);
+    strMap["_nDistinctMassProperties_"] = std::to_string(nDistinctMassProperties);
+    strMap["_nJitifiableClumpComponents_"] = std::to_string(nJitifiableClumpComponents);
+    strMap["_nMatTuples_"] = std::to_string(nMatTuples);
 }
 
 }  // namespace sgps

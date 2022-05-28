@@ -156,7 +156,10 @@ struct DEMSimParams {
 
     // Number of the templates (or say the ``types'') of clumps and spheres
     clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies;
-    clumpComponentOffset_t nDistinctClumpComponents;  ///< Does not include `big' clump's (external object's) components
+    clumpComponentOffset_t nDistinctMassProperties;  ///< All mass property items, not just clumps'
+    clumpComponentOffset_t
+        nJitifiableClumpComponents;  ///< Does not include `big' clump's (external object's) components
+    clumpComponentOffsetExt_t nDistinctClumpComponents;  ///< All clump components, including the ones `big' clumps have
     materialsOffset_t nMatTuples;
     // Coordinate of the left-bottom-front point of the simulation ``world''
     float LBFX;
@@ -182,7 +185,7 @@ struct DEMTemplate {
     float* relPosSphereX;
     float* relPosSphereY;
     float* relPosSphereZ;
-    float* massClumpBody;
+    float* massOwnerBody;
     float* mmiXX;
     float* mmiYY;
     float* mmiZZ;

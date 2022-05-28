@@ -5,7 +5,7 @@
 __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMDataKT* granData,
                                                  sgps::binsSphereTouches_t* numBinsSphereTouches,
                                                  sgps::objID_t* numAnalGeoSphereTouches) {
-    // _nDistinctClumpComponents_ elements are in these arrays
+    // _nJitifiableClumpComponents_ elements are in these arrays
     const float CDRadii[] = {_CDRadii_};
     const float CDRelPosX[] = {_CDRelPosX_};
     const float CDRelPosY[] = {_CDRelPosY_};

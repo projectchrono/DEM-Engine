@@ -2,8 +2,8 @@
 #include <DEM/DEMDefines.h>
 
 __global__ void computeKE(sgps::DEMDataDT* granData, float* KE) {
-    // _nTotalBodyTopologies_  elements are in these arrays
-    const float ClumpMasses[] = {_ClumpMasses_};
+    // _nDistinctMassProperties_  elements are in these arrays
+    const float MassProperties[] = {_MassProperties_};
     const float moiX[] = {_moiX_};
     const float moiY[] = {_moiY_};
     const float moiZ[] = {_moiZ_};
@@ -11,7 +11,7 @@ __global__ void computeKE(sgps::DEMDataDT* granData, float* KE) {
     sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < _nOwnerBodies_) {
         sgps::clumpBodyInertiaOffset_t myMassOffset = granData->inertiaPropOffsets[myID];
-        float myMass = ClumpMasses[myMassOffset];
+        float myMass = MassProperties[myMassOffset];
         float myMOIX = moiX[myMassOffset];
         float myMOIY = moiY[myMassOffset];
         float myMOIZ = moiZ[myMassOffset];

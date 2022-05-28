@@ -356,6 +356,9 @@ struct DEMClumpTemplate {
     // spheres. It is usually all 0, unless the user specifies it, in which case we need to process relPos such that
     // when the system is initialized, everything is still in the clump's CoM frame.
     float3 CoM = make_float3(0);
+    // CoM frame's orientation quaternion in the frame which is used to report the positions of this clump's component
+    // spheres. Usually unit quaternion.
+    float4 CoM_oriQ = make_float4(1.f, 0.f, 0.f, 0.f);
     // Each clump template will have a unique mark number. When clumps are loaded to the system, this mark will help
     // find their type offset.
     unsigned int mark;

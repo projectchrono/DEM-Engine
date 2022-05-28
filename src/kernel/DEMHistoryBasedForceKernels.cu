@@ -3,12 +3,12 @@
 #include <kernel/DEMHelperKernels.cu>
 
 __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData, size_t nContactPairs) {
-    // _nTotalBodyTopologies_ or _nDistinctClumpComponents_ elements are in these arrays
+    // _nDistinctMassProperties_ or _nJitifiableClumpComponents_ elements are in these arrays
     const float Radii[] = {_Radii_};
     const float CDRelPosX[] = {_CDRelPosX_};
     const float CDRelPosY[] = {_CDRelPosY_};
     const float CDRelPosZ[] = {_CDRelPosZ_};
-    const float ClumpMasses[] = {_ClumpMasses_};
+    const float MassProperties[] = {_MassProperties_};
 
     // _nMatTuples_ elements are in these arrays
     const float EProxy[] = {_EProxy_};
@@ -52,7 +52,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             sgps::bodyID_t bodyAOwner = granData->ownerClumpBody[bodyA];
             sgps::clumpComponentOffset_t bodyACompOffset = granData->clumpComponentOffset[bodyA];
             bodyAMatType = granData->materialTupleOffset[bodyA];
-            AOwnerMass = ClumpMasses[granData->inertiaPropOffsets[bodyAOwner]];
+            AOwnerMass = MassProperties[granData->inertiaPropOffsets[bodyAOwner]];
             ARadius = Radii[bodyACompOffset];
             // AOwnerFamily = granData->familyID[bodyAOwner];
             float3 myRelPos;
@@ -86,7 +86,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             sgps::bodyID_t bodyBOwner = granData->ownerClumpBody[bodyB];
             sgps::clumpComponentOffset_t bodyBCompOffset = granData->clumpComponentOffset[bodyB];
             bodyBMatType = granData->materialTupleOffset[bodyB];
-            BOwnerMass = ClumpMasses[granData->inertiaPropOffsets[bodyBOwner]];
+            BOwnerMass = MassProperties[granData->inertiaPropOffsets[bodyBOwner]];
             BRadius = Radii[bodyBCompOffset];
             // BOwnerFamily = granData->familyID[bodyBOwner];
             float3 myRelPos;
@@ -120,7 +120,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             sgps::objID_t bodyB = granData->idGeometryB[myContactID];
             sgps::bodyID_t bodyBOwner = objOwner[bodyB];
             bodyBMatType = objMaterial[bodyB];
-            BOwnerMass = ClumpMasses[granData->inertiaPropOffsets[bodyBOwner]];
+            BOwnerMass = MassProperties[granData->inertiaPropOffsets[bodyBOwner]];
             // TODO: fix these...
             BRadius = 10000.f;
             float3 myRelPos, bodyBRot;

@@ -86,7 +86,7 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
         //     .instantiate()
         //     .configure(dim3(blocks_needed_for_twice_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK),
         //                sizeof(float) * TEST_SHARED_SIZE * 4, this_stream)
-        //     .launch(massAOwner, moiAOwner, inertiaPropOffsets, idAOwner, 2 * nContactPairs, massClumpBody, mmiXX,
+        //     .launch(massAOwner, moiAOwner, inertiaPropOffsets, idAOwner, 2 * nContactPairs, massOwnerBody, mmiXX,
         //     mmiYY,
         //             mmiZZ, nDistinctClumpBodyTopologies);
         // GPU_CALL(cudaStreamSynchronize(this_stream));

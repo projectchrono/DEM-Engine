@@ -93,6 +93,13 @@ struct DEMExternObj {
     std::vector<std::shared_ptr<DEMMaterial>> materials;
     // Family code (used in prescribing its motions etc.)
     unsigned int family_code = DEM_RESERVED_FAMILY_NUM;  ///< Means it is default to the `fixed' family
+    // The coordinate of the CoM of this external object, in the frame where all its components' properties are
+    // reported. This is usually all-0 (meaning you should define the object's components in its CoM frame to begin
+    // with), but it can be user-specified.
+    float3 CoM = make_float3(0);
+    // CoM frame's orientation quaternion in the frame which is used to report all its components' properties. Usually
+    // unit quaternion.
+    float4 CoM_oriQ = make_float4(1.f, 0.f, 0.f, 0.f);
     // Obj's CoM initial position
     float3 init_pos = make_float3(0);
     // Obj's initial orientation quaternion
@@ -101,30 +108,12 @@ struct DEMExternObj {
     float mass = SGPS_DEM_HUGE_FLOAT;
     // Obj's MOI (huge by default)
     float3 MOI = make_float3(SGPS_DEM_HUGE_FLOAT);
-    // The (big) clump types that are a part of this extern obj. Note an external object should at most have one clump
-    // as its component.
-    unsigned int clump_type;
-    // Flag for having loaded more than one clump
-    bool clump_defined = false;
 
     union DEMAnalEntParams {
         DEMPlateParams_t plate;
         DEMPlaneParams_t plane;
     };
     std::vector<DEMAnalEntParams> entity_params;
-
-    /// Add a clump (using loaded clump template number) as a component to this external object
-    void AddClumpType(unsigned int type) {
-        if (clump_defined) {
-            SGPS_DEM_WARNING(
-                "Each external object can contain no more than one clump. When you load the second one, the first one "
-                "is overwritten.");
-        } else {
-            types.push_back(DEM_OBJ_COMPONENT::CLUMP);
-        }
-        clump_type = type;
-        clump_defined = true;
-    }
 
     /// Define object contact family number
     void SetFamily(const unsigned int code) { family_code = code; }

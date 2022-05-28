@@ -24,7 +24,7 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
     typedef cub::BlockReduce<sgps::spheresBinTouches_t, SGPS_DEM_MAX_SPHERES_PER_BIN> BlockReduceT;
     __shared__ typename BlockReduceT::TempStorage temp_storage;
 
-    // _nDistinctClumpComponents_ elements are in these arrays
+    // _nJitifiableClumpComponents_ elements are in these arrays
     const float CDRadii[] = {_CDRadii_};
     const float CDRelPosX[] = {_CDRelPosX_};
     const float CDRelPosY[] = {_CDRelPosY_};
@@ -154,7 +154,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
     typedef cub::BlockScan<sgps::spheresBinTouches_t, SGPS_DEM_MAX_SPHERES_PER_BIN> BlockScanT;
     __shared__ typename BlockScanT::TempStorage temp_storage;
 
-    // _nDistinctClumpComponents_ elements are in these arrays
+    // _nJitifiableClumpComponents_ elements are in these arrays
     const float CDRadii[] = {_CDRadii_};
     const float CDRelPosX[] = {_CDRelPosX_};
     const float CDRelPosY[] = {_CDRelPosY_};

@@ -66,7 +66,7 @@ void DEMDynamicThread::packDataPointers() {
     granTemplates->relPosSphereX = relPosSphereX.data();
     granTemplates->relPosSphereY = relPosSphereY.data();
     granTemplates->relPosSphereZ = relPosSphereZ.data();
-    granTemplates->massClumpBody = massClumpBody.data();
+    granTemplates->massOwnerBody = massOwnerBody.data();
     granTemplates->mmiXX = mmiXX.data();
     granTemplates->mmiYY = mmiYY.data();
     granTemplates->mmiZZ = mmiZZ.data();
@@ -146,8 +146,10 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
                                              size_t nSpheresGM,
                                              size_t nTriGM,
                                              unsigned int nAnalGM,
+                                             unsigned int nMassProperties,
                                              unsigned int nClumpTopo,
                                              unsigned int nClumpComponents,
+                                             unsigned int nJitifiableClumpComponents,
                                              unsigned int nMatTuples) {
     // Sizes of these arrays
     simParams->nSpheresGM = nSpheresGM;
@@ -157,7 +159,9 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     simParams->nOwnerClumps = nOwnerClumps;
     simParams->nExtObj = nExtObj;
     simParams->nTriEntities = nTriEntities;
+    simParams->nDistinctMassProperties = nMassProperties;
     simParams->nDistinctClumpBodyTopologies = nClumpTopo;
+    simParams->nJitifiableClumpComponents = nJitifiableClumpComponents;
     simParams->nDistinctClumpComponents = nClumpComponents;
     simParams->nMatTuples = nMatTuples;
 
@@ -191,10 +195,10 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     SGPS_DEM_TRACKED_RESIZE(materialTupleOffset, nSpheresGM, "materialTupleOffset", 0);
 
     // Resize to the length of the clump templates
-    SGPS_DEM_TRACKED_RESIZE(massClumpBody, nClumpTopo, "massClumpBody", 0);
-    SGPS_DEM_TRACKED_RESIZE(mmiXX, nClumpTopo, "mmiXX", 0);
-    SGPS_DEM_TRACKED_RESIZE(mmiYY, nClumpTopo, "mmiYY", 0);
-    SGPS_DEM_TRACKED_RESIZE(mmiZZ, nClumpTopo, "mmiZZ", 0);
+    SGPS_DEM_TRACKED_RESIZE(massOwnerBody, nMassProperties, "massOwnerBody", 0);
+    SGPS_DEM_TRACKED_RESIZE(mmiXX, nMassProperties, "mmiXX", 0);
+    SGPS_DEM_TRACKED_RESIZE(mmiYY, nMassProperties, "mmiYY", 0);
+    SGPS_DEM_TRACKED_RESIZE(mmiZZ, nMassProperties, "mmiZZ", 0);
     SGPS_DEM_TRACKED_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);
     SGPS_DEM_TRACKED_RESIZE(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
     SGPS_DEM_TRACKED_RESIZE(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
@@ -261,10 +265,9 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<clumpBodyInertiaO
         CrrProxy.at(i) = mat_Crr.at(i);
     }
 
-    // Then load in clump mass and MOI (only nDistinctClumpBodyTopologies interations; clumps_mass_types array may have
-    // more elements appended to the end of it for ext obj's mass info)
-    for (unsigned int i = 0; i < simParams->nDistinctClumpBodyTopologies; i++) {
-        massClumpBody.at(i) = clumps_mass_types.at(i);
+    // Then load in clump mass and MOI
+    for (unsigned int i = 0; i < simParams->nDistinctMassProperties; i++) {
+        massOwnerBody.at(i) = clumps_mass_types.at(i);
         float3 this_moi = clumps_moi_types.at(i);
         mmiXX.at(i) = this_moi.x;
         mmiYY.at(i) = this_moi.y;
@@ -630,7 +633,7 @@ inline void DEMDynamicThread::calculateForces() {
         // Reflect those body-wise forces on their owner clumps
         // hostCollectForces(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
         //                   granData->contactForces, granData->aX, granData->aY, granData->aZ,
-        //                   granData->ownerClumpBody, granTemplates->massClumpBody, simParams->h,
+        //                   granData->ownerClumpBody, granTemplates->massOwnerBody, simParams->h,
         //                   *stateOfSolver_resources.pNumContacts,simParams->l);
         collectContactForces(collect_force_kernels, granData->inertiaPropOffsets, granData->idGeometryA,
                              granData->idGeometryB, granData->contactType, granData->contactForces,

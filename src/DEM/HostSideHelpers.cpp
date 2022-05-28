@@ -241,7 +241,7 @@ inline void hostCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
                               float* clump_aY,
                               float* clump_aZ,
                               bodyID_t* ownerClumpBody,
-                              float* massClumpBody,
+                              float* massOwnerBody,
                               float h,
                               size_t n,
                               double l) {
@@ -250,13 +250,13 @@ inline void hostCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
         bodyID_t bodyB = idB[i];
         const float3 F = contactForces[i];
         bodyID_t AOwner = ownerClumpBody[bodyA];
-        float AMass = massClumpBody[inertiaPropOffsets[AOwner]];
+        float AMass = massOwnerBody[inertiaPropOffsets[AOwner]];
         clump_aX[AOwner] += (double)F.x / AMass / l * h * h;
         clump_aY[AOwner] += (double)F.y / AMass / l * h * h;
         clump_aZ[AOwner] += (double)F.z / AMass / l * h * h;
 
         bodyID_t BOwner = ownerClumpBody[bodyB];
-        float BMass = massClumpBody[inertiaPropOffsets[BOwner]];
+        float BMass = massOwnerBody[inertiaPropOffsets[BOwner]];
         clump_aX[BOwner] += -(double)F.x / BMass / l * h * h;
         clump_aY[BOwner] += -(double)F.y / BMass / l * h * h;
         clump_aZ[BOwner] += -(double)F.z / BMass / l * h * h;

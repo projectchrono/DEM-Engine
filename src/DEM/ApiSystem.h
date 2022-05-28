@@ -140,7 +140,8 @@ class DEMSolver {
         return LoadMaterialType(E, nu, CoR, 0.5, 0.01, -1.f);
     }
 
-    /// Load input clumps (topology types and initial locations) on a per-pair basis
+    /// Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial location
+    /// means the location of the clumps' CoM coordinates in the global frame.
     void AddClumps(const std::vector<unsigned int>& types, const std::vector<float3>& xyz);
     void AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& types, const std::vector<float3>& xyz);
 
@@ -383,11 +384,15 @@ class DEMSolver {
     unsigned int nDistinctClumpComponents;
     unsigned int nDistinctClumpBodyTopologies;
     unsigned int nDistinctMassProperties;
-    unsigned int nMatTuples_computed;
+    unsigned int nMatTuples;
     unsigned int nDistinctFamilies;
 
     // This many clump template can be jitified, and the rest need to exist in global memory
+    // Note all `mass' properties are jitified, it's just this many clump templates' component info will not be
+    // jitified. Therefore, this quantity does not seem to be useful beyond reporting to the user.
     unsigned int nJitifiableClumpTopo;
+    // Number of jitified clump components
+    unsigned int nJitifiableClumpComponents;
 
     // Whether the number of voxels and length unit l is explicitly given by the user
     bool explicit_nv_override = false;
@@ -395,10 +400,6 @@ class DEMSolver {
     bool sys_initialized = false;
     // Smallest sphere radius (used to let the user know whether the expand factor is sufficient)
     float m_smallest_radius = FLT_MAX;
-
-    // Right now, the following two are integrated into one, in nDistinctClumpComponents
-    // unsigned int nDistinctSphereRadii_computed;
-    // unsigned int nDistinctSphereRelativePositions_computed;
 
     // Cached state vectors such as the types and locations/velocities of the initial clumps to fill the sim domain
     // with. User managed arrays usually use unsigned int to represent integers and ensure safety; however
@@ -511,7 +512,7 @@ class DEMSolver {
     /// Prepare the material/contact proxy matrix force computation kernels
     void figureOutMaterialProxies();
     /// Figure out info about external objects/clump templates and whether they can be jitified
-    void preprocessExternObjs();
+    void preprocessAnalyticalObjs();
     /// Report simulation stats at initialization
     inline void reportInitStats() const;
     /// Based on user input, prepare family_mask_matrix (family contact map matrix)

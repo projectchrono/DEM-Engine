@@ -221,8 +221,10 @@ class DEMKinematicThread {
                                size_t nSpheresGM,
                                size_t nTriGM,
                                unsigned int nAnalGM,
+                               unsigned int nMassProperties,
                                unsigned int nClumpTopo,
                                unsigned int nClumpComponents,
+                               unsigned int nJitifiableClumpComponents,
                                unsigned int nMatTuples);
 
     // Data type TBD, should come from JITCed headers

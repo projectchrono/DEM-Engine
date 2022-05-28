@@ -12,18 +12,18 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
                                            sgps::spheresBinTouches_t* numContactsInEachBin,
                                            size_t nActiveBins) {
     // CUDA does not support initializing shared arrays, so we have to manually load them
-    __shared__ float CDRadii[_nDistinctClumpComponents_];
-    __shared__ float CDRelPosX[_nDistinctClumpComponents_];
-    __shared__ float CDRelPosY[_nDistinctClumpComponents_];
-    __shared__ float CDRelPosZ[_nDistinctClumpComponents_];
+    __shared__ float CDRadii[_nJitifiableClumpComponents_];
+    __shared__ float CDRelPosX[_nJitifiableClumpComponents_];
+    __shared__ float CDRelPosY[_nJitifiableClumpComponents_];
+    __shared__ float CDRelPosZ[_nJitifiableClumpComponents_];
     __shared__ bool familyMasks[_nFamilyMaskEntries_];
     if (threadIdx.x < _nActiveLoadingThreads_) {
-        const float jitifiedCDRadii[_nDistinctClumpComponents_] = {_CDRadii_};
-        const float jitifiedCDRelPosX[_nDistinctClumpComponents_] = {_CDRelPosX_};
-        const float jitifiedCDRelPosY[_nDistinctClumpComponents_] = {_CDRelPosY_};
-        const float jitifiedCDRelPosZ[_nDistinctClumpComponents_] = {_CDRelPosZ_};
+        const float jitifiedCDRadii[_nJitifiableClumpComponents_] = {_CDRadii_};
+        const float jitifiedCDRelPosX[_nJitifiableClumpComponents_] = {_CDRelPosX_};
+        const float jitifiedCDRelPosY[_nJitifiableClumpComponents_] = {_CDRelPosY_};
+        const float jitifiedCDRelPosZ[_nJitifiableClumpComponents_] = {_CDRelPosZ_};
         const bool jitifiedFamilyMasks[_nFamilyMaskEntries_] = {_familyMasks_};
-        for (sgps::clumpComponentOffset_t i = threadIdx.x; i < _nDistinctClumpComponents_;
+        for (sgps::clumpComponentOffset_t i = threadIdx.x; i < _nJitifiableClumpComponents_;
              i += _nActiveLoadingThreads_) {
             CDRadii[i] = jitifiedCDRadii[i];
             CDRelPosX[i] = jitifiedCDRelPosX[i];
@@ -142,18 +142,18 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
                                             sgps::bodyID_t* idSphB,
                                             size_t nActiveBins) {
     // CUDA does not support initializing shared arrays, so we have to manually load them
-    __shared__ float CDRadii[_nDistinctClumpComponents_];
-    __shared__ float CDRelPosX[_nDistinctClumpComponents_];
-    __shared__ float CDRelPosY[_nDistinctClumpComponents_];
-    __shared__ float CDRelPosZ[_nDistinctClumpComponents_];
+    __shared__ float CDRadii[_nJitifiableClumpComponents_];
+    __shared__ float CDRelPosX[_nJitifiableClumpComponents_];
+    __shared__ float CDRelPosY[_nJitifiableClumpComponents_];
+    __shared__ float CDRelPosZ[_nJitifiableClumpComponents_];
     __shared__ bool familyMasks[_nFamilyMaskEntries_];
     if (threadIdx.x < _nActiveLoadingThreads_) {
-        const float jitifiedCDRadii[_nDistinctClumpComponents_] = {_CDRadii_};
-        const float jitifiedCDRelPosX[_nDistinctClumpComponents_] = {_CDRelPosX_};
-        const float jitifiedCDRelPosY[_nDistinctClumpComponents_] = {_CDRelPosY_};
-        const float jitifiedCDRelPosZ[_nDistinctClumpComponents_] = {_CDRelPosZ_};
+        const float jitifiedCDRadii[_nJitifiableClumpComponents_] = {_CDRadii_};
+        const float jitifiedCDRelPosX[_nJitifiableClumpComponents_] = {_CDRelPosX_};
+        const float jitifiedCDRelPosY[_nJitifiableClumpComponents_] = {_CDRelPosY_};
+        const float jitifiedCDRelPosZ[_nJitifiableClumpComponents_] = {_CDRelPosZ_};
         const bool jitifiedFamilyMasks[_nFamilyMaskEntries_] = {_familyMasks_};
-        for (sgps::clumpComponentOffset_t i = threadIdx.x; i < _nDistinctClumpComponents_;
+        for (sgps::clumpComponentOffset_t i = threadIdx.x; i < _nJitifiableClumpComponents_;
              i += _nActiveLoadingThreads_) {
             CDRadii[i] = jitifiedCDRadii[i];
             CDRelPosX[i] = jitifiedCDRelPosX[i];
