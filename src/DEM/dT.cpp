@@ -191,7 +191,11 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
 
     // Resize to the number of spheres
     SGPS_DEM_TRACKED_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
-    SGPS_DEM_TRACKED_RESIZE(clumpComponentOffset, nSpheresGM, "sphereRadiusOffset", 0);
+    SGPS_DEM_TRACKED_RESIZE(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
+    // This extended component offset array can hold offset numbers even for big clumps (whereas clumpComponentOffset is
+    // typically uint_8, so it may not). If a sphere's component offset index falls in this range then it is not
+    // jitified, and the kernel needs to look for it in the global memory.
+    SGPS_DEM_TRACKED_RESIZE(clumpComponentOffsetExt, nSpheresGM, "clumpComponentOffsetExt", 0);
     SGPS_DEM_TRACKED_RESIZE(materialTupleOffset, nSpheresGM, "materialTupleOffset", 0);
 
     // Resize to the length of the clump templates
@@ -232,12 +236,12 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     SGPS_DEM_TRACKED_RESIZE(contactType_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactType_buffer",
                             DEM_NOT_A_CONTACT);
     if (!solverFlags.isHistoryless) {
-        SGPS_DEM_TRACKED_RESIZE(contactMapping_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactMapping",
-                                DEM_NULL_MAPPING_PARTNER);
+        SGPS_DEM_TRACKED_RESIZE(contactMapping_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER,
+                                "contactMapping_buffer", DEM_NULL_MAPPING_PARTNER);
     }
 }
 
-void DEMDynamicThread::populateManagedArrays(const std::vector<clumpBodyInertiaOffset_t>& input_clump_types,
+void DEMDynamicThread::populateManagedArrays(const std::vector<inertiaOffset_t>& input_clump_types,
                                              const std::vector<float3>& input_clump_xyz,
                                              const std::vector<float3>& input_clump_vel,
                                              const std::vector<unsigned int>& input_clump_family,
@@ -254,7 +258,8 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<clumpBodyInertiaO
                                              const std::vector<float>& mat_CoR,
                                              const std::vector<float>& mat_mu,
                                              const std::vector<float>& mat_Crr) {
-    // Use some temporary hacks to get the info in the managed mem
+    // Get the info into the managed memory from the host side. Can this process be more efficient? Maybe, but it's
+    // initialization anyway.
 
     // First, load in material properties
     for (unsigned int i = 0; i < mat_E.size(); i++) {
@@ -321,8 +326,18 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<clumpBodyInertiaO
 
         for (size_t j = 0; j < this_clump_no_sp_radii.size(); j++) {
             materialTupleOffset.at(k) = this_clump_no_sp_mat_ids.at(j);
-            clumpComponentOffset.at(k) = prescans.at(type_of_this_clump) + j;
             ownerClumpBody.at(k) = i;
+
+            // This component offset, is it too large that can't live in the jitified array?
+            unsigned int this_comp_offset = prescans.at(type_of_this_clump) + j;
+            clumpComponentOffsetExt.at(k) = this_comp_offset;
+            if (this_comp_offset < simParams->nJitifiableClumpComponents) {
+                clumpComponentOffset.at(k) = this_comp_offset;
+            } else {
+                // If not, an indicator will be put there
+                clumpComponentOffset.at(k) = DEM_RESERVED_CLUMP_COMPONENT_OFFSET;
+            }
+
             k++;
             // std::cout << "Sphere Rel Pos offset: " << this_clump_no_sp_loc_offsets.at(j) << std::endl;
         }
@@ -377,6 +392,10 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<clumpBodyInertiaO
         family_t this_family_num = family_user_impl_map.at(input_ext_obj_family.at(i));
         familyID.at(i + offset_for_ext_obj) = this_family_num;
     }
+
+    SGPS_DEM_DEBUG_PRINTF("Compare clumpComponentOffset and clumpComponentOffsetExt:");
+    SGPS_DEM_DEBUG_EXEC(displayArray<clumpComponentOffset_t>(clumpComponentOffset.data(), simParams->nSpheresGM));
+    SGPS_DEM_DEBUG_EXEC(displayArray<clumpComponentOffsetExt_t>(clumpComponentOffsetExt.data(), simParams->nSpheresGM));
 }
 
 void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {

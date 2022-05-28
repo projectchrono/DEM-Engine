@@ -233,7 +233,7 @@ std::vector<T1> hostUniqueVector(const std::vector<T1>& vec) {
 }
 
 // We collect h2a in fact, not force
-inline void hostCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
+inline void hostCollectForces(inertiaOffset_t* inertiaPropOffsets,
                               bodyID_t* idA,
                               bodyID_t* idB,
                               float3* contactForces,
@@ -264,7 +264,7 @@ inline void hostCollectForces(clumpBodyInertiaOffset_t* inertiaPropOffsets,
 }
 
 // Note we collect h2Alpha, not torque
-inline void hostCollectTorques(clumpBodyInertiaOffset_t* inertiaPropOffsets,
+inline void hostCollectTorques(inertiaOffset_t* inertiaPropOffsets,
                                bodyID_t* idA,
                                bodyID_t* idB,
                                float3* contactForces,
@@ -291,8 +291,8 @@ inline void hostCollectTorques(clumpBodyInertiaOffset_t* inertiaPropOffsets,
         bodyID_t bodyB = idB[i];
         bodyID_t AOwner = ownerClumpBody[bodyA];
         bodyID_t BOwner = ownerClumpBody[bodyB];
-        clumpBodyInertiaOffset_t AMOIOffset = inertiaPropOffsets[AOwner];
-        clumpBodyInertiaOffset_t BMOIOffset = inertiaPropOffsets[BOwner];
+        inertiaOffset_t AMOIOffset = inertiaPropOffsets[AOwner];
+        inertiaOffset_t BMOIOffset = inertiaPropOffsets[BOwner];
         float3 AMOI, BMOI;
         AMOI.x = mmiXX[AMOIOffset];
         AMOI.y = mmiYY[AMOIOffset];

@@ -9,19 +9,17 @@ namespace sgps {
 typedef uint16_t subVoxelPos_t;  ///< uint16 or uint32
 
 typedef uint64_t voxelID_t;
-// TODO: oriQ should be int (mapped to [-1,1]); applyOriQ2Vector3 and hostApplyOriQ2Vector3 need to be changed to make
-// that happen
 typedef float oriQ_t;
 typedef unsigned int bodyID_t;
 typedef unsigned int binID_t;
 typedef unsigned int triID_t;
 typedef uint8_t objID_t;
 typedef uint8_t materialsOffset_t;
-typedef uint8_t clumpBodyInertiaOffset_t;
+typedef uint8_t inertiaOffset_t;
 typedef uint8_t clumpComponentOffset_t;
 typedef unsigned short int clumpComponentOffsetExt_t;  ///< Extended component offset type for non-jitified part
 typedef double realFine_t;
-typedef char scratch_t;  ///< Data type for DEM scratch-pad array
+typedef char scratch_t;  ///< Data type for DEM scratch-pad array (this should NOT be changed)
 // typedef unsigned int distinctSphereRelativePositions_default_t;
 // typedef unsigned int distinctSphereRadiiOffset_default_t;
 

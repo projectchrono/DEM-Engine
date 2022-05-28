@@ -93,10 +93,18 @@ constexpr contactPairs_t DEM_NULL_MAPPING_PARTNER = ((size_t)1 << (sizeof(contac
 const unsigned int DEM_DEFAULT_CLUMP_FAMILY_NUM = 0;
 // Reserved (user) clump family number which is always used for fixities
 constexpr unsigned int DEM_RESERVED_FAMILY_NUM = ((unsigned int)1 << (sizeof(family_t) * SGPS_BITS_PER_BYTE)) - 1;
-// Reserved clump template mark number used to indicate that this clump template is not jitified, therefore need to
-// bring it from global memory
-constexpr clumpBodyInertiaOffset_t DEM_RESERVED_CLUMP_TYPE_MARK =
-    ((size_t)1 << (sizeof(clumpBodyInertiaOffset_t) * SGPS_BITS_PER_BYTE)) - 1;
+// Reserved clump template mark number, used to indicate the largest inertiaOffset number (currently not used since all
+// inertia properties are jitified)
+constexpr inertiaOffset_t DEM_RESERVED_INERTIA_OFFSET =
+    ((size_t)1 << (sizeof(inertiaOffset_t) * SGPS_BITS_PER_BYTE)) - 1;
+// Reserved clump component offset number, used to indicate that this sphere's relative pos etc. won't be found in the
+// kernel, instead have to be brought from the global memory
+constexpr clumpComponentOffset_t DEM_RESERVED_CLUMP_COMPONENT_OFFSET =
+    ((size_t)1 << (sizeof(clumpComponentOffset_t) * SGPS_BITS_PER_BYTE)) - 1;
+// Used to be compared against, so we know if some of the sphere components need to stay in global memory
+constexpr unsigned int DEM_THRESHOLD_CANT_JITIFY_ALL_COMP =
+    SGPS_DEM_MIN(SGPS_DEM_MIN(DEM_RESERVED_CLUMP_COMPONENT_OFFSET, SGPS_DEM_THRESHOLD_BIG_CLUMP),
+                 SGPS_DEM_THRESHOLD_TOO_MANY_SPHERE_COMP);
 
 // Some enums...
 // Friction mode
@@ -155,7 +163,7 @@ struct DEMSimParams {
     triID_t nTriJitified;
 
     // Number of the templates (or say the ``types'') of clumps and spheres
-    clumpBodyInertiaOffset_t nDistinctClumpBodyTopologies;
+    inertiaOffset_t nDistinctClumpBodyTopologies;
     clumpComponentOffset_t nDistinctMassProperties;  ///< All mass property items, not just clumps'
     clumpComponentOffset_t
         nJitifiableClumpComponents;  ///< Does not include `big' clump's (external object's) components
@@ -200,7 +208,7 @@ struct DEMTemplate {
 // A struct that holds pointers to data arrays that dT uses
 // For more details just look at PhysicsSystem.h
 struct DEMDataDT {
-    clumpBodyInertiaOffset_t* inertiaPropOffsets;
+    inertiaOffset_t* inertiaPropOffsets;
 
     family_t* familyID;
 

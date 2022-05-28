@@ -16,7 +16,7 @@ __global__ void applyFamilyChanges(sgps::DEMDataDT* granData, float h, float t) 
         float3 vel, acc;
         float mass;
         sgps::family_t family_code = granData->familyID[thisClump];
-        sgps::clumpBodyInertiaOffset_t myMassOffset = granData->inertiaPropOffsets[thisClump];
+        sgps::inertiaOffset_t myMassOffset = granData->inertiaPropOffsets[thisClump];
         mass = MassProperties[myMassOffset];
         voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
             pos.x, pos.y, pos.z, granData->voxelID[thisClump], granData->locX[thisClump], granData->locY[thisClump],

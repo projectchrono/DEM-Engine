@@ -366,6 +366,10 @@ struct DEMClumpTemplate {
     bool isBigClump = false;
 };
 
+struct DEMTracker {
+    size_t ownerID;
+};
+
 }  // namespace sgps
 
 #endif

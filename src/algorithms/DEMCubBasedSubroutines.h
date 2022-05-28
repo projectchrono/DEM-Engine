@@ -37,7 +37,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                       DEMSolverStateDataKT& scratchPad);
 
 void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernels,
-                          clumpBodyInertiaOffset_t* inertiaPropOffsets,
+                          inertiaOffset_t* inertiaPropOffsets,
                           bodyID_t* idA,
                           bodyID_t* idB,
                           contact_t* contactType,

@@ -321,6 +321,10 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     // Resize to the number of spheres
     SGPS_DEM_TRACKED_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
     SGPS_DEM_TRACKED_RESIZE(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
+    // This extended component offset array can hold offset numbers even for big clumps (whereas clumpComponentOffset is
+    // typically uint_8, so it may not). If a sphere's component offset index falls in this range then it is not
+    // jitified, and the kernel needs to look for it in the global memory.
+    SGPS_DEM_TRACKED_RESIZE(clumpComponentOffsetExt, nSpheresGM, "clumpComponentOffsetExt", 0);
 
     // Resize to the length of the clump templates
     SGPS_DEM_TRACKED_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);
@@ -348,14 +352,16 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     }
 }
 
-void DEMKinematicThread::populateManagedArrays(const std::vector<clumpBodyInertiaOffset_t>& input_clump_types,
+void DEMKinematicThread::populateManagedArrays(const std::vector<inertiaOffset_t>& input_clump_types,
                                                const std::vector<unsigned int>& input_clump_family,
                                                const std::vector<unsigned int>& input_ext_obj_family,
                                                const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
                                                const std::vector<float>& clumps_mass_types,
                                                const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                                const std::vector<std::vector<float3>>& clumps_sp_location_types) {
-    // Use some temporary hacks to get the info in the managed mem
+    // Get the info into the managed memory from the host side. Can this process be more efficient? Maybe, but it's
+    // initialization anyway.
+
     // All the input vectors should have the same length, nClumpTopo
     size_t k = 0;
     std::vector<unsigned int> prescans;
@@ -396,8 +402,18 @@ void DEMKinematicThread::populateManagedArrays(const std::vector<clumpBodyInerti
         auto this_clump_no_sp_relPos = clumps_sp_location_types.at(type_of_this_clump);
 
         for (size_t j = 0; j < this_clump_no_sp_radii.size(); j++) {
-            clumpComponentOffset.at(k) = prescans.at(type_of_this_clump) + j;
             ownerClumpBody.at(k) = i;
+
+            // This component offset, is it too large that can't live in the jitified array?
+            unsigned int this_comp_offset = prescans.at(type_of_this_clump) + j;
+            clumpComponentOffsetExt.at(k) = this_comp_offset;
+            if (this_comp_offset < simParams->nJitifiableClumpComponents) {
+                clumpComponentOffset.at(k) = this_comp_offset;
+            } else {
+                // If not, an indicator will be put there
+                clumpComponentOffset.at(k) = DEM_RESERVED_CLUMP_COMPONENT_OFFSET;
+            }
+
             k++;
         }
 

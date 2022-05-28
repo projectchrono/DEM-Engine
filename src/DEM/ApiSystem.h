@@ -145,6 +145,10 @@ class DEMSolver {
     void AddClumps(const std::vector<unsigned int>& types, const std::vector<float3>& xyz);
     void AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& types, const std::vector<float3>& xyz);
 
+    /// Load a clump into the system, and return a tracker object to the user, so that the user can apply direct
+    /// control/modification/quarry to this clump (while dT is hanging)
+    std::shared_ptr<DEMTracker> AddClumpTracked(const std::shared_ptr<DEMClumpTemplate>& type, float3 xyz);
+
     /// Load input clump initial velocities on a per-body basis. If this is not called (or if this vector is shorter
     /// than the clump location vector, then for the unassigned part) the initial velocity is assumed to be 0.
     void SetClumpVels(const std::vector<float3>& vel);
@@ -298,7 +302,7 @@ class DEMSolver {
     // is meaningless, since its normal is determined by its rotation.
     std::vector<objNormal_t> m_anal_normals;
     // Extra clumps are those loaded by adding external object. They typically consist of many spheres (~thousands).
-    std::vector<clumpBodyInertiaOffset_t> m_extra_clump_type;
+    std::vector<inertiaOffset_t> m_extra_clump_type;
     // Extra clumps' owners' ID will be appended to those added thru normal AddClump, and are consistent with external
     // obj IDs
     std::vector<unsigned int> m_extra_clump_owner;
@@ -405,7 +409,7 @@ class DEMSolver {
     // with. User managed arrays usually use unsigned int to represent integers and ensure safety; however
     // m_input_clump_types tends to be long and should use _t definition. Same goes for m_extra_clump_type, but not
     // user-input family number, because that number can be anything.
-    std::vector<clumpBodyInertiaOffset_t> m_input_clump_types;
+    std::vector<inertiaOffset_t> m_input_clump_types;
     // Some input clump initial profiles
     std::vector<float3> m_input_clump_xyz;
     // std::vector<float4> m_input_clump_rot;
@@ -485,6 +489,8 @@ class DEMSolver {
 
     /// Pre-process some user inputs so we acquire the knowledge on how to jitify the kernels
     void generateJITResources();
+    /// Make sure the input represents something we can simulate, and if not, tell the reasons
+    void postJITResourceGenSanityCheck();
     /// Flatten cached clump templates (from ClumpTemplate structs to float arrays)
     void preprocessClumpTemplates();
     /// Jitify GPU kernels, based on pre-processed user inputs
@@ -504,8 +510,8 @@ class DEMSolver {
     void initializeArrays();
     /// Pack array pointers to a struct so they can be easily used as kernel arguments
     void packDataPointers();
-    /// Warn users if the data types defined in DEMDefines.h do not blend well with the user inputs (such as when
-    /// the user inputs a huge amount of clump templates).
+    /// Warn users if the data types defined in DEMDefines.h do not blend well with the user inputs (fist-round
+    /// coarse-grain sanity check)
     void validateUserInputs();
     /// Compute the number of dT for cycles based on the amount of time the user wants to advance the simulation
     inline size_t computeDTCycles(double thisCallDuration);

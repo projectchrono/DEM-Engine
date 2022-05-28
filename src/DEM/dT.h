@@ -121,7 +121,7 @@ class DEMDynamicThread {
 
     // Those are the large ones, ones that have the same length as the number of clumps
     // The mass/MOI offsets
-    std::vector<clumpBodyInertiaOffset_t, ManagedAllocator<clumpBodyInertiaOffset_t>> inertiaPropOffsets;
+    std::vector<inertiaOffset_t, ManagedAllocator<inertiaOffset_t>> inertiaPropOffsets;
 
     // Clump's family identification code. Used in determining whether they can be contacts between two families, and
     // whether a family has prescribed motions.
@@ -284,7 +284,7 @@ class DEMDynamicThread {
                                unsigned int nMatTuples);
 
     // Data type TBD, should come from JITCed headers
-    void populateManagedArrays(const std::vector<clumpBodyInertiaOffset_t>& input_clump_types,
+    void populateManagedArrays(const std::vector<inertiaOffset_t>& input_clump_types,
                                const std::vector<float3>& input_clump_xyz,
                                const std::vector<float3>& input_clump_vel,
                                const std::vector<unsigned int>& input_clump_family,

@@ -504,7 +504,7 @@ void DEMSolver::preprocessClumpTemplates() {
               [](auto& left, auto& right) { return left->nComp < right->nComp; });
     // A mapping is needed to transform the user-defined clump type array so that it matches the new, rearranged clump
     // template array
-    std::unordered_map<clumpBodyInertiaOffset_t, clumpBodyInertiaOffset_t> old_mark_to_new;
+    std::unordered_map<inertiaOffset_t, inertiaOffset_t> old_mark_to_new;
     for (unsigned int i = 0; i < m_templates.size(); i++) {
         old_mark_to_new[m_templates.at(i)->mark] = i;
         SGPS_DEM_DEBUG_PRINTF("Clump template re-order: %u->%u, nComp: %u", m_templates.at(i)->mark, i,
@@ -563,10 +563,6 @@ unsigned int DEMSolver::AddAnalCompTemplate(const objType_t type,
 }
 
 void DEMSolver::preprocessAnalyticalObjs() {
-    // How many clump tempaltes are there? Is there one too large to jitify?
-
-    // How many triangle tempaltes are there? Is there one too large to jitify?
-
     // How many analytical entities are there? (those entities are always jitified)
     nExtObj = cached_extern_objs.size();
     unsigned int thisExtObj = 0;
@@ -650,41 +646,14 @@ void DEMSolver::generateJITResources() {
 
     // Flatten cached clump templates (from ClumpTemplate structs to float arrays), make ready for transferring to kTdT
     preprocessClumpTemplates();
-    // Right after, figure out the jitifiablity of clump templates. Loading external objects will not introduce more
-    // clump templates, so we can safely do it here.
-    bool unable_jitify_all = false;
+    // m_template_mass may be `appended' later, so we have to do it here
     nDistinctClumpBodyTopologies = m_template_mass.size();
-    nDistinctClumpComponents = 0;
-    nJitifiableClumpComponents = 0;
-    for (unsigned int i = 0; i < nDistinctClumpBodyTopologies; i++) {
-        nDistinctClumpComponents += m_template_sp_radii.at(i).size();
-        // Keep an eye on if the accumulated DistinctClumpComponents gets too many
-        if ((!unable_jitify_all) && (nDistinctClumpComponents > SGPS_DEM_THRESHOLD_TOO_MANY_SPHERE_COMP ||
-                                     m_template_sp_radii.at(i).size() > SGPS_DEM_THRESHOLD_BIG_CLUMP)) {
-            nJitifiableClumpTopo = i;
-            nJitifiableClumpComponents = nDistinctClumpComponents - m_template_sp_radii.at(i).size();
-            unable_jitify_all = true;
-        }
-    }
-    if (unable_jitify_all) {
-        SGPS_DEM_WARNING(
-            "There are %u clump templates loaded, but only %u are jitifiable due to some of the clumps are big and/or "
-            "there are many types of clumps.\nThis is expected if there are external objects represented by spherical "
-            "decomposition.",
-            nDistinctClumpBodyTopologies, nJitifiableClumpTopo);
-    } else {
-        nJitifiableClumpTopo = nDistinctClumpBodyTopologies;
-        nJitifiableClumpComponents = nDistinctClumpComponents;
-    }
 
     // Figure out info about external objects/clump templates and whether they can be jitified
     preprocessAnalyticalObjs();
-    if (nAnalGM > SGPS_DEM_THRESHOLD_TOO_MANY_ANAL_GEO) {
-        SGPS_DEM_WARNING(
-            "%u analytical geometries are loaded. Because all analytical geometries are jitified, this is a relatively "
-            "large amount.\nIf just-in-time compilation fails or kernels run slowly, this could be a cause.",
-            nAnalGM);
-    }
+
+    // How many triangle tempaltes are there?
+    // preprocessTriangleObjs();
 
     // Process the loaded materials. The pre-process of external objects and clumps could add more materials, so this
     // call need to go after those pre-process ones.
@@ -696,10 +665,13 @@ void DEMSolver::generateJITResources() {
     // nDistinctMassProperties will be larger than nDistinctClumpBodyTopologies, b/c of the external objects got
     // appended to the mass/MOI arrays
     nDistinctMassProperties = m_template_mass.size();
+
     // Also, external objects may introduce more material types
     nMatTuples = m_loaded_sp_materials.size();
+
     // If these `computed' numbers are larger than types like materialsOffset_t can hold, then we should error out and
     // let the user re-compile (or, should we somehow change the header automatically?)
+    postJITResourceGenSanityCheck();
 
     // Figure out the parameters related to the simulation `world', if need to
     if (!explicit_nv_override) {
@@ -822,8 +794,7 @@ void DEMSolver::initializeArrays() {
                               nDistinctMassProperties, nDistinctClumpBodyTopologies, nDistinctClumpComponents,
                               nJitifiableClumpComponents, nMatTuples);
 
-    // Now that the CUDA-related functions and data types are JITCompiled, we can feed those GPU-side arrays with the
-    // cached API-level simulation info.
+    // Now we can feed those GPU-side arrays with the cached API-level simulation info
     dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_input_clump_family,
                               m_input_ext_obj_xyz, m_input_ext_obj_family, m_family_user_impl_map,
                               m_template_sp_mat_ids, m_template_mass, m_template_moi, m_template_sp_radii,
@@ -865,13 +836,6 @@ void DEMSolver::validateUserInputs() {
     if (m_templates.size() == 0) {
         SGPS_DEM_ERROR("Before initializing the system, at least one clump type should be defined via LoadClumpType.");
     }
-    if (m_templates.size() >= std::numeric_limits<clumpBodyInertiaOffset_t>::max()) {
-        SGPS_DEM_ERROR(
-            "%u clump templates are loaded, but the max allowance is %u (No.%u is reserved).\nThis many clump "
-            "templates are not recommended but if they are indeed needed, you can redefine clumpBodyInertiaOffset_t.",
-            m_templates.size(), std::numeric_limits<clumpBodyInertiaOffset_t>::max() - 1,
-            std::numeric_limits<clumpBodyInertiaOffset_t>::max());
-    }
     if (m_expand_factor * m_expand_safety_param <= 0.0 && m_updateFreq > 0) {
         SGPS_DEM_WARNING(
             "You instructed that the physics can stretch %u time steps into the future, but did not instruct the "
@@ -888,6 +852,49 @@ void DEMSolver::validateUserInputs() {
 
     if (m_user_defined_force_model) {
         // TODO: See if this user model makes sense
+    }
+}
+
+void DEMSolver::postJITResourceGenSanityCheck() {
+    // Can we jitify all clump templates?
+    bool unable_jitify_all = false;
+    nDistinctClumpComponents = 0;
+    nJitifiableClumpComponents = 0;
+    for (unsigned int i = 0; i < nDistinctClumpBodyTopologies; i++) {
+        nDistinctClumpComponents += m_template_sp_radii.at(i).size();
+        // Keep an eye on if the accumulated DistinctClumpComponents gets too many
+        if ((!unable_jitify_all) && (nDistinctClumpComponents > DEM_THRESHOLD_CANT_JITIFY_ALL_COMP)) {
+            nJitifiableClumpTopo = i;
+            nJitifiableClumpComponents = nDistinctClumpComponents - m_template_sp_radii.at(i).size();
+            unable_jitify_all = true;
+        }
+    }
+    if (unable_jitify_all) {
+        SGPS_DEM_WARNING(
+            "There are %u clump templates loaded, but only %u are jitifiable due to some of the clumps are big and/or "
+            "there are many types of clumps (%u components jitified).\nThis is expected if there are external objects "
+            "represented by spherical decomposition.",
+            nDistinctClumpBodyTopologies, nJitifiableClumpTopo, nJitifiableClumpComponents);
+    } else {
+        nJitifiableClumpTopo = nDistinctClumpBodyTopologies;
+        nJitifiableClumpComponents = nDistinctClumpComponents;
+    }
+
+    // Sanity check for analytical geometries
+    if (nAnalGM > SGPS_DEM_THRESHOLD_TOO_MANY_ANAL_GEO) {
+        SGPS_DEM_WARNING(
+            "%u analytical geometries are loaded. Because all analytical geometries are jitified, this is a relatively "
+            "large amount.\nIf just-in-time compilation fails or kernels run slowly, this could be a cause.",
+            nAnalGM);
+    }
+
+    // Sanity check for final number of mass properties/inertia offsets
+    if (nDistinctMassProperties >= std::numeric_limits<inertiaOffset_t>::max()) {
+        SGPS_DEM_ERROR(
+            "%u clump templates are loaded, but the max allowance is %u (No.%u is reserved).\nThis many clump "
+            "templates are not recommended but if they are indeed needed, you can redefine inertiaOffset_t.",
+            nDistinctMassProperties, std::numeric_limits<inertiaOffset_t>::max() - 1,
+            std::numeric_limits<inertiaOffset_t>::max());
     }
 }
 
@@ -1153,7 +1160,7 @@ inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::st
 
 inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap) {
     std::string CDRadii, Radii, CDRelPosX, CDRelPosY, CDRelPosZ;
-    // Loop through all clump templates to find the JIT info to jitify
+    // Loop through all clump templates to jitify them, but without going over the shared memory limit
     for (unsigned int i = 0; i < nJitifiableClumpTopo; i++) {
         for (unsigned int j = 0; j < m_template_sp_radii.at(i).size(); j++) {
             Radii += to_string_with_precision(m_template_sp_radii.at(i).at(j)) + ",";

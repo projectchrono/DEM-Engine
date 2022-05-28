@@ -37,7 +37,7 @@ __global__ void cashInOwnerIndexB(sgps::bodyID_t* idOwner,
 
 __global__ void cashInMassMoiIndex(float* massOwner,
                                    float3* moiOwner,
-                                   sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets,
+                                   sgps::inertiaOffset_t* inertiaPropOffsets,
                                    sgps::bodyID_t* idOwner,
                                    size_t nContactPairs) {
     // _nDistinctMassProperties_  elements are in these arrays
@@ -49,7 +49,7 @@ __global__ void cashInMassMoiIndex(float* massOwner,
     sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContactPairs) {
         sgps::bodyID_t thisOwnerID = idOwner[myID];
-        sgps::clumpBodyInertiaOffset_t myMassOffset = inertiaPropOffsets[thisOwnerID];
+        sgps::inertiaOffset_t myMassOffset = inertiaPropOffsets[thisOwnerID];
         float3 moi;
         moi.x = moiX[myMassOffset];
         moi.y = moiY[myMassOffset];
@@ -65,14 +65,14 @@ __global__ void forceToAcc(float3* acc,
                            sgps::bodyID_t* owner,
                            float modifier,
                            size_t n,
-                           sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets) {
+                           sgps::inertiaOffset_t* inertiaPropOffsets) {
     // _nDistinctMassProperties_  elements are in these arrays
     const float MassProperties[] = {_MassProperties_};
 
     sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
         sgps::bodyID_t thisOwnerID = owner[myID];
-        sgps::clumpBodyInertiaOffset_t myMassOffset = inertiaPropOffsets[thisOwnerID];
+        sgps::inertiaOffset_t myMassOffset = inertiaPropOffsets[thisOwnerID];
         float myMass = MassProperties[myMassOffset];
         acc[myID] = F[myID] * modifier / myMass;
     }
@@ -85,7 +85,7 @@ __global__ void forceToAngAcc(float3* angAcc,
                               sgps::bodyID_t* owner,
                               float modifier,
                               size_t n,
-                              sgps::clumpBodyInertiaOffset_t* inertiaPropOffsets) {
+                              sgps::inertiaOffset_t* inertiaPropOffsets) {
     // _nDistinctMassProperties_  elements are in these arrays
     const float moiX[] = {_moiX_};
     const float moiY[] = {_moiY_};
@@ -94,7 +94,7 @@ __global__ void forceToAngAcc(float3* angAcc,
     sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
         sgps::bodyID_t thisOwnerID = owner[myID];
-        sgps::clumpBodyInertiaOffset_t myMassOffset = inertiaPropOffsets[thisOwnerID];
+        sgps::inertiaOffset_t myMassOffset = inertiaPropOffsets[thisOwnerID];
         float3 moi;
         moi.x = moiX[myMassOffset];
         moi.y = moiY[myMassOffset];
