@@ -362,7 +362,7 @@ struct DEMClumpTemplate {
     // Each clump template will have a unique mark number. When clumps are loaded to the system, this mark will help
     // find their type offset.
     unsigned int mark;
-    // Whether this is a big clump, which will not be jitified and treated differently
+    // Whether this is a big clump (not used; jitifiability is determined automatically)
     bool isBigClump = false;
 };
 

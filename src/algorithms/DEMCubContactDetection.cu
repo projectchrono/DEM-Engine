@@ -293,6 +293,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                         .configure(dim3(blocks_needed_for_mapping), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0,
                                    this_stream)
                         .launch(new_idA_runlength_full, unique_new_idA, new_idA_runlength, *pNumUniqueNewA);
+                    GPU_CALL(cudaStreamSynchronize(this_stream));
                 }
 
                 blocks_needed_for_mapping =
@@ -303,6 +304,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                         .configure(dim3(blocks_needed_for_mapping), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0,
                                    this_stream)
                         .launch(old_idA_runlength_full, unique_old_idA, old_idA_runlength, *pNumUniqueOldA);
+                    GPU_CALL(cudaStreamSynchronize(this_stream));
                 }
                 // SGPS_DEM_DEBUG_PRINTF("Unique contact IDs (A):");
                 // SGPS_DEM_DEBUG_EXEC(displayArray<bodyID_t>(unique_new_idA, *pNumUniqueNewA));
@@ -335,6 +337,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                         .configure(dim3(blocks_needed_for_mapping), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
                         .launch(new_idA_runlength_full, old_idA_runlength_full, new_idA_scanned_runlength,
                                 old_idA_scanned_runlength, granData->contactMapping, granData, nSpheresSafe);
+                    GPU_CALL(cudaStreamSynchronize(this_stream));
                 }
                 // SGPS_DEM_DEBUG_PRINTF("Contact mapping:");
                 // SGPS_DEM_DEBUG_EXEC(displayArray<contactPairs_t>(granData->contactMapping,

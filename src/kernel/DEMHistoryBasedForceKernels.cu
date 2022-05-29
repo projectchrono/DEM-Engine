@@ -61,7 +61,6 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             AOwnerMass = MassProperties[granData->inertiaPropOffsets[bodyAOwner]];
 
             // AOwnerFamily = granData->familyID[bodyAOwner];
-            float3 myRelPos;
             sgps::oriQ_t AoriQ0, AoriQ1, AoriQ2, AoriQ3;
 
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
@@ -99,7 +98,6 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             bodyBMatType = granData->materialTupleOffset[sphereID];
             BOwnerMass = MassProperties[granData->inertiaPropOffsets[bodyBOwner]];
             // BOwnerFamily = granData->familyID[bodyBOwner];
-            float3 myRelPos;
             sgps::oriQ_t BoriQ0, BoriQ1, BoriQ2, BoriQ3;
 
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(

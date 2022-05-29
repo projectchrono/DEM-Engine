@@ -170,6 +170,11 @@ class DEMSolver {
                                    const std::string& velX,
                                    const std::string& velY,
                                    const std::string& velZ);
+    ///
+    void SetFamilyPrescribedAngVel(unsigned int ID,
+                                   const std::string& velX,
+                                   const std::string& velY,
+                                   const std::string& velZ);
 
     /// Change all entities with family number ID_from to have a new number ID_to, when the condition defined by the
     /// string is satisfied by the entities in question. This should be called before initialization, and will be baked
@@ -352,7 +357,7 @@ class DEMSolver {
     // The edge length of a bin (for contact detection)
     double m_binSize;
     // Total number of bins
-    uint64_t m_num_bins;
+    size_t m_num_bins;
     // Number of bins on each direction
     binID_t nbX;
     binID_t nbY;

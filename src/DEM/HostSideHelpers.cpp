@@ -335,22 +335,20 @@ inline std::vector<float3> DEMCylSurfSampler(float3 CylCenter,
                                              float3 CylAxis,
                                              float CylRad,
                                              float CylHeight,
-                                             float SideIncr,
-                                             unsigned int NumRows) {
+                                             float ParticleRad) {
     std::vector<float3> points;
-    double RadIncr = 2.0 * SGPS_PI / (double)(NumRows);
+    float perimeter = 2.0 * SGPS_PI * CylRad;
+    unsigned int NumRows = perimeter / (1.2 * ParticleRad);
+    float RadIncr = 2.0 * SGPS_PI / (float)(NumRows);
+    float SideIncr = 1.2 * ParticleRad;
     float3 UnitCylAxis = normalize(CylAxis);
     float3 RadDir;
     {
-        float3 PerpVec1, PerpVec2;
-        PerpVec1.x = -UnitCylAxis.z;
-        PerpVec1.y = 0.f;
-        PerpVec1.z = UnitCylAxis.x;
-        PerpVec2.x = UnitCylAxis.y;
-        PerpVec2.y = -UnitCylAxis.x;
-        PerpVec2.z = 0.f;
-        RadDir = cross(PerpVec1, PerpVec2);
-        RadDir = normalize(RadDir);
+        float3 PerpVec;
+        PerpVec.x = -UnitCylAxis.z;
+        PerpVec.y = 0.f;
+        PerpVec.z = UnitCylAxis.x;
+        RadDir = normalize(PerpVec);
     }
     for (unsigned int i = 0; i < NumRows; i++) {
         std::vector<float3> thisRow;

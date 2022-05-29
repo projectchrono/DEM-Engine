@@ -16,6 +16,7 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEM_sim;
+    DEM_sim.SetVerbosity(INFO);
 
     srand(42);
 
@@ -25,22 +26,22 @@ int main() {
     int min_sphere = 1;
     int max_sphere = 5;
 
-    float min_rad = 0.01;
-    float max_rad = 0.02;
+    float min_rad = 0.005;
+    float max_rad = 0.01;
 
-    float min_relpos = -0.01;
-    float max_relpos = 0.01;
+    float min_relpos = -0.005;
+    float max_relpos = 0.005;
 
-    auto mat_type_sand = DEM_sim.LoadMaterialType(1e8, 0.3, 0.8);
-    auto mat_type_drum = DEM_sim.LoadMaterialType(1e9, 0.3, 0.9);
+    auto mat_type_sand = DEM_sim.LoadMaterialType(1e9, 0.3, 0.8);
+    auto mat_type_drum = DEM_sim.LoadMaterialType(2e9, 0.3, 0.9);
 
-    // First create a clump type for representing the drum
-    float drum_sp_r = 0.02;
-    auto template_drum = DEM_sim.LoadClumpSimpleSphere(0.5, drum_sp_r, mat_type_drum);
+    // Standard bin size
+    DEM_sim.InstructBinSize(min_rad * 2.0);
 
+    // Create some random clump templates for the filling materials
     // An array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
-    // Then randomly create some clumps for filling the drum
+    // Then randomly create some clump templates for filling the drum
     for (int i = 0; i < num_template; i++) {
         // first decide the number of spheres that live in this clump
         int num_sphere = rand() % (max_sphere - min_sphere + 1) + 1;
@@ -81,31 +82,65 @@ int main() {
         clump_types.push_back(DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat));
     }
 
-    std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_type;
-    std::vector<unsigned int> family_code;
-
-    // generate drum clumps
+    // Drum is a `big clump', we now generate its template
     float3 CylCenter = make_float3(0, 0, 0);
     float3 CylAxis = make_float3(1, 0, 0);
-    float CylRad = 0.2;
-    float CylHeight = 0.1;
-    float SideIncr = 0.03;
-    unsigned int NumRows = 300;
-    auto Drum = DEMCylSurfSampler(CylCenter, CylAxis, CylRad, CylHeight, SideIncr, NumRows);
+    float CylRad = 2.0;
+    float CylHeight = 1.0;
+    float CylMass = 1.0;
+    float CylParticleRad = 0.05;
+    float IXX = CylMass * CylRad * CylRad;
+    float IYY = (CylMass / 12) * (3 * CylRad * CylRad + CylHeight * CylHeight);
+    auto Drum_particles = DEMCylSurfSampler(CylCenter, CylAxis, CylRad, CylHeight, CylParticleRad);
+    auto Drum =
+        DEM_sim.LoadClumpType(CylMass, make_float3(IXX, IYY, IYY),
+                              std::vector<float>(Drum_particles.size(), CylParticleRad), Drum_particles, mat_type_drum);
+    std::cout << Drum_particles.size() << " spheres make up the rotating drum" << std::endl;
+
+    std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_type;
+    std::vector<float3> input_xyz;
+    std::vector<unsigned int> family_code;
+
+    // Add drum
+    input_template_type.push_back(Drum);
+    input_xyz.push_back(make_float3(0));
     // Drum is family 1
-    family_code.insert(family_code.end(), Drum.size(), 1);
-    // TODO: finish it!!
-    DEM_sim.SetFamilyPrescribedLinVel(1, "0", "0", "0");
-    input_template_type.insert(input_template_type.end(), Drum.size(), template_drum);
+    family_code.push_back(1);
+    // The drum rotates (facing X direction)
+    DEM_sim.SetFamilyPrescribedAngVel(1, "6.0", "0", "0");
+
+    // Then add top and bottom planes to `close up' the drum
+    float safe_delta = 0.05;
+    DEM_sim.AddBCPlane(make_float3(CylHeight / 2. - safe_delta, 0, 0), make_float3(-1, 0, 0), mat_type_drum);
+    DEM_sim.AddBCPlane(make_float3(-CylHeight / 2. + safe_delta, 0, 0), make_float3(1, 0, 0), mat_type_drum);
+
+    // Then sample some particles inside the drum
+    float3 sample_center = make_float3(0, 0, 0);
+    float sample_halfheight = CylHeight / 2.0 - safe_delta;
+    float sample_halfwidth = CylRad / 1.6;
+    auto input_material_xyz =
+        DEMBoxGridSampler(sample_center, make_float3(sample_halfheight, sample_halfwidth, sample_halfwidth), 0.025);
+    input_xyz.insert(input_xyz.end(), input_material_xyz.begin(), input_material_xyz.end());
+    unsigned int num_clumps = input_material_xyz.size();
+    family_code.insert(family_code.end(), num_clumps, 0);
+    // Casually select from generated clump types
+    for (unsigned int i = 0; i < num_clumps; i++) {
+        input_template_type.push_back(clump_types.at(i % num_template));
+    }
+
+    // Finally, input to system
+    DEM_sim.AddClumps(input_template_type, input_xyz);
+    DEM_sim.SetClumpFamilies(family_code);
+    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 4e-11);
 
     DEM_sim.CenterCoordSys();
     DEM_sim.SetTimeStepSize(5e-6);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEM_sim.SetCDUpdateFreq(5);
+    DEM_sim.SetCDUpdateFreq(15);
     // DEM_sim.SetExpandFactor(1e-3);
-    DEM_sim.SuggestExpandFactor(10.);
-    DEM_sim.SuggestExpandSafetyParam(2.);
+    DEM_sim.SuggestExpandFactor(12.);
+    DEM_sim.SuggestExpandSafetyParam(1.1);
     DEM_sim.Initialize();
 
     path out_dir = current_path();
@@ -114,8 +149,9 @@ int main() {
     for (int i = 0; i < 200; i++) {
         char filename[100];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
+        DEM_sim.WriteFileAsSpheres(std::string(filename));
         std::cout << "Frame: " << i << std::endl;
-        DEM_sim.LaunchThreads(3e-2);
+        DEM_sim.LaunchThreads(5e-2);
     }
 
     std::cout << "DEMdemo_Drum exiting..." << std::endl;

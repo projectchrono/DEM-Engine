@@ -43,10 +43,7 @@ inline __device__ void applyPrescribedPos(bool& LinPrescribed,
     }
 }
 
-// For now, write a custom kernel (instead of cub-based), and change it later
 inline __device__ void integrateVel(sgps::bodyID_t thisClump, sgps::DEMDataDT* granData, float h, float t) {
-    // Even prescribed motion should leverage custom integrators, so we put the prescription condition at a ``inner''
-    // location.
     sgps::family_t family_code = granData->familyID[thisClump];
     bool LinPrescribed = false, RotPrescribed = false;
     applyPrescribedVel<float, float>(LinPrescribed, RotPrescribed, granData->vX[thisClump], granData->vY[thisClump],

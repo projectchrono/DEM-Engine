@@ -165,6 +165,23 @@ void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
     m_input_family_prescription.push_back(preInfo);
 }
 
+void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID,
+                                          const std::string& velX,
+                                          const std::string& velY,
+                                          const std::string& velZ) {
+    familyPrescription_t preInfo;
+    preInfo.family = ID;
+    preInfo.rotVelX = velX;
+    preInfo.rotVelY = velY;
+    preInfo.rotVelZ = velZ;
+    // Both rot and lin vel are fixed. Use other methods if this is not intended.
+    preInfo.linVelPrescribed = true;
+    preInfo.rotVelPrescribed = true;
+    preInfo.used = true;
+
+    m_input_family_prescription.push_back(preInfo);
+}
+
 void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
                                             const std::string& X,
                                             const std::string& Y,
@@ -360,7 +377,7 @@ void DEMSolver::decideDefaultBinSize() {
 
     // TODO: What should be a default bin size?
     if (!m_use_user_instructed_bin_size) {
-        m_binSize = 1.0 * m_smallest_radius;
+        m_binSize = 2.0 * m_smallest_radius;
     }
 }
 
@@ -468,6 +485,13 @@ void DEMSolver::figureOutFamilyMasks() {
 
         this_family_info.externPos = this_family_info.externPos || preInfo.externPos;
         this_family_info.externVel = this_family_info.externVel || preInfo.externVel;
+
+        SGPS_DEM_DEBUG_PRINTF("User family %u has prescribed lin vel: %s, %s, %s", user_family,
+                              this_family_info.linVelX.c_str(), this_family_info.linVelY.c_str(),
+                              this_family_info.linVelZ.c_str());
+        SGPS_DEM_DEBUG_PRINTF("User family %u has prescribed ang vel: %s, %s, %s", user_family,
+                              this_family_info.rotVelX.c_str(), this_family_info.rotVelY.c_str(),
+                              this_family_info.rotVelZ.c_str());
     }
 }
 
@@ -669,10 +693,6 @@ void DEMSolver::generateJITResources() {
     // Also, external objects may introduce more material types
     nMatTuples = m_loaded_sp_materials.size();
 
-    // If these `computed' numbers are larger than types like materialsOffset_t can hold, then we should error out and
-    // let the user re-compile (or, should we somehow change the header automatically?)
-    postJITResourceGenSanityCheck();
-
     // Figure out the parameters related to the simulation `world', if need to
     if (!explicit_nv_override) {
         figureOutNV();
@@ -703,6 +723,10 @@ void DEMSolver::generateJITResources() {
 
     // How many owners we have, finally?
     nOwnerBodies = nExtObj + nOwnerClumps + nTriEntities;
+
+    // If these `computed' numbers are larger than types like materialsOffset_t can hold, then we should error out and
+    // let the user re-compile (or, should we somehow change the header automatically?)
+    postJITResourceGenSanityCheck();
 
     // Notify the user simulation stats
     reportInitStats();
@@ -871,9 +895,11 @@ void DEMSolver::postJITResourceGenSanityCheck() {
     }
     if (unable_jitify_all) {
         SGPS_DEM_WARNING(
-            "There are %u clump templates loaded, but only %u are jitifiable due to some of the clumps are big and/or "
-            "there are many types of clumps (%u components jitified).\nThis is expected if there are external objects "
-            "represented by spherical decomposition.",
+            "There are %u clump templates loaded, but only %u templates (totalling %u components) are jitifiable due "
+            "to some of the clumps are big and/or there are many types of clumps .\nIf you have external objects "
+            "represented by spherical decomposition (a.k.a. intend to use big clumps), there is probably nothing to "
+            "worry about.\nOtherwise, you may want to change the way this problem is formulated so you have fewer "
+            "clump templates.",
             nDistinctClumpBodyTopologies, nJitifiableClumpTopo, nJitifiableClumpComponents);
     } else {
         nJitifiableClumpTopo = nDistinctClumpBodyTopologies;
@@ -895,6 +921,14 @@ void DEMSolver::postJITResourceGenSanityCheck() {
             "templates are not recommended but if they are indeed needed, you can redefine inertiaOffset_t.",
             nDistinctMassProperties, std::numeric_limits<inertiaOffset_t>::max() - 1,
             std::numeric_limits<inertiaOffset_t>::max());
+    }
+
+    // Do we have more bins that our data type can handle?
+    if (m_num_bins > std::numeric_limits<binID_t>::max()) {
+        SGPS_DEM_ERROR(
+            "The simulation world has %zu bins (for domain partitioning in contact detection), but the largest bin IDs "
+            "is %zu.\nYou can try to make bins larger via InstructBinSize, or redefine binID_t and recompile.",
+            m_num_bins, std::numeric_limits<binID_t>::max());
     }
 }
 
