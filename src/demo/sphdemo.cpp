@@ -159,8 +159,8 @@ int main(int argc, char* argv[]) {
     // initialize the SPHSystem
     system->initialize(kernel_h, rho * kernel_h * kernel_h * kernel_h, rho, c, pos_vec, vel_vec, acc_vec, pres_vec,
                        fix_vec, dim_x, dim_y, dim_z);
-    system->printCSV("sph_folder/test" + std::to_string(0) + ".csv", pos_vec.data(), num_par, vel_vec.data(),
-                     acc_vec.data(), rho_vec.data(), pres_vec.data());
-    system->setPrintOut(true, 200);
+    // system->printCSV("sph_folder/test" + std::to_string(0) + ".csv", pos_vec.data(), num_par, vel_vec.data(),
+    //                  acc_vec.data(), rho_vec.data(), pres_vec.data());
+    // system->setPrintOut(true, 200);
     system->doStepDynamics(5e-5, 2.f);
 }

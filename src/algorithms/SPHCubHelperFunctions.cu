@@ -12,18 +12,19 @@ struct CustomCubFloat3Add {
 
 void PrefixScanExclusiveCub(std::vector<int, sgps::ManagedAllocator<int>>& d_in,
                             std::vector<int, sgps::ManagedAllocator<int>>& d_out,
+                            int work_size,
                             std::vector<int, sgps::ManagedAllocator<int>>& temp_storage) {
-    d_out.resize(d_in.size());
+    d_out.resize(work_size);
     // Determine temporary device storage requirements
     size_t temp_storage_bytes = 0;
-    cub::DeviceScan::ExclusiveSum(NULL, temp_storage_bytes, d_in.data(), d_out.data(), d_in.size());
+    cub::DeviceScan::ExclusiveSum(NULL, temp_storage_bytes, d_in.data(), d_out.data(), work_size);
     // Resize temporary storage
     size_t temp_arr_size = temp_storage_bytes / sizeof(int);
     if (temp_storage.size() < temp_arr_size) {
         temp_storage.resize(temp_arr_size);
     }
     // Run exclusive prefix sum
-    cub::DeviceScan::ExclusiveSum(temp_storage.data(), temp_storage_bytes, d_in.data(), d_out.data(), d_in.size());
+    cub::DeviceScan::ExclusiveSum(temp_storage.data(), temp_storage_bytes, d_in.data(), d_out.data(), work_size);
 
     cudaDeviceSynchronize();
 }
@@ -32,14 +33,15 @@ void PairRadixSortAscendCub(std::vector<int, sgps::ManagedAllocator<int>>& d_key
                             std::vector<int, sgps::ManagedAllocator<int>>& d_keys_out,
                             std::vector<int, sgps::ManagedAllocator<int>>& d_values_in,
                             std::vector<int, sgps::ManagedAllocator<int>>& d_values_out,
+                            int work_size,
                             std::vector<int, sgps::ManagedAllocator<int>>& temp_storage) {
-    d_keys_out.resize(d_keys_in.size());
-    d_values_out.resize(d_values_in.size());
+    d_keys_out.resize(work_size);
+    d_values_out.resize(work_size);
 
     // Determine temporary device storage requirements
     size_t temp_storage_bytes = 0;
     cub::DeviceRadixSort::SortPairs(NULL, temp_storage_bytes, d_keys_in.data(), d_keys_out.data(), d_values_in.data(),
-                                    d_values_out.data(), d_keys_in.size());
+                                    d_values_out.data(), work_size);
     // Resize temporary storage
     size_t temp_arr_size = temp_storage_bytes / sizeof(int);
     if (temp_storage.size() < temp_arr_size) {
@@ -47,7 +49,7 @@ void PairRadixSortAscendCub(std::vector<int, sgps::ManagedAllocator<int>>& d_key
     }
     // Run sorting operation
     cub::DeviceRadixSort::SortPairs(temp_storage.data(), temp_storage_bytes, d_keys_in.data(), d_keys_out.data(),
-                                    d_values_in.data(), d_values_out.data(), d_keys_in.size());
+                                    d_values_in.data(), d_values_out.data(), work_size);
 
     cudaDeviceSynchronize();
 }
@@ -56,14 +58,15 @@ void PairRadixSortAscendCub(std::vector<int, sgps::ManagedAllocator<int>>& d_key
                             std::vector<int, sgps::ManagedAllocator<int>>& d_keys_out,
                             std::vector<float, sgps::ManagedAllocator<float>>& d_values_in,
                             std::vector<float, sgps::ManagedAllocator<float>>& d_values_out,
+                            int work_size,
                             std::vector<float, sgps::ManagedAllocator<float>>& temp_storage) {
-    d_keys_out.resize(d_keys_in.size());
-    d_values_out.resize(d_values_in.size());
+    d_keys_out.resize(work_size);
+    d_values_out.resize(work_size);
 
     // Determine temporary device storage requirements
     size_t temp_storage_bytes = 0;
     cub::DeviceRadixSort::SortPairs(NULL, temp_storage_bytes, d_keys_in.data(), d_keys_out.data(), d_values_in.data(),
-                                    d_values_out.data(), d_keys_in.size());
+                                    d_values_out.data(), work_size);
     // Resize temporary storage
     size_t temp_arr_size = temp_storage_bytes / sizeof(float);
     if (temp_storage.size() < temp_arr_size) {
@@ -72,7 +75,7 @@ void PairRadixSortAscendCub(std::vector<int, sgps::ManagedAllocator<int>>& d_key
 
     // Run sorting operation
     cub::DeviceRadixSort::SortPairs(temp_storage.data(), temp_storage_bytes, d_keys_in.data(), d_keys_out.data(),
-                                    d_values_in.data(), d_values_out.data(), d_keys_in.size());
+                                    d_values_in.data(), d_values_out.data(), work_size);
 
     cudaDeviceSynchronize();
 }
@@ -81,14 +84,15 @@ void PairRadixSortAscendCub(std::vector<int, sgps::ManagedAllocator<int>>& d_key
                             std::vector<int, sgps::ManagedAllocator<int>>& d_keys_out,
                             std::vector<float3, sgps::ManagedAllocator<float3>>& d_values_in,
                             std::vector<float3, sgps::ManagedAllocator<float3>>& d_values_out,
+                            int work_size,
                             std::vector<float3, sgps::ManagedAllocator<float3>>& temp_storage) {
-    d_keys_out.resize(d_keys_in.size());
-    d_values_out.resize(d_values_in.size());
+    d_keys_out.resize(work_size);
+    d_values_out.resize(work_size);
 
     // Determine temporary device storage requirements
     size_t temp_storage_bytes = 0;
     cub::DeviceRadixSort::SortPairs(NULL, temp_storage_bytes, d_keys_in.data(), d_keys_out.data(), d_values_in.data(),
-                                    d_values_out.data(), d_keys_in.size());
+                                    d_values_out.data(), work_size);
     // Resize temporary storage
     size_t temp_arr_size = temp_storage_bytes / sizeof(float3);
     if (temp_storage.size() < temp_arr_size) {
@@ -97,7 +101,7 @@ void PairRadixSortAscendCub(std::vector<int, sgps::ManagedAllocator<int>>& d_key
 
     // Run sorting operation
     cub::DeviceRadixSort::SortPairs(temp_storage.data(), temp_storage_bytes, d_keys_in.data(), d_keys_out.data(),
-                                    d_values_in.data(), d_values_out.data(), d_keys_in.size());
+                                    d_values_in.data(), d_values_out.data(), work_size);
 
     cudaDeviceSynchronize();
 }
@@ -105,16 +109,17 @@ void PairRadixSortAscendCub(std::vector<int, sgps::ManagedAllocator<int>>& d_key
 void RunLengthEncodeCub(std::vector<int, sgps::ManagedAllocator<int>>& d_in,
                         std::vector<int, sgps::ManagedAllocator<int>>& d_unique_out,
                         std::vector<int, sgps::ManagedAllocator<int>>& d_counts_out,
+                        int work_size,
                         std::vector<int, sgps::ManagedAllocator<int>>& temp_storage) {
     std::vector<int, sgps::ManagedAllocator<int>> d_num_runs_out;
-    d_unique_out.resize(d_in.size());
-    d_counts_out.resize(d_in.size());
+    d_unique_out.resize(work_size);
+    d_counts_out.resize(work_size);
     d_num_runs_out.resize(1);
 
     // Determine temporary device storage requirements
     size_t temp_storage_bytes = 0;
     cub::DeviceRunLengthEncode::Encode(NULL, temp_storage_bytes, d_in.data(), d_unique_out.data(), d_counts_out.data(),
-                                       d_num_runs_out.data(), d_in.size());
+                                       d_num_runs_out.data(), work_size);
     // Resize temporary storage
     size_t temp_arr_size = temp_storage_bytes / sizeof(int);
     if (temp_storage.size() < temp_arr_size) {
@@ -123,7 +128,7 @@ void RunLengthEncodeCub(std::vector<int, sgps::ManagedAllocator<int>>& d_in,
 
     // Run encoding
     cub::DeviceRunLengthEncode::Encode(temp_storage.data(), temp_storage_bytes, d_in.data(), d_unique_out.data(),
-                                       d_counts_out.data(), d_num_runs_out.data(), d_in.size());
+                                       d_counts_out.data(), d_num_runs_out.data(), work_size);
 
     cudaDeviceSynchronize();
 
@@ -137,9 +142,10 @@ void SumReduceByKeyCub(std::vector<int, sgps::ManagedAllocator<int>>& d_keys_in,
                        std::vector<int, sgps::ManagedAllocator<int>>& d_unique_out,
                        std::vector<float, sgps::ManagedAllocator<float>>& d_values_in,
                        std::vector<float, sgps::ManagedAllocator<float>>& d_aggregates_out,
+                       int work_size,
                        std::vector<float, sgps::ManagedAllocator<float>>& temp_storage) {
-    d_unique_out.resize(d_keys_in.size());
-    d_aggregates_out.resize(d_values_in.size());
+    d_unique_out.resize(work_size);
+    d_aggregates_out.resize(work_size);
 
     std::vector<int, sgps::ManagedAllocator<int>> d_num_runs_out;
     d_num_runs_out.resize(1);
@@ -147,7 +153,7 @@ void SumReduceByKeyCub(std::vector<int, sgps::ManagedAllocator<int>>& d_keys_in,
     // Determine temporary device storage requirements
     size_t temp_storage_bytes = 0;
     cub::DeviceReduce::ReduceByKey(NULL, temp_storage_bytes, d_keys_in.data(), d_unique_out.data(), d_values_in.data(),
-                                   d_aggregates_out.data(), d_num_runs_out.data(), cub::Sum(), d_keys_in.size());
+                                   d_aggregates_out.data(), d_num_runs_out.data(), cub::Sum(), work_size);
     cudaDeviceSynchronize();
     // Resize temporary storage
     size_t temp_arr_size = temp_storage_bytes / sizeof(float);
@@ -157,7 +163,7 @@ void SumReduceByKeyCub(std::vector<int, sgps::ManagedAllocator<int>>& d_keys_in,
 
     cub::DeviceReduce::ReduceByKey(temp_storage.data(), temp_storage_bytes, d_keys_in.data(), d_unique_out.data(),
                                    d_values_in.data(), d_aggregates_out.data(), d_num_runs_out.data(), cub::Sum(),
-                                   d_keys_in.size());
+                                   work_size);
     cudaDeviceSynchronize();
 
     d_unique_out.erase(d_unique_out.begin() + d_num_runs_out[0], d_unique_out.end());
@@ -169,9 +175,10 @@ void SumReduceByKeyCub(std::vector<int, sgps::ManagedAllocator<int>>& d_keys_in,
                        std::vector<int, sgps::ManagedAllocator<int>>& d_unique_out,
                        std::vector<float3, sgps::ManagedAllocator<float3>>& d_values_in,
                        std::vector<float3, sgps::ManagedAllocator<float3>>& d_aggregates_out,
+                       int work_size,
                        std::vector<float3, sgps::ManagedAllocator<float3>>& temp_storage) {
-    d_unique_out.resize(d_keys_in.size());
-    d_aggregates_out.resize(d_values_in.size());
+    d_unique_out.resize(work_size);
+    d_aggregates_out.resize(work_size);
 
     std::vector<int, sgps::ManagedAllocator<int>> d_num_runs_out;
     d_num_runs_out.resize(1);
@@ -179,8 +186,7 @@ void SumReduceByKeyCub(std::vector<int, sgps::ManagedAllocator<int>>& d_keys_in,
     // Determine temporary device storage requirements
     size_t temp_storage_bytes = 0;
     cub::DeviceReduce::ReduceByKey(NULL, temp_storage_bytes, d_keys_in.data(), d_unique_out.data(), d_values_in.data(),
-                                   d_aggregates_out.data(), d_num_runs_out.data(), CustomCubFloat3Add(),
-                                   d_keys_in.size());
+                                   d_aggregates_out.data(), d_num_runs_out.data(), CustomCubFloat3Add(), work_size);
     cudaDeviceSynchronize();
     // Resize temporary storage
     size_t temp_arr_size = temp_storage_bytes / sizeof(float3);
@@ -190,7 +196,7 @@ void SumReduceByKeyCub(std::vector<int, sgps::ManagedAllocator<int>>& d_keys_in,
 
     cub::DeviceReduce::ReduceByKey(temp_storage.data(), temp_storage_bytes, d_keys_in.data(), d_unique_out.data(),
                                    d_values_in.data(), d_aggregates_out.data(), d_num_runs_out.data(),
-                                   CustomCubFloat3Add(), d_keys_in.size());
+                                   CustomCubFloat3Add(), work_size);
     cudaDeviceSynchronize();
 
     d_unique_out.erase(d_unique_out.begin() + d_num_runs_out[0], d_unique_out.end());

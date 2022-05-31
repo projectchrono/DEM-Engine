@@ -21,6 +21,7 @@ struct DataManager {
     float m;
     float rho_0;
     float c;
+    int k_n;  // total number of particles -> this number will not change as simulation proceeds
     std::vector<float3, sgps::ManagedAllocator<float3>> m_pos;     // particle locations
     std::vector<float3, sgps::ManagedAllocator<float3>> m_vel;     // particle velocities
     std::vector<float3, sgps::ManagedAllocator<float3>> m_acc;     // particle accelerations
@@ -31,6 +32,7 @@ struct DataManager {
     std::vector<float, sgps::ManagedAllocator<float>> m_pressure;  // pressure associated with each particle
 
     // collision data
+    int m_tot_collision;                                           // total number of collisions
     std::vector<int, sgps::ManagedAllocator<int>> m_pair_i;        // i particle of collision pair
     std::vector<int, sgps::ManagedAllocator<int>> m_pair_j;        // j particle of collision pair
     std::vector<float3, sgps::ManagedAllocator<float3>> m_W_grad;  // w gradient for each collision pair
