@@ -797,13 +797,6 @@ void DynamicThread::operator()() {
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        if (dynamicCounter % 250 == 0) {
-            getParentSystem().printCSV("sph_folder/test" + std::to_string(output_counter) + ".csv", pos_data.data(),
-                                       pos_data.size(), vel_data.data(), acc_data.data(), rho_data.data(),
-                                       pressure_data.data());
-            output_counter = output_counter + 1;
-        }
-
         // copy data back to the dataManager
         {
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
