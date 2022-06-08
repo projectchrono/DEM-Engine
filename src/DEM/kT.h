@@ -53,8 +53,11 @@ class DEMKinematicThread {
 
     size_t m_approx_bytes_used = 0;
 
-    // Set to true only when a user AdvanceSimulation call is finished. Set to false otherwise.
+    // Set to true only when a user call is finished. Set to false otherwise.
     bool userCallDone = false;
+
+    // kT should break out of its inner loop and return to a state where it awaits a `start' call at the outer loop
+    bool kTShouldReset = false;
 
     // Pointers to simulation params-related arrays
     DEMSimParams* simParams;
@@ -184,18 +187,28 @@ class DEMKinematicThread {
     }
     ~DEMKinematicThread() {
         // std::cout << "Kinematic thread closing..." << std::endl;
+
+        // kT as the aux helper thread, it could be hanging waiting for dT updates when the destructor is called, so we
+        // release it from that status here
+        breakWaitingStatus();
+
+        // It says start thread but it's actually just telling it to join
         pSchedSupport->kinematicShouldJoin = true;
         startThread();
         th.join();
+
         cudaStreamDestroy(streamInfo.stream);
     }
 
     // buffer exchange methods
     void setDestinationBufferPointers();
 
-    void primeDynamic();
+    // Break inner loop hanging status and wait in the outer loop. Note we must ensure resetUserCallStat is called
+    // shortly after breakWaitingStatus is called, since kinematicOwned_Cons2ProdBuffer_isFresh and kTShouldReset can be
+    // vulnerable if kT exited through dynamicsDone rather than control variable-based release.
+    void breakWaitingStatus();
 
-    // Called each time when the user calls LaunchThreads.
+    // Called each time when the user calls DoStepDynamicsSync.
     void startThread();
 
     // The actual kernel things go here.

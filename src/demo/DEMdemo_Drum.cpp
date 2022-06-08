@@ -9,7 +9,7 @@
 #include <DEM/HostSideHelpers.cpp>
 
 #include <cstdio>
-#include <time.h>
+#include <chrono>
 
 using namespace sgps;
 using namespace std::filesystem;
@@ -137,7 +137,7 @@ int main() {
     DEM_sim.SetTimeStepSize(5e-6);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEM_sim.SetCDUpdateFreq(15);
+    DEM_sim.SetCDUpdateFreq(20);
     // DEM_sim.SetExpandFactor(1e-3);
     DEM_sim.SuggestExpandFactor(12.);
     DEM_sim.SuggestExpandSafetyParam(1.1);
@@ -146,13 +146,17 @@ int main() {
     path out_dir = current_path();
     out_dir += "/DEMdemo_Drum";
     create_directory(out_dir);
+    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < 200; i++) {
         char filename[100];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
         DEM_sim.WriteFileAsSpheres(std::string(filename));
         std::cout << "Frame: " << i << std::endl;
-        DEM_sim.LaunchThreads(5e-2);
+        DEM_sim.DoStepDynamicsSync(5e-2);
     }
+    std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+    std::cout << time_sec.count() << " seconds" << std::endl;
 
     std::cout << "DEMdemo_Drum exiting..." << std::endl;
     // TODO: add end-game report APIs

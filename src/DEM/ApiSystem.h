@@ -229,14 +229,28 @@ class DEMSolver {
     /// purposes only.
     void WriteFileAsSpheres(const std::string& outfilename) const;
 
-    int Initialize();
+    /// Intialize the simulation system
+    void Initialize();
 
-    /// Advance simulation by this amount of time
-    int LaunchThreads(double thisCallDuration);
+    /// Advance simulation by this amount of time, and at the end of this call, synchronize kT and dT. This is suitable
+    /// for a longer call duration and without co-simulation.
+    void DoStepDynamicsSync(double thisCallDuration);
+
+    /// Advance simulation by this amount of time (but does not attempt to sync kT and dT). This can work with both long
+    /// and short call durations and allows interplay with co-simulation APIs.
+    void DoStepDynamics(double thisCallDuration);
 
     /// Copy the cached sim params to the GPU-accessible managed memory, so that they are picked up from the next ts of
     /// simulation. Usually used when you want to change simulation parameters after the system is already Intialized.
     void UpdateSimParams();
+
+    /// Reset kT and dT back to a status like when the simulation system is constructed. In general the user does not
+    /// need to call it, unless they want to run another test without re-constructing the entire DEM simulation system.
+    void ResetWorkerThreads();
+
+    /// Show the collaboration stats between dT and kT. This is more useful for tweaking the number of time steps that
+    /// dT should be allowed to be in advance of kT.
+    void ShowThreadCollaborationStats();
 
     /*
       protected:
@@ -509,8 +523,6 @@ class DEMSolver {
     /// Transfer (CPU-side) cached simulation data (about sim world) to the GPU-side. It is called automatically during
     /// system initialization.
     void transferSimParams();
-    /// Wait for kT and dT until they are done with the work and a signal is give by them, then the ApiSystem can go on.
-    void waitOnThreads();
     /// Transfer (CPU-side) cached clump templates info and initial clump type/position info to GPU-side arrays
     void initializeArrays();
     /// Pack array pointers to a struct so they can be easily used as kernel arguments

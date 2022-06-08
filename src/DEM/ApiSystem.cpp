@@ -27,8 +27,6 @@ DEMSolver::DEMSolver(unsigned int nGPUs) {
     kT = new DEMKinematicThread(dTkT_InteractionManager, dTkT_GpuManager, dT);
 
     // dT->setNDynamicCycles(nDynamicCycles);
-
-    // kT->primeDynamic();
 }
 
 DEMSolver::~DEMSolver() {
@@ -504,6 +502,7 @@ inline void DEMSolver::reportInitStats() const {
     SGPS_DEM_INFO("The total number of bins: %zu", m_num_bins);
 
     SGPS_DEM_INFO("The current number of clumps: %zu", nOwnerBodies);
+    SGPS_DEM_INFO("The current number of spheres: %zu", nSpheresGM);
     SGPS_DEM_INFO("The current number of families: %u", nDistinctFamilies);
 
     if (m_expand_factor > 0.0) {
@@ -953,7 +952,7 @@ void DEMSolver::jitifyKernels() {
 // The method should be called after user inputs are in place, and before starting the simulation. It figures out a part
 // of the required simulation information such as the scale of the poblem domain, and makes sure these info live in
 // managed memory.
-int DEMSolver::Initialize() {
+void DEMSolver::Initialize() {
     // A few checks first
     validateUserInputs();
 
@@ -979,7 +978,20 @@ int DEMSolver::Initialize() {
     jitifyKernels();
 
     sys_initialized = true;
-    return 0;
+}
+
+void DEMSolver::ResetWorkerThreads() {
+    // The user won't be calling this when dT is working, so our only problem is that kT may be spinning in the inner
+    // loop. So iet's release kT.
+    kT->breakWaitingStatus();
+    while (!kT->isUserCallDone()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(SGPS_DEM_WAIT_GRANULARITY_MS));
+    }
+
+    // Finally, reset the thread stats and wait for potential new user calls. This includes setting userCallDone to
+    // false.
+    kT->resetUserCallStat();
+    dT->resetUserCallStat();
 }
 
 // TODO: it seems that for variable step size, it is the best not to do the computation of n cycles here; rather we
@@ -997,33 +1009,43 @@ void DEMSolver::UpdateSimParams() {
     transferSimParams();
 }
 
-void DEMSolver::waitOnThreads() {
-    while (!(kT->isUserCallDone() & dT->isUserCallDone())) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(SGPS_DEM_WAIT_GRANULARITY_MS));
-    }
-    // Reset UserDone to false, make ready for the next user AdvanceSim call.
-    kT->resetUserCallStat();
-    dT->resetUserCallStat();
-}
-
-int DEMSolver::LaunchThreads(double thisCallDuration) {
+void DEMSolver::DoStepDynamics(double thisCallDuration) {
     // Is it needed here??
     // dT->packDataPointers(kT->granData);
 
-    // TODO: Return if nSphere==0
+    // TODO: Return if nSphere == 0
 
     // Tell dT how many iterations to go
     size_t nDTIters = computeDTCycles(thisCallDuration);
     dT->setNDynamicCycles(nDTIters);
 
-    kT->primeDynamic();
-
     dT->startThread();
     kT->startThread();
 
-    // We have to wait until these 2 threads finish their job before moving on.
-    waitOnThreads();
+    // Wait till dT is done
+    while (!dT->isUserCallDone()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(SGPS_DEM_WAIT_GRANULARITY_MS));
+    }
 
+    // Make dT ready for the next call. We don't do a `deep' reset using resetUserCallStat, since that's only used when
+    // kT and dT sync.
+    dT->userCallDone = false;
+}
+
+void DEMSolver::DoStepDynamicsSync(double thisCallDuration) {
+    // Based on async calls
+    DoStepDynamics(thisCallDuration);
+
+    // For DoStepDynamicsSync calls, you get a nice bonus of solver `hold-back' stats, since we expect sync-ed calls
+    // have longer duration, perhaps as long as the entire simulation duration.
+    ShowThreadCollaborationStats();
+
+    // dT is finished, but the user asks us to sync, so we have to make kT sync with dT. This can be done by calling
+    // ResetWorkerThreads.
+    ResetWorkerThreads();
+}
+
+void DEMSolver::ShowThreadCollaborationStats() {
     /*
     // Sim statistics
     std::cout << "\n~~ SIM STATISTICS ~~\n";
@@ -1035,8 +1057,6 @@ int DEMSolver::LaunchThreads(double thisCallDuration) {
     std::cout << "Number of times kinematic held back: "
               << dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack << std::endl;
     */
-
-    return 0;
 }
 
 inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::string>& strMap) {

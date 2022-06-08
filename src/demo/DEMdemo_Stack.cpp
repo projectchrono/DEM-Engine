@@ -86,7 +86,7 @@ int main() {
         // Seems that after user call, both thread are chilling, not responding; have to resolve it...
         // float KE = DEM_sim.GetTotalKineticEnergy();
         // std::cout << "Total kinetic energy: " << KE << std::endl;
-        DEM_sim.LaunchThreads(3e-3);
+        DEM_sim.DoStepDynamicsSync(3e-3);
     }
 
     std::cout << "DEMdemo_Stack exiting..." << std::endl;

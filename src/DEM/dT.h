@@ -182,7 +182,7 @@ class DEMDynamicThread {
     // Time elapsed in current simulation
     float timeElapsed = 0.f;
 
-    // Set to true only when a user AdvanceSimulation call is finished. Set to false otherwise.
+    // Set to true only when a user call is finished. Set to false otherwise.
     bool userCallDone = false;
 
     // If true, dT needs to re-process idA- and idB-related data arrays before collecting forces, as those arrays are
@@ -304,7 +304,7 @@ class DEMDynamicThread {
 
     void WriteCsvAsSpheres(std::ofstream& ptFile) const;
 
-    // Called each time when the user calls LaunchThreads.
+    // Called each time when the user calls DoStepDynamicsSync.
     void startThread();
 
     // The actual kernel things go here.

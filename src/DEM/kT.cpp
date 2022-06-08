@@ -90,25 +90,35 @@ void DEMKinematicThread::workerThread() {
             }
             // Ensure that we wait for start signal on next iteration
             pSchedSupport->kinematicStarted = false;
+            // The following is executed when kT and dT are being destroyed
             if (pSchedSupport->kinematicShouldJoin) {
                 break;
             }
         }
+
         // Run a while loop producing stuff in each iteration; once produced, it should be made available to the dynamic
         // via memcpy
         while (!pSchedSupport->dynamicDone) {
-            // Before producing something, a new work order should be in place. Wait on
-            // it
+            // Before producing something, a new work order should be in place. Wait on it.
             if (!pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh) {
                 pSchedSupport->schedulingStats.nTimesKinematicHeldBack++;
                 std::unique_lock<std::mutex> lock(pSchedSupport->kinematicCanProceed);
 
+                // kT never got locked in here indefinitely because, dT will always send a cv_KinematicCanProceed signal
+                // AFTER setting dynamicDone to true, if dT is about to finish
                 while (!pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh) {
                     // Loop to avoid spurious wakeups
                     pSchedSupport->cv_KinematicCanProceed.wait(lock);
                 }
 
-                // Getting here means that new "work order" data has been provided
+                // In the case where this weak-up call is at the destructor (dT has been executing without notifying the
+                // end of user calls, aka running DoStepDynamics), we don't have to do CD one more time, just break
+                if (kTShouldReset) {
+                    kTShouldReset = false;
+                    break;
+                }
+
+                // Getting here means that new `work order' data has been provided
                 {
                     // Acquire lock and get the work order
                     std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
@@ -124,40 +134,23 @@ void DEMKinematicThread::workerThread() {
                              previous_idGeometryB, previous_contactType, contactMapping, streamInfo.stream,
                              stateOfSolver_resources);
 
-            /* for the reference
-            for (int j = 0; j < N_MANUFACTURED_ITEMS; j++) {
-                // kinematicTestKernel<<<1, 1, 0, kinematicStream.stream>>>();
-
-                // use cudaLaunchKernel
-                // cudaLaunchKernel((void*)&kinematicTestKernel, dim3(1), dim3(1), NULL, 0, stream_id);
-                // example argument list:
-                //  args = { &arg1, &arg2, ... &argN };
-                // cudaLaunchKernel((void*)&kinematicTestKernelWithArgs, dim3(1), dim3(1), &args, 0, stream_id);
-                kinematicTestKernel<<<1, 1>>>();
-                cudaDeviceSynchronize();
-                pSchedSupport->dynamicShouldWait()
-                int indx = j % N_INPUT_ITEMS;
-                product[j] += this->costlyProductionStep(j) + inputData[indx];
-            }
-            */
-
             // Make it clear that the data for most recent work order has been used, in case there is interest in
             // updating it
             pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = false;
 
             {
-                // acquire lock and supply the dynamic with fresh produce
+                // Acquire lock and supply the dynamic with fresh produce
                 std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
                 sendToTheirBuffer();
             }
             pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = true;
             pSchedSupport->schedulingStats.nDynamicUpdates++;
 
-            // signal the dynamic that it has fresh produce
+            // Signal the dynamic that it has fresh produce
             pSchedSupport->cv_DynamicCanProceed.notify_all();
         }
 
-        // in case the dynamic is hanging in there...
+        // In case the dynamic is hanging in there...
         pSchedSupport->cv_DynamicCanProceed.notify_all();
 
         // When getting here, kT has finished one user call (although perhaps not at the end of the user script).
@@ -171,6 +164,18 @@ void DEMKinematicThread::startThread() {
     pSchedSupport->cv_KinematicStartLock.notify_one();
 }
 
+void DEMKinematicThread::breakWaitingStatus() {
+    // dynamicDone == true and cv_KinematicCanProceed should ensure kT breaks to the outer loop
+    pSchedSupport->dynamicDone = true;
+    // We distrubed kinematicOwned_Cons2ProdBuffer_isFresh and kTShouldReset here, but it matters not, as when
+    // breakWaitingStatus is called, they will always be reset to default soon
+    pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
+    kTShouldReset = true;
+
+    std::lock_guard<std::mutex> lock(pSchedSupport->kinematicCanProceed);
+    pSchedSupport->cv_KinematicCanProceed.notify_one();
+}
+
 bool DEMKinematicThread::isUserCallDone() {
     // return true if done, false if not
     return userCallDone;
@@ -180,6 +185,7 @@ void DEMKinematicThread::resetUserCallStat() {
     userCallDone = false;
     // Reset kT stats variables, making ready for next user call
     pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = false;
+    kTShouldReset = false;
 }
 
 size_t DEMKinematicThread::estimateMemUsage() const {
@@ -466,14 +472,6 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
             JitHelper::buildProgram("DEMHistoryMappingKernels", JitHelper::KERNEL_DIR / "DEMHistoryMappingKernels.cu",
                                     hSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
-}
-
-void DEMKinematicThread::primeDynamic() {
-    // transfer produce to dynamic buffer
-    // dT need an update from kT before it can do anything, so need to wait for that, so
-    // dynamicOwned_Prod2ConsBuffer_isFresh needs to be initially false
-    pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
-    // pSchedSupport->schedulingStats.nDynamicUpdates++;
 }
 
 }  // namespace sgps

@@ -335,12 +335,13 @@ inline std::vector<float3> DEMCylSurfSampler(float3 CylCenter,
                                              float3 CylAxis,
                                              float CylRad,
                                              float CylHeight,
-                                             float ParticleRad) {
+                                             float ParticleRad,
+                                             float spacing = 1.2f) {
     std::vector<float3> points;
     float perimeter = 2.0 * SGPS_PI * CylRad;
-    unsigned int NumRows = perimeter / (1.2 * ParticleRad);
+    unsigned int NumRows = perimeter / (spacing * ParticleRad);
     float RadIncr = 2.0 * SGPS_PI / (float)(NumRows);
-    float SideIncr = 1.2 * ParticleRad;
+    float SideIncr = spacing * ParticleRad;
     float3 UnitCylAxis = normalize(CylAxis);
     float3 RadDir;
     {

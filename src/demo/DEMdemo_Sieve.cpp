@@ -145,7 +145,7 @@ int main() {
         DEM_sim.WriteFileAsSpheres(std::string(filename));
         std::cout << "Frame: " << i << std::endl;
 
-        DEM_sim.LaunchThreads(1.0 / 20.);
+        DEM_sim.DoStepDynamicsSync(1.0 / 20.);
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
