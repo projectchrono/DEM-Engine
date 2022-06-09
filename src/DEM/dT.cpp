@@ -839,7 +839,7 @@ void DEMDynamicThread::startThread() {
     pSchedSupport->cv_DynamicStartLock.notify_one();
 }
 
-bool DEMDynamicThread::isUserCallDone() {
+bool DEMDynamicThread::isUserCallDone() const {
     // return true if done, false if not
     return userCallDone;
 }

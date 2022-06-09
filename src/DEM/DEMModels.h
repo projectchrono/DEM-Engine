@@ -129,7 +129,6 @@ inline std::string DEM_CLUMP_COMPONENT_ACQUISITION_PARTIALLY_JITIFIED() {
             myRelPosX = granData->relPosSphereX[myCompOffsetExt];
             myRelPosY = granData->relPosSphereY[myCompOffsetExt];
             myRelPosZ = granData->relPosSphereZ[myCompOffsetExt];
-            // Global memory's radiiSphere is not already expanded for CD purposes
             myRadius = granData->radiiSphere[myCompOffsetExt];
         }
     )V0G0N";

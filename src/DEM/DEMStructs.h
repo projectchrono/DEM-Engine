@@ -328,7 +328,7 @@ struct SolverFlags {
     bool use_compact_force_kernel = false;
     // This run is historyless
     bool isHistoryless = false;
-    // This run uses contact detection in an async fashion
+    // This run uses contact detection in an async fashion (kT and dT working at different points in simulation time)
     bool isAsync = true;
     // If family number can potentially change (at each time step) during the simulation, because of user intervention
     bool canFamilyChange = false;

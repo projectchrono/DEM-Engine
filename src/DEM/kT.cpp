@@ -114,7 +114,6 @@ void DEMKinematicThread::workerThread() {
                 // In the case where this weak-up call is at the destructor (dT has been executing without notifying the
                 // end of user calls, aka running DoStepDynamics), we don't have to do CD one more time, just break
                 if (kTShouldReset) {
-                    kTShouldReset = false;
                     break;
                 }
 
@@ -176,7 +175,7 @@ void DEMKinematicThread::breakWaitingStatus() {
     pSchedSupport->cv_KinematicCanProceed.notify_one();
 }
 
-bool DEMKinematicThread::isUserCallDone() {
+bool DEMKinematicThread::isUserCallDone() const {
     // return true if done, false if not
     return userCallDone;
 }

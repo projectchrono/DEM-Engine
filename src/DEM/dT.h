@@ -312,7 +312,7 @@ class DEMDynamicThread {
     void workerThread();
 
     // Query the value of userCallDone
-    bool isUserCallDone();
+    bool isUserCallDone() const;
     // Reset userCallDone back to false
     void resetUserCallStat();
     // Return the approximate RAM usage
