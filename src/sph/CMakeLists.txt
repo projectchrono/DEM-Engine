@@ -9,7 +9,8 @@ add_library(sph OBJECT)
 target_include_directories(
 	sph
 	PUBLIC ${NVIDIAJitifyPath}
-	PUBLIC ${ProjectIncludeRoot}
+	PUBLIC ${ProjectIncludeSource}
+	PUBLIC ${ProjectIncludeGenerated}
 	PUBLIC ${NVIDIAMathDir}
 )
 
@@ -31,7 +32,7 @@ set(sph_sources
 
 target_sources(
 	sph
-	INTERFACE ${sph_headers}
+	PUBLIC ${sph_headers}
 	PRIVATE ${sph_sources}
 )
 

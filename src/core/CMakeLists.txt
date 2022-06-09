@@ -6,7 +6,6 @@ message(STATUS "==== Configuring Core Components ====")
 
 set (core_message "[core]")
 message(STATUS "${core_message} Generating API version header...")
-
 configure_file(
 	ApiVersion.h.in ApiVersion.h
 	#	USE_SOURCE_PERMISSIONS ## This doesn't work in CMake <3.20
@@ -15,11 +14,13 @@ configure_file(
 
 add_library(core OBJECT)
 
+
 target_include_directories(
 	core
-	PUBLIC ${ProjectIncludeRoot}
-	PUBLIC ${NVIDIAJitifyPath}
-	PUBLIC ${NVIDIAMathDir}
+	PUBLIC $<BUILD_INTERFACE:${ProjectIncludeSource}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+	PUBLIC $<BUILD_INTERFACE:${ProjectIncludeGenerated}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+	PUBLIC $<BUILD_INTERFACE:${NVIDIAJitifyPath}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+	PUBLIC $<BUILD_INTERFACE:${NVIDIAMathDir}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
 target_link_libraries(
@@ -28,7 +29,7 @@ target_link_libraries(
 )
 
 set(core_headers
-	${CMAKE_CURRENT_SOURCE_DIR}/ApiVersion.h
+	${CMAKE_BINARY_DIR}/src/core/ApiVersion.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ManagedAllocator.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ManagedMemory.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/JitHelper.h
@@ -36,8 +37,8 @@ set(core_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuError.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuManager.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/chpf/particle_writer.hpp
-	${NVIDIAMathDir}/helper_math.cuh
 )
+
 
 set(core_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/DebugInfo.cpp
@@ -47,7 +48,7 @@ set(core_sources
 
 target_sources(
 	core
-	INTERFACE ${core_headers}
+	PUBLIC ${core_headers}
 	PRIVATE ${core_sources}
 )
 
@@ -55,4 +56,12 @@ set_target_properties(
 	core PROPERTIES 
 	POSITION_INDEPENDENT_CODE True
 	CXX_STANDARD ${CXXSTD_SUPPORTED}
+	PUBLIC_HEADER "${core_headers}"
 )
+
+install(
+	TARGETS core
+	PUBLIC_HEADER
+		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/core
+)
+

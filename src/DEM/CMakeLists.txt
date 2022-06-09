@@ -9,7 +9,8 @@ add_library(DEM OBJECT)
 target_include_directories(
 	DEM
 	PUBLIC ${NVIDIAJitifyPath}
-	PUBLIC ${ProjectIncludeRoot}
+	PUBLIC ${ProjectIncludeSource}
+	PUBLIC ${ProjectIncludeGenerated}
 	PUBLIC ${NVIDIAMathDir}
 )
 
@@ -17,6 +18,7 @@ target_link_libraries(
 	DEM
 	PUBLIC CUB::CUB
 )
+
 
 set(DEM_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/kT.h
@@ -27,19 +29,18 @@ set(DEM_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMModels.h
 	${CMAKE_CURRENT_SOURCE_DIR}/VariableTypes.h
 	${CMAKE_CURRENT_SOURCE_DIR}/Boundaries.h
-	${CMAKE_CURRENT_SOURCE_DIR}/HostSideHelpers.cpp
-	${NVIDIAMathDir}/helper_math.cuh
 )
 
 set(DEM_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/kT.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/dT.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/ApiSystem.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/HostSideHelpers.cpp
 )
 
 target_sources(
 	DEM
-	INTERFACE ${DEM_headers}
+	PUBLIC ${DEM_headers}
 	PRIVATE ${DEM_sources}
 )
 
@@ -47,5 +48,18 @@ set_target_properties(
 	DEM PROPERTIES
 	POSITION_INDEPENDENT_CODE True
 	CXX_STANDARD ${CXXSTD_SUPPORTED}
+	PUBLIC_HEADER "${DEM_headers}"
 )
+
+#foreach(header ${DEM_headers})
+#	set_target_properties(DEM PROPERTIES PUBLIC_HEADER ${header})
+#endforeach()
+
+install(
+	TARGETS DEM
+	PUBLIC_HEADER
+		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/DEM
+)
+
+
 

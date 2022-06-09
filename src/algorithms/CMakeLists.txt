@@ -12,7 +12,8 @@ add_library(algorithms OBJECT)
 
 target_include_directories(
 	algorithms	
-	PUBLIC ${ProjectIncludeRoot}
+	PUBLIC ${ProjectIncludeSource}
+	PUBLIC ${ProjectIncludeGenerated}
 	PUBLIC ${NVIDIAJitifyPath}
 	PUBLIC ${NVIDIAMathDir}
 )
@@ -30,7 +31,7 @@ set(algorithms_interface
 
 ### INTERNAL HEADERS ONLY (.h, .hpp, or .cuh) ###
 set(algorithms_headers
-	${NVIDIAMathDir}/helper_math.cuh
+	${NVIDIAMathDir}/nvmath/helper_math.cuh
 )
 
 set(algorithms_sources
@@ -43,8 +44,8 @@ set(algorithms_sources
 
 target_sources(
 	algorithms
-	INTERFACE ${algorithms_interface}
-	PRIVATE ${algorithms_headers}
+	PUBLIC ${algorithms_interface}
+	INTERFACE ${algorithms_headers}
 	PRIVATE ${algorithms_sources}
 )
 
@@ -62,5 +63,12 @@ set_target_properties(
 	algorithms PROPERTIES 
 	POSITION_INDEPENDENT_CODE True
 	CXX_STANDARD ${CXXSTD_SUPPORTED}
+	PUBLIC_HEADER "${algorithms_interface}"
 	CUDA_ARCHITECTURES "${virtual_architectures}"
+)
+
+install(
+	TARGETS algorithms
+	PUBLIC_HEADER
+		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/algorithms
 )

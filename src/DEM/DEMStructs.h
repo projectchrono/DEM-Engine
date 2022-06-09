@@ -11,7 +11,7 @@
 #include <core/utils/ManagedAllocator.hpp>
 #include <sstream>
 #include <exception>
-#include <helper_math.cuh>
+#include <nvmath/helper_math.cuh>
 
 namespace sgps {
 // Structs defined here will be used by some host classes in DEM.

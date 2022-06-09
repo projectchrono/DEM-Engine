@@ -5,7 +5,7 @@
 #include <cub/cub.cuh>
 // #include <thrust/sort.h>
 #include <core/utils/JitHelper.h>
-#include <helper_math.cuh>
+#include <nvmath/helper_math.cuh>
 
 #include <algorithms/DEMCubBasedSubroutines.h>
 #include <DEM/HostSideHelpers.cpp>
