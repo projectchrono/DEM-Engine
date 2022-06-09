@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 #include <core/utils/ManagedAllocator.hpp>
-#include <helper_math.cuh>
+#include <nvmath/helper_math.cuh>
 #include <core/utils/GpuManager.h>
 #include <cuda_runtime_api.h>
 #include <sph/datastruct.h>

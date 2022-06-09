@@ -41,6 +41,8 @@ find_path(
 
 set(NVIDIAMathDir ${CMAKE_CURRENT_LIST_DIR}/thirdparty/nvidia_helper_math)
 
+include(GNUInstallDirs)
+
 # ---------------------------------------------------------------------------- #
 # Global Configuration
 # ---------------------------------------------------------------------------- #
@@ -70,7 +72,8 @@ endif()
 cxx_std_autodetect()
 
 # Allow the use of #include <> for project headers (allowing cleaner better relative pathing)
-set(ProjectIncludeRoot "${CMAKE_CURRENT_SOURCE_DIR}/src" "${CMAKE_CURRENT_BINARY_DIR}/src")
+set(ProjectIncludeSource "${CMAKE_CURRENT_SOURCE_DIR}/src")
+set(ProjectIncludeGenerated "${CMAKE_BINARY_DIR}/src")
 
 # Global fix for CUDA language bug
 include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
@@ -103,12 +106,27 @@ get_target_property(DEM_INTERFACE DEM INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(SPH_INTERFACE sph INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(ALGORITHMS_INTERFACE algorithms INTERFACE_INCLUDE_DIRECTORIES)
 
+# All targets use the same include directories, so we can cheat and just export one of them
+target_include_directories(sbel_gpu_physics 
+	PUBLIC ${CORE_INTERFACE}
+)
+
 # Attach include directories to the top-level library target
 set_target_properties(sbel_gpu_physics
 	PROPERTIES
-	INTERFACE_INCLUDE_DIRECTORIES "${CORE_INTERFACE};${DEM_INTERFACE};${SPH_INTERFACE};${ALGORITHMS_INTERFACE}"
 	INTERFACE_LINK_LIBRARIES "CUDA::cudart;CUDA::nvrtc"
 	LINKER_LANGUAGE CUDA
+)
+
+install(
+	TARGETS sbel_gpu_physics EXPORT SGPS
+	LIBRARY
+		DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+install(
+	EXPORT SGPS 
+		DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SGPS/
 )
 	
 add_subdirectory(src/demo)

@@ -13,7 +13,7 @@
 #include <core/utils/ManagedAllocator.hpp>
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
-#include <helper_math.cuh>
+#include <nvmath/helper_math.cuh>
 #include <core/utils/GpuError.h>
 
 #include <DEM/DEMDefines.h>

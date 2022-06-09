@@ -11,7 +11,7 @@
 #include <DEM/dT.h>
 #include <DEM/kT.h>
 #include <DEM/HostSideHelpers.cpp>
-#include <helper_math.cuh>
+#include <nvmath/helper_math.cuh>
 #include <DEM/DEMDefines.h>
 
 #include <algorithms/DEMCubBasedSubroutines.h>

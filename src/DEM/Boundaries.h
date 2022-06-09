@@ -7,7 +7,7 @@
 #include <vector>
 #include <limits>
 
-#include <helper_math.cuh>
+#include <nvmath/helper_math.cuh>
 #include <DEM/DEMDefines.h>
 #include <DEM/DEMStructs.h>
 #include <core/utils/ManagedAllocator.hpp>

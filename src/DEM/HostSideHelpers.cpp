@@ -13,7 +13,7 @@
 #include <vector>
 #include <algorithm>
 #include <regex>
-#include <helper_math.cuh>
+#include <nvmath/helper_math.cuh>
 
 #include <DEM/DEMDefines.h>
 #include <DEM/DEMStructs.h>
