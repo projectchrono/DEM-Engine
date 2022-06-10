@@ -125,7 +125,7 @@ install(
 )
 
 install(
-	EXPORT SGPS 
+    EXPORT SGPS FILE sgps-config.cmake
 		DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SGPS/
 )
 	
