@@ -125,11 +125,12 @@ int main() {
     DEM_sim.SetClumpFamilies(family_code);
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
 
+    float step_size = 5e-6;
     DEM_sim.CenterCoordSys();
-    DEM_sim.SetTimeStepSize(5e-6);
+    DEM_sim.SetTimeStepSize(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEM_sim.SetCDUpdateFreq(20);
-    DEM_sim.SuggestExpandFactor(10.0, 5e-6 * 20);
+    DEM_sim.SuggestExpandFactor(10.0, step_size * 20);
     DEM_sim.SuggestExpandSafetyParam(1.5);
 
     DEM_sim.Initialize();
@@ -138,19 +139,29 @@ int main() {
     out_dir += "/DEMdemo_Sieve";
     create_directory(out_dir);
 
-    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < 400; i++) {
-        char filename[100];
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-        DEM_sim.WriteFileAsSpheres(std::string(filename));
-        std::cout << "Frame: " << i << std::endl;
+    float time_end = 20.0;
+    unsigned int fps = 20;
+    unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
-        DEM_sim.DoStepDynamicsSync(1.0 / 20.);
+    std::cout << "Output at " << fps << " FPS" << std::endl;
+    unsigned int currframe = 0;
+    unsigned int curr_step = 0;
+    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
+    for (double t = 0; t < (double)time_end; t += step_size, curr_step++) {
+        if (curr_step % out_steps == 0) {
+            std::cout << "Frame: " << currframe << std::endl;
+            char filename[100];
+            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
+            DEM_sim.WriteFileAsSpheres(std::string(filename));
+        }
+
+        DEM_sim.DoStepDynamics(step_size);
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
     std::cout << time_sec.count() << " seconds" << std::endl;
 
+    DEM_sim.ShowThreadCollaborationStats();
     std::cout << "DEMdemo_Sieve exiting..." << std::endl;
     // TODO: add end-game report APIs
     return 0;

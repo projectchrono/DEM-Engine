@@ -236,6 +236,14 @@ inline std::string pretty_format_bytes(size_t bytes) {
 // NOW DEFINING MACRO COMMANDS USED BY THE DEM MODULE
 // =============================================================================
 
+#define SGPS_DEM_PRINTF(...)                    \
+    {                                           \
+        if (verbosity > DEM_VERBOSITY::QUIET) { \
+            printf(__VA_ARGS__);                \
+            printf("\n");                       \
+        }                                       \
+    }
+
 #define SGPS_DEM_ERROR(...)                                      \
     {                                                            \
         if (verbosity >= DEM_VERBOSITY::ERROR) {                 \
@@ -377,10 +385,6 @@ struct DEMClumpTemplate {
     unsigned int mark;
     // Whether this is a big clump (not used; jitifiability is determined automatically)
     bool isBigClump = false;
-};
-
-struct DEMTracker {
-    size_t ownerID;
 };
 
 }  // namespace sgps

@@ -34,10 +34,10 @@ class DEMSolver {
     /// Set output detail level
     void SetVerbosity(DEM_VERBOSITY verbose) { verbosity = verbose; }
 
-    /// Instruct the dimension of the ``world'', as well as the origin point of this ``world''. On initialization, this
-    /// info will be used to figure out how to assign the num of voxels in each direction. If your ``useful'' domain is
+    /// Instruct the dimension of the `world', as well as the origin point of this `world'. On initialization, this
+    /// info will be used to figure out how to assign the num of voxels in each direction. If your `useful' domain is
     /// not box-shaped, then define a box that contains your domian. O is the coordinate of the left-bottom-front point
-    /// of your simulation ``world''.
+    /// of your simulation `world'.
     void InstructBoxDomainDimension(float x, float y, float z, float3 O = make_float3(0));
 
     /// Explicitly instruct the number of voxels (as 2^{x,y,z}) along each direction, as well as the smallest unit
@@ -139,6 +139,19 @@ class DEMSolver {
     std::shared_ptr<DEMMaterial> LoadMaterialType(float E, float nu, float CoR) {
         return LoadMaterialType(E, nu, CoR, 0.5, 0.01, -1.f);
     }
+
+    /// A struct to get or set tracked owner entities
+    struct DEMTracker {
+        // ownerID will be updated by dT on initialization
+        bodyID_t ownerID;
+        DEM_OWNER_TYPE type;
+        // A tracker tracks a owner loaded into the system via its respective loading method, so load_order registers
+        // the position of this object in the corresponding API-side array
+        size_t load_order;
+        // Methods to get info from this owner
+    };
+    /// Get position of a owner
+    float3 GetOwnerPosition(bodyID_t ownerID);
 
     /// Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial location
     /// means the location of the clumps' CoM coordinates in the global frame.
@@ -519,7 +532,7 @@ class DEMSolver {
     /// Figure out the unit length l and numbers of voxels along each direction, based on domain size X, Y, Z
     void figureOutNV();
     /// Set the default bin (for contact detection) size to be the same of the smallest sphere
-    void decideDefaultBinSize();
+    void decideBinSize();
     /// Transfer cached solver preferences/instructions to dT and kT.
     void transferSolverParams();
     /// Transfer (CPU-side) cached simulation data (about sim world) to the GPU-side. It is called automatically during

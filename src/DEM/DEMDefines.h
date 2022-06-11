@@ -25,8 +25,9 @@ namespace sgps {
     #define SGPS_GET_VAR_NAME(Variable) (#Variable)
 #endif
 
-#define SGPS_DEM_MAX_SPHERES_PER_BIN 32  ///< Can't be too large since one thread processes one bin
-#define SGPS_DEM_WAIT_GRANULARITY 1
+#ifndef SGPS_DEM_MAX_SPHERES_PER_BIN
+    #define SGPS_DEM_MAX_SPHERES_PER_BIN 32  ///< Can't be too large since one thread processes one bin
+#endif
 #ifndef SGPS_DEM_TINY_FLOAT
     #define SGPS_DEM_TINY_FLOAT 1e-12
 #endif
@@ -81,14 +82,15 @@ const objNormal_t DEM_ENTITY_NORMAL_OUTWARD = 1;
 const contact_t DEM_NOT_A_CONTACT = 0;
 const contact_t DEM_SPHERE_SPHERE_CONTACT = 1;
 const contact_t DEM_SPHERE_PLANE_CONTACT = 2;
+
 const notStupidBool_t DEM_DONT_PREVENT_CONTACT = 0;
 const notStupidBool_t DEM_PREVENT_CONTACT = 1;
 
 // This ID marks that this is a new contact, not present when we did contact detection last time
 // TODO: half max add half max... so stupid... Better way?? numeric_limit won't work...
-constexpr contactPairs_t DEM_NULL_MAPPING_PARTNER = ((size_t)1 << (sizeof(contactPairs_t) * SGPS_BITS_PER_BYTE - 1)) +
-                                                    ((size_t)1 << (sizeof(contactPairs_t) * SGPS_BITS_PER_BYTE - 1)) -
-                                                    1;
+constexpr contactPairs_t DEM_NULL_MAPPING_PARTNER =
+    ((size_t)1 << (sizeof(contactPairs_t) * SGPS_BITS_PER_BYTE - 1)) +
+    ((size_t)1 << (sizeof(contactPairs_t) * SGPS_BITS_PER_BYTE - 1) - 1);
 // Default (user) clump family number
 const unsigned int DEM_DEFAULT_CLUMP_FAMILY_NUM = 0;
 // Reserved (user) clump family number which is always used for fixities
@@ -121,6 +123,8 @@ enum DEM_VERBOSITY {
 };
 // Stepping method
 enum class DEM_TIME_INTEGRATOR { FORWARD_EULER, CENTERED_DIFFERENCE, EXTENDED_TAYLOR, CHUNG };
+// Owner types
+enum DEM_OWNER_TYPE { CLUMP, ANALYTICAL, MESH };
 
 // =============================================================================
 // NOW DEFINING SOME GPU-SIDE DATA STRUCTURES

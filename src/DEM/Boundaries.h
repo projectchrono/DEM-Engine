@@ -19,7 +19,7 @@ namespace sgps {
 /// External object type
 /// Note all of them are `shell', not solid objects. If you need a solid cylinder for example, then use one CYLINDER as
 /// the side plus 2 CIRCLE as the ends to emulate it. Please be sure to set OUTWARD CYLINDER normal in this case.
-enum class DEM_OBJ_COMPONENT { CLUMP, PLANE, SPHERE, PLATE, CIRCLE, CYLINDER, CYL_INF, CONE, CONE_INF, TRIANGLE };
+enum class DEM_OBJ_COMPONENT { PLANE, SPHERE, PLATE, CIRCLE, CYLINDER, CYL_INF, CONE, CONE_INF, TRIANGLE };
 /// Normal type: inward or outward?
 enum class DEM_OBJ_NORMAL { INWARD, OUTWARD };
 

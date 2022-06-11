@@ -243,23 +243,23 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     }
 }
 
-void DEMDynamicThread::populateManagedArrays(const std::vector<inertiaOffset_t>& input_clump_types,
-                                             const std::vector<float3>& input_clump_xyz,
-                                             const std::vector<float3>& input_clump_vel,
-                                             const std::vector<unsigned int>& input_clump_family,
-                                             const std::vector<float3>& input_ext_obj_xyz,
-                                             const std::vector<unsigned int>& input_ext_obj_family,
-                                             const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                                             const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
-                                             const std::vector<float>& clumps_mass_types,
-                                             const std::vector<float3>& clumps_moi_types,
-                                             const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                                             const std::vector<std::vector<float3>>& clumps_sp_location_types,
-                                             const std::vector<float>& mat_E,
-                                             const std::vector<float>& mat_nu,
-                                             const std::vector<float>& mat_CoR,
-                                             const std::vector<float>& mat_mu,
-                                             const std::vector<float>& mat_Crr) {
+void DEMDynamicThread::initManagedArrays(const std::vector<inertiaOffset_t>& input_clump_types,
+                                         const std::vector<float3>& input_clump_xyz,
+                                         const std::vector<float3>& input_clump_vel,
+                                         const std::vector<unsigned int>& input_clump_family,
+                                         const std::vector<float3>& input_ext_obj_xyz,
+                                         const std::vector<unsigned int>& input_ext_obj_family,
+                                         const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
+                                         const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
+                                         const std::vector<float>& clumps_mass_types,
+                                         const std::vector<float3>& clumps_moi_types,
+                                         const std::vector<std::vector<float>>& clumps_sp_radii_types,
+                                         const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                                         const std::vector<float>& mat_E,
+                                         const std::vector<float>& mat_nu,
+                                         const std::vector<float>& mat_CoR,
+                                         const std::vector<float>& mat_mu,
+                                         const std::vector<float>& mat_Crr) {
     // Get the info into the managed memory from the host side. Can this process be more efficient? Maybe, but it's
     // initialization anyway.
 
@@ -767,7 +767,7 @@ void DEMDynamicThread::workerThread() {
                 }
                 // dT got the produce, now mark its buffer to be no longer fresh
                 pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
-                pSchedSupport->stampLastUpdateOfDynamic = cycle;
+                pSchedSupport->stampLastUpdateOfDynamic = (pSchedSupport->currentStampOfDynamic).load();
 
                 // If this is a history-based run, then when contacts are received, we need to migrate the contact
                 // history info, to match the structure of the new contact array
@@ -792,6 +792,9 @@ void DEMDynamicThread::workerThread() {
                 pSchedSupport->dynamicDone = true;
             */
 
+            // Dynamic wrapped up one cycle
+            pSchedSupport->currentStampOfDynamic++;
+
             // If the kinematic is idle, give it the opportunity to get busy again
             if (!pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh) {
                 // Acquire lock and refresh the work order for the kinematic
@@ -804,12 +807,6 @@ void DEMDynamicThread::workerThread() {
                 // Signal the kinematic that it has data for a new work order
                 pSchedSupport->cv_KinematicCanProceed.notify_all();
             }
-
-            // std::cout << "dT Total contact pairs: " << granData->nContactPairs_buffer << std::endl;
-            // std::cout << "Dynamic side values. Cycle: " << cycle << std::endl;
-
-            // Dynamic wrapped up one cycle
-            pSchedSupport->currentStampOfDynamic++;
 
             // Check if we need to wait; i.e., if dynamic drifted too much into future, then we must wait a bit before
             // the next cycle begins

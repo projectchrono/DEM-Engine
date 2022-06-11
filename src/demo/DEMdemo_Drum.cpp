@@ -157,6 +157,7 @@ int main() {
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
     std::cout << time_sec.count() << " seconds" << std::endl;
+    ShowThreadCollaborationStats();
 
     std::cout << "DEMdemo_Drum exiting..." << std::endl;
     // TODO: add end-game report APIs

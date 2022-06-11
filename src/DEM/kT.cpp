@@ -116,26 +116,25 @@ void DEMKinematicThread::workerThread() {
                 if (kTShouldReset) {
                     break;
                 }
-
-                // Getting here means that new `work order' data has been provided
-                {
-                    // Acquire lock and get the work order
-                    std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
-                    unpackMyBuffer();
-                }
             }
+            // Getting here means that new `work order' data has been provided
+            {
+                // Acquire lock and get the work order
+                std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
+                unpackMyBuffer();
+            }
+            // Make it clear that the data for most recent work order has been used, in case there is interest in
+            // updating it
+            pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = false;
 
             // figure out the amount of shared mem
             // cudaDeviceGetAttribute.cudaDevAttrMaxSharedMemoryPerBlock
 
+            // kT's main task
             contactDetection(bin_occupation_kernels, contact_detection_kernels, history_kernels, granData, simParams,
                              solverFlags, verbosity, idGeometryA, idGeometryB, contactType, previous_idGeometryA,
                              previous_idGeometryB, previous_contactType, contactMapping, streamInfo.stream,
                              stateOfSolver_resources);
-
-            // Make it clear that the data for most recent work order has been used, in case there is interest in
-            // updating it
-            pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = false;
 
             {
                 // Acquire lock and supply the dynamic with fresh produce
@@ -353,13 +352,13 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     }
 }
 
-void DEMKinematicThread::populateManagedArrays(const std::vector<inertiaOffset_t>& input_clump_types,
-                                               const std::vector<unsigned int>& input_clump_family,
-                                               const std::vector<unsigned int>& input_ext_obj_family,
-                                               const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                                               const std::vector<float>& clumps_mass_types,
-                                               const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                                               const std::vector<std::vector<float3>>& clumps_sp_location_types) {
+void DEMKinematicThread::initManagedArrays(const std::vector<inertiaOffset_t>& input_clump_types,
+                                           const std::vector<unsigned int>& input_clump_family,
+                                           const std::vector<unsigned int>& input_ext_obj_family,
+                                           const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
+                                           const std::vector<float>& clumps_mass_types,
+                                           const std::vector<std::vector<float>>& clumps_sp_radii_types,
+                                           const std::vector<std::vector<float3>>& clumps_sp_location_types) {
     // Get the info into the managed memory from the host side. Can this process be more efficient? Maybe, but it's
     // initialization anyway.
 

@@ -237,13 +237,13 @@ class DEMKinematicThread {
                                unsigned int nMatTuples);
 
     // Data type TBD, should come from JITCed headers
-    void populateManagedArrays(const std::vector<inertiaOffset_t>& input_clump_types,
-                               const std::vector<unsigned int>& input_clump_family,
-                               const std::vector<unsigned int>& input_ext_obj_family,
-                               const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                               const std::vector<float>& clumps_mass_types,
-                               const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                               const std::vector<std::vector<float3>>& clumps_sp_location_types);
+    void initManagedArrays(const std::vector<inertiaOffset_t>& input_clump_types,
+                           const std::vector<unsigned int>& input_clump_family,
+                           const std::vector<unsigned int>& input_ext_obj_family,
+                           const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
+                           const std::vector<float>& clumps_mass_types,
+                           const std::vector<std::vector<float>>& clumps_sp_radii_types,
+                           const std::vector<std::vector<float3>>& clumps_sp_location_types);
 
     // Set SimParams items
     void setSimParams(unsigned char nvXp2,
