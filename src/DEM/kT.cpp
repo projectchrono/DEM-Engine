@@ -152,8 +152,9 @@ void DEMKinematicThread::workerThread() {
         // In case the dynamic is hanging in there...
         pSchedSupport->cv_DynamicCanProceed.notify_all();
 
-        // When getting here, kT has finished one user call (although perhaps not at the end of the user script).
-        userCallDone = true;
+        // When getting here, kT has finished one user call (although perhaps not at the end of the user script)
+        pPagerToMain->userCallDone = true;
+        pPagerToMain->cv_mainCanProceed.notify_all();
     }
 }
 
@@ -175,13 +176,7 @@ void DEMKinematicThread::breakWaitingStatus() {
     pSchedSupport->cv_KinematicCanProceed.notify_one();
 }
 
-bool DEMKinematicThread::isUserCallDone() const {
-    // return true if done, false if not
-    return userCallDone;
-}
-
 void DEMKinematicThread::resetUserCallStat() {
-    userCallDone = false;
     // Reset kT stats variables, making ready for next user call
     pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = false;
     kTShouldReset = false;

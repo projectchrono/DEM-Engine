@@ -30,6 +30,7 @@ class DEMSolverStateDataKT;
 
 class DEMKinematicThread {
   protected:
+    WorkerReportChannel* pPagerToMain;
     ThreadManager* pSchedSupport;
     GpuManager* pGpuDistributor;
 
@@ -52,9 +53,6 @@ class DEMKinematicThread {
     DEMSolverStateDataKT stateOfSolver_resources;
 
     size_t m_approx_bytes_used = 0;
-
-    // Set to true only when a user call is finished. Set to false otherwise.
-    bool userCallDone = false;
 
     // kT should break out of its inner loop and return to a state where it awaits a `start' call at the outer loop
     bool kTShouldReset = false;
@@ -168,8 +166,11 @@ class DEMKinematicThread {
     friend class DEMSolver;
     friend class DEMDynamicThread;
 
-    DEMKinematicThread(ThreadManager* pSchedSup, GpuManager* pGpuDist, DEMDynamicThread* dT)
-        : pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
+    DEMKinematicThread(WorkerReportChannel* pPager,
+                       ThreadManager* pSchedSup,
+                       GpuManager* pGpuDist,
+                       DEMDynamicThread* dT)
+        : pPagerToMain(pPager), pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
         GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
         GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataKT), cudaMemAttachGlobal));
 
@@ -179,6 +180,7 @@ class DEMKinematicThread {
         // My friend dT
         this->dT = dT;
 
+        pPagerToMain->userCallDone = false;
         pSchedSupport->kinematicShouldJoin = false;
         pSchedSupport->kinematicStarted = false;
 
@@ -215,9 +217,7 @@ class DEMKinematicThread {
     // It is called upon construction.
     void workerThread();
 
-    // Query the value of userCallDone
-    bool isUserCallDone() const;
-    // Reset userCallDone back to false
+    // Reset kT--dT interaction coordinator stats
     void resetUserCallStat();
     // Return the approximate RAM usage
     size_t estimateMemUsage() const;

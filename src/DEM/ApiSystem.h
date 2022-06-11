@@ -501,6 +501,8 @@ class DEMSolver {
     // The contact model is historyless, or not. It affects jitification.
     bool m_isHistoryless = false;
 
+    WorkerReportChannel* kTMain_InteractionManager;
+    WorkerReportChannel* dTMain_InteractionManager;
     GpuManager* dTkT_GpuManager;
     ThreadManager* dTkT_InteractionManager;
     DEMKinematicThread* kT;

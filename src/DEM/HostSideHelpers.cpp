@@ -5,7 +5,6 @@
 #ifndef SGPS_DEM_HOST_HELPERS
 #define SGPS_DEM_HOST_HELPERS
 
-#pragma once
 #include <iostream>
 #include <sstream>
 #include <list>

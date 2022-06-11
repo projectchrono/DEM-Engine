@@ -11,6 +11,9 @@
 #include <core/utils/ManagedAllocator.hpp>
 #include <sstream>
 #include <exception>
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
 #include <nvmath/helper_math.cuh>
 
 namespace sgps {
@@ -318,6 +321,16 @@ inline std::string pretty_format_bytes(size_t bytes) {
 // =============================================================================
 // NOW SOME HOST-SIDE SIMPLE STRUCTS USED BY THE DEM MODULE
 // =============================================================================
+
+// Manager of the collabortation between the main thread and worker threads
+class WorkerReportChannel {
+  public:
+    std::atomic<bool> userCallDone;
+    std::mutex mainCanProceed;
+    std::condition_variable cv_mainCanProceed;
+    WorkerReportChannel() noexcept { userCallDone = false; }
+    ~WorkerReportChannel() {}
+};
 
 struct SolverFlags {
     // Sort contact pair arrays before sending to kT

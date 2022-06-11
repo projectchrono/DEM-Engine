@@ -31,6 +31,7 @@ class DEMSolverStateDataDT;
 /// DynamicThread class
 class DEMDynamicThread {
   protected:
+    WorkerReportChannel* pPagerToMain;
     ThreadManager* pSchedSupport;
     GpuManager* pGpuDistributor;
 
@@ -182,9 +183,6 @@ class DEMDynamicThread {
     // Time elapsed in current simulation
     float timeElapsed = 0.f;
 
-    // Set to true only when a user call is finished. Set to false otherwise.
-    bool userCallDone = false;
-
     // If true, dT needs to re-process idA- and idB-related data arrays before collecting forces, as those arrays are
     // freshly obtained from kT.
     bool contactPairArr_isFresh = true;
@@ -218,8 +216,8 @@ class DEMDynamicThread {
     friend class DEMSolver;
     friend class DEMKinematicThread;
 
-    DEMDynamicThread(ThreadManager* pSchedSup, GpuManager* pGpuDist)
-        : pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
+    DEMDynamicThread(WorkerReportChannel* pPager, ThreadManager* pSchedSup, GpuManager* pGpuDist)
+        : pPagerToMain(pPager), pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
         GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
         GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataDT), cudaMemAttachGlobal));
 
@@ -228,6 +226,7 @@ class DEMDynamicThread {
         // Get a device/stream ID to use from the GPU Manager
         streamInfo = pGpuDistributor->getAvailableStream();
 
+        pPagerToMain->userCallDone = false;
         pSchedSupport->dynamicShouldJoin = false;
         pSchedSupport->dynamicStarted = false;
 
@@ -311,9 +310,7 @@ class DEMDynamicThread {
     // It is called upon construction.
     void workerThread();
 
-    // Query the value of userCallDone
-    bool isUserCallDone() const;
-    // Reset userCallDone back to false
+    // Reset kT--dT interaction coordinator stats
     void resetUserCallStat();
     // Return the approximate RAM usage
     size_t estimateMemUsage() const;

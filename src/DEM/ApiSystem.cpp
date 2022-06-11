@@ -19,19 +19,20 @@ namespace sgps {
 
 DEMSolver::DEMSolver(unsigned int nGPUs) {
     dTkT_InteractionManager = new ThreadManager();
-    // dTkT_InteractionManager->dynamicRequestedUpdateFrequency = m_updateFreq;
+    kTMain_InteractionManager = new WorkerReportChannel();
+    dTMain_InteractionManager = new WorkerReportChannel();
 
     dTkT_GpuManager = new GpuManager(nGPUs);
 
-    dT = new DEMDynamicThread(dTkT_InteractionManager, dTkT_GpuManager);
-    kT = new DEMKinematicThread(dTkT_InteractionManager, dTkT_GpuManager, dT);
-
-    // dT->setNDynamicCycles(nDynamicCycles);
+    dT = new DEMDynamicThread(dTMain_InteractionManager, dTkT_InteractionManager, dTkT_GpuManager);
+    kT = new DEMKinematicThread(kTMain_InteractionManager, dTkT_InteractionManager, dTkT_GpuManager, dT);
 }
 
 DEMSolver::~DEMSolver() {
     delete kT;
     delete dT;
+    delete kTMain_InteractionManager;
+    delete dTMain_InteractionManager;
     delete dTkT_InteractionManager;
     delete dTkT_GpuManager;
 }
@@ -310,6 +311,7 @@ void DEMSolver::ClearCache() {
     nOwnerClumps = 0;
     nExtObj = 0;
     nTriEntities = 0;
+    sys_initialized = false;
 
     cached_extern_objs.clear();
     m_anal_comp_pos.clear();
@@ -983,13 +985,15 @@ void DEMSolver::Initialize() {
 void DEMSolver::ResetWorkerThreads() {
     // The user won't be calling this when dT is working, so our only problem is that kT may be spinning in the inner
     // loop. So iet's release kT.
+    std::unique_lock<std::mutex> lock(kTMain_InteractionManager->mainCanProceed);
     kT->breakWaitingStatus();
-    while (!kT->isUserCallDone()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(SGPS_DEM_WAIT_GRANULARITY_MS));
+    while (!kTMain_InteractionManager->userCallDone) {
+        kTMain_InteractionManager->cv_mainCanProceed.wait(lock);
     }
+    // Reset to make ready for next user call, don't forget it
+    kTMain_InteractionManager->userCallDone = false;
 
-    // Finally, reset the thread stats and wait for potential new user calls. This includes setting userCallDone to
-    // false.
+    // Finally, reset the thread stats and wait for potential new user calls
     kT->resetUserCallStat();
     dT->resetUserCallStat();
 }
@@ -1023,13 +1027,13 @@ void DEMSolver::DoStepDynamics(double thisCallDuration) {
     kT->startThread();
 
     // Wait till dT is done
-    while (!dT->isUserCallDone()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(SGPS_DEM_WAIT_GRANULARITY_MS));
+    std::unique_lock<std::mutex> lock(dTMain_InteractionManager->mainCanProceed);
+    while (!dTMain_InteractionManager->userCallDone) {
+        dTMain_InteractionManager->cv_mainCanProceed.wait(lock);
     }
-
-    // Make dT ready for the next call. We don't do a `deep' reset using resetUserCallStat, since that's only used when
-    // kT and dT sync.
-    dT->userCallDone = false;
+    // Reset to make ready for next user call, don't forget it. We don't do a `deep' reset using resetUserCallStat,
+    // since that's only used when kT and dT sync.
+    dTMain_InteractionManager->userCallDone = false;
 }
 
 void DEMSolver::DoStepDynamicsSync(double thisCallDuration) {

@@ -828,8 +828,9 @@ void DEMDynamicThread::workerThread() {
             // due to that kinematicOwned_Cons2ProdBuffer_isFresh got set to true just before.
         }
 
-        // When getting here, dT has finished one user call (although perhaps not at the end of the user script).
-        userCallDone = true;
+        // When getting here, dT has finished one user call (although perhaps not at the end of the user script)
+        pPagerToMain->userCallDone = true;
+        pPagerToMain->cv_mainCanProceed.notify_all();
     }
 }
 
@@ -839,13 +840,7 @@ void DEMDynamicThread::startThread() {
     pSchedSupport->cv_DynamicStartLock.notify_one();
 }
 
-bool DEMDynamicThread::isUserCallDone() const {
-    // return true if done, false if not
-    return userCallDone;
-}
-
 void DEMDynamicThread::resetUserCallStat() {
-    userCallDone = false;
     // Reset last kT-side data receiving cycle time stamp.
     pSchedSupport->stampLastUpdateOfDynamic = -1;
     pSchedSupport->currentStampOfDynamic = 0;

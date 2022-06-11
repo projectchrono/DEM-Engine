@@ -26,7 +26,7 @@ namespace sgps {
 #endif
 
 #define SGPS_DEM_MAX_SPHERES_PER_BIN 32  ///< Can't be too large since one thread processes one bin
-#define SGPS_DEM_WAIT_GRANULARITY_MS 1
+#define SGPS_DEM_WAIT_GRANULARITY 1
 #ifndef SGPS_DEM_TINY_FLOAT
     #define SGPS_DEM_TINY_FLOAT 1e-12
 #endif
