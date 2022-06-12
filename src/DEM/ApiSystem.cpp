@@ -208,6 +208,10 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
 
 void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula) {}
 
+void DEMSolver::DisableFamilyOutput(unsigned int ID) {
+    m_no_output_families.insert(ID);
+}
+
 std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterialType(DEMMaterial& mat) {
     if (mat.CoR < SGPS_DEM_TINY_FLOAT) {
         SGPS_DEM_WARNING("Material type %u is set to have 0 restitution. Please make sure this is intentional.",
@@ -441,6 +445,7 @@ void DEMSolver::figureOutFamilyMasks() {
     // implementation-level numbers always start at 0)
     for (family_t i = 0; i < nDistinctFamilies; i++) {
         m_family_user_impl_map[unique_families.at(i)] = i;
+        m_family_impl_user_map[i] = unique_families.at(i);
     }
 
     // At this point, we know the size of the mask matrix, and we init it as all-allow
@@ -817,15 +822,41 @@ void DEMSolver::SetClumpFamilies(const std::vector<unsigned int>& code) {
     m_input_clump_family.insert(m_input_clump_family.end(), code.begin(), code.end());
 }
 
-void DEMSolver::WriteFileAsSpheres(const std::string& outfilename) const {
-    std::ofstream ptFile(outfilename, std::ios::out);  // std::ios::binary?
-    dT->WriteCsvAsSpheres(ptFile);
+void DEMSolver::WriteClumpFile(const std::string& outfilename) const {
+    if (m_clump_out_mode == DEM_OUTPUT_MODE::SPHERE) {
+        switch (m_out_format) {
+            case (DEM_OUTPUT_FORMAT::CHPF): {
+                std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
+                dT->writeChpfAsSpheres(ptFile);
+                break;
+            }
+            case (DEM_OUTPUT_FORMAT::CSV): {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeCsvAsSpheres(ptFile);
+                break;
+            }
+            case (DEM_OUTPUT_FORMAT::BINARY): {
+                std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
+                // TODO: Implement it
+                break;
+            }
+            default:
+                SGPS_DEM_ERROR("Clump output format is unknown. Please set it via SetOutputFormat.");
+        }
+    } else if (m_clump_out_mode == DEM_OUTPUT_MODE::CLUMP) {
+        // TODO: Implement it
+    } else {
+        SGPS_DEM_ERROR("Clump output mode is unknown. Please set it via SetClumpOutputMode.");
+    }
 }
 
 // This is generally used to pass individual instructions on how the solver should behave
 void DEMSolver::transferSolverParams() {
     kT->verbosity = verbosity;
     dT->verbosity = verbosity;
+
+    // I/O policies (only output content matters for worker threads)
+    dT->solverFlags.outputFlags = m_out_content;
 
     // Transfer historyless-ness
     kT->solverFlags.isHistoryless = m_isHistoryless;
@@ -865,9 +896,10 @@ void DEMSolver::initializeArrays() {
 
     // Now we can feed those GPU-side arrays with the cached API-level simulation info
     dT->initManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_input_clump_family,
-                          m_input_ext_obj_xyz, m_input_ext_obj_family, m_family_user_impl_map, m_template_sp_mat_ids,
-                          m_template_mass, m_template_moi, m_template_sp_radii, m_template_sp_relPos, m_E_proxy,
-                          m_nu_proxy, m_CoR_proxy, m_mu_proxy, m_Crr_proxy, m_tracked_objs);
+                          m_input_ext_obj_xyz, m_input_ext_obj_family, m_family_user_impl_map, m_family_impl_user_map,
+                          m_template_sp_mat_ids, m_template_mass, m_template_moi, m_template_sp_radii,
+                          m_template_sp_relPos, m_E_proxy, m_nu_proxy, m_CoR_proxy, m_mu_proxy, m_Crr_proxy,
+                          m_no_output_families, m_tracked_objs);
     kT->initManagedArrays(m_input_clump_types, m_input_clump_family, m_input_ext_obj_family, m_family_user_impl_map,
                           m_template_mass, m_template_sp_radii, m_template_sp_relPos);
 }

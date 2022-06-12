@@ -81,7 +81,7 @@ int main() {
     for (int i = 0; i < 100; i++) {
         char filename[100];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-        DEM_sim.WriteFileAsSpheres(std::string(filename));
+        DEM_sim.WriteClumpFile(std::string(filename));
         std::cout << "Frame: " << i << std::endl;
         // Seems that after user call, both thread are chilling, not responding; have to resolve it...
         // float KE = DEM_sim.GetTotalKineticEnergy();

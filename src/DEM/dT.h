@@ -7,7 +7,7 @@
 #include <mutex>
 #include <vector>
 #include <thread>
-// #include <set>
+#include <set>
 
 #include <core/ApiVersion.h>
 #include <core/utils/ManagedAllocator.hpp>
@@ -94,8 +94,9 @@ class DEMDynamicThread {
     std::vector<float3, ManagedAllocator<float3>> relPosNode3;
 
     // External object's components may need the following arrays to store some extra defining features of them. We
-    // assume there are usually not too many of them in a simulation. Relative position w.r.t. the owner. For example,
-    // the following 3 arrays may hold center points for plates, or tip positions for cones.
+    // assume there are usually not too many of them in a simulation.
+    // Relative position w.r.t. the owner. For example, the following 3 arrays may hold center points for plates, or tip
+    // positions for cones.
     std::vector<float, ManagedAllocator<float>> relPosEntityX;
     std::vector<float, ManagedAllocator<float>> relPosEntityY;
     std::vector<float, ManagedAllocator<float>> relPosEntityZ;
@@ -124,6 +125,9 @@ class DEMDynamicThread {
     // Clump's family identification code. Used in determining whether they can be contacts between two families, and
     // whether a family has prescribed motions.
     std::vector<family_t, ManagedAllocator<family_t>> familyID;
+
+    // The (impl-level) family IDs whose entities should not be outputted to files
+    std::vector<family_t, ManagedAllocator<family_t>> familiesNoOutput;
 
     // The voxel ID (split into 3 parts, representing XYZ location)
     std::vector<voxelID_t, ManagedAllocator<voxelID_t>> voxelID;
@@ -208,9 +212,9 @@ class DEMDynamicThread {
     std::vector<materialsOffset_t, ManagedAllocator<materialsOffset_t>> materialTupleOffset;
 
     // dT's copy of family map
-    // This maps like this: map.at(user family number) = (corresponding impl-level family number)
-    // TODO: Host side OK? And should this be given to wT? It should.
-    std::unordered_map<unsigned int, family_t> familyNumberMap;
+    // TODO: Host side OK? And should this be given to wT?
+    std::unordered_map<unsigned int, family_t> familyUserImplMap;
+    std::unordered_map<family_t, unsigned int> familyImplUserMap;
 
   public:
     friend class DEMSolver;
@@ -291,6 +295,7 @@ class DEMDynamicThread {
                            const std::vector<float3>& input_ext_obj_xyz,
                            const std::vector<unsigned int>& input_ext_obj_family,
                            const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
+                           const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
                            const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
                            const std::vector<float>& clumps_mass_types,
                            const std::vector<float3>& clumps_moi_types,
@@ -301,13 +306,15 @@ class DEMDynamicThread {
                            const std::vector<float>& mat_CoR,
                            const std::vector<float>& mat_mu,
                            const std::vector<float>& mat_Crr,
+                           const std::set<unsigned int>& no_output_families,
                            std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs);
 
     // Put sim data array pointers in place
     void packDataPointers();
     void packTransferPointers(DEMKinematicThread* kT);
 
-    void WriteCsvAsSpheres(std::ofstream& ptFile) const;
+    void writeChpfAsSpheres(std::ofstream& ptFile) const;
+    void writeCsvAsSpheres(std::ofstream& ptFile) const;
 
     // Called each time when the user calls DoStepDynamicsSync.
     void startThread();
@@ -336,10 +343,10 @@ class DEMDynamicThread {
     // Migrate contact history to fit the structure of the newly received contact array
     inline void migrateContactHistory();
 
-    // update clump-based acceleration array based on sphere-based force array
+    // Update clump-based acceleration array based on sphere-based force array
     inline void calculateForces();
 
-    // update clump pos/oriQ and vel/omega based on acceleration
+    // Update clump pos/oriQ and vel/omega based on acceleration
     inline void integrateClumpMotions();
 
     // Some per-step checks/modification, done before integration, but after force calculation (thus sort of in the

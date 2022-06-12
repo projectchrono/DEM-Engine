@@ -152,7 +152,7 @@ int main() {
             std::cout << "Frame: " << currframe << std::endl;
             char filename[100];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-            DEM_sim.WriteFileAsSpheres(std::string(filename));
+            DEM_sim.WriteClumpFile(std::string(filename));
         }
 
         DEM_sim.DoStepDynamics(step_size);

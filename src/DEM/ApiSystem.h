@@ -172,6 +172,9 @@ class DEMSolver {
     /// that family).
     void DisableContactBetweenFamilies(unsigned int ID1, unsigned int ID2);
 
+    /// Prevent entites associated with this family to be outputted to files
+    void DisableFamilyOutput(unsigned int ID);
+
     /// Mark all entities in this family to be fixed
     void SetFamilyFixed(unsigned int ID);
     ///
@@ -230,10 +233,8 @@ class DEMSolver {
     /// Return the kinetic energy of all clumps in a set of families
     // TODO: float GetTotalKineticEnergy(std::vector<unsigned int> families) const;
 
-    /// Write current simulation status to a file
-    /// Write overlapping spheres, not clumps. It makes the file larger, but less trouble to visualize. Use for test
-    /// purposes only.
-    void WriteFileAsSpheres(const std::string& outfilename) const;
+    /// Write the current status of clumps to a file
+    void WriteClumpFile(const std::string& outfilename) const;
 
     /// Intialize the simulation system
     void Initialize();
@@ -269,6 +270,15 @@ class DEMSolver {
         DEMSolver() : m_sys(nullptr) {}
         DEMSolver_impl* m_sys;
     */
+
+    /// Choose between outputting particles as individual component spheres (results in larger files but less
+    /// post-processing), or as owner clumps (e.g. xyz location means clump CoM locations, etc.), by
+    /// DEM_OUTPUT_MODE::SPHERE and DEM_OUTPUT_MODE::CLUMP options
+    void SetClumpOutputMode(DEM_OUTPUT_MODE mode) { m_clump_out_mode = mode; }
+    /// Choose output format
+    void SetOutputFormat(DEM_OUTPUT_FORMAT format) { m_out_format = format; }
+    /// Specify the information that needs to go into the output files
+    void SetOutputContent(DEM_OUTPUT_CONTENT content) { m_out_content = content; }
 
   private:
     // A number of behavior-related variables
@@ -355,6 +365,11 @@ class DEMSolver {
     std::set<float3> m_clumps_sp_location_types;
     std::vector<std::vector<distinctSphereRelativePositions_default_t>> m_clumps_sp_location_type_offset;
     */
+
+    // I/O related flags
+    DEM_OUTPUT_MODE m_clump_out_mode = DEM_OUTPUT_MODE::SPHERE;
+    DEM_OUTPUT_FORMAT m_out_format = DEM_OUTPUT_FORMAT::CHPF;
+    DEM_OUTPUT_CONTENT m_out_content = DEM_OUTPUT_CONTENT::ABSV;
 
     // ``World'' size along X dir (user-defined)
     float m_boxX = 0.f;
@@ -469,6 +484,11 @@ class DEMSolver {
     // Host-side mapping array that maps like this: map.at(user family number) = (corresponding impl-level family
     // number)
     std::unordered_map<unsigned int, family_t> m_family_user_impl_map;
+    // Host-side mapping array that maps like this: map.at(impl-level family number) = (corresponding user family
+    // number)
+    std::unordered_map<family_t, unsigned int> m_family_impl_user_map;
+    // The familes that should not be outputted
+    std::set<unsigned int> m_no_output_families;
     // TODO: fixed particles should automatically attain status indicating they don't interact with each other.
 
     // Unlike clumps, external objects do not have _types (each is its own type)
@@ -574,13 +594,14 @@ class DEMSolver {
 // A struct to get or set tracked owner entities, mainly for co-simulation
 class DEMTracker {
   private:
+    // Its parent DEMSolver system
     const DEMSolver* sys;
-    // The tracked object
 
   public:
     DEMTracker(DEMSolver* sim_sys) : sys(sim_sys) {}
     ~DEMTracker() {}
 
+    // The tracked object
     std::shared_ptr<DEMTrackedObj> obj;
     // Methods to get info from this owner
     float3 Pos() { return sys->GetOwnerPosition(obj->ownerID); }

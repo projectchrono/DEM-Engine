@@ -351,6 +351,8 @@ struct SolverFlags {
     bool isAsync = true;
     // If family number can potentially change (at each time step) during the simulation, because of user intervention
     bool canFamilyChange = false;
+    // Some output-related flags
+    DEM_OUTPUT_CONTENT outputFlags = DEM_OUTPUT_CONTENT::ABSV;
 };
 
 struct DEMMaterial {

@@ -17,6 +17,9 @@ using namespace std::filesystem;
 int main() {
     DEMSolver DEM_sim;
     DEM_sim.SetVerbosity(INFO);
+    DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
+    // Output family numbers (used to identify the centrifuging effect)
+    DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::FAMILY);
 
     srand(42);
 
@@ -43,13 +46,16 @@ int main() {
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
     // Then randomly create some clump templates for filling the drum
     for (int i = 0; i < num_template; i++) {
+        // A rather large multiplier is added to masses, so that centrifuging takes effect
+        float mult = 5 * (i + 1);
+
         // first decide the number of spheres that live in this clump
         int num_sphere = rand() % (max_sphere - min_sphere + 1) + 1;
 
         // then allocate the clump template definition arrays (all in SI)
-        float mass = 0.1 * (float)num_sphere;
+        float mass = 0.1 * (float)num_sphere * mult;
         float3 MOI =
-            make_float3(2e-5 * (float)num_sphere, 1.5e-5 * (float)num_sphere, 1.8e-5 * (float)num_sphere) * 50.;
+            make_float3(2e-5 * (float)num_sphere, 1.5e-5 * (float)num_sphere, 1.8e-5 * (float)num_sphere) * 50. * mult;
         std::vector<float> radii;
         std::vector<float3> relPos;
         std::vector<std::shared_ptr<DEMMaterial>> mat;
@@ -103,10 +109,10 @@ int main() {
 
     // Add drum
     auto Drum = DEM_sim.AddClumpTracked(Drum_template, make_float3(0));
-    // Drum is family 1
-    family_code.push_back(1);
+    // Drum is family 10
+    family_code.push_back(10);
     // The drum rotates (facing X direction)
-    DEM_sim.SetFamilyPrescribedAngVel(1, "6.0", "0", "0");
+    DEM_sim.SetFamilyPrescribedAngVel(10, "6.0", "0", "0");
 
     // Then add top and bottom planes to `close up' the drum
     float safe_delta = 0.03;
@@ -121,10 +127,11 @@ int main() {
         DEMBoxGridSampler(sample_center, make_float3(sample_halfheight, sample_halfwidth, sample_halfwidth), 0.025);
     input_xyz.insert(input_xyz.end(), input_material_xyz.begin(), input_material_xyz.end());
     unsigned int num_clumps = input_material_xyz.size();
-    family_code.insert(family_code.end(), num_clumps, 0);
     // Casually select from generated clump types
     for (unsigned int i = 0; i < num_clumps; i++) {
         input_template_type.push_back(clump_types.at(i % num_template));
+        // Every clump types gets a different family number
+        family_code.push_back(i % num_template);
     }
 
     // Finally, input to system
@@ -160,7 +167,7 @@ int main() {
             std::cout << "Frame: " << currframe << std::endl;
             char filename[100];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            DEM_sim.WriteFileAsSpheres(std::string(filename));
+            DEM_sim.WriteClumpFile(std::string(filename));
             currframe++;
         }
 

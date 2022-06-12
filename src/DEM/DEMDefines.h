@@ -128,6 +128,12 @@ enum DEM_VERBOSITY {
 enum class DEM_TIME_INTEGRATOR { FORWARD_EULER, CENTERED_DIFFERENCE, EXTENDED_TAYLOR, CHUNG };
 // Owner types
 enum DEM_OWNER_TYPE { CLUMP, ANALYTICAL, MESH };
+// Output particles as individual (component) spheres, or as owner clumps (clump CoMs for location, as an example)?
+enum class DEM_OUTPUT_MODE { SPHERE, CLUMP };
+// Format of the output files
+enum class DEM_OUTPUT_FORMAT { CSV, BINARY, CHPF };
+// The info that should be present in the output files
+enum DEM_OUTPUT_CONTENT { ABSV = 1, VEL = 2, ANG_VEL = 4, FORCE = 8, FAMILY = 16 };
 
 // =============================================================================
 // NOW DEFINING SOME GPU-SIDE DATA STRUCTURES
