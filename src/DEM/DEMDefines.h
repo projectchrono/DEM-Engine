@@ -91,6 +91,9 @@ const notStupidBool_t DEM_PREVENT_CONTACT = 1;
 constexpr contactPairs_t DEM_NULL_MAPPING_PARTNER =
     ((size_t)1 << (sizeof(contactPairs_t) * SGPS_BITS_PER_BYTE - 1)) +
     ((size_t)1 << (sizeof(contactPairs_t) * SGPS_BITS_PER_BYTE - 1) - 1);
+// Reserved bodyID
+constexpr bodyID_t DEM_NULL_BODYID = ((size_t)1 << (sizeof(bodyID_t) * SGPS_BITS_PER_BYTE - 1)) +
+                                     ((size_t)1 << (sizeof(bodyID_t) * SGPS_BITS_PER_BYTE - 1) - 1);
 // Default (user) clump family number
 const unsigned int DEM_DEFAULT_CLUMP_FAMILY_NUM = 0;
 // Reserved (user) clump family number which is always used for fixities

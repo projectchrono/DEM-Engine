@@ -34,11 +34,10 @@ int main() {
     float sphPos = 1.2f;
     input_xyz.push_back(make_float3(-sphPos, 0, 0));
     input_xyz.push_back(make_float3(sphPos, 0, 0));
-    DEM_sim.AddClumps(input_clump_type, input_xyz);
-
     input_vel.push_back(make_float3(1.f, 0, 0));
     input_vel.push_back(make_float3(-1.f, 0, 0));
-    DEM_sim.SetClumpVels(input_vel);
+
+    DEM_sim.AddClumps(input_clump_type, input_xyz, input_vel);
 
     DEM_sim.AddBCPlane(make_float3(0, 0, -1.25), make_float3(0, 0, 1), mat_type_1);
 

@@ -25,6 +25,7 @@ namespace sgps {
 // class DEMKinematicThread;
 // class DEMDynamicThread;
 // class ThreadManager;
+class DEMTracker;
 
 class DEMSolver {
   public:
@@ -140,31 +141,26 @@ class DEMSolver {
         return LoadMaterialType(E, nu, CoR, 0.5, 0.01, -1.f);
     }
 
-    /// A struct to get or set tracked owner entities
-    struct DEMTracker {
-        // ownerID will be updated by dT on initialization
-        bodyID_t ownerID;
-        DEM_OWNER_TYPE type;
-        // A tracker tracks a owner loaded into the system via its respective loading method, so load_order registers
-        // the position of this object in the corresponding API-side array
-        size_t load_order;
-        // Methods to get info from this owner
-    };
     /// Get position of a owner
-    float3 GetOwnerPosition(bodyID_t ownerID);
+    float3 GetOwnerPosition(bodyID_t ownerID) const;
+    /// Get angular velocity of a owner
+    float3 GetOwnerAngVel(bodyID_t ownerID) const;
 
     /// Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial location
-    /// means the location of the clumps' CoM coordinates in the global frame.
-    void AddClumps(const std::vector<unsigned int>& types, const std::vector<float3>& xyz);
-    void AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& types, const std::vector<float3>& xyz);
+    /// means the location of the clumps' CoM coordinates in the global frame. If velocties are not given then they are
+    /// assumed 0.
+    void AddClumps(const std::vector<unsigned int>& types,
+                   const std::vector<float3>& xyz,
+                   const std::vector<float3>& vel = std::vector<float3>());
+    void AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& types,
+                   const std::vector<float3>& xyz,
+                   const std::vector<float3>& vel = std::vector<float3>());
 
     /// Load a clump into the system, and return a tracker object to the user, so that the user can apply direct
     /// control/modification/quarry to this clump (while dT is hanging)
-    std::shared_ptr<DEMTracker> AddClumpTracked(const std::shared_ptr<DEMClumpTemplate>& type, float3 xyz);
-
-    /// Load input clump initial velocities on a per-body basis. If this is not called (or if this vector is shorter
-    /// than the clump location vector, then for the unassigned part) the initial velocity is assumed to be 0.
-    void SetClumpVels(const std::vector<float3>& vel);
+    std::shared_ptr<DEMTracker> AddClumpTracked(const std::shared_ptr<DEMClumpTemplate>& type,
+                                                float3 xyz,
+                                                float3 vel = make_float3(0));
 
     /// Instruct each clump the type of prescribed motion it should follow. If this is not called (or if this vector is
     /// shorter than the clump location vector, then for the unassigned part) those clumps are defaulted to type 0,
@@ -229,9 +225,6 @@ class DEMSolver {
     /// Remove host-side cached vectors (so you can re-define them, and then re-initialize system)
     void ClearCache();
 
-    /// Return the voxel ID of a clump by its numbering
-    voxelID_t GetClumpVoxelID(unsigned int i) const;
-
     /// Return total kinetic energy of all clumps
     float GetTotalKineticEnergy() const;
     /// Return the kinetic energy of all clumps in a set of families
@@ -259,11 +252,17 @@ class DEMSolver {
 
     /// Reset kT and dT back to a status like when the simulation system is constructed. In general the user does not
     /// need to call it, unless they want to run another test without re-constructing the entire DEM simulation system.
+    /// Also note this call does not reset the collaboration log between kT and dT.
     void ResetWorkerThreads();
 
     /// Show the collaboration stats between dT and kT. This is more useful for tweaking the number of time steps that
     /// dT should be allowed to be in advance of kT.
     void ShowThreadCollaborationStats();
+
+    /// Reset the collaboration stats between dT and kT back to the initial value (0). You should call this if you want
+    /// to start over and re-inspect the stats of the new run; otherwise, it is generally not needed, you can go ahead
+    /// and destroy DEMSolver.
+    void ClearThreadCollaborationStats();
 
     /*
       protected:
@@ -507,6 +506,10 @@ class DEMSolver {
     // Processed unique family prescription info
     std::vector<familyPrescription_t> m_unique_family_prescription;
 
+    // Cached tracked objects that can be leveraged by the user to assume explicit control over some simulation objects
+    std::vector<std::shared_ptr<DEMTrackedObj>> m_tracked_objs;
+    // std::vector<std::shared_ptr<DEMTracker>> m_trackers;
+
     // The number of dT steps before it waits for a kT update. The default value 0 means every dT step will wait for a
     // newly produced contact-pair info (from kT) before proceeding.
     int m_updateFreq = 0;
@@ -566,6 +569,22 @@ class DEMSolver {
     inline void equipFamilyPrescribedMotions(std::unordered_map<std::string, std::string>& strMap);
     inline void equipFamilyOnFlyChanges(std::unordered_map<std::string, std::string>& strMap);
     inline void equipForceModel(std::unordered_map<std::string, std::string>& strMap);
+};
+
+// A struct to get or set tracked owner entities, mainly for co-simulation
+class DEMTracker {
+  private:
+    const DEMSolver* sys;
+    // The tracked object
+
+  public:
+    DEMTracker(DEMSolver* sim_sys) : sys(sim_sys) {}
+    ~DEMTracker() {}
+
+    std::shared_ptr<DEMTrackedObj> obj;
+    // Methods to get info from this owner
+    float3 Pos() { return sys->GetOwnerPosition(obj->ownerID); }
+    float3 AngVel() { return sys->GetOwnerAngVel(obj->ownerID); }
 };
 
 }  // namespace sgps

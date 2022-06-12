@@ -56,17 +56,17 @@ int main() {
     family_code.push_back(0);
     input_vel.push_back(make_float3(0, 0, 0));
 
-    DEM_sim.AddClumps(input_template_type, input_xyz);
+    DEM_sim.AddClumps(input_template_type, input_xyz, input_vel);
     DEM_sim.SetClumpFamilies(family_code);
-    DEM_sim.SetClumpVels(input_vel);
     // Family 1 (ground) particles have no contact among each other, and fixed
     DEM_sim.DisableContactBetweenFamilies(1, 1);
     DEM_sim.SetFamilyFixed(1);
 
     DEM_sim.InstructBoxDomainNumVoxel(22, 22, 20, 7.5e-11);
 
+    float step_size = 1e-5;
     DEM_sim.CenterCoordSys();
-    DEM_sim.SetTimeStepSize(1e-5);
+    DEM_sim.SetTimeStepSize(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEM_sim.SetCDUpdateFreq(0);
     // DEM_sim.SetCDUpdateFreq(10);

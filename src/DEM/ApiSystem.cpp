@@ -37,6 +37,14 @@ DEMSolver::~DEMSolver() {
     delete dTkT_GpuManager;
 }
 
+float3 DEMSolver::GetOwnerPosition(bodyID_t ownerID) const {
+    return dT->getOwnerPosition(ownerID);
+}
+
+float3 DEMSolver::GetOwnerAngVel(bodyID_t ownerID) const {
+    return dT->getOwnerAngVel(ownerID);
+}
+
 // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
 void DEMSolver::UseCompactForceKernel(bool use_compact) {
     // This method works only if kT sort contact arrays first
@@ -347,10 +355,9 @@ void DEMSolver::ClearCache() {
 
     m_input_family_prescription.clear();
     m_unique_family_prescription.clear();
-}
 
-voxelID_t DEMSolver::GetClumpVoxelID(unsigned int i) const {
-    return dT->voxelID.at(i);
+    m_tracked_objs.clear();
+    // m_trackers.clear();
 }
 
 float DEMSolver::GetTotalKineticEnergy() const {
@@ -735,10 +742,13 @@ void DEMSolver::generateJITResources() {
     reportInitStats();
 }
 
-void DEMSolver::AddClumps(const std::vector<unsigned int>& type_marks, const std::vector<float3>& xyz) {
+void DEMSolver::AddClumps(const std::vector<unsigned int>& type_marks,
+                          const std::vector<float3>& xyz,
+                          const std::vector<float3>& vel) {
     if (type_marks.size() != xyz.size()) {
         SGPS_DEM_ERROR("Arrays in the call AddClumps must all have the same length.");
     }
+
     size_t num_old = m_input_clump_types.size();
     size_t num_new = type_marks.size();
     m_input_clump_types.resize(num_old + num_new);
@@ -747,20 +757,52 @@ void DEMSolver::AddClumps(const std::vector<unsigned int>& type_marks, const std
     }
     // clump_xyz are the xyz of the CoM
     m_input_clump_xyz.insert(m_input_clump_xyz.end(), xyz.begin(), xyz.end());
+
+    // Now set velocity
+    std::vector<float3> input_vel(vel);
+    if (type_marks.size() != input_vel.size()) {
+        SGPS_DEM_WARNING(
+            "Velocity and/or angular velocity array in the call AddClumps has a different length than position array, "
+            "and is resized (with 0-velocity fillers) to match the length.");
+        input_vel.resize(xyz.size(), make_float3(0));
+    }
+    m_input_clump_vel.insert(m_input_clump_vel.end(), input_vel.begin(), input_vel.end());
 }
 
-void DEMSolver::AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& types, const std::vector<float3>& xyz) {
+void DEMSolver::AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& types,
+                          const std::vector<float3>& xyz,
+                          const std::vector<float3>& vel) {
     // We don't load shared ptr to cache arrays, it's too large; besides, by this time the clump template must have been
     // loaded, so storing its offset in the template cache array is fine.
     std::vector<unsigned int> type_marks(types.size());
     for (size_t i = 0; i < types.size(); i++) {
         type_marks.at(i) = types.at(i)->mark;
     }
-    AddClumps(type_marks, xyz);
+    AddClumps(type_marks, xyz, vel);
 }
 
-void DEMSolver::SetClumpVels(const std::vector<float3>& vel) {
-    m_input_clump_vel.insert(m_input_clump_vel.end(), vel.begin(), vel.end());
+std::shared_ptr<DEMTracker> DEMSolver::AddClumpTracked(const std::shared_ptr<DEMClumpTemplate>& type,
+                                                       float3 xyz,
+                                                       float3 vel) {
+    size_t tracked_location = m_input_clump_types.size();
+
+    // Register this object, and dT needs it to figure out its impl-level owner ID
+    DEMTrackedObj tracked_obj;
+    tracked_obj.load_order = tracked_location;
+    tracked_obj.type = DEM_OWNER_TYPE::CLUMP;
+    std::shared_ptr<DEMTrackedObj> obj = std::make_shared<DEMTrackedObj>(std::move(tracked_obj));
+    m_tracked_objs.push_back(obj);
+
+    // Also instantiate a API-level tracker for the ease of usage
+    DEMTracker tracker(this);
+    tracker.obj = obj;
+    // m_trackers.push_back(std::make_shared<DEMTracker>(std::move(tracker)));
+
+    AddClumps(std::vector<std::shared_ptr<DEMClumpTemplate>>(1, type), std::vector<float3>(1, xyz),
+              std::vector<float3>(1, vel));
+
+    // return m_trackers.back();
+    return std::make_shared<DEMTracker>(std::move(tracker));
 }
 
 void DEMSolver::SetClumpFamilies(const std::vector<unsigned int>& code) {
@@ -825,7 +867,7 @@ void DEMSolver::initializeArrays() {
     dT->initManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_input_clump_family,
                           m_input_ext_obj_xyz, m_input_ext_obj_family, m_family_user_impl_map, m_template_sp_mat_ids,
                           m_template_mass, m_template_moi, m_template_sp_radii, m_template_sp_relPos, m_E_proxy,
-                          m_nu_proxy, m_CoR_proxy, m_mu_proxy, m_Crr_proxy);
+                          m_nu_proxy, m_CoR_proxy, m_mu_proxy, m_Crr_proxy, m_tracked_objs);
     kT->initManagedArrays(m_input_clump_types, m_input_clump_family, m_input_ext_obj_family, m_family_user_impl_map,
                           m_template_mass, m_template_sp_radii, m_template_sp_relPos);
 }
@@ -841,7 +883,11 @@ void DEMSolver::packDataPointers() {
 
 void DEMSolver::validateUserInputs() {
     // First match the length of input clump arrays, for those input arrays that we don't force the user to specify
-    m_input_clump_vel.resize(m_input_clump_xyz.size(), make_float3(0));
+    if (m_input_clump_vel.size() != m_input_clump_xyz.size()) {
+        SGPS_DEM_ERROR(
+            "I do not know what happened, but the clumps position initialization array has a length mismatch with the "
+            "velocity array.");
+    }
     if (m_input_clump_family.size() < m_input_clump_xyz.size()) {
         SGPS_DEM_WARNING("Some clumps do not have their family numbers specified, so defaulted to %u",
                          DEM_DEFAULT_CLUMP_FAMILY_NUM);
@@ -933,6 +979,11 @@ void DEMSolver::postJITResourceGenSanityCheck() {
             "is %zu.\nYou can try to make bins larger via InstructBinSize, or redefine binID_t and recompile.",
             m_num_bins, std::numeric_limits<binID_t>::max());
     }
+
+    // Debug outputs
+    SGPS_DEM_DEBUG_EXEC(printf("These owners are tracked: ");
+                        for (const auto& tracked
+                             : m_tracked_objs) { printf("%zu, ", tracked->ownerID); } printf("\n"););
 }
 
 void DEMSolver::jitifyKernels() {
@@ -1056,6 +1107,13 @@ void DEMSolver::ShowThreadCollaborationStats() {
                     (dTkT_InteractionManager->schedulingStats.nTimesDynamicHeldBack).load());
     SGPS_DEM_PRINTF("Number of times kinematic held back: %u",
                     (dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack).load());
+}
+
+void DEMSolver::ClearThreadCollaborationStats() {
+    dTkT_InteractionManager->schedulingStats.nDynamicUpdates = 0;
+    dTkT_InteractionManager->schedulingStats.nKinematicUpdates = 0;
+    dTkT_InteractionManager->schedulingStats.nTimesDynamicHeldBack = 0;
+    dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack = 0;
 }
 
 inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::string>& strMap) {

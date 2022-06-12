@@ -92,7 +92,7 @@ int main() {
     float IXX = CylMass * CylRad * CylRad;
     float IYY = (CylMass / 12) * (3 * CylRad * CylRad + CylHeight * CylHeight);
     auto Drum_particles = DEMCylSurfSampler(CylCenter, CylAxis, CylRad, CylHeight, CylParticleRad);
-    auto Drum =
+    auto Drum_template =
         DEM_sim.LoadClumpType(CylMass, make_float3(IXX, IYY, IYY),
                               std::vector<float>(Drum_particles.size(), CylParticleRad), Drum_particles, mat_type_drum);
     std::cout << Drum_particles.size() << " spheres make up the rotating drum" << std::endl;
@@ -102,22 +102,21 @@ int main() {
     std::vector<unsigned int> family_code;
 
     // Add drum
-    input_template_type.push_back(Drum);
-    input_xyz.push_back(make_float3(0));
+    auto Drum = DEM_sim.AddClumpTracked(Drum_template, make_float3(0));
     // Drum is family 1
     family_code.push_back(1);
     // The drum rotates (facing X direction)
     DEM_sim.SetFamilyPrescribedAngVel(1, "6.0", "0", "0");
 
     // Then add top and bottom planes to `close up' the drum
-    float safe_delta = 0.05;
+    float safe_delta = 0.03;
     DEM_sim.AddBCPlane(make_float3(CylHeight / 2. - safe_delta, 0, 0), make_float3(-1, 0, 0), mat_type_drum);
     DEM_sim.AddBCPlane(make_float3(-CylHeight / 2. + safe_delta, 0, 0), make_float3(1, 0, 0), mat_type_drum);
 
     // Then sample some particles inside the drum
     float3 sample_center = make_float3(0, 0, 0);
-    float sample_halfheight = CylHeight / 2.0 - safe_delta;
-    float sample_halfwidth = CylRad / 1.6;
+    float sample_halfheight = CylHeight / 2.0 - 3.0 * safe_delta;
+    float sample_halfwidth = CylRad / 1.45;
     auto input_material_xyz =
         DEMBoxGridSampler(sample_center, make_float3(sample_halfheight, sample_halfwidth, sample_halfwidth), 0.025);
     input_xyz.insert(input_xyz.end(), input_material_xyz.begin(), input_material_xyz.end());
@@ -133,8 +132,9 @@ int main() {
     DEM_sim.SetClumpFamilies(family_code);
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 4e-11);
 
+    float step_size = 5e-6;
     DEM_sim.CenterCoordSys();
-    DEM_sim.SetTimeStepSize(5e-6);
+    DEM_sim.SetTimeStepSize(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEM_sim.SetCDUpdateFreq(20);
@@ -146,18 +146,39 @@ int main() {
     path out_dir = current_path();
     out_dir += "/DEMdemo_Drum";
     create_directory(out_dir);
+
+    float time_end = 10.0;
+    unsigned int fps = 20;
+    unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
+
+    std::cout << "Output at " << fps << " FPS" << std::endl;
+    unsigned int currframe = 0;
+    unsigned int curr_step = 0;
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < 200; i++) {
-        char filename[100];
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-        DEM_sim.WriteFileAsSpheres(std::string(filename));
-        std::cout << "Frame: " << i << std::endl;
-        DEM_sim.DoStepDynamicsSync(5e-2);
+    for (double t = 0; t < (double)time_end; t += step_size, curr_step++) {
+        if (curr_step % out_steps == 0) {
+            std::cout << "Frame: " << currframe << std::endl;
+            char filename[100];
+            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
+            DEM_sim.WriteFileAsSpheres(std::string(filename));
+            currframe++;
+        }
+
+        DEM_sim.DoStepDynamics(step_size);
+        // We can quarry info out of this drum, since it is tracked
+        float3 drum_pos = Drum->Pos();
+        float3 drum_angVel = Drum->AngVel();
+        // std::cout << "Position of the drum: " << drum_pos.x << ", " << drum_pos.y << ", " << drum_pos.z
+        //           << std::endl;
+        // std::cout << "Angular velocity of the drum: " << drum_angVel.x << ", " << drum_angVel.y << ", "
+        //           << drum_angVel.z << std::endl;
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
     std::cout << time_sec.count() << " seconds" << std::endl;
-    ShowThreadCollaborationStats();
+    DEM_sim.ShowThreadCollaborationStats();
+    DEM_sim.ResetWorkerThreads();
+    DEM_sim.ClearThreadCollaborationStats();
 
     std::cout << "DEMdemo_Drum exiting..." << std::endl;
     // TODO: add end-game report APIs

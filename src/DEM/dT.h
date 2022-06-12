@@ -264,6 +264,11 @@ class DEMDynamicThread {
     // Compute total KE of all clumps
     float getKineticEnergy();
 
+    // Get this owner's position in user unit
+    float3 getOwnerPosition(bodyID_t ownerID) const;
+    // Get this owner's angular velocity
+    float3 getOwnerAngVel(bodyID_t ownerID) const;
+
     // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
     void allocateManagedArrays(size_t nOwnerBodies,
                                size_t nOwnerClumps,
@@ -295,7 +300,8 @@ class DEMDynamicThread {
                            const std::vector<float>& mat_nu,
                            const std::vector<float>& mat_CoR,
                            const std::vector<float>& mat_mu,
-                           const std::vector<float>& mat_Crr);
+                           const std::vector<float>& mat_Crr,
+                           std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs);
 
     // Put sim data array pointers in place
     void packDataPointers();

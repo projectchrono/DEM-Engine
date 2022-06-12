@@ -5,8 +5,6 @@
 #ifndef SGPS_DEM_HOST_STRUCTS
 #define SGPS_DEM_HOST_STRUCTS
 
-#pragma once
-
 #include <DEM/DEMDefines.h>
 #include <core/utils/ManagedAllocator.hpp>
 #include <sstream>
@@ -385,6 +383,16 @@ struct DEMClumpTemplate {
     unsigned int mark;
     // Whether this is a big clump (not used; jitifiability is determined automatically)
     bool isBigClump = false;
+};
+
+// A struct to get or set tracked owner entities
+struct DEMTrackedObj {
+    // ownerID will be updated by dT on initialization
+    bodyID_t ownerID = DEM_NULL_BODYID;
+    DEM_OWNER_TYPE type;
+    // A tracker tracks a owner loaded into the system via its respective loading method, so load_order registers
+    // the position of this object in the corresponding API-side array
+    size_t load_order;
 };
 
 }  // namespace sgps

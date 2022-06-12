@@ -259,7 +259,8 @@ void DEMDynamicThread::initManagedArrays(const std::vector<inertiaOffset_t>& inp
                                          const std::vector<float>& mat_nu,
                                          const std::vector<float>& mat_CoR,
                                          const std::vector<float>& mat_mu,
-                                         const std::vector<float>& mat_Crr) {
+                                         const std::vector<float>& mat_Crr,
+                                         std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs) {
     // Get the info into the managed memory from the host side. Can this process be more efficient? Maybe, but it's
     // initialization anyway.
 
@@ -397,6 +398,22 @@ void DEMDynamicThread::initManagedArrays(const std::vector<inertiaOffset_t>& inp
     SGPS_DEM_DEBUG_PRINTF("Compare clumpComponentOffset and clumpComponentOffsetExt:");
     SGPS_DEM_DEBUG_EXEC(displayArray<clumpComponentOffset_t>(clumpComponentOffset.data(), simParams->nSpheresGM));
     SGPS_DEM_DEBUG_EXEC(displayArray<clumpComponentOffsetExt_t>(clumpComponentOffsetExt.data(), simParams->nSpheresGM));
+
+    // Provide feedback to the tracked objects, tell them the owner numbers they are looking for
+    // Little computation is needed, as long as we know the structure of our owner array: nOwnerClumps go first, then
+    // nExtObj
+    for (auto& tracked_obj : tracked_objs) {
+        switch (tracked_obj->type) {
+            case (DEM_OWNER_TYPE::CLUMP):
+                tracked_obj->ownerID = tracked_obj->load_order;
+                break;
+            case (DEM_OWNER_TYPE::ANALYTICAL):
+                tracked_obj->ownerID = tracked_obj->load_order + simParams->nOwnerClumps;
+                break;
+            default:
+                SGPS_DEM_ERROR("A DEM tracked object has an unknown type.");
+        }
+    }
 }
 
 void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
@@ -921,6 +938,29 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
             std::move(JitHelper::buildProgram("DEMQuarryKernels", JitHelper::KERNEL_DIR / "DEMQuarryKernels.cu", qSubs,
                                               {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
+}
+
+float3 DEMDynamicThread::getOwnerAngVel(bodyID_t ownerID) const {
+    float3 angVel;
+    angVel.x = omgBarX.at(ownerID);
+    angVel.y = omgBarY.at(ownerID);
+    angVel.z = omgBarZ.at(ownerID);
+    return angVel;
+}
+
+float3 DEMDynamicThread::getOwnerPosition(bodyID_t ownerID) const {
+    float3 pos;
+    double X, Y, Z;
+    voxelID_t voxel = voxelID.at(ownerID);
+    subVoxelPos_t subVoxX = locX.at(ownerID);
+    subVoxelPos_t subVoxY = locY.at(ownerID);
+    subVoxelPos_t subVoxZ = locZ.at(ownerID);
+    hostVoxelID2Position<double, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ, simParams->nvXp2,
+                                                           simParams->nvYp2, simParams->voxelSize, simParams->l);
+    pos.x = X + simParams->LBFX;
+    pos.y = Y + simParams->LBFY;
+    pos.z = Z + simParams->LBFZ;
+    return pos;
 }
 
 }  // namespace sgps
