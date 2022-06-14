@@ -433,7 +433,7 @@ void DEMDynamicThread::initManagedArrays(const std::vector<inertiaOffset_t>& inp
     }
 }
 
-void DEMDynamicThread::writeChpfAsSpheres(std::ofstream& ptFile) const {
+void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
     ParticleFormatWriter pw;
     // pw.write(ptFile, ParticleFormatWriter::CompressionType::NONE, mass);
     std::vector<float> posX(simParams->nSpheresGM);
@@ -501,16 +501,17 @@ void DEMDynamicThread::writeChpfAsSpheres(std::ofstream& ptFile) const {
     // Write family numbers
     if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
         families.resize(num_output_spheres);
-        pw.write(ptFile, ParticleFormatWriter::CompressionType::NONE, families);
+        // TODO: How to do that?
+        // pw.write(ptFile, ParticleFormatWriter::CompressionType::NONE, families);
     }
 }
 
-void DEMDynamicThread::writeCsvAsSpheres(std::ofstream& ptFile) const {
+void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
     std::ostringstream outstrstream;
 
-    outstrstream << "x,y,z,r";
+    outstrstream << "#x,#y,#z,r";
     if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ABSV) {
-        outstrstream << ",|v|";
+        outstrstream << ",absv";
     }
     if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::VEL) {
         outstrstream << ",v_x,v_y,v_z";
@@ -829,7 +830,7 @@ void DEMDynamicThread::workerThread() {
     {
         int totGPU;
         cudaGetDeviceCount(&totGPU);
-        SGPS_DEM_INFO("Number of total active devices: %d", totGPU);
+        SGPS_DEM_INFO("Number of total active devices: %d\n", totGPU);
     }
 
     while (!pSchedSupport->dynamicShouldJoin) {
@@ -1048,7 +1049,24 @@ float3 DEMDynamicThread::getOwnerAngVel(bodyID_t ownerID) const {
     return angVel;
 }
 
-float3 DEMDynamicThread::getOwnerPosition(bodyID_t ownerID) const {
+float4 DEMDynamicThread::getOwnerOriQ(bodyID_t ownerID) const {
+    float4 oriQ;
+    oriQ.x = oriQ0.at(ownerID);
+    oriQ.y = oriQ1.at(ownerID);
+    oriQ.z = oriQ2.at(ownerID);
+    oriQ.w = oriQ3.at(ownerID);
+    return oriQ;
+}
+
+float3 DEMDynamicThread::getOwnerVel(bodyID_t ownerID) const {
+    float3 vel;
+    vel.x = vX.at(ownerID);
+    vel.y = vY.at(ownerID);
+    vel.z = vZ.at(ownerID);
+    return vel;
+}
+
+float3 DEMDynamicThread::getOwnerPos(bodyID_t ownerID) const {
     float3 pos;
     double X, Y, Z;
     voxelID_t voxel = voxelID.at(ownerID);

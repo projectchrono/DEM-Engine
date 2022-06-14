@@ -27,6 +27,13 @@ namespace sgps {
 // class ThreadManager;
 class DEMTracker;
 
+//////////////////////////////////////////////////////////////
+// TODO LIST: 1. Check if anal obj's normal direction is correct, and if applyOriQ2Vec is correct
+//            2. AddClumps returns a batch object and allow it to be tracked
+//            3. Allow ext obj init CoM setting
+//            4. Mass/MOI can be too small? Need to scale
+//////////////////////////////////////////////////////////////
+
 class DEMSolver {
   public:
     DEMSolver(unsigned int nGPUs = 2);
@@ -145,6 +152,10 @@ class DEMSolver {
     float3 GetOwnerPosition(bodyID_t ownerID) const;
     /// Get angular velocity of a owner
     float3 GetOwnerAngVel(bodyID_t ownerID) const;
+    /// Get quaternion of a owner
+    float4 GetOwnerOriQ(bodyID_t ownerID) const;
+    /// Get velocity of a owner
+    float3 GetOwnerVelocity(bodyID_t ownerID) const;
 
     /// Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial location
     /// means the location of the clumps' CoM coordinates in the global frame. If velocties are not given then they are
@@ -161,6 +172,10 @@ class DEMSolver {
     std::shared_ptr<DEMTracker> AddClumpTracked(const std::shared_ptr<DEMClumpTemplate>& type,
                                                 float3 xyz,
                                                 float3 vel = make_float3(0));
+
+    /// Create a DEMTracker to allow direct control/modification/quarry to the argument object
+    std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMExternObj>& obj);
+    // std::shared_ptr<DEMTracker> Track(std::shared_ptr<ClumpBatch>& obj);
 
     /// Instruct each clump the type of prescribed motion it should follow. If this is not called (or if this vector is
     /// shorter than the clump location vector, then for the unassigned part) those clumps are defaulted to type 0,
@@ -278,7 +293,7 @@ class DEMSolver {
     /// Choose output format
     void SetOutputFormat(DEM_OUTPUT_FORMAT format) { m_out_format = format; }
     /// Specify the information that needs to go into the output files
-    void SetOutputContent(DEM_OUTPUT_CONTENT content) { m_out_content = content; }
+    void SetOutputContent(unsigned int content) { m_out_content = content; }
 
   private:
     // A number of behavior-related variables
@@ -369,7 +384,7 @@ class DEMSolver {
     // I/O related flags
     DEM_OUTPUT_MODE m_clump_out_mode = DEM_OUTPUT_MODE::SPHERE;
     DEM_OUTPUT_FORMAT m_out_format = DEM_OUTPUT_FORMAT::CHPF;
-    DEM_OUTPUT_CONTENT m_out_content = DEM_OUTPUT_CONTENT::ABSV;
+    unsigned int m_out_content = DEM_OUTPUT_CONTENT::QUAT | DEM_OUTPUT_CONTENT::ABSV;
 
     // ``World'' size along X dir (user-defined)
     float m_boxX = 0.f;
@@ -606,6 +621,8 @@ class DEMTracker {
     // Methods to get info from this owner
     float3 Pos() { return sys->GetOwnerPosition(obj->ownerID); }
     float3 AngVel() { return sys->GetOwnerAngVel(obj->ownerID); }
+    float3 Vel() { return sys->GetOwnerVelocity(obj->ownerID); }
+    float4 OriQ() { return sys->GetOwnerOriQ(obj->ownerID); }
 };
 
 }  // namespace sgps

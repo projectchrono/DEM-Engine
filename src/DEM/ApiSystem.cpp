@@ -38,11 +38,19 @@ DEMSolver::~DEMSolver() {
 }
 
 float3 DEMSolver::GetOwnerPosition(bodyID_t ownerID) const {
-    return dT->getOwnerPosition(ownerID);
+    return dT->getOwnerPos(ownerID);
 }
 
 float3 DEMSolver::GetOwnerAngVel(bodyID_t ownerID) const {
     return dT->getOwnerAngVel(ownerID);
+}
+
+float3 DEMSolver::GetOwnerVelocity(bodyID_t ownerID) const {
+    return dT->getOwnerVel(ownerID);
+}
+
+float4 DEMSolver::GetOwnerOriQ(bodyID_t ownerID) const {
+    return dT->getOwnerOriQ(ownerID);
 }
 
 // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
@@ -294,6 +302,7 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpSimpleSphere(float mass,
 std::shared_ptr<DEMExternObj> DEMSolver::AddExternalObject() {
     DEMExternObj an_obj;
     std::shared_ptr<DEMExternObj> ptr = std::make_shared<DEMExternObj>(std::move(an_obj));
+    ptr->load_order = cached_extern_objs.size();
     cached_extern_objs.push_back(ptr);
     return cached_extern_objs.back();
 }
@@ -532,7 +541,7 @@ inline void DEMSolver::reportInitStats() const {
 
     if (m_expand_factor > 0.0) {
         SGPS_DEM_INFO("All geometries are enlarged/thickened by %.9g for contact detection purpose", m_expand_factor);
-        SGPS_DEM_INFO("This in the case of smallest sphere, means enlarging radius by %.9g%%",
+        SGPS_DEM_INFO("This in the case of the smallest sphere, means enlarging radius by %.9g%%",
                       (m_expand_factor / m_smallest_radius) * 100.0);
     }
 
@@ -795,12 +804,11 @@ std::shared_ptr<DEMTracker> DEMSolver::AddClumpTracked(const std::shared_ptr<DEM
     DEMTrackedObj tracked_obj;
     tracked_obj.load_order = tracked_location;
     tracked_obj.type = DEM_OWNER_TYPE::CLUMP;
-    std::shared_ptr<DEMTrackedObj> obj = std::make_shared<DEMTrackedObj>(std::move(tracked_obj));
-    m_tracked_objs.push_back(obj);
+    m_tracked_objs.push_back(std::make_shared<DEMTrackedObj>(std::move(tracked_obj)));
 
     // Also instantiate a API-level tracker for the ease of usage
     DEMTracker tracker(this);
-    tracker.obj = obj;
+    tracker.obj = m_tracked_objs.back();
     // m_trackers.push_back(std::make_shared<DEMTracker>(std::move(tracker)));
 
     AddClumps(std::vector<std::shared_ptr<DEMClumpTemplate>>(1, type), std::vector<float3>(1, xyz),
@@ -809,6 +817,23 @@ std::shared_ptr<DEMTracker> DEMSolver::AddClumpTracked(const std::shared_ptr<DEM
     // return m_trackers.back();
     return std::make_shared<DEMTracker>(std::move(tracker));
 }
+
+std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMExternObj>& obj) {
+    // Create a middle man: DEMTrackedObj. The reason we use it is because a simple struct should be used to transfer to
+    // dT for owner-number processing. If we cut the middle man and use things such as DEMExtObj, there will not be a
+    // universal treatment that dT can apply, besides we may have some include-related issues.
+    DEMTrackedObj tracked_obj;
+    tracked_obj.load_order = obj->load_order;
+    tracked_obj.type = DEM_OWNER_TYPE::ANALYTICAL;
+    m_tracked_objs.push_back(std::make_shared<DEMTrackedObj>(std::move(tracked_obj)));
+
+    // Create a Tracker for this tracked object
+    DEMTracker tracker(this);
+    tracker.obj = m_tracked_objs.back();
+    return std::make_shared<DEMTracker>(std::move(tracker));
+}
+
+// std::shared_ptr<DEMTracker> Track(std::shared_ptr<ClumpBatch>& obj) {}
 
 void DEMSolver::SetClumpFamilies(const std::vector<unsigned int>& code) {
     if (any_of(code.begin(), code.end(), [](unsigned int i) { return i >= DEM_RESERVED_FAMILY_NUM; })) {
@@ -827,12 +852,12 @@ void DEMSolver::WriteClumpFile(const std::string& outfilename) const {
         switch (m_out_format) {
             case (DEM_OUTPUT_FORMAT::CHPF): {
                 std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
-                dT->writeChpfAsSpheres(ptFile);
+                dT->writeSpheresAsChpf(ptFile);
                 break;
             }
             case (DEM_OUTPUT_FORMAT::CSV): {
                 std::ofstream ptFile(outfilename, std::ios::out);
-                dT->writeCsvAsSpheres(ptFile);
+                dT->writeSpheresAsCsv(ptFile);
                 break;
             }
             case (DEM_OUTPUT_FORMAT::BINARY): {

@@ -21,6 +21,8 @@ using namespace std::filesystem;
 int main() {
     DEMSolver DEM_sim;
     DEM_sim.SetVerbosity(INFO);
+    // Output as CSV so no post-processing is needed
+    DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
     DEM_sim.SetSolverHistoryless(true);
 
     srand(777);

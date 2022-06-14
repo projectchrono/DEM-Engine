@@ -108,6 +108,8 @@ struct DEMExternObj {
     float mass = SGPS_DEM_HUGE_FLOAT;
     // Obj's MOI (huge by default)
     float3 MOI = make_float3(SGPS_DEM_HUGE_FLOAT);
+    // Its offset when this obj got loaded into the API-level (m_) cached array
+    unsigned int load_order;
 
     union DEMAnalEntParams {
         DEMPlateParams_t plate;

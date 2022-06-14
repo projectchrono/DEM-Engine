@@ -269,9 +269,13 @@ class DEMDynamicThread {
     float getKineticEnergy();
 
     // Get this owner's position in user unit
-    float3 getOwnerPosition(bodyID_t ownerID) const;
+    float3 getOwnerPos(bodyID_t ownerID) const;
     // Get this owner's angular velocity
     float3 getOwnerAngVel(bodyID_t ownerID) const;
+    // Get this owner's quaternion
+    float4 getOwnerOriQ(bodyID_t ownerID) const;
+    // Get this owner's velocity
+    float3 getOwnerVel(bodyID_t ownerID) const;
 
     // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
     void allocateManagedArrays(size_t nOwnerBodies,
@@ -313,8 +317,8 @@ class DEMDynamicThread {
     void packDataPointers();
     void packTransferPointers(DEMKinematicThread* kT);
 
-    void writeChpfAsSpheres(std::ofstream& ptFile) const;
-    void writeCsvAsSpheres(std::ofstream& ptFile) const;
+    void writeSpheresAsChpf(std::ofstream& ptFile) const;
+    void writeSpheresAsCsv(std::ofstream& ptFile) const;
 
     // Called each time when the user calls DoStepDynamicsSync.
     void startThread();
