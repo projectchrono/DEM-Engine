@@ -5,12 +5,13 @@
 #ifndef SGPS_DEM_HOST_STRUCTS
 #define SGPS_DEM_HOST_STRUCTS
 
-#pragma once
-
 #include <DEM/DEMDefines.h>
 #include <core/utils/ManagedAllocator.hpp>
 #include <sstream>
 #include <exception>
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
 #include <nvmath/helper_math.cuh>
 
 namespace sgps {
@@ -233,6 +234,14 @@ inline std::string pretty_format_bytes(size_t bytes) {
 // NOW DEFINING MACRO COMMANDS USED BY THE DEM MODULE
 // =============================================================================
 
+#define SGPS_DEM_PRINTF(...)                    \
+    {                                           \
+        if (verbosity > DEM_VERBOSITY::QUIET) { \
+            printf(__VA_ARGS__);                \
+            printf("\n");                       \
+        }                                       \
+    }
+
 #define SGPS_DEM_ERROR(...)                                      \
     {                                                            \
         if (verbosity >= DEM_VERBOSITY::ERROR) {                 \
@@ -319,6 +328,16 @@ inline std::string pretty_format_bytes(size_t bytes) {
 // NOW SOME HOST-SIDE SIMPLE STRUCTS USED BY THE DEM MODULE
 // =============================================================================
 
+// Manager of the collabortation between the main thread and worker threads
+class WorkerReportChannel {
+  public:
+    std::atomic<bool> userCallDone;
+    std::mutex mainCanProceed;
+    std::condition_variable cv_mainCanProceed;
+    WorkerReportChannel() noexcept { userCallDone = false; }
+    ~WorkerReportChannel() {}
+};
+
 struct SolverFlags {
     // Sort contact pair arrays before sending to kT
     bool should_sort_pairs = true;
@@ -328,10 +347,12 @@ struct SolverFlags {
     bool use_compact_force_kernel = false;
     // This run is historyless
     bool isHistoryless = false;
-    // This run uses contact detection in an async fashion
+    // This run uses contact detection in an async fashion (kT and dT working at different points in simulation time)
     bool isAsync = true;
     // If family number can potentially change (at each time step) during the simulation, because of user intervention
     bool canFamilyChange = false;
+    // Some output-related flags
+    unsigned int outputFlags = DEM_OUTPUT_CONTENT::QUAT | DEM_OUTPUT_CONTENT::ABSV;
 };
 
 struct DEMMaterial {
@@ -366,8 +387,14 @@ struct DEMClumpTemplate {
     bool isBigClump = false;
 };
 
-struct DEMTracker {
-    size_t ownerID;
+// A struct to get or set tracked owner entities
+struct DEMTrackedObj {
+    // ownerID will be updated by dT on initialization
+    bodyID_t ownerID = DEM_NULL_BODYID;
+    DEM_OWNER_TYPE type;
+    // A tracker tracks a owner loaded into the system via its respective loading method, so load_order registers
+    // the position of this object in the corresponding API-side array
+    size_t load_order;
 };
 
 }  // namespace sgps

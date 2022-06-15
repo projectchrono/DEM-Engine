@@ -5,6 +5,7 @@
 #include <cstring>
 #include <iostream>
 #include <thread>
+#include <algorithm>
 
 #include <core/ApiVersion.h>
 #include <core/utils/chpf/particle_writer.hpp>
@@ -243,23 +244,26 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     }
 }
 
-void DEMDynamicThread::populateManagedArrays(const std::vector<inertiaOffset_t>& input_clump_types,
-                                             const std::vector<float3>& input_clump_xyz,
-                                             const std::vector<float3>& input_clump_vel,
-                                             const std::vector<unsigned int>& input_clump_family,
-                                             const std::vector<float3>& input_ext_obj_xyz,
-                                             const std::vector<unsigned int>& input_ext_obj_family,
-                                             const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                                             const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
-                                             const std::vector<float>& clumps_mass_types,
-                                             const std::vector<float3>& clumps_moi_types,
-                                             const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                                             const std::vector<std::vector<float3>>& clumps_sp_location_types,
-                                             const std::vector<float>& mat_E,
-                                             const std::vector<float>& mat_nu,
-                                             const std::vector<float>& mat_CoR,
-                                             const std::vector<float>& mat_mu,
-                                             const std::vector<float>& mat_Crr) {
+void DEMDynamicThread::initManagedArrays(const std::vector<inertiaOffset_t>& input_clump_types,
+                                         const std::vector<float3>& input_clump_xyz,
+                                         const std::vector<float3>& input_clump_vel,
+                                         const std::vector<unsigned int>& input_clump_family,
+                                         const std::vector<float3>& input_ext_obj_xyz,
+                                         const std::vector<unsigned int>& input_ext_obj_family,
+                                         const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
+                                         const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
+                                         const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
+                                         const std::vector<float>& clumps_mass_types,
+                                         const std::vector<float3>& clumps_moi_types,
+                                         const std::vector<std::vector<float>>& clumps_sp_radii_types,
+                                         const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                                         const std::vector<float>& mat_E,
+                                         const std::vector<float>& mat_nu,
+                                         const std::vector<float>& mat_CoR,
+                                         const std::vector<float>& mat_mu,
+                                         const std::vector<float>& mat_Crr,
+                                         const std::set<unsigned int>& no_output_families,
+                                         std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs) {
     // Get the info into the managed memory from the host side. Can this process be more efficient? Maybe, but it's
     // initialization anyway.
 
@@ -282,7 +286,21 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<inertiaOffset_t>&
     }
 
     // dT will need this family number map, store it
-    familyNumberMap = family_user_impl_map;
+    familyUserImplMap = family_user_impl_map;
+    familyImplUserMap = family_impl_user_map;
+
+    // Take notes of the families that should not be outputted
+    {
+        std::set<unsigned int>::iterator it;
+        unsigned int i = 0;
+        familiesNoOutput.resize(no_output_families.size());
+        for (it = no_output_families.begin(); it != no_output_families.end(); it++, i++) {
+            familiesNoOutput.at(i) = familyUserImplMap.at(*it);
+        }
+        std::sort(familiesNoOutput.begin(), familiesNoOutput.end());
+        SGPS_DEM_DEBUG_PRINTF("Impl-level families that will not be outputted:");
+        SGPS_DEM_DEBUG_EXEC(displayArray<family_t>(familiesNoOutput.data(), familiesNoOutput.size()));
+    }
 
     // Then, load in clump type info
     // All flattened to single arrays, so a prescans is needed so we know each input clump's component offsets
@@ -397,39 +415,57 @@ void DEMDynamicThread::populateManagedArrays(const std::vector<inertiaOffset_t>&
     SGPS_DEM_DEBUG_PRINTF("Compare clumpComponentOffset and clumpComponentOffsetExt:");
     SGPS_DEM_DEBUG_EXEC(displayArray<clumpComponentOffset_t>(clumpComponentOffset.data(), simParams->nSpheresGM));
     SGPS_DEM_DEBUG_EXEC(displayArray<clumpComponentOffsetExt_t>(clumpComponentOffsetExt.data(), simParams->nSpheresGM));
+
+    // Provide feedback to the tracked objects, tell them the owner numbers they are looking for
+    // Little computation is needed, as long as we know the structure of our owner array: nOwnerClumps go first, then
+    // nExtObj
+    for (auto& tracked_obj : tracked_objs) {
+        switch (tracked_obj->type) {
+            case (DEM_OWNER_TYPE::CLUMP):
+                tracked_obj->ownerID = tracked_obj->load_order;
+                break;
+            case (DEM_OWNER_TYPE::ANALYTICAL):
+                tracked_obj->ownerID = tracked_obj->load_order + simParams->nOwnerClumps;
+                break;
+            default:
+                SGPS_DEM_ERROR("A DEM tracked object has an unknown type.");
+        }
+    }
 }
 
-void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
+void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
     ParticleFormatWriter pw;
     // pw.write(ptFile, ParticleFormatWriter::CompressionType::NONE, mass);
-    std::vector<float> posX(simParams->nSpheresGM, 0);
-    std::vector<float> posY(simParams->nSpheresGM, 0);
-    std::vector<float> posZ(simParams->nSpheresGM, 0);
-    std::vector<float> spRadii(simParams->nSpheresGM, 0);
+    std::vector<float> posX(simParams->nSpheresGM);
+    std::vector<float> posY(simParams->nSpheresGM);
+    std::vector<float> posZ(simParams->nSpheresGM);
+    std::vector<float> spRadii(simParams->nSpheresGM);
+    std::vector<unsigned int> families;
+    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
+        families.resize(simParams->nSpheresGM);
+    }
     size_t num_output_spheres = 0;
 
-    // TODO: Let wT handle this
-    unsigned int no_write_family;
-    bool exist_no_write_family = false;
-    if (familyNumberMap.find(DEM_RESERVED_FAMILY_NUM) != familyNumberMap.end()) {
-        no_write_family = familyNumberMap.at(DEM_RESERVED_FAMILY_NUM);
-        exist_no_write_family = true;
-    }
     for (size_t i = 0; i < simParams->nSpheresGM; i++) {
         auto this_owner = ownerClumpBody.at(i);
-        unsigned int this_family = familyID.at(this_owner);
-        // TODO: Right now, just don't output the reserved family. Will add proper output flags to wT.
-        if (this_family == no_write_family && exist_no_write_family) {
+        family_t this_family = familyID.at(this_owner);
+        // If this (impl-level) family is in the no-output list, skip it
+        if (std::binary_search(familiesNoOutput.begin(), familiesNoOutput.end(), this_family)) {
             continue;
         }
 
-        voxelID_t voxelIDX =
-            voxelID.at(this_owner) & (((voxelID_t)1 << simParams->nvXp2) - 1);  // & operation here equals modulo
-        voxelID_t voxelIDY = (voxelID.at(this_owner) >> simParams->nvXp2) & (((voxelID_t)1 << simParams->nvYp2) - 1);
-        voxelID_t voxelIDZ = (voxelID.at(this_owner)) >> (simParams->nvXp2 + simParams->nvYp2);
-        // std::cout << "this owner: " << this_owner << std::endl;
-        // std::cout << "Out voxel ID: " << voxelID.at(this_owner) << std::endl;
-        // std::cout << "Out voxel ID XYZ: " << voxelIDX << ", " << voxelIDY << ", " << voxelIDZ << std::endl;
+        float3 CoM;
+        float X, Y, Z;
+        voxelID_t voxel = voxelID.at(this_owner);
+        subVoxelPos_t subVoxX = locX.at(this_owner);
+        subVoxelPos_t subVoxY = locY.at(this_owner);
+        subVoxelPos_t subVoxZ = locZ.at(this_owner);
+        hostVoxelID2Position<float, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ,
+                                                              simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
+                                                              simParams->l);
+        CoM.x = X + simParams->LBFX;
+        CoM.y = Y + simParams->LBFY;
+        CoM.z = Z + simParams->LBFZ;
 
         // Must use clumpComponentOffsetExt, b/c clumpComponentOffset may not be a faithful representation of clump
         // component offset numbers
@@ -442,23 +478,105 @@ void DEMDynamicThread::WriteCsvAsSpheres(std::ofstream& ptFile) const {
         float this_sp_rot_3 = oriQ3.at(this_owner);
         hostApplyOriQ2Vector3<float, float>(this_sp_deviation_x, this_sp_deviation_y, this_sp_deviation_z,
                                             this_sp_rot_0, this_sp_rot_1, this_sp_rot_2, this_sp_rot_3);
-        posX.at(num_output_spheres) = voxelIDX * simParams->voxelSize + locX.at(this_owner) * simParams->l +
-                                      this_sp_deviation_x + simParams->LBFX;
-        posY.at(num_output_spheres) = voxelIDY * simParams->voxelSize + locY.at(this_owner) * simParams->l +
-                                      this_sp_deviation_y + simParams->LBFY;
-        posZ.at(num_output_spheres) = voxelIDZ * simParams->voxelSize + locZ.at(this_owner) * simParams->l +
-                                      this_sp_deviation_z + simParams->LBFZ;
+        posX.at(num_output_spheres) = CoM.x + this_sp_deviation_x;
+        posY.at(num_output_spheres) = CoM.y + this_sp_deviation_y;
+        posZ.at(num_output_spheres) = CoM.z + this_sp_deviation_z;
         // std::cout << "Sphere Pos: " << posX.at(i) << ", " << posY.at(i) << ", " << posZ.at(i) << std::endl;
 
         spRadii.at(num_output_spheres) = radiiSphere.at(clumpComponentOffsetExt.at(i));
 
+        // Family number needs to be user number
+        if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
+            families.at(num_output_spheres) = familyImplUserMap.at(this_family);
+        }
+
         num_output_spheres++;
     }
+    // Write basics
     posX.resize(num_output_spheres);
     posY.resize(num_output_spheres);
     posZ.resize(num_output_spheres);
     spRadii.resize(num_output_spheres);
     pw.write(ptFile, ParticleFormatWriter::CompressionType::NONE, posX, posY, posZ, spRadii);
+    // Write family numbers
+    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
+        families.resize(num_output_spheres);
+        // TODO: How to do that?
+        // pw.write(ptFile, ParticleFormatWriter::CompressionType::NONE, families);
+    }
+}
+
+void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
+    std::ostringstream outstrstream;
+
+    outstrstream << "#x,#y,#z,r";
+    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ABSV) {
+        outstrstream << ",absv";
+    }
+    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::VEL) {
+        outstrstream << ",v_x,v_y,v_z";
+    }
+    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ANG_VEL) {
+        outstrstream << ",w_x,w_y,w_z";
+    }
+    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FORCE) {
+        outstrstream << ",F_x,F_y,F_z";
+    }
+    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
+        outstrstream << ",family";
+    }
+    outstrstream << "\n";
+
+    for (size_t i = 0; i < simParams->nSpheresGM; i++) {
+        auto this_owner = ownerClumpBody.at(i);
+        family_t this_family = familyID.at(this_owner);
+        // If this (impl-level) family is in the no-output list, skip it
+        if (std::binary_search(familiesNoOutput.begin(), familiesNoOutput.end(), this_family)) {
+            continue;
+        }
+
+        float3 CoM;
+        float3 pos;
+        float radius;
+        float X, Y, Z;
+        voxelID_t voxel = voxelID.at(this_owner);
+        subVoxelPos_t subVoxX = locX.at(this_owner);
+        subVoxelPos_t subVoxY = locY.at(this_owner);
+        subVoxelPos_t subVoxZ = locZ.at(this_owner);
+        hostVoxelID2Position<float, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ,
+                                                              simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
+                                                              simParams->l);
+        CoM.x = X + simParams->LBFX;
+        CoM.y = Y + simParams->LBFY;
+        CoM.z = Z + simParams->LBFZ;
+
+        // Must use clumpComponentOffsetExt, b/c clumpComponentOffset may not be a faithful representation of clump
+        // component offset numbers
+        float3 this_sp_deviation;
+        this_sp_deviation.x = relPosSphereX.at(clumpComponentOffsetExt.at(i));
+        this_sp_deviation.y = relPosSphereY.at(clumpComponentOffsetExt.at(i));
+        this_sp_deviation.z = relPosSphereZ.at(clumpComponentOffsetExt.at(i));
+        float this_sp_rot_0 = oriQ0.at(this_owner);
+        float this_sp_rot_1 = oriQ1.at(this_owner);
+        float this_sp_rot_2 = oriQ2.at(this_owner);
+        float this_sp_rot_3 = oriQ3.at(this_owner);
+        hostApplyOriQ2Vector3<float, float>(this_sp_deviation.x, this_sp_deviation.y, this_sp_deviation.z,
+                                            this_sp_rot_0, this_sp_rot_1, this_sp_rot_2, this_sp_rot_3);
+        pos = CoM + this_sp_deviation;
+        outstrstream << pos.x << "," << pos.y << "," << pos.z;
+
+        radius = radiiSphere.at(clumpComponentOffsetExt.at(i));
+        outstrstream << "," << radius;
+
+        // Family number needs to be user number
+        if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
+            outstrstream << "," << familyImplUserMap.at(this_family);
+        }
+
+        outstrstream << "\n";
+    }
+
+    ptFile << outstrstream.str();
 }
 
 inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
@@ -712,7 +830,7 @@ void DEMDynamicThread::workerThread() {
     {
         int totGPU;
         cudaGetDeviceCount(&totGPU);
-        SGPS_DEM_INFO("Number of total active devices: %d", totGPU);
+        SGPS_DEM_INFO("Number of total active devices: %d\n", totGPU);
     }
 
     while (!pSchedSupport->dynamicShouldJoin) {
@@ -767,7 +885,7 @@ void DEMDynamicThread::workerThread() {
                 }
                 // dT got the produce, now mark its buffer to be no longer fresh
                 pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
-                pSchedSupport->stampLastUpdateOfDynamic = cycle;
+                pSchedSupport->stampLastUpdateOfDynamic = (pSchedSupport->currentStampOfDynamic).load();
 
                 // If this is a history-based run, then when contacts are received, we need to migrate the contact
                 // history info, to match the structure of the new contact array
@@ -792,6 +910,9 @@ void DEMDynamicThread::workerThread() {
                 pSchedSupport->dynamicDone = true;
             */
 
+            // Dynamic wrapped up one cycle
+            pSchedSupport->currentStampOfDynamic++;
+
             // If the kinematic is idle, give it the opportunity to get busy again
             if (!pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh) {
                 // Acquire lock and refresh the work order for the kinematic
@@ -804,12 +925,6 @@ void DEMDynamicThread::workerThread() {
                 // Signal the kinematic that it has data for a new work order
                 pSchedSupport->cv_KinematicCanProceed.notify_all();
             }
-
-            // std::cout << "dT Total contact pairs: " << granData->nContactPairs_buffer << std::endl;
-            // std::cout << "Dynamic side values. Cycle: " << cycle << std::endl;
-
-            // Dynamic wrapped up one cycle
-            pSchedSupport->currentStampOfDynamic++;
 
             // Check if we need to wait; i.e., if dynamic drifted too much into future, then we must wait a bit before
             // the next cycle begins
@@ -828,8 +943,9 @@ void DEMDynamicThread::workerThread() {
             // due to that kinematicOwned_Cons2ProdBuffer_isFresh got set to true just before.
         }
 
-        // When getting here, dT has finished one user call (although perhaps not at the end of the user script).
-        userCallDone = true;
+        // When getting here, dT has finished one user call (although perhaps not at the end of the user script)
+        pPagerToMain->userCallDone = true;
+        pPagerToMain->cv_mainCanProceed.notify_all();
     }
 }
 
@@ -839,13 +955,7 @@ void DEMDynamicThread::startThread() {
     pSchedSupport->cv_DynamicStartLock.notify_one();
 }
 
-bool DEMDynamicThread::isUserCallDone() {
-    // return true if done, false if not
-    return userCallDone;
-}
-
 void DEMDynamicThread::resetUserCallStat() {
-    userCallDone = false;
     // Reset last kT-side data receiving cycle time stamp.
     pSchedSupport->stampLastUpdateOfDynamic = -1;
     pSchedSupport->currentStampOfDynamic = 0;
@@ -929,6 +1039,46 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
             std::move(JitHelper::buildProgram("DEMQuarryKernels", JitHelper::KERNEL_DIR / "DEMQuarryKernels.cu", qSubs,
                                               {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
+}
+
+float3 DEMDynamicThread::getOwnerAngVel(bodyID_t ownerID) const {
+    float3 angVel;
+    angVel.x = omgBarX.at(ownerID);
+    angVel.y = omgBarY.at(ownerID);
+    angVel.z = omgBarZ.at(ownerID);
+    return angVel;
+}
+
+float4 DEMDynamicThread::getOwnerOriQ(bodyID_t ownerID) const {
+    float4 oriQ;
+    oriQ.x = oriQ0.at(ownerID);
+    oriQ.y = oriQ1.at(ownerID);
+    oriQ.z = oriQ2.at(ownerID);
+    oriQ.w = oriQ3.at(ownerID);
+    return oriQ;
+}
+
+float3 DEMDynamicThread::getOwnerVel(bodyID_t ownerID) const {
+    float3 vel;
+    vel.x = vX.at(ownerID);
+    vel.y = vY.at(ownerID);
+    vel.z = vZ.at(ownerID);
+    return vel;
+}
+
+float3 DEMDynamicThread::getOwnerPos(bodyID_t ownerID) const {
+    float3 pos;
+    double X, Y, Z;
+    voxelID_t voxel = voxelID.at(ownerID);
+    subVoxelPos_t subVoxX = locX.at(ownerID);
+    subVoxelPos_t subVoxY = locY.at(ownerID);
+    subVoxelPos_t subVoxZ = locZ.at(ownerID);
+    hostVoxelID2Position<double, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ, simParams->nvXp2,
+                                                           simParams->nvYp2, simParams->voxelSize, simParams->l);
+    pos.x = X + simParams->LBFX;
+    pos.y = Y + simParams->LBFY;
+    pos.z = Z + simParams->LBFZ;
+    return pos;
 }
 
 }  // namespace sgps

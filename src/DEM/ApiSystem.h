@@ -25,6 +25,14 @@ namespace sgps {
 // class DEMKinematicThread;
 // class DEMDynamicThread;
 // class ThreadManager;
+class DEMTracker;
+
+//////////////////////////////////////////////////////////////
+// TODO LIST: 1. Check if anal obj's normal direction is correct, and if applyOriQ2Vec is correct
+//            2. AddClumps returns a batch object and allow it to be tracked
+//            3. Allow ext obj init CoM setting
+//            4. Mass/MOI can be too small? Need to scale
+//////////////////////////////////////////////////////////////
 
 class DEMSolver {
   public:
@@ -34,10 +42,10 @@ class DEMSolver {
     /// Set output detail level
     void SetVerbosity(DEM_VERBOSITY verbose) { verbosity = verbose; }
 
-    /// Instruct the dimension of the ``world'', as well as the origin point of this ``world''. On initialization, this
-    /// info will be used to figure out how to assign the num of voxels in each direction. If your ``useful'' domain is
+    /// Instruct the dimension of the `world', as well as the origin point of this `world'. On initialization, this
+    /// info will be used to figure out how to assign the num of voxels in each direction. If your `useful' domain is
     /// not box-shaped, then define a box that contains your domian. O is the coordinate of the left-bottom-front point
-    /// of your simulation ``world''.
+    /// of your simulation `world'.
     void InstructBoxDomainDimension(float x, float y, float z, float3 O = make_float3(0));
 
     /// Explicitly instruct the number of voxels (as 2^{x,y,z}) along each direction, as well as the smallest unit
@@ -140,18 +148,34 @@ class DEMSolver {
         return LoadMaterialType(E, nu, CoR, 0.5, 0.01, -1.f);
     }
 
+    /// Get position of a owner
+    float3 GetOwnerPosition(bodyID_t ownerID) const;
+    /// Get angular velocity of a owner
+    float3 GetOwnerAngVel(bodyID_t ownerID) const;
+    /// Get quaternion of a owner
+    float4 GetOwnerOriQ(bodyID_t ownerID) const;
+    /// Get velocity of a owner
+    float3 GetOwnerVelocity(bodyID_t ownerID) const;
+
     /// Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial location
-    /// means the location of the clumps' CoM coordinates in the global frame.
-    void AddClumps(const std::vector<unsigned int>& types, const std::vector<float3>& xyz);
-    void AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& types, const std::vector<float3>& xyz);
+    /// means the location of the clumps' CoM coordinates in the global frame. If velocties are not given then they are
+    /// assumed 0.
+    void AddClumps(const std::vector<unsigned int>& types,
+                   const std::vector<float3>& xyz,
+                   const std::vector<float3>& vel = std::vector<float3>());
+    void AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& types,
+                   const std::vector<float3>& xyz,
+                   const std::vector<float3>& vel = std::vector<float3>());
 
     /// Load a clump into the system, and return a tracker object to the user, so that the user can apply direct
     /// control/modification/quarry to this clump (while dT is hanging)
-    std::shared_ptr<DEMTracker> AddClumpTracked(const std::shared_ptr<DEMClumpTemplate>& type, float3 xyz);
+    std::shared_ptr<DEMTracker> AddClumpTracked(const std::shared_ptr<DEMClumpTemplate>& type,
+                                                float3 xyz,
+                                                float3 vel = make_float3(0));
 
-    /// Load input clump initial velocities on a per-body basis. If this is not called (or if this vector is shorter
-    /// than the clump location vector, then for the unassigned part) the initial velocity is assumed to be 0.
-    void SetClumpVels(const std::vector<float3>& vel);
+    /// Create a DEMTracker to allow direct control/modification/quarry to the argument object
+    std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMExternObj>& obj);
+    // std::shared_ptr<DEMTracker> Track(std::shared_ptr<ClumpBatch>& obj);
 
     /// Instruct each clump the type of prescribed motion it should follow. If this is not called (or if this vector is
     /// shorter than the clump location vector, then for the unassigned part) those clumps are defaulted to type 0,
@@ -162,6 +186,9 @@ class DEMSolver {
     /// encountered in contact detection). These 2 families can be the same (which means no contact within members of
     /// that family).
     void DisableContactBetweenFamilies(unsigned int ID1, unsigned int ID2);
+
+    /// Prevent entites associated with this family to be outputted to files
+    void DisableFamilyOutput(unsigned int ID);
 
     /// Mark all entities in this family to be fixed
     void SetFamilyFixed(unsigned int ID);
@@ -216,18 +243,13 @@ class DEMSolver {
     /// Remove host-side cached vectors (so you can re-define them, and then re-initialize system)
     void ClearCache();
 
-    /// Return the voxel ID of a clump by its numbering
-    voxelID_t GetClumpVoxelID(unsigned int i) const;
-
     /// Return total kinetic energy of all clumps
     float GetTotalKineticEnergy() const;
     /// Return the kinetic energy of all clumps in a set of families
     // TODO: float GetTotalKineticEnergy(std::vector<unsigned int> families) const;
 
-    /// Write current simulation status to a file
-    /// Write overlapping spheres, not clumps. It makes the file larger, but less trouble to visualize. Use for test
-    /// purposes only.
-    void WriteFileAsSpheres(const std::string& outfilename) const;
+    /// Write the current status of clumps to a file
+    void WriteClumpFile(const std::string& outfilename) const;
 
     /// Intialize the simulation system
     void Initialize();
@@ -246,17 +268,32 @@ class DEMSolver {
 
     /// Reset kT and dT back to a status like when the simulation system is constructed. In general the user does not
     /// need to call it, unless they want to run another test without re-constructing the entire DEM simulation system.
+    /// Also note this call does not reset the collaboration log between kT and dT.
     void ResetWorkerThreads();
 
     /// Show the collaboration stats between dT and kT. This is more useful for tweaking the number of time steps that
     /// dT should be allowed to be in advance of kT.
     void ShowThreadCollaborationStats();
 
+    /// Reset the collaboration stats between dT and kT back to the initial value (0). You should call this if you want
+    /// to start over and re-inspect the stats of the new run; otherwise, it is generally not needed, you can go ahead
+    /// and destroy DEMSolver.
+    void ClearThreadCollaborationStats();
+
     /*
       protected:
         DEMSolver() : m_sys(nullptr) {}
         DEMSolver_impl* m_sys;
     */
+
+    /// Choose between outputting particles as individual component spheres (results in larger files but less
+    /// post-processing), or as owner clumps (e.g. xyz location means clump CoM locations, etc.), by
+    /// DEM_OUTPUT_MODE::SPHERE and DEM_OUTPUT_MODE::CLUMP options
+    void SetClumpOutputMode(DEM_OUTPUT_MODE mode) { m_clump_out_mode = mode; }
+    /// Choose output format
+    void SetOutputFormat(DEM_OUTPUT_FORMAT format) { m_out_format = format; }
+    /// Specify the information that needs to go into the output files
+    void SetOutputContent(unsigned int content) { m_out_content = content; }
 
   private:
     // A number of behavior-related variables
@@ -343,6 +380,11 @@ class DEMSolver {
     std::set<float3> m_clumps_sp_location_types;
     std::vector<std::vector<distinctSphereRelativePositions_default_t>> m_clumps_sp_location_type_offset;
     */
+
+    // I/O related flags
+    DEM_OUTPUT_MODE m_clump_out_mode = DEM_OUTPUT_MODE::SPHERE;
+    DEM_OUTPUT_FORMAT m_out_format = DEM_OUTPUT_FORMAT::CHPF;
+    unsigned int m_out_content = DEM_OUTPUT_CONTENT::QUAT | DEM_OUTPUT_CONTENT::ABSV;
 
     // ``World'' size along X dir (user-defined)
     float m_boxX = 0.f;
@@ -457,6 +499,11 @@ class DEMSolver {
     // Host-side mapping array that maps like this: map.at(user family number) = (corresponding impl-level family
     // number)
     std::unordered_map<unsigned int, family_t> m_family_user_impl_map;
+    // Host-side mapping array that maps like this: map.at(impl-level family number) = (corresponding user family
+    // number)
+    std::unordered_map<family_t, unsigned int> m_family_impl_user_map;
+    // The familes that should not be outputted
+    std::set<unsigned int> m_no_output_families;
     // TODO: fixed particles should automatically attain status indicating they don't interact with each other.
 
     // Unlike clumps, external objects do not have _types (each is its own type)
@@ -494,6 +541,10 @@ class DEMSolver {
     // Processed unique family prescription info
     std::vector<familyPrescription_t> m_unique_family_prescription;
 
+    // Cached tracked objects that can be leveraged by the user to assume explicit control over some simulation objects
+    std::vector<std::shared_ptr<DEMTrackedObj>> m_tracked_objs;
+    // std::vector<std::shared_ptr<DEMTracker>> m_trackers;
+
     // The number of dT steps before it waits for a kT update. The default value 0 means every dT step will wait for a
     // newly produced contact-pair info (from kT) before proceeding.
     int m_updateFreq = 0;
@@ -501,6 +552,8 @@ class DEMSolver {
     // The contact model is historyless, or not. It affects jitification.
     bool m_isHistoryless = false;
 
+    WorkerReportChannel* kTMain_InteractionManager;
+    WorkerReportChannel* dTMain_InteractionManager;
     GpuManager* dTkT_GpuManager;
     ThreadManager* dTkT_InteractionManager;
     DEMKinematicThread* kT;
@@ -517,7 +570,7 @@ class DEMSolver {
     /// Figure out the unit length l and numbers of voxels along each direction, based on domain size X, Y, Z
     void figureOutNV();
     /// Set the default bin (for contact detection) size to be the same of the smallest sphere
-    void decideDefaultBinSize();
+    void decideBinSize();
     /// Transfer cached solver preferences/instructions to dT and kT.
     void transferSolverParams();
     /// Transfer (CPU-side) cached simulation data (about sim world) to the GPU-side. It is called automatically during
@@ -551,6 +604,25 @@ class DEMSolver {
     inline void equipFamilyPrescribedMotions(std::unordered_map<std::string, std::string>& strMap);
     inline void equipFamilyOnFlyChanges(std::unordered_map<std::string, std::string>& strMap);
     inline void equipForceModel(std::unordered_map<std::string, std::string>& strMap);
+};
+
+// A struct to get or set tracked owner entities, mainly for co-simulation
+class DEMTracker {
+  private:
+    // Its parent DEMSolver system
+    const DEMSolver* sys;
+
+  public:
+    DEMTracker(DEMSolver* sim_sys) : sys(sim_sys) {}
+    ~DEMTracker() {}
+
+    // The tracked object
+    std::shared_ptr<DEMTrackedObj> obj;
+    // Methods to get info from this owner
+    float3 Pos() { return sys->GetOwnerPosition(obj->ownerID); }
+    float3 AngVel() { return sys->GetOwnerAngVel(obj->ownerID); }
+    float3 Vel() { return sys->GetOwnerVelocity(obj->ownerID); }
+    float4 OriQ() { return sys->GetOwnerOriQ(obj->ownerID); }
 };
 
 }  // namespace sgps

@@ -19,21 +19,38 @@ namespace sgps {
 
 DEMSolver::DEMSolver(unsigned int nGPUs) {
     dTkT_InteractionManager = new ThreadManager();
-    // dTkT_InteractionManager->dynamicRequestedUpdateFrequency = m_updateFreq;
+    kTMain_InteractionManager = new WorkerReportChannel();
+    dTMain_InteractionManager = new WorkerReportChannel();
 
     dTkT_GpuManager = new GpuManager(nGPUs);
 
-    dT = new DEMDynamicThread(dTkT_InteractionManager, dTkT_GpuManager);
-    kT = new DEMKinematicThread(dTkT_InteractionManager, dTkT_GpuManager, dT);
-
-    // dT->setNDynamicCycles(nDynamicCycles);
+    dT = new DEMDynamicThread(dTMain_InteractionManager, dTkT_InteractionManager, dTkT_GpuManager);
+    kT = new DEMKinematicThread(kTMain_InteractionManager, dTkT_InteractionManager, dTkT_GpuManager, dT);
 }
 
 DEMSolver::~DEMSolver() {
     delete kT;
     delete dT;
+    delete kTMain_InteractionManager;
+    delete dTMain_InteractionManager;
     delete dTkT_InteractionManager;
     delete dTkT_GpuManager;
+}
+
+float3 DEMSolver::GetOwnerPosition(bodyID_t ownerID) const {
+    return dT->getOwnerPos(ownerID);
+}
+
+float3 DEMSolver::GetOwnerAngVel(bodyID_t ownerID) const {
+    return dT->getOwnerAngVel(ownerID);
+}
+
+float3 DEMSolver::GetOwnerVelocity(bodyID_t ownerID) const {
+    return dT->getOwnerVel(ownerID);
+}
+
+float4 DEMSolver::GetOwnerOriQ(bodyID_t ownerID) const {
+    return dT->getOwnerOriQ(ownerID);
 }
 
 // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
@@ -199,6 +216,10 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
 
 void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula) {}
 
+void DEMSolver::DisableFamilyOutput(unsigned int ID) {
+    m_no_output_families.insert(ID);
+}
+
 std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterialType(DEMMaterial& mat) {
     if (mat.CoR < SGPS_DEM_TINY_FLOAT) {
         SGPS_DEM_WARNING("Material type %u is set to have 0 restitution. Please make sure this is intentional.",
@@ -281,6 +302,7 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpSimpleSphere(float mass,
 std::shared_ptr<DEMExternObj> DEMSolver::AddExternalObject() {
     DEMExternObj an_obj;
     std::shared_ptr<DEMExternObj> ptr = std::make_shared<DEMExternObj>(std::move(an_obj));
+    ptr->load_order = cached_extern_objs.size();
     cached_extern_objs.push_back(ptr);
     return cached_extern_objs.back();
 }
@@ -310,6 +332,7 @@ void DEMSolver::ClearCache() {
     nOwnerClumps = 0;
     nExtObj = 0;
     nTriEntities = 0;
+    sys_initialized = false;
 
     cached_extern_objs.clear();
     m_anal_comp_pos.clear();
@@ -321,6 +344,9 @@ void DEMSolver::ClearCache() {
     m_anal_normals.clear();
     m_extra_clump_type.clear();
     m_extra_clump_owner.clear();
+
+    m_input_ext_obj_xyz.clear();
+    m_input_ext_obj_family.clear();
 
     m_template_mass.clear();
     m_template_moi.clear();
@@ -342,10 +368,9 @@ void DEMSolver::ClearCache() {
 
     m_input_family_prescription.clear();
     m_unique_family_prescription.clear();
-}
 
-voxelID_t DEMSolver::GetClumpVoxelID(unsigned int i) const {
-    return dT->voxelID.at(i);
+    m_tracked_objs.clear();
+    // m_trackers.clear();
 }
 
 float DEMSolver::GetTotalKineticEnergy() const {
@@ -363,7 +388,7 @@ void DEMSolver::figureOutNV() {
     }
 }
 
-void DEMSolver::decideDefaultBinSize() {
+void DEMSolver::decideBinSize() {
     // find the smallest radius
     for (auto elem : m_template_sp_radii) {
         for (auto radius : elem) {
@@ -377,11 +402,19 @@ void DEMSolver::decideDefaultBinSize() {
     if (!m_use_user_instructed_bin_size) {
         m_binSize = 2.0 * m_smallest_radius;
     }
+
+    nbX = (binID_t)(m_voxelSize * (double)((size_t)1 << nvXp2) / m_binSize) + 1;
+    nbY = (binID_t)(m_voxelSize * (double)((size_t)1 << nvYp2) / m_binSize) + 1;
+    nbZ = (binID_t)(m_voxelSize * (double)((size_t)1 << nvZp2) / m_binSize) + 1;
+    m_num_bins = (uint64_t)nbX * (uint64_t)nbY * (uint64_t)nbZ;
+    // It's better to compute num of bins this way, rather than...
+    // (uint64_t)(m_boxX / m_binSize + 1) * (uint64_t)(m_boxY / m_binSize + 1) * (uint64_t)(m_boxZ / m_binSize + 1);
+    // because the space bins and voxels can cover may be larger than the user-defined sim domain
 }
 
 void DEMSolver::figureOutMaterialProxies() {
     // Use the info in m_loaded_sp_materials to populate API-side proxy arrays
-    // These arrays are later passed to kTdT in populateManagedArrays
+    // These arrays are later passed to kTdT in initManagedArrays
     unsigned int count = m_loaded_sp_materials.size();
     m_E_proxy.resize(count);
     m_nu_proxy.resize(count);
@@ -421,6 +454,7 @@ void DEMSolver::figureOutFamilyMasks() {
     // implementation-level numbers always start at 0)
     for (family_t i = 0; i < nDistinctFamilies; i++) {
         m_family_user_impl_map[unique_families.at(i)] = i;
+        m_family_impl_user_map[i] = unique_families.at(i);
     }
 
     // At this point, we know the size of the mask matrix, and we init it as all-allow
@@ -507,7 +541,7 @@ inline void DEMSolver::reportInitStats() const {
 
     if (m_expand_factor > 0.0) {
         SGPS_DEM_INFO("All geometries are enlarged/thickened by %.9g for contact detection purpose", m_expand_factor);
-        SGPS_DEM_INFO("This in the case of smallest sphere, means enlarging radius by %.9g%%",
+        SGPS_DEM_INFO("This in the case of the smallest sphere, means enlarging radius by %.9g%%",
                       (m_expand_factor / m_smallest_radius) * 100.0);
     }
 
@@ -522,7 +556,7 @@ inline void DEMSolver::reportInitStats() const {
 
 void DEMSolver::preprocessClumpTemplates() {
     // A sort based on the number of components of each clump type is needed, so larger clumps are near the end of the
-    // array, so we can always jitify the smaller clumps, and leave larger ones in global memory
+    // array, so we can always jitify the smaller clumps, and leave larger ones in GPU global memory
     std::sort(m_templates.begin(), m_templates.end(),
               [](auto& left, auto& right) { return left->nComp < right->nComp; });
     // A mapping is needed to transform the user-defined clump type array so that it matches the new, rearranged clump
@@ -696,16 +730,7 @@ void DEMSolver::generateJITResources() {
     if (!explicit_nv_override) {
         figureOutNV();
     }
-    decideDefaultBinSize();
-
-    nbX = (binID_t)(m_voxelSize * (double)((size_t)1 << nvXp2) / m_binSize) + 1;
-    nbY = (binID_t)(m_voxelSize * (double)((size_t)1 << nvYp2) / m_binSize) + 1;
-    nbZ = (binID_t)(m_voxelSize * (double)((size_t)1 << nvZp2) / m_binSize) + 1;
-    m_num_bins = (uint64_t)nbX * (uint64_t)nbY * (uint64_t)nbZ;
-    // It's better to compute num of bins this way, rather than...
-    // (uint64_t)(m_boxX / m_binSize + 1) * (uint64_t)(m_boxY / m_binSize + 1) * (uint64_t)(m_boxZ / m_binSize + 1);
-    // because the space bins and voxels can cover may be larger than the user-defined sim domain
-    // TODO: should check if m_num_bins is larger than uint32, if uint32 is selected for storing binID
+    decideBinSize();
 
     // Figure out the initial profile/status of clumps, and related quantities, if need to
     nOwnerClumps = m_input_clump_types.size();
@@ -731,10 +756,13 @@ void DEMSolver::generateJITResources() {
     reportInitStats();
 }
 
-void DEMSolver::AddClumps(const std::vector<unsigned int>& type_marks, const std::vector<float3>& xyz) {
+void DEMSolver::AddClumps(const std::vector<unsigned int>& type_marks,
+                          const std::vector<float3>& xyz,
+                          const std::vector<float3>& vel) {
     if (type_marks.size() != xyz.size()) {
         SGPS_DEM_ERROR("Arrays in the call AddClumps must all have the same length.");
     }
+
     size_t num_old = m_input_clump_types.size();
     size_t num_new = type_marks.size();
     m_input_clump_types.resize(num_old + num_new);
@@ -743,21 +771,69 @@ void DEMSolver::AddClumps(const std::vector<unsigned int>& type_marks, const std
     }
     // clump_xyz are the xyz of the CoM
     m_input_clump_xyz.insert(m_input_clump_xyz.end(), xyz.begin(), xyz.end());
+
+    // Now set velocity
+    std::vector<float3> input_vel(vel);
+    if (type_marks.size() != input_vel.size()) {
+        SGPS_DEM_WARNING(
+            "Velocity and/or angular velocity array in the call AddClumps has a different length than position array, "
+            "and is resized (with 0-velocity fillers) to match the length.");
+        input_vel.resize(xyz.size(), make_float3(0));
+    }
+    m_input_clump_vel.insert(m_input_clump_vel.end(), input_vel.begin(), input_vel.end());
 }
 
-void DEMSolver::AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& types, const std::vector<float3>& xyz) {
+void DEMSolver::AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& types,
+                          const std::vector<float3>& xyz,
+                          const std::vector<float3>& vel) {
     // We don't load shared ptr to cache arrays, it's too large; besides, by this time the clump template must have been
     // loaded, so storing its offset in the template cache array is fine.
     std::vector<unsigned int> type_marks(types.size());
     for (size_t i = 0; i < types.size(); i++) {
         type_marks.at(i) = types.at(i)->mark;
     }
-    AddClumps(type_marks, xyz);
+    AddClumps(type_marks, xyz, vel);
 }
 
-void DEMSolver::SetClumpVels(const std::vector<float3>& vel) {
-    m_input_clump_vel.insert(m_input_clump_vel.end(), vel.begin(), vel.end());
+std::shared_ptr<DEMTracker> DEMSolver::AddClumpTracked(const std::shared_ptr<DEMClumpTemplate>& type,
+                                                       float3 xyz,
+                                                       float3 vel) {
+    size_t tracked_location = m_input_clump_types.size();
+
+    // Register this object, and dT needs it to figure out its impl-level owner ID
+    DEMTrackedObj tracked_obj;
+    tracked_obj.load_order = tracked_location;
+    tracked_obj.type = DEM_OWNER_TYPE::CLUMP;
+    m_tracked_objs.push_back(std::make_shared<DEMTrackedObj>(std::move(tracked_obj)));
+
+    // Also instantiate a API-level tracker for the ease of usage
+    DEMTracker tracker(this);
+    tracker.obj = m_tracked_objs.back();
+    // m_trackers.push_back(std::make_shared<DEMTracker>(std::move(tracker)));
+
+    AddClumps(std::vector<std::shared_ptr<DEMClumpTemplate>>(1, type), std::vector<float3>(1, xyz),
+              std::vector<float3>(1, vel));
+
+    // return m_trackers.back();
+    return std::make_shared<DEMTracker>(std::move(tracker));
 }
+
+std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMExternObj>& obj) {
+    // Create a middle man: DEMTrackedObj. The reason we use it is because a simple struct should be used to transfer to
+    // dT for owner-number processing. If we cut the middle man and use things such as DEMExtObj, there will not be a
+    // universal treatment that dT can apply, besides we may have some include-related issues.
+    DEMTrackedObj tracked_obj;
+    tracked_obj.load_order = obj->load_order;
+    tracked_obj.type = DEM_OWNER_TYPE::ANALYTICAL;
+    m_tracked_objs.push_back(std::make_shared<DEMTrackedObj>(std::move(tracked_obj)));
+
+    // Create a Tracker for this tracked object
+    DEMTracker tracker(this);
+    tracker.obj = m_tracked_objs.back();
+    return std::make_shared<DEMTracker>(std::move(tracker));
+}
+
+// std::shared_ptr<DEMTracker> Track(std::shared_ptr<ClumpBatch>& obj) {}
 
 void DEMSolver::SetClumpFamilies(const std::vector<unsigned int>& code) {
     if (any_of(code.begin(), code.end(), [](unsigned int i) { return i >= DEM_RESERVED_FAMILY_NUM; })) {
@@ -771,15 +847,41 @@ void DEMSolver::SetClumpFamilies(const std::vector<unsigned int>& code) {
     m_input_clump_family.insert(m_input_clump_family.end(), code.begin(), code.end());
 }
 
-void DEMSolver::WriteFileAsSpheres(const std::string& outfilename) const {
-    std::ofstream ptFile(outfilename, std::ios::out);  // std::ios::binary?
-    dT->WriteCsvAsSpheres(ptFile);
+void DEMSolver::WriteClumpFile(const std::string& outfilename) const {
+    if (m_clump_out_mode == DEM_OUTPUT_MODE::SPHERE) {
+        switch (m_out_format) {
+            case (DEM_OUTPUT_FORMAT::CHPF): {
+                std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
+                dT->writeSpheresAsChpf(ptFile);
+                break;
+            }
+            case (DEM_OUTPUT_FORMAT::CSV): {
+                std::ofstream ptFile(outfilename, std::ios::out);
+                dT->writeSpheresAsCsv(ptFile);
+                break;
+            }
+            case (DEM_OUTPUT_FORMAT::BINARY): {
+                std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
+                // TODO: Implement it
+                break;
+            }
+            default:
+                SGPS_DEM_ERROR("Clump output format is unknown. Please set it via SetOutputFormat.");
+        }
+    } else if (m_clump_out_mode == DEM_OUTPUT_MODE::CLUMP) {
+        // TODO: Implement it
+    } else {
+        SGPS_DEM_ERROR("Clump output mode is unknown. Please set it via SetClumpOutputMode.");
+    }
 }
 
 // This is generally used to pass individual instructions on how the solver should behave
 void DEMSolver::transferSolverParams() {
     kT->verbosity = verbosity;
     dT->verbosity = verbosity;
+
+    // I/O policies (only output content matters for worker threads)
+    dT->solverFlags.outputFlags = m_out_content;
 
     // Transfer historyless-ness
     kT->solverFlags.isHistoryless = m_isHistoryless;
@@ -818,12 +920,13 @@ void DEMSolver::initializeArrays() {
                               nJitifiableClumpComponents, nMatTuples);
 
     // Now we can feed those GPU-side arrays with the cached API-level simulation info
-    dT->populateManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_input_clump_family,
-                              m_input_ext_obj_xyz, m_input_ext_obj_family, m_family_user_impl_map,
-                              m_template_sp_mat_ids, m_template_mass, m_template_moi, m_template_sp_radii,
-                              m_template_sp_relPos, m_E_proxy, m_nu_proxy, m_CoR_proxy, m_mu_proxy, m_Crr_proxy);
-    kT->populateManagedArrays(m_input_clump_types, m_input_clump_family, m_input_ext_obj_family, m_family_user_impl_map,
-                              m_template_mass, m_template_sp_radii, m_template_sp_relPos);
+    dT->initManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_input_clump_family,
+                          m_input_ext_obj_xyz, m_input_ext_obj_family, m_family_user_impl_map, m_family_impl_user_map,
+                          m_template_sp_mat_ids, m_template_mass, m_template_moi, m_template_sp_radii,
+                          m_template_sp_relPos, m_E_proxy, m_nu_proxy, m_CoR_proxy, m_mu_proxy, m_Crr_proxy,
+                          m_no_output_families, m_tracked_objs);
+    kT->initManagedArrays(m_input_clump_types, m_input_clump_family, m_input_ext_obj_family, m_family_user_impl_map,
+                          m_template_mass, m_template_sp_radii, m_template_sp_relPos);
 }
 
 void DEMSolver::packDataPointers() {
@@ -837,7 +940,11 @@ void DEMSolver::packDataPointers() {
 
 void DEMSolver::validateUserInputs() {
     // First match the length of input clump arrays, for those input arrays that we don't force the user to specify
-    m_input_clump_vel.resize(m_input_clump_xyz.size(), make_float3(0));
+    if (m_input_clump_vel.size() != m_input_clump_xyz.size()) {
+        SGPS_DEM_ERROR(
+            "I do not know what happened, but the clumps position initialization array has a length mismatch with the "
+            "velocity array.");
+    }
     if (m_input_clump_family.size() < m_input_clump_xyz.size()) {
         SGPS_DEM_WARNING("Some clumps do not have their family numbers specified, so defaulted to %u",
                          DEM_DEFAULT_CLUMP_FAMILY_NUM);
@@ -929,6 +1036,11 @@ void DEMSolver::postJITResourceGenSanityCheck() {
             "is %zu.\nYou can try to make bins larger via InstructBinSize, or redefine binID_t and recompile.",
             m_num_bins, std::numeric_limits<binID_t>::max());
     }
+
+    // Debug outputs
+    SGPS_DEM_DEBUG_EXEC(printf("These owners are tracked: ");
+                        for (const auto& tracked
+                             : m_tracked_objs) { printf("%zu, ", tracked->ownerID); } printf("\n"););
 }
 
 void DEMSolver::jitifyKernels() {
@@ -983,13 +1095,15 @@ void DEMSolver::Initialize() {
 void DEMSolver::ResetWorkerThreads() {
     // The user won't be calling this when dT is working, so our only problem is that kT may be spinning in the inner
     // loop. So iet's release kT.
+    std::unique_lock<std::mutex> lock(kTMain_InteractionManager->mainCanProceed);
     kT->breakWaitingStatus();
-    while (!kT->isUserCallDone()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(SGPS_DEM_WAIT_GRANULARITY_MS));
+    while (!kTMain_InteractionManager->userCallDone) {
+        kTMain_InteractionManager->cv_mainCanProceed.wait(lock);
     }
+    // Reset to make ready for next user call, don't forget it
+    kTMain_InteractionManager->userCallDone = false;
 
-    // Finally, reset the thread stats and wait for potential new user calls. This includes setting userCallDone to
-    // false.
+    // Finally, reset the thread stats and wait for potential new user calls
     kT->resetUserCallStat();
     dT->resetUserCallStat();
 }
@@ -1004,7 +1118,7 @@ inline size_t DEMSolver::computeDTCycles(double thisCallDuration) {
 /// user, they can call this method to transfer them to the GPU-side in mid-simulation.
 void DEMSolver::UpdateSimParams() {
     // TODO: transferSimParams() only transfers sim world info, not clump template info. Clump info transformation is
-    // now in populateManagedArrays! Need to resolve that.
+    // now in initManagedArrays! Need to resolve that.
     transferSolverParams();
     transferSimParams();
 }
@@ -1023,22 +1137,18 @@ void DEMSolver::DoStepDynamics(double thisCallDuration) {
     kT->startThread();
 
     // Wait till dT is done
-    while (!dT->isUserCallDone()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(SGPS_DEM_WAIT_GRANULARITY_MS));
+    std::unique_lock<std::mutex> lock(dTMain_InteractionManager->mainCanProceed);
+    while (!dTMain_InteractionManager->userCallDone) {
+        dTMain_InteractionManager->cv_mainCanProceed.wait(lock);
     }
-
-    // Make dT ready for the next call. We don't do a `deep' reset using resetUserCallStat, since that's only used when
-    // kT and dT sync.
-    dT->userCallDone = false;
+    // Reset to make ready for next user call, don't forget it. We don't do a `deep' reset using resetUserCallStat,
+    // since that's only used when kT and dT sync.
+    dTMain_InteractionManager->userCallDone = false;
 }
 
 void DEMSolver::DoStepDynamicsSync(double thisCallDuration) {
     // Based on async calls
     DoStepDynamics(thisCallDuration);
-
-    // For DoStepDynamicsSync calls, you get a nice bonus of solver `hold-back' stats, since we expect sync-ed calls
-    // have longer duration, perhaps as long as the entire simulation duration.
-    ShowThreadCollaborationStats();
 
     // dT is finished, but the user asks us to sync, so we have to make kT sync with dT. This can be done by calling
     // ResetWorkerThreads.
@@ -1046,17 +1156,21 @@ void DEMSolver::DoStepDynamicsSync(double thisCallDuration) {
 }
 
 void DEMSolver::ShowThreadCollaborationStats() {
-    /*
-    // Sim statistics
-    std::cout << "\n~~ SIM STATISTICS ~~\n";
-    std::cout << "Number of dynamic updates: " << dTkT_InteractionManager->schedulingStats.nDynamicUpdates << std::endl;
-    std::cout << "Number of kinematic updates: " << dTkT_InteractionManager->schedulingStats.nKinematicUpdates
-              << std::endl;
-    std::cout << "Number of times dynamic held back: " << dTkT_InteractionManager->schedulingStats.nTimesDynamicHeldBack
-              << std::endl;
-    std::cout << "Number of times kinematic held back: "
-              << dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack << std::endl;
-    */
+    SGPS_DEM_PRINTF("\n~~ kT--dT CO-OP STATISTICS ~~\n");
+    SGPS_DEM_PRINTF("Number of dynamic updates: %u", (dTkT_InteractionManager->schedulingStats.nDynamicUpdates).load());
+    SGPS_DEM_PRINTF("Number of kinematic updates: %u",
+                    (dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load());
+    SGPS_DEM_PRINTF("Number of times dynamic held back: %u",
+                    (dTkT_InteractionManager->schedulingStats.nTimesDynamicHeldBack).load());
+    SGPS_DEM_PRINTF("Number of times kinematic held back: %u",
+                    (dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack).load());
+}
+
+void DEMSolver::ClearThreadCollaborationStats() {
+    dTkT_InteractionManager->schedulingStats.nDynamicUpdates = 0;
+    dTkT_InteractionManager->schedulingStats.nKinematicUpdates = 0;
+    dTkT_InteractionManager->schedulingStats.nTimesDynamicHeldBack = 0;
+    dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack = 0;
 }
 
 inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::string>& strMap) {

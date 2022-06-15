@@ -5,7 +5,6 @@
 #ifndef SGPS_DEM_HOST_HELPERS
 #define SGPS_DEM_HOST_HELPERS
 
-#pragma once
 #include <iostream>
 #include <sstream>
 #include <list>
@@ -220,6 +219,47 @@ inline void hostScanForJumps(T1* arr, T1* arr_elem, T2* jump_loc, T3* jump_len, 
             total_found++;
         }
     }
+}
+
+// Chops a long ID (typically voxelID) into XYZ components
+template <typename T1, typename T2>
+inline void hostIDChopper(T1& X, T1& Y, T1& Z, const T2& ID, const unsigned char& nvXp2, const unsigned char& nvYp2) {
+    X = ID & (((T1)1 << nvXp2) - 1);  // & operation here equals modulo
+    Y = (ID >> nvXp2) & (((T1)1 << nvYp2) - 1);
+    Z = (ID) >> (nvXp2 + nvYp2);
+}
+
+// Packs XYZ components back to a long ID (typically voxelID)
+template <typename T1, typename T2>
+inline void hostIDPacker(T1& ID,
+                         const T2& X,
+                         const T2& Y,
+                         const T2& Z,
+                         const unsigned char& nvXp2,
+                         const unsigned char& nvYp2) {
+    ID = X;
+    ID += Y << nvXp2;
+    ID += Z << (nvXp2 + nvYp2);
+}
+
+// From a voxelID to (usually double-precision) xyz coordinate
+template <typename T1, typename T2, typename T3>
+inline void hostVoxelID2Position(T1& X,
+                                 T1& Y,
+                                 T1& Z,
+                                 const T2& ID,
+                                 const T3& subPosX,
+                                 const T3& subPosY,
+                                 const T3& subPosZ,
+                                 const unsigned char& nvXp2,
+                                 const unsigned char& nvYp2,
+                                 const T1& voxelSize,
+                                 const T1& l) {
+    T2 voxelIDX, voxelIDY, voxelIDZ;
+    hostIDChopper<T2, T2>(voxelIDX, voxelIDY, voxelIDZ, ID, nvXp2, nvYp2);
+    X = (T1)voxelIDX * voxelSize + (T1)subPosX * l;
+    Y = (T1)voxelIDY * voxelSize + (T1)subPosY * l;
+    Z = (T1)voxelIDZ * voxelSize + (T1)subPosZ * l;
 }
 
 template <typename T1>

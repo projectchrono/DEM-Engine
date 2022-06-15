@@ -7,7 +7,7 @@
 #include <mutex>
 #include <vector>
 #include <thread>
-// #include <set>
+#include <set>
 
 #include <core/ApiVersion.h>
 #include <core/utils/ManagedAllocator.hpp>
@@ -31,6 +31,7 @@ class DEMSolverStateDataDT;
 /// DynamicThread class
 class DEMDynamicThread {
   protected:
+    WorkerReportChannel* pPagerToMain;
     ThreadManager* pSchedSupport;
     GpuManager* pGpuDistributor;
 
@@ -93,8 +94,9 @@ class DEMDynamicThread {
     std::vector<float3, ManagedAllocator<float3>> relPosNode3;
 
     // External object's components may need the following arrays to store some extra defining features of them. We
-    // assume there are usually not too many of them in a simulation. Relative position w.r.t. the owner. For example,
-    // the following 3 arrays may hold center points for plates, or tip positions for cones.
+    // assume there are usually not too many of them in a simulation.
+    // Relative position w.r.t. the owner. For example, the following 3 arrays may hold center points for plates, or tip
+    // positions for cones.
     std::vector<float, ManagedAllocator<float>> relPosEntityX;
     std::vector<float, ManagedAllocator<float>> relPosEntityY;
     std::vector<float, ManagedAllocator<float>> relPosEntityZ;
@@ -123,6 +125,9 @@ class DEMDynamicThread {
     // Clump's family identification code. Used in determining whether they can be contacts between two families, and
     // whether a family has prescribed motions.
     std::vector<family_t, ManagedAllocator<family_t>> familyID;
+
+    // The (impl-level) family IDs whose entities should not be outputted to files
+    std::vector<family_t, ManagedAllocator<family_t>> familiesNoOutput;
 
     // The voxel ID (split into 3 parts, representing XYZ location)
     std::vector<voxelID_t, ManagedAllocator<voxelID_t>> voxelID;
@@ -182,9 +187,6 @@ class DEMDynamicThread {
     // Time elapsed in current simulation
     float timeElapsed = 0.f;
 
-    // Set to true only when a user call is finished. Set to false otherwise.
-    bool userCallDone = false;
-
     // If true, dT needs to re-process idA- and idB-related data arrays before collecting forces, as those arrays are
     // freshly obtained from kT.
     bool contactPairArr_isFresh = true;
@@ -210,16 +212,16 @@ class DEMDynamicThread {
     std::vector<materialsOffset_t, ManagedAllocator<materialsOffset_t>> materialTupleOffset;
 
     // dT's copy of family map
-    // This maps like this: map.at(user family number) = (corresponding impl-level family number)
-    // TODO: Host side OK? And should this be given to wT? It should.
-    std::unordered_map<unsigned int, family_t> familyNumberMap;
+    // TODO: Host side OK? And should this be given to wT?
+    std::unordered_map<unsigned int, family_t> familyUserImplMap;
+    std::unordered_map<family_t, unsigned int> familyImplUserMap;
 
   public:
     friend class DEMSolver;
     friend class DEMKinematicThread;
 
-    DEMDynamicThread(ThreadManager* pSchedSup, GpuManager* pGpuDist)
-        : pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
+    DEMDynamicThread(WorkerReportChannel* pPager, ThreadManager* pSchedSup, GpuManager* pGpuDist)
+        : pPagerToMain(pPager), pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
         GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
         GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataDT), cudaMemAttachGlobal));
 
@@ -228,6 +230,7 @@ class DEMDynamicThread {
         // Get a device/stream ID to use from the GPU Manager
         streamInfo = pGpuDistributor->getAvailableStream();
 
+        pPagerToMain->userCallDone = false;
         pSchedSupport->dynamicShouldJoin = false;
         pSchedSupport->dynamicStarted = false;
 
@@ -265,6 +268,15 @@ class DEMDynamicThread {
     // Compute total KE of all clumps
     float getKineticEnergy();
 
+    // Get this owner's position in user unit
+    float3 getOwnerPos(bodyID_t ownerID) const;
+    // Get this owner's angular velocity
+    float3 getOwnerAngVel(bodyID_t ownerID) const;
+    // Get this owner's quaternion
+    float4 getOwnerOriQ(bodyID_t ownerID) const;
+    // Get this owner's velocity
+    float3 getOwnerVel(bodyID_t ownerID) const;
+
     // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
     void allocateManagedArrays(size_t nOwnerBodies,
                                size_t nOwnerClumps,
@@ -280,29 +292,33 @@ class DEMDynamicThread {
                                unsigned int nMatTuples);
 
     // Data type TBD, should come from JITCed headers
-    void populateManagedArrays(const std::vector<inertiaOffset_t>& input_clump_types,
-                               const std::vector<float3>& input_clump_xyz,
-                               const std::vector<float3>& input_clump_vel,
-                               const std::vector<unsigned int>& input_clump_family,
-                               const std::vector<float3>& input_ext_obj_xyz,
-                               const std::vector<unsigned int>& input_ext_obj_family,
-                               const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                               const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
-                               const std::vector<float>& clumps_mass_types,
-                               const std::vector<float3>& clumps_moi_types,
-                               const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                               const std::vector<std::vector<float3>>& clumps_sp_location_types,
-                               const std::vector<float>& mat_E,
-                               const std::vector<float>& mat_nu,
-                               const std::vector<float>& mat_CoR,
-                               const std::vector<float>& mat_mu,
-                               const std::vector<float>& mat_Crr);
+    void initManagedArrays(const std::vector<inertiaOffset_t>& input_clump_types,
+                           const std::vector<float3>& input_clump_xyz,
+                           const std::vector<float3>& input_clump_vel,
+                           const std::vector<unsigned int>& input_clump_family,
+                           const std::vector<float3>& input_ext_obj_xyz,
+                           const std::vector<unsigned int>& input_ext_obj_family,
+                           const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
+                           const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
+                           const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
+                           const std::vector<float>& clumps_mass_types,
+                           const std::vector<float3>& clumps_moi_types,
+                           const std::vector<std::vector<float>>& clumps_sp_radii_types,
+                           const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                           const std::vector<float>& mat_E,
+                           const std::vector<float>& mat_nu,
+                           const std::vector<float>& mat_CoR,
+                           const std::vector<float>& mat_mu,
+                           const std::vector<float>& mat_Crr,
+                           const std::set<unsigned int>& no_output_families,
+                           std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs);
 
     // Put sim data array pointers in place
     void packDataPointers();
     void packTransferPointers(DEMKinematicThread* kT);
 
-    void WriteCsvAsSpheres(std::ofstream& ptFile) const;
+    void writeSpheresAsChpf(std::ofstream& ptFile) const;
+    void writeSpheresAsCsv(std::ofstream& ptFile) const;
 
     // Called each time when the user calls DoStepDynamicsSync.
     void startThread();
@@ -311,9 +327,7 @@ class DEMDynamicThread {
     // It is called upon construction.
     void workerThread();
 
-    // Query the value of userCallDone
-    bool isUserCallDone();
-    // Reset userCallDone back to false
+    // Reset kT--dT interaction coordinator stats
     void resetUserCallStat();
     // Return the approximate RAM usage
     size_t estimateMemUsage() const;
@@ -333,10 +347,10 @@ class DEMDynamicThread {
     // Migrate contact history to fit the structure of the newly received contact array
     inline void migrateContactHistory();
 
-    // update clump-based acceleration array based on sphere-based force array
+    // Update clump-based acceleration array based on sphere-based force array
     inline void calculateForces();
 
-    // update clump pos/oriQ and vel/omega based on acceleration
+    // Update clump pos/oriQ and vel/omega based on acceleration
     inline void integrateClumpMotions();
 
     // Some per-step checks/modification, done before integration, but after force calculation (thus sort of in the

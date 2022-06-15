@@ -84,8 +84,7 @@ inline __device__ void IDPacker(T1& ID,
                                 const T2& Z,
                                 const unsigned char& nvXp2,
                                 const unsigned char& nvYp2) {
-    ID = 0;
-    ID += X;
+    ID = X;
     ID += Y << nvXp2;
     ID += Z << (nvXp2 + nvYp2);
 }
