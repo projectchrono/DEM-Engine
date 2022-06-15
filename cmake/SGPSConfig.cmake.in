@@ -5,6 +5,14 @@
 # SGPS_INCLUDE_DIRS
 # SGPS_LIBRARIES
 #
+# Requires the following packages to be loaded first:
+#
+# CUDAToolkit
+#
+
+if (NOT CUDAToolkit_FOUND AND NOT SGPS_IGNORE_MISSING_CUDA)
+	message(SEND_ERROR "SGPS requires the CUDAToolkit package in order to build build. To suppress this error, set the variable SGPS_IGNORE_MISSING_CUDA.")
+endif()
 
 cmake_path(GET CMAKE_CURRENT_LIST_FILE PARENT_PATH SGPSCMakeDir)
 
