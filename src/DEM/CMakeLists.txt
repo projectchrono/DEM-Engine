@@ -8,7 +8,6 @@ add_library(DEM OBJECT)
 
 target_include_directories(
 	DEM
-	PUBLIC ${NVIDIAJitifyPath}
 	PUBLIC ${ProjectIncludeSource}
 	PUBLIC ${ProjectIncludeGenerated}
 	PUBLIC ${NVIDIAMathDir}

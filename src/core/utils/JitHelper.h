@@ -10,7 +10,7 @@
 #include <vector>
 #include <unordered_map>
 
-#include <jitify.hpp>
+#include <jitify/jitify.hpp>
 
 class JitHelper {
   public:

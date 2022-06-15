@@ -8,7 +8,6 @@ add_library(sph OBJECT)
 
 target_include_directories(
 	sph
-	PUBLIC ${NVIDIAJitifyPath}
 	PUBLIC ${ProjectIncludeSource}
 	PUBLIC ${ProjectIncludeGenerated}
 	PUBLIC ${NVIDIAMathDir}

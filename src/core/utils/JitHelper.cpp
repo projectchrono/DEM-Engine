@@ -6,7 +6,7 @@
 #include <filesystem>
 #include <string>
 
-#include <jitify.hpp>
+#include <jitify/jitify.hpp>
 
 #include <core/ApiVersion.h>
 #include <core/utils/JitHelper.h>

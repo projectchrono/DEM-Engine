@@ -12,6 +12,13 @@ configure_file(
 	@ONLY
 )
 
+message(STATUS "${core_message} Extracting NVIDIA Jitify header...") 
+configure_file(
+	${NVIDIAJitifyPath}/jitify.hpp
+	${CMAKE_BINARY_DIR}/src/jitify/jitify.hpp
+	COPYONLY
+)
+
 add_library(core OBJECT)
 
 
@@ -19,7 +26,6 @@ target_include_directories(
 	core
 	PUBLIC $<BUILD_INTERFACE:${ProjectIncludeSource}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 	PUBLIC $<BUILD_INTERFACE:${ProjectIncludeGenerated}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-	PUBLIC $<BUILD_INTERFACE:${NVIDIAJitifyPath}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 	PUBLIC $<BUILD_INTERFACE:${NVIDIAMathDir}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
@@ -80,5 +86,11 @@ install(
 install(
 	DIRECTORY ${NVIDIAMathDir}/nvmath
 		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+install(
+	FILES 
+		"${NVIDIAJitifyPath}/jitify.hpp"
+	DESTINATION 
+		${CMAKE_INSTALL_INCLUDEDIR}/jitify
 )
 

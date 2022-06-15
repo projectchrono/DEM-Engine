@@ -14,7 +14,6 @@ target_include_directories(
 	algorithms	
 	PUBLIC ${ProjectIncludeSource}
 	PUBLIC ${ProjectIncludeGenerated}
-	PUBLIC ${NVIDIAJitifyPath}
 	PUBLIC ${NVIDIAMathDir}
 )
 
