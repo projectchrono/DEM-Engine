@@ -118,15 +118,79 @@ set_target_properties(sbel_gpu_physics
 	LINKER_LANGUAGE CUDA
 )
 
+# ---------------------------------------------------------------------------- #
+# Export and Install The Generated Targets 
+# ---------------------------------------------------------------------------- #
+
+set(config_directory ${CMAKE_INSTALL_LIBDIR}/cmake/SGPS)
+
+# Install the library, creating an export target for it as well 
 install(
-	TARGETS sbel_gpu_physics EXPORT SGPS
+	TARGETS sbel_gpu_physics EXPORT SGPSTargets
 	LIBRARY
 		DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
-install(
-	EXPORT SGPS 
-		DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/SGPS/
+# Export the generated library target
+export(EXPORT SGPSTargets
+	FILE "${CMAKE_CURRENT_BINARY_DIR}/SGPS/SGPSTargets.cmake"
+	NAMESPACE SGPS::
 )
-	
+
+# Set the install location for the exported target file 
+install(
+	EXPORT SGPSTargets
+	DESTINATION 
+		${config_directory}
+	NAMESPACE SGPS::
+)
+
+
+# These macros aid in the generation of the installable config files 
+include(CMakePackageConfigHelpers)
+
+
+# Generate the **Build Tree** version of SGPSConfig.cmake from the base file
+set(CONF_INCLUDE_DIRS "${ProjectIncludeSource}" "${ProjectIncludeGenerated}")
+
+configure_file(cmake/SGPSConfig.cmake.in
+	"${CMAKE_CURRENT_BINARY_DIR}/SGPS/SGPSConfig.cmake"
+	@ONLY
+)
+
+
+# Generate the _Install Tree_ version of SGPSConfig.cmake from the base file
+file(RELATIVE_PATH REL_INCLUDE_DIR ${CMAKE_INSTALL_PREFIX}/${config_directory} ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR})
+set(CONF_INCLUDE_DIRS "\${SGPSCMakeDir}/${REL_INCLUDE_DIR}")
+
+# NOTE: This is placed in CMAKE_FILES_DIRECTORY to keep it out of the build tree
+configure_file(cmake/SGPSConfig.cmake.in
+	"${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/SGPSConfig.cmake"
+	@ONLY
+)
+
+
+# Automatically generate a SGPSConfigVersion.cmake file
+
+write_basic_package_version_file(
+	${CMAKE_CURRENT_BINARY_DIR}/SGPS/SGPSConfigVersion.cmake
+	VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
+	COMPATIBILITY AnyNewerVersion
+)
+
+# Install the generated config files
+install(
+	FILES
+		"${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/SGPSConfig.cmake"
+		"${CMAKE_CURRENT_BINARY_DIR}/SGPS/SGPSConfigVersion.cmake"
+	DESTINATION
+		${config_directory}
+)
+
+ 
+
+# ---------------------------------------------------------------------------- #
+# Build embedded demos
+# ---------------------------------------------------------------------------- #
 add_subdirectory(src/demo)
+
