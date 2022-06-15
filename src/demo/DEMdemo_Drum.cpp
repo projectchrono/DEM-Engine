@@ -36,7 +36,7 @@ int main() {
     float3 MOI = make_float3(1. / 5. * mass * (1 * 1 + 2 * 2), 1. / 5. * mass * (1 * 1 + 2 * 2),
                              1. / 5. * mass * (1 * 1 + 1 * 1));
     // We can scale this general template to make it smaller, like a DEM particle that you would actually use
-    float scaling = 0.008;
+    float scaling = 0.006;
 
     auto mat_type_sand = DEM_sim.LoadMaterialType(1e9, 0.3, 0.8);
     auto mat_type_drum = DEM_sim.LoadMaterialType(2e9, 0.3, 0.9);
@@ -54,16 +54,16 @@ int main() {
         double mult = 0.5 * (i + 1);
 
         // Then allocate the clump template definition arrays (all in SI)
-        float this_mass = mult * scaling * scaling * scaling * mass;
-        float3 this_MOI = mult * scaling * scaling * scaling * scaling * scaling * MOI;
+        float this_mass = mult * scaling * scaling * scaling * mass * 10.;
+        float3 this_MOI = mult * scaling * scaling * scaling * scaling * scaling * MOI * 10.;
         std::vector<float> this_radii(radii);
         std::vector<float3> this_relPos(relPos);
         std::transform(radii.begin(), radii.end(), this_radii.begin(), [scaling](float& r) { return r * scaling; });
         std::transform(relPos.begin(), relPos.end(), this_relPos.begin(), [scaling](float3& r) { return r * scaling; });
 
         // It returns a handle to this clump template
-        clump_types.push_back(DEM_sim.LoadClumpType(this_mass, this_MOI, this_radii, this_relPos, mat_type_sand));
-        // clump_types.push_back(DEM_sim.LoadClumpSimpleSphere(this_mass, 2. * scaling, mat_type_sand));
+        // clump_types.push_back(DEM_sim.LoadClumpType(this_mass, this_MOI, this_radii, this_relPos, mat_type_sand));
+        clump_types.push_back(DEM_sim.LoadClumpSimpleSphere(this_mass, 2. * scaling, mat_type_sand));
 
         // std::cout << "Adding a clump with mass: " << this_mass << std::endl;
         // std::cout << "This clump's MOI: " << this_MOI.x << ", " << this_MOI.y << ", " << this_MOI.z << std::endl;
@@ -138,7 +138,7 @@ int main() {
     DEM_sim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/DEMdemo_Drum_Test";
+    out_dir += "/DEMdemo_Drum";
     create_directory(out_dir);
 
     float time_end = 30.0;

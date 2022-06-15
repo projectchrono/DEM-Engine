@@ -24,7 +24,7 @@
 
 // Forward declare jitify::Program to avoid downstream dependency
 namespace jitify {
-  class Program;
+class Program;
 }
 
 namespace sgps {
