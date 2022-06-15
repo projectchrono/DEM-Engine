@@ -58,6 +58,7 @@ set_target_properties(
 	PUBLIC_HEADER "${core_headers}"
 )
 
+# Install Core Headers
 install(
 	DIRECTORY ${ProjectIncludeSource}/core
 		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
@@ -67,10 +68,17 @@ install(
 			PATTERN "chpf/docs" EXCLUDE
 )
 
+# Install Generated Headers 
 install(
 	FILES 
 		"${CMAKE_BINARY_DIR}/src/core/ApiVersion.h"
 	DESTINATION
 		${CMAKE_INSTALL_INCLUDEDIR}/core
+)
+
+# Install Third-party Headers 
+install(
+	DIRECTORY ${NVIDIAMathDir}/nvmath
+		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
