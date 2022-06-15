@@ -28,13 +28,13 @@ set(DEM_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMModels.h
 	${CMAKE_CURRENT_SOURCE_DIR}/VariableTypes.h
 	${CMAKE_CURRENT_SOURCE_DIR}/Boundaries.h
+	${CMAKE_CURRENT_SOURCE_DIR}/HostSideHelpers.hpp
 )
 
 set(DEM_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/kT.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/dT.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/ApiSystem.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/HostSideHelpers.cpp
 )
 
 target_sources(

@@ -8,7 +8,7 @@
 #include <nvmath/helper_math.cuh>
 
 #include <algorithms/DEMCubBasedSubroutines.h>
-#include <DEM/HostSideHelpers.cpp>
+#include <DEM/HostSideHelpers.hpp>
 
 #include <algorithms/DEMCubWrappers.cu>
 

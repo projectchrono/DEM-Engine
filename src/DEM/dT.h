@@ -7,6 +7,7 @@
 #include <mutex>
 #include <vector>
 #include <thread>
+#include <unordered_map>
 #include <set>
 
 #include <core/ApiVersion.h>
@@ -19,7 +20,12 @@
 #include <DEM/DEMDefines.h>
 #include <DEM/DEMStructs.h>
 
-#include <core/utils/JitHelper.h>
+// #include <core/utils/JitHelper.h>
+
+// Forward declare jitify::Program to avoid downstream dependency
+namespace jitify {
+  class Program;
+}
 
 namespace sgps {
 

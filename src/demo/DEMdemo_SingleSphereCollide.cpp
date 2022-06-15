@@ -6,11 +6,12 @@
 #include <core/utils/ThreadManager.h>
 #include <core/utils/chpf/particle_writer.hpp>
 #include <DEM/ApiSystem.h>
-#include <DEM/HostSideHelpers.cpp>
+#include <DEM/HostSideHelpers.hpp>
 
 #include <filesystem>
 #include <cstdio>
 #include <time.h>
+#include <filesystem>
 
 using namespace sgps;
 using namespace std::filesystem;

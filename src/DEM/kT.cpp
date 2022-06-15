@@ -8,9 +8,10 @@
 
 #include <core/ApiVersion.h>
 #include <core/utils/chpf/particle_writer.hpp>
+#include <core/utils/JitHelper.h>
 #include <DEM/kT.h>
 #include <DEM/dT.h>
-#include <DEM/HostSideHelpers.cpp>
+#include <DEM/HostSideHelpers.hpp>
 #include <DEM/DEMDefines.h>
 
 #include <algorithms/DEMCubBasedSubroutines.h>

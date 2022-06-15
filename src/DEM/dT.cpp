@@ -9,9 +9,10 @@
 
 #include <core/ApiVersion.h>
 #include <core/utils/chpf/particle_writer.hpp>
+#include <core/utils/JitHelper.h>
 #include <DEM/dT.h>
 #include <DEM/kT.h>
-#include <DEM/HostSideHelpers.cpp>
+#include <DEM/HostSideHelpers.hpp>
 #include <nvmath/helper_math.cuh>
 #include <DEM/DEMDefines.h>
 

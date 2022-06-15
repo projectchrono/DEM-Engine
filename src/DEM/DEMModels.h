@@ -12,7 +12,7 @@
 
 #include <DEM/DEMDefines.h>
 #include <DEM/DEMStructs.h>
-#include <DEM/HostSideHelpers.cpp>
+#include <DEM/HostSideHelpers.hpp>
 
 namespace sgps {
 
