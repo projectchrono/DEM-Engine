@@ -30,9 +30,6 @@ target_link_libraries(
 
 set(core_headers
 	${CMAKE_BINARY_DIR}/src/core/ApiVersion.h
-)
-
-set(core_utils_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ManagedAllocator.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ManagedMemory.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/JitHelper.h
@@ -58,7 +55,7 @@ set_target_properties(
 	core PROPERTIES 
 	POSITION_INDEPENDENT_CODE True
 	CXX_STANDARD ${CXXSTD_SUPPORTED}
-	PUBLIC_HEADER "${core_headers};${core_utils_headers}"
+	PUBLIC_HEADER "${core_headers}"
 )
 
 install(
@@ -68,5 +65,12 @@ install(
 			PATTERN "*.h"
 			PATTERN "*.hpp"
 			PATTERN "chpf/docs" EXCLUDE
+)
+
+install(
+	FILES 
+		"${CMAKE_BINARY_DIR}/src/core/ApiVersion.h"
+	DESTINATION
+		${CMAKE_INSTALL_INCLUDEDIR}/core
 )
 
