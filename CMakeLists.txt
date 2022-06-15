@@ -111,10 +111,14 @@ target_include_directories(sbel_gpu_physics
 	PUBLIC ${CORE_INTERFACE}
 )
 
+target_link_libraries(sbel_gpu_physics
+	PUBLIC CUDA::cudart
+	PUBLIC CUDA::nvrtc
+)
+
 # Attach include directories to the top-level library target
 set_target_properties(sbel_gpu_physics
 	PROPERTIES
-	INTERFACE_LINK_LIBRARIES "CUDA::cudart;CUDA::nvrtc"
 	LINKER_LANGUAGE CUDA
 )
 
