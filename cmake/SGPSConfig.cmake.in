@@ -6,7 +6,7 @@
 # SGPS_LIBRARIES
 #
 
-cmake_file(GET CMAKE_CURRENT_LIST_FILE PARENT_PATH SGPSCMakeDir)
+cmake_path(GET CMAKE_CURRENT_LIST_FILE PARENT_PATH SGPSCMakeDir)
 
 if (NOT TARGET sbel_gpu_physics AND NOT SGPS_BINARY_DIR)
 	include("${SGPSCMakeDir}/SGPSTargets.cmake")

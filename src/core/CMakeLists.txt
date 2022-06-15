@@ -30,6 +30,9 @@ target_link_libraries(
 
 set(core_headers
 	${CMAKE_BINARY_DIR}/src/core/ApiVersion.h
+)
+
+set(core_utils_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ManagedAllocator.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ManagedMemory.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/JitHelper.h
@@ -39,7 +42,6 @@ set(core_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/chpf/particle_writer.hpp
 )
 
-
 set(core_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/DebugInfo.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuManager.cpp
@@ -48,7 +50,7 @@ set(core_sources
 
 target_sources(
 	core
-	PUBLIC ${core_headers}
+	PUBLIC ${core_headers} ${core_utils_headers}
 	PRIVATE ${core_sources}
 )
 
@@ -56,12 +58,15 @@ set_target_properties(
 	core PROPERTIES 
 	POSITION_INDEPENDENT_CODE True
 	CXX_STANDARD ${CXXSTD_SUPPORTED}
-	PUBLIC_HEADER "${core_headers}"
+	PUBLIC_HEADER "${core_headers};${core_utils_headers}"
 )
 
 install(
-	TARGETS core
-	PUBLIC_HEADER
-		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/core
+	DIRECTORY ${ProjectIncludeSource}/core
+		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+		FILES_MATCHING 
+			PATTERN "*.h"
+			PATTERN "*.hpp"
+			PATTERN "chpf/docs" EXCLUDE
 )
 
