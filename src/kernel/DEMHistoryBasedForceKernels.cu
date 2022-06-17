@@ -44,6 +44,8 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
         float3 ALinVel, ARotVel, BLinVel, BRotVel;
         float AOwnerMass, ARadius, BOwnerMass, BRadius;
         sgps::materialsOffset_t bodyAMatType, bodyBMatType;
+        sgps::oriQ_t AoriQ0, AoriQ1, AoriQ2, AoriQ3;
+        sgps::oriQ_t BoriQ0, BoriQ1, BoriQ2, BoriQ3;
         // sgps::family_t AOwnerFamily, BOwnerFamily;
         // Take care of 2 bodies in order, bodyA first, grab location and velocity to local cache
         // We know in this kernel, bodyA will be a sphere; bodyB can be something else
@@ -61,7 +63,6 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             AOwnerMass = MassProperties[granData->inertiaPropOffsets[bodyAOwner]];
 
             // AOwnerFamily = granData->familyID[bodyAOwner];
-            sgps::oriQ_t AoriQ0, AoriQ1, AoriQ2, AoriQ3;
 
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 AOwnerPos.x, AOwnerPos.y, AOwnerPos.z, granData->voxelID[bodyAOwner], granData->locX[bodyAOwner],
@@ -98,7 +99,6 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             bodyBMatType = granData->materialTupleOffset[sphereID];
             BOwnerMass = MassProperties[granData->inertiaPropOffsets[bodyBOwner]];
             // BOwnerFamily = granData->familyID[bodyBOwner];
-            sgps::oriQ_t BoriQ0, BoriQ1, BoriQ2, BoriQ3;
 
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 BOwnerPos.x, BOwnerPos.y, BOwnerPos.z, granData->voxelID[bodyBOwner], granData->locX[bodyBOwner],
@@ -132,7 +132,6 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             BRadius = 10000.f;
             float myRelPosX, myRelPosY, myRelPosZ;
             float3 bodyBRot;
-            sgps::oriQ_t BoriQ0, BoriQ1, BoriQ2, BoriQ3;
 
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 BOwnerPos.x, BOwnerPos.y, BOwnerPos.z, granData->voxelID[bodyBOwner], granData->locX[bodyBOwner],
@@ -192,11 +191,26 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             {
                 float3 locCPA = contactPnt - AOwnerPos;
                 float3 locCPB = contactPnt - BOwnerPos;
+                // Now map this contact point location to bodies' local ref
+                applyOriQ2Vector3<float, sgps::oriQ_t>(locCPA.x, locCPA.y, locCPA.z, AoriQ0, -AoriQ1, -AoriQ2, -AoriQ3);
+                applyOriQ2Vector3<float, sgps::oriQ_t>(locCPB.x, locCPB.y, locCPB.z, BoriQ0, -BoriQ1, -BoriQ2, -BoriQ3);
                 granData->contactPointGeometryA[myContactID] = locCPA;
                 granData->contactPointGeometryB[myContactID] = locCPB;
                 // We also need the relative velocity between A and B in global frame to use in the damping terms
-                velB2A = (ALinVel + cross(ARotVel, locCPA)) - (BLinVel + cross(BRotVel, locCPB));
+                // To get that, we need contact points' rotational velocity in GLOBAL frame
+                float3 rotVelCPA = cross(ARotVel, locCPA);
+                float3 rotVelCPB = cross(BRotVel, locCPB);
+                applyOriQ2Vector3<float, sgps::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AoriQ0, AoriQ1, AoriQ2,
+                                                       AoriQ3);
+                applyOriQ2Vector3<float, sgps::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BoriQ0, BoriQ1, BoriQ2,
+                                                       BoriQ3);
+                velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
+                // Get contact history from global memory
                 delta_tan = granData->contactHistory[myContactID];
+                // if (length(rotVelCPA)>10.) {
+                // printf("rotVelCPA is %e\n", length(rotVelCPA));
+                // printf("ALinVel is %e\n", length(ALinVel));
+                // }
             }
 
             // The following part, the force model, is user-specifiable

@@ -142,16 +142,22 @@ inline __device__ void normalizeVector3(T1& x, T1& y, T1& z) {
 
 // Hamilton product of 2 quaternions
 template <typename T1>
-inline __device__ void
-HamiltonProduct(T1& A1, T1& B1, T1& C1, T1& D1, const T1& a2, const T1& b2, const T1& c2, const T1& d2) {
-    T1 a1 = A1;
-    T1 b1 = B1;
-    T1 c1 = C1;
-    T1 d1 = D1;
-    A1 = a1 * a2 - b1 * b2 - c1 * c2 - d1 * d2;
-    B1 = a1 * b2 + b1 * a2 + c1 * d2 - d1 * c2;
-    C1 = a1 * c2 - b1 * d2 + c1 * a2 + d1 * b2;
-    D1 = a1 * d2 + b1 * c2 - c1 * b2 + d1 * a2;
+inline __device__ void HamiltonProduct(T1& A,
+                                       T1& B,
+                                       T1& C,
+                                       T1& D,
+                                       const T1 a1,
+                                       const T1 b1,
+                                       const T1 c1,
+                                       const T1 d1,
+                                       const T1 a2,
+                                       const T1 b2,
+                                       const T1 c2,
+                                       const T1 d2) {
+    A = a1 * a2 - b1 * b2 - c1 * c2 - d1 * d2;
+    B = a1 * b2 + b1 * a2 + c1 * d2 - d1 * c2;
+    C = a1 * c2 - b1 * d2 + c1 * a2 + d1 * b2;
+    D = a1 * d2 + b1 * c2 - c1 * b2 + d1 * a2;
 }
 
 /**

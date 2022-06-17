@@ -109,29 +109,26 @@ inline __device__ void integratePos(sgps::bodyID_t thisClump, sgps::DEMDataDT* g
     if (!RotPrescribed) {
         // Then integrate the quaternion
         // Exp map-based rotation angle calculation
-        double deltaQ0;
+        double deltaQ0 = 1;
         double deltaQ1 = granData->omgBarX[thisClump];
         double deltaQ2 = granData->omgBarY[thisClump];
         double deltaQ3 = granData->omgBarZ[thisClump];
         double len = sqrt(deltaQ1 * deltaQ1 + deltaQ2 * deltaQ2 + deltaQ3 * deltaQ3);
-        // TODO: Why not just store omgBar, not hOmgBar (it's even better for integer representation purposes)
-        // TODO: Talk with Dan about this (is he insisting this because it has implications in rA?)
         double theta = 0.5 * h * len;  // 0.5*dt*len, delta rotation
-        if (len > SGPS_DEM_TINY_FLOAT) {
+        if (len > 0) {
             deltaQ0 = cos(theta);
             double s = sin(theta) / len;
             deltaQ1 *= s;
             deltaQ2 *= s;
             deltaQ3 *= s;
-        } else {
-            deltaQ0 = 1;
-            deltaQ1 = 0;
-            deltaQ2 = 0;
-            deltaQ3 = 0;
         }
-        // Hamilton product should maintain the unit-ness of quaternions
+        // Note: our omgBar is local, so the integration formula is deltaRot * Quat, not the other way around. Think it
+        // as a local rotation followed by another local rotation. Also, Hamilton product should automatically maintain
+        // the unit-ness of quaternions.
         HamiltonProduct<float>(granData->oriQ0[thisClump], granData->oriQ1[thisClump], granData->oriQ2[thisClump],
-                               granData->oriQ3[thisClump], deltaQ0, deltaQ1, deltaQ2, deltaQ3);
+                               granData->oriQ3[thisClump], deltaQ0, deltaQ1, deltaQ2, deltaQ3,
+                               granData->oriQ0[thisClump], granData->oriQ1[thisClump], granData->oriQ2[thisClump],
+                               granData->oriQ3[thisClump]);
     }
 }
 

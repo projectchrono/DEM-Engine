@@ -24,9 +24,6 @@ int main() {
 
     srand(42);
 
-    // total number of random clump templates to generate
-    int num_template = 6;
-
     // A general template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
     std::vector<float> radii = {1.0, 0.88, 0.64, 0.88, 0.64};
     std::vector<float3> relPos = {make_float3(0, 0, 0), make_float3(0, 0, 0.86), make_float3(0, 0, 1.44),
@@ -48,7 +45,7 @@ int main() {
     // An array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
     // Then randomly create some clump templates for filling the drum
-    for (int i = 0; i < num_template / 2; i++) {
+    for (int i = 0; i < 3; i++) {
         // A multiplier is added to the masses of different clumps, so that centrifuging separate those types. Consider
         // it separating materials with different densities.
         double mult = 0.5 * (i + 1);
@@ -63,7 +60,7 @@ int main() {
 
         // Load a (ellipsoid-shaped) clump and a sphere
         clump_types.push_back(DEM_sim.LoadClumpType(this_mass, this_MOI, this_radii, this_relPos, mat_type_sand));
-        clump_types.push_back(DEM_sim.LoadClumpSimpleSphere(this_mass, 2. * scaling, mat_type_sand));
+        clump_types.push_back(DEM_sim.LoadClumpSimpleSphere(this_mass, std::cbrt(2.0) * scaling, mat_type_sand));
 
         // std::cout << "Adding a clump with mass: " << this_mass << std::endl;
         // std::cout << "This clump's MOI: " << this_MOI.x << ", " << this_MOI.y << ", " << this_MOI.z << std::endl;
@@ -103,7 +100,7 @@ int main() {
     auto top_bot_planes = DEM_sim.AddExternalObject();
     top_bot_planes->AddPlane(make_float3(CylHeight / 2. - safe_delta, 0, 0), make_float3(-1, 0, 0), mat_type_drum);
     top_bot_planes->AddPlane(make_float3(-CylHeight / 2. + safe_delta, 0, 0), make_float3(1, 0, 0), mat_type_drum);
-    top_bot_planes->SetFamily(drum_family);
+    // top_bot_planes->SetFamily(drum_family);
     auto planes_tracker = DEM_sim.Track(top_bot_planes);
 
     // Then sample some particles inside the drum
@@ -116,9 +113,9 @@ int main() {
     unsigned int num_clumps = input_material_xyz.size();
     // Casually select from generated clump types
     for (unsigned int i = 0; i < num_clumps; i++) {
-        input_template_type.push_back(clump_types.at(i % num_template));
+        input_template_type.push_back(clump_types.at(i % clump_types.size()));
         // Every clump types gets a different family number
-        family_code.push_back(i % num_template);
+        family_code.push_back(i % clump_types.size());
     }
 
     // Finally, input to system
