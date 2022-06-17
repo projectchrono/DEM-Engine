@@ -1368,8 +1368,7 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_nbY_"] = std::to_string(nbY);
     strMap["_nbZ_"] = std::to_string(nbZ);
 
-    // This l needs to be more accurate
-    strMap["_l_"] = to_string_with_precision(l, 17);
+    strMap["_l_"] = to_string_with_precision(l);
     strMap["_voxelSize_"] = to_string_with_precision(m_voxelSize);
     strMap["_binSize_"] = to_string_with_precision(m_binSize);
 

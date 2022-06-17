@@ -419,7 +419,8 @@ inline void hostApplyOriQ2Vector3(T1& X, T1& Y, T1& Z, const T2& Q0, const T2& Q
         ((T2)2.0 * (Q0 * Q0 + Q3 * Q3) - (T2)1.0) * oldZ;
 }
 
-inline std::string to_string_with_precision(const double a_value, const unsigned int n = 10) {
+// Default accuracy is 17. This accuracy is especially needed for MOIs and length-unit (l).
+inline std::string to_string_with_precision(const double a_value, const unsigned int n = 17) {
     std::ostringstream out;
     out.precision(n);
     out << std::fixed << a_value;

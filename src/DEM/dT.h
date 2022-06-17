@@ -2,8 +2,6 @@
 //  Copyright (c) 2021, University of Wisconsin - Madison
 //  All rights reserved.
 
-#pragma once
-
 #include <mutex>
 #include <vector>
 #include <thread>

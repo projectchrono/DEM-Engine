@@ -3,7 +3,7 @@
 #include <DEM/DEMDefines.h>
 
 // I can only include CUDAMathHelpers.cu here and if I do it in other kernel files such as DEMBinSphereKernels.cu too,
-// there will be double-load problem where operators are re-defined. Is there a "pragma once" sort of thing here?
+// there will be double-load problem where operators are re-defined. Not sure how to resolve it.
 #include <kernel/CUDAMathHelpers.cu>
 
 // inline __device__ voxelID_t position2VoxelID

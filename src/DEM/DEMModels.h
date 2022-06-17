@@ -5,7 +5,6 @@
 #ifndef SGPS_DEM_MODEL_STASH
 #define SGPS_DEM_MODEL_STASH
 
-#pragma once
 #include <cstring>
 #include <cmath>
 #include <vector>

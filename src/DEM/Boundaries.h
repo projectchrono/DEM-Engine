@@ -2,7 +2,8 @@
 //  Copyright (c) 2021, University of Wisconsin - Madison
 //  All rights reserved.
 
-#pragma once
+#ifndef SGPS_DEM_BOUNDARIES
+#define SGPS_DEM_BOUNDARIES
 
 #include <vector>
 #include <limits>
@@ -156,3 +157,5 @@ struct DEMExternObj {
 };
 
 }  // namespace sgps
+
+#endif

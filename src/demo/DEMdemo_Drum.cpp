@@ -48,21 +48,21 @@ int main() {
     // An array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
     // Then randomly create some clump templates for filling the drum
-    for (int i = 0; i < num_template; i++) {
+    for (int i = 0; i < num_template / 2; i++) {
         // A multiplier is added to the masses of different clumps, so that centrifuging separate those types. Consider
         // it separating materials with different densities.
         double mult = 0.5 * (i + 1);
 
         // Then allocate the clump template definition arrays (all in SI)
-        float this_mass = mult * scaling * scaling * scaling * mass * 10.;
-        float3 this_MOI = mult * scaling * scaling * scaling * scaling * scaling * MOI * 10.;
+        float this_mass = mult * scaling * scaling * scaling * mass;
+        float3 this_MOI = mult * scaling * scaling * scaling * scaling * scaling * MOI;
         std::vector<float> this_radii(radii);
         std::vector<float3> this_relPos(relPos);
         std::transform(radii.begin(), radii.end(), this_radii.begin(), [scaling](float& r) { return r * scaling; });
         std::transform(relPos.begin(), relPos.end(), this_relPos.begin(), [scaling](float3& r) { return r * scaling; });
 
-        // It returns a handle to this clump template
-        // clump_types.push_back(DEM_sim.LoadClumpType(this_mass, this_MOI, this_radii, this_relPos, mat_type_sand));
+        // Load a (ellipsoid-shaped) clump and a sphere
+        clump_types.push_back(DEM_sim.LoadClumpType(this_mass, this_MOI, this_radii, this_relPos, mat_type_sand));
         clump_types.push_back(DEM_sim.LoadClumpSimpleSphere(this_mass, 2. * scaling, mat_type_sand));
 
         // std::cout << "Adding a clump with mass: " << this_mass << std::endl;
@@ -91,7 +91,7 @@ int main() {
     // Add drum
     auto Drum = DEM_sim.AddClumpTracked(Drum_template, make_float3(0));
     // Drum is family 10
-    unsigned int drum_family = 10;
+    unsigned int drum_family = 100;
     family_code.push_back(drum_family);
     // The drum rotates (facing X direction)
     DEM_sim.SetFamilyPrescribedAngVel(drum_family, "6.0", "0", "0");
@@ -103,7 +103,7 @@ int main() {
     auto top_bot_planes = DEM_sim.AddExternalObject();
     top_bot_planes->AddPlane(make_float3(CylHeight / 2. - safe_delta, 0, 0), make_float3(-1, 0, 0), mat_type_drum);
     top_bot_planes->AddPlane(make_float3(-CylHeight / 2. + safe_delta, 0, 0), make_float3(1, 0, 0), mat_type_drum);
-    // top_bot_planes->SetFamily(drum_family);
+    top_bot_planes->SetFamily(drum_family);
     auto planes_tracker = DEM_sim.Track(top_bot_planes);
 
     // Then sample some particles inside the drum

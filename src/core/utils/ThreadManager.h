@@ -2,7 +2,9 @@
 //  Copyright (c) 2021, University of Wisconsin - Madison
 //  All rights reserved.
 
-#pragma once
+#ifndef SGPS_THREAD_MANAGER
+#define SGPS_THREAD_MANAGER
+
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
@@ -85,3 +87,5 @@ class ThreadManager {
         return shouldWait;
     }
 };
+
+#endif

@@ -5,7 +5,6 @@
 #ifndef SGPS_DEM_MISC_DEFINES
 #define SGPS_DEM_MISC_DEFINES
 
-#pragma once
 #include <limits>
 #include <stdint.h>
 #include <algorithm>
