@@ -207,10 +207,6 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
                 velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
                 // Get contact history from global memory
                 delta_tan = granData->contactHistory[myContactID];
-                // if (length(rotVelCPA)>10.) {
-                // printf("rotVelCPA is %e\n", length(rotVelCPA));
-                // printf("ALinVel is %e\n", length(ALinVel));
-                // }
             }
 
             // The following part, the force model, is user-specifiable

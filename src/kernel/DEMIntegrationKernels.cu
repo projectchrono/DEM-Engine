@@ -122,13 +122,12 @@ inline __device__ void integratePos(sgps::bodyID_t thisClump, sgps::DEMDataDT* g
             deltaQ2 *= s;
             deltaQ3 *= s;
         }
-        // Note: our omgBar is local, so the integration formula is deltaRot * Quat, not the other way around. Think it
-        // as a local rotation followed by another local rotation. Also, Hamilton product should automatically maintain
-        // the unit-ness of quaternions.
+        // Note: Yes it is Quat * deltaRot, not the other way around. Also, Hamilton product should automatically
+        // maintain the unit-ness of quaternions.
         HamiltonProduct<float>(granData->oriQ0[thisClump], granData->oriQ1[thisClump], granData->oriQ2[thisClump],
-                               granData->oriQ3[thisClump], deltaQ0, deltaQ1, deltaQ2, deltaQ3,
-                               granData->oriQ0[thisClump], granData->oriQ1[thisClump], granData->oriQ2[thisClump],
-                               granData->oriQ3[thisClump]);
+                               granData->oriQ3[thisClump], granData->oriQ0[thisClump], granData->oriQ1[thisClump],
+                               granData->oriQ2[thisClump], granData->oriQ3[thisClump], deltaQ0, deltaQ1, deltaQ2,
+                               deltaQ3);
     }
 }
 

@@ -35,8 +35,8 @@ int main() {
     // We can scale this general template to make it smaller, like a DEM particle that you would actually use
     float scaling = 0.006;
 
-    auto mat_type_sand = DEM_sim.LoadMaterialType(1e9, 0.3, 0.8);
-    auto mat_type_drum = DEM_sim.LoadMaterialType(2e9, 0.3, 0.9);
+    auto mat_type_sand = DEM_sim.LoadMaterialType(1e9, 0.3, 0.3);
+    auto mat_type_drum = DEM_sim.LoadMaterialType(2e9, 0.3, 0.4);
 
     // Bin size needs to make sure no too-many-sphere-per-bin situation happens
     DEM_sim.InstructBinSize(scaling);
@@ -91,7 +91,7 @@ int main() {
     unsigned int drum_family = 100;
     family_code.push_back(drum_family);
     // The drum rotates (facing X direction)
-    DEM_sim.SetFamilyPrescribedAngVel(drum_family, "6.0", "0", "0");
+    DEM_sim.SetFamilyPrescribedAngVel(drum_family, "(t > 2.0) ? 6.0 : 0.0", "0", "0");
     // Disable contacts within drum components
     DEM_sim.DisableContactBetweenFamilies(drum_family, drum_family);
 
@@ -114,8 +114,8 @@ int main() {
     // Casually select from generated clump types
     for (unsigned int i = 0; i < num_clumps; i++) {
         input_template_type.push_back(clump_types.at(i % clump_types.size()));
-        // Every clump types gets a different family number
-        family_code.push_back(i % clump_types.size());
+        // Every clump type that has a unique mass, gets a unique family number
+        family_code.push_back((i % clump_types.size()) / 2);
     }
 
     // Finally, input to system
