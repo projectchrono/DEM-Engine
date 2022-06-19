@@ -17,7 +17,8 @@ SET(DEMOS
 		DEMdemo_Sieve
 		DEMdemo_SingleSphereCollide
 		DEMdemo_Stack
-		DEMdemo_Drum
+		DEMdemo_RotatingDrum
+		DEMdemo_Centrifuge
 		DEMdemo_GameOfLife
 		sphdemo
 		hello_world

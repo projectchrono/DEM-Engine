@@ -354,11 +354,19 @@ inline void hostCollectTorques(inertiaOffset_t* inertiaPropOffsets,
 }
 
 /// A light-weight grid/box sampler that can be used to generate the initial stage of the DEM system
-inline std::vector<float3> DEMBoxGridSampler(float3 BoxCenter, float3 HalfDims, float GridSize) {
+inline std::vector<float3> DEMBoxGridSampler(float3 BoxCenter,
+                                             float3 HalfDims,
+                                             float GridSizeX,
+                                             float GridSizeY = -1.0,
+                                             float GridSizeZ = -1.0) {
+    if (GridSizeY < 0)
+        GridSizeY = GridSizeX;
+    if (GridSizeZ < 0)
+        GridSizeZ = GridSizeX;
     std::vector<float3> points;
-    for (float z = BoxCenter.z - HalfDims.z; z <= BoxCenter.z + HalfDims.z; z += GridSize) {
-        for (float y = BoxCenter.y - HalfDims.y; y <= BoxCenter.y + HalfDims.y; y += GridSize) {
-            for (float x = BoxCenter.x - HalfDims.x; x <= BoxCenter.x + HalfDims.x; x += GridSize) {
+    for (float z = BoxCenter.z - HalfDims.z; z <= BoxCenter.z + HalfDims.z; z += GridSizeZ) {
+        for (float y = BoxCenter.y - HalfDims.y; y <= BoxCenter.y + HalfDims.y; y += GridSizeY) {
+            for (float x = BoxCenter.x - HalfDims.x; x <= BoxCenter.x + HalfDims.x; x += GridSizeX) {
                 float3 xyz;
                 xyz.x = x;
                 xyz.y = y;

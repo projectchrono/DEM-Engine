@@ -1002,7 +1002,7 @@ void DEMSolver::postJITResourceGenSanityCheck() {
     if (unable_jitify_all) {
         SGPS_DEM_WARNING(
             "There are %u clump templates loaded, but only %u templates (totalling %u components) are jitifiable due "
-            "to some of the clumps are big and/or there are many types of clumps .\nIf you have external objects "
+            "to some of the clumps are big and/or there are many types of clumps.\nIf you have external objects "
             "represented by spherical decomposition (a.k.a. intend to use big clumps), there is probably nothing to "
             "worry about.\nOtherwise, you may want to change the way this problem is formulated so you have fewer "
             "clump templates.",

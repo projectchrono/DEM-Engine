@@ -569,6 +569,15 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
         radius = radiiSphere.at(clumpComponentOffsetExt.at(i));
         outstrstream << "," << radius;
 
+        // Only linear velocity
+        if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ABSV) {
+            float3 absv;
+            absv.x = vX.at(this_owner);
+            absv.y = vY.at(this_owner);
+            absv.z = vZ.at(this_owner);
+            outstrstream << "," << length(absv);
+        }
+
         // Family number needs to be user number
         if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
             outstrstream << "," << familyImplUserMap.at(this_family);
