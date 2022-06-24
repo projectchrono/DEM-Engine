@@ -185,6 +185,8 @@ class DEMDynamicThread {
     // destroyed; this is not physical, but also, considering the contact history tends to be miniscule, this is
     // probably not a big problem either.
     std::vector<float3, ManagedAllocator<float3>> contactHistory;
+    // Durations in time of persistent contact pairs
+    std::vector<float, ManagedAllocator<float>> contactDuration;
 
     size_t m_approx_bytes_used = 0;
 

@@ -40,7 +40,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
         float3 B2A;  // Unit vector pointing from body B to body A
         double overlapDepth;
         double3 AOwnerPos, bodyAPos, BOwnerPos, bodyBPos;
-        float3 ALinVel, ARotVel, BLinVel, BRotVel;
+        float3 ALinVel, ARotVel, rotVelCPA, BLinVel, BRotVel, rotVelCPB;
         float AOwnerMass, ARadius, BOwnerMass, BRadius;
         sgps::materialsOffset_t bodyAMatType, bodyBMatType;
         sgps::oriQ_t AoriQ0, AoriQ1, AoriQ2, AoriQ3;
@@ -186,15 +186,12 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
                 granData->contactPointGeometryB[myContactID] = locCPB;
                 // We also need the relative velocity between A and B in global frame to use in the damping terms
                 // To get that, we need contact points' rotational velocity in GLOBAL frame
-                float3 rotVelCPA = cross(ARotVel, locCPA);
-                float3 rotVelCPB = cross(BRotVel, locCPB);
+                rotVelCPA = cross(ARotVel, locCPA);
+                rotVelCPB = cross(BRotVel, locCPB);
                 applyOriQ2Vector3<float, sgps::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AoriQ0, AoriQ1, AoriQ2,
                                                        AoriQ3);
                 applyOriQ2Vector3<float, sgps::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BoriQ0, BoriQ1, BoriQ2,
                                                        BoriQ3);
-                velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
-                // Get contact history from global memory
-                delta_tan = granData->contactHistory[myContactID];
             }
 
             // The following part, the force model, is user-specifiable

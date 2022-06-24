@@ -59,6 +59,8 @@ class DEMSolver {
     void SetGravitationalAcceleration(float3 g) { G = g; }
     /// Set a constant time step size
     void SetTimeStepSize(double ts_size) { m_ts_size = ts_size; }
+    /// Get the currently cached constant time step size
+    double GetConstStepSize() { return m_ts_size; }
     /// Set the number of dT steps before it waits for a contact-pair info update from kT
     void SetCDUpdateFreq(int freq) { m_updateFreq = freq; }
     // TODO: Implement an API that allows setting ts size through a list

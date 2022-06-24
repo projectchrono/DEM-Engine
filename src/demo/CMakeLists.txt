@@ -16,7 +16,7 @@ SET(DEMOS
 		DEMdemo_Pile
 		DEMdemo_Sieve
 		DEMdemo_SingleSphereCollide
-		DEMdemo_Stack
+		DEMdemo_TestPack
 		DEMdemo_RotatingDrum
 		DEMdemo_Centrifuge
 		DEMdemo_GameOfLife
