@@ -311,6 +311,7 @@ std::shared_ptr<DEMExternObj> DEMSolver::AddBCPlane(const float3 pos,
                                                     const float3 normal,
                                                     const std::shared_ptr<DEMMaterial>& material) {
     std::shared_ptr<DEMExternObj> ptr = AddExternalObject();
+    // TODO: make the owner of this BC to have the same CoM as this BC
     ptr->AddPlane(pos, normal, material);
     return ptr;
 }

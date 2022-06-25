@@ -16,6 +16,53 @@ using namespace sgps;
 using namespace std::filesystem;
 const double PI = 3.141592653589793;
 
+void EllpsiodFallingOver(DEMSolver& DEM_sim) {
+    // An ellipsoid a,b,c = 0.2,0.2,0.5, represented several sphere components
+    std::vector<float> radii = {0.095, 0.136, 0.179, 0.204, 0.204, 0.179, 0.136, 0.095};
+    std::vector<float3> relPos = {make_float3(0, 0, 0.4),    make_float3(0, 0, 0.342),  make_float3(0, 0, 0.228),
+                                  make_float3(0, 0, 0.071),  make_float3(0, 0, -0.071), make_float3(0, 0, -0.228),
+                                  make_float3(0, 0, -0.342), make_float3(0, 0, -0.4)};
+    // Then calculate mass and MOI
+    float mass = 5.0;
+    // E, nu, CoR, mu, Crr
+    auto mat_type_1 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.5, 0.25, 0.2);
+    float3 MOI = make_float3(1. / 5. * mass * (0.2 * 0.2 + 0.5 * 0.5), 1. / 5. * mass * (0.2 * 0.2 + 0.5 * 0.5),
+                             1. / 5. * mass * (0.2 * 0.2 + 0.2 * 0.2));
+    auto ellipsoid_template = DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat_type_1);
+
+    // Add the ground
+    float3 normal_dir = make_float3(0, 0, 1);
+    float3 tang_dir = make_float3(0, 1, 0);
+    DEM_sim.AddBCPlane(make_float3(0, 0, 0), normal_dir, mat_type_1);
+
+    // Add an ellipsoid with init vel
+    auto ellipsoid = DEM_sim.AddClumpTracked(ellipsoid_template, normal_dir * 0.5, tang_dir * 0.3);
+    // DEM_sim.SetClumpFamilies(family_code);
+
+    DEM_sim.SetTimeStepSize(1e-3);
+    DEM_sim.Initialize();
+
+    float frame_time = 1e-1;
+    path out_dir = current_path();
+    out_dir += "/DEMdemo_TestPack";
+    create_directory(out_dir);
+    for (int i = 0; i < 6.0 / frame_time; i++) {
+        char filename[100];
+        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
+        DEM_sim.WriteClumpFile(std::string(filename));
+        std::cout << "Frame: " << i << std::endl;
+        float4 oriQ = ellipsoid->OriQ();
+        float3 angVel = ellipsoid->AngVel();
+        std::cout << "Time: " << frame_time * i << std::endl;
+        std::cout << "Quaternion of the ellipsoid: " << oriQ.x << ", " << oriQ.y << ", " << oriQ.z << ", " << oriQ.w
+                  << std::endl;
+        std::cout << "Angular velocity of the ellipsoid: " << angVel.x << ", " << angVel.y << ", " << angVel.z
+                  << std::endl;
+
+        DEM_sim.DoStepDynamics(frame_time);
+    }
+}
+
 void SphereRollUpIncline(DEMSolver& DEM_sim) {
     // Clump initial profile
     std::vector<float3> input_xyz;
@@ -40,6 +87,7 @@ void SphereRollUpIncline(DEMSolver& DEM_sim) {
     auto sphere = DEM_sim.AddClumpTracked(sphere_template, normal_dir * sphere_rad, tang_dir * 0.5);
     // DEM_sim.SetClumpFamilies(family_code);
 
+    DEM_sim.SetTimeStepSize(1e-5);
     DEM_sim.Initialize();
 
     float frame_time = 1e-5;
@@ -68,25 +116,13 @@ int main() {
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
 
     DEM_sim.InstructBoxDomainNumVoxel(22, 22, 20, 7.5e-11);
-    float step_size = 1e-5;
     DEM_sim.CenterCoordSys();
-    DEM_sim.SetTimeStepSize(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEM_sim.SetCDUpdateFreq(0);
 
-    // An ellipsoid
-    std::vector<float> radii = {0.2, 0.176, 0.128, 0.176, 0.128};
-    std::vector<float3> relPos = {make_float3(0, 0, 0), make_float3(0, 0, 0.172), make_float3(0, 0, 0.288),
-                                  make_float3(0, 0, -0.172), make_float3(0, 0, -0.288)};
-    // Then calculate mass and MOI
-    float mass = 5.0;
-    auto mat_type_1 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.5, 0.5, 0.3);
-    float3 MOI = make_float3(1. / 5. * mass * (0.2 * 0.2 + 0.4 * 0.4), 1. / 5. * mass * (0.2 * 0.2 + 0.4 * 0.4),
-                             1. / 5. * mass * (0.2 * 0.2 + 0.2 * 0.2));
-    auto ellipsoid_template = DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat_type_1);
-
     // Validation tests
-    SphereRollUpIncline(DEM_sim);
+    // SphereRollUpIncline(DEM_sim);
+    EllpsiodFallingOver(DEM_sim);
 
     std::cout << "DEMdemo_TestPack exiting..." << std::endl;
     // TODO: add end-game report APIs
