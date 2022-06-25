@@ -132,7 +132,7 @@ inline std::string DEM_HERTZIAN_FORCE_MODEL_FRICTIONLESS() {
         // printf("overlapDepth: %f\n", overlapDepth);
         // printf("kn * overlapDepth: %f\n", k_n * overlapDepth);
         // printf("gn * projection: %f\n", gamma_n * projection);
-        force = (k_n * overlapDepth + gamma_n * projection) * B2A;
+        force += (k_n * overlapDepth + gamma_n * projection) * B2A;
     )V0G0N";
 
     return model;

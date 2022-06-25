@@ -24,6 +24,7 @@ int main() {
     DEM_sim.SetVerbosity(INFO);
     // Output as CSV so no post-processing is needed
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
+    DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::XYZ);
     DEM_sim.SetSolverHistoryless(true);
 
     srand(777);
@@ -103,7 +104,8 @@ int main() {
     DEM_sim.DisableContactBetweenFamilies(10, 10);
 
     // The rule for changing family numbers is simple: you die, move to 10; live, move to 0. And then, family 10 will
-    // not be outputted. Dead to alive: if you have 3 alive neighbours
+    // not be outputted.
+    // Dead to alive: if you have 3 alive neighbours
     DEM_sim.ChangeFamilyWhen(
         10, 0, "float my_neighbours = length(acc * mass); return (my_neighbours > 2.9) && (my_neighbours < 3.1);");
     // Alive to dead, if less than 2 alive neighbours, or more than 3 alive neighbours (more than 6 dead neighbors, or

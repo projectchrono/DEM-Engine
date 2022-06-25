@@ -175,7 +175,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
                                              CoRProxy[bodyBMatType]);
             }
             // Variables that we need to report back (user referrable)
-            float3 velB2A, delta_tan, force;
+            float3 force = make_float3(0, 0, 0);
             {
                 float3 locCPA = contactPnt - AOwnerPos;
                 float3 locCPB = contactPnt - BOwnerPos;
