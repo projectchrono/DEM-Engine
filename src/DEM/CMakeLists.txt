@@ -16,6 +16,7 @@ target_include_directories(
 target_link_libraries(
 	DEM
 	PUBLIC CUB::CUB
+	PUBLIC ${ChPF_IMPORTED_NAME}
 )
 
 

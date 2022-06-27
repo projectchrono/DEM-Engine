@@ -7,7 +7,6 @@
 #include <thread>
 
 #include <core/ApiVersion.h>
-#include <core/utils/chpf/particle_writer.hpp>
 #include <core/utils/JitHelper.h>
 #include <DEM/kT.h>
 #include <DEM/dT.h>

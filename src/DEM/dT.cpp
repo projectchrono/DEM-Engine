@@ -7,8 +7,8 @@
 #include <thread>
 #include <algorithm>
 
+#include <chpf.hpp>
 #include <core/ApiVersion.h>
-#include <core/utils/chpf/particle_writer.hpp>
 #include <core/utils/JitHelper.h>
 #include <DEM/dT.h>
 #include <DEM/kT.h>
@@ -435,8 +435,8 @@ void DEMDynamicThread::initManagedArrays(const std::vector<inertiaOffset_t>& inp
 }
 
 void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
-    ParticleFormatWriter pw;
-    // pw.write(ptFile, ParticleFormatWriter::CompressionType::NONE, mass);
+	chpf::Writer pw;
+    // pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, mass);
     std::vector<float> posX(simParams->nSpheresGM);
     std::vector<float> posY(simParams->nSpheresGM);
     std::vector<float> posZ(simParams->nSpheresGM);
@@ -497,13 +497,14 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
     posX.resize(num_output_spheres);
     posY.resize(num_output_spheres);
     posZ.resize(num_output_spheres);
-    spRadii.resize(num_output_spheres);
-    pw.write(ptFile, ParticleFormatWriter::CompressionType::NONE, posX, posY, posZ, spRadii);
+    spRadii.resize(num_output_spheres); 
+	// TODO: Set {} to the list of column names
+    pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, {}, posX, posY, posZ, spRadii);
     // Write family numbers
     if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
         families.resize(num_output_spheres);
         // TODO: How to do that?
-        // pw.write(ptFile, ParticleFormatWriter::CompressionType::NONE, families);
+        // pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, {}, families);
     }
 }
 

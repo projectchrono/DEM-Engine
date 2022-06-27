@@ -22,8 +22,14 @@ project(
 # ---------------------------------------------------------------------------- #
 # Additional Packages
 # ---------------------------------------------------------------------------- #
+
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+include(FetchContent)
+
 include(cmake/FixNinjaColors.cmake)
 fix_ninja_colors()
+
 
 find_package(CUDAToolkit REQUIRED)
 
@@ -33,15 +39,36 @@ find_package(
 	#PATHS ${CMAKE_CURRENT_LIST_DIR}/thirdparty/cub/cub
 )
 
+# Find NVIDIA's Jitify library 
 find_path(
 	NVIDIAJitifyPath
 	NAMES jitify.hpp
 	PATHS "${CMAKE_CURRENT_LIST_DIR}/thirdparty/jitify"
 )
 
+# nvidia_helper_math doesn't require any extra configuration, so just set the path 
 set(NVIDIAMathDir ${CMAKE_CURRENT_LIST_DIR}/thirdparty/nvidia_helper_math)
 
-include(GNUInstallDirs)
+# Find ChPF, else fetch it 
+find_package(ChPF 3.0 QUIET)
+
+if (NOT ChPF_FOUND) 		
+	FetchContent_Declare(
+		ChPF
+		GIT_REPOSITORY	https://gitlab.com/uwsbel/chpf.git
+		GIT_TAG			859b62cc50a429c5b2db17f75bb8cdbc6d683cc5
+	)
+	FetchContent_MakeAvailable(ChPF)
+
+endif()
+
+# Based on whether ChPF was found or fetched, set the target name CMake can use to find it 
+if (ChPF_FOUND) 
+	set(ChPF_IMPORTED_NAME "ChPF::ChPF")
+elseif (chpf_POPULATED)
+	set(ChPF_IMPORTED_NAME "ChPF")
+endif()
+
 
 # ---------------------------------------------------------------------------- #
 # Global Configuration
@@ -114,6 +141,7 @@ target_include_directories(sbel_gpu_physics
 target_link_libraries(sbel_gpu_physics
 	PUBLIC CUDA::cudart
 	PUBLIC CUDA::nvrtc
+	PUBLIC ${ChPF_IMPORTED_NAME}
 )
 
 # Attach include directories to the top-level library target
@@ -151,7 +179,6 @@ install(
 
 
 # These macros aid in the generation of the installable config files 
-include(CMakePackageConfigHelpers)
 
 
 # Generate the **Build Tree** version of SGPSConfig.cmake from the base file
