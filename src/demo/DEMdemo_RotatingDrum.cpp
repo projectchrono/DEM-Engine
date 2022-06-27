@@ -154,7 +154,7 @@ int main() {
             //           << ", " << plane_quat.w << std::endl;
         }
 
-        DEM_sim.DoStepDynamics(step_size);
+        DEM_sim.DoDynamics(step_size);
         // We can quarry info out of this drum, since it is tracked
         // float3 drum_pos = Drum->Pos();
         // float3 drum_angVel = Drum->AngVel();

@@ -415,7 +415,7 @@ inline std::vector<float3> DEMCylSurfSampler(float3 CylCenter,
 
 /// Host version of applying a quaternion to a vector
 template <typename T1, typename T2>
-inline void hostApplyOriQ2Vector3(T1& X, T1& Y, T1& Z, const T2& Q0, const T2& Q1, const T2& Q2, const T2& Q3) {
+inline void hostapplyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Q0, const T2& Q1, const T2& Q2, const T2& Q3) {
     T1 oldX = X;
     T1 oldY = Y;
     T1 oldZ = Z;

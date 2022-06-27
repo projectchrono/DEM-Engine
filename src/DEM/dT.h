@@ -326,7 +326,7 @@ class DEMDynamicThread {
     void writeSpheresAsChpf(std::ofstream& ptFile) const;
     void writeSpheresAsCsv(std::ofstream& ptFile) const;
 
-    // Called each time when the user calls DoStepDynamicsSync.
+    // Called each time when the user calls DoDynamicsThenSync.
     void startThread();
 
     // The actual kernel things go here.

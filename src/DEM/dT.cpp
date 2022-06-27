@@ -479,8 +479,8 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
         float this_sp_rot_1 = oriQ1.at(this_owner);
         float this_sp_rot_2 = oriQ2.at(this_owner);
         float this_sp_rot_3 = oriQ3.at(this_owner);
-        hostApplyOriQ2Vector3<float, float>(this_sp_deviation_x, this_sp_deviation_y, this_sp_deviation_z,
-                                            this_sp_rot_0, this_sp_rot_1, this_sp_rot_2, this_sp_rot_3);
+        hostapplyOriQToVector3<float, float>(this_sp_deviation_x, this_sp_deviation_y, this_sp_deviation_z,
+                                             this_sp_rot_0, this_sp_rot_1, this_sp_rot_2, this_sp_rot_3);
         posX.at(num_output_spheres) = CoM.x + this_sp_deviation_x;
         posY.at(num_output_spheres) = CoM.y + this_sp_deviation_y;
         posZ.at(num_output_spheres) = CoM.z + this_sp_deviation_z;
@@ -563,8 +563,8 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
         float this_sp_rot_1 = oriQ1.at(this_owner);
         float this_sp_rot_2 = oriQ2.at(this_owner);
         float this_sp_rot_3 = oriQ3.at(this_owner);
-        hostApplyOriQ2Vector3<float, float>(this_sp_deviation.x, this_sp_deviation.y, this_sp_deviation.z,
-                                            this_sp_rot_0, this_sp_rot_1, this_sp_rot_2, this_sp_rot_3);
+        hostapplyOriQToVector3<float, float>(this_sp_deviation.x, this_sp_deviation.y, this_sp_deviation.z,
+                                             this_sp_rot_0, this_sp_rot_1, this_sp_rot_2, this_sp_rot_3);
         pos = CoM + this_sp_deviation;
         outstrstream << pos.x << "," << pos.y << "," << pos.z;
 
@@ -875,7 +875,7 @@ void DEMDynamicThread::workerThread() {
         // There is only one situation where dT needs to wait for kT to provide one initial CD result...
         // This is the `new-boot' case, where stampLastUpdateOfDynamic == -1; in any other situations, dT does not have
         // `drift-into-future-too-much' problem here, b/c if it has the problem then it would have been addressed at the
-        // end of last DoStepDynamics call, the final `ShouldWait' check.
+        // end of last DoDynamics call, the final `ShouldWait' check.
         if (pSchedSupport->stampLastUpdateOfDynamic < 0) {
             // In this `new-boot' case, we send kT a work order, b/c dT needs results from CD to proceed. After this one
             // instance, kT and dT may work in an async fashion.
@@ -1061,7 +1061,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
         std::unordered_map<std::string, std::string> qSubs = massMatSubs;
         qSubs.insert(simParamSubs.begin(), simParamSubs.end());
         quarry_stats_kernels = std::make_shared<jitify::Program>(
-            std::move(JitHelper::buildProgram("DEMQuarryKernels", JitHelper::KERNEL_DIR / "DEMQuarryKernels.cu", qSubs,
+            std::move(JitHelper::buildProgram("DEMQueryKernels", JitHelper::KERNEL_DIR / "DEMQueryKernels.cu", qSubs,
                                               {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
 }

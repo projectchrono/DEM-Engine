@@ -214,7 +214,7 @@ class DEMKinematicThread {
     // vulnerable if kT exited through dynamicsDone rather than control variable-based release.
     void breakWaitingStatus();
 
-    // Called each time when the user calls DoStepDynamicsSync.
+    // Called each time when the user calls DoDynamicsThenSync.
     void startThread();
 
     // The actual kernel things go here.

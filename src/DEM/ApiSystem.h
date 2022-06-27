@@ -256,11 +256,14 @@ class DEMSolver {
 
     /// Advance simulation by this amount of time, and at the end of this call, synchronize kT and dT. This is suitable
     /// for a longer call duration and without co-simulation.
-    void DoStepDynamicsSync(double thisCallDuration);
+    void DoDynamicsThenSync(double thisCallDuration);
 
     /// Advance simulation by this amount of time (but does not attempt to sync kT and dT). This can work with both long
     /// and short call durations and allows interplay with co-simulation APIs.
-    void DoStepDynamics(double thisCallDuration);
+    void DoDynamics(double thisCallDuration);
+
+    /// Equivalent to calling DoDynamics with the time step size as the argument
+    void DoStepDynamics() { DoDynamics(m_ts_size); }
 
     /// Copy the cached sim params to the GPU-accessible managed memory, so that they are picked up from the next ts of
     /// simulation. Usually used when you want to change simulation parameters after the system is already Intialized.
@@ -296,22 +299,9 @@ class DEMSolver {
     void SetOutputContent(unsigned int content) { m_out_content = content; }
 
   private:
-    // A number of behavior-related variables
-    // Verbosity
-    DEM_VERBOSITY verbosity = INFO;
-    // If true, kT should sort contact arrays then transfer them to dT
-    bool kT_should_sort = true;
-    // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
-    bool use_compact_sweep_force_strat = false;
-    // If true, the solvers may need to do a per-step sweep to apply family number changes
-    bool m_famnum_change_conditionally = false;
-
-    // Force model, as a string
-    std::string m_force_model = DEM_HERTZIAN_FORCE_MODEL();
-    bool m_user_defined_force_model = false;
-
-    // User explicitly set a bin size to use
-    bool m_use_user_instructed_bin_size = false;
+    ////////////////////////////////////////////////////////////////////////////////
+    // Template-like info cached on the host side
+    ////////////////////////////////////////////////////////////////////////////////
 
     // This is the cached material information.
     // It will be massaged into the managed memory upon Initialize().
@@ -332,9 +322,6 @@ class DEMSolver {
     std::vector<std::vector<unsigned int>> m_template_sp_mat_ids;
     std::vector<std::vector<float>> m_template_sp_radii;
     std::vector<std::vector<float3>> m_template_sp_relPos;
-
-    // Shared pointers to external objects cached at the API system
-    std::vector<std::shared_ptr<DEMExternObj>> cached_extern_objs;
 
     // Flattened (analytical) object component definition arrays, potentially jitifiable
     // These extra analytical entities' owners' ID will be appended to those added thru normal AddClump
@@ -357,12 +344,6 @@ class DEMSolver {
     // Component object normal direction, defaulting to inward. If this object is topologically a plane then this param
     // is meaningless, since its normal is determined by its rotation.
     std::vector<objNormal_t> m_anal_normals;
-    // Extra clumps are those loaded by adding external object. They typically consist of many spheres (~thousands).
-    std::vector<inertiaOffset_t> m_extra_clump_type;
-    // Extra clumps' owners' ID will be appended to those added thru normal AddClump, and are consistent with external
-    // obj IDs
-    std::vector<unsigned int> m_extra_clump_owner;
-    std::vector<float3> m_extra_clump_xyz;
 
     /*
     // Dan and Ruochun decided NOT to extract unique input values.
@@ -380,6 +361,26 @@ class DEMSolver {
     std::set<float3> m_clumps_sp_location_types;
     std::vector<std::vector<distinctSphereRelativePositions_default_t>> m_clumps_sp_location_type_offset;
     */
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // Flag-like behavior-related variables cached on the host side
+    ////////////////////////////////////////////////////////////////////////////////
+
+    // Verbosity
+    DEM_VERBOSITY verbosity = INFO;
+    // If true, kT should sort contact arrays then transfer them to dT
+    bool kT_should_sort = true;
+    // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
+    bool use_compact_sweep_force_strat = false;
+    // If true, the solvers may need to do a per-step sweep to apply family number changes
+    bool m_famnum_change_conditionally = false;
+
+    // Force model, as a string
+    std::string m_force_model = DEM_HERTZIAN_FORCE_MODEL();
+    bool m_user_defined_force_model = false;
+
+    // User explicitly set a bin size to use
+    bool m_use_user_instructed_bin_size = false;
 
     // I/O related flags
     DEM_OUTPUT_MODE m_clump_out_mode = DEM_OUTPUT_MODE::SPHERE;
@@ -466,10 +467,31 @@ class DEMSolver {
     // Smallest sphere radius (used to let the user know whether the expand factor is sufficient)
     float m_smallest_radius = FLT_MAX;
 
+    // The number of dT steps before it waits for a kT update. The default value 0 means every dT step will wait for a
+    // newly produced contact-pair info (from kT) before proceeding.
+    int m_updateFreq = 0;
+
+    // The contact model is historyless, or not. It affects jitification.
+    bool m_isHistoryless = false;
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // Cached user's direct (non-template-related) inputs concerning the actual 
+    // physics objects presented in the simulation, which need to be processed 
+    // before shipment, at initialization time
+    ////////////////////////////////////////////////////////////////////////////////
+
+    // Shared pointers to external objects cached at the API system
+    std::vector<std::shared_ptr<DEMExternObj>> cached_extern_objs;
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // Flattened and sometimes processed user inputs, ready to be transferred to
+    // worker threads
+    ////////////////////////////////////////////////////////////////////////////////
+
     // Cached state vectors such as the types and locations/velocities of the initial clumps to fill the sim domain
     // with. User managed arrays usually use unsigned int to represent integers and ensure safety; however
-    // m_input_clump_types tends to be long and should use _t definition. Same goes for m_extra_clump_type, but not
-    // user-input family number, because that number can be anything.
+    // m_input_clump_types tends to be long and should use _t definition. Note this is not the same for user-input
+    // family number, because that number can be anything.
     std::vector<inertiaOffset_t> m_input_clump_types;
     // Some input clump initial profiles
     std::vector<float3> m_input_clump_xyz;
@@ -545,12 +567,9 @@ class DEMSolver {
     std::vector<std::shared_ptr<DEMTrackedObj>> m_tracked_objs;
     // std::vector<std::shared_ptr<DEMTracker>> m_trackers;
 
-    // The number of dT steps before it waits for a kT update. The default value 0 means every dT step will wait for a
-    // newly produced contact-pair info (from kT) before proceeding.
-    int m_updateFreq = 0;
-
-    // The contact model is historyless, or not. It affects jitification.
-    bool m_isHistoryless = false;
+    ////////////////////////////////////////////////////////////////////////////////
+    // DEM system's workers, helpers, friends
+    ////////////////////////////////////////////////////////////////////////////////
 
     WorkerReportChannel* kTMain_InteractionManager;
     WorkerReportChannel* dTMain_InteractionManager;
@@ -558,6 +577,10 @@ class DEMSolver {
     ThreadManager* dTkT_InteractionManager;
     DEMKinematicThread* kT;
     DEMDynamicThread* dT;
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // DEM system's private methods
+    ////////////////////////////////////////////////////////////////////////////////
 
     /// Pre-process some user inputs so we acquire the knowledge on how to jitify the kernels
     void generateJITResources();

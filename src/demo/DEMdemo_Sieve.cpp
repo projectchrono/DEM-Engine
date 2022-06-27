@@ -156,7 +156,7 @@ int main() {
             DEM_sim.WriteClumpFile(std::string(filename));
         }
 
-        DEM_sim.DoStepDynamics(step_size);
+        DEM_sim.DoDynamics(step_size);
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);

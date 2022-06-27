@@ -110,7 +110,7 @@ inline __device__ void voxelID2Position(T1& X,
 }
 
 template <typename T1, typename T2>
-inline __device__ void applyOriQ2Vector3(T1& X, T1& Y, T1& Z, const T2& Q0, const T2& Q1, const T2& Q2, const T2& Q3) {
+inline __device__ void applyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Q0, const T2& Q1, const T2& Q2, const T2& Q3) {
     T1 oldX = X;
     T1 oldY = Y;
     T1 oldZ = Z;
@@ -283,7 +283,7 @@ inline __device__ float3 findLocalCoord(const T1& X,
     locY = Y - Oy;
     locZ = Z - Oz;
     // To find the contact point in the local (body) frame, just apply inverse quaternion to OP vector in global frame
-    applyOriQ2Vector3<float, sgps::oriQ_t>(locX, locY, locZ, oriQ0, -oriQ1, -oriQ2, -oriQ3);
+    applyOriQToVector3<float, sgps::oriQ_t>(locX, locY, locZ, oriQ0, -oriQ1, -oriQ2, -oriQ3);
     return make_float3(locX, locY, locZ);
 }
 

@@ -59,7 +59,7 @@ void EllpsiodFallingOver(DEMSolver& DEM_sim) {
         std::cout << "Angular velocity of the ellipsoid: " << angVel.x << ", " << angVel.y << ", " << angVel.z
                   << std::endl;
 
-        DEM_sim.DoStepDynamics(frame_time);
+        DEM_sim.DoDynamics(frame_time);
     }
 }
 
@@ -106,7 +106,7 @@ void SphereRollUpIncline(DEMSolver& DEM_sim) {
         std::cout << "Angular velocity of the sphere: " << angVel.x << ", " << angVel.y << ", " << angVel.z
                   << std::endl;
 
-        DEM_sim.DoStepDynamics(frame_time);
+        DEM_sim.DoDynamics(frame_time);
     }
 }
 

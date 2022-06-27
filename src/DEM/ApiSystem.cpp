@@ -343,8 +343,6 @@ void DEMSolver::ClearCache() {
     m_anal_size_3.clear();
     m_anal_types.clear();
     m_anal_normals.clear();
-    m_extra_clump_type.clear();
-    m_extra_clump_owner.clear();
 
     m_input_ext_obj_xyz.clear();
     m_input_ext_obj_family.clear();
@@ -1124,7 +1122,7 @@ void DEMSolver::UpdateSimParams() {
     transferSimParams();
 }
 
-void DEMSolver::DoStepDynamics(double thisCallDuration) {
+void DEMSolver::DoDynamics(double thisCallDuration) {
     // Is it needed here??
     // dT->packDataPointers(kT->granData);
 
@@ -1147,9 +1145,9 @@ void DEMSolver::DoStepDynamics(double thisCallDuration) {
     dTMain_InteractionManager->userCallDone = false;
 }
 
-void DEMSolver::DoStepDynamicsSync(double thisCallDuration) {
+void DEMSolver::DoDynamicsThenSync(double thisCallDuration) {
     // Based on async calls
-    DoStepDynamics(thisCallDuration);
+    DoDynamics(thisCallDuration);
 
     // dT is finished, but the user asks us to sync, so we have to make kT sync with dT. This can be done by calling
     // ResetWorkerThreads.

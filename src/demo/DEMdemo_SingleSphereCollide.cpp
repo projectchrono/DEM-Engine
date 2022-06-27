@@ -64,7 +64,7 @@ int main() {
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
         DEM_sim.WriteClumpFile(std::string(filename));
 
-        DEM_sim.DoStepDynamicsSync(1e-2);
+        DEM_sim.DoDynamicsThenSync(1e-2);
     }
 
     std::cout << "DEMdemo_SingleSphereCollide exiting..." << std::endl;

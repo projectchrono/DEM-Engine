@@ -137,6 +137,7 @@ struct DEMExternObj {
         params.plane.normal = unit_normal;
         entity_params.push_back(params);
     }
+    /// Add a plate with finite size.
     /// Assuming the normal you specified is the z-direction and that normal vector originates from the pos point you
     /// input. Then specify the dimensions along x- and y-axes to define the plate's area.
     void AddPlate(const float3 pos,

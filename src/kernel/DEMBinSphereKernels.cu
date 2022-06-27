@@ -60,7 +60,8 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
             const float myOriQ1 = granData->oriQ1[myOwnerID];
             const float myOriQ2 = granData->oriQ2[myOwnerID];
             const float myOriQ3 = granData->oriQ3[myOwnerID];
-            applyOriQ2Vector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2, myOriQ3);
+            applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2,
+                                                    myOriQ3);
             // The bin number that I live in (with fractions)?
             myPosX = ownerX + (double)myRelPosX;
             myPosY = ownerY + (double)myRelPosY;
@@ -111,10 +112,10 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
             float objBRotX = objRotX[objB];
             float objBRotY = objRotY[objB];
             float objBRotZ = objRotZ[objB];
-            applyOriQ2Vector3<float, sgps::oriQ_t>(objBRelPosX, objBRelPosX, objBRelPosX, ownerOriQ0, ownerOriQ1,
-                                                   ownerOriQ2, ownerOriQ3);
-            applyOriQ2Vector3<float, sgps::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQ0, ownerOriQ1, ownerOriQ2,
-                                                   ownerOriQ3);
+            applyOriQToVector3<float, sgps::oriQ_t>(objBRelPosX, objBRelPosX, objBRelPosX, ownerOriQ0, ownerOriQ1,
+                                                    ownerOriQ2, ownerOriQ3);
+            applyOriQToVector3<float, sgps::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQ0, ownerOriQ1, ownerOriQ2,
+                                                    ownerOriQ3);
             double objBPosX = ownerX + (double)objBRelPosX;
             double objBPosY = ownerY + (double)objBRelPosY;
             double objBPosZ = ownerZ + (double)objBRelPosZ;
@@ -193,7 +194,8 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
             const float myOriQ1 = granData->oriQ1[myOwnerID];
             const float myOriQ2 = granData->oriQ2[myOwnerID];
             const float myOriQ3 = granData->oriQ3[myOwnerID];
-            applyOriQ2Vector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2, myOriQ3);
+            applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2,
+                                                    myOriQ3);
             // The bin number that I live in (with fractions)?
             myPosX = ownerX + (double)myRelPosX;
             myPosY = ownerY + (double)myRelPosY;
@@ -245,10 +247,10 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
             float objBRotX = objRotX[objB];
             float objBRotY = objRotY[objB];
             float objBRotZ = objRotZ[objB];
-            applyOriQ2Vector3<float, sgps::oriQ_t>(objBRelPosX, objBRelPosX, objBRelPosX, ownerOriQ0, ownerOriQ1,
-                                                   ownerOriQ2, ownerOriQ3);
-            applyOriQ2Vector3<float, sgps::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQ0, ownerOriQ1, ownerOriQ2,
-                                                   ownerOriQ3);
+            applyOriQToVector3<float, sgps::oriQ_t>(objBRelPosX, objBRelPosX, objBRelPosX, ownerOriQ0, ownerOriQ1,
+                                                    ownerOriQ2, ownerOriQ3);
+            applyOriQToVector3<float, sgps::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQ0, ownerOriQ1, ownerOriQ2,
+                                                    ownerOriQ3);
             double objBPosX = ownerX + (double)objBRelPosX;
             double objBPosY = ownerY + (double)objBRelPosY;
             double objBPosZ = ownerZ + (double)objBRelPosZ;

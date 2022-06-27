@@ -110,7 +110,7 @@ __global__ void forceToAngAcc(float3* angAcc,
         float3 myCntPnt = cntPnt[myID];
         float3 myF = F[myID] * modifier;
         // F is in global frame, but it needs to be in local to coordinate with moi and cntPnt
-        applyOriQ2Vector3<float, sgps::oriQ_t>(myF.x, myF.y, myF.z, myOriQ0, -myOriQ1, -myOriQ2, -myOriQ3);
+        applyOriQToVector3<float, sgps::oriQ_t>(myF.x, myF.y, myF.z, myOriQ0, -myOriQ1, -myOriQ2, -myOriQ3);
         angAcc[myID] = cross(myCntPnt, myF) / moi;
     }
 }

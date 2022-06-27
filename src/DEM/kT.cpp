@@ -113,7 +113,7 @@ void DEMKinematicThread::workerThread() {
                 }
 
                 // In the case where this weak-up call is at the destructor (dT has been executing without notifying the
-                // end of user calls, aka running DoStepDynamics), we don't have to do CD one more time, just break
+                // end of user calls, aka running DoDynamics), we don't have to do CD one more time, just break
                 if (kTShouldReset) {
                     break;
                 }

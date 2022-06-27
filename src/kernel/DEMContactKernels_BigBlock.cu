@@ -63,7 +63,7 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
         float myOriQ1 = granData->oriQ1[ownerID];
         float myOriQ2 = granData->oriQ2[ownerID];
         float myOriQ3 = granData->oriQ3[ownerID];
-        applyOriQ2Vector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2, myOriQ3);
+        applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2, myOriQ3);
         bodyX[myThreadID] = ownerX + (double)myRelPosX;
         bodyY[myThreadID] = ownerY + (double)myRelPosY;
         bodyZ[myThreadID] = ownerZ + (double)myRelPosZ;
@@ -192,7 +192,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
         float myOriQ1 = granData->oriQ1[ownerID];
         float myOriQ2 = granData->oriQ2[ownerID];
         float myOriQ3 = granData->oriQ3[ownerID];
-        applyOriQ2Vector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2, myOriQ3);
+        applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2, myOriQ3);
         bodyX[myThreadID] = ownerX + (double)myRelPosX;
         bodyY[myThreadID] = ownerY + (double)myRelPosY;
         bodyZ[myThreadID] = ownerZ + (double)myRelPosZ;
