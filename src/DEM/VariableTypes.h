@@ -2,7 +2,8 @@
 //  Copyright (c) 2021, University of Wisconsin - Madison
 //  All rights reserved.
 
-#pragma once
+#ifndef SGPS_DEM_VAR_TYPES
+#define SGPS_DEM_VAR_TYPES
 
 namespace sgps {
 
@@ -45,3 +46,5 @@ typedef uint8_t family_t;         ///< Data type for clump presecription type
 typedef uint8_t objType_t;
 typedef bool objNormal_t;
 }  // namespace sgps
+
+#endif

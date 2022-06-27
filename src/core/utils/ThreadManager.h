@@ -2,7 +2,9 @@
 //  Copyright (c) 2021, University of Wisconsin - Madison
 //  All rights reserved.
 
-#pragma once
+#ifndef SGPS_THREAD_MANAGER
+#define SGPS_THREAD_MANAGER
+
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
@@ -47,7 +49,7 @@ class ThreadManager {
 
     // The following variables are used to ensure that when an instance of d or k thread is created, a while loop that
     // spins in place is created. It does actual work only when we tell it all preparations are done and it can proceed
-    // to do the next DoStepDynamics call.
+    // to do the next DoDynamics call.
     std::atomic<bool> dynamicStarted;
     std::atomic<bool> dynamicShouldJoin;
     std::atomic<bool> kinematicStarted;
@@ -85,3 +87,5 @@ class ThreadManager {
         return shouldWait;
     }
 };
+
+#endif

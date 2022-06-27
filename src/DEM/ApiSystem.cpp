@@ -311,6 +311,7 @@ std::shared_ptr<DEMExternObj> DEMSolver::AddBCPlane(const float3 pos,
                                                     const float3 normal,
                                                     const std::shared_ptr<DEMMaterial>& material) {
     std::shared_ptr<DEMExternObj> ptr = AddExternalObject();
+    // TODO: make the owner of this BC to have the same CoM as this BC
     ptr->AddPlane(pos, normal, material);
     return ptr;
 }
@@ -342,8 +343,6 @@ void DEMSolver::ClearCache() {
     m_anal_size_3.clear();
     m_anal_types.clear();
     m_anal_normals.clear();
-    m_extra_clump_type.clear();
-    m_extra_clump_owner.clear();
 
     m_input_ext_obj_xyz.clear();
     m_input_ext_obj_family.clear();
@@ -1002,7 +1001,7 @@ void DEMSolver::postJITResourceGenSanityCheck() {
     if (unable_jitify_all) {
         SGPS_DEM_WARNING(
             "There are %u clump templates loaded, but only %u templates (totalling %u components) are jitifiable due "
-            "to some of the clumps are big and/or there are many types of clumps .\nIf you have external objects "
+            "to some of the clumps are big and/or there are many types of clumps.\nIf you have external objects "
             "represented by spherical decomposition (a.k.a. intend to use big clumps), there is probably nothing to "
             "worry about.\nOtherwise, you may want to change the way this problem is formulated so you have fewer "
             "clump templates.",
@@ -1123,7 +1122,7 @@ void DEMSolver::UpdateSimParams() {
     transferSimParams();
 }
 
-void DEMSolver::DoStepDynamics(double thisCallDuration) {
+void DEMSolver::DoDynamics(double thisCallDuration) {
     // Is it needed here??
     // dT->packDataPointers(kT->granData);
 
@@ -1146,9 +1145,9 @@ void DEMSolver::DoStepDynamics(double thisCallDuration) {
     dTMain_InteractionManager->userCallDone = false;
 }
 
-void DEMSolver::DoStepDynamicsSync(double thisCallDuration) {
+void DEMSolver::DoDynamicsThenSync(double thisCallDuration) {
     // Based on async calls
-    DoStepDynamics(thisCallDuration);
+    DoDynamics(thisCallDuration);
 
     // dT is finished, but the user asks us to sync, so we have to make kT sync with dT. This can be done by calling
     // ResetWorkerThreads.
@@ -1368,8 +1367,7 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_nbY_"] = std::to_string(nbY);
     strMap["_nbZ_"] = std::to_string(nbZ);
 
-    // This l needs to be more accurate
-    strMap["_l_"] = to_string_with_precision(l, 17);
+    strMap["_l_"] = to_string_with_precision(l);
     strMap["_voxelSize_"] = to_string_with_precision(m_voxelSize);
     strMap["_binSize_"] = to_string_with_precision(m_binSize);
 

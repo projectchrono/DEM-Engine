@@ -170,7 +170,7 @@ int main() {
         std::cout << "Frame: " << i << std::endl;
         // float KE = DEM_sim.GetTotalKineticEnergy();
         // std::cout << "Total kinetic energy: " << KE << std::endl;
-        DEM_sim.DoStepDynamicsSync(5e-2);
+        DEM_sim.DoDynamicsThenSync(5e-2);
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);

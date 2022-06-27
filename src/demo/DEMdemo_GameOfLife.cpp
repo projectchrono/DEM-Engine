@@ -23,6 +23,7 @@ int main() {
     DEM_sim.SetVerbosity(INFO);
     // Output as CSV so no post-processing is needed
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
+    DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::XYZ);
     DEM_sim.SetSolverHistoryless(true);
 
     srand(777);
@@ -95,14 +96,15 @@ int main() {
 
     // The force model just serves as a contact number register here. So let's say if 2 spheres are in contact, the
     // force is constant 1, so you have 4+ neighbours if you feel 4+ force, and 2- if you got 2- neighbours.
+    // To avoid force cancelling out, we let alive cells always get positive force, and dead cells negative.
     DEM_sim.DefineContactForceModel(
         "if (AOwnerFamily == 0) force = make_float3(0, 0, 1); else force = make_float3(0, 0, -1);");
-    // To avoid force canceling out, we let alive cells always get positive force, and dead cells negative
     DEM_sim.DisableContactBetweenFamilies(0, 0);
     DEM_sim.DisableContactBetweenFamilies(10, 10);
 
     // The rule for changing family numbers is simple: you die, move to 10; live, move to 0. And then, family 10 will
-    // not be outputted. Dead to alive: if you have 3 alive neighbours
+    // not be outputted.
+    // Dead to alive: if you have 3 alive neighbours
     DEM_sim.ChangeFamilyWhen(
         10, 0, "float my_neighbours = length(acc * mass); return (my_neighbours > 2.9) && (my_neighbours < 3.1);");
     // Alive to dead, if less than 2 alive neighbours, or more than 3 alive neighbours (more than 6 dead neighbors, or
@@ -131,7 +133,7 @@ int main() {
         DEM_sim.WriteClumpFile(std::string(filename));
         std::cout << "Frame: " << i << std::endl;
 
-        DEM_sim.DoStepDynamicsSync(1.);
+        DEM_sim.DoDynamicsThenSync(1.);
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);

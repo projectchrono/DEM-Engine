@@ -5,7 +5,6 @@
 #ifndef SGPS_DEM_MISC_DEFINES
 #define SGPS_DEM_MISC_DEFINES
 
-#pragma once
 #include <limits>
 #include <stdint.h>
 #include <algorithm>
@@ -44,6 +43,12 @@ namespace sgps {
 // A few pre-computed constants
 #ifndef SGPS_TWO_OVER_THREE
     #define SGPS_TWO_OVER_THREE 0.666666666666667
+#endif
+#ifndef SGPS_FOUR_OVER_THREE
+    #define SGPS_FOUR_OVER_THREE 1.333333333333333
+#endif
+#ifndef SGPS_FIVE_OVER_THREE
+    #define SGPS_FIVE_OVER_THREE 1.666666666666667
 #endif
 #ifndef SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX
     #define SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX 1.825741858350554
@@ -242,6 +247,7 @@ struct DEMDataDT {
     float3* contactPointGeometryA;
     float3* contactPointGeometryB;
     float3* contactHistory;
+    float* contactDuration;
 
     // The offset info that indexes into the template arrays
     bodyID_t* ownerClumpBody;

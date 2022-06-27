@@ -3,7 +3,7 @@
 #include <DEM/DEMDefines.h>
 
 // I can only include CUDAMathHelpers.cu here and if I do it in other kernel files such as DEMBinSphereKernels.cu too,
-// there will be double-load problem where operators are re-defined. Is there a "pragma once" sort of thing here?
+// there will be double-load problem where operators are re-defined. Not sure how to resolve it.
 #include <kernel/CUDAMathHelpers.cu>
 
 // inline __device__ voxelID_t position2VoxelID
@@ -110,7 +110,7 @@ inline __device__ void voxelID2Position(T1& X,
 }
 
 template <typename T1, typename T2>
-inline __device__ void applyOriQ2Vector3(T1& X, T1& Y, T1& Z, const T2& Q0, const T2& Q1, const T2& Q2, const T2& Q3) {
+inline __device__ void applyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Q0, const T2& Q1, const T2& Q2, const T2& Q3) {
     T1 oldX = X;
     T1 oldY = Y;
     T1 oldZ = Z;
@@ -142,16 +142,22 @@ inline __device__ void normalizeVector3(T1& x, T1& y, T1& z) {
 
 // Hamilton product of 2 quaternions
 template <typename T1>
-inline __device__ void
-HamiltonProduct(T1& A1, T1& B1, T1& C1, T1& D1, const T1& a2, const T1& b2, const T1& c2, const T1& d2) {
-    T1 a1 = A1;
-    T1 b1 = B1;
-    T1 c1 = C1;
-    T1 d1 = D1;
-    A1 = a1 * a2 - b1 * b2 - c1 * c2 - d1 * d2;
-    B1 = a1 * b2 + b1 * a2 + c1 * d2 - d1 * c2;
-    C1 = a1 * c2 - b1 * d2 + c1 * a2 + d1 * b2;
-    D1 = a1 * d2 + b1 * c2 - c1 * b2 + d1 * a2;
+inline __device__ void HamiltonProduct(T1& A,
+                                       T1& B,
+                                       T1& C,
+                                       T1& D,
+                                       const T1 a1,
+                                       const T1 b1,
+                                       const T1 c1,
+                                       const T1 d1,
+                                       const T1 a2,
+                                       const T1 b2,
+                                       const T1 c2,
+                                       const T1 d2) {
+    A = a1 * a2 - b1 * b2 - c1 * c2 - d1 * d2;
+    B = a1 * b2 + b1 * a2 + c1 * d2 - d1 * c2;
+    C = a1 * c2 - b1 * d2 + c1 * a2 + d1 * b2;
+    D = a1 * d2 + b1 * c2 - c1 * b2 + d1 * a2;
 }
 
 /**
@@ -277,7 +283,7 @@ inline __device__ float3 findLocalCoord(const T1& X,
     locY = Y - Oy;
     locZ = Z - Oz;
     // To find the contact point in the local (body) frame, just apply inverse quaternion to OP vector in global frame
-    applyOriQ2Vector3<float, sgps::oriQ_t>(locX, locY, locZ, oriQ0, -oriQ1, -oriQ2, -oriQ3);
+    applyOriQToVector3<float, sgps::oriQ_t>(locX, locY, locZ, oriQ0, -oriQ1, -oriQ2, -oriQ3);
     return make_float3(locX, locY, locZ);
 }
 

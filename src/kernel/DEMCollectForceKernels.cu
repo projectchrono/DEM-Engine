@@ -7,7 +7,7 @@ __global__ void cashInOwnerIndexA(sgps::bodyID_t* idOwner,
                                   sgps::bodyID_t* ownerClumpBody,
                                   sgps::contact_t* contactType,
                                   size_t nContactPairs) {
-    sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    sgps::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContactPairs) {
         sgps::bodyID_t thisBodyID = id[myID];
         idOwner[myID] = ownerClumpBody[thisBodyID];
@@ -22,7 +22,7 @@ __global__ void cashInOwnerIndexB(sgps::bodyID_t* idOwner,
     // May have analytical entities in it
     const sgps::bodyID_t objOwner[_nAnalGMSafe_] = {_objOwner_};
 
-    sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    sgps::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContactPairs) {
         sgps::bodyID_t thisBodyID = id[myID];
         sgps::contact_t thisCntType = contactType[myID];
@@ -46,7 +46,7 @@ __global__ void cashInMassMoiIndex(float* massOwner,
     const float moiZ[] = {_moiZ_};
     const float MassProperties[] = {_MassProperties_};
 
-    sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    sgps::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContactPairs) {
         sgps::bodyID_t thisOwnerID = idOwner[myID];
         sgps::inertiaOffset_t myMassOffset = inertiaPropOffsets[thisOwnerID];
@@ -69,11 +69,11 @@ __global__ void forceToAcc(float3* acc,
     // _nDistinctMassProperties_  elements are in these arrays
     const float MassProperties[] = {_MassProperties_};
 
-    sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    sgps::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
-        sgps::bodyID_t thisOwnerID = owner[myID];
-        sgps::inertiaOffset_t myMassOffset = inertiaPropOffsets[thisOwnerID];
-        float myMass = MassProperties[myMassOffset];
+        const sgps::bodyID_t thisOwnerID = owner[myID];
+        const sgps::inertiaOffset_t myMassOffset = inertiaPropOffsets[thisOwnerID];
+        const float myMass = MassProperties[myMassOffset];
         acc[myID] = F[myID] * modifier / myMass;
     }
 }
@@ -81,6 +81,10 @@ __global__ void forceToAcc(float3* acc,
 // computes cross(a, b) ./ c
 __global__ void forceToAngAcc(float3* angAcc,
                               float3* cntPnt,
+                              sgps::oriQ_t* oriQ0,
+                              sgps::oriQ_t* oriQ1,
+                              sgps::oriQ_t* oriQ2,
+                              sgps::oriQ_t* oriQ3,
                               float3* F,
                               sgps::bodyID_t* owner,
                               float modifier,
@@ -91,16 +95,22 @@ __global__ void forceToAngAcc(float3* angAcc,
     const float moiY[] = {_moiY_};
     const float moiZ[] = {_moiZ_};
 
-    sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    sgps::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
-        sgps::bodyID_t thisOwnerID = owner[myID];
-        sgps::inertiaOffset_t myMassOffset = inertiaPropOffsets[thisOwnerID];
+        const sgps::bodyID_t thisOwnerID = owner[myID];
+        const sgps::inertiaOffset_t myMassOffset = inertiaPropOffsets[thisOwnerID];
+        const sgps::oriQ_t myOriQ0 = oriQ0[thisOwnerID];
+        const sgps::oriQ_t myOriQ1 = oriQ1[thisOwnerID];
+        const sgps::oriQ_t myOriQ2 = oriQ2[thisOwnerID];
+        const sgps::oriQ_t myOriQ3 = oriQ3[thisOwnerID];
         float3 moi;
         moi.x = moiX[myMassOffset];
         moi.y = moiY[myMassOffset];
         moi.z = moiZ[myMassOffset];
-        auto myCntPnt = cntPnt[myID];
-        auto myF = F[myID] * modifier;
+        float3 myCntPnt = cntPnt[myID];
+        float3 myF = F[myID] * modifier;
+        // F is in global frame, but it needs to be in local to coordinate with moi and cntPnt
+        applyOriQToVector3<float, sgps::oriQ_t>(myF.x, myF.y, myF.z, myOriQ0, -myOriQ1, -myOriQ2, -myOriQ3);
         angAcc[myID] = cross(myCntPnt, myF) / moi;
     }
 }

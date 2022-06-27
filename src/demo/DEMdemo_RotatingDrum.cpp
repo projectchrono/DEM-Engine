@@ -4,6 +4,7 @@
 
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
+#include <core/utils/chpf/particle_writer.hpp>
 #include <DEM/ApiSystem.h>
 #include <DEM/HostSideHelpers.hpp>
 
@@ -18,13 +19,10 @@ int main() {
     DEMSolver DEM_sim;
     DEM_sim.SetVerbosity(INFO);
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
-    // Output family numbers (used to identify the centrifuging effect)
-    DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::FAMILY);
+    DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::ABSV);
+    std::cout << "Note: This is a relatively large demo and should take hours/days to run!!" << std::endl;
 
     srand(42);
-
-    // total number of random clump templates to generate
-    int num_template = 6;
 
     // A general template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
     std::vector<float> radii = {1.0, 0.88, 0.64, 0.88, 0.64};
@@ -35,10 +33,10 @@ int main() {
     float3 MOI = make_float3(1. / 5. * mass * (1 * 1 + 2 * 2), 1. / 5. * mass * (1 * 1 + 2 * 2),
                              1. / 5. * mass * (1 * 1 + 1 * 1));
     // We can scale this general template to make it smaller, like a DEM particle that you would actually use
-    float scaling = 0.008;
+    float scaling = 0.01;
 
-    auto mat_type_sand = DEM_sim.LoadMaterialType(1e9, 0.3, 0.8);
-    auto mat_type_drum = DEM_sim.LoadMaterialType(2e9, 0.3, 0.9);
+    auto mat_type_sand = DEM_sim.LoadMaterialType(1e9, 0.3, 0.3);
+    auto mat_type_drum = DEM_sim.LoadMaterialType(2e9, 0.3, 0.4);
 
     // Bin size needs to make sure no too-many-sphere-per-bin situation happens
     DEM_sim.InstructBinSize(scaling);
@@ -46,27 +44,17 @@ int main() {
     // Create some random clump templates for the filling materials
     // An array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
-    // Then randomly create some clump templates for filling the drum
-    for (int i = 0; i < num_template; i++) {
-        // A multiplier is added to the masses of different clumps, so that centrifuging separate those types. Consider
-        // it separating materials with different densities.
-        double mult = 0.5 * (i + 1);
+    // Allocate the clump template definition arrays (all in SI)
+    float this_mass = scaling * scaling * scaling * mass;
+    float3 this_MOI = scaling * scaling * scaling * scaling * scaling * MOI;
+    std::vector<float> this_radii(radii);
+    std::vector<float3> this_relPos(relPos);
+    std::transform(radii.begin(), radii.end(), this_radii.begin(), [scaling](float& r) { return r * scaling; });
+    std::transform(relPos.begin(), relPos.end(), this_relPos.begin(), [scaling](float3& r) { return r * scaling; });
 
-        // Then allocate the clump template definition arrays (all in SI)
-        float this_mass = mult * scaling * scaling * scaling * mass;
-        float3 this_MOI = mult * scaling * scaling * scaling * scaling * scaling * MOI;
-        std::vector<float> this_radii(radii);
-        std::vector<float3> this_relPos(relPos);
-        std::transform(radii.begin(), radii.end(), this_radii.begin(), [scaling](float& r) { return r * scaling; });
-        std::transform(relPos.begin(), relPos.end(), this_relPos.begin(), [scaling](float3& r) { return r * scaling; });
-
-        // It returns a handle to this clump template
-        clump_types.push_back(DEM_sim.LoadClumpType(this_mass, this_MOI, this_radii, this_relPos, mat_type_sand));
-        // clump_types.push_back(DEM_sim.LoadClumpSimpleSphere(this_mass, 2. * scaling, mat_type_sand));
-
-        // std::cout << "Adding a clump with mass: " << this_mass << std::endl;
-        // std::cout << "This clump's MOI: " << this_MOI.x << ", " << this_MOI.y << ", " << this_MOI.z << std::endl;
-    }
+    // Load particle template(s)
+    clump_types.push_back(DEM_sim.LoadClumpType(this_mass, this_MOI, this_radii, this_relPos, mat_type_sand));
+    // clump_types.push_back(DEM_sim.LoadClumpSimpleSphere(this_mass, std::cbrt(2.0) * scaling, mat_type_sand));
 
     // Drum is a `big clump', we now generate its template
     float3 CylCenter = make_float3(0, 0, 0);
@@ -90,10 +78,10 @@ int main() {
     // Add drum
     auto Drum = DEM_sim.AddClumpTracked(Drum_template, make_float3(0));
     // Drum is family 10
-    unsigned int drum_family = 10;
+    unsigned int drum_family = 100;
     family_code.push_back(drum_family);
     // The drum rotates (facing X direction)
-    DEM_sim.SetFamilyPrescribedAngVel(drum_family, "6.0", "0", "0");
+    DEM_sim.SetFamilyPrescribedAngVel(drum_family, "0.1", "0", "0");
     // Disable contacts within drum components
     DEM_sim.DisableContactBetweenFamilies(drum_family, drum_family);
 
@@ -109,15 +97,17 @@ int main() {
     float3 sample_center = make_float3(0, 0, 0);
     float sample_halfheight = CylHeight / 2.0 - 3.0 * safe_delta;
     float sample_halfwidth = CylRad / 1.5;
-    auto input_material_xyz = DEMBoxGridSampler(
-        sample_center, make_float3(sample_halfheight, sample_halfwidth, sample_halfwidth), scaling * 2 * 2.1);
+    // Ensure the spacing is acceptable for both spherical and ellipsoidal fillers
+    auto input_material_xyz =
+        DEMBoxGridSampler(sample_center, make_float3(sample_halfheight, sample_halfwidth, sample_halfwidth),
+                          scaling * std::cbrt(2.0) * 2.1, scaling * std::cbrt(2.0) * 2.1, scaling * 2 * 2.1);
     input_xyz.insert(input_xyz.end(), input_material_xyz.begin(), input_material_xyz.end());
     unsigned int num_clumps = input_material_xyz.size();
     // Casually select from generated clump types
     for (unsigned int i = 0; i < num_clumps; i++) {
-        input_template_type.push_back(clump_types.at(i % num_template));
-        // Every clump types gets a different family number
-        family_code.push_back(i % num_template);
+        input_template_type.push_back(clump_types.at(i % clump_types.size()));
+        // Every clump type that has a unique mass, gets a unique family number
+        family_code.push_back((i % clump_types.size()) / 2);
     }
 
     // Finally, input to system
@@ -130,17 +120,17 @@ int main() {
     DEM_sim.SetTimeStepSize(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEM_sim.SetCDUpdateFreq(20);
+    DEM_sim.SetCDUpdateFreq(40);
     // DEM_sim.SetExpandFactor(1e-3);
-    DEM_sim.SuggestExpandFactor(12.);
-    DEM_sim.SuggestExpandSafetyParam(1.5);
+    DEM_sim.SuggestExpandFactor(3.);
+    DEM_sim.SuggestExpandSafetyParam(1.1);
     DEM_sim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/DEMdemo_Drum_Test";
+    out_dir += "/DEMdemo_RotatingDrum";
     create_directory(out_dir);
 
-    float time_end = 30.0;
+    float time_end = 20.0;
     unsigned int fps = 20;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
@@ -151,6 +141,7 @@ int main() {
     for (double t = 0; t < (double)time_end; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
             std::cout << "Frame: " << currframe << std::endl;
+            DEM_sim.ShowThreadCollaborationStats();
             char filename[100];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
             DEM_sim.WriteClumpFile(std::string(filename));
@@ -163,7 +154,7 @@ int main() {
             //           << ", " << plane_quat.w << std::endl;
         }
 
-        DEM_sim.DoStepDynamics(step_size);
+        DEM_sim.DoDynamics(step_size);
         // We can quarry info out of this drum, since it is tracked
         // float3 drum_pos = Drum->Pos();
         // float3 drum_angVel = Drum->AngVel();
@@ -180,7 +171,7 @@ int main() {
     DEM_sim.ResetWorkerThreads();
     DEM_sim.ClearThreadCollaborationStats();
 
-    std::cout << "DEMdemo_Drum exiting..." << std::endl;
+    std::cout << "DEMdemo_RotatingDrum exiting..." << std::endl;
     // TODO: add end-game report APIs
     return 0;
 }

@@ -2,8 +2,6 @@
 //  Copyright (c) 2021, University of Wisconsin - Madison
 //  All rights reserved.
 
-#pragma once
-
 #include <mutex>
 #include <vector>
 #include <thread>
@@ -24,7 +22,7 @@
 
 // Forward declare jitify::Program to avoid downstream dependency
 namespace jitify {
-  class Program;
+class Program;
 }
 
 namespace sgps {
@@ -216,7 +214,7 @@ class DEMKinematicThread {
     // vulnerable if kT exited through dynamicsDone rather than control variable-based release.
     void breakWaitingStatus();
 
-    // Called each time when the user calls DoStepDynamicsSync.
+    // Called each time when the user calls DoDynamicsThenSync.
     void startThread();
 
     // The actual kernel things go here.

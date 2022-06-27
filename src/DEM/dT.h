@@ -2,8 +2,6 @@
 //  Copyright (c) 2021, University of Wisconsin - Madison
 //  All rights reserved.
 
-#pragma once
-
 #include <mutex>
 #include <vector>
 #include <thread>
@@ -24,7 +22,7 @@
 
 // Forward declare jitify::Program to avoid downstream dependency
 namespace jitify {
-  class Program;
+class Program;
 }
 
 namespace sgps {
@@ -187,6 +185,8 @@ class DEMDynamicThread {
     // destroyed; this is not physical, but also, considering the contact history tends to be miniscule, this is
     // probably not a big problem either.
     std::vector<float3, ManagedAllocator<float3>> contactHistory;
+    // Durations in time of persistent contact pairs
+    std::vector<float, ManagedAllocator<float>> contactDuration;
 
     size_t m_approx_bytes_used = 0;
 
@@ -326,7 +326,7 @@ class DEMDynamicThread {
     void writeSpheresAsChpf(std::ofstream& ptFile) const;
     void writeSpheresAsCsv(std::ofstream& ptFile) const;
 
-    // Called each time when the user calls DoStepDynamicsSync.
+    // Called each time when the user calls DoDynamicsThenSync.
     void startThread();
 
     // The actual kernel things go here.

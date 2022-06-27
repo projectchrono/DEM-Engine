@@ -354,11 +354,19 @@ inline void hostCollectTorques(inertiaOffset_t* inertiaPropOffsets,
 }
 
 /// A light-weight grid/box sampler that can be used to generate the initial stage of the DEM system
-inline std::vector<float3> DEMBoxGridSampler(float3 BoxCenter, float3 HalfDims, float GridSize) {
+inline std::vector<float3> DEMBoxGridSampler(float3 BoxCenter,
+                                             float3 HalfDims,
+                                             float GridSizeX,
+                                             float GridSizeY = -1.0,
+                                             float GridSizeZ = -1.0) {
+    if (GridSizeY < 0)
+        GridSizeY = GridSizeX;
+    if (GridSizeZ < 0)
+        GridSizeZ = GridSizeX;
     std::vector<float3> points;
-    for (float z = BoxCenter.z - HalfDims.z; z <= BoxCenter.z + HalfDims.z; z += GridSize) {
-        for (float y = BoxCenter.y - HalfDims.y; y <= BoxCenter.y + HalfDims.y; y += GridSize) {
-            for (float x = BoxCenter.x - HalfDims.x; x <= BoxCenter.x + HalfDims.x; x += GridSize) {
+    for (float z = BoxCenter.z - HalfDims.z; z <= BoxCenter.z + HalfDims.z; z += GridSizeZ) {
+        for (float y = BoxCenter.y - HalfDims.y; y <= BoxCenter.y + HalfDims.y; y += GridSizeY) {
+            for (float x = BoxCenter.x - HalfDims.x; x <= BoxCenter.x + HalfDims.x; x += GridSizeX) {
                 float3 xyz;
                 xyz.x = x;
                 xyz.y = y;
@@ -407,7 +415,7 @@ inline std::vector<float3> DEMCylSurfSampler(float3 CylCenter,
 
 /// Host version of applying a quaternion to a vector
 template <typename T1, typename T2>
-inline void hostApplyOriQ2Vector3(T1& X, T1& Y, T1& Z, const T2& Q0, const T2& Q1, const T2& Q2, const T2& Q3) {
+inline void hostapplyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Q0, const T2& Q1, const T2& Q2, const T2& Q3) {
     T1 oldX = X;
     T1 oldY = Y;
     T1 oldZ = Z;
@@ -419,7 +427,8 @@ inline void hostApplyOriQ2Vector3(T1& X, T1& Y, T1& Z, const T2& Q0, const T2& Q
         ((T2)2.0 * (Q0 * Q0 + Q3 * Q3) - (T2)1.0) * oldZ;
 }
 
-inline std::string to_string_with_precision(const double a_value, const unsigned int n = 10) {
+// Default accuracy is 17. This accuracy is especially needed for MOIs and length-unit (l).
+inline std::string to_string_with_precision(const double a_value, const unsigned int n = 17) {
     std::ostringstream out;
     out.precision(n);
     out << std::fixed << a_value;

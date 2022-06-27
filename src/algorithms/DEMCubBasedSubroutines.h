@@ -2,8 +2,6 @@
 //  Copyright (c) 2021, University of Wisconsin - Madison
 //  All rights reserved.
 
-#pragma once
-
 #include <DEM/DEMStructs.h>
 #include <DEM/DEMDefines.h>
 #include <core/utils/GpuManager.h>
@@ -44,6 +42,10 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
                           float3* contactForces,
                           float3* contactPointA,
                           float3* contactPointB,
+                          oriQ_t* oriQ0,
+                          oriQ_t* oriQ1,
+                          oriQ_t* oriQ2,
+                          oriQ_t* oriQ3,
                           float* clump_aX,
                           float* clump_aY,
                           float* clump_aZ,
