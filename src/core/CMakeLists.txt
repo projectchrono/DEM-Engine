@@ -32,6 +32,7 @@ target_include_directories(
 target_link_libraries(
 	core
 	PUBLIC CUB::CUB
+	INTERFACE ${ChPF_IMPORTED_NAME}
 )
 
 set(core_headers
@@ -42,7 +43,6 @@ set(core_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ThreadManager.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuError.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuManager.h
-	${CMAKE_CURRENT_SOURCE_DIR}/utils/chpf/particle_writer.hpp
 )
 
 set(core_sources
@@ -71,7 +71,6 @@ install(
 		FILES_MATCHING 
 			PATTERN "*.h"
 			PATTERN "*.hpp"
-			PATTERN "chpf/docs" EXCLUDE
 )
 
 # Install Generated Headers 

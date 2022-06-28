@@ -31,14 +31,18 @@ function(fix_ninja_colors)
 
 		# Fix GCC colors
 		if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
-			set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-fdiagnostics-color=always" PARENT_SCOPE)
+			#set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-fdiagnostics-color=always" PARENT_SCOPE)
+			list(APPEND CMAKE_CXX_FLAGS "-fdiagnostics-color=always")	
 
 		# Fix Clang colors
 		elseif (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang")
-			set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-fcolor-diagnostics" PARENT_SCOPE)
+			#set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-fcolor-diagnostics" PARENT_SCOPE)
+			list(APPEND CMAKE_CXX_FLAGS "-fcolor-diagnostics")
 
 		endif()
-
+		
+		list(REMOVE_DUPLICATES CMAKE_CXX_FLAGS)
+		set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} PARENT_SCOPE)
 	endif()
 
 endfunction()
