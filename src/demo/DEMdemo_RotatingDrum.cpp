@@ -71,20 +71,6 @@ int main() {
                               std::vector<float>(Drum_particles.size(), CylParticleRad), Drum_particles, mat_type_drum);
     std::cout << Drum_particles.size() << " spheres make up the rotating drum" << std::endl;
 
-    std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_type;
-    std::vector<float3> input_xyz;
-    std::vector<unsigned int> family_code;
-
-    // Add drum
-    auto Drum = DEM_sim.AddClumpTracked(Drum_template, make_float3(0));
-    // Drum is family 10
-    unsigned int drum_family = 100;
-    family_code.push_back(drum_family);
-    // The drum rotates (facing X direction)
-    DEM_sim.SetFamilyPrescribedAngVel(drum_family, "0.1", "0", "0");
-    // Disable contacts within drum components
-    DEM_sim.DisableContactBetweenFamilies(drum_family, drum_family);
-
     // Then add top and bottom planes to `close up' the drum
     float safe_delta = 0.03;
     auto top_bot_planes = DEM_sim.AddExternalObject();
@@ -92,6 +78,10 @@ int main() {
     top_bot_planes->AddPlane(make_float3(-CylHeight / 2. + safe_delta, 0, 0), make_float3(1, 0, 0), mat_type_drum);
     // top_bot_planes->SetFamily(drum_family);
     auto planes_tracker = DEM_sim.Track(top_bot_planes);
+
+    std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_type;
+    std::vector<float3> input_xyz;
+    std::vector<unsigned int> family_code;
 
     // Then sample some particles inside the drum
     float3 sample_center = make_float3(0, 0, 0);
@@ -111,11 +101,22 @@ int main() {
     }
 
     // Finally, input to system
-    DEM_sim.AddClumps(input_template_type, input_xyz);
-    DEM_sim.SetClumpFamilies(family_code);
-    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 4e-11);
+    auto particles = DEM_sim.AddClumps(input_template_type, input_xyz);
+    particles->SetFamilies(family_code);
+
+    // Add drum
+    auto Drum = DEM_sim.AddClumps(Drum_template, make_float3(0));
+    // Drum is family 10
+    unsigned int drum_family = 100;
+    Drum->SetFamilies(drum_family);
+    // The drum rotates (facing X direction)
+    DEM_sim.SetFamilyPrescribedAngVel(drum_family, "0.1", "0", "0");
+    // Disable contacts within drum components
+    DEM_sim.DisableContactBetweenFamilies(drum_family, drum_family);
+    auto Drum_tracker = DEM_sim.Track(Drum);
 
     float step_size = 5e-6;
+    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 4e-11);
     DEM_sim.CenterCoordSys();
     DEM_sim.SetTimeStepSize(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
@@ -155,9 +156,9 @@ int main() {
         }
 
         DEM_sim.DoDynamics(step_size);
-        // We can quarry info out of this drum, since it is tracked
-        // float3 drum_pos = Drum->Pos();
-        // float3 drum_angVel = Drum->AngVel();
+        // We can query info out of this drum, since it is tracked
+        // float3 drum_pos = Drum_tracker->Pos();
+        // float3 drum_angVel = Drum_tracker->AngVel();
         // std::cout << "Position of the drum: " << drum_pos.x << ", " << drum_pos.y << ", " << drum_pos.z
         //           << std::endl;
         // std::cout << "Angular velocity of the drum: " << drum_angVel.x << ", " << drum_angVel.y << ", "

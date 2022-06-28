@@ -94,21 +94,26 @@ int main() {
     // No contact within family 1
     DEM_sim.DisableContactBetweenFamilies(1, 1);
     input_template_type.insert(input_template_type.end(), input_xyz.size(), template_sieve);
+    auto sieve = DEM_sim.AddClumps(input_template_type, input_xyz);
+    sieve->SetFamilies(family_code);
 
-    // float sample_halfheight = 1.;
+    // Clear arrays and add the grains being sieved
+    std::vector<std::shared_ptr<DEMClumpTemplate>>().swap(input_template_type);
+    std::vector<unsigned int>().swap(family_code);
     float sample_halfheight = 0.15;
     float sample_halfwidth = 2.;
     // generate initial clumps for piling
     float3 sample_center = make_float3(0, 0, sample_halfheight + sieve_sp_r + 0.07);
-    auto pile =
+    input_xyz =
         DEMBoxGridSampler(sample_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight), 0.07);
-    input_xyz.insert(input_xyz.end(), pile.begin(), pile.end());
-    unsigned int num_clumps = pile.size();
+    unsigned int num_clumps = input_xyz.size();
     // Casually select from generated clump types
     for (unsigned int i = 0; i < num_clumps; i++) {
         input_template_type.push_back(clump_types.at(i % num_template));
         family_code.push_back(0);
     }
+    auto grains = DEM_sim.AddClumps(input_template_type, input_xyz);
+    grains->SetFamilies(family_code);
 
     std::shared_ptr<DEMExternObj> BCs = DEM_sim.AddExternalObject();
     BCs->SetFamily(2);
@@ -122,11 +127,8 @@ int main() {
     // BC family does not interact with the sieve
     DEM_sim.DisableContactBetweenFamilies(1, 2);
 
-    DEM_sim.AddClumps(input_template_type, input_xyz);
-    DEM_sim.SetClumpFamilies(family_code);
-    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
-
     float step_size = 5e-6;
+    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
     DEM_sim.CenterCoordSys();
     DEM_sim.SetTimeStepSize(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));

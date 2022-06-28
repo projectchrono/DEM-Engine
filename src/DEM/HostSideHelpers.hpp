@@ -92,7 +92,7 @@ inline unsigned int stash_material_in_templates(std::vector<std::shared_ptr<DEMM
     // Is this material already loaded? (most likely yes)
     auto it_mat = std::find_if(loaded_materials.begin(), loaded_materials.end(), is_same);
     if (it_mat != loaded_materials.end()) {
-        // Already in, then just get where it's located in the m_loaded_sp_materials array
+        // Already in, then just get where it's located in the m_loaded_materials array
         return std::distance(loaded_materials.begin(), it_mat);
     } else {
         // Not already in, come on. Load it, and then get it into this_clump_sp_mat_ids. This is unlikely, unless the
@@ -433,6 +433,12 @@ inline std::string to_string_with_precision(const double a_value, const unsigned
     out.precision(n);
     out << std::fixed << a_value;
     return out.str();
+}
+
+// Release the memory allocated for an array
+template <typename T1>
+inline void deallocate_array(std::vector<T1>& arr) {
+    std::vector<T1>().swap(arr);
 }
 
 }  // namespace sgps

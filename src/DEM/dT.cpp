@@ -247,36 +247,30 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     }
 }
 
-void DEMDynamicThread::initManagedArrays(const std::vector<inertiaOffset_t>& input_clump_types,
-                                         const std::vector<float3>& input_clump_xyz,
-                                         const std::vector<float3>& input_clump_vel,
-                                         const std::vector<unsigned int>& input_clump_family,
+void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                          const std::vector<float3>& input_ext_obj_xyz,
                                          const std::vector<unsigned int>& input_ext_obj_family,
                                          const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
                                          const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
-                                         const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
+                                         const std::vector<std::vector<unsigned int>>& clumps_sp_mat_ids,
                                          const std::vector<float>& clumps_mass_types,
                                          const std::vector<float3>& clumps_moi_types,
                                          const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                          const std::vector<std::vector<float3>>& clumps_sp_location_types,
-                                         const std::vector<float>& mat_E,
-                                         const std::vector<float>& mat_nu,
-                                         const std::vector<float>& mat_CoR,
-                                         const std::vector<float>& mat_mu,
-                                         const std::vector<float>& mat_Crr,
+                                         const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
                                          const std::set<unsigned int>& no_output_families,
                                          std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs) {
     // Get the info into the managed memory from the host side. Can this process be more efficient? Maybe, but it's
     // initialization anyway.
 
     // First, load in material properties
-    for (unsigned int i = 0; i < mat_E.size(); i++) {
-        EProxy.at(i) = mat_E.at(i);
-        nuProxy.at(i) = mat_nu.at(i);
-        CoRProxy.at(i) = mat_CoR.at(i);
-        muProxy.at(i) = mat_mu.at(i);
-        CrrProxy.at(i) = mat_Crr.at(i);
+    for (unsigned int i = 0; i < loaded_materials.size(); i++) {
+        std::shared_ptr<DEMMaterial> Mat = loaded_materials.at(i);
+        EProxy.at(i) = Mat->E;
+        nuProxy.at(i) = Mat->nu;
+        CoRProxy.at(i) = Mat->CoR;
+        muProxy.at(i) = Mat->mu;
+        CrrProxy.at(i) = Mat->Crr;
     }
 
     // Then load in clump mass and MOI
@@ -306,19 +300,19 @@ void DEMDynamicThread::initManagedArrays(const std::vector<inertiaOffset_t>& inp
     }
 
     // Then, load in clump type info
-    // All flattened to single arrays, so a prescans is needed so we know each input clump's component offsets
+    // All flattened to single arrays, so a prescans_comp is needed so we know each input clump's component offsets
     size_t k = 0;
-    std::vector<unsigned int> prescans;
+    std::vector<unsigned int> prescans_comp;
 
-    prescans.push_back(0);
+    prescans_comp.push_back(0);
     for (auto elem : clumps_sp_radii_types) {
         for (auto radius : elem) {
             radiiSphere.at(k) = radius;
             k++;
         }
-        prescans.push_back(k);
+        prescans_comp.push_back(k);
     }
-    prescans.pop_back();
+    prescans_comp.pop_back();
     k = 0;
 
     for (auto elem : clumps_sp_location_types) {
@@ -329,63 +323,117 @@ void DEMDynamicThread::initManagedArrays(const std::vector<inertiaOffset_t>& inp
             k++;
         }
     }
-    k = 0;
 
-    // Then, load in input clumps
+    // Left-bottom-front point of the `world'
     float3 LBF;
     LBF.x = simParams->LBFX;
     LBF.y = simParams->LBFY;
     LBF.z = simParams->LBFZ;
-    for (size_t i = 0; i < simParams->nOwnerClumps; i++) {
-        auto type_of_this_clump = input_clump_types.at(i);
-        inertiaPropOffsets.at(i) = type_of_this_clump;
-        auto this_CoM_coord = input_clump_xyz.at(i) - LBF;
-        // std::cout << "CoM position: " << this_CoM_coord.x << ", " << this_CoM_coord.y << ", " << this_CoM_coord.z <<
-        // std::endl;
-        auto this_clump_no_sp_radii = clumps_sp_radii_types.at(type_of_this_clump);
-        auto this_clump_no_sp_relPos = clumps_sp_location_types.at(type_of_this_clump);
-        auto this_clump_no_sp_mat_ids = input_clumps_sp_mat_ids.at(type_of_this_clump);
-
-        for (size_t j = 0; j < this_clump_no_sp_radii.size(); j++) {
-            materialTupleOffset.at(k) = this_clump_no_sp_mat_ids.at(j);
-            ownerClumpBody.at(k) = i;
-
-            // This component offset, is it too large that can't live in the jitified array?
-            unsigned int this_comp_offset = prescans.at(type_of_this_clump) + j;
-            clumpComponentOffsetExt.at(k) = this_comp_offset;
-            if (this_comp_offset < simParams->nJitifiableClumpComponents) {
-                clumpComponentOffset.at(k) = this_comp_offset;
-            } else {
-                // If not, an indicator will be put there
-                clumpComponentOffset.at(k) = DEM_RESERVED_CLUMP_COMPONENT_OFFSET;
+    k = 0;
+    // Then, load in input clumps
+    // We take notes on how many clumps each batch has, it will be useful when we assemble the tracker information
+    std::vector<size_t> prescans_batch_size(input_clump_batches.size(), 0);
+    unsigned int batch_num = 0;
+    {
+        bool pop_family_msg = false;
+        std::vector<inertiaOffset_t> input_clump_types;
+        std::vector<float3> input_clump_xyz;
+        std::vector<float4> input_clump_oriQ;
+        std::vector<float3> input_clump_vel;
+        std::vector<float3> input_clump_angVel;
+        std::vector<unsigned int> input_clump_family;
+        // Flatten the input clump batches (because by design we transfer flatten clump info to GPU)
+        for (const auto& a_batch : input_clump_batches) {
+            // Decode type number and flatten
+            std::vector<inertiaOffset_t> type_marks(a_batch->GetNumClumps());
+            for (size_t i = 0; i < a_batch->GetNumClumps(); i++) {
+                type_marks.at(i) = a_batch->types.at(i)->mark;
             }
-
-            k++;
-            // std::cout << "Sphere Rel Pos offset: " << this_clump_no_sp_loc_offsets.at(j) << std::endl;
+            input_clump_types.insert(input_clump_types.end(), type_marks.begin(), type_marks.end());
+            // Now xyz
+            input_clump_xyz.insert(input_clump_xyz.end(), a_batch->xyz.begin(), a_batch->xyz.end());
+            // Now vel
+            input_clump_vel.insert(input_clump_vel.end(), a_batch->vel.begin(), a_batch->vel.end());
+            // Now quaternion
+            input_clump_oriQ.insert(input_clump_oriQ.end(), a_batch->oriQ.begin(), a_batch->oriQ.end());
+            // Now angular velocity
+            input_clump_angVel.insert(input_clump_angVel.end(), a_batch->angVel.begin(), a_batch->angVel.end());
+            // For family numbers, we check if the user has explicitly set them. If not, send a warning.
+            if ((!a_batch->families_isSpecified) && (!pop_family_msg)) {
+                SGPS_DEM_WARNING("Some clumps do not have their family numbers specified, so defaulted to %u",
+                                 DEM_DEFAULT_CLUMP_FAMILY_NUM);
+                pop_family_msg = true;
+            }
+            input_clump_family.insert(input_clump_family.end(), a_batch->families.begin(), a_batch->families.end());
+            SGPS_DEM_DEBUG_PRINTF("Loaded a batch of %zu clumps.", a_batch->GetNumClumps());
+            if (batch_num > 0) {
+                prescans_batch_size.at(batch_num) = prescans_batch_size.at(batch_num - 1) + a_batch->GetNumClumps();
+            }
+            batch_num++;
         }
 
-        voxelID_t voxelNumX = (double)this_CoM_coord.x / simParams->voxelSize;
-        voxelID_t voxelNumY = (double)this_CoM_coord.y / simParams->voxelSize;
-        voxelID_t voxelNumZ = (double)this_CoM_coord.z / simParams->voxelSize;
-        locX.at(i) = ((double)this_CoM_coord.x - (double)voxelNumX * simParams->voxelSize) / simParams->l;
-        locY.at(i) = ((double)this_CoM_coord.y - (double)voxelNumY * simParams->voxelSize) / simParams->l;
-        locZ.at(i) = ((double)this_CoM_coord.z - (double)voxelNumZ * simParams->voxelSize) / simParams->l;
-        // std::cout << "Clump voxel num: " << voxelNumX << ", " << voxelNumY << ", " << voxelNumZ << std::endl;
+        for (size_t i = 0; i < simParams->nOwnerClumps; i++) {
+            auto type_of_this_clump = input_clump_types.at(i);
+            inertiaPropOffsets.at(i) = type_of_this_clump;
+            auto this_CoM_coord = input_clump_xyz.at(i) - LBF;
+            // std::cout << "CoM position: " << this_CoM_coord.x << ", " << this_CoM_coord.y << ", " << this_CoM_coord.z
+            // << std::endl;
+            auto this_clump_no_sp_radii = clumps_sp_radii_types.at(type_of_this_clump);
+            auto this_clump_no_sp_relPos = clumps_sp_location_types.at(type_of_this_clump);
+            auto this_clump_no_sp_mat_ids = clumps_sp_mat_ids.at(type_of_this_clump);
 
-        voxelID.at(i) += voxelNumX;
-        voxelID.at(i) += voxelNumY << simParams->nvXp2;
-        voxelID.at(i) += voxelNumZ << (simParams->nvXp2 + simParams->nvYp2);
-        // std::cout << "Computed voxel num: " << voxelID.at(i) << std::endl;
+            for (size_t j = 0; j < this_clump_no_sp_radii.size(); j++) {
+                materialTupleOffset.at(k) = this_clump_no_sp_mat_ids.at(j);
+                ownerClumpBody.at(k) = i;
 
-        // Set initial velocity
-        auto vel_of_this_clump = input_clump_vel.at(i);
-        vX.at(i) = vel_of_this_clump.x;
-        vY.at(i) = vel_of_this_clump.y;
-        vZ.at(i) = vel_of_this_clump.z;
+                // This component offset, is it too large that can't live in the jitified array?
+                unsigned int this_comp_offset = prescans_comp.at(type_of_this_clump) + j;
+                clumpComponentOffsetExt.at(k) = this_comp_offset;
+                if (this_comp_offset < simParams->nJitifiableClumpComponents) {
+                    clumpComponentOffset.at(k) = this_comp_offset;
+                } else {
+                    // If not, an indicator will be put there
+                    clumpComponentOffset.at(k) = DEM_RESERVED_CLUMP_COMPONENT_OFFSET;
+                }
 
-        // Set family code
-        family_t this_family_num = family_user_impl_map.at(input_clump_family.at(i));
-        familyID.at(i) = this_family_num;
+                k++;
+                // std::cout << "Sphere Rel Pos offset: " << this_clump_no_sp_loc_offsets.at(j) << std::endl;
+            }
+
+            voxelID_t voxelNumX = (double)this_CoM_coord.x / simParams->voxelSize;
+            voxelID_t voxelNumY = (double)this_CoM_coord.y / simParams->voxelSize;
+            voxelID_t voxelNumZ = (double)this_CoM_coord.z / simParams->voxelSize;
+            locX.at(i) = ((double)this_CoM_coord.x - (double)voxelNumX * simParams->voxelSize) / simParams->l;
+            locY.at(i) = ((double)this_CoM_coord.y - (double)voxelNumY * simParams->voxelSize) / simParams->l;
+            locZ.at(i) = ((double)this_CoM_coord.z - (double)voxelNumZ * simParams->voxelSize) / simParams->l;
+
+            voxelID.at(i) += voxelNumX;
+            voxelID.at(i) += voxelNumY << simParams->nvXp2;
+            voxelID.at(i) += voxelNumZ << (simParams->nvXp2 + simParams->nvYp2);
+
+            // Set initial oriQ
+            auto oriQ_of_this_clump = input_clump_oriQ.at(i);
+            oriQ0.at(i) = oriQ_of_this_clump.x;
+            oriQ1.at(i) = oriQ_of_this_clump.y;
+            oriQ2.at(i) = oriQ_of_this_clump.z;
+            oriQ3.at(i) = oriQ_of_this_clump.w;
+
+            // Set initial velocity
+            auto vel_of_this_clump = input_clump_vel.at(i);
+            vX.at(i) = vel_of_this_clump.x;
+            vY.at(i) = vel_of_this_clump.y;
+            vZ.at(i) = vel_of_this_clump.z;
+
+            // Set initial angular velocity
+            auto angVel_of_this_clump = input_clump_angVel.at(i);
+            omgBarX.at(i) = angVel_of_this_clump.x;
+            omgBarY.at(i) = angVel_of_this_clump.y;
+            omgBarZ.at(i) = angVel_of_this_clump.z;
+
+            // Set family code
+            family_t this_family_num = family_user_impl_map.at(input_clump_family.at(i));
+            familyID.at(i) = this_family_num;
+        }
     }
 
     // Load in initial positions and mass properties for the owners of those external objects
@@ -424,10 +472,10 @@ void DEMDynamicThread::initManagedArrays(const std::vector<inertiaOffset_t>& inp
     // nExtObj
     for (auto& tracked_obj : tracked_objs) {
         switch (tracked_obj->type) {
-            case (DEM_OWNER_TYPE::CLUMP):
-                tracked_obj->ownerID = tracked_obj->load_order;
+            case (DEM_ENTITY_TYPE::CLUMP):
+                tracked_obj->ownerID = prescans_batch_size.at(tracked_obj->load_order);
                 break;
-            case (DEM_OWNER_TYPE::ANALYTICAL):
+            case (DEM_ENTITY_TYPE::ANALYTICAL):
                 tracked_obj->ownerID = tracked_obj->load_order + simParams->nOwnerClumps;
                 break;
             default:

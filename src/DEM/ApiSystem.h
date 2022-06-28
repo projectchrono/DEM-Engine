@@ -15,7 +15,7 @@
 #include <nvmath/helper_math.cuh>
 #include <DEM/DEMDefines.h>
 #include <DEM/DEMStructs.h>
-#include <DEM/Boundaries.h>
+#include <DEM/DEMBdrsAndObjs.h>
 #include <DEM/DEMModels.h>
 
 namespace sgps {
@@ -26,10 +26,8 @@ namespace sgps {
 class DEMTracker;
 
 //////////////////////////////////////////////////////////////
-// TODO LIST: 1. Check if anal obj's normal direction is correct, and if applyOriQ2Vec is correct
-//            2. AddClumps returns a batch object and allow it to be tracked
-//            3. Allow ext obj init CoM setting
-//            4. Mass/MOI can be too small? Need to scale
+// TODO LIST: 1. Check if anal obj's normal direction is correct, and if applyOriQToVec is correct
+//            2. Allow ext obj init CoM setting
 //////////////////////////////////////////////////////////////
 
 class DEMSolver {
@@ -158,29 +156,20 @@ class DEMSolver {
     float3 GetOwnerVelocity(bodyID_t ownerID) const;
 
     /// Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial location
-    /// means the location of the clumps' CoM coordinates in the global frame. If velocties are not given then they are
-    /// assumed 0.
-    void AddClumps(const std::vector<unsigned int>& types,
-                   const std::vector<float3>& xyz,
-                   const std::vector<float3>& vel = std::vector<float3>());
-    void AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& types,
-                   const std::vector<float3>& xyz,
-                   const std::vector<float3>& vel = std::vector<float3>());
+    /// means the location of the clumps' CoM coordinates in the global frame.
+    std::shared_ptr<DEMClumpBatch> AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& input_types,
+                                             const std::vector<float3>& input_xyz);
+    std::shared_ptr<DEMClumpBatch> AddClumps(std::shared_ptr<DEMClumpTemplate>& input_type, float3 input_xyz) {
+        return AddClumps(std::vector<std::shared_ptr<DEMClumpTemplate>>(1, input_type),
+                         std::vector<float3>(1, input_xyz));
+    }
 
-    /// Load a clump into the system, and return a tracker object to the user, so that the user can apply direct
-    /// control/modification/quarry to this clump (while dT is hanging)
-    std::shared_ptr<DEMTracker> AddClumpTracked(const std::shared_ptr<DEMClumpTemplate>& type,
-                                                float3 xyz,
-                                                float3 vel = make_float3(0));
-
-    /// Create a DEMTracker to allow direct control/modification/quarry to the argument object
+    /// Create a DEMTracker to allow direct control/modification/query to this external object
     std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMExternObj>& obj);
-    // std::shared_ptr<DEMTracker> Track(std::shared_ptr<ClumpBatch>& obj);
-
-    /// Instruct each clump the type of prescribed motion it should follow. If this is not called (or if this vector is
-    /// shorter than the clump location vector, then for the unassigned part) those clumps are defaulted to type 0,
-    /// which is following `normal' physics.
-    void SetClumpFamilies(const std::vector<unsigned int>& code);
+    /// Create a DEMTracker to allow direct control/modification/query to this batch of clumps. By default, it refers to
+    /// the first clump in this batch. The user can refer to other clumps in this batch by supplying an offset when
+    /// using this tracker's querying or assignment methods.
+    std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMClumpBatch>& obj);
 
     /// Instruct the solver that the 2 input families should not have contacts (a.k.a. ignored, if such a pair is
     /// encountered in contact detection). These 2 families can be the same (which means no contact within members of
@@ -269,6 +258,10 @@ class DEMSolver {
     /// simulation. Usually used when you want to change simulation parameters after the system is already Intialized.
     void UpdateSimParams();
 
+    /// Transfer newly loaded clumps/meshed objects to the GPU-side in mid-simulation and allocate GPU memory space for
+    /// them
+    void UpdateGPUArrays();
+
     /// Reset kT and dT back to a status like when the simulation system is constructed. In general the user does not
     /// need to call it, unless they want to run another test without re-constructing the entire DEM simulation system.
     /// Also note this call does not reset the collaboration log between kT and dT.
@@ -282,6 +275,9 @@ class DEMSolver {
     /// to start over and re-inspect the stats of the new run; otherwise, it is generally not needed, you can go ahead
     /// and destroy DEMSolver.
     void ClearThreadCollaborationStats();
+
+    /// Removes all entities associated with a family from the arrays (to save memory space)
+    void PurgeFamily(unsigned int family_num);
 
     /*
       protected:
@@ -299,69 +295,6 @@ class DEMSolver {
     void SetOutputContent(unsigned int content) { m_out_content = content; }
 
   private:
-    ////////////////////////////////////////////////////////////////////////////////
-    // Template-like info cached on the host side
-    ////////////////////////////////////////////////////////////////////////////////
-
-    // This is the cached material information.
-    // It will be massaged into the managed memory upon Initialize().
-    std::vector<std::shared_ptr<DEMMaterial>> m_loaded_sp_materials;
-    // Materials info is processed at API level (on initialization) for generating proxy arrays
-    std::vector<float> m_E_proxy;
-    std::vector<float> m_nu_proxy;
-    std::vector<float> m_CoR_proxy;
-    std::vector<float> m_mu_proxy;
-    std::vector<float> m_Crr_proxy;
-
-    // This is the cached clump structure information. Note although not stated explicitly, those are only `clump'
-    // templates, not including triangles, analytical geometries etc.
-    std::vector<std::shared_ptr<DEMClumpTemplate>> m_templates;
-    // Clump templates will be flatten and transferred into kernels upon Initialize()
-    std::vector<float> m_template_mass;
-    std::vector<float3> m_template_moi;
-    std::vector<std::vector<unsigned int>> m_template_sp_mat_ids;
-    std::vector<std::vector<float>> m_template_sp_radii;
-    std::vector<std::vector<float3>> m_template_sp_relPos;
-
-    // Flattened (analytical) object component definition arrays, potentially jitifiable
-    // These extra analytical entities' owners' ID will be appended to those added thru normal AddClump
-    std::vector<unsigned int> m_anal_owner;
-    // Material types of these analytical geometries
-    std::vector<materialsOffset_t> m_anal_materials;
-    // Initial locations of this obj's components relative to obj's CoM
-    std::vector<float3> m_anal_comp_pos;
-    // Some float3 quantity that is representitive of a component's initial orientation (such as plane normal, and its
-    // meaning can vary among different types)
-    std::vector<float3> m_anal_comp_rot;
-    // Some float quantity that is representitive of a component's size (e.g. for a cylinder, top radius)
-    std::vector<float> m_anal_size_1;
-    // Some float quantity that is representitive of a component's size (e.g. for a cylinder, bottom radius)
-    std::vector<float> m_anal_size_2;
-    // Some float quantity that is representitive of a component's size (e.g. for a cylinder, its length)
-    std::vector<float> m_anal_size_3;
-    // Component object types
-    std::vector<objType_t> m_anal_types;
-    // Component object normal direction, defaulting to inward. If this object is topologically a plane then this param
-    // is meaningless, since its normal is determined by its rotation.
-    std::vector<objNormal_t> m_anal_normals;
-
-    /*
-    // Dan and Ruochun decided NOT to extract unique input values.
-    // Instead, we trust users: we simply store all clump template info users give.
-    // So this unique-value-extractor block is disabled and commented.
-
-    // unique clump masses derived from m_template_mass
-    std::set<float> m_template_mass_types;
-    std::vector<unsigned int> m_template_mass_type_offset;
-    // unique sphere radii types derived from m_template_sp_radii
-    std::set<float> m_template_sp_radii_types;
-    std::vector<std::vector<distinctSphereRadiiOffset_default_t>> m_template_sp_radii_type_offset;
-    // unique sphere (local) location types derived from m_template_sp_relPos
-    // std::set<float3, float3_less_than> m_clumps_sp_location_types;
-    std::set<float3> m_clumps_sp_location_types;
-    std::vector<std::vector<distinctSphereRelativePositions_default_t>> m_clumps_sp_location_type_offset;
-    */
-
     ////////////////////////////////////////////////////////////////////////////////
     // Flag-like behavior-related variables cached on the host side
     ////////////////////////////////////////////////////////////////////////////////
@@ -427,38 +360,9 @@ class DEMSolver {
     // left undiscovered by CD.
     float m_expand_safety_param = 1.f;
 
-    // Total number of spheres
-    size_t nSpheresGM = 0;
-    // Total number of triangle facets
-    size_t nTriGM = 0;
-    // Number of analytical entites (as components of some external objects)
-    unsigned int nAnalGM = 0;
-    // Total number of owner bodies
-    size_t nOwnerBodies = 0;
-    // Number of loaded clumps
-    size_t nOwnerClumps = 0;
-    // Number of loaded external objects
-    unsigned int nExtObj = 0;
-    // Number of loaded triangle-represented (mesh) objects
-    size_t nTriEntities = 0;
-    // nExtObj + nOwnerClumps + nTriEntities == nOwnerBodies
-
     // The number of user-estimated (max) number of owners that will be present in the simulation. If 0, then the arrays
     // will just be resized at intialization based on the input size.
     size_t m_instructed_num_owners = 0;
-
-    unsigned int nDistinctClumpComponents;
-    unsigned int nDistinctClumpBodyTopologies;
-    unsigned int nDistinctMassProperties;
-    unsigned int nMatTuples;
-    unsigned int nDistinctFamilies;
-
-    // This many clump template can be jitified, and the rest need to exist in global memory
-    // Note all `mass' properties are jitified, it's just this many clump templates' component info will not be
-    // jitified. Therefore, this quantity does not seem to be useful beyond reporting to the user.
-    unsigned int nJitifiableClumpTopo;
-    // Number of jitified clump components
-    unsigned int nJitifiableClumpComponents;
 
     // Whether the number of voxels and length unit l is explicitly given by the user
     bool explicit_nv_override = false;
@@ -475,37 +379,89 @@ class DEMSolver {
     bool m_isHistoryless = false;
 
     ////////////////////////////////////////////////////////////////////////////////
-    // Cached user's direct (non-template-related) inputs concerning the actual 
-    // physics objects presented in the simulation, which need to be processed 
-    // before shipment, at initialization time
+    // No method is provided to modify the following key quantities, even if
+    // there are entites added to/removed from the simulation, in which case
+    // they will just be modified. At the time these quantities should be clear,
+    // the user might as well reconstruct the simulator.
     ////////////////////////////////////////////////////////////////////////////////
 
-    // Shared pointers to external objects cached at the API system
+    // Total number of spheres
+    size_t nSpheresGM = 0;
+    // Total number of triangle facets
+    size_t nTriGM = 0;
+    // Number of analytical entites (as components of some external objects)
+    unsigned int nAnalGM = 0;
+    // Total number of owner bodies
+    size_t nOwnerBodies = 0;
+    // Number of loaded clumps
+    size_t nOwnerClumps = 0;
+    // Number of loaded external objects
+    unsigned int nExtObj = 0;
+    // Number of loaded triangle-represented (mesh) objects
+    size_t nTriEntities = 0;
+    // nExtObj + nOwnerClumps + nTriEntities == nOwnerBodies
+
+    // Number of batches of clumps loaded by the user. Note this number never decreases, it just records how many times
+    // the user loaded clumps into the simulation for the duration of this class.
+    size_t nBatchClumps = 0;
+    // Number of times when an external (analytical) object is loaded by the user. Never decreases.
+    unsigned int nTimesExtObjLoad = 0;
+    // Number of times when a meshed object is loaded by the user. Never decreses.
+    size_t nTimesTriObjLoad = 0;
+
+    // The list of unique family numbers that the user ever assigned. This has implications on family map construction,
+    // and the elements of it never get removed.
+    std::vector<unsigned int> unique_user_families;
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // These quantities will be reset at the time of jitification or re-jitification,
+    // but not when entities are added to/removed from the simulation. No method is
+    // provided to directly modify them as it is not needed.
+    ////////////////////////////////////////////////////////////////////////////////
+
+    unsigned int nDistinctClumpComponents;
+    unsigned int nDistinctClumpBodyTopologies;
+    unsigned int nDistinctMassProperties;
+    unsigned int nMatTuples;
+    unsigned int nDistinctFamilies;
+
+    // This many clump template can be jitified, and the rest need to exist in global memory
+    // Note all `mass' properties are jitified, it's just this many clump templates' component info will not be
+    // jitified. Therefore, this quantity does not seem to be useful beyond reporting to the user.
+    unsigned int nJitifiableClumpTopo;
+    // Number of jitified clump components
+    unsigned int nJitifiableClumpComponents;
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // Cached user's direct (raw) inputs concerning the actual physics objects
+    // presented in the simulation, which need to be processed before shipment,
+    // at initialization time. These items can and should be cleared before users
+    // add entites from the simulation on-the-fly, and be loaded with new entities.
+    ////////////////////////////////////////////////////////////////////////////////
+
+    // This is the cached material information.
+    // It will be massaged into the managed memory upon Initialize().
+    std::vector<std::shared_ptr<DEMMaterial>> m_loaded_materials;
+
+    // This is the cached clump structure information. Note although not stated explicitly, those are only `clump'
+    // templates, not including triangles, analytical geometries etc.
+    std::vector<std::shared_ptr<DEMClumpTemplate>> m_templates;
+
+    // Shared pointers to a batch of clumps loaded into the system. Through this returned handle, the user can further
+    // specify the vel, ori etc. of this batch of clumps.
+    std::vector<std::shared_ptr<DEMClumpBatch>> cached_input_clump_batches;
+
+    // Shared pointers to analytical objects cached at the API system
     std::vector<std::shared_ptr<DEMExternObj>> cached_extern_objs;
 
-    ////////////////////////////////////////////////////////////////////////////////
-    // Flattened and sometimes processed user inputs, ready to be transferred to
-    // worker threads
-    ////////////////////////////////////////////////////////////////////////////////
+    // Shared pointers to meshed objects cached at the API system
+    // TODO: std::vector<std::shared_ptr<DEMMeshObj>> cached_mesh_objs;
 
-    // Cached state vectors such as the types and locations/velocities of the initial clumps to fill the sim domain
-    // with. User managed arrays usually use unsigned int to represent integers and ensure safety; however
-    // m_input_clump_types tends to be long and should use _t definition. Note this is not the same for user-input
-    // family number, because that number can be anything.
-    std::vector<inertiaOffset_t> m_input_clump_types;
-    // Some input clump initial profiles
-    std::vector<float3> m_input_clump_xyz;
-    // std::vector<float4> m_input_clump_rot;
-    std::vector<float3> m_input_clump_vel;
-    // Specify the ``family'' code for each clump. Then you can specify if they should go with some prescribed motion or
-    // some special physics (for example, being fixed). The default behavior (without specification) for every family is
-    // using ``normal'' physics.
-    std::vector<unsigned int> m_input_clump_family;
-
-    struct familyPair_t {
-        unsigned int ID1;
-        unsigned int ID2;
-    };
+    // User-input prescribed motion
+    std::vector<familyPrescription_t> m_input_family_prescription;
+    // TODO: fixed particles should automatically attain status indicating they don't interact with each other.
+    // The familes that should not be outputted
+    std::set<unsigned int> m_no_output_families;
     // Change family number from ID1 to ID2 when conditions are met
     std::vector<familyPair_t> m_family_change_pairs;
     // Corrsponding family number changing conditions
@@ -517,6 +473,16 @@ class DEMSolver {
     // function; prescribed location as a function)
     // Upper-triangular interaction `mask' matrix, which clarifies the family codes that a family can interact with.
     // This is needed by kT only.
+
+    // Cached tracked objects that can be leveraged by the user to assume explicit control over some simulation objects
+    std::vector<std::shared_ptr<DEMTrackedObj>> m_tracked_objs;
+    // std::vector<std::shared_ptr<DEMTracker>> m_trackers;
+
+    ////////////////////////////////////////////////////////////////////////////////
+    // Flattened and sometimes processed user inputs, ready to be transferred to
+    // worker threads
+    ////////////////////////////////////////////////////////////////////////////////
+
     std::vector<notStupidBool_t> m_family_mask_matrix;
     // Host-side mapping array that maps like this: map.at(user family number) = (corresponding impl-level family
     // number)
@@ -524,48 +490,71 @@ class DEMSolver {
     // Host-side mapping array that maps like this: map.at(impl-level family number) = (corresponding user family
     // number)
     std::unordered_map<family_t, unsigned int> m_family_impl_user_map;
-    // The familes that should not be outputted
-    std::set<unsigned int> m_no_output_families;
-    // TODO: fixed particles should automatically attain status indicating they don't interact with each other.
 
     // Unlike clumps, external objects do not have _types (each is its own type)
     std::vector<float3> m_input_ext_obj_xyz;
     // std::vector<float4> m_input_ext_obj_rot;
     std::vector<unsigned int> m_input_ext_obj_family;
 
-    struct familyPrescription_t {
-        unsigned int family;
-        std::string linPosX = "none";
-        std::string linPosY = "none";
-        std::string linPosZ = "none";
-        std::string linVelX = "none";
-        std::string linVelY = "none";
-        std::string linVelZ = "none";
-
-        std::string oriQ = "none";
-        std::string rotVelX = "none";
-        std::string rotVelY = "none";
-        std::string rotVelZ = "none";
-        // Is this prescribed motion dictating the motion of the entities (true), or just added on top of the true
-        // physics (false)
-        bool linVelPrescribed = false;
-        bool rotVelPrescribed = false;
-        bool rotPosPrescribed = false;
-        bool linPosPrescribed = false;
-        // This family will receive external updates of velocity and position (overwrites analytical prescription)
-        bool externVel = false;
-        bool externPos = false;
-        // A switch to mark if there is any prescription going on for this family at all
-        bool used = false;
-    };
-    // User-input prescribed motion
-    std::vector<familyPrescription_t> m_input_family_prescription;
     // Processed unique family prescription info
     std::vector<familyPrescription_t> m_unique_family_prescription;
 
-    // Cached tracked objects that can be leveraged by the user to assume explicit control over some simulation objects
-    std::vector<std::shared_ptr<DEMTrackedObj>> m_tracked_objs;
-    // std::vector<std::shared_ptr<DEMTracker>> m_trackers;
+    // Flattened array of all family numbers the user used. This needs to be prepared each time at initialization time
+    // since we need to know the range and amount of unique family numbers the user used, as we did not restrict what
+    // naming scheme the user must use when defining family numbers.
+    std::vector<unsigned int> m_input_clump_family;
+
+    // Flattened (analytical) object component definition arrays, potentially jitifiable
+    // These extra analytical entities' owners' ID will be appended to those added thru normal AddClump
+    std::vector<unsigned int> m_anal_owner;
+    // Material types of these analytical geometries
+    std::vector<materialsOffset_t> m_anal_materials;
+    // Initial locations of this obj's components relative to obj's CoM
+    std::vector<float3> m_anal_comp_pos;
+    // Some float3 quantity that is representitive of a component's initial orientation (such as plane normal, and its
+    // meaning can vary among different types)
+    std::vector<float3> m_anal_comp_rot;
+    // Some float quantity that is representitive of a component's size (e.g. for a cylinder, top radius)
+    std::vector<float> m_anal_size_1;
+    // Some float quantity that is representitive of a component's size (e.g. for a cylinder, bottom radius)
+    std::vector<float> m_anal_size_2;
+    // Some float quantity that is representitive of a component's size (e.g. for a cylinder, its length)
+    std::vector<float> m_anal_size_3;
+    // Component object types
+    std::vector<objType_t> m_anal_types;
+    // Component object normal direction, defaulting to inward. If this object is topologically a plane then this param
+    // is meaningless, since its normal is determined by its rotation.
+    std::vector<objNormal_t> m_anal_normals;
+
+    // Clump templates will be flatten and transferred into kernels upon Initialize()
+    std::vector<float> m_template_mass;
+    std::vector<float3> m_template_moi;
+    std::vector<std::vector<unsigned int>> m_template_sp_mat_ids;
+    std::vector<std::vector<float>> m_template_sp_radii;
+    std::vector<std::vector<float3>> m_template_sp_relPos;
+    /*
+    // Dan and Ruochun decided NOT to extract unique input values.
+    // Instead, we trust users: we simply store all clump template info users give.
+    // So this unique-value-extractor block is disabled and commented.
+
+    // unique clump masses derived from m_template_mass
+    std::set<float> m_template_mass_types;
+    std::vector<unsigned int> m_template_mass_type_offset;
+    // unique sphere radii types derived from m_template_sp_radii
+    std::set<float> m_template_sp_radii_types;
+    std::vector<std::vector<distinctSphereRadiiOffset_default_t>> m_template_sp_radii_type_offset;
+    // unique sphere (local) location types derived from m_template_sp_relPos
+    // std::set<float3, float3_less_than> m_clumps_sp_location_types;
+    std::set<float3> m_clumps_sp_location_types;
+    std::vector<std::vector<distinctSphereRelativePositions_default_t>> m_clumps_sp_location_type_offset;
+    */
+
+    // Materials info is processed at API level (on initialization) for generating proxy arrays
+    std::vector<float> m_E_proxy;
+    std::vector<float> m_nu_proxy;
+    std::vector<float> m_CoR_proxy;
+    std::vector<float> m_mu_proxy;
+    std::vector<float> m_Crr_proxy;
 
     ////////////////////////////////////////////////////////////////////////////////
     // DEM system's workers, helpers, friends
@@ -606,6 +595,8 @@ class DEMSolver {
     /// Warn users if the data types defined in DEMDefines.h do not blend well with the user inputs (fist-round
     /// coarse-grain sanity check)
     void validateUserInputs();
+    /// Modify user inputs before passing to impl-level systems when needed
+    void processUserInputs();
     /// Compute the number of dT for cycles based on the amount of time the user wants to advance the simulation
     inline size_t computeDTCycles(double thisCallDuration);
     /// Prepare the material/contact proxy matrix force computation kernels
@@ -616,6 +607,8 @@ class DEMSolver {
     inline void reportInitStats() const;
     /// Based on user input, prepare family_mask_matrix (family contact map matrix)
     void figureOutFamilyMasks();
+    /// Release the memory for those flattened arrays
+    void releaseFlattenedArrays();
 
     // Some JIT packaging helpers
     inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap);
@@ -642,10 +635,10 @@ class DEMTracker {
     // The tracked object
     std::shared_ptr<DEMTrackedObj> obj;
     // Methods to get info from this owner
-    float3 Pos() { return sys->GetOwnerPosition(obj->ownerID); }
-    float3 AngVel() { return sys->GetOwnerAngVel(obj->ownerID); }
-    float3 Vel() { return sys->GetOwnerVelocity(obj->ownerID); }
-    float4 OriQ() { return sys->GetOwnerOriQ(obj->ownerID); }
+    float3 Pos(size_t offset = 0) { return sys->GetOwnerPosition(obj->ownerID + offset); }
+    float3 AngVel(size_t offset = 0) { return sys->GetOwnerAngVel(obj->ownerID + offset); }
+    float3 Vel(size_t offset = 0) { return sys->GetOwnerVelocity(obj->ownerID + offset); }
+    float4 OriQ(size_t offset = 0) { return sys->GetOwnerOriQ(obj->ownerID + offset); }
 };
 
 }  // namespace sgps

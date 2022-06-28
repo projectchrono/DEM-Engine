@@ -338,6 +338,37 @@ class WorkerReportChannel {
     ~WorkerReportChannel() {}
 };
 
+struct familyPrescription_t {
+    unsigned int family;
+    std::string linPosX = "none";
+    std::string linPosY = "none";
+    std::string linPosZ = "none";
+    std::string linVelX = "none";
+    std::string linVelY = "none";
+    std::string linVelZ = "none";
+
+    std::string oriQ = "none";
+    std::string rotVelX = "none";
+    std::string rotVelY = "none";
+    std::string rotVelZ = "none";
+    // Is this prescribed motion dictating the motion of the entities (true), or just added on top of the true
+    // physics (false)
+    bool linVelPrescribed = false;
+    bool rotVelPrescribed = false;
+    bool rotPosPrescribed = false;
+    bool linPosPrescribed = false;
+    // This family will receive external updates of velocity and position (overwrites analytical prescription)
+    bool externVel = false;
+    bool externPos = false;
+    // A switch to mark if there is any prescription going on for this family at all
+    bool used = false;
+};
+
+struct familyPair_t {
+    unsigned int ID1;
+    unsigned int ID2;
+};
+
 struct SolverFlags {
     // Sort contact pair arrays before sending to kT
     bool should_sort_pairs = true;
@@ -391,7 +422,7 @@ struct DEMClumpTemplate {
 struct DEMTrackedObj {
     // ownerID will be updated by dT on initialization
     bodyID_t ownerID = DEM_NULL_BODYID;
-    DEM_OWNER_TYPE type;
+    DEM_ENTITY_TYPE type;
     // A tracker tracks a owner loaded into the system via its respective loading method, so load_order registers
     // the position of this object in the corresponding API-side array
     size_t load_order;

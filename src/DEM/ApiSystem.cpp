@@ -223,17 +223,17 @@ void DEMSolver::DisableFamilyOutput(unsigned int ID) {
 std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterialType(DEMMaterial& mat) {
     if (mat.CoR < SGPS_DEM_TINY_FLOAT) {
         SGPS_DEM_WARNING("Material type %u is set to have 0 restitution. Please make sure this is intentional.",
-                         m_loaded_sp_materials.size());
+                         m_loaded_materials.size());
     }
     if (mat.CoR > 1.f) {
         SGPS_DEM_WARNING(
             "Material type %u is set to have a restitution coefficient larger than 1. This is typically not physical "
             "and should destabilize the simulation.",
-            m_loaded_sp_materials.size());
+            m_loaded_materials.size());
     }
     std::shared_ptr<DEMMaterial> ptr = std::make_shared<DEMMaterial>(std::move(mat));
-    m_loaded_sp_materials.push_back(ptr);
-    return m_loaded_sp_materials.back();
+    m_loaded_materials.push_back(ptr);
+    return m_loaded_materials.back();
 }
 
 std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterialType(float E, float nu, float CoR, float mu, float Crr, float rho) {
@@ -302,7 +302,8 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpSimpleSphere(float mass,
 std::shared_ptr<DEMExternObj> DEMSolver::AddExternalObject() {
     DEMExternObj an_obj;
     std::shared_ptr<DEMExternObj> ptr = std::make_shared<DEMExternObj>(std::move(an_obj));
-    ptr->load_order = cached_extern_objs.size();
+    ptr->load_order = nTimesExtObjLoad;
+    nTimesExtObjLoad++;
     cached_extern_objs.push_back(ptr);
     return cached_extern_objs.back();
 }
@@ -326,13 +327,6 @@ void DEMSolver::DisableContactBetweenFamilies(unsigned int ID1, unsigned int ID2
 void DEMSolver::ClearCache() {
     // TODO: Must be missing some...
     // TODO: Use swap or reassignment to release the memory
-    nSpheresGM = 0;
-    nTriGM = 0;
-    nAnalGM = 0;
-    nOwnerBodies = 0;
-    nOwnerClumps = 0;
-    nExtObj = 0;
-    nTriEntities = 0;
     sys_initialized = false;
 
     cached_extern_objs.clear();
@@ -352,12 +346,8 @@ void DEMSolver::ClearCache() {
     m_template_sp_radii.clear();
     m_template_sp_relPos.clear();
     m_template_sp_mat_ids.clear();
-    m_loaded_sp_materials.clear();
+    m_loaded_materials.clear();
 
-    m_input_clump_types.clear();
-    m_input_clump_xyz.clear();
-    m_input_clump_vel.clear();
-    m_input_clump_family.clear();
     m_family_mask_matrix.clear();
     m_family_user_impl_map.clear();
 
@@ -369,11 +359,10 @@ void DEMSolver::ClearCache() {
     m_unique_family_prescription.clear();
 
     m_tracked_objs.clear();
-    // m_trackers.clear();
 }
 
 float DEMSolver::GetTotalKineticEnergy() const {
-    if (nOwnerBodies == 0) {
+    if (nOwnerClumps == 0) {
         return 0.0;
     }
     return dT->getKineticEnergy();
@@ -412,16 +401,16 @@ void DEMSolver::decideBinSize() {
 }
 
 void DEMSolver::figureOutMaterialProxies() {
-    // Use the info in m_loaded_sp_materials to populate API-side proxy arrays
+    // Use the info in m_loaded_materials to populate API-side proxy arrays
     // These arrays are later passed to kTdT in initManagedArrays
-    unsigned int count = m_loaded_sp_materials.size();
+    unsigned int count = m_loaded_materials.size();
     m_E_proxy.resize(count);
     m_nu_proxy.resize(count);
     m_CoR_proxy.resize(count);
     m_mu_proxy.resize(count);
     m_Crr_proxy.resize(count);
     for (unsigned int i = 0; i < count; i++) {
-        std::shared_ptr<DEMMaterial>& Mat = m_loaded_sp_materials.at(i);
+        std::shared_ptr<DEMMaterial>& Mat = m_loaded_materials.at(i);
         m_E_proxy.at(i) = Mat->E;
         m_nu_proxy.at(i) = Mat->nu;
         m_CoR_proxy.at(i) = Mat->CoR;
@@ -433,27 +422,43 @@ void DEMSolver::figureOutMaterialProxies() {
 void DEMSolver::figureOutFamilyMasks() {
     // Figure out the unique family numbers
     std::vector<unsigned int> unique_clump_families = hostUniqueVector<unsigned int>(m_input_clump_family);
+    if (any_of(unique_clump_families.begin(), unique_clump_families.end(),
+               [](unsigned int i) { return i >= DEM_RESERVED_FAMILY_NUM; })) {
+        SGPS_DEM_WARNING(
+            "Some clumps are instructed to have family number %u (or larger).\nThis family number is reserved for "
+            "completely fixed boundaries. Using it on your simulation entities will make them fixed, regardless of "
+            "your specification.\nYou can change family_t if you indeed need more families to work with.",
+            DEM_RESERVED_FAMILY_NUM);
+    }
+
     std::vector<unsigned int> unique_ext_obj_families = hostUniqueVector<unsigned int>(m_input_ext_obj_family);
+    // TODO: find the uniques for triangle input families as well
     unique_clump_families.insert(unique_clump_families.end(), unique_ext_obj_families.begin(),
                                  unique_ext_obj_families.end());
-    // TODO: find the uniques for triangle input families as well
-    std::vector<unsigned int> unique_families = hostUniqueVector<unsigned int>(unique_clump_families);
-    unsigned int max_family_num = *(std::max_element(unique_families.begin(), unique_families.end()));
+    // Combine all unique user family numbers together
+    unique_clump_families.insert(unique_clump_families.end(), unique_user_families.begin(), unique_user_families.end());
+    std::vector<unsigned int> unique_families_this_time = hostUniqueVector<unsigned int>(unique_clump_families);
+    unique_user_families.assign(unique_families_this_time.begin(), unique_families_this_time.end());
+    unsigned int max_family_num = *(std::max_element(unique_user_families.begin(), unique_user_families.end()));
 
-    nDistinctFamilies = unique_families.size();
+    SGPS_DEM_DEBUG_EXEC(printf("Unique user families:\n"); for (unsigned int i = 0; i < unique_user_families.size();
+                                                                i++) printf("%u, ", unique_user_families.at(i));
+                        printf("\n"););
+
+    nDistinctFamilies = unique_user_families.size();
     if (nDistinctFamilies > std::numeric_limits<family_t>::max()) {
         SGPS_DEM_ERROR(
             "You have %u families, however per data type restriction, there can be no more than %u. If so many "
             "families are indeed needed, please redefine family_t.",
             nDistinctFamilies, std::numeric_limits<family_t>::max());
     }
-    // displayArray<unsigned int>(unique_families.data(), unique_families.size());
+    // displayArray<unsigned int>(unique_user_families.data(), unique_user_families.size());
 
     // Build the user--internal family number map (user can define family number however they want, but our
     // implementation-level numbers always start at 0)
     for (family_t i = 0; i < nDistinctFamilies; i++) {
-        m_family_user_impl_map[unique_families.at(i)] = i;
-        m_family_impl_user_map[i] = unique_families.at(i);
+        m_family_user_impl_map[unique_user_families.at(i)] = i;
+        m_family_impl_user_map[i] = unique_user_families.at(i);
     }
 
     // At this point, we know the size of the mask matrix, and we init it as all-allow
@@ -528,15 +533,20 @@ void DEMSolver::figureOutFamilyMasks() {
 
 inline void DEMSolver::reportInitStats() const {
     SGPS_DEM_INFO("The dimension of the simulation world: %.17g, %.17g, %.17g", m_boxX, m_boxY, m_boxZ);
+    SGPS_DEM_INFO("Simulation world X range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_boxX);
+    SGPS_DEM_INFO("Simulation world Y range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_boxY);
+    SGPS_DEM_INFO("Simulation world Z range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_boxZ);
     SGPS_DEM_INFO("The length unit in this simulation is: %.17g", l);
     SGPS_DEM_INFO("The edge length of a voxel: %.17g", m_voxelSize);
 
     SGPS_DEM_INFO("The edge length of a bin: %.17g", m_binSize);
     SGPS_DEM_INFO("The total number of bins: %zu", m_num_bins);
 
-    SGPS_DEM_INFO("The current number of clumps: %zu", nOwnerBodies);
-    SGPS_DEM_INFO("The current number of spheres: %zu", nSpheresGM);
-    SGPS_DEM_INFO("The current number of families: %u", nDistinctFamilies);
+    SGPS_DEM_INFO("The total number of clumps: %zu", nOwnerClumps);
+    SGPS_DEM_INFO("The combined number of component spheres: %zu", nSpheresGM);
+    SGPS_DEM_INFO("The total number of analytical objects: %u", nExtObj);
+    SGPS_DEM_INFO("Grand total number of owners: %zu", nOwnerBodies);
+    SGPS_DEM_INFO("The total number of families: %u", nDistinctFamilies);
 
     if (m_expand_factor > 0.0) {
         SGPS_DEM_INFO("All geometries are enlarged/thickened by %.9g for contact detection purpose", m_expand_factor);
@@ -566,9 +576,6 @@ void DEMSolver::preprocessClumpTemplates() {
         SGPS_DEM_DEBUG_PRINTF("Clump template re-order: %u->%u, nComp: %u", m_templates.at(i)->mark, i,
                               m_templates.at(i)->nComp);
     }
-    for (unsigned int i = 0; i < m_input_clump_types.size(); i++) {
-        m_input_clump_types.at(i) = old_mark_to_new.at(m_input_clump_types.at(i));
-    }
     // If the user then add more clumps to the system (without adding templates, which mandates a re-initialization),
     // mapping again is not needed, because now we redefine each template's mark to be the same as their current
     // position in template array
@@ -587,7 +594,7 @@ void DEMSolver::preprocessClumpTemplates() {
         // m_template_sp_mat_ids is an array of ints that represent the indices of the material array
         std::vector<unsigned int> this_clump_sp_mat_ids;
         for (const std::shared_ptr<DEMMaterial>& this_material : clump->materials) {
-            this_clump_sp_mat_ids.push_back(stash_material_in_templates(m_loaded_sp_materials, this_material));
+            this_clump_sp_mat_ids.push_back(stash_material_in_templates(m_loaded_materials, this_material));
         }
         m_template_sp_mat_ids.push_back(this_clump_sp_mat_ids);
         SGPS_DEM_DEBUG_EXEC(printf("Input clump No.%d has material types: ", m_template_mass.size() - 1);
@@ -606,7 +613,7 @@ unsigned int DEMSolver::AddAnalCompTemplate(const objType_t type,
                                             const float d3,
                                             const objNormal_t normal) {
     m_anal_types.push_back(type);
-    m_anal_materials.push_back(stash_material_in_templates(m_loaded_sp_materials, material));
+    m_anal_materials.push_back(stash_material_in_templates(m_loaded_materials, material));
     m_anal_owner.push_back(owner);
     m_anal_comp_pos.push_back(pos);
     m_anal_comp_rot.push_back(rot);
@@ -694,7 +701,7 @@ void DEMSolver::generateJITResources() {
     }
 
     nDistinctClumpBodyTopologies = m_template_mass_types.size();
-    nMatTuples = m_loaded_sp_materials.size();
+    nMatTuples = m_loaded_materials.size();
 
     nDistinctSphereRadii_computed = m_template_sp_radii_types.size();
     nDistinctSphereRelativePositions_computed = m_clumps_sp_location_types.size();
@@ -723,7 +730,7 @@ void DEMSolver::generateJITResources() {
     nDistinctMassProperties = m_template_mass.size();
 
     // Also, external objects may introduce more material types
-    nMatTuples = m_loaded_sp_materials.size();
+    nMatTuples = m_loaded_materials.size();
 
     // Figure out the parameters related to the simulation `world', if need to
     if (!explicit_nv_override) {
@@ -731,90 +738,33 @@ void DEMSolver::generateJITResources() {
     }
     decideBinSize();
 
-    // Figure out the initial profile/status of clumps, and related quantities, if need to
-    nOwnerClumps = m_input_clump_types.size();
-
-    // Remember that m_input_clump_types stores clump type number, not their shared ptr, to save some memory space
-    for (size_t i = 0; i < m_input_clump_types.size(); i++) {
-        auto this_type_num = m_input_clump_types.at(i);
-        auto this_radii = m_template_sp_radii.at(this_type_num);
-        nSpheresGM += this_radii.size();
-    }
-
-    // Enlarge the expand factor if the user tells us to
-    m_expand_factor *= m_expand_safety_param;
-
-    // How many owners we have, finally?
+    // Finally, with both user inputs and jit info processed, we can derive the number of owners that we have now
     nOwnerBodies = nExtObj + nOwnerClumps + nTriEntities;
 
     // If these `computed' numbers are larger than types like materialsOffset_t can hold, then we should error out and
     // let the user re-compile (or, should we somehow change the header automatically?)
     postJITResourceGenSanityCheck();
 
-    // Notify the user simulation stats
+    // Notify the user how jitification goes
     reportInitStats();
 }
 
-void DEMSolver::AddClumps(const std::vector<unsigned int>& type_marks,
-                          const std::vector<float3>& xyz,
-                          const std::vector<float3>& vel) {
-    if (type_marks.size() != xyz.size()) {
+std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& input_types,
+                                                    const std::vector<float3>& input_xyz) {
+    if (input_types.size() != input_xyz.size()) {
         SGPS_DEM_ERROR("Arrays in the call AddClumps must all have the same length.");
     }
+    size_t nClumps = input_types.size();
+    // We did not create defaults for families, and if the user did not specify families then they will be added at
+    // initialization, and a warning will be given
 
-    size_t num_old = m_input_clump_types.size();
-    size_t num_new = type_marks.size();
-    m_input_clump_types.resize(num_old + num_new);
-    for (size_t i = 0; i < num_new; i++) {
-        m_input_clump_types.at(num_old + i) = type_marks.at(i);
-    }
-    // clump_xyz are the xyz of the CoM
-    m_input_clump_xyz.insert(m_input_clump_xyz.end(), xyz.begin(), xyz.end());
-
-    // Now set velocity
-    std::vector<float3> input_vel(vel);
-    if (type_marks.size() != input_vel.size()) {
-        SGPS_DEM_WARNING(
-            "Velocity and/or angular velocity array in the call AddClumps has a different length than position array, "
-            "and is resized (with 0-velocity fillers) to match the length.");
-        input_vel.resize(xyz.size(), make_float3(0));
-    }
-    m_input_clump_vel.insert(m_input_clump_vel.end(), input_vel.begin(), input_vel.end());
-}
-
-void DEMSolver::AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& types,
-                          const std::vector<float3>& xyz,
-                          const std::vector<float3>& vel) {
-    // We don't load shared ptr to cache arrays, it's too large; besides, by this time the clump template must have been
-    // loaded, so storing its offset in the template cache array is fine.
-    std::vector<unsigned int> type_marks(types.size());
-    for (size_t i = 0; i < types.size(); i++) {
-        type_marks.at(i) = types.at(i)->mark;
-    }
-    AddClumps(type_marks, xyz, vel);
-}
-
-std::shared_ptr<DEMTracker> DEMSolver::AddClumpTracked(const std::shared_ptr<DEMClumpTemplate>& type,
-                                                       float3 xyz,
-                                                       float3 vel) {
-    size_t tracked_location = m_input_clump_types.size();
-
-    // Register this object, and dT needs it to figure out its impl-level owner ID
-    DEMTrackedObj tracked_obj;
-    tracked_obj.load_order = tracked_location;
-    tracked_obj.type = DEM_OWNER_TYPE::CLUMP;
-    m_tracked_objs.push_back(std::make_shared<DEMTrackedObj>(std::move(tracked_obj)));
-
-    // Also instantiate a API-level tracker for the ease of usage
-    DEMTracker tracker(this);
-    tracker.obj = m_tracked_objs.back();
-    // m_trackers.push_back(std::make_shared<DEMTracker>(std::move(tracker)));
-
-    AddClumps(std::vector<std::shared_ptr<DEMClumpTemplate>>(1, type), std::vector<float3>(1, xyz),
-              std::vector<float3>(1, vel));
-
-    // return m_trackers.back();
-    return std::make_shared<DEMTracker>(std::move(tracker));
+    DEMClumpBatch a_batch(nClumps);
+    a_batch.SetTypes(input_types);
+    a_batch.SetPos(input_xyz);
+    a_batch.load_order = nBatchClumps;
+    nBatchClumps++;
+    cached_input_clump_batches.push_back(std::make_shared<DEMClumpBatch>(std::move(a_batch)));
+    return cached_input_clump_batches.back();
 }
 
 std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMExternObj>& obj) {
@@ -823,7 +773,7 @@ std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMExternObj>& obj)
     // universal treatment that dT can apply, besides we may have some include-related issues.
     DEMTrackedObj tracked_obj;
     tracked_obj.load_order = obj->load_order;
-    tracked_obj.type = DEM_OWNER_TYPE::ANALYTICAL;
+    tracked_obj.type = DEM_ENTITY_TYPE::ANALYTICAL;
     m_tracked_objs.push_back(std::make_shared<DEMTrackedObj>(std::move(tracked_obj)));
 
     // Create a Tracker for this tracked object
@@ -832,18 +782,16 @@ std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMExternObj>& obj)
     return std::make_shared<DEMTracker>(std::move(tracker));
 }
 
-// std::shared_ptr<DEMTracker> Track(std::shared_ptr<ClumpBatch>& obj) {}
+std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMClumpBatch>& obj) {
+    DEMTrackedObj tracked_obj;
+    tracked_obj.load_order = obj->load_order;
+    tracked_obj.type = DEM_ENTITY_TYPE::CLUMP;
+    m_tracked_objs.push_back(std::make_shared<DEMTrackedObj>(std::move(tracked_obj)));
 
-void DEMSolver::SetClumpFamilies(const std::vector<unsigned int>& code) {
-    if (any_of(code.begin(), code.end(), [](unsigned int i) { return i >= DEM_RESERVED_FAMILY_NUM; })) {
-        SGPS_DEM_WARNING(
-            "Family number %u is reserved for completely fixed boundaries. Using it on your simulation entities will "
-            "make them fixed, regardless of your specification.\nYou can change family_t if you indeed need more "
-            "families to work with.",
-            DEM_RESERVED_FAMILY_NUM);
-    }
-
-    m_input_clump_family.insert(m_input_clump_family.end(), code.begin(), code.end());
+    // Create a Tracker for this tracked object
+    DEMTracker tracker(this);
+    tracker.obj = m_tracked_objs.back();
+    return std::make_shared<DEMTracker>(std::move(tracker));
 }
 
 void DEMSolver::WriteClumpFile(const std::string& outfilename) const {
@@ -919,13 +867,12 @@ void DEMSolver::initializeArrays() {
                               nJitifiableClumpComponents, nMatTuples);
 
     // Now we can feed those GPU-side arrays with the cached API-level simulation info
-    dT->initManagedArrays(m_input_clump_types, m_input_clump_xyz, m_input_clump_vel, m_input_clump_family,
-                          m_input_ext_obj_xyz, m_input_ext_obj_family, m_family_user_impl_map, m_family_impl_user_map,
-                          m_template_sp_mat_ids, m_template_mass, m_template_moi, m_template_sp_radii,
-                          m_template_sp_relPos, m_E_proxy, m_nu_proxy, m_CoR_proxy, m_mu_proxy, m_Crr_proxy,
+    dT->initManagedArrays(cached_input_clump_batches, m_input_ext_obj_xyz, m_input_ext_obj_family,
+                          m_family_user_impl_map, m_family_impl_user_map, m_template_sp_mat_ids, m_template_mass,
+                          m_template_moi, m_template_sp_radii, m_template_sp_relPos, m_loaded_materials,
                           m_no_output_families, m_tracked_objs);
-    kT->initManagedArrays(m_input_clump_types, m_input_clump_family, m_input_ext_obj_family, m_family_user_impl_map,
-                          m_template_mass, m_template_sp_radii, m_template_sp_relPos);
+    kT->initManagedArrays(cached_input_clump_batches, m_input_ext_obj_family, m_family_user_impl_map, m_template_mass,
+                          m_template_sp_radii, m_template_sp_relPos);
 }
 
 void DEMSolver::packDataPointers() {
@@ -938,21 +885,7 @@ void DEMSolver::packDataPointers() {
 }
 
 void DEMSolver::validateUserInputs() {
-    // First match the length of input clump arrays, for those input arrays that we don't force the user to specify
-    if (m_input_clump_vel.size() != m_input_clump_xyz.size()) {
-        SGPS_DEM_ERROR(
-            "I do not know what happened, but the clumps position initialization array has a length mismatch with the "
-            "velocity array.");
-    }
-    if (m_input_clump_family.size() < m_input_clump_xyz.size()) {
-        SGPS_DEM_WARNING("Some clumps do not have their family numbers specified, so defaulted to %u",
-                         DEM_DEFAULT_CLUMP_FAMILY_NUM);
-    }
-    m_input_clump_family.resize(m_input_clump_xyz.size(), DEM_DEFAULT_CLUMP_FAMILY_NUM);
-    // Fix the reserved family (reserved family number is in user family, not in impl family)
-    SetFamilyFixed(DEM_RESERVED_FAMILY_NUM);
-
-    if (m_loaded_sp_materials.size() == 0) {
+    if (m_loaded_materials.size() == 0) {
         SGPS_DEM_ERROR(
             "Before initializing the system, at least one material type should be loaded via LoadMaterialType.");
     }
@@ -1031,8 +964,9 @@ void DEMSolver::postJITResourceGenSanityCheck() {
     // Do we have more bins that our data type can handle?
     if (m_num_bins > std::numeric_limits<binID_t>::max()) {
         SGPS_DEM_ERROR(
-            "The simulation world has %zu bins (for domain partitioning in contact detection), but the largest bin IDs "
-            "is %zu.\nYou can try to make bins larger via InstructBinSize, or redefine binID_t and recompile.",
+            "The simulation world has %zu bins (for domain partitioning in contact detection), but the largest bin ID "
+            "that we can have is %zu.\nYou can try to make bins larger via InstructBinSize, or redefine binID_t and "
+            "recompile.",
             m_num_bins, std::numeric_limits<binID_t>::max());
     }
 
@@ -1060,6 +994,25 @@ void DEMSolver::jitifyKernels() {
                       familyChangesSubs, analGeoSubs, forceModelSubs);
 }
 
+void DEMSolver::processUserInputs() {
+    // No need to initialize nOwnerClumps, as this function may be called on-the-fly
+    for (const auto& a_batch : cached_input_clump_batches) {
+        nOwnerClumps += a_batch->GetNumClumps();
+        for (size_t i = 0; i < a_batch->GetNumClumps(); i++) {
+            unsigned int nComp = a_batch->types.at(i)->nComp;
+            nSpheresGM += nComp;
+        }
+        // Family number is flattened here, only because figureOutFamilyMasks() needs it
+        m_input_clump_family.insert(m_input_clump_family.end(), a_batch->families.begin(), a_batch->families.end());
+    }
+
+    // Fix the reserved family (reserved family number is in user family, not in impl family)
+    SetFamilyFixed(DEM_RESERVED_FAMILY_NUM);
+
+    // Enlarge the expand factor if the user tells us to
+    m_expand_factor *= m_expand_safety_param;
+}
+
 // The method should be called after user inputs are in place, and before starting the simulation. It figures out a part
 // of the required simulation information such as the scale of the poblem domain, and makes sure these info live in
 // managed memory.
@@ -1067,13 +1020,13 @@ void DEMSolver::Initialize() {
     // A few checks first
     validateUserInputs();
 
+    // Figure out how large a system the user wants to run this time
+    processUserInputs();
+
     // Call the JIT compiler generator to make prep for this simulation
     generateJITResources();
 
-    // Modify user inputs before passing to impl-level systems when needed, based on what we learn from the previous
-    // step
-
-    // Transfer some user-specified solver preference/instructions to workers
+    // Transfer user-specified solver preference/instructions to workers
     transferSolverParams();
 
     // Transfer some simulation params to implementation level
@@ -1088,7 +1041,22 @@ void DEMSolver::Initialize() {
     // Compile some of the kernels
     jitifyKernels();
 
+    // Release the memory for those flattened arrays, as they are only used for transfers between workers and
+    // jitification
+    releaseFlattenedArrays();
+
     sys_initialized = true;
+}
+
+void DEMSolver::releaseFlattenedArrays() {
+    deallocate_array(m_input_ext_obj_xyz);
+    deallocate_array(m_input_ext_obj_family);
+    deallocate_array(m_input_clump_family);
+    deallocate_array(m_family_mask_matrix);
+    deallocate_array(m_unique_family_prescription);
+    m_family_user_impl_map.clear();
+    m_family_impl_user_map.clear();
+    // TODO: Finish it...
 }
 
 void DEMSolver::ResetWorkerThreads() {
@@ -1113,20 +1081,33 @@ inline size_t DEMSolver::computeDTCycles(double thisCallDuration) {
     return (size_t)std::round(thisCallDuration / m_ts_size);
 }
 
-/// Designed such that when (CPU-side) cached simulation data (about sim world, and clump templates) are updated by the
-/// user, they can call this method to transfer them to the GPU-side in mid-simulation.
+/// When simulation parameters are updated by the user, they can call this method to transfer them to the GPU-side in
+/// mid-simulation. This is relatively light-weight, designed only to change solver behavior and no array re-allocation
+/// and re-compilation will happen.
 void DEMSolver::UpdateSimParams() {
-    // TODO: transferSimParams() only transfers sim world info, not clump template info. Clump info transformation is
-    // now in initManagedArrays! Need to resolve that.
     transferSolverParams();
-    transferSimParams();
+    // TODO: inspect what sim params should be transferred and what should not
+    // transferSimParams();
 }
+
+/// When more clumps/meshed objects got loaded, this method should be called to transfer them to the GPU-side in
+/// mid-simulation. This method cannot handle the addition of extra templates or analytical entities, which require
+/// re-compilation.
+/// TODO: Implement it.
+void DEMSolver::UpdateGPUArrays() {}
+
+/// Removes all entities associated with a family from the arrays (to save memory space). This method should only be
+/// called periodically because it gives a large overhead. This is only used in long simulations where if the
+/// `phased-out' entities do not get cleared, we won't have enough memory space.
+/// TODO: Implement it.
+void DEMSolver::PurgeFamily(unsigned int family_num) {}
 
 void DEMSolver::DoDynamics(double thisCallDuration) {
     // Is it needed here??
     // dT->packDataPointers(kT->granData);
 
     // TODO: Return if nSphere == 0
+    // TODO: Check if initialized
 
     // Tell dT how many iterations to go
     size_t nDTIters = computeDTCycles(thisCallDuration);

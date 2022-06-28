@@ -82,19 +82,17 @@ int main() {
                               std::vector<float>(Drum_particles.size(), CylParticleRad), Drum_particles, mat_type_drum);
     std::cout << Drum_particles.size() << " spheres make up the centrifuge" << std::endl;
 
-    std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_type;
-    std::vector<float3> input_xyz;
-    std::vector<unsigned int> family_code;
-
     // Add drum
-    auto Drum = DEM_sim.AddClumpTracked(Drum_template, make_float3(0));
+    auto Drum = DEM_sim.AddClumps(Drum_template, make_float3(0));
     // Drum is family 10
     unsigned int drum_family = 100;
-    family_code.push_back(drum_family);
+    Drum->SetFamilies(drum_family);
     // The drum rotates (facing X direction)
     DEM_sim.SetFamilyPrescribedAngVel(drum_family, "(t > 2.0) ? 6.0 : 0.0", "0", "0");
     // Disable contacts within drum components
     DEM_sim.DisableContactBetweenFamilies(drum_family, drum_family);
+    // Set drum to be tracked
+    auto Drum_tracker = DEM_sim.Track(Drum);
 
     // Then add top and bottom planes to `close up' the drum
     float safe_delta = 0.03;
@@ -105,6 +103,9 @@ int main() {
     auto planes_tracker = DEM_sim.Track(top_bot_planes);
 
     // Then sample some particles inside the drum
+    std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_type;
+    std::vector<float3> input_xyz;
+    std::vector<unsigned int> family_code;
     float3 sample_center = make_float3(0, 0, 0);
     float sample_halfheight = CylHeight / 2.0 - 3.0 * safe_delta;
     float sample_halfwidth = CylRad / 1.5;
@@ -121,8 +122,8 @@ int main() {
     }
 
     // Finally, input to system
-    DEM_sim.AddClumps(input_template_type, input_xyz);
-    DEM_sim.SetClumpFamilies(family_code);
+    auto particles = DEM_sim.AddClumps(input_template_type, input_xyz);
+    particles->SetFamilies(family_code);
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 4e-11);
 
     float step_size = 5e-6;
@@ -165,9 +166,9 @@ int main() {
         }
 
         DEM_sim.DoDynamics(step_size);
-        // We can quarry info out of this drum, since it is tracked
-        // float3 drum_pos = Drum->Pos();
-        // float3 drum_angVel = Drum->AngVel();
+        // We can query info out of this drum, since it is tracked
+        // float3 drum_pos = Drum_tracker->Pos();
+        // float3 drum_angVel = Drum_tracker->AngVel();
         // std::cout << "Position of the drum: " << drum_pos.x << ", " << drum_pos.y << ", " << drum_pos.z
         //           << std::endl;
         // std::cout << "Angular velocity of the drum: " << drum_angVel.x << ", " << drum_angVel.y << ", "

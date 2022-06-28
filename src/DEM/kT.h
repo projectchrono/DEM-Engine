@@ -15,6 +15,7 @@
 #include <nvmath/helper_math.cuh>
 #include <core/utils/GpuError.h>
 
+#include <DEM/DEMBdrsAndObjs.h>
 #include <DEM/DEMDefines.h>
 #include <DEM/DEMStructs.h>
 
@@ -241,8 +242,7 @@ class DEMKinematicThread {
                                unsigned int nMatTuples);
 
     // Data type TBD, should come from JITCed headers
-    void initManagedArrays(const std::vector<inertiaOffset_t>& input_clump_types,
-                           const std::vector<unsigned int>& input_clump_family,
+    void initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                            const std::vector<unsigned int>& input_ext_obj_family,
                            const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
                            const std::vector<float>& clumps_mass_types,

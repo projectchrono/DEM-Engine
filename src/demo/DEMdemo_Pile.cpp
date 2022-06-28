@@ -116,7 +116,8 @@ int main() {
     DEM_sim.DisableContactBetweenFamilies(1, 1);
     DEM_sim.SetFamilyFixed(1);
     input_ground_clump_type.insert(input_ground_clump_type.end(), input_ground_xyz.size(), template_ground);
-    DEM_sim.AddClumps(input_ground_clump_type, input_ground_xyz);
+    auto ground = DEM_sim.AddClumps(input_ground_clump_type, input_ground_xyz);
+    ground->SetFamilies(family_code);
 
     // Generate initial clumps for piling
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
@@ -126,16 +127,16 @@ int main() {
     auto input_pile_xyz =
         DEMBoxGridSampler(sample_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight), 0.05);
     unsigned int num_clumps = input_pile_xyz.size();
+    // Clear family_code for pile particles
+    std::vector<unsigned int>().swap(family_code);
     // Casually select from generated clump types
     for (unsigned int i = 0; i < num_clumps; i++) {
         input_pile_template_type.push_back(clump_types.at(i % num_template));
         family_code.push_back(0);
     }
-    // Calling AddClumps a second time will just add more clumps to the system, appending to the existing ones
-    DEM_sim.AddClumps(input_pile_template_type, input_pile_xyz);
-
-    // Assign family numbers to all particles
-    DEM_sim.SetClumpFamilies(family_code);
+    // Calling AddClumps a second time will just add more clumps to the system
+    auto the_pile = DEM_sim.AddClumps(input_pile_template_type, input_pile_xyz);
+    the_pile->SetFamilies(family_code);
 
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
     // DEM_sim.InstructBoxDomainNumVoxel(11, 11, 10, 1e-10);

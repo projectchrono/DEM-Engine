@@ -113,8 +113,8 @@ int main() {
     DEM_sim.ChangeFamilyWhen(
         0, 10, "float my_neighbours = length(acc * mass); return (my_neighbours < 4.9) || (my_neighbours > 6.1);");
 
-    DEM_sim.AddClumps(input_template_num, input_xyz);
-    DEM_sim.SetClumpFamilies(family_code);
+    auto particles = DEM_sim.AddClumps(input_template_num, input_xyz);
+    particles->SetFamilies(family_code);
     DEM_sim.InstructBoxDomainNumVoxel(22, 22, 20, (world_size + grid_size) / std::pow(2, 16) / std::pow(2, 22));
 
     DEM_sim.CenterCoordSys();

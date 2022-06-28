@@ -132,7 +132,7 @@ enum DEM_VERBOSITY {
 // Stepping method
 enum class DEM_TIME_INTEGRATOR { FORWARD_EULER, CENTERED_DIFFERENCE, EXTENDED_TAYLOR, CHUNG };
 // Owner types
-enum DEM_OWNER_TYPE { CLUMP, ANALYTICAL, MESH };
+enum DEM_ENTITY_TYPE { CLUMP, ANALYTICAL, MESH };
 // Output particles as individual (component) spheres, or as owner clumps (clump CoMs for location, as an example)?
 enum class DEM_OUTPUT_MODE { SPHERE, CLUMP };
 // Format of the output files

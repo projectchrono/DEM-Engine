@@ -15,6 +15,7 @@
 #include <nvmath/helper_math.cuh>
 #include <core/utils/GpuError.h>
 
+#include <DEM/DEMBdrsAndObjs.h>
 #include <DEM/DEMDefines.h>
 #include <DEM/DEMStructs.h>
 
@@ -298,10 +299,7 @@ class DEMDynamicThread {
                                unsigned int nMatTuples);
 
     // Data type TBD, should come from JITCed headers
-    void initManagedArrays(const std::vector<inertiaOffset_t>& input_clump_types,
-                           const std::vector<float3>& input_clump_xyz,
-                           const std::vector<float3>& input_clump_vel,
-                           const std::vector<unsigned int>& input_clump_family,
+    void initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                            const std::vector<float3>& input_ext_obj_xyz,
                            const std::vector<unsigned int>& input_ext_obj_family,
                            const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
@@ -311,11 +309,7 @@ class DEMDynamicThread {
                            const std::vector<float3>& clumps_moi_types,
                            const std::vector<std::vector<float>>& clumps_sp_radii_types,
                            const std::vector<std::vector<float3>>& clumps_sp_location_types,
-                           const std::vector<float>& mat_E,
-                           const std::vector<float>& mat_nu,
-                           const std::vector<float>& mat_CoR,
-                           const std::vector<float>& mat_mu,
-                           const std::vector<float>& mat_Crr,
+                           const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
                            const std::set<unsigned int>& no_output_families,
                            std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs);
 

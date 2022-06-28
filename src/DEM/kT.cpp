@@ -353,8 +353,7 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     }
 }
 
-void DEMKinematicThread::initManagedArrays(const std::vector<inertiaOffset_t>& input_clump_types,
-                                           const std::vector<unsigned int>& input_clump_family,
+void DEMKinematicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                            const std::vector<unsigned int>& input_ext_obj_family,
                                            const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
                                            const std::vector<float>& clumps_mass_types,
@@ -365,17 +364,17 @@ void DEMKinematicThread::initManagedArrays(const std::vector<inertiaOffset_t>& i
 
     // All the input vectors should have the same length, nClumpTopo
     size_t k = 0;
-    std::vector<unsigned int> prescans;
+    std::vector<unsigned int> prescans_comp;
 
-    prescans.push_back(0);
+    prescans_comp.push_back(0);
     for (auto elem : clumps_sp_radii_types) {
         for (auto radius : elem) {
             radiiSphere.at(k) = radius;
             k++;
         }
-        prescans.push_back(k);
+        prescans_comp.push_back(k);
     }
-    prescans.pop_back();
+    prescans_comp.pop_back();
     k = 0;
 
     for (auto elem : clumps_sp_location_types) {
@@ -386,38 +385,53 @@ void DEMKinematicThread::initManagedArrays(const std::vector<inertiaOffset_t>& i
             k++;
         }
     }
+
     k = 0;
-
-    float3 LBF;
-    LBF.x = simParams->LBFX;
-    LBF.y = simParams->LBFY;
-    LBF.z = simParams->LBFZ;
-    // float3 LBF = make_float3(simParams->LBFX, simParams->LBFY, simParams->LBFZ);
-    for (size_t i = 0; i < simParams->nOwnerClumps; i++) {
-        auto type_of_this_clump = input_clump_types.at(i);
-
-        // auto this_CoM_coord = input_clump_xyz.at(i) - LBF; // kT don't have to init owner xyz
-        auto this_clump_no_sp_radii = clumps_sp_radii_types.at(type_of_this_clump);
-        auto this_clump_no_sp_relPos = clumps_sp_location_types.at(type_of_this_clump);
-
-        for (size_t j = 0; j < this_clump_no_sp_radii.size(); j++) {
-            ownerClumpBody.at(k) = i;
-
-            // This component offset, is it too large that can't live in the jitified array?
-            unsigned int this_comp_offset = prescans.at(type_of_this_clump) + j;
-            clumpComponentOffsetExt.at(k) = this_comp_offset;
-            if (this_comp_offset < simParams->nJitifiableClumpComponents) {
-                clumpComponentOffset.at(k) = this_comp_offset;
-            } else {
-                // If not, an indicator will be put there
-                clumpComponentOffset.at(k) = DEM_RESERVED_CLUMP_COMPONENT_OFFSET;
+    // float3 LBF;
+    // LBF.x = simParams->LBFX;
+    // LBF.y = simParams->LBFY;
+    // LBF.z = simParams->LBFZ;
+    // Now load clump init info
+    {
+        std::vector<inertiaOffset_t> input_clump_types;
+        std::vector<unsigned int> input_clump_family;
+        // Flatten the input clump batches (because by design we transfer flatten clump info to GPU)
+        for (const auto& a_batch : input_clump_batches) {
+            // Decode type number and flatten
+            std::vector<inertiaOffset_t> type_marks(a_batch->GetNumClumps());
+            for (size_t i = 0; i < a_batch->GetNumClumps(); i++) {
+                type_marks.at(i) = a_batch->types.at(i)->mark;
             }
-
-            k++;
+            input_clump_types.insert(input_clump_types.end(), type_marks.begin(), type_marks.end());
+            input_clump_family.insert(input_clump_family.end(), a_batch->families.begin(), a_batch->families.end());
         }
 
-        family_t this_family_num = family_user_impl_map.at(input_clump_family.at(i));
-        familyID.at(i) = this_family_num;
+        for (size_t i = 0; i < simParams->nOwnerClumps; i++) {
+            auto type_of_this_clump = input_clump_types.at(i);
+
+            // auto this_CoM_coord = input_clump_xyz.at(i) - LBF; // kT don't have to init owner xyz
+            auto this_clump_no_sp_radii = clumps_sp_radii_types.at(type_of_this_clump);
+            auto this_clump_no_sp_relPos = clumps_sp_location_types.at(type_of_this_clump);
+
+            for (size_t j = 0; j < this_clump_no_sp_radii.size(); j++) {
+                ownerClumpBody.at(k) = i;
+
+                // This component offset, is it too large that can't live in the jitified array?
+                unsigned int this_comp_offset = prescans_comp.at(type_of_this_clump) + j;
+                clumpComponentOffsetExt.at(k) = this_comp_offset;
+                if (this_comp_offset < simParams->nJitifiableClumpComponents) {
+                    clumpComponentOffset.at(k) = this_comp_offset;
+                } else {
+                    // If not, an indicator will be put there
+                    clumpComponentOffset.at(k) = DEM_RESERVED_CLUMP_COMPONENT_OFFSET;
+                }
+
+                k++;
+            }
+
+            family_t this_family_num = family_user_impl_map.at(input_clump_family.at(i));
+            familyID.at(i) = this_family_num;
+        }
     }
 
     size_t offset_for_ext_obj = simParams->nOwnerClumps;

@@ -36,8 +36,9 @@ void EllpsiodFallingOver(DEMSolver& DEM_sim) {
     DEM_sim.AddBCPlane(make_float3(0, 0, 0), normal_dir, mat_type_1);
 
     // Add an ellipsoid with init vel
-    auto ellipsoid = DEM_sim.AddClumpTracked(ellipsoid_template, normal_dir * 0.5, tang_dir * 0.3);
-    // DEM_sim.SetClumpFamilies(family_code);
+    auto ellipsoid = DEM_sim.AddClumps(ellipsoid_template, normal_dir * 0.5);
+    ellipsoid->SetVel(tang_dir * 0.3);
+    auto ellipsoid_tracker = DEM_sim.Track(ellipsoid);
 
     DEM_sim.SetTimeStepSize(1e-3);
     DEM_sim.Initialize();
@@ -51,8 +52,8 @@ void EllpsiodFallingOver(DEMSolver& DEM_sim) {
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
         DEM_sim.WriteClumpFile(std::string(filename));
         std::cout << "Frame: " << i << std::endl;
-        float4 oriQ = ellipsoid->OriQ();
-        float3 angVel = ellipsoid->AngVel();
+        float4 oriQ = ellipsoid_tracker->OriQ();
+        float3 angVel = ellipsoid_tracker->AngVel();
         std::cout << "Time: " << frame_time * i << std::endl;
         std::cout << "Quaternion of the ellipsoid: " << oriQ.x << ", " << oriQ.y << ", " << oriQ.z << ", " << oriQ.w
                   << std::endl;
@@ -84,35 +85,36 @@ void SphereRollUpIncline(DEMSolver& DEM_sim) {
     DEM_sim.AddBCPlane(make_float3(0, 0, 0), normal_dir, mat_type_1);
 
     // Add a ball rolling
-    auto sphere = DEM_sim.AddClumpTracked(sphere_template, normal_dir * sphere_rad, tang_dir * 0.5);
-    // DEM_sim.SetClumpFamilies(family_code);
+    auto sphere = DEM_sim.AddClumps(sphere_template, normal_dir * sphere_rad);
+    sphere->SetVel(tang_dir * 0.5);
+    auto sphere_tracker = DEM_sim.Track(sphere);
 
-    DEM_sim.SetTimeStepSize(1e-5);
+    float step_time = 1e-5;
+    DEM_sim.SetTimeStepSize(step_time);
     DEM_sim.Initialize();
 
-    float frame_time = 1e-5;
     path out_dir = current_path();
     out_dir += "/DEMdemo_TestPack";
     create_directory(out_dir);
-    for (int i = 0; i < 0.15 / frame_time; i++) {
+    for (int i = 0; i < 0.15 / step_time; i++) {
         char filename[100];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
         // DEM_sim.WriteClumpFile(std::string(filename));
         std::cout << "Frame: " << i << std::endl;
-        float3 vel = sphere->Vel();
-        float3 angVel = sphere->AngVel();
-        std::cout << "Time: " << frame_time * i << std::endl;
+        float3 vel = sphere_tracker->Vel();
+        float3 angVel = sphere_tracker->AngVel();
+        std::cout << "Time: " << step_time * i << std::endl;
         std::cout << "Velocity of the sphere: " << vel.x << ", " << vel.y << ", " << vel.z << std::endl;
         std::cout << "Angular velocity of the sphere: " << angVel.x << ", " << angVel.y << ", " << angVel.z
                   << std::endl;
 
-        DEM_sim.DoDynamics(frame_time);
+        DEM_sim.DoStepDynamics();
     }
 }
 
 int main() {
     DEMSolver DEM_sim;
-    DEM_sim.SetVerbosity(INFO);
+    DEM_sim.SetVerbosity(DEBUG);
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
 
     DEM_sim.InstructBoxDomainNumVoxel(22, 22, 20, 7.5e-11);
