@@ -44,7 +44,7 @@ int main() {
 
     DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, 3e-11);
 
-    DEM_sim.CenterCoordSys();
+    DEM_sim.InstructCoordSysOrigin("center");
     DEM_sim.SetTimeStepSize(2e-5);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // Velocity not to exceed 3.0

@@ -118,7 +118,7 @@ int main() {
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
 
     DEM_sim.InstructBoxDomainNumVoxel(22, 22, 20, 7.5e-11);
-    DEM_sim.CenterCoordSys();
+    DEM_sim.InstructCoordSysOrigin("center");
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEM_sim.SetCDUpdateFreq(0);
 

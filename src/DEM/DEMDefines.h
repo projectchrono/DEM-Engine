@@ -138,7 +138,17 @@ enum class DEM_OUTPUT_MODE { SPHERE, CLUMP };
 // Format of the output files
 enum class DEM_OUTPUT_FORMAT { CSV, BINARY, CHPF };
 // The info that should be present in the output files
-enum DEM_OUTPUT_CONTENT { XYZ = 0, QUAT = 1, ABSV = 2, VEL = 4, ANG_VEL = 8, FORCE = 16, FAMILY = 32 };
+enum DEM_OUTPUT_CONTENT {
+    XYZ = 0,
+    QUAT = 1,
+    ABSV = 2,
+    VEL = 4,
+    ANG_VEL = 8,
+    ACC = 16,
+    ANG_ACC = 32,
+    FAMILY = 64,
+    MAT = 128
+};
 
 // =============================================================================
 // NOW DEFINING SOME GPU-SIDE DATA STRUCTURES

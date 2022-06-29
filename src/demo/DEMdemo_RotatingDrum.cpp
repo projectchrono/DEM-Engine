@@ -117,7 +117,7 @@ int main() {
 
     float step_size = 5e-6;
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 4e-11);
-    DEM_sim.CenterCoordSys();
+    DEM_sim.InstructCoordSysOrigin("center");
     DEM_sim.SetTimeStepSize(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety

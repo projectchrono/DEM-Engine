@@ -28,6 +28,8 @@ class DEMTracker;
 //////////////////////////////////////////////////////////////
 // TODO LIST: 1. Check if anal obj's normal direction is correct, and if applyOriQToVec is correct
 //            2. Allow ext obj init CoM setting
+//            3. Instruct how many dT steps should at LEAST do before receiving kT update
+//            4. Jitify a family number converter (user to impl)
 //////////////////////////////////////////////////////////////
 
 class DEMSolver {
@@ -38,20 +40,16 @@ class DEMSolver {
     /// Set output detail level
     void SetVerbosity(DEM_VERBOSITY verbose) { verbosity = verbose; }
 
-    /// Instruct the dimension of the `world', as well as the origin point of this `world'. On initialization, this
+    /// Instruct the dimension of the `world'. On initialization, this
     /// info will be used to figure out how to assign the num of voxels in each direction. If your `useful' domain is
     /// not box-shaped, then define a box that contains your domian. O is the coordinate of the left-bottom-front point
     /// of your simulation `world'.
-    void InstructBoxDomainDimension(float x, float y, float z, float3 O = make_float3(0));
+    void InstructBoxDomainDimension(float x, float y, float z, const std::string dir_exact = "none");
 
     /// Explicitly instruct the number of voxels (as 2^{x,y,z}) along each direction, as well as the smallest unit
     /// length l. This is usually for test purposes, and will overwrite other size-related definitions of the big
     /// domain.
-    void InstructBoxDomainNumVoxel(unsigned char x,
-                                   unsigned char y,
-                                   unsigned char z,
-                                   float len_unit = 1e-10f,
-                                   float3 O = make_float3(0));
+    void InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned char z, float len_unit = 1e-10f);
 
     /// Set gravity
     void SetGravitationalAcceleration(float3 g) { G = g; }
@@ -63,11 +61,12 @@ class DEMSolver {
     void SetCDUpdateFreq(int freq) { m_updateFreq = freq; }
     // TODO: Implement an API that allows setting ts size through a list
 
-    /// A convenient call that sets the origin of your coordinate system to be in the very center of your simulation
-    /// `world'. Useful especially you feel like having this `world' large to safely hold everything, and don't
-    /// quite care about the amount of accuracy lost by not fine-tuning the `world' size. Returns the coordinate of
-    /// the left-bottom-front point of your simulation `world' after this operation.
-    float3 CenterCoordSys();
+    /// Sets the origin of your coordinate system
+    void InstructCoordSysOrigin(const std::string& where) { m_user_instructed_origin = where; }
+    void InstructCoordSysOrigin(float3 O) {
+        m_boxLBF = O;
+        m_user_instructed_origin = "explicit";
+    }
 
     /// Explicitly instruct the bin size (for contact detection) that the solver should use
     void InstructBinSize(double bin_size) {
@@ -320,12 +319,16 @@ class DEMSolver {
     DEM_OUTPUT_FORMAT m_out_format = DEM_OUTPUT_FORMAT::CHPF;
     unsigned int m_out_content = DEM_OUTPUT_CONTENT::QUAT | DEM_OUTPUT_CONTENT::ABSV;
 
-    // ``World'' size along X dir (user-defined)
-    float m_boxX = 0.f;
-    // ``World'' size along Y dir (user-defined)
-    float m_boxY = 0.f;
-    // ``World'' size along Z dir (user-defined)
-    float m_boxZ = 0.f;
+    // User instructed simulation `world' size. Note it is an approximate of the true size and we will generate a world
+    // not smaller than this.
+    float3 m_user_boxSize = make_float3(-1.f);
+
+    // Exact `World' size along X dir (determined at init time)
+    float m_boxX = -1.f;
+    // Exact `World' size along Y dir (determined at init time)
+    float m_boxY = -1.f;
+    // Exact `World' size along Z dir (determined at init time)
+    float m_boxZ = -1.f;
     // Origin of the ``world''
     float3 m_boxLBF = make_float3(0);
     // Number of voxels in the X direction, expressed as a power of 2
@@ -377,6 +380,9 @@ class DEMSolver {
 
     // The contact model is historyless, or not. It affects jitification.
     bool m_isHistoryless = false;
+
+    // Where the user wants the origin of the coordinate system to be
+    std::string m_user_instructed_origin = "explicit";
 
     ////////////////////////////////////////////////////////////////////////////////
     // No method is provided to modify the following key quantities, even if
@@ -581,6 +587,8 @@ class DEMSolver {
     void jitifyKernels();
     /// Figure out the unit length l and numbers of voxels along each direction, based on domain size X, Y, Z
     void figureOutNV();
+    /// Derive the origin of the coordinate system using user inputs
+    void figureOutOrigin();
     /// Set the default bin (for contact detection) size to be the same of the smallest sphere
     void decideBinSize();
     /// Transfer cached solver preferences/instructions to dT and kT.

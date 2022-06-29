@@ -64,7 +64,14 @@ void DEMSolver::UseCompactForceKernel(bool use_compact) {
     }
 }
 
-void DEMSolver::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned char z, float len_unit, float3 O) {
+void DEMSolver::InstructBoxDomainDimension(float x, float y, float z, const std::string dir_exact) {
+    m_user_boxSize.x = x;
+    m_user_boxSize.y = y;
+    m_user_boxSize.z = z;
+    // TODO: And the direction exact?
+}
+
+void DEMSolver::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned char z, float len_unit) {
     if (x + y + z != sizeof(voxelID_t) * SGPS_BITS_PER_BYTE) {
         SGPS_DEM_ERROR("Please give voxel numbers (as powers of 2) along each direction such that they add up to %zu.",
                        sizeof(voxelID_t) * SGPS_BITS_PER_BYTE);
@@ -73,23 +80,17 @@ void DEMSolver::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsi
     nvXp2 = x;
     nvYp2 = y;
     nvZp2 = z;
-    m_boxLBF = O;
 
     // Calculating `world' size by the input nvXp2 and l
     m_voxelSize = (double)((size_t)1 << DEM_VOXEL_RES_POWER2) * (double)l;
     m_boxX = m_voxelSize * (double)((size_t)1 << x);
     m_boxY = m_voxelSize * (double)((size_t)1 << y);
     m_boxZ = m_voxelSize * (double)((size_t)1 << z);
+    // In this debug case, user domain size is the same as actual domain size
+    m_user_boxSize.x = m_boxX;
+    m_user_boxSize.y = m_boxY;
+    m_user_boxSize.z = m_boxZ;
     explicit_nv_override = true;
-}
-
-float3 DEMSolver::CenterCoordSys() {
-    float3 O;
-    O.x = -(m_boxX) / 2.0;
-    O.y = -(m_boxY) / 2.0;
-    O.z = -(m_boxZ) / 2.0;
-    m_boxLBF = O;
-    return O;
 }
 
 void DEMSolver::DefineContactForceModel(const std::string& model) {
@@ -368,13 +369,7 @@ float DEMSolver::GetTotalKineticEnergy() const {
     return dT->getKineticEnergy();
 }
 
-void DEMSolver::figureOutNV() {
-    if (m_boxX <= 0.f || m_boxY <= 0.f || m_boxZ <= 0.f) {
-        SGPS_DEM_ERROR(
-            "The size of the simulation world is set to be (or default to be) %f by %f by %f. It is impossibly small.",
-            m_boxX, m_boxY, m_boxZ);
-    }
-}
+void DEMSolver::figureOutNV() {}
 
 void DEMSolver::decideBinSize() {
     // find the smallest radius
@@ -667,6 +662,19 @@ void DEMSolver::preprocessAnalyticalObjs() {
     }
 }
 
+void DEMSolver::figureOutOrigin() {
+    if (m_user_instructed_origin == "explicit") {
+        return;
+    }
+    float3 O;
+    if (m_user_instructed_origin == "center") {
+        O = -(m_user_boxSize) / 2.0;
+        m_boxLBF = O;
+    } else {
+        SGPS_DEM_ERROR("Unrecognized location of system origin.");
+    }
+}
+
 void DEMSolver::generateJITResources() {
     /*
     // Dan and Ruochun decided not to extract unique input values.
@@ -736,6 +744,7 @@ void DEMSolver::generateJITResources() {
     if (!explicit_nv_override) {
         figureOutNV();
     }
+    figureOutOrigin();
     decideBinSize();
 
     // Finally, with both user inputs and jit info processed, we can derive the number of owners that we have now
@@ -898,6 +907,13 @@ void DEMSolver::validateUserInputs() {
     if (m_templates.size() == 0) {
         SGPS_DEM_ERROR("Before initializing the system, at least one clump type should be defined via LoadClumpType.");
     }
+
+    if (m_user_boxSize.x <= 0.f || m_user_boxSize.y <= 0.f || m_user_boxSize.z <= 0.f) {
+        SGPS_DEM_ERROR(
+            "The size of the simulation world is set to be (or default to be) %f by %f by %f. It is impossibly small.",
+            m_user_boxSize.x, m_user_boxSize.y, m_user_boxSize.z);
+    }
+
     if (m_expand_factor * m_expand_safety_param <= 0.0 && m_updateFreq > 0) {
         SGPS_DEM_WARNING(
             "You instructed that the physics can stretch %u time steps into the future, but did not instruct the "

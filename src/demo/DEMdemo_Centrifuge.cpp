@@ -79,7 +79,7 @@ int main() {
     auto Drum_template =
         DEM_sim.LoadClumpType(CylMass, make_float3(IXX, IYY, IYY),
                               std::vector<float>(Drum_particles.size(), CylParticleRad), Drum_particles, mat_type_drum);
-    std::cout << Drum_particles.size() << " spheres make up the centrifuge" << std::endl;
+    std::cout << Drum_particles.size() << " spheres make up the cylindrical wall" << std::endl;
 
     // Add drum
     auto Drum = DEM_sim.AddClumps(Drum_template, make_float3(0));
@@ -87,7 +87,7 @@ int main() {
     unsigned int drum_family = 100;
     Drum->SetFamilies(drum_family);
     // The drum rotates (facing X direction)
-    DEM_sim.SetFamilyPrescribedAngVel(drum_family, "(t > 2.0) ? 6.0 : 0.0", "0", "0");
+    DEM_sim.SetFamilyPrescribedAngVel(drum_family, "6.0", "0", "0");
     // Disable contacts within drum components
     DEM_sim.DisableContactBetweenFamilies(drum_family, drum_family);
     // Set drum to be tracked
@@ -98,7 +98,7 @@ int main() {
     auto top_bot_planes = DEM_sim.AddExternalObject();
     top_bot_planes->AddPlane(make_float3(CylHeight / 2. - safe_delta, 0, 0), make_float3(-1, 0, 0), mat_type_drum);
     top_bot_planes->AddPlane(make_float3(-CylHeight / 2. + safe_delta, 0, 0), make_float3(1, 0, 0), mat_type_drum);
-    // top_bot_planes->SetFamily(drum_family);
+    top_bot_planes->SetFamily(drum_family);
     auto planes_tracker = DEM_sim.Track(top_bot_planes);
 
     // Then sample some particles inside the drum
@@ -126,9 +126,9 @@ int main() {
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 4e-11);
 
     float step_size = 5e-6;
-    DEM_sim.CenterCoordSys();
+    DEM_sim.InstructCoordSysOrigin("center");
     DEM_sim.SetTimeStepSize(step_size);
-    DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    DEM_sim.SetGravitationalAcceleration(make_float3(-9.8, 0, 0));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEM_sim.SetCDUpdateFreq(40);
     // DEM_sim.SetExpandFactor(1e-3);

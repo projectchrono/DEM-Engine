@@ -485,7 +485,7 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
 }
 
 void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
-	chpf::Writer pw;
+    chpf::Writer pw;
     // pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, mass);
     std::vector<float> posX(simParams->nSpheresGM);
     std::vector<float> posY(simParams->nSpheresGM);
@@ -547,8 +547,8 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
     posX.resize(num_output_spheres);
     posY.resize(num_output_spheres);
     posZ.resize(num_output_spheres);
-    spRadii.resize(num_output_spheres); 
-	// TODO: Set {} to the list of column names
+    spRadii.resize(num_output_spheres);
+    // TODO: Set {} to the list of column names
     pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, {}, posX, posY, posZ, spRadii);
     // Write family numbers
     if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
@@ -571,11 +571,17 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
     if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ANG_VEL) {
         outstrstream << ",w_x,w_y,w_z";
     }
-    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FORCE) {
-        outstrstream << ",F_x,F_y,F_z";
+    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ACC) {
+        outstrstream << ",a_x,a_y,a_z";
+    }
+    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ANG_ACC) {
+        outstrstream << ",alpha_x,alpha_y,alpha_z";
     }
     if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
         outstrstream << ",family";
+    }
+    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::MAT) {
+        outstrstream << ",material";
     }
     outstrstream << "\n";
 

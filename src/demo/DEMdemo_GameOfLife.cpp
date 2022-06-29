@@ -116,7 +116,7 @@ int main() {
     particles->SetFamilies(family_code);
     DEM_sim.InstructBoxDomainNumVoxel(22, 22, 20, (world_size + grid_size) / std::pow(2, 16) / std::pow(2, 22));
 
-    DEM_sim.CenterCoordSys();
+    DEM_sim.InstructCoordSysOrigin("center");
     DEM_sim.SetTimeStepSize(1.);
     DEM_sim.SetCDUpdateFreq(0);
 
