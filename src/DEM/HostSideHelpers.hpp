@@ -397,6 +397,11 @@ inline std::vector<float3> DEMCylSurfSampler(float3 CylCenter,
         PerpVec.x = -UnitCylAxis.z;
         PerpVec.y = 0.f;
         PerpVec.z = UnitCylAxis.x;
+        if (length(PerpVec) < 1e-6) {
+            PerpVec.x = 0.f;
+            PerpVec.y = -UnitCylAxis.z;
+            PerpVec.z = UnitCylAxis.y;
+        }
         RadDir = normalize(PerpVec);
     }
     for (unsigned int i = 0; i < NumRows; i++) {

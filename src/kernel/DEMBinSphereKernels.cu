@@ -112,7 +112,7 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
             float objBRotX = objRotX[objB];
             float objBRotY = objRotY[objB];
             float objBRotZ = objRotZ[objB];
-            applyOriQToVector3<float, sgps::oriQ_t>(objBRelPosX, objBRelPosX, objBRelPosX, ownerOriQ0, ownerOriQ1,
+            applyOriQToVector3<float, sgps::oriQ_t>(objBRelPosX, objBRelPosY, objBRelPosZ, ownerOriQ0, ownerOriQ1,
                                                     ownerOriQ2, ownerOriQ3);
             applyOriQToVector3<float, sgps::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQ0, ownerOriQ1, ownerOriQ2,
                                                     ownerOriQ3);
@@ -247,7 +247,7 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
             float objBRotX = objRotX[objB];
             float objBRotY = objRotY[objB];
             float objBRotZ = objRotZ[objB];
-            applyOriQToVector3<float, sgps::oriQ_t>(objBRelPosX, objBRelPosX, objBRelPosX, ownerOriQ0, ownerOriQ1,
+            applyOriQToVector3<float, sgps::oriQ_t>(objBRelPosX, objBRelPosY, objBRelPosZ, ownerOriQ0, ownerOriQ1,
                                                     ownerOriQ2, ownerOriQ3);
             applyOriQToVector3<float, sgps::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQ0, ownerOriQ1, ownerOriQ2,
                                                     ownerOriQ3);
