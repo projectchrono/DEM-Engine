@@ -4,7 +4,6 @@
 
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
-#include <core/utils/chpf/particle_writer.hpp>
 #include <DEM/ApiSystem.h>
 #include <DEM/HostSideHelpers.hpp>
 
@@ -116,7 +115,7 @@ int main() {
     auto Drum_tracker = DEM_sim.Track(Drum);
 
     float step_size = 5e-6;
-    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 4e-11);
+    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 5e-11);
     DEM_sim.InstructCoordSysOrigin("center");
     DEM_sim.SetTimeStepSize(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));

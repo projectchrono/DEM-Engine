@@ -68,7 +68,7 @@ int main() {
 
     // Drum is a `big clump', we now generate its template
     float3 CylCenter = make_float3(0, 0, 0);
-    float3 CylAxis = make_float3(1, 0, 0);
+    float3 CylAxis = make_float3(0, 0, 1);
     float CylRad = 2.0;
     float CylHeight = 1.0;
     float CylMass = 1.0;
@@ -87,7 +87,7 @@ int main() {
     unsigned int drum_family = 100;
     Drum->SetFamilies(drum_family);
     // The drum rotates (facing X direction)
-    DEM_sim.SetFamilyPrescribedAngVel(drum_family, "6.0", "0", "0");
+    DEM_sim.SetFamilyPrescribedAngVel(drum_family, "0", "0", "6.0");
     // Disable contacts within drum components
     DEM_sim.DisableContactBetweenFamilies(drum_family, drum_family);
     // Set drum to be tracked
@@ -96,8 +96,8 @@ int main() {
     // Then add top and bottom planes to `close up' the drum
     float safe_delta = 0.03;
     auto top_bot_planes = DEM_sim.AddExternalObject();
-    top_bot_planes->AddPlane(make_float3(CylHeight / 2. - safe_delta, 0, 0), make_float3(-1, 0, 0), mat_type_drum);
-    top_bot_planes->AddPlane(make_float3(-CylHeight / 2. + safe_delta, 0, 0), make_float3(1, 0, 0), mat_type_drum);
+    top_bot_planes->AddPlane(make_float3(0, 0, CylHeight / 2. - safe_delta), make_float3(0, 0, -1), mat_type_drum);
+    top_bot_planes->AddPlane(make_float3(0, 0, -CylHeight / 2. + safe_delta), make_float3(0, 0, 1), mat_type_drum);
     top_bot_planes->SetFamily(drum_family);
     auto planes_tracker = DEM_sim.Track(top_bot_planes);
 
@@ -109,7 +109,7 @@ int main() {
     float sample_halfheight = CylHeight / 2.0 - 3.0 * safe_delta;
     float sample_halfwidth = CylRad / 1.5;
     auto input_material_xyz =
-        DEMBoxGridSampler(sample_center, make_float3(sample_halfheight, sample_halfwidth, sample_halfwidth),
+        DEMBoxGridSampler(sample_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight),
                           scaling * std::cbrt(2.0) * 2.1, scaling * std::cbrt(2.0) * 2.1, scaling * 2 * 2.1);
     input_xyz.insert(input_xyz.end(), input_material_xyz.begin(), input_material_xyz.end());
     unsigned int num_clumps = input_material_xyz.size();
@@ -123,12 +123,12 @@ int main() {
     // Finally, input to system
     auto particles = DEM_sim.AddClumps(input_template_type, input_xyz);
     particles->SetFamilies(family_code);
-    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 4e-11);
+    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 5e-11);
 
     float step_size = 5e-6;
     DEM_sim.InstructCoordSysOrigin("center");
     DEM_sim.SetTimeStepSize(step_size);
-    DEM_sim.SetGravitationalAcceleration(make_float3(-9.8, 0, 0));
+    DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEM_sim.SetCDUpdateFreq(40);
     // DEM_sim.SetExpandFactor(1e-3);

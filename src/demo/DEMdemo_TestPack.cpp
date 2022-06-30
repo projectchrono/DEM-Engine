@@ -4,7 +4,6 @@
 
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
-#include <core/utils/chpf/particle_writer.hpp>
 #include <DEM/ApiSystem.h>
 #include <DEM/HostSideHelpers.hpp>
 

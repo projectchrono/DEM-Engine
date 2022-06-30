@@ -12,10 +12,10 @@
 // class holds on to statistics related to the scheduling process
 class ManagerStatistics {
   public:
-    std::atomic<unsigned int> nTimesDynamicHeldBack;
-    std::atomic<unsigned int> nTimesKinematicHeldBack;
-    std::atomic<unsigned int> nDynamicUpdates;
-    std::atomic<unsigned int> nKinematicUpdates;
+    std::atomic<uint64_t> nTimesDynamicHeldBack;
+    std::atomic<uint64_t> nTimesKinematicHeldBack;
+    std::atomic<uint64_t> nDynamicUpdates;
+    std::atomic<uint64_t> nKinematicUpdates;
 
     ManagerStatistics() noexcept {
         nTimesDynamicHeldBack = 0;
@@ -31,9 +31,9 @@ class ManagerStatistics {
 // production-consumption interplay
 class ThreadManager {
   public:
-    std::atomic<int> stampLastUpdateOfDynamic;
-    std::atomic<int> currentStampOfDynamic;
-    std::atomic<int> dynamicRequestedUpdateFrequency;
+    std::atomic<int64_t> stampLastUpdateOfDynamic;
+    std::atomic<int64_t> currentStampOfDynamic;
+    std::atomic<int64_t> dynamicRequestedUpdateFrequency;
     std::atomic<bool> dynamicDone;
 
     std::atomic<bool> dynamicOwned_Prod2ConsBuffer_isFresh;
