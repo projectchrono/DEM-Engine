@@ -77,7 +77,7 @@ int main() {
     float IYY = (CylMass / 12) * (3 * CylRad * CylRad + CylHeight * CylHeight);
     auto Drum_particles = DEMCylSurfSampler(CylCenter, CylAxis, CylRad, CylHeight, CylParticleRad);
     auto Drum_template =
-        DEM_sim.LoadClumpType(CylMass, make_float3(IXX, IYY, IYY),
+        DEM_sim.LoadClumpType(CylMass, make_float3(IYY, IYY, IXX),
                               std::vector<float>(Drum_particles.size(), CylParticleRad), Drum_particles, mat_type_drum);
     std::cout << Drum_particles.size() << " spheres make up the cylindrical wall" << std::endl;
 

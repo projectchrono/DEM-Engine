@@ -5,6 +5,7 @@
 #include <fstream>
 #include <filesystem>
 #include <string>
+#include <regex>
 
 #include <jitify/jitify.hpp>
 
@@ -39,15 +40,11 @@ jitify::Program JitHelper::buildProgram(
     std::vector<std::string> flags) {
     std::string code = name + "\n";
 
-    // Generate block of substitution macros
-    code.append("#ifndef SGPS_KERNEL_SUBSTITUTIONS\n");
-    code.append("#define SGPS_KERNEL_SUBSTITUTIONS\n");
-    for (auto& subst : substitutions) {
-        code.append("#define " + subst.first + " " + subst.second + "\n");
-    }
-    code.append("#endif\n");
-
     code.append(JitHelper::loadSourceFile(source));
+    // Apply the substitutions
+    for (auto& subst : substitutions) {
+        code = std::regex_replace(code, std::regex(subst.first), subst.second);
+    }
 
     std::vector<std::string> header_code;
     // THIS BLOCK IS ONLY NEEDED IF THE headers PARAMETER IS USED

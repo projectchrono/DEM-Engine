@@ -131,9 +131,9 @@ int main() {
     DEM_sim.InstructCoordSysOrigin("center");
     DEM_sim.SetTimeStepSize(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
-    DEM_sim.SetCDUpdateFreq(20);
-    DEM_sim.SuggestExpandFactor(10.0, step_size * 20);
-    DEM_sim.SuggestExpandSafetyParam(1.5);
+    DEM_sim.SetCDUpdateFreq(30);
+    DEM_sim.SuggestExpandFactor(6.0, step_size * 30);
+    DEM_sim.SuggestExpandSafetyParam(1.0);
 
     DEM_sim.Initialize();
 

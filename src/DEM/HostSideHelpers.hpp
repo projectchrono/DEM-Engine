@@ -145,7 +145,8 @@ inline std::string remove_comments(const std::string& prgm) {
     return res;
 }
 
-/// Remove comments and newlines from a piece of code, making it suitable for jitification in the framework of SGPS
+/// Remove comments and newlines from a piece of code, so that string replacement happens `in-line'. When the code is
+/// compacted, it gives more understandable compiler error msg, but make it explode if user's code needs to have '\n'
 inline std::string compact_code(const std::string& prgm) {
     std::string res;
     res = remove_comments(prgm);

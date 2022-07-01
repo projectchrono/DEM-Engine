@@ -1170,9 +1170,10 @@ void DEMSolver::ClearThreadCollaborationStats() {
 }
 
 inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::string>& strMap) {
-    // Jitfied contents cannot have comments or it confuses the compiler, we remove comments, then remove all '\n', it
-    // should be enough
-    std::string model = compact_code(m_force_model);
+    std::string model = m_force_model;
+    if (m_ensure_kernel_line_num) {
+        std::string model = compact_code(model);
+    }
     strMap["_DEMForceModel_"] = model;
 }
 
@@ -1188,7 +1189,9 @@ inline void DEMSolver::equipFamilyOnFlyChanges(std::unordered_map<std::string, s
         // The conditions will be handled by a series of if statements
         std::string cond = "if (family_code == " + std::to_string(implID1) + ") { bool shouldMakeChange = false;";
         std::string user_str = replace_pattern(m_family_change_conditions.at(i), "return", "shouldMakeChange = ");
-        user_str = compact_code(user_str);
+        if (m_ensure_kernel_line_num) {
+            user_str = compact_code(user_str);
+        }
         cond += user_str;
         cond += "if (shouldMakeChange) {granData->familyID[thisClump] = " + std::to_string(implID2) + ";}";
         cond += "}";
@@ -1328,10 +1331,13 @@ inline void DEMSolver::equipClumpTemplateAcquisition(std::unordered_map<std::str
     std::string componentAcqStrat;
     if (nJitifiableClumpTopo == nDistinctClumpBodyTopologies) {
         // In this case, all clump templates can be jitified
-        componentAcqStrat = compact_code(DEM_CLUMP_COMPONENT_ACQUISITION_ALL_JITIFIED());
+        componentAcqStrat = DEM_CLUMP_COMPONENT_ACQUISITION_ALL_JITIFIED();
     } else if (nJitifiableClumpTopo < nDistinctClumpBodyTopologies) {
         // In this case, some clump templates are in the global memory
-        componentAcqStrat = compact_code(DEM_CLUMP_COMPONENT_ACQUISITION_PARTIALLY_JITIFIED());
+        componentAcqStrat = DEM_CLUMP_COMPONENT_ACQUISITION_PARTIALLY_JITIFIED();
+    }
+    if (m_ensure_kernel_line_num) {
+        componentAcqStrat = compact_code(componentAcqStrat);
     }
     strMap["_componentAcqStrat_"] = componentAcqStrat;
 }

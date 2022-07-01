@@ -208,6 +208,11 @@ class DEMSolver {
     /// Define a custom contact force model by a string
     void DefineContactForceModel(const std::string& model);
 
+    /// If true, each jitification string substitution will do a one-liner to one-liner replacement, so that if the
+    /// kernel compilation fails, the error meessage line number will reflex the actual spot where that happens (instead
+    /// of some random number)
+    void EnsureKernelErrMsgLineNum(bool flag = true) { m_ensure_kernel_line_num = flag; }
+
     /// Add an (analytical or clump-represented) external object to the simulation system
     std::shared_ptr<DEMExternObj> AddExternalObject();
     std::shared_ptr<DEMExternObj> AddBCPlane(const float3 pos,
@@ -383,6 +388,9 @@ class DEMSolver {
 
     // Where the user wants the origin of the coordinate system to be
     std::string m_user_instructed_origin = "explicit";
+
+    // If we should ensure that when kernel jitification fails, the line number reported reflexes where error happens
+    bool m_ensure_kernel_line_num = false;
 
     ////////////////////////////////////////////////////////////////////////////////
     // No method is provided to modify the following key quantities, even if
