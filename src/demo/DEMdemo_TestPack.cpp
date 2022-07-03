@@ -15,7 +15,26 @@ using namespace sgps;
 using namespace std::filesystem;
 const double PI = 3.141592653589793;
 
-void EllpsiodFallingOver(DEMSolver& DEM_sim) {
+inline bool near(float a, float b) {
+    if (std::abs(a - b) < 1e-6) {
+        return true;
+    }
+    return false;
+}
+
+void SetSolverProp(DEMSolver& DEM_sim) {
+    DEM_sim.SetVerbosity(DEBUG);
+    DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
+
+    DEM_sim.InstructBoxDomainNumVoxel(22, 22, 20, 7.5e-11);
+    DEM_sim.InstructCoordSysOrigin("center");
+    DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    DEM_sim.SetCDUpdateFreq(0);
+}
+
+void EllpsiodFallingOver() {
+    DEMSolver DEM_sim;
+    SetSolverProp(DEM_sim);
     // An ellipsoid a,b,c = 0.2,0.2,0.5, represented several sphere components
     std::vector<float> radii = {0.095, 0.136, 0.179, 0.204, 0.204, 0.179, 0.136, 0.095};
     std::vector<float3> relPos = {make_float3(0, 0, 0.4),    make_float3(0, 0, 0.342),  make_float3(0, 0, 0.228),
@@ -63,14 +82,11 @@ void EllpsiodFallingOver(DEMSolver& DEM_sim) {
     }
 }
 
-void SphereRollUpIncline(DEMSolver& DEM_sim) {
-    // Clump initial profile
-    std::vector<float3> input_xyz;
-    std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_type;
-    std::vector<unsigned int> family_code;
-    std::vector<float3> input_vel;
+void SphereRollUpIncline() {
+    DEMSolver DEM_sim;
+    SetSolverProp(DEM_sim);
 
-    auto mat_type_1 = DEM_sim.LoadMaterialType(1e7, 0.3, 0.5, 0.5, 0.3);
+    auto mat_type_1 = DEM_sim.LoadMaterialType(1e9, 0.3, 0.5, 0.5, 0.3);
     // A ball
     float sphere_rad = 0.2;
     float mass = 5.0;
@@ -98,7 +114,9 @@ void SphereRollUpIncline(DEMSolver& DEM_sim) {
     for (int i = 0; i < 0.15 / step_time; i++) {
         char filename[100];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-        // DEM_sim.WriteClumpFile(std::string(filename));
+        // if (i % 100 == 0) {
+        //     DEM_sim.WriteClumpFile(std::string(filename));
+        // }
         std::cout << "Frame: " << i << std::endl;
         float3 vel = sphere_tracker->Vel();
         float3 angVel = sphere_tracker->AngVel();
@@ -111,19 +129,82 @@ void SphereRollUpIncline(DEMSolver& DEM_sim) {
     }
 }
 
+void SphereStack() {
+    float sphere_rad = 0.15;
+    float m_bot = 1.0;
+    unsigned int run_num = 0;
+
+    for (float gap = 0.2 * sphere_rad; gap <= 0.4 * sphere_rad; gap += 0.05 * sphere_rad) {
+        for (float Crr = 0.15; Crr <= 0.6; Crr += 0.01) {
+            for (float m_top = 0.5; m_top <= 2.5; m_top += 0.01) {
+                DEMSolver DEM_sim;
+                SetSolverProp(DEM_sim);
+                DEM_sim.SetVerbosity(ERROR);
+
+                auto mat_type_1 = DEM_sim.LoadMaterialType(2e6, 0.3, 0.4, 0.25, Crr);
+                // 2 types of spheres
+                auto sphere_top_template = DEM_sim.LoadClumpSimpleSphere(m_top, sphere_rad, mat_type_1);
+                auto sphere_bot_template = DEM_sim.LoadClumpSimpleSphere(m_bot, sphere_rad, mat_type_1);
+
+                // Add the bottom plane
+                float3 normal_dir = make_float3(0, 0, 1);
+                float3 tang_dir = make_float3(1, 0, 0);
+                DEM_sim.AddBCPlane(make_float3(0, 0, 0), normal_dir, mat_type_1);
+
+                // Add 3 stacking spheres
+                auto sphere_bot_1 = DEM_sim.AddClumps(sphere_bot_template,
+                                                      -tang_dir * (gap / 2. + sphere_rad) + normal_dir * sphere_rad);
+                auto sphere_bot_2 = DEM_sim.AddClumps(sphere_bot_template,
+                                                      tang_dir * (gap / 2. + sphere_rad) + normal_dir * sphere_rad);
+                auto sphere_top = DEM_sim.AddClumps(
+                    sphere_top_template,
+                    normal_dir *
+                        (std::sqrt(std::pow(2. * sphere_rad, 2) - std::pow(gap / 2. + sphere_rad, 2)) + sphere_rad));
+                auto sphere_tracker = DEM_sim.Track(sphere_top);
+
+                float step_time = 5e-4;
+                DEM_sim.SetTimeStepSize(step_time);
+                DEM_sim.Initialize();
+
+                float frame_time = 1e-1;
+                float top_sp_Z = 99999.9;
+                float3 pos = make_float3(0);
+                path out_dir = current_path();
+                out_dir += "/DEMdemo_TestPack";
+                create_directory(out_dir);
+                int i = 0;
+                while (!near(pos.z, top_sp_Z)) {
+                    top_sp_Z = pos.z;
+                    if (run_num == 0) {
+                        char filename[100];
+                        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
+                        DEM_sim.WriteClumpFile(std::string(filename));
+                    }
+                    DEM_sim.DoDynamics(frame_time);
+                    pos = sphere_tracker->Pos();
+                    i++;
+                }
+
+                run_num++;
+                std::cout << "Test No. " << run_num << std::endl;
+                if (top_sp_Z <= sphere_rad) {
+                    std::cout << "Sphere mass: " << m_top << std::endl;
+                    std::cout << "Rolling resistance: " << Crr << std::endl;
+                    std::cout << "Init gap: " << gap << std::endl;
+                    std::cout << "Time it takes: " << frame_time * i << std::endl;
+                    std::cout << "========== Pile collapse with this params ==========" << std::endl;
+                    break;
+                }
+            }
+        }
+    }
+}
+
 int main() {
-    DEMSolver DEM_sim;
-    DEM_sim.SetVerbosity(DEBUG);
-    DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
-
-    DEM_sim.InstructBoxDomainNumVoxel(22, 22, 20, 7.5e-11);
-    DEM_sim.InstructCoordSysOrigin("center");
-    DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
-    DEM_sim.SetCDUpdateFreq(0);
-
-    // Validation tests
-    // SphereRollUpIncline(DEM_sim);
-    EllpsiodFallingOver(DEM_sim);
+    // Choose a validation test by uncommenting it
+    // SphereRollUpIncline();
+    // EllpsiodFallingOver();
+    SphereStack();
 
     std::cout << "DEMdemo_TestPack exiting..." << std::endl;
     // TODO: add end-game report APIs
