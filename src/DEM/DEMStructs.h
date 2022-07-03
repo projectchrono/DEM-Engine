@@ -242,16 +242,18 @@ inline std::string pretty_format_bytes(size_t bytes) {
         }                                       \
     }
 
-#define SGPS_DEM_ERROR(...)                                      \
-    {                                                            \
-        if (verbosity >= DEM_VERBOSITY::ERROR) {                 \
-            char error_message[256];                             \
-            sprintf(error_message, __VA_ARGS__);                 \
-            printf("\nERROR! ");                                 \
-            printf("%s", error_message);                         \
-            printf("\n%s", __func__);                            \
-        }                                                        \
-        throw std::runtime_error("\nEXITING SGPS SIMULATION\n"); \
+#define SGPS_DEM_ERROR(...)                  \
+    {                                        \
+        char error_message[256];             \
+        char func_name[256];                 \
+        sprintf(error_message, __VA_ARGS__); \
+        sprintf(func_name, __func__);        \
+        std::string out = error_message;     \
+        out += "\n";                         \
+        out += "This happened in ";          \
+        out += func_name;                    \
+        out += ".\n";                        \
+        throw std::runtime_error(out);       \
     }
 
 #define SGPS_DEM_WARNING(...)                      \

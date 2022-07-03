@@ -156,6 +156,9 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
                                              unsigned int nClumpComponents,
                                              unsigned int nJitifiableClumpComponents,
                                              unsigned int nMatTuples) {
+    // Report the number of GPUs in use (maybe this line is quite out of place)
+    SGPS_DEM_INFO("Number of total active devices: %d", totGPU);
+
     // Sizes of these arrays
     simParams->nSpheresGM = nSpheresGM;
     simParams->nTriGM = nTriGM;
@@ -907,11 +910,7 @@ void DEMDynamicThread::workerThread() {
     // Set the gpu for this thread
     cudaSetDevice(streamInfo.device);
     cudaStreamCreate(&streamInfo.stream);
-    {
-        int totGPU;
-        cudaGetDeviceCount(&totGPU);
-        SGPS_DEM_INFO("Number of total active devices: %d\n", totGPU);
-    }
+    cudaGetDeviceCount(&totGPU);
 
     while (!pSchedSupport->dynamicShouldJoin) {
         {

@@ -194,6 +194,9 @@ class DEMDynamicThread {
     // Time elapsed in current simulation
     float timeElapsed = 0.f;
 
+    // Total number of GPUs that are running
+    int totGPU = 0;
+
     // If true, dT needs to re-process idA- and idB-related data arrays before collecting forces, as those arrays are
     // freshly obtained from kT.
     bool contactPairArr_isFresh = true;

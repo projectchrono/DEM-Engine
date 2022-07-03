@@ -162,8 +162,11 @@ void SphereStack() {
                         (std::sqrt(std::pow(2. * sphere_rad, 2) - std::pow(gap / 2. + sphere_rad, 2)) + sphere_rad));
                 auto sphere_tracker = DEM_sim.Track(sphere_top);
 
-                float step_time = 5e-4;
+                float step_time = 5e-5;
                 DEM_sim.SetTimeStepSize(step_time);
+                // Just do CD once and we are all good
+                DEM_sim.SetCDUpdateFreq(-1);
+                DEM_sim.SuggestExpandFactor(1.0);
                 DEM_sim.Initialize();
 
                 float frame_time = 1e-1;
