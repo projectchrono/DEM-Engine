@@ -176,6 +176,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             }
             // Variables that we need to report back (user referrable)
             float3 force = make_float3(0, 0, 0);
+            float3 torque_only_force = make_float3(0, 0, 0);
             {
                 float3 locCPA = contactPnt - AOwnerPos;
                 float3 locCPB = contactPnt - BOwnerPos;
@@ -202,8 +203,10 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
 
             // Write hard-earned values back to global memory
             granData->contactForces[myContactID] = force;
+            granData->contactTorque_convToForce[myContactID] = torque_only_force;
         } else {
             granData->contactForces[myContactID] = make_float3(0, 0, 0);
+            granData->contactTorque_convToForce[myContactID] = make_float3(0, 0, 0);
         }
     }
 }

@@ -54,6 +54,7 @@ void DEMDynamicThread::packDataPointers() {
     granData->contactMapping_buffer = contactMapping_buffer.data();
 
     granData->contactForces = contactForces.data();
+    granData->contactTorque_convToForce = contactTorque_convToForce.data();
     granData->contactPointGeometryA = contactPointGeometryA.data();
     granData->contactPointGeometryB = contactPointGeometryB.data();
     granData->contactHistory = contactHistory.data();
@@ -229,6 +230,8 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     SGPS_DEM_TRACKED_RESIZE(idGeometryB, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryB", 0);
     SGPS_DEM_TRACKED_RESIZE(contactForces, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactForces",
                             make_float3(0));
+    SGPS_DEM_TRACKED_RESIZE(contactTorque_convToForce, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER,
+                            "contactTorque_convToForce", make_float3(0));
     SGPS_DEM_TRACKED_RESIZE(contactHistory, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactHistory",
                             make_float3(0));
     SGPS_DEM_TRACKED_RESIZE(contactDuration, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactDuration", 0);
@@ -654,6 +657,8 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     SGPS_DEM_TRACKED_RESIZE_NOPRINT(idGeometryB, nContactPairs);
     SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactType, nContactPairs);
     SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactForces, nContactPairs);
+    SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactTorque_convToForce, nContactPairs);
+
     SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactPointGeometryA, nContactPairs);
     SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactPointGeometryB, nContactPairs);
 
@@ -662,6 +667,7 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     granData->idGeometryB = idGeometryB.data();
     granData->contactType = contactType.data();
     granData->contactForces = contactForces.data();
+    granData->contactTorque_convToForce = contactTorque_convToForce.data();
     granData->contactPointGeometryA = contactPointGeometryA.data();
     granData->contactPointGeometryB = contactPointGeometryB.data();
 
@@ -857,13 +863,13 @@ inline void DEMDynamicThread::calculateForces() {
         //                   granData->contactForces, granData->aX, granData->aY, granData->aZ,
         //                   granData->ownerClumpBody, granData->massOwnerBody, simParams->h,
         //                   *stateOfSolver_resources.pNumContacts,simParams->l);
-        collectContactForces(collect_force_kernels, granData->inertiaPropOffsets, granData->idGeometryA,
-                             granData->idGeometryB, granData->contactType, granData->contactForces,
-                             granData->contactPointGeometryA, granData->contactPointGeometryB, granData->oriQ0,
-                             granData->oriQ1, granData->oriQ2, granData->oriQ3, granData->aX, granData->aY,
-                             granData->aZ, granData->alphaX, granData->alphaY, granData->alphaZ,
-                             granData->ownerClumpBody, *stateOfSolver_resources.pNumContacts, simParams->nOwnerBodies,
-                             contactPairArr_isFresh, streamInfo.stream, stateOfSolver_resources);
+        collectContactForces(
+            collect_force_kernels, granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
+            granData->contactType, granData->contactForces, granData->contactTorque_convToForce,
+            granData->contactPointGeometryA, granData->contactPointGeometryB, granData->oriQ0, granData->oriQ1,
+            granData->oriQ2, granData->oriQ3, granData->aX, granData->aY, granData->aZ, granData->alphaX,
+            granData->alphaY, granData->alphaZ, granData->ownerClumpBody, *stateOfSolver_resources.pNumContacts,
+            simParams->nOwnerBodies, contactPairArr_isFresh, streamInfo.stream, stateOfSolver_resources);
         // displayArray<float>(granData->aX, simParams->nOwnerBodies);
         // displayFloat3(granData->contactForces, *stateOfSolver_resources.pNumContacts);
         // std::cout << *stateOfSolver_resources.pNumContacts << std::endl;

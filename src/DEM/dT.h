@@ -177,6 +177,11 @@ class DEMDynamicThread {
     // Some of dT's own work arrays
     // Force of each contact event. It is the force that bodyA feels.
     std::vector<float3, ManagedAllocator<float3>> contactForces;
+    // An imaginary `force' in each contact event that produces torque only, and does not affect the linear motion. It
+    // will rise in our default rolling resistance model, which is just a torque model; yet, our contact registration is
+    // contact pair-based, meaning we do not know the specs of each contact body, so we can register force only, not
+    // torque. Therefore, this vector arises.
+    std::vector<float3, ManagedAllocator<float3>> contactTorque_convToForce;
     // Local position of contact point of contact w.r.t. the reference frame of body A and B
     std::vector<float3, ManagedAllocator<float3>> contactPointGeometryA;
     std::vector<float3, ManagedAllocator<float3>> contactPointGeometryB;

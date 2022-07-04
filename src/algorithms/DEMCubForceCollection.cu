@@ -28,6 +28,7 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
                           bodyID_t* idB,
                           contact_t* contactType,
                           float3* contactForces,
+                          float3* contactForces_convToForce,
                           float3* contactPointA,
                           float3* contactPointB,
                           oriQ_t* oriQ0,
@@ -162,15 +163,15 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
     collect_force_kernels->kernel("forceToAngAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(alpha_A, contactPointA, oriQ0, oriQ1, oriQ2, oriQ3, contactForces, idAOwner, 1.f, nContactPairs,
-                inertiaPropOffsets);
+        .launch(alpha_A, contactPointA, oriQ0, oriQ1, oriQ2, oriQ3, contactForces, contactForces_convToForce, idAOwner,
+                1.f, nContactPairs, inertiaPropOffsets);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // and don't forget body B
     collect_force_kernels->kernel("forceToAngAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(alpha_B, contactPointB, oriQ0, oriQ1, oriQ2, oriQ3, contactForces, idBOwner, -1.f, nContactPairs,
-                inertiaPropOffsets);
+        .launch(alpha_B, contactPointB, oriQ0, oriQ1, oriQ2, oriQ3, contactForces, contactForces_convToForce, idBOwner,
+                -1.f, nContactPairs, inertiaPropOffsets);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // Reducing the angular acceleration (2 * nContactPairs for both body A and B)
     // Note: to do this, idAOwner needs to be sorted along with alpha_A. So we sort first.

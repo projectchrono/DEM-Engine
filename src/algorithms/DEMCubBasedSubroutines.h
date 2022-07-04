@@ -40,6 +40,7 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
                           bodyID_t* idB,
                           contact_t* contactType,
                           float3* contactForces,
+                          float3* contactForces_convToForce,
                           float3* contactPointA,
                           float3* contactPointB,
                           oriQ_t* oriQ0,

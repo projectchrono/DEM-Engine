@@ -254,6 +254,7 @@ struct DEMDataDT {
 
     // Some dT's own work array pointers
     float3* contactForces;
+    float3* contactTorque_convToForce;
     float3* contactPointGeometryA;
     float3* contactPointGeometryB;
     float3* contactHistory;

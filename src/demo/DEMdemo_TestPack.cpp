@@ -15,8 +15,8 @@ using namespace sgps;
 using namespace std::filesystem;
 const double PI = 3.141592653589793;
 
-inline bool near(float a, float b) {
-    if (std::abs(a - b) < 1e-6) {
+inline bool near(float a, float b, float t = 1e-6) {
+    if (std::abs(a - b) < t) {
         return true;
     }
     return false;
@@ -83,65 +83,126 @@ void EllpsiodFallingOver() {
 }
 
 void SphereRollUpIncline() {
-    DEMSolver DEM_sim;
-    SetSolverProp(DEM_sim);
-
-    auto mat_type_1 = DEM_sim.LoadMaterialType(1e9, 0.3, 0.5, 0.5, 0.3);
-    // A ball
+    // First, test the case when alpha = 35
     float sphere_rad = 0.2;
     float mass = 5.0;
-    auto sphere_template = DEM_sim.LoadClumpSimpleSphere(mass, sphere_rad, mat_type_1);
+    float mu = 0.5;
+    {
+        DEMSolver DEM_sim;
+        SetSolverProp(DEM_sim);
 
-    // Incline angle
-    float alpha = 35.;
-    // Add the incline
-    float3 normal_dir = make_float3(-std::sin(2. * PI * (alpha / 360.)), 0., std::cos(2. * PI * (alpha / 360.)));
-    float3 tang_dir = make_float3(std::cos(2. * PI * (alpha / 360.)), 0., std::sin(2. * PI * (alpha / 360.)));
-    DEM_sim.AddBCPlane(make_float3(0, 0, 0), normal_dir, mat_type_1);
+        auto mat_type_1 = DEM_sim.LoadMaterialType(1e9, 0.3, 0.5, mu, 0.3);
+        // A ball
+        auto sphere_template = DEM_sim.LoadClumpSimpleSphere(mass, sphere_rad, mat_type_1);
 
-    // Add a ball rolling
-    auto sphere = DEM_sim.AddClumps(sphere_template, normal_dir * sphere_rad);
-    sphere->SetVel(tang_dir * 0.5);
-    auto sphere_tracker = DEM_sim.Track(sphere);
+        // Incline angle
+        float alpha = 35.;
+        // Add the incline
+        float3 normal_dir = make_float3(-std::sin(2. * PI * (alpha / 360.)), 0., std::cos(2. * PI * (alpha / 360.)));
+        float3 tang_dir = make_float3(std::cos(2. * PI * (alpha / 360.)), 0., std::sin(2. * PI * (alpha / 360.)));
+        DEM_sim.AddBCPlane(make_float3(0, 0, 0), normal_dir, mat_type_1);
 
-    float step_time = 1e-5;
-    DEM_sim.SetTimeStepSize(step_time);
-    DEM_sim.Initialize();
+        // Add a ball rolling
+        auto sphere = DEM_sim.AddClumps(sphere_template, normal_dir * sphere_rad);
+        sphere->SetVel(tang_dir * 0.5);
+        auto sphere_tracker = DEM_sim.Track(sphere);
 
-    path out_dir = current_path();
-    out_dir += "/DEMdemo_TestPack";
-    create_directory(out_dir);
-    for (int i = 0; i < 0.15 / step_time; i++) {
-        char filename[100];
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-        // if (i % 100 == 0) {
-        //     DEM_sim.WriteClumpFile(std::string(filename));
-        // }
-        std::cout << "Frame: " << i << std::endl;
-        float3 vel = sphere_tracker->Vel();
-        float3 angVel = sphere_tracker->AngVel();
-        std::cout << "Time: " << step_time * i << std::endl;
-        std::cout << "Velocity of the sphere: " << vel.x << ", " << vel.y << ", " << vel.z << std::endl;
-        std::cout << "Angular velocity of the sphere: " << angVel.x << ", " << angVel.y << ", " << angVel.z
-                  << std::endl;
+        float step_time = 1e-5;
+        DEM_sim.SetTimeStepSize(step_time);
+        DEM_sim.Initialize();
 
-        DEM_sim.DoStepDynamics();
+        path out_dir = current_path();
+        out_dir += "/DEMdemo_TestPack";
+        create_directory(out_dir);
+        for (int i = 0; i < 0.15 / step_time; i++) {
+            char filename[100];
+            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
+            // if (i % 100 == 0) {
+            //     DEM_sim.WriteClumpFile(std::string(filename));
+            // }
+            std::cout << "Frame: " << i << std::endl;
+            float3 vel = sphere_tracker->Vel();
+            float3 angVel = sphere_tracker->AngVel();
+            std::cout << "Time: " << step_time * i << std::endl;
+            std::cout << "Velocity of the sphere: " << vel.x << ", " << vel.y << ", " << vel.z << std::endl;
+            std::cout << "Angular velocity of the sphere: " << angVel.x << ", " << angVel.y << ", " << angVel.z
+                      << std::endl;
+
+            DEM_sim.DoStepDynamics();
+        }
+    }
+
+    std::cout << "======================================" << std::endl;
+    // Then try to generate the plot (alpha = [0, 30], Crr = [0.2, 0.6])
+    float run_time = 1.0;
+    unsigned int i = 0;
+    for (float alpha = 30; alpha >= 1; alpha -= 0.1) {
+        for (float Crr = 0.2; Crr <= 0.6; Crr += 0.01) {
+            DEMSolver DEM_sim;
+            SetSolverProp(DEM_sim);
+            DEM_sim.SetVerbosity(QUIET);
+
+            auto mat_type_1 = DEM_sim.LoadMaterialType(1e9, 0.3, 0.5, mu, Crr);
+            // A ball
+            auto sphere_template = DEM_sim.LoadClumpSimpleSphere(mass, sphere_rad, mat_type_1);
+
+            // Add the incline
+            float3 normal_dir =
+                make_float3(-std::sin(2. * PI * (alpha / 360.)), 0., std::cos(2. * PI * (alpha / 360.)));
+            float3 tang_dir = make_float3(std::cos(2. * PI * (alpha / 360.)), 0., std::sin(2. * PI * (alpha / 360.)));
+            DEM_sim.AddBCPlane(make_float3(0, 0, 0), normal_dir, mat_type_1);
+
+            // Add a ball rolling
+            auto sphere = DEM_sim.AddClumps(sphere_template, normal_dir * sphere_rad);
+            sphere->SetVel(tang_dir * 0.5);
+            auto sphere_tracker = DEM_sim.Track(sphere);
+
+            float step_time = 1e-5;
+            DEM_sim.SetTimeStepSize(step_time);
+            DEM_sim.SetCDUpdateFreq(-1);
+            DEM_sim.SuggestExpandFactor(1.0);
+            DEM_sim.Initialize();
+
+            DEM_sim.DoDynamicsThenSync(run_time);
+            float3 vel = sphere_tracker->Vel();
+            float3 angVel = sphere_tracker->AngVel();
+            float vel_mag = length(vel);
+            float angVel_mag = length(angVel);
+            std::cout << "Angle of incline: " << alpha << std::endl;
+            std::cout << "Rolling resistance: " << Crr << std::endl;
+            std::cout << "Velocity (mag) of the sphere: " << vel_mag << std::endl;
+            std::cout << "Angular velocity (mag) of the sphere: " << angVel_mag << std::endl;
+            if (vel_mag < 1e-4) {
+                std::cout << "It is probably stationary" << std::endl;
+            } else if (near(angVel_mag * sphere_rad, vel_mag, 1e-1)) {
+                std::cout << "It is pure rolling" << std::endl;
+            } else if (angVel_mag * sphere_rad < 1e-4) {
+                std::cout << "It is pure slipping" << std::endl;
+            } else if (vel_mag > angVel_mag * sphere_rad) {
+                std::cout << "It is rolling with slipping" << std::endl;
+            } else {
+                std::cout << "WARNING!!! I do not know what happened!!" << std::endl;
+            }
+            i++;
+            std::cout << "=============== " << i << "-th run ===================" << std::endl;
+        }
     }
 }
 
 void SphereStack() {
     float sphere_rad = 0.15;
     float m_bot = 1.0;
+    float mu = 0.2;
     unsigned int run_num = 0;
 
-    for (float gap = 0.2 * sphere_rad; gap <= 0.4 * sphere_rad; gap += 0.05 * sphere_rad) {
+    for (float gap = 0.4 * sphere_rad; gap >= 0.2 * sphere_rad; gap -= 0.05 * sphere_rad) {
         for (float Crr = 0.15; Crr <= 0.6; Crr += 0.01) {
-            for (float m_top = 0.5; m_top <= 2.5; m_top += 0.01) {
+            for (float m_top = 0.5; m_top <= 3.5; m_top += 0.05) {
                 DEMSolver DEM_sim;
                 SetSolverProp(DEM_sim);
                 DEM_sim.SetVerbosity(ERROR);
 
-                auto mat_type_1 = DEM_sim.LoadMaterialType(2e6, 0.3, 0.4, 0.25, Crr);
+                auto mat_type_1 = DEM_sim.LoadMaterialType(2e6, 0.3, 0.4, mu, Crr);
                 // 2 types of spheres
                 auto sphere_top_template = DEM_sim.LoadClumpSimpleSphere(m_top, sphere_rad, mat_type_1);
                 auto sphere_bot_template = DEM_sim.LoadClumpSimpleSphere(m_bot, sphere_rad, mat_type_1);
@@ -162,7 +223,7 @@ void SphereStack() {
                         (std::sqrt(std::pow(2. * sphere_rad, 2) - std::pow(gap / 2. + sphere_rad, 2)) + sphere_rad));
                 auto sphere_tracker = DEM_sim.Track(sphere_top);
 
-                float step_time = 5e-5;
+                float step_time = 1e-5;
                 DEM_sim.SetTimeStepSize(step_time);
                 // Just do CD once and we are all good
                 DEM_sim.SetCDUpdateFreq(-1);
@@ -176,7 +237,7 @@ void SphereStack() {
                 out_dir += "/DEMdemo_TestPack";
                 create_directory(out_dir);
                 int i = 0;
-                while (!near(pos.z, top_sp_Z)) {
+                while (!near(pos.z, top_sp_Z, 1e-4)) {
                     top_sp_Z = pos.z;
                     if (run_num == 0) {
                         char filename[100];

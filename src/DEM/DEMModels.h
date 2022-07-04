@@ -77,10 +77,11 @@ inline std::string DEM_HERTZIAN_FORCE_MODEL() {
                 // This v_rot is only used for identifying resistance direction
                 const float v_rot_mag = length(v_rot);
                 if (v_rot_mag > SGPS_DEM_TINY_FLOAT) {
-                    // Right now, var force is just normal force, so use it, as quick a hack
-                    // You should know that Crr * normal_force is the underlying formula
-                    const float3 resistance_force = (v_rot / v_rot_mag) * (Crr * length(force));
-                    force += resistance_force;
+                    // You should know that Crr * normal_force is the underlying formula, and in our model,
+                    // it is a `force' that produces torque only, instead of also cancelling out friction.
+                    // Its direction is that it `resists' rotation, see picture in 
+                    // https://en.wikipedia.org/wiki/Rolling_resistance.
+                    torque_only_force = (v_rot / v_rot_mag) * (Crr * length(force));
                 }
             }
         }

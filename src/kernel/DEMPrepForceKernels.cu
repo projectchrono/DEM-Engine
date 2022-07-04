@@ -5,9 +5,9 @@
 inline __device__ void cleanUpContactForces(size_t thisContact,
                                             sgps::DEMSimParams* simParams,
                                             sgps::DEMDataDT* granData) {
-    granData->contactForces[thisContact].x = 0;
-    granData->contactForces[thisContact].y = 0;
-    granData->contactForces[thisContact].z = 0;
+    const float3 zeros = make_float3(0, 0, 0);
+    granData->contactForces[thisContact] = zeros;
+    granData->contactTorque_convToForce[thisContact] = zeros;
     // TODO: Prescribed forces to be added here
 }
 

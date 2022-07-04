@@ -86,6 +86,7 @@ __global__ void forceToAngAcc(float3* angAcc,
                               sgps::oriQ_t* oriQ2,
                               sgps::oriQ_t* oriQ3,
                               float3* F,
+                              float3* torque_inForceForm,
                               sgps::bodyID_t* owner,
                               float modifier,
                               size_t n,
@@ -108,7 +109,9 @@ __global__ void forceToAngAcc(float3* angAcc,
         moi.y = moiY[myMassOffset];
         moi.z = moiZ[myMassOffset];
         float3 myCntPnt = cntPnt[myID];
-        float3 myF = F[myID] * modifier;
+        // torque_inForceForm is usually the contribution of rolling resistance and it contributes to torque only, not
+        // linear velocity
+        float3 myF = (F[myID] + torque_inForceForm[myID]) * modifier;
         // F is in global frame, but it needs to be in local to coordinate with moi and cntPnt
         applyOriQToVector3<float, sgps::oriQ_t>(myF.x, myF.y, myF.z, myOriQ0, -myOriQ1, -myOriQ2, -myOriQ3);
         angAcc[myID] = cross(myCntPnt, myF) / moi;
