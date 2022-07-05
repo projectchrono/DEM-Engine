@@ -4,7 +4,7 @@
 
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
-#include <DEM/ApiSystem.h>
+#include <DEM/API.h>
 #include <DEM/HostSideHelpers.hpp>
 
 #include <cstdio>

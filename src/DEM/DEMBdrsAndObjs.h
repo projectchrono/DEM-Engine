@@ -6,8 +6,10 @@
 #define SGPS_DEM_BOUNDARIES
 
 #include <vector>
+#include <string>
 #include <limits>
 #include <iostream>
+#include <sstream>
 
 #include <nvmath/helper_math.cuh>
 #include <DEM/DEMDefines.h>
@@ -164,9 +166,10 @@ class DEMClumpBatch {
     const size_t nClumps;
     void assertLength(size_t len, const std::string name) {
         if (len != nClumps) {
-            std::cout << name << " input argument must have length " << nClumps << " (not " << len
-                      << "), same as the number of clumps you originally added via AddClumps." << std::endl;
-            throw std::runtime_error("\nEXITING SGPS SIMULATION\n");
+            std::stringstream ss;
+            ss << name << " input argument must have length " << nClumps << " (not " << len
+               << "), same as the number of clumps you originally added via AddClumps." << std::endl;
+            throw std::runtime_error(ss.str());
         }
     }
 

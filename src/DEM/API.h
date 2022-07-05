@@ -2,6 +2,9 @@
 //  Copyright (c) 2021, University of Wisconsin - Madison
 //  All rights reserved.
 
+#ifndef SGPS_DEM_API
+#define SGPS_DEM_API
+
 #include <vector>
 #include <set>
 #include <cfloat>
@@ -219,20 +222,6 @@ class DEMSolver {
                                              const float3 normal,
                                              const std::shared_ptr<DEMMaterial>& material);
 
-    // Add content to the flattened analytical component array
-    // Note that analytical component is big different in that they each has a position in the jitified analytical
-    // templates, insteads of like a clump, has an extra ComponentOffset array points it to the right jitified template
-    // location.
-    unsigned int AddAnalCompTemplate(const objType_t type,
-                                     const std::shared_ptr<DEMMaterial>& material,
-                                     const unsigned int owner,
-                                     const float3 pos,
-                                     const float3 rot = make_float3(0),
-                                     const float d1 = 0.f,
-                                     const float d2 = 0.f,
-                                     const float d3 = 0.f,
-                                     const objNormal_t normal = DEM_ENTITY_NORMAL_INWARD);
-
     /// Remove host-side cached vectors (so you can re-define them, and then re-initialize system)
     void ClearCache();
 
@@ -282,6 +271,10 @@ class DEMSolver {
 
     /// Removes all entities associated with a family from the arrays (to save memory space)
     void PurgeFamily(unsigned int family_num);
+
+    /// Release the memory for the flattened arrays (which are used for initialization pre-processing and transferring
+    /// info the worker threads)
+    void ReleaseFlattenedArrays();
 
     /*
       protected:
@@ -614,7 +607,7 @@ class DEMSolver {
     /// Modify user inputs before passing to impl-level systems when needed
     void processUserInputs();
     /// Compute the number of dT for cycles based on the amount of time the user wants to advance the simulation
-    inline size_t computeDTCycles(double thisCallDuration);
+    size_t computeDTCycles(double thisCallDuration);
     /// Prepare the material/contact proxy matrix force computation kernels
     void figureOutMaterialProxies();
     /// Figure out info about external objects/clump templates and whether they can be jitified
@@ -623,8 +616,19 @@ class DEMSolver {
     inline void reportInitStats() const;
     /// Based on user input, prepare family_mask_matrix (family contact map matrix)
     void figureOutFamilyMasks();
-    /// Release the memory for those flattened arrays
-    void releaseFlattenedArrays();
+    /// Add content to the flattened analytical component array.
+    /// Note that analytical component is big different in that they each has a position in the jitified analytical
+    /// templates, insteads of like a clump, has an extra ComponentOffset array points it to the right jitified template
+    /// location.
+    void addAnalCompTemplate(const objType_t type,
+                             const std::shared_ptr<DEMMaterial>& material,
+                             const unsigned int owner,
+                             const float3 pos,
+                             const float3 rot = make_float3(0),
+                             const float d1 = 0.f,
+                             const float d2 = 0.f,
+                             const float d3 = 0.f,
+                             const objNormal_t normal = DEM_ENTITY_NORMAL_INWARD);
 
     // Some JIT packaging helpers
     inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap);
@@ -658,3 +662,5 @@ class DEMTracker {
 };
 
 }  // namespace sgps
+
+#endif

@@ -23,7 +23,7 @@ target_link_libraries(
 set(DEM_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/kT.h
 	${CMAKE_CURRENT_SOURCE_DIR}/dT.h
-	${CMAKE_CURRENT_SOURCE_DIR}/ApiSystem.h
+	${CMAKE_CURRENT_SOURCE_DIR}/API.h
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMDefines.h
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMStructs.h
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMModels.h
@@ -35,7 +35,8 @@ set(DEM_headers
 set(DEM_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/kT.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/dT.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/ApiSystem.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/APIPublic.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/APIPrivate.cpp
 )
 
 target_sources(

@@ -2,6 +2,9 @@
 //  Copyright (c) 2021, University of Wisconsin - Madison
 //  All rights reserved.
 
+#ifndef SGPS_DEM_DT
+#define SGPS_DEM_DT
+
 #include <mutex>
 #include <vector>
 #include <thread>
@@ -382,3 +385,5 @@ class DEMDynamicThread {
 };  // dT ends
 
 }  // namespace sgps
+
+#endif

@@ -2,6 +2,9 @@
 //  Copyright (c) 2021, University of Wisconsin - Madison
 //  All rights reserved.
 
+#ifndef SGPS_DEM_KT
+#define SGPS_DEM_KT
+
 #include <mutex>
 #include <vector>
 #include <thread>
@@ -295,3 +298,5 @@ class DEMKinematicThread {
 };  // kT ends
 
 }  // namespace sgps
+
+#endif
