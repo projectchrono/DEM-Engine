@@ -86,7 +86,7 @@ void SphereRollUpIncline() {
     // First, test the case when alpha = 35
     float sphere_rad = 0.2;
     float mass = 5.0;
-    float mu = 0.5;
+    float mu = 0.25;
     {
         DEMSolver DEM_sim;
         SetSolverProp(DEM_sim);
@@ -136,8 +136,8 @@ void SphereRollUpIncline() {
     // Then try to generate the plot (alpha = [0, 30], Crr = [0.2, 0.6])
     float run_time = 1.0;
     unsigned int i = 0;
-    for (float alpha = 30; alpha >= 1; alpha -= 0.1) {
-        for (float Crr = 0.2; Crr <= 0.6; Crr += 0.01) {
+    for (float alpha = 60; alpha >= 1; alpha -= 1) {
+        for (float Crr = 0.0; Crr <= 0.8; Crr += 0.02) {
             DEMSolver DEM_sim;
             SetSolverProp(DEM_sim);
             DEM_sim.SetVerbosity(QUIET);
@@ -172,11 +172,11 @@ void SphereRollUpIncline() {
             std::cout << "Rolling resistance: " << Crr << std::endl;
             std::cout << "Velocity (mag) of the sphere: " << vel_mag << std::endl;
             std::cout << "Angular velocity (mag) of the sphere: " << angVel_mag << std::endl;
-            if (vel_mag < 1e-4) {
-                std::cout << "It is probably stationary" << std::endl;
-            } else if (near(angVel_mag * sphere_rad, vel_mag, 1e-1)) {
+            if (vel_mag < 1e-2) {
+                std::cout << "It is stationary" << std::endl;
+            } else if (near(angVel_mag * sphere_rad, vel_mag, 1e-2)) {
                 std::cout << "It is pure rolling" << std::endl;
-            } else if (angVel_mag * sphere_rad < 1e-4) {
+            } else if (angVel_mag * sphere_rad < 1e-2) {
                 std::cout << "It is pure slipping" << std::endl;
             } else if (vel_mag > angVel_mag * sphere_rad) {
                 std::cout << "It is rolling with slipping" << std::endl;
@@ -192,12 +192,13 @@ void SphereRollUpIncline() {
 void SphereStack() {
     float sphere_rad = 0.15;
     float m_bot = 1.0;
-    float mu = 0.2;
+    float mu = 0.25;
     unsigned int run_num = 0;
 
     for (float gap = 0.4 * sphere_rad; gap >= 0.2 * sphere_rad; gap -= 0.05 * sphere_rad) {
-        for (float Crr = 0.15; Crr <= 0.6; Crr += 0.01) {
-            for (float m_top = 0.5; m_top <= 3.5; m_top += 0.05) {
+        for (float Crr = 0.03; Crr <= 0.3; Crr += 0.01) {
+            bool found = false;
+            for (float m_top = 0.1; m_top <= 50.0; m_top += 0.02) {
                 DEMSolver DEM_sim;
                 SetSolverProp(DEM_sim);
                 DEM_sim.SetVerbosity(ERROR);
@@ -257,8 +258,12 @@ void SphereStack() {
                     std::cout << "Init gap: " << gap << std::endl;
                     std::cout << "Time it takes: " << frame_time * i << std::endl;
                     std::cout << "========== Pile collapse with this params ==========" << std::endl;
+                    found = true;
                     break;
                 }
+            }
+            if (!found) {
+                std::cout << "WARNING!!! Even with largest mass it did not collapse!" << std::endl;
             }
         }
     }
