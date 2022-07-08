@@ -37,6 +37,7 @@ set(DEM_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/dT.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/APIPublic.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/APIPrivate.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/MeshUtils.cpp
 )
 
 target_sources(

@@ -43,6 +43,7 @@ set(core_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ThreadManager.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuError.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuManager.h
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/WavefrontMeshLoader.hpp
 )
 
 set(core_sources

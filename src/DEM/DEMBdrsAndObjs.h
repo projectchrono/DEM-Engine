@@ -10,6 +10,8 @@
 #include <limits>
 #include <iostream>
 #include <sstream>
+#include <array>
+#include <cmath>
 
 #include <nvmath/helper_math.cuh>
 #include <DEM/DEMDefines.h>
@@ -229,6 +231,62 @@ class DEMClumpBatch {
         families_isSpecified = true;
     }
     void SetFamilies(unsigned int input) { SetFamilies(std::vector<unsigned int>(nClumps, input)); }
+};
+
+// DEM mesh object
+class DEMMeshConnected {
+  public:
+    std::vector<float3> vertices;
+    std::vector<float3> normals;
+    std::vector<float3> UV;
+    std::vector<float3> colors;
+
+    std::vector<int3> face_v_indices;
+    std::vector<int3> face_n_indices;
+    std::vector<int3> face_uv_indices;
+    std::vector<int3> face_col_indices;
+
+    std::string filename;  ///< file string if loading an obj file
+
+    DEMMeshConnected() {}
+    ~DEMMeshConnected() {}
+
+    /// Load a triangle mesh saved as a Wavefront .obj file
+    bool LoadWavefrontMesh(std::string input_file, bool load_normals = true, bool load_uv = false);
+
+    /// Write the specified meshes in a Wavefront .obj file
+    static void WriteWavefront(const std::string& filename, std::vector<DEMMeshConnected>& meshes);
+
+    /// Utility function for merging multiple meshes.
+    static DEMMeshConnected Merge(std::vector<DEMMeshConnected>& meshes);
+
+    /// Get the number of triangles already added to this mesh
+    unsigned int getNumTriangles() const { return face_v_indices.size(); }
+
+    /// Clear all data
+    void Clear() {
+        this->vertices.clear();
+        this->normals.clear();
+        this->UV.clear();
+        this->colors.clear();
+        this->face_v_indices.clear();
+        this->face_n_indices.clear();
+        this->face_uv_indices.clear();
+        this->face_col_indices.clear();
+    }
+
+    /// Compute barycenter, mass and MOI in CoM frame
+    void ComputeMassProperties(double& mass, float3& center, float3& inertia);
+
+    /// Transformation utilities
+    void Rotate(const float4 rotQ);
+    void Translate(const float3 displ);
+
+    /// Create a map of neighboring triangles, vector of:
+    /// [Ti TieA TieB TieC]
+    /// (the free sides have triangle id = -1).
+    /// Return false if some edge has more than 2 neighboring triangles
+    bool ComputeNeighbouringTriangleMap(std::vector<std::array<int, 4>>& tri_map) const;
 };
 
 }  // namespace sgps
