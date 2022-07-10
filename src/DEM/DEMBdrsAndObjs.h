@@ -261,7 +261,7 @@ class DEMMeshConnected {
     static DEMMeshConnected Merge(std::vector<DEMMeshConnected>& meshes);
 
     /// Get the number of triangles already added to this mesh
-    unsigned int getNumTriangles() const { return face_v_indices.size(); }
+    unsigned int GetNumTriangles() const { return face_v_indices.size(); }
 
     /// Clear all data
     void Clear() {

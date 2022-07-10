@@ -4,7 +4,7 @@
 
 // This is a modification of the code by J.W. Ratcliff (MIT license below)
 //
-// Copyright (c) 20011 by John W. Ratcliff mailto:jratcliffscarab@gmail.com
+// Copyright (c) 2011 by John W. Ratcliff mailto:jratcliffscarab@gmail.com
 //
 //
 // The MIT license:
@@ -27,8 +27,8 @@
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#ifndef SGPS_OBJ_MESH_LOADER
-#define SGPS_OBJ_MESH_LOADER
+#ifndef SGPS_OBJ_MESH_LOADER_HPP
+#define SGPS_OBJ_MESH_LOADER_HPP
 
 #include <algorithm>
 #include <cstdio>

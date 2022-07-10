@@ -1,5 +1,5 @@
-#ifndef SGPS_GPU_MANAGER
-#define SGPS_GPU_MANAGER
+#ifndef SGPS_GPU_MANAGER_H
+#define SGPS_GPU_MANAGER_H
 
 #include <cuda_runtime_api.h>
 #include <vector>

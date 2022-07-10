@@ -2,8 +2,8 @@
 //  Copyright (c) 2021, University of Wisconsin - Madison
 //  All rights reserved.
 
-#ifndef SGPS_THREAD_MANAGER
-#define SGPS_THREAD_MANAGER
+#ifndef SGPS_THREAD_MANAGER_H
+#define SGPS_THREAD_MANAGER_H
 
 #include <atomic>
 #include <condition_variable>

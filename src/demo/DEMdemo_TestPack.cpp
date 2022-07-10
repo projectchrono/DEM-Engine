@@ -137,7 +137,7 @@ void SphereRollUpIncline() {
     float run_time = 1.0;
     unsigned int i = 0;
     for (float alpha = 60; alpha >= 1; alpha -= 1) {
-        for (float Crr = 0.0; Crr <= 0.8; Crr += 0.02) {
+        for (float Crr = 0.0; Crr <= 0.6; Crr += 0.02) {
             DEMSolver DEM_sim;
             SetSolverProp(DEM_sim);
             DEM_sim.SetVerbosity(QUIET);
@@ -271,9 +271,9 @@ void SphereStack() {
 
 int main() {
     // Choose a validation test by uncommenting it
-    // SphereRollUpIncline();
+    SphereRollUpIncline();
     // EllpsiodFallingOver();
-    SphereStack();
+    // SphereStack();
 
     std::cout << "DEMdemo_TestPack exiting..." << std::endl;
     // TODO: add end-game report APIs

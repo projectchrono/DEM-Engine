@@ -1,5 +1,5 @@
-#ifndef SGPS_HEADER_GENERATOR
-#define SGPS_HEADER_GENERATOR
+#ifndef SGPS_HEADER_GENERATOR_H
+#define SGPS_HEADER_GENERATOR_H
 
 #include <string>
 #include <unordered_map>
