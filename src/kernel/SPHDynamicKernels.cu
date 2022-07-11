@@ -82,7 +82,7 @@ __global__ void dynamicStep5(float3* pos_data,
 
     if (fix_data[idx] == 0) {
         float grav = -9.8f;
-        acc_data[idx].z += grav;
+        acc_data[idx].z = grav;
 
         vel_data[idx].x += acc_data[idx].x * time_step;
         vel_data[idx].y += acc_data[idx].y * time_step;

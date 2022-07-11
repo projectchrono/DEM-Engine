@@ -470,6 +470,10 @@ __global__ void kinematicStep2(float3* pos_data,
 // Kinematic 5th Step, this is the 1st pass of the kinematic thread
 // We will use shared memory to store particle location data
 // the 1st pass is going to fill the num_col vector
+// Has a constraint that number of particles in a BSD cannot exceed 1024
+// This can be guaranteed by allowing at most 8 particles in one dimension
+// when particles are perfectly spaced (initial configuration),
+// but as they move, this constraint could be broken
 // =================================================================================================================
 
 __global__ void kinematicStep5(
@@ -484,10 +488,9 @@ __global__ void kinematicStep5(
     int* num_col,
     int unique_length,
     float buffer_width) {
-    __shared__ float3 pos_local[512];  // request maximum capacity for the shared mem
-    __shared__ int idx_local[512];     // request maximum capacity for track
-    __shared__ int iden_local[512];
-    __shared__ int tot_in_bsd;
+    __shared__ float3 pos_local[MAX_PARTICLES_PER_BSD];  // request maximum capacity for the shared mem
+    __shared__ int idx_local[MAX_PARTICLES_PER_BSD];     // request maximum capacity for track
+    __shared__ int iden_local[MAX_PARTICLES_PER_BSD];
 
     int sd_idx = blockIdx.x;
     int idx = threadIdx.x;
@@ -496,16 +499,14 @@ __global__ void kinematicStep5(
         return;
     }
 
-    if (threadIdx.x == 0) {
-        tot_in_bsd = length_BSD_data[sd_idx];
-        // printf("bsd_idx: %d, tot_in_bsd: %d\n", sd_idx, tot_in_bsd);
-        int start_idx = offset_BSD_data[sd_idx];
-        int end_idx = offset_BSD_data[sd_idx] + length_BSD_data[sd_idx];
-        for (int i = start_idx; i < end_idx; i++) {
-            pos_local[i - start_idx] = pos_data[idx_track_data_sorted[i]];
-            idx_local[i - start_idx] = idx_track_data_sorted[i];
-            iden_local[i - start_idx] = BSD_iden_idx_sorted[i];
-        }
+    int start_idx = offset_BSD_data[sd_idx];
+    int tot_in_bsd = length_BSD_data[sd_idx];
+    // printf("bsd_idx: %d, tot_in_bsd: %d\n", sd_idx, tot_in_bsd);
+    if (idx < MAX_PARTICLES_PER_BSD && idx < length_BSD_data[sd_idx]) {
+        int global_idx = start_idx + idx;
+        pos_local[idx] = pos_data[idx_track_data_sorted[global_idx]];
+        idx_local[idx] = idx_track_data_sorted[global_idx];
+        iden_local[idx] = BSD_iden_idx_sorted[global_idx];
     }
 
     __syncthreads();
@@ -532,13 +533,13 @@ __global__ void kinematicStep5(
         }
     }
 
-    num_col[sd_idx * 512 + idx] = count;
+    num_col[sd_idx * MAX_PARTICLES_PER_BSD + idx] = count;
 }
 
 // =================================================================================================================
 // Kinematic 7th Step, this is the 2nd pass of the kinematic thread
 // We will use shared memory to store particle location data
-// the 1st pass is going to fill the num_col vector
+// the 2nd pass is going to fill in particle i-j pairs
 // =================================================================================================================
 
 __global__ void kinematicStep7(
@@ -557,10 +558,9 @@ __global__ void kinematicStep7(
     int* num_col_offset,
     float3* W_grad_data,
     float buffer_width) {
-    __shared__ float3 pos_local[512];  // request maximum capacity for the shared mem
-    __shared__ int idx_local[512];     // request maximum capacity for track
-    __shared__ int iden_local[512];
-    __shared__ int tot_in_bsd;
+    __shared__ float3 pos_local[MAX_PARTICLES_PER_BSD];  // request maximum capacity for the shared mem
+    __shared__ int idx_local[MAX_PARTICLES_PER_BSD];     // request maximum capacity for track
+    __shared__ int iden_local[MAX_PARTICLES_PER_BSD];
 
     int sd_idx = blockIdx.x;
     int idx = threadIdx.x;
@@ -569,16 +569,14 @@ __global__ void kinematicStep7(
         return;
     }
 
-    if (threadIdx.x == 0) {
-        tot_in_bsd = length_BSD_data[sd_idx];
-        // printf("tot_in_bsd: %d\n", tot_in_bsd);
-        int start_idx = offset_BSD_data[sd_idx];
-        int end_idx = offset_BSD_data[sd_idx] + length_BSD_data[sd_idx];
-        for (int i = start_idx; i < end_idx; i++) {
-            pos_local[i - start_idx] = pos_data[idx_track_data_sorted[i]];
-            idx_local[i - start_idx] = idx_track_data_sorted[i];
-            iden_local[i - start_idx] = BSD_iden_idx_sorted[i];
-        }
+    int start_idx = offset_BSD_data[sd_idx];
+    int tot_in_bsd = length_BSD_data[sd_idx];
+    // printf("bsd_idx: %d, tot_in_bsd: %d\n", sd_idx, tot_in_bsd);
+    if (idx < MAX_PARTICLES_PER_BSD && idx < length_BSD_data[sd_idx]) {
+        int global_idx = start_idx + idx;
+        pos_local[idx] = pos_data[idx_track_data_sorted[global_idx]];
+        idx_local[idx] = idx_track_data_sorted[global_idx];
+        iden_local[idx] = BSD_iden_idx_sorted[global_idx];
     }
 
     __syncthreads();
@@ -600,12 +598,12 @@ __global__ void kinematicStep7(
                           (pos_local[i].z - pos_local[idx].z) * (pos_local[i].z - pos_local[idx].z);
 
             if (dist2 <= kernel_h * buffer_width * kernel_h * buffer_width) {
-                pair_i_data[num_col_offset[sd_idx * 512 + idx] + count] = idx_local[idx];
-                pair_j_data[num_col_offset[sd_idx * 512 + idx] + count] = idx_local[i];
+                pair_i_data[num_col_offset[sd_idx * MAX_PARTICLES_PER_BSD + idx] + count] = idx_local[idx];
+                pair_j_data[num_col_offset[sd_idx * MAX_PARTICLES_PER_BSD + idx] + count] = idx_local[i];
 
                 float3 dir = pos_local[idx] - pos_local[i];
 
-                W_grad_data[num_col_offset[sd_idx * 512 + idx] + count] = W_Grad(dir, kernel_h);
+                W_grad_data[num_col_offset[sd_idx * MAX_PARTICLES_PER_BSD + idx] + count] = W_Grad(dir, kernel_h);
 
                 count++;
             }

@@ -34,12 +34,20 @@ void SPHSystem::initialize(float kernel_h,
     dataManager.m = m;
     dataManager.rho_0 = rho_0;
     dataManager.c = c;
-    dataManager.m_pos.assign(pos.begin(), pos.end());
-    dataManager.m_vel.assign(vel.begin(), vel.end());
-    dataManager.m_acc.assign(acc.begin(), acc.end());
-    dataManager.m_pressure.assign(pres.begin(), pres.end());
-    dataManager.m_fix.assign(fix.begin(), fix.end());
-    dataManager.k_n = dataManager.m_pos.size();
+    dataManager.k_n = pos.size();
+
+    dataManager.m_pos.resize(dataManager.k_n);
+    dataManager.m_vel.resize(dataManager.k_n);
+    dataManager.m_acc.resize(dataManager.k_n);
+    dataManager.m_pressure.resize(dataManager.k_n);
+    dataManager.m_fix.resize(dataManager.k_n);
+    
+    cudaMemcpy(dataManager.m_pos.data(), pos.data(), dataManager.k_n * sizeof(float3), cudaMemcpyDefault);
+    cudaMemcpy(dataManager.m_vel.data(), vel.data(), dataManager.k_n * sizeof(float3), cudaMemcpyDefault);
+    cudaMemcpy(dataManager.m_acc.data(), acc.data(), dataManager.k_n * sizeof(float3), cudaMemcpyDefault);
+    cudaMemcpy(dataManager.m_pressure.data(), pres.data(), dataManager.k_n * sizeof(float), cudaMemcpyDefault);
+    cudaMemcpy(dataManager.m_fix.data(), fix.data(), dataManager.k_n * sizeof(char), cudaMemcpyDefault);
+
     this->domain_x = domain_x + 5 * kernel_h;
     this->domain_y = domain_y + 5 * kernel_h;
     this->domain_z = domain_z + 5 * kernel_h;
@@ -200,9 +208,9 @@ void KinematicThread::operator()() {
             pressure_data.resize(k_n);
             pos_data.resize(k_n);
             rho_data.resize(k_n);
-            cudaMemcpy(fix_data.data(), dataManager.m_fix.data(), k_n * sizeof(char), cudaMemcpyHostToDevice);
+            cudaMemcpy(fix_data.data(), dataManager.m_fix.data(), k_n * sizeof(char), cudaMemcpyDefault);
             cudaMemcpy(pressure_data.data(), dataManager.m_pressure.data(), k_n * sizeof(float),
-                       cudaMemcpyHostToDevice);
+                       cudaMemcpyDefault);
         }
 
         // for each step, the kinematic thread needs to do two passes
@@ -211,7 +219,7 @@ void KinematicThread::operator()() {
 
         if (getParentSystem().pos_data_isFresh == true) {
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
-            cudaMemcpy(pos_data.data(), dataManager.m_pos.data(), k_n * sizeof(float3), cudaMemcpyHostToDevice);
+            cudaMemcpy(pos_data.data(), dataManager.m_pos.data(), k_n * sizeof(float3), cudaMemcpyDefault);
         }
 
         // notify the system that the position data has been consumed
@@ -233,13 +241,10 @@ void KinematicThread::operator()() {
         // ==============================================================================================================
         // resize the num_BSD_data vector
         num_BSD_data.resize(k_n);
-        num_BSD_data.shrink_to_fit();
         // resize the idx_track_data vector
         idx_track_data.resize(k_n);
-        idx_track_data.shrink_to_fit();
         // resize the offset_BSD_data vector
         offset_BSD_data.resize(k_n);
-        offset_BSD_data.shrink_to_fit();
 
         kinematic_program.kernel("kinematicStep1")
             .instantiate()
@@ -263,13 +268,8 @@ void KinematicThread::operator()() {
         // ==============================================================================================================
 
         idx_track_data.resize(TotLength);
-        idx_track_data.shrink_to_fit();
-
         BSD_idx.resize(TotLength);
-        BSD_idx.shrink_to_fit();
-
         BSD_iden_idx.resize(TotLength);
-        BSD_iden_idx.shrink_to_fit();
 
         kinematic_program.kernel("kinematicStep2")
             .instantiate()
@@ -326,19 +326,17 @@ void KinematicThread::operator()() {
         // (Kinematic First Pass)
         // ==============================================================================================================
 
-        num_col.clear();
-        num_col.resize(unique_BSD_idx.size() * 512);
-        num_col.shrink_to_fit();
+        num_col.resize(unique_BSD_idx.size() * MAX_PARTICLES_PER_BSD);
 
         // set threads per block to be 512
         // set total number of block to be unique_BSD_idx.size()
         num_block = unique_BSD_idx.size();
-        num_thread = 512;
+        num_thread = MAX_PARTICLES_PER_BSD;
 
         // launch kinematic first pass kernel
         kinematic_program.kernel("kinematicStep5")
             .instantiate()
-            .configure(dim3(num_block), dim3(num_thread), (MAX_NUM_UNIT * UNIT_SHARED_SIZE), streamInfo.stream)
+            .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), k_n, multiplier * kernel_h, idx_track_data_sorted.data(),
                     BSD_iden_idx_sorted.data(), offset_BSD_idx.data(), length_BSD_idx.data(), unique_BSD_idx.data(),
                     num_col.data(), unique_BSD_idx.size(), buffer_width);
@@ -366,23 +364,18 @@ void KinematicThread::operator()() {
 
         // resize contact pair data size
         pair_i_data.resize(tot_collision);
-        pair_i_data.shrink_to_fit();
-
         pair_j_data.resize(tot_collision);
-        pair_j_data.shrink_to_fit();
-
         W_grad_data.resize(tot_collision);
-        W_grad_data.shrink_to_fit();
 
         // set threads per block to be 512
         // set total number of block to be unique_BSD_idx.size()
         num_block = unique_BSD_idx.size();
-        num_thread = 512;
+        num_thread = MAX_PARTICLES_PER_BSD;
 
         // launch kinematic first pass kernel
         kinematic_program.kernel("kinematicStep7")
             .instantiate()
-            .configure(dim3(num_block), dim3(num_thread), (MAX_NUM_UNIT * UNIT_SHARED_SIZE), streamInfo.stream)
+            .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), k_n, multiplier * kernel_h, idx_track_data_sorted.data(),
                     BSD_iden_idx_sorted.data(), offset_BSD_idx.data(), length_BSD_idx.data(), unique_BSD_idx.data(),
                     num_col.data(), unique_BSD_idx.size(), pair_i_data.data(), pair_j_data.data(),
@@ -413,9 +406,7 @@ void KinematicThread::operator()() {
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // initialize density and pressure vectors
-        rho_data.clear();
         rho_data.resize(pos_data.size());
-        rho_data.shrink_to_fit();
 
         num_thread = 512;
         num_block =
@@ -428,22 +419,6 @@ void KinematicThread::operator()() {
                     i_length.data(), j_data_sorted_1.data(), fix_data.data(), i_unique.size(), multiplier * kernel_h, m,
                     rho_0);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-
-        // clear kinematic step 8 data
-        i_data_sorted_1.clear();
-        i_data_sorted_1.shrink_to_fit();
-
-        j_data_sorted_1.clear();
-        j_data_sorted_1.shrink_to_fit();
-
-        i_unique.clear();
-        i_unique.shrink_to_fit();
-
-        i_length.clear();
-        i_length.shrink_to_fit();
-
-        i_offset.clear();
-        i_offset.shrink_to_fit();
 
         // ==============================================================================================================
         // Kinematic Step 9
@@ -477,22 +452,6 @@ void KinematicThread::operator()() {
                     j_length.data(), i_data_sorted_2.data(), fix_data.data(), j_unique.size(), multiplier * kernel_h, m,
                     rho_0);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-
-        // clear kinematic step 8 data
-        i_data_sorted_2.clear();
-        i_data_sorted_2.shrink_to_fit();
-
-        j_data_sorted_2.clear();
-        j_data_sorted_2.shrink_to_fit();
-
-        j_unique.clear();
-        j_unique.shrink_to_fit();
-
-        j_length.clear();
-        j_length.shrink_to_fit();
-
-        j_offset.clear();
-        j_offset.shrink_to_fit();
 
         // ==============================================================================================================
         // Kinematic Step 10
@@ -581,7 +540,7 @@ void DynamicThread::operator()() {
                                                    std::unordered_map<std::string, std::string>(),
                                                    {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
 
-    // get total numer of particles
+    // get total number of particles
     int k_n;
     int tot_collision;
     {
@@ -598,9 +557,9 @@ void DynamicThread::operator()() {
             pos_data.resize(k_n);
             vel_data.resize(k_n);
             fix_data.resize(k_n);
-            cudaMemcpy(pos_data.data(), dataManager.m_pos.data(), k_n * sizeof(float3), cudaMemcpyHostToDevice);
-            cudaMemcpy(vel_data.data(), dataManager.m_vel.data(), k_n * sizeof(float3), cudaMemcpyHostToDevice);
-            cudaMemcpy(fix_data.data(), dataManager.m_fix.data(), k_n * sizeof(char), cudaMemcpyHostToDevice);
+            cudaMemcpy(pos_data.data(), dataManager.m_pos.data(), k_n * sizeof(float3), cudaMemcpyDefault);
+            cudaMemcpy(vel_data.data(), dataManager.m_vel.data(), k_n * sizeof(float3), cudaMemcpyDefault);
+            cudaMemcpy(fix_data.data(), dataManager.m_fix.data(), k_n * sizeof(char), cudaMemcpyDefault);
         }
 
         // temp step size explicit definition
@@ -611,39 +570,27 @@ void DynamicThread::operator()() {
             tot_collision = dataManager.m_tot_collision;
 
             if (dynamicCounter == 0) {
-                tot_collision = dataManager.m_tot_collision;
                 pair_i_data.resize(tot_collision);
                 pair_j_data.resize(tot_collision);
                 rho_data.resize(k_n);
                 pressure_data.resize(k_n);
                 W_grad_data.resize(tot_collision);
-                cudaMemcpy(pair_i_data.data(), dataManager.m_pair_i.data(), tot_collision * sizeof(int),
-                           cudaMemcpyDeviceToDevice);
-                cudaMemcpy(pair_j_data.data(), dataManager.m_pair_j.data(), tot_collision * sizeof(int),
-                           cudaMemcpyDeviceToDevice);
-                cudaMemcpy(rho_data.data(), dataManager.m_rho.data(), k_n * sizeof(float), cudaMemcpyDeviceToDevice);
-                cudaMemcpy(pressure_data.data(), dataManager.m_pressure.data(), k_n * sizeof(float),
-                           cudaMemcpyDeviceToDevice);
-                cudaMemcpy(W_grad_data.data(), dataManager.m_W_grad.data(), tot_collision * sizeof(float3),
-                           cudaMemcpyDeviceToDevice);
-
             } else {
-                tot_collision = dataManager.m_tot_collision;
                 if (tot_collision > pair_i_data.size()) {
                     pair_i_data.resize(tot_collision);
                     pair_j_data.resize(tot_collision);
                     W_grad_data.resize(tot_collision);
                 }
-                cudaMemcpy(pair_i_data.data(), dataManager.m_pair_i.data(), tot_collision * sizeof(int),
-                           cudaMemcpyDeviceToDevice);
-                cudaMemcpy(pair_j_data.data(), dataManager.m_pair_j.data(), tot_collision * sizeof(int),
-                           cudaMemcpyDeviceToDevice);
-                cudaMemcpy(rho_data.data(), dataManager.m_rho.data(), k_n * sizeof(float), cudaMemcpyDeviceToDevice);
-                cudaMemcpy(pressure_data.data(), dataManager.m_pressure.data(), k_n * sizeof(float),
-                           cudaMemcpyDeviceToDevice);
-                cudaMemcpy(W_grad_data.data(), dataManager.m_W_grad.data(), tot_collision * sizeof(float3),
-                           cudaMemcpyDeviceToDevice);
             }
+            cudaMemcpy(pair_i_data.data(), dataManager.m_pair_i.data(), tot_collision * sizeof(int),
+                       cudaMemcpyDeviceToDevice);
+            cudaMemcpy(pair_j_data.data(), dataManager.m_pair_j.data(), tot_collision * sizeof(int),
+                       cudaMemcpyDeviceToDevice);
+            cudaMemcpy(rho_data.data(), dataManager.m_rho.data(), k_n * sizeof(float), cudaMemcpyDeviceToDevice);
+            cudaMemcpy(pressure_data.data(), dataManager.m_pressure.data(), k_n * sizeof(float),
+                       cudaMemcpyDeviceToDevice);
+            cudaMemcpy(W_grad_data.data(), dataManager.m_W_grad.data(), tot_collision * sizeof(float3),
+                       cudaMemcpyDeviceToDevice);
         }
 
         // notify the system that the contact data is old
@@ -654,9 +601,7 @@ void DynamicThread::operator()() {
         }
 
         // clear acc_data each step
-        acc_data.clear();
         acc_data.resize(pos_data.size());
-        acc_data.shrink_to_fit();
 
         // ==============================================================================================================
         // Dynamic Step 1
@@ -667,8 +612,6 @@ void DynamicThread::operator()() {
         int num_block =
             (tot_collision % num_thread != 0) ? (tot_collision / num_thread + 1) : (tot_collision / num_thread);
 
-        col_acc_data.clear();
-        col_acc_data.shrink_to_fit();
         col_acc_data.resize(tot_collision);
 
         // call dynamic first gpu pass
@@ -709,19 +652,6 @@ void DynamicThread::operator()() {
             .launch(pair_i_data_reduced_1.data(), col_acc_data_reduced_1.data(), acc_data.data(),
                     pair_i_data_reduced_1.size());
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-
-        // clear intermediate vectors
-        pair_i_data_sorted_1.clear();
-        pair_i_data_sorted_1.shrink_to_fit();
-
-        col_acc_data_sorted_1.clear();
-        col_acc_data_sorted_1.shrink_to_fit();
-
-        pair_i_data_reduced_1.clear();
-        pair_i_data_reduced_1.shrink_to_fit();
-
-        col_acc_data_reduced_1.clear();
-        col_acc_data_reduced_1.shrink_to_fit();
 
         // ==============================================================================================================
         // Dynamic Step 3
@@ -766,19 +696,6 @@ void DynamicThread::operator()() {
             .launch(pair_j_data_reduced_2.data(), col_acc_data_reduced_2.data(), acc_data.data(),
                     pair_j_data_reduced_2.size());
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-
-        // clear intermediate vectors
-        pair_j_data_sorted_2.clear();
-        pair_j_data_sorted_2.shrink_to_fit();
-
-        col_acc_data_sorted_2.clear();
-        col_acc_data_sorted_2.shrink_to_fit();
-
-        pair_j_data_reduced_2.clear();
-        pair_j_data_reduced_2.shrink_to_fit();
-
-        col_acc_data_reduced_2.clear();
-        col_acc_data_reduced_2.shrink_to_fit();
 
         // ==============================================================================================================
         // Dynamic Step 5
