@@ -740,7 +740,7 @@ inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::st
     std::string MassProperties, moiX, moiY, moiZ, E_proxy, nu_proxy, CoR_proxy, mu_proxy, Crr_proxy;
     // Loop through all templates to find in the JIT info
     // Note m_template_mass's size is nDistinctMassProperties, and it may be large than nDistinctClumpBodyTopologies
-    // because of the ext obj mass entries appended to that array
+    // because the ext obj mass entries and meshed objs mass entries are appended to that array
     for (unsigned int i = 0; i < m_template_mass.size(); i++) {
         MassProperties += to_string_with_precision(m_template_mass.at(i)) + ",";
         moiX += to_string_with_precision(m_template_moi.at(i).x) + ",";

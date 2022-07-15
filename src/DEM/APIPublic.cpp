@@ -387,6 +387,28 @@ std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(const std::vector<std::share
     return cached_input_clump_batches.back();
 }
 
+std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMesh(DEMMeshConnected& mesh) {
+    if (mesh.GetNumTriangles() == 0) {
+        SGPS_DEM_WARNING("It seems that a mesh contains 0 triangle face.");
+    }
+    mesh.load_order = nTimesTriObjLoad;
+    nTimesTriObjLoad++;
+
+    cached_mesh_objs.push_back(std::make_shared<DEMMeshConnected>(std::move(mesh)));
+    return cached_mesh_objs.back();
+}
+
+std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMesh(const std::string& filename,
+                                                              bool load_normals,
+                                                              bool load_uv) {
+    DEMMeshConnected mesh;
+    bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
+    if (!flag) {
+        SGPS_DEM_ERROR("Failed to load in mesh file %s.", filename.c_str());
+    }
+    return AddWavefrontMesh(mesh);
+}
+
 std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMExternObj>& obj) {
     // Create a middle man: DEMTrackedObj. The reason we use it is because a simple struct should be used to transfer to
     // dT for owner-number processing. If we cut the middle man and use things such as DEMExtObj, there will not be a

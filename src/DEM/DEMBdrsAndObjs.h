@@ -235,6 +235,24 @@ class DEMClumpBatch {
 
 // DEM mesh object
 class DEMMeshConnected {
+  private:
+    size_t nTri = 0;
+    void assertLength(size_t len, const std::string name) {
+        if (nTri == 0) {
+            std::cerr << "The settings at the " << name << " call were applied to 0 mesh facet.\nPlease consider using "
+                      << name
+                      << " only after loading the mesh file, because mesh utilities are supposed to provide per-facet "
+                         "control of your mesh, so we need to know the mesh first."
+                      << std::endl;
+        }
+        if (len != nTri) {
+            std::stringstream ss;
+            ss << name << " input argument must have length " << nTri << " (not " << len
+               << "), same as the number of triangle facets in the mesh." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+    }
+
   public:
     std::vector<float3> vertices;
     std::vector<float3> normals;
@@ -246,9 +264,32 @@ class DEMMeshConnected {
     std::vector<int3> face_uv_indices;
     std::vector<int3> face_col_indices;
 
+    // Material types for each mesh facet
+    std::vector<std::shared_ptr<DEMMaterial>> materials;
+    // Family code (used in prescribing its motions etc.)
+    unsigned int family_code = DEM_RESERVED_FAMILY_NUM;  ///< Means it is default to the `fixed' family
+    // The coordinate of the CoM of this meshed object, in the frame where all the mesh's node coordinates are
+    // reported. This is usually all-0 (meaning you should define the object's components in its CoM frame to begin
+    // with), but it can be user-specified.
+    float3 CoM = make_float3(0);
+    // CoM frame's orientation quaternion in the frame which is used to report all the mesh's node coordinates.
+    // It is usually unit quaternion.
+    float4 CoM_oriQ = make_float4(1.f, 0.f, 0.f, 0.f);
+    // Obj's CoM initial position
+    float3 init_pos = make_float3(0);
+    // Obj's initial orientation quaternion
+    float4 init_oriQ = make_float4(1.f, 0.f, 0.f, 0.f);
+    // Obj's mass (huge by default)
+    float mass = 1.f;
+    // Obj's MOI (huge by default)
+    float3 MOI = make_float3(1.f);
+    // Its offset when this obj got loaded into the API-level user raw-input array
+    unsigned int load_order;
+
     std::string filename;  ///< file string if loading an obj file
 
     DEMMeshConnected() {}
+    DEMMeshConnected(std::string input_file) { LoadWavefrontMesh(input_file); }
     ~DEMMeshConnected() {}
 
     /// Load a triangle mesh saved as a Wavefront .obj file
@@ -261,7 +302,7 @@ class DEMMeshConnected {
     static DEMMeshConnected Merge(std::vector<DEMMeshConnected>& meshes);
 
     /// Get the number of triangles already added to this mesh
-    unsigned int GetNumTriangles() const { return face_v_indices.size(); }
+    size_t GetNumTriangles() const { return nTri; }
 
     /// Clear all data
     void Clear() {
@@ -275,10 +316,25 @@ class DEMMeshConnected {
         this->face_col_indices.clear();
     }
 
+    /// Set mass and MOI (in principal frame)
+    void SetMassMOI(float mass, float3 MOI) {
+        this->mass = mass;
+        this->MOI = MOI;
+    }
+
+    /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
+    void SetMaterial(const std::vector<std::shared_ptr<DEMMaterial>>& input) {
+        assertLength(input.size(), "SetMaterial");
+        materials = input;
+    }
+    void SetMaterial(const std::shared_ptr<DEMMaterial>& input) {
+        SetMaterial(std::vector<std::shared_ptr<DEMMaterial>>(nTri, input));
+    }
+
     /// Compute barycenter, mass and MOI in CoM frame
     void ComputeMassProperties(double& mass, float3& center, float3& inertia);
 
-    /// Transformation utilities
+    /// Transforme the meshed object so it gets to its initial position, before the simulation starts
     void Rotate(const float4 rotQ);
     void Translate(const float3 displ);
 

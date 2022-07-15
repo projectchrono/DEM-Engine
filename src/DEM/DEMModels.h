@@ -50,6 +50,7 @@ inline std::string DEM_HERTZIAN_FORCE_MODEL() {
             const float gamma_n = SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
 
             force += (k_n * overlapDepth + gamma_n * projection) * B2A;
+            // printf("normal force: %f, %f, %f\n", force.x, force.y, force.z);
         }
 
         // Rolling resistance part
@@ -82,6 +83,7 @@ inline std::string DEM_HERTZIAN_FORCE_MODEL() {
                     // Its direction is that it `resists' rotation, see picture in 
                     // https://en.wikipedia.org/wiki/Rolling_resistance.
                     torque_only_force = (v_rot / v_rot_mag) * (Crr * length(force));
+                    // printf("torque force: %f, %f, %f\n", torque_only_force.x, torque_only_force.y, torque_only_force.z);
                 }
             }
         }
@@ -104,6 +106,7 @@ inline std::string DEM_HERTZIAN_FORCE_MODEL() {
             }
             // Use force to collect tangent_force
             force += tangent_force;
+            // printf("tangent force: %f, %f, %f\n", tangent_force.x, tangent_force.y, tangent_force.z);
         }    
     )V0G0N";
 

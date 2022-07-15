@@ -20,6 +20,7 @@ SET(DEMOS
 		DEMdemo_RotatingDrum
 		DEMdemo_Centrifuge
 		DEMdemo_GameOfLife
+		DEMdemo_BallDrop
 		sphdemo
 		hello_world
 )

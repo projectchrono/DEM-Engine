@@ -109,6 +109,8 @@ bool DEMMeshConnected::LoadWavefrontMesh(std::string input_file, bool load_norma
         this->face_uv_indices.clear();
     }
 
+    this->nTri = face_v_indices.size();
+
     return true;
 }
 

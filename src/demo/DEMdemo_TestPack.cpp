@@ -91,7 +91,7 @@ void SphereRollUpIncline() {
         DEMSolver DEM_sim;
         SetSolverProp(DEM_sim);
 
-        auto mat_type_1 = DEM_sim.LoadMaterialType(1e9, 0.3, 0.5, mu, 0.3);
+        auto mat_type_1 = DEM_sim.LoadMaterialType(1e9, 0.3, 0.5, mu, 0.15);
         // A ball
         auto sphere_template = DEM_sim.LoadClumpSimpleSphere(mass, sphere_rad, mat_type_1);
 
@@ -137,7 +137,7 @@ void SphereRollUpIncline() {
     float run_time = 1.0;
     unsigned int i = 0;
     for (float alpha = 60; alpha >= 1; alpha -= 1) {
-        for (float Crr = 0.0; Crr <= 0.6; Crr += 0.02) {
+        for (float Crr = 0.0; Crr <= 0.3; Crr += 0.01) {
             DEMSolver DEM_sim;
             SetSolverProp(DEM_sim);
             DEM_sim.SetVerbosity(QUIET);
@@ -192,10 +192,10 @@ void SphereRollUpIncline() {
 void SphereStack() {
     float sphere_rad = 0.15;
     float m_bot = 1.0;
-    float mu = 0.25;
+    float mu = 0.2;
     unsigned int run_num = 0;
 
-    for (float gap = 0.4 * sphere_rad; gap >= 0.2 * sphere_rad; gap -= 0.05 * sphere_rad) {
+    for (float gap = 0.2 * sphere_rad; gap <= 0.4 * sphere_rad; gap += 0.05 * sphere_rad) {
         for (float Crr = 0.03; Crr <= 0.3; Crr += 0.01) {
             bool found = false;
             for (float m_top = 0.1; m_top <= 50.0; m_top += 0.02) {
@@ -252,6 +252,7 @@ void SphereStack() {
 
                 run_num++;
                 std::cout << "Test No. " << run_num << std::endl;
+                std::cout << "Final Z coord: " << pos.z << std::endl;
                 if (top_sp_Z <= sphere_rad) {
                     std::cout << "Sphere mass: " << m_top << std::endl;
                     std::cout << "Rolling resistance: " << Crr << std::endl;
@@ -271,9 +272,9 @@ void SphereStack() {
 
 int main() {
     // Choose a validation test by uncommenting it
-    SphereRollUpIncline();
+    // SphereRollUpIncline();
     // EllpsiodFallingOver();
-    // SphereStack();
+    SphereStack();
 
     std::cout << "DEMdemo_TestPack exiting..." << std::endl;
     // TODO: add end-game report APIs

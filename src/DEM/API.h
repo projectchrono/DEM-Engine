@@ -166,6 +166,12 @@ class DEMSolver {
                          std::vector<float3>(1, input_xyz));
     }
 
+    /// Load a mesh-represented object
+    std::shared_ptr<DEMMeshConnected> AddWavefrontMesh(const std::string& filename,
+                                                       bool load_normals = true,
+                                                       bool load_uv = false);
+    std::shared_ptr<DEMMeshConnected> AddWavefrontMesh(DEMMeshConnected& mesh);
+
     /// Create a DEMTracker to allow direct control/modification/query to this external object
     std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMExternObj>& obj);
     /// Create a DEMTracker to allow direct control/modification/query to this batch of clumps. By default, it refers to
@@ -462,7 +468,7 @@ class DEMSolver {
     std::vector<std::shared_ptr<DEMExternObj>> cached_extern_objs;
 
     // Shared pointers to meshed objects cached at the API system
-    // TODO: std::vector<std::shared_ptr<DEMMeshObj>> cached_mesh_objs;
+    std::vector<std::shared_ptr<DEMMeshConnected>> cached_mesh_objs;
 
     // User-input prescribed motion
     std::vector<familyPrescription_t> m_input_family_prescription;
