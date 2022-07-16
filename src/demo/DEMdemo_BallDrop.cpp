@@ -22,7 +22,7 @@ int main() {
     std::cout << "Note: This is a relatively large demo and should take hours/days to run!!" << std::endl;
 
     srand(42);
-    auto projectile = DEM_sim.AddWavefrontMesh("./data/sphere.obj");
+    auto projectile = DEM_sim.AddWavefrontMesh("./data/mesh/sphere.obj");
     std::cout << "Total num of triangles: " << projectile->GetNumTriangles() << std::endl;
 
     std::cout << "DEMdemo_BallDrop exiting..." << std::endl;

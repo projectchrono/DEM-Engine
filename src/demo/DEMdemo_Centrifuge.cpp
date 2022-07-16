@@ -24,19 +24,28 @@ int main() {
 
     srand(42);
 
-    // A general template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
-    std::vector<float> radii = {1.0, 0.88, 0.64, 0.88, 0.64};
-    std::vector<float3> relPos = {make_float3(0, 0, 0), make_float3(0, 0, 0.86), make_float3(0, 0, 1.44),
-                                  make_float3(0, 0, -0.86), make_float3(0, 0, -1.44)};
-    // Then calculate mass and MOI
+    // What will be loaded from the file, is a template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
+    DEMClumpTemplate ellipsoid;
+    ellipsoid.ReadComponentFromFile("./data/clumps/ellipsoid_2_1_1.csv");
+    // Calculate its mass and MOI
     float mass = 2.6e3 * 4. / 3. * SGPS_PI * 2 * 1 * 1;
     float3 MOI = make_float3(1. / 5. * mass * (1 * 1 + 2 * 2), 1. / 5. * mass * (1 * 1 + 2 * 2),
                              1. / 5. * mass * (1 * 1 + 1 * 1));
     // We can scale this general template to make it smaller, like a DEM particle that you would actually use
     float scaling = 0.01;
+    // Scale the template we just created
+    mass *= scaling * scaling * scaling;
+    MOI *= scaling * scaling * scaling * scaling * scaling;
+    ellipsoid.mass = mass;
+    ellipsoid.MOI = MOI;
+    std::for_each(ellipsoid.radii.begin(), ellipsoid.radii.end(), [scaling](float& r) { r *= scaling; });
+    std::for_each(ellipsoid.relPos.begin(), ellipsoid.relPos.end(), [scaling](float3& r) { r *= scaling; });
 
     auto mat_type_sand = DEM_sim.LoadMaterialType(1e9, 0.3, 0.3);
     auto mat_type_drum = DEM_sim.LoadMaterialType(2e9, 0.3, 0.4);
+
+    // Define material type for the particles (on a per-sphere-component basis)
+    ellipsoid.materials = std::vector<std::shared_ptr<DEMMaterial>>(ellipsoid.nComp, mat_type_sand);
 
     // Bin size needs to make sure no too-many-sphere-per-bin situation happens
     DEM_sim.InstructBinSize(scaling);
@@ -48,22 +57,20 @@ int main() {
     for (int i = 0; i < 3; i++) {
         // A multiplier is added to the masses of different clumps, so that centrifuging separate those types. Consider
         // it separating materials with different densities.
-        double mult = 0.5 * (i + 1);
-
-        // Then allocate the clump template definition arrays (all in SI)
-        float this_mass = mult * scaling * scaling * scaling * mass;
-        float3 this_MOI = mult * scaling * scaling * scaling * scaling * scaling * MOI;
-        std::vector<float> this_radii(radii);
-        std::vector<float3> this_relPos(relPos);
-        std::transform(radii.begin(), radii.end(), this_radii.begin(), [scaling](float& r) { return r * scaling; });
-        std::transform(relPos.begin(), relPos.end(), this_relPos.begin(), [scaling](float3& r) { return r * scaling; });
+        float mult = std::pow(1.5, i);
+        // Then make a new copy of the template then do the scaling of mass
+        DEMClumpTemplate ellipsoid_template = ellipsoid;
+        ellipsoid_template.mass *= mult;
+        ellipsoid_template.MOI *= mult;
 
         // Load a (ellipsoid-shaped) clump and a sphere
-        clump_types.push_back(DEM_sim.LoadClumpType(this_mass, this_MOI, this_radii, this_relPos, mat_type_sand));
-        clump_types.push_back(DEM_sim.LoadClumpSimpleSphere(this_mass, std::cbrt(2.0) * scaling, mat_type_sand));
+        clump_types.push_back(DEM_sim.LoadClumpType(ellipsoid_template));
+        clump_types.push_back(
+            DEM_sim.LoadClumpSimpleSphere(ellipsoid_template.mass, std::cbrt(2.0) * scaling, mat_type_sand));
 
-        // std::cout << "Adding a clump with mass: " << this_mass << std::endl;
-        // std::cout << "This clump's MOI: " << this_MOI.x << ", " << this_MOI.y << ", " << this_MOI.z << std::endl;
+        // std::cout << "Adding a clump with mass: " << ellipsoid_template.mass << std::endl;
+        // std::cout << "This clump's MOI: " << ellipsoid_template.MOI.x << ", " << ellipsoid_template.MOI.y << ", "
+        //           << ellipsoid_template.MOI.z << std::endl;
     }
 
     // Drum is a `big clump', we now generate its template

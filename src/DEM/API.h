@@ -127,6 +127,16 @@ class DEMSolver {
                                                     const std::shared_ptr<DEMMaterial>& sp_material);
     /// An overload of LoadClumpType where the user builds the DEMClumpTemplate struct themselves then supply it
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(DEMClumpTemplate& clump);
+    /// An overload of LoadClumpType which loads sphere components from a file
+    std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
+                                                    float3 moi,
+                                                    const std::string filename,
+                                                    const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials);
+    /// An overload of LoadClumpType which loads sphere components from a file and all components use the same material
+    std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
+                                                    float3 moi,
+                                                    const std::string filename,
+                                                    const std::shared_ptr<DEMMaterial>& sp_material);
 
     /// A simplified version of LoadClumpType: it just loads a one-sphere clump template
     std::shared_ptr<DEMClumpTemplate> LoadClumpSimpleSphere(float mass,

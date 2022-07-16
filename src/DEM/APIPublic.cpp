@@ -256,6 +256,12 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clu
             "Radii, relative positions and material arrays defining a clump topology, must all have the same "
             "length.\nIf you constructed a DEMClumpTemplate struct yourself, you may need to set nComp manually.");
     }
+    if (clump.mass < SGPS_DEM_TINY_FLOAT || length(clump.MOI) < SGPS_DEM_TINY_FLOAT) {
+        SGPS_DEM_WARNING(
+            "A type of clump is instructed to have 0 mass or moment of inertia. This will most likely destabilize the "
+            "simulation.");
+    }
+
     // Print the mark to this clump template
     unsigned int offset = m_templates.size();
     clump.mark = offset;
@@ -263,6 +269,32 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clu
     std::shared_ptr<DEMClumpTemplate> ptr = std::make_shared<DEMClumpTemplate>(std::move(clump));
     m_templates.push_back(ptr);
     return m_templates.back();
+}
+
+std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(float mass,
+                                                           float3 moi,
+                                                           const std::string filename,
+                                                           const std::shared_ptr<DEMMaterial>& sp_material) {
+    DEMClumpTemplate clump;
+    clump.mass = mass;
+    clump.MOI = moi;
+    clump.ReadComponentFromFile(filename);
+    std::vector<std::shared_ptr<DEMMaterial>> sp_materials(clump.nComp, sp_material);
+    clump.materials = sp_materials;
+    return LoadClumpType(clump);
+}
+
+std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(
+    float mass,
+    float3 moi,
+    const std::string filename,
+    const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
+    DEMClumpTemplate clump;
+    clump.mass = mass;
+    clump.MOI = moi;
+    clump.ReadComponentFromFile(filename);
+    clump.materials = sp_materials;
+    return LoadClumpType(clump);
 }
 
 std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(

@@ -7,6 +7,7 @@
 
 #include <DEM/DEMDefines.h>
 #include <core/utils/ManagedAllocator.hpp>
+#include <core/utils/csv.hpp>
 #include <sstream>
 #include <exception>
 #include <atomic>
@@ -399,9 +400,10 @@ struct DEMMaterial {
 
 // A struct that defines a `clump' (one of the core concepts of this solver). A clump is typically small which consists
 // of several sphere components, but it can be as large as having thousands of spheres.
-struct DEMClumpTemplate {
-    float mass;
-    float3 MOI;
+class DEMClumpTemplate {
+  public:
+    float mass = 0;
+    float3 MOI = make_float3(0);
     std::vector<float> radii;
     std::vector<float3> relPos;
     std::vector<std::shared_ptr<DEMMaterial>> materials;
@@ -418,6 +420,24 @@ struct DEMClumpTemplate {
     unsigned int mark;
     // Whether this is a big clump (not used; jitifiability is determined automatically)
     bool isBigClump = false;
+
+    /// Retrieve clump's sphere component information from a file
+    int ReadComponentFromFile(const std::string filename) {
+        io::CSVReader<4> in(filename);
+        in.read_header(io::ignore_extra_column, "x", "y", "z", "r");
+        float r;
+        float3 pos;
+        unsigned int count = 0;
+        while (in.read_row(pos.x, pos.y, pos.z, r)) {
+            radii.push_back(r);
+            relPos.push_back(pos);
+            count++;
+        }
+        nComp += count;
+
+        // TODO: If there is an error while loading, we should report it
+        return 0;
+    }
 };
 
 // A struct to get or set tracked owner entities
