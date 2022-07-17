@@ -54,6 +54,14 @@ class DEMSolver {
     /// domain.
     void InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned char z, float len_unit = 1e-10f);
 
+    /// Instruct if and how we should add boundaries to the simulation world upon initialization. Choose between `none',
+    /// `all' (add 6 boundary planes) and `top_open' (add 5 boundary planes and leave the z-directon top open). Also
+    /// specifies the material that should be assigned to those bounding boundaries.
+    void InstructBoxDomainBoundingBC(const std::string& inst, const std::shared_ptr<DEMMaterial>& mat) {
+        m_user_add_bounding_box = inst;
+        m_bounding_box_material = mat;
+    }
+
     /// Set gravity
     void SetGravitationalAcceleration(float3 g) { G = g; }
     /// Set a constant time step size
@@ -174,6 +182,10 @@ class DEMSolver {
     std::shared_ptr<DEMClumpBatch> AddClumps(std::shared_ptr<DEMClumpTemplate>& input_type, float3 input_xyz) {
         return AddClumps(std::vector<std::shared_ptr<DEMClumpTemplate>>(1, input_type),
                          std::vector<float3>(1, input_xyz));
+    }
+    std::shared_ptr<DEMClumpBatch> AddClumps(std::shared_ptr<DEMClumpTemplate>& input_type,
+                                             const std::vector<float3>& input_xyz) {
+        return AddClumps(std::vector<std::shared_ptr<DEMClumpTemplate>>(input_xyz.size(), input_type), input_xyz);
     }
 
     /// Load a mesh-represented object
@@ -398,6 +410,12 @@ class DEMSolver {
     // Where the user wants the origin of the coordinate system to be
     std::string m_user_instructed_origin = "explicit";
 
+    // If and how we should add boundaries to the simulation world upon initialization. Choose between none, all and
+    // top_open.
+    std::string m_user_add_bounding_box = "none";
+    // And the material should be used for the bounding BCs
+    std::shared_ptr<DEMMaterial> m_bounding_box_material;
+
     // If we should ensure that when kernel jitification fails, the line number reported reflexes where error happens
     bool m_ensure_kernel_line_num = false;
 
@@ -608,6 +626,8 @@ class DEMSolver {
     void figureOutOrigin();
     /// Set the default bin (for contact detection) size to be the same of the smallest sphere
     void decideBinSize();
+    /// Add boundaries to the simulation `world' based on user instructions
+    void addWorldBoundingBox();
     /// Transfer cached solver preferences/instructions to dT and kT.
     void transferSolverParams();
     /// Transfer (CPU-side) cached simulation data (about sim world) to the GPU-side. It is called automatically during

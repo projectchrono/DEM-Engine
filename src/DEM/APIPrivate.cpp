@@ -17,6 +17,11 @@
 
 namespace sgps {
 
+// Simple material util functions used by some DEM private methods
+inline bool is_DEM_material_same(const std::shared_ptr<DEMMaterial>& a, const std::shared_ptr<DEMMaterial>& b);
+inline unsigned int stash_material_in_templates(std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
+                                                const std::shared_ptr<DEMMaterial>& this_material);
+
 void DEMSolver::generateJITResources() {
     /*
     // Dan and Ruochun decided not to extract unique input values.
@@ -57,6 +62,13 @@ void DEMSolver::generateJITResources() {
     nDistinctSphereRelativePositions_computed = m_clumps_sp_location_types.size();
     */
 
+    // Figure out the parameters related to the simulation `world', if need to
+    if (!explicit_nv_override) {
+        figureOutNV();
+    }
+    figureOutOrigin();
+    addWorldBoundingBox();
+
     // Flatten cached clump templates (from ClumpTemplate structs to float arrays), make ready for transferring to kTdT
     preprocessClumpTemplates();
     // m_template_mass may be `appended' later, so we have to do it here
@@ -82,11 +94,7 @@ void DEMSolver::generateJITResources() {
     // Also, external objects may introduce more material types
     nMatTuples = m_loaded_materials.size();
 
-    // Figure out the parameters related to the simulation `world', if need to
-    if (!explicit_nv_override) {
-        figureOutNV();
-    }
-    figureOutOrigin();
+    // Decide bin size (for contact detection)
     decideBinSize();
 
     // Finally, with both user inputs and jit info processed, we can derive the number of owners that we have now
@@ -269,8 +277,20 @@ void DEMSolver::decideBinSize() {
     }
 
     // TODO: What should be a default bin size?
-    if (!m_use_user_instructed_bin_size) {
-        m_binSize = 2.0 * m_smallest_radius;
+    if (m_smallest_radius > SGPS_DEM_TINY_FLOAT) {
+        if (!m_use_user_instructed_bin_size) {
+            m_binSize = 2.0 * m_smallest_radius;
+        }
+    } else {
+        if (!m_use_user_instructed_bin_size) {
+            SGPS_DEM_ERROR(
+                "There are spheres in clump templates that have 0 radii, and the user did not specify the bin size "
+                "(for contact detection)!\nBecause the bin size is supposed to be defaulted to the size of the "
+                "smallest sphere, now the solver does not know what to do.");
+        } else {
+            SGPS_DEM_WARNING(
+                "There are spheres in clump templates that have 0 radii!! Please make sure this is intentional.");
+        }
     }
 
     nbX = (binID_t)(m_voxelSize * (double)((size_t)1 << nvXp2) / m_binSize) + 1;
@@ -500,6 +520,27 @@ void DEMSolver::figureOutOrigin() {
     }
 }
 
+void DEMSolver::addWorldBoundingBox() {
+    // Now, add the bounding box for the simulation `world' if instructed
+    if (m_user_add_bounding_box == "all" || m_user_add_bounding_box == "top_open") {
+        auto box = this->AddExternalObject();
+        box->AddPlane(host_make_float3(m_boxLBF.x + m_boxX / 2., m_boxLBF.y + m_boxY / 2., m_boxLBF.z),
+                      host_make_float3(0, 0, 1), m_bounding_box_material);
+        box->AddPlane(host_make_float3(m_boxLBF.x, m_boxLBF.y + m_boxY / 2., m_boxLBF.z + m_boxZ / 2.),
+                      host_make_float3(1, 0, 0), m_bounding_box_material);
+        box->AddPlane(host_make_float3(m_boxLBF.x + m_boxX, m_boxLBF.y + m_boxY / 2., m_boxLBF.z + m_boxZ / 2.),
+                      host_make_float3(-1, 0, 0), m_bounding_box_material);
+        box->AddPlane(host_make_float3(m_boxLBF.x + m_boxX / 2., m_boxLBF.y, m_boxLBF.z + m_boxZ / 2.),
+                      host_make_float3(0, 1, 0), m_bounding_box_material);
+        box->AddPlane(host_make_float3(m_boxLBF.x + m_boxX / 2., m_boxLBF.y + m_boxY, m_boxLBF.z + m_boxZ / 2.),
+                      host_make_float3(0, -1, 0), m_bounding_box_material);
+        if (m_user_add_bounding_box == "all") {
+            box->AddPlane(host_make_float3(m_boxLBF.x + m_boxX / 2., m_boxLBF.y + m_boxY / 2., m_boxLBF.z + m_boxZ),
+                          host_make_float3(0, 0, -1), m_bounding_box_material);
+        }
+    }
+}
+
 // This is generally used to pass individual instructions on how the solver should behave
 void DEMSolver::transferSolverParams() {
     kT->verbosity = verbosity;
@@ -606,6 +647,47 @@ void DEMSolver::validateUserInputs() {
 // should use a while loop to control that loop in worker threads.
 size_t DEMSolver::computeDTCycles(double thisCallDuration) {
     return (size_t)std::round(thisCallDuration / m_ts_size);
+}
+
+// Test if 2 types of DEM materials are the same
+inline bool is_DEM_material_same(const std::shared_ptr<DEMMaterial>& a, const std::shared_ptr<DEMMaterial>& b) {
+    if (std::abs(a->rho - b->rho) > SGPS_DEM_TINY_FLOAT) {
+        return false;
+    }
+    if (std::abs(a->E - b->E) > SGPS_DEM_TINY_FLOAT) {
+        return false;
+    }
+    if (std::abs(a->nu - b->nu) > SGPS_DEM_TINY_FLOAT) {
+        return false;
+    }
+    if (std::abs(a->CoR - b->CoR) > SGPS_DEM_TINY_FLOAT) {
+        return false;
+    }
+    if (std::abs(a->mu - b->mu) > SGPS_DEM_TINY_FLOAT) {
+        return false;
+    }
+    if (std::abs(a->Crr - b->Crr) > SGPS_DEM_TINY_FLOAT) {
+        return false;
+    }
+    return true;
+}
+
+/// Check if this_material is in loaded_materials: if yes, return the correspnding index in loaded_materials; if not,
+/// load it and return the correspnding index in loaded_materials (the last element)
+inline unsigned int stash_material_in_templates(std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
+                                                const std::shared_ptr<DEMMaterial>& this_material) {
+    auto is_same = [&](const std::shared_ptr<DEMMaterial>& ptr) { return is_DEM_material_same(ptr, this_material); };
+    // Is this material already loaded? (most likely yes)
+    auto it_mat = std::find_if(loaded_materials.begin(), loaded_materials.end(), is_same);
+    if (it_mat != loaded_materials.end()) {
+        // Already in, then just get where it's located in the m_loaded_materials array
+        return std::distance(loaded_materials.begin(), it_mat);
+    } else {
+        // Not already in, come on. Load it, and then get it into this_clump_sp_mat_ids. This is unlikely, unless the
+        // users made a shared_ptr themselves.
+        loaded_materials.push_back(this_material);
+        return loaded_materials.size() - 1;
+    }
 }
 
 inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::string>& strMap) {

@@ -22,8 +22,6 @@ int main() {
     DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::FAMILY);
     std::cout << "Note: This is a relatively large demo and should take hours/days to run!!" << std::endl;
 
-    srand(42);
-
     // What will be loaded from the file, is a template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
     DEMClumpTemplate ellipsoid;
     ellipsoid.ReadComponentFromFile("./data/clumps/ellipsoid_2_1_1.csv");
@@ -80,7 +78,7 @@ int main() {
     float CylHeight = 1.0;
     float CylMass = 1.0;
     float CylParticleRad = 0.05;
-    float IXX = CylMass * CylRad * CylRad;
+    float IXX = CylMass * CylRad * CylRad / 2;
     float IYY = (CylMass / 12) * (3 * CylRad * CylRad + CylHeight * CylHeight);
     auto Drum_particles = DEMCylSurfSampler(CylCenter, CylAxis, CylRad, CylHeight, CylParticleRad);
     auto Drum_template =

@@ -21,6 +21,7 @@ SET(DEMOS
 		DEMdemo_Centrifuge
 		DEMdemo_GameOfLife
 		DEMdemo_BallDrop
+		DEMdemo_RoverWheel
 		sphdemo
 		hello_world
 )

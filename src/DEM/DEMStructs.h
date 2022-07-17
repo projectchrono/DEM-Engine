@@ -14,6 +14,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <nvmath/helper_math.cuh>
+#include <DEM/HostSideHelpers.hpp>
 
 namespace sgps {
 // Structs defined here will be used by some host classes in DEM.
@@ -245,8 +246,8 @@ inline std::string pretty_format_bytes(size_t bytes) {
 
 #define SGPS_DEM_ERROR(...)                  \
     {                                        \
-        char error_message[256];             \
-        char func_name[256];                 \
+        char error_message[1024];            \
+        char func_name[1024];                \
         sprintf(error_message, __VA_ARGS__); \
         sprintf(func_name, __func__);        \
         std::string out = error_message;     \
@@ -414,7 +415,7 @@ class DEMClumpTemplate {
     float3 CoM = make_float3(0);
     // CoM frame's orientation quaternion in the frame which is used to report the positions of this clump's component
     // spheres. Usually unit quaternion.
-    float4 CoM_oriQ = make_float4(1.f, 0.f, 0.f, 0.f);
+    float4 CoM_oriQ = host_make_float4(1, 0, 0, 0);
     // Each clump template will have a unique mark number. When clumps are loaded to the system, this mark will help
     // find their type offset.
     unsigned int mark;
@@ -422,10 +423,14 @@ class DEMClumpTemplate {
     bool isBigClump = false;
 
     /// Retrieve clump's sphere component information from a file
-    int ReadComponentFromFile(const std::string filename) {
+    int ReadComponentFromFile(const std::string filename,
+                              const std::string x_id = "x",
+                              const std::string y_id = "y",
+                              const std::string z_id = "z",
+                              const std::string r_id = "r") {
         io::CSVReader<4> in(filename);
-        in.read_header(io::ignore_extra_column, "x", "y", "z", "r");
-        float r;
+        in.read_header(io::ignore_missing_column, x_id, y_id, z_id, r_id);
+        float r = 0;
         float3 pos;
         unsigned int count = 0;
         while (in.read_row(pos.x, pos.y, pos.z, r)) {

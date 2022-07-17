@@ -253,8 +253,11 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clu
     if (clump.nComp != clump.radii.size() || clump.nComp != clump.relPos.size() ||
         clump.nComp != clump.materials.size()) {
         SGPS_DEM_ERROR(
-            "Radii, relative positions and material arrays defining a clump topology, must all have the same "
-            "length.\nIf you constructed a DEMClumpTemplate struct yourself, you may need to set nComp manually.");
+            "Radii, relative positions and material arrays defining a clump topology, must all have the same length "
+            "(%zu, as indicated by nComp).\nHowever it seems that their lengths are %zu, %zu, %zu, respectively.\nIf "
+            "you constructed a DEMClumpTemplate struct yourself, you may need to carefully check if their lengths "
+            "agree with nComp.",
+            clump.nComp, clump.radii.size(), clump.relPos.size(), clump.materials.size());
     }
     if (clump.mass < SGPS_DEM_TINY_FLOAT || length(clump.MOI) < SGPS_DEM_TINY_FLOAT) {
         SGPS_DEM_WARNING(
@@ -544,7 +547,7 @@ void DEMSolver::ReleaseFlattenedArrays() {
 
 void DEMSolver::ResetWorkerThreads() {
     // The user won't be calling this when dT is working, so our only problem is that kT may be spinning in the inner
-    // loop. So iet's release kT.
+    // loop. So let's release kT.
     std::unique_lock<std::mutex> lock(kTMain_InteractionManager->mainCanProceed);
     kT->breakWaitingStatus();
     while (!kTMain_InteractionManager->userCallDone) {

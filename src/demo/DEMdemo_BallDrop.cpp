@@ -19,9 +19,7 @@ int main() {
     DEM_sim.SetVerbosity(INFO);
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
     DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::ABSV);
-    std::cout << "Note: This is a relatively large demo and should take hours/days to run!!" << std::endl;
 
-    srand(42);
     auto projectile = DEM_sim.AddWavefrontMesh("./data/mesh/sphere.obj");
     std::cout << "Total num of triangles: " << projectile->GetNumTriangles() << std::endl;
 

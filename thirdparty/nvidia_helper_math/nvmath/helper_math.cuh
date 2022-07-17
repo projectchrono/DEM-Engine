@@ -166,9 +166,6 @@ inline __host__ __device__ uint3 make_uint3(int3 a) {
     return ::make_uint3(uint(a.x), uint(a.y), uint(a.z));
 }
 
-inline __host__ __device__ float4 make_float4(float a, float b, float c, float d) {
-    return ::make_float4(a, b, c, d);
-}
 inline __host__ __device__ float4 make_float4(float s) {
     return ::make_float4(s, s, s, s);
 }

@@ -15,7 +15,6 @@
 #include <nvmath/helper_math.cuh>
 
 #include <DEM/DEMDefines.h>
-#include <DEM/DEMStructs.h>
 
 namespace sgps {
 
@@ -61,45 +60,22 @@ inline void elemSwap(T1* x, T1* y) {
     *y = tmp;
 }
 
-// Test if 2 types of DEM materials are the same
-inline bool is_DEM_material_same(const std::shared_ptr<DEMMaterial>& a, const std::shared_ptr<DEMMaterial>& b) {
-    if (std::abs(a->rho - b->rho) > SGPS_DEM_TINY_FLOAT) {
-        return false;
-    }
-    if (std::abs(a->E - b->E) > SGPS_DEM_TINY_FLOAT) {
-        return false;
-    }
-    if (std::abs(a->nu - b->nu) > SGPS_DEM_TINY_FLOAT) {
-        return false;
-    }
-    if (std::abs(a->CoR - b->CoR) > SGPS_DEM_TINY_FLOAT) {
-        return false;
-    }
-    if (std::abs(a->mu - b->mu) > SGPS_DEM_TINY_FLOAT) {
-        return false;
-    }
-    if (std::abs(a->Crr - b->Crr) > SGPS_DEM_TINY_FLOAT) {
-        return false;
-    }
-    return true;
+// TODO: Why is there a namespace (?) issue that makes us able to use make_float3 properly in demo scripts, but not in
+// any of these DEM system h or cpp files?
+inline float3 host_make_float3(float a, float b, float c) {
+    float3 f;
+    f.x = a;
+    f.y = b;
+    f.z = c;
+    return f;
 }
-
-/// Check if this_material is in loaded_materials: if yes, return the correspnding index in loaded_materials; if not,
-/// load it and return the correspnding index in loaded_materials (the last element)
-inline unsigned int stash_material_in_templates(std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
-                                                const std::shared_ptr<DEMMaterial>& this_material) {
-    auto is_same = [&](const std::shared_ptr<DEMMaterial>& ptr) { return is_DEM_material_same(ptr, this_material); };
-    // Is this material already loaded? (most likely yes)
-    auto it_mat = std::find_if(loaded_materials.begin(), loaded_materials.end(), is_same);
-    if (it_mat != loaded_materials.end()) {
-        // Already in, then just get where it's located in the m_loaded_materials array
-        return std::distance(loaded_materials.begin(), it_mat);
-    } else {
-        // Not already in, come on. Load it, and then get it into this_clump_sp_mat_ids. This is unlikely, unless the
-        // users made a shared_ptr themselves.
-        loaded_materials.push_back(this_material);
-        return loaded_materials.size() - 1;
-    }
+inline float4 host_make_float4(float a, float b, float c, float d) {
+    float4 f;
+    f.x = a;
+    f.y = b;
+    f.z = c;
+    f.w = d;
+    return f;
 }
 
 /// Replace all instances of a certain pattern from a string then return it
