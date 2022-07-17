@@ -694,7 +694,7 @@ class DEMSolver {
 class DEMTracker {
   private:
     // Its parent DEMSolver system
-    const DEMSolver* sys;
+    DEMSolver* sys;
 
   public:
     DEMTracker(DEMSolver* sim_sys) : sys(sim_sys) {}
@@ -708,6 +708,10 @@ class DEMTracker {
     float3 Vel(size_t offset = 0) { return sys->GetOwnerVelocity(obj->ownerID + offset); }
     float4 OriQ(size_t offset = 0) { return sys->GetOwnerOriQ(obj->ownerID + offset); }
     // Methods to set motions to this owner
+    void SetPos(float3 pos, size_t offset = 0) { sys->SetOwnerPosition(obj->ownerID + offset, pos); }
+    void SetAngVel(float3 angVel, size_t offset = 0) { sys->SetOwnerAngVel(obj->ownerID + offset, angVel); }
+    void SetVel(float3 vel, size_t offset = 0) { sys->SetOwnerVelocity(obj->ownerID + offset, vel); }
+    void SetOriQ(float4 oriQ, size_t offset = 0) { sys->SetOwnerOriQ(obj->ownerID + offset, oriQ); }
 };
 
 }  // namespace sgps
