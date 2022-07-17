@@ -286,14 +286,23 @@ class DEMDynamicThread {
     // Compute total KE of all clumps
     float getKineticEnergy();
 
-    // Get this owner's position in user unit
+    /// Get this owner's position in user unit
     float3 getOwnerPos(bodyID_t ownerID) const;
-    // Get this owner's angular velocity
+    /// Get this owner's angular velocity
     float3 getOwnerAngVel(bodyID_t ownerID) const;
-    // Get this owner's quaternion
+    /// Get this owner's quaternion
     float4 getOwnerOriQ(bodyID_t ownerID) const;
-    // Get this owner's velocity
+    /// Get this owner's velocity
     float3 getOwnerVel(bodyID_t ownerID) const;
+
+    /// Set this owner's position in user unit
+    void setOwnerPos(bodyID_t ownerID, float3 pos);
+    /// Set this owner's angular velocity
+    void setOwnerAngVel(bodyID_t ownerID, float3 angVel);
+    /// Set this owner's quaternion
+    void setOwnerOriQ(bodyID_t ownerID, float4 oriQ);
+    /// Set this owner's velocity
+    void setOwnerVel(bodyID_t ownerID, float3 vel);
 
     // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
     void allocateManagedArrays(size_t nOwnerBodies,

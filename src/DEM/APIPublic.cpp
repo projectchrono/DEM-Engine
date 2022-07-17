@@ -40,17 +40,27 @@ DEMSolver::~DEMSolver() {
 float3 DEMSolver::GetOwnerPosition(bodyID_t ownerID) const {
     return dT->getOwnerPos(ownerID);
 }
-
 float3 DEMSolver::GetOwnerAngVel(bodyID_t ownerID) const {
     return dT->getOwnerAngVel(ownerID);
 }
-
 float3 DEMSolver::GetOwnerVelocity(bodyID_t ownerID) const {
     return dT->getOwnerVel(ownerID);
 }
-
 float4 DEMSolver::GetOwnerOriQ(bodyID_t ownerID) const {
     return dT->getOwnerOriQ(ownerID);
+}
+
+void DEMSolver::SetOwnerPosition(bodyID_t ownerID, float3 pos) {
+    dT->setOwnerPos(ownerID, pos);
+}
+void DEMSolver::SetOwnerAngVel(bodyID_t ownerID, float3 angVel) {
+    dT->setOwnerAngVel(ownerID, angVel);
+}
+void DEMSolver::SetOwnerVelocity(bodyID_t ownerID, float3 vel) {
+    dT->setOwnerVel(ownerID, vel);
+}
+void DEMSolver::SetOwnerOriQ(bodyID_t ownerID, float4 oriQ) {
+    dT->setOwnerOriQ(ownerID, oriQ);
 }
 
 // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
@@ -167,15 +177,16 @@ void DEMSolver::ChangeFamilyNow(unsigned int ID_from, unsigned int ID_to) {}
 void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
                                           const std::string& velX,
                                           const std::string& velY,
-                                          const std::string& velZ) {
+                                          const std::string& velZ,
+                                          bool dictate) {
     familyPrescription_t preInfo;
     preInfo.family = ID;
     preInfo.linVelX = velX;
     preInfo.linVelY = velY;
     preInfo.linVelZ = velZ;
-    // Both rot and lin vel are fixed. Use other methods if this is not intended.
-    preInfo.linVelPrescribed = true;
-    preInfo.rotVelPrescribed = true;
+
+    preInfo.linVelPrescribed = dictate;
+    preInfo.rotVelPrescribed = dictate;
     preInfo.used = true;
 
     m_input_family_prescription.push_back(preInfo);
@@ -184,15 +195,16 @@ void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
 void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID,
                                           const std::string& velX,
                                           const std::string& velY,
-                                          const std::string& velZ) {
+                                          const std::string& velZ,
+                                          bool dictate) {
     familyPrescription_t preInfo;
     preInfo.family = ID;
     preInfo.rotVelX = velX;
     preInfo.rotVelY = velY;
     preInfo.rotVelZ = velZ;
-    // Both rot and lin vel are fixed. Use other methods if this is not intended.
-    preInfo.linVelPrescribed = true;
-    preInfo.rotVelPrescribed = true;
+
+    preInfo.linVelPrescribed = dictate;
+    preInfo.rotVelPrescribed = dictate;
     preInfo.used = true;
 
     m_input_family_prescription.push_back(preInfo);

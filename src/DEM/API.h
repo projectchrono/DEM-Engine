@@ -174,6 +174,14 @@ class DEMSolver {
     float4 GetOwnerOriQ(bodyID_t ownerID) const;
     /// Get velocity of a owner
     float3 GetOwnerVelocity(bodyID_t ownerID) const;
+    /// Set position of a owner in user unit
+    void SetOwnerPosition(bodyID_t ownerID, float3 pos);
+    /// Set angular velocity of a owner
+    void SetOwnerAngVel(bodyID_t ownerID, float3 angVel);
+    /// Set velocity of a owner
+    void SetOwnerVelocity(bodyID_t ownerID, float3 vel);
+    /// Set quaternion of a owner
+    void SetOwnerOriQ(bodyID_t ownerID, float4 oriQ);
 
     /// Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial location
     /// means the location of the clumps' CoM coordinates in the global frame.
@@ -211,16 +219,20 @@ class DEMSolver {
 
     /// Mark all entities in this family to be fixed
     void SetFamilyFixed(unsigned int ID);
-    ///
+    /// Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this
+    /// prescription completely dictates this family's motions.
     void SetFamilyPrescribedLinVel(unsigned int ID,
                                    const std::string& velX,
                                    const std::string& velY,
-                                   const std::string& velZ);
-    ///
+                                   const std::string& velZ,
+                                   bool dictate = true);
+    /// Set the prescribed angular velocity to all entities in a family. If dictate is set to true, then this
+    /// prescription completely dictates this family's motions.
     void SetFamilyPrescribedAngVel(unsigned int ID,
                                    const std::string& velX,
                                    const std::string& velY,
-                                   const std::string& velZ);
+                                   const std::string& velZ,
+                                   bool dictate = true);
 
     /// Change all entities with family number ID_from to have a new number ID_to, when the condition defined by the
     /// string is satisfied by the entities in question. This should be called before initialization, and will be baked
@@ -695,6 +707,7 @@ class DEMTracker {
     float3 AngVel(size_t offset = 0) { return sys->GetOwnerAngVel(obj->ownerID + offset); }
     float3 Vel(size_t offset = 0) { return sys->GetOwnerVelocity(obj->ownerID + offset); }
     float4 OriQ(size_t offset = 0) { return sys->GetOwnerOriQ(obj->ownerID + offset); }
+    // Methods to set motions to this owner
 };
 
 }  // namespace sgps

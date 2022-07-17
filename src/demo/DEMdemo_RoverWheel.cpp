@@ -40,7 +40,7 @@ int main() {
     auto wheel_template = DEM_sim.LoadClumpType(wheel_mass, make_float3(wheel_IXX, wheel_IXX, wheel_IZZ),
                                                 "./data/clumps/ViperWheelSimple.csv", mat_type_wheel);
     // The file contains no wheel particles size info, so let's manually set them
-    wheel_template->radii = std::vector<float>(wheel_template->nComp, 0.02);
+    wheel_template->radii = std::vector<float>(wheel_template->nComp, 0.01);
 
     // Then the ground particle template
     DEMClumpTemplate ellipsoid_template;
@@ -50,9 +50,9 @@ int main() {
     float3 MOI = make_float3(1. / 5. * mass * (1 * 1 + 2 * 2), 1. / 5. * mass * (1 * 1 + 2 * 2),
                              1. / 5. * mass * (1 * 1 + 1 * 1));
     // Scale the template we just created
-    float scaling = 0.01;
-    ellipsoid_template.mass *= scaling * scaling * scaling;
-    ellipsoid_template.MOI *= scaling * scaling * scaling * scaling * scaling;
+    double scaling = 0.01;
+    ellipsoid_template.mass = mass * scaling * scaling * scaling;
+    ellipsoid_template.MOI = MOI * scaling * scaling * scaling * scaling * scaling;
     std::for_each(ellipsoid_template.radii.begin(), ellipsoid_template.radii.end(),
                   [scaling](float& r) { r *= scaling; });
     std::for_each(ellipsoid_template.relPos.begin(), ellipsoid_template.relPos.end(),
@@ -62,17 +62,26 @@ int main() {
     auto ground_particle_template = DEM_sim.LoadClumpType(ellipsoid_template);
 
     // Instantiate this wheel
-    auto wheel = DEM_sim.AddClumps(wheel_template, make_float3(0, 0, 0.35));
+    auto wheel = DEM_sim.AddClumps(wheel_template, make_float3(-1.2, 0, 0.4));
     // Let's `flip' the wheel's initial position so... yeah, it's like how wheel operates normally
     wheel->SetOriQ(make_float4(0.7071, 0.7071, 0, 0));
+    // Give the wheel a family number so we can potentially add prescription
+    wheel->SetFamily(10);
+    // Note that the added constant ang vel is wrt the wheel's own coord sys, therefore it should be on the z axis: in
+    // line with the orientation at which the wheel is loaded into the simulation system.
+    DEM_sim.SetFamilyPrescribedAngVel(10, "0", "0", "-2.0", false);
+
     // Sample and add ground particles
-    float3 sample_center = make_float3(0, 0, -0.35);
-    float sample_halfheight = 0.35;
-    float sample_halfwidth = 0.7;
+    float3 sample_center = make_float3(0, 0, -0.3);
+    float sample_halfheight = 0.4;
+    float sample_halfwidth_x = 1.45;
+    float sample_halfwidth_y = 0.725;
     auto ground_particles_xyz =
-        DEMBoxGridSampler(sample_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight),
+        DEMBoxGridSampler(sample_center, make_float3(sample_halfwidth_x, sample_halfwidth_y, sample_halfheight),
                           scaling * std::cbrt(2.0) * 2.1, scaling * std::cbrt(2.0) * 2.1, scaling * 2 * 2.1);
     auto ground_particles = DEM_sim.AddClumps(ground_particle_template, ground_particles_xyz);
+    // Give ground particles a small initial velocity so they `collapse' at the start of the simulation
+    ground_particles->SetVel(make_float3(0.002, 0, 0));
 
     // Make ready for simulation
     float step_size = 5e-6;
@@ -84,15 +93,44 @@ int main() {
     // DEM_sim.SetExpandFactor(1e-3);
     DEM_sim.SuggestExpandFactor(2.);
     DEM_sim.SuggestExpandSafetyParam(1.2);
+    DEM_sim.InstructBinSize(scaling / 1.5);
     DEM_sim.Initialize();
+
+    float time_end = 20.0;
+    unsigned int fps = 20;
+    unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
     path out_dir = current_path();
     out_dir += "/DEMdemo_RoverWheel";
     create_directory(out_dir);
-    int currframe = 0;
-    char filename[100];
-    sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-    DEM_sim.WriteClumpFile(std::string(filename));
+    unsigned int currframe = 0;
+    unsigned int curr_step = 0;
+    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
+    for (double t = 0; t < (double)time_end; t += step_size, curr_step++) {
+        if (curr_step % out_steps == 0) {
+            std::cout << "Frame: " << currframe << std::endl;
+            DEM_sim.ShowThreadCollaborationStats();
+            char filename[100];
+            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
+            DEM_sim.WriteClumpFile(std::string(filename));
+            currframe++;
+        }
+
+        DEM_sim.DoDynamics(step_size);
+        // We can query info out of this drum, since it is tracked
+        // float3 drum_pos = Drum_tracker->Pos();
+        // float3 drum_angVel = Drum_tracker->AngVel();
+        // std::cout << "Position of the drum: " << drum_pos.x << ", " << drum_pos.y << ", " << drum_pos.z
+        //           << std::endl;
+        // std::cout << "Angular velocity of the drum: " << drum_angVel.x << ", " << drum_angVel.y << ", "
+        //           << drum_angVel.z << std::endl;
+    }
+    std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+    std::cout << (time_sec.count()) / time_end << " seconds (wall time) to finish 1 seconds' simulation" << std::endl;
+    DEM_sim.ShowThreadCollaborationStats();
+    DEM_sim.ResetWorkerThreads();
+    DEM_sim.ClearThreadCollaborationStats();
 
     std::cout << "DEMdemo_RoverWheel exiting..." << std::endl;
     // TODO: add end-game report APIs

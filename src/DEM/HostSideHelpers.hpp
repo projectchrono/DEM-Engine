@@ -221,22 +221,47 @@ inline void hostIDPacker(T1& ID,
 
 // From a voxelID to (usually double-precision) xyz coordinate
 template <typename T1, typename T2, typename T3>
-inline void hostVoxelID2Position(T1& X,
-                                 T1& Y,
-                                 T1& Z,
-                                 const T2& ID,
-                                 const T3& subPosX,
-                                 const T3& subPosY,
-                                 const T3& subPosZ,
-                                 const unsigned char& nvXp2,
-                                 const unsigned char& nvYp2,
-                                 const T1& voxelSize,
-                                 const T1& l) {
+inline void hostVoxelIDToPosition(T1& X,
+                                  T1& Y,
+                                  T1& Z,
+                                  const T2& ID,
+                                  const T3& subPosX,
+                                  const T3& subPosY,
+                                  const T3& subPosZ,
+                                  const unsigned char& nvXp2,
+                                  const unsigned char& nvYp2,
+                                  const T1& voxelSize,
+                                  const T1& l) {
     T2 voxelIDX, voxelIDY, voxelIDZ;
     hostIDChopper<T2, T2>(voxelIDX, voxelIDY, voxelIDZ, ID, nvXp2, nvYp2);
     X = (T1)voxelIDX * voxelSize + (T1)subPosX * l;
     Y = (T1)voxelIDY * voxelSize + (T1)subPosY * l;
     Z = (T1)voxelIDZ * voxelSize + (T1)subPosZ * l;
+}
+
+// From xyz coordinate (usually double-precision) to voxelID
+template <typename T1, typename T2, typename T3>
+inline void hostPositionToVoxelID(T1& ID,
+                                  T2& subPosX,
+                                  T2& subPosY,
+                                  T2& subPosZ,
+                                  const T3& X,
+                                  const T3& Y,
+                                  const T3& Z,
+                                  const unsigned char& nvXp2,
+                                  const unsigned char& nvYp2,
+                                  const T3& voxelSize,
+                                  const T3& l) {
+    voxelID_t voxelNumX = X / voxelSize;
+    voxelID_t voxelNumY = Y / voxelSize;
+    voxelID_t voxelNumZ = Z / voxelSize;
+    subPosX = (X - (T3)voxelNumX * voxelSize) / l;
+    subPosY = (Y - (T3)voxelNumY * voxelSize) / l;
+    subPosZ = (Z - (T3)voxelNumZ * voxelSize) / l;
+
+    ID = voxelNumX;
+    ID += voxelNumY << nvXp2;
+    ID += voxelNumZ << (nvXp2 + nvYp2);
 }
 
 template <typename T1>

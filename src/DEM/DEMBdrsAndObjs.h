@@ -201,6 +201,9 @@ class DEMClumpBatch {
     void SetTypes(const std::shared_ptr<DEMClumpTemplate>& input) {
         SetTypes(std::vector<std::shared_ptr<DEMClumpTemplate>>(nClumps, input));
     }
+    void SetType(const std::shared_ptr<DEMClumpTemplate>& input) {
+        SetTypes(std::vector<std::shared_ptr<DEMClumpTemplate>>(nClumps, input));
+    }
     void SetPos(const std::vector<float3>& input) {
         assertLength(input.size(), "SetPos");
         xyz = input;
@@ -230,6 +233,7 @@ class DEMClumpBatch {
         families_isSpecified = true;
     }
     void SetFamilies(unsigned int input) { SetFamilies(std::vector<unsigned int>(nClumps, input)); }
+    void SetFamily(unsigned int input) { SetFamilies(std::vector<unsigned int>(nClumps, input)); }
 };
 
 // DEM mesh object

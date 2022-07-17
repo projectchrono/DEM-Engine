@@ -381,6 +381,7 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
         for (size_t i = 0; i < simParams->nOwnerClumps; i++) {
             auto type_of_this_clump = input_clump_types.at(i);
             inertiaPropOffsets.at(i) = type_of_this_clump;
+            // this_CoM_coord is already offsetted wrt LBF here, so we can use it directly at hostPositionToVoxelID
             auto this_CoM_coord = input_clump_xyz.at(i) - LBF;
             // std::cout << "CoM position: " << this_CoM_coord.x << ", " << this_CoM_coord.y << ", " << this_CoM_coord.z
             // << std::endl;
@@ -406,16 +407,9 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
                 // std::cout << "Sphere Rel Pos offset: " << this_clump_no_sp_loc_offsets.at(j) << std::endl;
             }
 
-            voxelID_t voxelNumX = (double)this_CoM_coord.x / simParams->voxelSize;
-            voxelID_t voxelNumY = (double)this_CoM_coord.y / simParams->voxelSize;
-            voxelID_t voxelNumZ = (double)this_CoM_coord.z / simParams->voxelSize;
-            locX.at(i) = ((double)this_CoM_coord.x - (double)voxelNumX * simParams->voxelSize) / simParams->l;
-            locY.at(i) = ((double)this_CoM_coord.y - (double)voxelNumY * simParams->voxelSize) / simParams->l;
-            locZ.at(i) = ((double)this_CoM_coord.z - (double)voxelNumZ * simParams->voxelSize) / simParams->l;
-
-            voxelID.at(i) += voxelNumX;
-            voxelID.at(i) += voxelNumY << simParams->nvXp2;
-            voxelID.at(i) += voxelNumZ << (simParams->nvXp2 + simParams->nvYp2);
+            hostPositionToVoxelID<voxelID_t, subVoxelPos_t, double>(
+                voxelID.at(i), locX.at(i), locY.at(i), locZ.at(i), (double)this_CoM_coord.x, (double)this_CoM_coord.y,
+                (double)this_CoM_coord.z, simParams->nvXp2, simParams->nvYp2, simParams->voxelSize, simParams->l);
 
             // Set initial oriQ
             auto oriQ_of_this_clump = input_clump_oriQ.at(i);
@@ -517,9 +511,9 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
         subVoxelPos_t subVoxX = locX.at(this_owner);
         subVoxelPos_t subVoxY = locY.at(this_owner);
         subVoxelPos_t subVoxZ = locZ.at(this_owner);
-        hostVoxelID2Position<float, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ,
-                                                              simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
-                                                              simParams->l);
+        hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ,
+                                                               simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
+                                                               simParams->l);
         CoM.x = X + simParams->LBFX;
         CoM.y = Y + simParams->LBFY;
         CoM.z = Z + simParams->LBFZ;
@@ -607,9 +601,9 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
         subVoxelPos_t subVoxX = locX.at(this_owner);
         subVoxelPos_t subVoxY = locY.at(this_owner);
         subVoxelPos_t subVoxZ = locZ.at(this_owner);
-        hostVoxelID2Position<float, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ,
-                                                              simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
-                                                              simParams->l);
+        hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ,
+                                                               simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
+                                                               simParams->l);
         CoM.x = X + simParams->LBFX;
         CoM.y = Y + simParams->LBFY;
         CoM.z = Z + simParams->LBFZ;
@@ -1158,12 +1152,42 @@ float3 DEMDynamicThread::getOwnerPos(bodyID_t ownerID) const {
     subVoxelPos_t subVoxX = locX.at(ownerID);
     subVoxelPos_t subVoxY = locY.at(ownerID);
     subVoxelPos_t subVoxZ = locZ.at(ownerID);
-    hostVoxelID2Position<double, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ, simParams->nvXp2,
-                                                           simParams->nvYp2, simParams->voxelSize, simParams->l);
+    hostVoxelIDToPosition<double, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ, simParams->nvXp2,
+                                                            simParams->nvYp2, simParams->voxelSize, simParams->l);
     pos.x = X + simParams->LBFX;
     pos.y = Y + simParams->LBFY;
     pos.z = Z + simParams->LBFZ;
     return pos;
+}
+
+void DEMDynamicThread::setOwnerAngVel(bodyID_t ownerID, float3 angVel) {
+    omgBarX.at(ownerID) = angVel.x;
+    omgBarY.at(ownerID) = angVel.y;
+    omgBarZ.at(ownerID) = angVel.z;
+}
+
+void DEMDynamicThread::setOwnerPos(bodyID_t ownerID, float3 pos) {
+    // Convert to relative pos wrt LBF point first
+    double X, Y, Z;
+    X = pos.x - simParams->LBFX;
+    Y = pos.y - simParams->LBFY;
+    Z = pos.z - simParams->LBFZ;
+    hostPositionToVoxelID<voxelID_t, subVoxelPos_t, double>(voxelID.at(ownerID), locX.at(ownerID), locY.at(ownerID),
+                                                            locZ.at(ownerID), X, Y, Z, simParams->nvXp2,
+                                                            simParams->nvYp2, simParams->voxelSize, simParams->l);
+}
+
+void DEMDynamicThread::setOwnerOriQ(bodyID_t ownerID, float4 oriQ) {
+    oriQ0.at(ownerID) = oriQ.x;
+    oriQ1.at(ownerID) = oriQ.y;
+    oriQ2.at(ownerID) = oriQ.z;
+    oriQ3.at(ownerID) = oriQ.w;
+}
+
+void DEMDynamicThread::setOwnerVel(bodyID_t ownerID, float3 vel) {
+    vX.at(ownerID) = vel.x;
+    vY.at(ownerID) = vel.y;
+    vZ.at(ownerID) = vel.z;
 }
 
 }  // namespace sgps
