@@ -636,6 +636,7 @@ void DEMSolver::ShowThreadCollaborationStats() {
                     (dTkT_InteractionManager->schedulingStats.nTimesDynamicHeldBack).load());
     SGPS_DEM_PRINTF("Number of times kinematic held back: %u",
                     (dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack).load());
+    SGPS_DEM_PRINTF("\n-----------------------------\n");
 }
 
 void DEMSolver::ClearThreadCollaborationStats() {

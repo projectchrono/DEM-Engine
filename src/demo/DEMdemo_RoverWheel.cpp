@@ -50,7 +50,7 @@ int main() {
     float3 MOI = make_float3(1. / 5. * mass * (1 * 1 + 2 * 2), 1. / 5. * mass * (1 * 1 + 2 * 2),
                              1. / 5. * mass * (1 * 1 + 1 * 1));
     // Scale the template we just created
-    double scaling = 0.01;
+    double scaling = 0.005;
     ellipsoid_template.mass = mass * scaling * scaling * scaling;
     ellipsoid_template.MOI = MOI * scaling * scaling * scaling * scaling * scaling;
     std::for_each(ellipsoid_template.radii.begin(), ellipsoid_template.radii.end(),
@@ -89,14 +89,14 @@ int main() {
     DEM_sim.SetTimeStepSize(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEM_sim.SetCDUpdateFreq(40);
+    DEM_sim.SetCDUpdateFreq(30);
     // DEM_sim.SetExpandFactor(1e-3);
-    DEM_sim.SuggestExpandFactor(2.);
+    DEM_sim.SuggestExpandFactor(2.5);
     DEM_sim.SuggestExpandSafetyParam(1.2);
     DEM_sim.InstructBinSize(scaling / 1.5);
     DEM_sim.Initialize();
 
-    float time_end = 20.0;
+    float time_end = 10.0;
     unsigned int fps = 20;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
