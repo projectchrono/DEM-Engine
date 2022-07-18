@@ -12,6 +12,8 @@
 #include <vector>
 #include <algorithm>
 #include <regex>
+#include <fstream>
+#include <filesystem>
 #include <nvmath/helper_math.cuh>
 
 #include <DEM/DEMDefines.h>
@@ -365,6 +367,14 @@ inline std::string to_string_with_precision(const double a_value, const unsigned
 template <typename T1>
 inline void deallocate_array(std::vector<T1>& arr) {
     std::vector<T1>().swap(arr);
+}
+
+// Load content from a file to a string
+inline std::string read_file_to_string(const std::filesystem::path& sourcefile) {
+    std::ifstream t(sourcefile);
+    std::stringstream buffer;
+    buffer << t.rdbuf();
+    return buffer.str();
 }
 
 }  // namespace sgps

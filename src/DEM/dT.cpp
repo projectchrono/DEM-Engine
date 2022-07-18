@@ -549,7 +549,7 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
     posZ.resize(num_output_spheres);
     spRadii.resize(num_output_spheres);
     // TODO: Set {} to the list of column names
-    pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, {}, posX, posY, posZ, spRadii);
+    pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, {"x", "y", "z", "r"}, posX, posY, posZ, spRadii);
     // Write family numbers
     if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
         families.resize(num_output_spheres);

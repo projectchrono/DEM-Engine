@@ -712,6 +712,9 @@ class DEMTracker {
     void SetAngVel(float3 angVel, size_t offset = 0) { sys->SetOwnerAngVel(obj->ownerID + offset, angVel); }
     void SetVel(float3 vel, size_t offset = 0) { sys->SetOwnerVelocity(obj->ownerID + offset, vel); }
     void SetOriQ(float4 oriQ, size_t offset = 0) { sys->SetOwnerOriQ(obj->ownerID + offset, oriQ); }
+    /// Add an extra force to the tracked body, for the next time step. Note if the user intends to add a persistent
+    /// external force, then using family prescription is the better method.
+    void AddForce(float3 force, size_t offset = 0);
 };
 
 }  // namespace sgps
