@@ -307,6 +307,12 @@ class DEMMeshConnected {
     /// Get the number of triangles already added to this mesh
     size_t GetNumTriangles() const { return nTri; }
 
+    /// Access the n-th triangle in mesh
+    DEMTriangle GetTriangle(size_t index) const {
+        return DEMTriangle(vertices[face_v_indices[index].x], vertices[face_v_indices[index].y],
+                           vertices[face_v_indices[index].z]);
+    }
+
     /// Clear all data
     void Clear() {
         this->vertices.clear();

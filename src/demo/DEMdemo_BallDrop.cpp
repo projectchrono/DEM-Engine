@@ -20,7 +20,7 @@ int main() {
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
     DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::ABSV);
 
-    auto projectile = DEM_sim.AddWavefrontMesh("./data/mesh/sphere.obj");
+    auto projectile = DEM_sim.AddWavefrontMeshObject("./data/mesh/sphere.obj");
     std::cout << "Total num of triangles: " << projectile->GetNumTriangles() << std::endl;
 
     std::cout << "DEMdemo_BallDrop exiting..." << std::endl;

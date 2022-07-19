@@ -391,12 +391,21 @@ struct SolverFlags {
 };
 
 struct DEMMaterial {
-    float rho = -1.f;  // Density
     float E = 1e8;     // Young's modulus
     float nu = 0.3;    // Poission's ratio
     float CoR = 0.5;   // Coeff of Restitution
     float mu = 0.5;    // Static friction coeff
     float Crr = 0.01;  // Rolling resistance coeff
+};
+
+class DEMTriangle {
+  public:
+    DEMTriangle(float3 pnt1, float3 pnt2, float3 pnt3) : p1(pnt1), p2(pnt2), p3(pnt3) {}
+    DEMTriangle() {}
+    ~DEMTriangle() {}
+    float3 p1;
+    float3 p2;
+    float3 p3;
 };
 
 // A struct that defines a `clump' (one of the core concepts of this solver). A clump is typically small which consists

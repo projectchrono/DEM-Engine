@@ -152,18 +152,11 @@ class DEMSolver {
                                                             const std::shared_ptr<DEMMaterial>& material);
 
     /// Load materials properties (Young's modulus, Poisson's ratio, Coeff of Restitution...) into
-    /// the API-level cache. Return the ptr of the material type just loaded. If rho is not given then later
-    /// calculating particle mass from rho is not allowed (instead it has to be explicitly given).
+    /// the API-level cache. Return the ptr of the material type just loaded.
     std::shared_ptr<DEMMaterial> LoadMaterialType(DEMMaterial& mat);
-    std::shared_ptr<DEMMaterial> LoadMaterialType(float E, float nu, float CoR, float mu, float Crr, float rho);
-    std::shared_ptr<DEMMaterial> LoadMaterialType(float E, float nu, float CoR, float rho) {
-        return LoadMaterialType(E, nu, CoR, 0.5, 0.01, rho);
-    }
-    std::shared_ptr<DEMMaterial> LoadMaterialType(float E, float nu, float CoR, float mu, float Crr) {
-        return LoadMaterialType(E, nu, CoR, mu, Crr, -1.f);
-    }
+    std::shared_ptr<DEMMaterial> LoadMaterialType(float E, float nu, float CoR, float mu, float Crr);
     std::shared_ptr<DEMMaterial> LoadMaterialType(float E, float nu, float CoR) {
-        return LoadMaterialType(E, nu, CoR, 0.5, 0.01, -1.f);
+        return LoadMaterialType(E, nu, CoR, 0.5, 0.0);
     }
 
     /// Get position of a owner
@@ -197,10 +190,10 @@ class DEMSolver {
     }
 
     /// Load a mesh-represented object
-    std::shared_ptr<DEMMeshConnected> AddWavefrontMesh(const std::string& filename,
-                                                       bool load_normals = true,
-                                                       bool load_uv = false);
-    std::shared_ptr<DEMMeshConnected> AddWavefrontMesh(DEMMeshConnected& mesh);
+    std::shared_ptr<DEMMeshConnected> AddWavefrontMeshObject(const std::string& filename,
+                                                             bool load_normals = true,
+                                                             bool load_uv = false);
+    std::shared_ptr<DEMMeshConnected> AddWavefrontMeshObject(DEMMeshConnected& mesh);
 
     /// Create a DEMTracker to allow direct control/modification/query to this external object
     std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMExternObj>& obj);
@@ -488,9 +481,15 @@ class DEMSolver {
     ////////////////////////////////////////////////////////////////////////////////
     // Cached user's direct (raw) inputs concerning the actual physics objects
     // presented in the simulation, which need to be processed before shipment,
-    // at initialization time. These items can and should be cleared before users
-    // add entites from the simulation on-the-fly, and be loaded with new entities.
+    // at initialization time. These items can be cleared before users add entites
+    // from the simulation on-the-fly, and be loaded with new entities; but this
+    // is the responsibility of the user. If the user does not clear these cached
+    // data and then re-initialize using the `Overwrite' style, then it is like
+    // starting the original simulation over. If the user clear these, then add
+    // some new data, and then re-initialize using the `Add' style, it is like adding
+    // more entities to the existing simulation system.
     ////////////////////////////////////////////////////////////////////////////////
+    //// TODO: These re-initialization flavors haven't been added
 
     // This is the cached material information.
     // It will be massaged into the managed memory upon Initialize().
@@ -533,7 +532,7 @@ class DEMSolver {
 
     ////////////////////////////////////////////////////////////////////////////////
     // Flattened and sometimes processed user inputs, ready to be transferred to
-    // worker threads
+    // worker threads. Will be automatically cleared after initialization.
     ////////////////////////////////////////////////////////////////////////////////
 
     std::vector<notStupidBool_t> m_family_mask_matrix;
@@ -546,8 +545,12 @@ class DEMSolver {
 
     // Unlike clumps, external objects do not have _types (each is its own type)
     std::vector<float3> m_input_ext_obj_xyz;
-    // std::vector<float4> m_input_ext_obj_rot;
+    std::vector<float4> m_input_ext_obj_rot;
     std::vector<unsigned int> m_input_ext_obj_family;
+    // Mesh is also flattened before sending to kT and dT
+    std::vector<float3> m_input_mesh_obj_xyz;
+    std::vector<float4> m_input_mesh_obj_rot;
+    std::vector<unsigned int> m_input_mesh_obj_family;
 
     // Processed unique family prescription info
     std::vector<familyPrescription_t> m_unique_family_prescription;
@@ -578,6 +581,13 @@ class DEMSolver {
     // Component object normal direction, defaulting to inward. If this object is topologically a plane then this param
     // is meaningless, since its normal is determined by its rotation.
     std::vector<objNormal_t> m_anal_normals;
+
+    // These extra mesh facets' owners' ID will be appended to analytical entities'
+    std::vector<unsigned int> m_mesh_facet_owner;
+    // Material types of these mesh facets
+    std::vector<materialsOffset_t> m_mesh_facet_materials;
+    // Material types of these mesh facets
+    std::vector<DEMTriangle> m_mesh_facets;
 
     // Clump templates will be flatten and transferred into kernels upon Initialize()
     std::vector<float> m_template_mass;
@@ -658,8 +668,10 @@ class DEMSolver {
     size_t computeDTCycles(double thisCallDuration);
     /// Prepare the material/contact proxy matrix force computation kernels
     void figureOutMaterialProxies();
-    /// Figure out info about external objects/clump templates and whether they can be jitified
+    /// Figure out info about external objects and how they should be jitified
     void preprocessAnalyticalObjs();
+    /// Figure out info about external meshed objects
+    void preprocessTriangleObjs();
     /// Report simulation stats at initialization
     inline void reportInitStats() const;
     /// Based on user input, prepare family_mask_matrix (family contact map matrix)

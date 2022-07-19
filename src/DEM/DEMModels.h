@@ -24,7 +24,7 @@ inline std::string DEM_HERTZIAN_FORCE_MODEL() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "ForceCalcStrategy.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SGPS_DEM_ERROR("The force model file %s cannot be loaded for some reason.", sourcefile.c_str());
+        SGPS_DEM_ERROR("The force model file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -62,8 +62,7 @@ inline std::string DEM_CLUMP_COMPONENT_ACQUISITION_ALL_JITIFIED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "ClumpCompAcqStratAllJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SGPS_DEM_ERROR("The clump component jitification strategy file %s cannot be loaded for some reason.",
-                       sourcefile.c_str());
+        SGPS_DEM_ERROR("The clump component jitification strategy file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -72,8 +71,7 @@ inline std::string DEM_CLUMP_COMPONENT_ACQUISITION_PARTIALLY_JITIFIED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "ClumpCompAcqStratPartialJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SGPS_DEM_ERROR("The clump component jitification strategy file %s cannot be loaded for some reason.",
-                       sourcefile.c_str());
+        SGPS_DEM_ERROR("The clump component jitification strategy file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }

@@ -77,8 +77,8 @@ void DEMSolver::generateJITResources() {
     // Figure out info about external objects/clump templates and whether they can be jitified
     preprocessAnalyticalObjs();
 
-    // How many triangle tempaltes are there?
-    // preprocessTriangleObjs();
+    // Count how many triangle tempaltes are there and flatten them
+    preprocessTriangleObjs();
 
     // Process the loaded materials. The pre-process of external objects and clumps could add more materials, so this
     // call need to go after those pre-process ones.
@@ -246,7 +246,10 @@ void DEMSolver::jitifyKernels() {
 }
 
 void DEMSolver::processUserInputs() {
-    // No need to initialize nOwnerClumps, as this function may be called on-the-fly
+    // The number of loaded clumps is calculated here, not in generateJITResources like meshes and analytical objects,
+    // because clumps are not flattened before transferring to dT, so I just throw it here, somewhere eeearly in the
+    // initialization process. Good idea? Also note that there is no need to initialize nOwnerClumps = 0, as
+    // re-initialization may be called in mid-simulation using an `Add' flavor.
     for (const auto& a_batch : cached_input_clump_batches) {
         nOwnerClumps += a_batch->GetNumClumps();
         for (size_t i = 0; i < a_batch->GetNumClumps(); i++) {
@@ -307,6 +310,10 @@ inline void DEMSolver::reportInitStats() const {
     SGPS_DEM_INFO("Simulation world X range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_boxX);
     SGPS_DEM_INFO("Simulation world Y range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_boxY);
     SGPS_DEM_INFO("Simulation world Z range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_boxZ);
+    SGPS_DEM_INFO("User-specified dimensions are not larger than the above simulation world.");
+    SGPS_DEM_INFO("User-specified X-dimension range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_user_boxSize.x);
+    SGPS_DEM_INFO("User-specified Y-dimension range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_user_boxSize.y);
+    SGPS_DEM_INFO("User-specified Z-dimension range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_user_boxSize.z);
     SGPS_DEM_INFO("The length unit in this simulation is: %.17g", l);
     SGPS_DEM_INFO("The edge length of a voxel: %.17g", m_voxelSize);
 
@@ -335,16 +342,16 @@ inline void DEMSolver::reportInitStats() const {
 }
 
 void DEMSolver::preprocessAnalyticalObjs() {
-    // How many analytical entities are there? (those entities are always jitified)
-    nExtObj = cached_extern_objs.size();
+    // nExtObj can increase in mid-simulation if the user re-initialize using an `Add' flavor
+    nExtObj += cached_extern_objs.size();
     unsigned int thisExtObj = 0;
-    for (auto ext_obj : cached_extern_objs) {
+    for (const auto& ext_obj : cached_extern_objs) {
         // Load mass and MOI properties into arrays waiting to be transfered to kTdT. Note this must be done after user
         // loads all clump templates, as ext obj's mass info is `appended' to clump mass arrays
         m_template_mass.push_back(ext_obj->mass);
         m_template_moi.push_back(ext_obj->MOI);
 
-        // TODO: If CoM is not all-0, all components should be offsetted
+        //// TODO: If CoM is not all-0, all components should be offsetted
         // float3 CoM = ext_obj->CoM;
         // float4 CoM_oriQ = ext_obj->CoM_oriQ;
 
@@ -353,8 +360,8 @@ void DEMSolver::preprocessAnalyticalObjs() {
         auto comp_params = ext_obj->entity_params;
         auto comp_mat = ext_obj->materials;
         m_input_ext_obj_xyz.push_back(ext_obj->init_pos);
+        //// TODO: init_oriQ?????
         m_input_ext_obj_family.push_back(ext_obj->family_code);
-        // TODO: allow orientation input for ext obj
         for (unsigned int i = 0; i < ext_obj->types.size(); i++) {
             auto param = comp_params.at(this_num_anal_ent);
             this_num_anal_ent++;
@@ -373,6 +380,45 @@ void DEMSolver::preprocessAnalyticalObjs() {
         }
         nAnalGM += this_num_anal_ent;
         thisExtObj++;
+    }
+}
+
+void DEMSolver::preprocessTriangleObjs() {
+    nTriEntities += cached_mesh_objs.size();
+    unsigned int thisMeshObj = 0;
+    for (const auto& mesh_obj : cached_mesh_objs) {
+        //// TODO: If CoM is not all-0, all components should be offsetted
+        // float3 CoM = ext_obj->CoM;
+        // float4 CoM_oriQ = ext_obj->CoM_oriQ;
+
+        m_input_mesh_obj_xyz.push_back(mesh_obj->init_pos);
+        m_input_mesh_obj_rot.push_back(mesh_obj->init_oriQ);
+        m_input_mesh_obj_family.push_back(mesh_obj->family_code);
+        m_mesh_facet_owner.insert(m_mesh_facet_owner.end(), mesh_obj->GetNumTriangles(), thisMeshObj);
+        for (unsigned int i = 0; i < mesh_obj->GetNumTriangles(); i++) {
+            m_mesh_facet_materials.push_back(
+                stash_material_in_templates(m_loaded_materials, mesh_obj->materials.at(i)));
+            m_mesh_facets.push_back(mesh_obj->GetTriangle(i));
+            // // If we wish to correct surface orientation based on given vertex normals, rather than using RHR...
+            // if (use_mesh_normals) {
+            //     int normal_i = mesh->m_face_n_indices.at(i).x();  // normals at each vertex of this triangle
+            //     ChVector<double> normal = mesh->m_normals.at(normal_i);
+
+            //     // Generate normal using RHR from nodes 1, 2, and 3
+            //     ChVector<double> AB = tri.p2 - tri.p1;
+            //     ChVector<double> AC = tri.p3 - tri.p1;
+            //     ChVector<double> cross;
+            //     cross.Cross(AB, AC);
+
+            //     // If the normal created by a RHR traversal is not correct, switch two vertices
+            //     if (cross.Dot(normal) < 0) {
+            //         std::swap(pMeshSoup->node2[tri_i], pMeshSoup->node3[tri_i]);
+            //     }
+            // }
+        }
+
+        nTriGM += mesh_obj->GetNumTriangles();
+        thisMeshObj++;
     }
 }
 
@@ -521,21 +567,29 @@ void DEMSolver::figureOutOrigin() {
 }
 
 void DEMSolver::addWorldBoundingBox() {
-    // Now, add the bounding box for the simulation `world' if instructed
+    // Now, add the bounding box for the simulation `world' if instructed.
+    // Note the positions to add these planes are determined by the user-wanted box sizes, not m_boxXYZ which is the max
+    // possible box size.
     if (m_user_add_bounding_box == "all" || m_user_add_bounding_box == "top_open") {
         auto box = this->AddExternalObject();
-        box->AddPlane(host_make_float3(m_boxLBF.x + m_boxX / 2., m_boxLBF.y + m_boxY / 2., m_boxLBF.z),
-                      host_make_float3(0, 0, 1), m_bounding_box_material);
-        box->AddPlane(host_make_float3(m_boxLBF.x, m_boxLBF.y + m_boxY / 2., m_boxLBF.z + m_boxZ / 2.),
-                      host_make_float3(1, 0, 0), m_bounding_box_material);
-        box->AddPlane(host_make_float3(m_boxLBF.x + m_boxX, m_boxLBF.y + m_boxY / 2., m_boxLBF.z + m_boxZ / 2.),
+        box->AddPlane(
+            host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y + m_user_boxSize.y / 2., m_boxLBF.z),
+            host_make_float3(0, 0, 1), m_bounding_box_material);
+        box->AddPlane(
+            host_make_float3(m_boxLBF.x, m_boxLBF.y + m_user_boxSize.y / 2., m_boxLBF.z + m_user_boxSize.z / 2.),
+            host_make_float3(1, 0, 0), m_bounding_box_material);
+        box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x, m_boxLBF.y + m_user_boxSize.y / 2.,
+                                       m_boxLBF.z + m_user_boxSize.z / 2.),
                       host_make_float3(-1, 0, 0), m_bounding_box_material);
-        box->AddPlane(host_make_float3(m_boxLBF.x + m_boxX / 2., m_boxLBF.y, m_boxLBF.z + m_boxZ / 2.),
-                      host_make_float3(0, 1, 0), m_bounding_box_material);
-        box->AddPlane(host_make_float3(m_boxLBF.x + m_boxX / 2., m_boxLBF.y + m_boxY, m_boxLBF.z + m_boxZ / 2.),
+        box->AddPlane(
+            host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y, m_boxLBF.z + m_user_boxSize.z / 2.),
+            host_make_float3(0, 1, 0), m_bounding_box_material);
+        box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y + m_user_boxSize.y,
+                                       m_boxLBF.z + m_user_boxSize.z / 2.),
                       host_make_float3(0, -1, 0), m_bounding_box_material);
         if (m_user_add_bounding_box == "all") {
-            box->AddPlane(host_make_float3(m_boxLBF.x + m_boxX / 2., m_boxLBF.y + m_boxY / 2., m_boxLBF.z + m_boxZ),
+            box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y + m_user_boxSize.y / 2.,
+                                           m_boxLBF.z + m_user_boxSize.z),
                           host_make_float3(0, 0, -1), m_bounding_box_material);
         }
     }
@@ -604,6 +658,7 @@ void DEMSolver::packDataPointers() {
 }
 
 void DEMSolver::validateUserInputs() {
+    //// TODO: Remove this constraint
     if (m_loaded_materials.size() == 0) {
         SGPS_DEM_ERROR(
             "Before initializing the system, at least one material type should be loaded via LoadMaterialType.");
@@ -651,9 +706,6 @@ size_t DEMSolver::computeDTCycles(double thisCallDuration) {
 
 // Test if 2 types of DEM materials are the same
 inline bool is_DEM_material_same(const std::shared_ptr<DEMMaterial>& a, const std::shared_ptr<DEMMaterial>& b) {
-    if (std::abs(a->rho - b->rho) > SGPS_DEM_TINY_FLOAT) {
-        return false;
-    }
     if (std::abs(a->E - b->E) > SGPS_DEM_TINY_FLOAT) {
         return false;
     }

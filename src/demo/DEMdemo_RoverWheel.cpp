@@ -21,8 +21,8 @@ int main() {
     DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::ABSV);
 
     // Define materials
-    auto mat_type_terrain = DEM_sim.LoadMaterialType(2e9, 0.3, 0.6);
-    auto mat_type_wheel = DEM_sim.LoadMaterialType(1e9, 0.3, 0.5);
+    auto mat_type_terrain = DEM_sim.LoadMaterialType(2e9, 0.3, 0.6, 0.5, 0.01);
+    auto mat_type_wheel = DEM_sim.LoadMaterialType(1e9, 0.3, 0.5, 0.5, 0.01);
 
     // Define the simulation world
     double world_size = 1.5;

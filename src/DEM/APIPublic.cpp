@@ -249,9 +249,8 @@ std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterialType(DEMMaterial& mat) {
     return m_loaded_materials.back();
 }
 
-std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterialType(float E, float nu, float CoR, float mu, float Crr, float rho) {
+std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterialType(float E, float nu, float CoR, float mu, float Crr) {
     struct DEMMaterial a_material;
-    a_material.rho = rho;
     a_material.E = E;
     a_material.nu = nu;
     a_material.CoR = CoR;
@@ -434,9 +433,9 @@ std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(const std::vector<std::share
     return cached_input_clump_batches.back();
 }
 
-std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMesh(DEMMeshConnected& mesh) {
+std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(DEMMeshConnected& mesh) {
     if (mesh.GetNumTriangles() == 0) {
-        SGPS_DEM_WARNING("It seems that a mesh contains 0 triangle face.");
+        SGPS_DEM_WARNING("It seems that a mesh contains 0 triangle facet.");
     }
     mesh.load_order = nTimesTriObjLoad;
     nTimesTriObjLoad++;
@@ -445,15 +444,15 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMesh(DEMMeshConnected& 
     return cached_mesh_objs.back();
 }
 
-std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMesh(const std::string& filename,
-                                                              bool load_normals,
-                                                              bool load_uv) {
+std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
+                                                                    bool load_normals,
+                                                                    bool load_uv) {
     DEMMeshConnected mesh;
     bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
     if (!flag) {
         SGPS_DEM_ERROR("Failed to load in mesh file %s.", filename.c_str());
     }
-    return AddWavefrontMesh(mesh);
+    return AddWavefrontMeshObject(mesh);
 }
 
 std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMExternObj>& obj) {
@@ -543,6 +542,8 @@ void DEMSolver::Initialize() {
     // jitification
     ReleaseFlattenedArrays();
 
+    //// TODO: Give a warning if sys_initialized is true and the system is re-initialized: in that case, the user should
+    /// know what they are doing
     sys_initialized = true;
 }
 
