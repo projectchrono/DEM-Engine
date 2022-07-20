@@ -29,7 +29,7 @@ class DEMSolverStateDataDT {
   private:
     // The vector used by CUB or by anybody else that needs scratch space.
     // Please pay attention to the type the vector stores.
-    std::vector<scratch_t, ManagedAllocator<scratch_t>> threadScratchSpace;
+    std::vector<scratch_t, ManagedAllocator<scratch_t>> cubScratchSpace;
 
     // The vectors used by threads when they need temporary arrays (very typically, for storing arrays outputted by cub
     // scan or reduce operations).
@@ -67,10 +67,10 @@ class DEMSolverStateDataDT {
 
     // Return raw pointer to swath of device memory that is at least "sizeNeeded" large
     inline scratch_t* allocateScratchSpace(size_t sizeNeeded) {
-        if (threadScratchSpace.size() < sizeNeeded) {
-            threadScratchSpace.resize(sizeNeeded);
+        if (cubScratchSpace.size() < sizeNeeded) {
+            cubScratchSpace.resize(sizeNeeded);
         }
-        return threadScratchSpace.data();
+        return cubScratchSpace.data();
     }
 
     // TODO: Better way to write this???
@@ -121,7 +121,7 @@ class DEMSolverStateDataKT {
   private:
     // The vector used by CUB or by anybody else that needs scratch space.
     // Please pay attention to the type the vector stores.
-    std::vector<scratch_t, ManagedAllocator<scratch_t>> threadScratchSpace;
+    std::vector<scratch_t, ManagedAllocator<scratch_t>> cubScratchSpace;
 
     // The vectors used by threads when they need temporary arrays (very typically, for storing arrays outputted by cub
     // scan or reduce operations).
@@ -166,10 +166,10 @@ class DEMSolverStateDataKT {
 
     // Return raw pointer to swath of device memory that is at least "sizeNeeded" large
     inline scratch_t* allocateScratchSpace(size_t sizeNeeded) {
-        if (threadScratchSpace.size() < sizeNeeded) {
-            threadScratchSpace.resize(sizeNeeded);
+        if (cubScratchSpace.size() < sizeNeeded) {
+            cubScratchSpace.resize(sizeNeeded);
         }
-        return threadScratchSpace.data();
+        return cubScratchSpace.data();
     }
 
     // TODO: Better way to write this???

@@ -398,23 +398,25 @@ void DEMSolver::preprocessTriangleObjs() {
         for (unsigned int i = 0; i < mesh_obj->GetNumTriangles(); i++) {
             m_mesh_facet_materials.push_back(
                 stash_material_in_templates(m_loaded_materials, mesh_obj->materials.at(i)));
-            m_mesh_facets.push_back(mesh_obj->GetTriangle(i));
-            // // If we wish to correct surface orientation based on given vertex normals, rather than using RHR...
-            // if (use_mesh_normals) {
-            //     int normal_i = mesh->m_face_n_indices.at(i).x();  // normals at each vertex of this triangle
-            //     ChVector<double> normal = mesh->m_normals.at(normal_i);
+            DEMTriangle tri = mesh_obj->GetTriangle(i);
+            // If we wish to correct surface orientation based on given vertex normals, rather than using RHR...
+            if (mesh_obj->use_mesh_normals) {
+                int normal_i = mesh_obj->face_n_indices.at(i).x;  // normals at each vertex of this triangle
+                float3 normal = mesh_obj->normals.at(normal_i);
 
-            //     // Generate normal using RHR from nodes 1, 2, and 3
-            //     ChVector<double> AB = tri.p2 - tri.p1;
-            //     ChVector<double> AC = tri.p3 - tri.p1;
-            //     ChVector<double> cross;
-            //     cross.Cross(AB, AC);
+                // Generate normal using RHR from nodes 1, 2, and 3
+                float3 AB = tri.p2 - tri.p1;
+                float3 AC = tri.p3 - tri.p1;
+                float3 cross_product = cross(AB, AC);
 
-            //     // If the normal created by a RHR traversal is not correct, switch two vertices
-            //     if (cross.Dot(normal) < 0) {
-            //         std::swap(pMeshSoup->node2[tri_i], pMeshSoup->node3[tri_i]);
-            //     }
-            // }
+                // If the normal created by a RHR traversal is not correct, switch two vertices
+                if (dot(cross_product, normal) < 0) {
+                    float3 tmp = tri.p2;
+                    tri.p2 = tri.p3;
+                    tri.p3 = tmp;
+                }
+            }
+            m_mesh_facets.push_back(tri);
         }
 
         nTriGM += mesh_obj->GetNumTriangles();
@@ -640,12 +642,30 @@ void DEMSolver::initializeArrays() {
                               nJitifiableClumpComponents, nMatTuples);
 
     // Now we can feed those GPU-side arrays with the cached API-level simulation info
-    dT->initManagedArrays(cached_input_clump_batches, m_input_ext_obj_xyz, m_input_ext_obj_family,
-                          m_family_user_impl_map, m_family_impl_user_map, m_template_sp_mat_ids, m_template_mass,
-                          m_template_moi, m_template_sp_radii, m_template_sp_relPos, m_loaded_materials,
-                          m_no_output_families, m_tracked_objs);
-    kT->initManagedArrays(cached_input_clump_batches, m_input_ext_obj_family, m_family_user_impl_map, m_template_mass,
-                          m_template_sp_radii, m_template_sp_relPos);
+    dT->initManagedArrays(
+        // Clump batchs' initial stats
+        cached_input_clump_batches,
+        // Analytical objects' initial stats
+        m_input_ext_obj_xyz, m_input_ext_obj_family,
+        // Meshed objects' initial stats
+        m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facet_materials,
+        m_mesh_facets,
+        // Family number mapping
+        m_family_user_impl_map, m_family_impl_user_map,
+        // Template info (mass, sphere components, materials etc.)
+        m_template_sp_mat_ids, m_template_mass, m_template_moi, m_template_sp_radii, m_template_sp_relPos,
+        m_loaded_materials,
+        // I/O and misc.
+        m_no_output_families, m_tracked_objs);
+    kT->initManagedArrays(
+        // Clump batchs' initial stats
+        cached_input_clump_batches,
+        // Analytical objects' initial stats
+        m_input_ext_obj_family,
+        // Meshed objects' initial stats
+        m_input_mesh_obj_family,
+        // Templates and misc.
+        m_family_user_impl_map, m_template_mass, m_template_sp_radii, m_template_sp_relPos);
 }
 
 void DEMSolver::packDataPointers() {

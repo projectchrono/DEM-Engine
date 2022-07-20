@@ -497,14 +497,14 @@ void DEMSolver::WriteClumpFile(const std::string& outfilename) const {
             }
             case (DEM_OUTPUT_FORMAT::BINARY): {
                 std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
-                // TODO: Implement it
+                //// TODO: Implement it
                 break;
             }
             default:
                 SGPS_DEM_ERROR("Clump output format is unknown. Please set it via SetOutputFormat.");
         }
     } else if (m_clump_out_mode == DEM_OUTPUT_MODE::CLUMP) {
-        // TODO: Implement it
+        //// TODO: Implement it
     } else {
         SGPS_DEM_ERROR("Clump output mode is unknown. Please set it via SetClumpOutputMode.");
     }

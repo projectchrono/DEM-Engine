@@ -247,6 +247,7 @@ class DEMKinematicThread {
     // Data type TBD, should come from JITCed headers
     void initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                            const std::vector<unsigned int>& input_ext_obj_family,
+                           const std::vector<unsigned int>& input_mesh_obj_family,
                            const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
                            const std::vector<float>& clumps_mass_types,
                            const std::vector<std::vector<float>>& clumps_sp_radii_types,

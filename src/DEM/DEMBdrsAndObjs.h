@@ -239,7 +239,6 @@ class DEMClumpBatch {
 // DEM mesh object
 class DEMMeshConnected {
   private:
-    size_t nTri = 0;
     void assertLength(size_t len, const std::string name) {
         if (nTri == 0) {
             std::cerr << "The settings at the " << name << " call were applied to 0 mesh facet.\nPlease consider using "
@@ -257,6 +256,9 @@ class DEMMeshConnected {
     }
 
   public:
+    // Number of triangle facets in the mesh
+    size_t nTri = 0;
+
     std::vector<float3> vertices;
     std::vector<float3> normals;
     std::vector<float3> UV;
@@ -291,6 +293,10 @@ class DEMMeshConnected {
 
     std::string filename;  ///< file string if loading an obj file
 
+    // If true, when the mesh is initialized into the system, it will re-order the nodes of each triangle so that the
+    // normals derived from right-hand-rule are the same as the normals in the mesh file
+    bool use_mesh_normals = false;
+
     DEMMeshConnected() {}
     DEMMeshConnected(std::string input_file) { LoadWavefrontMesh(input_file); }
     ~DEMMeshConnected() {}
@@ -306,6 +312,10 @@ class DEMMeshConnected {
 
     /// Get the number of triangles already added to this mesh
     size_t GetNumTriangles() const { return nTri; }
+
+    /// Instruct that when the mesh is initialized into the system, it will re-order the nodes of each triangle so that
+    /// the normals derived from right-hand-rule are the same as the normals in the mesh file
+    void UseNormals(bool use = true) { use_mesh_normals = use; }
 
     /// Access the n-th triangle in mesh
     DEMTriangle GetTriangle(size_t index) const {
