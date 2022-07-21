@@ -50,17 +50,18 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                       std::vector<contact_t, ManagedAllocator<contact_t>>& previous_contactType,
                       std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>>& contactMapping,
                       cudaStream_t& this_stream,
-                      DEMSolverStateDataKT& scratchPad) {
+                      DEMSolverStateData& scratchPad) {
     // total bytes needed for temp arrays in contact detection
     size_t CD_temp_arr_bytes = 0;
 
     // 1st step: register the number of sphere--bin touching pairs for each sphere for further processing
     CD_temp_arr_bytes = simParams->nSpheresGM * sizeof(binsSphereTouches_t);
-    binsSphereTouches_t* numBinsSphereTouches = (binsSphereTouches_t*)scratchPad.allocateTempVector1(CD_temp_arr_bytes);
+    binsSphereTouches_t* numBinsSphereTouches =
+        (binsSphereTouches_t*)scratchPad.allocateTempVector(0, CD_temp_arr_bytes);
     // This kernel is also tasked to find how many analytical objects each sphere touches
-    // We'll use a new vector 3 to store this
+    // We'll use a new vector 2 to store this
     CD_temp_arr_bytes = simParams->nSpheresGM * sizeof(objID_t);
-    objID_t* numAnalGeoSphereTouches = (objID_t*)scratchPad.allocateTempVector3(CD_temp_arr_bytes);
+    objID_t* numAnalGeoSphereTouches = (objID_t*)scratchPad.allocateTempVector(2, CD_temp_arr_bytes);
     size_t blocks_needed_for_bodies =
         (simParams->nSpheresGM + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
 
@@ -73,17 +74,17 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
     // 2nd step: prefix scan sphere--bin touching pairs
     CD_temp_arr_bytes = simParams->nSpheresGM * sizeof(binSphereTouchPairs_t);
     binSphereTouchPairs_t* numBinsSphereTouchesScan =
-        (binSphereTouchPairs_t*)scratchPad.allocateTempVector2(CD_temp_arr_bytes);
-    cubDEMPrefixScan<binsSphereTouches_t, binSphereTouchPairs_t, DEMSolverStateDataKT>(
+        (binSphereTouchPairs_t*)scratchPad.allocateTempVector(1, CD_temp_arr_bytes);
+    cubDEMPrefixScan<binsSphereTouches_t, binSphereTouchPairs_t, DEMSolverStateData>(
         numBinsSphereTouches, numBinsSphereTouchesScan, simParams->nSpheresGM, this_stream, scratchPad);
     size_t* pNumBinSphereTouchPairs = scratchPad.pTempSizeVar1;
     *pNumBinSphereTouchPairs = (size_t)numBinsSphereTouchesScan[simParams->nSpheresGM - 1] +
                                (size_t)numBinsSphereTouches[simParams->nSpheresGM - 1];
-    // The same process is done for sphere--analytical geometry pairs as well. Use vector 4 for this.
+    // The same process is done for sphere--analytical geometry pairs as well. Use vector 3 for this.
     CD_temp_arr_bytes = simParams->nSpheresGM * sizeof(binSphereTouchPairs_t);
     binSphereTouchPairs_t* numAnalGeoSphereTouchesScan =
-        (binSphereTouchPairs_t*)scratchPad.allocateTempVector4(CD_temp_arr_bytes);
-    cubDEMPrefixScan<objID_t, binSphereTouchPairs_t, DEMSolverStateDataKT>(
+        (binSphereTouchPairs_t*)scratchPad.allocateTempVector(3, CD_temp_arr_bytes);
+    cubDEMPrefixScan<objID_t, binSphereTouchPairs_t, DEMSolverStateData>(
         numAnalGeoSphereTouches, numAnalGeoSphereTouchesScan, simParams->nSpheresGM, this_stream, scratchPad);
     *(scratchPad.pNumContacts) = (size_t)numAnalGeoSphereTouches[simParams->nSpheresGM - 1] +
                                  (size_t)numAnalGeoSphereTouchesScan[simParams->nSpheresGM - 1];
@@ -95,11 +96,11 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
     // displayArray<binSphereTouchPairs_t>(numBinsSphereTouchesScan, simParams->nSpheresGM);
 
     // 3rd step: use a custom kernel to figure out all sphere--bin touching pairs. Note numBinsSphereTouches can retire
-    // now so we allocate on temp vector 1 and re-use vector 3.
+    // now so we allocate on temp vector 0 and re-use vector 2.
     CD_temp_arr_bytes = (*pNumBinSphereTouchPairs) * sizeof(binID_t);
-    binID_t* binIDsEachSphereTouches = (binID_t*)scratchPad.allocateTempVector1(CD_temp_arr_bytes);
+    binID_t* binIDsEachSphereTouches = (binID_t*)scratchPad.allocateTempVector(0, CD_temp_arr_bytes);
     CD_temp_arr_bytes = (*pNumBinSphereTouchPairs) * sizeof(bodyID_t);
-    bodyID_t* sphereIDsEachBinTouches = (bodyID_t*)scratchPad.allocateTempVector3(CD_temp_arr_bytes);
+    bodyID_t* sphereIDsEachBinTouches = (bodyID_t*)scratchPad.allocateTempVector(2, CD_temp_arr_bytes);
     // This kernel is also responsible of figuring out sphere--analytical geometry pairs
     bin_occupation_kernels->kernel("populateBinSphereTouchingPairs")
         .instantiate()
@@ -113,16 +114,16 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
     // displayArray<bodyID_t>(sphereIDsEachBinTouches, *pNumBinSphereTouchPairs);
 
     // 4th step: allocate and populate SORTED binIDsEachSphereTouches and sphereIDsEachBinTouches. Note
-    // numBinsSphereTouchesScan can retire now so we allocate on vector 2 and re-use vector 4.
+    // numBinsSphereTouchesScan can retire now so we allocate on vector 1 and re-use vector 3.
     CD_temp_arr_bytes = (*pNumBinSphereTouchPairs) * sizeof(bodyID_t);
-    bodyID_t* sphereIDsEachBinTouches_sorted = (bodyID_t*)scratchPad.allocateTempVector2(CD_temp_arr_bytes);
+    bodyID_t* sphereIDsEachBinTouches_sorted = (bodyID_t*)scratchPad.allocateTempVector(1, CD_temp_arr_bytes);
     CD_temp_arr_bytes = (*pNumBinSphereTouchPairs) * sizeof(binID_t);
-    binID_t* binIDsEachSphereTouches_sorted = (binID_t*)scratchPad.allocateTempVector4(CD_temp_arr_bytes);
+    binID_t* binIDsEachSphereTouches_sorted = (binID_t*)scratchPad.allocateTempVector(3, CD_temp_arr_bytes);
     // hostSortByKey<binID_t, bodyID_t>(granData->binIDsEachSphereTouches, granData->sphereIDsEachBinTouches,
     //                                  *pNumBinSphereTouchPairs);
-    cubDEMSortByKeys<binID_t, bodyID_t, DEMSolverStateDataKT>(binIDsEachSphereTouches, binIDsEachSphereTouches_sorted,
-                                                              sphereIDsEachBinTouches, sphereIDsEachBinTouches_sorted,
-                                                              *pNumBinSphereTouchPairs, this_stream, scratchPad);
+    cubDEMSortByKeys<binID_t, bodyID_t, DEMSolverStateData>(binIDsEachSphereTouches, binIDsEachSphereTouches_sorted,
+                                                            sphereIDsEachBinTouches, sphereIDsEachBinTouches_sorted,
+                                                            *pNumBinSphereTouchPairs, this_stream, scratchPad);
     // std::cout << "Sorted bin IDs: ";
     // displayArray<binID_t>(binIDsEachSphereTouches_sorted, *pNumBinSphereTouchPairs);
     // std::cout << "Corresponding sphere IDs: ";
@@ -133,15 +134,16 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
     // active bins.
     binID_t* binIDsUnique = (binID_t*)binIDsEachSphereTouches;
     size_t* pNumActiveBins = scratchPad.pTempSizeVar2;
-    cubDEMUnique<binID_t, DEMSolverStateDataKT>(binIDsEachSphereTouches_sorted, binIDsUnique, pNumActiveBins,
-                                                *pNumBinSphereTouchPairs, this_stream, scratchPad);
+    cubDEMUnique<binID_t, DEMSolverStateData>(binIDsEachSphereTouches_sorted, binIDsUnique, pNumActiveBins,
+                                              *pNumBinSphereTouchPairs, this_stream, scratchPad);
     // Allocate space for encoding output, and run it. Note the (unsorted) binIDsEachSphereTouches and
-    // sphereIDsEachBinTouches can retire now, so we allocate on temp vectors 1 and 3.
+    // sphereIDsEachBinTouches can retire now, so we allocate on temp vectors 0 and 2.
     CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(binID_t);
-    binID_t* activeBinIDs = (binID_t*)scratchPad.allocateTempVector1(CD_temp_arr_bytes);
+    binID_t* activeBinIDs = (binID_t*)scratchPad.allocateTempVector(0, CD_temp_arr_bytes);
     CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(spheresBinTouches_t);
-    spheresBinTouches_t* numSpheresBinTouches = (spheresBinTouches_t*)scratchPad.allocateTempVector3(CD_temp_arr_bytes);
-    cubDEMRunLengthEncode<binID_t, spheresBinTouches_t, DEMSolverStateDataKT>(
+    spheresBinTouches_t* numSpheresBinTouches =
+        (spheresBinTouches_t*)scratchPad.allocateTempVector(2, CD_temp_arr_bytes);
+    cubDEMRunLengthEncode<binID_t, spheresBinTouches_t, DEMSolverStateData>(
         binIDsEachSphereTouches_sorted, activeBinIDs, numSpheresBinTouches, pNumActiveBins, *pNumBinSphereTouchPairs,
         this_stream, scratchPad);
     // std::cout << "numActiveBins: " << *pNumActiveBins << std::endl;
@@ -153,11 +155,11 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
     // displayArray<binID_t>(binIDsEachSphereTouches_sorted, *pNumBinSphereTouchPairs);
 
     // Then, scan to find the offsets that are used to index into sphereIDsEachBinTouches_sorted to obtain bin-wise
-    // spheres. Note binIDsEachSphereTouches_sorted can retire so we allocate on temp vector 4.
+    // spheres. Note binIDsEachSphereTouches_sorted can retire so we allocate on temp vector 3.
     CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(binSphereTouchPairs_t);
     binSphereTouchPairs_t* sphereIDsLookUpTable =
-        (binSphereTouchPairs_t*)scratchPad.allocateTempVector4(CD_temp_arr_bytes);
-    cubDEMPrefixScan<binsSphereTouches_t, binSphereTouchPairs_t, DEMSolverStateDataKT>(
+        (binSphereTouchPairs_t*)scratchPad.allocateTempVector(3, CD_temp_arr_bytes);
+    cubDEMPrefixScan<binsSphereTouches_t, binSphereTouchPairs_t, DEMSolverStateData>(
         numSpheresBinTouches, sphereIDsLookUpTable, *pNumActiveBins, this_stream, scratchPad);
     // std::cout << "sphereIDsLookUpTable: ";
     // displayArray<binSphereTouchPairs_t>(sphereIDsLookUpTable, *pNumActiveBins);
@@ -166,7 +168,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
     // the actual pair names. A new temp array is needed for this numContactsInEachBin. Note we assume the number of
     // contact in each bin is the same level as the number of spheres in each bin (capped by the same data type).
     CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(spheresBinTouches_t);
-    spheresBinTouches_t* numContactsInEachBin = (spheresBinTouches_t*)scratchPad.allocateTempVector5(CD_temp_arr_bytes);
+    spheresBinTouches_t* numContactsInEachBin =
+        (spheresBinTouches_t*)scratchPad.allocateTempVector(4, CD_temp_arr_bytes);
     size_t blocks_needed_for_bins = (*pNumActiveBins + SGPS_DEM_NUM_BINS_PER_BLOCK - 1) / SGPS_DEM_NUM_BINS_PER_BLOCK;
     if (blocks_needed_for_bins > 0) {
         contact_detection_kernels->kernel("getNumberOfContactsEachBin")
@@ -176,20 +179,18 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                     sphereIDsLookUpTable, numContactsInEachBin, *pNumActiveBins);
         GPU_CALL(cudaStreamSynchronize(this_stream));
 
-        // TODO: sphere should have jitified and non-jitified part. Use a component ID > max_comp_id to signal bringing
-        // data from global memory.
-        // TODO: Add tri--sphere CD kernel (if mesh support is to be added). This kernel integrates tri--boundary CD.
-        // Note triangle facets can have jitified (many bodies of the same type) and non-jitified (a big meshed body)
-        // part. Use a component ID > max_comp_id to signal bringing data from global memory.
-        // TODO: Add tri--tri CD kernel (in the far future, should mesh-rerpesented geometry to be supported). This
-        // kernel integrates tri--boundary CD.
-        // TODO: remember that boundary types are either all jitified or non-jitified. In principal, they should be all
-        // jitified.
+        //// TODO: sphere should have jitified and non-jitified part. Use a component ID > max_comp_id to signal
+        ///bringing data from global memory. / TODO: Add tri--sphere CD kernel (if mesh support is to be added). This
+        ///kernel integrates tri--boundary CD. Note triangle facets can have jitified (many bodies of the same type) and
+        ///non-jitified (a big meshed body) part. Use a component ID > max_comp_id to signal bringing data from global
+        ///memory. / TODO: Add tri--tri CD kernel (in the far future, should mesh-rerpesented geometry to be supported).
+        ///This kernel integrates tri--boundary CD. / TODO: remember that boundary types are either all jitified or
+        ///non-jitified. In principal, they should be all jitified.
 
         // Prescan numContactsInEachBin to get the final contactReportOffsets. A new vector is needed.
         CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(contactPairs_t);
-        contactPairs_t* contactReportOffsets = (contactPairs_t*)scratchPad.allocateTempVector6(CD_temp_arr_bytes);
-        cubDEMPrefixScan<spheresBinTouches_t, contactPairs_t, DEMSolverStateDataKT>(
+        contactPairs_t* contactReportOffsets = (contactPairs_t*)scratchPad.allocateTempVector(5, CD_temp_arr_bytes);
+        cubDEMPrefixScan<spheresBinTouches_t, contactPairs_t, DEMSolverStateData>(
             numContactsInEachBin, contactReportOffsets, *pNumActiveBins, this_stream, scratchPad);
         // SGPS_DEM_DEBUG_PRINTF("Contact report offsets:");
         // SGPS_DEM_DEBUG_EXEC(displayArray<contactPairs_t>(contactReportOffsets, *pNumActiveBins));
@@ -226,16 +227,16 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
         if ((!solverFlags.isHistoryless) || solverFlags.should_sort_pairs) {
             // All temp vectors are free now, and all of them are fairly long...
             size_t type_arr_bytes = (*scratchPad.pNumContacts) * sizeof(contact_t);
-            contact_t* contactType_sorted = (contact_t*)scratchPad.allocateTempVector1(type_arr_bytes);
+            contact_t* contactType_sorted = (contact_t*)scratchPad.allocateTempVector(0, type_arr_bytes);
             size_t id_arr_bytes = (*scratchPad.pNumContacts) * sizeof(bodyID_t);
-            bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector2(id_arr_bytes);
-            bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector3(id_arr_bytes);
+            bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector(1, id_arr_bytes);
+            bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector(2, id_arr_bytes);
 
             // TODO: But do I have to SortByKey twice?? Can I zip these value arrays together??
-            cubDEMSortByKeys<bodyID_t, bodyID_t, DEMSolverStateDataKT>(
-                granData->idGeometryA, idA_sorted, granData->idGeometryB, idB_sorted, *scratchPad.pNumContacts,
-                this_stream, scratchPad);
-            cubDEMSortByKeys<bodyID_t, contact_t, DEMSolverStateDataKT>(
+            cubDEMSortByKeys<bodyID_t, bodyID_t, DEMSolverStateData>(granData->idGeometryA, idA_sorted,
+                                                                     granData->idGeometryB, idB_sorted,
+                                                                     *scratchPad.pNumContacts, this_stream, scratchPad);
+            cubDEMSortByKeys<bodyID_t, contact_t, DEMSolverStateData>(
                 granData->idGeometryA, idA_sorted, granData->contactType, contactType_sorted, *scratchPad.pNumContacts,
                 this_stream, scratchPad);
 
@@ -261,28 +262,28 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                 // First, identify the new and old idA run-length
                 size_t run_length_bytes = nSpheresSafe * sizeof(geoSphereTouches_t);
                 geoSphereTouches_t* new_idA_runlength =
-                    (geoSphereTouches_t*)scratchPad.allocateTempVector1(run_length_bytes);
+                    (geoSphereTouches_t*)scratchPad.allocateTempVector(0, run_length_bytes);
                 size_t unique_id_bytes = nSpheresSafe * sizeof(bodyID_t);
-                bodyID_t* unique_new_idA = (bodyID_t*)scratchPad.allocateTempVector2(unique_id_bytes);
+                bodyID_t* unique_new_idA = (bodyID_t*)scratchPad.allocateTempVector(1, unique_id_bytes);
                 size_t* pNumUniqueNewA = scratchPad.pTempSizeVar1;
-                cubDEMRunLengthEncode<bodyID_t, geoSphereTouches_t, DEMSolverStateDataKT>(
+                cubDEMRunLengthEncode<bodyID_t, geoSphereTouches_t, DEMSolverStateData>(
                     granData->idGeometryA, unique_new_idA, new_idA_runlength, pNumUniqueNewA, *scratchPad.pNumContacts,
                     this_stream, scratchPad);
 
                 geoSphereTouches_t* old_idA_runlength =
-                    (geoSphereTouches_t*)scratchPad.allocateTempVector3(run_length_bytes);
-                bodyID_t* unique_old_idA = (bodyID_t*)scratchPad.allocateTempVector4(unique_id_bytes);
+                    (geoSphereTouches_t*)scratchPad.allocateTempVector(2, run_length_bytes);
+                bodyID_t* unique_old_idA = (bodyID_t*)scratchPad.allocateTempVector(3, unique_id_bytes);
                 size_t* pNumUniqueOldA = scratchPad.pTempSizeVar2;
-                cubDEMRunLengthEncode<bodyID_t, geoSphereTouches_t, DEMSolverStateDataKT>(
+                cubDEMRunLengthEncode<bodyID_t, geoSphereTouches_t, DEMSolverStateData>(
                     granData->previous_idGeometryA, unique_old_idA, old_idA_runlength, pNumUniqueOldA,
                     *(scratchPad.pNumPrevContacts), this_stream, scratchPad);
 
                 // Then, add zeros to run-length arrays such that even if a sphereID is not present in idA, it has a
                 // place in the run-length arrays that indicates 0 run-length
                 geoSphereTouches_t* new_idA_runlength_full =
-                    (geoSphereTouches_t*)scratchPad.allocateTempVector5(run_length_bytes);
+                    (geoSphereTouches_t*)scratchPad.allocateTempVector(4, run_length_bytes);
                 geoSphereTouches_t* old_idA_runlength_full =
-                    (geoSphereTouches_t*)scratchPad.allocateTempVector6(run_length_bytes);
+                    (geoSphereTouches_t*)scratchPad.allocateTempVector(5, run_length_bytes);
                 GPU_CALL(cudaMemset((void*)new_idA_runlength_full, 0, run_length_bytes));
                 GPU_CALL(cudaMemset((void*)old_idA_runlength_full, 0, run_length_bytes));
                 size_t blocks_needed_for_mapping =
@@ -314,12 +315,12 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                 // Then, prescan to find run-length offsets, in preparation for custom kernels
                 size_t scanned_runlength_bytes = nSpheresSafe * sizeof(contactPairs_t);
                 contactPairs_t* new_idA_scanned_runlength =
-                    (contactPairs_t*)scratchPad.allocateTempVector1(scanned_runlength_bytes);
+                    (contactPairs_t*)scratchPad.allocateTempVector(0, scanned_runlength_bytes);
                 contactPairs_t* old_idA_scanned_runlength =
-                    (contactPairs_t*)scratchPad.allocateTempVector2(scanned_runlength_bytes);
-                cubDEMPrefixScan<geoSphereTouches_t, contactPairs_t, DEMSolverStateDataKT>(
+                    (contactPairs_t*)scratchPad.allocateTempVector(1, scanned_runlength_bytes);
+                cubDEMPrefixScan<geoSphereTouches_t, contactPairs_t, DEMSolverStateData>(
                     new_idA_runlength_full, new_idA_scanned_runlength, nSpheresSafe, this_stream, scratchPad);
-                cubDEMPrefixScan<geoSphereTouches_t, contactPairs_t, DEMSolverStateDataKT>(
+                cubDEMPrefixScan<geoSphereTouches_t, contactPairs_t, DEMSolverStateData>(
                     old_idA_runlength_full, old_idA_scanned_runlength, nSpheresSafe, this_stream, scratchPad);
 
                 // Then, each thread will scan a sphere, if this sphere has non-zero run-length in both new and old idA,
@@ -368,10 +369,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
     if (solverFlags.use_compact_force_kernel && solverFlags.should_sort_pairs) {
         // Figure out how many contacts an item in idA array typically has
         size_t unique_arr_bytes = (size_t)simParams->nSpheresGM * sizeof(bodyID_t);
-        bodyID_t* unique_arr = (bodyID_t*)scratchPad.allocateTempVector1(unique_arr_bytes);
-        size_t* num_unique_idA = (size_t*)scratchPad.allocateTempVector2(sizeof(size_t));
-        cubDEMUnique<bodyID_t, DEMSolverStateDataKT>(granData->idGeometryA, unique_arr, num_unique_idA,
-                                                     *scratchPad.pNumContacts, this_stream, scratchPad);
+        bodyID_t* unique_arr = (bodyID_t*)scratchPad.allocateTempVector(0, unique_arr_bytes);
+        size_t* num_unique_idA = (size_t*)scratchPad.allocateTempVector(1, sizeof(size_t));
+        cubDEMUnique<bodyID_t, DEMSolverStateData>(granData->idGeometryA, unique_arr, num_unique_idA,
+                                                   *scratchPad.pNumContacts, this_stream, scratchPad);
         double avg_cnts_per_geo =
             (*num_unique_idA > 0) ? (double)(*scratchPad.pNumContacts) / (double)(*num_unique_idA) : 0.0;
 

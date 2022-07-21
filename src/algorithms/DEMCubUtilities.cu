@@ -11,16 +11,16 @@
 
 namespace sgps {
 
-void sumReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateDataDT& scratchPad) {
-    cubDEMSum<float, DEMSolverStateDataDT>(d_in, d_out, n, this_stream, scratchPad);
+void sumReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad) {
+    cubDEMSum<float, DEMSolverStateData>(d_in, d_out, n, this_stream, scratchPad);
 }
 
 void flagMaxReduce(notStupidBool_t* d_in,
                    notStupidBool_t* d_out,
                    size_t n,
                    cudaStream_t& this_stream,
-                   DEMSolverStateDataDT& scratchPad) {
-    cubDEMMax<notStupidBool_t, DEMSolverStateDataDT>(d_in, d_out, n, this_stream, scratchPad);
+                   DEMSolverStateData& scratchPad) {
+    cubDEMMax<notStupidBool_t, DEMSolverStateData>(d_in, d_out, n, this_stream, scratchPad);
 }
 
 }  // namespace sgps

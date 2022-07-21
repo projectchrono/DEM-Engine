@@ -130,9 +130,9 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
 float DEMDynamicThread::getKineticEnergy() {
     // We can use temp vectors as we please. Allocate num_of_clumps floats.
     size_t quarryTempSize = (size_t)simParams->nOwnerBodies * sizeof(float);
-    float* KEArr = (float*)stateOfSolver_resources.allocateTempVector1(quarryTempSize);
+    float* KEArr = (float*)stateOfSolver_resources.allocateTempVector(0, quarryTempSize);
     size_t returnSize = sizeof(float);
-    float* KE = (float*)stateOfSolver_resources.allocateTempVector2(returnSize);
+    float* KE = (float*)stateOfSolver_resources.allocateTempVector(1, returnSize);
     size_t blocks_needed_for_KE =
         (simParams->nOwnerBodies + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
     quarry_stats_kernels->kernel("computeKE")
@@ -702,9 +702,10 @@ inline void DEMDynamicThread::unpackMyBuffer() {
                         *stateOfSolver_resources.pNumContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
     if (!solverFlags.isHistoryless) {
         // Note we don't have to use dedicated memory space for unpacking contactMapping_buffer contents, because we
-        // only use it once per kT update, at the time of unpacking. So let us just use a temp vector to store it.
+        // only use it once per kT update, at the time of unpacking. So let us just use a temp vector to store it. Note
+        // we cannot use vector 0 since it may hold critical flattened owner ID info.
         size_t mapping_bytes = (*stateOfSolver_resources.pNumContacts) * sizeof(contactPairs_t);
-        granData->contactMapping = (contactPairs_t*)stateOfSolver_resources.allocateTempVector1(mapping_bytes);
+        granData->contactMapping = (contactPairs_t*)stateOfSolver_resources.allocateTempVector(1, mapping_bytes);
         GPU_CALL(cudaMemcpy(granData->contactMapping, granData->contactMapping_buffer, mapping_bytes,
                             cudaMemcpyDeviceToDevice));
     }
@@ -737,15 +738,16 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
 }
 
 inline void DEMDynamicThread::migrateContactHistory() {
-    // Use this newHistory and newDuration to store temporarily the rearranged contact history
+    // Use this newHistory and newDuration to store temporarily the rearranged contact history.  Note we cannot use
+    // vector 0 or 1 since they may be in use.
     size_t history_arr_bytes = (*stateOfSolver_resources.pNumContacts) * sizeof(float3);
     size_t duration_arr_bytes = (*stateOfSolver_resources.pNumContacts) * sizeof(float);
     size_t sentry_bytes = (*stateOfSolver_resources.pNumPrevContacts) * sizeof(notStupidBool_t);
-    float3* newHistory = (float3*)stateOfSolver_resources.allocateTempVector2(history_arr_bytes);
-    float* newDuration = (float*)stateOfSolver_resources.allocateTempVector3(duration_arr_bytes);
+    float3* newHistory = (float3*)stateOfSolver_resources.allocateTempVector(2, history_arr_bytes);
+    float* newDuration = (float*)stateOfSolver_resources.allocateTempVector(3, duration_arr_bytes);
     // This is used for checking if there are contact history got lost in the transition by surprise. But no need to
     // check if the user did not ask for it.
-    notStupidBool_t* contactSentry = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector4(sentry_bytes);
+    notStupidBool_t* contactSentry = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(4, sentry_bytes);
 
     // A sentry array is here to see if there exist a contact that dT thinks it's alive but kT doesn't map it to the new
     // history array
@@ -779,7 +781,7 @@ inline void DEMDynamicThread::migrateContactHistory() {
     // Take a look, does the sentry indicate that there is an `alive' contact got lost?
     if (*stateOfSolver_resources.pNumPrevContacts > 0 && verbosity >= DEM_VERBOSITY::INFO_STEP_WARN) {
         notStupidBool_t* lostContact =
-            (notStupidBool_t*)stateOfSolver_resources.allocateTempVector5(sizeof(notStupidBool_t));
+            (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(5, sizeof(notStupidBool_t));
         flagMaxReduce(contactSentry, lostContact, *stateOfSolver_resources.pNumPrevContacts, streamInfo.stream,
                       stateOfSolver_resources);
         if (*lostContact && solverFlags.isAsync) {

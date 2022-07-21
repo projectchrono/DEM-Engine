@@ -46,15 +46,16 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
                           const size_t nClumps,
                           bool contactPairArr_isFresh,
                           cudaStream_t& this_stream,
-                          DEMSolverStateDataDT& scratchPad) {
+                          DEMSolverStateData& scratchPad) {
     // Preparation: allocate enough temp array memory and chop it to pieces, for the usage of cub operations. Note that
     // if contactPairArr_isFresh is false, then this allocation should not alter the size and content of the temp array
     // space, so the information in it can be used in the next iteration.
     size_t cachedArraySizeOwner = (size_t)2 * nContactPairs * sizeof(bodyID_t);
+    // Use temp vector 0 to store the flattened owner IDs. So the rest of the temp arrays start from number 1.
+    bodyID_t* idAOwner = (bodyID_t*)scratchPad.allocateTempVector(0, cachedArraySizeOwner);
+    bodyID_t* idBOwner = (bodyID_t*)(idAOwner + nContactPairs);
     // size_t cachedArraySizeMass = (size_t)2 * nContactPairs * sizeof(float);
     // size_t cachedArraySizeMOI = (size_t)2 * nContactPairs * sizeof(float3);
-    bodyID_t* idAOwner = (bodyID_t*)scratchPad.allocateCachedOwner(cachedArraySizeOwner);
-    bodyID_t* idBOwner = (bodyID_t*)(idAOwner + nContactPairs);
     // float* massAOwner = (float*)scratchPad.allocateCachedMass(cachedArraySizeMass);
     // float* massBOwner = (float*)(massAOwner + nContactPairs);
     // float3* moiAOwner = (float3*)scratchPad.allocateCachedMOI(cachedArraySizeMOI);
@@ -104,15 +105,15 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
     size_t tempArraySizeAcc_sorted = (size_t)2 * nContactPairs * sizeof(float3);
     size_t tempArraySizeOwnerAcc = (size_t)nClumps * sizeof(float3);
     size_t tempArraySizeOwner = (size_t)nClumps * sizeof(bodyID_t);
-    float3* acc_A = (float3*)scratchPad.allocateTempVector1(tempArraySizeAcc);
+    float3* acc_A = (float3*)scratchPad.allocateTempVector(1, tempArraySizeAcc);
     float3* acc_B = (float3*)(acc_A + nContactPairs);
-    float3* acc_A_sorted = (float3*)scratchPad.allocateTempVector2(tempArraySizeAcc_sorted);
+    float3* acc_A_sorted = (float3*)scratchPad.allocateTempVector(2, tempArraySizeAcc_sorted);
     // float3* acc_B_sorted = (float3*)(acc_A_sorted  + nContactPairs);
-    bodyID_t* idAOwner_sorted = (bodyID_t*)scratchPad.allocateTempVector3(cachedArraySizeOwner);
+    bodyID_t* idAOwner_sorted = (bodyID_t*)scratchPad.allocateTempVector(3, cachedArraySizeOwner);
     // bodyID_t* idBOwner_sorted = (bodyID_t*)(idAOwner_sorted + nContactPairs);
-    float3* accOwner = (float3*)scratchPad.allocateTempVector4(
-        tempArraySizeOwnerAcc);  // can store both linear and angular acceleration
-    bodyID_t* uniqueOwner = (bodyID_t*)scratchPad.allocateTempVector5(tempArraySizeOwner);
+    float3* accOwner = (float3*)scratchPad.allocateTempVector(
+        4, tempArraySizeOwnerAcc);  // can store both linear and angular acceleration
+    bodyID_t* uniqueOwner = (bodyID_t*)scratchPad.allocateTempVector(5, tempArraySizeOwner);
     // collect accelerations for body A (modifier used to be h * h / l when we stored acc as h^2*acc)
     // NOTE!! If you pass floating point number to kernels, the number needs to be something like 1.f, not 1.0.
     // Somtimes 1.0 got converted to 0.f with the kernel call.
@@ -132,13 +133,13 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
 
     // Reducing the acceleration (2 * nContactPairs for both body A and B)
     // Note: to do this, idAOwner needs to be sorted along with acc_A. So we sort first.
-    cubDEMSortByKeys<bodyID_t, float3, DEMSolverStateDataDT>(idAOwner, idAOwner_sorted, acc_A, acc_A_sorted,
-                                                             nContactPairs * 2, this_stream, scratchPad);
+    cubDEMSortByKeys<bodyID_t, float3, DEMSolverStateData>(idAOwner, idAOwner_sorted, acc_A, acc_A_sorted,
+                                                           nContactPairs * 2, this_stream, scratchPad);
     // Then we reduce by key
     // This variable stores the cub output of how many cub runs it executed for collecting forces
     size_t* pForceCollectionRuns = scratchPad.pTempSizeVar1;
     CubFloat3Add float3_add_op;
-    cubDEMReduceByKeys<bodyID_t, float3, CubFloat3Add, DEMSolverStateDataDT>(
+    cubDEMReduceByKeys<bodyID_t, float3, CubFloat3Add, DEMSolverStateData>(
         idAOwner_sorted, uniqueOwner, acc_A_sorted, accOwner, pForceCollectionRuns, float3_add_op, nContactPairs * 2,
         this_stream, scratchPad);
     // Then we stash acceleration
@@ -175,10 +176,10 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // Reducing the angular acceleration (2 * nContactPairs for both body A and B)
     // Note: to do this, idAOwner needs to be sorted along with alpha_A. So we sort first.
-    cubDEMSortByKeys<bodyID_t, float3, DEMSolverStateDataDT>(idAOwner, idAOwner_sorted, alpha_A, alpha_A_sorted,
-                                                             nContactPairs * 2, this_stream, scratchPad);
+    cubDEMSortByKeys<bodyID_t, float3, DEMSolverStateData>(idAOwner, idAOwner_sorted, alpha_A, alpha_A_sorted,
+                                                           nContactPairs * 2, this_stream, scratchPad);
     // Then we reduce
-    cubDEMReduceByKeys<bodyID_t, float3, CubFloat3Add, DEMSolverStateDataDT>(
+    cubDEMReduceByKeys<bodyID_t, float3, CubFloat3Add, DEMSolverStateData>(
         idAOwner_sorted, uniqueOwner, alpha_A_sorted, accOwner, pForceCollectionRuns, float3_add_op, nContactPairs * 2,
         this_stream, scratchPad);
     // Then we stash angular acceleration

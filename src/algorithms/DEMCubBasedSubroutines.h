@@ -9,13 +9,13 @@
 
 namespace sgps {
 
-void sumReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateDataDT& scratchPad);
+void sumReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
 
 void flagMaxReduce(notStupidBool_t* d_in,
                    notStupidBool_t* d_out,
                    size_t n,
                    cudaStream_t& this_stream,
-                   DEMSolverStateDataDT& scratchPad);
+                   DEMSolverStateData& scratchPad);
 
 void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                       std::shared_ptr<jitify::Program>& contact_detection_kernels,
@@ -32,7 +32,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                       std::vector<contact_t, ManagedAllocator<contact_t>>& previous_contactType,
                       std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>>& contactMapping,
                       cudaStream_t& this_stream,
-                      DEMSolverStateDataKT& scratchPad);
+                      DEMSolverStateData& scratchPad);
 
 void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernels,
                           inertiaOffset_t* inertiaPropOffsets,
@@ -58,6 +58,6 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
                           const size_t nClumps,
                           bool contactPairArr_isFresh,
                           cudaStream_t& this_stream,
-                          DEMSolverStateDataDT& scratchPad);
+                          DEMSolverStateData& scratchPad);
 
 }  // namespace sgps

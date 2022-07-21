@@ -34,7 +34,7 @@ namespace sgps {
 // Implementation-level classes
 class DEMKinematicThread;
 class DEMDynamicThread;
-class DEMSolverStateDataDT;
+class DEMSolverStateData;
 
 /// DynamicThread class
 class DEMDynamicThread {
@@ -55,8 +55,8 @@ class DEMDynamicThread {
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
 
-    // A class that contains scratch pad and system status data
-    DEMSolverStateDataDT stateOfSolver_resources;
+    // A class that contains scratch pad and system status data (constructed with the number of temp arrays we need)
+    DEMSolverStateData stateOfSolver_resources = DEMSolverStateData(6);
 
     // The number of for iterations dT does for a specific user "run simulation" call
     size_t nDynamicCycles;
