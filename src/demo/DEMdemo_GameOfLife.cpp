@@ -10,6 +10,7 @@
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
 #include <DEM/HostSideHelpers.hpp>
+#include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
 #include <chrono>

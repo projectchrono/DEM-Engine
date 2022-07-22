@@ -6,6 +6,7 @@
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
 #include <DEM/HostSideHelpers.hpp>
+#include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
 #include <chrono>
@@ -26,7 +27,7 @@ int main() {
     DEMClumpTemplate ellipsoid;
     ellipsoid.ReadComponentFromFile("./data/clumps/ellipsoid_2_1_1.csv");
     // Calculate its mass and MOI
-    float mass = 2.6e3 * 4. / 3. * SGPS_PI * 2 * 1 * 1;
+    float mass = 2.6e3 * 4. / 3. * PI * 2 * 1 * 1;
     float3 MOI = make_float3(1. / 5. * mass * (1 * 1 + 2 * 2), 1. / 5. * mass * (1 * 1 + 2 * 2),
                              1. / 5. * mass * (1 * 1 + 1 * 1));
     // We can scale this general template to make it smaller, like a DEM particle that you would actually use

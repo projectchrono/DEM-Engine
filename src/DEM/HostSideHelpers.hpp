@@ -62,8 +62,8 @@ inline void elemSwap(T1* x, T1* y) {
     *y = tmp;
 }
 
-// TODO: Why is there a namespace (?) issue that makes us able to use make_float3 properly in demo scripts, but not in
-// any of these DEM system h or cpp files?
+//// TODO: Why is there a namespace (?) issue that makes us able to use make_float3 properly in demo scripts, but not in
+/// any of these DEM system h or cpp files?
 inline float3 host_make_float3(float a, float b, float c) {
     float3 f;
     f.x = a;
@@ -274,71 +274,6 @@ std::vector<T1> hostUniqueVector(const std::vector<T1>& vec) {
     auto tmp_it = std::unique(unique_vec.begin(), unique_vec.end());
     unique_vec.resize(std::distance(unique_vec.begin(), tmp_it));
     return unique_vec;
-}
-
-/// A light-weight grid/box sampler that can be used to generate the initial stage of the DEM system
-inline std::vector<float3> DEMBoxGridSampler(float3 BoxCenter,
-                                             float3 HalfDims,
-                                             float GridSizeX,
-                                             float GridSizeY = -1.0,
-                                             float GridSizeZ = -1.0) {
-    if (GridSizeY < 0)
-        GridSizeY = GridSizeX;
-    if (GridSizeZ < 0)
-        GridSizeZ = GridSizeX;
-    std::vector<float3> points;
-    for (float z = BoxCenter.z - HalfDims.z; z <= BoxCenter.z + HalfDims.z; z += GridSizeZ) {
-        for (float y = BoxCenter.y - HalfDims.y; y <= BoxCenter.y + HalfDims.y; y += GridSizeY) {
-            for (float x = BoxCenter.x - HalfDims.x; x <= BoxCenter.x + HalfDims.x; x += GridSizeX) {
-                float3 xyz;
-                xyz.x = x;
-                xyz.y = y;
-                xyz.z = z;
-                points.push_back(xyz);
-            }
-        }
-    }
-    return points;
-}
-
-/// A light-weight sampler that generates a shell made of particles that resembles a cylindrical surface
-inline std::vector<float3> DEMCylSurfSampler(float3 CylCenter,
-                                             float3 CylAxis,
-                                             float CylRad,
-                                             float CylHeight,
-                                             float ParticleRad,
-                                             float spacing = 1.2f) {
-    std::vector<float3> points;
-    float perimeter = 2.0 * SGPS_PI * CylRad;
-    unsigned int NumRows = perimeter / (spacing * ParticleRad);
-    float RadIncr = 2.0 * SGPS_PI / (float)(NumRows);
-    float SideIncr = spacing * ParticleRad;
-    float3 UnitCylAxis = normalize(CylAxis);
-    float3 RadDir;
-    {
-        float3 PerpVec;
-        PerpVec.x = -UnitCylAxis.z;
-        PerpVec.y = 0.f;
-        PerpVec.z = UnitCylAxis.x;
-        if (length(PerpVec) < 1e-6) {
-            PerpVec.x = 0.f;
-            PerpVec.y = -UnitCylAxis.z;
-            PerpVec.z = UnitCylAxis.y;
-        }
-        RadDir = normalize(PerpVec);
-    }
-    for (unsigned int i = 0; i < NumRows; i++) {
-        std::vector<float3> thisRow;
-        float3 thisRowSt = CylCenter + UnitCylAxis * (CylHeight / 2.) + RadDir * CylRad;
-        for (float d = 0.; d <= CylHeight; d += SideIncr) {
-            float3 point;
-            point = thisRowSt + UnitCylAxis * (-d);
-            thisRow.push_back(point);
-        }
-        points.insert(points.end(), thisRow.begin(), thisRow.end());
-        RadDir = Rodrigues(RadDir, UnitCylAxis, RadIncr);
-    }
-    return points;
 }
 
 /// Host version of applying a quaternion to a vector

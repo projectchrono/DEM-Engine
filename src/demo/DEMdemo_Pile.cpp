@@ -6,6 +6,7 @@
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
 #include <DEM/HostSideHelpers.hpp>
+#include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
 #include <chrono>
@@ -19,7 +20,7 @@ int main() {
     DEM_sim.UseFrictionalHertzianModel();
     DEM_sim.SetVerbosity(INFO_STEP_STATS);
 
-    srand(time(NULL));
+    srand(42);
 
     // total number of random clump templates to generate
     int num_template = 6;
@@ -88,13 +89,10 @@ int main() {
     }
 
     // Generate ground clumps
+    HCPSampler sampler1(ground_sp_r * 1.3);
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_ground_clump_type;
     std::vector<unsigned int> family_code;
-    auto input_ground_xyz = DEMBoxGridSampler(make_float3(0, 0, -3.8), make_float3(5.0, 5.0, 0.001), ground_sp_r * 1.3);
-    // Generate domain bottom
-    // auto domain_bottom = DEMBoxGridSampler(make_float3(0, 0, -10.0), make_float3(5.2, 5.2, 0.001), ground_sp_r
-    // * 1.3); input_ground_xyz.insert(input_ground_xyz.end(), domain_bottom.begin(), domain_bottom.end()); Mark family
-    // 1 as fixed
+    auto input_ground_xyz = sampler1.SampleBox(make_float3(0, 0, -3.8), make_float3(5.0, 5.0, 0.001));
     family_code.insert(family_code.end(), input_ground_xyz.size(), 1);
     DEM_sim.DisableContactBetweenFamilies(1, 1);
     DEM_sim.SetFamilyFixed(1);
@@ -103,12 +101,12 @@ int main() {
     ground->SetFamilies(family_code);
 
     // Generate initial clumps for piling
+    HCPSampler sampler2(0.08);
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
     float3 sample_center = make_float3(0, 0, -1);
     float sample_halfheight = 2;
     float sample_halfwidth = 0.7;
-    auto input_pile_xyz =
-        DEMBoxGridSampler(sample_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight), 0.05);
+    auto input_pile_xyz = sampler2.SampleCylinderZ(sample_center, sample_halfwidth, sample_halfheight);
     unsigned int num_clumps = input_pile_xyz.size();
     // Clear family_code for pile particles
     std::vector<unsigned int>().swap(family_code);

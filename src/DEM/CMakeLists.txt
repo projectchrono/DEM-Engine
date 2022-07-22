@@ -30,6 +30,7 @@ set(DEM_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/VariableTypes.h
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMBdrsAndObjs.h
 	${CMAKE_CURRENT_SOURCE_DIR}/HostSideHelpers.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/Samplers.hpp
 )
 
 set(DEM_sources

@@ -6,6 +6,7 @@
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
 #include <DEM/HostSideHelpers.hpp>
+#include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
 #include <chrono>
@@ -21,14 +22,12 @@ int main() {
     DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::ABSV);
     std::cout << "Note: This is a relatively large demo and should take hours/days to run!!" << std::endl;
 
-    srand(42);
-
     // A general template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
     std::vector<float> radii = {1.0, 0.88, 0.64, 0.88, 0.64};
     std::vector<float3> relPos = {make_float3(0, 0, 0), make_float3(0, 0, 0.86), make_float3(0, 0, 1.44),
                                   make_float3(0, 0, -0.86), make_float3(0, 0, -1.44)};
     // Then calculate mass and MOI
-    float mass = 2.6e3 * 4. / 3. * SGPS_PI * 2 * 1 * 1;
+    float mass = 2.6e3 * 4. / 3. * PI * 2 * 1 * 1;
     float3 MOI = make_float3(1. / 5. * mass * (1 * 1 + 2 * 2), 1. / 5. * mass * (1 * 1 + 2 * 2),
                              1. / 5. * mass * (1 * 1 + 1 * 1));
     // We can scale this general template to make it smaller, like a DEM particle that you would actually use

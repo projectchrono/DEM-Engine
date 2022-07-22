@@ -6,6 +6,7 @@
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
 #include <DEM/HostSideHelpers.hpp>
+#include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
 #include <time.h>
@@ -13,7 +14,6 @@
 
 using namespace sgps;
 using namespace std::filesystem;
-const double PI = 3.141592653589793;
 
 inline bool near(float a, float b, float t = 1e-6) {
     if (std::abs(a - b) < t) {

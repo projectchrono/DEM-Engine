@@ -43,10 +43,10 @@ inline std::string DEM_HERTZIAN_FORCE_MODEL_FRICTIONLESS() {
         const float Sn = 2. * E * sqrt_Rd;
 
         const float loge = (CoR < SGPS_DEM_TINY_FLOAT) ? log(SGPS_DEM_TINY_FLOAT) : log(CoR);
-        float beta = loge / sqrt(loge * loge + SGPS_PI_SQUARED);
+        float beta = loge / sqrt(loge * loge + sgps::PI_SQUARED);
 
-        const float k_n = SGPS_TWO_OVER_THREE * Sn;
-        const float gamma_n = SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
+        const float k_n = sgps::TWO_OVER_THREE * Sn;
+        const float gamma_n = sgps::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
 
         // normal force (that A feels)
         // printf("overlapDepth: %f\n", overlapDepth);

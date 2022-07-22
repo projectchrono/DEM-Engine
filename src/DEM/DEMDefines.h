@@ -41,24 +41,12 @@ namespace sgps {
 #endif
 
 // A few pre-computed constants
-#ifndef SGPS_TWO_OVER_THREE
-    #define SGPS_TWO_OVER_THREE 0.666666666666667
-#endif
-#ifndef SGPS_FOUR_OVER_THREE
-    #define SGPS_FOUR_OVER_THREE 1.333333333333333
-#endif
-#ifndef SGPS_FIVE_OVER_THREE
-    #define SGPS_FIVE_OVER_THREE 1.666666666666667
-#endif
-#ifndef SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX
-    #define SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX 1.825741858350554
-#endif
-#ifndef SGPS_PI
-    #define SGPS_PI 3.141592653589793
-#endif
-#ifndef SGPS_PI_SQUARED
-    #define SGPS_PI_SQUARED 9.869604401089358
-#endif
+constexpr double TWO_OVER_THREE = 0.666666666666667;
+constexpr double FOUR_OVER_THREE = 1.333333333333333;
+constexpr double FIVE_OVER_THREE = 1.666666666666667;
+constexpr double TWO_TIMES_SQRT_FIVE_OVER_SIX = 1.825741858350554;
+constexpr double PI = 3.1415926535897932385;
+constexpr double PI_SQUARED = 9.869604401089358;
 
 constexpr uint8_t DEM_VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * SGPS_BITS_PER_BYTE;
 constexpr int64_t DEM_MAX_SUBVOXEL = (int64_t)1 << DEM_VOXEL_RES_POWER2;

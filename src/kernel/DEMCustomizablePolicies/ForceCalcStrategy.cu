@@ -24,10 +24,10 @@ float3 vrel_tan;
     const float Sn = 2. * E * sqrt_Rd;
 
     const float loge = (CoR < SGPS_DEM_TINY_FLOAT) ? log(SGPS_DEM_TINY_FLOAT) : log(CoR);
-    beta = loge / sqrt(loge * loge + SGPS_PI_SQUARED);
+    beta = loge / sqrt(loge * loge + sgps::PI_SQUARED);
 
-    const float k_n = SGPS_TWO_OVER_THREE * Sn;
-    const float gamma_n = SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
+    const float k_n = sgps::TWO_OVER_THREE * Sn;
+    const float gamma_n = sgps::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
 
     force += (k_n * overlapDepth + gamma_n * projection) * B2A;
     // printf("normal force: %f, %f, %f\n", force.x, force.y, force.z);
@@ -39,13 +39,13 @@ if (Crr > 0.0) {
     bool should_add_rolling_resistance = true;
     {
         const float R_eff = sqrtf((ARadius * BRadius) / (ARadius + BRadius));
-        const float kn_simple = SGPS_FOUR_OVER_THREE * E * sqrtf(R_eff);
-        const float gn_simple = -2.f * sqrtf(SGPS_FIVE_OVER_THREE * mass_eff * E) * beta * powf(R_eff, 0.25f);
+        const float kn_simple = sgps::FOUR_OVER_THREE * E * sqrtf(R_eff);
+        const float gn_simple = -2.f * sqrtf(sgps::FIVE_OVER_THREE * mass_eff * E) * beta * powf(R_eff, 0.25f);
 
         const float d_coeff = gn_simple / (2.f * sqrtf(kn_simple * mass_eff));
 
         if (d_coeff < 1.0) {
-            float t_collision = SGPS_PI * sqrtf(mass_eff / (kn_simple * (1.f - d_coeff * d_coeff)));
+            float t_collision = sgps::PI * sqrtf(mass_eff / (kn_simple * (1.f - d_coeff * d_coeff)));
             if (delta_time <= t_collision) {
                 should_add_rolling_resistance = false;
             }
@@ -71,7 +71,7 @@ if (Crr > 0.0) {
 // Tangential force part
 if (mu > 0.0) {
     const float kt = 8. * G * sqrt_Rd;
-    const float gt = -SGPS_TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
+    const float gt = -sgps::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
     float3 tangent_force = -kt * delta_tan - gt * vrel_tan;
     const float ft = length(tangent_force);
     if (ft > SGPS_DEM_TINY_FLOAT) {

@@ -6,6 +6,7 @@
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
 #include <DEM/HostSideHelpers.hpp>
+#include <DEM/utils/Samplers.hpp>
 
 #include <cstdio>
 #include <chrono>
@@ -89,7 +90,7 @@ int main() {
     auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, 0), make_float3(5.0, 5.0, 0.001), sieve_sp_r * 2.0);
     // The sieve is family 1
     family_code.insert(family_code.end(), input_xyz.size(), 1);
-    DEM_sim.SetFamilyPrescribedLinVel(1, "0", "0", "(t > 1.0) ? 2.0 * sin(5.0 * SGPS_PI * (t - 1.0)) : 0");
+    DEM_sim.SetFamilyPrescribedLinVel(1, "0", "0", "(t > 1.0) ? 2.0 * sin(5.0 * PI * (t - 1.0)) : 0");
     // No contact within family 1
     DEM_sim.DisableContactBetweenFamilies(1, 1);
     input_template_type.insert(input_template_type.end(), input_xyz.size(), template_sieve);
