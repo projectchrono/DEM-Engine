@@ -335,6 +335,10 @@ class DEMDynamicThread {
                            const std::vector<float3>& clumps_moi_types,
                            const std::vector<std::vector<float>>& clumps_sp_radii_types,
                            const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                           const std::vector<float>& ext_obj_mass_types,
+                           const std::vector<float3>& ext_obj_moi_types,
+                           const std::vector<float>& mesh_obj_mass_types,
+                           const std::vector<float3>& mesh_obj_moi_types,
                            const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
                            const std::set<unsigned int>& no_output_families,
                            std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs);

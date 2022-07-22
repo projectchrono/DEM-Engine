@@ -29,7 +29,7 @@ namespace sgps {
 class DEMTracker;
 
 //////////////////////////////////////////////////////////////
-// TODO LIST: 1. Check if anal obj's normal direction is correct, and if applyOriQToVec is correct
+// TODO LIST: 1. Variable ts size, quick!
 //            2. Allow ext obj init CoM setting
 //            3. Instruct how many dT steps should at LEAST do before receiving kT update
 //            4. Jitify a family number converter (user to impl)
@@ -465,9 +465,20 @@ class DEMSolver {
     // provided to directly modify them as it is not needed.
     ////////////////////////////////////////////////////////////////////////////////
 
+    // Num of sphere components that all clump templates have
     unsigned int nDistinctClumpComponents;
+
+    // Num of clump templates types, basically. It's also the number of clump template mass properties.
     unsigned int nDistinctClumpBodyTopologies;
+
+    // A design choice is that each analytical obj and meshed obj is its own mass type, so the following 2 quantities
+    // are not independent, so we just won't use them Num of analytical objects loaded unsigned int
+    // nExtObjMassProperties; Num of meshed objects loaded unsigned int nMeshMassProperties;
+
+    // Sum of the above 3 items (but in fact nDistinctClumpBodyTopologies + nExtObj + nTriEntities)
     unsigned int nDistinctMassProperties;
+
+    // Num of material types and family groups
     unsigned int nMatTuples;
     unsigned int nDistinctFamilies;
 
@@ -590,17 +601,23 @@ class DEMSolver {
     std::vector<DEMTriangle> m_mesh_facets;
 
     // Clump templates will be flatten and transferred into kernels upon Initialize()
-    std::vector<float> m_template_mass;
-    std::vector<float3> m_template_moi;
+    std::vector<float> m_template_clump_mass;
+    std::vector<float3> m_template_clump_moi;
     std::vector<std::vector<unsigned int>> m_template_sp_mat_ids;
     std::vector<std::vector<float>> m_template_sp_radii;
     std::vector<std::vector<float3>> m_template_sp_relPos;
+    // Analytical objects that will be flatten and transferred into kernels upon Initialize()
+    std::vector<float> m_ext_obj_mass;
+    std::vector<float3> m_ext_obj_moi;
+    // Meshed objects that will be flatten and transferred into kernels upon Initialize()
+    std::vector<float> m_mesh_obj_mass;
+    std::vector<float3> m_mesh_obj_moi;
     /*
     // Dan and Ruochun decided NOT to extract unique input values.
     // Instead, we trust users: we simply store all clump template info users give.
     // So this unique-value-extractor block is disabled and commented.
 
-    // unique clump masses derived from m_template_mass
+    // unique clump masses derived from m_template_clump_mass
     std::set<float> m_template_mass_types;
     std::vector<unsigned int> m_template_mass_type_offset;
     // unique sphere radii types derived from m_template_sp_radii
@@ -694,7 +711,7 @@ class DEMSolver {
     inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap);
     inline void equipClumpTemplateAcquisition(std::unordered_map<std::string, std::string>& strMap);
     inline void equipSimParams(std::unordered_map<std::string, std::string>& strMap);
-    inline void equipClumpMassMat(std::unordered_map<std::string, std::string>& strMap);
+    inline void equipMassMat(std::unordered_map<std::string, std::string>& strMap);
     inline void equipAnalGeoTemplates(std::unordered_map<std::string, std::string>& strMap);
     inline void equipFamilyMasks(std::unordered_map<std::string, std::string>& strMap);
     inline void equipFamilyPrescribedMotions(std::unordered_map<std::string, std::string>& strMap);

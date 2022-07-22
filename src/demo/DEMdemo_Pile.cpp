@@ -33,22 +33,6 @@ int main() {
     float min_relpos = -0.01;
     float max_relpos = 0.01;
 
-    /*
-    std::vector<float> radii_a_vec(3, .4);
-    std::vector<float> radii_b_vec(3, .6);
-    std::vector<float> radii_c_vec(3, .8);
-
-    std::vector<float3> pos_a_vec(3, make_float3(.1, .12, .08));
-    std::vector<float3> pos_b_vec(3, make_float3(.1, .05, .06));
-    std::vector<float3> pos_c_vec(3, make_float3(.12, .1, .14));
-    std::vector<float3> pos_d_vec;
-    pos_d_vec.push_back(2. * make_float3(.2, .3, .17));
-    pos_d_vec.push_back(2. * make_float3(.12, .4, .37));
-    pos_d_vec.push_back(2. * make_float3(.22, .19, .45));
-
-    std::vector<unsigned int> mat_vec(3, 0);
-    */
-
     auto mat_type_1 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.3);
     auto mat_type_2 = DEM_sim.LoadMaterialType(1e9, 0.3, 0.7);
 

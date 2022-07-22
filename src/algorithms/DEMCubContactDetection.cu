@@ -180,12 +180,12 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
         GPU_CALL(cudaStreamSynchronize(this_stream));
 
         //// TODO: sphere should have jitified and non-jitified part. Use a component ID > max_comp_id to signal
-        ///bringing data from global memory. / TODO: Add tri--sphere CD kernel (if mesh support is to be added). This
-        ///kernel integrates tri--boundary CD. Note triangle facets can have jitified (many bodies of the same type) and
-        ///non-jitified (a big meshed body) part. Use a component ID > max_comp_id to signal bringing data from global
-        ///memory. / TODO: Add tri--tri CD kernel (in the far future, should mesh-rerpesented geometry to be supported).
-        ///This kernel integrates tri--boundary CD. / TODO: remember that boundary types are either all jitified or
-        ///non-jitified. In principal, they should be all jitified.
+        /// bringing data from global memory. / TODO: Add tri--sphere CD kernel (if mesh support is to be added). This
+        /// kernel integrates tri--boundary CD. Note triangle facets can have jitified (many bodies of the same type)
+        /// and non-jitified (a big meshed body) part. Use a component ID > max_comp_id to signal bringing data from
+        /// global memory. / TODO: Add tri--tri CD kernel (in the far future, should mesh-rerpesented geometry to be
+        /// supported). This kernel integrates tri--boundary CD. / TODO: remember that boundary types are either all
+        /// jitified or non-jitified. In principal, they should be all jitified.
 
         // Prescan numContactsInEachBin to get the final contactReportOffsets. A new vector is needed.
         CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(contactPairs_t);

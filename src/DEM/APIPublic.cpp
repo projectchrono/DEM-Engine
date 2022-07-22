@@ -388,8 +388,8 @@ void DEMSolver::ClearCache() {
     m_input_ext_obj_xyz.clear();
     m_input_ext_obj_family.clear();
 
-    m_template_mass.clear();
-    m_template_moi.clear();
+    m_template_clump_mass.clear();
+    m_template_clump_moi.clear();
     m_template_sp_radii.clear();
     m_template_sp_relPos.clear();
     m_template_sp_mat_ids.clear();

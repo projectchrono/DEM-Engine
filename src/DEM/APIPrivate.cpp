@@ -27,9 +27,9 @@ void DEMSolver::generateJITResources() {
     // Dan and Ruochun decided not to extract unique input values.
     // Instead, we trust users: we simply store all clump template info users give.
     // So the unique-value-extractor block is disabled and commented.
-    size_t input_num_clump_types = m_template_mass.size();
+    size_t input_num_clump_types = m_template_clump_mass.size();
     // Put unique clump mass values in a set.
-    m_template_mass_types.insert(m_template_mass.begin(), m_template_mass.end());
+    m_template_mass_types.insert(m_template_clump_mass.begin(), m_template_clump_mass.end());
     for (size_t i = 0; i < input_num_clump_types; i++) {
         // Put unique sphere radii values in a set.
         m_template_sp_radii_types.insert(m_template_sp_radii.at(i).begin(), m_template_sp_radii.at(i).end());
@@ -40,7 +40,7 @@ void DEMSolver::generateJITResources() {
     // uniques sets.
     for (size_t i = 0; i < input_num_clump_types; i++) {
         m_template_mass_type_offset.push_back(
-            std::distance(m_template_mass_types.begin(), m_template_mass_types.find(m_template_mass.at(i))));
+            std::distance(m_template_mass_types.begin(), m_template_mass_types.find(m_template_clump_mass.at(i))));
         std::vector<distinctSphereRadiiOffset_default_t> sp_radii_type_offset(m_template_sp_radii.at(i).size(), 0);
         std::vector<distinctSphereRelativePositions_default_t> sp_location_type_offset(
             m_template_sp_relPos.at(i).size(), 0);
@@ -71,8 +71,6 @@ void DEMSolver::generateJITResources() {
 
     // Flatten cached clump templates (from ClumpTemplate structs to float arrays), make ready for transferring to kTdT
     preprocessClumpTemplates();
-    // m_template_mass may be `appended' later, so we have to do it here
-    nDistinctClumpBodyTopologies = m_template_mass.size();
 
     // Figure out info about external objects/clump templates and whether they can be jitified
     preprocessAnalyticalObjs();
@@ -87,9 +85,9 @@ void DEMSolver::generateJITResources() {
     // Based on user input, prepare family_mask_matrix (family contact map matrix)
     figureOutFamilyMasks();
 
-    // nDistinctMassProperties will be larger than nDistinctClumpBodyTopologies, b/c of the external objects got
-    // appended to the mass/MOI arrays
-    nDistinctMassProperties = m_template_mass.size();
+    // Compute stats
+    nDistinctClumpBodyTopologies = m_template_clump_mass.size();
+    nDistinctMassProperties = nDistinctClumpBodyTopologies + nExtObj + nTriEntities;
 
     // Also, external objects may introduce more material types
     nMatTuples = m_loaded_materials.size();
@@ -144,10 +142,12 @@ void DEMSolver::postJITResourceGenSanityCheck() {
     }
 
     // Sanity check for final number of mass properties/inertia offsets
+    //// TODO: Maybe mass properties should also have jitifiable and non-jitifiable part???
     if (nDistinctMassProperties >= std::numeric_limits<inertiaOffset_t>::max()) {
         SGPS_DEM_ERROR(
-            "%u clump templates are loaded, but the max allowance is %u (No.%u is reserved).\nThis many clump "
-            "templates are not recommended but if they are indeed needed, you can redefine inertiaOffset_t.",
+            "%u different mass properties (from the contribution of clump templates, analytical objects and meshed "
+            "objects) are loaded, but the max allowance is %u (No.%u is reserved).\nThis many types of mass properties "
+            "are not recommended but if they are indeed needed, you can redefine inertiaOffset_t.",
             nDistinctMassProperties, std::numeric_limits<inertiaOffset_t>::max() - 1,
             std::numeric_limits<inertiaOffset_t>::max());
     }
@@ -189,8 +189,8 @@ void DEMSolver::preprocessClumpTemplates() {
 
     // Now we can flatten clump template and make ready for transfer
     for (const auto& clump : m_templates) {
-        m_template_mass.push_back(clump->mass);
-        m_template_moi.push_back(clump->MOI);
+        m_template_clump_mass.push_back(clump->mass);
+        m_template_clump_moi.push_back(clump->MOI);
         m_template_sp_radii.push_back(clump->radii);
         // TODO: If CoM is not all-0, then relPos should be massaged here
         m_template_sp_relPos.push_back(clump->relPos);
@@ -201,7 +201,7 @@ void DEMSolver::preprocessClumpTemplates() {
             this_clump_sp_mat_ids.push_back(stash_material_in_templates(m_loaded_materials, this_material));
         }
         m_template_sp_mat_ids.push_back(this_clump_sp_mat_ids);
-        SGPS_DEM_DEBUG_EXEC(printf("Input clump No.%d has material types: ", m_template_mass.size() - 1);
+        SGPS_DEM_DEBUG_EXEC(printf("Input clump No.%d has material types: ", m_template_clump_mass.size() - 1);
                             for (unsigned int i = 0; i < this_clump_sp_mat_ids.size();
                                  i++) { printf("%d, ", this_clump_sp_mat_ids.at(i)); } printf("\n"););
     }
@@ -233,7 +233,7 @@ void DEMSolver::jitifyKernels() {
     equipClumpTemplates(templateSubs);
     equipClumpTemplateAcquisition(templateAcqSubs);
     equipSimParams(simParamSubs);
-    equipClumpMassMat(massMatSubs);
+    equipMassMat(massMatSubs);
     equipAnalGeoTemplates(analGeoSubs);
     equipFamilyMasks(familyMaskSubs);
     equipFamilyPrescribedMotions(familyPrescribeSubs);
@@ -346,10 +346,9 @@ void DEMSolver::preprocessAnalyticalObjs() {
     nExtObj += cached_extern_objs.size();
     unsigned int thisExtObj = 0;
     for (const auto& ext_obj : cached_extern_objs) {
-        // Load mass and MOI properties into arrays waiting to be transfered to kTdT. Note this must be done after user
-        // loads all clump templates, as ext obj's mass info is `appended' to clump mass arrays
-        m_template_mass.push_back(ext_obj->mass);
-        m_template_moi.push_back(ext_obj->MOI);
+        // Load mass and MOI properties into arrays waiting to be transfered to kTdT
+        m_ext_obj_mass.push_back(ext_obj->mass);
+        m_ext_obj_moi.push_back(ext_obj->MOI);
 
         //// TODO: If CoM is not all-0, all components should be offsetted
         // float3 CoM = ext_obj->CoM;
@@ -387,6 +386,8 @@ void DEMSolver::preprocessTriangleObjs() {
     nTriEntities += cached_mesh_objs.size();
     unsigned int thisMeshObj = 0;
     for (const auto& mesh_obj : cached_mesh_objs) {
+        m_mesh_obj_mass.push_back(mesh_obj->mass);
+        m_mesh_obj_moi.push_back(mesh_obj->MOI);
         //// TODO: If CoM is not all-0, all components should be offsetted
         // float3 CoM = ext_obj->CoM;
         // float4 CoM_oriQ = ext_obj->CoM_oriQ;
@@ -652,8 +653,13 @@ void DEMSolver::initializeArrays() {
         m_mesh_facets,
         // Family number mapping
         m_family_user_impl_map, m_family_impl_user_map,
-        // Template info (mass, sphere components, materials etc.)
-        m_template_sp_mat_ids, m_template_mass, m_template_moi, m_template_sp_radii, m_template_sp_relPos,
+        // Clump template info (mass, sphere components, materials etc.)
+        m_template_sp_mat_ids, m_template_clump_mass, m_template_clump_moi, m_template_sp_radii, m_template_sp_relPos,
+        // Analytical obj `template' properties
+        m_ext_obj_mass, m_ext_obj_moi,
+        // Meshed obj `template' properties
+        m_mesh_obj_mass, m_mesh_obj_moi,
+        // Universal template info
         m_loaded_materials,
         // I/O and misc.
         m_no_output_families, m_tracked_objs);
@@ -665,7 +671,7 @@ void DEMSolver::initializeArrays() {
         // Meshed objects' initial stats
         m_input_mesh_obj_family,
         // Templates and misc.
-        m_family_user_impl_map, m_template_mass, m_template_sp_radii, m_template_sp_relPos);
+        m_family_user_impl_map, m_template_clump_mass, m_template_sp_radii, m_template_sp_relPos);
 }
 
 void DEMSolver::packDataPointers() {
@@ -890,16 +896,26 @@ inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std
     strMap["_objSize3_"] = objSize3;
 }
 
-inline void DEMSolver::equipClumpMassMat(std::unordered_map<std::string, std::string>& strMap) {
+inline void DEMSolver::equipMassMat(std::unordered_map<std::string, std::string>& strMap) {
     std::string MassProperties, moiX, moiY, moiZ, E_proxy, nu_proxy, CoR_proxy, mu_proxy, Crr_proxy;
-    // Loop through all templates to find in the JIT info
-    // Note m_template_mass's size is nDistinctMassProperties, and it may be large than nDistinctClumpBodyTopologies
-    // because the ext obj mass entries and meshed objs mass entries are appended to that array
-    for (unsigned int i = 0; i < m_template_mass.size(); i++) {
-        MassProperties += to_string_with_precision(m_template_mass.at(i)) + ",";
-        moiX += to_string_with_precision(m_template_moi.at(i).x) + ",";
-        moiY += to_string_with_precision(m_template_moi.at(i).y) + ",";
-        moiZ += to_string_with_precision(m_template_moi.at(i).z) + ",";
+    // Loop through all templates to jitify them
+    for (unsigned int i = 0; i < m_template_clump_mass.size(); i++) {
+        MassProperties += to_string_with_precision(m_template_clump_mass.at(i)) + ",";
+        moiX += to_string_with_precision(m_template_clump_moi.at(i).x) + ",";
+        moiY += to_string_with_precision(m_template_clump_moi.at(i).y) + ",";
+        moiZ += to_string_with_precision(m_template_clump_moi.at(i).z) + ",";
+    }
+    for (unsigned int i = 0; i < m_ext_obj_mass.size(); i++) {
+        MassProperties += to_string_with_precision(m_ext_obj_mass.at(i)) + ",";
+        moiX += to_string_with_precision(m_ext_obj_moi.at(i).x) + ",";
+        moiY += to_string_with_precision(m_ext_obj_moi.at(i).y) + ",";
+        moiZ += to_string_with_precision(m_ext_obj_moi.at(i).z) + ",";
+    }
+    for (unsigned int i = 0; i < m_mesh_obj_mass.size(); i++) {
+        MassProperties += to_string_with_precision(m_mesh_obj_mass.at(i)) + ",";
+        moiX += to_string_with_precision(m_mesh_obj_moi.at(i).x) + ",";
+        moiY += to_string_with_precision(m_mesh_obj_moi.at(i).y) + ",";
+        moiZ += to_string_with_precision(m_mesh_obj_moi.at(i).z) + ",";
     }
     for (unsigned int i = 0; i < nMatTuples; i++) {
         E_proxy += to_string_with_precision(m_E_proxy.at(i)) + ",";

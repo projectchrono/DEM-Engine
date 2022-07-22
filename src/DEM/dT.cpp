@@ -269,6 +269,10 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
                                          const std::vector<float3>& clumps_moi_types,
                                          const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                          const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                                         const std::vector<float>& ext_obj_mass_types,
+                                         const std::vector<float3>& ext_obj_moi_types,
+                                         const std::vector<float>& mesh_obj_mass_types,
+                                         const std::vector<float3>& mesh_obj_moi_types,
                                          const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
                                          const std::set<unsigned int>& no_output_families,
                                          std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs) {
@@ -286,12 +290,32 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
     }
 
     // Then load in clump mass and MOI
-    for (unsigned int i = 0; i < simParams->nDistinctMassProperties; i++) {
-        massOwnerBody.at(i) = clumps_mass_types.at(i);
-        float3 this_moi = clumps_moi_types.at(i);
-        mmiXX.at(i) = this_moi.x;
-        mmiYY.at(i) = this_moi.y;
-        mmiZZ.at(i) = this_moi.z;
+    size_t k = 0;
+    {
+        for (unsigned int i = 0; i < clumps_mass_types.size(); i++) {
+            massOwnerBody.at(k) = clumps_mass_types.at(i);
+            float3 this_moi = clumps_moi_types.at(i);
+            mmiXX.at(k) = this_moi.x;
+            mmiYY.at(k) = this_moi.y;
+            mmiZZ.at(k) = this_moi.z;
+            k++;
+        }
+        for (unsigned int i = 0; i < ext_obj_mass_types.size(); i++) {
+            massOwnerBody.at(k) = ext_obj_mass_types.at(i);
+            float3 this_moi = ext_obj_moi_types.at(i);
+            mmiXX.at(k) = this_moi.x;
+            mmiYY.at(k) = this_moi.y;
+            mmiZZ.at(k) = this_moi.z;
+            k++;
+        }
+        for (unsigned int i = 0; i < mesh_obj_mass_types.size(); i++) {
+            massOwnerBody.at(k) = mesh_obj_mass_types.at(i);
+            float3 this_moi = mesh_obj_moi_types.at(i);
+            mmiXX.at(k) = this_moi.x;
+            mmiYY.at(k) = this_moi.y;
+            mmiZZ.at(k) = this_moi.z;
+            k++;
+        }
     }
 
     // dT will need this family number map, store it
@@ -311,28 +335,30 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
         SGPS_DEM_DEBUG_EXEC(displayArray<family_t>(familiesNoOutput.data(), familiesNoOutput.size()));
     }
 
-    // Then, load in clump type info
+    // Then, load in clump components info
     // All flattened to single arrays, so a prescans_comp is needed so we know each input clump's component offsets
-    size_t k = 0;
+    k = 0;
     std::vector<unsigned int> prescans_comp;
 
-    prescans_comp.push_back(0);
-    for (auto elem : clumps_sp_radii_types) {
-        for (auto radius : elem) {
-            radiiSphere.at(k) = radius;
-            k++;
+    {
+        prescans_comp.push_back(0);
+        for (const auto& elem : clumps_sp_radii_types) {
+            for (const auto& radius : elem) {
+                radiiSphere.at(k) = radius;
+                k++;
+            }
+            prescans_comp.push_back(k);
         }
-        prescans_comp.push_back(k);
-    }
-    prescans_comp.pop_back();
-    k = 0;
+        prescans_comp.pop_back();
+        k = 0;
 
-    for (auto elem : clumps_sp_location_types) {
-        for (auto loc : elem) {
-            relPosSphereX.at(k) = loc.x;
-            relPosSphereY.at(k) = loc.y;
-            relPosSphereZ.at(k) = loc.z;
-            k++;
+        for (const auto& elem : clumps_sp_location_types) {
+            for (const auto& loc : elem) {
+                relPosSphereX.at(k) = loc.x;
+                relPosSphereY.at(k) = loc.y;
+                relPosSphereZ.at(k) = loc.z;
+                k++;
+            }
         }
     }
 
@@ -449,21 +475,12 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
     for (size_t i = 0; i < simParams->nExtObj; i++) {
         inertiaPropOffsets.at(i + offset_for_ext_obj) = i + offset_for_ext_obj_mass_template;
         auto this_CoM_coord = input_ext_obj_xyz.at(i) - LBF;
-        voxelID_t voxelNumX = (double)this_CoM_coord.x / simParams->voxelSize;
-        voxelID_t voxelNumY = (double)this_CoM_coord.y / simParams->voxelSize;
-        voxelID_t voxelNumZ = (double)this_CoM_coord.z / simParams->voxelSize;
-        locX.at(i + offset_for_ext_obj) =
-            ((double)this_CoM_coord.x - (double)voxelNumX * simParams->voxelSize) / simParams->l;
-        locY.at(i + offset_for_ext_obj) =
-            ((double)this_CoM_coord.y - (double)voxelNumY * simParams->voxelSize) / simParams->l;
-        locZ.at(i + offset_for_ext_obj) =
-            ((double)this_CoM_coord.z - (double)voxelNumZ * simParams->voxelSize) / simParams->l;
-
-        voxelID.at(i + offset_for_ext_obj) += voxelNumX;
-        voxelID.at(i + offset_for_ext_obj) += voxelNumY << simParams->nvXp2;
-        voxelID.at(i + offset_for_ext_obj) += voxelNumZ << (simParams->nvXp2 + simParams->nvYp2);
-        // TODO: and initial rot?
-        // TODO: and initial vel?
+        hostPositionToVoxelID<voxelID_t, subVoxelPos_t, double>(
+            voxelID.at(i + offset_for_ext_obj), locX.at(i + offset_for_ext_obj), locY.at(i + offset_for_ext_obj),
+            locZ.at(i + offset_for_ext_obj), (double)this_CoM_coord.x, (double)this_CoM_coord.y,
+            (double)this_CoM_coord.z, simParams->nvXp2, simParams->nvYp2, simParams->voxelSize, simParams->l);
+        //// TODO: and initial rot?
+        //// TODO: and initial vel?
 
         family_t this_family_num = family_user_impl_map.at(input_ext_obj_family.at(i));
         familyID.at(i + offset_for_ext_obj) = this_family_num;
@@ -473,9 +490,39 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
     SGPS_DEM_DEBUG_EXEC(displayArray<clumpComponentOffset_t>(clumpComponentOffset.data(), simParams->nSpheresGM));
     SGPS_DEM_DEBUG_EXEC(displayArray<clumpComponentOffsetExt_t>(clumpComponentOffsetExt.data(), simParams->nSpheresGM));
 
+    // Load in initial positions and mass properties for the owners of the meshed objects
+    // They go after analytical object owners
+    size_t offset_for_mesh_obj = offset_for_ext_obj + simParams->nExtObj;
+    unsigned int offset_for_mesh_obj_mass_template = offset_for_ext_obj_mass_template + simParams->nExtObj;
+    for (size_t i = 0; i < simParams->nTriEntities; i++) {
+        inertiaPropOffsets.at(i + offset_for_mesh_obj) = i + offset_for_mesh_obj_mass_template;
+        auto this_CoM_coord = input_mesh_obj_xyz.at(i) - LBF;
+        hostPositionToVoxelID<voxelID_t, subVoxelPos_t, double>(
+            voxelID.at(i + offset_for_mesh_obj), locX.at(i + offset_for_mesh_obj), locY.at(i + offset_for_mesh_obj),
+            locZ.at(i + offset_for_mesh_obj), (double)this_CoM_coord.x, (double)this_CoM_coord.y,
+            (double)this_CoM_coord.z, simParams->nvXp2, simParams->nvYp2, simParams->voxelSize, simParams->l);
+
+        // Set mesh owner's oriQ
+        auto oriQ_of_this = input_mesh_obj_rot.at(i);
+        oriQ0.at(i + offset_for_mesh_obj) = oriQ_of_this.x;
+        oriQ1.at(i + offset_for_mesh_obj) = oriQ_of_this.y;
+        oriQ2.at(i + offset_for_mesh_obj) = oriQ_of_this.z;
+        oriQ3.at(i + offset_for_mesh_obj) = oriQ_of_this.w;
+
+        //// TODO: and initial vel?
+
+        //// TODO: Per-facet info
+        // mesh_facet_owner,
+        // mesh_facet_materials,
+        // mesh_facets,
+
+        family_t this_family_num = family_user_impl_map.at(input_mesh_obj_family.at(i));
+        familyID.at(i + offset_for_mesh_obj) = this_family_num;
+    }
+
     // Provide feedback to the tracked objects, tell them the owner numbers they are looking for
     // Little computation is needed, as long as we know the structure of our owner array: nOwnerClumps go first, then
-    // nExtObj
+    // nExtObj, then nTriEntities
     for (auto& tracked_obj : tracked_objs) {
         switch (tracked_obj->type) {
             case (DEM_ENTITY_TYPE::CLUMP):
