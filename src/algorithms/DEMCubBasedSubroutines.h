@@ -32,7 +32,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                       std::vector<contact_t, ManagedAllocator<contact_t>>& previous_contactType,
                       std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>>& contactMapping,
                       cudaStream_t& this_stream,
-                      DEMSolverStateData& scratchPad);
+                      DEMSolverStateData& scratchPad,
+                      SolverTimers& timers);
 
 void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernels,
                           inertiaOffset_t* inertiaPropOffsets,
@@ -58,6 +59,7 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
                           const size_t nClumps,
                           bool contactPairArr_isFresh,
                           cudaStream_t& this_stream,
-                          DEMSolverStateData& scratchPad);
+                          DEMSolverStateData& scratchPad,
+                          SolverTimers& timers);
 
 }  // namespace sgps

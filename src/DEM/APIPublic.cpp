@@ -547,6 +547,32 @@ void DEMSolver::Initialize() {
     sys_initialized = true;
 }
 
+void DEMSolver::ShowTimingStats() {
+    std::vector<std::string> kT_timer_names, dT_timer_names;
+    std::vector<double> kT_timer_vals, dT_timer_vals;
+    double kT_total_time, dT_total_time;
+    kT->getTiming(kT_timer_names, kT_timer_vals);
+    dT->getTiming(dT_timer_names, dT_timer_vals);
+    kT_total_time = vector_sum<double>(kT_timer_vals);
+    dT_total_time = vector_sum<double>(dT_timer_vals);
+    SGPS_DEM_PRINTF("\n~~ kT TIMING STATISTICS ~~\n");
+    for (unsigned int i = 0; i < kT_timer_names.size(); i++) {
+        SGPS_DEM_PRINTF("%s: %.9g seconds, %.6g%% of kT total runtime\n", kT_timer_names.at(i).c_str(),
+                        kT_timer_vals.at(i), kT_timer_vals.at(i) / kT_total_time * 100.);
+    }
+    SGPS_DEM_PRINTF("\n~~ dT TIMING STATISTICS ~~\n");
+    for (unsigned int i = 0; i < dT_timer_names.size(); i++) {
+        SGPS_DEM_PRINTF("%s: %.9g seconds, %.6g%% of dT total runtime\n", dT_timer_names.at(i).c_str(),
+                        dT_timer_vals.at(i), dT_timer_vals.at(i) / dT_total_time * 100.);
+    }
+    SGPS_DEM_PRINTF("\n--------------------------\n");
+}
+
+void DEMSolver::ClearTimingStats() {
+    kT->resetTimers();
+    dT->resetTimers();
+}
+
 void DEMSolver::ReleaseFlattenedArrays() {
     deallocate_array(m_input_ext_obj_xyz);
     deallocate_array(m_input_ext_obj_family);
@@ -630,12 +656,13 @@ void DEMSolver::DoDynamicsThenSync(double thisCallDuration) {
 
 void DEMSolver::ShowThreadCollaborationStats() {
     SGPS_DEM_PRINTF("\n~~ kT--dT CO-OP STATISTICS ~~\n");
-    SGPS_DEM_PRINTF("Number of dynamic updates: %u", (dTkT_InteractionManager->schedulingStats.nDynamicUpdates).load());
-    SGPS_DEM_PRINTF("Number of kinematic updates: %u",
+    SGPS_DEM_PRINTF("Number of dynamic updates: %u\n",
+                    (dTkT_InteractionManager->schedulingStats.nDynamicUpdates).load());
+    SGPS_DEM_PRINTF("Number of kinematic updates: %u\n",
                     (dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load());
-    SGPS_DEM_PRINTF("Number of times dynamic held back: %u",
+    SGPS_DEM_PRINTF("Number of times dynamic held back: %u\n",
                     (dTkT_InteractionManager->schedulingStats.nTimesDynamicHeldBack).load());
-    SGPS_DEM_PRINTF("Number of times kinematic held back: %u",
+    SGPS_DEM_PRINTF("Number of times kinematic held back: %u\n",
                     (dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack).load());
     SGPS_DEM_PRINTF("\n-----------------------------\n");
 }

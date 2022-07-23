@@ -10,6 +10,7 @@
 #include <list>
 #include <cmath>
 #include <vector>
+#include <numeric>
 #include <algorithm>
 #include <regex>
 #include <fstream>
@@ -42,6 +43,12 @@ inline void displayFloat3(float3* arr, size_t n) {
         std::cout << "(" << +(arr[i].x) << ", " << +(arr[i].y) << ", " << +(arr[i].z) << "), ";
     }
     std::cout << std::endl;
+}
+
+template <typename T1>
+inline T1 vector_sum(const std::vector<T1>& vect) {
+    T1 sum_of_elems = std::accumulate(vect.begin(), vect.end(), T1(0));
+    return sum_of_elems;
 }
 
 template <typename T1>

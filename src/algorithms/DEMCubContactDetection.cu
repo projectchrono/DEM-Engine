@@ -50,10 +50,12 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                       std::vector<contact_t, ManagedAllocator<contact_t>>& previous_contactType,
                       std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>>& contactMapping,
                       cudaStream_t& this_stream,
-                      DEMSolverStateData& scratchPad) {
+                      DEMSolverStateData& scratchPad,
+                      SolverTimers& timers) {
     // total bytes needed for temp arrays in contact detection
     size_t CD_temp_arr_bytes = 0;
 
+    timers.GetTimer("Discretize domain").start();
     // 1st step: register the number of sphere--bin touching pairs for each sphere for further processing
     CD_temp_arr_bytes = simParams->nSpheresGM * sizeof(binsSphereTouches_t);
     binsSphereTouches_t* numBinsSphereTouches =
@@ -163,7 +165,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
         numSpheresBinTouches, sphereIDsLookUpTable, *pNumActiveBins, this_stream, scratchPad);
     // std::cout << "sphereIDsLookUpTable: ";
     // displayArray<binSphereTouchPairs_t>(sphereIDsLookUpTable, *pNumActiveBins);
+    timers.GetTimer("Discretize domain").stop();
 
+    timers.GetTimer("Find contact pairs").start();
     // 6th step: find the contact pairs. One-two punch: first find num of contacts in each bin, then prescan, then find
     // the actual pair names. A new temp array is needed for this numContactsInEachBin. Note we assume the number of
     // contact in each bin is the same level as the number of spheres in each bin (capped by the same data type).
@@ -221,7 +225,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
         GPU_CALL(cudaStreamSynchronize(this_stream));
 
     }  // End of bin-wise contact detection subroutine
+    timers.GetTimer("Find contact pairs").stop();
 
+    timers.GetTimer("Build history map").start();
     // Now, sort idGeometryAB by their owners. Needed for identifying persistent contacts in history-based models.
     if (*scratchPad.pNumContacts > 0) {
         if ((!solverFlags.isHistoryless) || solverFlags.should_sort_pairs) {
@@ -363,6 +369,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
             }
         }
     }  // End of contact sorting--mapping subroutine
+    timers.GetTimer("Build history map").stop();
 
     // Now, given the dT force kernel size, how many contacts should each thread takes care of so idA can be resonably
     // cached in shared memory?

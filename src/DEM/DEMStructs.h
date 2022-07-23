@@ -9,11 +9,14 @@
 #include <core/utils/ManagedAllocator.hpp>
 #include <core/utils/csv.hpp>
 #include <core/utils/GpuError.h>
+#include <core/utils/Timer.hpp>
+
 #include <sstream>
 #include <exception>
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
+#include <unordered_map>
 #include <nvmath/helper_math.cuh>
 #include <DEM/HostSideHelpers.hpp>
 
@@ -116,7 +119,6 @@ inline std::string pretty_format_bytes(size_t bytes) {
     {                                           \
         if (verbosity > DEM_VERBOSITY::QUIET) { \
             printf(__VA_ARGS__);                \
-            printf("\n");                       \
         }                                       \
     }
 
@@ -207,6 +209,21 @@ inline std::string pretty_format_bytes(size_t bytes) {
 // =============================================================================
 // NOW SOME HOST-SIDE SIMPLE STRUCTS USED BY THE DEM MODULE
 // =============================================================================
+
+// Timers used by kT and dT
+class SolverTimers {
+  private:
+    const unsigned int num_timers;
+    std::unordered_map<std::string, Timer<double>> m_timers;
+
+  public:
+    SolverTimers(const std::vector<std::string>& names) : num_timers(names.size()) {
+        for (unsigned int i = 0; i < num_timers; i++) {
+            m_timers[names.at(i)] = Timer<double>();
+        }
+    }
+    Timer<double>& GetTimer(const std::string& name) { return m_timers.at(name); }
+};
 
 // Manager of the collabortation between the main thread and worker threads
 class WorkerReportChannel {

@@ -297,10 +297,16 @@ class DEMSolver {
     /// dT should be allowed to be in advance of kT.
     void ShowThreadCollaborationStats();
 
+    /// Show the wall time and percentages of wall time spend on various solver tasks
+    void ShowTimingStats();
+
     /// Reset the collaboration stats between dT and kT back to the initial value (0). You should call this if you want
     /// to start over and re-inspect the stats of the new run; otherwise, it is generally not needed, you can go ahead
     /// and destroy DEMSolver.
     void ClearThreadCollaborationStats();
+
+    /// Reset the recordings of the wall time and percentages of wall time spend on various solver tasks
+    void ClearTimingStats();
 
     /// Removes all entities associated with a family from the arrays (to save memory space)
     void PurgeFamily(unsigned int family_num);

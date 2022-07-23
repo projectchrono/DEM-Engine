@@ -234,6 +234,11 @@ class DEMDynamicThread {
     std::unordered_map<unsigned int, family_t> familyUserImplMap;
     std::unordered_map<family_t, unsigned int> familyImplUserMap;
 
+    // dT's timers
+    std::vector<std::string> timer_names = {"Calculate contact forces", "Collect contact forces", "Integration",
+                                            "Unpack updates from kT", "Send to kT buffer"};
+    SolverTimers timers = SolverTimers(timer_names);
+
   public:
     friend class DEMSolver;
     friend class DEMKinematicThread;
@@ -268,7 +273,7 @@ class DEMDynamicThread {
     // buffer exchange methods
     void setDestinationBufferPointers();
 
-    // Set SimParams items
+    /// Set SimParams items
     void setSimParams(unsigned char nvXp2,
                       unsigned char nvYp2,
                       unsigned char nvZp2,
@@ -283,7 +288,7 @@ class DEMDynamicThread {
                       double ts_size,
                       float expand_factor);
 
-    // Compute total KE of all clumps
+    /// Compute total KE of all clumps
     float getKineticEnergy();
 
     /// Get this owner's position in user unit
@@ -304,7 +309,7 @@ class DEMDynamicThread {
     /// Set this owner's velocity
     void setOwnerVel(bodyID_t ownerID, float3 vel);
 
-    // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
+    /// Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
     void allocateManagedArrays(size_t nOwnerBodies,
                                size_t nOwnerClumps,
                                unsigned int nExtObj,
@@ -318,7 +323,7 @@ class DEMDynamicThread {
                                unsigned int nJitifiableClumpComponents,
                                unsigned int nMatTuples);
 
-    // Data type TBD, should come from JITCed headers
+    /// Data type TBD, should come from JITCed headers
     void initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                            const std::vector<float3>& input_ext_obj_xyz,
                            const std::vector<unsigned int>& input_ext_obj_family,
@@ -343,14 +348,14 @@ class DEMDynamicThread {
                            const std::set<unsigned int>& no_output_families,
                            std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs);
 
-    // Put sim data array pointers in place
+    /// Put sim data array pointers in place
     void packDataPointers();
     void packTransferPointers(DEMKinematicThread* kT);
 
     void writeSpheresAsChpf(std::ofstream& ptFile) const;
     void writeSpheresAsCsv(std::ofstream& ptFile) const;
 
-    // Called each time when the user calls DoDynamicsThenSync.
+    /// Called each time when the user calls DoDynamicsThenSync.
     void startThread();
 
     // The actual kernel things go here.
@@ -361,6 +366,16 @@ class DEMDynamicThread {
     void resetUserCallStat();
     // Return the approximate RAM usage
     size_t estimateMemUsage() const;
+
+    /// Return timing inforation for this current run
+    void getTiming(std::vector<std::string>& names, std::vector<double>& vals);
+
+    /// Reset the timers
+    void resetTimers() {
+        for (const auto& name : timer_names) {
+            timers.GetTimer(name).reset();
+        }
+    }
 
     // Jitify dT kernels (at initialization) based on existing knowledge of this run
     void jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,

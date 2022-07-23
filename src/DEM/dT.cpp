@@ -289,7 +289,7 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
         CrrProxy.at(i) = Mat->Crr;
     }
 
-    // Then load in clump mass and MOI
+    // Then load in mass and MOI template info
     size_t k = 0;
     {
         for (unsigned int i = 0; i < clumps_mass_types.size(); i++) {
@@ -898,6 +898,7 @@ inline void DEMDynamicThread::calculateForces() {
     // If no contact then we don't have to calculate forces. Note there might still be forces, coming from prescription
     // or other sources.
     if (blocks_needed_for_contacts > 0) {
+        timers.GetTimer("Calculate contact forces").start();
         // a custom kernel to compute forces
         cal_force_kernels->kernel("calculateContactForces")
             .instantiate()
@@ -906,7 +907,9 @@ inline void DEMDynamicThread::calculateForces() {
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         // displayFloat3(granData->contactForces, *stateOfSolver_resources.pNumContacts);
         // std::cout << "===========================" << std::endl;
+        timers.GetTimer("Calculate contact forces").stop();
 
+        timers.GetTimer("Collect contact forces").start();
         // Reflect those body-wise forces on their owner clumps
         // hostCollectForces(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
         //                   granData->contactForces, granData->aX, granData->aY, granData->aZ,
@@ -918,7 +921,7 @@ inline void DEMDynamicThread::calculateForces() {
             granData->contactPointGeometryA, granData->contactPointGeometryB, granData->oriQ0, granData->oriQ1,
             granData->oriQ2, granData->oriQ3, granData->aX, granData->aY, granData->aZ, granData->alphaX,
             granData->alphaY, granData->alphaZ, granData->ownerClumpBody, *stateOfSolver_resources.pNumContacts,
-            simParams->nOwnerBodies, contactPairArr_isFresh, streamInfo.stream, stateOfSolver_resources);
+            simParams->nOwnerBodies, contactPairArr_isFresh, streamInfo.stream, stateOfSolver_resources, timers);
         // displayArray<float>(granData->aX, simParams->nOwnerBodies);
         // displayFloat3(granData->contactForces, *stateOfSolver_resources.pNumContacts);
         // std::cout << *stateOfSolver_resources.pNumContacts << std::endl;
@@ -936,6 +939,7 @@ inline void DEMDynamicThread::calculateForces() {
         // displayArray<float>(granData->alphaX, simParams->nOwnerBodies);
         // displayArray<float>(granData->alphaY, simParams->nOwnerBodies);
         // displayArray<float>(granData->alphaZ, simParams->nOwnerBodies);
+        timers.GetTimer("Collect contact forces").stop();
     }
 }
 
@@ -1010,6 +1014,7 @@ void DEMDynamicThread::workerThread() {
         for (int cycle = 0; cycle < nDynamicCycles; cycle++) {
             // If the produce is fresh, use it
             if (pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
+                timers.GetTimer("Unpack updates from kT").start();
                 {
                     // Acquire lock and use the content of the dynamic-owned transfer buffer
                     std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
@@ -1026,11 +1031,16 @@ void DEMDynamicThread::workerThread() {
                 if (!solverFlags.isHistoryless) {
                     migrateContactHistory();
                 }
+                timers.GetTimer("Unpack updates from kT").stop();
             }
 
             calculateForces();
+
             routineChecks();
+
+            timers.GetTimer("Integration").start();
             integrateClumpMotions();
+            timers.GetTimer("Integration").stop();
 
             // TODO: make changes for variable time step size cases
             timeElapsed += simParams->h;
@@ -1049,6 +1059,7 @@ void DEMDynamicThread::workerThread() {
 
             // If the kinematic is idle, give it the opportunity to get busy again
             if (!pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh) {
+                timers.GetTimer("Send to kT buffer").start();
                 // Acquire lock and refresh the work order for the kinematic
                 {
                     std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
@@ -1056,6 +1067,7 @@ void DEMDynamicThread::workerThread() {
                 }
                 pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
                 pSchedSupport->schedulingStats.nKinematicUpdates++;
+                timers.GetTimer("Send to kT buffer").stop();
                 // Signal the kinematic that it has data for a new work order
                 pSchedSupport->cv_KinematicCanProceed.notify_all();
             }
@@ -1080,6 +1092,13 @@ void DEMDynamicThread::workerThread() {
         // When getting here, dT has finished one user call (although perhaps not at the end of the user script)
         pPagerToMain->userCallDone = true;
         pPagerToMain->cv_mainCanProceed.notify_all();
+    }
+}
+
+void DEMDynamicThread::getTiming(std::vector<std::string>& names, std::vector<double>& vals) {
+    names = timer_names;
+    for (const auto& name : timer_names) {
+        vals.push_back(timers.GetTimer(name).GetTimeSeconds());
     }
 }
 

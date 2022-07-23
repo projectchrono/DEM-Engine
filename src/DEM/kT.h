@@ -170,6 +170,11 @@ class DEMKinematicThread {
     // The ID that maps this analytical entity component's geometry-defining parameters, when this component is jitified
     // std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> analComponentOffset;
 
+    // kT's timers
+    std::vector<std::string> timer_names = {"Discretize domain", "Find contact pairs", "Build history map",
+                                            "Unpack updates from dT", "Send to dT buffer"};
+    SolverTimers timers = SolverTimers(timer_names);
+
   public:
     friend class DEMSolver;
     friend class DEMDynamicThread;
@@ -225,12 +230,12 @@ class DEMKinematicThread {
     // It is called upon construction.
     void workerThread();
 
-    // Reset kT--dT interaction coordinator stats
+    /// Reset kT--dT interaction coordinator stats
     void resetUserCallStat();
-    // Return the approximate RAM usage
+    /// Return the approximate RAM usage
     size_t estimateMemUsage() const;
 
-    // Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
+    /// Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
     void allocateManagedArrays(size_t nOwnerBodies,
                                size_t nOwnerClumps,
                                unsigned int nExtObj,
@@ -244,7 +249,7 @@ class DEMKinematicThread {
                                unsigned int nJitifiableClumpComponents,
                                unsigned int nMatTuples);
 
-    // Data type TBD, should come from JITCed headers
+    /// Data type TBD, should come from JITCed headers
     void initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                            const std::vector<unsigned int>& input_ext_obj_family,
                            const std::vector<unsigned int>& input_mesh_obj_family,
@@ -253,7 +258,7 @@ class DEMKinematicThread {
                            const std::vector<std::vector<float>>& clumps_sp_radii_types,
                            const std::vector<std::vector<float3>>& clumps_sp_location_types);
 
-    // Set SimParams items
+    /// Set SimParams items
     void setSimParams(unsigned char nvXp2,
                       unsigned char nvYp2,
                       unsigned char nvZp2,
@@ -271,6 +276,16 @@ class DEMKinematicThread {
     // Put sim data array pointers in place
     void packDataPointers();
     void packTransferPointers(DEMDynamicThread* dT);
+
+    /// Return timing inforation for this current run
+    void getTiming(std::vector<std::string>& names, std::vector<double>& vals);
+
+    /// Reset the timers
+    void resetTimers() {
+        for (const auto& name : timer_names) {
+            timers.GetTimer(name).reset();
+        }
+    }
 
     // Jitify kT kernels (at initialization) based on existing knowledge of this run
     void jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,

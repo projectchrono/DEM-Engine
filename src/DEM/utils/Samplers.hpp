@@ -2,10 +2,11 @@
 //  Copyright (c) 2021, University of Wisconsin - Madison
 //  All rights reserved.
 
-// This file contains modifications of the code by Radu Serban
+// This file contains modifications of the code by Radu Serban as a part
+// of Project Chrono
 // Use of this source code is governed by a BSD-style license that can be found
 // in the LICENSE file at the top level of the distribution and at
-// http://projectchrono.org/license-chrono.txt.
+// http://projectchrono.org/license-chrono.txt. A copy of the license is below.
 
 // Copyright (c) 2014 projectchrono.org
 // All rights reserved.

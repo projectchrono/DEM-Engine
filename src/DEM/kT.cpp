@@ -117,12 +117,16 @@ void DEMKinematicThread::workerThread() {
                     break;
                 }
             }
+
+            timers.GetTimer("Unpack updates from dT").start();
             // Getting here means that new `work order' data has been provided
             {
                 // Acquire lock and get the work order
                 std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
                 unpackMyBuffer();
             }
+            timers.GetTimer("Unpack updates from dT").stop();
+
             // Make it clear that the data for most recent work order has been used, in case there is interest in
             // updating it
             pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = false;
@@ -134,8 +138,9 @@ void DEMKinematicThread::workerThread() {
             contactDetection(bin_occupation_kernels, contact_detection_kernels, history_kernels, granData, simParams,
                              solverFlags, verbosity, idGeometryA, idGeometryB, contactType, previous_idGeometryA,
                              previous_idGeometryB, previous_contactType, contactMapping, streamInfo.stream,
-                             stateOfSolver_resources);
+                             stateOfSolver_resources, timers);
 
+            timers.GetTimer("Send to dT buffer").start();
             {
                 // Acquire lock and supply the dynamic with fresh produce
                 std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
@@ -143,6 +148,7 @@ void DEMKinematicThread::workerThread() {
             }
             pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = true;
             pSchedSupport->schedulingStats.nDynamicUpdates++;
+            timers.GetTimer("Send to dT buffer").stop();
 
             // Signal the dynamic that it has fresh produce
             pSchedSupport->cv_DynamicCanProceed.notify_all();
@@ -154,6 +160,13 @@ void DEMKinematicThread::workerThread() {
         // When getting here, kT has finished one user call (although perhaps not at the end of the user script)
         pPagerToMain->userCallDone = true;
         pPagerToMain->cv_mainCanProceed.notify_all();
+    }
+}
+
+void DEMKinematicThread::getTiming(std::vector<std::string>& names, std::vector<double>& vals) {
+    names = timer_names;
+    for (const auto& name : timer_names) {
+        vals.push_back(timers.GetTimer(name).GetTimeSeconds());
     }
 }
 
