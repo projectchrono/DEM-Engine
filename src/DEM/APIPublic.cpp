@@ -105,7 +105,7 @@ void DEMSolver::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsi
 
 void DEMSolver::DefineContactForceModel(const std::string& model) {
     m_force_model = model;
-    m_user_defined_force_model = true;
+    use_user_defined_force_model = true;
 }
 
 void DEMSolver::SetSolverHistoryless(bool useHistoryless) {
@@ -120,27 +120,13 @@ void DEMSolver::SetSolverHistoryless(bool useHistoryless) {
 void DEMSolver::UseFrictionalHertzianModel() {
     m_isHistoryless = false;
     m_force_model = DEM_HERTZIAN_FORCE_MODEL();
-    m_user_defined_force_model = false;
+    use_user_defined_force_model = false;
 }
 
 void DEMSolver::UseFrictionlessHertzianModel() {
     m_isHistoryless = true;
     m_force_model = DEM_HERTZIAN_FORCE_MODEL_FRICTIONLESS();
-    m_user_defined_force_model = false;
-}
-
-void DEMSolver::SuggestExpandFactor(float max_vel) {
-    if (m_ts_size <= 0.0) {
-        SGPS_DEM_ERROR(
-            "Please set the constant time step size before calling this method, or supplying both the maximum expect "
-            "velocity AND maximum time between contact detections as arguments.");
-    }
-    if (m_updateFreq == 0) {
-        SGPS_DEM_ERROR(
-            "Please set contact detection frequency via SetCDUpdateFreq before calling this method, or supplying both "
-            "the maximum expect velocity AND maximum time between contact detections as arguments.");
-    }
-    DEMSolver::SuggestExpandFactor(max_vel, m_ts_size * m_updateFreq);
+    use_user_defined_force_model = false;
 }
 
 void DEMSolver::SetFamilyFixed(unsigned int ID) {
@@ -556,11 +542,13 @@ void DEMSolver::ShowTimingStats() {
     kT_total_time = vector_sum<double>(kT_timer_vals);
     dT_total_time = vector_sum<double>(dT_timer_vals);
     SGPS_DEM_PRINTF("\n~~ kT TIMING STATISTICS ~~\n");
+    SGPS_DEM_PRINTF("kT total active time: %.9g seconds\n", kT_total_time);
     for (unsigned int i = 0; i < kT_timer_names.size(); i++) {
         SGPS_DEM_PRINTF("%s: %.9g seconds, %.6g%% of kT total runtime\n", kT_timer_names.at(i).c_str(),
                         kT_timer_vals.at(i), kT_timer_vals.at(i) / kT_total_time * 100.);
     }
     SGPS_DEM_PRINTF("\n~~ dT TIMING STATISTICS ~~\n");
+    SGPS_DEM_PRINTF("dT total active time: %.9g seconds\n", dT_total_time);
     for (unsigned int i = 0; i < dT_timer_names.size(); i++) {
         SGPS_DEM_PRINTF("%s: %.9g seconds, %.6g%% of dT total runtime\n", dT_timer_names.at(i).c_str(),
                         dT_timer_vals.at(i), dT_timer_vals.at(i) / dT_total_time * 100.);

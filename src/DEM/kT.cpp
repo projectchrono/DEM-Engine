@@ -261,7 +261,9 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
                                       float3 LBFPoint,
                                       float3 G,
                                       double ts_size,
-                                      float expand_factor) {
+                                      float expand_factor,
+                                      float approx_max_vel,
+                                      float expand_safety_param) {
     simParams->nvXp2 = nvXp2;
     simParams->nvYp2 = nvYp2;
     simParams->nvZp2 = nvZp2;
@@ -276,6 +278,8 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
     simParams->Gz = G.z;
     simParams->h = ts_size;
     simParams->beta = expand_factor;
+    simParams->approxMaxVel = approx_max_vel;
+    simParams->expSafetyParam = expand_safety_param;
     simParams->nbX = nbX;
     simParams->nbY = nbY;
     simParams->nbZ = nbZ;

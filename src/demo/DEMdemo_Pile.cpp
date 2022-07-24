@@ -130,13 +130,13 @@ int main() {
     plane_a->AddPlane(make_float3(-4.5, 0, 0), make_float3(1, 0, 0), mat_type_2);
 
     DEM_sim.InstructCoordSysOrigin("center");
-    DEM_sim.SetTimeStepSize(5e-6);
+    DEM_sim.SetInitTimeStep(5e-6);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEM_sim.SetCDUpdateFreq(20);
     // DEM_sim.SetExpandFactor(1e-3);
-    DEM_sim.SuggestExpandFactor(10.);
-    DEM_sim.SuggestExpandSafetyParam(2.);
+    DEM_sim.SetMaxVelocity(10.);
+    DEM_sim.SetExpandSafetyParam(2.);
     DEM_sim.Initialize();
 
     DEM_sim.UpdateSimParams();  // Not needed; just testing if this function works...

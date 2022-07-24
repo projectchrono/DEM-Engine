@@ -133,13 +133,13 @@ int main() {
 
     float step_size = 5e-6;
     DEM_sim.InstructCoordSysOrigin("center");
-    DEM_sim.SetTimeStepSize(step_size);
+    DEM_sim.SetInitTimeStep(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEM_sim.SetCDUpdateFreq(40);
     // DEM_sim.SetExpandFactor(1e-3);
-    DEM_sim.SuggestExpandFactor(12.);
-    DEM_sim.SuggestExpandSafetyParam(1.2);
+    DEM_sim.SetMaxVelocity(12.);
+    DEM_sim.SetExpandSafetyParam(1.2);
     DEM_sim.Initialize();
 
     path out_dir = current_path();

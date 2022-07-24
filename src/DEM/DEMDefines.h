@@ -197,6 +197,10 @@ struct DEMSimParams {
     float h;
     // Sphere radii/geometry thickness inflation amount (for safer contact detection)
     float beta;
+    // Max velocity, user approximated, we verify during simulation
+    float approxMaxVel;
+    // Expand safety parameter (multiplier for the CD envelope)
+    float expSafetyParam;
     // Stepping method
     DEM_TIME_INTEGRATOR stepping = DEM_TIME_INTEGRATOR::FORWARD_EULER;
 };

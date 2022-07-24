@@ -64,10 +64,13 @@ class DEMSolver {
 
     /// Set gravity
     void SetGravitationalAcceleration(float3 g) { G = g; }
-    /// Set a constant time step size
-    void SetTimeStepSize(double ts_size) { m_ts_size = ts_size; }
-    /// Get the currently cached constant time step size
-    double GetConstStepSize() { return m_ts_size; }
+    /// Set the initial time step size. If using constant step size, then this will be used throughout; otherwise, the
+    /// actual step size depends on the variable step strategy.
+    void SetInitTimeStep(double ts_size) { m_ts_size = ts_size; }
+    /// Get the current time step size in simulation
+    double GetTimeStepSize();
+    /// Getthe current expand factor in simulation
+    float GetExpandFactor();
     /// Set the number of dT steps before it waits for a contact-pair info update from kT
     void SetCDUpdateFreq(int freq) { m_updateFreq = freq; }
     // TODO: Implement an API that allows setting ts size through a list
@@ -81,7 +84,7 @@ class DEMSolver {
 
     /// Explicitly instruct the bin size (for contact detection) that the solver should use
     void InstructBinSize(double bin_size) {
-        m_use_user_instructed_bin_size = true;
+        use_user_defined_bin_size = true;
         m_binSize = bin_size;
     }
 
@@ -108,17 +111,19 @@ class DEMSolver {
     void UseCompactForceKernel(bool use_compact);
 
     /// (Explicitly) set the amount by which the radii of the spheres (and the thickness of the boundaries) are expanded
-    /// for the purpose of contact detection (safe, and creates false positives).
-    void SetExpandFactor(float beta) { m_expand_factor = beta; }
-    /// Input the maximum expected particle velocity and simulation time per contact detection (a.k.a per kT run), to
-    /// help the solver automatically select a expand factor.
-    void SuggestExpandFactor(float max_vel, float max_time_per_CD) { m_expand_factor = max_vel * max_time_per_CD; }
-    /// If using constant step size and the step size is set, then inputting only the max expected velocity is fine.
-    void SuggestExpandFactor(float max_vel);
+    /// for the purpose of contact detection (safe, and creates false positives). If fix is set to true, then this
+    /// expand factor does not change even if the user uses variable time step size.
+    void SetExpandFactor(float beta, bool fix = true) {
+        m_expand_factor = beta;
+        use_user_defined_expand_factor = fix;
+    }
+    /// Input the maximum expected particle velocity. This is mainly to help the solver automatically select a expand
+    /// factor and do sanity checks during the simulation.
+    void SetMaxVelocity(float max_vel) { m_approx_max_vel = max_vel; }
     /// Further enlarge the safety perimeter needed by the input amount. Large number means even safer contact detection
     /// (missing no contacts), but creates more false positives, and risks leading to more bodies in a bin than a block
     /// can handle.
-    void SuggestExpandSafetyParam(float param) { m_expand_safety_param = param; }
+    void SetExpandSafetyParam(float param) { m_expand_safety_param = param; }
 
     /// Load possible clump types into the API-level cache
     /// Return the shared ptr to the clump type just loaded
@@ -346,10 +351,12 @@ class DEMSolver {
 
     // Force model, as a string
     std::string m_force_model = DEM_HERTZIAN_FORCE_MODEL();
-    bool m_user_defined_force_model = false;
+    bool use_user_defined_force_model = false;
 
     // User explicitly set a bin size to use
-    bool m_use_user_instructed_bin_size = false;
+    bool use_user_defined_bin_size = false;
+    // User explicity specify a expand factor to use
+    bool use_user_defined_expand_factor = false;
 
     // I/O related flags
     DEM_OUTPUT_MODE m_clump_out_mode = DEM_OUTPUT_MODE::SPHERE;
@@ -399,6 +406,8 @@ class DEMSolver {
     // positives, and risks leading to more bodies in a bin than a block can handle, but helps prevent contacts being
     // left undiscovered by CD.
     float m_expand_safety_param = 1.f;
+    // User-instructed approximate maximum velocity (of any point on a body in the simulation)
+    float m_approx_max_vel = -1.f;
 
     // The number of user-estimated (max) number of owners that will be present in the simulation. If 0, then the arrays
     // will just be resized at intialization based on the input size.

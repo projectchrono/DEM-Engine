@@ -107,7 +107,9 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                     float3 LBFPoint,
                                     float3 G,
                                     double ts_size,
-                                    float expand_factor) {
+                                    float expand_factor,
+                                    float approx_max_vel,
+                                    float expand_safety_param) {
     simParams->nvXp2 = nvXp2;
     simParams->nvYp2 = nvYp2;
     simParams->nvZp2 = nvZp2;
@@ -122,6 +124,8 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->Gz = G.z;
     simParams->h = ts_size;
     simParams->beta = expand_factor;
+    simParams->approxMaxVel = approx_max_vel;
+    simParams->expSafetyParam = expand_safety_param;
     simParams->nbX = nbX;
     simParams->nbY = nbY;
     simParams->nbZ = nbZ;
@@ -580,7 +584,7 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
         float this_sp_rot_1 = oriQ1.at(this_owner);
         float this_sp_rot_2 = oriQ2.at(this_owner);
         float this_sp_rot_3 = oriQ3.at(this_owner);
-        hostapplyOriQToVector3<float, float>(this_sp_deviation_x, this_sp_deviation_y, this_sp_deviation_z,
+        hostApplyOriQToVector3<float, float>(this_sp_deviation_x, this_sp_deviation_y, this_sp_deviation_z,
                                              this_sp_rot_0, this_sp_rot_1, this_sp_rot_2, this_sp_rot_3);
         posX.at(num_output_spheres) = CoM.x + this_sp_deviation_x;
         posY.at(num_output_spheres) = CoM.y + this_sp_deviation_y;
@@ -671,7 +675,7 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
         float this_sp_rot_1 = oriQ1.at(this_owner);
         float this_sp_rot_2 = oriQ2.at(this_owner);
         float this_sp_rot_3 = oriQ3.at(this_owner);
-        hostapplyOriQToVector3<float, float>(this_sp_deviation.x, this_sp_deviation.y, this_sp_deviation.z,
+        hostApplyOriQToVector3<float, float>(this_sp_deviation.x, this_sp_deviation.y, this_sp_deviation.z,
                                              this_sp_rot_0, this_sp_rot_1, this_sp_rot_2, this_sp_rot_3);
         pos = CoM + this_sp_deviation;
         outstrstream << pos.x << "," << pos.y << "," << pos.z;

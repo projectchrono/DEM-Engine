@@ -58,7 +58,7 @@ void EllpsiodFallingOver() {
     ellipsoid->SetVel(tang_dir * 0.3);
     auto ellipsoid_tracker = DEM_sim.Track(ellipsoid);
 
-    DEM_sim.SetTimeStepSize(1e-3);
+    DEM_sim.SetInitTimeStep(1e-3);
     DEM_sim.Initialize();
 
     float frame_time = 1e-1;
@@ -108,7 +108,7 @@ void SphereRollUpIncline() {
         auto sphere_tracker = DEM_sim.Track(sphere);
 
         float step_time = 1e-5;
-        DEM_sim.SetTimeStepSize(step_time);
+        DEM_sim.SetInitTimeStep(step_time);
         DEM_sim.Initialize();
 
         path out_dir = current_path();
@@ -158,9 +158,9 @@ void SphereRollUpIncline() {
             auto sphere_tracker = DEM_sim.Track(sphere);
 
             float step_time = 1e-5;
-            DEM_sim.SetTimeStepSize(step_time);
+            DEM_sim.SetInitTimeStep(step_time);
             DEM_sim.SetCDUpdateFreq(-1);
-            DEM_sim.SuggestExpandFactor(1.0);
+            DEM_sim.SetMaxVelocity(1.0);
             DEM_sim.Initialize();
 
             DEM_sim.DoDynamicsThenSync(run_time);
@@ -225,10 +225,10 @@ void SphereStack() {
                 auto sphere_tracker = DEM_sim.Track(sphere_top);
 
                 float step_time = 1e-5;
-                DEM_sim.SetTimeStepSize(step_time);
+                DEM_sim.SetInitTimeStep(step_time);
                 // Just do CD once and we are all good
                 DEM_sim.SetCDUpdateFreq(-1);
-                DEM_sim.SuggestExpandFactor(1.0);
+                DEM_sim.SetMaxVelocity(1.0);
                 DEM_sim.Initialize();
 
                 float frame_time = 1e-1;

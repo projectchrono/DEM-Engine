@@ -263,8 +263,18 @@ void DEMSolver::processUserInputs() {
     // Fix the reserved family (reserved family number is in user family, not in impl family)
     SetFamilyFixed(DEM_RESERVED_FAMILY_NUM);
 
-    // Enlarge the expand factor if the user tells us to
-    m_expand_factor *= m_expand_safety_param;
+    // Figure out ts size and the envelope to add to geometries (for CD safety)
+    if ((!use_user_defined_expand_factor) && ts_size_is_const) {
+        m_expand_factor = m_approx_max_vel * m_ts_size * m_updateFreq * m_expand_safety_param;
+    }
+    if (m_expand_factor * m_expand_safety_param <= 0.0 && m_updateFreq > 0 && ts_size_is_const) {
+        SGPS_DEM_WARNING(
+            "You instructed that the physics can stretch %u time steps into the future, but did not instruct the "
+            "geometries to expand via SetExpandFactor or SetMaxVelocity. The contact detection procedure will likely "
+            "fail to detect some contact events before it is too late, hindering the simulation accuracy and "
+            "stability.",
+            m_updateFreq);
+    }
 }
 
 void DEMSolver::figureOutNV() {}
@@ -281,11 +291,11 @@ void DEMSolver::decideBinSize() {
 
     // TODO: What should be a default bin size?
     if (m_smallest_radius > SGPS_DEM_TINY_FLOAT) {
-        if (!m_use_user_instructed_bin_size) {
+        if (!use_user_defined_bin_size) {
             m_binSize = 2.0 * m_smallest_radius;
         }
     } else {
-        if (!m_use_user_instructed_bin_size) {
+        if (!use_user_defined_bin_size) {
             SGPS_DEM_ERROR(
                 "There are spheres in clump templates that have 0 radii, and the user did not specify the bin size "
                 "(for contact detection)!\nBecause the bin size is supposed to be defaulted to the size of the "
@@ -509,7 +519,7 @@ void DEMSolver::figureOutFamilyMasks() {
             if (user_family != DEM_RESERVED_FAMILY_NUM) {
                 SGPS_DEM_WARNING(
                     "Family number %u is instructed to have prescribed motion, but no entity is associated with this "
-                    "family.",
+                    "family at system initialization.",
                     user_family);
             }
             continue;
@@ -610,6 +620,10 @@ void DEMSolver::transferSolverParams() {
     kT->solverFlags.isHistoryless = m_isHistoryless;
     dT->solverFlags.isHistoryless = m_isHistoryless;
 
+    // Time step constant-ness and expand factor constant-ness
+    dT->solverFlags.isStepConst = ts_size_is_const;
+    kT->solverFlags.isExpandFactorFixed = use_user_defined_expand_factor;
+
     // Tell kT and dT if this run is async
     kT->solverFlags.isAsync = !(m_updateFreq == 0);
     dT->solverFlags.isAsync = !(m_updateFreq == 0);
@@ -628,9 +642,9 @@ void DEMSolver::transferSolverParams() {
 
 void DEMSolver::transferSimParams() {
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
-                     m_expand_factor);
+                     m_expand_factor, m_approx_max_vel, m_expand_safety_param);
     kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
-                     m_expand_factor);
+                     m_expand_factor, m_approx_max_vel, m_expand_safety_param);
 }
 
 void DEMSolver::initializeArrays() {
@@ -691,7 +705,7 @@ void DEMSolver::validateUserInputs() {
     }
     if (m_ts_size <= 0.0 && ts_size_is_const) {
         SGPS_DEM_ERROR(
-            "Time step size is set to be %f. Please supply a positive number via SetTimeStepSize, or define the "
+            "Time step size is set to be %f. Please supply a positive number via SetInitTimeStep, or define the "
             "variable stepping properly.",
             m_ts_size);
     }
@@ -705,13 +719,6 @@ void DEMSolver::validateUserInputs() {
             m_user_boxSize.x, m_user_boxSize.y, m_user_boxSize.z);
     }
 
-    if (m_expand_factor * m_expand_safety_param <= 0.0 && m_updateFreq > 0) {
-        SGPS_DEM_WARNING(
-            "You instructed that the physics can stretch %u time steps into the future, but did not instruct the "
-            "geometries to expand via SuggestExpandFactor. The contact detection procedure will likely fail to detect "
-            "some contact events before it is too late, hindering the simulation accuracy and stability.",
-            m_updateFreq);
-    }
     if (m_updateFreq < 0) {
         SGPS_DEM_WARNING(
             "The physics of the DEM system can drift into the future as much as it wants compared to contact "
@@ -719,7 +726,14 @@ void DEMSolver::validateUserInputs() {
             "intended.");
     }
 
-    if (m_user_defined_force_model) {
+    if ((!ts_size_is_const) && (!use_user_defined_expand_factor) && (m_approx_max_vel <= 0.f)) {
+        SGPS_DEM_ERROR(
+            "When using variable time step size, this solver needs your approximated maximum body/point velocity to "
+            "add margins for a safe contact detection.\nYou should either supply that via SetMaxVelocity, or "
+            "explicitly set a expand factor via SetExpandFactor.");
+    }
+
+    if (use_user_defined_force_model) {
         // TODO: See if this user model makes sense
     }
 }

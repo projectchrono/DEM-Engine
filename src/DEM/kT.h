@@ -271,7 +271,9 @@ class DEMKinematicThread {
                       float3 LBFPoint,
                       float3 G,
                       double ts_size,
-                      float expand_factor);
+                      float expand_factor,
+                      float approx_max_vel,
+                      float expand_safety_param);
 
     // Put sim data array pointers in place
     void packDataPointers();

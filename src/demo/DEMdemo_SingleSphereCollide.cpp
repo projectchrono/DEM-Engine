@@ -46,12 +46,12 @@ int main() {
     DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, 3e-11);
 
     DEM_sim.InstructCoordSysOrigin("center");
-    DEM_sim.SetTimeStepSize(2e-5);
+    DEM_sim.SetInitTimeStep(2e-5);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // Velocity not to exceed 3.0
     DEM_sim.SetCDUpdateFreq(10);
-    DEM_sim.SuggestExpandFactor(3.);
-    DEM_sim.SuggestExpandSafetyParam(2.);
+    DEM_sim.SetMaxVelocity(3.);
+    DEM_sim.SetExpandSafetyParam(2.);
 
     DEM_sim.Initialize();
 

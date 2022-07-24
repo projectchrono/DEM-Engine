@@ -281,14 +281,17 @@ struct SolverFlags {
     bool canFamilyChange = false;
     // Some output-related flags
     unsigned int outputFlags = DEM_OUTPUT_CONTENT::QUAT | DEM_OUTPUT_CONTENT::ABSV;
+    // Time step constant-ness and expand factor constant-ness
+    bool isStepConst = true;
+    bool isExpandFactorFixed = true;
 };
 
 struct DEMMaterial {
-    float E = 1e8;     // Young's modulus
-    float nu = 0.3;    // Poission's ratio
-    float CoR = 0.5;   // Coeff of Restitution
-    float mu = 0.5;    // Static friction coeff
-    float Crr = 0.01;  // Rolling resistance coeff
+    float E = 1e8;    // Young's modulus
+    float nu = 0.3;   // Poission's ratio
+    float CoR = 0.5;  // Coeff of Restitution
+    float mu = 0.5;   // Static friction coeff
+    float Crr = 0.0;  // Rolling resistance coeff
 };
 
 class DEMTriangle {

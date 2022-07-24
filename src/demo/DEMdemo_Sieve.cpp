@@ -90,7 +90,7 @@ int main() {
     auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, 0), make_float3(5.0, 5.0, 0.001), sieve_sp_r * 2.0);
     // The sieve is family 1
     family_code.insert(family_code.end(), input_xyz.size(), 1);
-    DEM_sim.SetFamilyPrescribedLinVel(1, "0", "0", "(t > 1.0) ? 2.0 * sin(5.0 * PI * (t - 1.0)) : 0");
+    DEM_sim.SetFamilyPrescribedLinVel(1, "0", "0", "(t > 1.0) ? 2.0 * sin(5.0 * sgps::PI * (t - 1.0)) : 0");
     // No contact within family 1
     DEM_sim.DisableContactBetweenFamilies(1, 1);
     input_template_type.insert(input_template_type.end(), input_xyz.size(), template_sieve);
@@ -130,11 +130,11 @@ int main() {
     float step_size = 5e-6;
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
     DEM_sim.InstructCoordSysOrigin("center");
-    DEM_sim.SetTimeStepSize(step_size);
+    DEM_sim.SetInitTimeStep(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEM_sim.SetCDUpdateFreq(30);
-    DEM_sim.SuggestExpandFactor(6.0, step_size * 30);
-    DEM_sim.SuggestExpandSafetyParam(1.0);
+    DEM_sim.SetExpandFactor(6.0 * 30 * step_size);
+    DEM_sim.SetExpandSafetyParam(1.0);
 
     DEM_sim.Initialize();
 
@@ -165,6 +165,7 @@ int main() {
     std::cout << time_sec.count() << " seconds" << std::endl;
 
     DEM_sim.ShowThreadCollaborationStats();
+    DEM_sim.ShowTimingStats();
     std::cout << "DEMdemo_Sieve exiting..." << std::endl;
     // TODO: add end-game report APIs
     return 0;
