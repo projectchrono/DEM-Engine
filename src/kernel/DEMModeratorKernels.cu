@@ -2,7 +2,7 @@
 #include <kernel/DEMHelperKernels.cu>
 #include <DEM/DEMDefines.h>
 
-__global__ void applyFamilyChanges(sgps::DEMDataDT* granData, float h, float t) {
+__global__ void applyFamilyChanges(sgps::DEMDataDT* granData, sgps::bodyID_t nOwnerBodies, float h, float t) {
     // _nDistinctMassProperties_  elements are in these arrays
     const float moiX[] = {_moiX_};
     const float moiY[] = {_moiY_};
@@ -10,7 +10,7 @@ __global__ void applyFamilyChanges(sgps::DEMDataDT* granData, float h, float t) 
     const float MassProperties[] = {_MassProperties_};
 
     sgps::bodyID_t thisClump = blockIdx.x * blockDim.x + threadIdx.x;
-    if (thisClump < _nOwnerBodies_) {
+    if (thisClump < nOwnerBodies) {
         // The user may make references to owner positions, velocities, accelerations and simulation time
         double3 pos;
         float3 vel, acc;

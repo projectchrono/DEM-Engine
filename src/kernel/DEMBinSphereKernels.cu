@@ -31,7 +31,7 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
 
     sgps::bodyID_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (sphereID < _nSpheresGM_) {
+    if (sphereID < simParams->nSpheresGM) {
         // Register sphere--analytical geometry contacts
         sgps::objID_t contact_count = 0;
         // Sphere's family ID
@@ -164,7 +164,7 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
     const float objSize3[_nAnalGMSafe_] = {_objSize3_};
 
     sgps::bodyID_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (sphereID < _nSpheresGM_) {
+    if (sphereID < simParams->nSpheresGM) {
         double myPosX, myPosY, myPosZ;
         double myRadius;
         unsigned int sphFamilyNum;

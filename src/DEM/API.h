@@ -696,8 +696,6 @@ class DEMSolver {
     void validateUserInputs();
     /// Modify user inputs before passing to impl-level systems when needed
     void processUserInputs();
-    /// Compute the number of dT for cycles based on the amount of time the user wants to advance the simulation
-    size_t computeDTCycles(double thisCallDuration);
     /// Prepare the material/contact proxy matrix force computation kernels
     void figureOutMaterialProxies();
     /// Figure out info about external objects and how they should be jitified

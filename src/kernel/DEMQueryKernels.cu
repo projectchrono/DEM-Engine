@@ -1,7 +1,7 @@
 // DEM kernels used for quarrying (statistical) information from the current simulation system
 #include <DEM/DEMDefines.h>
 
-__global__ void computeKE(sgps::DEMDataDT* granData, float* KE) {
+__global__ void computeKE(sgps::DEMDataDT* granData, sgps::bodyID_t nOwnerBodies, float* KE) {
     // _nDistinctMassProperties_  elements are in these arrays
     const float MassProperties[] = {_MassProperties_};
     const float moiX[] = {_moiX_};
@@ -9,7 +9,7 @@ __global__ void computeKE(sgps::DEMDataDT* granData, float* KE) {
     const float moiZ[] = {_moiZ_};
 
     sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (myID < _nOwnerBodies_) {
+    if (myID < nOwnerBodies) {
         sgps::inertiaOffset_t myMassOffset = granData->inertiaPropOffsets[myID];
         float myMass = MassProperties[myMassOffset];
         float myMOIX = moiX[myMassOffset];

@@ -583,29 +583,29 @@ void DEMSolver::addWorldBoundingBox() {
     // Now, add the bounding box for the simulation `world' if instructed.
     // Note the positions to add these planes are determined by the user-wanted box sizes, not m_boxXYZ which is the max
     // possible box size.
-    if (m_user_add_bounding_box == "all" || m_user_add_bounding_box == "top_open") {
-        auto box = this->AddExternalObject();
-        box->AddPlane(
-            host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y + m_user_boxSize.y / 2., m_boxLBF.z),
-            host_make_float3(0, 0, 1), m_bounding_box_material);
-        box->AddPlane(
-            host_make_float3(m_boxLBF.x, m_boxLBF.y + m_user_boxSize.y / 2., m_boxLBF.z + m_user_boxSize.z / 2.),
-            host_make_float3(1, 0, 0), m_bounding_box_material);
-        box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x, m_boxLBF.y + m_user_boxSize.y / 2.,
-                                       m_boxLBF.z + m_user_boxSize.z / 2.),
-                      host_make_float3(-1, 0, 0), m_bounding_box_material);
-        box->AddPlane(
-            host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y, m_boxLBF.z + m_user_boxSize.z / 2.),
-            host_make_float3(0, 1, 0), m_bounding_box_material);
-        box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y + m_user_boxSize.y,
-                                       m_boxLBF.z + m_user_boxSize.z / 2.),
-                      host_make_float3(0, -1, 0), m_bounding_box_material);
-        if (m_user_add_bounding_box == "all") {
-            box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y + m_user_boxSize.y / 2.,
-                                           m_boxLBF.z + m_user_boxSize.z),
-                          host_make_float3(0, 0, -1), m_bounding_box_material);
-        }
-    }
+    if (m_user_add_bounding_box == "none")
+        return;
+    auto box = this->AddExternalObject();
+    box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y + m_user_boxSize.y / 2., m_boxLBF.z),
+                  host_make_float3(0, 0, 1), m_bounding_box_material);
+    if (m_user_add_bounding_box == "only_bottom")
+        return;
+    box->AddPlane(host_make_float3(m_boxLBF.x, m_boxLBF.y + m_user_boxSize.y / 2., m_boxLBF.z + m_user_boxSize.z / 2.),
+                  host_make_float3(1, 0, 0), m_bounding_box_material);
+    box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x, m_boxLBF.y + m_user_boxSize.y / 2.,
+                                   m_boxLBF.z + m_user_boxSize.z / 2.),
+                  host_make_float3(-1, 0, 0), m_bounding_box_material);
+    box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y, m_boxLBF.z + m_user_boxSize.z / 2.),
+                  host_make_float3(0, 1, 0), m_bounding_box_material);
+    box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y + m_user_boxSize.y,
+                                   m_boxLBF.z + m_user_boxSize.z / 2.),
+                  host_make_float3(0, -1, 0), m_bounding_box_material);
+    if (m_user_add_bounding_box == "top_open")
+        return;
+    // Finally, if == all, add a top boundary
+    box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y + m_user_boxSize.y / 2.,
+                                   m_boxLBF.z + m_user_boxSize.z),
+                  host_make_float3(0, 0, -1), m_bounding_box_material);
 }
 
 // This is generally used to pass individual instructions on how the solver should behave
@@ -736,12 +736,6 @@ void DEMSolver::validateUserInputs() {
     if (use_user_defined_force_model) {
         // TODO: See if this user model makes sense
     }
-}
-
-// TODO: it seems that for variable step size, it is the best not to do the computation of n cycles here; rather we
-// should use a while loop to control that loop in worker threads.
-size_t DEMSolver::computeDTCycles(double thisCallDuration) {
-    return (size_t)std::round(thisCallDuration / m_ts_size);
 }
 
 // Test if 2 types of DEM materials are the same
@@ -998,8 +992,8 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_binSize_"] = to_string_with_precision(m_binSize);
 
     strMap["_nAnalGM_"] = std::to_string(nAnalGM);
-    strMap["_nOwnerBodies_"] = std::to_string(nOwnerBodies);
-    strMap["_nSpheresGM_"] = std::to_string(nSpheresGM);
+    // strMap["_nOwnerBodies_"] = std::to_string(nOwnerBodies);
+    // strMap["_nSpheresGM_"] = std::to_string(nSpheresGM);
 
     strMap["_LBFX_"] = to_string_with_precision(m_boxLBF.x);
     strMap["_LBFY_"] = to_string_with_precision(m_boxLBF.y);
@@ -1007,7 +1001,7 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_Gx_"] = to_string_with_precision(G.x);
     strMap["_Gy_"] = to_string_with_precision(G.y);
     strMap["_Gz_"] = to_string_with_precision(G.z);
-    strMap["_beta_"] = to_string_with_precision(m_expand_factor);
+    // strMap["_beta_"] = to_string_with_precision(m_expand_factor);
 
     // Some constants that we should consider using or not using
     // Some sim systems can have 0 boundary entities in them. In this case, we have to ensure jitification does not fail

@@ -26,7 +26,7 @@ __global__ void prepareForceArrays(sgps::DEMSimParams* simParams, sgps::DEMDataD
     if (myID < nContactPairs) {
         cleanUpContactForces(myID, simParams, granData);
     }
-    if (myID < _nOwnerBodies_) {
+    if (myID < simParams->nOwnerBodies) {
         cleanUpAcc(myID, simParams, granData);
     }
 }

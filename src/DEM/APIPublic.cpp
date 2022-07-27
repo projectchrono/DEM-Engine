@@ -616,9 +616,8 @@ void DEMSolver::DoDynamics(double thisCallDuration) {
     // TODO: Return if nSphere == 0
     // TODO: Check if initialized
 
-    // Tell dT how many iterations to go
-    size_t nDTIters = computeDTCycles(thisCallDuration);
-    dT->setNDynamicCycles(nDTIters);
+    // Tell dT how long this call is
+    dT->setCycleDuration(thisCallDuration);
 
     dT->startThread();
     kT->startThread();

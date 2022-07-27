@@ -59,7 +59,7 @@ class DEMDynamicThread {
     DEMSolverStateData stateOfSolver_resources = DEMSolverStateData(6);
 
     // The number of for iterations dT does for a specific user "run simulation" call
-    size_t nDynamicCycles;
+    double cycleDuration;
 
     // Buffer arrays for storing info from the dT side.
     // kT modifies these arrays; dT uses them only.
@@ -248,7 +248,7 @@ class DEMDynamicThread {
         GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
         GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataDT), cudaMemAttachGlobal));
 
-        nDynamicCycles = 0;
+        cycleDuration = 0;
 
         // Get a device/stream ID to use from the GPU Manager
         streamInfo = pGpuDistributor->getAvailableStream();
@@ -268,7 +268,7 @@ class DEMDynamicThread {
         cudaStreamDestroy(streamInfo.stream);
     }
 
-    void setNDynamicCycles(size_t val) { nDynamicCycles = val; }
+    void setCycleDuration(double val) { cycleDuration = val; }
 
     // buffer exchange methods
     void setDestinationBufferPointers();

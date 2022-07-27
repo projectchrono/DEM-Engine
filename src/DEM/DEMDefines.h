@@ -108,15 +108,7 @@ constexpr unsigned int DEM_THRESHOLD_CANT_JITIFY_ALL_COMP =
 // Friction mode
 enum class DEM_FRICTION_MODE { FRICTIONLESS, MULTI_STEP };
 // Verbosity
-enum DEM_VERBOSITY {
-    QUIET = 0,
-    ERROR = 10,
-    WARNING = 20,
-    INFO = 30,
-    INFO_STEP_STATS = 32,
-    INFO_STEP_WARN = 35,
-    DEBUG = 40
-};
+enum DEM_VERBOSITY { QUIET = 0, ERROR = 10, WARNING = 20, INFO = 30, STEP_STATS = 32, STEP_METRIC = 35, DEBUG = 40 };
 // Stepping method
 enum class DEM_TIME_INTEGRATOR { FORWARD_EULER, CENTERED_DIFFERENCE, EXTENDED_TAYLOR, CHUNG };
 // Owner types

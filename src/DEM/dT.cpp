@@ -142,7 +142,7 @@ float DEMDynamicThread::getKineticEnergy() {
     quarry_stats_kernels->kernel("computeKE")
         .instantiate()
         .configure(dim3(blocks_needed_for_KE), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData, KEArr);
+        .launch(granData, simParams->nOwnerBodies, KEArr);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     // displayArray<float>(KEArr, simParams->nOwnerBodies);
     sumReduce(KEArr, KE, simParams->nOwnerBodies, streamInfo.stream, stateOfSolver_resources);
@@ -803,7 +803,7 @@ inline void DEMDynamicThread::migrateContactHistory() {
     // A sentry array is here to see if there exist a contact that dT thinks it's alive but kT doesn't map it to the new
     // history array
     size_t blocks_needed_for_rearrange;
-    if (*stateOfSolver_resources.pNumPrevContacts > 0 && verbosity >= DEM_VERBOSITY::INFO_STEP_WARN) {
+    if (*stateOfSolver_resources.pNumPrevContacts > 0 && verbosity >= DEM_VERBOSITY::STEP_METRIC) {
         // GPU_CALL(cudaMemset(contactSentry, 0, sentry_bytes));
         blocks_needed_for_rearrange = (*stateOfSolver_resources.pNumPrevContacts + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) /
                                       SGPS_DEM_MAX_THREADS_PER_BLOCK;
@@ -830,13 +830,13 @@ inline void DEMDynamicThread::migrateContactHistory() {
     }
 
     // Take a look, does the sentry indicate that there is an `alive' contact got lost?
-    if (*stateOfSolver_resources.pNumPrevContacts > 0 && verbosity >= DEM_VERBOSITY::INFO_STEP_WARN) {
+    if (*stateOfSolver_resources.pNumPrevContacts > 0 && verbosity >= DEM_VERBOSITY::STEP_METRIC) {
         notStupidBool_t* lostContact =
             (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(5, sizeof(notStupidBool_t));
-        flagMaxReduce(contactSentry, lostContact, *stateOfSolver_resources.pNumPrevContacts, streamInfo.stream,
+        boolMaxReduce(contactSentry, lostContact, *stateOfSolver_resources.pNumPrevContacts, streamInfo.stream,
                       stateOfSolver_resources);
         if (*lostContact && solverFlags.isAsync) {
-            SGPS_DEM_INFO_STEP_WARN(
+            SGPS_DEM_STEP_METRIC(
                 "At least one contact is active at time %.9g on dT, but it is not detected on kT, therefore being "
                 "removed unexpectedly!",
                 timeElapsed);
@@ -953,7 +953,7 @@ inline void DEMDynamicThread::integrateClumpMotions() {
     integrator_kernels->kernel("integrateClumps")
         .instantiate()
         .configure(dim3(blocks_needed_for_clumps), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData, simParams->h, timeElapsed);
+        .launch(granData, simParams->nOwnerBodies, simParams->h, timeElapsed);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
@@ -964,7 +964,7 @@ inline void DEMDynamicThread::routineChecks() {
         mod_kernels->kernel("applyFamilyChanges")
             .instantiate()
             .configure(dim3(blocks_needed_for_clumps), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-            .launch(granData, simParams->h, timeElapsed);
+            .launch(granData, simParams->nOwnerBodies, simParams->h, timeElapsed);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 }
@@ -1015,7 +1015,7 @@ void DEMDynamicThread::workerThread() {
             }
         }
 
-        for (int cycle = 0; cycle < nDynamicCycles; cycle++) {
+        for (double cycle = 0.0; cycle < cycleDuration; cycle += simParams->h) {
             // If the produce is fresh, use it
             if (pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
                 timers.GetTimer("Unpack updates from kT").start();
@@ -1038,27 +1038,30 @@ void DEMDynamicThread::workerThread() {
                 timers.GetTimer("Unpack updates from kT").stop();
             }
 
-            calculateForces();
+            // If using variable ts size, only when a step is accepted can we move on
+            bool step_accepted = false;
+            do {
+                calculateForces();
 
-            routineChecks();
+                routineChecks();
 
-            timers.GetTimer("Integration").start();
-            integrateClumpMotions();
-            timers.GetTimer("Integration").stop();
+                timers.GetTimer("Integration").start();
+                integrateClumpMotions();
+                timers.GetTimer("Integration").stop();
 
-            // TODO: make changes for variable time step size cases
-            timeElapsed += simParams->h;
+                step_accepted = true;
+            } while ((!solverFlags.isStepConst) || (!step_accepted));
 
             // CalculateForces is done, set it to false
             // This will be set to true next time it receives an update from kT
             contactPairArr_isFresh = false;
 
             /*
-            if (cycle == (nDynamicCycles - 1))
+            if (cycle == (cycleDuration - 1))
                 pSchedSupport->dynamicDone = true;
             */
 
-            // Dynamic wrapped up one cycle
+            // Dynamic wrapped up one cycle, record this fact into schedule support
             pSchedSupport->currentStampOfDynamic++;
 
             // If the kinematic is idle, give it the opportunity to get busy again
@@ -1091,6 +1094,9 @@ void DEMDynamicThread::workerThread() {
             // cycle and immediately be too much into future. If this is at the beginning, dT will stale while kT could
             // also be chilling waiting for an update; but since it's at the end of a cycle, kT should got busy already
             // due to that kinematicOwned_Cons2ProdBuffer_isFresh got set to true just before.
+
+            // TODO: make changes for variable time step size cases
+            timeElapsed += simParams->h;
         }
 
         // When getting here, dT has finished one user call (although perhaps not at the end of the user script)

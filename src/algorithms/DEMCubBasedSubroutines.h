@@ -11,7 +11,7 @@ namespace sgps {
 
 void sumReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
 
-void flagMaxReduce(notStupidBool_t* d_in,
+void boolMaxReduce(notStupidBool_t* d_in,
                    notStupidBool_t* d_out,
                    size_t n,
                    cudaStream_t& this_stream,
