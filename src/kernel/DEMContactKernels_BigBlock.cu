@@ -105,8 +105,8 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMDataKT* granData,
             in_contact = checkSpheresOverlap<double>(
                 bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], CDRadii[compOffsets[bodyA]], bodyX[bodyB], bodyY[bodyB],
                 bodyZ[bodyB], CDRadii[compOffsets[bodyB]], contactPntX, contactPntY, contactPntZ);
-            sgps::binID_t contactPntBin =
-                getPointBinID<sgps::binID_t>(contactPntX, contactPntY, contactPntZ, _binSize_, _nbX_, _nbY_);
+            sgps::binID_t contactPntBin = getPointBinID<sgps::binID_t>(
+                contactPntX, contactPntY, contactPntZ, simParams->binSize, simParams->nbX, simParams->nbY);
 
             /*
             printf("contactPntBin: %u, %u, %u\n", (unsigned int)(contactPntX/_binSize_),
@@ -240,8 +240,8 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
             in_contact = checkSpheresOverlap<double>(
                 bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], CDRadii[compOffsets[bodyA]], bodyX[bodyB], bodyY[bodyB],
                 bodyZ[bodyB], CDRadii[compOffsets[bodyB]], contactPntX, contactPntY, contactPntZ);
-            sgps::binID_t contactPntBin =
-                getPointBinID<sgps::binID_t>(contactPntX, contactPntY, contactPntZ, _binSize_, _nbX_, _nbY_);
+            sgps::binID_t contactPntBin = getPointBinID<sgps::binID_t>(
+                contactPntX, contactPntY, contactPntZ, simParams->binSize, simParams->nbX, simParams->nbY);
 
             if (in_contact && (contactPntBin == binID)) {
                 blockwise_offset++;
@@ -283,8 +283,8 @@ __global__ void populateContactPairsEachBin(sgps::DEMDataKT* granData,
             in_contact = checkSpheresOverlap<double>(
                 bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], CDRadii[compOffsets[bodyA]], bodyX[bodyB], bodyY[bodyB],
                 bodyZ[bodyB], CDRadii[compOffsets[bodyB]], contactPntX, contactPntY, contactPntZ);
-            sgps::binID_t contactPntBin =
-                getPointBinID<sgps::binID_t>(contactPntX, contactPntY, contactPntZ, _binSize_, _nbX_, _nbY_);
+            sgps::binID_t contactPntBin = getPointBinID<sgps::binID_t>(
+                contactPntX, contactPntY, contactPntZ, simParams->binSize, simParams->nbX, simParams->nbY);
 
             if (in_contact && (contactPntBin == binID)) {
                 idSphA[myReportOffset] = bodyIDs[bodyA];

@@ -66,11 +66,11 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
             myPosX = ownerX + (double)myRelPosX;
             myPosY = ownerY + (double)myRelPosY;
             myPosZ = ownerZ + (double)myRelPosZ;
-            double myBinX = myPosX / _binSize_;
-            double myBinY = myPosY / _binSize_;
-            double myBinZ = myPosZ / _binSize_;
+            double myBinX = myPosX / simParams->binSize;
+            double myBinY = myPosY / simParams->binSize;
+            double myBinZ = myPosZ / simParams->binSize;
             // How many bins my radius spans (with fractions)?
-            double myRadiusSpan = myRadius / _binSize_;
+            double myRadiusSpan = myRadius / simParams->binSize;
             // printf("myRadius: %f\n", myRadiusSpan);
             // Now, figure out how many bins I touch in each direction
             sgps::binsSphereTouches_t numX =
@@ -200,11 +200,11 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
             myPosX = ownerX + (double)myRelPosX;
             myPosY = ownerY + (double)myRelPosY;
             myPosZ = ownerZ + (double)myRelPosZ;
-            double myBinX = myPosX / _binSize_;
-            double myBinY = myPosY / _binSize_;
-            double myBinZ = myPosZ / _binSize_;
+            double myBinX = myPosX / simParams->binSize;
+            double myBinY = myPosY / simParams->binSize;
+            double myBinZ = myPosZ / simParams->binSize;
             // How many bins my radius spans (with fractions)?
-            double myRadiusSpan = myRadius / _binSize_;
+            double myRadiusSpan = myRadius / simParams->binSize;
             // Now, write the IDs of those bins that I touch, back to the global memory
             sgps::binID_t thisBinID;
             for (unsigned int k = (unsigned int)(myBinZ - myRadiusSpan); k <= (unsigned int)(myBinZ + myRadiusSpan);
@@ -213,7 +213,8 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
                      j++) {
                     for (unsigned int i = (unsigned int)(myBinX - myRadiusSpan);
                          i <= (unsigned int)(myBinX + myRadiusSpan); i++) {
-                        thisBinID = (sgps::binID_t)i + (sgps::binID_t)j * _nbX_ + (sgps::binID_t)k * _nbX_ * _nbY_;
+                        thisBinID = (sgps::binID_t)i + (sgps::binID_t)j * simParams->nbX +
+                                    (sgps::binID_t)k * simParams->nbX * simParams->nbY;
                         binIDsEachSphereTouches[myReportOffset] = thisBinID;
                         sphereIDsEachBinTouches[myReportOffset] = sphereID;
                         myReportOffset++;

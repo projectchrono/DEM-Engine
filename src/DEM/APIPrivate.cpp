@@ -983,13 +983,13 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_nvYp2_"] = std::to_string(nvYp2);
     strMap["_nvZp2_"] = std::to_string(nvZp2);
 
-    strMap["_nbX_"] = std::to_string(nbX);
-    strMap["_nbY_"] = std::to_string(nbY);
-    strMap["_nbZ_"] = std::to_string(nbZ);
+    // strMap["_nbX_"] = std::to_string(nbX);
+    // strMap["_nbY_"] = std::to_string(nbY);
+    // strMap["_nbZ_"] = std::to_string(nbZ);
 
     strMap["_l_"] = to_string_with_precision(l);
     strMap["_voxelSize_"] = to_string_with_precision(m_voxelSize);
-    strMap["_binSize_"] = to_string_with_precision(m_binSize);
+    // strMap["_binSize_"] = to_string_with_precision(m_binSize);
 
     strMap["_nAnalGM_"] = std::to_string(nAnalGM);
     // strMap["_nOwnerBodies_"] = std::to_string(nOwnerBodies);

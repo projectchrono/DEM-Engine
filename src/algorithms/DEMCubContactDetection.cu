@@ -161,7 +161,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
     CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(binSphereTouchPairs_t);
     binSphereTouchPairs_t* sphereIDsLookUpTable =
         (binSphereTouchPairs_t*)scratchPad.allocateTempVector(3, CD_temp_arr_bytes);
-    cubDEMPrefixScan<binsSphereTouches_t, binSphereTouchPairs_t, DEMSolverStateData>(
+    cubDEMPrefixScan<spheresBinTouches_t, binSphereTouchPairs_t, DEMSolverStateData>(
         numSpheresBinTouches, sphereIDsLookUpTable, *pNumActiveBins, this_stream, scratchPad);
     // std::cout << "sphereIDsLookUpTable: ";
     // displayArray<binSphereTouchPairs_t>(sphereIDsLookUpTable, *pNumActiveBins);
