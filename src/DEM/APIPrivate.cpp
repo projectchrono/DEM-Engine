@@ -470,6 +470,17 @@ void DEMSolver::figureOutFamilyMasks() {
     // TODO: find the uniques for triangle input families as well
     unique_clump_families.insert(unique_clump_families.end(), unique_ext_obj_families.begin(),
                                  unique_ext_obj_families.end());
+    // Also don't forget!!!! If the user specified special family rules, these family numbers involved there may not be
+    // in the entity family number soup. We need to therefore take care of them here. It's really not general and feels
+    // random, maybe I should make a set to store all input family numbers instead.
+    for (const auto& a_pair : m_input_no_contact_pairs) {
+        unique_clump_families.push_back(a_pair.ID1);
+        unique_clump_families.push_back(a_pair.ID2);
+    }
+    for (const auto& preInfo : m_input_family_prescription) {
+        unique_clump_families.push_back(preInfo.family);
+    }
+
     // Combine all unique user family numbers together
     unique_clump_families.insert(unique_clump_families.end(), unique_user_families.begin(), unique_user_families.end());
     std::vector<unsigned int> unique_families_this_time = hostUniqueVector<unsigned int>(unique_clump_families);
@@ -515,15 +526,14 @@ void DEMSolver::figureOutFamilyMasks() {
     m_unique_family_prescription.resize(nDistinctFamilies);
     for (const auto& preInfo : m_input_family_prescription) {
         unsigned int user_family = preInfo.family;
-        if (m_family_user_impl_map.find(user_family) == m_family_user_impl_map.end()) {
-            if (user_family != DEM_RESERVED_FAMILY_NUM) {
-                SGPS_DEM_WARNING(
-                    "Family number %u is instructed to have prescribed motion, but no entity is associated with this "
-                    "family at system initialization.",
-                    user_family);
-            }
-            continue;
-        }
+        // if (m_family_user_impl_map.find(user_family) == m_family_user_impl_map.end()) {
+        //     if (user_family != DEM_RESERVED_FAMILY_NUM) {
+        //         SGPS_DEM_WARNING(
+        //             "Family number %u is instructed to have prescribed motion, but no entity is associated with this
+        //             " "family at system initialization.", user_family);
+        //     }
+        //     continue;
+        // }
 
         auto& this_family_info = m_unique_family_prescription.at(m_family_user_impl_map.at(user_family));
 
