@@ -239,7 +239,7 @@ class DEMSolver {
 
     /// Change all entities with family number ID_from to have a new number ID_to, immediately. This is callable when kT
     /// and dT are hanging, not when they are actively working, or the behavior is not defined.
-    void ChangeFamilyNow(unsigned int ID_from, unsigned int ID_to);
+    void ChangeFamily(unsigned int ID_from, unsigned int ID_to);
 
     ///
     void SetFamilyPrescribedPosition(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);

@@ -95,6 +95,11 @@ void DEMDynamicThread::packTransferPointers(DEMKinematicThread* kT) {
     granData->pKTOwnedBuffer_familyID = kT->granData->familyID_buffer;
 }
 
+void DEMDynamicThread::changeFamily(family_t ID_from, family_t ID_to) {
+    std::replace_if(
+        familyID.begin(), familyID.end(), [ID_from](family_t& i) { return i == ID_from; }, ID_to);
+}
+
 void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                     unsigned char nvYp2,
                                     unsigned char nvZp2,

@@ -311,6 +311,9 @@ class DEMDynamicThread {
     /// Set this owner's velocity
     void setOwnerVel(bodyID_t ownerID, float3 vel);
 
+    /// Change all entities with (implementation-level) family number ID_from to have a new number ID_to
+    void changeFamily(family_t ID_from, family_t ID_to);
+
     /// Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
     void allocateManagedArrays(size_t nOwnerBodies,
                                size_t nOwnerClumps,

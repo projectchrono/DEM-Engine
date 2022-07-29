@@ -158,7 +158,11 @@ void DEMSolver::ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const
     m_family_change_conditions.push_back(condition);
 }
 
-void DEMSolver::ChangeFamilyNow(unsigned int ID_from, unsigned int ID_to) {}
+void DEMSolver::ChangeFamily(unsigned int ID_from, unsigned int ID_to) {
+    family_t ID_from_impl = m_family_user_impl_map.at(ID_from);
+    family_t ID_to_impl = m_family_user_impl_map.at(ID_to);
+    dT->changeFamily(ID_from_impl, ID_to_impl);
+}
 
 void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
                                           const std::string& velX,
