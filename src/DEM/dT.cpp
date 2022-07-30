@@ -318,7 +318,7 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
 
     // Then load in mass and MOI template info
     size_t k = 0;
-    {
+    if (solverFlags.useMassJitify) {
         for (unsigned int i = 0; i < clumps_mass_types.size(); i++) {
             massOwnerBody.at(k) = clumps_mass_types.at(i);
             float3 this_moi = clumps_moi_types.at(i);
@@ -362,12 +362,10 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
         SGPS_DEM_DEBUG_EXEC(displayArray<family_t>(familiesNoOutput.data(), familiesNoOutput.size()));
     }
 
-    // Then, load in clump components info
-    // All flattened to single arrays, so a prescans_comp is needed so we know each input clump's component offsets
+    // Then, load in clump components info (but only if instructed to use jitified clump templates)
     k = 0;
     std::vector<unsigned int> prescans_comp;
-
-    {
+    if (solverFlags.useClumpJitify) {
         prescans_comp.push_back(0);
         for (const auto& elem : clumps_sp_radii_types) {
             for (const auto& radius : elem) {
@@ -401,7 +399,7 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
     unsigned int batch_num = 0;
     {
         bool pop_family_msg = false;
-        std::vector<inertiaOffset_t> input_clump_types;
+        std::vector<unsigned int> input_clump_types;
         std::vector<float3> input_clump_xyz;
         std::vector<float4> input_clump_oriQ;
         std::vector<float3> input_clump_vel;
@@ -410,7 +408,7 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
         // Flatten the input clump batches (because by design we transfer flatten clump info to GPU)
         for (const auto& a_batch : input_clump_batches) {
             // Decode type number and flatten
-            std::vector<inertiaOffset_t> type_marks(a_batch->GetNumClumps());
+            std::vector<unsigned int> type_marks(a_batch->GetNumClumps());
             for (size_t i = 0; i < a_batch->GetNumClumps(); i++) {
                 type_marks.at(i) = a_batch->types.at(i)->mark;
             }
@@ -439,11 +437,18 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
 
         for (size_t i = 0; i < simParams->nOwnerClumps; i++) {
             auto type_of_this_clump = input_clump_types.at(i);
-            inertiaPropOffsets.at(i) = type_of_this_clump;
-            // this_CoM_coord is already offsetted wrt LBF here, so we can use it directly at hostPositionToVoxelID
+            if (solverFlags.useMassJitify) {
+                inertiaPropOffsets.at(i) = type_of_this_clump;
+            } else {
+                massOwnerBody.at(i) = clumps_mass_types.at(type_of_this_clump);
+                const float3 this_moi = clumps_moi_types.at(type_of_this_clump);
+                mmiXX.at(i) = this_moi.x;
+                mmiYY.at(i) = this_moi.y;
+                mmiZZ.at(i) = this_moi.z;
+            }
+
             auto this_CoM_coord = input_clump_xyz.at(i) - LBF;
-            // std::cout << "CoM position: " << this_CoM_coord.x << ", " << this_CoM_coord.y << ", " << this_CoM_coord.z
-            // << std::endl;
+
             auto this_clump_no_sp_radii = clumps_sp_radii_types.at(type_of_this_clump);
             auto this_clump_no_sp_relPos = clumps_sp_location_types.at(type_of_this_clump);
             auto this_clump_no_sp_mat_ids = clumps_sp_mat_ids.at(type_of_this_clump);
@@ -452,14 +457,23 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
                 materialTupleOffset.at(k) = this_clump_no_sp_mat_ids.at(j);
                 ownerClumpBody.at(k) = i;
 
-                // This component offset, is it too large that can't live in the jitified array?
-                unsigned int this_comp_offset = prescans_comp.at(type_of_this_clump) + j;
-                clumpComponentOffsetExt.at(k) = this_comp_offset;
-                if (this_comp_offset < simParams->nJitifiableClumpComponents) {
-                    clumpComponentOffset.at(k) = this_comp_offset;
+                // Depending on whether we jitify or flatten
+                if (solverFlags.useClumpJitify) {
+                    // This component offset, is it too large that can't live in the jitified array?
+                    unsigned int this_comp_offset = prescans_comp.at(type_of_this_clump) + j;
+                    clumpComponentOffsetExt.at(k) = this_comp_offset;
+                    if (this_comp_offset < simParams->nJitifiableClumpComponents) {
+                        clumpComponentOffset.at(k) = this_comp_offset;
+                    } else {
+                        // If not, an indicator will be put there
+                        clumpComponentOffset.at(k) = DEM_RESERVED_CLUMP_COMPONENT_OFFSET;
+                    }
                 } else {
-                    // If not, an indicator will be put there
-                    clumpComponentOffset.at(k) = DEM_RESERVED_CLUMP_COMPONENT_OFFSET;
+                    radiiSphere.at(k) = this_clump_no_sp_radii.at(j);
+                    const float3 relPos = this_clump_no_sp_relPos.at(j);
+                    relPosSphereX.at(k) = relPos.x;
+                    relPosSphereY.at(k) = relPos.y;
+                    relPosSphereZ.at(k) = relPos.z;
                 }
 
                 k++;
@@ -500,7 +514,17 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
     size_t offset_for_ext_obj = simParams->nOwnerClumps;
     unsigned int offset_for_ext_obj_mass_template = simParams->nDistinctClumpBodyTopologies;
     for (size_t i = 0; i < simParams->nExtObj; i++) {
-        inertiaPropOffsets.at(i + offset_for_ext_obj) = i + offset_for_ext_obj_mass_template;
+        // Analytical object mass properties are useful in force collection, but not useful in force calculation:
+        // analytical component masses are jitified into kernels directly.
+        if (solverFlags.useMassJitify) {
+            inertiaPropOffsets.at(i + offset_for_ext_obj) = i + offset_for_ext_obj_mass_template;
+        } else {
+            massOwnerBody.at(i + offset_for_ext_obj) = ext_obj_mass_types.at(i);
+            const float3 this_moi = ext_obj_moi_types.at(i);
+            mmiXX.at(i + offset_for_ext_obj) = this_moi.x;
+            mmiYY.at(i + offset_for_ext_obj) = this_moi.y;
+            mmiZZ.at(i + offset_for_ext_obj) = this_moi.z;
+        }
         auto this_CoM_coord = input_ext_obj_xyz.at(i) - LBF;
         hostPositionToVoxelID<voxelID_t, subVoxelPos_t, double>(
             voxelID.at(i + offset_for_ext_obj), locX.at(i + offset_for_ext_obj), locY.at(i + offset_for_ext_obj),
@@ -522,7 +546,15 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
     size_t offset_for_mesh_obj = offset_for_ext_obj + simParams->nExtObj;
     unsigned int offset_for_mesh_obj_mass_template = offset_for_ext_obj_mass_template + simParams->nExtObj;
     for (size_t i = 0; i < simParams->nTriEntities; i++) {
-        inertiaPropOffsets.at(i + offset_for_mesh_obj) = i + offset_for_mesh_obj_mass_template;
+        if (solverFlags.useMassJitify) {
+            inertiaPropOffsets.at(i + offset_for_mesh_obj) = i + offset_for_mesh_obj_mass_template;
+        } else {
+            massOwnerBody.at(i + offset_for_mesh_obj) = mesh_obj_mass_types.at(i);
+            const float3 this_moi = mesh_obj_moi_types.at(i);
+            mmiXX.at(i + offset_for_mesh_obj) = this_moi.x;
+            mmiYY.at(i + offset_for_mesh_obj) = this_moi.y;
+            mmiZZ.at(i + offset_for_mesh_obj) = this_moi.z;
+        }
         auto this_CoM_coord = input_mesh_obj_xyz.at(i) - LBF;
         hostPositionToVoxelID<voxelID_t, subVoxelPos_t, double>(
             voxelID.at(i + offset_for_mesh_obj), locX.at(i + offset_for_mesh_obj), locY.at(i + offset_for_mesh_obj),
@@ -598,11 +630,10 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
         CoM.y = Y + simParams->LBFY;
         CoM.z = Z + simParams->LBFZ;
 
-        // Must use clumpComponentOffsetExt, b/c clumpComponentOffset may not be a faithful representation of clump
-        // component offset numbers
-        float this_sp_deviation_x = relPosSphereX.at(clumpComponentOffsetExt.at(i));
-        float this_sp_deviation_y = relPosSphereY.at(clumpComponentOffsetExt.at(i));
-        float this_sp_deviation_z = relPosSphereZ.at(clumpComponentOffsetExt.at(i));
+        size_t compOffset = (solverFlags.useClumpJitify) ? clumpComponentOffsetExt.at(i) : i;
+        float this_sp_deviation_x = relPosSphereX.at(compOffset);
+        float this_sp_deviation_y = relPosSphereY.at(compOffset);
+        float this_sp_deviation_z = relPosSphereZ.at(compOffset);
         float this_sp_rot_0 = oriQ0.at(this_owner);
         float this_sp_rot_1 = oriQ1.at(this_owner);
         float this_sp_rot_2 = oriQ2.at(this_owner);
@@ -614,7 +645,7 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
         posZ.at(num_output_spheres) = CoM.z + this_sp_deviation_z;
         // std::cout << "Sphere Pos: " << posX.at(i) << ", " << posY.at(i) << ", " << posZ.at(i) << std::endl;
 
-        spRadii.at(num_output_spheres) = radiiSphere.at(clumpComponentOffsetExt.at(i));
+        spRadii.at(num_output_spheres) = radiiSphere.at(compOffset);
 
         // Family number needs to be user number
         if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
@@ -688,12 +719,11 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
         CoM.y = Y + simParams->LBFY;
         CoM.z = Z + simParams->LBFZ;
 
-        // Must use clumpComponentOffsetExt, b/c clumpComponentOffset may not be a faithful representation of clump
-        // component offset numbers
+        size_t compOffset = (solverFlags.useClumpJitify) ? clumpComponentOffsetExt.at(i) : i;
         float3 this_sp_deviation;
-        this_sp_deviation.x = relPosSphereX.at(clumpComponentOffsetExt.at(i));
-        this_sp_deviation.y = relPosSphereY.at(clumpComponentOffsetExt.at(i));
-        this_sp_deviation.z = relPosSphereZ.at(clumpComponentOffsetExt.at(i));
+        this_sp_deviation.x = relPosSphereX.at(compOffset);
+        this_sp_deviation.y = relPosSphereY.at(compOffset);
+        this_sp_deviation.z = relPosSphereZ.at(compOffset);
         float this_sp_rot_0 = oriQ0.at(this_owner);
         float this_sp_rot_1 = oriQ1.at(this_owner);
         float this_sp_rot_2 = oriQ2.at(this_owner);
@@ -703,7 +733,7 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
         pos = CoM + this_sp_deviation;
         outstrstream << pos.x << "," << pos.y << "," << pos.z;
 
-        radius = radiiSphere.at(clumpComponentOffsetExt.at(i));
+        radius = radiiSphere.at(compOffset);
         outstrstream << "," << radius;
 
         // Only linear velocity

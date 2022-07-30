@@ -336,19 +336,25 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     }
 
     // Resize to the number of spheres
-    SGPS_DEM_TRACKED_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
-    SGPS_DEM_TRACKED_RESIZE(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
-    // This extended component offset array can hold offset numbers even for big clumps (whereas clumpComponentOffset is
-    // typically uint_8, so it may not). If a sphere's component offset index falls in this range then it is not
-    // jitified, and the kernel needs to look for it in the global memory.
-    SGPS_DEM_TRACKED_RESIZE(clumpComponentOffsetExt, nSpheresGM, "clumpComponentOffsetExt", 0);
+    SGPS_DEM_TRACKED_RESIZE(ownerClumpBody, nSpheresGM + nTriGM, "ownerClumpBody", 0);
 
-    // Resize to the length of the clump templates
-    SGPS_DEM_TRACKED_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);
-    SGPS_DEM_TRACKED_RESIZE(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
-    SGPS_DEM_TRACKED_RESIZE(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
-    SGPS_DEM_TRACKED_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
-    // SGPS_DEM_TRACKED_RESIZE(inflatedRadiiVoxelRatio, nClumpComponents, "inflatedRadiiVoxelRatio", 0);
+    if (solverFlags.useClumpJitify) {
+        SGPS_DEM_TRACKED_RESIZE(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
+        // This extended component offset array can hold offset numbers even for big clumps (whereas
+        // clumpComponentOffset is typically uint_8, so it may not). If a sphere's component offset index falls in this
+        // range then it is not jitified, and the kernel needs to look for it in the global memory.
+        SGPS_DEM_TRACKED_RESIZE(clumpComponentOffsetExt, nSpheresGM, "clumpComponentOffsetExt", 0);
+        // Resize to the length of the clump templates
+        SGPS_DEM_TRACKED_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);
+        SGPS_DEM_TRACKED_RESIZE(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
+        SGPS_DEM_TRACKED_RESIZE(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
+        SGPS_DEM_TRACKED_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
+    } else {
+        SGPS_DEM_TRACKED_RESIZE(radiiSphere, nSpheresGM, "radiiSphere", 0);
+        SGPS_DEM_TRACKED_RESIZE(relPosSphereX, nSpheresGM, "relPosSphereX", 0);
+        SGPS_DEM_TRACKED_RESIZE(relPosSphereY, nSpheresGM, "relPosSphereY", 0);
+        SGPS_DEM_TRACKED_RESIZE(relPosSphereZ, nSpheresGM, "relPosSphereZ", 0);
+    }
 
     // Arrays for kT produced contact info
     // The following several arrays will have variable sizes, so here we only used an estimate. My estimate of total
@@ -383,23 +389,25 @@ void DEMKinematicThread::initManagedArrays(const std::vector<std::shared_ptr<DEM
     size_t k = 0;
     std::vector<unsigned int> prescans_comp;
 
-    prescans_comp.push_back(0);
-    for (auto elem : clumps_sp_radii_types) {
-        for (auto radius : elem) {
-            radiiSphere.at(k) = radius;
-            k++;
+    if (solverFlags.useClumpJitify) {
+        prescans_comp.push_back(0);
+        for (auto elem : clumps_sp_radii_types) {
+            for (auto radius : elem) {
+                radiiSphere.at(k) = radius;
+                k++;
+            }
+            prescans_comp.push_back(k);
         }
-        prescans_comp.push_back(k);
-    }
-    prescans_comp.pop_back();
-    k = 0;
+        prescans_comp.pop_back();
+        k = 0;
 
-    for (auto elem : clumps_sp_location_types) {
-        for (auto loc : elem) {
-            relPosSphereX.at(k) = loc.x;
-            relPosSphereY.at(k) = loc.y;
-            relPosSphereZ.at(k) = loc.z;
-            k++;
+        for (auto elem : clumps_sp_location_types) {
+            for (auto loc : elem) {
+                relPosSphereX.at(k) = loc.x;
+                relPosSphereY.at(k) = loc.y;
+                relPosSphereZ.at(k) = loc.z;
+                k++;
+            }
         }
     }
 
@@ -410,12 +418,12 @@ void DEMKinematicThread::initManagedArrays(const std::vector<std::shared_ptr<DEM
     // LBF.z = simParams->LBFZ;
     // Now load clump init info
     {
-        std::vector<inertiaOffset_t> input_clump_types;
+        std::vector<unsigned int> input_clump_types;
         std::vector<unsigned int> input_clump_family;
         // Flatten the input clump batches (because by design we transfer flatten clump info to GPU)
         for (const auto& a_batch : input_clump_batches) {
             // Decode type number and flatten
-            std::vector<inertiaOffset_t> type_marks(a_batch->GetNumClumps());
+            std::vector<unsigned int> type_marks(a_batch->GetNumClumps());
             for (size_t i = 0; i < a_batch->GetNumClumps(); i++) {
                 type_marks.at(i) = a_batch->types.at(i)->mark;
             }
@@ -433,14 +441,23 @@ void DEMKinematicThread::initManagedArrays(const std::vector<std::shared_ptr<DEM
             for (size_t j = 0; j < this_clump_no_sp_radii.size(); j++) {
                 ownerClumpBody.at(k) = i;
 
-                // This component offset, is it too large that can't live in the jitified array?
-                unsigned int this_comp_offset = prescans_comp.at(type_of_this_clump) + j;
-                clumpComponentOffsetExt.at(k) = this_comp_offset;
-                if (this_comp_offset < simParams->nJitifiableClumpComponents) {
-                    clumpComponentOffset.at(k) = this_comp_offset;
+                // Depending on whether we jitify or flatten
+                if (solverFlags.useClumpJitify) {
+                    // This component offset, is it too large that can't live in the jitified array?
+                    unsigned int this_comp_offset = prescans_comp.at(type_of_this_clump) + j;
+                    clumpComponentOffsetExt.at(k) = this_comp_offset;
+                    if (this_comp_offset < simParams->nJitifiableClumpComponents) {
+                        clumpComponentOffset.at(k) = this_comp_offset;
+                    } else {
+                        // If not, an indicator will be put there
+                        clumpComponentOffset.at(k) = DEM_RESERVED_CLUMP_COMPONENT_OFFSET;
+                    }
                 } else {
-                    // If not, an indicator will be put there
-                    clumpComponentOffset.at(k) = DEM_RESERVED_CLUMP_COMPONENT_OFFSET;
+                    radiiSphere.at(k) = this_clump_no_sp_radii.at(j);
+                    const float3 relPos = this_clump_no_sp_relPos.at(j);
+                    relPosSphereX.at(k) = relPos.x;
+                    relPosSphereY.at(k) = relPos.y;
+                    relPosSphereZ.at(k) = relPos.z;
                 }
 
                 k++;

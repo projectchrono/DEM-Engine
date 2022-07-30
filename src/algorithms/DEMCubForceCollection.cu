@@ -85,18 +85,6 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
         // displayArray<bodyID_t>(idAOwner, nContactPairs);
         // displayArray<bodyID_t>(idBOwner, nContactPairs);
         // displayArray<contact_t>(contactType, nContactPairs);
-
-        // // Secondly, prepare the owner mass and moi arrays (nContactPairs * float/float3) for usage in final
-        // reduction
-        // // by key (do it for both A and B)
-        // collect_force_kernels->kernel("cashInMassMoiIndex")
-        //     .instantiate()
-        //     .configure(dim3(blocks_needed_for_twice_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK),
-        //                sizeof(float) * TEST_SHARED_SIZE * 4, this_stream)
-        //     .launch(massAOwner, moiAOwner, inertiaPropOffsets, idAOwner, 2 * nContactPairs, massOwnerBody, mmiXX,
-        //     mmiYY,
-        //             mmiZZ, nDistinctClumpBodyTopologies);
-        // GPU_CALL(cudaStreamSynchronize(this_stream));
     }
 
     // ==============================================
@@ -115,7 +103,7 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
     float3* accOwner = (float3*)scratchPad.allocateTempVector(
         4, tempArraySizeOwnerAcc);  // can store both linear and angular acceleration
     bodyID_t* uniqueOwner = (bodyID_t*)scratchPad.allocateTempVector(5, tempArraySizeOwner);
-    // collect accelerations for body A (modifier used to be h * h / l when we stored acc as h^2*acc)
+    // Collect accelerations for body A (modifier used to be h * h / l when we stored acc as h^2*acc)
     // NOTE!! If you pass floating point number to kernels, the number needs to be something like 1.f, not 1.0.
     // Somtimes 1.0 got converted to 0.f with the kernel call.
     collect_force_kernels->kernel("forceToAcc")

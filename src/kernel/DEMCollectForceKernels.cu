@@ -35,6 +35,7 @@ __global__ void cashInOwnerIndexB(sgps::bodyID_t* idOwner,
     }
 }
 
+/*
 __global__ void cashInMassMoiIndex(float* massOwner,
                                    float3* moiOwner,
                                    sgps::inertiaOffset_t* inertiaPropOffsets,
@@ -58,6 +59,7 @@ __global__ void cashInMassMoiIndex(float* massOwner,
         moiOwner[myID] = moi;
     }
 }
+*/
 
 // computes a ./ b
 __global__ void forceToAcc(float3* acc,

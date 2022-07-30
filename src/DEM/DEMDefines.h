@@ -171,11 +171,10 @@ struct DEMSimParams {
     triID_t nTriJitified;
 
     // Number of the templates (or say the ``types'') of clumps and spheres
-    inertiaOffset_t nDistinctClumpBodyTopologies;
-    clumpComponentOffset_t nDistinctMassProperties;  ///< All mass property items, not just clumps'
-    clumpComponentOffset_t
-        nJitifiableClumpComponents;  ///< Does not include `big' clump's (external object's) components
-    clumpComponentOffsetExt_t nDistinctClumpComponents;  ///< All clump components, including the ones `big' clumps have
+    unsigned int nDistinctClumpBodyTopologies;
+    unsigned int nDistinctMassProperties;     ///< All mass property items, not just clumps'
+    unsigned int nJitifiableClumpComponents;  ///< Does not include `big' clump's (external object's) components
+    unsigned int nDistinctClumpComponents;    ///< All clump components, including the ones `big' clumps have
     materialsOffset_t nMatTuples;
     // Coordinate of the left-bottom-front point of the simulation ``world''
     float LBFX;
