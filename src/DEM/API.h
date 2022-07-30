@@ -43,10 +43,9 @@ class DEMSolver {
     /// Set output detail level
     void SetVerbosity(DEM_VERBOSITY verbose) { verbosity = verbose; }
 
-    /// Instruct the dimension of the `world'. On initialization, this
-    /// info will be used to figure out how to assign the num of voxels in each direction. If your `useful' domain is
-    /// not box-shaped, then define a box that contains your domian. O is the coordinate of the left-bottom-front point
-    /// of your simulation `world'.
+    /// Instruct the dimension of the `world'. On initialization, this info will be used to figure out how to assign the
+    /// num of voxels in each direction. If your `useful' domain is not box-shaped, then define a box that contains your
+    /// domian. O is the coordinate of the left-bottom-front point of your simulation `world'.
     void InstructBoxDomainDimension(float x, float y, float z, const std::string dir_exact = "none");
 
     /// Explicitly instruct the number of voxels (as 2^{x,y,z}) along each direction, as well as the smallest unit
@@ -76,14 +75,14 @@ class DEMSolver {
     // TODO: Implement an API that allows setting ts size through a list
 
     /// Sets the origin of your coordinate system
-    void InstructCoordSysOrigin(const std::string& where) { m_user_instructed_origin = where; }
-    void InstructCoordSysOrigin(float3 O) {
+    void SetCoordSysOrigin(const std::string& where) { m_user_instructed_origin = where; }
+    void SetCoordSysOrigin(float3 O) {
         m_boxLBF = O;
         m_user_instructed_origin = "explicit";
     }
 
     /// Explicitly instruct the bin size (for contact detection) that the solver should use
-    void InstructBinSize(double bin_size) {
+    void SetInitBinSize(double bin_size) {
         use_user_defined_bin_size = true;
         m_binSize = bin_size;
     }
@@ -106,6 +105,15 @@ class DEMSolver {
     /// Instruct the solver if contact pair arrays should be sorted before usage. This is needed if history-based model
     /// is in use.
     void SetSortContactPairs(bool use_sort) { kT_should_sort = use_sort; }
+
+    /// Instruct the solver to rearrange and consolidate clump templates information, then jitify it into GPU kernels
+    /// (if set to true), rather than using flattened sphere component configuration arrays whose entries are associated
+    /// with individual spheres. Note: setting it to true gives no performance benefit known to me.
+    void SetJitifyClumpTemplates(bool use = true) { jitify_clump_templates = use; }
+    /// Instruct the solver to rearrange and consolidate mass property information (for all owner types), then jitify it
+    /// into GPU kernels (if set to true), rather than using flattened mass property arrays whose entries are associated
+    /// with individual owners. Note: setting it to true gives no performance benefit known to me.
+    void SetJitifyMassProperties(bool use = true) { jitify_mass_moi = use; }
 
     // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
     void UseCompactForceKernel(bool use_compact);
@@ -347,11 +355,15 @@ class DEMSolver {
     // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
     bool use_compact_sweep_force_strat = false;
     // If true, the solvers may need to do a per-step sweep to apply family number changes
-    bool m_famnum_change_conditionally = false;
+    bool famnum_can_change_conditionally = false;
 
     // Force model, as a string
     std::string m_force_model = DEM_HERTZIAN_FORCE_MODEL();
     bool use_user_defined_force_model = false;
+    // Should jitify clump template into kernels
+    bool jitify_clump_templates = true;
+    // Should jitify mass/MOI properties into kernels
+    bool jitify_mass_moi = true;
 
     // User explicitly set a bin size to use
     bool use_user_defined_bin_size = false;

@@ -149,7 +149,7 @@ void DEMSolver::SetFamilyFixed(unsigned int ID) {
 
 void DEMSolver::ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const std::string& condition) {
     // If one such user call is made, then the solver needs to prepare for per-step family number-changing sweeps
-    m_famnum_change_conditionally = true;
+    famnum_can_change_conditionally = true;
     familyPair_t a_pair;
     a_pair.ID1 = ID_from;
     a_pair.ID2 = ID_to;
@@ -159,9 +159,7 @@ void DEMSolver::ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const
 }
 
 void DEMSolver::ChangeFamily(unsigned int ID_from, unsigned int ID_to) {
-    family_t ID_from_impl = m_family_user_impl_map.at(ID_from);
-    family_t ID_to_impl = m_family_user_impl_map.at(ID_to);
-    dT->changeFamily(ID_from_impl, ID_to_impl);
+    dT->changeFamily(ID_from, ID_to);
 }
 
 void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
@@ -388,7 +386,7 @@ void DEMSolver::ClearCache() {
     m_family_mask_matrix.clear();
     m_family_user_impl_map.clear();
 
-    m_famnum_change_conditionally = false;
+    famnum_can_change_conditionally = false;
     m_family_change_pairs.clear();
     m_family_change_conditions.clear();
 

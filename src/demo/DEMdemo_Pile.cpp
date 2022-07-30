@@ -129,7 +129,7 @@ int main() {
     std::shared_ptr<DEMExternObj> plane_a = DEM_sim.AddExternalObject();
     plane_a->AddPlane(make_float3(-4.5, 0, 0), make_float3(1, 0, 0), mat_type_2);
 
-    DEM_sim.InstructCoordSysOrigin("center");
+    DEM_sim.SetCoordSysOrigin("center");
     DEM_sim.SetInitTimeStep(5e-6);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety

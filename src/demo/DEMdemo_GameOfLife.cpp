@@ -39,7 +39,7 @@ int main() {
     unsigned int n_init = 10000;
 
     // Bin size can be somewhat large
-    DEM_sim.InstructBinSize(grid_size * 3.0);
+    DEM_sim.SetInitBinSize(grid_size * 3.0);
 
     auto template_sphere = DEM_sim.LoadClumpSimpleSphere(1.0, r, mat_type_1);
 
@@ -118,7 +118,7 @@ int main() {
     particles->SetFamilies(family_code);
     DEM_sim.InstructBoxDomainNumVoxel(22, 22, 20, (world_size + grid_size) / std::pow(2, 16) / std::pow(2, 22));
 
-    DEM_sim.InstructCoordSysOrigin("center");
+    DEM_sim.SetCoordSysOrigin("center");
     DEM_sim.SetInitTimeStep(1.);
     DEM_sim.SetCDUpdateFreq(0);
 

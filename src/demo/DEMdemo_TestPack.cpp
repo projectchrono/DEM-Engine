@@ -27,7 +27,7 @@ void SetSolverProp(DEMSolver& DEM_sim) {
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
 
     DEM_sim.InstructBoxDomainNumVoxel(22, 22, 20, 7.5e-11);
-    DEM_sim.InstructCoordSysOrigin("center");
+    DEM_sim.SetCoordSysOrigin("center");
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEM_sim.SetCDUpdateFreq(0);
 }

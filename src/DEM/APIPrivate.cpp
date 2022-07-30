@@ -107,30 +107,54 @@ void DEMSolver::generateJITResources() {
 }
 
 void DEMSolver::postJITResourceGenSanityCheck() {
-    // Can we jitify all clump templates?
-    bool unable_jitify_all = false;
-    nDistinctClumpComponents = 0;
-    nJitifiableClumpComponents = 0;
-    for (unsigned int i = 0; i < nDistinctClumpBodyTopologies; i++) {
-        nDistinctClumpComponents += m_template_sp_radii.at(i).size();
-        // Keep an eye on if the accumulated DistinctClumpComponents gets too many
-        if ((!unable_jitify_all) && (nDistinctClumpComponents > DEM_THRESHOLD_CANT_JITIFY_ALL_COMP)) {
-            nJitifiableClumpTopo = i;
-            nJitifiableClumpComponents = nDistinctClumpComponents - m_template_sp_radii.at(i).size();
-            unable_jitify_all = true;
+    if (jitify_clump_templates) {
+        // Can we jitify all clump templates?
+        bool unable_jitify_all = false;
+        nDistinctClumpComponents = 0;
+        nJitifiableClumpComponents = 0;
+        for (unsigned int i = 0; i < nDistinctClumpBodyTopologies; i++) {
+            nDistinctClumpComponents += m_template_sp_radii.at(i).size();
+            // Keep an eye on if the accumulated DistinctClumpComponents gets too many
+            if ((!unable_jitify_all) && (nDistinctClumpComponents > DEM_THRESHOLD_CANT_JITIFY_ALL_COMP)) {
+                nJitifiableClumpTopo = i;
+                nJitifiableClumpComponents = nDistinctClumpComponents - m_template_sp_radii.at(i).size();
+                unable_jitify_all = true;
+            }
+        }
+        if (unable_jitify_all) {
+            SGPS_DEM_WARNING(
+                "There are %u clump templates loaded, but only %u templates (totalling %u components) are jitifiable "
+                "due "
+                "to some of the clumps are big and/or there are many types of clumps.\nIt is probably because you have "
+                "external objects represented by spherical decomposition (a.k.a. have big clumps).\nIn this case, I "
+                "strongly suggest against calling SetJitifyClumpTemplates to use jitification for clump templates.",
+                nDistinctClumpBodyTopologies, nJitifiableClumpTopo, nJitifiableClumpComponents);
+        } else {
+            nJitifiableClumpTopo = nDistinctClumpBodyTopologies;
+            nJitifiableClumpComponents = nDistinctClumpComponents;
         }
     }
-    if (unable_jitify_all) {
-        SGPS_DEM_WARNING(
-            "There are %u clump templates loaded, but only %u templates (totalling %u components) are jitifiable due "
-            "to some of the clumps are big and/or there are many types of clumps.\nIf you have external objects "
-            "represented by spherical decomposition (a.k.a. intend to use big clumps), there is probably nothing to "
-            "worry about.\nOtherwise, you may want to change the way this problem is formulated so you have fewer "
-            "clump templates.",
-            nDistinctClumpBodyTopologies, nJitifiableClumpTopo, nJitifiableClumpComponents);
-    } else {
-        nJitifiableClumpTopo = nDistinctClumpBodyTopologies;
-        nJitifiableClumpComponents = nDistinctClumpComponents;
+
+    if (jitify_mass_moi) {
+        // Sanity check for final number of mass properties/inertia offsets
+        if (nDistinctMassProperties >= std::numeric_limits<inertiaOffset_t>::max()) {
+            SGPS_DEM_ERROR(
+                "%u different mass properties (from the contribution of clump templates, analytical objects and meshed "
+                "objects) are loaded, but the max allowance is %u (No.%u is reserved).\nIn general, I suggest against "
+                "calling SetJitifyMassProperties to use jitification for mass properties and here, you definitely "
+                "should not use it.",
+                nDistinctMassProperties, std::numeric_limits<inertiaOffset_t>::max() - 1,
+                std::numeric_limits<inertiaOffset_t>::max());
+        }
+    }
+
+    // Do we have more bins that our data type can handle?
+    if (m_num_bins > std::numeric_limits<binID_t>::max()) {
+        SGPS_DEM_ERROR(
+            "The simulation world has %zu bins (for domain partitioning in contact detection), but the largest bin ID "
+            "that we can have is %zu.\nYou can try to make bins larger via SetInitBinSize, or redefine binID_t and "
+            "recompile.",
+            m_num_bins, std::numeric_limits<binID_t>::max());
     }
 
     // Sanity check for analytical geometries
@@ -141,26 +165,6 @@ void DEMSolver::postJITResourceGenSanityCheck() {
             nAnalGM);
     }
 
-    // Sanity check for final number of mass properties/inertia offsets
-    //// TODO: Maybe mass properties should also have jitifiable and non-jitifiable part???
-    if (nDistinctMassProperties >= std::numeric_limits<inertiaOffset_t>::max()) {
-        SGPS_DEM_ERROR(
-            "%u different mass properties (from the contribution of clump templates, analytical objects and meshed "
-            "objects) are loaded, but the max allowance is %u (No.%u is reserved).\nThis many types of mass properties "
-            "are not recommended but if they are indeed needed, you can redefine inertiaOffset_t.",
-            nDistinctMassProperties, std::numeric_limits<inertiaOffset_t>::max() - 1,
-            std::numeric_limits<inertiaOffset_t>::max());
-    }
-
-    // Do we have more bins that our data type can handle?
-    if (m_num_bins > std::numeric_limits<binID_t>::max()) {
-        SGPS_DEM_ERROR(
-            "The simulation world has %zu bins (for domain partitioning in contact detection), but the largest bin ID "
-            "that we can have is %zu.\nYou can try to make bins larger via InstructBinSize, or redefine binID_t and "
-            "recompile.",
-            m_num_bins, std::numeric_limits<binID_t>::max());
-    }
-
     // Debug outputs
     SGPS_DEM_DEBUG_EXEC(printf("These owners are tracked: ");
                         for (const auto& tracked
@@ -168,23 +172,26 @@ void DEMSolver::postJITResourceGenSanityCheck() {
 }
 
 void DEMSolver::preprocessClumpTemplates() {
-    // A sort based on the number of components of each clump type is needed, so larger clumps are near the end of the
-    // array, so we can always jitify the smaller clumps, and leave larger ones in GPU global memory
-    std::sort(m_templates.begin(), m_templates.end(),
-              [](auto& left, auto& right) { return left->nComp < right->nComp; });
-    // A mapping is needed to transform the user-defined clump type array so that it matches the new, rearranged clump
-    // template array
-    std::unordered_map<inertiaOffset_t, inertiaOffset_t> old_mark_to_new;
-    for (unsigned int i = 0; i < m_templates.size(); i++) {
-        old_mark_to_new[m_templates.at(i)->mark] = i;
-        SGPS_DEM_DEBUG_PRINTF("Clump template re-order: %u->%u, nComp: %u", m_templates.at(i)->mark, i,
-                              m_templates.at(i)->nComp);
-    }
-    // If the user then add more clumps to the system (without adding templates, which mandates a re-initialization),
-    // mapping again is not needed, because now we redefine each template's mark to be the same as their current
-    // position in template array
-    for (unsigned int i = 0; i < m_templates.size(); i++) {
-        m_templates.at(i)->mark = i;
+    // We really only have to sort clump templates if we wish to jitify clump templates
+    if (jitify_clump_templates) {
+        // A sort based on the number of components of each clump type is needed, so larger clumps are near the end of
+        // the array, so we can always jitify the smaller clumps, and leave larger ones in GPU global memory
+        std::sort(m_templates.begin(), m_templates.end(),
+                  [](auto& left, auto& right) { return left->nComp < right->nComp; });
+        // A mapping is needed to transform the user-defined clump type array so that it matches the new, rearranged
+        // clump template array
+        std::unordered_map<unsigned int, unsigned int> old_mark_to_new;
+        for (unsigned int i = 0; i < m_templates.size(); i++) {
+            old_mark_to_new[m_templates.at(i)->mark] = i;
+            SGPS_DEM_DEBUG_PRINTF("Clump template re-order: %u->%u, nComp: %u", m_templates.at(i)->mark, i,
+                                  m_templates.at(i)->nComp);
+        }
+        // If the user then add more clumps to the system (without adding templates, which mandates a
+        // re-initialization), mapping again is not needed, because now we redefine each template's mark to be the same
+        // as their current position in template array
+        for (unsigned int i = 0; i < m_templates.size(); i++) {
+            m_templates.at(i)->mark = i;
+        }
     }
 
     // Now we can flatten clump template and make ready for transfer
@@ -247,7 +254,7 @@ void DEMSolver::jitifyKernels() {
 
 void DEMSolver::processUserInputs() {
     // The number of loaded clumps is calculated here, not in generateJITResources like meshes and analytical objects,
-    // because clumps are not flattened before transferring to dT, so I just throw it here, somewhere eeearly in the
+    // because clumps are not flattened before transferring to dT, so I just throw it here, somewhere early in the
     // initialization process. Good idea? Also note that there is no need to initialize nOwnerClumps = 0, as
     // re-initialization may be called in mid-simulation using an `Add' flavor.
     for (const auto& a_batch : cached_input_clump_batches) {
@@ -634,6 +641,11 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.isStepConst = ts_size_is_const;
     kT->solverFlags.isExpandFactorFixed = use_user_defined_expand_factor;
 
+    // Jitify or not
+    dT->solverFlags.useClumpJitify = jitify_clump_templates;
+    dT->solverFlags.useMassJitify = jitify_mass_moi;
+    kT->solverFlags.useClumpJitify = jitify_clump_templates;
+
     // Tell kT and dT if this run is async
     kT->solverFlags.isAsync = !(m_updateFreq == 0);
     dT->solverFlags.isAsync = !(m_updateFreq == 0);
@@ -641,8 +653,8 @@ void DEMSolver::transferSolverParams() {
     dTkT_InteractionManager->dynamicRequestedUpdateFrequency = m_updateFreq;
 
     // Tell kT and dT whether the user enforeced potential on-the-fly family number changes
-    kT->solverFlags.canFamilyChange = m_famnum_change_conditionally;
-    dT->solverFlags.canFamilyChange = m_famnum_change_conditionally;
+    kT->solverFlags.canFamilyChange = famnum_can_change_conditionally;
+    dT->solverFlags.canFamilyChange = famnum_can_change_conditionally;
 
     kT->solverFlags.should_sort_pairs = kT_should_sort;
 

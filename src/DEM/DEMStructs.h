@@ -284,6 +284,10 @@ struct SolverFlags {
     // Time step constant-ness and expand factor constant-ness
     bool isStepConst = true;
     bool isExpandFactorFixed = true;
+    // Whether instructed to use jitification for mass properties and clump components (default to no and it is
+    // recommended)
+    bool useClumpJitify = false;
+    bool useMassJitify = false;
 };
 
 struct DEMMaterial {

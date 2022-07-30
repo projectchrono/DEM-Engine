@@ -175,7 +175,7 @@ class DEMClumpBatch {
     }
 
   public:
-    bool families_isSpecified = false;
+    bool family_isSpecified = false;
     std::vector<std::shared_ptr<DEMClumpTemplate>> types;
     std::vector<unsigned int> families;
     std::vector<float3> vel;
@@ -230,7 +230,7 @@ class DEMClumpBatch {
     void SetFamilies(const std::vector<unsigned int>& input) {
         assertLength(input.size(), "SetFamilies");
         families = input;
-        families_isSpecified = true;
+        family_isSpecified = true;
     }
     void SetFamilies(unsigned int input) { SetFamilies(std::vector<unsigned int>(nClumps, input)); }
     void SetFamily(unsigned int input) { SetFamilies(std::vector<unsigned int>(nClumps, input)); }

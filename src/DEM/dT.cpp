@@ -95,9 +95,11 @@ void DEMDynamicThread::packTransferPointers(DEMKinematicThread* kT) {
     granData->pKTOwnedBuffer_familyID = kT->granData->familyID_buffer;
 }
 
-void DEMDynamicThread::changeFamily(family_t ID_from, family_t ID_to) {
+void DEMDynamicThread::changeFamily(unsigned int ID_from, unsigned int ID_to) {
+    family_t ID_from_impl = familyUserImplMap.at(ID_from);
+    family_t ID_to_impl = familyUserImplMap.at(ID_to);
     std::replace_if(
-        familyID.begin(), familyID.end(), [ID_from](family_t& i) { return i == ID_from; }, ID_to);
+        familyID.begin(), familyID.end(), [ID_from_impl](family_t& i) { return i == ID_from_impl; }, ID_to_impl);
 }
 
 void DEMDynamicThread::setSimParams(unsigned char nvXp2,
@@ -184,7 +186,6 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     simParams->nMatTuples = nMatTuples;
 
     // Resize to the number of clumps
-    SGPS_DEM_TRACKED_RESIZE(inertiaPropOffsets, nOwnerBodies, "inertiaPropOffsets", 0);
     SGPS_DEM_TRACKED_RESIZE(familyID, nOwnerBodies, "familyID", 0);
     SGPS_DEM_TRACKED_RESIZE(voxelID, nOwnerBodies, "voxelID", 0);
     SGPS_DEM_TRACKED_RESIZE(locX, nOwnerBodies, "locX", 0);
@@ -207,24 +208,41 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     SGPS_DEM_TRACKED_RESIZE(alphaY, nOwnerBodies, "alphaY", 0);
     SGPS_DEM_TRACKED_RESIZE(alphaZ, nOwnerBodies, "alphaZ", 0);
 
-    // Resize to the number of spheres
-    SGPS_DEM_TRACKED_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
-    SGPS_DEM_TRACKED_RESIZE(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
-    // This extended component offset array can hold offset numbers even for big clumps (whereas clumpComponentOffset is
-    // typically uint_8, so it may not). If a sphere's component offset index falls in this range then it is not
-    // jitified, and the kernel needs to look for it in the global memory.
-    SGPS_DEM_TRACKED_RESIZE(clumpComponentOffsetExt, nSpheresGM, "clumpComponentOffsetExt", 0);
-    SGPS_DEM_TRACKED_RESIZE(materialTupleOffset, nSpheresGM, "materialTupleOffset", 0);
+    // Resize to the number of geometries
+    SGPS_DEM_TRACKED_RESIZE(ownerClumpBody, nSpheresGM + nTriGM, "ownerClumpBody", 0);
+    SGPS_DEM_TRACKED_RESIZE(materialTupleOffset, nSpheresGM + nTriGM, "materialTupleOffset", 0);
 
-    // Resize to the length of the clump templates
-    SGPS_DEM_TRACKED_RESIZE(massOwnerBody, nMassProperties, "massOwnerBody", 0);
-    SGPS_DEM_TRACKED_RESIZE(mmiXX, nMassProperties, "mmiXX", 0);
-    SGPS_DEM_TRACKED_RESIZE(mmiYY, nMassProperties, "mmiYY", 0);
-    SGPS_DEM_TRACKED_RESIZE(mmiZZ, nMassProperties, "mmiZZ", 0);
-    SGPS_DEM_TRACKED_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);
-    SGPS_DEM_TRACKED_RESIZE(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
-    SGPS_DEM_TRACKED_RESIZE(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
-    SGPS_DEM_TRACKED_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
+    // For clump component offset, it's only needed if clump components are jitified
+    if (solverFlags.useClumpJitify) {
+        SGPS_DEM_TRACKED_RESIZE(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
+        // This extended component offset array can hold offset numbers even for big clumps (whereas
+        // clumpComponentOffset is typically uint_8, so it may not). If a sphere's component offset index falls in this
+        // range then it is not jitified, and the kernel needs to look for it in the global memory.
+        SGPS_DEM_TRACKED_RESIZE(clumpComponentOffsetExt, nSpheresGM, "clumpComponentOffsetExt", 0);
+        SGPS_DEM_TRACKED_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);
+        SGPS_DEM_TRACKED_RESIZE(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
+        SGPS_DEM_TRACKED_RESIZE(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
+        SGPS_DEM_TRACKED_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
+    } else {
+        SGPS_DEM_TRACKED_RESIZE(radiiSphere, nSpheresGM, "radiiSphere", 0);
+        SGPS_DEM_TRACKED_RESIZE(relPosSphereX, nSpheresGM, "relPosSphereX", 0);
+        SGPS_DEM_TRACKED_RESIZE(relPosSphereY, nSpheresGM, "relPosSphereY", 0);
+        SGPS_DEM_TRACKED_RESIZE(relPosSphereZ, nSpheresGM, "relPosSphereZ", 0);
+    }
+
+    // If we jitify mass properties, then
+    if (solverFlags.useMassJitify) {
+        SGPS_DEM_TRACKED_RESIZE(inertiaPropOffsets, nOwnerBodies, "inertiaPropOffsets", 0);
+        SGPS_DEM_TRACKED_RESIZE(massOwnerBody, nMassProperties, "massOwnerBody", 0);
+        SGPS_DEM_TRACKED_RESIZE(mmiXX, nMassProperties, "mmiXX", 0);
+        SGPS_DEM_TRACKED_RESIZE(mmiYY, nMassProperties, "mmiYY", 0);
+        SGPS_DEM_TRACKED_RESIZE(mmiZZ, nMassProperties, "mmiZZ", 0);
+    } else {
+        SGPS_DEM_TRACKED_RESIZE(massOwnerBody, nOwnerBodies, "massOwnerBody", 0);
+        SGPS_DEM_TRACKED_RESIZE(mmiXX, nOwnerBodies, "mmiXX", 0);
+        SGPS_DEM_TRACKED_RESIZE(mmiYY, nOwnerBodies, "mmiYY", 0);
+        SGPS_DEM_TRACKED_RESIZE(mmiZZ, nOwnerBodies, "mmiZZ", 0);
+    }
     SGPS_DEM_TRACKED_RESIZE(EProxy, nMatTuples, "EProxy", 0);
     SGPS_DEM_TRACKED_RESIZE(nuProxy, nMatTuples, "nuProxy", 0);
     SGPS_DEM_TRACKED_RESIZE(CoRProxy, nMatTuples, "CoRProxy", 0);
@@ -406,7 +424,7 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
             // Now angular velocity
             input_clump_angVel.insert(input_clump_angVel.end(), a_batch->angVel.begin(), a_batch->angVel.end());
             // For family numbers, we check if the user has explicitly set them. If not, send a warning.
-            if ((!a_batch->families_isSpecified) && (!pop_family_msg)) {
+            if ((!a_batch->family_isSpecified) && (!pop_family_msg)) {
                 SGPS_DEM_WARNING("Some clumps do not have their family numbers specified, so defaulted to %u",
                                  DEM_DEFAULT_CLUMP_FAMILY_NUM);
                 pop_family_msg = true;
@@ -1057,7 +1075,7 @@ void DEMDynamicThread::workerThread() {
                 step_accepted = true;
             } while ((!solverFlags.isStepConst) || (!step_accepted));
 
-            // CalculateForces is done, set it to false
+            // CalculateForces is done, set contactPairArr_isFresh to false
             // This will be set to true next time it receives an update from kT
             contactPairArr_isFresh = false;
 
