@@ -139,11 +139,11 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
 }
 
 float DEMDynamicThread::getKineticEnergy() {
-    // We can use temp vectors as we please. Allocate num_of_clumps floats.
-    size_t quarryTempSize = (size_t)simParams->nOwnerBodies * sizeof(float);
-    float* KEArr = (float*)stateOfSolver_resources.allocateTempVector(0, quarryTempSize);
-    size_t returnSize = sizeof(float);
-    float* KE = (float*)stateOfSolver_resources.allocateTempVector(1, returnSize);
+    // We can use temp vectors as we please. Allocate num_of_clumps doubles.
+    size_t quarryTempSize = (size_t)simParams->nOwnerBodies * sizeof(double);
+    double* KEArr = (double*)stateOfSolver_resources.allocateTempVector(1, quarryTempSize);
+    size_t returnSize = sizeof(double);
+    double* KE = (double*)stateOfSolver_resources.allocateTempVector(2, returnSize);
     size_t blocks_needed_for_KE =
         (simParams->nOwnerBodies + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
     quarry_stats_kernels->kernel("computeKE")
@@ -151,7 +151,7 @@ float DEMDynamicThread::getKineticEnergy() {
         .configure(dim3(blocks_needed_for_KE), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
         .launch(granData, simParams->nOwnerBodies, KEArr);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-    // displayArray<float>(KEArr, simParams->nOwnerBodies);
+    // displayArray<double>(KEArr, simParams->nOwnerBodies);
     sumReduce(KEArr, KE, simParams->nOwnerBodies, streamInfo.stream, stateOfSolver_resources);
     return *KE;
 }
@@ -972,13 +972,13 @@ inline void DEMDynamicThread::calculateForces() {
         //                   granData->contactForces, granData->aX, granData->aY, granData->aZ,
         //                   granData->ownerClumpBody, granData->massOwnerBody, simParams->h,
         //                   *stateOfSolver_resources.pNumContacts,simParams->l);
-        collectContactForces(
-            collect_force_kernels, granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
-            granData->contactType, granData->contactForces, granData->contactTorque_convToForce,
-            granData->contactPointGeometryA, granData->contactPointGeometryB, granData->oriQ0, granData->oriQ1,
-            granData->oriQ2, granData->oriQ3, granData->aX, granData->aY, granData->aZ, granData->alphaX,
-            granData->alphaY, granData->alphaZ, granData->ownerClumpBody, *stateOfSolver_resources.pNumContacts,
-            simParams->nOwnerBodies, contactPairArr_isFresh, streamInfo.stream, stateOfSolver_resources, timers);
+        collectContactForces(collect_force_kernels, granData, granData->idGeometryA, granData->idGeometryB,
+                             granData->contactType, granData->contactForces, granData->contactTorque_convToForce,
+                             granData->contactPointGeometryA, granData->contactPointGeometryB, granData->oriQ0,
+                             granData->oriQ1, granData->oriQ2, granData->oriQ3, granData->aX, granData->aY,
+                             granData->aZ, granData->alphaX, granData->alphaY, granData->alphaZ,
+                             granData->ownerClumpBody, *stateOfSolver_resources.pNumContacts, simParams->nOwnerBodies,
+                             contactPairArr_isFresh, streamInfo.stream, stateOfSolver_resources, timers);
         // displayArray<float>(granData->aX, simParams->nOwnerBodies);
         // displayFloat3(granData->contactForces, *stateOfSolver_resources.pNumContacts);
         // std::cout << *stateOfSolver_resources.pNumContacts << std::endl;
@@ -1185,74 +1185,48 @@ size_t DEMDynamicThread::estimateMemUsage() const {
     return m_approx_bytes_used;
 }
 
-void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,
-                                     const std::unordered_map<std::string, std::string>& templateAcqSubs,
-                                     const std::unordered_map<std::string, std::string>& simParamSubs,
-                                     const std::unordered_map<std::string, std::string>& massMatSubs,
-                                     const std::unordered_map<std::string, std::string>& familyMaskSubs,
-                                     const std::unordered_map<std::string, std::string>& familyPrescribeSubs,
-                                     const std::unordered_map<std::string, std::string>& familyChangesSubs,
-                                     const std::unordered_map<std::string, std::string>& analGeoSubs,
-                                     const std::unordered_map<std::string, std::string>& forceModelSubs) {
+void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& Subs) {
     // First one is force array preparation kernels
     {
-        std::unordered_map<std::string, std::string> pfSubs = templateSubs;
-        pfSubs.insert(simParamSubs.begin(), simParamSubs.end());
         prep_force_kernels = std::make_shared<jitify::Program>(
             std::move(JitHelper::buildProgram("DEMPrepForceKernels", JitHelper::KERNEL_DIR / "DEMPrepForceKernels.cu",
-                                              pfSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+                                              Subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
     // Then force calculation kernels
     // Depending on historyless-ness, we may want jitify different versions of kernels
     {
-        std::unordered_map<std::string, std::string> cfSubs = templateSubs;
-        cfSubs.insert(templateAcqSubs.begin(), templateAcqSubs.end());
-        cfSubs.insert(simParamSubs.begin(), simParamSubs.end());
-        cfSubs.insert(massMatSubs.begin(), massMatSubs.end());
-        cfSubs.insert(analGeoSubs.begin(), analGeoSubs.end());
-        cfSubs.insert(forceModelSubs.begin(), forceModelSubs.end());
         if (solverFlags.isHistoryless) {
             cal_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-                "DEMHistorylessForceKernels", JitHelper::KERNEL_DIR / "DEMHistorylessForceKernels.cu", cfSubs,
+                "DEMHistorylessForceKernels", JitHelper::KERNEL_DIR / "DEMHistorylessForceKernels.cu", Subs,
                 {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
         } else {
             cal_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-                "DEMHistoryBasedForceKernels", JitHelper::KERNEL_DIR / "DEMHistoryBasedForceKernels.cu", cfSubs,
+                "DEMHistoryBasedForceKernels", JitHelper::KERNEL_DIR / "DEMHistoryBasedForceKernels.cu", Subs,
                 {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
         }
     }
     // Then force accumulation kernels
     {
-        std::unordered_map<std::string, std::string> cfSubs = massMatSubs;
-        cfSubs.insert(simParamSubs.begin(), simParamSubs.end());
-        cfSubs.insert(analGeoSubs.begin(), analGeoSubs.end());
         collect_force_kernels = std::make_shared<jitify::Program>(std::move(
-            JitHelper::buildProgram("DEMCollectForceKernels", JitHelper::KERNEL_DIR / "DEMCollectForceKernels.cu",
-                                    cfSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+            JitHelper::buildProgram("DEMCollectForceKernels", JitHelper::KERNEL_DIR / "DEMCollectForceKernels.cu", Subs,
+                                    {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
     // Then integration kernels
     {
-        std::unordered_map<std::string, std::string> intSubs = simParamSubs;
-        intSubs.insert(familyPrescribeSubs.begin(), familyPrescribeSubs.end());
         integrator_kernels = std::make_shared<jitify::Program>(std::move(
-            JitHelper::buildProgram("DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu",
-                                    intSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+            JitHelper::buildProgram("DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu", Subs,
+                                    {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
     // Then kernels that are... wildcards, which make on-the-fly changes to solver data
     if (solverFlags.canFamilyChange) {
-        std::unordered_map<std::string, std::string> modSubs = simParamSubs;
-        modSubs.insert(massMatSubs.begin(), massMatSubs.end());
-        modSubs.insert(familyChangesSubs.begin(), familyChangesSubs.end());
         mod_kernels = std::make_shared<jitify::Program>(
             std::move(JitHelper::buildProgram("DEMModeratorKernels", JitHelper::KERNEL_DIR / "DEMModeratorKernels.cu",
-                                              modSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+                                              Subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
     // Then quarrying kernels
     {
-        std::unordered_map<std::string, std::string> qSubs = massMatSubs;
-        qSubs.insert(simParamSubs.begin(), simParamSubs.end());
         quarry_stats_kernels = std::make_shared<jitify::Program>(
-            std::move(JitHelper::buildProgram("DEMQueryKernels", JitHelper::KERNEL_DIR / "DEMQueryKernels.cu", qSubs,
+            std::move(JitHelper::buildProgram("DEMQueryKernels", JitHelper::KERNEL_DIR / "DEMQueryKernels.cu", Subs,
                                               {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
 }

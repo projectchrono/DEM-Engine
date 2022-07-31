@@ -2,35 +2,18 @@
 #include <DEM/DEMDefines.h>
 #include <kernel/DEMHelperKernels.cu>
 
+// If clump templates are jitified, they will be below
+_clumpTemplateDefs_;
+// Definitions of analytical entites are below
+_analyticalEntityDefs_;
+// Family mask, _nFamilyMaskEntries_ elements are in this array
+__constant__ __device__ bool familyMasks[] = {_familyMasks_};
+
 __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
                                                  sgps::DEMDataKT* granData,
                                                  sgps::binsSphereTouches_t* numBinsSphereTouches,
                                                  sgps::objID_t* numAnalGeoSphereTouches) {
-    // _nJitifiableClumpComponents_ elements are in these arrays
-    const float Radii[] = {_Radii_};
-    const float CDRelPosX[] = {_CDRelPosX_};
-    const float CDRelPosY[] = {_CDRelPosY_};
-    const float CDRelPosZ[] = {_CDRelPosZ_};
-
-    // _nFamilyMaskEntries_ elements are in this array
-    const bool familyMasks[] = {_familyMasks_};
-
-    // _nAnalGM_ elements are in these arrays
-    const sgps::objType_t objType[_nAnalGMSafe_] = {_objType_};
-    const sgps::bodyID_t objOwner[_nAnalGMSafe_] = {_objOwner_};
-    const bool objNormal[_nAnalGMSafe_] = {_objNormal_};
-    const float objRelPosX[_nAnalGMSafe_] = {_objRelPosX_};
-    const float objRelPosY[_nAnalGMSafe_] = {_objRelPosY_};
-    const float objRelPosZ[_nAnalGMSafe_] = {_objRelPosZ_};
-    const float objRotX[_nAnalGMSafe_] = {_objRotX_};
-    const float objRotY[_nAnalGMSafe_] = {_objRotY_};
-    const float objRotZ[_nAnalGMSafe_] = {_objRotZ_};
-    const float objSize1[_nAnalGMSafe_] = {_objSize1_};
-    const float objSize2[_nAnalGMSafe_] = {_objSize2_};
-    const float objSize3[_nAnalGMSafe_] = {_objSize3_};
-
     sgps::bodyID_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;
-
     if (sphereID < simParams->nSpheresGM) {
         // Register sphere--analytical geometry contacts
         sgps::objID_t contact_count = 0;
@@ -87,7 +70,7 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
         }
 
         // Each sphere entity should also check if it overlaps with an analytical boundary-type geometry
-        for (sgps::objID_t objB = 0; objB < _nAnalGM_; objB++) {
+        for (sgps::objID_t objB = 0; objB < simParams->nAnalGM; objB++) {
             sgps::contact_t contact_type;
             sgps::bodyID_t objBOwner = objOwner[objB];
             // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
@@ -140,29 +123,6 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
                                                sgps::bodyID_t* idGeoA,
                                                sgps::bodyID_t* idGeoB,
                                                sgps::contact_t* contactType) {
-    //  elements are in these arrays
-    const float Radii[] = {_Radii_};
-    const float CDRelPosX[] = {_CDRelPosX_};
-    const float CDRelPosY[] = {_CDRelPosY_};
-    const float CDRelPosZ[] = {_CDRelPosZ_};
-
-    // _nFamilyMaskEntries_ elements are in this array
-    const bool familyMasks[] = {_familyMasks_};
-
-    // _nAnalGM_ elements are in these arrays
-    const sgps::objType_t objType[_nAnalGMSafe_] = {_objType_};
-    const sgps::bodyID_t objOwner[_nAnalGMSafe_] = {_objOwner_};
-    const bool objNormal[_nAnalGMSafe_] = {_objNormal_};
-    const float objRelPosX[_nAnalGMSafe_] = {_objRelPosX_};
-    const float objRelPosY[_nAnalGMSafe_] = {_objRelPosY_};
-    const float objRelPosZ[_nAnalGMSafe_] = {_objRelPosZ_};
-    const float objRotX[_nAnalGMSafe_] = {_objRotX_};
-    const float objRotY[_nAnalGMSafe_] = {_objRotY_};
-    const float objRotZ[_nAnalGMSafe_] = {_objRotZ_};
-    const float objSize1[_nAnalGMSafe_] = {_objSize1_};
-    const float objSize2[_nAnalGMSafe_] = {_objSize2_};
-    const float objSize3[_nAnalGMSafe_] = {_objSize3_};
-
     sgps::bodyID_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;
     if (sphereID < simParams->nSpheresGM) {
         double myPosX, myPosY, myPosZ;
@@ -224,7 +184,7 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
         }
 
         // Each sphere entity should also check if it overlaps with an analytical boundary-type geometry
-        for (sgps::objID_t objB = 0; objB < _nAnalGM_; objB++) {
+        for (sgps::objID_t objB = 0; objB < simParams->nAnalGM; objB++) {
             sgps::contact_t contact_type;
             sgps::bodyID_t objBOwner = objOwner[objB];
             // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)

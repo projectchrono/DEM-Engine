@@ -60,7 +60,7 @@ if (Crr > 0.0) {
         if (v_rot_mag > SGPS_DEM_TINY_FLOAT) {
             // You should know that Crr * normal_force is the underlying formula, and in our model,
             // it is a `force' that produces torque only, instead of also cancelling out friction.
-            // Its direction is that it `resists' rotation, see picture in 
+            // Its direction is that it `resists' rotation, see picture in
             // https://en.wikipedia.org/wiki/Rolling_resistance.
             torque_only_force = (v_rot / v_rot_mag) * (Crr * length(force));
             // printf("torque force: %f, %f, %f\n", torque_only_force.x, torque_only_force.y, torque_only_force.z);
@@ -87,4 +87,4 @@ if (mu > 0.0) {
     // Use force to collect tangent_force
     force += tangent_force;
     // printf("tangent force: %f, %f, %f\n", tangent_force.x, tangent_force.y, tangent_force.z);
-}  
+}

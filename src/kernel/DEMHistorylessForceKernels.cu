@@ -3,34 +3,16 @@
 #include <DEM/DEMDefines.h>
 #include <kernel/DEMHelperKernels.cu>
 
+// If clump templates are jitified, they will be below
+_clumpTemplateDefs_;
+// Definitions of analytical entites are below
+_analyticalEntityDefs_;
+// Material properties are below
+_materialDefs_;
+// If mass properties are jitified, then they are below
+_massDefs_;
+
 __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData, size_t nContactPairs) {
-    // _nDistinctMassProperties_ or _nJitifiableClumpComponents_ elements are in these arrays
-    const float Radii[] = {_Radii_};
-    const float CDRelPosX[] = {_CDRelPosX_};
-    const float CDRelPosY[] = {_CDRelPosY_};
-    const float CDRelPosZ[] = {_CDRelPosZ_};
-    const float MassProperties[] = {_MassProperties_};
-
-    // _nMatTuples_ elements are in these arrays
-    const float EProxy[] = {_EProxy_};
-    const float nuProxy[] = {_nuProxy_};
-    const float CoRProxy[] = {_CoRProxy_};
-
-    // _nAnalGM_ elements are in these arrays
-    const sgps::objType_t objType[_nAnalGMSafe_] = {_objType_};
-    const sgps::bodyID_t objOwner[_nAnalGMSafe_] = {_objOwner_};
-    const bool objNormal[_nAnalGMSafe_] = {_objNormal_};
-    const sgps::materialsOffset_t objMaterial[_nAnalGMSafe_] = {_objMaterial_};
-    const float objRelPosX[_nAnalGMSafe_] = {_objRelPosX_};
-    const float objRelPosY[_nAnalGMSafe_] = {_objRelPosY_};
-    const float objRelPosZ[_nAnalGMSafe_] = {_objRelPosZ_};
-    const float objRotX[_nAnalGMSafe_] = {_objRotX_};
-    const float objRotY[_nAnalGMSafe_] = {_objRotY_};
-    const float objRotZ[_nAnalGMSafe_] = {_objRotZ_};
-    const float objSize1[_nAnalGMSafe_] = {_objSize1_};
-    const float objSize2[_nAnalGMSafe_] = {_objSize2_};
-    const float objSize3[_nAnalGMSafe_] = {_objSize3_};
-
     sgps::contactPairs_t myContactID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myContactID < nContactPairs) {
         // Identify contact type first
@@ -59,7 +41,14 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             { _componentAcqStrat_; }
 
             bodyAMatType = granData->materialTupleOffset[sphereID];
-            AOwnerMass = MassProperties[granData->inertiaPropOffsets[bodyAOwner]];
+            // Get my mass info from either jitified arrays or global memory
+            // Outputs myMass
+            // Use an input named exactly `myOwner' which is the id of this owner
+            {
+                float myMass;
+                _massAcqStrat_;
+                AOwnerMass = myMass;
+            }
 
             AOwnerFamily = granData->familyID[bodyAOwner];
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
@@ -94,7 +83,14 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             { _componentAcqStrat_; }
 
             bodyBMatType = granData->materialTupleOffset[sphereID];
-            BOwnerMass = MassProperties[granData->inertiaPropOffsets[bodyBOwner]];
+            // Get my mass info from either jitified arrays or global memory
+            // Outputs myMass
+            // Use an input named exactly `myOwner' which is the id of this owner
+            {
+                float myMass;
+                _massAcqStrat_;
+                AOwnerMass = myMass;
+            }
 
             BOwnerFamily = granData->familyID[bodyBOwner];
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
@@ -124,7 +120,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             sgps::objID_t bodyB = granData->idGeometryB[myContactID];
             sgps::bodyID_t bodyBOwner = objOwner[bodyB];
             bodyBMatType = objMaterial[bodyB];
-            BOwnerMass = MassProperties[granData->inertiaPropOffsets[bodyBOwner]];
+            BOwnerMass = objMass[bodyB];
             // TODO: fix these...
             BRadius = 10000.f;
             float myRelPosX, myRelPosY, myRelPosZ;

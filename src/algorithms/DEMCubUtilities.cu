@@ -14,8 +14,8 @@ namespace sgps {
 // These functions interconnecting the cub-part and cpp-part of the code cannot be templated... because of cmake
 // restrictions. Not much that I can do, other than writing them all out.
 
-void sumReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad) {
-    cubDEMSum<float, DEMSolverStateData>(d_in, d_out, n, this_stream, scratchPad);
+void sumReduce(double* d_in, double* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad) {
+    cubDEMSum<double, DEMSolverStateData>(d_in, d_out, n, this_stream, scratchPad);
 }
 
 void boolMaxReduce(notStupidBool_t* d_in,

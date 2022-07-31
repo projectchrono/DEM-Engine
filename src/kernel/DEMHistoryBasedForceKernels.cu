@@ -2,36 +2,16 @@
 #include <DEM/DEMDefines.h>
 #include <kernel/DEMHelperKernels.cu>
 
+// If clump templates are jitified, they will be below
+_clumpTemplateDefs_;
+// Definitions of analytical entites are below
+_analyticalEntityDefs_;
+// Material properties are below
+_materialDefs_;
+// If mass properties are jitified, then they are below
+_massDefs_;
+
 __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData, size_t nContactPairs) {
-    // _nDistinctMassProperties_ or _nJitifiableClumpComponents_ elements are in these arrays
-    const float Radii[] = {_Radii_};
-    const float CDRelPosX[] = {_CDRelPosX_};
-    const float CDRelPosY[] = {_CDRelPosY_};
-    const float CDRelPosZ[] = {_CDRelPosZ_};
-    const float MassProperties[] = {_MassProperties_};
-
-    // _nMatTuples_ elements are in these arrays
-    const float EProxy[] = {_EProxy_};
-    const float nuProxy[] = {_nuProxy_};
-    const float CoRProxy[] = {_CoRProxy_};
-    const float muProxy[] = {_muProxy_};
-    const float CrrProxy[] = {_CrrProxy_};
-
-    // _nAnalGM_ elements are in these arrays
-    const sgps::objType_t objType[_nAnalGMSafe_] = {_objType_};
-    const sgps::bodyID_t objOwner[_nAnalGMSafe_] = {_objOwner_};
-    const bool objNormal[_nAnalGMSafe_] = {_objNormal_};
-    const sgps::materialsOffset_t objMaterial[_nAnalGMSafe_] = {_objMaterial_};
-    const float objRelPosX[_nAnalGMSafe_] = {_objRelPosX_};
-    const float objRelPosY[_nAnalGMSafe_] = {_objRelPosY_};
-    const float objRelPosZ[_nAnalGMSafe_] = {_objRelPosZ_};
-    const float objRotX[_nAnalGMSafe_] = {_objRotX_};
-    const float objRotY[_nAnalGMSafe_] = {_objRotY_};
-    const float objRotZ[_nAnalGMSafe_] = {_objRotZ_};
-    const float objSize1[_nAnalGMSafe_] = {_objSize1_};
-    const float objSize2[_nAnalGMSafe_] = {_objSize2_};
-    const float objSize3[_nAnalGMSafe_] = {_objSize3_};
-
     sgps::contactPairs_t myContactID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myContactID < nContactPairs) {
         // Identify contact type first
@@ -51,7 +31,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
         // We know in this kernel, bodyA will be a sphere; bodyB can be something else
         {
             sgps::bodyID_t sphereID = granData->idGeometryA[myContactID];
-            sgps::bodyID_t bodyAOwner = granData->ownerClumpBody[sphereID];
+            sgps::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
 
             float myRelPosX, myRelPosY, myRelPosZ, myRadius;
             // Get my component offset info from either jitified arrays or global memory
@@ -59,36 +39,44 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             // Use an input named exactly `sphereID' which is the id of this sphere component
             { _componentAcqStrat_; }
 
-            bodyAMatType = granData->materialTupleOffset[sphereID];
-            AOwnerMass = MassProperties[granData->inertiaPropOffsets[bodyAOwner]];
+            // Get my mass info from either jitified arrays or global memory
+            // Outputs myMass
+            // Use an input named exactly `myOwner' which is the id of this owner
+            {
+                float myMass;
+                _massAcqStrat_;
+                AOwnerMass = myMass;
+            }
 
-            // AOwnerFamily = granData->familyID[bodyAOwner];
+            bodyAMatType = granData->materialTupleOffset[sphereID];
+
+            // AOwnerFamily = granData->familyID[myOwner];
 
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
-                AOwnerPos.x, AOwnerPos.y, AOwnerPos.z, granData->voxelID[bodyAOwner], granData->locX[bodyAOwner],
-                granData->locY[bodyAOwner], granData->locZ[bodyAOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
+                AOwnerPos.x, AOwnerPos.y, AOwnerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
+                granData->locY[myOwner], granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
 
-            AoriQ0 = granData->oriQ0[bodyAOwner];
-            AoriQ1 = granData->oriQ1[bodyAOwner];
-            AoriQ2 = granData->oriQ2[bodyAOwner];
-            AoriQ3 = granData->oriQ3[bodyAOwner];
+            AoriQ0 = granData->oriQ0[myOwner];
+            AoriQ1 = granData->oriQ1[myOwner];
+            AoriQ2 = granData->oriQ2[myOwner];
+            AoriQ3 = granData->oriQ3[myOwner];
             applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, AoriQ0, AoriQ1, AoriQ2, AoriQ3);
             bodyAPos.x = AOwnerPos.x + (double)myRelPosX;
             bodyAPos.y = AOwnerPos.y + (double)myRelPosY;
             bodyAPos.z = AOwnerPos.z + (double)myRelPosZ;
-            ALinVel.x = granData->vX[bodyAOwner];
-            ALinVel.y = granData->vY[bodyAOwner];
-            ALinVel.z = granData->vZ[bodyAOwner];
-            ARotVel.x = granData->omgBarX[bodyAOwner];
-            ARotVel.y = granData->omgBarY[bodyAOwner];
-            ARotVel.z = granData->omgBarZ[bodyAOwner];
+            ALinVel.x = granData->vX[myOwner];
+            ALinVel.y = granData->vY[myOwner];
+            ALinVel.z = granData->vZ[myOwner];
+            ARotVel.x = granData->omgBarX[myOwner];
+            ARotVel.y = granData->omgBarY[myOwner];
+            ARotVel.z = granData->omgBarZ[myOwner];
             ARadius = myRadius;
         }
 
         // Then bodyB, location and velocity
         if (myContactType == sgps::DEM_SPHERE_SPHERE_CONTACT) {
             sgps::bodyID_t sphereID = granData->idGeometryB[myContactID];
-            sgps::bodyID_t bodyBOwner = granData->ownerClumpBody[sphereID];
+            sgps::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
 
             float myRelPosX, myRelPosY, myRelPosZ, myRadius;
             // Get my component offset info from either jitified arrays or global memory
@@ -96,27 +84,36 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             // Use an input named exactly `sphereID' which is the id of this sphere component
             { _componentAcqStrat_; }
 
+            // Get my mass info from either jitified arrays or global memory
+            // Outputs myMass
+            // Use an input named exactly `myOwner' which is the id of this owner
+            {
+                float myMass;
+                _massAcqStrat_;
+                BOwnerMass = myMass;
+            }
+
             bodyBMatType = granData->materialTupleOffset[sphereID];
-            BOwnerMass = MassProperties[granData->inertiaPropOffsets[bodyBOwner]];
-            // BOwnerFamily = granData->familyID[bodyBOwner];
+
+            // BOwnerFamily = granData->familyID[myOwner];
 
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
-                BOwnerPos.x, BOwnerPos.y, BOwnerPos.z, granData->voxelID[bodyBOwner], granData->locX[bodyBOwner],
-                granData->locY[bodyBOwner], granData->locZ[bodyBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            BoriQ0 = granData->oriQ0[bodyBOwner];
-            BoriQ1 = granData->oriQ1[bodyBOwner];
-            BoriQ2 = granData->oriQ2[bodyBOwner];
-            BoriQ3 = granData->oriQ3[bodyBOwner];
+                BOwnerPos.x, BOwnerPos.y, BOwnerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
+                granData->locY[myOwner], granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
+            BoriQ0 = granData->oriQ0[myOwner];
+            BoriQ1 = granData->oriQ1[myOwner];
+            BoriQ2 = granData->oriQ2[myOwner];
+            BoriQ3 = granData->oriQ3[myOwner];
             applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
             bodyBPos.x = BOwnerPos.x + (double)myRelPosX;
             bodyBPos.y = BOwnerPos.y + (double)myRelPosY;
             bodyBPos.z = BOwnerPos.z + (double)myRelPosZ;
-            BLinVel.x = granData->vX[bodyBOwner];
-            BLinVel.y = granData->vY[bodyBOwner];
-            BLinVel.z = granData->vZ[bodyBOwner];
-            BRotVel.x = granData->omgBarX[bodyBOwner];
-            BRotVel.y = granData->omgBarY[bodyBOwner];
-            BRotVel.z = granData->omgBarZ[bodyBOwner];
+            BLinVel.x = granData->vX[myOwner];
+            BLinVel.y = granData->vY[myOwner];
+            BLinVel.z = granData->vZ[myOwner];
+            BRotVel.x = granData->omgBarX[myOwner];
+            BRotVel.y = granData->omgBarY[myOwner];
+            BRotVel.z = granData->omgBarZ[myOwner];
             BRadius = myRadius;
 
             myContactType = checkSpheresOverlap<double, float>(
@@ -125,24 +122,24 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
         } else {
             // If B is analytical entity, its owner, relative location, material info is jitified
             sgps::objID_t bodyB = granData->idGeometryB[myContactID];
-            sgps::bodyID_t bodyBOwner = objOwner[bodyB];
+            sgps::bodyID_t myOwner = objOwner[bodyB];
             bodyBMatType = objMaterial[bodyB];
-            BOwnerMass = MassProperties[granData->inertiaPropOffsets[bodyBOwner]];
+            BOwnerMass = objMass[bodyB];
             // TODO: fix these...
             BRadius = 10000.f;
             float myRelPosX, myRelPosY, myRelPosZ;
             float3 bodyBRot;
 
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
-                BOwnerPos.x, BOwnerPos.y, BOwnerPos.z, granData->voxelID[bodyBOwner], granData->locX[bodyBOwner],
-                granData->locY[bodyBOwner], granData->locZ[bodyBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
+                BOwnerPos.x, BOwnerPos.y, BOwnerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
+                granData->locY[myOwner], granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
             myRelPosX = objRelPosX[bodyB];
             myRelPosY = objRelPosY[bodyB];
             myRelPosZ = objRelPosZ[bodyB];
-            BoriQ0 = granData->oriQ0[bodyBOwner];
-            BoriQ1 = granData->oriQ1[bodyBOwner];
-            BoriQ2 = granData->oriQ2[bodyBOwner];
-            BoriQ3 = granData->oriQ3[bodyBOwner];
+            BoriQ0 = granData->oriQ0[myOwner];
+            BoriQ1 = granData->oriQ1[myOwner];
+            BoriQ2 = granData->oriQ2[myOwner];
+            BoriQ3 = granData->oriQ3[myOwner];
             applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
             bodyBPos.x = BOwnerPos.x + (double)myRelPosX;
             bodyBPos.y = BOwnerPos.y + (double)myRelPosY;
@@ -154,12 +151,12 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             bodyBRot.z = objRotZ[bodyB];
             applyOriQToVector3<float, sgps::oriQ_t>(bodyBRot.x, bodyBRot.y, bodyBRot.z, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
 
-            BLinVel.x = granData->vX[bodyBOwner];
-            BLinVel.y = granData->vY[bodyBOwner];
-            BLinVel.z = granData->vZ[bodyBOwner];
-            BRotVel.x = granData->omgBarX[bodyBOwner];
-            BRotVel.y = granData->omgBarY[bodyBOwner];
-            BRotVel.z = granData->omgBarZ[bodyBOwner];
+            BLinVel.x = granData->vX[myOwner];
+            BLinVel.y = granData->vY[myOwner];
+            BLinVel.z = granData->vZ[myOwner];
+            BRotVel.x = granData->omgBarX[myOwner];
+            BRotVel.y = granData->omgBarY[myOwner];
+            BRotVel.z = granData->omgBarZ[myOwner];
 
             // Note for this test on dT side we don't enlarge entities
             myContactType = checkSphereEntityOverlap<double>(

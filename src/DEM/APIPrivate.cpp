@@ -107,6 +107,7 @@ void DEMSolver::generateJITResources() {
 }
 
 void DEMSolver::postJITResourceGenSanityCheck() {
+    // There is this very cumbersome check if the user wish to jitify clump templates
     if (jitify_clump_templates) {
         // Can we jitify all clump templates?
         bool unable_jitify_all = false;
@@ -124,10 +125,9 @@ void DEMSolver::postJITResourceGenSanityCheck() {
         if (unable_jitify_all) {
             SGPS_DEM_WARNING(
                 "There are %u clump templates loaded, but only %u templates (totalling %u components) are jitifiable "
-                "due "
-                "to some of the clumps are big and/or there are many types of clumps.\nIt is probably because you have "
-                "external objects represented by spherical decomposition (a.k.a. have big clumps).\nIn this case, I "
-                "strongly suggest against calling SetJitifyClumpTemplates to use jitification for clump templates.",
+                "due to some of the clumps are big and/or there are many types of clumps.\nIt is probably because you "
+                "have external objects represented by spherical decomposition (a.k.a. have big clumps).\nIn this case, "
+                "I strongly suggest against calling SetJitifyClumpTemplates to use jitification for clump templates.",
                 nDistinctClumpBodyTopologies, nJitifiableClumpTopo, nJitifiableClumpComponents);
         } else {
             nJitifiableClumpTopo = nDistinctClumpBodyTopologies;
@@ -235,21 +235,19 @@ void DEMSolver::addAnalCompTemplate(const objType_t type,
 }
 
 void DEMSolver::jitifyKernels() {
-    std::unordered_map<std::string, std::string> templateSubs, templateAcqSubs, simParamSubs, massMatSubs,
-        familyMaskSubs, familyPrescribeSubs, familyChangesSubs, analGeoSubs, forceModelSubs;
-    equipClumpTemplates(templateSubs);
-    equipClumpTemplateAcquisition(templateAcqSubs);
-    equipSimParams(simParamSubs);
-    equipMassMat(massMatSubs);
-    equipAnalGeoTemplates(analGeoSubs);
-    equipFamilyMasks(familyMaskSubs);
-    equipFamilyPrescribedMotions(familyPrescribeSubs);
-    equipFamilyOnFlyChanges(familyChangesSubs);
-    equipForceModel(forceModelSubs);
-    kT->jitifyKernels(templateSubs, templateAcqSubs, simParamSubs, massMatSubs, familyMaskSubs, familyPrescribeSubs,
-                      familyChangesSubs, analGeoSubs);
-    dT->jitifyKernels(templateSubs, templateAcqSubs, simParamSubs, massMatSubs, familyMaskSubs, familyPrescribeSubs,
-                      familyChangesSubs, analGeoSubs, forceModelSubs);
+    // A big fat tab for all string replacement that the JIT compiler needs to consider
+    std::unordered_map<std::string, std::string> Subs;
+    equipClumpTemplates(Subs);
+    equipSimParams(Subs);
+    equipMassMOI(Subs);
+    equipMaterials(Subs);
+    equipAnalGeoTemplates(Subs);
+    equipFamilyMasks(Subs);
+    equipFamilyPrescribedMotions(Subs);
+    equipFamilyOnFlyChanges(Subs);
+    equipForceModel(Subs);
+    kT->jitifyKernels(Subs);
+    dT->jitifyKernels(Subs);
 }
 
 void DEMSolver::processUserInputs() {
@@ -720,11 +718,6 @@ void DEMSolver::packDataPointers() {
 }
 
 void DEMSolver::validateUserInputs() {
-    //// TODO: Remove this constraint
-    if (m_loaded_materials.size() == 0) {
-        SGPS_DEM_ERROR(
-            "Before initializing the system, at least one material type should be loaded via LoadMaterialType.");
-    }
     if (m_ts_size <= 0.0 && ts_size_is_const) {
         SGPS_DEM_ERROR(
             "Time step size is set to be %f. Please supply a positive number via SetInitTimeStep, or define the "
@@ -882,14 +875,17 @@ inline void DEMSolver::equipFamilyMasks(std::unordered_map<std::string, std::str
     for (unsigned int i = 0; i < m_family_mask_matrix.size(); i++) {
         maskMat += std::to_string(m_family_mask_matrix.at(i)) + ",";
     }
+    // Put some junk in if it is empty
+    if (m_family_mask_matrix.size() == 0) {
+        maskMat += "0";
+    }
     strMap["_familyMasks_"] = maskMat;
 }
 
 inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std::string>& strMap) {
     // Some sim systems can have 0 boundary entities in them. In this case, we have to ensure jitification does not fail
-    std::string objOwner = " ", objType = " ", objMat = " ", objNormal = " ", objRelPosX = " ", objRelPosY = " ",
-                objRelPosZ = " ", objRotX = " ", objRotY = " ", objRotZ = " ", objSize1 = " ", objSize2 = " ",
-                objSize3 = " ";
+    std::string objOwner, objType, objMat, objNormal, objRelPosX, objRelPosY, objRelPosZ, objRotX, objRotY, objRotZ,
+        objSize1, objSize2, objSize3, objMass;
     for (unsigned int i = 0; i < nAnalGM; i++) {
         // External objects will be owners, and their IDs are following template-loaded simulation clumps
         bodyID_t myOwner = nOwnerClumps + m_anal_owner.at(i);
@@ -906,47 +902,125 @@ inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std
         objSize1 += to_string_with_precision(m_anal_size_1.at(i)) + ",";
         objSize2 += to_string_with_precision(m_anal_size_2.at(i)) + ",";
         objSize3 += to_string_with_precision(m_anal_size_3.at(i)) + ",";
+        // As for analytical object components, we just need to store mass, no MOI needed, since it's for for
+        // calculation only. When collecting acceleration of analytical owners, it gets that from long global arrays.
+        objMass += to_string_with_precision(m_ext_obj_mass.at(m_anal_owner.at(i))) + ",";
+    }
+    if (nAnalGM == 0) {
+        // If the user looks for trouble, jitifies 0 analytical entities, then put some junk there to make it
+        // compilable: those kernels won't be executed anyway
+        objOwner += "0";
+        objType += "0";
+        objMat += "0";
+        objNormal += "0";
+        objRelPosX += "0";
+        objRelPosY += "0";
+        objRelPosZ += "0";
+        objRotX += "0";
+        objRotY += "0";
+        objRotZ += "0";
+        objSize1 += "0";
+        objSize2 += "0";
+        objSize3 += "0";
+        objMass += "0";
     }
 
+    std::unordered_map<std::string, std::string> array_content;
+    array_content["_objOwner_"] = objOwner;
+    array_content["_objType_"] = objType;
+    array_content["_objMaterial_"] = objMat;
+    array_content["_objNormal_"] = objNormal;
+    array_content["_objRelPosX_"] = objRelPosX;
+    array_content["_objRelPosY_"] = objRelPosY;
+    array_content["_objRelPosZ_"] = objRelPosZ;
+    array_content["_objRotX_"] = objRotX;
+    array_content["_objRotY_"] = objRotY;
+    array_content["_objRotZ_"] = objRotZ;
+    array_content["_objSize1_"] = objSize1;
+    array_content["_objSize2_"] = objSize2;
+    array_content["_objSize3_"] = objSize3;
+    array_content["_objMass_"] = objMass;
+
+    std::string analyticalEntityDefs = DEM_ANALYTICAL_COMPONENT_DEFINITIONS_JITIFIED();
+    analyticalEntityDefs = replace_patterns(analyticalEntityDefs, array_content);
+    if (m_ensure_kernel_line_num) {
+        analyticalEntityDefs = compact_code(analyticalEntityDefs);
+    }
+    strMap["_analyticalEntityDefs_"] = analyticalEntityDefs;
+
+    // There is a special owner-only version used by force collection kernels. We have it here so we don't have not-used
+    // variable warnings while jitifying
     strMap["_objOwner_"] = objOwner;
-    strMap["_objType_"] = objType;
-    strMap["_objMaterial_"] = objMat;
-    strMap["_objNormal_"] = objNormal;
-
-    strMap["_objRelPosX_"] = objRelPosX;
-    strMap["_objRelPosY_"] = objRelPosY;
-    strMap["_objRelPosZ_"] = objRelPosZ;
-
-    strMap["_objRotX_"] = objRotX;
-    strMap["_objRotY_"] = objRotY;
-    strMap["_objRotZ_"] = objRotZ;
-
-    strMap["_objSize1_"] = objSize1;
-    strMap["_objSize2_"] = objSize2;
-    strMap["_objSize3_"] = objSize3;
 }
 
-inline void DEMSolver::equipMassMat(std::unordered_map<std::string, std::string>& strMap) {
-    std::string MassProperties, moiX, moiY, moiZ, E_proxy, nu_proxy, CoR_proxy, mu_proxy, Crr_proxy;
-    // Loop through all templates to jitify them
-    for (unsigned int i = 0; i < m_template_clump_mass.size(); i++) {
-        MassProperties += to_string_with_precision(m_template_clump_mass.at(i)) + ",";
-        moiX += to_string_with_precision(m_template_clump_moi.at(i).x) + ",";
-        moiY += to_string_with_precision(m_template_clump_moi.at(i).y) + ",";
-        moiZ += to_string_with_precision(m_template_clump_moi.at(i).z) + ",";
+inline void DEMSolver::equipMassMOI(std::unordered_map<std::string, std::string>& strMap) {
+    std::string massDefs, moiDefs, massAcqStrat, moiAcqStrat;
+    // We only need to jitify and mass info offsets to kernels if we jitify them. If not, we just bring mass info as
+    // floats from global memory.
+    if (jitify_mass_moi) {
+        std::string MassProperties, moiX, moiY, moiZ;
+        // Loop through all templates to jitify them
+        for (unsigned int i = 0; i < m_template_clump_mass.size(); i++) {
+            MassProperties += to_string_with_precision(m_template_clump_mass.at(i)) + ",";
+            moiX += to_string_with_precision(m_template_clump_moi.at(i).x) + ",";
+            moiY += to_string_with_precision(m_template_clump_moi.at(i).y) + ",";
+            moiZ += to_string_with_precision(m_template_clump_moi.at(i).z) + ",";
+        }
+        for (unsigned int i = 0; i < m_ext_obj_mass.size(); i++) {
+            MassProperties += to_string_with_precision(m_ext_obj_mass.at(i)) + ",";
+            moiX += to_string_with_precision(m_ext_obj_moi.at(i).x) + ",";
+            moiY += to_string_with_precision(m_ext_obj_moi.at(i).y) + ",";
+            moiZ += to_string_with_precision(m_ext_obj_moi.at(i).z) + ",";
+        }
+        for (unsigned int i = 0; i < m_mesh_obj_mass.size(); i++) {
+            MassProperties += to_string_with_precision(m_mesh_obj_mass.at(i)) + ",";
+            moiX += to_string_with_precision(m_mesh_obj_moi.at(i).x) + ",";
+            moiY += to_string_with_precision(m_mesh_obj_moi.at(i).y) + ",";
+            moiZ += to_string_with_precision(m_mesh_obj_moi.at(i).z) + ",";
+        }
+        if (nDistinctMassProperties == 0) {
+            MassProperties += "0";
+            moiX += "0";
+            moiY += "0";
+            moiZ += "0";
+        }
+        std::unordered_map<std::string, std::string> array_content;
+        array_content["_MassProperties_"] = MassProperties;
+        array_content["_moiX_"] = moiX;
+        array_content["_moiY_"] = moiY;
+        array_content["_moiZ_"] = moiZ;
+
+        massDefs = DEM_MASS_DEFINITIONS_JITIFIED();
+        moiDefs = DEM_MOI_DEFINITIONS_JITIFIED();
+
+        massDefs = replace_patterns(massDefs, array_content);
+        moiDefs = replace_patterns(moiDefs, array_content);
+
+        massAcqStrat = DEM_MASS_ACQUISITION_JITIFIED();
+        moiAcqStrat = DEM_MOI_ACQUISITION_JITIFIED();
+    } else {
+        // Here, no need to jitify any mass/MOI templates
+        massDefs = " ";
+        moiDefs = " ";
+
+        massAcqStrat = DEM_MASS_ACQUISITION_FLATTENED();
+        moiAcqStrat = DEM_MOI_ACQUISITION_FLATTENED();
     }
-    for (unsigned int i = 0; i < m_ext_obj_mass.size(); i++) {
-        MassProperties += to_string_with_precision(m_ext_obj_mass.at(i)) + ",";
-        moiX += to_string_with_precision(m_ext_obj_moi.at(i).x) + ",";
-        moiY += to_string_with_precision(m_ext_obj_moi.at(i).y) + ",";
-        moiZ += to_string_with_precision(m_ext_obj_moi.at(i).z) + ",";
+    if (m_ensure_kernel_line_num) {
+        massDefs = compact_code(massDefs);
+        moiDefs = compact_code(moiDefs);
+        massAcqStrat = compact_code(massAcqStrat);
+        moiAcqStrat = compact_code(moiAcqStrat);
     }
-    for (unsigned int i = 0; i < m_mesh_obj_mass.size(); i++) {
-        MassProperties += to_string_with_precision(m_mesh_obj_mass.at(i)) + ",";
-        moiX += to_string_with_precision(m_mesh_obj_moi.at(i).x) + ",";
-        moiY += to_string_with_precision(m_mesh_obj_moi.at(i).y) + ",";
-        moiZ += to_string_with_precision(m_mesh_obj_moi.at(i).z) + ",";
-    }
+    strMap["_massDefs_"] = massDefs;
+    strMap["_moiDefs_"] = moiDefs;
+    strMap["_massAcqStrat_"] = massAcqStrat;
+    strMap["_moiAcqStrat_"] = moiAcqStrat;
+}
+
+inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::string>& strMap) {
+    std::string E_proxy, nu_proxy, CoR_proxy, mu_proxy, Crr_proxy;
+    // Loop through all material templates to jitify them
     for (unsigned int i = 0; i < nMatTuples; i++) {
         E_proxy += to_string_with_precision(m_E_proxy.at(i)) + ",";
         nu_proxy += to_string_with_precision(m_nu_proxy.at(i)) + ",";
@@ -954,50 +1028,90 @@ inline void DEMSolver::equipMassMat(std::unordered_map<std::string, std::string>
         mu_proxy += to_string_with_precision(m_mu_proxy.at(i)) + ",";
         Crr_proxy += to_string_with_precision(m_Crr_proxy.at(i)) + ",";
     }
-    strMap["_MassProperties_"] = MassProperties;
-    strMap["_moiX_"] = moiX;
-    strMap["_moiY_"] = moiY;
-    strMap["_moiZ_"] = moiZ;
-    strMap["_EProxy_"] = E_proxy;
-    strMap["_nuProxy_"] = nu_proxy;
-    strMap["_CoRProxy_"] = CoR_proxy;
-    strMap["_muProxy_"] = mu_proxy;
-    strMap["_CrrProxy_"] = Crr_proxy;
-}
+    if (nMatTuples == 0) {
+        // If the user looks for trouble, jitifies 0 material, then put some junk there to make it compilable: those
+        // kernels won't be executed anyway
+        E_proxy += "0";
+        nu_proxy += "0";
+        CoR_proxy += "0";
+        mu_proxy += "0";
+        Crr_proxy += "0";
+    }
+    std::unordered_map<std::string, std::string> array_content;
+    array_content["_EProxy_"] = E_proxy;
+    array_content["_nuProxy_"] = nu_proxy;
+    array_content["_CoRProxy_"] = CoR_proxy;
+    array_content["_muProxy_"] = mu_proxy;
+    array_content["_CrrProxy_"] = Crr_proxy;
 
-inline void DEMSolver::equipClumpTemplateAcquisition(std::unordered_map<std::string, std::string>& strMap) {
-    // This part is different depending on whether we have clump templates that are in global memory only
-    std::string componentAcqStrat;
-    if (nJitifiableClumpTopo == nDistinctClumpBodyTopologies) {
-        // In this case, all clump templates can be jitified
-        componentAcqStrat = DEM_CLUMP_COMPONENT_ACQUISITION_ALL_JITIFIED();
-    } else if (nJitifiableClumpTopo < nDistinctClumpBodyTopologies) {
-        // In this case, some clump templates are in the global memory
-        componentAcqStrat = DEM_CLUMP_COMPONENT_ACQUISITION_PARTIALLY_JITIFIED();
-    }
+    std::string materialDefs = DEM_MATERIAL_DEFINITIONS_JITIFIED();
+    materialDefs = replace_patterns(materialDefs, array_content);
     if (m_ensure_kernel_line_num) {
-        componentAcqStrat = compact_code(componentAcqStrat);
+        materialDefs = compact_code(materialDefs);
     }
-    strMap["_componentAcqStrat_"] = componentAcqStrat;
+    strMap["_materialDefs_"] = materialDefs;
 }
 
 inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap) {
-    std::string CDRadii, Radii, CDRelPosX, CDRelPosY, CDRelPosZ;
-    // Loop through all clump templates to jitify them, but without going over the shared memory limit
-    for (unsigned int i = 0; i < nJitifiableClumpTopo; i++) {
-        for (unsigned int j = 0; j < m_template_sp_radii.at(i).size(); j++) {
-            Radii += to_string_with_precision(m_template_sp_radii.at(i).at(j)) + ",";
-            CDRadii += to_string_with_precision(m_template_sp_radii.at(i).at(j) + m_expand_factor) + ",";
-            CDRelPosX += to_string_with_precision(m_template_sp_relPos.at(i).at(j).x) + ",";
-            CDRelPosY += to_string_with_precision(m_template_sp_relPos.at(i).at(j).y) + ",";
-            CDRelPosZ += to_string_with_precision(m_template_sp_relPos.at(i).at(j).z) + ",";
+    // We only need to jitify and bring template offset to kernels if we jitify clump templates. If not, we just bring
+    // clump component info as floats from global memory.
+    std::string clump_template_arrays, componentAcqStrat;
+    if (jitify_clump_templates) {
+        // Prepare jitified clump template
+        clump_template_arrays = DEM_CLUMP_COMPONENT_DEFINITIONS_JITIFIED();
+        {
+            std::unordered_map<std::string, std::string> array_content;
+            std::string CDRadii, Radii, CDRelPosX, CDRelPosY, CDRelPosZ;
+            // Loop through all clump templates to jitify them, but without going over the shared memory limit
+            for (unsigned int i = 0; i < nJitifiableClumpTopo; i++) {
+                for (unsigned int j = 0; j < m_template_sp_radii.at(i).size(); j++) {
+                    Radii += to_string_with_precision(m_template_sp_radii.at(i).at(j)) + ",";
+                    CDRadii += to_string_with_precision(m_template_sp_radii.at(i).at(j) + m_expand_factor) + ",";
+                    CDRelPosX += to_string_with_precision(m_template_sp_relPos.at(i).at(j).x) + ",";
+                    CDRelPosY += to_string_with_precision(m_template_sp_relPos.at(i).at(j).y) + ",";
+                    CDRelPosZ += to_string_with_precision(m_template_sp_relPos.at(i).at(j).z) + ",";
+                }
+            }
+            if (nJitifiableClumpTopo == 0) {
+                // If the user looks for trouble, jitifies 0 template, then put some junk there to make it compilable:
+                // those kernels won't be executed anyway
+                Radii += "0";
+                CDRadii += "0";
+                CDRelPosX += "0";
+                CDRelPosY += "0";
+                CDRelPosZ += "0";
+            }
+            array_content["_Radii_"] = Radii;
+            array_content["_CDRadii_"] = CDRadii;
+            array_content["_CDRelPosX_"] = CDRelPosX;
+            array_content["_CDRelPosY_"] = CDRelPosY;
+            array_content["_CDRelPosZ_"] = CDRelPosZ;
+            clump_template_arrays = replace_patterns(clump_template_arrays, array_content);
         }
+
+        // Then prepare the acquisition rules for jitified templates. It's so much trouble.
+        // This part is different depending on whether we have clump templates that are in global memory only
+        if (nJitifiableClumpTopo == nDistinctClumpBodyTopologies) {
+            // In this case, all clump templates can be jitified
+            componentAcqStrat = DEM_CLUMP_COMPONENT_ACQUISITION_ALL_JITIFIED();
+        } else if (nJitifiableClumpTopo < nDistinctClumpBodyTopologies) {
+            // In this case, some clump templates are in the global memory
+            componentAcqStrat = DEM_CLUMP_COMPONENT_ACQUISITION_PARTIALLY_JITIFIED();
+        }
+
+    } else {
+        // Compared to the jitified case, non-jitified version is much simpler: just bring them from global memory
+        componentAcqStrat = DEM_CLUMP_COMPONENT_ACQUISITION_FLATTENED();
+        // And we do not need to define clump template in kernels, in this case
+        clump_template_arrays = " ";
     }
-    strMap["_Radii_"] = Radii;
-    strMap["_CDRadii_"] = CDRadii;
-    strMap["_CDRelPosX_"] = CDRelPosX;
-    strMap["_CDRelPosY_"] = CDRelPosY;
-    strMap["_CDRelPosZ_"] = CDRelPosZ;
+
+    if (m_ensure_kernel_line_num) {
+        clump_template_arrays = compact_code(clump_template_arrays);
+        componentAcqStrat = compact_code(componentAcqStrat);
+    }
+    strMap["_clumpTemplateDefs_"] = clump_template_arrays;
+    strMap["_componentAcqStrat_"] = componentAcqStrat;
 }
 
 inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::string>& strMap) {
@@ -1013,7 +1127,6 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_voxelSize_"] = to_string_with_precision(m_voxelSize);
     // strMap["_binSize_"] = to_string_with_precision(m_binSize);
 
-    strMap["_nAnalGM_"] = std::to_string(nAnalGM);
     // strMap["_nOwnerBodies_"] = std::to_string(nOwnerBodies);
     // strMap["_nSpheresGM_"] = std::to_string(nSpheresGM);
 
@@ -1026,9 +1139,7 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     // strMap["_beta_"] = to_string_with_precision(m_expand_factor);
 
     // Some constants that we should consider using or not using
-    // Some sim systems can have 0 boundary entities in them. In this case, we have to ensure jitification does not fail
-    unsigned int nAnalGMSafe = (nAnalGM > 0) ? nAnalGM : 1;
-    strMap["_nAnalGMSafe_"] = std::to_string(nAnalGMSafe);
+    // strMap["_nAnalGM_"] = std::to_string(nAnalGM);
     strMap["_nActiveLoadingThreads_"] = std::to_string(NUM_ACTIVE_TEMPLATE_LOADING_THREADS);
     // nTotalBodyTopologies includes clump topologies and ext obj topologies
     strMap["_nDistinctMassProperties_"] = std::to_string(nDistinctMassProperties);

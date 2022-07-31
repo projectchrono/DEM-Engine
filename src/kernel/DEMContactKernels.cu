@@ -4,6 +4,11 @@
 
 #include <cub/util_ptx.cuh>
 
+// If clump templates are jitified, they will be below
+_clumpTemplateDefs_;
+// Family mask, _nFamilyMaskEntries_ elements are in this array
+__constant__ __device__ bool familyMasks[] = {_familyMasks_};
+
 __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
                                            sgps::DEMDataKT* granData,
                                            sgps::bodyID_t* sphereIDsEachBinTouches_sorted,
@@ -12,31 +17,6 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
                                            sgps::binSphereTouchPairs_t* sphereIDsLookUpTable,
                                            sgps::spheresBinTouches_t* numContactsInEachBin,
                                            size_t nActiveBins) {
-    // CUDA does not support initializing shared arrays, so we have to manually load them
-    __shared__ float Radii[_nJitifiableClumpComponents_];
-    __shared__ float CDRelPosX[_nJitifiableClumpComponents_];
-    __shared__ float CDRelPosY[_nJitifiableClumpComponents_];
-    __shared__ float CDRelPosZ[_nJitifiableClumpComponents_];
-    __shared__ bool familyMasks[_nFamilyMaskEntries_];
-    if (threadIdx.x < _nActiveLoadingThreads_) {
-        const float jitifiedCDRadii[_nJitifiableClumpComponents_] = {_Radii_};
-        const float jitifiedCDRelPosX[_nJitifiableClumpComponents_] = {_CDRelPosX_};
-        const float jitifiedCDRelPosY[_nJitifiableClumpComponents_] = {_CDRelPosY_};
-        const float jitifiedCDRelPosZ[_nJitifiableClumpComponents_] = {_CDRelPosZ_};
-        const bool jitifiedFamilyMasks[_nFamilyMaskEntries_] = {_familyMasks_};
-        for (sgps::clumpComponentOffset_t i = threadIdx.x; i < _nJitifiableClumpComponents_;
-             i += _nActiveLoadingThreads_) {
-            Radii[i] = jitifiedCDRadii[i];
-            CDRelPosX[i] = jitifiedCDRelPosX[i];
-            CDRelPosY[i] = jitifiedCDRelPosY[i];
-            CDRelPosZ[i] = jitifiedCDRelPosZ[i];
-        }
-        for (unsigned int i = threadIdx.x; i < _nFamilyMaskEntries_; i += _nActiveLoadingThreads_) {
-            familyMasks[i] = jitifiedFamilyMasks[i];
-        }
-    }
-    __syncthreads();
-
     // Only active bins got execute this...
     sgps::binID_t myActiveID = blockIdx.x * blockDim.x + threadIdx.x;
     // I need to store all the sphereIDs that I am supposed to look into
@@ -151,31 +131,6 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
                                             sgps::bodyID_t* idSphA,
                                             sgps::bodyID_t* idSphB,
                                             size_t nActiveBins) {
-    // CUDA does not support initializing shared arrays, so we have to manually load them
-    __shared__ float Radii[_nJitifiableClumpComponents_];
-    __shared__ float CDRelPosX[_nJitifiableClumpComponents_];
-    __shared__ float CDRelPosY[_nJitifiableClumpComponents_];
-    __shared__ float CDRelPosZ[_nJitifiableClumpComponents_];
-    __shared__ bool familyMasks[_nFamilyMaskEntries_];
-    if (threadIdx.x < _nActiveLoadingThreads_) {
-        const float jitifiedCDRadii[_nJitifiableClumpComponents_] = {_Radii_};
-        const float jitifiedCDRelPosX[_nJitifiableClumpComponents_] = {_CDRelPosX_};
-        const float jitifiedCDRelPosY[_nJitifiableClumpComponents_] = {_CDRelPosY_};
-        const float jitifiedCDRelPosZ[_nJitifiableClumpComponents_] = {_CDRelPosZ_};
-        const bool jitifiedFamilyMasks[_nFamilyMaskEntries_] = {_familyMasks_};
-        for (sgps::clumpComponentOffset_t i = threadIdx.x; i < _nJitifiableClumpComponents_;
-             i += _nActiveLoadingThreads_) {
-            Radii[i] = jitifiedCDRadii[i];
-            CDRelPosX[i] = jitifiedCDRelPosX[i];
-            CDRelPosY[i] = jitifiedCDRelPosY[i];
-            CDRelPosZ[i] = jitifiedCDRelPosZ[i];
-        }
-        for (unsigned int i = threadIdx.x; i < _nFamilyMaskEntries_; i += _nActiveLoadingThreads_) {
-            familyMasks[i] = jitifiedFamilyMasks[i];
-        }
-    }
-    __syncthreads();
-
     // Only active bins got to execute this...
     sgps::binID_t myActiveID = blockIdx.x * blockDim.x + threadIdx.x;
     // I need to store all the sphereIDs that I am supposed to look into

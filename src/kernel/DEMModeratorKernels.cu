@@ -2,13 +2,11 @@
 #include <kernel/DEMHelperKernels.cu>
 #include <DEM/DEMDefines.h>
 
-__global__ void applyFamilyChanges(sgps::DEMDataDT* granData, sgps::bodyID_t nOwnerBodies, float h, float t) {
-    // _nDistinctMassProperties_  elements are in these arrays
-    const float moiX[] = {_moiX_};
-    const float moiY[] = {_moiY_};
-    const float moiZ[] = {_moiZ_};
-    const float MassProperties[] = {_MassProperties_};
+// Mass properties are below, if jitified mass properties are in use
+_massDefs_;
+_moiDefs_;
 
+__global__ void applyFamilyChanges(sgps::DEMDataDT* granData, sgps::bodyID_t nOwnerBodies, float h, float t) {
     sgps::bodyID_t thisClump = blockIdx.x * blockDim.x + threadIdx.x;
     if (thisClump < nOwnerBodies) {
         // The user may make references to owner positions, velocities, accelerations and simulation time
@@ -16,8 +14,14 @@ __global__ void applyFamilyChanges(sgps::DEMDataDT* granData, sgps::bodyID_t nOw
         float3 vel, acc;
         float mass;
         sgps::family_t family_code = granData->familyID[thisClump];
-        sgps::inertiaOffset_t myMassOffset = granData->inertiaPropOffsets[thisClump];
-        mass = MassProperties[myMassOffset];
+        // Get my mass info from either jitified arrays or global memory
+        // Outputs myMass
+        // Use an input named exactly `myOwner' which is the id of this owner
+        {
+            float myMass;
+            _massAcqStrat_;
+            mass = myMass;
+        }
         voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
             pos.x, pos.y, pos.z, granData->voxelID[thisClump], granData->locX[thisClump], granData->locY[thisClump],
             granData->locZ[thisClump], _nvXp2_, _nvYp2_, _voxelSize_, _l_);

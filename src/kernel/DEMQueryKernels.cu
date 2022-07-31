@@ -1,30 +1,35 @@
 // DEM kernels used for quarrying (statistical) information from the current simulation system
 #include <DEM/DEMDefines.h>
 
-__global__ void computeKE(sgps::DEMDataDT* granData, sgps::bodyID_t nOwnerBodies, float* KE) {
-    // _nDistinctMassProperties_  elements are in these arrays
-    const float MassProperties[] = {_MassProperties_};
-    const float moiX[] = {_moiX_};
-    const float moiY[] = {_moiY_};
-    const float moiZ[] = {_moiZ_};
+// Mass properties are below, if jitified mass properties are in use
+_massDefs_;
+_moiDefs_;
 
-    sgps::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
-    if (myID < nOwnerBodies) {
-        sgps::inertiaOffset_t myMassOffset = granData->inertiaPropOffsets[myID];
-        float myMass = MassProperties[myMassOffset];
-        float myMOIX = moiX[myMassOffset];
-        float myMOIY = moiY[myMassOffset];
-        float myMOIZ = moiZ[myMassOffset];
+__global__ void computeKE(sgps::DEMDataDT* granData, sgps::bodyID_t nOwnerBodies, double* KE) {
+    sgps::bodyID_t myOwner = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myOwner < nOwnerBodies) {
+        float myMass;
+        float3 myMOI;
+        // Get my mass info from either jitified arrays or global memory
+        // Outputs myMass
+        // Use an input named exactly `myOwner' which is the id of this owner
+        { _massAcqStrat_; }
+
+        // Get my mass info from either jitified arrays or global memory
+        // Outputs myMOI
+        // Use an input named exactly `myOwner' which is the id of this owner
+        { _moiAcqStrat_; }
+
         // First lin energy
-        float myVX = granData->vX[myID];
-        float myVY = granData->vY[myID];
-        float myVZ = granData->vZ[myID];
-        float myKE = 0.5 * myMass * (myVX * myVX + myVY * myVY + myVZ * myVZ);
+        double myVX = granData->vX[myOwner];
+        double myVY = granData->vY[myOwner];
+        double myVZ = granData->vZ[myOwner];
+        double myKE = 0.5 * myMass * (myVX * myVX + myVY * myVY + myVZ * myVZ);
         // Then rot energy
-        myVX = granData->omgBarX[myID];
-        myVY = granData->omgBarY[myID];
-        myVZ = granData->omgBarZ[myID];
-        myKE += 0.5 * (myMOIX * myVX * myVX + myMOIY * myVY * myVY + myMOIZ * myVZ * myVZ);
-        KE[myID] = myKE;
+        myVX = granData->omgBarX[myOwner];
+        myVY = granData->omgBarY[myOwner];
+        myVZ = granData->omgBarZ[myOwner];
+        myKE += 0.5 * ((double)myMOI.x * myVX * myVX + (double)myMOI.y * myVY * myVY + (double)myMOI.z * myVZ * myVZ);
+        KE[myOwner] = myKE;
     }
 }

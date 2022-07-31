@@ -166,9 +166,9 @@ struct DEMSimParams {
     bodyID_t nOwnerClumps;
     objID_t nExtObj;
     bodyID_t nTriEntities;
-    // Number of clump spheres/triangle facets that we managed to jitify into the kernels
-    bodyID_t nSpheresJitified;
-    triID_t nTriJitified;
+
+    // bodyID_t nSpheresJitified;
+    // triID_t nTriJitified;
 
     // Number of the templates (or say the ``types'') of clumps and spheres
     unsigned int nDistinctClumpBodyTopologies;

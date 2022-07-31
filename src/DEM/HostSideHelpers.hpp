@@ -92,6 +92,16 @@ inline std::string replace_pattern(const std::string& in, const std::string& fro
     return std::regex_replace(in, std::regex(from), to);
 }
 
+/// Replace all instances of certain patterns from a string, based on a mapping passed as an argument
+inline std::string replace_patterns(const std::string& in,
+                                    const std::unordered_map<std::string, std::string>& mapping) {
+    std::string str = in;
+    for (const auto& rep : mapping) {
+        str = std::regex_replace(str, std::regex(rep.first), rep.second);
+    }
+    return str;
+}
+
 /// Sachin Gupta's work on removing comments from a piece of code, from
 /// https://www.geeksforgeeks.org/remove-comments-given-cc-program/
 inline std::string remove_comments(const std::string& prgm) {

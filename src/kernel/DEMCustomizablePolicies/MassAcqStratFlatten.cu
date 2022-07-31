@@ -1,0 +1,1 @@
+myMass = granData->massOwnerBody[myOwner];

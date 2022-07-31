@@ -383,15 +383,7 @@ class DEMDynamicThread {
     }
 
     // Jitify dT kernels (at initialization) based on existing knowledge of this run
-    void jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,
-                       const std::unordered_map<std::string, std::string>& templateAcqSubs,
-                       const std::unordered_map<std::string, std::string>& simParamSubs,
-                       const std::unordered_map<std::string, std::string>& massMatSubs,
-                       const std::unordered_map<std::string, std::string>& familyMaskSubs,
-                       const std::unordered_map<std::string, std::string>& familyPrescribeSubs,
-                       const std::unordered_map<std::string, std::string>& familyChangesSubs,
-                       const std::unordered_map<std::string, std::string>& analGeoSubs,
-                       const std::unordered_map<std::string, std::string>& forceModelSubs);
+    void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs);
 
   private:
     // Migrate contact history to fit the structure of the newly received contact array

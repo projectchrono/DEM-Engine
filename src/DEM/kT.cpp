@@ -475,44 +475,24 @@ void DEMKinematicThread::initManagedArrays(const std::vector<std::shared_ptr<DEM
     }
 }
 
-void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,
-                                       const std::unordered_map<std::string, std::string>& templateAcqSubs,
-                                       const std::unordered_map<std::string, std::string>& simParamSubs,
-                                       const std::unordered_map<std::string, std::string>& massMatSubs,
-                                       const std::unordered_map<std::string, std::string>& familyMaskSubs,
-                                       const std::unordered_map<std::string, std::string>& familyPrescribeSubs,
-                                       const std::unordered_map<std::string, std::string>& familyChangesSubs,
-                                       const std::unordered_map<std::string, std::string>& analGeoSubs) {
+void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& Subs) {
     // First one is bin_occupation_kernels kernels, which figure out the bin--sphere touch pairs
     {
-        std::unordered_map<std::string, std::string> boSubs = templateSubs;
-        boSubs.insert(templateAcqSubs.begin(), templateAcqSubs.end());
-        boSubs.insert(simParamSubs.begin(), simParamSubs.end());
-        boSubs.insert(analGeoSubs.begin(), analGeoSubs.end());
-        boSubs.insert(familyMaskSubs.begin(), familyMaskSubs.end());
-        // bin_occupation_kernels = JitHelper::buildProgram(
-        //     "DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
-        //     std::unordered_map<std::string, std::string>(), {"-I" + (JitHelper::KERNEL_DIR / "..").string()});
         bin_occupation_kernels = std::make_shared<jitify::Program>(
             std::move(JitHelper::buildProgram("DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
-                                              boSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+                                              Subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
     // Then CD kernels
     {
-        std::unordered_map<std::string, std::string> cdSubs = templateSubs;
-        cdSubs.insert(templateAcqSubs.begin(), templateAcqSubs.end());
-        cdSubs.insert(simParamSubs.begin(), simParamSubs.end());
-        cdSubs.insert(familyMaskSubs.begin(), familyMaskSubs.end());
         contact_detection_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu", cdSubs,
+            "DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu", Subs,
             {"-I" + (JitHelper::KERNEL_DIR / "..").string(), "-I/opt/apps/cuda/x86_64/11.6.0/default/include"})));
     }
     // Then contact history mapping kernels
     {
-        std::unordered_map<std::string, std::string> hSubs;
         history_kernels = std::make_shared<jitify::Program>(std::move(
             JitHelper::buildProgram("DEMHistoryMappingKernels", JitHelper::KERNEL_DIR / "DEMHistoryMappingKernels.cu",
-                                    hSubs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+                                    Subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
 }
 

@@ -290,14 +290,7 @@ class DEMKinematicThread {
     }
 
     // Jitify kT kernels (at initialization) based on existing knowledge of this run
-    void jitifyKernels(const std::unordered_map<std::string, std::string>& templateSubs,
-                       const std::unordered_map<std::string, std::string>& templateAcqSubs,
-                       const std::unordered_map<std::string, std::string>& simParamSubs,
-                       const std::unordered_map<std::string, std::string>& massMatSubs,
-                       const std::unordered_map<std::string, std::string>& familyMaskSubs,
-                       const std::unordered_map<std::string, std::string>& familyPrescribeSubs,
-                       const std::unordered_map<std::string, std::string>& familyChangesSubs,
-                       const std::unordered_map<std::string, std::string>& analGeoSubs);
+    void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs);
 
   private:
     // Bring kT buffer array data to its working arrays

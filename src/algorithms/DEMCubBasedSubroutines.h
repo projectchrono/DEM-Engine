@@ -9,7 +9,7 @@
 
 namespace sgps {
 
-void sumReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
+void sumReduce(double* d_in, double* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
 
 void boolMaxReduce(notStupidBool_t* d_in,
                    notStupidBool_t* d_out,
@@ -36,7 +36,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                       SolverTimers& timers);
 
 void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernels,
-                          inertiaOffset_t* inertiaPropOffsets,
+                          DEMDataDT* granData,
                           bodyID_t* idA,
                           bodyID_t* idB,
                           contact_t* contactType,

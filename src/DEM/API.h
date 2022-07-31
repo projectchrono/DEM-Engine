@@ -33,6 +33,10 @@ class DEMTracker;
 //            2. Allow ext obj init CoM setting
 //            3. Instruct how many dT steps should at LEAST do before receiving kT update
 //            4. Jitify a family number converter (user to impl)
+//            5. Make force model a struct, and inside it...
+//            6. Select whether to acquire mat, acquire what history, and whether
+//               to use a/several custom float arrays to store custom config data
+//            7. This custom array can be defined at clump template/anal obj/mesh obj generation
 //////////////////////////////////////////////////////////////
 
 class DEMSolver {
@@ -734,9 +738,9 @@ class DEMSolver {
 
     // Some JIT packaging helpers
     inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap);
-    inline void equipClumpTemplateAcquisition(std::unordered_map<std::string, std::string>& strMap);
     inline void equipSimParams(std::unordered_map<std::string, std::string>& strMap);
-    inline void equipMassMat(std::unordered_map<std::string, std::string>& strMap);
+    inline void equipMassMOI(std::unordered_map<std::string, std::string>& strMap);
+    inline void equipMaterials(std::unordered_map<std::string, std::string>& strMap);
     inline void equipAnalGeoTemplates(std::unordered_map<std::string, std::string>& strMap);
     inline void equipFamilyMasks(std::unordered_map<std::string, std::string>& strMap);
     inline void equipFamilyPrescribedMotions(std::unordered_map<std::string, std::string>& strMap);
