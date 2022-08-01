@@ -365,9 +365,9 @@ class DEMSolver {
     std::string m_force_model = DEM_HERTZIAN_FORCE_MODEL();
     bool use_user_defined_force_model = false;
     // Should jitify clump template into kernels
-    bool jitify_clump_templates = true;
+    bool jitify_clump_templates = false;
     // Should jitify mass/MOI properties into kernels
-    bool jitify_mass_moi = true;
+    bool jitify_mass_moi = false;
 
     // User explicitly set a bin size to use
     bool use_user_defined_bin_size = false;

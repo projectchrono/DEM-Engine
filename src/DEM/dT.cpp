@@ -972,13 +972,9 @@ inline void DEMDynamicThread::calculateForces() {
         //                   granData->contactForces, granData->aX, granData->aY, granData->aZ,
         //                   granData->ownerClumpBody, granData->massOwnerBody, simParams->h,
         //                   *stateOfSolver_resources.pNumContacts,simParams->l);
-        collectContactForces(collect_force_kernels, granData, granData->idGeometryA, granData->idGeometryB,
-                             granData->contactType, granData->contactForces, granData->contactTorque_convToForce,
-                             granData->contactPointGeometryA, granData->contactPointGeometryB, granData->oriQ0,
-                             granData->oriQ1, granData->oriQ2, granData->oriQ3, granData->aX, granData->aY,
-                             granData->aZ, granData->alphaX, granData->alphaY, granData->alphaZ,
-                             granData->ownerClumpBody, *stateOfSolver_resources.pNumContacts, simParams->nOwnerBodies,
-                             contactPairArr_isFresh, streamInfo.stream, stateOfSolver_resources, timers);
+        collectContactForces(collect_force_kernels, granData, *stateOfSolver_resources.pNumContacts,
+                             simParams->nOwnerBodies, contactPairArr_isFresh, streamInfo.stream,
+                             stateOfSolver_resources, timers);
         // displayArray<float>(granData->aX, simParams->nOwnerBodies);
         // displayFloat3(granData->contactForces, *stateOfSolver_resources.pNumContacts);
         // std::cout << *stateOfSolver_resources.pNumContacts << std::endl;

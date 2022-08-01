@@ -24,24 +24,6 @@ struct CubFloat3Add {
 
 void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernels,
                           DEMDataDT* granData,
-                          bodyID_t* idA,
-                          bodyID_t* idB,
-                          contact_t* contactType,
-                          float3* contactForces,
-                          float3* contactForces_convToForce,
-                          float3* contactPointA,
-                          float3* contactPointB,
-                          oriQ_t* oriQ0,
-                          oriQ_t* oriQ1,
-                          oriQ_t* oriQ2,
-                          oriQ_t* oriQ3,
-                          float* clump_aX,
-                          float* clump_aY,
-                          float* clump_aZ,
-                          float* clump_alphaX,
-                          float* clump_alphaY,
-                          float* clump_alphaZ,
-                          bodyID_t* ownerClumpBody,
                           const size_t nContactPairs,
                           const size_t nClumps,
                           bool contactPairArr_isFresh,
@@ -73,18 +55,17 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
         collect_force_kernels->kernel("cashInOwnerIndexA")
             .instantiate()
             .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-            .launch(idAOwner, idA, ownerClumpBody, contactType, nContactPairs);
+            .launch(idAOwner, granData->idGeometryA, granData->ownerClumpBody, granData->contactType, nContactPairs);
         GPU_CALL(cudaStreamSynchronize(this_stream));
 
         // But for B, it can be sphere, triangle or some analytical geometries
         collect_force_kernels->kernel("cashInOwnerIndexB")
             .instantiate()
             .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-            .launch(idBOwner, idB, ownerClumpBody, contactType, nContactPairs);
+            .launch(idBOwner, granData->idGeometryB, granData->ownerClumpBody, granData->contactType, nContactPairs);
         GPU_CALL(cudaStreamSynchronize(this_stream));
         // displayArray<bodyID_t>(idAOwner, nContactPairs);
         // displayArray<bodyID_t>(idBOwner, nContactPairs);
-        // displayArray<contact_t>(contactType, nContactPairs);
     }
 
     // ==============================================
@@ -109,16 +90,16 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
     collect_force_kernels->kernel("forceToAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(acc_A, contactForces, idAOwner, 1.f, nContactPairs, granData);
+        .launch(acc_A, granData->contactForces, idAOwner, 1.f, nContactPairs, granData);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // and don't forget body B
     collect_force_kernels->kernel("forceToAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(acc_B, contactForces, idBOwner, -1.f, nContactPairs, granData);
+        .launch(acc_B, granData->contactForces, idBOwner, -1.f, nContactPairs, granData);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // displayFloat3(acc_A, 2 * nContactPairs);
-    // displayFloat3(contactForces, nContactPairs);
+    // displayFloat3(granData->contactForces, nContactPairs);
 
     // Reducing the acceleration (2 * nContactPairs for both body A and B)
     // Note: to do this, idAOwner needs to be sorted along with acc_A. So we sort first.
@@ -137,11 +118,11 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
     collect_force_kernels->kernel("stashElem")
         .instantiate()
         .configure(dim3(blocks_needed_for_stashing), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(clump_aX, clump_aY, clump_aZ, uniqueOwner, accOwner, *pForceCollectionRuns);
+        .launch(granData->aX, granData->aY, granData->aZ, uniqueOwner, accOwner, *pForceCollectionRuns);
     GPU_CALL(cudaStreamSynchronize(this_stream));
-    // displayArray<float>(clump_aX, nClumps);
-    // displayArray<float>(clump_aY, nClumps);
-    // displayArray<float>(clump_aZ, nClumps);
+    // displayArray<float>(granData->aX, nClumps);
+    // displayArray<float>(granData->aY, nClumps);
+    // displayArray<float>(granData->aZ, nClumps);
 
     // =====================================================
     // Then take care of angular accelerations
@@ -153,15 +134,17 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
     collect_force_kernels->kernel("forceToAngAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(alpha_A, contactPointA, oriQ0, oriQ1, oriQ2, oriQ3, contactForces, contactForces_convToForce, idAOwner,
-                1.f, nContactPairs, granData);
+        .launch(alpha_A, granData->contactPointGeometryA, granData->oriQ0, granData->oriQ1, granData->oriQ2,
+                granData->oriQ3, granData->contactForces, granData->contactTorque_convToForce, idAOwner, 1.f,
+                nContactPairs, granData);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // and don't forget body B
     collect_force_kernels->kernel("forceToAngAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(alpha_B, contactPointB, oriQ0, oriQ1, oriQ2, oriQ3, contactForces, contactForces_convToForce, idBOwner,
-                -1.f, nContactPairs, granData);
+        .launch(alpha_B, granData->contactPointGeometryB, granData->oriQ0, granData->oriQ1, granData->oriQ2,
+                granData->oriQ3, granData->contactForces, granData->contactTorque_convToForce, idBOwner, -1.f,
+                nContactPairs, granData);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // Reducing the angular acceleration (2 * nContactPairs for both body A and B)
     // Note: to do this, idAOwner needs to be sorted along with alpha_A. So we sort first.
@@ -177,7 +160,7 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
     collect_force_kernels->kernel("stashElem")
         .instantiate()
         .configure(dim3(blocks_needed_for_stashing), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(clump_alphaX, clump_alphaY, clump_alphaZ, uniqueOwner, accOwner, *pForceCollectionRuns);
+        .launch(granData->alphaX, granData->alphaY, granData->alphaZ, uniqueOwner, accOwner, *pForceCollectionRuns);
     GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
