@@ -88,6 +88,10 @@ class DEMKinematicThread {
     std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ3_buffer;
     std::vector<family_t, ManagedAllocator<family_t>> familyID_buffer;
 
+    // kT's copy of family map
+    std::unordered_map<unsigned int, family_t> familyUserImplMap;
+    std::unordered_map<family_t, unsigned int> familyImplUserMap;
+
     // Managed arrays for dT's personal use (not transfer buffer)
 
     // Those are the template array of the unique component information. Note that these arrays may be thousands-element
@@ -254,6 +258,7 @@ class DEMKinematicThread {
                            const std::vector<unsigned int>& input_ext_obj_family,
                            const std::vector<unsigned int>& input_mesh_obj_family,
                            const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
+                           const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
                            const std::vector<float>& clumps_mass_types,
                            const std::vector<std::vector<float>>& clumps_sp_radii_types,
                            const std::vector<std::vector<float3>>& clumps_sp_location_types);
@@ -288,6 +293,9 @@ class DEMKinematicThread {
             timers.GetTimer(name).reset();
         }
     }
+
+    /// Change all entities with (user-level) family number ID_from to have a new number ID_to
+    void changeFamily(unsigned int ID_from, unsigned int ID_to);
 
     // Jitify kT kernels (at initialization) based on existing knowledge of this run
     void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs);

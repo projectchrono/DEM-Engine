@@ -160,6 +160,7 @@ void DEMSolver::ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const
 
 void DEMSolver::ChangeFamily(unsigned int ID_from, unsigned int ID_to) {
     dT->changeFamily(ID_from, ID_to);
+    kT->changeFamily(ID_from, ID_to);
 }
 
 void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,

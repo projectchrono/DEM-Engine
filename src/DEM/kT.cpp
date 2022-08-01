@@ -170,6 +170,13 @@ void DEMKinematicThread::getTiming(std::vector<std::string>& names, std::vector<
     }
 }
 
+void DEMKinematicThread::changeFamily(unsigned int ID_from, unsigned int ID_to) {
+    family_t ID_from_impl = familyUserImplMap.at(ID_from);
+    family_t ID_to_impl = familyUserImplMap.at(ID_to);
+    std::replace_if(
+        familyID.begin(), familyID.end(), [ID_from_impl](family_t& i) { return i == ID_from_impl; }, ID_to_impl);
+}
+
 void DEMKinematicThread::startThread() {
     std::lock_guard<std::mutex> lock(pSchedSupport->kinematicStartLock);
     pSchedSupport->kinematicStarted = true;
@@ -379,6 +386,7 @@ void DEMKinematicThread::initManagedArrays(const std::vector<std::shared_ptr<DEM
                                            const std::vector<unsigned int>& input_ext_obj_family,
                                            const std::vector<unsigned int>& input_mesh_obj_family,
                                            const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
+                                           const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
                                            const std::vector<float>& clumps_mass_types,
                                            const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                            const std::vector<std::vector<float3>>& clumps_sp_location_types) {
@@ -410,6 +418,10 @@ void DEMKinematicThread::initManagedArrays(const std::vector<std::shared_ptr<DEM
             }
         }
     }
+
+    // kT may need this family number map, store it
+    familyUserImplMap = family_user_impl_map;
+    familyImplUserMap = family_impl_user_map;
 
     k = 0;
     // float3 LBF;

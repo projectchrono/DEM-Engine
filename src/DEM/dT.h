@@ -230,7 +230,7 @@ class DEMDynamicThread {
     std::vector<materialsOffset_t, ManagedAllocator<materialsOffset_t>> materialTupleOffset;
 
     // dT's copy of family map
-    // TODO: Host side OK? And should this be given to wT?
+    //// TODO: Host side OK? And should this be given to wT?
     std::unordered_map<unsigned int, family_t> familyUserImplMap;
     std::unordered_map<family_t, unsigned int> familyImplUserMap;
 

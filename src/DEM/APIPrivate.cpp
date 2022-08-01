@@ -704,8 +704,10 @@ void DEMSolver::initializeArrays() {
         m_input_ext_obj_family,
         // Meshed objects' initial stats
         m_input_mesh_obj_family,
+        // Family number mapping
+        m_family_user_impl_map, m_family_impl_user_map,
         // Templates and misc.
-        m_family_user_impl_map, m_template_clump_mass, m_template_sp_radii, m_template_sp_relPos);
+        m_template_clump_mass, m_template_sp_radii, m_template_sp_relPos);
 }
 
 void DEMSolver::packDataPointers() {

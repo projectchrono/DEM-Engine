@@ -537,10 +537,6 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
         familyID.at(i + offset_for_ext_obj) = this_family_num;
     }
 
-    SGPS_DEM_DEBUG_PRINTF("Compare clumpComponentOffset and clumpComponentOffsetExt:");
-    SGPS_DEM_DEBUG_EXEC(displayArray<clumpComponentOffset_t>(clumpComponentOffset.data(), simParams->nSpheresGM));
-    SGPS_DEM_DEBUG_EXEC(displayArray<clumpComponentOffsetExt_t>(clumpComponentOffsetExt.data(), simParams->nSpheresGM));
-
     // Load in initial positions and mass properties for the owners of the meshed objects
     // They go after analytical object owners
     size_t offset_for_mesh_obj = offset_for_ext_obj + simParams->nExtObj;

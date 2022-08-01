@@ -19,6 +19,7 @@ using namespace std::filesystem;
 int main() {
     DEMSolver DEM_sim;
     DEM_sim.SetVerbosity(DEBUG);
+    DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
 
     // srand(time(NULL));
     srand(4150);
@@ -26,20 +27,27 @@ int main() {
     auto mat_type_1 = DEM_sim.LoadMaterialType(1e9, 0.3, 0.8);
     auto sph_type_1 = DEM_sim.LoadClumpSimpleSphere(11728., 1., mat_type_1);
 
-    std::vector<float3> input_xyz;
-    std::vector<float3> input_vel;
-    std::vector<std::shared_ptr<DEMClumpTemplate>> input_clump_type(2, sph_type_1);
+    std::vector<float3> input_xyz1, input_xyz2;
+    std::vector<float3> input_vel1, input_vel2;
+    std::vector<std::shared_ptr<DEMClumpTemplate>> input_clump_type(1, sph_type_1);
     // std::vector<unsigned int> input_clump_type(1, sph_type_1);
 
     // Inputs are just 2 sphere
     float sphPos = 1.2f;
-    input_xyz.push_back(make_float3(-sphPos, 0, 0));
-    input_xyz.push_back(make_float3(sphPos, 0, 0));
-    input_vel.push_back(make_float3(1.f, 0, 0));
-    input_vel.push_back(make_float3(-1.f, 0, 0));
+    input_xyz1.push_back(make_float3(-sphPos, 0, 0));
+    input_xyz2.push_back(make_float3(sphPos, 0, 0));
+    input_vel1.push_back(make_float3(1.f, 0, 0));
+    input_vel2.push_back(make_float3(-1.f, 0, 0));
 
-    auto particles = DEM_sim.AddClumps(input_clump_type, input_xyz);
-    particles->SetVel(input_vel);
+    auto particles1 = DEM_sim.AddClumps(input_clump_type, input_xyz1);
+    particles1->SetVel(input_vel1);
+    particles1->SetFamily(0);
+
+    auto particles2 = DEM_sim.AddClumps(input_clump_type, input_xyz2);
+    particles2->SetVel(input_vel2);
+    particles2->SetFamily(1);
+
+    DEM_sim.DisableContactBetweenFamilies(0, 1);
 
     DEM_sim.AddBCPlane(make_float3(0, 0, -1.25), make_float3(0, 0, 1), mat_type_1);
 
@@ -58,8 +66,14 @@ int main() {
     path out_dir = current_path();
     out_dir += "/DEMdemo_SingleSphereCollide";
     create_directory(out_dir);
+    bool changed_family = false;
     for (int i = 0; i < 100; i++) {
         std::cout << "Frame: " << i << std::endl;
+
+        if ((!changed_family) && i >= 10) {
+            DEM_sim.ChangeFamily(1, 0);
+            changed_family = true;
+        }
 
         char filename[100];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
