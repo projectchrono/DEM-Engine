@@ -328,6 +328,10 @@ class DEMSolver {
     /// Removes all entities associated with a family from the arrays (to save memory space)
     void PurgeFamily(unsigned int family_num);
 
+    /// Forward declaration of a family number, so you can define its prescription or masks later on, or change entities
+    /// family numbers to this one via ChangeFamily
+    void InsertFamily(unsigned int ID);
+
     /// Release the memory for the flattened arrays (which are used for initialization pre-processing and transferring
     /// info the worker threads)
     void ReleaseFlattenedArrays();

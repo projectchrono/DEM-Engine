@@ -293,6 +293,16 @@ std::vector<T1> hostUniqueVector(const std::vector<T1>& vec) {
     return unique_vec;
 }
 
+template <typename T1>
+inline bool check_exist(const std::vector<T1>& vec, const T1& key) {
+    return std::find(vec.begin(), vec.end(), key) != vec.end();
+}
+
+template <typename T1, typename T2>
+inline bool check_exist(const std::unordered_map<T1, T2>& map, const T1& key) {
+    return map.find(key) != map.end();
+}
+
 /// Host version of applying a quaternion to a vector
 template <typename T1, typename T2>
 inline void hostApplyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Q0, const T2& Q1, const T2& Q2, const T2& Q3) {

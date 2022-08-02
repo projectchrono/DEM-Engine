@@ -459,6 +459,10 @@ void DEMSolver::figureOutMaterialProxies() {
     }
 }
 
+void DEMSolver::InsertFamily(unsigned int ID) {
+    unique_user_families.push_back(ID);
+}
+
 void DEMSolver::figureOutFamilyMasks() {
     // Figure out the unique family numbers
     std::vector<unsigned int> unique_clump_families = hostUniqueVector<unsigned int>(m_input_clump_family);
@@ -484,6 +488,10 @@ void DEMSolver::figureOutFamilyMasks() {
     }
     for (const auto& preInfo : m_input_family_prescription) {
         unique_clump_families.push_back(preInfo.family);
+    }
+    for (const auto& a_pair : m_family_change_pairs) {
+        unique_clump_families.push_back(a_pair.ID1);
+        unique_clump_families.push_back(a_pair.ID2);
     }
 
     // Combine all unique user family numbers together

@@ -159,6 +159,21 @@ void DEMSolver::ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const
 }
 
 void DEMSolver::ChangeFamily(unsigned int ID_from, unsigned int ID_to) {
+    if (!check_exist(unique_user_families, ID_from)) {
+        SGPS_DEM_WARNING(
+            "Family %u (from-family) has no prior reference before a ChangeFamily call, therefore no work is done.",
+            ID_from);
+        return;
+    }
+    if (!check_exist(unique_user_families, ID_to)) {
+        SGPS_DEM_ERROR(
+            "Family %u (to-family) has no prior reference before a ChangeFamily call.\nThis is currently not allowed, "
+            "as creating a family in imd-simulation usually requires re-jitification anyway.\nIf a family with no "
+            "special prescription or masking is needed, then you can forward-declare this family via InsertFamily "
+            "before initialization.",
+            ID_to);
+        return;
+    }
     dT->changeFamily(ID_from, ID_to);
     kT->changeFamily(ID_from, ID_to);
 }
