@@ -511,9 +511,13 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
                                               Subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
     // Then CD kernels
-    {
+    if (solverFlags.useOneBinPerThread) {
         contact_detection_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu", Subs,
+            {"-I" + (JitHelper::KERNEL_DIR / "..").string(), "-I/opt/apps/cuda/x86_64/11.6.0/default/include"})));
+    } else {
+        contact_detection_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMContactKernels_Blockwise", JitHelper::KERNEL_DIR / "DEMContactKernels_Blockwise.cu", Subs,
             {"-I" + (JitHelper::KERNEL_DIR / "..").string(), "-I/opt/apps/cuda/x86_64/11.6.0/default/include"})));
     }
     // Then contact history mapping kernels

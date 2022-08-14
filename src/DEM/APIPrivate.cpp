@@ -654,6 +654,9 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.useMassJitify = jitify_mass_moi;
     kT->solverFlags.useClumpJitify = jitify_clump_templates;
 
+    // CD strategy
+    kT->solverFlags.useOneBinPerThread = use_one_bin_per_thread;
+
     // Tell kT and dT if this run is async
     kT->solverFlags.isAsync = !(m_updateFreq == 0);
     dT->solverFlags.isAsync = !(m_updateFreq == 0);

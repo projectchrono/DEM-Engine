@@ -25,7 +25,7 @@ namespace sgps {
 #endif
 
 #ifndef SGPS_DEM_MAX_SPHERES_PER_BIN
-    #define SGPS_DEM_MAX_SPHERES_PER_BIN 32  ///< Can't be too large since one thread processes one bin
+    #define SGPS_DEM_MAX_SPHERES_PER_BIN 256  ///< Can't be too large since one thread processes one bin
 #endif
 #ifndef SGPS_DEM_TINY_FLOAT
     #define SGPS_DEM_TINY_FLOAT 1e-12
@@ -51,7 +51,7 @@ constexpr double PI_SQUARED = 9.869604401089358;
 constexpr uint8_t DEM_VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * SGPS_BITS_PER_BYTE;
 constexpr int64_t DEM_MAX_SUBVOXEL = (int64_t)1 << DEM_VOXEL_RES_POWER2;
 
-#define SGPS_DEM_NUM_BINS_PER_BLOCK 128
+#define SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK 256
 #define SGPS_DEM_NUM_BODIES_PER_BLOCK 512
 #define SGPS_DEM_MAX_THREADS_PER_BLOCK 1024
 #define SGPS_DEM_INIT_CNT_MULTIPLIER 4
@@ -65,7 +65,7 @@ constexpr int64_t DEM_MAX_SUBVOXEL = (int64_t)1 << DEM_VOXEL_RES_POWER2;
 // It should generally just be the warp size. When a block is launched, at least min(these_numbers) threads will be
 // launched so the template loading is always safe.
 constexpr clumpComponentOffset_t NUM_ACTIVE_TEMPLATE_LOADING_THREADS =
-    SGPS_DEM_MIN(SGPS_DEM_MIN(SGPS_CUDA_WARP_SIZE, SGPS_DEM_NUM_BINS_PER_BLOCK), SGPS_DEM_NUM_BODIES_PER_BLOCK);
+    SGPS_DEM_MIN(SGPS_DEM_MIN(SGPS_CUDA_WARP_SIZE, SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK), SGPS_DEM_NUM_BODIES_PER_BLOCK);
 
 const objType_t DEM_ENTITY_TYPE_PLANE = 0;
 const objType_t DEM_ENTITY_TYPE_PLATE = 1;

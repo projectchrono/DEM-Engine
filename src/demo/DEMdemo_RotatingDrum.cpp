@@ -37,7 +37,8 @@ int main() {
     auto mat_type_drum = DEM_sim.LoadMaterialType(2e9, 0.3, 0.4, 0.5, 0.01);
 
     // Bin size needs to make sure no too-many-sphere-per-bin situation happens
-    DEM_sim.SetInitBinSize(scaling);
+    // DEM_sim.SetInitBinSize(scaling);
+    DEM_sim.SetInitBinSize(4 * scaling);
 
     // Create some random clump templates for the filling materials
     // An array to store these generated clump templates
@@ -119,7 +120,7 @@ int main() {
     DEM_sim.SetInitTimeStep(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEM_sim.SetCDUpdateFreq(40);
+    DEM_sim.SetCDUpdateFreq(10);
     // DEM_sim.SetExpandFactor(1e-3);
     DEM_sim.SetMaxVelocity(3.);
     DEM_sim.SetExpandSafetyParam(1.1);

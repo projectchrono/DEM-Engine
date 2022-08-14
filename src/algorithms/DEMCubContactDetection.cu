@@ -174,11 +174,14 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
     CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(spheresBinTouches_t);
     spheresBinTouches_t* numContactsInEachBin =
         (spheresBinTouches_t*)scratchPad.allocateTempVector(4, CD_temp_arr_bytes);
-    size_t blocks_needed_for_bins = (*pNumActiveBins + SGPS_DEM_NUM_BINS_PER_BLOCK - 1) / SGPS_DEM_NUM_BINS_PER_BLOCK;
+    size_t blocks_needed_for_bins =
+        (solverFlags.useOneBinPerThread)
+            ? (*pNumActiveBins + SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK - 1) / SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK
+            : *pNumActiveBins;
     if (blocks_needed_for_bins > 0) {
         contact_detection_kernels->kernel("getNumberOfContactsEachBin")
             .instantiate()
-            .configure(dim3(blocks_needed_for_bins), dim3(SGPS_DEM_NUM_BINS_PER_BLOCK), 0, this_stream)
+            .configure(dim3(blocks_needed_for_bins), dim3(SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
             .launch(simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
                     sphereIDsLookUpTable, numContactsInEachBin, *pNumActiveBins);
         GPU_CALL(cudaStreamSynchronize(this_stream));
@@ -196,6 +199,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
         contactPairs_t* contactReportOffsets = (contactPairs_t*)scratchPad.allocateTempVector(5, CD_temp_arr_bytes);
         cubDEMPrefixScan<spheresBinTouches_t, contactPairs_t, DEMSolverStateData>(
             numContactsInEachBin, contactReportOffsets, *pNumActiveBins, this_stream, scratchPad);
+        // SGPS_DEM_DEBUG_PRINTF("Num contacts each bin:");
+        // SGPS_DEM_DEBUG_EXEC(displayArray<spheresBinTouches_t>(numContactsInEachBin, *pNumActiveBins));
         // SGPS_DEM_DEBUG_PRINTF("Contact report offsets:");
         // SGPS_DEM_DEBUG_EXEC(displayArray<contactPairs_t>(contactReportOffsets, *pNumActiveBins));
         // SGPS_DEM_DEBUG_PRINTF("Family number:");
@@ -219,7 +224,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
         // Then fill in those contacts
         contact_detection_kernels->kernel("populateContactPairsEachBin")
             .instantiate()
-            .configure(dim3(blocks_needed_for_bins), dim3(SGPS_DEM_NUM_BINS_PER_BLOCK), 0, this_stream)
+            .configure(dim3(blocks_needed_for_bins), dim3(SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
             .launch(simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
                     sphereIDsLookUpTable, contactReportOffsets, idSphA, idSphB, *pNumActiveBins);
         GPU_CALL(cudaStreamSynchronize(this_stream));

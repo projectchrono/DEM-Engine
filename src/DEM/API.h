@@ -119,6 +119,11 @@ class DEMSolver {
     /// with individual owners. Note: setting it to true gives no performance benefit known to me.
     void SetJitifyMassProperties(bool use = true) { jitify_mass_moi = use; }
 
+    /// Instruct the contact detection process to use one thread to process a bin (if true), instead of using a block to
+    /// process a bin. This probably also requires you to manually set a smaller SGPS_DEM_MAX_SPHERES_PER_BIN. This can
+    /// potentially be faster especially in a scenario where the spheres are of similar sizes.
+    void SetOneBinPerThread(bool use = true) { use_one_bin_per_thread = use; }
+
     // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
     void UseCompactForceKernel(bool use_compact);
 
@@ -372,6 +377,8 @@ class DEMSolver {
     bool jitify_clump_templates = false;
     // Should jitify mass/MOI properties into kernels
     bool jitify_mass_moi = false;
+    // CD uses one thread (not one block) to process a bin
+    bool use_one_bin_per_thread = false;
 
     // User explicitly set a bin size to use
     bool use_user_defined_bin_size = false;
