@@ -22,7 +22,8 @@ DEMSolver::DEMSolver(unsigned int nGPUs) {
     kTMain_InteractionManager = new WorkerReportChannel();
     dTMain_InteractionManager = new WorkerReportChannel();
 
-    dTkT_GpuManager = new GpuManager(nGPUs);
+    // 2 means 2 threads (nGPUs is currently not used)
+    dTkT_GpuManager = new GpuManager(2);
 
     dT = new DEMDynamicThread(dTMain_InteractionManager, dTkT_InteractionManager, dTkT_GpuManager);
     kT = new DEMKinematicThread(kTMain_InteractionManager, dTkT_InteractionManager, dTkT_GpuManager, dT);

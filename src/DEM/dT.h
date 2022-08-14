@@ -188,6 +188,8 @@ class DEMDynamicThread {
     // Local position of contact point of contact w.r.t. the reference frame of body A and B
     std::vector<float3, ManagedAllocator<float3>> contactPointGeometryA;
     std::vector<float3, ManagedAllocator<float3>> contactPointGeometryB;
+    // The velocity of the contact points in the global frame: can be useful in determining the time step size
+    // std::vector<float3, ManagedAllocator<float3>> contactPointVel;
     // Contact history: how much did the contact point move on the geometry surface compared to when the contact first
     // emerged?
     // TODO: If it's that the contact point moves from a component of a clump to another component, history will also be
@@ -201,9 +203,6 @@ class DEMDynamicThread {
 
     // Time elapsed in current simulation
     float timeElapsed = 0.f;
-
-    // Total number of GPUs that are running
-    int totGPU = 0;
 
     // If true, dT needs to re-process idA- and idB-related data arrays before collecting forces, as those arrays are
     // freshly obtained from kT.
@@ -236,7 +235,7 @@ class DEMDynamicThread {
 
     // dT's timers
     std::vector<std::string> timer_names = {"Calculate contact forces", "Collect contact forces", "Integration",
-                                            "Unpack updates from kT", "Send to kT buffer"};
+                                            "Unpack updates from kT",   "Send to kT buffer",      "Wait for kT update"};
     SolverTimers timers = SolverTimers(timer_names);
 
   public:

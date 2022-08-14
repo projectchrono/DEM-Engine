@@ -321,6 +321,8 @@ void DEMSolver::decideBinSize() {
 }
 
 inline void DEMSolver::reportInitStats() const {
+    SGPS_DEM_INFO("Number of total active devices: %d", dTkT_GpuManager->getNumDevices());
+
     SGPS_DEM_INFO("The dimension of the simulation world: %.17g, %.17g, %.17g", m_boxX, m_boxY, m_boxZ);
     SGPS_DEM_INFO("Simulation world X range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_boxX);
     SGPS_DEM_INFO("Simulation world Y range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_boxY);
@@ -728,12 +730,6 @@ void DEMSolver::packDataPointers() {
 }
 
 void DEMSolver::validateUserInputs() {
-    if (m_ts_size <= 0.0 && ts_size_is_const) {
-        SGPS_DEM_ERROR(
-            "Time step size is set to be %f. Please supply a positive number via SetInitTimeStep, or define the "
-            "variable stepping properly.",
-            m_ts_size);
-    }
     if (m_templates.size() == 0) {
         SGPS_DEM_ERROR("Before initializing the system, at least one clump type should be defined via LoadClumpType.");
     }

@@ -25,10 +25,10 @@ void migrate(T* data, std::size_t size, int device, cudaStream_t stream = 0) {
 }
 
 // Inadviseable, but necessary to force transfer of const arrays to device
-template <class T>
-void migrate(const T* data, std::size_t size, int device, cudaStream_t stream = 0) {
-    __migrate_impl<T>(std::const_cast<T*>(data), size, device, stream);
-}
+// template <class T>
+// void migrate(const T* data, std::size_t size, int device, cudaStream_t stream = 0) {
+//     __migrate_impl<T>(std::const_cast<T*>(data), size, device, stream);
+// }
 
 // Migrate a single class or value
 template <class T>
@@ -67,7 +67,7 @@ enum class ManagedAdvice {
 // Underlying implementation
 template <class T>
 void __advise_impl(const T* data, std::size_t size, ManagedAdvice advice, int device) {
-    cudaMemAdvise(data, size * sizeof(T), advice, device);
+    cudaMemAdvise(data, size * sizeof(T), (cudaMemoryAdvise)advice, device);
 }
 
 // Advice for raw pointer

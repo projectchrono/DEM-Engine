@@ -23,7 +23,7 @@ class GpuManager {
     // Returns the HIGHEST number of streams per device
     unsigned int getMaxStreamsPerDevice();
 
-    unsigned int getNumDevices();
+    int getNumDevices();
 
     // DO NOT USE UNLESS YOU INTEND TO MANUALLY HANDLE YOUR STREAMS
     const std::vector<StreamInfo>& getStreamsFromDevice(int index);

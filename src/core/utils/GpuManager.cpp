@@ -32,7 +32,7 @@ GpuManager::~GpuManager() {
 }
 
 // TODO: add CUDA error checking
-unsigned int GpuManager::getNumDevices() {
+int GpuManager::getNumDevices() {
     int ndevices = 0;
     cudaGetDeviceCount(&ndevices);
     return ndevices;

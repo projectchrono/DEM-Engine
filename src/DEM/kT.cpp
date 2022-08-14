@@ -22,12 +22,16 @@ inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
     dT->idGeometryA_buffer.resize(nContactPairs);
     dT->idGeometryB_buffer.resize(nContactPairs);
     dT->contactType_buffer.resize(nContactPairs);
+    SGPS_DEM_ADVISE_DEVICE(dT->idGeometryA_buffer, dT->streamInfo.device);
+    SGPS_DEM_ADVISE_DEVICE(dT->idGeometryB_buffer, dT->streamInfo.device);
+    SGPS_DEM_ADVISE_DEVICE(dT->contactType_buffer, dT->streamInfo.device);
     granData->pDTOwnedBuffer_idGeometryA = dT->idGeometryA_buffer.data();
     granData->pDTOwnedBuffer_idGeometryB = dT->idGeometryB_buffer.data();
     granData->pDTOwnedBuffer_contactType = dT->contactType_buffer.data();
 
     if (!solverFlags.isHistoryless) {
         dT->contactMapping_buffer.resize(nContactPairs);
+        SGPS_DEM_ADVISE_DEVICE(dT->contactMapping_buffer, dT->streamInfo.device);
         granData->pDTOwnedBuffer_contactMapping = dT->contactMapping_buffer.data();
     }
 }
@@ -101,6 +105,7 @@ void DEMKinematicThread::workerThread() {
         while (!pSchedSupport->dynamicDone) {
             // Before producing something, a new work order should be in place. Wait on it.
             if (!pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh) {
+                timers.GetTimer("Wait for dT update").start();
                 pSchedSupport->schedulingStats.nTimesKinematicHeldBack++;
                 std::unique_lock<std::mutex> lock(pSchedSupport->kinematicCanProceed);
 
@@ -110,6 +115,7 @@ void DEMKinematicThread::workerThread() {
                     // Loop to avoid spurious wakeups
                     pSchedSupport->cv_KinematicCanProceed.wait(lock);
                 }
+                timers.GetTimer("Wait for dT update").stop();
 
                 // In the case where this weak-up call is at the destructor (dT has been executing without notifying the
                 // end of user calls, aka running DoDynamics), we don't have to do CD one more time, just break
@@ -338,8 +344,18 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     SGPS_DEM_TRACKED_RESIZE(oriQ1_buffer, nOwnerBodies, "oriQ1_buffer", 0);
     SGPS_DEM_TRACKED_RESIZE(oriQ2_buffer, nOwnerBodies, "oriQ2_buffer", 0);
     SGPS_DEM_TRACKED_RESIZE(oriQ3_buffer, nOwnerBodies, "oriQ3_buffer", 0);
+
+    SGPS_DEM_ADVISE_DEVICE(voxelID_buffer, dT->streamInfo.device);
+    SGPS_DEM_ADVISE_DEVICE(locX_buffer, dT->streamInfo.device);
+    SGPS_DEM_ADVISE_DEVICE(locY_buffer, dT->streamInfo.device);
+    SGPS_DEM_ADVISE_DEVICE(locZ_buffer, dT->streamInfo.device);
+    SGPS_DEM_ADVISE_DEVICE(oriQ0_buffer, dT->streamInfo.device);
+    SGPS_DEM_ADVISE_DEVICE(oriQ1_buffer, dT->streamInfo.device);
+    SGPS_DEM_ADVISE_DEVICE(oriQ2_buffer, dT->streamInfo.device);
+    SGPS_DEM_ADVISE_DEVICE(oriQ3_buffer, dT->streamInfo.device);
     if (solverFlags.canFamilyChange) {
         SGPS_DEM_TRACKED_RESIZE(familyID_buffer, nOwnerBodies, "familyID_buffer", 0);
+        SGPS_DEM_ADVISE_DEVICE(familyID_buffer, dT->streamInfo.device);
     }
 
     // Resize to the number of spheres

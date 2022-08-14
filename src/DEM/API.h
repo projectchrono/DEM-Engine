@@ -29,7 +29,7 @@ namespace sgps {
 class DEMTracker;
 
 //////////////////////////////////////////////////////////////
-// TODO LIST: 1. Variable ts size, quick!
+// TODO LIST: 1. Variable ts size, quick! (MAX_VEL flavor uses tracked max cp vel)
 //            2. Allow ext obj init CoM setting
 //            3. Instruct how many dT steps should at LEAST do before receiving kT update
 //            4. Jitify a family number converter (user to impl)

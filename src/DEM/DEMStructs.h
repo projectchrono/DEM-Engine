@@ -7,6 +7,7 @@
 
 #include <DEM/DEMDefines.h>
 #include <core/utils/ManagedAllocator.hpp>
+#include <core/utils/ManagedMemory.hpp>
 #include <core/utils/csv.hpp>
 #include <core/utils/GpuError.h>
 #include <core/utils/Timer.hpp>
@@ -206,6 +207,8 @@ inline std::string pretty_format_bytes(size_t bytes) {
                             pretty_format_bytes(byte_delta).c_str());                                                  \
     }
 
+#define SGPS_DEM_ADVISE_DEVICE(vec, device) \
+    { advise(vec, ManagedAdvice::PREFERRED_LOC, device); }
 // =============================================================================
 // NOW SOME HOST-SIDE SIMPLE STRUCTS USED BY THE DEM MODULE
 // =============================================================================
@@ -266,6 +269,8 @@ struct familyPair_t {
     unsigned int ID2;
 };
 
+enum class DEM_VAR_TS_STRAT { CONST, MAX_VEL, INT_GAP };
+
 struct SolverFlags {
     // Sort contact pair arrays before sending to kT
     bool should_sort_pairs = true;
@@ -284,6 +289,8 @@ struct SolverFlags {
     // Time step constant-ness and expand factor constant-ness
     bool isStepConst = true;
     bool isExpandFactorFixed = true;
+    // The strategy for selecting the variable time step size
+    DEM_VAR_TS_STRAT stepSizeStrat = DEM_VAR_TS_STRAT::CONST;
     // Whether instructed to use jitification for mass properties and clump components (default to no and it is
     // recommended)
     bool useClumpJitify = false;

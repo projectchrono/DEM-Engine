@@ -168,9 +168,6 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
                                              unsigned int nClumpComponents,
                                              unsigned int nJitifiableClumpComponents,
                                              unsigned int nMatTuples) {
-    // Report the number of GPUs in use (maybe this line is quite out of place)
-    SGPS_DEM_INFO("Number of total active devices: %d", totGPU);
-
     // Sizes of these arrays
     simParams->nSpheresGM = nSpheresGM;
     simParams->nTriGM = nTriGM;
@@ -274,9 +271,13 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     SGPS_DEM_TRACKED_RESIZE(idGeometryB_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryB_buffer", 0);
     SGPS_DEM_TRACKED_RESIZE(contactType_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactType_buffer",
                             DEM_NOT_A_CONTACT);
+    SGPS_DEM_ADVISE_DEVICE(idGeometryA_buffer, streamInfo.device);
+    SGPS_DEM_ADVISE_DEVICE(idGeometryB_buffer, streamInfo.device);
+    SGPS_DEM_ADVISE_DEVICE(contactType_buffer, streamInfo.device);
     if (!solverFlags.isHistoryless) {
         SGPS_DEM_TRACKED_RESIZE(contactMapping_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER,
                                 "contactMapping_buffer", DEM_NULL_MAPPING_PARTNER);
+        SGPS_DEM_ADVISE_DEVICE(contactMapping_buffer, streamInfo.device);
     }
 }
 
@@ -1018,7 +1019,6 @@ void DEMDynamicThread::workerThread() {
     // Set the gpu for this thread
     cudaSetDevice(streamInfo.device);
     cudaStreamCreate(&streamInfo.stream);
-    cudaGetDeviceCount(&totGPU);
 
     while (!pSchedSupport->dynamicShouldJoin) {
         {
@@ -1127,6 +1127,7 @@ void DEMDynamicThread::workerThread() {
             // Check if we need to wait; i.e., if dynamic drifted too much into future, then we must wait a bit before
             // the next cycle begins
             if (pSchedSupport->dynamicShouldWait()) {
+                timers.GetTimer("Wait for kT update").start();
                 // Wait for a signal from kT to indicate that kT has caught up
                 pSchedSupport->schedulingStats.nTimesDynamicHeldBack++;
                 std::unique_lock<std::mutex> lock(pSchedSupport->dynamicCanProceed);
@@ -1134,6 +1135,7 @@ void DEMDynamicThread::workerThread() {
                     // Loop to avoid spurious wakeups
                     pSchedSupport->cv_DynamicCanProceed.wait(lock);
                 }
+                timers.GetTimer("Wait for kT update").stop();
             }
             // NOTE: This ShouldWait check is at the end of a dT cycle, not at the beginning, because dT could start a
             // cycle and immediately be too much into future. If this is at the beginning, dT will stale while kT could

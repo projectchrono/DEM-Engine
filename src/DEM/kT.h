@@ -175,8 +175,8 @@ class DEMKinematicThread {
     // std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> analComponentOffset;
 
     // kT's timers
-    std::vector<std::string> timer_names = {"Discretize domain", "Find contact pairs", "Build history map",
-                                            "Unpack updates from dT", "Send to dT buffer"};
+    std::vector<std::string> timer_names = {"Discretize domain",      "Find contact pairs", "Build history map",
+                                            "Unpack updates from dT", "Send to dT buffer",  "Wait for dT update"};
     SolverTimers timers = SolverTimers(timer_names);
 
   public:
