@@ -83,7 +83,7 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
     // Note this distribution is not even, but we need all active threads to process the same amount of pairs, so that
     // each thread can easily know its offset
     const unsigned int nPairsEachHandles =
-        (nPairsNeedHandling + SGPS_DEM_MAX_SPHERES_PER_BIN - 1) / SGPS_DEM_MAX_SPHERES_PER_BIN;
+        (nPairsNeedHandling + SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK - 1) / SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK;
     {
         sgps::spheresBinTouches_t contact_count = 0;
         // i, j are local sphere number in bin
@@ -216,7 +216,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
     // Note this distribution is not even, but we need all active threads to process the same amount of pairs, so that
     // each thread can easily know its offset
     const unsigned int nPairsEachHandles =
-        (nPairsNeedHandling + SGPS_DEM_MAX_SPHERES_PER_BIN - 1) / SGPS_DEM_MAX_SPHERES_PER_BIN;
+        (nPairsNeedHandling + SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK - 1) / SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK;
 
     // First figure out blockwise report offset. Meaning redoing the previous kernel
     // Blockwise report offset

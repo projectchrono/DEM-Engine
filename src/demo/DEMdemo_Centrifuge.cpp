@@ -47,7 +47,7 @@ int main() {
     ellipsoid.materials = std::vector<std::shared_ptr<DEMMaterial>>(ellipsoid.nComp, mat_type_sand);
 
     // Bin size needs to make sure no too-many-sphere-per-bin situation happens
-    DEM_sim.SetInitBinSize(scaling);
+    DEM_sim.SetInitBinSize(4 * scaling);
 
     // Create some random clump templates for the filling materials
     // An array to store these generated clump templates
@@ -87,31 +87,12 @@ int main() {
                               std::vector<float>(Drum_particles.size(), CylParticleRad), Drum_particles, mat_type_drum);
     std::cout << Drum_particles.size() << " spheres make up the cylindrical wall" << std::endl;
 
-    // Add drum
-    auto Drum = DEM_sim.AddClumps(Drum_template, make_float3(0));
-    // Drum is family 10
-    unsigned int drum_family = 100;
-    Drum->SetFamilies(drum_family);
-    // The drum rotates (facing X direction)
-    DEM_sim.SetFamilyPrescribedAngVel(drum_family, "0", "0", "6.0");
-    // Disable contacts within drum components
-    DEM_sim.DisableContactBetweenFamilies(drum_family, drum_family);
-    // Set drum to be tracked
-    auto Drum_tracker = DEM_sim.Track(Drum);
-
-    // Then add top and bottom planes to `close up' the drum
-    float safe_delta = 0.03;
-    auto top_bot_planes = DEM_sim.AddExternalObject();
-    top_bot_planes->AddPlane(make_float3(0, 0, CylHeight / 2. - safe_delta), make_float3(0, 0, -1), mat_type_drum);
-    top_bot_planes->AddPlane(make_float3(0, 0, -CylHeight / 2. + safe_delta), make_float3(0, 0, 1), mat_type_drum);
-    top_bot_planes->SetFamily(drum_family);
-    auto planes_tracker = DEM_sim.Track(top_bot_planes);
-
     // Then sample some particles inside the drum
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_type;
     std::vector<float3> input_xyz;
     std::vector<unsigned int> family_code;
     float3 sample_center = make_float3(0, 0, 0);
+    float safe_delta = 0.03;
     float sample_halfheight = CylHeight / 2.0 - 3.0 * safe_delta;
     float sample_halfwidth = CylRad / 1.5;
     auto input_material_xyz =
@@ -125,18 +106,34 @@ int main() {
         // Every clump type that has a unique mass, gets a unique family number
         family_code.push_back((i % clump_types.size()) / 2);
     }
-
-    // Finally, input to system
     auto particles = DEM_sim.AddClumps(input_template_type, input_xyz);
     particles->SetFamilies(family_code);
-    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 5e-11);
 
+    // Finally, don't forget to actually add the drum to system
+    auto Drum = DEM_sim.AddClumps(Drum_template, make_float3(0));
+    // Drum is family 10
+    unsigned int drum_family = 100;
+    Drum->SetFamilies(drum_family);
+    // The drum rotates (facing X direction)
+    DEM_sim.SetFamilyPrescribedAngVel(drum_family, "0", "0", "6.0");
+    // Disable contacts within drum components
+    DEM_sim.DisableContactBetweenFamilies(drum_family, drum_family);
+    // Then add top and bottom planes to `close up' the drum
+    auto top_bot_planes = DEM_sim.AddExternalObject();
+    top_bot_planes->AddPlane(make_float3(0, 0, CylHeight / 2. - safe_delta), make_float3(0, 0, -1), mat_type_drum);
+    top_bot_planes->AddPlane(make_float3(0, 0, -CylHeight / 2. + safe_delta), make_float3(0, 0, 1), mat_type_drum);
+    top_bot_planes->SetFamily(drum_family);
+    auto planes_tracker = DEM_sim.Track(top_bot_planes);
+    // Set drum to be tracked
+    auto Drum_tracker = DEM_sim.Track(Drum);
+
+    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 5e-11);
     float step_size = 5e-6;
     DEM_sim.SetCoordSysOrigin("center");
     DEM_sim.SetInitTimeStep(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEM_sim.SetCDUpdateFreq(40);
+    DEM_sim.SetCDUpdateFreq(10);
     // DEM_sim.SetExpandFactor(1e-3);
     DEM_sim.SetMaxVelocity(12.);
     DEM_sim.SetExpandSafetyParam(1.2);
@@ -162,6 +159,13 @@ int main() {
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
             DEM_sim.WriteClumpFile(std::string(filename));
             currframe++;
+            // We can query info out of this drum, since it is tracked
+            float3 drum_pos = Drum_tracker->Pos();
+            float3 drum_angVel = Drum_tracker->AngVel();
+            std::cout << "Position of the drum: " << drum_pos.x << ", " << drum_pos.y << ", " << drum_pos.z
+                      << std::endl;
+            std::cout << "Angular velocity of the drum: " << drum_angVel.x << ", " << drum_angVel.y << ", "
+                      << drum_angVel.z << std::endl;
             // float3 plane_vel = planes_tracker->Vel();
             // float4 plane_quat = planes_tracker->OriQ();
             // std::cout << "Vel of the planes: " << plane_vel.x << ", " << plane_vel.y << ", " << plane_vel.z
@@ -171,13 +175,6 @@ int main() {
         }
 
         DEM_sim.DoDynamics(step_size);
-        // We can query info out of this drum, since it is tracked
-        // float3 drum_pos = Drum_tracker->Pos();
-        // float3 drum_angVel = Drum_tracker->AngVel();
-        // std::cout << "Position of the drum: " << drum_pos.x << ", " << drum_pos.y << ", " << drum_pos.z
-        //           << std::endl;
-        // std::cout << "Angular velocity of the drum: " << drum_angVel.x << ", " << drum_angVel.y << ", "
-        //           << drum_angVel.z << std::endl;
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);

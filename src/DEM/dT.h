@@ -352,6 +352,44 @@ class DEMDynamicThread {
                            const std::set<unsigned int>& no_output_families,
                            std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs);
 
+    // Components of initManagedArrays
+    void buildTrackedObjs(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
+                          const std::vector<float3>& input_ext_obj_xyz,
+                          std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs,
+                          size_t nExistOwners);
+    void populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
+                              const std::vector<float3>& input_ext_obj_xyz,
+                              const std::vector<unsigned int>& input_ext_obj_family,
+                              const std::vector<float3>& input_mesh_obj_xyz,
+                              const std::vector<float4>& input_mesh_obj_rot,
+                              const std::vector<unsigned int>& input_mesh_obj_family,
+                              const std::vector<unsigned int>& mesh_facet_owner,
+                              const std::vector<materialsOffset_t>& mesh_facet_materials,
+                              const std::vector<DEMTriangle>& mesh_facets,
+                              const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
+                              const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
+                              const std::vector<std::vector<unsigned int>>& clumps_sp_mat_ids,
+                              const std::vector<float>& clumps_mass_types,
+                              const std::vector<float3>& clumps_moi_types,
+                              const std::vector<std::vector<float>>& clumps_sp_radii_types,
+                              const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                              const std::vector<float>& ext_obj_mass_types,
+                              const std::vector<float3>& ext_obj_moi_types,
+                              const std::vector<float>& mesh_obj_mass_types,
+                              const std::vector<float3>& mesh_obj_moi_types,
+                              size_t nExistOwners,
+                              size_t nExistSpheres);
+    void registerPolicies(const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
+                          const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
+                          const std::vector<float>& clumps_mass_types,
+                          const std::vector<float3>& clumps_moi_types,
+                          const std::vector<float>& ext_obj_mass_types,
+                          const std::vector<float3>& ext_obj_moi_types,
+                          const std::vector<float>& mesh_obj_mass_types,
+                          const std::vector<float3>& mesh_obj_moi_types,
+                          const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
+                          const std::set<unsigned int>& no_output_families);
+
     /// Put sim data array pointers in place
     void packDataPointers();
     void packTransferPointers(DEMKinematicThread* kT);

@@ -398,17 +398,23 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     }
 }
 
-void DEMKinematicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
-                                           const std::vector<unsigned int>& input_ext_obj_family,
-                                           const std::vector<unsigned int>& input_mesh_obj_family,
-                                           const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                                           const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
-                                           const std::vector<float>& clumps_mass_types,
-                                           const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                                           const std::vector<std::vector<float3>>& clumps_sp_location_types) {
-    // Get the info into the managed memory from the host side. Can this process be more efficient? Maybe, but it's
-    // initialization anyway.
+void DEMKinematicThread::registerPolicies(const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
+                                          const std::unordered_map<family_t, unsigned int>& family_impl_user_map) {
+    // kT may need this family number map, store it
+    familyUserImplMap = family_user_impl_map;
+    familyImplUserMap = family_impl_user_map;
+}
 
+void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
+                                              const std::vector<unsigned int>& input_ext_obj_family,
+                                              const std::vector<unsigned int>& input_mesh_obj_family,
+                                              const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
+                                              const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
+                                              const std::vector<float>& clumps_mass_types,
+                                              const std::vector<std::vector<float>>& clumps_sp_radii_types,
+                                              const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                                              size_t nExistOwners,
+                                              size_t nExistSpheres) {
     // All the input vectors should have the same length, nClumpTopo
     size_t k = 0;
     std::vector<unsigned int> prescans_comp;
@@ -435,18 +441,14 @@ void DEMKinematicThread::initManagedArrays(const std::vector<std::shared_ptr<DEM
         }
     }
 
-    // kT may need this family number map, store it
-    familyUserImplMap = family_user_impl_map;
-    familyImplUserMap = family_impl_user_map;
-
     k = 0;
     // float3 LBF;
     // LBF.x = simParams->LBFX;
     // LBF.y = simParams->LBFY;
     // LBF.z = simParams->LBFZ;
     // Now load clump init info
+    std::vector<unsigned int> input_clump_types;
     {
-        std::vector<unsigned int> input_clump_types;
         std::vector<unsigned int> input_clump_family;
         // Flatten the input clump batches (because by design we transfer flatten clump info to GPU)
         for (const auto& a_batch : input_clump_batches) {
@@ -459,7 +461,7 @@ void DEMKinematicThread::initManagedArrays(const std::vector<std::shared_ptr<DEM
             input_clump_family.insert(input_clump_family.end(), a_batch->families.begin(), a_batch->families.end());
         }
 
-        for (size_t i = 0; i < simParams->nOwnerClumps; i++) {
+        for (size_t i = 0; i < input_clump_types.size(); i++) {
             auto type_of_this_clump = input_clump_types.at(i);
 
             // auto this_CoM_coord = input_clump_xyz.at(i) - LBF; // kT don't have to init owner xyz
@@ -467,40 +469,58 @@ void DEMKinematicThread::initManagedArrays(const std::vector<std::shared_ptr<DEM
             auto this_clump_no_sp_relPos = clumps_sp_location_types.at(type_of_this_clump);
 
             for (size_t j = 0; j < this_clump_no_sp_radii.size(); j++) {
-                ownerClumpBody.at(k) = i;
+                ownerClumpBody.at(nExistSpheres + k) = i;
 
                 // Depending on whether we jitify or flatten
                 if (solverFlags.useClumpJitify) {
                     // This component offset, is it too large that can't live in the jitified array?
                     unsigned int this_comp_offset = prescans_comp.at(type_of_this_clump) + j;
-                    clumpComponentOffsetExt.at(k) = this_comp_offset;
+                    clumpComponentOffsetExt.at(nExistSpheres + k) = this_comp_offset;
                     if (this_comp_offset < simParams->nJitifiableClumpComponents) {
-                        clumpComponentOffset.at(k) = this_comp_offset;
+                        clumpComponentOffset.at(nExistSpheres + k) = this_comp_offset;
                     } else {
                         // If not, an indicator will be put there
-                        clumpComponentOffset.at(k) = DEM_RESERVED_CLUMP_COMPONENT_OFFSET;
+                        clumpComponentOffset.at(nExistSpheres + k) = DEM_RESERVED_CLUMP_COMPONENT_OFFSET;
                     }
                 } else {
-                    radiiSphere.at(k) = this_clump_no_sp_radii.at(j);
+                    radiiSphere.at(nExistSpheres + k) = this_clump_no_sp_radii.at(j);
                     const float3 relPos = this_clump_no_sp_relPos.at(j);
-                    relPosSphereX.at(k) = relPos.x;
-                    relPosSphereY.at(k) = relPos.y;
-                    relPosSphereZ.at(k) = relPos.z;
+                    relPosSphereX.at(nExistSpheres + k) = relPos.x;
+                    relPosSphereY.at(nExistSpheres + k) = relPos.y;
+                    relPosSphereZ.at(nExistSpheres + k) = relPos.z;
                 }
 
                 k++;
             }
 
             family_t this_family_num = family_user_impl_map.at(input_clump_family.at(i));
-            familyID.at(i) = this_family_num;
+            familyID.at(nExistOwners + i) = this_family_num;
         }
     }
 
-    size_t offset_for_ext_obj = simParams->nOwnerClumps;
-    for (size_t i = 0; i < simParams->nExtObj; i++) {
+    size_t offset_for_ext_obj = input_clump_types.size();
+    for (size_t i = 0; i < input_ext_obj_family.size(); i++) {
         family_t this_family_num = family_user_impl_map.at(input_ext_obj_family.at(i));
         familyID.at(i + offset_for_ext_obj) = this_family_num;
     }
+}
+
+void DEMKinematicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
+                                           const std::vector<unsigned int>& input_ext_obj_family,
+                                           const std::vector<unsigned int>& input_mesh_obj_family,
+                                           const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
+                                           const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
+                                           const std::vector<float>& clumps_mass_types,
+                                           const std::vector<std::vector<float>>& clumps_sp_radii_types,
+                                           const std::vector<std::vector<float3>>& clumps_sp_location_types) {
+    // Get the info into the managed memory from the host side. Can this process be more efficient? Maybe, but it's
+    // initialization anyway.
+
+    registerPolicies(family_user_impl_map, family_impl_user_map);
+
+    populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, family_user_impl_map,
+                         family_impl_user_map, clumps_mass_types, clumps_sp_radii_types, clumps_sp_location_types, 0,
+                         0);
 }
 
 void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& Subs) {

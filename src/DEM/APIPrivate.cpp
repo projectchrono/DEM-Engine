@@ -22,7 +22,33 @@ inline bool is_DEM_material_same(const std::shared_ptr<DEMMaterial>& a, const st
 inline unsigned int stash_material_in_templates(std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
                                                 const std::shared_ptr<DEMMaterial>& this_material);
 
-void DEMSolver::generateJITResources() {
+void DEMSolver::generateWorldResources() {
+    // Figure out the parameters related to the simulation `world', if need to
+    if (!explicit_nv_override) {
+        figureOutNV();
+    }
+    figureOutOrigin();
+    addWorldBoundingBox();
+
+    // Process the loaded materials. The pre-process of external objects and clumps could add more materials, so this
+    // call need to go after those pre-process ones.
+    figureOutMaterialProxies();
+
+    // Based on user input, prepare family_mask_matrix (family contact map matrix)
+    figureOutFamilyMasks();
+
+    // Decide bin size (for contact detection)
+    decideBinSize();
+
+    // If these `computed' numbers are larger than types like materialsOffset_t can hold, then we should error out and
+    // let the user re-compile (or, should we somehow change the header automatically?)
+    postJITResourceGenSanityCheck();
+
+    // Notify the user how jitification goes
+    reportInitStats();
+}
+
+void DEMSolver::generateEntityResources() {
     /*
     // Dan and Ruochun decided not to extract unique input values.
     // Instead, we trust users: we simply store all clump template info users give.
@@ -61,16 +87,11 @@ void DEMSolver::generateJITResources() {
     nDistinctSphereRadii_computed = m_template_sp_radii_types.size();
     nDistinctSphereRelativePositions_computed = m_clumps_sp_location_types.size();
     */
-
-    // Figure out the parameters related to the simulation `world', if need to
-    if (!explicit_nv_override) {
-        figureOutNV();
-    }
-    figureOutOrigin();
-    addWorldBoundingBox();
-
     // Flatten cached clump templates (from ClumpTemplate structs to float arrays), make ready for transferring to kTdT
     preprocessClumpTemplates();
+
+    // Flatten some input clump information, to figure out the size of the input, and their associated family numbers
+    preprocessClumps();
 
     // Figure out info about external objects/clump templates and whether they can be jitified
     preprocessAnalyticalObjs();
@@ -78,32 +99,19 @@ void DEMSolver::generateJITResources() {
     // Count how many triangle tempaltes are there and flatten them
     preprocessTriangleObjs();
 
-    // Process the loaded materials. The pre-process of external objects and clumps could add more materials, so this
-    // call need to go after those pre-process ones.
-    figureOutMaterialProxies();
-
-    // Based on user input, prepare family_mask_matrix (family contact map matrix)
-    figureOutFamilyMasks();
-
     // Compute stats
+    updateTotalEntityNum();
+}
+
+void DEMSolver::updateTotalEntityNum() {
     nDistinctClumpBodyTopologies = m_template_clump_mass.size();
     nDistinctMassProperties = nDistinctClumpBodyTopologies + nExtObj + nTriEntities;
 
     // Also, external objects may introduce more material types
     nMatTuples = m_loaded_materials.size();
 
-    // Decide bin size (for contact detection)
-    decideBinSize();
-
     // Finally, with both user inputs and jit info processed, we can derive the number of owners that we have now
     nOwnerBodies = nExtObj + nOwnerClumps + nTriEntities;
-
-    // If these `computed' numbers are larger than types like materialsOffset_t can hold, then we should error out and
-    // let the user re-compile (or, should we somehow change the header automatically?)
-    postJITResourceGenSanityCheck();
-
-    // Notify the user how jitification goes
-    reportInitStats();
 }
 
 void DEMSolver::postJITResourceGenSanityCheck() {
@@ -214,6 +222,18 @@ void DEMSolver::preprocessClumpTemplates() {
     }
 }
 
+void DEMSolver::preprocessClumps() {
+    for (const auto& a_batch : cached_input_clump_batches) {
+        nOwnerClumps += a_batch->GetNumClumps();
+        for (size_t i = 0; i < a_batch->GetNumClumps(); i++) {
+            unsigned int nComp = a_batch->types.at(i)->nComp;
+            nSpheresGM += nComp;
+        }
+        // Family number is flattened here, only because figureOutFamilyMasks() needs it
+        m_input_clump_family.insert(m_input_clump_family.end(), a_batch->families.begin(), a_batch->families.end());
+    }
+}
+
 void DEMSolver::addAnalCompTemplate(const objType_t type,
                                     const std::shared_ptr<DEMMaterial>& material,
                                     const unsigned int owner,
@@ -248,38 +268,6 @@ void DEMSolver::jitifyKernels() {
     equipForceModel(Subs);
     kT->jitifyKernels(Subs);
     dT->jitifyKernels(Subs);
-}
-
-void DEMSolver::processUserInputs() {
-    // The number of loaded clumps is calculated here, not in generateJITResources like meshes and analytical objects,
-    // because clumps are not flattened before transferring to dT, so I just throw it here, somewhere early in the
-    // initialization process. Good idea? Also note that there is no need to initialize nOwnerClumps = 0, as
-    // re-initialization may be called in mid-simulation using an `Add' flavor.
-    for (const auto& a_batch : cached_input_clump_batches) {
-        nOwnerClumps += a_batch->GetNumClumps();
-        for (size_t i = 0; i < a_batch->GetNumClumps(); i++) {
-            unsigned int nComp = a_batch->types.at(i)->nComp;
-            nSpheresGM += nComp;
-        }
-        // Family number is flattened here, only because figureOutFamilyMasks() needs it
-        m_input_clump_family.insert(m_input_clump_family.end(), a_batch->families.begin(), a_batch->families.end());
-    }
-
-    // Fix the reserved family (reserved family number is in user family, not in impl family)
-    SetFamilyFixed(DEM_RESERVED_FAMILY_NUM);
-
-    // Figure out ts size and the envelope to add to geometries (for CD safety)
-    if ((!use_user_defined_expand_factor) && ts_size_is_const) {
-        m_expand_factor = m_approx_max_vel * m_ts_size * m_updateFreq * m_expand_safety_param;
-    }
-    if (m_expand_factor * m_expand_safety_param <= 0.0 && m_updateFreq > 0 && ts_size_is_const) {
-        SGPS_DEM_WARNING(
-            "You instructed that the physics can stretch %u time steps into the future, but did not instruct the "
-            "geometries to expand via SetExpandFactor or SetMaxVelocity. The contact detection procedure will likely "
-            "fail to detect some contact events before it is too late, hindering the simulation accuracy and "
-            "stability.",
-            m_updateFreq);
-    }
 }
 
 void DEMSolver::figureOutNV() {}
@@ -680,7 +668,7 @@ void DEMSolver::transferSimParams() {
                      m_expand_factor, m_approx_max_vel, m_expand_safety_param);
 }
 
-void DEMSolver::initializeArrays() {
+void DEMSolver::allocateGPUArrays() {
     // Resize managed arrays based on the statistical data we had from the previous step
     dT->allocateManagedArrays(nOwnerBodies, nOwnerClumps, nExtObj, nTriEntities, nSpheresGM, nTriGM, nAnalGM,
                               nDistinctMassProperties, nDistinctClumpBodyTopologies, nDistinctClumpComponents,
@@ -688,7 +676,9 @@ void DEMSolver::initializeArrays() {
     kT->allocateManagedArrays(nOwnerBodies, nOwnerClumps, nExtObj, nTriEntities, nSpheresGM, nTriGM, nAnalGM,
                               nDistinctMassProperties, nDistinctClumpBodyTopologies, nDistinctClumpComponents,
                               nJitifiableClumpComponents, nMatTuples);
+}
 
+void DEMSolver::initializeGPUArrays() {
     // Now we can feed those GPU-side arrays with the cached API-level simulation info
     dT->initManagedArrays(
         // Clump batchs' initial stats
@@ -723,6 +713,13 @@ void DEMSolver::initializeArrays() {
         m_template_clump_mass, m_template_sp_radii, m_template_sp_relPos);
 }
 
+/// When more clumps/meshed objects got loaded, this method should be called to transfer them to the GPU-side in
+/// mid-simulation. This method cannot handle the addition of extra templates or analytical entities, which require
+/// re-compilation.
+void DEMSolver::updateClumpMeshArrays() {
+    // dT->updateClumpMeshArrays
+}
+
 void DEMSolver::packDataPointers() {
     dT->packDataPointers();
     kT->packDataPointers();
@@ -733,6 +730,13 @@ void DEMSolver::packDataPointers() {
 }
 
 void DEMSolver::validateUserInputs() {
+    // Keep tab of some quatities...
+    nLastTimeClumpTemplateLoad = nClumpTemplateLoad;
+    nLastTimeExtObjLoad = nExtObjLoad;
+    nLastTimeBatchClumpsLoad = nBatchClumpsLoad;
+    nLastTimeTriObjLoad = nTriObjLoad;
+
+    // Then some checks...
     if (m_templates.size() == 0) {
         SGPS_DEM_ERROR("Before initializing the system, at least one clump type should be defined via LoadClumpType.");
     }
@@ -759,6 +763,22 @@ void DEMSolver::validateUserInputs() {
 
     if (use_user_defined_force_model) {
         // TODO: See if this user model makes sense
+    }
+
+    // Fix the reserved family (reserved family number is in user family, not in impl family)
+    SetFamilyFixed(DEM_RESERVED_FAMILY_NUM);
+
+    // Figure out ts size and the envelope to add to geometries (for CD safety)
+    if ((!use_user_defined_expand_factor) && ts_size_is_const) {
+        m_expand_factor = m_approx_max_vel * m_ts_size * m_updateFreq * m_expand_safety_param;
+    }
+    if (m_expand_factor * m_expand_safety_param <= 0.0 && m_updateFreq > 0 && ts_size_is_const) {
+        SGPS_DEM_WARNING(
+            "You instructed that the physics can stretch %u time steps into the future, but did not instruct the "
+            "geometries to expand via SetExpandFactor or SetMaxVelocity. The contact detection procedure will likely "
+            "fail to detect some contact events before it is too late, hindering the simulation accuracy and "
+            "stability.",
+            m_updateFreq);
     }
 }
 

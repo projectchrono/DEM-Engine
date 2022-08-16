@@ -330,6 +330,10 @@ template <typename T1>
 inline void deallocate_array(std::vector<T1>& arr) {
     std::vector<T1>().swap(arr);
 }
+template <typename T1, typename T2>
+inline void deallocate_array(std::unordered_map<T1, T2>& mapping) {
+    mapping.clear();
+}
 
 // Load content from a file to a string
 inline std::string read_file_to_string(const std::filesystem::path& sourcefile) {

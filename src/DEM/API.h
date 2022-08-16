@@ -306,9 +306,8 @@ class DEMSolver {
     /// simulation. Usually used when you want to change simulation parameters after the system is already Intialized.
     void UpdateSimParams();
 
-    /// Transfer newly loaded clumps/meshed objects to the GPU-side in mid-simulation and allocate GPU memory space for
-    /// them
-    void UpdateGPUArrays();
+    /// Transfer newly loaded clumps to the GPU-side in mid-simulation
+    void UpdateClumps();
 
     /// Reset kT and dT back to a status like when the simulation system is constructed. In general the user does not
     /// need to call it, unless they want to run another test without re-constructing the entire DEM simulation system.
@@ -491,11 +490,19 @@ class DEMSolver {
 
     // Number of batches of clumps loaded by the user. Note this number never decreases, it just records how many times
     // the user loaded clumps into the simulation for the duration of this class.
-    size_t nBatchClumps = 0;
+    size_t nBatchClumpsLoad = 0;
     // Number of times when an external (analytical) object is loaded by the user. Never decreases.
-    unsigned int nTimesExtObjLoad = 0;
+    unsigned int nExtObjLoad = 0;
     // Number of times when a meshed object is loaded by the user. Never decreses.
-    size_t nTimesTriObjLoad = 0;
+    size_t nTriObjLoad = 0;
+    // Number of clump templates loaded. Never decreases.
+    size_t nClumpTemplateLoad = 0;
+
+    // The above quantities, when they were last time initialized. Used for sanity checks at user re-initialization.
+    size_t nLastTimeClumpTemplateLoad = 0;
+    unsigned int nLastTimeExtObjLoad = 0;
+    size_t nLastTimeBatchClumpsLoad = 0;
+    size_t nLastTimeTriObjLoad = 0;
 
     // The list of unique family numbers that the user ever assigned. This has implications on family map construction,
     // and the elements of it never get removed.
@@ -693,12 +700,20 @@ class DEMSolver {
     // DEM system's private methods
     ////////////////////////////////////////////////////////////////////////////////
 
-    /// Pre-process some user inputs so we acquire the knowledge on how to jitify the kernels
-    void generateJITResources();
+    /// Pre-process some user inputs regarding the simulation entities that fill up the world, so we acquire the
+    /// knowledge on how to jitify the kernels
+    void generateEntityResources();
+    /// Pre-process some user inputs regarding the (sizes, features of) simulation world
+    void generateWorldResources();
     /// Make sure the input represents something we can simulate, and if not, tell the reasons
     void postJITResourceGenSanityCheck();
+    /// Flatten some input clump information, to figure out the size of the input, and their associated family numbers
+    /// (to make jitifying family policies easier)
+    void preprocessClumps();
     /// Flatten cached clump templates (from ClumpTemplate structs to float arrays)
     void preprocessClumpTemplates();
+    /// Count the number of `things' that should be in the simulation now
+    void updateTotalEntityNum();
     /// Jitify GPU kernels, based on pre-processed user inputs
     void jitifyKernels();
     /// Figure out the unit length l and numbers of voxels along each direction, based on domain size X, Y, Z
@@ -714,15 +729,15 @@ class DEMSolver {
     /// Transfer (CPU-side) cached simulation data (about sim world) to the GPU-side. It is called automatically during
     /// system initialization.
     void transferSimParams();
-    /// Transfer (CPU-side) cached clump templates info and initial clump type/position info to GPU-side arrays
-    void initializeArrays();
+    /// Transfer cached clump templates info etc. to GPU-side arrays
+    void initializeGPUArrays();
+    /// Allocate memory space for GPU-side arrays
+    void allocateGPUArrays();
     /// Pack array pointers to a struct so they can be easily used as kernel arguments
     void packDataPointers();
     /// Warn users if the data types defined in DEMDefines.h do not blend well with the user inputs (fist-round
     /// coarse-grain sanity check)
     void validateUserInputs();
-    /// Modify user inputs before passing to impl-level systems when needed
-    void processUserInputs();
     /// Prepare the material/contact proxy matrix force computation kernels
     void figureOutMaterialProxies();
     /// Figure out info about external objects and how they should be jitified
@@ -733,6 +748,9 @@ class DEMSolver {
     inline void reportInitStats() const;
     /// Based on user input, prepare family_mask_matrix (family contact map matrix)
     void figureOutFamilyMasks();
+    /// Transfer newly loaded clumps/meshed objects to the GPU-side in mid-simulation and allocate GPU memory space for
+    /// them
+    void updateClumpMeshArrays();
     /// Add content to the flattened analytical component array.
     /// Note that analytical component is big different in that they each has a position in the jitified analytical
     /// templates, insteads of like a clump, has an extra ComponentOffset array points it to the right jitified template

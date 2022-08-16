@@ -287,6 +287,7 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clu
 
     std::shared_ptr<DEMClumpTemplate> ptr = std::make_shared<DEMClumpTemplate>(std::move(clump));
     m_templates.push_back(ptr);
+    nClumpTemplateLoad++;
     return m_templates.back();
 }
 
@@ -354,8 +355,8 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpSimpleSphere(float mass,
 std::shared_ptr<DEMExternObj> DEMSolver::AddExternalObject() {
     DEMExternObj an_obj;
     std::shared_ptr<DEMExternObj> ptr = std::make_shared<DEMExternObj>(std::move(an_obj));
-    ptr->load_order = nTimesExtObjLoad;
-    nTimesExtObjLoad++;
+    ptr->load_order = nExtObjLoad;
+    nExtObjLoad++;
     cached_extern_objs.push_back(ptr);
     return cached_extern_objs.back();
 }
@@ -377,40 +378,19 @@ void DEMSolver::DisableContactBetweenFamilies(unsigned int ID1, unsigned int ID2
 }
 
 void DEMSolver::ClearCache() {
-    // TODO: Must be missing some...
-    // TODO: Use swap or reassignment to release the memory
-    sys_initialized = false;
+    deallocate_array(cached_input_clump_batches);
+    deallocate_array(cached_extern_objs);
+    deallocate_array(cached_mesh_objs);
+    deallocate_array(m_tracked_objs);
 
-    cached_extern_objs.clear();
-    m_anal_comp_pos.clear();
-    m_anal_comp_rot.clear();
-    m_anal_size_1.clear();
-    m_anal_size_2.clear();
-    m_anal_size_3.clear();
-    m_anal_types.clear();
-    m_anal_normals.clear();
-
-    m_input_ext_obj_xyz.clear();
-    m_input_ext_obj_family.clear();
-
-    m_template_clump_mass.clear();
-    m_template_clump_moi.clear();
-    m_template_sp_radii.clear();
-    m_template_sp_relPos.clear();
-    m_template_sp_mat_ids.clear();
-    m_loaded_materials.clear();
-
-    m_family_mask_matrix.clear();
-    m_family_user_impl_map.clear();
-
-    famnum_can_change_conditionally = false;
-    m_family_change_pairs.clear();
-    m_family_change_conditions.clear();
-
-    m_input_family_prescription.clear();
-    m_unique_family_prescription.clear();
-
-    m_tracked_objs.clear();
+    // Rigth now, there is no way to re-define the following arrays without re-starting the simulation
+    // m_loaded_materials;
+    // m_templates;
+    // m_input_family_prescription;
+    // m_no_output_families;
+    // m_family_change_pairs;
+    // m_family_change_conditions;
+    // m_input_no_contact_pairs;
 }
 
 float DEMSolver::GetTotalKineticEnergy() const {
@@ -432,8 +412,8 @@ std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(const std::vector<std::share
     DEMClumpBatch a_batch(nClumps);
     a_batch.SetTypes(input_types);
     a_batch.SetPos(input_xyz);
-    a_batch.load_order = nBatchClumps;
-    nBatchClumps++;
+    a_batch.load_order = nBatchClumpsLoad;
+    nBatchClumpsLoad++;
     cached_input_clump_batches.push_back(std::make_shared<DEMClumpBatch>(std::move(a_batch)));
     return cached_input_clump_batches.back();
 }
@@ -442,8 +422,8 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(DEMMeshConne
     if (mesh.GetNumTriangles() == 0) {
         SGPS_DEM_WARNING("It seems that a mesh contains 0 triangle facet.");
     }
-    mesh.load_order = nTimesTriObjLoad;
-    nTimesTriObjLoad++;
+    mesh.load_order = nTriObjLoad;
+    nTriObjLoad++;
 
     cached_mesh_objs.push_back(std::make_shared<DEMMeshConnected>(std::move(mesh)));
     return cached_mesh_objs.back();
@@ -522,11 +502,9 @@ void DEMSolver::Initialize() {
     // A few checks first
     validateUserInputs();
 
-    // Figure out how large a system the user wants to run this time
-    processUserInputs();
-
     // Call the JIT compiler generator to make prep for this simulation
-    generateJITResources();
+    generateEntityResources();
+    generateWorldResources();  // World info such as family policies needs entity info
 
     // Transfer user-specified solver preference/instructions to workers
     transferSolverParams();
@@ -535,7 +513,8 @@ void DEMSolver::Initialize() {
     transferSimParams();
 
     // Allocate and populate kT dT managed arrays
-    initializeArrays();
+    allocateGPUArrays();
+    initializeGPUArrays();
 
     // Put sim data array pointers in place
     packDataPointers();
@@ -581,14 +560,52 @@ void DEMSolver::ClearTimingStats() {
 }
 
 void DEMSolver::ReleaseFlattenedArrays() {
-    deallocate_array(m_input_ext_obj_xyz);
-    deallocate_array(m_input_ext_obj_family);
-    deallocate_array(m_input_clump_family);
     deallocate_array(m_family_mask_matrix);
+
+    deallocate_array(m_family_user_impl_map);
+    deallocate_array(m_family_impl_user_map);
+
+    deallocate_array(m_input_ext_obj_xyz);
+    deallocate_array(m_input_ext_obj_rot);
+    deallocate_array(m_input_ext_obj_family);
+
+    deallocate_array(m_input_mesh_obj_xyz);
+    deallocate_array(m_input_mesh_obj_rot);
+    deallocate_array(m_input_mesh_obj_family);
+
     deallocate_array(m_unique_family_prescription);
-    m_family_user_impl_map.clear();
-    m_family_impl_user_map.clear();
-    // TODO: Finish it...
+    deallocate_array(m_input_clump_family);
+    deallocate_array(m_anal_owner);
+    deallocate_array(m_anal_materials);
+    deallocate_array(m_anal_comp_pos);
+    deallocate_array(m_anal_comp_rot);
+    deallocate_array(m_anal_size_1);
+    deallocate_array(m_anal_size_2);
+    deallocate_array(m_anal_size_3);
+    deallocate_array(m_anal_types);
+    deallocate_array(m_anal_normals);
+
+    deallocate_array(m_mesh_facet_owner);
+    deallocate_array(m_mesh_facet_materials);
+    deallocate_array(m_mesh_facets);
+
+    deallocate_array(m_template_clump_mass);
+    deallocate_array(m_template_clump_moi);
+    deallocate_array(m_template_sp_mat_ids);
+    deallocate_array(m_template_sp_radii);
+    deallocate_array(m_template_sp_relPos);
+
+    deallocate_array(m_ext_obj_mass);
+    deallocate_array(m_ext_obj_moi);
+
+    deallocate_array(m_mesh_obj_mass);
+    deallocate_array(m_mesh_obj_moi);
+
+    deallocate_array(m_E_proxy);
+    deallocate_array(m_nu_proxy);
+    deallocate_array(m_CoR_proxy);
+    deallocate_array(m_mu_proxy);
+    deallocate_array(m_Crr_proxy);
 }
 
 void DEMSolver::ResetWorkerThreads() {
@@ -616,11 +633,33 @@ void DEMSolver::UpdateSimParams() {
     // transferSimParams();
 }
 
-/// When more clumps/meshed objects got loaded, this method should be called to transfer them to the GPU-side in
-/// mid-simulation. This method cannot handle the addition of extra templates or analytical entities, which require
-/// re-compilation.
-/// TODO: Implement it.
-void DEMSolver::UpdateGPUArrays() {}
+void DEMSolver::UpdateClumps() {
+    if (!sys_initialized) {
+        SGPS_DEM_ERROR(
+            "Please call UpdateClumps only after the system is initialized, because it is for adding additional clumps "
+            "to an initialized DEM system.");
+    }
+    if (nLastTimeExtObjLoad != nExtObjLoad) {
+        SGPS_DEM_ERROR(
+            "UpdateClumps cannot be used after loading new external objects. Consider re-initializing at this point.");
+    }
+    if (nLastTimeClumpTemplateLoad != nClumpTemplateLoad) {
+        SGPS_DEM_ERROR(
+            "UpdateClumps cannot be used after loading new clump templates. Consider re-initializing at this point.");
+    }
+    SGPS_DEM_WARNING(
+        "UpdateClumps will add all currently cached clumps to the simulation.\nYou may want to ClearCache first, then "
+        "AddClumps, then call this method, so the clumps cached earlier are forgotten before this method takes place.");
+
+    preprocessClumps();
+    preprocessClumpTemplates();
+    //// TODO: This method should also work on newly added meshes
+    updateTotalEntityNum();
+    allocateGPUArrays();
+    updateClumpMeshArrays();
+    packDataPointers();
+    ReleaseFlattenedArrays();
+}
 
 /// Removes all entities associated with a family from the arrays (to save memory space). This method should only be
 /// called periodically because it gives a large overhead. This is only used in long simulations where if the
