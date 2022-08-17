@@ -47,7 +47,7 @@ int main() {
     ellipsoid.materials = std::vector<std::shared_ptr<DEMMaterial>>(ellipsoid.nComp, mat_type_sand);
 
     // Bin size needs to make sure no too-many-sphere-per-bin situation happens
-    DEM_sim.SetInitBinSize(4 * scaling);
+    DEM_sim.SetInitBinSize(scaling);
 
     // Create some random clump templates for the filling materials
     // An array to store these generated clump templates

@@ -92,8 +92,6 @@ void DEMKinematicThread::workerThread() {
             while (!pSchedSupport->kinematicStarted) {
                 pSchedSupport->cv_KinematicStartLock.wait(lock);
             }
-            // Ensure that we wait for start signal on next iteration
-            pSchedSupport->kinematicStarted = false;
             // The following is executed when kT and dT are being destroyed
             if (pSchedSupport->kinematicShouldJoin) {
                 break;
@@ -166,6 +164,9 @@ void DEMKinematicThread::workerThread() {
         // When getting here, kT has finished one user call (although perhaps not at the end of the user script)
         pPagerToMain->userCallDone = true;
         pPagerToMain->cv_mainCanProceed.notify_all();
+
+        // Ensure that we wait for start signal on next iteration
+        pSchedSupport->kinematicStarted = false;
     }
 }
 
@@ -469,7 +470,7 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
             auto this_clump_no_sp_relPos = clumps_sp_location_types.at(type_of_this_clump);
 
             for (size_t j = 0; j < this_clump_no_sp_radii.size(); j++) {
-                ownerClumpBody.at(nExistSpheres + k) = i;
+                ownerClumpBody.at(nExistSpheres + k) = nExistOwners + i;
 
                 // Depending on whether we jitify or flatten
                 if (solverFlags.useClumpJitify) {
@@ -493,14 +494,14 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
                 k++;
             }
 
-            family_t this_family_num = family_user_impl_map.at(input_clump_family.at(i));
+            family_t this_family_num = familyUserImplMap.at(input_clump_family.at(i));
             familyID.at(nExistOwners + i) = this_family_num;
         }
     }
 
     size_t offset_for_ext_obj = input_clump_types.size();
     for (size_t i = 0; i < input_ext_obj_family.size(); i++) {
-        family_t this_family_num = family_user_impl_map.at(input_ext_obj_family.at(i));
+        family_t this_family_num = familyUserImplMap.at(input_ext_obj_family.at(i));
         familyID.at(i + offset_for_ext_obj) = this_family_num;
     }
 }
@@ -521,6 +522,24 @@ void DEMKinematicThread::initManagedArrays(const std::vector<std::shared_ptr<DEM
     populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, family_user_impl_map,
                          family_impl_user_map, clumps_mass_types, clumps_sp_radii_types, clumps_sp_location_types, 0,
                          0);
+}
+
+void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
+                                               const std::vector<unsigned int>& input_ext_obj_family,
+                                               const std::vector<unsigned int>& input_mesh_obj_family,
+                                               const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
+                                               const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
+                                               const std::vector<float>& clumps_mass_types,
+                                               const std::vector<std::vector<float>>& clumps_sp_radii_types,
+                                               const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                                               size_t nExistingOwners,
+                                               size_t nExistingClumps,
+                                               size_t nExistingSpheres,
+                                               size_t nExistingTriMesh,
+                                               size_t nExistingFacets) {
+    populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, family_user_impl_map,
+                         family_impl_user_map, clumps_mass_types, clumps_sp_radii_types, clumps_sp_location_types,
+                         nExistingOwners, nExistingSpheres);
 }
 
 void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& Subs) {

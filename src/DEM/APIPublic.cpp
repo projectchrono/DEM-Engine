@@ -504,7 +504,8 @@ void DEMSolver::Initialize() {
 
     // Call the JIT compiler generator to make prep for this simulation
     generateEntityResources();
-    generateWorldResources();  // World info such as family policies needs entity info
+    generatePolicyResources();  // Policy info such as family policies needs entity info
+    postResourceGen();
 
     // Transfer user-specified solver preference/instructions to workers
     transferSolverParams();
@@ -609,6 +610,12 @@ void DEMSolver::ReleaseFlattenedArrays() {
 }
 
 void DEMSolver::ResetWorkerThreads() {
+    // It's possible that kT is already waiting for a user call, when ResetWorkerThreads is called. In this case, we do
+    // nothing.
+    if (dTkT_InteractionManager->kinematicStarted == false) {
+        return;
+    }
+
     // The user won't be calling this when dT is working, so our only problem is that kT may be spinning in the inner
     // loop. So let's release kT.
     std::unique_lock<std::mutex> lock(kTMain_InteractionManager->mainCanProceed);
@@ -641,22 +648,37 @@ void DEMSolver::UpdateClumps() {
     }
     if (nLastTimeExtObjLoad != nExtObjLoad) {
         SGPS_DEM_ERROR(
-            "UpdateClumps cannot be used after loading new external objects. Consider re-initializing at this point.");
+            "UpdateClumps cannot be used after loading new analytical objects. Consider re-initializing at this "
+            "point.\nNumber of analytical objects at last initialization: %u\nNumber of analytical objects now: %u",
+            nLastTimeExtObjLoad, nExtObjLoad);
     }
     if (nLastTimeClumpTemplateLoad != nClumpTemplateLoad) {
         SGPS_DEM_ERROR(
-            "UpdateClumps cannot be used after loading new clump templates. Consider re-initializing at this point.");
+            "UpdateClumps cannot be used after loading new clump templates. Consider re-initializing at this "
+            "point.\nNumber of clump templates at last initialization: %u\nNumber of clump templates now: %u",
+            nLastTimeClumpTemplateLoad, nClumpTemplateLoad);
     }
     SGPS_DEM_WARNING(
         "UpdateClumps will add all currently cached clumps to the simulation.\nYou may want to ClearCache first, then "
         "AddClumps, then call this method, so the clumps cached earlier are forgotten before this method takes place.");
+
+    // This method requires kT and dT are sync-ed
+    ResetWorkerThreads();
+
+    // Record the number of entities, before adding to the system
+    size_t nOwners_old = nOwnerBodies;
+    size_t nClumps_old = nOwnerClumps;
+    size_t nSpheres_old = nSpheresGM;
+    size_t nTriMesh_old = nTriEntities;
+    size_t nFacets_old = nTriGM;
 
     preprocessClumps();
     preprocessClumpTemplates();
     //// TODO: This method should also work on newly added meshes
     updateTotalEntityNum();
     allocateGPUArrays();
-    updateClumpMeshArrays();
+    // `Update' method needs to know the number of existing clumps and spheres (before this addition)
+    updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old);
     packDataPointers();
     ReleaseFlattenedArrays();
 }

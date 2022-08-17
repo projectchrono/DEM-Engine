@@ -70,6 +70,8 @@ class DEMSolver {
     /// Set the initial time step size. If using constant step size, then this will be used throughout; otherwise, the
     /// actual step size depends on the variable step strategy.
     void SetInitTimeStep(double ts_size) { m_ts_size = ts_size; }
+    /// Return the number of clumps that are currently in the simulation
+    size_t GetNumClumps() { return nOwnerClumps; }
     /// Get the current time step size in simulation
     double GetTimeStepSize();
     /// Getthe current expand factor in simulation
@@ -704,9 +706,12 @@ class DEMSolver {
     /// knowledge on how to jitify the kernels
     void generateEntityResources();
     /// Pre-process some user inputs regarding the (sizes, features of) simulation world
-    void generateWorldResources();
+    void generatePolicyResources();
+    /// Must be called after generateEntityResources and generatePolicyResources to wrap the info in the previous steps
+    /// up
+    void postResourceGen();
     /// Make sure the input represents something we can simulate, and if not, tell the reasons
-    void postJITResourceGenSanityCheck();
+    void postResourceGenChecksAndTabKeeping();
     /// Flatten some input clump information, to figure out the size of the input, and their associated family numbers
     /// (to make jitifying family policies easier)
     void preprocessClumps();
@@ -750,7 +755,7 @@ class DEMSolver {
     void figureOutFamilyMasks();
     /// Transfer newly loaded clumps/meshed objects to the GPU-side in mid-simulation and allocate GPU memory space for
     /// them
-    void updateClumpMeshArrays();
+    void updateClumpMeshArrays(size_t nOwners, size_t nClumps, size_t nSpheres, size_t nTriMesh, size_t nFacets);
     /// Add content to the flattened analytical component array.
     /// Note that analytical component is big different in that they each has a position in the jitified analytical
     /// templates, insteads of like a clump, has an extra ComponentOffset array points it to the right jitified template

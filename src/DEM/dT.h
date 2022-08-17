@@ -390,6 +390,37 @@ class DEMDynamicThread {
                           const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
                           const std::set<unsigned int>& no_output_families);
 
+    /// Add more clumps and/or meshes into the system, without re-initialization. It must be clump/mesh-addition only,
+    /// no other changes to the system.
+    void updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
+                               const std::vector<float3>& input_ext_obj_xyz,
+                               const std::vector<unsigned int>& input_ext_obj_family,
+                               const std::vector<float3>& input_mesh_obj_xyz,
+                               const std::vector<float4>& input_mesh_obj_rot,
+                               const std::vector<unsigned int>& input_mesh_obj_family,
+                               const std::vector<unsigned int>& mesh_facet_owner,
+                               const std::vector<materialsOffset_t>& mesh_facet_materials,
+                               const std::vector<DEMTriangle>& mesh_facets,
+                               const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
+                               const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
+                               const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
+                               const std::vector<float>& clumps_mass_types,
+                               const std::vector<float3>& clumps_moi_types,
+                               const std::vector<std::vector<float>>& clumps_sp_radii_types,
+                               const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                               const std::vector<float>& ext_obj_mass_types,
+                               const std::vector<float3>& ext_obj_moi_types,
+                               const std::vector<float>& mesh_obj_mass_types,
+                               const std::vector<float3>& mesh_obj_moi_types,
+                               const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
+                               const std::set<unsigned int>& no_output_families,
+                               std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs,
+                               size_t nExistingOwners,
+                               size_t nExistingClumps,
+                               size_t nExistingSpheres,
+                               size_t nExistingTriMesh,
+                               size_t nExistingFacets);
+
     /// Put sim data array pointers in place
     void packDataPointers();
     void packTransferPointers(DEMKinematicThread* kT);

@@ -22,14 +22,7 @@ inline bool is_DEM_material_same(const std::shared_ptr<DEMMaterial>& a, const st
 inline unsigned int stash_material_in_templates(std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
                                                 const std::shared_ptr<DEMMaterial>& this_material);
 
-void DEMSolver::generateWorldResources() {
-    // Figure out the parameters related to the simulation `world', if need to
-    if (!explicit_nv_override) {
-        figureOutNV();
-    }
-    figureOutOrigin();
-    addWorldBoundingBox();
-
+void DEMSolver::generatePolicyResources() {
     // Process the loaded materials. The pre-process of external objects and clumps could add more materials, so this
     // call need to go after those pre-process ones.
     figureOutMaterialProxies();
@@ -39,13 +32,6 @@ void DEMSolver::generateWorldResources() {
 
     // Decide bin size (for contact detection)
     decideBinSize();
-
-    // If these `computed' numbers are larger than types like materialsOffset_t can hold, then we should error out and
-    // let the user re-compile (or, should we somehow change the header automatically?)
-    postJITResourceGenSanityCheck();
-
-    // Notify the user how jitification goes
-    reportInitStats();
 }
 
 void DEMSolver::generateEntityResources() {
@@ -87,6 +73,14 @@ void DEMSolver::generateEntityResources() {
     nDistinctSphereRadii_computed = m_template_sp_radii_types.size();
     nDistinctSphereRelativePositions_computed = m_clumps_sp_location_types.size();
     */
+
+    // Figure out the parameters related to the simulation `world', if need to
+    if (!explicit_nv_override) {
+        figureOutNV();
+    }
+    figureOutOrigin();
+    addWorldBoundingBox();
+
     // Flatten cached clump templates (from ClumpTemplate structs to float arrays), make ready for transferring to kTdT
     preprocessClumpTemplates();
 
@@ -98,9 +92,18 @@ void DEMSolver::generateEntityResources() {
 
     // Count how many triangle tempaltes are there and flatten them
     preprocessTriangleObjs();
+}
 
+void DEMSolver::postResourceGen() {
     // Compute stats
     updateTotalEntityNum();
+
+    // If these `computed' numbers are larger than types like materialsOffset_t can hold, then we should error out and
+    // let the user re-compile (or, should we somehow change the header automatically?)
+    postResourceGenChecksAndTabKeeping();
+
+    // Notify the user how jitification goes
+    reportInitStats();
 }
 
 void DEMSolver::updateTotalEntityNum() {
@@ -114,7 +117,7 @@ void DEMSolver::updateTotalEntityNum() {
     nOwnerBodies = nExtObj + nOwnerClumps + nTriEntities;
 }
 
-void DEMSolver::postJITResourceGenSanityCheck() {
+void DEMSolver::postResourceGenChecksAndTabKeeping() {
     // There is this very cumbersome check if the user wish to jitify clump templates
     if (jitify_clump_templates) {
         // Can we jitify all clump templates?
@@ -172,6 +175,13 @@ void DEMSolver::postJITResourceGenSanityCheck() {
             "large amount.\nIf just-in-time compilation fails or kernels run slowly, this could be a cause.",
             nAnalGM);
     }
+
+    // Keep tab of some quatities... It has to be done this late, because initialization may add analytical objects to
+    // the system.
+    nLastTimeClumpTemplateLoad = nClumpTemplateLoad;
+    nLastTimeExtObjLoad = nExtObjLoad;
+    nLastTimeBatchClumpsLoad = nBatchClumpsLoad;
+    nLastTimeTriObjLoad = nTriObjLoad;
 
     // Debug outputs
     SGPS_DEM_DEBUG_EXEC(printf("These owners are tracked: ");
@@ -484,15 +494,16 @@ void DEMSolver::figureOutFamilyMasks() {
         unique_clump_families.push_back(a_pair.ID2);
     }
 
+    // Note: default family number should always be there. Sometimes if we have no family at all, at initialization
+    // (especially when you update/add clumps to simulation), family mapping will give a _Map_ out of range problem. So,
+    // let's just add one.
+    InsertFamily(DEM_DEFAULT_CLUMP_FAMILY_NUM);
+
     // Combine all unique user family numbers together
     unique_clump_families.insert(unique_clump_families.end(), unique_user_families.begin(), unique_user_families.end());
     std::vector<unsigned int> unique_families_this_time = hostUniqueVector<unsigned int>(unique_clump_families);
     unique_user_families.assign(unique_families_this_time.begin(), unique_families_this_time.end());
     unsigned int max_family_num = *(std::max_element(unique_user_families.begin(), unique_user_families.end()));
-
-    SGPS_DEM_DEBUG_EXEC(printf("Unique user families:\n"); for (unsigned int i = 0; i < unique_user_families.size();
-                                                                i++) printf("%u, ", unique_user_families.at(i));
-                        printf("\n"););
 
     nDistinctFamilies = unique_user_families.size();
     if (nDistinctFamilies > std::numeric_limits<family_t>::max()) {
@@ -501,7 +512,9 @@ void DEMSolver::figureOutFamilyMasks() {
             "families are indeed needed, please redefine family_t.",
             nDistinctFamilies, std::numeric_limits<family_t>::max());
     }
-    // displayArray<unsigned int>(unique_user_families.data(), unique_user_families.size());
+    SGPS_DEM_DEBUG_EXEC(printf("Unique user families:\n"); for (unsigned int i = 0; i < unique_user_families.size();
+                                                                i++) printf("%u, ", unique_user_families.at(i));
+                        printf("\n"););
 
     // Build the user--internal family number map (user can define family number however they want, but our
     // implementation-level numbers always start at 0)
@@ -716,8 +729,46 @@ void DEMSolver::initializeGPUArrays() {
 /// When more clumps/meshed objects got loaded, this method should be called to transfer them to the GPU-side in
 /// mid-simulation. This method cannot handle the addition of extra templates or analytical entities, which require
 /// re-compilation.
-void DEMSolver::updateClumpMeshArrays() {
-    // dT->updateClumpMeshArrays
+void DEMSolver::updateClumpMeshArrays(size_t nOwners,
+                                      size_t nClumps,
+                                      size_t nSpheres,
+                                      size_t nTriMesh,
+                                      size_t nFacets) {
+    dT->updateClumpMeshArrays(
+        // Clump batchs' initial stats
+        cached_input_clump_batches,
+        // Analytical objects' initial stats
+        m_input_ext_obj_xyz, m_input_ext_obj_family,
+        // Meshed objects' initial stats
+        m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facet_materials,
+        m_mesh_facets,
+        // Family number mapping
+        m_family_user_impl_map, m_family_impl_user_map,
+        // Clump template info (mass, sphere components, materials etc.)
+        m_template_sp_mat_ids, m_template_clump_mass, m_template_clump_moi, m_template_sp_radii, m_template_sp_relPos,
+        // Analytical obj `template' properties
+        m_ext_obj_mass, m_ext_obj_moi,
+        // Meshed obj `template' properties
+        m_mesh_obj_mass, m_mesh_obj_moi,
+        // Universal template info
+        m_loaded_materials,
+        // I/O and misc.
+        m_no_output_families, m_tracked_objs,
+        // Number of entities, old
+        nOwners, nClumps, nSpheres, nTriMesh, nFacets);
+    kT->updateClumpMeshArrays(
+        // Clump batchs' initial stats
+        cached_input_clump_batches,
+        // Analytical objects' initial stats
+        m_input_ext_obj_family,
+        // Meshed objects' initial stats
+        m_input_mesh_obj_family,
+        // Family number mapping
+        m_family_user_impl_map, m_family_impl_user_map,
+        // Templates and misc.
+        m_template_clump_mass, m_template_sp_radii, m_template_sp_relPos,
+        // Number of entities, old
+        nOwners, nClumps, nSpheres, nTriMesh, nFacets);
 }
 
 void DEMSolver::packDataPointers() {
@@ -730,12 +781,6 @@ void DEMSolver::packDataPointers() {
 }
 
 void DEMSolver::validateUserInputs() {
-    // Keep tab of some quatities...
-    nLastTimeClumpTemplateLoad = nClumpTemplateLoad;
-    nLastTimeExtObjLoad = nExtObjLoad;
-    nLastTimeBatchClumpsLoad = nBatchClumpsLoad;
-    nLastTimeTriObjLoad = nTriObjLoad;
-
     // Then some checks...
     if (m_templates.size() == 0) {
         SGPS_DEM_ERROR("Before initializing the system, at least one clump type should be defined via LoadClumpType.");

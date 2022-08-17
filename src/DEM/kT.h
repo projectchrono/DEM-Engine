@@ -276,6 +276,23 @@ class DEMKinematicThread {
                               const std::vector<std::vector<float3>>& clumps_sp_location_types,
                               size_t nExistOwners,
                               size_t nExistSpheres);
+
+    /// Add more clumps and/or meshes into the system, without re-initialization. It must be clump/mesh-addition only,
+    /// no other changes to the system.
+    void updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
+                               const std::vector<unsigned int>& input_ext_obj_family,
+                               const std::vector<unsigned int>& input_mesh_obj_family,
+                               const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
+                               const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
+                               const std::vector<float>& clumps_mass_types,
+                               const std::vector<std::vector<float>>& clumps_sp_radii_types,
+                               const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                               size_t nExistingOwners,
+                               size_t nExistingClumps,
+                               size_t nExistingSpheres,
+                               size_t nExistingTriMesh,
+                               size_t nExistingFacets);
+
     /// Set SimParams items
     void setSimParams(unsigned char nvXp2,
                       unsigned char nvYp2,
