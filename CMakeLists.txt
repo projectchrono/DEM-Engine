@@ -56,7 +56,7 @@ if (NOT ChPF_FOUND)
 	FetchContent_Declare(
 		ChPF
 		GIT_REPOSITORY	https://gitlab.com/uwsbel/chpf.git
-		GIT_TAG			859b62cc50a429c5b2db17f75bb8cdbc6d683cc5
+		GIT_TAG			0699f01e720cecf58719a1651ab797c6a62a1897
 	)
 	FetchContent_MakeAvailable(ChPF)
 
