@@ -61,6 +61,9 @@ class DEMDynamicThread {
     // The number of for iterations dT does for a specific user "run simulation" call
     double cycleDuration;
 
+    // Bool for indicating kT is actively running job, not waiting for start signal
+    bool workerRunning = false;
+
     // Buffer arrays for storing info from the dT side.
     // kT modifies these arrays; dT uses them only.
 
@@ -421,6 +424,9 @@ class DEMDynamicThread {
                                size_t nExistingTriMesh,
                                size_t nExistingFacets);
 
+    /// Change radii and relPos info of these owners (if these owners are clumps)
+    void changeOwnerSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors);
+
     /// Put sim data array pointers in place
     void packDataPointers();
     void packTransferPointers(DEMKinematicThread* kT);
@@ -481,6 +487,7 @@ class DEMDynamicThread {
     std::shared_ptr<jitify::Program> integrator_kernels;
     std::shared_ptr<jitify::Program> quarry_stats_kernels;
     std::shared_ptr<jitify::Program> mod_kernels;
+    std::shared_ptr<jitify::Program> misc_kernels;
 };  // dT ends
 
 }  // namespace sgps

@@ -37,6 +37,7 @@ class DEMTracker;
 //            6. Select whether to acquire mat, acquire what history, and whether
 //               to use a/several custom float arrays to store custom config data
 //            7. This custom array can be defined at clump template/anal obj/mesh obj generation
+//            8. Make UpdateClumps also update tracked clump batches
 //////////////////////////////////////////////////////////////
 
 class DEMSolver {
@@ -264,6 +265,10 @@ class DEMSolver {
     void SetFamilyPrescribedPosition(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
     ///
     void SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula);
+
+    /// Change the sizes of the clumps by a factor. This method directly works on the clump components spheres,
+    /// therefore requiring sphere components to be store in flattened array (default behavior), not jitified templates.
+    void ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors);
 
     /// Define a custom contact force model by a string
     void DefineContactForceModel(const std::string& model);
@@ -807,6 +812,13 @@ class DEMTracker {
     /// Add an extra force to the tracked body, for the next time step. Note if the user intends to add a persistent
     /// external force, then using family prescription is the better method.
     void AddForce(float3 force, size_t offset = 0);
+    /// Change the size of clump entities
+    void ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {
+        std::vector<bodyID_t> offsetted_IDs(IDs);
+        size_t offset = obj->ownerID;
+        std::for_each(offsetted_IDs.begin(), offsetted_IDs.end(), [offset](bodyID_t& x) { x += offset; });
+        sys->ChangeClumpSizes(offsetted_IDs, factors);
+    }
 };
 
 }  // namespace sgps

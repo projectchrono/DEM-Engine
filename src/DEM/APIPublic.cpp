@@ -509,7 +509,6 @@ void DEMSolver::Initialize() {
 
     // Transfer user-specified solver preference/instructions to workers
     transferSolverParams();
-
     // Transfer some simulation params to implementation level
     transferSimParams();
 
@@ -612,7 +611,7 @@ void DEMSolver::ReleaseFlattenedArrays() {
 void DEMSolver::ResetWorkerThreads() {
     // It's possible that kT is already waiting for a user call, when ResetWorkerThreads is called. In this case, we do
     // nothing.
-    if (dTkT_InteractionManager->kinematicStarted == false) {
+    if (kT->workerRunning == false) {
         return;
     }
 
@@ -636,6 +635,7 @@ void DEMSolver::ResetWorkerThreads() {
 /// and re-compilation will happen.
 void DEMSolver::UpdateSimParams() {
     transferSolverParams();
+    transferSimParams();
     // TODO: inspect what sim params should be transferred and what should not
     // transferSimParams();
 }
@@ -681,6 +681,27 @@ void DEMSolver::UpdateClumps() {
     updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old);
     packDataPointers();
     ReleaseFlattenedArrays();
+}
+
+void DEMSolver::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {
+    if (!sys_initialized) {
+        SGPS_DEM_ERROR(
+            "ChangeClumpSizes operates on device-side arrays directly, so it requires the system to be initialized "
+            "first.");
+    }
+    if (jitify_clump_templates || jitify_mass_moi) {
+        SGPS_DEM_ERROR(
+            "ChangeClumpSizes only works when the clump components are flattened (not jitified).\nConsider calling "
+            "SetJitifyClumpTemplates(false) and SetJitifyMassProperties(false).");
+    }
+
+    // This method requires kT and dT are sync-ed
+    ResetWorkerThreads();
+
+    std::thread dThread = std::move(std::thread([this, IDs, factors]() { this->dT->changeOwnerSizes(IDs, factors); }));
+    std::thread kThread = std::move(std::thread([this, IDs, factors]() { this->kT->changeOwnerSizes(IDs, factors); }));
+    dThread.join();
+    kThread.join();
 }
 
 /// Removes all entities associated with a family from the arrays (to save memory space). This method should only be

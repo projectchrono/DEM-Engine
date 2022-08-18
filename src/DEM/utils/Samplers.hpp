@@ -221,6 +221,12 @@ inline std::vector<float3> DEMBoxGridSampler(float3 BoxCenter,
     return sampler.SampleBox(BoxCenter, HalfDims);
 }
 
+/// A wrapper for a HCP sampler of a box domain
+inline std::vector<float3> DEMBoxHCPSampler(float3 BoxCenter, float3 HalfDims, float GridSize) {
+    HCPSampler sampler(GridSize);
+    return sampler.SampleBox(BoxCenter, HalfDims);
+}
+
 /// A light-weight sampler that generates a shell made of particles that resembles a cylindrical surface
 inline std::vector<float3> DEMCylSurfSampler(float3 CylCenter,
                                              float3 CylAxis,

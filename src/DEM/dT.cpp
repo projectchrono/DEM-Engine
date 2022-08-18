@@ -156,6 +156,56 @@ float DEMDynamicThread::getKineticEnergy() {
     return *KE;
 }
 
+void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {
+    // Set the gpu for this thread
+    // cudaSetDevice(streamInfo.device);
+    // cudaStream_t new_stream;
+    // cudaStreamCreate(&new_stream);
+
+    // First get IDs and factors to device side
+    size_t IDSize = IDs.size() * sizeof(bodyID_t);
+    bodyID_t* dIDs = (bodyID_t*)stateOfSolver_resources.allocateTempVector(1, IDSize);
+    // for (size_t i=0; i<IDs.size(); i++) {
+    //     dIDs[i] = IDs.at(i);
+    // }
+    // GPU_CALL(cudaMemcpy(dIDs, IDs.data(), IDSize, cudaMemcpyHostToDevice));
+    size_t factorSize = factors.size() * sizeof(float);
+    float* dFactors = (float*)stateOfSolver_resources.allocateTempVector(2, factorSize);
+    // for (size_t i=0; i<factors.size(); i++) {
+    //     dFactors[i] = factors.at(i);
+    // }
+    // GPU_CALL(cudaMemcpy(dFactors, factors.data(), factorSize, cudaMemcpyHostToDevice));
+
+    // size_t idBoolSize = (size_t)simParams->nOwnerBodies * sizeof(notStupidBool_t);
+    // size_t ownerFactorSize = (size_t)simParams->nOwnerBodies * sizeof(float);
+    // // Bool table for whether this owner should change
+    // notStupidBool_t* idBool = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(3, idBoolSize);
+    // for (size_t i=0; i<simParams->nOwnerBodies; i++) {
+    //     idBool[i] = 0;
+    // }
+    // GPU_CALL(cudaMemset(idBool, 0, idBoolSize));
+    // float* ownerFactors = (float*)stateOfSolver_resources.allocateTempVector(4, ownerFactorSize);
+    // size_t blocks_needed_for_marking = (IDs.size() + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) /
+    // SGPS_DEM_MAX_THREADS_PER_BLOCK;
+
+    // // Mark on the bool array those owners that need a change
+    // misc_kernels->kernel("markOwnerToChange")
+    //     .instantiate()
+    //     .configure(dim3(blocks_needed_for_marking), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0, new_stream)
+    //     .launch(idBool, ownerFactors, dIDs, dFactors, IDs.size());
+    // GPU_CALL(cudaStreamSynchronize(new_stream));
+
+    // // Change the size of the sphere components in question
+    // size_t blocks_needed_for_changing = (simParams->nSpheresGM + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) /
+    // SGPS_DEM_MAX_THREADS_PER_BLOCK; misc_kernels->kernel("dTModifyComponents")
+    //     .instantiate()
+    //     .configure(dim3(blocks_needed_for_changing), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0, new_stream)
+    //     .launch(granData, idBool, ownerFactors, simParams->nSpheresGM);
+    // GPU_CALL(cudaStreamSynchronize(new_stream));
+
+    // cudaStreamDestroy(new_stream);
+}
+
 void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
                                              size_t nOwnerClumps,
                                              unsigned int nExtObj,
@@ -1128,6 +1178,10 @@ void DEMDynamicThread::workerThread() {
             while (!pSchedSupport->dynamicStarted) {
                 pSchedSupport->cv_DynamicStartLock.wait(lock);
             }
+            // Ensure that we wait for start signal on next iteration
+            pSchedSupport->dynamicStarted = false;
+            // Now dT is running
+            workerRunning = true;
             // The following is executed when kT and dT are being destroyed
             if (pSchedSupport->dynamicShouldJoin) {
                 break;
@@ -1250,8 +1304,8 @@ void DEMDynamicThread::workerThread() {
         pPagerToMain->userCallDone = true;
         pPagerToMain->cv_mainCanProceed.notify_all();
 
-        // Ensure that we wait for start signal on next iteration
-        pSchedSupport->dynamicStarted = false;
+        // Now dT finished running
+        workerRunning = false;
     }
 }
 
@@ -1324,6 +1378,12 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     {
         quarry_stats_kernels = std::make_shared<jitify::Program>(
             std::move(JitHelper::buildProgram("DEMQueryKernels", JitHelper::KERNEL_DIR / "DEMQueryKernels.cu", Subs,
+                                              {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+    }
+    // Then misc kernels
+    {
+        misc_kernels = std::make_shared<jitify::Program>(
+            std::move(JitHelper::buildProgram("DEMMiscKernels", JitHelper::KERNEL_DIR / "DEMMiscKernels.cu", Subs,
                                               {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
 }

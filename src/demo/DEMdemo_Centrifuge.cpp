@@ -47,7 +47,7 @@ int main() {
     ellipsoid.materials = std::vector<std::shared_ptr<DEMMaterial>>(ellipsoid.nComp, mat_type_sand);
 
     // Bin size needs to make sure no too-many-sphere-per-bin situation happens
-    DEM_sim.SetInitBinSize(scaling);
+    DEM_sim.SetInitBinSize(2 * scaling);
 
     // Create some random clump templates for the filling materials
     // An array to store these generated clump templates
@@ -143,7 +143,7 @@ int main() {
     out_dir += "/DEMdemo_Centrifuge";
     create_directory(out_dir);
 
-    float time_end = 30.0;
+    float time_end = 10.0;
     unsigned int fps = 20;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 

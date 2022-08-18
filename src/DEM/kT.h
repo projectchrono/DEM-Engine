@@ -65,6 +65,9 @@ class DEMKinematicThread {
     // kT should break out of its inner loop and return to a state where it awaits a `start' call at the outer loop
     bool kTShouldReset = false;
 
+    // Bool for indicating kT is actively running job, not waiting for start signal
+    bool workerRunning = false;
+
     // Pointers to simulation params-related arrays
     DEMSimParams* simParams;
 
@@ -327,6 +330,9 @@ class DEMKinematicThread {
     /// Change all entities with (user-level) family number ID_from to have a new number ID_to
     void changeFamily(unsigned int ID_from, unsigned int ID_to);
 
+    /// Change radii and relPos info of these owners (if these owners are clumps)
+    void changeOwnerSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors);
+
     // Jitify kT kernels (at initialization) based on existing knowledge of this run
     void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs);
 
@@ -343,6 +349,7 @@ class DEMKinematicThread {
     std::shared_ptr<jitify::Program> bin_occupation_kernels;
     std::shared_ptr<jitify::Program> contact_detection_kernels;
     std::shared_ptr<jitify::Program> history_kernels;
+    std::shared_ptr<jitify::Program> misc_kernels;
 
 };  // kT ends
 
