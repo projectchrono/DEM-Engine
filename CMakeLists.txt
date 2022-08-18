@@ -223,7 +223,7 @@ install(
 # ---------------------------------------------------------------------------- #
 # set(DataDir "data")
 file(COPY ${CMAKE_CURRENT_LIST_DIR}/data/ DESTINATION ${CMAKE_BINARY_DIR}/data/)
-install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/data/ DESTINATION ${CMAKE_INSTALL_LIBDIR}/data/)
+install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/data/ DESTINATION ${CMAKE_INSTALL_DATADIR}/data/)
 
 # ---------------------------------------------------------------------------- #
 # Build embedded demos
