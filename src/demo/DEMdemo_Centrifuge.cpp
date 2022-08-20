@@ -181,7 +181,6 @@ int main() {
     std::cout << (time_sec.count()) / time_end * 10.0 << " seconds (wall time) to finish 10 seconds' simulation"
               << std::endl;
     DEM_sim.ShowThreadCollaborationStats();
-    DEM_sim.ResetWorkerThreads();
     DEM_sim.ClearThreadCollaborationStats();
 
     DEM_sim.ShowTimingStats();

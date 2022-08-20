@@ -316,11 +316,6 @@ class DEMSolver {
     /// Transfer newly loaded clumps to the GPU-side in mid-simulation
     void UpdateClumps();
 
-    /// Reset kT and dT back to a status like when the simulation system is constructed. In general the user does not
-    /// need to call it, unless they want to run another test without re-constructing the entire DEM simulation system.
-    /// Also note this call does not reset the collaboration log between kT and dT.
-    void ResetWorkerThreads();
-
     /// Show the collaboration stats between dT and kT. This is more useful for tweaking the number of time steps that
     /// dT should be allowed to be in advance of kT.
     void ShowThreadCollaborationStats();
@@ -758,6 +753,11 @@ class DEMSolver {
     inline void reportInitStats() const;
     /// Based on user input, prepare family_mask_matrix (family contact map matrix)
     void figureOutFamilyMasks();
+    /// Reset kT and dT back to a status like when the simulation system is constructed. I decided to make this a
+    /// private method because it can be dangerous, as if it is called when kT is waiting at the outer loop, it will
+    /// stall the siumulation. So perhaps the user should not call it without knowing what they are doing. Also note
+    /// this call does not reset the collaboration log between kT and dT.
+    void resetWorkerThreads();
     /// Transfer newly loaded clumps/meshed objects to the GPU-side in mid-simulation and allocate GPU memory space for
     /// them
     void updateClumpMeshArrays(size_t nOwners, size_t nClumps, size_t nSpheres, size_t nTriMesh, size_t nFacets);

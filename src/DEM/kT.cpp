@@ -197,43 +197,35 @@ void DEMKinematicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, cons
     // First get IDs and factors to device side
     size_t IDSize = IDs.size() * sizeof(bodyID_t);
     bodyID_t* dIDs = (bodyID_t*)stateOfSolver_resources.allocateTempVector(1, IDSize);
-    // for (size_t i=0; i<IDs.size(); i++) {
-    //     dIDs[i] = IDs.at(i);
-    // }
-    // GPU_CALL(cudaMemcpy(dIDs, IDs.data(), IDSize, cudaMemcpyHostToDevice));
+    GPU_CALL(cudaMemcpy(dIDs, IDs.data(), IDSize, cudaMemcpyHostToDevice));
     size_t factorSize = factors.size() * sizeof(float);
     float* dFactors = (float*)stateOfSolver_resources.allocateTempVector(2, factorSize);
-    // for (size_t i=0; i<factors.size(); i++) {
-    //     dFactors[i] = factors.at(i);
-    // }
-    // GPU_CALL(cudaMemcpy(dFactors, factors.data(), factorSize, cudaMemcpyHostToDevice));
+    GPU_CALL(cudaMemcpy(dFactors, factors.data(), factorSize, cudaMemcpyHostToDevice));
 
-    // size_t idBoolSize = (size_t)simParams->nOwnerBodies * sizeof(notStupidBool_t);
-    // size_t ownerFactorSize = (size_t)simParams->nOwnerBodies * sizeof(float);
-    // // Bool table for whether this owner should change
-    // notStupidBool_t* idBool = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(3, idBoolSize);
-    // for (size_t i=0; i<simParams->nOwnerBodies; i++) {
-    //     idBool[i] = 0;
-    // }
-    // GPU_CALL(cudaMemset(idBool, 0, idBoolSize));
-    // float* ownerFactors = (float*)stateOfSolver_resources.allocateTempVector(4, ownerFactorSize);
-    // size_t blocks_needed_for_marking = (IDs.size() + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) /
-    // SGPS_DEM_MAX_THREADS_PER_BLOCK;
+    size_t idBoolSize = (size_t)simParams->nOwnerBodies * sizeof(notStupidBool_t);
+    size_t ownerFactorSize = (size_t)simParams->nOwnerBodies * sizeof(float);
+    // Bool table for whether this owner should change
+    notStupidBool_t* idBool = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(3, idBoolSize);
+    GPU_CALL(cudaMemset(idBool, 0, idBoolSize));
+    float* ownerFactors = (float*)stateOfSolver_resources.allocateTempVector(4, ownerFactorSize);
+    size_t blocks_needed_for_marking =
+        (IDs.size() + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) / SGPS_DEM_MAX_THREADS_PER_BLOCK;
 
-    // // Mark on the bool array those owners that need a change
-    // misc_kernels->kernel("markOwnerToChange")
-    //     .instantiate()
-    //     .configure(dim3(blocks_needed_for_marking), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0, new_stream)
-    //     .launch(idBool, ownerFactors, dIDs, dFactors, IDs.size());
-    // GPU_CALL(cudaStreamSynchronize(new_stream));
+    // Mark on the bool array those owners that need a change
+    misc_kernels->kernel("markOwnerToChange")
+        .instantiate()
+        .configure(dim3(blocks_needed_for_marking), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+        .launch(idBool, ownerFactors, dIDs, dFactors, IDs.size());
+    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-    // // Change the size of the sphere components in question
-    // size_t blocks_needed_for_changing = (simParams->nSpheresGM + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) /
-    // SGPS_DEM_MAX_THREADS_PER_BLOCK; misc_kernels->kernel("kTModifyComponents")
-    //     .instantiate()
-    //     .configure(dim3(blocks_needed_for_changing), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0, new_stream)
-    //     .launch(granData, idBool, ownerFactors, simParams->nSpheresGM);
-    // GPU_CALL(cudaStreamSynchronize(new_stream));
+    // Change the size of the sphere components in question
+    size_t blocks_needed_for_changing =
+        (simParams->nSpheresGM + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) / SGPS_DEM_MAX_THREADS_PER_BLOCK;
+    misc_kernels->kernel("kTModifyComponents")
+        .instantiate()
+        .configure(dim3(blocks_needed_for_changing), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+        .launch(granData, idBool, ownerFactors, simParams->nSpheresGM);
+    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     // cudaStreamDestroy(new_stream);
 }

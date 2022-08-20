@@ -130,7 +130,6 @@ int main() {
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
     std::cout << (time_sec.count()) / time_end << " seconds (wall time) to finish 1 seconds' simulation" << std::endl;
     DEM_sim.ShowThreadCollaborationStats();
-    DEM_sim.ResetWorkerThreads();
     DEM_sim.ClearThreadCollaborationStats();
 
     std::cout << "DEMdemo_RoverWheel exiting..." << std::endl;

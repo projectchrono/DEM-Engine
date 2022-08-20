@@ -608,8 +608,8 @@ void DEMSolver::ReleaseFlattenedArrays() {
     deallocate_array(m_Crr_proxy);
 }
 
-void DEMSolver::ResetWorkerThreads() {
-    // It's possible that kT is already waiting for a user call, when ResetWorkerThreads is called. In this case, we do
+void DEMSolver::resetWorkerThreads() {
+    // It's possible that kT is already waiting for a user call, when resetWorkerThreads is called. In this case, we do
     // nothing.
     if (kT->workerRunning == false) {
         return;
@@ -663,7 +663,7 @@ void DEMSolver::UpdateClumps() {
         "AddClumps, then call this method, so the clumps cached earlier are forgotten before this method takes place.");
 
     // This method requires kT and dT are sync-ed
-    ResetWorkerThreads();
+    // resetWorkerThreads();
 
     // Record the number of entities, before adding to the system
     size_t nOwners_old = nOwnerBodies;
@@ -696,7 +696,7 @@ void DEMSolver::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::ve
     }
 
     // This method requires kT and dT are sync-ed
-    ResetWorkerThreads();
+    // resetWorkerThreads();
 
     std::thread dThread = std::move(std::thread([this, IDs, factors]() { this->dT->changeOwnerSizes(IDs, factors); }));
     std::thread kThread = std::move(std::thread([this, IDs, factors]() { this->kT->changeOwnerSizes(IDs, factors); }));
@@ -738,8 +738,8 @@ void DEMSolver::DoDynamicsThenSync(double thisCallDuration) {
     DoDynamics(thisCallDuration);
 
     // dT is finished, but the user asks us to sync, so we have to make kT sync with dT. This can be done by calling
-    // ResetWorkerThreads.
-    ResetWorkerThreads();
+    // resetWorkerThreads.
+    resetWorkerThreads();
 }
 
 void DEMSolver::ShowThreadCollaborationStats() {

@@ -24,18 +24,18 @@ int main() {
     // auto projectile = DEM_sim.AddWavefrontMeshObject("./data/mesh/sphere.obj");
     // std::cout << "Total num of triangles: " << projectile->GetNumTriangles() << std::endl;
 
-    auto mat_type_ball = DEM_sim.LoadMaterialType(1e10, 0.3, 0.3);
-    auto mat_type_terrain = DEM_sim.LoadMaterialType(5e9, 0.3, 0.2);
+    auto mat_type_ball = DEM_sim.LoadMaterialType(1e5, 0.3, 0.3);
+    auto mat_type_terrain = DEM_sim.LoadMaterialType(1e5, 0.3, 0.2);
 
     float ball_rad = 0.2;
     auto template_ball =
         DEM_sim.LoadClumpSimpleSphere(ball_rad * ball_rad * ball_rad * 7e3 * 4 / 3 * 3.14, ball_rad, mat_type_ball);
 
-    float terrain_rad = 0.01;
+    float terrain_rad = 0.02;
     auto template_terrain = DEM_sim.LoadClumpSimpleSphere(
         terrain_rad * terrain_rad * terrain_rad * 2.6e3 * 4 / 3 * 3.14, terrain_rad, mat_type_terrain);
 
-    float step_size = 1e-5;
+    float step_size = 5e-6;
     double world_size = 1.5;
 
     float3 sample_center = make_float3(0, 0, -world_size / 4);
@@ -48,7 +48,7 @@ int main() {
     unsigned int nTerrainParticles = input_xyz.size();
 
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, world_size / std::pow(2, 16) / std::pow(2, 21));
-    DEM_sim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
+    DEM_sim.InstructBoxDomainBoundingBC("all", mat_type_terrain);
     DEM_sim.AddBCPlane(make_float3(0, 0, -world_size / 2), make_float3(0, 0, 1), mat_type_terrain);
     DEM_sim.SetCoordSysOrigin("center");
     DEM_sim.SetInitTimeStep(step_size);
@@ -58,21 +58,14 @@ int main() {
     // DEM_sim.SetExpandFactor(1e-3);
     DEM_sim.SetMaxVelocity(2.);
     DEM_sim.SetExpandSafetyParam(1.1);
-    DEM_sim.SetInitBinSize(6 * terrain_rad);
+    DEM_sim.SetInitBinSize(4 * terrain_rad);
     DEM_sim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/DEMdemo_BallDropPolydisperse";
+    out_dir += "/DEMdemo_PolydisperseGeneration";
     create_directory(out_dir);
 
-    float sim_end = 20.0;
-    unsigned int fps = 100;
-    float frame_time = 1.0 / fps;
-    unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
-
-    std::cout << "Output at " << fps << " FPS" << std::endl;
     unsigned int currframe = 0;
-    unsigned int curr_step = 0;
 
     for (float t = 0; t < 0.1; t += 0.05) {
         {
@@ -82,7 +75,7 @@ int main() {
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
             DEM_sim.WriteClumpFile(std::string(filename));
         }
-        DEM_sim.DoDynamics(0.05);
+        DEM_sim.DoDynamicsThenSync(0.05);
     }
 
     ///////////////////////////////////////////////////////////////
@@ -90,17 +83,24 @@ int main() {
     // the fly
     ///////////////////////////////////////////////////////////////
     std::vector<unsigned int> enlarge_ids;
-    std::vector<float> enlarge_ratio;
     // Pick around 1/3 particles to enlarge
     for (unsigned int i = 0; i < nTerrainParticles; i++) {
         if (i % 3 == 0) {
             enlarge_ids.push_back(i);
-            enlarge_ratio.push_back(1.00002);
         }
     }
 
+    step_size = 5e-7;
+    DEM_sim.SetInitTimeStep(step_size);
+    DEM_sim.UpdateSimParams();
+
+    float sim_end = 0.5;
+    unsigned int steps_togo = 1e5;
+    unsigned int out_steps = steps_togo * 10;
+    unsigned int curr_step = 0;
+
     float cur_terrain_rad = terrain_rad;
-    while (cur_terrain_rad < terrain_rad * 2) {
+    while (cur_terrain_rad < terrain_rad * 1.5) {
         if (curr_step % out_steps == 0) {
             std::cout << "Frame: " << currframe << std::endl;
             DEM_sim.ShowThreadCollaborationStats();
@@ -109,16 +109,28 @@ int main() {
             DEM_sim.WriteClumpFile(std::string(filename));
         }
 
+        std::cout << "Current particle size: " << cur_terrain_rad << std::endl;
+        double prev_rad = cur_terrain_rad;
+        cur_terrain_rad += terrain_rad / 100;
+        std::vector<float> enlarge_ratio(enlarge_ids.size(), (double)cur_terrain_rad / prev_rad);
+        terrain_tracker->ChangeClumpSizes(enlarge_ids, enlarge_ratio);
+
         // Must DoDynamicsThenSync (not DoDynamics), as adding entities to the simulation is only allowed at a sync-ed
         // point of time.
-        std::cout << "Current particle size: " << cur_terrain_rad << std::endl;
-        terrain_tracker->ChangeClumpSizes(enlarge_ids, enlarge_ratio);
-        DEM_sim.DoDynamicsThenSync(step_size);
-        cur_terrain_rad *= enlarge_ratio.at(0);
+        DEM_sim.DoDynamicsThenSync(step_size * steps_togo);
 
-        curr_step++;
+        curr_step += steps_togo;
     }
-    DEM_sim.DoDynamicsThenSync(0.1);
+
+    float step_time = 1e-2;
+    for (float t = 0; t < sim_end; t += step_time) {
+        std::cout << "Frame: " << currframe << std::endl;
+        DEM_sim.ShowThreadCollaborationStats();
+        char filename[200];
+        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
+        DEM_sim.WriteClumpFile(std::string(filename));
+        DEM_sim.DoDynamicsThenSync(step_time);
+    }
 
     // for (double t = 0; t < (double)sim_end; t += frame_time, currframe++) {
     //     std::cout << "Frame: " << currframe << std::endl;
@@ -132,7 +144,7 @@ int main() {
     //     //
     // }
 
-    std::cout << "DEMdemo_BallDropPolydisperse exiting..." << std::endl;
+    std::cout << "DEMdemo_PolydisperseGeneration exiting..." << std::endl;
     // TODO: add end-game report APIs
     return 0;
 }

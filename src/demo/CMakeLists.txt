@@ -21,7 +21,7 @@ SET(DEMOS
 		DEMdemo_Centrifuge
 		DEMdemo_GameOfLife
 		DEMdemo_BallDrop
-		DEMdemo_BallDropPolydisperse
+		DEMdemo_PolydisperseGeneration
 		DEMdemo_RoverWheel
 		sphdemo
 		hello_world
