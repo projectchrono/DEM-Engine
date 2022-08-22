@@ -287,13 +287,16 @@ class DEMSolver {
     /// Remove host-side cached vectors (so you can re-define them, and then re-initialize system)
     void ClearCache();
 
-    /// Return total kinetic energy of all clumps
+    /// Return total kinetic energy of all entities
     float GetTotalKineticEnergy() const;
     /// Return the kinetic energy of all clumps in a set of families
     // TODO: float GetTotalKineticEnergy(std::vector<unsigned int> families) const;
 
     /// Write the current status of clumps to a file
     void WriteClumpFile(const std::string& outfilename) const;
+    /// Write the current status of `clumps' to a file, but not as clumps, instead, as each individual sphere. This may
+    /// make small-scale rendering easier.
+    void WriteSphereFile(const std::string& outfilename) const;
 
     /// Intialize the simulation system
     void Initialize();
@@ -387,7 +390,8 @@ class DEMSolver {
     bool use_user_defined_expand_factor = false;
 
     // I/O related flags
-    DEM_OUTPUT_MODE m_clump_out_mode = DEM_OUTPUT_MODE::SPHERE;
+    DEM_OUTPUT_MODE m_clump_out_mode =
+        DEM_OUTPUT_MODE::SPHERE;  ///< Not used (output style determined by method call style)
     DEM_OUTPUT_FORMAT m_out_format = DEM_OUTPUT_FORMAT::CHPF;
     unsigned int m_out_content = DEM_OUTPUT_CONTENT::QUAT | DEM_OUTPUT_CONTENT::ABSV;
 
@@ -604,6 +608,8 @@ class DEMSolver {
     // Host-side mapping array that maps like this: map.at(impl-level family number) = (corresponding user family
     // number)
     std::unordered_map<family_t, unsigned int> m_family_impl_user_map;
+    // Map between clump templates and the user-assigned name. It is needed when the clump is outputted to files.
+    std::unordered_map<unsigned int, std::string> m_template_number_name_map;
 
     // Unlike clumps, external objects do not have _types (each is its own type)
     std::vector<float3> m_input_ext_obj_xyz;

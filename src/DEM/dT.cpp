@@ -139,16 +139,16 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
 }
 
 float DEMDynamicThread::getKineticEnergy() {
-    // We can use temp vectors as we please. Allocate num_of_clumps doubles.
+    // We can use temp vectors as we please
     size_t quarryTempSize = (size_t)simParams->nOwnerBodies * sizeof(double);
     double* KEArr = (double*)stateOfSolver_resources.allocateTempVector(1, quarryTempSize);
     size_t returnSize = sizeof(double);
     double* KE = (double*)stateOfSolver_resources.allocateTempVector(2, returnSize);
     size_t blocks_needed_for_KE =
-        (simParams->nOwnerBodies + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
+        (simParams->nOwnerBodies + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) / SGPS_DEM_MAX_THREADS_PER_BLOCK;
     quarry_stats_kernels->kernel("computeKE")
         .instantiate()
-        .configure(dim3(blocks_needed_for_KE), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+        .configure(dim3(blocks_needed_for_KE), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
         .launch(granData, simParams->nOwnerBodies, KEArr);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     // displayArray<double>(KEArr, simParams->nOwnerBodies);
@@ -269,9 +269,11 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
         SGPS_DEM_TRACKED_RESIZE(relPosSphereZ, nSpheresGM, "relPosSphereZ", 0);
     }
 
+    // Resize to number of owners
+    SGPS_DEM_TRACKED_RESIZE(ownerTypes, nOwnerBodies, "ownerTypes", 0);
+    SGPS_DEM_TRACKED_RESIZE(inertiaPropOffsets, nOwnerBodies, "inertiaPropOffsets", 0);
     // If we jitify mass properties, then
     if (solverFlags.useMassJitify) {
-        SGPS_DEM_TRACKED_RESIZE(inertiaPropOffsets, nOwnerBodies, "inertiaPropOffsets", 0);
         SGPS_DEM_TRACKED_RESIZE(massOwnerBody, nMassProperties, "massOwnerBody", 0);
         SGPS_DEM_TRACKED_RESIZE(mmiXX, nMassProperties, "mmiXX", 0);
         SGPS_DEM_TRACKED_RESIZE(mmiYY, nMassProperties, "mmiYY", 0);
@@ -325,6 +327,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
 
 void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
                                         const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
+                                        const std::unordered_map<unsigned int, std::string>& template_number_name_map,
                                         const std::vector<float>& clumps_mass_types,
                                         const std::vector<float3>& clumps_moi_types,
                                         const std::vector<float>& ext_obj_mass_types,
@@ -377,6 +380,8 @@ void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, f
     // dT will need this family number map, store it
     familyUserImplMap = family_user_impl_map;
     familyImplUserMap = family_impl_user_map;
+    // And store clump naming map
+    templateNumNameMap = template_number_name_map;
 
     // Take notes of the families that should not be outputted
     {
@@ -487,10 +492,12 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                               simParams->nOwnerBodies);
 
         for (size_t i = 0; i < input_clump_types.size(); i++) {
+            // If got here, this is a clump
+            ownerTypes.at(nExistOwners + i) = DEM_OWNER_T_CLUMP;
+
             auto type_of_this_clump = input_clump_types.at(i);
-            if (solverFlags.useMassJitify) {
-                inertiaPropOffsets.at(nExistOwners + i) = type_of_this_clump;
-            } else {
+            inertiaPropOffsets.at(nExistOwners + i) = type_of_this_clump;
+            if (!solverFlags.useMassJitify) {
                 massOwnerBody.at(nExistOwners + i) = clumps_mass_types.at(type_of_this_clump);
                 const float3 this_moi = clumps_moi_types.at(type_of_this_clump);
                 mmiXX.at(nExistOwners + i) = this_moi.x;
@@ -566,11 +573,12 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
     size_t offset_for_ext_obj = nExistOwners + input_clump_types.size();
     unsigned int offset_for_ext_obj_mass_template = simParams->nDistinctClumpBodyTopologies;
     for (size_t i = 0; i < input_ext_obj_xyz.size(); i++) {
+        // If got here, it is an analytical obj
+        ownerTypes.at(i + offset_for_ext_obj) = DEM_OWNER_T_ANALYTICAL;
         // Analytical object mass properties are useful in force collection, but not useful in force calculation:
         // analytical component masses are jitified into kernels directly.
-        if (solverFlags.useMassJitify) {
-            inertiaPropOffsets.at(i + offset_for_ext_obj) = i + offset_for_ext_obj_mass_template;
-        } else {
+        inertiaPropOffsets.at(i + offset_for_ext_obj) = i + offset_for_ext_obj_mass_template;
+        if (!solverFlags.useMassJitify) {
             massOwnerBody.at(i + offset_for_ext_obj) = ext_obj_mass_types.at(i);
             const float3 this_moi = ext_obj_moi_types.at(i);
             mmiXX.at(i + offset_for_ext_obj) = this_moi.x;
@@ -594,9 +602,11 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
     size_t offset_for_mesh_obj = offset_for_ext_obj + input_ext_obj_xyz.size();
     unsigned int offset_for_mesh_obj_mass_template = offset_for_ext_obj_mass_template + input_ext_obj_xyz.size();
     for (size_t i = 0; i < input_mesh_obj_xyz.size(); i++) {
-        if (solverFlags.useMassJitify) {
-            inertiaPropOffsets.at(i + offset_for_mesh_obj) = i + offset_for_mesh_obj_mass_template;
-        } else {
+        // If got here, it is a mesh
+        ownerTypes.at(i + offset_for_mesh_obj) = DEM_OWNER_T_MESH;
+
+        inertiaPropOffsets.at(i + offset_for_mesh_obj) = i + offset_for_mesh_obj_mass_template;
+        if (!solverFlags.useMassJitify) {
             massOwnerBody.at(i + offset_for_mesh_obj) = mesh_obj_mass_types.at(i);
             const float3 this_moi = mesh_obj_moi_types.at(i);
             mmiXX.at(i + offset_for_mesh_obj) = this_moi.x;
@@ -668,6 +678,7 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
                                          const std::vector<DEMTriangle>& mesh_facets,
                                          const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
                                          const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
+                                         const std::unordered_map<unsigned int, std::string>& template_number_name_map,
                                          const std::vector<std::vector<unsigned int>>& clumps_sp_mat_ids,
                                          const std::vector<float>& clumps_mass_types,
                                          const std::vector<float3>& clumps_moi_types,
@@ -683,9 +694,9 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
     // Get the info into the managed memory from the host side. Can this process be more efficient? Maybe, but it's
     // initialization anyway.
 
-    registerPolicies(family_user_impl_map, family_impl_user_map, clumps_mass_types, clumps_moi_types,
-                     ext_obj_mass_types, ext_obj_moi_types, mesh_obj_mass_types, mesh_obj_moi_types, loaded_materials,
-                     no_output_families);
+    registerPolicies(family_user_impl_map, family_impl_user_map, template_number_name_map, clumps_mass_types,
+                     clumps_moi_types, ext_obj_mass_types, ext_obj_moi_types, mesh_obj_mass_types, mesh_obj_moi_types,
+                     loaded_materials, no_output_families);
 
     // For initialization, owner array offset is 0
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_family, input_mesh_obj_xyz,
@@ -883,6 +894,86 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
             absv.x = vX.at(this_owner);
             absv.y = vY.at(this_owner);
             absv.z = vZ.at(this_owner);
+            outstrstream << "," << length(absv);
+        }
+
+        // Family number needs to be user number
+        if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
+            outstrstream << "," << familyImplUserMap.at(this_family);
+        }
+
+        outstrstream << "\n";
+    }
+
+    ptFile << outstrstream.str();
+}
+
+void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile) const {}
+
+void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile) const {
+    std::ostringstream outstrstream;
+
+    // xyz and quaternion are always there
+    outstrstream << "#x,#y,#z,Q0,Q1,Q2,Q3,clump_type";
+    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ABSV) {
+        outstrstream << ",absv";
+    }
+    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::VEL) {
+        outstrstream << ",v_x,v_y,v_z";
+    }
+    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ANG_VEL) {
+        outstrstream << ",w_x,w_y,w_z";
+    }
+    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ACC) {
+        outstrstream << ",a_x,a_y,a_z";
+    }
+    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ANG_ACC) {
+        outstrstream << ",alpha_x,alpha_y,alpha_z";
+    }
+    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
+        outstrstream << ",family";
+    }
+    outstrstream << "\n";
+
+    for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
+        // i is this owner's number. And if it is not a clump, we can move on.
+        if (ownerTypes.at(i) != DEM_OWNER_T_CLUMP)
+            continue;
+
+        family_t this_family = familyID.at(i);
+        // If this (impl-level) family is in the no-output list, skip it
+        if (std::binary_search(familiesNoOutput.begin(), familiesNoOutput.end(), this_family)) {
+            continue;
+        }
+
+        float3 CoM;
+        float X, Y, Z;
+        voxelID_t voxel = voxelID.at(i);
+        subVoxelPos_t subVoxX = locX.at(i);
+        subVoxelPos_t subVoxY = locY.at(i);
+        subVoxelPos_t subVoxZ = locZ.at(i);
+        hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ,
+                                                               simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
+                                                               simParams->l);
+        CoM.x = X + simParams->LBFX;
+        CoM.y = Y + simParams->LBFY;
+        CoM.z = Z + simParams->LBFZ;
+        // Output position
+        outstrstream << CoM.x << "," << CoM.y << "," << CoM.z;
+
+        // Then quaternions
+        outstrstream << "," << oriQ0.at(i) << "," << oriQ1.at(i) << "," << oriQ2.at(i) << "," << oriQ3.at(i);
+
+        // Then type of clump
+        unsigned int clump_mark = inertiaPropOffsets.at(i);
+        outstrstream << "," << templateNumNameMap.at(clump_mark);
+
+        // Only linear velocity
+        if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ABSV) {
+            float3 absv;
+            absv.x = vX.at(i);
+            absv.y = vY.at(i);
+            absv.z = vZ.at(i);
             outstrstream << "," << length(absv);
         }
 
@@ -1172,8 +1263,6 @@ void DEMDynamicThread::workerThread() {
             }
             // Ensure that we wait for start signal on next iteration
             pSchedSupport->dynamicStarted = false;
-            // Now dT is running
-            workerRunning = true;
             // The following is executed when kT and dT are being destroyed
             if (pSchedSupport->dynamicShouldJoin) {
                 break;
@@ -1295,9 +1384,6 @@ void DEMDynamicThread::workerThread() {
         // When getting here, dT has finished one user call (although perhaps not at the end of the user script)
         pPagerToMain->userCallDone = true;
         pPagerToMain->cv_mainCanProceed.notify_all();
-
-        // Now dT finished running
-        workerRunning = false;
     }
 }
 

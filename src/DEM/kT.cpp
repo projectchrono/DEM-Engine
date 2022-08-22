@@ -92,8 +92,6 @@ void DEMKinematicThread::workerThread() {
             while (!pSchedSupport->kinematicStarted) {
                 pSchedSupport->cv_KinematicStartLock.wait(lock);
             }
-            // Now dT is running
-            workerRunning = true;
             // Ensure that we wait for start signal on next iteration
             pSchedSupport->kinematicStarted = false;
             // The following is executed when kT and dT are being destroyed
@@ -168,9 +166,6 @@ void DEMKinematicThread::workerThread() {
         // When getting here, kT has finished one user call (although perhaps not at the end of the user script)
         pPagerToMain->userCallDone = true;
         pPagerToMain->cv_mainCanProceed.notify_all();
-
-        // Now kT finished running
-        workerRunning = false;
     }
 }
 

@@ -79,6 +79,11 @@ const contact_t DEM_SPHERE_PLANE_CONTACT = 2;
 const notStupidBool_t DEM_DONT_PREVENT_CONTACT = 0;
 const notStupidBool_t DEM_PREVENT_CONTACT = 1;
 
+// Codes for owner types. We just have a handful of types...
+const ownerType_t DEM_OWNER_T_CLUMP = 0;
+const ownerType_t DEM_OWNER_T_ANALYTICAL = 1;
+const ownerType_t DEM_OWNER_T_MESH = 2;
+
 // This ID marks that this is a new contact, not present when we did contact detection last time
 // TODO: half max add half max... so stupid... Better way?? numeric_limit won't work...
 constexpr contactPairs_t DEM_NULL_MAPPING_PARTNER =
@@ -127,7 +132,10 @@ enum DEM_OUTPUT_CONTENT {
     ACC = 16,
     ANG_ACC = 32,
     FAMILY = 64,
-    MAT = 128
+    MAT = 128,
+    // How much this clump expanded in size via ChangeClumpSizes, compared to its `vanilla' template. Can be useful if
+    // the user imposed some fine-grain clump size control.
+    EXP_FACTOR = 256
 };
 
 // =============================================================================

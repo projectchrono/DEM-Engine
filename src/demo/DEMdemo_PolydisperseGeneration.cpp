@@ -10,6 +10,7 @@
 
 #include <cstdio>
 #include <chrono>
+#include <random>
 #include <filesystem>
 
 using namespace sgps;
@@ -24,8 +25,10 @@ int main() {
     // auto projectile = DEM_sim.AddWavefrontMeshObject("./data/mesh/sphere.obj");
     // std::cout << "Total num of triangles: " << projectile->GetNumTriangles() << std::endl;
 
-    auto mat_type_ball = DEM_sim.LoadMaterialType(1e5, 0.3, 0.3);
-    auto mat_type_terrain = DEM_sim.LoadMaterialType(1e5, 0.3, 0.2);
+    // Shrink both mass and stiffness to make the settling not challenging
+    float shrink_factor = 3e3;
+    auto mat_type_ball = DEM_sim.LoadMaterialType(1e9 / shrink_factor, 0.3, 0.3);
+    auto mat_type_terrain = DEM_sim.LoadMaterialType(1e9 / shrink_factor, 0.3, 0.2);
 
     float ball_rad = 0.2;
     auto template_ball =
@@ -52,7 +55,7 @@ int main() {
     DEM_sim.AddBCPlane(make_float3(0, 0, -world_size / 2), make_float3(0, 0, 1), mat_type_terrain);
     DEM_sim.SetCoordSysOrigin("center");
     DEM_sim.SetInitTimeStep(step_size);
-    DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8 / shrink_factor));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEM_sim.SetCDUpdateFreq(10);
     // DEM_sim.SetExpandFactor(1e-3);
@@ -73,7 +76,7 @@ int main() {
             DEM_sim.ShowThreadCollaborationStats();
             char filename[200];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-            DEM_sim.WriteClumpFile(std::string(filename));
+            DEM_sim.WriteSphereFile(std::string(filename));
         }
         DEM_sim.DoDynamicsThenSync(0.05);
     }
@@ -82,62 +85,74 @@ int main() {
     // As a proof of concept, we enlarge some of the particles on
     // the fly
     ///////////////////////////////////////////////////////////////
+    std::random_device r_device;
+    std::default_random_engine r_engine(r_device());
+    std::discrete_distribution<unsigned int> discrete_dist({1, 2});
     std::vector<unsigned int> enlarge_ids;
     // Pick around 1/3 particles to enlarge
     for (unsigned int i = 0; i < nTerrainParticles; i++) {
-        if (i % 3 == 0) {
+        unsigned int num = std::round(discrete_dist(r_engine));
+        if (num == 0) {
             enlarge_ids.push_back(i);
         }
     }
 
-    step_size = 5e-7;
+    step_size = 2e-6;
     DEM_sim.SetInitTimeStep(step_size);
     DEM_sim.UpdateSimParams();
 
-    float sim_end = 0.5;
-    unsigned int steps_togo = 1e5;
-    unsigned int out_steps = steps_togo * 10;
+    float sim_end = 10.0;
+    unsigned int steps_togo = 2e5;
+    unsigned int out_steps = steps_togo * 3;
     unsigned int curr_step = 0;
 
     float cur_terrain_rad = terrain_rad;
+    float totalKE;
     while (cur_terrain_rad < terrain_rad * 1.5) {
-        if (curr_step % out_steps == 0) {
-            std::cout << "Frame: " << currframe << std::endl;
-            DEM_sim.ShowThreadCollaborationStats();
-            char filename[200];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-            DEM_sim.WriteClumpFile(std::string(filename));
-        }
-
-        std::cout << "Current particle size: " << cur_terrain_rad << std::endl;
         double prev_rad = cur_terrain_rad;
-        cur_terrain_rad += terrain_rad / 100;
+        cur_terrain_rad += terrain_rad / 10;
+        std::cout << "Current particle size: " << cur_terrain_rad << std::endl;
         std::vector<float> enlarge_ratio(enlarge_ids.size(), (double)cur_terrain_rad / prev_rad);
         terrain_tracker->ChangeClumpSizes(enlarge_ids, enlarge_ratio);
 
-        // Must DoDynamicsThenSync (not DoDynamics), as adding entities to the simulation is only allowed at a sync-ed
-        // point of time.
-        DEM_sim.DoDynamicsThenSync(step_size * steps_togo);
-
-        curr_step += steps_togo;
+        do {
+            // Must DoDynamicsThenSync (not DoDynamics), as adding entities to the simulation is only allowed at a
+            // sync-ed point of time.
+            DEM_sim.DoDynamicsThenSync(step_size * steps_togo);
+            if (curr_step % out_steps == 0) {
+                std::cout << "Frame: " << currframe << std::endl;
+                char filename[200];
+                sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
+                DEM_sim.WriteSphereFile(std::string(filename));
+            }
+            totalKE = DEM_sim.GetTotalKineticEnergy();
+            std::cout << "Total kinematic energy now: " << totalKE << std::endl;
+            curr_step += steps_togo;
+        } while (totalKE > 0.5);
     }
+    DEM_sim.ShowThreadCollaborationStats();
 
-    float step_time = 1e-2;
-    for (float t = 0; t < sim_end; t += step_time) {
-        std::cout << "Frame: " << currframe << std::endl;
-        DEM_sim.ShowThreadCollaborationStats();
-        char filename[200];
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-        DEM_sim.WriteClumpFile(std::string(filename));
-        DEM_sim.DoDynamicsThenSync(step_time);
-    }
+    // float step_time = 1e-1;
+    // for (float t = 0; t < sim_end; t += step_time) {
+    //     std::cout << "Frame: " << currframe << std::endl;
+    //     DEM_sim.ShowThreadCollaborationStats();
+    //     char filename[200];
+    //     sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
+    //     DEM_sim.WriteSphereFile(std::string(filename));
+    //     DEM_sim.DoDynamicsThenSync(step_time);
+    // }
+
+    // Finally, output a `checkpoint'
+    char cp_filename[200];
+    sprintf(cp_filename, "%s/Final_xyz.csv", out_dir.c_str());
+    DEM_sim.WriteClumpFile(std::string(cp_filename));
 
     // for (double t = 0; t < (double)sim_end; t += frame_time, currframe++) {
     //     std::cout << "Frame: " << currframe << std::endl;
     //     DEM_sim.ShowThreadCollaborationStats();
     //     char filename[200];
     //     sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-    //     DEM_sim.WriteClumpFile(std::string(filename));
+    //     DEM_sim.WriteSphereFile(std::string(filename));
 
     //     DEM_sim.DoDynamics(frame_time);
 

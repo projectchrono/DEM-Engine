@@ -87,7 +87,7 @@ int main() {
         DEM_sim.ShowThreadCollaborationStats();
         char filename[200];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-        DEM_sim.WriteClumpFile(std::string(filename));
+        DEM_sim.WriteSphereFile(std::string(filename));
 
         // Then prepare for adding another layer
         offset_z += 2.5 * terrain_rad;
@@ -101,7 +101,7 @@ int main() {
     //     DEM_sim.ShowThreadCollaborationStats();
     //     char filename[200];
     //     sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-    //     DEM_sim.WriteClumpFile(std::string(filename));
+    //     DEM_sim.WriteSphereFile(std::string(filename));
 
     //     DEM_sim.DoDynamics(frame_time);
 

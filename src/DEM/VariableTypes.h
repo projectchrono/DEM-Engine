@@ -42,6 +42,7 @@ typedef unsigned short int geoSphereTouches_t;
 typedef uint8_t notStupidBool_t;  ///< Ad-hoc bool (array) type
 typedef uint8_t contact_t;        ///< Contact type (sphere--sphere is 1, etc.)
 typedef uint8_t family_t;         ///< Data type for clump presecription type
+typedef uint8_t ownerType_t;      ///< The type of a owner entity
 
 typedef uint8_t objType_t;
 typedef bool objNormal_t;

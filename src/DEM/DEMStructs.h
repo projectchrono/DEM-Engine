@@ -339,6 +339,8 @@ class DEMClumpTemplate {
     unsigned int mark;
     // Whether this is a big clump (not used; jitifiability is determined automatically)
     bool isBigClump = false;
+    // A name given by the user. It will be outputted to file to indicate the type of a clump.
+    std::string m_name = "NULL";
 
     /// Retrieve clump's sphere component information from a file
     int ReadComponentFromFile(const std::string filename,
@@ -361,6 +363,8 @@ class DEMClumpTemplate {
         //// TODO: If there is an error while loading, we should report it
         return 0;
     }
+
+    void AssignName(const std::string& some_name) { m_name = some_name; }
 };
 
 // A struct to get or set tracked owner entities

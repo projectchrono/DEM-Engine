@@ -61,9 +61,6 @@ class DEMDynamicThread {
     // The number of for iterations dT does for a specific user "run simulation" call
     double cycleDuration;
 
-    // Bool for indicating kT is actively running job, not waiting for start signal
-    bool workerRunning = false;
-
     // Buffer arrays for storing info from the dT side.
     // kT modifies these arrays; dT uses them only.
 
@@ -128,6 +125,9 @@ class DEMDynamicThread {
     std::vector<float, ManagedAllocator<float>> CoRProxy;
     std::vector<float, ManagedAllocator<float>> muProxy;
     std::vector<float, ManagedAllocator<float>> CrrProxy;
+
+    // What type is this owner? Clump? Analytical object? Meshed object?
+    std::vector<ownerType_t, ManagedAllocator<ownerType_t>> ownerTypes;
 
     // Those are the large ones, ones that have the same length as the number of clumps
     // The mass/MOI offsets
@@ -236,6 +236,9 @@ class DEMDynamicThread {
     std::unordered_map<unsigned int, family_t> familyUserImplMap;
     std::unordered_map<family_t, unsigned int> familyImplUserMap;
 
+    // dT's copy of "clump template and their names" map
+    std::unordered_map<unsigned int, std::string> templateNumNameMap;
+
     // dT's timers
     std::vector<std::string> timer_names = {"Calculate contact forces", "Collect contact forces", "Integration",
                                             "Unpack updates from kT",   "Send to kT buffer",      "Wait for kT update"};
@@ -292,7 +295,7 @@ class DEMDynamicThread {
                       float approx_max_vel,
                       float expand_safety_param);
 
-    /// Compute total KE of all clumps
+    /// Compute total KE of all entities
     float getKineticEnergy();
 
     /// Get this owner's position in user unit
@@ -342,6 +345,7 @@ class DEMDynamicThread {
                            const std::vector<DEMTriangle>& mesh_facets,
                            const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
                            const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
+                           const std::unordered_map<unsigned int, std::string>& template_number_name_map,
                            const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
                            const std::vector<float>& clumps_mass_types,
                            const std::vector<float3>& clumps_moi_types,
@@ -384,6 +388,7 @@ class DEMDynamicThread {
                               size_t nExistSpheres);
     void registerPolicies(const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
                           const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
+                          const std::unordered_map<unsigned int, std::string>& template_number_name_map,
                           const std::vector<float>& clumps_mass_types,
                           const std::vector<float3>& clumps_moi_types,
                           const std::vector<float>& ext_obj_mass_types,
@@ -433,6 +438,8 @@ class DEMDynamicThread {
 
     void writeSpheresAsChpf(std::ofstream& ptFile) const;
     void writeSpheresAsCsv(std::ofstream& ptFile) const;
+    void writeClumpsAsChpf(std::ofstream& ptFile) const;
+    void writeClumpsAsCsv(std::ofstream& ptFile) const;
 
     /// Called each time when the user calls DoDynamicsThenSync.
     void startThread();

@@ -212,6 +212,11 @@ void DEMSolver::preprocessClumpTemplates() {
         }
     }
 
+    // Build the clump template number--name map
+    for (const auto& clump_template : m_templates) {
+        m_template_number_name_map[clump_template->mark] = clump_template->m_name;
+    }
+
     // Now we can flatten clump template and make ready for transfer
     for (const auto& clump : m_templates) {
         m_template_clump_mass.push_back(clump->mass);
@@ -703,6 +708,8 @@ void DEMSolver::initializeGPUArrays() {
         m_mesh_facets,
         // Family number mapping
         m_family_user_impl_map, m_family_impl_user_map,
+        // Clump template name mapping
+        m_template_number_name_map,
         // Clump template info (mass, sphere components, materials etc.)
         m_template_sp_mat_ids, m_template_clump_mass, m_template_clump_moi, m_template_sp_radii, m_template_sp_relPos,
         // Analytical obj `template' properties

@@ -157,7 +157,7 @@ int main() {
             DEM_sim.ShowThreadCollaborationStats();
             char filename[100];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            DEM_sim.WriteClumpFile(std::string(filename));
+            DEM_sim.WriteSphereFile(std::string(filename));
             currframe++;
             // We can query info out of this drum, since it is tracked
             float3 drum_pos = Drum_tracker->Pos();

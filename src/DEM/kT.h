@@ -65,9 +65,6 @@ class DEMKinematicThread {
     // kT should break out of its inner loop and return to a state where it awaits a `start' call at the outer loop
     bool kTShouldReset = false;
 
-    // Bool for indicating kT is actively running job, not waiting for start signal
-    bool workerRunning = false;
-
     // Pointers to simulation params-related arrays
     DEMSimParams* simParams;
 

@@ -113,7 +113,7 @@ int main() {
             DEM_sim.ShowThreadCollaborationStats();
             char filename[100];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            DEM_sim.WriteClumpFile(std::string(filename));
+            DEM_sim.WriteSphereFile(std::string(filename));
             currframe++;
         }
 

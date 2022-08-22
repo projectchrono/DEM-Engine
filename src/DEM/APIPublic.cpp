@@ -285,6 +285,13 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clu
     unsigned int offset = m_templates.size();
     clump.mark = offset;
 
+    // Give it a default name
+    if (clump.m_name == "NULL") {
+        char my_name[200];
+        sprintf(my_name, "%04d", nClumpTemplateLoad);
+        clump.AssignName(std::string(my_name));
+    }
+
     std::shared_ptr<DEMClumpTemplate> ptr = std::make_shared<DEMClumpTemplate>(std::move(clump));
     m_templates.push_back(ptr);
     nClumpTemplateLoad++;
@@ -467,31 +474,47 @@ std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMClumpBatch>& obj
     return std::make_shared<DEMTracker>(std::move(tracker));
 }
 
-void DEMSolver::WriteClumpFile(const std::string& outfilename) const {
-    if (m_clump_out_mode == DEM_OUTPUT_MODE::SPHERE) {
-        switch (m_out_format) {
-            case (DEM_OUTPUT_FORMAT::CHPF): {
-                std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
-                dT->writeSpheresAsChpf(ptFile);
-                break;
-            }
-            case (DEM_OUTPUT_FORMAT::CSV): {
-                std::ofstream ptFile(outfilename, std::ios::out);
-                dT->writeSpheresAsCsv(ptFile);
-                break;
-            }
-            case (DEM_OUTPUT_FORMAT::BINARY): {
-                std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
-                //// TODO: Implement it
-                break;
-            }
-            default:
-                SGPS_DEM_ERROR("Clump output format is unknown. Please set it via SetOutputFormat.");
+void DEMSolver::WriteSphereFile(const std::string& outfilename) const {
+    switch (m_out_format) {
+        case (DEM_OUTPUT_FORMAT::CHPF): {
+            std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
+            dT->writeSpheresAsChpf(ptFile);
+            break;
         }
-    } else if (m_clump_out_mode == DEM_OUTPUT_MODE::CLUMP) {
-        //// TODO: Implement it
-    } else {
-        SGPS_DEM_ERROR("Clump output mode is unknown. Please set it via SetClumpOutputMode.");
+        case (DEM_OUTPUT_FORMAT::CSV): {
+            std::ofstream ptFile(outfilename, std::ios::out);
+            dT->writeSpheresAsCsv(ptFile);
+            break;
+        }
+        case (DEM_OUTPUT_FORMAT::BINARY): {
+            std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
+            //// TODO: Implement it
+            break;
+        }
+        default:
+            SGPS_DEM_ERROR("Clump output format is unknown. Please set it via SetOutputFormat.");
+    }
+}
+
+void DEMSolver::WriteClumpFile(const std::string& outfilename) const {
+    switch (m_out_format) {
+        case (DEM_OUTPUT_FORMAT::CHPF): {
+            std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
+            dT->writeClumpsAsChpf(ptFile);
+            break;
+        }
+        case (DEM_OUTPUT_FORMAT::CSV): {
+            std::ofstream ptFile(outfilename, std::ios::out);
+            dT->writeClumpsAsCsv(ptFile);
+            break;
+        }
+        case (DEM_OUTPUT_FORMAT::BINARY): {
+            std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
+            //// TODO: Implement it
+            break;
+        }
+        default:
+            SGPS_DEM_ERROR("Clump output format is unknown. Please set it via SetOutputFormat.");
     }
 }
 
@@ -564,6 +587,7 @@ void DEMSolver::ReleaseFlattenedArrays() {
 
     deallocate_array(m_family_user_impl_map);
     deallocate_array(m_family_impl_user_map);
+    deallocate_array(m_template_number_name_map);
 
     deallocate_array(m_input_ext_obj_xyz);
     deallocate_array(m_input_ext_obj_rot);
@@ -609,12 +633,6 @@ void DEMSolver::ReleaseFlattenedArrays() {
 }
 
 void DEMSolver::resetWorkerThreads() {
-    // It's possible that kT is already waiting for a user call, when resetWorkerThreads is called. In this case, we do
-    // nothing.
-    if (kT->workerRunning == false) {
-        return;
-    }
-
     // The user won't be calling this when dT is working, so our only problem is that kT may be spinning in the inner
     // loop. So let's release kT.
     std::unique_lock<std::mutex> lock(kTMain_InteractionManager->mainCanProceed);

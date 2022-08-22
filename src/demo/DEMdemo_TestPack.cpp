@@ -68,7 +68,7 @@ void EllpsiodFallingOver() {
     for (int i = 0; i < 6.0 / frame_time; i++) {
         char filename[100];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-        DEM_sim.WriteClumpFile(std::string(filename));
+        DEM_sim.WriteSphereFile(std::string(filename));
         std::cout << "Frame: " << i << std::endl;
         float4 oriQ = ellipsoid_tracker->OriQ();
         float3 angVel = ellipsoid_tracker->AngVel();
@@ -118,7 +118,7 @@ void SphereRollUpIncline() {
             char filename[100];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
             // if (i % 100 == 0) {
-            //     DEM_sim.WriteClumpFile(std::string(filename));
+            //     DEM_sim.WriteSphereFile(std::string(filename));
             // }
             std::cout << "Frame: " << i << std::endl;
             float3 vel = sphere_tracker->Vel();
@@ -243,7 +243,7 @@ void SphereStack() {
                     if (run_num == 0) {
                         char filename[100];
                         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-                        DEM_sim.WriteClumpFile(std::string(filename));
+                        DEM_sim.WriteSphereFile(std::string(filename));
                     }
                     DEM_sim.DoDynamics(frame_time);
                     pos = sphere_tracker->Pos();
