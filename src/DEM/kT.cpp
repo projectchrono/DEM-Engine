@@ -130,6 +130,7 @@ void DEMKinematicThread::workerThread() {
                 // Acquire lock and get the work order
                 std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
                 unpackMyBuffer();
+                // pSchedSupport->schedulingStats.nKinematicReceives++;
             }
             timers.GetTimer("Unpack updates from dT").stop();
 

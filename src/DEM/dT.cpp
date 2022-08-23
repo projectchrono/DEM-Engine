@@ -1305,6 +1305,7 @@ void DEMDynamicThread::workerThread() {
                     unpackMyBuffer();
                     // Leave myself a mental note that I just obtained new produce from kT
                     contactPairArr_isFresh = true;
+                    // pSchedSupport->schedulingStats.nDynamicReceives++;
                 }
                 // dT got the produce, now mark its buffer to be no longer fresh
                 pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
@@ -1379,6 +1380,8 @@ void DEMDynamicThread::workerThread() {
 
             // TODO: make changes for variable time step size cases
             timeElapsed += simParams->h;
+
+            nTotalSteps++;
         }
 
         // When getting here, dT has finished one user call (although perhaps not at the end of the user script)

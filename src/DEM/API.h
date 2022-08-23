@@ -38,6 +38,7 @@ class DEMTracker;
 //               to use a/several custom float arrays to store custom config data
 //            7. This custom array can be defined at clump template/anal obj/mesh obj generation
 //            8. Make UpdateClumps also update tracked clump batches
+//            9. wT takes care of an extra output when it crushes
 //////////////////////////////////////////////////////////////
 
 class DEMSolver {

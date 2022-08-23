@@ -1027,7 +1027,7 @@ template <unsigned column_count,
           class trim_policy = trim_chars<' ', '\t'>,
           class quote_policy = no_quote_escape<','>,
           class overflow_policy = throw_on_overflow,
-          class comment_policy = empty_line_comment>
+          class comment_policy = single_and_empty_line_comment<'#'>>
 class CSVReader {
   private:
     LineReader in;

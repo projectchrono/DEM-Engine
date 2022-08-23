@@ -334,6 +334,8 @@ class DEMKinematicThread {
     void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs);
 
   private:
+    const std::string Name = "kT";
+
     // Bring kT buffer array data to its working arrays
     void unpackMyBuffer();
     // Send produced data to dT-owned biffers

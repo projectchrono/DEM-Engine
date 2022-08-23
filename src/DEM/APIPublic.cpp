@@ -762,22 +762,34 @@ void DEMSolver::DoDynamicsThenSync(double thisCallDuration) {
 
 void DEMSolver::ShowThreadCollaborationStats() {
     SGPS_DEM_PRINTF("\n~~ kT--dT CO-OP STATISTICS ~~\n");
-    SGPS_DEM_PRINTF("Number of dynamic updates: %u\n",
+    SGPS_DEM_PRINTF("Number of steps dynamic executed: %zu\n", dT->nTotalSteps);
+    SGPS_DEM_PRINTF("Number of updates dynamic gets: %zu\n",
                     (dTkT_InteractionManager->schedulingStats.nDynamicUpdates).load());
-    SGPS_DEM_PRINTF("Number of kinematic updates: %u\n",
+    SGPS_DEM_PRINTF("Number of updates kinematic gets: %zu\n",
                     (dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load());
-    SGPS_DEM_PRINTF("Number of times dynamic held back: %u\n",
+    if ((dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load() > 0)
+        SGPS_DEM_PRINTF(
+            "Average steps per dynamic update: %.7g\n",
+            (double)(dT->nTotalSteps) / (dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load());
+    // SGPS_DEM_PRINTF("Number of times dynamic loads buffer: %zu\n",
+    //                 (dTkT_InteractionManager->schedulingStats.nDynamicReceives).load());
+    // SGPS_DEM_PRINTF("Number of times kinematic loads buffer: %zu\n",
+    //                 (dTkT_InteractionManager->schedulingStats.nKinematicReceives).load());
+    SGPS_DEM_PRINTF("Number of times dynamic held back: %zu\n",
                     (dTkT_InteractionManager->schedulingStats.nTimesDynamicHeldBack).load());
-    SGPS_DEM_PRINTF("Number of times kinematic held back: %u\n",
+    SGPS_DEM_PRINTF("Number of times kinematic held back: %zu\n",
                     (dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack).load());
-    SGPS_DEM_PRINTF("\n-----------------------------\n");
+    SGPS_DEM_PRINTF("-----------------------------\n");
 }
 
 void DEMSolver::ClearThreadCollaborationStats() {
     dTkT_InteractionManager->schedulingStats.nDynamicUpdates = 0;
     dTkT_InteractionManager->schedulingStats.nKinematicUpdates = 0;
+    // dTkT_InteractionManager->schedulingStats.nDynamicReceives = 0;
+    // dTkT_InteractionManager->schedulingStats.nKinematicReceives = 0;
     dTkT_InteractionManager->schedulingStats.nTimesDynamicHeldBack = 0;
     dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack = 0;
+    dT->nTotalSteps = 0;
 }
 
 }  // namespace sgps

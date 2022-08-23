@@ -206,6 +206,8 @@ class DEMDynamicThread {
 
     // Time elapsed in current simulation
     float timeElapsed = 0.f;
+    // dT's total steps run (since last time the collaboration stats cache is cleared)
+    uint64_t nTotalSteps = 0;
 
     // If true, dT needs to re-process idA- and idB-related data arrays before collecting forces, as those arrays are
     // freshly obtained from kT.
@@ -467,6 +469,8 @@ class DEMDynamicThread {
     void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs);
 
   private:
+    const std::string Name = "dT";
+
     // Migrate contact history to fit the structure of the newly received contact array
     inline void migrateContactHistory();
 

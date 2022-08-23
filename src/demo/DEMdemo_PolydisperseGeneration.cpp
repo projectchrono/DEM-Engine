@@ -97,13 +97,13 @@ int main() {
         }
     }
 
-    step_size = 2e-6;
+    step_size = 1e-6;
     DEM_sim.SetInitTimeStep(step_size);
     DEM_sim.UpdateSimParams();
 
     float sim_end = 10.0;
-    unsigned int steps_togo = 2e5;
-    unsigned int out_steps = steps_togo * 3;
+    unsigned int steps_togo = (unsigned int)(0.1 / step_size);
+    unsigned int out_steps = steps_togo * 5;
     unsigned int curr_step = 0;
 
     float cur_terrain_rad = terrain_rad;

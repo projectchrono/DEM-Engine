@@ -16,12 +16,16 @@ class ManagerStatistics {
     std::atomic<uint64_t> nTimesKinematicHeldBack;
     std::atomic<uint64_t> nDynamicUpdates;
     std::atomic<uint64_t> nKinematicUpdates;
+    // std::atomic<uint64_t> nDynamicReceives;
+    // std::atomic<uint64_t> nKinematicReceives;
 
     ManagerStatistics() noexcept {
         nTimesDynamicHeldBack = 0;
         nTimesKinematicHeldBack = 0;
         nDynamicUpdates = 0;
         nKinematicUpdates = 0;
+        // nDynamicReceives = 0;
+        // nKinematicReceives = 0;
     }
 
     ~ManagerStatistics() {}
