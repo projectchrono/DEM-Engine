@@ -19,20 +19,20 @@ namespace sgps {
 
 inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
     // TODO: This memory usage is not tracked... How can I track the size changes on my friend's end??
-    dT->idGeometryA_buffer.resize(nContactPairs);
-    dT->idGeometryB_buffer.resize(nContactPairs);
-    dT->contactType_buffer.resize(nContactPairs);
-    SGPS_DEM_ADVISE_DEVICE(dT->idGeometryA_buffer, dT->streamInfo.device);
-    SGPS_DEM_ADVISE_DEVICE(dT->idGeometryB_buffer, dT->streamInfo.device);
-    SGPS_DEM_ADVISE_DEVICE(dT->contactType_buffer, dT->streamInfo.device);
-    granData->pDTOwnedBuffer_idGeometryA = dT->idGeometryA_buffer.data();
-    granData->pDTOwnedBuffer_idGeometryB = dT->idGeometryB_buffer.data();
-    granData->pDTOwnedBuffer_contactType = dT->contactType_buffer.data();
+    // dT->idGeometryA_buffer.resize(nContactPairs);
+    // dT->idGeometryB_buffer.resize(nContactPairs);
+    // dT->contactType_buffer.resize(nContactPairs);
+    // SGPS_DEM_ADVISE_DEVICE(dT->idGeometryA_buffer, dT->streamInfo.device);
+    // SGPS_DEM_ADVISE_DEVICE(dT->idGeometryB_buffer, dT->streamInfo.device);
+    // SGPS_DEM_ADVISE_DEVICE(dT->contactType_buffer, dT->streamInfo.device);
+    // granData->pDTOwnedBuffer_idGeometryA = dT->granData->idGeometryA_buffer;
+    // granData->pDTOwnedBuffer_idGeometryB = dT->granData->idGeometryB_buffer;
+    // granData->pDTOwnedBuffer_contactType = dT->granData->contactType_buffer;
 
     if (!solverFlags.isHistoryless) {
-        dT->contactMapping_buffer.resize(nContactPairs);
-        SGPS_DEM_ADVISE_DEVICE(dT->contactMapping_buffer, dT->streamInfo.device);
-        granData->pDTOwnedBuffer_contactMapping = dT->contactMapping_buffer.data();
+        // dT->contactMapping_buffer.resize(nContactPairs);
+        // SGPS_DEM_ADVISE_DEVICE(dT->contactMapping_buffer, dT->streamInfo.device);
+        // granData->pDTOwnedBuffer_contactMapping = dT->contactMapping_buffer;
     }
 }
 
@@ -65,7 +65,7 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
     GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_nContactPairs, stateOfSolver_resources.pNumContacts, sizeof(size_t),
                         cudaMemcpyDeviceToDevice));
     // Resize dT owned buffers before usage
-    if (*stateOfSolver_resources.pNumContacts > dT->idGeometryA_buffer.size()) {
+    if (*stateOfSolver_resources.pNumContacts > dT->buffer_size) {
         transferArraysResize(*stateOfSolver_resources.pNumContacts);
     }
     GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA,
@@ -74,11 +74,16 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
                         (*stateOfSolver_resources.pNumContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactType, granData->contactType,
                         (*stateOfSolver_resources.pNumContacts) * sizeof(contact_t), cudaMemcpyDeviceToDevice));
+    // SGPS_DEM_MIGRATE_TO_DEVICE(dT->idGeometryA_buffer, dT->streamInfo.device, streamInfo.stream);
+    // SGPS_DEM_MIGRATE_TO_DEVICE(dT->idGeometryB_buffer, dT->streamInfo.device, streamInfo.stream);
+    // SGPS_DEM_MIGRATE_TO_DEVICE(dT->contactType_buffer, dT->streamInfo.device, streamInfo.stream);
     if (!solverFlags.isHistoryless) {
         GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactMapping, granData->contactMapping,
                             (*stateOfSolver_resources.pNumContacts) * sizeof(contactPairs_t),
                             cudaMemcpyDeviceToDevice));
+        // SGPS_DEM_MIGRATE_TO_DEVICE(dT->contactMapping_buffer, dT->streamInfo.device, streamInfo.stream);
     }
+    // GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
 void DEMKinematicThread::workerThread() {
@@ -141,7 +146,7 @@ void DEMKinematicThread::workerThread() {
             // figure out the amount of shared mem
             // cudaDeviceGetAttribute.cudaDevAttrMaxSharedMemoryPerBlock
 
-            // kT's main task
+            // kT's main task, contact detection
             contactDetection(bin_occupation_kernels, contact_detection_kernels, history_kernels, granData, simParams,
                              solverFlags, verbosity, idGeometryA, idGeometryB, contactType, previous_idGeometryA,
                              previous_idGeometryB, previous_contactType, contactMapping, streamInfo.stream,
@@ -299,10 +304,10 @@ void DEMKinematicThread::packDataPointers() {
 void DEMKinematicThread::packTransferPointers(DEMDynamicThread* dT) {
     // Set the pointers to dT owned buffers
     granData->pDTOwnedBuffer_nContactPairs = &(dT->granData->nContactPairs_buffer);
-    granData->pDTOwnedBuffer_idGeometryA = dT->idGeometryA_buffer.data();
-    granData->pDTOwnedBuffer_idGeometryB = dT->idGeometryB_buffer.data();
-    granData->pDTOwnedBuffer_contactType = dT->contactType_buffer.data();
-    granData->pDTOwnedBuffer_contactMapping = dT->contactMapping_buffer.data();
+    granData->pDTOwnedBuffer_idGeometryA = dT->granData->idGeometryA_buffer;
+    granData->pDTOwnedBuffer_idGeometryB = dT->granData->idGeometryB_buffer;
+    granData->pDTOwnedBuffer_contactType = dT->granData->contactType_buffer;
+    granData->pDTOwnedBuffer_contactMapping = dT->granData->contactMapping_buffer;
 }
 
 void DEMKinematicThread::setSimParams(unsigned char nvXp2,
@@ -353,6 +358,8 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
                                                unsigned int nClumpComponents,
                                                unsigned int nJitifiableClumpComponents,
                                                unsigned int nMatTuples) {
+    GPU_CALL(cudaSetDevice(streamInfo.device));
+
     // Sizes of these arrays
     simParams->nSpheresGM = nSpheresGM;
     simParams->nTriGM = nTriGM;

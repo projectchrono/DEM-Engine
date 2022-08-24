@@ -687,13 +687,21 @@ void DEMSolver::transferSimParams() {
 }
 
 void DEMSolver::allocateGPUArrays() {
+    std::thread dThread = std::move(std::thread([this]() {
+        this->dT->allocateManagedArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriEntities,
+                                        this->nSpheresGM, this->nTriGM, this->nAnalGM, this->nDistinctMassProperties,
+                                        this->nDistinctClumpBodyTopologies, this->nDistinctClumpComponents,
+                                        this->nJitifiableClumpComponents, this->nMatTuples);
+    }));
+    std::thread kThread = std::move(std::thread([this]() {
+        this->kT->allocateManagedArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriEntities,
+                                        this->nSpheresGM, this->nTriGM, this->nAnalGM, this->nDistinctMassProperties,
+                                        this->nDistinctClumpBodyTopologies, this->nDistinctClumpComponents,
+                                        this->nJitifiableClumpComponents, this->nMatTuples);
+    }));
+    dThread.join();
+    kThread.join();
     // Resize managed arrays based on the statistical data we had from the previous step
-    dT->allocateManagedArrays(nOwnerBodies, nOwnerClumps, nExtObj, nTriEntities, nSpheresGM, nTriGM, nAnalGM,
-                              nDistinctMassProperties, nDistinctClumpBodyTopologies, nDistinctClumpComponents,
-                              nJitifiableClumpComponents, nMatTuples);
-    kT->allocateManagedArrays(nOwnerBodies, nOwnerClumps, nExtObj, nTriEntities, nSpheresGM, nTriGM, nAnalGM,
-                              nDistinctMassProperties, nDistinctClumpBodyTopologies, nDistinctClumpComponents,
-                              nJitifiableClumpComponents, nMatTuples);
 }
 
 void DEMSolver::initializeGPUArrays() {

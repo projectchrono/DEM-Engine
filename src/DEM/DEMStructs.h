@@ -210,6 +210,9 @@ inline std::string pretty_format_bytes(size_t bytes) {
 #define SGPS_DEM_ADVISE_DEVICE(vec, device) \
     { advise(vec, ManagedAdvice::PREFERRED_LOC, device); }
 
+#define SGPS_DEM_MIGRATE_TO_DEVICE(vec, device, stream) \
+    { migrate(vec, device, stream); }
+
 // #define DEM_OUTPUT_IF_GPU_FAILS(res) \
 //     { gpu_assert((res), __FILE__, __LINE__, false); throw std::runtime_error("GPU Assertion Failed!");}
 
