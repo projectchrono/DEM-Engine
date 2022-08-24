@@ -25,6 +25,8 @@ inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
     // SGPS_DEM_ADVISE_DEVICE(dT->idGeometryA_buffer, dT->streamInfo.device);
     // SGPS_DEM_ADVISE_DEVICE(dT->idGeometryB_buffer, dT->streamInfo.device);
     // SGPS_DEM_ADVISE_DEVICE(dT->contactType_buffer, dT->streamInfo.device);
+
+    // These buffers are on dT
     GPU_CALL(cudaSetDevice(dT->streamInfo.device));
     dT->buffer_size = nContactPairs;
     SGPS_DEM_DEVICE_PTR_ALLOC(dT->granData->idGeometryA_buffer, nContactPairs);
@@ -40,6 +42,7 @@ inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
         SGPS_DEM_DEVICE_PTR_ALLOC(dT->granData->contactMapping_buffer, nContactPairs);
         granData->pDTOwnedBuffer_contactMapping = dT->granData->contactMapping_buffer;
     }
+    // Unset the device change we just made
     GPU_CALL(cudaSetDevice(streamInfo.device));
 }
 
@@ -287,15 +290,15 @@ void DEMKinematicThread::packDataPointers() {
     granData->contactMapping = contactMapping.data();
 
     // for kT, those state vectors are fed by dT, so each has a buffer
-    granData->voxelID_buffer = voxelID_buffer.data();
-    granData->locX_buffer = locX_buffer.data();
-    granData->locY_buffer = locY_buffer.data();
-    granData->locZ_buffer = locZ_buffer.data();
-    granData->oriQ0_buffer = oriQ0_buffer.data();
-    granData->oriQ1_buffer = oriQ1_buffer.data();
-    granData->oriQ2_buffer = oriQ2_buffer.data();
-    granData->oriQ3_buffer = oriQ3_buffer.data();
-    granData->familyID_buffer = familyID_buffer.data();
+    // granData->voxelID_buffer = voxelID_buffer.data();
+    // granData->locX_buffer = locX_buffer.data();
+    // granData->locY_buffer = locY_buffer.data();
+    // granData->locZ_buffer = locZ_buffer.data();
+    // granData->oriQ0_buffer = oriQ0_buffer.data();
+    // granData->oriQ1_buffer = oriQ1_buffer.data();
+    // granData->oriQ2_buffer = oriQ2_buffer.data();
+    // granData->oriQ3_buffer = oriQ3_buffer.data();
+    // granData->familyID_buffer = familyID_buffer.data();
 
     // The offset info that indexes into the template arrays
     granData->ownerClumpBody = ownerClumpBody.data();
@@ -394,31 +397,46 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     SGPS_DEM_TRACKED_RESIZE(oriQ3, nOwnerBodies, "oriQ3", 0);
 
     // Transfer buffer arrays
-    SGPS_DEM_TRACKED_RESIZE(voxelID_buffer, nOwnerBodies, "voxelID_buffer", 0);
-    SGPS_DEM_TRACKED_RESIZE(locX_buffer, nOwnerBodies, "locX_buffer", 0);
-    SGPS_DEM_TRACKED_RESIZE(locY_buffer, nOwnerBodies, "locY_buffer", 0);
-    SGPS_DEM_TRACKED_RESIZE(locZ_buffer, nOwnerBodies, "locZ_buffer", 0);
-    SGPS_DEM_TRACKED_RESIZE(oriQ0_buffer, nOwnerBodies, "oriQ0_buffer", 0);
-    SGPS_DEM_TRACKED_RESIZE(oriQ1_buffer, nOwnerBodies, "oriQ1_buffer", 0);
-    SGPS_DEM_TRACKED_RESIZE(oriQ2_buffer, nOwnerBodies, "oriQ2_buffer", 0);
-    SGPS_DEM_TRACKED_RESIZE(oriQ3_buffer, nOwnerBodies, "oriQ3_buffer", 0);
+    // It is cudaMalloc-ed memory, not managed, because we want explicit locality control of buffers
+    {
+        // These buffers should be on dT, to save dT access time
+        GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+        SGPS_DEM_DEVICE_PTR_ALLOC(granData->voxelID_buffer, nOwnerBodies);
+        SGPS_DEM_DEVICE_PTR_ALLOC(granData->locX_buffer, nOwnerBodies);
+        SGPS_DEM_DEVICE_PTR_ALLOC(granData->locY_buffer, nOwnerBodies);
+        SGPS_DEM_DEVICE_PTR_ALLOC(granData->locZ_buffer, nOwnerBodies);
+        SGPS_DEM_DEVICE_PTR_ALLOC(granData->oriQ0_buffer, nOwnerBodies);
+        SGPS_DEM_DEVICE_PTR_ALLOC(granData->oriQ1_buffer, nOwnerBodies);
+        SGPS_DEM_DEVICE_PTR_ALLOC(granData->oriQ2_buffer, nOwnerBodies);
+        SGPS_DEM_DEVICE_PTR_ALLOC(granData->oriQ3_buffer, nOwnerBodies);
 
-    SGPS_DEM_ADVISE_DEVICE(voxelID_buffer, dT->streamInfo.device);
-    SGPS_DEM_ADVISE_DEVICE(locX_buffer, dT->streamInfo.device);
-    SGPS_DEM_ADVISE_DEVICE(locY_buffer, dT->streamInfo.device);
-    SGPS_DEM_ADVISE_DEVICE(locZ_buffer, dT->streamInfo.device);
-    SGPS_DEM_ADVISE_DEVICE(oriQ0_buffer, dT->streamInfo.device);
-    SGPS_DEM_ADVISE_DEVICE(oriQ1_buffer, dT->streamInfo.device);
-    SGPS_DEM_ADVISE_DEVICE(oriQ2_buffer, dT->streamInfo.device);
-    SGPS_DEM_ADVISE_DEVICE(oriQ3_buffer, dT->streamInfo.device);
-    if (solverFlags.canFamilyChange) {
-        SGPS_DEM_TRACKED_RESIZE(familyID_buffer, nOwnerBodies, "familyID_buffer", 0);
-        SGPS_DEM_ADVISE_DEVICE(familyID_buffer, dT->streamInfo.device);
+        // SGPS_DEM_TRACKED_RESIZE(voxelID_buffer, nOwnerBodies, "voxelID_buffer", 0);
+        // SGPS_DEM_TRACKED_RESIZE(locX_buffer, nOwnerBodies, "locX_buffer", 0);
+        // SGPS_DEM_TRACKED_RESIZE(locY_buffer, nOwnerBodies, "locY_buffer", 0);
+        // SGPS_DEM_TRACKED_RESIZE(locZ_buffer, nOwnerBodies, "locZ_buffer", 0);
+        // SGPS_DEM_TRACKED_RESIZE(oriQ0_buffer, nOwnerBodies, "oriQ0_buffer", 0);
+        // SGPS_DEM_TRACKED_RESIZE(oriQ1_buffer, nOwnerBodies, "oriQ1_buffer", 0);
+        // SGPS_DEM_TRACKED_RESIZE(oriQ2_buffer, nOwnerBodies, "oriQ2_buffer", 0);
+        // SGPS_DEM_TRACKED_RESIZE(oriQ3_buffer, nOwnerBodies, "oriQ3_buffer", 0);
+        // SGPS_DEM_ADVISE_DEVICE(voxelID_buffer, dT->streamInfo.device);
+        // SGPS_DEM_ADVISE_DEVICE(locX_buffer, dT->streamInfo.device);
+        // SGPS_DEM_ADVISE_DEVICE(locY_buffer, dT->streamInfo.device);
+        // SGPS_DEM_ADVISE_DEVICE(locZ_buffer, dT->streamInfo.device);
+        // SGPS_DEM_ADVISE_DEVICE(oriQ0_buffer, dT->streamInfo.device);
+        // SGPS_DEM_ADVISE_DEVICE(oriQ1_buffer, dT->streamInfo.device);
+        // SGPS_DEM_ADVISE_DEVICE(oriQ2_buffer, dT->streamInfo.device);
+        // SGPS_DEM_ADVISE_DEVICE(oriQ3_buffer, dT->streamInfo.device);
+        if (solverFlags.canFamilyChange) {
+            // SGPS_DEM_TRACKED_RESIZE(familyID_buffer, nOwnerBodies, "familyID_buffer", 0);
+            // SGPS_DEM_ADVISE_DEVICE(familyID_buffer, dT->streamInfo.device);
+            SGPS_DEM_DEVICE_PTR_ALLOC(granData->familyID_buffer, nOwnerBodies);
+        }
+        // Unset the device change we just did
+        GPU_CALL(cudaSetDevice(streamInfo.device));
     }
 
-    // Resize to the number of spheres
+    // Resize to the number of spheres (or plus num of triangle facets)
     SGPS_DEM_TRACKED_RESIZE(ownerClumpBody, nSpheresGM + nTriGM, "ownerClumpBody", 0);
-
     if (solverFlags.useClumpJitify) {
         SGPS_DEM_TRACKED_RESIZE(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
         // This extended component offset array can hold offset numbers even for big clumps (whereas
