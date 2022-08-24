@@ -1,6 +1,7 @@
 //  Copyright (c) 2021, SBEL GPU Development Team
 //  Copyright (c) 2021, University of Wisconsin - Madison
-//  All rights reserved.
+//  
+//	SPDX-License-Identifier: BSD-3-Clause
 
 // This file contains modifications of the code by Radu Serban as a part
 // of Project Chrono
@@ -9,7 +10,7 @@
 // http://projectchrono.org/license-chrono.txt. A copy of the license is below.
 
 // Copyright (c) 2014 projectchrono.org
-// All rights reserved.
+// All Rights Reserved.
 
 // Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
 // following conditions are met:

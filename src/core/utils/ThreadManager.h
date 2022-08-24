@@ -1,6 +1,7 @@
 //  Copyright (c) 2021, SBEL GPU Development Team
 //  Copyright (c) 2021, University of Wisconsin - Madison
-//  All rights reserved.
+//  
+//	SPDX-License-Identifier: BSD-3-Clause
 
 #ifndef SGPS_THREAD_MANAGER_H
 #define SGPS_THREAD_MANAGER_H

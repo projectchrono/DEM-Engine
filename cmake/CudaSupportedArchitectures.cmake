@@ -1,9 +1,13 @@
 # Copyright (c) 2021, SBEL GPU Development Team
 # Copyright (c) 2021, University of Wisconsin - Madison
-# All rights reserved.
+# 
+#	SPDX-License-Identifier: BSD-3-Clause
 
-# The original source code of this file was authored by Colin Vanden Heuvel
-# for this project and is also available under a permissive (Zlib) license.
+
+# The original source code of this file was authored by Colin Vanden Heuvel,
+# who also worked on this project, and the upstream version is also available
+# under a permissive (Zlib) license.
+#
 # https://gitlab.com/thepianoboy/cmake-nuggets
 
 

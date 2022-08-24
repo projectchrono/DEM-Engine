@@ -1,13 +1,14 @@
 //  Copyright (c) 2021, SBEL GPU Development Team
 //  Copyright (c) 2021, University of Wisconsin - Madison
-//  All rights reserved.
+//  
+//	SPDX-License-Identifier: BSD-3-Clause
 
 // This is a modification of the code by Ben Strasser (license below)
 //
 // Copyright: (2012-2015) Ben Strasser <code@ben-strasser.net>
 // License: BSD-3
 //
-// All rights reserved.
+// All Rights Reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:

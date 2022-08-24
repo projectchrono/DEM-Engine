@@ -1,3 +1,9 @@
+# Copyright (c) 2021, SBEL GPU Development Team
+# Copyright (c) 2021, University of Wisconsin - Madison
+# 
+#	SPDX-License-Identifier: BSD-3-Clause
+
+
 # Installable SGPSConfig.cmake (base file) 
 #
 # Provides the following package variables:
@@ -9,6 +15,7 @@
 #
 # CUDAToolkit
 #
+
 
 if (NOT CUDAToolkit_FOUND AND NOT SGPS_IGNORE_MISSING_CUDA)
 	message(SEND_ERROR "SGPS requires the CUDAToolkit package in order to build build. To suppress this error, set the variable SGPS_IGNORE_MISSING_CUDA.")

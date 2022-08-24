@@ -1,6 +1,7 @@
 //  Copyright (c) 2021, SBEL GPU Development Team
 //  Copyright (c) 2021, University of Wisconsin - Madison
-//  All rights reserved.
+//  
+//	SPDX-License-Identifier: BSD-3-Clause
 
 #ifndef SGPS_DEM_DT
 #define SGPS_DEM_DT
