@@ -207,9 +207,21 @@ inline std::string pretty_format_bytes(size_t bytes) {
                             pretty_format_bytes(byte_delta).c_str());                                                  \
     }
 
+//// TODO: this is currently not tracked...
+// ptr being a reference to a pointer is crucial
+template <typename T>
+inline void SGPS_DEM_DEVICE_PTR_ALLOC(T*& ptr, size_t size) {
+    cudaPointerAttributes attrib;
+    GPU_CALL(cudaPointerGetAttributes(&attrib, ptr));
+
+    if (attrib.type != cudaMemoryType::cudaMemoryTypeUnregistered)
+        GPU_CALL(cudaFree(ptr));
+    GPU_CALL(cudaMalloc((void**)&ptr, size * sizeof(T)));
+}
+
+// Managed advise doesn't seem to do anything...
 #define SGPS_DEM_ADVISE_DEVICE(vec, device) \
     { advise(vec, ManagedAdvice::PREFERRED_LOC, device); }
-
 #define SGPS_DEM_MIGRATE_TO_DEVICE(vec, device, stream) \
     { migrate(vec, device, stream); }
 

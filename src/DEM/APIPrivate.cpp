@@ -687,6 +687,7 @@ void DEMSolver::transferSimParams() {
 }
 
 void DEMSolver::allocateGPUArrays() {
+    // Resize managed arrays based on the statistical data we had from the previous step
     std::thread dThread = std::move(std::thread([this]() {
         this->dT->allocateManagedArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriEntities,
                                         this->nSpheresGM, this->nTriGM, this->nAnalGM, this->nDistinctMassProperties,
@@ -701,7 +702,6 @@ void DEMSolver::allocateGPUArrays() {
     }));
     dThread.join();
     kThread.join();
-    // Resize managed arrays based on the statistical data we had from the previous step
 }
 
 void DEMSolver::initializeGPUArrays() {

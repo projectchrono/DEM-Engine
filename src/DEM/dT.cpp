@@ -210,6 +210,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
                                              unsigned int nClumpComponents,
                                              unsigned int nJitifiableClumpComponents,
                                              unsigned int nMatTuples) {
+    // dT buffer arrays should be on dT and this is to ensure that
     GPU_CALL(cudaSetDevice(streamInfo.device));
 
     // Sizes of these arrays
@@ -321,21 +322,16 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     // SGPS_DEM_ADVISE_DEVICE(idGeometryA_buffer, streamInfo.device);
     // SGPS_DEM_ADVISE_DEVICE(idGeometryB_buffer, streamInfo.device);
     // SGPS_DEM_ADVISE_DEVICE(contactType_buffer, streamInfo.device);
-    GPU_CALL(cudaMalloc((void**)&(granData->idGeometryA_buffer),
-                        nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER * sizeof(bodyID_t)));
-    GPU_CALL(cudaMalloc((void**)&(granData->idGeometryB_buffer),
-                        nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER * sizeof(bodyID_t)));
-    GPU_CALL(cudaMalloc((void**)&(granData->contactType_buffer),
-                        nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER * sizeof(contact_t)));
-
+    buffer_size = nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER;
+    SGPS_DEM_DEVICE_PTR_ALLOC(granData->idGeometryA_buffer, buffer_size);
+    SGPS_DEM_DEVICE_PTR_ALLOC(granData->idGeometryB_buffer, buffer_size);
+    SGPS_DEM_DEVICE_PTR_ALLOC(granData->contactType_buffer, buffer_size);
     if (!solverFlags.isHistoryless) {
         // SGPS_DEM_TRACKED_RESIZE(contactMapping_buffer, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER,
         //                         "contactMapping_buffer", DEM_NULL_MAPPING_PARTNER);
         // SGPS_DEM_ADVISE_DEVICE(contactMapping_buffer, streamInfo.device);
-        GPU_CALL(cudaMalloc((void**)&(granData->contactMapping_buffer),
-                            nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER * sizeof(contactPairs_t)));
+        SGPS_DEM_DEVICE_PTR_ALLOC(granData->contactMapping_buffer, buffer_size);
     }
-    buffer_size = nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER;
 }
 
 void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
@@ -1019,15 +1015,6 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     granData->contactTorque_convToForce = contactTorque_convToForce.data();
     granData->contactPointGeometryA = contactPointGeometryA.data();
     granData->contactPointGeometryB = contactPointGeometryB.data();
-
-    // Note that my buffer array sizes may have been changed by kT, so I need to repack those pointers too
-    // granData->idGeometryA_buffer = idGeometryA_buffer.data();
-    // granData->idGeometryB_buffer = idGeometryB_buffer.data();
-    // granData->contactType_buffer = contactType_buffer.data();
-    // If not historyless, then contact history map needs to be updated in case kT made modifications
-    if (!solverFlags.isHistoryless) {
-        // granData->contactMapping_buffer = contactMapping_buffer.data();
-    }
 }
 
 inline void DEMDynamicThread::unpackMyBuffer() {
@@ -1265,8 +1252,8 @@ inline void DEMDynamicThread::routineChecks() {
 
 void DEMDynamicThread::workerThread() {
     // Set the gpu for this thread
-    cudaSetDevice(streamInfo.device);
-    cudaStreamCreate(&streamInfo.stream);
+    GPU_CALL(cudaSetDevice(streamInfo.device));
+    GPU_CALL(cudaSetDevice(streamInfo.device));
 
     while (!pSchedSupport->dynamicShouldJoin) {
         {

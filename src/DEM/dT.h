@@ -52,6 +52,8 @@ class DEMDynamicThread {
     // The std::thread that binds to this instance
     std::thread th;
 
+    // Number of items in the buffer array (which is not a managed vector, due to our need to explicitly control where
+    // it is allocated)
     size_t buffer_size;
 
     // Object which stores the device and stream IDs for this thread

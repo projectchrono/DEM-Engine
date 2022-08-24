@@ -25,15 +25,22 @@ inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
     // SGPS_DEM_ADVISE_DEVICE(dT->idGeometryA_buffer, dT->streamInfo.device);
     // SGPS_DEM_ADVISE_DEVICE(dT->idGeometryB_buffer, dT->streamInfo.device);
     // SGPS_DEM_ADVISE_DEVICE(dT->contactType_buffer, dT->streamInfo.device);
-    // granData->pDTOwnedBuffer_idGeometryA = dT->granData->idGeometryA_buffer;
-    // granData->pDTOwnedBuffer_idGeometryB = dT->granData->idGeometryB_buffer;
-    // granData->pDTOwnedBuffer_contactType = dT->granData->contactType_buffer;
+    GPU_CALL(cudaSetDevice(dT->streamInfo.device));
+    dT->buffer_size = nContactPairs;
+    SGPS_DEM_DEVICE_PTR_ALLOC(dT->granData->idGeometryA_buffer, nContactPairs);
+    SGPS_DEM_DEVICE_PTR_ALLOC(dT->granData->idGeometryB_buffer, nContactPairs);
+    SGPS_DEM_DEVICE_PTR_ALLOC(dT->granData->contactType_buffer, nContactPairs);
+    granData->pDTOwnedBuffer_idGeometryA = dT->granData->idGeometryA_buffer;
+    granData->pDTOwnedBuffer_idGeometryB = dT->granData->idGeometryB_buffer;
+    granData->pDTOwnedBuffer_contactType = dT->granData->contactType_buffer;
 
     if (!solverFlags.isHistoryless) {
         // dT->contactMapping_buffer.resize(nContactPairs);
         // SGPS_DEM_ADVISE_DEVICE(dT->contactMapping_buffer, dT->streamInfo.device);
-        // granData->pDTOwnedBuffer_contactMapping = dT->contactMapping_buffer;
+        SGPS_DEM_DEVICE_PTR_ALLOC(dT->granData->contactMapping_buffer, nContactPairs);
+        granData->pDTOwnedBuffer_contactMapping = dT->granData->contactMapping_buffer;
     }
+    GPU_CALL(cudaSetDevice(streamInfo.device));
 }
 
 inline void DEMKinematicThread::unpackMyBuffer() {
@@ -68,6 +75,7 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
     if (*stateOfSolver_resources.pNumContacts > dT->buffer_size) {
         transferArraysResize(*stateOfSolver_resources.pNumContacts);
     }
+
     GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA,
                         (*stateOfSolver_resources.pNumContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryB, granData->idGeometryB,
@@ -88,8 +96,8 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
 
 void DEMKinematicThread::workerThread() {
     // Set the device for this thread
-    cudaSetDevice(streamInfo.device);
-    cudaStreamCreate(&streamInfo.stream);
+    GPU_CALL(cudaSetDevice(streamInfo.device));
+    GPU_CALL(cudaSetDevice(streamInfo.device));
 
     while (!pSchedSupport->kinematicShouldJoin) {
         {
