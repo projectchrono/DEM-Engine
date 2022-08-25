@@ -120,7 +120,7 @@ int main() {
     DEM_sim.SetInitTimeStep(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEM_sim.SetCDUpdateFreq(10);
+    DEM_sim.SetCDUpdateFreq(20);
     // DEM_sim.SetExpandFactor(1e-3);
     DEM_sim.SetMaxVelocity(3.);
     DEM_sim.SetExpandSafetyParam(1.1);
@@ -130,7 +130,7 @@ int main() {
     out_dir += "/DEMdemo_RotatingDrum";
     create_directory(out_dir);
 
-    float time_end = 10.0;
+    float time_end = 20.0;
     unsigned int fps = 20;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
@@ -139,21 +139,21 @@ int main() {
     unsigned int curr_step = 0;
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (double t = 0; t < (double)time_end; t += step_size, curr_step++) {
-        // if (curr_step % out_steps == 0) {
-        //     std::cout << "Frame: " << currframe << std::endl;
-        //     DEM_sim.ShowThreadCollaborationStats();
-        //     char filename[100];
-        //     sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-        //     DEM_sim.WriteSphereFile(std::string(filename));
-        //     currframe++;
-        //     // float3 plane_vel = planes_tracker->Vel();
-        //     // float4 plane_quat = planes_tracker->OriQ();
-        //     // std::cout << "Vel of the planes: " << plane_vel.x << ", " << plane_vel.y << ", " << plane_vel.z
-        //     //           << std::endl;
-        //     // std::cout << "Quaternion of the planes: " << plane_quat.x << ", " << plane_quat.y << ", " <<
-        //     plane_quat.z
-        //     //           << ", " << plane_quat.w << std::endl;
-        // }
+        if (curr_step % out_steps == 0) {
+            std::cout << "Frame: " << currframe << std::endl;
+            DEM_sim.ShowThreadCollaborationStats();
+            char filename[100];
+            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
+            DEM_sim.WriteSphereFile(std::string(filename));
+            currframe++;
+            // float3 plane_vel = planes_tracker->Vel();
+            // float4 plane_quat = planes_tracker->OriQ();
+            // std::cout << "Vel of the planes: " << plane_vel.x << ", " << plane_vel.y << ", " << plane_vel.z
+            //           << std::endl;
+            // std::cout << "Quaternion of the planes: " << plane_quat.x << ", " << plane_quat.y << ", " <<
+            plane_quat.z
+            //           << ", " << plane_quat.w << std::endl;
+        }
 
         DEM_sim.DoDynamics(step_size);
         // We can query info out of this drum, since it is tracked
