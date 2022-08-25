@@ -1,6 +1,6 @@
 //  Copyright (c) 2021, SBEL GPU Development Team
 //  Copyright (c) 2021, University of Wisconsin - Madison
-//  
+//
 //	SPDX-License-Identifier: BSD-3-Clause
 
 #include <cstring>
@@ -629,11 +629,11 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
     if (solverFlags.useOneBinPerThread) {
         contact_detection_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu", Subs,
-            {"-I" + (JitHelper::KERNEL_DIR / "..").string(), "-I/opt/apps/cuda/x86_64/11.6.0/default/include"})));
+            {"-I" + (JitHelper::KERNEL_DIR / "..").string(), "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
     } else {
         contact_detection_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMContactKernels_Blockwise", JitHelper::KERNEL_DIR / "DEMContactKernels_Blockwise.cu", Subs,
-            {"-I" + (JitHelper::KERNEL_DIR / "..").string(), "-I/opt/apps/cuda/x86_64/11.6.0/default/include"})));
+            {"-I" + (JitHelper::KERNEL_DIR / "..").string(), "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
     }
     // Then contact history mapping kernels
     {

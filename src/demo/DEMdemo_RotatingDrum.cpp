@@ -1,6 +1,6 @@
 //  Copyright (c) 2021, SBEL GPU Development Team
 //  Copyright (c) 2021, University of Wisconsin - Madison
-//  
+//
 //	SPDX-License-Identifier: BSD-3-Clause
 
 #include <core/ApiVersion.h>
@@ -151,8 +151,7 @@ int main() {
             // float4 plane_quat = planes_tracker->OriQ();
             // std::cout << "Vel of the planes: " << plane_vel.x << ", " << plane_vel.y << ", " << plane_vel.z
             //           << std::endl;
-            // std::cout << "Quaternion of the planes: " << plane_quat.x << ", " << plane_quat.y << ", " <<
-            plane_quat.z
+            // std::cout << "Quaternion of the planes: " << plane_quat.x << ", " << plane_quat.y << ", " << plane_quat.z
             //           << ", " << plane_quat.w << std::endl;
         }
 

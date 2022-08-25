@@ -1,6 +1,6 @@
 //  Copyright (c) 2021, SBEL GPU Development Team
 //  Copyright (c) 2021, University of Wisconsin - Madison
-//  
+//
 //	SPDX-License-Identifier: BSD-3-Clause
 
 #include <core/ApiVersion.h>
@@ -20,6 +20,7 @@ int main() {
     DEMSolver DEM_sim;
     DEM_sim.UseFrictionalHertzianModel();
     DEM_sim.SetVerbosity(STEP_STATS);
+    DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
 
     srand(42);
 
