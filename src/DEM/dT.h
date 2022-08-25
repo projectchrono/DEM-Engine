@@ -53,6 +53,10 @@ class DEMDynamicThread {
     // The std::thread that binds to this instance
     std::thread th;
 
+    // Number of items in the buffer array (which is not a managed vector, due to our need to explicitly control where
+    // it is allocated)
+    size_t buffer_size;
+
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
 
@@ -66,10 +70,10 @@ class DEMDynamicThread {
     // kT modifies these arrays; dT uses them only.
 
     // dT gets contact pair/location/history map info from kT
-    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA_buffer;
-    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB_buffer;
-    std::vector<contact_t, ManagedAllocator<contact_t>> contactType_buffer;
-    std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>> contactMapping_buffer;
+    // std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA_buffer;
+    // std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB_buffer;
+    // std::vector<contact_t, ManagedAllocator<contact_t>> contactType_buffer;
+    // std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>> contactMapping_buffer;
 
     // Pointers to simulation params-related arrays
     DEMSimParams* simParams;

@@ -75,19 +75,19 @@ class DEMKinematicThread {
     // Buffer arrays for storing info from the dT side.
     // dT modifies these arrays; kT uses them only.
 
-    // kT gets clump locations and rotations from dT
-    // The voxel ID
-    std::vector<voxelID_t, ManagedAllocator<voxelID_t>> voxelID_buffer;
-    // The XYZ local location inside a voxel
-    std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locX_buffer;
-    std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locY_buffer;
-    std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locZ_buffer;
-    // The clump quaternion
-    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ0_buffer;
-    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ1_buffer;
-    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ2_buffer;
-    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ3_buffer;
-    std::vector<family_t, ManagedAllocator<family_t>> familyID_buffer;
+    // // kT gets clump locations and rotations from dT
+    // // The voxel ID
+    // std::vector<voxelID_t, ManagedAllocator<voxelID_t>> voxelID_buffer;
+    // // The XYZ local location inside a voxel
+    // std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locX_buffer;
+    // std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locY_buffer;
+    // std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locZ_buffer;
+    // // The clump quaternion
+    // std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ0_buffer;
+    // std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ1_buffer;
+    // std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ2_buffer;
+    // std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ3_buffer;
+    // std::vector<family_t, ManagedAllocator<family_t>> familyID_buffer;
 
     // kT's copy of family map
     std::unordered_map<unsigned int, family_t> familyUserImplMap;

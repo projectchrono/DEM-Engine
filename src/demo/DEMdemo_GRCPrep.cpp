@@ -132,7 +132,7 @@ int main() {
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEM_sim.SetCDUpdateFreq(10);
     // DEM_sim.SetExpandFactor(1e-3);
-    DEM_sim.SetMaxVelocity(8.);
+    DEM_sim.SetMaxVelocity(15.);
     DEM_sim.SetExpandSafetyParam(1.2);
     DEM_sim.SetInitBinSize(scales.at(2));
     DEM_sim.Initialize();
@@ -142,7 +142,7 @@ int main() {
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
     path out_dir = current_path();
-    out_dir += "/DEMdemo_GRCPrep_1";
+    out_dir += "/DEMdemo_GRCPrep";
     create_directory(out_dir);
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
@@ -153,7 +153,7 @@ int main() {
     float offset_z = bottom + sample_halfheight + 0.15;
     float settle_frame_time = 0.2;
     float settle_batch_time = 2.0;
-    while (DEM_sim.GetNumClumps() < 0.5e6) {
+    while (DEM_sim.GetNumClumps() < 0.2e6) {
         DEM_sim.ClearCache();
         float3 sample_center = make_float3(0, 0, offset_z);
         std::vector<std::shared_ptr<DEMClumpTemplate>> heap_template_in_use;
@@ -208,7 +208,7 @@ int main() {
     DEM_sim.ShowThreadCollaborationStats();
     DEM_sim.ClearThreadCollaborationStats();
 
-    std::cout << "DEMdemo_GRCPrep_1 exiting..." << std::endl;
+    std::cout << "DEMdemo_GRCPrep exiting..." << std::endl;
     // TODO: add end-game report APIs
     return 0;
 }

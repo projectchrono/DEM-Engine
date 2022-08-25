@@ -121,7 +121,7 @@ int main() {
     DEM_sim.SetInitTimeStep(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEM_sim.SetCDUpdateFreq(10);
+    DEM_sim.SetCDUpdateFreq(20);
     // DEM_sim.SetExpandFactor(1e-3);
     DEM_sim.SetMaxVelocity(3.);
     DEM_sim.SetExpandSafetyParam(1.1);
@@ -151,7 +151,8 @@ int main() {
             // float4 plane_quat = planes_tracker->OriQ();
             // std::cout << "Vel of the planes: " << plane_vel.x << ", " << plane_vel.y << ", " << plane_vel.z
             //           << std::endl;
-            // std::cout << "Quaternion of the planes: " << plane_quat.x << ", " << plane_quat.y << ", " << plane_quat.z
+            // std::cout << "Quaternion of the planes: " << plane_quat.x << ", " << plane_quat.y << ", " <<
+            plane_quat.z
             //           << ", " << plane_quat.w << std::endl;
         }
 
