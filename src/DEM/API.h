@@ -30,7 +30,7 @@ namespace sgps {
 class DEMTracker;
 
 //////////////////////////////////////////////////////////////
-// TODO LIST: 1. Variable ts size, quick! (MAX_VEL flavor uses tracked max cp vel)
+// TODO LIST: 1. Variable ts size (MAX_VEL flavor uses tracked max cp vel)
 //            2. Allow ext obj init CoM setting
 //            3. Instruct how many dT steps should at LEAST do before receiving kT update
 //            4. Jitify a family number converter (user to impl)
@@ -205,6 +205,7 @@ class DEMSolver {
 
     /// Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial location
     /// means the location of the clumps' CoM coordinates in the global frame.
+    std::shared_ptr<DEMClumpBatch> AddClumps(DEMClumpBatch& input_batch);
     std::shared_ptr<DEMClumpBatch> AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& input_types,
                                              const std::vector<float3>& input_xyz);
     std::shared_ptr<DEMClumpBatch> AddClumps(std::shared_ptr<DEMClumpTemplate>& input_type, float3 input_xyz) {
@@ -292,13 +293,62 @@ class DEMSolver {
     /// Return total kinetic energy of all entities
     float GetTotalKineticEnergy() const;
     /// Return the kinetic energy of all clumps in a set of families
-    // TODO: float GetTotalKineticEnergy(std::vector<unsigned int> families) const;
+    //// TODO: Implement it
+    float GetClumpKineticEnergy() const;
+    //// TODO: float GetTotalKineticEnergy(std::vector<unsigned int> families) const;
 
     /// Write the current status of clumps to a file
     void WriteClumpFile(const std::string& outfilename) const;
     /// Write the current status of `clumps' to a file, but not as clumps, instead, as each individual sphere. This may
     /// make small-scale rendering easier.
     void WriteSphereFile(const std::string& outfilename) const;
+
+    /// Read clump coordinates from a CSV file (whose format is consistent with this solver's clump output file).
+    /// Returns an unordered_map which maps each unique clump type name to a vector of float3 (XYZ coordinates).
+    static std::unordered_map<std::string, std::vector<float3>> ReadClumpXyzFromCsv(
+        const std::string& infilename,
+        const std::string& clump_header = DEM_OUTPUT_FILE_CLUMP_TYPE_NAME,
+        const std::string& x_header = DEM_OUTPUT_FILE_X_COL_NAME,
+        const std::string& y_header = DEM_OUTPUT_FILE_Y_COL_NAME,
+        const std::string& z_header = DEM_OUTPUT_FILE_Z_COL_NAME) {
+        std::unordered_map<std::string, std::vector<float3>> type_xyz_map;
+        io::CSVReader<4, io::trim_chars<' ', '\t'>, io::no_quote_escape<','>, io::throw_on_overflow,
+                      io::empty_line_comment>
+            in(infilename);
+        in.read_header(io::ignore_extra_column, clump_header, x_header, y_header, z_header);
+        std::string type_name;
+        float3 XYZ;
+        size_t count = 0;
+        while (in.read_row(type_name, XYZ.x, XYZ.y, XYZ.z)) {
+            type_xyz_map[type_name].push_back(XYZ);
+            count++;
+        }
+        return type_xyz_map;
+    }
+    /// Read clump quaternions from a CSV file (whose format is consistent with this solver's clump output file).
+    /// Returns an unordered_map which maps each unique clump type name to a vector of float4 (4 components of the
+    /// quaternion, (1, 0, 0, 0) means 0 rotation).
+    static std::unordered_map<std::string, std::vector<float4>> ReadClumpQuatFromCsv(
+        const std::string& infilename,
+        const std::string& clump_header = DEM_OUTPUT_FILE_CLUMP_TYPE_NAME,
+        const std::string& q0_header = "Q0",
+        const std::string& q1_header = "Q1",
+        const std::string& q2_header = "Q2",
+        const std::string& q3_header = "Q3") {
+        std::unordered_map<std::string, std::vector<float4>> type_Q_map;
+        io::CSVReader<5, io::trim_chars<' ', '\t'>, io::no_quote_escape<','>, io::throw_on_overflow,
+                      io::empty_line_comment>
+            in(infilename);
+        in.read_header(io::ignore_extra_column, clump_header, q0_header, q1_header, q2_header, q3_header);
+        std::string type_name;
+        float4 Q;
+        size_t count = 0;
+        while (in.read_row(type_name, Q.x, Q.y, Q.z, Q.w)) {
+            type_Q_map[type_name].push_back(Q);
+            count++;
+        }
+        return type_Q_map;
+    }
 
     /// Intialize the simulation system
     void Initialize();

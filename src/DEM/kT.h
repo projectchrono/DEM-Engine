@@ -313,7 +313,7 @@ class DEMKinematicThread {
 
     // Put sim data array pointers in place
     void packDataPointers();
-    void packTransferPointers(DEMDynamicThread* dT);
+    void packTransferPointers(DEMDynamicThread*& dT);
 
     /// Return timing inforation for this current run
     void getTiming(std::vector<std::string>& names, std::vector<double>& vals);

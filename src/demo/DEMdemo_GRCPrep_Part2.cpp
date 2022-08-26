@@ -44,7 +44,7 @@ int main() {
     // Define the wheel geometry
     float wheel_rad = 0.25;
     float wheel_width = 0.2;
-    float wheel_mass = 10.0 * kg_g_conv;  // in g
+    float wheel_mass = 10.0 * kg_g_conv;  // in kg or g
     // Our shelf wheel geometry is lying flat on ground with z being the axial direction
     float wheel_IZZ = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
@@ -57,7 +57,7 @@ int main() {
     DEMClumpTemplate shape_template;
     shape_template.ReadComponentFromFile("./data/clumps/triangular_flat.csv");
     // Calculate its mass and MOI
-    float mass = 2.6e3 * 5.5886717 * kg_g_conv;  // in g
+    float mass = 2.6e3 * 5.5886717 * kg_g_conv;  // in kg or g
     float3 MOI = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3 * kg_g_conv;
     // Scale the template we just created
     std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
@@ -79,24 +79,6 @@ int main() {
         this_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(this_template.nComp, mat_type_terrain);
         ground_particle_templates.push_back(DEM_sim.LoadClumpType(this_template));
     }
-
-    std::vector<double> weight_perc = {0.18, 0.20, 0.14, 0.16, 0.17, 0.15};
-    std::vector<double> grain_perc;
-    for (int i = 0; i < scales.size(); i++) {
-        grain_perc.push_back(weight_perc.at(i) / std::pow(scales.at(i), 3));
-    }
-    {
-        double tmp = vector_sum(grain_perc);
-        std::for_each(grain_perc.begin(), grain_perc.end(), [tmp](double& p) { p /= tmp; });
-        std::cout << "Percentage of grains add up to " << vector_sum(grain_perc) << std::endl;
-    }
-    std::random_device r;
-    std::default_random_engine e1(r());
-    // Distribution that defines different weights (17, 10, etc.) for numbers.
-    std::discrete_distribution<int> discrete_dist(grain_perc.begin(), grain_perc.end());
-
-    // Sampler to use
-    HCPSampler sampler(scales.at(0) * 2.2);
 
     // // Instantiate this wheel
     // auto wheel = DEM_sim.AddClumps(wheel_template, make_float3(-0.5, 0, bottom + 0.3));
@@ -124,15 +106,60 @@ int main() {
     DEM_sim.InsertFamily(4);
     DEM_sim.InsertFamily(5);
 
+    // Now we load part1 clump locations from a part1 output file
+    auto part1_clump_xyz = DEM_sim.ReadClumpXyzFromCsv("GRC_2e5.csv");
+    auto part1_clump_quaternion = DEM_sim.ReadClumpQuatFromCsv("GRC_2e5.csv");
+    std::vector<float3> in_xyz;
+    std::vector<float4> in_quat;
+    std::vector<std::shared_ptr<DEMClumpTemplate>> in_types;
+    unsigned int t_num;
+    for (int i = 0; i < scales.size(); i++) {
+        // Our template names are 0001, 0002 etc.
+        t_num++;
+        char t_name[20];
+        sprintf(t_name, "%04d", t_num);
+
+        auto this_type_xyz = part1_clump_xyz[std::string(t_name)];
+        auto this_type_quat = part1_clump_quaternion[std::string(t_name)];
+
+        size_t n_clump_this_type = this_type_xyz.size();
+        // Prepare clump type identification vector for loading into the system (don't forget type 0 in
+        // ground_particle_templates is the template for rover wheel)
+        std::vector<std::shared_ptr<DEMClumpTemplate>> this_type(n_clump_this_type,
+                                                                 ground_particle_templates.at(t_num - 1));
+
+        // Add them to the big long vector
+        in_xyz.insert(in_xyz.end(), this_type_xyz.begin(), this_type_xyz.end());
+        in_quat.insert(in_quat.end(), this_type_quat.begin(), this_type_quat.end());
+        in_types.insert(in_types.end(), this_type.begin(), this_type.end());
+    }
+    // Finally, load them into the system
+    DEMClumpBatch base_batch(in_xyz.size());
+    base_batch.SetTypes(in_types);
+    base_batch.SetPos(in_xyz);
+    base_batch.SetOriQ(in_quat);
+    DEM_sim.AddClumps(base_batch);
+
+    // Based on the `base_batch', we can create more batches. For example, another batch that is like copy-paste the
+    // existing batch, then shift up for a small distance.
+    float shift_dist = 0.05;
+    // Add 5 layers of such graular bed
+    for (int i = 0; i < 5; i++) {
+        DEMClumpBatch another_batch = base_batch;
+        std::for_each(in_xyz.begin(), in_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
+        another_batch.SetPos(in_xyz);
+        DEM_sim.AddClumps(another_batch);
+    }
+
     // Make ready for simulation
-    float step_size = 5e-7;
+    float step_size = 1e-6;
     DEM_sim.SetCoordSysOrigin("center");
     DEM_sim.SetInitTimeStep(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEM_sim.SetCDUpdateFreq(10);
     // DEM_sim.SetExpandFactor(1e-3);
-    DEM_sim.SetMaxVelocity(15.);
+    DEM_sim.SetMaxVelocity(25.);
     DEM_sim.SetExpandSafetyParam(1.2);
     DEM_sim.SetInitBinSize(scales.at(2));
     DEM_sim.Initialize();
@@ -142,52 +169,25 @@ int main() {
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
     path out_dir = current_path();
-    out_dir += "/DEMdemo_GRCPrep";
+    out_dir += "/DEMdemo_GRCPrep_Part2";
     create_directory(out_dir);
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
 
-    float sample_halfheight = 0.4;
-    float sample_halfwidth_x = (world_y_size * 0.96) / 2;
-    float sample_halfwidth_y = (world_y_size * 0.96) / 2;
-    float offset_z = bottom + sample_halfheight + 0.15;
-    float settle_frame_time = 0.2;
+    float settle_frame_time = 0.05;
     float settle_batch_time = 2.0;
-    while (DEM_sim.GetNumClumps() < 0.2e6) {
-        DEM_sim.ClearCache();
-        float3 sample_center = make_float3(0, 0, offset_z);
-        std::vector<std::shared_ptr<DEMClumpTemplate>> heap_template_in_use;
-        std::vector<unsigned int> heap_family;
-        // Sample and add heap particles
-        auto heap_particles_xyz =
-            sampler.SampleBox(sample_center, make_float3(sample_halfwidth_x, sample_halfwidth_y, sample_halfheight));
-        for (unsigned int i = 0; i < heap_particles_xyz.size(); i++) {
-            int ind = std::round(discrete_dist(e1));
-            heap_template_in_use.push_back(ground_particle_templates.at(ind));
-            heap_family.push_back(ind);
-        }
-        auto heap_particles = DEM_sim.AddClumps(heap_template_in_use, heap_particles_xyz);
-        // Give ground particles a small initial velocity so they `collapse' at the start of the simulation
-        heap_particles->SetVel(make_float3(0.00, 0, -0.05));
-        heap_particles->SetFamilies(heap_family);
-        DEM_sim.UpdateClumps();
-        std::cout << "Current number of clumps: " << DEM_sim.GetNumClumps() << std::endl;
 
-        // Allow for some settling
-        // Must DoDynamicsThenSync (not DoDynamics), as adding entities to the simulation is only allowed at a sync-ed
-        // point of time.
-        for (float t = 0; t < settle_batch_time; t += settle_frame_time) {
-            std::cout << "Frame: " << currframe << std::endl;
-            char filename[200];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-            DEM_sim.WriteSphereFile(std::string(filename));
-            DEM_sim.DoDynamicsThenSync(settle_frame_time);
-        }
-
+    for (float t = 0; t < settle_batch_time; t += settle_frame_time) {
+        std::cout << "Frame: " << currframe << std::endl;
+        char filename[200];
+        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
+        DEM_sim.WriteSphereFile(std::string(filename));
+        DEM_sim.DoDynamicsThenSync(settle_frame_time);
         DEM_sim.ShowThreadCollaborationStats();
     }
+
     char cp_filename[200];
-    sprintf(cp_filename, "%s/Final_xyz.csv", out_dir.c_str());
+    sprintf(cp_filename, "%s/GRC.csv", out_dir.c_str());
     DEM_sim.WriteClumpFile(std::string(cp_filename));
 
     // DEM_sim.DoDynamicsThenSync(0.3);
@@ -205,10 +205,8 @@ int main() {
     //     DEM_sim.DoDynamics(step_size);
     // }
 
-    DEM_sim.ShowThreadCollaborationStats();
     DEM_sim.ClearThreadCollaborationStats();
 
-    std::cout << "DEMdemo_GRCPrep exiting..." << std::endl;
-    // TODO: add end-game report APIs
+    std::cout << "DEMdemo_GRCPrep_Part2 exiting..." << std::endl;
     return 0;
 }

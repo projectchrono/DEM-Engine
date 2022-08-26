@@ -313,7 +313,7 @@ void DEMKinematicThread::packDataPointers() {
     granData->relPosSphereZ = relPosSphereZ.data();
 }
 
-void DEMKinematicThread::packTransferPointers(DEMDynamicThread* dT) {
+void DEMKinematicThread::packTransferPointers(DEMDynamicThread*& dT) {
     // Set the pointers to dT owned buffers
     granData->pDTOwnedBuffer_nContactPairs = &(dT->granData->nContactPairs_buffer);
     granData->pDTOwnedBuffer_idGeometryA = dT->granData->idGeometryA_buffer;

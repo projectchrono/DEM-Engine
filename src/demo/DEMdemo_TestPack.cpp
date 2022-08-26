@@ -278,7 +278,5 @@ int main() {
     SphereStack();
 
     std::cout << "DEMdemo_TestPack exiting..." << std::endl;
-    // TODO: add end-game report APIs
-
     return 0;
 }

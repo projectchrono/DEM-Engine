@@ -402,10 +402,17 @@ void DEMSolver::ClearCache() {
 }
 
 float DEMSolver::GetTotalKineticEnergy() const {
-    if (nOwnerClumps == 0) {
+    if (nOwnerBodies == 0) {
         return 0.0;
     }
     return dT->getKineticEnergy();
+}
+
+std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(DEMClumpBatch& input_batch) {
+    input_batch.load_order = nBatchClumpsLoad;
+    nBatchClumpsLoad++;
+    cached_input_clump_batches.push_back(std::make_shared<DEMClumpBatch>(std::move(input_batch)));
+    return cached_input_clump_batches.back();
 }
 
 std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& input_types,
@@ -420,10 +427,7 @@ std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(const std::vector<std::share
     DEMClumpBatch a_batch(nClumps);
     a_batch.SetTypes(input_types);
     a_batch.SetPos(input_xyz);
-    a_batch.load_order = nBatchClumpsLoad;
-    nBatchClumpsLoad++;
-    cached_input_clump_batches.push_back(std::make_shared<DEMClumpBatch>(std::move(a_batch)));
-    return cached_input_clump_batches.back();
+    return AddClumps(a_batch);
 }
 
 std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(DEMMeshConnected& mesh) {
@@ -575,7 +579,7 @@ void DEMSolver::ShowTimingStats() {
         SGPS_DEM_PRINTF("%s: %.9g seconds, %.6g%% of dT total runtime\n", dT_timer_names.at(i).c_str(),
                         dT_timer_vals.at(i), dT_timer_vals.at(i) / dT_total_time * 100.);
     }
-    SGPS_DEM_PRINTF("\n--------------------------\n");
+    SGPS_DEM_PRINTF("--------------------------\n");
 }
 
 void DEMSolver::ClearTimingStats() {
@@ -656,7 +660,6 @@ void DEMSolver::UpdateSimParams() {
     transferSolverParams();
     transferSimParams();
     // TODO: inspect what sim params should be transferred and what should not
-    // transferSimParams();
 }
 
 void DEMSolver::UpdateClumps() {

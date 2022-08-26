@@ -160,6 +160,5 @@ int main() {
     DEM_sim.ClearTimingStats();
 
     std::cout << "DEMdemo_Pile exiting..." << std::endl;
-    // TODO: add end-game report APIs
     return 0;
 }

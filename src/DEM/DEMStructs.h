@@ -387,6 +387,81 @@ class DEMClumpTemplate {
     void AssignName(const std::string& some_name) { m_name = some_name; }
 };
 
+/// API-(Host-)side struct that holds cached user-input batches of clumps
+class DEMClumpBatch {
+  private:
+    const size_t nClumps;
+    void assertLength(size_t len, const std::string name) {
+        if (len != nClumps) {
+            std::stringstream ss;
+            ss << name << " input argument must have length " << nClumps << " (not " << len
+               << "), same as the number of clumps you originally added via AddClumps." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+    }
+
+  public:
+    bool family_isSpecified = false;
+    std::vector<std::shared_ptr<DEMClumpTemplate>> types;
+    std::vector<unsigned int> families;
+    std::vector<float3> vel;
+    std::vector<float3> angVel;
+    std::vector<float3> xyz;
+    std::vector<float4> oriQ;
+    // Its offset when this obj got loaded into the API-level user raw-input array
+    size_t load_order;
+    DEMClumpBatch(size_t num) : nClumps(num) {
+        types.resize(num);
+        families.resize(num, DEM_DEFAULT_CLUMP_FAMILY_NUM);
+        vel.resize(num, make_float3(0));
+        angVel.resize(num, make_float3(0));
+        xyz.resize(num);
+        oriQ.resize(num, host_make_float4(1, 0, 0, 0));
+    }
+    ~DEMClumpBatch() {}
+    size_t GetNumClumps() const { return nClumps; }
+    void SetTypes(const std::vector<std::shared_ptr<DEMClumpTemplate>>& input) {
+        assertLength(input.size(), "SetTypes");
+        types = input;
+    }
+    void SetTypes(const std::shared_ptr<DEMClumpTemplate>& input) {
+        SetTypes(std::vector<std::shared_ptr<DEMClumpTemplate>>(nClumps, input));
+    }
+    void SetType(const std::shared_ptr<DEMClumpTemplate>& input) {
+        SetTypes(std::vector<std::shared_ptr<DEMClumpTemplate>>(nClumps, input));
+    }
+    void SetPos(const std::vector<float3>& input) {
+        assertLength(input.size(), "SetPos");
+        xyz = input;
+    }
+    void SetPos(float3 input) { SetPos(std::vector<float3>(nClumps, input)); }
+    void SetVel(const std::vector<float3>& input) {
+        assertLength(input.size(), "SetVel");
+        vel = input;
+    }
+    void SetVel(float3 input) { SetVel(std::vector<float3>(nClumps, input)); }
+    void SetAngVel(const std::vector<float3>& input) {
+        assertLength(input.size(), "SetAngVel");
+        angVel = input;
+    }
+    void SetAngVel(float3 input) { SetAngVel(std::vector<float3>(nClumps, input)); }
+    void SetOriQ(const std::vector<float4>& input) {
+        assertLength(input.size(), "SetOriQ");
+        oriQ = input;
+    }
+    void SetOriQ(float4 input) { SetOriQ(std::vector<float4>(nClumps, input)); }
+    /// Specify the `family' code for each clump. Then you can specify if they should go with some prescribed motion or
+    /// some special physics (for example, being fixed). The default behavior (without specification) for every family
+    /// is using `normal' physics.
+    void SetFamilies(const std::vector<unsigned int>& input) {
+        assertLength(input.size(), "SetFamilies");
+        families = input;
+        family_isSpecified = true;
+    }
+    void SetFamilies(unsigned int input) { SetFamilies(std::vector<unsigned int>(nClumps, input)); }
+    void SetFamily(unsigned int input) { SetFamilies(std::vector<unsigned int>(nClumps, input)); }
+};
+
 // A struct to get or set tracked owner entities
 struct DEMTrackedObj {
     // ownerID will be updated by dT on initialization
@@ -397,6 +472,14 @@ struct DEMTrackedObj {
     size_t load_order;
 };
 
+// =============================================================================
+// NOW SOME HOST-SIDE CONSTANTS
+// =============================================================================
+
+const std::string DEM_OUTPUT_FILE_X_COL_NAME = std::string("X");
+const std::string DEM_OUTPUT_FILE_Y_COL_NAME = std::string("Y");
+const std::string DEM_OUTPUT_FILE_Z_COL_NAME = std::string("Z");
+const std::string DEM_OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
 }  // namespace sgps
 
 #endif

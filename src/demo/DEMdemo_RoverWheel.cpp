@@ -134,6 +134,5 @@ int main() {
     DEM_sim.ClearThreadCollaborationStats();
 
     std::cout << "DEMdemo_RoverWheel exiting..." << std::endl;
-    // TODO: add end-game report APIs
     return 0;
 }

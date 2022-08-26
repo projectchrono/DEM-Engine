@@ -174,6 +174,5 @@ int main() {
     DEM_sim.ShowTimingStats();
 
     std::cout << "DEMdemo_RotatingDrum exiting..." << std::endl;
-    // TODO: add end-game report APIs
     return 0;
 }

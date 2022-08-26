@@ -187,6 +187,5 @@ int main() {
     DEM_sim.ShowTimingStats();
 
     std::cout << "DEMdemo_Centrifuge exiting..." << std::endl;
-    // TODO: add end-game report APIs
     return 0;
 }

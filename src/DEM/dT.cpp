@@ -83,7 +83,7 @@ void DEMDynamicThread::packDataPointers() {
     granData->CrrProxy = CrrProxy.data();
 }
 
-void DEMDynamicThread::packTransferPointers(DEMKinematicThread* kT) {
+void DEMDynamicThread::packTransferPointers(DEMKinematicThread*& kT) {
     // These are the pointers for sending data to dT
     granData->pKTOwnedBuffer_voxelID = kT->granData->voxelID_buffer;
     granData->pKTOwnedBuffer_locX = kT->granData->locX_buffer;
@@ -822,7 +822,9 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
     posZ.resize(num_output_spheres);
     spRadii.resize(num_output_spheres);
     // TODO: Set {} to the list of column names
-    pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, {"x", "y", "z", "r"}, posX, posY, posZ, spRadii);
+    pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT,
+             {DEM_OUTPUT_FILE_X_COL_NAME, DEM_OUTPUT_FILE_Y_COL_NAME, DEM_OUTPUT_FILE_Z_COL_NAME, "r"}, posX, posY,
+             posZ, spRadii);
     // Write family numbers
     if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
         families.resize(num_output_spheres);
@@ -834,7 +836,8 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
 void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
     std::ostringstream outstrstream;
 
-    outstrstream << "#x,#y,#z,r";
+    outstrstream << DEM_OUTPUT_FILE_X_COL_NAME + "," + DEM_OUTPUT_FILE_Y_COL_NAME + "," + DEM_OUTPUT_FILE_Z_COL_NAME +
+                        ",r";
     if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ABSV) {
         outstrstream << ",absv";
     }
@@ -924,7 +927,8 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile) const {
     std::ostringstream outstrstream;
 
     // xyz and quaternion are always there
-    outstrstream << "#x,#y,#z,Q0,Q1,Q2,Q3,clump_type";
+    outstrstream << DEM_OUTPUT_FILE_X_COL_NAME + "," + DEM_OUTPUT_FILE_Y_COL_NAME + "," + DEM_OUTPUT_FILE_Z_COL_NAME +
+                        ",Q0,Q1,Q2,Q3," + DEM_OUTPUT_FILE_CLUMP_TYPE_NAME;
     if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ABSV) {
         outstrstream << ",absv";
     }

@@ -161,6 +161,5 @@ int main() {
     // }
 
     std::cout << "DEMdemo_PolydisperseGeneration exiting..." << std::endl;
-    // TODO: add end-game report APIs
     return 0;
 }

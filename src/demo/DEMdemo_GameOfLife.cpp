@@ -143,6 +143,5 @@ int main() {
     std::cout << time_sec.count() << " seconds" << std::endl;
 
     std::cout << "DEMdemo_GameOfLife exiting..." << std::endl;
-    // TODO: add end-game report APIs
     return 0;
 }

@@ -441,7 +441,7 @@ class DEMDynamicThread {
 
     /// Put sim data array pointers in place
     void packDataPointers();
-    void packTransferPointers(DEMKinematicThread* kT);
+    void packTransferPointers(DEMKinematicThread*& kT);
 
     void writeSpheresAsChpf(std::ofstream& ptFile) const;
     void writeSpheresAsCsv(std::ofstream& ptFile) const;

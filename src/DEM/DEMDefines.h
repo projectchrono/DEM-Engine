@@ -20,26 +20,13 @@ namespace sgps {
 // =============================================================================
 // NOW DEFINING CONSTANTS USED BY THE DEM MODULE
 // =============================================================================
-
-#ifndef SGPS_GET_VAR_NAME
-    #define SGPS_GET_VAR_NAME(Variable) (#Variable)
-#endif
-
-#ifndef SGPS_DEM_MAX_SPHERES_PER_BIN
-    #define SGPS_DEM_MAX_SPHERES_PER_BIN 256  ///< Can't be too large since one thread processes one bin
-#endif
-#ifndef SGPS_DEM_TINY_FLOAT
-    #define SGPS_DEM_TINY_FLOAT 1e-12
-#endif
-#ifndef SGPS_DEM_HUGE_FLOAT
-    #define SGPS_DEM_HUGE_FLOAT 1e15
-#endif
-#ifndef SGPS_BITS_PER_BYTE
-    #define SGPS_BITS_PER_BYTE 8
-#endif
-#ifndef SGPS_CUDA_WARP_SIZE
-    #define SGPS_CUDA_WARP_SIZE 32
-#endif
+#define SGPS_GET_VAR_NAME(Variable) (#Variable)
+#define SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK 256
+#define SGPS_DEM_MAX_SPHERES_PER_BIN 256  ///< Can't be larger than SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK
+#define SGPS_DEM_TINY_FLOAT 1e-12
+#define SGPS_DEM_HUGE_FLOAT 1e15
+#define SGPS_BITS_PER_BYTE 8
+#define SGPS_CUDA_WARP_SIZE 32
 
 // A few pre-computed constants
 constexpr double TWO_OVER_THREE = 0.666666666666667;
@@ -52,7 +39,6 @@ constexpr double PI_SQUARED = 9.869604401089358;
 constexpr uint8_t DEM_VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * SGPS_BITS_PER_BYTE;
 constexpr int64_t DEM_MAX_SUBVOXEL = (int64_t)1 << DEM_VOXEL_RES_POWER2;
 
-#define SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK 256
 #define SGPS_DEM_NUM_BODIES_PER_BLOCK 512
 #define SGPS_DEM_MAX_THREADS_PER_BLOCK 1024
 #define SGPS_DEM_INIT_CNT_MULTIPLIER 4

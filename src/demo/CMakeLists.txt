@@ -23,7 +23,8 @@ SET(DEMOS
 		DEMdemo_BallDrop
 		DEMdemo_PolydisperseGeneration
 		DEMdemo_RoverWheel
-		DEMdemo_GRCPrep
+		DEMdemo_GRCPrep_Part1
+		DEMdemo_GRCPrep_Part2
 		sphdemo
 		hello_world
 )
