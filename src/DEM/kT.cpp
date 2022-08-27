@@ -101,7 +101,7 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
 void DEMKinematicThread::workerThread() {
     // Set the device for this thread
     GPU_CALL(cudaSetDevice(streamInfo.device));
-    GPU_CALL(cudaSetDevice(streamInfo.device));
+    GPU_CALL(cudaStreamCreate(&streamInfo.stream));
 
     while (!pSchedSupport->kinematicShouldJoin) {
         {

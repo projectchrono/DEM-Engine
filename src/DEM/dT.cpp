@@ -913,7 +913,7 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
 
         // Family number needs to be user number
         if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
-            outstrstream << "," << this_family;
+            outstrstream << "," << +(this_family);
         }
 
         outstrstream << "\n";
@@ -994,7 +994,7 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile) const {
 
         // Family number needs to be user number
         if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
-            outstrstream << "," << this_family;
+            outstrstream << "," << +(this_family);
         }
 
         outstrstream << "\n";
@@ -1259,7 +1259,7 @@ inline void DEMDynamicThread::routineChecks() {
 void DEMDynamicThread::workerThread() {
     // Set the gpu for this thread
     GPU_CALL(cudaSetDevice(streamInfo.device));
-    GPU_CALL(cudaSetDevice(streamInfo.device));
+    GPU_CALL(cudaStreamCreate(&streamInfo.stream));
 
     while (!pSchedSupport->dynamicShouldJoin) {
         {
