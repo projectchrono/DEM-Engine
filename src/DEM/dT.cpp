@@ -48,6 +48,7 @@ void DEMDynamicThread::packDataPointers() {
     granData->idGeometryA = idGeometryA.data();
     granData->idGeometryB = idGeometryB.data();
     granData->contactType = contactType.data();
+    granData->familyMasks = familyMaskMatrix.data();
 
     // granData->idGeometryA_buffer = idGeometryA_buffer.data();
     // granData->idGeometryB_buffer = idGeometryB_buffer.data();
@@ -97,8 +98,8 @@ void DEMDynamicThread::packTransferPointers(DEMKinematicThread*& kT) {
 }
 
 void DEMDynamicThread::changeFamily(unsigned int ID_from, unsigned int ID_to) {
-    family_t ID_from_impl = familyUserImplMap.at(ID_from);
-    family_t ID_to_impl = familyUserImplMap.at(ID_to);
+    family_t ID_from_impl = ID_from;
+    family_t ID_to_impl = ID_to;
     std::replace_if(
         familyID.begin(), familyID.end(), [ID_from_impl](family_t& i) { return i == ID_from_impl; }, ID_to_impl);
 }
@@ -251,6 +252,10 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     SGPS_DEM_TRACKED_RESIZE(alphaY, nOwnerBodies, "alphaY", 0);
     SGPS_DEM_TRACKED_RESIZE(alphaZ, nOwnerBodies, "alphaZ", 0);
 
+    // Resize the family mask `matrix' (in fact it is flattened)
+    SGPS_DEM_TRACKED_RESIZE(familyMaskMatrix, (DEM_NUM_AVAL_FAMILIES - 1) * DEM_NUM_AVAL_FAMILIES / 2,
+                            "familyMaskMatrix", DEM_DONT_PREVENT_CONTACT);
+
     // Resize to the number of geometries
     SGPS_DEM_TRACKED_RESIZE(ownerClumpBody, nSpheresGM + nTriGM, "ownerClumpBody", 0);
     SGPS_DEM_TRACKED_RESIZE(materialTupleOffset, nSpheresGM + nTriGM, "materialTupleOffset", 0);
@@ -335,9 +340,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     }
 }
 
-void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                                        const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
-                                        const std::unordered_map<unsigned int, std::string>& template_number_name_map,
+void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, std::string>& template_number_name_map,
                                         const std::vector<float>& clumps_mass_types,
                                         const std::vector<float3>& clumps_moi_types,
                                         const std::vector<float>& ext_obj_mass_types,
@@ -345,6 +348,7 @@ void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, f
                                         const std::vector<float>& mesh_obj_mass_types,
                                         const std::vector<float3>& mesh_obj_moi_types,
                                         const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
+                                        const std::vector<notStupidBool_t>& family_mask_matrix,
                                         const std::set<unsigned int>& no_output_families) {
     // No modification for the arrays in this function. They can only be completely re-constructed.
 
@@ -387,10 +391,11 @@ void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, f
         }
     }
 
-    // dT will need this family number map, store it
-    familyUserImplMap = family_user_impl_map;
-    familyImplUserMap = family_impl_user_map;
-    // And store clump naming map
+    // Store family mask
+    for (size_t i = 0; i < family_mask_matrix.size(); i++)
+        familyMaskMatrix.at(i) = family_mask_matrix.at(i);
+
+    // Store clump naming map
     templateNumNameMap = template_number_name_map;
 
     // Take notes of the families that should not be outputted
@@ -399,7 +404,7 @@ void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, f
         unsigned int i = 0;
         familiesNoOutput.resize(no_output_families.size());
         for (it = no_output_families.begin(); it != no_output_families.end(); it++, i++) {
-            familiesNoOutput.at(i) = familyUserImplMap.at(*it);
+            familiesNoOutput.at(i) = *it;
         }
         std::sort(familiesNoOutput.begin(), familiesNoOutput.end());
         SGPS_DEM_DEBUG_PRINTF("Impl-level families that will not be outputted:");
@@ -416,8 +421,6 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                                             const std::vector<unsigned int>& mesh_facet_owner,
                                             const std::vector<materialsOffset_t>& mesh_facet_materials,
                                             const std::vector<DEMTriangle>& mesh_facets,
-                                            const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                                            const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
                                             const std::vector<std::vector<unsigned int>>& clumps_sp_mat_ids,
                                             const std::vector<float>& clumps_mass_types,
                                             const std::vector<float3>& clumps_moi_types,
@@ -573,7 +576,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
             omgBarZ.at(nExistOwners + i) = angVel_of_this_clump.z;
 
             // Set family code
-            family_t this_family_num = familyUserImplMap.at(input_clump_family.at(i));
+            family_t this_family_num = input_clump_family.at(i);
             familyID.at(nExistOwners + i) = this_family_num;
         }
     }
@@ -603,7 +606,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         //// TODO: and initial rot?
         //// TODO: and initial vel?
 
-        family_t this_family_num = familyUserImplMap.at(input_ext_obj_family.at(i));
+        family_t this_family_num = input_ext_obj_family.at(i);
         familyID.at(i + offset_for_ext_obj) = this_family_num;
     }
 
@@ -643,7 +646,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         // mesh_facet_materials,
         // mesh_facets,
 
-        family_t this_family_num = familyUserImplMap.at(input_mesh_obj_family.at(i));
+        family_t this_family_num = input_mesh_obj_family.at(i);
         familyID.at(i + offset_for_mesh_obj) = this_family_num;
     }
 }
@@ -686,8 +689,6 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
                                          const std::vector<unsigned int>& mesh_facet_owner,
                                          const std::vector<materialsOffset_t>& mesh_facet_materials,
                                          const std::vector<DEMTriangle>& mesh_facets,
-                                         const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                                         const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
                                          const std::unordered_map<unsigned int, std::string>& template_number_name_map,
                                          const std::vector<std::vector<unsigned int>>& clumps_sp_mat_ids,
                                          const std::vector<float>& clumps_mass_types,
@@ -699,21 +700,22 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
                                          const std::vector<float>& mesh_obj_mass_types,
                                          const std::vector<float3>& mesh_obj_moi_types,
                                          const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
+                                         const std::vector<notStupidBool_t>& family_mask_matrix,
                                          const std::set<unsigned int>& no_output_families,
                                          std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs) {
     // Get the info into the managed memory from the host side. Can this process be more efficient? Maybe, but it's
     // initialization anyway.
 
-    registerPolicies(family_user_impl_map, family_impl_user_map, template_number_name_map, clumps_mass_types,
-                     clumps_moi_types, ext_obj_mass_types, ext_obj_moi_types, mesh_obj_mass_types, mesh_obj_moi_types,
-                     loaded_materials, no_output_families);
+    registerPolicies(template_number_name_map, clumps_mass_types, clumps_moi_types, ext_obj_mass_types,
+                     ext_obj_moi_types, mesh_obj_mass_types, mesh_obj_moi_types, loaded_materials, family_mask_matrix,
+                     no_output_families);
 
     // For initialization, owner array offset is 0
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_family, input_mesh_obj_xyz,
                          input_mesh_obj_rot, input_mesh_obj_family, mesh_facet_owner, mesh_facet_materials, mesh_facets,
-                         family_user_impl_map, family_impl_user_map, clumps_sp_mat_ids, clumps_mass_types,
-                         clumps_moi_types, clumps_sp_radii_types, clumps_sp_location_types, ext_obj_mass_types,
-                         ext_obj_moi_types, mesh_obj_mass_types, mesh_obj_moi_types, 0, 0);
+                         clumps_sp_mat_ids, clumps_mass_types, clumps_moi_types, clumps_sp_radii_types,
+                         clumps_sp_location_types, ext_obj_mass_types, ext_obj_moi_types, mesh_obj_mass_types,
+                         mesh_obj_moi_types, 0, 0);
 
     buildTrackedObjs(input_clump_batches, input_ext_obj_xyz, tracked_objs, 0);
 }
@@ -727,8 +729,6 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                                              const std::vector<unsigned int>& mesh_facet_owner,
                                              const std::vector<materialsOffset_t>& mesh_facet_materials,
                                              const std::vector<DEMTriangle>& mesh_facets,
-                                             const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                                             const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
                                              const std::vector<std::vector<unsigned int>>& clumps_sp_mat_ids,
                                              const std::vector<float>& clumps_mass_types,
                                              const std::vector<float3>& clumps_moi_types,
@@ -739,6 +739,7 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                                              const std::vector<float>& mesh_obj_mass_types,
                                              const std::vector<float3>& mesh_obj_moi_types,
                                              const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
+                                             const std::vector<notStupidBool_t>& family_mask_matrix,
                                              const std::set<unsigned int>& no_output_families,
                                              std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs,
                                              size_t nExistingOwners,
@@ -751,9 +752,9 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
     // Analytical objects-related arrays should be empty
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_family, input_mesh_obj_xyz,
                          input_mesh_obj_rot, input_mesh_obj_family, mesh_facet_owner, mesh_facet_materials, mesh_facets,
-                         family_user_impl_map, family_impl_user_map, clumps_sp_mat_ids, clumps_mass_types,
-                         clumps_moi_types, clumps_sp_radii_types, clumps_sp_location_types, ext_obj_mass_types,
-                         ext_obj_moi_types, mesh_obj_mass_types, mesh_obj_moi_types, nExistingOwners, nExistingSpheres);
+                         clumps_sp_mat_ids, clumps_mass_types, clumps_moi_types, clumps_sp_radii_types,
+                         clumps_sp_location_types, ext_obj_mass_types, ext_obj_moi_types, mesh_obj_mass_types,
+                         mesh_obj_moi_types, nExistingOwners, nExistingSpheres);
 
     // No changes to tracked objects
 }
@@ -809,9 +810,9 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
 
         spRadii.at(num_output_spheres) = radiiSphere.at(compOffset);
 
-        // Family number needs to be user number
+        // Family number
         if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
-            families.at(num_output_spheres) = familyImplUserMap.at(this_family);
+            families.at(num_output_spheres) = this_family;
         }
 
         num_output_spheres++;
@@ -912,7 +913,7 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
 
         // Family number needs to be user number
         if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
-            outstrstream << "," << familyImplUserMap.at(this_family);
+            outstrstream << "," << this_family;
         }
 
         outstrstream << "\n";
@@ -993,7 +994,7 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile) const {
 
         // Family number needs to be user number
         if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
-            outstrstream << "," << familyImplUserMap.at(this_family);
+            outstrstream << "," << this_family;
         }
 
         outstrstream << "\n";

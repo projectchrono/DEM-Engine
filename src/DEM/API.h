@@ -33,7 +33,6 @@ class DEMTracker;
 // TODO LIST: 1. Variable ts size (MAX_VEL flavor uses tracked max cp vel)
 //            2. Allow ext obj init CoM setting
 //            3. Instruct how many dT steps should at LEAST do before receiving kT update
-//            4. Jitify a family number converter (user to impl)
 //            5. Make force model a struct, and inside it...
 //            6. Select whether to acquire mat, acquire what history, and whether
 //               to use a/several custom float arrays to store custom config data
@@ -389,10 +388,6 @@ class DEMSolver {
     /// Removes all entities associated with a family from the arrays (to save memory space)
     void PurgeFamily(unsigned int family_num);
 
-    /// Forward declaration of a family number, so you can define its prescription or masks later on, or change entities
-    /// family numbers to this one via ChangeFamily
-    void InsertFamily(unsigned int ID);
-
     /// Release the memory for the flattened arrays (which are used for initialization pre-processing and transferring
     /// info the worker threads)
     void ReleaseFlattenedArrays();
@@ -405,7 +400,9 @@ class DEMSolver {
 
     /// Choose between outputting particles as individual component spheres (results in larger files but less
     /// post-processing), or as owner clumps (e.g. xyz location means clump CoM locations, etc.), by
-    /// DEM_OUTPUT_MODE::SPHERE and DEM_OUTPUT_MODE::CLUMP options
+    /// DEM_OUTPUT_MODE::SPHERE and DEM_OUTPUT_MODE::CLUMP options.
+    /// NOTE: I did not implement this functionality; the flavor of output depends on the actual write-to-file function
+    /// call.
     void SetClumpOutputMode(DEM_OUTPUT_MODE mode) { m_clump_out_mode = mode; }
     /// Choose output format
     void SetOutputFormat(DEM_OUTPUT_FORMAT format) { m_out_format = format; }
@@ -562,10 +559,6 @@ class DEMSolver {
     size_t nLastTimeBatchClumpsLoad = 0;
     size_t nLastTimeTriObjLoad = 0;
 
-    // The list of unique family numbers that the user ever assigned. This has implications on family map construction,
-    // and the elements of it never get removed.
-    std::vector<unsigned int> unique_user_families;
-
     ////////////////////////////////////////////////////////////////////////////////
     // These quantities will be reset at the time of jitification or re-jitification,
     // but not when entities are added to/removed from the simulation. No method is
@@ -585,9 +578,11 @@ class DEMSolver {
     // Sum of the above 3 items (but in fact nDistinctClumpBodyTopologies + nExtObj + nTriEntities)
     unsigned int nDistinctMassProperties;
 
-    // Num of material types and family groups
+    // Num of material types
     unsigned int nMatTuples;
-    unsigned int nDistinctFamilies;
+
+    // Not used anymore
+    // unsigned int nDistinctFamilies;
 
     // This many clump template can be jitified, and the rest need to exist in global memory
     // Note all `mass' properties are jitified, it's just this many clump templates' component info will not be
@@ -653,13 +648,8 @@ class DEMSolver {
     // worker threads. Will be automatically cleared after initialization.
     ////////////////////////////////////////////////////////////////////////////////
 
+    // Family mask that helps determine whether between 2 families there should be contacts, or not
     std::vector<notStupidBool_t> m_family_mask_matrix;
-    // Host-side mapping array that maps like this: map.at(user family number) = (corresponding impl-level family
-    // number)
-    std::unordered_map<unsigned int, family_t> m_family_user_impl_map;
-    // Host-side mapping array that maps like this: map.at(impl-level family number) = (corresponding user family
-    // number)
-    std::unordered_map<family_t, unsigned int> m_family_impl_user_map;
     // Map between clump templates and the user-assigned name. It is needed when the clump is outputted to files.
     std::unordered_map<unsigned int, std::string> m_template_number_name_map;
 
@@ -839,7 +829,7 @@ class DEMSolver {
     inline void equipMassMOI(std::unordered_map<std::string, std::string>& strMap);
     inline void equipMaterials(std::unordered_map<std::string, std::string>& strMap);
     inline void equipAnalGeoTemplates(std::unordered_map<std::string, std::string>& strMap);
-    inline void equipFamilyMasks(std::unordered_map<std::string, std::string>& strMap);
+    // inline void equipFamilyMasks(std::unordered_map<std::string, std::string>& strMap);
     inline void equipFamilyPrescribedMotions(std::unordered_map<std::string, std::string>& strMap);
     inline void equipFamilyOnFlyChanges(std::unordered_map<std::string, std::string>& strMap);
     inline void equipForceModel(std::unordered_map<std::string, std::string>& strMap);

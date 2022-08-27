@@ -239,9 +239,11 @@ class DEMDynamicThread {
     std::vector<materialsOffset_t, ManagedAllocator<materialsOffset_t>> materialTupleOffset;
 
     // dT's copy of family map
-    //// TODO: Host side OK? And should this be given to wT?
-    std::unordered_map<unsigned int, family_t> familyUserImplMap;
-    std::unordered_map<family_t, unsigned int> familyImplUserMap;
+    // std::unordered_map<unsigned int, family_t> familyUserImplMap;
+    // std::unordered_map<family_t, unsigned int> familyImplUserMap;
+
+    // A long array (usually 32640 elements) registering whether between 2 families there should be contacts
+    std::vector<notStupidBool_t, ManagedAllocator<notStupidBool_t>> familyMaskMatrix;
 
     // dT's copy of "clump template and their names" map
     std::unordered_map<unsigned int, std::string> templateNumNameMap;
@@ -350,8 +352,6 @@ class DEMDynamicThread {
                            const std::vector<unsigned int>& mesh_facet_owner,
                            const std::vector<materialsOffset_t>& mesh_facet_materials,
                            const std::vector<DEMTriangle>& mesh_facets,
-                           const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                           const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
                            const std::unordered_map<unsigned int, std::string>& template_number_name_map,
                            const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
                            const std::vector<float>& clumps_mass_types,
@@ -363,6 +363,7 @@ class DEMDynamicThread {
                            const std::vector<float>& mesh_obj_mass_types,
                            const std::vector<float3>& mesh_obj_moi_types,
                            const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
+                           const std::vector<notStupidBool_t>& family_mask_matrix,
                            const std::set<unsigned int>& no_output_families,
                            std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs);
 
@@ -380,8 +381,6 @@ class DEMDynamicThread {
                               const std::vector<unsigned int>& mesh_facet_owner,
                               const std::vector<materialsOffset_t>& mesh_facet_materials,
                               const std::vector<DEMTriangle>& mesh_facets,
-                              const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                              const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
                               const std::vector<std::vector<unsigned int>>& clumps_sp_mat_ids,
                               const std::vector<float>& clumps_mass_types,
                               const std::vector<float3>& clumps_moi_types,
@@ -393,9 +392,7 @@ class DEMDynamicThread {
                               const std::vector<float3>& mesh_obj_moi_types,
                               size_t nExistOwners,
                               size_t nExistSpheres);
-    void registerPolicies(const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                          const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
-                          const std::unordered_map<unsigned int, std::string>& template_number_name_map,
+    void registerPolicies(const std::unordered_map<unsigned int, std::string>& template_number_name_map,
                           const std::vector<float>& clumps_mass_types,
                           const std::vector<float3>& clumps_moi_types,
                           const std::vector<float>& ext_obj_mass_types,
@@ -403,6 +400,7 @@ class DEMDynamicThread {
                           const std::vector<float>& mesh_obj_mass_types,
                           const std::vector<float3>& mesh_obj_moi_types,
                           const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
+                          const std::vector<notStupidBool_t>& family_mask_matrix,
                           const std::set<unsigned int>& no_output_families);
 
     /// Add more clumps and/or meshes into the system, without re-initialization. It must be clump/mesh-addition only,
@@ -416,8 +414,6 @@ class DEMDynamicThread {
                                const std::vector<unsigned int>& mesh_facet_owner,
                                const std::vector<materialsOffset_t>& mesh_facet_materials,
                                const std::vector<DEMTriangle>& mesh_facets,
-                               const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                               const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
                                const std::vector<std::vector<unsigned int>>& input_clumps_sp_mat_ids,
                                const std::vector<float>& clumps_mass_types,
                                const std::vector<float3>& clumps_moi_types,
@@ -428,6 +424,7 @@ class DEMDynamicThread {
                                const std::vector<float>& mesh_obj_mass_types,
                                const std::vector<float3>& mesh_obj_moi_types,
                                const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
+                               const std::vector<notStupidBool_t>& family_mask_matrix,
                                const std::set<unsigned int>& no_output_families,
                                std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs,
                                size_t nExistingOwners,

@@ -26,13 +26,13 @@ int main() {
     // Output as CSV so no post-processing is needed
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
     DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::XYZ);
-    DEM_sim.SetSolverHistoryless(true);
+    // DEM_sim.SetSolverHistoryless(true);
     DEM_sim.EnsureKernelErrMsgLineNum();
 
     srand(777);
 
     // Formality
-    auto mat_type_1 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.2);
+    auto mat_type_1 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.0);
 
     float grid_size = 1.0;
     float r = (1.45 * grid_size) / 2.0;
@@ -138,6 +138,7 @@ int main() {
 
         DEM_sim.DoDynamicsThenSync(1.);
     }
+
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
     std::cout << time_sec.count() << " seconds" << std::endl;

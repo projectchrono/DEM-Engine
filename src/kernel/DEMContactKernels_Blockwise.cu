@@ -10,7 +10,7 @@
 // If clump templates are jitified, they will be below
 _clumpTemplateDefs_;
 // Family mask, _nFamilyMaskEntries_ elements are in this array
-__constant__ __device__ bool familyMasks[] = {_familyMasks_};
+// __constant__ __device__ bool familyMasks[] = {_familyMasks_};
 
 __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
                                            sgps::DEMDataKT* granData,
@@ -102,7 +102,7 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
             unsigned int bodyBFamily = ownerFamilies[bodyB];
             unsigned int maskMatID = locateMaskPair<unsigned int>(bodyAFamily, bodyBFamily);
             // If marked no contact, skip ths iteration
-            if (familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
+            if (granData->familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
                 continue;
             }
 
@@ -239,7 +239,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
             unsigned int bodyBFamily = ownerFamilies[bodyB];
             unsigned int maskMatID = locateMaskPair<unsigned int>(bodyAFamily, bodyBFamily);
             // If marked no contact, skip ths iteration
-            if (familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
+            if (granData->familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
                 continue;
             }
 
@@ -285,7 +285,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
     //         unsigned int bodyBFamily = ownerFamilies[bodyB];
     //         unsigned int maskMatID = locateMaskPair<unsigned int>(bodyAFamily, bodyBFamily);
     //         // If marked no contact, skip ths iteration
-    //         if (familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
+    //         if (granData->familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
     //             continue;
     //         }
 

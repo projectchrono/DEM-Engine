@@ -83,6 +83,8 @@ constexpr bodyID_t DEM_NULL_BODYID = ((size_t)1 << (sizeof(bodyID_t) * SGPS_BITS
 const unsigned int DEM_DEFAULT_CLUMP_FAMILY_NUM = 0;
 // Reserved (user) clump family number which is always used for fixities
 constexpr unsigned int DEM_RESERVED_FAMILY_NUM = ((unsigned int)1 << (sizeof(family_t) * SGPS_BITS_PER_BYTE)) - 1;
+// The number of all possible families is known: it depends on family_t
+constexpr size_t DEM_NUM_AVAL_FAMILIES = (size_t)1 << (sizeof(family_t) * SGPS_BITS_PER_BYTE);
 // Reserved clump template mark number, used to indicate the largest inertiaOffset number (currently not used since all
 // inertia properties are jitified)
 constexpr inertiaOffset_t DEM_RESERVED_INERTIA_OFFSET =
@@ -230,6 +232,9 @@ struct DEMDataDT {
     contact_t* contactType;
     contactPairs_t* contactMapping;
 
+    // Family mask
+    notStupidBool_t* familyMasks;
+
     // Some dT's own work array pointers
     float3* contactForces;
     float3* contactTorque_convToForce;
@@ -302,6 +307,9 @@ struct DEMDataKT {
     oriQ_t* oriQ2_buffer;
     oriQ_t* oriQ3_buffer;
     family_t* familyID_buffer;
+
+    // Family mask
+    notStupidBool_t* familyMasks;
 
     // The offset info that indexes into the template arrays
     bodyID_t* ownerClumpBody;

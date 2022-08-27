@@ -278,7 +278,7 @@ void DEMSolver::jitifyKernels() {
     equipMassMOI(Subs);
     equipMaterials(Subs);
     equipAnalGeoTemplates(Subs);
-    equipFamilyMasks(Subs);
+    // equipFamilyMasks(Subs);
     equipFamilyPrescribedMotions(Subs);
     equipFamilyOnFlyChanges(Subs);
     equipForceModel(Subs);
@@ -345,7 +345,6 @@ inline void DEMSolver::reportInitStats() const {
     SGPS_DEM_INFO("The combined number of component spheres: %zu", nSpheresGM);
     SGPS_DEM_INFO("The total number of analytical objects: %u", nExtObj);
     SGPS_DEM_INFO("Grand total number of owners: %zu", nOwnerBodies);
-    SGPS_DEM_INFO("The total number of families: %u", nDistinctFamilies);
 
     if (m_expand_factor > 0.0) {
         SGPS_DEM_INFO("All geometries are enlarged/thickened by %.9g for contact detection purpose", m_expand_factor);
@@ -465,102 +464,42 @@ void DEMSolver::figureOutMaterialProxies() {
     }
 }
 
-void DEMSolver::InsertFamily(unsigned int ID) {
-    unique_user_families.push_back(ID);
-}
-
 void DEMSolver::figureOutFamilyMasks() {
-    // Figure out the unique family numbers
+    // Figure out the unique family numbers for a sanity check
     std::vector<unsigned int> unique_clump_families = hostUniqueVector<unsigned int>(m_input_clump_family);
     if (any_of(unique_clump_families.begin(), unique_clump_families.end(),
-               [](unsigned int i) { return i >= DEM_RESERVED_FAMILY_NUM; })) {
+               [](unsigned int i) { return i == DEM_RESERVED_FAMILY_NUM; })) {
         SGPS_DEM_WARNING(
-            "Some clumps are instructed to have family number %u (or larger).\nThis family number is reserved for "
+            "Some clumps are instructed to have family number %u.\nThis family number is reserved for "
             "completely fixed boundaries. Using it on your simulation entities will make them fixed, regardless of "
             "your specification.\nYou can change family_t if you indeed need more families to work with.",
             DEM_RESERVED_FAMILY_NUM);
     }
 
-    std::vector<unsigned int> unique_ext_obj_families = hostUniqueVector<unsigned int>(m_input_ext_obj_family);
-    // TODO: find the uniques for triangle input families as well
-    unique_clump_families.insert(unique_clump_families.end(), unique_ext_obj_families.begin(),
-                                 unique_ext_obj_families.end());
-    // Also don't forget!!!! If the user specified special family rules, these family numbers involved there may not be
-    // in the entity family number soup. We need to therefore take care of them here. It's really not general and feels
-    // random, maybe I should make a set to store all input family numbers instead.
-    for (const auto& a_pair : m_input_no_contact_pairs) {
-        unique_clump_families.push_back(a_pair.ID1);
-        unique_clump_families.push_back(a_pair.ID2);
-    }
-    for (const auto& preInfo : m_input_family_prescription) {
-        unique_clump_families.push_back(preInfo.family);
-    }
-    for (const auto& a_pair : m_family_change_pairs) {
-        unique_clump_families.push_back(a_pair.ID1);
-        unique_clump_families.push_back(a_pair.ID2);
-    }
-
-    // Note: default family number should always be there. Sometimes if we have no family at all, at initialization
-    // (especially when you update/add clumps to simulation), family mapping will give a _Map_ out of range problem. So,
-    // let's just add one.
-    InsertFamily(DEM_DEFAULT_CLUMP_FAMILY_NUM);
-
-    // Combine all unique user family numbers together
-    unique_clump_families.insert(unique_clump_families.end(), unique_user_families.begin(), unique_user_families.end());
-    std::vector<unsigned int> unique_families_this_time = hostUniqueVector<unsigned int>(unique_clump_families);
-    unique_user_families.assign(unique_families_this_time.begin(), unique_families_this_time.end());
-    unsigned int max_family_num = *(std::max_element(unique_user_families.begin(), unique_user_families.end()));
-
-    nDistinctFamilies = unique_user_families.size();
-    if (nDistinctFamilies > std::numeric_limits<family_t>::max()) {
-        SGPS_DEM_ERROR(
-            "You have %u families, however per data type restriction, there can be no more than %u. If so many "
-            "families are indeed needed, please redefine family_t.",
-            nDistinctFamilies, std::numeric_limits<family_t>::max());
-    }
-    SGPS_DEM_DEBUG_EXEC(printf("Unique user families:\n"); for (unsigned int i = 0; i < unique_user_families.size();
-                                                                i++) printf("%u, ", unique_user_families.at(i));
-                        printf("\n"););
-
-    // Build the user--internal family number map (user can define family number however they want, but our
-    // implementation-level numbers always start at 0)
-    for (family_t i = 0; i < nDistinctFamilies; i++) {
-        m_family_user_impl_map[unique_user_families.at(i)] = i;
-        m_family_impl_user_map[i] = unique_user_families.at(i);
-    }
-
-    // At this point, we know the size of the mask matrix, and we init it as all-allow
-    m_family_mask_matrix.resize((nDistinctFamilies + 1) * nDistinctFamilies / 2, DEM_DONT_PREVENT_CONTACT);
+    // We always know the size of the mask matrix, and we init it as all-allow
+    m_family_mask_matrix.clear();
+    m_family_mask_matrix.resize((DEM_NUM_AVAL_FAMILIES - 1) * DEM_NUM_AVAL_FAMILIES / 2, DEM_DONT_PREVENT_CONTACT);
 
     // Then we figure out the masks
     for (const auto& a_pair : m_input_no_contact_pairs) {
         // Convert user-input pairs into impl-level pairs
-        unsigned int implID1 = m_family_user_impl_map.at(a_pair.ID1);
-        unsigned int implID2 = m_family_user_impl_map.at(a_pair.ID2);
+        unsigned int implID1 = a_pair.ID1;
+        unsigned int implID2 = a_pair.ID2;
         // Now fill in the mask matrix
         unsigned int posInMat = locateMaskPair<unsigned int>(implID1, implID2);
         m_family_mask_matrix.at(posInMat) = DEM_PREVENT_CONTACT;
     }
-    // displayArray<notStupidBool_t>(m_family_mask_matrix.data(), m_family_mask_matrix.size());
 
-    // Then, figure out each family's prescription info and put it into an (impl family number-based) array
+    // Then, figure out each family's prescription info and put it into an array
     // Multiple user prescription input entries can work on the same array entry
-    m_unique_family_prescription.resize(nDistinctFamilies);
+    m_unique_family_prescription.resize(DEM_NUM_AVAL_FAMILIES);
     for (const auto& preInfo : m_input_family_prescription) {
         unsigned int user_family = preInfo.family;
-        // if (m_family_user_impl_map.find(user_family) == m_family_user_impl_map.end()) {
-        //     if (user_family != DEM_RESERVED_FAMILY_NUM) {
-        //         SGPS_DEM_WARNING(
-        //             "Family number %u is instructed to have prescribed motion, but no entity is associated with this
-        //             " "family at system initialization.", user_family);
-        //     }
-        //     continue;
-        // }
 
-        auto& this_family_info = m_unique_family_prescription.at(m_family_user_impl_map.at(user_family));
+        auto& this_family_info = m_unique_family_prescription.at(user_family);
 
         this_family_info.used = true;
-        this_family_info.family = m_family_user_impl_map.at(user_family);
+        this_family_info.family = user_family;
         if (preInfo.linPosX != "none")
             this_family_info.linPosX = preInfo.linPosX;
         if (preInfo.linPosY != "none")
@@ -715,8 +654,6 @@ void DEMSolver::initializeGPUArrays() {
         // Meshed objects' initial stats
         m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facet_materials,
         m_mesh_facets,
-        // Family number mapping
-        m_family_user_impl_map, m_family_impl_user_map,
         // Clump template name mapping
         m_template_number_name_map,
         // Clump template info (mass, sphere components, materials etc.)
@@ -727,6 +664,8 @@ void DEMSolver::initializeGPUArrays() {
         m_mesh_obj_mass, m_mesh_obj_moi,
         // Universal template info
         m_loaded_materials,
+        // Family mask
+        m_family_mask_matrix,
         // I/O and misc.
         m_no_output_families, m_tracked_objs);
     kT->initManagedArrays(
@@ -736,8 +675,8 @@ void DEMSolver::initializeGPUArrays() {
         m_input_ext_obj_family,
         // Meshed objects' initial stats
         m_input_mesh_obj_family,
-        // Family number mapping
-        m_family_user_impl_map, m_family_impl_user_map,
+        // Family mask
+        m_family_mask_matrix,
         // Templates and misc.
         m_template_clump_mass, m_template_sp_radii, m_template_sp_relPos);
 }
@@ -758,8 +697,6 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // Meshed objects' initial stats
         m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facet_materials,
         m_mesh_facets,
-        // Family number mapping
-        m_family_user_impl_map, m_family_impl_user_map,
         // Clump template info (mass, sphere components, materials etc.)
         m_template_sp_mat_ids, m_template_clump_mass, m_template_clump_moi, m_template_sp_radii, m_template_sp_relPos,
         // Analytical obj `template' properties
@@ -768,6 +705,8 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         m_mesh_obj_mass, m_mesh_obj_moi,
         // Universal template info
         m_loaded_materials,
+        // Family mask
+        m_family_mask_matrix,
         // I/O and misc.
         m_no_output_families, m_tracked_objs,
         // Number of entities, old
@@ -779,8 +718,8 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         m_input_ext_obj_family,
         // Meshed objects' initial stats
         m_input_mesh_obj_family,
-        // Family number mapping
-        m_family_user_impl_map, m_family_impl_user_map,
+        // Family mask
+        m_family_mask_matrix,
         // Templates and misc.
         m_template_clump_mass, m_template_sp_radii, m_template_sp_relPos,
         // Number of entities, old
@@ -895,8 +834,8 @@ inline void DEMSolver::equipFamilyOnFlyChanges(std::unordered_map<std::string, s
     for (unsigned int i = 0; i < n_rules; i++) {
         // User family num and internal family num are not the same
         // Convert user-input pairs into impl-level pairs
-        unsigned int implID1 = m_family_user_impl_map.at(m_family_change_pairs.at(i).ID1);
-        unsigned int implID2 = m_family_user_impl_map.at(m_family_change_pairs.at(i).ID2);
+        unsigned int implID1 = m_family_change_pairs.at(i).ID1;
+        unsigned int implID2 = m_family_change_pairs.at(i).ID2;
 
         // The conditions will be handled by a series of if statements
         std::string cond = "if (family_code == " + std::to_string(implID1) + ") { bool shouldMakeChange = false;";
@@ -905,7 +844,7 @@ inline void DEMSolver::equipFamilyOnFlyChanges(std::unordered_map<std::string, s
             user_str = compact_code(user_str);
         }
         cond += user_str;
-        cond += "if (shouldMakeChange) {granData->familyID[thisClump] = " + std::to_string(implID2) + ";}";
+        cond += "if (shouldMakeChange) {granData->familyID[myOwner] = " + std::to_string(implID2) + ";}";
         cond += "}";
         condStr += cond;
     }
@@ -959,18 +898,19 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
     strMap["_posPrescriptionStrategy_"] = posStr;
 }
 
-inline void DEMSolver::equipFamilyMasks(std::unordered_map<std::string, std::string>& strMap) {
-    std::string maskMat;
-    strMap["_nFamilyMaskEntries_"] = std::to_string(m_family_mask_matrix.size());
-    for (unsigned int i = 0; i < m_family_mask_matrix.size(); i++) {
-        maskMat += std::to_string(m_family_mask_matrix.at(i)) + ",";
-    }
-    // Put some junk in if it is empty
-    if (m_family_mask_matrix.size() == 0) {
-        maskMat += "0";
-    }
-    strMap["_familyMasks_"] = maskMat;
-}
+// Family mask is no longer jitified... but stored in global array
+// inline void DEMSolver::equipFamilyMasks(std::unordered_map<std::string, std::string>& strMap) {
+//     std::string maskMat;
+//     strMap["_nFamilyMaskEntries_"] = std::to_string(m_family_mask_matrix.size());
+//     for (unsigned int i = 0; i < m_family_mask_matrix.size(); i++) {
+//         maskMat += std::to_string(m_family_mask_matrix.at(i)) + ",";
+//     }
+//     // Put some junk in if it is empty
+//     if (m_family_mask_matrix.size() == 0) {
+//         maskMat += "0";
+//     }
+//     strMap["_familyMasks_"] = maskMat;
+// }
 
 inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std::string>& strMap) {
     // Some sim systems can have 0 boundary entities in them. In this case, we have to ensure jitification does not fail

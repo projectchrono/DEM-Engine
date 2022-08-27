@@ -94,13 +94,6 @@ int main() {
     // Sampler to use
     HCPSampler sampler(scales.at(0) * 2.2);
 
-    DEM_sim.InsertFamily(0);
-    DEM_sim.InsertFamily(1);
-    DEM_sim.InsertFamily(2);
-    DEM_sim.InsertFamily(3);
-    DEM_sim.InsertFamily(4);
-    DEM_sim.InsertFamily(5);
-
     // Make ready for simulation
     float step_size = 5e-7;
     DEM_sim.SetCoordSysOrigin("center");

@@ -7,7 +7,7 @@ _clumpTemplateDefs_;
 // Definitions of analytical entites are below
 _analyticalEntityDefs_;
 // Family mask, _nFamilyMaskEntries_ elements are in this array
-__constant__ __device__ bool familyMasks[] = {_familyMasks_};
+// __constant__ __device__ bool familyMasks[] = {_familyMasks_};
 
 __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
                                                  sgps::DEMDataKT* granData,
@@ -78,7 +78,7 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
             unsigned int maskMatID =
                 locateMaskPair<unsigned int>((unsigned int)sphFamilyNum, (unsigned int)objFamilyNum);
             // If marked no contact, skip ths iteration
-            if (familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
+            if (granData->familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
                 continue;
             }
             double ownerX, ownerY, ownerZ;
@@ -191,7 +191,7 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
             unsigned int objFamilyNum = granData->familyID[objBOwner];
             unsigned int maskMatID = locateMaskPair<unsigned int>(sphFamilyNum, objFamilyNum);
             // If marked no contact, skip ths iteration
-            if (familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
+            if (granData->familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
                 continue;
             }
             double ownerX, ownerY, ownerZ;

@@ -99,12 +99,6 @@ int main() {
     // DEM_sim.DisableContactBetweenFamilies(101, 5);
     // DEM_sim.DisableContactBetweenFamilies(101, 101);
     // DEM_sim.DisableContactBetweenFamilies(100, 100);
-    DEM_sim.InsertFamily(0);
-    DEM_sim.InsertFamily(1);
-    DEM_sim.InsertFamily(2);
-    DEM_sim.InsertFamily(3);
-    DEM_sim.InsertFamily(4);
-    DEM_sim.InsertFamily(5);
 
     // Now we load part1 clump locations from a part1 output file
     auto part1_clump_xyz = DEM_sim.ReadClumpXyzFromCsv("GRC_2e5.csv");
@@ -142,7 +136,7 @@ int main() {
 
     // Based on the `base_batch', we can create more batches. For example, another batch that is like copy-paste the
     // existing batch, then shift up for a small distance.
-    float shift_dist = 0.05;
+    float shift_dist = 0.04;
     // Add 5 layers of such graular bed
     for (int i = 0; i < 5; i++) {
         DEMClumpBatch another_batch = base_batch;
@@ -152,14 +146,14 @@ int main() {
     }
 
     // Make ready for simulation
-    float step_size = 1e-6;
+    float step_size = 5e-7;
     DEM_sim.SetCoordSysOrigin("center");
     DEM_sim.SetInitTimeStep(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEM_sim.SetCDUpdateFreq(10);
     // DEM_sim.SetExpandFactor(1e-3);
-    DEM_sim.SetMaxVelocity(25.);
+    DEM_sim.SetMaxVelocity(20.);
     DEM_sim.SetExpandSafetyParam(1.2);
     DEM_sim.SetInitBinSize(scales.at(2));
     DEM_sim.Initialize();
@@ -175,7 +169,7 @@ int main() {
     unsigned int curr_step = 0;
 
     float settle_frame_time = 0.05;
-    float settle_batch_time = 2.0;
+    float settle_batch_time = 1.2;
 
     for (float t = 0; t < settle_batch_time; t += settle_frame_time) {
         std::cout << "Frame: " << currframe << std::endl;

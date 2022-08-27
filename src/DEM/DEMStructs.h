@@ -455,6 +455,13 @@ class DEMClumpBatch {
     /// is using `normal' physics.
     void SetFamilies(const std::vector<unsigned int>& input) {
         assertLength(input.size(), "SetFamilies");
+        if (any_of(input.begin(), input.end(),
+                   [](unsigned int i) { return i > std::numeric_limits<family_t>::max(); })) {
+            std::stringstream ss;
+            ss << "Some clumps are instructed to have a family number larger than the max allowance "
+               << std::numeric_limits<family_t>::max() << std::endl;
+            throw std::runtime_error(ss.str());
+        }
         families = input;
         family_isSpecified = true;
     }
@@ -480,6 +487,7 @@ const std::string DEM_OUTPUT_FILE_X_COL_NAME = std::string("X");
 const std::string DEM_OUTPUT_FILE_Y_COL_NAME = std::string("Y");
 const std::string DEM_OUTPUT_FILE_Z_COL_NAME = std::string("Z");
 const std::string DEM_OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
+
 }  // namespace sgps
 
 #endif

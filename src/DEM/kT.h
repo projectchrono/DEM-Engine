@@ -90,8 +90,8 @@ class DEMKinematicThread {
     // std::vector<family_t, ManagedAllocator<family_t>> familyID_buffer;
 
     // kT's copy of family map
-    std::unordered_map<unsigned int, family_t> familyUserImplMap;
-    std::unordered_map<family_t, unsigned int> familyImplUserMap;
+    // std::unordered_map<unsigned int, family_t> familyUserImplMap;
+    // std::unordered_map<family_t, unsigned int> familyImplUserMap;
 
     // Managed arrays for dT's personal use (not transfer buffer)
 
@@ -146,6 +146,9 @@ class DEMKinematicThread {
     // Clump's family identification code. Used in determining whether they can be contacts between two families, and
     // whether a family has prescribed motions.
     std::vector<family_t, ManagedAllocator<family_t>> familyID;
+
+    // A long array (usually 32640 elements) registering whether between 2 families there should be contacts
+    std::vector<notStupidBool_t, ManagedAllocator<notStupidBool_t>> familyMaskMatrix;
 
     // kT computed contact pair info
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA;
@@ -258,20 +261,16 @@ class DEMKinematicThread {
     void initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                            const std::vector<unsigned int>& input_ext_obj_family,
                            const std::vector<unsigned int>& input_mesh_obj_family,
-                           const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                           const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
+                           const std::vector<notStupidBool_t>& family_mask_matrix,
                            const std::vector<float>& clumps_mass_types,
                            const std::vector<std::vector<float>>& clumps_sp_radii_types,
                            const std::vector<std::vector<float3>>& clumps_sp_location_types);
 
     // initManagedArrays's components
-    void registerPolicies(const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                          const std::unordered_map<family_t, unsigned int>& family_impl_user_map);
+    void registerPolicies(const std::vector<notStupidBool_t>& family_mask_matrix);
     void populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                               const std::vector<unsigned int>& input_ext_obj_family,
                               const std::vector<unsigned int>& input_mesh_obj_family,
-                              const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                              const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
                               const std::vector<float>& clumps_mass_types,
                               const std::vector<std::vector<float>>& clumps_sp_radii_types,
                               const std::vector<std::vector<float3>>& clumps_sp_location_types,
@@ -283,8 +282,7 @@ class DEMKinematicThread {
     void updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                const std::vector<unsigned int>& input_ext_obj_family,
                                const std::vector<unsigned int>& input_mesh_obj_family,
-                               const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                               const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
+                               const std::vector<notStupidBool_t>& family_mask_matrix,
                                const std::vector<float>& clumps_mass_types,
                                const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                const std::vector<std::vector<float3>>& clumps_sp_location_types,

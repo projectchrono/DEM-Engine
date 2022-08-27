@@ -124,7 +124,15 @@ struct DEMExternObj {
     std::vector<DEMAnalEntParams> entity_params;
 
     /// Define object contact family number
-    void SetFamily(const unsigned int code) { family_code = code; }
+    void SetFamily(const unsigned int code) {
+        if (code > std::numeric_limits<family_t>::max()) {
+            std::stringstream ss;
+            ss << "An external object is instructed to have family number " << code
+               << ", which is larger than the max allowance " << std::numeric_limits<family_t>::max() << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        family_code = code;
+    }
 
     /// Define object mass and MOI
     void SetMassMOI(const float input_mass, const float3 input_MOI) {

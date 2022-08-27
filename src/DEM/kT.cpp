@@ -195,8 +195,8 @@ void DEMKinematicThread::getTiming(std::vector<std::string>& names, std::vector<
 }
 
 void DEMKinematicThread::changeFamily(unsigned int ID_from, unsigned int ID_to) {
-    family_t ID_from_impl = familyUserImplMap.at(ID_from);
-    family_t ID_to_impl = familyUserImplMap.at(ID_to);
+    family_t ID_from_impl = ID_from;
+    family_t ID_to_impl = ID_to;
     std::replace_if(
         familyID.begin(), familyID.end(), [ID_from_impl](family_t& i) { return i == ID_from_impl; }, ID_to_impl);
 }
@@ -289,6 +289,7 @@ void DEMKinematicThread::packDataPointers() {
     granData->previous_idGeometryB = previous_idGeometryB.data();
     granData->previous_contactType = previous_contactType.data();
     granData->contactMapping = contactMapping.data();
+    granData->familyMasks = familyMaskMatrix.data();
 
     // for kT, those state vectors are fed by dT, so each has a buffer
     // granData->voxelID_buffer = voxelID_buffer.data();
@@ -386,6 +387,10 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     simParams->nDistinctClumpComponents = nClumpComponents;
     simParams->nMatTuples = nMatTuples;
 
+    // Resize the family mask `matrix' (in fact it is flattened)
+    SGPS_DEM_TRACKED_RESIZE(familyMaskMatrix, (DEM_NUM_AVAL_FAMILIES - 1) * DEM_NUM_AVAL_FAMILIES / 2,
+                            "familyMaskMatrix", DEM_DONT_PREVENT_CONTACT);
+
     // Resize to the number of clumps
     SGPS_DEM_TRACKED_RESIZE(familyID, nOwnerBodies, "familyID", 0);
     SGPS_DEM_TRACKED_RESIZE(voxelID, nOwnerBodies, "voxelID", 0);
@@ -475,18 +480,15 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     }
 }
 
-void DEMKinematicThread::registerPolicies(const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                                          const std::unordered_map<family_t, unsigned int>& family_impl_user_map) {
-    // kT may need this family number map, store it
-    familyUserImplMap = family_user_impl_map;
-    familyImplUserMap = family_impl_user_map;
+void DEMKinematicThread::registerPolicies(const std::vector<notStupidBool_t>& family_mask_matrix) {
+    // Store family mask
+    for (size_t i = 0; i < family_mask_matrix.size(); i++)
+        familyMaskMatrix.at(i) = family_mask_matrix.at(i);
 }
 
 void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                               const std::vector<unsigned int>& input_ext_obj_family,
                                               const std::vector<unsigned int>& input_mesh_obj_family,
-                                              const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                                              const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
                                               const std::vector<float>& clumps_mass_types,
                                               const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                               const std::vector<std::vector<float3>>& clumps_sp_location_types,
@@ -570,14 +572,14 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
                 k++;
             }
 
-            family_t this_family_num = familyUserImplMap.at(input_clump_family.at(i));
+            family_t this_family_num = input_clump_family.at(i);
             familyID.at(nExistOwners + i) = this_family_num;
         }
     }
 
     size_t offset_for_ext_obj = input_clump_types.size();
     for (size_t i = 0; i < input_ext_obj_family.size(); i++) {
-        family_t this_family_num = familyUserImplMap.at(input_ext_obj_family.at(i));
+        family_t this_family_num = input_ext_obj_family.at(i);
         familyID.at(i + offset_for_ext_obj) = this_family_num;
     }
 }
@@ -585,26 +587,23 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
 void DEMKinematicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                            const std::vector<unsigned int>& input_ext_obj_family,
                                            const std::vector<unsigned int>& input_mesh_obj_family,
-                                           const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                                           const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
+                                           const std::vector<notStupidBool_t>& family_mask_matrix,
                                            const std::vector<float>& clumps_mass_types,
                                            const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                            const std::vector<std::vector<float3>>& clumps_sp_location_types) {
     // Get the info into the managed memory from the host side. Can this process be more efficient? Maybe, but it's
     // initialization anyway.
 
-    registerPolicies(family_user_impl_map, family_impl_user_map);
+    registerPolicies(family_mask_matrix);
 
-    populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, family_user_impl_map,
-                         family_impl_user_map, clumps_mass_types, clumps_sp_radii_types, clumps_sp_location_types, 0,
-                         0);
+    populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, clumps_mass_types,
+                         clumps_sp_radii_types, clumps_sp_location_types, 0, 0);
 }
 
 void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                                const std::vector<unsigned int>& input_ext_obj_family,
                                                const std::vector<unsigned int>& input_mesh_obj_family,
-                                               const std::unordered_map<unsigned int, family_t>& family_user_impl_map,
-                                               const std::unordered_map<family_t, unsigned int>& family_impl_user_map,
+                                               const std::vector<notStupidBool_t>& family_mask_matrix,
                                                const std::vector<float>& clumps_mass_types,
                                                const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                                const std::vector<std::vector<float3>>& clumps_sp_location_types,
@@ -613,9 +612,8 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
                                                size_t nExistingSpheres,
                                                size_t nExistingTriMesh,
                                                size_t nExistingFacets) {
-    populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, family_user_impl_map,
-                         family_impl_user_map, clumps_mass_types, clumps_sp_radii_types, clumps_sp_location_types,
-                         nExistingOwners, nExistingSpheres);
+    populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, clumps_mass_types,
+                         clumps_sp_radii_types, clumps_sp_location_types, nExistingOwners, nExistingSpheres);
 }
 
 void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& Subs) {

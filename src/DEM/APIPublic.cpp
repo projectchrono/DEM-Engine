@@ -132,6 +132,10 @@ void DEMSolver::UseFrictionlessHertzianModel() {
 }
 
 void DEMSolver::SetFamilyFixed(unsigned int ID) {
+    if (ID > std::numeric_limits<family_t>::max()) {
+        SGPS_DEM_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.",
+                       ID, std::numeric_limits<family_t>::max());
+    }
     familyPrescription_t preInfo;
     preInfo.family = ID;
     preInfo.linVelX = "0";
@@ -150,6 +154,12 @@ void DEMSolver::SetFamilyFixed(unsigned int ID) {
 }
 
 void DEMSolver::ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const std::string& condition) {
+    if (ID_from > std::numeric_limits<family_t>::max() || ID_to > std::numeric_limits<family_t>::max()) {
+        SGPS_DEM_ERROR(
+            "You instructed family number %u should change to %u, but family number should not be larger than %u.",
+            ID_from, ID_to, std::numeric_limits<family_t>::max());
+    }
+
     // If one such user call is made, then the solver needs to prepare for per-step family number-changing sweeps
     famnum_can_change_conditionally = true;
     familyPair_t a_pair;
@@ -161,21 +171,27 @@ void DEMSolver::ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const
 }
 
 void DEMSolver::ChangeFamily(unsigned int ID_from, unsigned int ID_to) {
-    if (!check_exist(unique_user_families, ID_from)) {
-        SGPS_DEM_WARNING(
-            "Family %u (from-family) has no prior reference before a ChangeFamily call, therefore no work is done.",
-            ID_from);
-        return;
-    }
-    if (!check_exist(unique_user_families, ID_to)) {
+    // if (!check_exist(unique_user_families, ID_from)) {
+    //     SGPS_DEM_WARNING(
+    //         "Family %u (from-family) has no prior reference before a ChangeFamily call, therefore no work is done.",
+    //         ID_from);
+    //     return;
+    // }
+    // if (!check_exist(unique_user_families, ID_to)) {
+    //     SGPS_DEM_ERROR(
+    //         "Family %u (to-family) has no prior reference before a ChangeFamily call.\nThis is currently not allowed,
+    //         " "as creating a family in mid-simulation usually requires re-jitification anyway.\nIf a family with no "
+    //         "special prescription or masking is needed, then you can forward-declare this family via InsertFamily "
+    //         "before initialization.",
+    //         ID_to);
+    //     return;
+    // }
+    if (ID_from > std::numeric_limits<family_t>::max() || ID_to > std::numeric_limits<family_t>::max()) {
         SGPS_DEM_ERROR(
-            "Family %u (to-family) has no prior reference before a ChangeFamily call.\nThis is currently not allowed, "
-            "as creating a family in imd-simulation usually requires re-jitification anyway.\nIf a family with no "
-            "special prescription or masking is needed, then you can forward-declare this family via InsertFamily "
-            "before initialization.",
-            ID_to);
-        return;
+            "You instructed family number %u should change to %u, but family number should not be larger than %u.",
+            ID_from, ID_to, std::numeric_limits<family_t>::max());
     }
+
     dT->changeFamily(ID_from, ID_to);
     kT->changeFamily(ID_from, ID_to);
 }
@@ -185,6 +201,10 @@ void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
                                           const std::string& velY,
                                           const std::string& velZ,
                                           bool dictate) {
+    if (ID > std::numeric_limits<family_t>::max()) {
+        SGPS_DEM_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.",
+                       ID, std::numeric_limits<family_t>::max());
+    }
     familyPrescription_t preInfo;
     preInfo.family = ID;
     preInfo.linVelX = velX;
@@ -203,6 +223,10 @@ void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID,
                                           const std::string& velY,
                                           const std::string& velZ,
                                           bool dictate) {
+    if (ID > std::numeric_limits<family_t>::max()) {
+        SGPS_DEM_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.",
+                       ID, std::numeric_limits<family_t>::max());
+    }
     familyPrescription_t preInfo;
     preInfo.family = ID;
     preInfo.rotVelX = velX;
@@ -220,6 +244,10 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
                                             const std::string& X,
                                             const std::string& Y,
                                             const std::string& Z) {
+    if (ID > std::numeric_limits<family_t>::max()) {
+        SGPS_DEM_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.",
+                       ID, std::numeric_limits<family_t>::max());
+    }
     familyPrescription_t preInfo;
     preInfo.family = ID;
     preInfo.linPosX = X;
@@ -233,9 +261,18 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
     m_input_family_prescription.push_back(preInfo);
 }
 
-void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula) {}
+void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula) {
+    if (ID > std::numeric_limits<family_t>::max()) {
+        SGPS_DEM_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.",
+                       ID, std::numeric_limits<family_t>::max());
+    }
+}
 
 void DEMSolver::DisableFamilyOutput(unsigned int ID) {
+    if (ID > std::numeric_limits<family_t>::max()) {
+        SGPS_DEM_ERROR("You tried to disable output for family %u, but family number should not be larger than %u.", ID,
+                       std::numeric_limits<family_t>::max());
+    }
     m_no_output_families.insert(ID);
 }
 
@@ -379,6 +416,12 @@ std::shared_ptr<DEMExternObj> DEMSolver::AddBCPlane(const float3 pos,
 }
 
 void DEMSolver::DisableContactBetweenFamilies(unsigned int ID1, unsigned int ID2) {
+    if (ID1 > std::numeric_limits<family_t>::max() || ID2 > std::numeric_limits<family_t>::max()) {
+        SGPS_DEM_ERROR(
+            "You tried to disable contact between family number %u and %u, but family number should not be larger than "
+            "%u.",
+            ID1, ID2, std::numeric_limits<family_t>::max());
+    }
     familyPair_t a_pair;
     a_pair.ID1 = ID1;
     a_pair.ID2 = ID2;
@@ -590,8 +633,8 @@ void DEMSolver::ClearTimingStats() {
 void DEMSolver::ReleaseFlattenedArrays() {
     deallocate_array(m_family_mask_matrix);
 
-    deallocate_array(m_family_user_impl_map);
-    deallocate_array(m_family_impl_user_map);
+    // deallocate_array(m_family_user_impl_map);
+    // deallocate_array(m_family_impl_user_map);
     deallocate_array(m_template_number_name_map);
 
     deallocate_array(m_input_ext_obj_xyz);

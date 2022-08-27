@@ -26,7 +26,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
         sgps::materialsOffset_t bodyAMatType, bodyBMatType;
         sgps::oriQ_t AoriQ0, AoriQ1, AoriQ2, AoriQ3;
         sgps::oriQ_t BoriQ0, BoriQ1, BoriQ2, BoriQ3;
-        // sgps::family_t AOwnerFamily, BOwnerFamily;
+        sgps::family_t AOwnerFamily, BOwnerFamily;
         // Take care of 2 bodies in order, bodyA first, grab location and velocity to local cache
         // We know in this kernel, bodyA will be a sphere; bodyB can be something else
         {
@@ -50,7 +50,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
 
             bodyAMatType = granData->materialTupleOffset[sphereID];
 
-            // AOwnerFamily = granData->familyID[myOwner];
+            AOwnerFamily = granData->familyID[myOwner];
 
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 AOwnerPos.x, AOwnerPos.y, AOwnerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
@@ -95,7 +95,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
 
             bodyBMatType = granData->materialTupleOffset[sphereID];
 
-            // BOwnerFamily = granData->familyID[myOwner];
+            BOwnerFamily = granData->familyID[myOwner];
 
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 BOwnerPos.x, BOwnerPos.y, BOwnerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
