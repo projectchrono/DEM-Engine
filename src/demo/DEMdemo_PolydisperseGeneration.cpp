@@ -51,6 +51,9 @@ int main() {
     auto terrain_tracker = DEM_sim.Track(terrain_particles);
     unsigned int nTerrainParticles = input_xyz.size();
 
+    // Create a inspector to find out the highest point of this granular pile
+    auto max_z_finder = DEM_sim.CreateInspector("max_z", DEM_INSPECT_ENTITY_TYPE::SPHERE);
+
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, world_size / std::pow(2, 16) / std::pow(2, 21));
     DEM_sim.InstructBoxDomainBoundingBC("all", mat_type_terrain);
     DEM_sim.AddBCPlane(make_float3(0, 0, -world_size / 2), make_float3(0, 0, 1), mat_type_terrain);
@@ -71,6 +74,9 @@ int main() {
 
     unsigned int currframe = 0;
 
+    float high_z = max_z_finder->GetValue();
+    std::cout << "Max Z is at " << high_z << std::endl;
+
     for (float t = 0; t < 0.1; t += 0.05) {
         {
             std::cout << "Frame: " << currframe << std::endl;
@@ -81,6 +87,8 @@ int main() {
         }
         DEM_sim.DoDynamicsThenSync(0.05);
     }
+    high_z = max_z_finder->GetValue();
+    std::cout << "Max Z is at " << high_z << std::endl;
 
     ///////////////////////////////////////////////////////////////
     // As a proof of concept, we enlarge some of the particles on
@@ -109,39 +117,29 @@ int main() {
 
     float cur_terrain_rad = terrain_rad;
     float totalKE;
-    while (cur_terrain_rad < terrain_rad * 1.5) {
-        double prev_rad = cur_terrain_rad;
-        cur_terrain_rad += terrain_rad / 10;
-        std::cout << "Current particle size: " << cur_terrain_rad << std::endl;
-        std::vector<float> enlarge_ratio(enlarge_ids.size(), (double)cur_terrain_rad / prev_rad);
-        terrain_tracker->ChangeClumpSizes(enlarge_ids, enlarge_ratio);
+    // while (cur_terrain_rad < terrain_rad * 1.5) {
+    //     double prev_rad = cur_terrain_rad;
+    //     cur_terrain_rad += terrain_rad / 10;
+    //     std::cout << "Current particle size: " << cur_terrain_rad << std::endl;
+    //     std::vector<float> enlarge_ratio(enlarge_ids.size(), (double)cur_terrain_rad / prev_rad);
+    //     terrain_tracker->ChangeClumpSizes(enlarge_ids, enlarge_ratio);
 
-        do {
-            // Must DoDynamicsThenSync (not DoDynamics), as adding entities to the simulation is only allowed at a
-            // sync-ed point of time.
-            DEM_sim.DoDynamicsThenSync(step_size * steps_togo);
-            if (curr_step % out_steps == 0) {
-                std::cout << "Frame: " << currframe << std::endl;
-                char filename[200];
-                sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-                DEM_sim.WriteSphereFile(std::string(filename));
-            }
-            totalKE = DEM_sim.GetTotalKineticEnergy();
-            std::cout << "Total kinematic energy now: " << totalKE << std::endl;
-            curr_step += steps_togo;
-        } while (totalKE > 0.5);
-    }
-    DEM_sim.ShowThreadCollaborationStats();
-
-    // float step_time = 1e-1;
-    // for (float t = 0; t < sim_end; t += step_time) {
-    //     std::cout << "Frame: " << currframe << std::endl;
-    //     DEM_sim.ShowThreadCollaborationStats();
-    //     char filename[200];
-    //     sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-    //     DEM_sim.WriteSphereFile(std::string(filename));
-    //     DEM_sim.DoDynamicsThenSync(step_time);
+    //     do {
+    //         // Must DoDynamicsThenSync (not DoDynamics), as adding entities to the simulation is only allowed at a
+    //         // sync-ed point of time.
+    //         DEM_sim.DoDynamicsThenSync(step_size * steps_togo);
+    //         if (curr_step % out_steps == 0) {
+    //             std::cout << "Frame: " << currframe << std::endl;
+    //             char filename[200];
+    //             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
+    //             DEM_sim.WriteSphereFile(std::string(filename));
+    //         }
+    //         totalKE = DEM_sim.GetTotalKineticEnergy();
+    //         std::cout << "Total kinematic energy now: " << totalKE << std::endl;
+    //         curr_step += steps_togo;
+    //     } while (totalKE > 0.5);
     // }
+    // DEM_sim.ShowThreadCollaborationStats();
 
     // Finally, output a `checkpoint'
     char cp_filename[200];

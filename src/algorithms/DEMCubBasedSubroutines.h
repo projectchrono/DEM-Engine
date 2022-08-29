@@ -10,13 +10,26 @@
 
 namespace sgps {
 
-void sumReduce(double* d_in, double* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
+void doubleSumReduce(double* d_in, double* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
+
+void floatSumReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
 
 void boolMaxReduce(notStupidBool_t* d_in,
                    notStupidBool_t* d_out,
                    size_t n,
                    cudaStream_t& this_stream,
                    DEMSolverStateData& scratchPad);
+
+void floatMaxReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
+
+void floatMaxReduceByKey(notStupidBool_t* d_keys_in,
+                         notStupidBool_t* d_unique_out,
+                         float* d_vals_in,
+                         float* d_aggregates_out,
+                         size_t* d_num_out,
+                         size_t n,
+                         cudaStream_t& this_stream,
+                         DEMSolverStateData& scratchPad);
 
 void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                       std::shared_ptr<jitify::Program>& contact_detection_kernels,

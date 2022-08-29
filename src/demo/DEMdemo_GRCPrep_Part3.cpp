@@ -24,6 +24,7 @@ int main() {
     DEM_sim.SetVerbosity(INFO);
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
     // DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::FAMILY);
+    DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::XYZ);
 
     srand(759);
 
@@ -153,8 +154,12 @@ int main() {
         }
     }
 
+    // Now add a plane to compress the `road'
+    auto compressor =
+        DEM_sim.AddBCPlane(make_float3(world_y_size * 2 / 2, 0, 0), make_float3(0, 0, -1), mat_type_terrain);
+
     // Make ready for simulation
-    float step_size = 3e-6;
+    float step_size = 1e-6;
     DEM_sim.SetCoordSysOrigin("center");
     DEM_sim.SetInitTimeStep(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
@@ -188,7 +193,6 @@ int main() {
         DEM_sim.ShowThreadCollaborationStats();
     }
 
-    // DEM_sim.DoDynamicsThenSync(0.3);
     // DEM_sim.ChangeFamily(101, 100);
     // for (double t = 0; t < (double)time_end; t += step_size, curr_step++) {
     //     if (curr_step % out_steps == 0) {

@@ -470,6 +470,13 @@ class DEMDynamicThread {
     // Jitify dT kernels (at initialization) based on existing knowledge of this run
     void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs);
 
+    // Execute this kernel, then return the reduced value
+    float* inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
+                       const std::string& kernel_name,
+                       size_t n,
+                       DEM_CUB_REDUCE_FLAVOR reduce_flavor,
+                       bool all_domain);
+
   private:
     const std::string Name = "dT";
 
@@ -498,7 +505,7 @@ class DEMDynamicThread {
     std::shared_ptr<jitify::Program> cal_force_kernels;
     std::shared_ptr<jitify::Program> collect_force_kernels;
     std::shared_ptr<jitify::Program> integrator_kernels;
-    std::shared_ptr<jitify::Program> quarry_stats_kernels;
+    // std::shared_ptr<jitify::Program> quarry_stats_kernels;
     std::shared_ptr<jitify::Program> mod_kernels;
     std::shared_ptr<jitify::Program> misc_kernels;
 };  // dT ends

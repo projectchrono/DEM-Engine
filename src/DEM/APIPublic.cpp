@@ -7,6 +7,7 @@
 #include <DEM/API.h>
 #include <DEM/DEMDefines.h>
 #include <DEM/HostSideHelpers.hpp>
+#include <DEM/DEMAuxClasses.h>
 
 #include <iostream>
 #include <fstream>
@@ -501,7 +502,7 @@ std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMExternObj>& obj)
     // universal treatment that dT can apply, besides we may have some include-related issues.
     DEMTrackedObj tracked_obj;
     tracked_obj.load_order = obj->load_order;
-    tracked_obj.type = DEM_ENTITY_TYPE::ANALYTICAL;
+    tracked_obj.type = DEM_OWNER_TYPE::ANALYTICAL;
     m_tracked_objs.push_back(std::make_shared<DEMTrackedObj>(std::move(tracked_obj)));
 
     // Create a Tracker for this tracked object
@@ -513,13 +514,20 @@ std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMExternObj>& obj)
 std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMClumpBatch>& obj) {
     DEMTrackedObj tracked_obj;
     tracked_obj.load_order = obj->load_order;
-    tracked_obj.type = DEM_ENTITY_TYPE::CLUMP;
+    tracked_obj.type = DEM_OWNER_TYPE::CLUMP;
     m_tracked_objs.push_back(std::make_shared<DEMTrackedObj>(std::move(tracked_obj)));
 
     // Create a Tracker for this tracked object
     DEMTracker tracker(this);
     tracker.obj = m_tracked_objs.back();
     return std::make_shared<DEMTracker>(std::move(tracker));
+}
+
+std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity,
+                                                         DEM_INSPECT_ENTITY_TYPE insp_type) {
+    DEMInspector insp(this, quantity, insp_type);
+    m_inspectors.push_back(std::make_shared<DEMInspector>(std::move(insp)));
+    return m_inspectors.back();
 }
 
 void DEMSolver::WriteSphereFile(const std::string& outfilename) const {
@@ -837,6 +845,24 @@ void DEMSolver::ClearThreadCollaborationStats() {
     dTkT_InteractionManager->schedulingStats.nTimesDynamicHeldBack = 0;
     dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack = 0;
     dT->nTotalSteps = 0;
+}
+
+float DEMSolver::dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
+                                 const std::string& kernel_name,
+                                 DEM_INSPECT_ENTITY_TYPE thing_to_insp,
+                                 DEM_CUB_REDUCE_FLAVOR reduce_flavor,
+                                 bool all_domain) {
+    size_t n;
+    switch (thing_to_insp) {
+        case (DEM_INSPECT_ENTITY_TYPE::SPHERE):
+            n = nSpheresGM;
+            break;
+        case (DEM_INSPECT_ENTITY_TYPE::CLUMP):
+            n = nOwnerClumps;
+            break;
+    }
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, n, reduce_flavor, all_domain);
+    return *pRes;
 }
 
 }  // namespace sgps

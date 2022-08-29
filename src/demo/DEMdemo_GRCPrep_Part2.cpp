@@ -24,6 +24,7 @@ int main() {
     DEM_sim.SetVerbosity(INFO);
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
     // DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::FAMILY);
+    DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::XYZ);
 
     srand(759);
 

@@ -11,6 +11,18 @@
 
 namespace sgps {
 
+struct CubFloat3Add {
+    CUB_RUNTIME_FUNCTION __forceinline__ __device__ __host__ float3 operator()(const float3& a, const float3& b) const {
+        return ::make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
+    }
+};
+
+struct CubFloatAdd {
+    CUB_RUNTIME_FUNCTION __forceinline__ __device__ __host__ float operator()(const float& a, const float& b) const {
+        return a + b;
+    }
+};
+
 template <typename T1, typename T2, typename T3>
 inline void cubDEMPrefixScan(T1* d_in, T2* d_out, size_t n, cudaStream_t& this_stream, T3& scratchPad) {
     // NOTE!!! Why did I not use ExclusiveSum? I found that when for a cub scan operation, if the d_in and d_out are of

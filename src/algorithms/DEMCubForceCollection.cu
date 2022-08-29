@@ -17,12 +17,6 @@
 
 namespace sgps {
 
-struct CubFloat3Add {
-    CUB_RUNTIME_FUNCTION __forceinline__ __device__ __host__ float3 operator()(const float3& a, const float3& b) const {
-        return ::make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
-    }
-};
-
 void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernels,
                           DEMDataDT* granData,
                           const size_t nContactPairs,

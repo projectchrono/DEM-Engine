@@ -284,6 +284,11 @@ void DEMSolver::jitifyKernels() {
     equipForceModel(Subs);
     kT->jitifyKernels(Subs);
     dT->jitifyKernels(Subs);
+
+    // Now, inspectors need to be jitified too
+    for (auto& insp : m_inspectors) {
+        insp->initializeInspector(Subs);
+    }
 }
 
 void DEMSolver::figureOutNV() {}
@@ -386,11 +391,11 @@ void DEMSolver::preprocessAnalyticalObjs() {
             this_num_anal_ent++;
             switch (ext_obj->types.at(i)) {
                 case DEM_OBJ_COMPONENT::PLANE:
-                    addAnalCompTemplate(DEM_ENTITY_TYPE_PLANE, comp_mat.at(i), thisExtObj, param.plane.position,
+                    addAnalCompTemplate(DEM_ANAL_OBJ_TYPE_PLANE, comp_mat.at(i), thisExtObj, param.plane.position,
                                         param.plane.normal);
                     break;
                 case DEM_OBJ_COMPONENT::PLATE:
-                    addAnalCompTemplate(DEM_ENTITY_TYPE_PLATE, comp_mat.at(i), thisExtObj, param.plate.center,
+                    addAnalCompTemplate(DEM_ANAL_OBJ_TYPE_PLATE, comp_mat.at(i), thisExtObj, param.plate.center,
                                         param.plate.normal, param.plate.h_dim_x, param.plate.h_dim_y);
                     break;
                 default:

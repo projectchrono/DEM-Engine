@@ -473,7 +473,7 @@ class DEMClumpBatch {
 struct DEMTrackedObj {
     // ownerID will be updated by dT on initialization
     bodyID_t ownerID = DEM_NULL_BODYID;
-    DEM_ENTITY_TYPE type;
+    DEM_OWNER_TYPE type;
     // A tracker tracks a owner loaded into the system via its respective loading method, so load_order registers
     // the position of this object in the corresponding API-side array
     size_t load_order;

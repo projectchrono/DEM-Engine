@@ -32,6 +32,7 @@ set(DEM_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMBdrsAndObjs.h
 	${CMAKE_CURRENT_SOURCE_DIR}/HostSideHelpers.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/Samplers.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMAuxClasses.h
 )
 
 set(DEM_sources
@@ -40,6 +41,7 @@ set(DEM_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/APIPublic.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/APIPrivate.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/MeshUtils.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMAuxClasses.cpp
 )
 
 target_sources(

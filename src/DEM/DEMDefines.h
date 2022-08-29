@@ -54,8 +54,8 @@ constexpr int64_t DEM_MAX_SUBVOXEL = (int64_t)1 << DEM_VOXEL_RES_POWER2;
 constexpr clumpComponentOffset_t NUM_ACTIVE_TEMPLATE_LOADING_THREADS =
     SGPS_DEM_MIN(SGPS_DEM_MIN(SGPS_CUDA_WARP_SIZE, SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK), SGPS_DEM_NUM_BODIES_PER_BLOCK);
 
-const objType_t DEM_ENTITY_TYPE_PLANE = 0;
-const objType_t DEM_ENTITY_TYPE_PLATE = 1;
+const objType_t DEM_ANAL_OBJ_TYPE_PLANE = 0;
+const objType_t DEM_ANAL_OBJ_TYPE_PLATE = 1;
 const objNormal_t DEM_ENTITY_NORMAL_INWARD = 0;
 const objNormal_t DEM_ENTITY_NORMAL_OUTWARD = 1;
 
@@ -106,9 +106,11 @@ enum DEM_VERBOSITY { QUIET = 0, ERROR = 10, WARNING = 20, INFO = 30, STEP_STATS 
 // Stepping method
 enum class DEM_TIME_INTEGRATOR { FORWARD_EULER, CENTERED_DIFFERENCE, EXTENDED_TAYLOR, CHUNG };
 // Owner types
-enum DEM_ENTITY_TYPE { CLUMP, ANALYTICAL, MESH };
-// Output particles as individual (component) spheres, or as owner clumps (clump CoMs for location, as an example)?
-enum class DEM_OUTPUT_MODE { SPHERE, CLUMP };
+enum class DEM_OWNER_TYPE { CLUMP, ANALYTICAL, MESH };
+// Types of entities (can be either owner or geometry entity) that can be inspected by inspection methods
+enum class DEM_INSPECT_ENTITY_TYPE { SPHERE, CLUMP, MESH, MESH_FACET };
+// Which reduce operation is needed in an inspection
+enum class DEM_CUB_REDUCE_FLAVOR { NONE, MAX, MIN, SUM };
 // Format of the output files
 enum class DEM_OUTPUT_FORMAT { CSV, BINARY, CHPF };
 // The info that should be present in the output files
@@ -126,6 +128,8 @@ enum DEM_OUTPUT_CONTENT {
     // the user imposed some fine-grain clump size control.
     EXP_FACTOR = 256
 };
+// Output particles as individual (component) spheres, or as owner clumps (clump CoMs for location, as an example)?
+// enum class DEM_OUTPUT_MODE { SPHERE, CLUMP };
 
 // =============================================================================
 // NOW DEFINING SOME GPU-SIDE DATA STRUCTURES

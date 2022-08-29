@@ -21,18 +21,21 @@
 #include <DEM/DEMStructs.h>
 #include <DEM/DEMBdrsAndObjs.h>
 #include <DEM/DEMModels.h>
+#include <DEM/DEMAuxClasses.h>
 
 namespace sgps {
 
 // class DEMKinematicThread;
 // class DEMDynamicThread;
 // class ThreadManager;
+class DEMInspector;
 class DEMTracker;
 
 //////////////////////////////////////////////////////////////
 // TODO LIST: 1. Variable ts size (MAX_VEL flavor uses tracked max cp vel)
 //            2. Allow ext obj init CoM setting
 //            3. Instruct how many dT steps should at LEAST do before receiving kT update
+//            4. Sleepers that don't participate CD or integration
 //            5. Make force model a struct, and inside it...
 //            6. Select whether to acquire mat, acquire what history, and whether
 //               to use a/several custom float arrays to store custom config data
@@ -229,6 +232,12 @@ class DEMSolver {
     /// using this tracker's querying or assignment methods.
     std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMClumpBatch>& obj);
 
+    /// Create a inspector object that can help query some statistical info of the clumps in the simulation
+    std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity = "max_z",
+                                                  DEM_INSPECT_ENTITY_TYPE insp_type = DEM_INSPECT_ENTITY_TYPE::SPHERE);
+    // std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity, region, DEM_INSPECT_ENTITY_TYPE
+    // insp_type = DEM_INSPECT_ENTITY_TYPE::SPHERE);
+
     /// Instruct the solver that the 2 input families should not have contacts (a.k.a. ignored, if such a pair is
     /// encountered in contact detection). These 2 families can be the same (which means no contact within members of
     /// that family).
@@ -398,16 +407,24 @@ class DEMSolver {
         DEMSolver_impl* m_sys;
     */
 
-    /// Choose between outputting particles as individual component spheres (results in larger files but less
-    /// post-processing), or as owner clumps (e.g. xyz location means clump CoM locations, etc.), by
-    /// DEM_OUTPUT_MODE::SPHERE and DEM_OUTPUT_MODE::CLUMP options.
-    /// NOTE: I did not implement this functionality; the flavor of output depends on the actual write-to-file function
-    /// call.
-    void SetClumpOutputMode(DEM_OUTPUT_MODE mode) { m_clump_out_mode = mode; }
+    // Choose between outputting particles as individual component spheres (results in larger files but less
+    // post-processing), or as owner clumps (e.g. xyz location means clump CoM locations, etc.), by
+    // DEM_OUTPUT_MODE::SPHERE and DEM_OUTPUT_MODE::CLUMP options.
+    // NOTE: I did not implement this functionality; the flavor of output depends on the actual write-to-file function
+    // call.
+    // void SetClumpOutputMode(DEM_OUTPUT_MODE mode) { m_clump_out_mode = mode; }
+
     /// Choose output format
     void SetOutputFormat(DEM_OUTPUT_FORMAT format) { m_out_format = format; }
     /// Specify the information that needs to go into the output files
     void SetOutputContent(unsigned int content) { m_out_content = content; }
+
+    /// Let dT do this call and return the reduce value of the inspected quantity
+    float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
+                          const std::string& kernel_name,
+                          DEM_INSPECT_ENTITY_TYPE thing_to_insp,
+                          DEM_CUB_REDUCE_FLAVOR reduce_flavor,
+                          bool all_domain);
 
   private:
     ////////////////////////////////////////////////////////////////////////////////
@@ -439,8 +456,7 @@ class DEMSolver {
     bool use_user_defined_expand_factor = false;
 
     // I/O related flags
-    DEM_OUTPUT_MODE m_clump_out_mode =
-        DEM_OUTPUT_MODE::SPHERE;  ///< Not used (output style determined by method call style)
+    // DEM_OUTPUT_MODE m_clump_out_mode = DEM_OUTPUT_MODE::SPHERE;
     DEM_OUTPUT_FORMAT m_out_format = DEM_OUTPUT_FORMAT::CHPF;
     unsigned int m_out_content = DEM_OUTPUT_CONTENT::QUAT | DEM_OUTPUT_CONTENT::ABSV;
 
@@ -643,6 +659,9 @@ class DEMSolver {
     std::vector<std::shared_ptr<DEMTrackedObj>> m_tracked_objs;
     // std::vector<std::shared_ptr<DEMTracker>> m_trackers;
 
+    // Cached inspectors that can be used to query the simulation system
+    std::vector<std::shared_ptr<DEMInspector>> m_inspectors;
+
     ////////////////////////////////////////////////////////////////////////////////
     // Flattened and sometimes processed user inputs, ready to be transferred to
     // worker threads. Will be automatically cleared after initialization.
@@ -833,40 +852,6 @@ class DEMSolver {
     inline void equipFamilyPrescribedMotions(std::unordered_map<std::string, std::string>& strMap);
     inline void equipFamilyOnFlyChanges(std::unordered_map<std::string, std::string>& strMap);
     inline void equipForceModel(std::unordered_map<std::string, std::string>& strMap);
-};
-
-// A struct to get or set tracked owner entities, mainly for co-simulation
-class DEMTracker {
-  private:
-    // Its parent DEMSolver system
-    DEMSolver* sys;
-
-  public:
-    DEMTracker(DEMSolver* sim_sys) : sys(sim_sys) {}
-    ~DEMTracker() {}
-
-    // The tracked object
-    std::shared_ptr<DEMTrackedObj> obj;
-    // Methods to get info from this owner
-    float3 Pos(size_t offset = 0) { return sys->GetOwnerPosition(obj->ownerID + offset); }
-    float3 AngVel(size_t offset = 0) { return sys->GetOwnerAngVel(obj->ownerID + offset); }
-    float3 Vel(size_t offset = 0) { return sys->GetOwnerVelocity(obj->ownerID + offset); }
-    float4 OriQ(size_t offset = 0) { return sys->GetOwnerOriQ(obj->ownerID + offset); }
-    // Methods to set motions to this owner
-    void SetPos(float3 pos, size_t offset = 0) { sys->SetOwnerPosition(obj->ownerID + offset, pos); }
-    void SetAngVel(float3 angVel, size_t offset = 0) { sys->SetOwnerAngVel(obj->ownerID + offset, angVel); }
-    void SetVel(float3 vel, size_t offset = 0) { sys->SetOwnerVelocity(obj->ownerID + offset, vel); }
-    void SetOriQ(float4 oriQ, size_t offset = 0) { sys->SetOwnerOriQ(obj->ownerID + offset, oriQ); }
-    /// Add an extra force to the tracked body, for the next time step. Note if the user intends to add a persistent
-    /// external force, then using family prescription is the better method.
-    void AddForce(float3 force, size_t offset = 0);
-    /// Change the size of clump entities
-    void ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {
-        std::vector<bodyID_t> offsetted_IDs(IDs);
-        size_t offset = obj->ownerID;
-        std::for_each(offsetted_IDs.begin(), offsetted_IDs.end(), [offset](bodyID_t& x) { x += offset; });
-        sys->ChangeClumpSizes(offsetted_IDs, factors);
-    }
 };
 
 }  // namespace sgps

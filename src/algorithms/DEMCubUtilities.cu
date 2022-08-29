@@ -15,8 +15,12 @@ namespace sgps {
 // These functions interconnecting the cub-part and cpp-part of the code cannot be templated... because of cmake
 // restrictions. Not much that I can do, other than writing them all out.
 
-void sumReduce(double* d_in, double* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad) {
+void doubleSumReduce(double* d_in, double* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad) {
     cubDEMSum<double, DEMSolverStateData>(d_in, d_out, n, this_stream, scratchPad);
+}
+
+void floatSumReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad) {
+    cubDEMSum<float, DEMSolverStateData>(d_in, d_out, n, this_stream, scratchPad);
 }
 
 void boolMaxReduce(notStupidBool_t* d_in,
@@ -29,6 +33,20 @@ void boolMaxReduce(notStupidBool_t* d_in,
 
 void floatMaxReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad) {
     cubDEMMax<float, DEMSolverStateData>(d_in, d_out, n, this_stream, scratchPad);
+}
+
+void floatMaxReduceByKey(notStupidBool_t* d_keys_in,
+                         notStupidBool_t* d_unique_out,
+                         float* d_vals_in,
+                         float* d_aggregates_out,
+                         size_t* d_num_out,
+                         size_t n,
+                         cudaStream_t& this_stream,
+                         DEMSolverStateData& scratchPad) {
+    // I'm not sure how to pass cuda cub::Sum() as a template argument here, so I used a custom add...
+    CubFloatAdd add_op;
+    cubDEMReduceByKeys<notStupidBool_t, float, CubFloatAdd, DEMSolverStateData>(
+        d_keys_in, d_unique_out, d_vals_in, d_aggregates_out, d_num_out, add_op, n, this_stream, scratchPad);
 }
 
 }  // namespace sgps

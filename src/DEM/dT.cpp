@@ -141,21 +141,22 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
 }
 
 float DEMDynamicThread::getKineticEnergy() {
-    // We can use temp vectors as we please
-    size_t quarryTempSize = (size_t)simParams->nOwnerBodies * sizeof(double);
-    double* KEArr = (double*)stateOfSolver_resources.allocateTempVector(1, quarryTempSize);
-    size_t returnSize = sizeof(double);
-    double* KE = (double*)stateOfSolver_resources.allocateTempVector(2, returnSize);
-    size_t blocks_needed_for_KE =
-        (simParams->nOwnerBodies + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) / SGPS_DEM_MAX_THREADS_PER_BLOCK;
-    quarry_stats_kernels->kernel("computeKE")
-        .instantiate()
-        .configure(dim3(blocks_needed_for_KE), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData, simParams->nOwnerBodies, KEArr);
-    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-    // displayArray<double>(KEArr, simParams->nOwnerBodies);
-    sumReduce(KEArr, KE, simParams->nOwnerBodies, streamInfo.stream, stateOfSolver_resources);
-    return *KE;
+    // // We can use temp vectors as we please
+    // size_t quarryTempSize = (size_t)simParams->nOwnerBodies * sizeof(double);
+    // double* KEArr = (double*)stateOfSolver_resources.allocateTempVector(1, quarryTempSize);
+    // size_t returnSize = sizeof(double);
+    // double* KE = (double*)stateOfSolver_resources.allocateTempVector(2, returnSize);
+    // size_t blocks_needed_for_KE =
+    //     (simParams->nOwnerBodies + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) / SGPS_DEM_MAX_THREADS_PER_BLOCK;
+    // quarry_stats_kernels->kernel("computeKE")
+    //     .instantiate()
+    //     .configure(dim3(blocks_needed_for_KE), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+    //     .launch(granData, simParams->nOwnerBodies, KEArr);
+    // GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    // // displayArray<double>(KEArr, simParams->nOwnerBodies);
+    // doubleSumReduce(KEArr, KE, simParams->nOwnerBodies, streamInfo.stream, stateOfSolver_resources);
+    // return *KE;
+    return 0;
 }
 
 void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {
@@ -667,10 +668,10 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
     // nExtObj, then nTriEntities
     for (auto& tracked_obj : tracked_objs) {
         switch (tracked_obj->type) {
-            case (DEM_ENTITY_TYPE::CLUMP):
+            case (DEM_OWNER_TYPE::CLUMP):
                 tracked_obj->ownerID = nExistOwners + prescans_batch_size.at(tracked_obj->load_order);
                 break;
-            case (DEM_ENTITY_TYPE::ANALYTICAL):
+            case (DEM_OWNER_TYPE::ANALYTICAL):
                 // prescans_batch_size.back() is the total num of loaded clumps this time
                 tracked_obj->ownerID = nExistOwners + tracked_obj->load_order + prescans_batch_size.back();
                 break;
@@ -1462,17 +1463,57 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
                                               Subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
     // Then quarrying kernels
-    {
-        quarry_stats_kernels = std::make_shared<jitify::Program>(
-            std::move(JitHelper::buildProgram("DEMQueryKernels", JitHelper::KERNEL_DIR / "DEMQueryKernels.cu", Subs,
-                                              {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
-    }
+    // {
+    //     quarry_stats_kernels = std::make_shared<jitify::Program>(
+    //         std::move(JitHelper::buildProgram("DEMQueryKernels", JitHelper::KERNEL_DIR / "DEMQueryKernels.cu", Subs,
+    //                                           {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+    // }
     // Then misc kernels
     {
         misc_kernels = std::make_shared<jitify::Program>(
             std::move(JitHelper::buildProgram("DEMMiscKernels", JitHelper::KERNEL_DIR / "DEMMiscKernels.cu", Subs,
                                               {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
+}
+
+float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
+                                     const std::string& kernel_name,
+                                     size_t n,
+                                     DEM_CUB_REDUCE_FLAVOR reduce_flavor,
+                                     bool all_domain) {
+    // We can use temp vectors as we please
+    size_t quarryTempSize = n * sizeof(float);
+    float* resArr = (float*)stateOfSolver_resources.allocateTempVector(1, quarryTempSize);
+    size_t regionTempSize = n * sizeof(notStupidBool_t);
+    notStupidBool_t* boolArr = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(2, regionTempSize);
+    GPU_CALL(cudaMemset(boolArr, 0, regionTempSize));
+
+    size_t returnSize = sizeof(float);
+    float* res = (float*)stateOfSolver_resources.allocateTempVector(3, returnSize);
+    size_t blocks_needed = (n + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) / SGPS_DEM_MAX_THREADS_PER_BLOCK;
+    inspection_kernel->kernel(kernel_name)
+        .instantiate()
+        .configure(dim3(blocks_needed), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+        .launch(granData, resArr, boolArr, n);
+    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+    if (all_domain) {
+        switch (reduce_flavor) {
+            case (DEM_CUB_REDUCE_FLAVOR::MAX):
+                floatMaxReduce(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
+                break;
+            case (DEM_CUB_REDUCE_FLAVOR::SUM):
+                floatSumReduce(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
+                break;
+            case (DEM_CUB_REDUCE_FLAVOR::NONE):
+                return resArr;
+        }
+        // If this inspection is comfined in a region, then boolArr and resArr need to be sorted and reduce by key
+    } else {
+        //// TODO: Implement it
+    }
+
+    return res;
 }
 
 float3 DEMDynamicThread::getOwnerAngVel(bodyID_t ownerID) const {

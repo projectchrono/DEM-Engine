@@ -17,8 +17,8 @@
 #include <fstream>
 #include <filesystem>
 #include <nvmath/helper_math.cuh>
-
-#include <DEM/DEMDefines.h>
+#include <DEM/VariableTypes.h>
+// #include <DEM/DEMDefines.h>
 
 namespace sgps {
 
@@ -334,6 +334,15 @@ inline void deallocate_array(std::vector<T1>& arr) {
 template <typename T1, typename T2>
 inline void deallocate_array(std::unordered_map<T1, T2>& mapping) {
     mapping.clear();
+}
+
+// A smaller hasher that helps determine the indentifier type. Contribution from Nick and hare1039 on Stackoverflow,
+// https://stackoverflow.com/questions/650162/why-cant-the-switch-statement-be-applied-on-strings.
+constexpr unsigned int hash_charr(const char* s, int off = 0) {
+    return !s[off] ? 7001 : (hash_charr(s, off + 1) * 33) ^ s[off];
+}
+constexpr inline unsigned int operator"" _(const char* s, size_t) {
+    return hash_charr(s);
 }
 
 // Load content from a file to a string

@@ -346,7 +346,7 @@ inline __device__ sgps::contact_t checkSphereEntityOverlap(const T1& xA,
                                                            const bool& normalB,
                                                            const float& beta4Entity) {
     switch (typeB) {
-        case (sgps::DEM_ENTITY_TYPE_PLANE): {
+        case (sgps::DEM_ANAL_OBJ_TYPE_PLANE): {
             const T1 plane2sphX = xA - xB;
             const T1 plane2sphY = yA - yB;
             const T1 plane2sphZ = zA - zB;
@@ -357,7 +357,7 @@ inline __device__ sgps::contact_t checkSphereEntityOverlap(const T1& xA,
             }
             return sgps::DEM_SPHERE_PLANE_CONTACT;
         }
-        case (sgps::DEM_ENTITY_TYPE_PLATE): {
+        case (sgps::DEM_ANAL_OBJ_TYPE_PLATE): {
             return sgps::DEM_NOT_A_CONTACT;
         }
         default:
@@ -391,7 +391,7 @@ inline __device__ sgps::contact_t checkSphereEntityOverlap(const T1& xA,
                                                            T2& normalZ,
                                                            T1& overlapDepth) {
     switch (typeB) {
-        case (sgps::DEM_ENTITY_TYPE_PLANE): {
+        case (sgps::DEM_ANAL_OBJ_TYPE_PLANE): {
             const T1 plane2sphX = xA - xB;
             const T1 plane2sphY = yA - yB;
             const T1 plane2sphZ = zA - zB;
@@ -411,7 +411,7 @@ inline __device__ sgps::contact_t checkSphereEntityOverlap(const T1& xA,
             normalZ = dirzB;
             return sgps::DEM_SPHERE_PLANE_CONTACT;
         }
-        case (sgps::DEM_ENTITY_TYPE_PLATE): {
+        case (sgps::DEM_ANAL_OBJ_TYPE_PLATE): {
             return sgps::DEM_NOT_A_CONTACT;
         }
         default:
