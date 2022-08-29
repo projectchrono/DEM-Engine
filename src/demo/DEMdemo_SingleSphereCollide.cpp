@@ -52,6 +52,10 @@ int main() {
 
     DEM_sim.AddBCPlane(make_float3(0, 0, -1.25), make_float3(0, 0, 1), mat_type_1);
 
+    // Create a inspector to find out the highest point of this granular pile
+    auto max_z_finder = DEM_sim.CreateInspector("max_z", DEM_INSPECT_ENTITY_TYPE::SPHERE);
+    float max_z;
+
     DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, 3e-11);
 
     DEM_sim.SetCoordSysOrigin("center");
@@ -81,6 +85,8 @@ int main() {
         DEM_sim.WriteSphereFile(std::string(filename));
 
         DEM_sim.DoDynamicsThenSync(1e-2);
+        max_z = max_z_finder->GetValue();
+        std::cout << "Max Z coord is " << max_z << std::endl;
     }
 
     std::cout << "DEMdemo_SingleSphereCollide exiting..." << std::endl;

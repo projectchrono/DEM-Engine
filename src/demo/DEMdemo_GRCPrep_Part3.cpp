@@ -154,9 +154,14 @@ int main() {
         }
     }
 
+    // Create a inspector to find out the highest point of this granular pile
+    auto max_z_finder = DEM_sim.CreateInspector("max_z", DEM_INSPECT_ENTITY_TYPE::SPHERE);
+
     // Now add a plane to compress the `road'
-    auto compressor =
-        DEM_sim.AddBCPlane(make_float3(world_y_size * 2 / 2, 0, 0), make_float3(0, 0, -1), mat_type_terrain);
+    auto compressor = DEM_sim.AddExternalObject();
+    compressor->AddPlane(make_float3(0, 0, 0), make_float3(0, 0, -1), mat_type_terrain);
+    compressor->SetFamily(DEM_RESERVED_FAMILY_NUM);
+    auto compressor_tracker = DEM_sim.Track(compressor);
 
     // Make ready for simulation
     float step_size = 1e-6;
@@ -181,17 +186,28 @@ int main() {
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
 
-    float settle_frame_time = 0.05;
     float settle_batch_time = 0.5;
+    float compressor_final_dist = 0.01;
+    float compressor_v = compressor_final_dist / settle_batch_time;
 
-    for (float t = 0; t < settle_batch_time; t += settle_frame_time) {
-        std::cout << "Frame: " << currframe << std::endl;
-        char filename[200];
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-        DEM_sim.WriteSphereFile(std::string(filename));
-        DEM_sim.DoDynamicsThenSync(settle_frame_time);
-        DEM_sim.ShowThreadCollaborationStats();
+    float now_z = max_z_finder->GetValue();
+    std::cout << "Highest point is at " << now_z << std::endl;
+    compressor_tracker->SetPos(make_float3(0, 0, now_z));
+    for (float t = 0; t < settle_batch_time; t += step_size, curr_step++) {
+        if (curr_step % out_steps == 0) {
+            std::cout << "Frame: " << currframe << std::endl;
+            std::cout << "Highest point is at " << now_z << std::endl;
+            DEM_sim.ShowThreadCollaborationStats();
+            char filename[200];
+            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
+            DEM_sim.WriteSphereFile(std::string(filename));
+        }
+        now_z -= compressor_v * step_size;
+        compressor_tracker->SetPos(make_float3(0, 0, now_z));
+        DEM_sim.DoDynamics(step_size);
     }
+
+    DEM_sim.DoDynamicsThenSync(0);
 
     // DEM_sim.ChangeFamily(101, 100);
     // for (double t = 0; t < (double)time_end; t += step_size, curr_step++) {

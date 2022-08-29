@@ -36,6 +36,7 @@ __global__ void computeKE(sgps::DEMDataDT* granData, size_t nOwnerBodies, double
 }
 
 __global__ void inspectSphereProperty(sgps::DEMDataDT* granData,
+                                      sgps::DEMSimParams* simParams,
                                       float* quantity,
                                       sgps::notStupidBool_t* in_region,
                                       size_t nSpheres) {
@@ -59,9 +60,10 @@ __global__ void inspectSphereProperty(sgps::DEMDataDT* granData,
                                                 granData->oriQ3[myOwner]);
 
         // Use sphereXYZ to determine if this sphere is in the region that should be counted
-        float sphereX = ownerX + myRelPosX;
-        float sphereY = ownerY + myRelPosY;
-        float sphereZ = ownerZ + myRelPosZ;
+        // And don't forget adding LBF as an offset
+        float sphereX = ownerX + myRelPosX + simParams->LBFX;
+        float sphereY = ownerY + myRelPosY + simParams->LBFY;
+        float sphereZ = ownerZ + myRelPosZ + simParams->LBFZ;
         { _inRegionPolicy_; }
 
         // Now it's a problem of what quantity to query

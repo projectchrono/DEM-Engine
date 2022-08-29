@@ -1494,7 +1494,7 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     inspection_kernel->kernel(kernel_name)
         .instantiate()
         .configure(dim3(blocks_needed), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData, resArr, boolArr, n);
+        .launch(granData, simParams, resArr, boolArr, n);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     if (all_domain) {
