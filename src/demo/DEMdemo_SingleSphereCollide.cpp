@@ -43,10 +43,7 @@ int main() {
     auto particles1 = DEM_sim.AddClumps(input_clump_type, input_xyz1);
     particles1->SetVel(input_vel1);
     particles1->SetFamily(0);
-
-    auto particles2 = DEM_sim.AddClumps(input_clump_type, input_xyz2);
-    particles2->SetVel(input_vel2);
-    particles2->SetFamily(1);
+    auto tracker1 = DEM_sim.Track(particles1);
 
     DEM_sim.DisableContactBetweenFamilies(0, 1);
 
@@ -68,6 +65,15 @@ int main() {
 
     DEM_sim.Initialize();
 
+    // You can add more clumps to simulation like this...
+    DEM_sim.ClearCache();
+    auto particles2 = DEM_sim.AddClumps(input_clump_type, input_xyz2);
+    particles2->SetVel(input_vel2);
+    particles2->SetFamily(1);
+    auto tracker2 = DEM_sim.Track(particles2);
+    DEM_sim.UpdateClumps();
+
+    // Ready simulation
     path out_dir = current_path();
     out_dir += "/DEMdemo_SingleSphereCollide";
     create_directory(out_dir);
@@ -87,6 +93,8 @@ int main() {
         DEM_sim.DoDynamicsThenSync(1e-2);
         max_z = max_z_finder->GetValue();
         std::cout << "Max Z coord is " << max_z << std::endl;
+        std::cout << "Particle 1 X coord is " << tracker1->Pos().x << std::endl;
+        std::cout << "Particle 2 X coord is " << tracker2->Pos().x << std::endl;
     }
 
     std::cout << "DEMdemo_SingleSphereCollide exiting..." << std::endl;

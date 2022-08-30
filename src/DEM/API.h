@@ -40,7 +40,6 @@ class DEMTracker;
 //            6. Select whether to acquire mat, acquire what history, and whether
 //               to use a/several custom float arrays to store custom config data
 //            7. This custom array can be defined at clump template/anal obj/mesh obj generation
-//            8. Make UpdateClumps also update tracked clump batches
 //            9. wT takes care of an extra output when it crushes
 //////////////////////////////////////////////////////////////
 
@@ -537,11 +536,18 @@ class DEMSolver {
     bool m_ensure_kernel_line_num = false;
 
     ////////////////////////////////////////////////////////////////////////////////
-    // No method is provided to modify the following key quantities, even if
+    // No user method is provided to modify the following key quantities, even if
     // there are entites added to/removed from the simulation, in which case
-    // they will just be modified. At the time these quantities should be clear,
+    // they will just be modified. At the time these quantities should be cleared,
     // the user might as well reconstruct the simulator.
     ////////////////////////////////////////////////////////////////////////////////
+
+    // Cached tracked objects that can be leveraged by the user to assume explicit control over some simulation objects
+    std::vector<std::shared_ptr<DEMTrackedObj>> m_tracked_objs;
+    // std::vector<std::shared_ptr<DEMTracker>> m_trackers;
+
+    // Cached inspectors that can be used to query the simulation system
+    std::vector<std::shared_ptr<DEMInspector>> m_inspectors;
 
     // Total number of spheres
     size_t nSpheresGM = 0;
@@ -654,13 +660,6 @@ class DEMSolver {
     // function; prescribed location as a function)
     // Upper-triangular interaction `mask' matrix, which clarifies the family codes that a family can interact with.
     // This is needed by kT only.
-
-    // Cached tracked objects that can be leveraged by the user to assume explicit control over some simulation objects
-    std::vector<std::shared_ptr<DEMTrackedObj>> m_tracked_objs;
-    // std::vector<std::shared_ptr<DEMTracker>> m_trackers;
-
-    // Cached inspectors that can be used to query the simulation system
-    std::vector<std::shared_ptr<DEMInspector>> m_inspectors;
 
     ////////////////////////////////////////////////////////////////////////////////
     // Flattened and sometimes processed user inputs, ready to be transferred to

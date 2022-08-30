@@ -666,19 +666,26 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
     // Provide feedback to the tracked objects, tell them the owner numbers they are looking for
     // Little computation is needed, as long as we know the structure of our owner array: nOwnerClumps go first, then
     // nExtObj, then nTriEntities
-    for (auto& tracked_obj : tracked_objs) {
+    // Also note, we just have to process those haven't been processed
+    for (unsigned int i = nTrackersProcessed; i < tracked_objs.size(); i++) {
+        auto& tracked_obj = tracked_objs.at(i);
         switch (tracked_obj->type) {
             case (DEM_OWNER_TYPE::CLUMP):
                 tracked_obj->ownerID = nExistOwners + prescans_batch_size.at(tracked_obj->load_order);
+                tracked_obj->nSpanOwners = prescans_batch_size.at(tracked_obj->load_order + 1) -
+                                           prescans_batch_size.at(tracked_obj->load_order);
                 break;
             case (DEM_OWNER_TYPE::ANALYTICAL):
                 // prescans_batch_size.back() is the total num of loaded clumps this time
                 tracked_obj->ownerID = nExistOwners + tracked_obj->load_order + prescans_batch_size.back();
+                tracked_obj->nSpanOwners = 1;
                 break;
             default:
                 SGPS_DEM_ERROR("A DEM tracked object has an unknown type.");
         }
     }
+    nTrackersProcessed = tracked_objs.size();
+    SGPS_DEM_DEBUG_PRINTF("Total number of trackers on the record: %u", nTrackersProcessed);
 }
 
 void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
@@ -757,7 +764,8 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                          clumps_sp_location_types, ext_obj_mass_types, ext_obj_moi_types, mesh_obj_mass_types,
                          mesh_obj_moi_types, nExistingOwners, nExistingSpheres);
 
-    // No changes to tracked objects
+    // Make changes to tracked objects (potentially add more)
+    buildTrackedObjs(input_clump_batches, input_ext_obj_xyz, tracked_objs, nExistingOwners);
 }
 
 void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {

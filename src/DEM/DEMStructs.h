@@ -473,10 +473,20 @@ class DEMClumpBatch {
 struct DEMTrackedObj {
     // ownerID will be updated by dT on initialization
     bodyID_t ownerID = DEM_NULL_BODYID;
+    // Type of this tracked object
     DEM_OWNER_TYPE type;
     // A tracker tracks a owner loaded into the system via its respective loading method, so load_order registers
     // the position of this object in the corresponding API-side array
     size_t load_order;
+    // Number of owners that are covered by this tracker. This exists because if you track a batch of clumps, ownerID is
+    // but the first owner of that batch.
+    size_t nSpanOwners = 1;
+    // If this tracked object is broken b/c the owner it points to has been removed from the simulation system
+    bool isBroken = false;
+    // If it is a tracked mesh, then this is the offset for its first facet in the triangle geometry arrays
+    size_t facetID;
+    // If it is a tracked mesh, then this is the number of triangle facets that it has
+    size_t nFacets;
 };
 
 // =============================================================================

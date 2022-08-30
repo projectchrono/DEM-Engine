@@ -480,6 +480,10 @@ class DEMDynamicThread {
   private:
     const std::string Name = "dT";
 
+    // Number of trackers I already processed before (if I see a tracked_obj array longer than this in initialization, I
+    // know I have to process the new-comers)
+    unsigned int nTrackersProcessed = 0;
+
     // Migrate contact history to fit the structure of the newly received contact array
     inline void migrateContactHistory();
 

@@ -401,7 +401,9 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpSimpleSphere(float mass,
 std::shared_ptr<DEMExternObj> DEMSolver::AddExternalObject() {
     DEMExternObj an_obj;
     std::shared_ptr<DEMExternObj> ptr = std::make_shared<DEMExternObj>(std::move(an_obj));
-    ptr->load_order = nExtObjLoad;
+    // load_order should beits position in the cache array, not nExtObjLoad
+    ptr->load_order = cached_extern_objs.size();
+    // But we still need to record a ext obj loaded
     nExtObjLoad++;
     cached_extern_objs.push_back(ptr);
     return cached_extern_objs.back();
@@ -433,7 +435,9 @@ void DEMSolver::ClearCache() {
     deallocate_array(cached_input_clump_batches);
     deallocate_array(cached_extern_objs);
     deallocate_array(cached_mesh_objs);
-    deallocate_array(m_tracked_objs);
+
+    // Should not remove tracked objs: we don't want to break trackers when new entities are loaded
+    // deallocate_array(m_tracked_objs);
 
     // Rigth now, there is no way to re-define the following arrays without re-starting the simulation
     // m_loaded_materials;
@@ -453,7 +457,9 @@ float DEMSolver::GetTotalKineticEnergy() const {
 }
 
 std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(DEMClumpBatch& input_batch) {
-    input_batch.load_order = nBatchClumpsLoad;
+    // load_order should beits position in the cache array, not nBatchClumpsLoad
+    input_batch.load_order = cached_input_clump_batches.size();
+    // But we still need to record a batch loaded
     nBatchClumpsLoad++;
     cached_input_clump_batches.push_back(std::make_shared<DEMClumpBatch>(std::move(input_batch)));
     return cached_input_clump_batches.back();
@@ -478,7 +484,10 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(DEMMeshConne
     if (mesh.GetNumTriangles() == 0) {
         SGPS_DEM_WARNING("It seems that a mesh contains 0 triangle facet.");
     }
-    mesh.load_order = nTriObjLoad;
+    // load_order should beits position in the cache array, not nTriObjLoad
+    mesh.load_order = cached_mesh_objs.size();
+
+    // But we still need to record a tri-mesh loaded
     nTriObjLoad++;
 
     cached_mesh_objs.push_back(std::make_shared<DEMMeshConnected>(std::move(mesh)));

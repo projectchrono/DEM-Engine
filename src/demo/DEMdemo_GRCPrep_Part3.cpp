@@ -191,7 +191,6 @@ int main() {
     float compressor_v = compressor_final_dist / settle_batch_time;
 
     float now_z = max_z_finder->GetValue();
-    std::cout << "Highest point is at " << now_z << std::endl;
     compressor_tracker->SetPos(make_float3(0, 0, now_z));
     for (float t = 0; t < settle_batch_time; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
