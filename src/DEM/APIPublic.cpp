@@ -561,9 +561,8 @@ std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMClumpBatch>& obj
     return std::make_shared<DEMTracker>(std::move(tracker));
 }
 
-std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity,
-                                                         DEM_INSPECT_ENTITY_TYPE insp_type) {
-    DEMInspector insp(this, quantity, insp_type);
+std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity) {
+    DEMInspector insp(this, quantity);
     m_inspectors.push_back(std::make_shared<DEMInspector>(std::move(insp)));
     return m_inspectors.back();
 }
@@ -794,8 +793,9 @@ void DEMSolver::UpdateClumps() {
     // This method should not introduce new material or clump template or family prescription, let's check that
     if (nLastTimeMatNum != m_loaded_materials.size() || nLastTimeFamilyPreNum != m_input_family_prescription.size()) {
         SGPS_DEM_ERROR(
-            "UpdateClumps cannot be if you introduce new material types or family prescription (which will need "
-            "re-jitification).\nWe used to have %u materials, now we have %u.\nWe used to have %u family prescription, "
+            "UpdateClumps should not be used if you introduce new material types or family prescription (which will "
+            "need re-jitification).\nWe used to have %u materials, now we have %u.\nWe used to have %u family "
+            "prescription, "
             "now we have %u.",
             nLastTimeMatNum, m_loaded_materials.size(), nLastTimeFamilyPreNum, m_input_family_prescription.size());
     }

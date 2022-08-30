@@ -39,25 +39,15 @@ class DEMInspector {
 
     // Based on user input...
     void switch_quantity_type(const std::string& quantity);
-    void switch_kernel_to_call(DEM_INSPECT_ENTITY_TYPE insp_type);
 
   public:
-    DEMInspector(DEMSolver* sim_sys,
-                 const std::string& quantity,
-                 DEM_INSPECT_ENTITY_TYPE insp_type = DEM_INSPECT_ENTITY_TYPE::SPHERE)
-        : sys(sim_sys) {
+    DEMInspector(DEMSolver* sim_sys, const std::string& quantity) : sys(sim_sys) {
         switch_quantity_type(quantity);
-        thing_to_insp = insp_type;
-        switch_kernel_to_call(insp_type);
         // In default constructor, all entities are considered `in-region'
         in_region_code = " ";
         all_domain = true;
     }
-    DEMInspector(DEMSolver* sim_sys,
-                 const std::string& quantity,
-                 const std::string& region,
-                 DEM_INSPECT_ENTITY_TYPE insp_type = DEM_INSPECT_ENTITY_TYPE::SPHERE)
-        : sys(sim_sys) {}
+    DEMInspector(DEMSolver* sim_sys, const std::string& quantity, const std::string& region) : sys(sim_sys) {}
     ~DEMInspector() {}
 
     void SetInspectionCode(const std::string& code) { inspection_code = code; }

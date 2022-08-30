@@ -49,9 +49,11 @@ int main() {
 
     DEM_sim.AddBCPlane(make_float3(0, 0, -1.25), make_float3(0, 0, 1), mat_type_1);
 
-    // Create a inspector to find out the highest point of this granular pile
-    auto max_z_finder = DEM_sim.CreateInspector("max_z", DEM_INSPECT_ENTITY_TYPE::SPHERE);
+    // Create a inspector to find out stuff
+    auto max_z_finder = DEM_sim.CreateInspector("clump_max_z");
     float max_z;
+    auto max_v_finder = DEM_sim.CreateInspector("clump_max_absv");
+    float max_v;
 
     DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, 3e-11);
 
@@ -93,7 +95,9 @@ int main() {
 
         DEM_sim.DoDynamicsThenSync(1e-2);
         max_z = max_z_finder->GetValue();
+        max_v = max_v_finder->GetValue();
         std::cout << "Max Z coord is " << max_z << std::endl;
+        std::cout << "Max velocity of any point is " << max_v << std::endl;
         std::cout << "Particle 1 X coord is " << tracker1->Pos().x << std::endl;
         std::cout << "Particle 2 X coord is " << tracker2->Pos().x << std::endl;
     }

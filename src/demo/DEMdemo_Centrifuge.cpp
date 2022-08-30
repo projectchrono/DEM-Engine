@@ -128,6 +128,10 @@ int main() {
     // Set drum to be tracked
     auto Drum_tracker = DEM_sim.Track(Drum);
 
+    // Keep tab of the max velocity in simulation
+    auto max_v_finder = DEM_sim.CreateInspector("clump_max_absv");
+    float max_v;
+
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 5e-11);
     float step_size = 5e-6;
     DEM_sim.SetCoordSysOrigin("center");
@@ -136,7 +140,7 @@ int main() {
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEM_sim.SetCDUpdateFreq(10);
     // DEM_sim.SetExpandFactor(1e-3);
-    DEM_sim.SetMaxVelocity(12.);
+    DEM_sim.SetMaxVelocity(20.);
     DEM_sim.SetExpandSafetyParam(1.2);
     DEM_sim.Initialize();
 
@@ -161,18 +165,10 @@ int main() {
             DEM_sim.WriteSphereFile(std::string(filename));
             currframe++;
             // We can query info out of this drum, since it is tracked
-            float3 drum_pos = Drum_tracker->Pos();
-            float3 drum_angVel = Drum_tracker->AngVel();
-            std::cout << "Position of the drum: " << drum_pos.x << ", " << drum_pos.y << ", " << drum_pos.z
-                      << std::endl;
-            std::cout << "Angular velocity of the drum: " << drum_angVel.x << ", " << drum_angVel.y << ", "
-                      << drum_angVel.z << std::endl;
-            // float3 plane_vel = planes_tracker->Vel();
-            // float4 plane_quat = planes_tracker->OriQ();
-            // std::cout << "Vel of the planes: " << plane_vel.x << ", " << plane_vel.y << ", " << plane_vel.z
-            //           << std::endl;
-            // std::cout << "Quaternion of the planes: " << plane_quat.x << ", " << plane_quat.y << ", " << plane_quat.z
-            //           << ", " << plane_quat.w << std::endl;
+            // float3 drum_pos = Drum_tracker->Pos();
+            // float3 drum_angVel = Drum_tracker->AngVel();
+            max_v = max_v_finder->GetValue();
+            std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
         }
 
         DEM_sim.DoDynamics(step_size);

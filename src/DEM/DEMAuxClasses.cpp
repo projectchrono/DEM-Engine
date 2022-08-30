@@ -21,40 +21,82 @@ const std::string DEM_INSP_CODE_SPHERE_LOW_Z = R"V0G0N(
     quantity[sphereID] = sphereZ - myRadius;
 )V0G0N";
 
+const std::string DEM_INSP_CODE_SPHERE_HIGH_ABSV = R"V0G0N(
+    float3 relPos = make_float3(myRelPosX, myRelPosY, myRelPosZ);
+    // Get owner's velocity
+    float3 rotVel, linVel;
+    linVel.x = granData->vX[myOwner];
+    linVel.y = granData->vY[myOwner];
+    linVel.z = granData->vZ[myOwner];
+    // rotVel is local
+    rotVel.x = granData->omgBarX[myOwner];
+    rotVel.y = granData->omgBarY[myOwner];
+    rotVel.z = granData->omgBarZ[myOwner];
+    // 2 potential points on sphere that are the fastest
+    float velA, velB;
+    {
+        // First is the `outer-most' point
+        float3 loc = relPos;
+        if (length(relPos) > SGPS_DEM_TINY_FLOAT)
+            loc += normalize(relPos) * myRadius;
+        // loc is already local
+        float3 pRotVel = cross(rotVel, loc);
+        // Map rotational contribution back to global
+        applyOriQToVector3<float, sgps::oriQ_t>(pRotVel.x, pRotVel.y, pRotVel.z, 
+                                                oriQ0, oriQ1, oriQ2, oriQ3);
+        velA = length(pRotVel + linVel);
+    }
+    {
+        // Second is the `inner-most' point
+        float3 loc = relPos;
+        if (length(relPos) > SGPS_DEM_TINY_FLOAT)
+            loc -= normalize(relPos) * myRadius;
+        float3 pRotVel = cross(rotVel, loc);
+        applyOriQToVector3<float, sgps::oriQ_t>(pRotVel.x, pRotVel.y, pRotVel.z, 
+                                                oriQ0, oriQ1, oriQ2, oriQ3);
+        velB = length(pRotVel + linVel);
+    }
+    // Select the larger one
+    quantity[sphereID] = (velA > velB) ? velA : velB;
+)V0G0N";
+
 void DEMInspector::switch_quantity_type(const std::string& quantity) {
     switch (hash_charr(quantity.c_str())) {
-        case ("max_z"_):
+        case ("clump_max_z"_):
             inspection_code = DEM_INSP_CODE_SPHERE_HIGH_Z;
             reduce_flavor = DEM_CUB_REDUCE_FLAVOR::MAX;
+            kernel_name = "inspectSphereProperty";
+            thing_to_insp = DEM_INSPECT_ENTITY_TYPE::SPHERE;
             break;
-        case ("min_z"_):
+        case ("clump_min_z"_):
             inspection_code = DEM_INSP_CODE_SPHERE_LOW_Z;
             reduce_flavor = DEM_CUB_REDUCE_FLAVOR::MIN;
+            kernel_name = "inspectSphereProperty";
+            thing_to_insp = DEM_INSPECT_ENTITY_TYPE::SPHERE;
             break;
+        // case ("mesh_max_z"_):
+        //     reduce_flavor = DEM_CUB_REDUCE_FLAVOR::MAX;
+        //     break;
+        // case ("clump_com_max_z"_):
+        //     // inspection_code = DEM_INSP_CODE_SPHERE_HIGH_Z;
+        //     reduce_flavor = DEM_CUB_REDUCE_FLAVOR::MAX;
+        //     kernel_name = "inspectClumpProperty";
+        //     break;
         //// TODO: void ratio will have its own query function
         // case "void_ratio"_:
         //     break;
-        case ("absv"_):
-            // inspection_code = ;
-            reduce_flavor = DEM_CUB_REDUCE_FLAVOR::NONE;
+        case ("clump_max_absv"_):
+            inspection_code = DEM_INSP_CODE_SPHERE_HIGH_ABSV;
+            reduce_flavor = DEM_CUB_REDUCE_FLAVOR::MAX;
+            kernel_name = "inspectSphereProperty";
+            thing_to_insp = DEM_INSPECT_ENTITY_TYPE::SPHERE;
             break;
+        // case ("clump_absv"_):
+        //     reduce_flavor = DEM_CUB_REDUCE_FLAVOR::NONE;
+        //     break;
         default:
             std::stringstream ss;
             ss << quantity << " is not a known query type." << std::endl;
-            throw std::runtime_error(ss.str());
-    }
-}
-void DEMInspector::switch_kernel_to_call(DEM_INSPECT_ENTITY_TYPE insp_type) {
-    switch (insp_type) {
-        case (DEM_INSPECT_ENTITY_TYPE::SPHERE):
-            kernel_name = "inspectSphereProperty";
-            break;
-        case (DEM_INSPECT_ENTITY_TYPE::CLUMP):
-            kernel_name = "inspectClumpProperty";
-            break;
-        default:
-            std::stringstream ss;
-            ss << "You should select inspection entity type between SPHERE and CLUMP." << std::endl;
             throw std::runtime_error(ss.str());
     }
 }

@@ -628,6 +628,19 @@ void DEMSolver::transferSolverParams() {
 }
 
 void DEMSolver::transferSimParams() {
+    // Figure out ts size and the envelope to add to geometries (for CD safety)
+    if ((!use_user_defined_expand_factor) && ts_size_is_const) {
+        m_expand_factor = m_approx_max_vel * m_ts_size * m_updateFreq * m_expand_safety_param;
+    }
+    if (m_expand_factor * m_expand_safety_param <= 0.0 && m_updateFreq > 0 && ts_size_is_const) {
+        SGPS_DEM_WARNING(
+            "You instructed that the physics can stretch %u time steps into the future, but did not instruct the "
+            "geometries to expand via SetExpandFactor or SetMaxVelocity. The contact detection procedure will likely "
+            "fail to detect some contact events before it is too late, hindering the simulation accuracy and "
+            "stability.",
+            m_updateFreq);
+    }
+
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
                      m_expand_factor, m_approx_max_vel, m_expand_safety_param);
     kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
@@ -775,19 +788,6 @@ void DEMSolver::validateUserInputs() {
 
     // Fix the reserved family (reserved family number is in user family, not in impl family)
     SetFamilyFixed(DEM_RESERVED_FAMILY_NUM);
-
-    // Figure out ts size and the envelope to add to geometries (for CD safety)
-    if ((!use_user_defined_expand_factor) && ts_size_is_const) {
-        m_expand_factor = m_approx_max_vel * m_ts_size * m_updateFreq * m_expand_safety_param;
-    }
-    if (m_expand_factor * m_expand_safety_param <= 0.0 && m_updateFreq > 0 && ts_size_is_const) {
-        SGPS_DEM_WARNING(
-            "You instructed that the physics can stretch %u time steps into the future, but did not instruct the "
-            "geometries to expand via SetExpandFactor or SetMaxVelocity. The contact detection procedure will likely "
-            "fail to detect some contact events before it is too late, hindering the simulation accuracy and "
-            "stability.",
-            m_updateFreq);
-    }
 }
 
 // Test if 2 types of DEM materials are the same

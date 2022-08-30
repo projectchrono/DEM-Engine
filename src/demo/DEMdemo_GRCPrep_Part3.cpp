@@ -155,7 +155,7 @@ int main() {
     }
 
     // Create a inspector to find out the highest point of this granular pile
-    auto max_z_finder = DEM_sim.CreateInspector("max_z", DEM_INSPECT_ENTITY_TYPE::SPHERE);
+    auto max_z_finder = DEM_sim.CreateInspector("clump_max_z");
 
     // Now add a plane to compress the `road'
     auto compressor = DEM_sim.AddExternalObject();
@@ -187,7 +187,7 @@ int main() {
     unsigned int curr_step = 0;
 
     float settle_batch_time = 0.5;
-    float compressor_final_dist = 0.01;
+    float compressor_final_dist = 0.04;
     float compressor_v = compressor_final_dist / settle_batch_time;
 
     float now_z = max_z_finder->GetValue();
@@ -207,6 +207,9 @@ int main() {
     }
 
     DEM_sim.DoDynamicsThenSync(0);
+    char cp_filename[200];
+    sprintf(cp_filename, "%s/GRC_10e6.csv", out_dir.c_str());
+    DEM_sim.WriteClumpFile(std::string(cp_filename));
 
     // DEM_sim.ChangeFamily(101, 100);
     // for (double t = 0; t < (double)time_end; t += step_size, curr_step++) {

@@ -52,7 +52,7 @@ int main() {
     unsigned int nTerrainParticles = input_xyz.size();
 
     // Create a inspector to find out the highest point of this granular pile
-    auto max_z_finder = DEM_sim.CreateInspector("max_z", DEM_INSPECT_ENTITY_TYPE::SPHERE);
+    auto max_z_finder = DEM_sim.CreateInspector("clump_max_z");
 
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, world_size / std::pow(2, 16) / std::pow(2, 21));
     DEM_sim.InstructBoxDomainBoundingBC("all", mat_type_terrain);

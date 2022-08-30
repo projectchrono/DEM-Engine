@@ -127,6 +127,11 @@ inline __host__ __device__ void operator/=(float3& a, float b) {
     a.z /= b;
 }
 
+inline __device__ float3 normalize(float3 v) {
+    float invLen = rsqrtf(dot(v, v));
+    return v * invLen;
+}
+
 // Cause an error inside a kernel
 #define SGPS_DEM_ABORT_KERNEL(...) \
     {                              \

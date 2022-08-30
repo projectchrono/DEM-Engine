@@ -232,10 +232,8 @@ class DEMSolver {
     std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMClumpBatch>& obj);
 
     /// Create a inspector object that can help query some statistical info of the clumps in the simulation
-    std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity = "max_z",
-                                                  DEM_INSPECT_ENTITY_TYPE insp_type = DEM_INSPECT_ENTITY_TYPE::SPHERE);
-    // std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity, region, DEM_INSPECT_ENTITY_TYPE
-    // insp_type = DEM_INSPECT_ENTITY_TYPE::SPHERE);
+    std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity = "clump_max_z");
+    // std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity, region);
 
     /// Instruct the solver that the 2 input families should not have contacts (a.k.a. ignored, if such a pair is
     /// encountered in contact detection). These 2 families can be the same (which means no contact within members of
