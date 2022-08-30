@@ -183,71 +183,14 @@ void DEMSolver::postResourceGenChecksAndTabKeeping() {
     nLastTimeExtObjLoad = nExtObjLoad;
     nLastTimeBatchClumpsLoad = nBatchClumpsLoad;
     nLastTimeTriObjLoad = nTriObjLoad;
+    nLastTimeMatNum = m_loaded_materials.size();
+    nLastTimeClumpTemplateNum = m_templates.size();
+    nLastTimeFamilyPreNum = m_input_family_prescription.size();
 
     // Debug outputs
     SGPS_DEM_DEBUG_EXEC(printf("These owners are tracked: ");
                         for (const auto& tracked
                              : m_tracked_objs) { printf("%zu, ", tracked->ownerID); } printf("\n"););
-}
-
-void DEMSolver::preprocessClumpTemplates() {
-    // We really only have to sort clump templates if we wish to jitify clump templates
-    if (jitify_clump_templates) {
-        // A sort based on the number of components of each clump type is needed, so larger clumps are near the end of
-        // the array, so we can always jitify the smaller clumps, and leave larger ones in GPU global memory
-        std::sort(m_templates.begin(), m_templates.end(),
-                  [](auto& left, auto& right) { return left->nComp < right->nComp; });
-        // A mapping is needed to transform the user-defined clump type array so that it matches the new, rearranged
-        // clump template array
-        std::unordered_map<unsigned int, unsigned int> old_mark_to_new;
-        for (unsigned int i = 0; i < m_templates.size(); i++) {
-            old_mark_to_new[m_templates.at(i)->mark] = i;
-            SGPS_DEM_DEBUG_PRINTF("Clump template re-order: %u->%u, nComp: %u", m_templates.at(i)->mark, i,
-                                  m_templates.at(i)->nComp);
-        }
-        // If the user then add more clumps to the system (without adding templates, which mandates a
-        // re-initialization), mapping again is not needed, because now we redefine each template's mark to be the same
-        // as their current position in template array
-        for (unsigned int i = 0; i < m_templates.size(); i++) {
-            m_templates.at(i)->mark = i;
-        }
-    }
-
-    // Build the clump template number--name map
-    for (const auto& clump_template : m_templates) {
-        m_template_number_name_map[clump_template->mark] = clump_template->m_name;
-    }
-
-    // Now we can flatten clump template and make ready for transfer
-    for (const auto& clump : m_templates) {
-        m_template_clump_mass.push_back(clump->mass);
-        m_template_clump_moi.push_back(clump->MOI);
-        m_template_sp_radii.push_back(clump->radii);
-        // TODO: If CoM is not all-0, then relPos should be massaged here
-        m_template_sp_relPos.push_back(clump->relPos);
-
-        // m_template_sp_mat_ids is an array of ints that represent the indices of the material array
-        std::vector<unsigned int> this_clump_sp_mat_ids;
-        for (const std::shared_ptr<DEMMaterial>& this_material : clump->materials) {
-            this_clump_sp_mat_ids.push_back(stash_material_in_templates(m_loaded_materials, this_material));
-        }
-        m_template_sp_mat_ids.push_back(this_clump_sp_mat_ids);
-        SGPS_DEM_DEBUG_EXEC(printf("Input clump No.%d has material types: ", m_template_clump_mass.size() - 1);
-                            for (unsigned int i = 0; i < this_clump_sp_mat_ids.size();
-                                 i++) { printf("%d, ", this_clump_sp_mat_ids.at(i)); } printf("\n"););
-    }
-}
-
-void DEMSolver::preprocessClumps() {
-    for (const auto& a_batch : cached_input_clump_batches) {
-        nOwnerClumps += a_batch->GetNumClumps();
-        for (size_t i = 0; i < a_batch->GetNumClumps(); i++) {
-            unsigned int nComp = a_batch->types.at(i)->nComp;
-            nSpheresGM += nComp;
-        }
-        // Family number is flattened here, only because figureOutFamilyMasks() needs it
-        m_input_clump_family.insert(m_input_clump_family.end(), a_batch->families.begin(), a_batch->families.end());
-    }
 }
 
 void DEMSolver::addAnalCompTemplate(const objType_t type,
@@ -404,6 +347,66 @@ void DEMSolver::preprocessAnalyticalObjs() {
         }
         nAnalGM += this_num_anal_ent;
         thisExtObj++;
+    }
+}
+
+void DEMSolver::preprocessClumpTemplates() {
+    // We really only have to sort clump templates if we wish to jitify clump templates
+    if (jitify_clump_templates) {
+        // A sort based on the number of components of each clump type is needed, so larger clumps are near the end of
+        // the array, so we can always jitify the smaller clumps, and leave larger ones in GPU global memory
+        std::sort(m_templates.begin(), m_templates.end(),
+                  [](auto& left, auto& right) { return left->nComp < right->nComp; });
+        // A mapping is needed to transform the user-defined clump type array so that it matches the new, rearranged
+        // clump template array
+        std::unordered_map<unsigned int, unsigned int> old_mark_to_new;
+        for (unsigned int i = 0; i < m_templates.size(); i++) {
+            old_mark_to_new[m_templates.at(i)->mark] = i;
+            SGPS_DEM_DEBUG_PRINTF("Clump template re-order: %u->%u, nComp: %u", m_templates.at(i)->mark, i,
+                                  m_templates.at(i)->nComp);
+        }
+        // If the user then add more clumps to the system (without adding templates, which mandates a
+        // re-initialization), mapping again is not needed, because now we redefine each template's mark to be the same
+        // as their current position in template array
+        for (unsigned int i = 0; i < m_templates.size(); i++) {
+            m_templates.at(i)->mark = i;
+        }
+    }
+
+    // Build the clump template number--name map
+    for (const auto& clump_template : m_templates) {
+        m_template_number_name_map[clump_template->mark] = clump_template->m_name;
+    }
+
+    // Now we can flatten clump template and make ready for transfer
+    for (const auto& clump : m_templates) {
+        m_template_clump_mass.push_back(clump->mass);
+        m_template_clump_moi.push_back(clump->MOI);
+        m_template_sp_radii.push_back(clump->radii);
+        // TODO: If CoM is not all-0, then relPos should be massaged here
+        m_template_sp_relPos.push_back(clump->relPos);
+
+        // m_template_sp_mat_ids is an array of ints that represent the indices of the material array
+        std::vector<unsigned int> this_clump_sp_mat_ids;
+        for (const std::shared_ptr<DEMMaterial>& this_material : clump->materials) {
+            this_clump_sp_mat_ids.push_back(stash_material_in_templates(m_loaded_materials, this_material));
+        }
+        m_template_sp_mat_ids.push_back(this_clump_sp_mat_ids);
+        SGPS_DEM_DEBUG_EXEC(printf("Input clump No.%d has material types: ", m_template_clump_mass.size() - 1);
+                            for (unsigned int i = 0; i < this_clump_sp_mat_ids.size();
+                                 i++) { printf("%d, ", this_clump_sp_mat_ids.at(i)); } printf("\n"););
+    }
+}
+
+void DEMSolver::preprocessClumps() {
+    for (const auto& a_batch : cached_input_clump_batches) {
+        nOwnerClumps += a_batch->GetNumClumps();
+        for (size_t i = 0; i < a_batch->GetNumClumps(); i++) {
+            unsigned int nComp = a_batch->types.at(i)->nComp;
+            nSpheresGM += nComp;
+        }
+        // Family number is flattened here, only because figureOutFamilyMasks() needs it
+        m_input_clump_family.insert(m_input_clump_family.end(), a_batch->families.begin(), a_batch->families.end());
     }
 }
 

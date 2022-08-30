@@ -242,6 +242,9 @@ class DEMSolver {
     /// that family).
     void DisableContactBetweenFamilies(unsigned int ID1, unsigned int ID2);
 
+    /// Re-enable contact between 2 families after the system is initialized
+    void EnableContactBetweenFamilies(unsigned int ID1, unsigned int ID2);
+
     /// Prevent entites associated with this family to be outputted to files
     void DisableFamilyOutput(unsigned int ID);
 
@@ -456,7 +459,7 @@ class DEMSolver {
 
     // I/O related flags
     // DEM_OUTPUT_MODE m_clump_out_mode = DEM_OUTPUT_MODE::SPHERE;
-    DEM_OUTPUT_FORMAT m_out_format = DEM_OUTPUT_FORMAT::CHPF;
+    DEM_OUTPUT_FORMAT m_out_format = DEM_OUTPUT_FORMAT::CSV;
     unsigned int m_out_content = DEM_OUTPUT_CONTENT::QUAT | DEM_OUTPUT_CONTENT::ABSV;
 
     // User instructed simulation `world' size. Note it is an approximate of the true size and we will generate a world
@@ -580,6 +583,9 @@ class DEMSolver {
     unsigned int nLastTimeExtObjLoad = 0;
     size_t nLastTimeBatchClumpsLoad = 0;
     size_t nLastTimeTriObjLoad = 0;
+    unsigned int nLastTimeMatNum = 0;
+    unsigned int nLastTimeClumpTemplateNum = 0;
+    unsigned int nLastTimeFamilyPreNum = 0;
 
     ////////////////////////////////////////////////////////////////////////////////
     // These quantities will be reset at the time of jitification or re-jitification,

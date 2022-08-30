@@ -425,16 +425,46 @@ void DEMSolver::DisableContactBetweenFamilies(unsigned int ID1, unsigned int ID2
             "%u.",
             ID1, ID2, std::numeric_limits<family_t>::max());
     }
-    familyPair_t a_pair;
-    a_pair.ID1 = ID1;
-    a_pair.ID2 = ID2;
-    m_input_no_contact_pairs.push_back(a_pair);
+    if (!sys_initialized) {
+        familyPair_t a_pair;
+        a_pair.ID1 = ID1;
+        a_pair.ID2 = ID2;
+        m_input_no_contact_pairs.push_back(a_pair);
+    } else {
+        // If initialized, directly pass this info to workers
+        unsigned int posInMat = locateMaskPair<unsigned int>(ID1, ID2);
+        kT->familyMaskMatrix.at(posInMat) = DEM_PREVENT_CONTACT;
+        dT->familyMaskMatrix.at(posInMat) = DEM_PREVENT_CONTACT;
+    }
+}
+
+void DEMSolver::EnableContactBetweenFamilies(unsigned int ID1, unsigned int ID2) {
+    if (ID1 > std::numeric_limits<family_t>::max() || ID2 > std::numeric_limits<family_t>::max()) {
+        SGPS_DEM_ERROR(
+            "You tried to disable contact between family number %u and %u, but family number should not be larger than "
+            "%u.",
+            ID1, ID2, std::numeric_limits<family_t>::max());
+    }
+    if (!sys_initialized) {
+        SGPS_DEM_ERROR(
+            "There is no need to call EnableContactBetweenFamilies before system initialization.\nAll families have "
+            "contacts with each other by default. Just do not disable them if you need that contact.");
+    } else {
+        // If initialized, directly pass this info to workers
+        unsigned int posInMat = locateMaskPair<unsigned int>(ID1, ID2);
+        kT->familyMaskMatrix.at(posInMat) = DEM_DONT_PREVENT_CONTACT;
+        dT->familyMaskMatrix.at(posInMat) = DEM_DONT_PREVENT_CONTACT;
+    }
 }
 
 void DEMSolver::ClearCache() {
     deallocate_array(cached_input_clump_batches);
     deallocate_array(cached_extern_objs);
     deallocate_array(cached_mesh_objs);
+
+    // m_input_no_contact_pairs can be removed, if the system is initialized. After initialization, family mask can be
+    // directly transferred to workers on user call.
+    deallocate_array(m_input_no_contact_pairs);
 
     // Should not remove tracked objs: we don't want to break trackers when new entities are loaded
     // deallocate_array(m_tracked_objs);
@@ -446,7 +476,6 @@ void DEMSolver::ClearCache() {
     // m_no_output_families;
     // m_family_change_pairs;
     // m_family_change_conditions;
-    // m_input_no_contact_pairs;
 }
 
 float DEMSolver::GetTotalKineticEnergy() const {
@@ -650,8 +679,6 @@ void DEMSolver::ClearTimingStats() {
 void DEMSolver::ReleaseFlattenedArrays() {
     deallocate_array(m_family_mask_matrix);
 
-    // deallocate_array(m_family_user_impl_map);
-    // deallocate_array(m_family_impl_user_map);
     deallocate_array(m_template_number_name_map);
 
     deallocate_array(m_input_ext_obj_xyz);
@@ -763,6 +790,15 @@ void DEMSolver::UpdateClumps() {
     updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old);
     packDataPointers();
     ReleaseFlattenedArrays();
+
+    // This method should not introduce new material or clump template or family prescription, let's check that
+    if (nLastTimeMatNum != m_loaded_materials.size() || nLastTimeFamilyPreNum != m_input_family_prescription.size()) {
+        SGPS_DEM_ERROR(
+            "UpdateClumps cannot be if you introduce new material types or family prescription (which will need "
+            "re-jitification).\nWe used to have %u materials, now we have %u.\nWe used to have %u family prescription, "
+            "now we have %u.",
+            nLastTimeMatNum, m_loaded_materials.size(), nLastTimeFamilyPreNum, m_input_family_prescription.size());
+    }
 }
 
 void DEMSolver::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {

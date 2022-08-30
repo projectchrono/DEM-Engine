@@ -65,7 +65,7 @@ int main() {
 
     DEM_sim.Initialize();
 
-    // You can add more clumps to simulation like this...
+    // You can add more clumps to simulation after initialization, like this...
     DEM_sim.ClearCache();
     auto particles2 = DEM_sim.AddClumps(input_clump_type, input_xyz2);
     particles2->SetVel(input_vel2);
@@ -82,7 +82,8 @@ int main() {
         std::cout << "Frame: " << i << std::endl;
 
         if ((!changed_family) && i >= 10) {
-            DEM_sim.ChangeFamily(1, 0);
+            // DEM_sim.ChangeFamily(1, 0);
+            DEM_sim.EnableContactBetweenFamilies(0, 1);
             changed_family = true;
         }
 
