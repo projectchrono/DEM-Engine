@@ -40,6 +40,14 @@ class DEMInspector {
     // Based on user input...
     void switch_quantity_type(const std::string& quantity);
 
+    void assertInit() {
+        if (!initialized) {
+            std::stringstream ss;
+            ss << "Inspector should only be used for querying after system initialization!" << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+    }
+
   public:
     DEMInspector(DEMSolver* sim_sys, const std::string& quantity) : sys(sim_sys) {
         switch_quantity_type(quantity);

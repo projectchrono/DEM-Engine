@@ -102,6 +102,7 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
 }
 
 float DEMInspector::GetValue() {
+    assertInit();
     return sys->dTInspectReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
 }
 

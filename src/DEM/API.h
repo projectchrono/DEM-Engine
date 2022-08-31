@@ -220,6 +220,10 @@ class DEMSolver {
 
     /// Load a mesh-represented object
     std::shared_ptr<DEMMeshConnected> AddWavefrontMeshObject(const std::string& filename,
+                                                             const std::shared_ptr<DEMMaterial>& mat,
+                                                             bool load_normals = true,
+                                                             bool load_uv = false);
+    std::shared_ptr<DEMMeshConnected> AddWavefrontMeshObject(const std::string& filename,
                                                              bool load_normals = true,
                                                              bool load_uv = false);
     std::shared_ptr<DEMMeshConnected> AddWavefrontMeshObject(DEMMeshConnected& mesh);
@@ -563,8 +567,8 @@ class DEMSolver {
     // Number of loaded external objects
     unsigned int nExtObj = 0;
     // Number of loaded triangle-represented (mesh) objects
-    size_t nTriEntities = 0;
-    // nExtObj + nOwnerClumps + nTriEntities == nOwnerBodies
+    size_t nTriMeshes = 0;
+    // nExtObj + nOwnerClumps + nTriMeshes == nOwnerBodies
 
     // Number of batches of clumps loaded by the user. Note this number never decreases, it just records how many times
     // the user loaded clumps into the simulation for the duration of this class.
@@ -601,7 +605,7 @@ class DEMSolver {
     // are not independent, so we just won't use them Num of analytical objects loaded unsigned int
     // nExtObjMassProperties; Num of meshed objects loaded unsigned int nMeshMassProperties;
 
-    // Sum of the above 3 items (but in fact nDistinctClumpBodyTopologies + nExtObj + nTriEntities)
+    // Sum of the above 3 items (but in fact nDistinctClumpBodyTopologies + nExtObj + nTriMeshes)
     unsigned int nDistinctMassProperties;
 
     // Num of material types
@@ -820,7 +824,7 @@ class DEMSolver {
     /// Figure out info about external meshed objects
     void preprocessTriangleObjs();
     /// Report simulation stats at initialization
-    inline void reportInitStats() const;
+    void reportInitStats() const;
     /// Based on user input, prepare family_mask_matrix (family contact map matrix)
     void figureOutFamilyMasks();
     /// Reset kT and dT back to a status like when the simulation system is constructed. I decided to make this a

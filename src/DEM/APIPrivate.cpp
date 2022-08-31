@@ -102,20 +102,17 @@ void DEMSolver::postResourceGen() {
     // If these `computed' numbers are larger than types like materialsOffset_t can hold, then we should error out and
     // let the user re-compile (or, should we somehow change the header automatically?)
     postResourceGenChecksAndTabKeeping();
-
-    // Notify the user how jitification goes
-    reportInitStats();
 }
 
 void DEMSolver::updateTotalEntityNum() {
     nDistinctClumpBodyTopologies = m_template_clump_mass.size();
-    nDistinctMassProperties = nDistinctClumpBodyTopologies + nExtObj + nTriEntities;
+    nDistinctMassProperties = nDistinctClumpBodyTopologies + nExtObj + nTriMeshes;
 
     // Also, external objects may introduce more material types
     nMatTuples = m_loaded_materials.size();
 
     // Finally, with both user inputs and jit info processed, we can derive the number of owners that we have now
-    nOwnerBodies = nExtObj + nOwnerClumps + nTriEntities;
+    nOwnerBodies = nExtObj + nOwnerClumps + nTriMeshes;
 }
 
 void DEMSolver::postResourceGenChecksAndTabKeeping() {
@@ -272,7 +269,7 @@ void DEMSolver::decideBinSize() {
     // because the space bins and voxels can cover may be larger than the user-defined sim domain
 }
 
-inline void DEMSolver::reportInitStats() const {
+void DEMSolver::reportInitStats() const {
     SGPS_DEM_INFO("Number of total active devices: %d", dTkT_GpuManager->getNumDevices());
 
     SGPS_DEM_INFO("The dimension of the simulation world: %.17g, %.17g, %.17g", m_boxX, m_boxY, m_boxZ);
@@ -411,9 +408,14 @@ void DEMSolver::preprocessClumps() {
 }
 
 void DEMSolver::preprocessTriangleObjs() {
-    nTriEntities += cached_mesh_objs.size();
+    nTriMeshes += cached_mesh_objs.size();
     unsigned int thisMeshObj = 0;
     for (const auto& mesh_obj : cached_mesh_objs) {
+        if (!(mesh_obj->isMaterialSet)) {
+            SGPS_DEM_ERROR(
+                "A meshed object is loaded by does not have associated material.\nPlease assign material to meshes via "
+                "SetMaterial.");
+        }
         m_mesh_obj_mass.push_back(mesh_obj->mass);
         m_mesh_obj_moi.push_back(mesh_obj->MOI);
         //// TODO: If CoM is not all-0, all components should be offsetted
@@ -650,13 +652,13 @@ void DEMSolver::transferSimParams() {
 void DEMSolver::allocateGPUArrays() {
     // Resize managed arrays based on the statistical data we had from the previous step
     std::thread dThread = std::move(std::thread([this]() {
-        this->dT->allocateManagedArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriEntities,
+        this->dT->allocateManagedArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
                                         this->nSpheresGM, this->nTriGM, this->nAnalGM, this->nDistinctMassProperties,
                                         this->nDistinctClumpBodyTopologies, this->nDistinctClumpComponents,
                                         this->nJitifiableClumpComponents, this->nMatTuples);
     }));
     std::thread kThread = std::move(std::thread([this]() {
-        this->kT->allocateManagedArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriEntities,
+        this->kT->allocateManagedArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
                                         this->nSpheresGM, this->nTriGM, this->nAnalGM, this->nDistinctMassProperties,
                                         this->nDistinctClumpBodyTopologies, this->nDistinctClumpComponents,
                                         this->nJitifiableClumpComponents, this->nMatTuples);
@@ -673,8 +675,8 @@ void DEMSolver::initializeGPUArrays() {
         // Analytical objects' initial stats
         m_input_ext_obj_xyz, m_input_ext_obj_family,
         // Meshed objects' initial stats
-        m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facet_materials,
-        m_mesh_facets,
+        cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner,
+        m_mesh_facet_materials, m_mesh_facets,
         // Clump template name mapping
         m_template_number_name_map,
         // Clump template info (mass, sphere components, materials etc.)
@@ -689,13 +691,14 @@ void DEMSolver::initializeGPUArrays() {
         m_family_mask_matrix,
         // I/O and misc.
         m_no_output_families, m_tracked_objs);
+
     kT->initManagedArrays(
         // Clump batchs' initial stats
         cached_input_clump_batches,
         // Analytical objects' initial stats
         m_input_ext_obj_family,
         // Meshed objects' initial stats
-        m_input_mesh_obj_family,
+        m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facets,
         // Family mask
         m_family_mask_matrix,
         // Templates and misc.
@@ -716,8 +719,8 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // Analytical objects' initial stats
         m_input_ext_obj_xyz, m_input_ext_obj_family,
         // Meshed objects' initial stats
-        m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facet_materials,
-        m_mesh_facets,
+        cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner,
+        m_mesh_facet_materials, m_mesh_facets,
         // Clump template info (mass, sphere components, materials etc.)
         m_template_sp_mat_ids, m_template_clump_mass, m_template_clump_moi, m_template_sp_radii, m_template_sp_relPos,
         // Analytical obj `template' properties
@@ -738,7 +741,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // Analytical objects' initial stats
         m_input_ext_obj_family,
         // Meshed objects' initial stats
-        m_input_mesh_obj_family,
+        m_input_mesh_obj_family, m_mesh_facet_owner, m_mesh_facets,
         // Family mask
         m_family_mask_matrix,
         // Templates and misc.
@@ -783,7 +786,7 @@ void DEMSolver::validateUserInputs() {
     }
 
     if (use_user_defined_force_model) {
-        // TODO: See if this user model makes sense
+        //// TODO: See if this user model makes sense
     }
 
     // Fix the reserved family (reserved family number is in user family, not in impl family)
@@ -1171,9 +1174,9 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_LBFX_"] = to_string_with_precision(m_boxLBF.x);
     strMap["_LBFY_"] = to_string_with_precision(m_boxLBF.y);
     strMap["_LBFZ_"] = to_string_with_precision(m_boxLBF.z);
-    strMap["_Gx_"] = to_string_with_precision(G.x);
-    strMap["_Gy_"] = to_string_with_precision(G.y);
-    strMap["_Gz_"] = to_string_with_precision(G.z);
+    // strMap["_Gx_"] = to_string_with_precision(G.x);
+    // strMap["_Gy_"] = to_string_with_precision(G.y);
+    // strMap["_Gz_"] = to_string_with_precision(G.z);
     // strMap["_beta_"] = to_string_with_precision(m_expand_factor);
 
     // Some constants that we should consider using or not using

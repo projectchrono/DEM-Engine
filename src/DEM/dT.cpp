@@ -66,7 +66,14 @@ void DEMDynamicThread::packDataPointers() {
     granData->ownerClumpBody = ownerClumpBody.data();
     granData->clumpComponentOffset = clumpComponentOffset.data();
     granData->clumpComponentOffsetExt = clumpComponentOffsetExt.data();
-    granData->materialTupleOffset = materialTupleOffset.data();
+    granData->sphereMaterialOffset = sphereMaterialOffset.data();
+
+    // Mesh-related
+    granData->ownerMesh = ownerMesh.data();
+    granData->relPosNode1 = relPosNode1.data();
+    granData->relPosNode2 = relPosNode2.data();
+    granData->relPosNode3 = relPosNode3.data();
+    granData->triMaterialOffset = triMaterialOffset.data();
 
     // Template array pointers
     granData->radiiSphere = radiiSphere.data();
@@ -204,7 +211,7 @@ void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const 
 void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
                                              size_t nOwnerClumps,
                                              unsigned int nExtObj,
-                                             size_t nTriEntities,
+                                             size_t nTriMeshes,
                                              size_t nSpheresGM,
                                              size_t nTriGM,
                                              unsigned int nAnalGM,
@@ -223,7 +230,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     simParams->nOwnerBodies = nOwnerBodies;
     simParams->nOwnerClumps = nOwnerClumps;
     simParams->nExtObj = nExtObj;
-    simParams->nTriEntities = nTriEntities;
+    simParams->nTriMeshes = nTriMeshes;
     simParams->nDistinctMassProperties = nMassProperties;
     simParams->nDistinctClumpBodyTopologies = nClumpTopo;
     simParams->nJitifiableClumpComponents = nJitifiableClumpComponents;
@@ -258,9 +265,8 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
                             "familyMaskMatrix", DEM_DONT_PREVENT_CONTACT);
 
     // Resize to the number of geometries
-    SGPS_DEM_TRACKED_RESIZE(ownerClumpBody, nSpheresGM + nTriGM, "ownerClumpBody", 0);
-    SGPS_DEM_TRACKED_RESIZE(materialTupleOffset, nSpheresGM + nTriGM, "materialTupleOffset", 0);
-
+    SGPS_DEM_TRACKED_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
+    SGPS_DEM_TRACKED_RESIZE(sphereMaterialOffset, nSpheresGM, "sphereMaterialOffset", 0);
     // For clump component offset, it's only needed if clump components are jitified
     if (solverFlags.useClumpJitify) {
         SGPS_DEM_TRACKED_RESIZE(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
@@ -278,6 +284,13 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
         SGPS_DEM_TRACKED_RESIZE(relPosSphereY, nSpheresGM, "relPosSphereY", 0);
         SGPS_DEM_TRACKED_RESIZE(relPosSphereZ, nSpheresGM, "relPosSphereZ", 0);
     }
+
+    // Resize to the number of triangle facets
+    SGPS_DEM_TRACKED_RESIZE(ownerMesh, nTriGM, "ownerMesh", 0);
+    SGPS_DEM_TRACKED_RESIZE(relPosNode1, nTriGM, "relPosNode1", make_float3(0));
+    SGPS_DEM_TRACKED_RESIZE(relPosNode2, nTriGM, "relPosNode2", make_float3(0));
+    SGPS_DEM_TRACKED_RESIZE(relPosNode3, nTriGM, "relPosNode3", make_float3(0));
+    SGPS_DEM_TRACKED_RESIZE(triMaterialOffset, nTriGM, "triMaterialOffset", 0);
 
     // Resize to number of owners
     SGPS_DEM_TRACKED_RESIZE(ownerTypes, nOwnerBodies, "ownerTypes", 0);
@@ -301,7 +314,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     SGPS_DEM_TRACKED_RESIZE(CrrProxy, nMatTuples, "CrrProxy", 0);
 
     // Arrays for contact info
-    // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is 2n, and I
+    // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is ~ 4n, and I
     // think the max is 6n (although I can't prove it). Note the estimate should be large enough to decrease the number
     // of reallocations in the simulation, but not too large that eats too much memory.
     SGPS_DEM_TRACKED_RESIZE(idGeometryA, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "idGeometryA", 0);
@@ -432,7 +445,8 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                                             const std::vector<float>& mesh_obj_mass_types,
                                             const std::vector<float3>& mesh_obj_moi_types,
                                             size_t nExistOwners,
-                                            size_t nExistSpheres) {
+                                            size_t nExistSpheres,
+                                            size_t nExistingFacets) {
     // Load in clump components info (but only if instructed to use jitified clump templates). This step will be
     // repeated even if we are just adding some more clumps to system, not a complete re-initialization.
     size_t k = 0;
@@ -526,7 +540,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
             auto this_clump_no_sp_mat_ids = clumps_sp_mat_ids.at(type_of_this_clump);
 
             for (size_t j = 0; j < this_clump_no_sp_radii.size(); j++) {
-                materialTupleOffset.at(nExistSpheres + k) = this_clump_no_sp_mat_ids.at(j);
+                sphereMaterialOffset.at(nExistSpheres + k) = this_clump_no_sp_mat_ids.at(j);
                 ownerClumpBody.at(nExistSpheres + k) = nExistOwners + i;
 
                 // Depending on whether we jitify or flatten
@@ -584,88 +598,112 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
 
     // Load in initial positions and mass properties for the owners of those external objects
     // They go after clump owners
-    size_t offset_for_ext_obj = nExistOwners + input_clump_types.size();
+    size_t owner_offset_for_ext_obj = nExistOwners + input_clump_types.size();
     unsigned int offset_for_ext_obj_mass_template = simParams->nDistinctClumpBodyTopologies;
     for (size_t i = 0; i < input_ext_obj_xyz.size(); i++) {
         // If got here, it is an analytical obj
-        ownerTypes.at(i + offset_for_ext_obj) = DEM_OWNER_T_ANALYTICAL;
+        ownerTypes.at(i + owner_offset_for_ext_obj) = DEM_OWNER_T_ANALYTICAL;
         // Analytical object mass properties are useful in force collection, but not useful in force calculation:
         // analytical component masses are jitified into kernels directly.
-        inertiaPropOffsets.at(i + offset_for_ext_obj) = i + offset_for_ext_obj_mass_template;
+        inertiaPropOffsets.at(i + owner_offset_for_ext_obj) = i + offset_for_ext_obj_mass_template;
         if (!solverFlags.useMassJitify) {
-            massOwnerBody.at(i + offset_for_ext_obj) = ext_obj_mass_types.at(i);
+            massOwnerBody.at(i + owner_offset_for_ext_obj) = ext_obj_mass_types.at(i);
             const float3 this_moi = ext_obj_moi_types.at(i);
-            mmiXX.at(i + offset_for_ext_obj) = this_moi.x;
-            mmiYY.at(i + offset_for_ext_obj) = this_moi.y;
-            mmiZZ.at(i + offset_for_ext_obj) = this_moi.z;
+            mmiXX.at(i + owner_offset_for_ext_obj) = this_moi.x;
+            mmiYY.at(i + owner_offset_for_ext_obj) = this_moi.y;
+            mmiZZ.at(i + owner_offset_for_ext_obj) = this_moi.z;
         }
         auto this_CoM_coord = input_ext_obj_xyz.at(i) - LBF;
         hostPositionToVoxelID<voxelID_t, subVoxelPos_t, double>(
-            voxelID.at(i + offset_for_ext_obj), locX.at(i + offset_for_ext_obj), locY.at(i + offset_for_ext_obj),
-            locZ.at(i + offset_for_ext_obj), (double)this_CoM_coord.x, (double)this_CoM_coord.y,
-            (double)this_CoM_coord.z, simParams->nvXp2, simParams->nvYp2, simParams->voxelSize, simParams->l);
+            voxelID.at(i + owner_offset_for_ext_obj), locX.at(i + owner_offset_for_ext_obj),
+            locY.at(i + owner_offset_for_ext_obj), locZ.at(i + owner_offset_for_ext_obj), (double)this_CoM_coord.x,
+            (double)this_CoM_coord.y, (double)this_CoM_coord.z, simParams->nvXp2, simParams->nvYp2,
+            simParams->voxelSize, simParams->l);
         //// TODO: and initial rot?
         //// TODO: and initial vel?
 
         family_t this_family_num = input_ext_obj_family.at(i);
-        familyID.at(i + offset_for_ext_obj) = this_family_num;
+        familyID.at(i + owner_offset_for_ext_obj) = this_family_num;
     }
 
     // Load in initial positions and mass properties for the owners of the meshed objects
     // They go after analytical object owners
-    size_t offset_for_mesh_obj = offset_for_ext_obj + input_ext_obj_xyz.size();
+    size_t owner_offset_for_mesh_obj = owner_offset_for_ext_obj + input_ext_obj_xyz.size();
     unsigned int offset_for_mesh_obj_mass_template = offset_for_ext_obj_mass_template + input_ext_obj_xyz.size();
+    // k for indexing the triangle facets
+    k = 0;
     for (size_t i = 0; i < input_mesh_obj_xyz.size(); i++) {
         // If got here, it is a mesh
-        ownerTypes.at(i + offset_for_mesh_obj) = DEM_OWNER_T_MESH;
+        ownerTypes.at(i + owner_offset_for_mesh_obj) = DEM_OWNER_T_MESH;
 
-        inertiaPropOffsets.at(i + offset_for_mesh_obj) = i + offset_for_mesh_obj_mass_template;
+        inertiaPropOffsets.at(i + owner_offset_for_mesh_obj) = i + offset_for_mesh_obj_mass_template;
         if (!solverFlags.useMassJitify) {
-            massOwnerBody.at(i + offset_for_mesh_obj) = mesh_obj_mass_types.at(i);
+            massOwnerBody.at(i + owner_offset_for_mesh_obj) = mesh_obj_mass_types.at(i);
             const float3 this_moi = mesh_obj_moi_types.at(i);
-            mmiXX.at(i + offset_for_mesh_obj) = this_moi.x;
-            mmiYY.at(i + offset_for_mesh_obj) = this_moi.y;
-            mmiZZ.at(i + offset_for_mesh_obj) = this_moi.z;
+            mmiXX.at(i + owner_offset_for_mesh_obj) = this_moi.x;
+            mmiYY.at(i + owner_offset_for_mesh_obj) = this_moi.y;
+            mmiZZ.at(i + owner_offset_for_mesh_obj) = this_moi.z;
         }
         auto this_CoM_coord = input_mesh_obj_xyz.at(i) - LBF;
         hostPositionToVoxelID<voxelID_t, subVoxelPos_t, double>(
-            voxelID.at(i + offset_for_mesh_obj), locX.at(i + offset_for_mesh_obj), locY.at(i + offset_for_mesh_obj),
-            locZ.at(i + offset_for_mesh_obj), (double)this_CoM_coord.x, (double)this_CoM_coord.y,
-            (double)this_CoM_coord.z, simParams->nvXp2, simParams->nvYp2, simParams->voxelSize, simParams->l);
+            voxelID.at(i + owner_offset_for_mesh_obj), locX.at(i + owner_offset_for_mesh_obj),
+            locY.at(i + owner_offset_for_mesh_obj), locZ.at(i + owner_offset_for_mesh_obj), (double)this_CoM_coord.x,
+            (double)this_CoM_coord.y, (double)this_CoM_coord.z, simParams->nvXp2, simParams->nvYp2,
+            simParams->voxelSize, simParams->l);
 
         // Set mesh owner's oriQ
         auto oriQ_of_this = input_mesh_obj_rot.at(i);
-        oriQ0.at(i + offset_for_mesh_obj) = oriQ_of_this.x;
-        oriQ1.at(i + offset_for_mesh_obj) = oriQ_of_this.y;
-        oriQ2.at(i + offset_for_mesh_obj) = oriQ_of_this.z;
-        oriQ3.at(i + offset_for_mesh_obj) = oriQ_of_this.w;
+        oriQ0.at(i + owner_offset_for_mesh_obj) = oriQ_of_this.x;
+        oriQ1.at(i + owner_offset_for_mesh_obj) = oriQ_of_this.y;
+        oriQ2.at(i + owner_offset_for_mesh_obj) = oriQ_of_this.z;
+        oriQ3.at(i + owner_offset_for_mesh_obj) = oriQ_of_this.w;
 
         //// TODO: and initial vel?
 
-        //// TODO: Per-facet info
-        // mesh_facet_owner,
-        // mesh_facet_materials,
-        // mesh_facets,
+        // Per-facet info
+        size_t this_facet_owner = mesh_facet_owner.at(k);
+        for (; k < mesh_facet_owner.size(); k++) {
+            // mesh_facet_owner run length is the num of facets in this mesh entity
+            if (mesh_facet_owner.at(k) != this_facet_owner)
+                break;
+            ownerMesh.at(nExistingFacets + k) = owner_offset_for_mesh_obj + this_facet_owner;
+            triMaterialOffset.at(nExistingFacets + k) = mesh_facet_materials.at(k);
+            DEMTriangle this_tri = mesh_facets.at(k);
+            relPosNode1.at(nExistingFacets + k) = this_tri.p1;
+            relPosNode2.at(nExistingFacets + k) = this_tri.p2;
+            relPosNode3.at(nExistingFacets + k) = this_tri.p3;
+        }
 
         family_t this_family_num = input_mesh_obj_family.at(i);
-        familyID.at(i + offset_for_mesh_obj) = this_family_num;
+        familyID.at(i + owner_offset_for_mesh_obj) = this_family_num;
+
+        SGPS_DEM_DEBUG_PRINTF("dT just loaded a mesh in family %u", +(this_family_num));
+        SGPS_DEM_DEBUG_PRINTF("Number of triangle facets loaded thus far: %zu", k);
     }
 }
 
 void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                         const std::vector<float3>& input_ext_obj_xyz,
+                                        const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
                                         std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs,
-                                        size_t nExistOwners) {
+                                        size_t nExistOwners,
+                                        size_t nExistingFacets) {
     // We take notes on how many clumps each batch has, it will be useful when we assemble the tracker information
     std::vector<size_t> prescans_batch_size;
     prescans_batch_size.push_back(0);
     for (const auto& a_batch : input_clump_batches) {
         prescans_batch_size.push_back(a_batch->GetNumClumps());
     }
+    // Also take notes on num of facets of each mesh obj
+    std::vector<size_t> prescans_mesh_size;
+    prescans_mesh_size.push_back(0);
+    for (const auto& a_mesh : input_mesh_objs) {
+        prescans_mesh_size.push_back(a_mesh->GetNumTriangles());
+    }
 
     // Provide feedback to the tracked objects, tell them the owner numbers they are looking for
     // Little computation is needed, as long as we know the structure of our owner array: nOwnerClumps go first, then
-    // nExtObj, then nTriEntities
+    // nExtObj, then nTriMeshes
     // Also note, we just have to process those haven't been processed
     for (unsigned int i = nTrackersProcessed; i < tracked_objs.size(); i++) {
         auto& tracked_obj = tracked_objs.at(i);
@@ -680,6 +718,14 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
                 tracked_obj->ownerID = nExistOwners + tracked_obj->load_order + prescans_batch_size.back();
                 tracked_obj->nSpanOwners = 1;
                 break;
+            case (DEM_OWNER_TYPE::MESH):
+                tracked_obj->ownerID =
+                    nExistOwners + input_ext_obj_xyz.size() + prescans_batch_size.back() + tracked_obj->load_order;
+                tracked_obj->nSpanOwners = 1;
+                tracked_obj->facetID = nExistingFacets + prescans_mesh_size.at(tracked_obj->load_order);
+                tracked_obj->nFacets =
+                    prescans_mesh_size.at(tracked_obj->load_order + 1) - prescans_mesh_size.at(tracked_obj->load_order);
+                break;
             default:
                 SGPS_DEM_ERROR("A DEM tracked object has an unknown type.");
         }
@@ -691,6 +737,7 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
 void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                          const std::vector<float3>& input_ext_obj_xyz,
                                          const std::vector<unsigned int>& input_ext_obj_family,
+                                         const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
                                          const std::vector<float3>& input_mesh_obj_xyz,
                                          const std::vector<float4>& input_mesh_obj_rot,
                                          const std::vector<unsigned int>& input_mesh_obj_family,
@@ -723,14 +770,15 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
                          input_mesh_obj_rot, input_mesh_obj_family, mesh_facet_owner, mesh_facet_materials, mesh_facets,
                          clumps_sp_mat_ids, clumps_mass_types, clumps_moi_types, clumps_sp_radii_types,
                          clumps_sp_location_types, ext_obj_mass_types, ext_obj_moi_types, mesh_obj_mass_types,
-                         mesh_obj_moi_types, 0, 0);
+                         mesh_obj_moi_types, 0, 0, 0);
 
-    buildTrackedObjs(input_clump_batches, input_ext_obj_xyz, tracked_objs, 0);
+    buildTrackedObjs(input_clump_batches, input_ext_obj_xyz, input_mesh_objs, tracked_objs, 0, 0);
 }
 
 void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                              const std::vector<float3>& input_ext_obj_xyz,
                                              const std::vector<unsigned int>& input_ext_obj_family,
+                                             const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
                                              const std::vector<float3>& input_mesh_obj_xyz,
                                              const std::vector<float4>& input_mesh_obj_rot,
                                              const std::vector<unsigned int>& input_mesh_obj_family,
@@ -762,10 +810,11 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                          input_mesh_obj_rot, input_mesh_obj_family, mesh_facet_owner, mesh_facet_materials, mesh_facets,
                          clumps_sp_mat_ids, clumps_mass_types, clumps_moi_types, clumps_sp_radii_types,
                          clumps_sp_location_types, ext_obj_mass_types, ext_obj_moi_types, mesh_obj_mass_types,
-                         mesh_obj_moi_types, nExistingOwners, nExistingSpheres);
+                         mesh_obj_moi_types, nExistingOwners, nExistingSpheres, nExistingFacets);
 
     // Make changes to tracked objects (potentially add more)
-    buildTrackedObjs(input_clump_batches, input_ext_obj_xyz, tracked_objs, nExistingOwners);
+    buildTrackedObjs(input_clump_batches, input_ext_obj_xyz, input_mesh_objs, tracked_objs, nExistingOwners,
+                     nExistingFacets);
 }
 
 void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {

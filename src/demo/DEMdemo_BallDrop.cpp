@@ -18,19 +18,19 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEM_sim;
-    DEM_sim.SetVerbosity(INFO);
+    DEM_sim.SetVerbosity(DEBUG);
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
     DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::ABSV);
-
-    // auto projectile = DEM_sim.AddWavefrontMeshObject("./data/mesh/sphere.obj");
-    // std::cout << "Total num of triangles: " << projectile->GetNumTriangles() << std::endl;
 
     auto mat_type_ball = DEM_sim.LoadMaterialType(1e10, 0.3, 0.3);
     auto mat_type_terrain = DEM_sim.LoadMaterialType(5e9, 0.3, 0.2);
 
-    float ball_rad = 0.2;
-    auto template_ball =
-        DEM_sim.LoadClumpSimpleSphere(ball_rad * ball_rad * ball_rad * 7e3 * 4 / 3 * 3.14, ball_rad, mat_type_ball);
+    auto projectile = DEM_sim.AddWavefrontMeshObject("./data/mesh/sphere.obj", mat_type_ball);
+    std::cout << "Total num of triangles: " << projectile->GetNumTriangles() << std::endl;
+
+    // float ball_rad = 0.2;
+    // auto template_ball =
+    //     DEM_sim.LoadClumpSimpleSphere(ball_rad * ball_rad * ball_rad * 7e3 * 4 / 3 * 3.14, ball_rad, mat_type_ball);
 
     float terrain_rad = 0.005;
     auto template_terrain = DEM_sim.LoadClumpSimpleSphere(

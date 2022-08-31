@@ -205,6 +205,7 @@ class DEMMeshConnected {
 
     // Material types for each mesh facet
     std::vector<std::shared_ptr<DEMMaterial>> materials;
+    bool isMaterialSet = false;
     // Family code (used in prescribing its motions etc.)
     unsigned int family_code = DEM_RESERVED_FAMILY_NUM;  ///< Means it is default to the `fixed' family
     // The coordinate of the CoM of this meshed object, in the frame where all the mesh's node coordinates are
@@ -233,6 +234,10 @@ class DEMMeshConnected {
 
     DEMMeshConnected() {}
     DEMMeshConnected(std::string input_file) { LoadWavefrontMesh(input_file); }
+    DEMMeshConnected(std::string input_file, const std::shared_ptr<DEMMaterial>& mat) {
+        LoadWavefrontMesh(input_file);
+        SetMaterial(mat);
+    }
     ~DEMMeshConnected() {}
 
     /// Load a triangle mesh saved as a Wavefront .obj file
@@ -279,6 +284,7 @@ class DEMMeshConnected {
     void SetMaterial(const std::vector<std::shared_ptr<DEMMaterial>>& input) {
         assertLength(input.size(), "SetMaterial");
         materials = input;
+        isMaterialSet = true;
     }
     void SetMaterial(const std::shared_ptr<DEMMaterial>& input) {
         SetMaterial(std::vector<std::shared_ptr<DEMMaterial>>(nTri, input));

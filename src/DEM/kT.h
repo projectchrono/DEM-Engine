@@ -165,16 +165,13 @@ class DEMKinematicThread {
     // Sphere-related arrays in managed memory
     // Owner body ID of this component
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerClumpBody;
+    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerMesh;
+
     // The ID that maps this sphere component's geometry-defining parameters, when this component is jitified
     std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> clumpComponentOffset;
     // The ID that maps this sphere component's geometry-defining parameters, when this component is not jitified (too
     // many templates)
     std::vector<clumpComponentOffsetExt_t, ManagedAllocator<clumpComponentOffsetExt_t>> clumpComponentOffsetExt;
-    // The ID that maps this triangle component's geometry-defining parameters, when this component is jitified
-    std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> triComponentOffset;
-    // The ID that maps this triangle component's geometry-defining parameters, when this component is not jitified (too
-    // many templates)
-    std::vector<clumpComponentOffsetExt_t, ManagedAllocator<clumpComponentOffsetExt_t>> triComponentOffsetExt;
     // The ID that maps this analytical entity component's geometry-defining parameters, when this component is jitified
     // std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> analComponentOffset;
 
@@ -247,7 +244,7 @@ class DEMKinematicThread {
     void allocateManagedArrays(size_t nOwnerBodies,
                                size_t nOwnerClumps,
                                unsigned int nExtObj,
-                               size_t nTriEntities,
+                               size_t nTriMeshes,
                                size_t nSpheresGM,
                                size_t nTriGM,
                                unsigned int nAnalGM,
@@ -257,31 +254,38 @@ class DEMKinematicThread {
                                unsigned int nJitifiableClumpComponents,
                                unsigned int nMatTuples);
 
-    /// Data type TBD, should come from JITCed headers
-    void initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
-                           const std::vector<unsigned int>& input_ext_obj_family,
-                           const std::vector<unsigned int>& input_mesh_obj_family,
-                           const std::vector<notStupidBool_t>& family_mask_matrix,
-                           const std::vector<float>& clumps_mass_types,
-                           const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                           const std::vector<std::vector<float3>>& clumps_sp_location_types);
-
     // initManagedArrays's components
     void registerPolicies(const std::vector<notStupidBool_t>& family_mask_matrix);
     void populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                               const std::vector<unsigned int>& input_ext_obj_family,
                               const std::vector<unsigned int>& input_mesh_obj_family,
+                              const std::vector<unsigned int>& input_mesh_facet_owner,
+                              const std::vector<DEMTriangle>& input_mesh_facets,
                               const std::vector<float>& clumps_mass_types,
                               const std::vector<std::vector<float>>& clumps_sp_radii_types,
                               const std::vector<std::vector<float3>>& clumps_sp_location_types,
                               size_t nExistOwners,
-                              size_t nExistSpheres);
+                              size_t nExistSpheres,
+                              size_t nExistingFacets);
+
+    /// Initialize managed arrays
+    void initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
+                           const std::vector<unsigned int>& input_ext_obj_family,
+                           const std::vector<unsigned int>& input_mesh_obj_family,
+                           const std::vector<unsigned int>& input_mesh_facet_owner,
+                           const std::vector<DEMTriangle>& input_mesh_facets,
+                           const std::vector<notStupidBool_t>& family_mask_matrix,
+                           const std::vector<float>& clumps_mass_types,
+                           const std::vector<std::vector<float>>& clumps_sp_radii_types,
+                           const std::vector<std::vector<float3>>& clumps_sp_location_types);
 
     /// Add more clumps and/or meshes into the system, without re-initialization. It must be clump/mesh-addition only,
     /// no other changes to the system.
     void updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                const std::vector<unsigned int>& input_ext_obj_family,
                                const std::vector<unsigned int>& input_mesh_obj_family,
+                               const std::vector<unsigned int>& input_mesh_facet_owner,
+                               const std::vector<DEMTriangle>& input_mesh_facets,
                                const std::vector<notStupidBool_t>& family_mask_matrix,
                                const std::vector<float>& clumps_mass_types,
                                const std::vector<std::vector<float>>& clumps_sp_radii_types,

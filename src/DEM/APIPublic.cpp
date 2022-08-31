@@ -524,6 +524,19 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(DEMMeshConne
 }
 
 std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
+                                                                    const std::shared_ptr<DEMMaterial>& mat,
+                                                                    bool load_normals,
+                                                                    bool load_uv) {
+    DEMMeshConnected mesh;
+    bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
+    if (!flag) {
+        SGPS_DEM_ERROR("Failed to load in mesh file %s.", filename.c_str());
+    }
+    mesh.SetMaterial(mat);
+    return AddWavefrontMeshObject(mesh);
+}
+
+std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
                                                                     bool load_normals,
                                                                     bool load_uv) {
     DEMMeshConnected mesh;
@@ -637,6 +650,9 @@ void DEMSolver::Initialize() {
 
     // Compile some of the kernels
     jitifyKernels();
+
+    // Notify the user how jitification goes
+    reportInitStats();
 
     // Release the memory for those flattened arrays, as they are only used for transfers between workers and
     // jitification
@@ -777,7 +793,7 @@ void DEMSolver::UpdateClumps() {
     size_t nOwners_old = nOwnerBodies;
     size_t nClumps_old = nOwnerClumps;
     size_t nSpheres_old = nSpheresGM;
-    size_t nTriMesh_old = nTriEntities;
+    size_t nTriMesh_old = nTriMeshes;
     size_t nFacets_old = nTriGM;
 
     preprocessClumps();
@@ -795,8 +811,7 @@ void DEMSolver::UpdateClumps() {
         SGPS_DEM_ERROR(
             "UpdateClumps should not be used if you introduce new material types or family prescription (which will "
             "need re-jitification).\nWe used to have %u materials, now we have %u.\nWe used to have %u family "
-            "prescription, "
-            "now we have %u.",
+            "prescription, now we have %u.",
             nLastTimeMatNum, m_loaded_materials.size(), nLastTimeFamilyPreNum, m_input_family_prescription.size());
     }
 }

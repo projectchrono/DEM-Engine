@@ -221,22 +221,19 @@ class DEMDynamicThread {
     // Template-related arrays in managed memory
     // Belonged-body ID
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerClumpBody;
+    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerMesh;
 
     // The ID that maps this sphere component's geometry-defining parameters, when this component is jitified
     std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> clumpComponentOffset;
     // The ID that maps this sphere component's geometry-defining parameters, when this component is not jitified (too
     // many templates)
     std::vector<clumpComponentOffsetExt_t, ManagedAllocator<clumpComponentOffsetExt_t>> clumpComponentOffsetExt;
-    // The ID that maps this triangle component's geometry-defining parameters, when this component is jitified
-    std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> triComponentOffset;
-    // The ID that maps this triangle component's geometry-defining parameters, when this component is not jitified (too
-    // many templates)
-    std::vector<clumpComponentOffsetExt_t, ManagedAllocator<clumpComponentOffsetExt_t>> triComponentOffsetExt;
     // The ID that maps this analytical entity component's geometry-defining parameters, when this component is jitified
     // std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> analComponentOffset;
 
     // The ID that maps this entity's material
-    std::vector<materialsOffset_t, ManagedAllocator<materialsOffset_t>> materialTupleOffset;
+    std::vector<materialsOffset_t, ManagedAllocator<materialsOffset_t>> sphereMaterialOffset;
+    std::vector<materialsOffset_t, ManagedAllocator<materialsOffset_t>> triMaterialOffset;
 
     // dT's copy of family map
     // std::unordered_map<unsigned int, family_t> familyUserImplMap;
@@ -332,7 +329,7 @@ class DEMDynamicThread {
     void allocateManagedArrays(size_t nOwnerBodies,
                                size_t nOwnerClumps,
                                unsigned int nExtObj,
-                               size_t nTriEntities,
+                               size_t nTriMeshes,
                                size_t nSpheresGM,
                                size_t nTriGM,
                                unsigned int nAnalGM,
@@ -342,10 +339,50 @@ class DEMDynamicThread {
                                unsigned int nJitifiableClumpComponents,
                                unsigned int nMatTuples);
 
-    /// Data type TBD, should come from JITCed headers
+    // Components of initManagedArrays
+    void buildTrackedObjs(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
+                          const std::vector<float3>& input_ext_obj_xyz,
+                          const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
+                          std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs,
+                          size_t nExistOwners,
+                          size_t nExistingFacets);
+    void populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
+                              const std::vector<float3>& input_ext_obj_xyz,
+                              const std::vector<unsigned int>& input_ext_obj_family,
+                              const std::vector<float3>& input_mesh_obj_xyz,
+                              const std::vector<float4>& input_mesh_obj_rot,
+                              const std::vector<unsigned int>& input_mesh_obj_family,
+                              const std::vector<unsigned int>& mesh_facet_owner,
+                              const std::vector<materialsOffset_t>& mesh_facet_materials,
+                              const std::vector<DEMTriangle>& mesh_facets,
+                              const std::vector<std::vector<unsigned int>>& clumps_sp_mat_ids,
+                              const std::vector<float>& clumps_mass_types,
+                              const std::vector<float3>& clumps_moi_types,
+                              const std::vector<std::vector<float>>& clumps_sp_radii_types,
+                              const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                              const std::vector<float>& ext_obj_mass_types,
+                              const std::vector<float3>& ext_obj_moi_types,
+                              const std::vector<float>& mesh_obj_mass_types,
+                              const std::vector<float3>& mesh_obj_moi_types,
+                              size_t nExistOwners,
+                              size_t nExistSpheres,
+                              size_t nExistingFacets);
+    void registerPolicies(const std::unordered_map<unsigned int, std::string>& template_number_name_map,
+                          const std::vector<float>& clumps_mass_types,
+                          const std::vector<float3>& clumps_moi_types,
+                          const std::vector<float>& ext_obj_mass_types,
+                          const std::vector<float3>& ext_obj_moi_types,
+                          const std::vector<float>& mesh_obj_mass_types,
+                          const std::vector<float3>& mesh_obj_moi_types,
+                          const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
+                          const std::vector<notStupidBool_t>& family_mask_matrix,
+                          const std::set<unsigned int>& no_output_families);
+
+    /// Initialized managed arrays
     void initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                            const std::vector<float3>& input_ext_obj_xyz,
                            const std::vector<unsigned int>& input_ext_obj_family,
+                           const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
                            const std::vector<float3>& input_mesh_obj_xyz,
                            const std::vector<float4>& input_mesh_obj_rot,
                            const std::vector<unsigned int>& input_mesh_obj_family,
@@ -367,47 +404,12 @@ class DEMDynamicThread {
                            const std::set<unsigned int>& no_output_families,
                            std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs);
 
-    // Components of initManagedArrays
-    void buildTrackedObjs(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
-                          const std::vector<float3>& input_ext_obj_xyz,
-                          std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs,
-                          size_t nExistOwners);
-    void populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
-                              const std::vector<float3>& input_ext_obj_xyz,
-                              const std::vector<unsigned int>& input_ext_obj_family,
-                              const std::vector<float3>& input_mesh_obj_xyz,
-                              const std::vector<float4>& input_mesh_obj_rot,
-                              const std::vector<unsigned int>& input_mesh_obj_family,
-                              const std::vector<unsigned int>& mesh_facet_owner,
-                              const std::vector<materialsOffset_t>& mesh_facet_materials,
-                              const std::vector<DEMTriangle>& mesh_facets,
-                              const std::vector<std::vector<unsigned int>>& clumps_sp_mat_ids,
-                              const std::vector<float>& clumps_mass_types,
-                              const std::vector<float3>& clumps_moi_types,
-                              const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                              const std::vector<std::vector<float3>>& clumps_sp_location_types,
-                              const std::vector<float>& ext_obj_mass_types,
-                              const std::vector<float3>& ext_obj_moi_types,
-                              const std::vector<float>& mesh_obj_mass_types,
-                              const std::vector<float3>& mesh_obj_moi_types,
-                              size_t nExistOwners,
-                              size_t nExistSpheres);
-    void registerPolicies(const std::unordered_map<unsigned int, std::string>& template_number_name_map,
-                          const std::vector<float>& clumps_mass_types,
-                          const std::vector<float3>& clumps_moi_types,
-                          const std::vector<float>& ext_obj_mass_types,
-                          const std::vector<float3>& ext_obj_moi_types,
-                          const std::vector<float>& mesh_obj_mass_types,
-                          const std::vector<float3>& mesh_obj_moi_types,
-                          const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
-                          const std::vector<notStupidBool_t>& family_mask_matrix,
-                          const std::set<unsigned int>& no_output_families);
-
     /// Add more clumps and/or meshes into the system, without re-initialization. It must be clump/mesh-addition only,
     /// no other changes to the system.
     void updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                const std::vector<float3>& input_ext_obj_xyz,
                                const std::vector<unsigned int>& input_ext_obj_family,
+                               const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
                                const std::vector<float3>& input_mesh_obj_xyz,
                                const std::vector<float4>& input_mesh_obj_rot,
                                const std::vector<unsigned int>& input_mesh_obj_family,

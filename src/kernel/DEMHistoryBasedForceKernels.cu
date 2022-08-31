@@ -48,7 +48,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
                 AOwnerMass = myMass;
             }
 
-            bodyAMatType = granData->materialTupleOffset[sphereID];
+            bodyAMatType = granData->sphereMaterialOffset[sphereID];
 
             AOwnerFamily = granData->familyID[myOwner];
 
@@ -93,7 +93,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
                 BOwnerMass = myMass;
             }
 
-            bodyBMatType = granData->materialTupleOffset[sphereID];
+            bodyBMatType = granData->sphereMaterialOffset[sphereID];
 
             BOwnerFamily = granData->familyID[myOwner];
 

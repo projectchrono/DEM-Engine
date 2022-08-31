@@ -307,6 +307,12 @@ void DEMKinematicThread::packDataPointers() {
     granData->clumpComponentOffset = clumpComponentOffset.data();
     granData->clumpComponentOffsetExt = clumpComponentOffsetExt.data();
 
+    // Mesh-related
+    granData->ownerMesh = ownerMesh.data();
+    granData->relPosNode1 = relPosNode1.data();
+    granData->relPosNode2 = relPosNode2.data();
+    granData->relPosNode3 = relPosNode3.data();
+
     // Template array pointers
     granData->radiiSphere = radiiSphere.data();
     granData->relPosSphereX = relPosSphereX.data();
@@ -362,7 +368,7 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
 void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
                                                size_t nOwnerClumps,
                                                unsigned int nExtObj,
-                                               size_t nTriEntities,
+                                               size_t nTriMeshes,
                                                size_t nSpheresGM,
                                                size_t nTriGM,
                                                unsigned int nAnalGM,
@@ -380,7 +386,7 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     simParams->nOwnerBodies = nOwnerBodies;
     simParams->nOwnerClumps = nOwnerClumps;
     simParams->nExtObj = nExtObj;
-    simParams->nTriEntities = nTriEntities;
+    simParams->nTriMeshes = nTriMeshes;
     simParams->nDistinctMassProperties = nMassProperties;
     simParams->nDistinctClumpBodyTopologies = nClumpTopo;
     simParams->nJitifiableClumpComponents = nJitifiableClumpComponents;
@@ -442,7 +448,14 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     }
 
     // Resize to the number of spheres (or plus num of triangle facets)
-    SGPS_DEM_TRACKED_RESIZE(ownerClumpBody, nSpheresGM + nTriGM, "ownerClumpBody", 0);
+    SGPS_DEM_TRACKED_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
+
+    // Resize to the number of triangle facets
+    SGPS_DEM_TRACKED_RESIZE(ownerMesh, nTriGM, "ownerMesh", 0);
+    SGPS_DEM_TRACKED_RESIZE(relPosNode1, nTriGM, "relPosNode1", make_float3(0));
+    SGPS_DEM_TRACKED_RESIZE(relPosNode2, nTriGM, "relPosNode2", make_float3(0));
+    SGPS_DEM_TRACKED_RESIZE(relPosNode3, nTriGM, "relPosNode3", make_float3(0));
+
     if (solverFlags.useClumpJitify) {
         SGPS_DEM_TRACKED_RESIZE(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
         // This extended component offset array can hold offset numbers even for big clumps (whereas
@@ -489,11 +502,14 @@ void DEMKinematicThread::registerPolicies(const std::vector<notStupidBool_t>& fa
 void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                               const std::vector<unsigned int>& input_ext_obj_family,
                                               const std::vector<unsigned int>& input_mesh_obj_family,
+                                              const std::vector<unsigned int>& input_mesh_facet_owner,
+                                              const std::vector<DEMTriangle>& input_mesh_facets,
                                               const std::vector<float>& clumps_mass_types,
                                               const std::vector<std::vector<float>>& clumps_sp_radii_types,
                                               const std::vector<std::vector<float3>>& clumps_sp_location_types,
                                               size_t nExistOwners,
-                                              size_t nExistSpheres) {
+                                              size_t nExistSpheres,
+                                              size_t nExistingFacets) {
     // All the input vectors should have the same length, nClumpTopo
     size_t k = 0;
     std::vector<unsigned int> prescans_comp;
@@ -577,16 +593,43 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
         }
     }
 
-    size_t offset_for_ext_obj = input_clump_types.size();
+    // Analytical objs
+    size_t owner_offset_for_ext_obj = nExistOwners + input_clump_types.size();
     for (size_t i = 0; i < input_ext_obj_family.size(); i++) {
         family_t this_family_num = input_ext_obj_family.at(i);
-        familyID.at(i + offset_for_ext_obj) = this_family_num;
+        familyID.at(i + owner_offset_for_ext_obj) = this_family_num;
+    }
+
+    // Mesh objs
+    size_t owner_offset_for_mesh_obj = owner_offset_for_ext_obj + input_ext_obj_family.size();
+    // k for indexing the triangle facets
+    k = 0;
+    for (size_t i = 0; i < input_mesh_obj_family.size(); i++) {
+        // Per-facet info
+        size_t this_facet_owner = input_mesh_facet_owner.at(k);
+        for (; k < input_mesh_facet_owner.size(); k++) {
+            // input_mesh_facet_owner run length is the num of facets in this mesh entity
+            if (input_mesh_facet_owner.at(k) != this_facet_owner)
+                break;
+            ownerMesh.at(nExistingFacets + k) = owner_offset_for_mesh_obj + this_facet_owner;
+            DEMTriangle this_tri = input_mesh_facets.at(k);
+            relPosNode1.at(nExistingFacets + k) = this_tri.p1;
+            relPosNode2.at(nExistingFacets + k) = this_tri.p2;
+            relPosNode3.at(nExistingFacets + k) = this_tri.p3;
+        }
+
+        family_t this_family_num = input_mesh_obj_family.at(i);
+        familyID.at(i + owner_offset_for_mesh_obj) = this_family_num;
+        // SGPS_DEM_DEBUG_PRINTF("kT just loaded a mesh in family %u", +(this_family_num));
+        // SGPS_DEM_DEBUG_PRINTF("Number of triangle facets loaded thus far: %zu", k);
     }
 }
 
 void DEMKinematicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                            const std::vector<unsigned int>& input_ext_obj_family,
                                            const std::vector<unsigned int>& input_mesh_obj_family,
+                                           const std::vector<unsigned int>& input_mesh_facet_owner,
+                                           const std::vector<DEMTriangle>& input_mesh_facets,
                                            const std::vector<notStupidBool_t>& family_mask_matrix,
                                            const std::vector<float>& clumps_mass_types,
                                            const std::vector<std::vector<float>>& clumps_sp_radii_types,
@@ -596,13 +639,16 @@ void DEMKinematicThread::initManagedArrays(const std::vector<std::shared_ptr<DEM
 
     registerPolicies(family_mask_matrix);
 
-    populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, clumps_mass_types,
-                         clumps_sp_radii_types, clumps_sp_location_types, 0, 0);
+    populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, input_mesh_facet_owner,
+                         input_mesh_facets, clumps_mass_types, clumps_sp_radii_types, clumps_sp_location_types, 0, 0,
+                         0);
 }
 
 void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                                const std::vector<unsigned int>& input_ext_obj_family,
                                                const std::vector<unsigned int>& input_mesh_obj_family,
+                                               const std::vector<unsigned int>& input_mesh_facet_owner,
+                                               const std::vector<DEMTriangle>& input_mesh_facets,
                                                const std::vector<notStupidBool_t>& family_mask_matrix,
                                                const std::vector<float>& clumps_mass_types,
                                                const std::vector<std::vector<float>>& clumps_sp_radii_types,
@@ -612,8 +658,9 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
                                                size_t nExistingSpheres,
                                                size_t nExistingTriMesh,
                                                size_t nExistingFacets) {
-    populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, clumps_mass_types,
-                         clumps_sp_radii_types, clumps_sp_location_types, nExistingOwners, nExistingSpheres);
+    populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, input_mesh_facet_owner,
+                         input_mesh_facets, clumps_mass_types, clumps_sp_radii_types, clumps_sp_location_types,
+                         nExistingOwners, nExistingSpheres, nExistingFacets);
 }
 
 void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& Subs) {

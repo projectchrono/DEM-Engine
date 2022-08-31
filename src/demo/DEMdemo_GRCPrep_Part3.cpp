@@ -156,6 +156,8 @@ int main() {
 
     // Create a inspector to find out the highest point of this granular pile
     auto max_z_finder = DEM_sim.CreateInspector("clump_max_z");
+    // Keep tab of the max velocity in simulation
+    auto max_v_finder = DEM_sim.CreateInspector("clump_max_absv");
 
     // Now add a plane to compress the `road'
     auto compressor = DEM_sim.AddExternalObject();
@@ -196,6 +198,8 @@ int main() {
         if (curr_step % out_steps == 0) {
             std::cout << "Frame: " << currframe << std::endl;
             std::cout << "Highest point is at " << now_z << std::endl;
+            float max_v = max_v_finder->GetValue();
+            std::cout << "Max vel in simulation is " << max_v << std::endl;
             DEM_sim.ShowThreadCollaborationStats();
             char filename[200];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);

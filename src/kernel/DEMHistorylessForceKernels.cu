@@ -40,7 +40,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             // Use an input named exactly `sphereID' which is the id of this sphere component
             { _componentAcqStrat_; }
 
-            bodyAMatType = granData->materialTupleOffset[sphereID];
+            bodyAMatType = granData->sphereMaterialOffset[sphereID];
             // Get my mass info from either jitified arrays or global memory
             // Outputs myMass
             // Use an input named exactly `myOwner' which is the id of this owner
@@ -82,7 +82,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             // Use an input named exactly `sphereID' which is the id of this sphere component
             { _componentAcqStrat_; }
 
-            bodyBMatType = granData->materialTupleOffset[sphereID];
+            bodyBMatType = granData->sphereMaterialOffset[sphereID];
             // Get my mass info from either jitified arrays or global memory
             // Outputs myMass
             // Use an input named exactly `myOwner' which is the id of this owner

@@ -41,7 +41,7 @@ constexpr int64_t DEM_MAX_SUBVOXEL = (int64_t)1 << DEM_VOXEL_RES_POWER2;
 
 #define SGPS_DEM_NUM_BODIES_PER_BLOCK 512
 #define SGPS_DEM_MAX_THREADS_PER_BLOCK 1024
-#define SGPS_DEM_INIT_CNT_MULTIPLIER 4
+#define SGPS_DEM_INIT_CNT_MULTIPLIER 5
 // If there are more than this number of analytical geometry, we may have difficulty jitify them all
 #define SGPS_DEM_THRESHOLD_TOO_MANY_ANAL_GEO 64
 // If a clump has more than this number of sphere components, it is automatically considered a non-jitifiable big clump
@@ -166,7 +166,7 @@ struct DEMSimParams {
     bodyID_t nOwnerBodies;
     bodyID_t nOwnerClumps;
     objID_t nExtObj;
-    bodyID_t nTriEntities;
+    bodyID_t nTriMeshes;
 
     // bodyID_t nSpheresJitified;
     // triID_t nTriJitified;
@@ -251,7 +251,12 @@ struct DEMDataDT {
     bodyID_t* ownerClumpBody;
     clumpComponentOffset_t* clumpComponentOffset;
     clumpComponentOffsetExt_t* clumpComponentOffsetExt;
-    materialsOffset_t* materialTupleOffset;
+    materialsOffset_t* sphereMaterialOffset;
+    bodyID_t* ownerMesh;
+    float3* relPosNode1;
+    float3* relPosNode2;
+    float3* relPosNode3;
+    materialsOffset_t* triMaterialOffset;
 
     // dT-owned buffer pointers, for itself's usage
     size_t nContactPairs_buffer = 0;
@@ -319,6 +324,10 @@ struct DEMDataKT {
     bodyID_t* ownerClumpBody;
     clumpComponentOffset_t* clumpComponentOffset;
     clumpComponentOffsetExt_t* clumpComponentOffsetExt;
+    bodyID_t* ownerMesh;
+    float3* relPosNode1;
+    float3* relPosNode2;
+    float3* relPosNode3;
 
     // kT's own work arrays. Now these array pointers get assigned in contactDetection() which point to shared scratch
     // spaces. No need to do forward declaration anymore. They are left here for reference, should contactDetection()
