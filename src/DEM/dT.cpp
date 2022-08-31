@@ -882,8 +882,9 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
     spRadii.resize(num_output_spheres);
     // TODO: Set {} to the list of column names
     pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT,
-             {DEM_OUTPUT_FILE_X_COL_NAME, DEM_OUTPUT_FILE_Y_COL_NAME, DEM_OUTPUT_FILE_Z_COL_NAME, "r"}, posX, posY,
-             posZ, spRadii);
+             {DEM_OUTPUT_FILE_X_COL_NAME, DEM_OUTPUT_FILE_Y_COL_NAME, DEM_OUTPUT_FILE_Z_COL_NAME,
+              DEM_OUTPUT_FILE_R_COL_NAME},
+             posX, posY, posZ, spRadii);
     // Write family numbers
     if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
         families.resize(num_output_spheres);

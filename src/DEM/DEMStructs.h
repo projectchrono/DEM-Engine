@@ -230,6 +230,16 @@ inline void SGPS_DEM_DEVICE_PTR_ALLOC(T*& ptr, size_t size) {
 //     { gpu_assert((res), __FILE__, __LINE__, false); throw std::runtime_error("GPU Assertion Failed!");}
 
 // =============================================================================
+// NOW SOME HOST-SIDE CONSTANTS
+// =============================================================================
+
+const std::string DEM_OUTPUT_FILE_X_COL_NAME = std::string("X");
+const std::string DEM_OUTPUT_FILE_Y_COL_NAME = std::string("Y");
+const std::string DEM_OUTPUT_FILE_Z_COL_NAME = std::string("Z");
+const std::string DEM_OUTPUT_FILE_R_COL_NAME = std::string("r");
+const std::string DEM_OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
+
+// =============================================================================
 // NOW SOME HOST-SIDE SIMPLE STRUCTS USED BY THE DEM MODULE
 // =============================================================================
 
@@ -364,10 +374,10 @@ class DEMClumpTemplate {
 
     /// Retrieve clump's sphere component information from a file
     int ReadComponentFromFile(const std::string filename,
-                              const std::string x_id = "x",
-                              const std::string y_id = "y",
-                              const std::string z_id = "z",
-                              const std::string r_id = "r") {
+                              const std::string x_id = DEM_OUTPUT_FILE_X_COL_NAME,
+                              const std::string y_id = DEM_OUTPUT_FILE_Y_COL_NAME,
+                              const std::string z_id = DEM_OUTPUT_FILE_Z_COL_NAME,
+                              const std::string r_id = DEM_OUTPUT_FILE_R_COL_NAME) {
         io::CSVReader<4> in(filename);
         in.read_header(io::ignore_missing_column, x_id, y_id, z_id, r_id);
         float r = 0;
@@ -488,15 +498,6 @@ struct DEMTrackedObj {
     // If it is a tracked mesh, then this is the number of triangle facets that it has
     size_t nFacets;
 };
-
-// =============================================================================
-// NOW SOME HOST-SIDE CONSTANTS
-// =============================================================================
-
-const std::string DEM_OUTPUT_FILE_X_COL_NAME = std::string("X");
-const std::string DEM_OUTPUT_FILE_Y_COL_NAME = std::string("Y");
-const std::string DEM_OUTPUT_FILE_Z_COL_NAME = std::string("Z");
-const std::string DEM_OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
 
 }  // namespace sgps
 
