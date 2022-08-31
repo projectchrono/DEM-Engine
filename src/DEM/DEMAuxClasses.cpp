@@ -33,31 +33,19 @@ const std::string DEM_INSP_CODE_SPHERE_HIGH_ABSV = R"V0G0N(
     rotVel.y = granData->omgBarY[myOwner];
     rotVel.z = granData->omgBarZ[myOwner];
     // 2 potential points on sphere that are the fastest
-    float velA, velB;
+    float vel;
     {
-        // First is the `outer-most' point
-        float3 loc = relPos;
-        if (length(relPos) > SGPS_DEM_TINY_FLOAT)
-            loc += normalize(relPos) * myRadius;
-        // loc is already local
-        float3 pRotVel = cross(rotVel, loc);
+        // It is indeed an estimation, since it accounts for center of sphere
+        // only. But interestingly, a sphere's rotation about its own CoM does
+        // not contribute to the size of contact detection margin, which is the
+        // main reason for querying max absv for us. So, it should be fine.
+        float3 pRotVel = cross(rotVel, relPos);
         // Map rotational contribution back to global
         applyOriQToVector3<float, sgps::oriQ_t>(pRotVel.x, pRotVel.y, pRotVel.z, 
                                                 oriQ0, oriQ1, oriQ2, oriQ3);
-        velA = length(pRotVel + linVel);
+        vel = length(pRotVel + linVel);
     }
-    {
-        // Second is the `inner-most' point
-        float3 loc = relPos;
-        if (length(relPos) > SGPS_DEM_TINY_FLOAT)
-            loc -= normalize(relPos) * myRadius;
-        float3 pRotVel = cross(rotVel, loc);
-        applyOriQToVector3<float, sgps::oriQ_t>(pRotVel.x, pRotVel.y, pRotVel.z, 
-                                                oriQ0, oriQ1, oriQ2, oriQ3);
-        velB = length(pRotVel + linVel);
-    }
-    // Select the larger one
-    quantity[sphereID] = (velA > velB) ? velA : velB;
+    quantity[sphereID] = vel;
 )V0G0N";
 
 void DEMInspector::switch_quantity_type(const std::string& quantity) {

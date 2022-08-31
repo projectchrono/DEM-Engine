@@ -374,10 +374,10 @@ class DEMClumpTemplate {
 
     /// Retrieve clump's sphere component information from a file
     int ReadComponentFromFile(const std::string filename,
-                              const std::string x_id = DEM_OUTPUT_FILE_X_COL_NAME,
-                              const std::string y_id = DEM_OUTPUT_FILE_Y_COL_NAME,
-                              const std::string z_id = DEM_OUTPUT_FILE_Z_COL_NAME,
-                              const std::string r_id = DEM_OUTPUT_FILE_R_COL_NAME) {
+                              const std::string x_id = "x",
+                              const std::string y_id = "y",
+                              const std::string z_id = "z",
+                              const std::string r_id = "r") {
         io::CSVReader<4> in(filename);
         in.read_header(io::ignore_missing_column, x_id, y_id, z_id, r_id);
         float r = 0;
