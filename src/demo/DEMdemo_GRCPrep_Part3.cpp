@@ -173,8 +173,8 @@ int main() {
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEM_sim.SetCDUpdateFreq(10);
     // DEM_sim.SetExpandFactor(1e-3);
-    DEM_sim.SetMaxVelocity(20.);
-    DEM_sim.SetExpandSafetyParam(1.2);
+    DEM_sim.SetMaxVelocity(3.);
+    DEM_sim.SetExpandSafetyParam(1.1);
     DEM_sim.SetInitBinSize(scales.at(3));
     DEM_sim.Initialize();
 
@@ -189,7 +189,7 @@ int main() {
     unsigned int curr_step = 0;
 
     float settle_batch_time = 0.5;
-    float compressor_final_dist = 0.04;
+    float compressor_final_dist = 0.08;
     float compressor_v = compressor_final_dist / settle_batch_time;
 
     float now_z = max_z_finder->GetValue();

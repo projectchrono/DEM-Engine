@@ -143,7 +143,7 @@ int main() {
     out_dir += "/DEMdemo_Sieve";
     create_directory(out_dir);
 
-    float time_end = 20.0;
+    float time_end = 40.0;
     unsigned int fps = 20;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 

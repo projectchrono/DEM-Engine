@@ -141,7 +141,7 @@ int main() {
     DEM_sim.SetCDUpdateFreq(10);
     // DEM_sim.SetExpandFactor(1e-3);
     DEM_sim.SetMaxVelocity(20.);
-    DEM_sim.SetExpandSafetyParam(1.2);
+    DEM_sim.SetExpandSafetyParam(1.0);
     DEM_sim.Initialize();
 
     path out_dir = current_path();

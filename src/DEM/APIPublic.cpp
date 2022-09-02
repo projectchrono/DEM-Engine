@@ -52,6 +52,12 @@ float3 DEMSolver::GetOwnerVelocity(bodyID_t ownerID) const {
 float4 DEMSolver::GetOwnerOriQ(bodyID_t ownerID) const {
     return dT->getOwnerOriQ(ownerID);
 }
+float3 DEMSolver::GetOwnerAcc(bodyID_t ownerID) const {
+    return dT->getOwnerAcc(ownerID);
+}
+float3 DEMSolver::GetOwnerAngAcc(bodyID_t ownerID) const {
+    return dT->getOwnerAngAcc(ownerID);
+}
 
 void DEMSolver::SetOwnerPosition(bodyID_t ownerID, float3 pos) {
     dT->setOwnerPos(ownerID, pos);

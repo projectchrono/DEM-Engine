@@ -195,6 +195,10 @@ class DEMSolver {
     float4 GetOwnerOriQ(bodyID_t ownerID) const;
     /// Get velocity of a owner
     float3 GetOwnerVelocity(bodyID_t ownerID) const;
+    /// Get the acceleration of a owner
+    float3 GetOwnerAcc(bodyID_t ownerID) const;
+    /// Get the angular acceleration of a owner
+    float3 GetOwnerAngAcc(bodyID_t ownerID) const;
     /// Set position of a owner in user unit
     void SetOwnerPosition(bodyID_t ownerID, float3 pos);
     /// Set angular velocity of a owner

@@ -87,14 +87,18 @@ class DEMTracker {
     float3 AngVel(size_t offset = 0);
     float3 Vel(size_t offset = 0);
     float4 OriQ(size_t offset = 0);
+    // float3 Acc(size_t offset = 0);
+    // float3 AngAcc(size_t offset = 0);
+    float3 ContactAcc(size_t offset = 0);
+    float3 ContactAngAcc(size_t offset = 0);
     // Methods to set motions to this owner
     void SetPos(float3 pos, size_t offset = 0);
     void SetAngVel(float3 angVel, size_t offset = 0);
     void SetVel(float3 vel, size_t offset = 0);
     void SetOriQ(float4 oriQ, size_t offset = 0);
-    /// Add an extra force to the tracked body, for the next time step. Note if the user intends to add a persistent
+    /// Add an extra acc to the tracked body, for the next time step. Note if the user intends to add a persistent
     /// external force, then using family prescription is the better method.
-    void AddForce(float3 force, size_t offset = 0);
+    void AddAcc(float3 force, size_t offset = 0);
     /// Change the size of clump entities
     void ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors);
 };

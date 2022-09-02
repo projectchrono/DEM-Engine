@@ -123,6 +123,23 @@ float3 DEMTracker::Vel(size_t offset) {
 float4 DEMTracker::OriQ(size_t offset) {
     return sys->GetOwnerOriQ(obj->ownerID + offset);
 }
+// float3 DEMTracker::Acc(size_t offset) {
+//     float3 contact_acc = sys->GetOwnerAcc(obj->ownerID + offset);
+//     // Contact acceleration is not total acc, we need to add gravity and manually added forces
+//     //// TODO: How to do that?
+// }
+// float3 DEMTracker::AngAcc(size_t offset) {
+//     float3 contact_angAcc = sys->GetOwnerAngAcc(obj->ownerID + offset);
+//     // Contact angAcc is not total angAcc, we need to add manually added angular acc
+//     //// TODO: How to do that?
+// }
+float3 DEMTracker::ContactAcc(size_t offset) {
+    return sys->GetOwnerAcc(obj->ownerID + offset);
+}
+float3 DEMTracker::ContactAngAcc(size_t offset) {
+    return sys->GetOwnerAngAcc(obj->ownerID + offset);
+}
+
 void DEMTracker::SetPos(float3 pos, size_t offset) {
     sys->SetOwnerPosition(obj->ownerID + offset, pos);
 }

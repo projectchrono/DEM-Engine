@@ -12,9 +12,9 @@ inline __device__ void cleanUpContactForces(size_t thisContact,
 }
 
 inline __device__ void cleanUpAcc(size_t thisClump, sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData) {
-    granData->aX[thisClump] = simParams->Gx;
-    granData->aY[thisClump] = simParams->Gy;
-    granData->aZ[thisClump] = simParams->Gz;
+    granData->aX[thisClump] = 0;
+    granData->aY[thisClump] = 0;
+    granData->aZ[thisClump] = 0;
     granData->alphaX[thisClump] = 0;
     granData->alphaY[thisClump] = 0;
     granData->alphaZ[thisClump] = 0;

@@ -43,7 +43,11 @@ inline __device__ void applyPrescribedPos(bool& LinPrescribed,
     }
 }
 
-inline __device__ void integrateVel(sgps::bodyID_t thisClump, sgps::DEMDataDT* granData, float h, float t) {
+inline __device__ void integrateVel(sgps::bodyID_t thisClump,
+                                    sgps::DEMSimParams* simParams,
+                                    sgps::DEMDataDT* granData,
+                                    float h,
+                                    float t) {
     sgps::family_t family_code = granData->familyID[thisClump];
     bool LinPrescribed = false, RotPrescribed = false;
     applyPrescribedVel<float, float>(LinPrescribed, RotPrescribed, granData->vX[thisClump], granData->vY[thisClump],
@@ -51,9 +55,9 @@ inline __device__ void integrateVel(sgps::bodyID_t thisClump, sgps::DEMDataDT* g
                                      granData->omgBarY[thisClump], granData->omgBarZ[thisClump], family_code, (float)t);
 
     if (!LinPrescribed) {
-        granData->vX[thisClump] += granData->aX[thisClump] * h;
-        granData->vY[thisClump] += granData->aY[thisClump] * h;
-        granData->vZ[thisClump] += granData->aZ[thisClump] * h;
+        granData->vX[thisClump] += (granData->aX[thisClump] + simParams->Gx) * h;
+        granData->vY[thisClump] += (granData->aY[thisClump] + simParams->Gy) * h;
+        granData->vZ[thisClump] += (granData->aZ[thisClump] + simParams->Gz) * h;
     }
 
     if (!RotPrescribed) {
@@ -131,10 +135,10 @@ inline __device__ void integratePos(sgps::bodyID_t thisClump, sgps::DEMDataDT* g
     }
 }
 
-__global__ void integrateClumps(sgps::DEMDataDT* granData, sgps::bodyID_t nOwnerBodies, float h, float t) {
+__global__ void integrateClumps(sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData, float t) {
     sgps::bodyID_t thisClump = blockIdx.x * blockDim.x + threadIdx.x;
-    if (thisClump < nOwnerBodies) {
-        integrateVel(thisClump, granData, h, t);
-        integratePos(thisClump, granData, h, t);
+    if (thisClump < simParams->nOwnerBodies) {
+        integrateVel(thisClump, simParams, granData, simParams->h, t);
+        integratePos(thisClump, granData, simParams->h, t);
     }
 }

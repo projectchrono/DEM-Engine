@@ -1299,7 +1299,7 @@ inline void DEMDynamicThread::integrateClumpMotions() {
     integrator_kernels->kernel("integrateClumps")
         .instantiate()
         .configure(dim3(blocks_needed_for_clumps), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData, simParams->nOwnerBodies, simParams->h, timeElapsed);
+        .launch(simParams, granData, timeElapsed);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
@@ -1589,6 +1589,22 @@ float4 DEMDynamicThread::getOwnerOriQ(bodyID_t ownerID) const {
     oriQ.z = oriQ2.at(ownerID);
     oriQ.w = oriQ3.at(ownerID);
     return oriQ;
+}
+
+float3 DEMDynamicThread::getOwnerAcc(bodyID_t ownerID) const {
+    float3 acc;
+    acc.x = aX.at(ownerID);
+    acc.y = aY.at(ownerID);
+    acc.z = aZ.at(ownerID);
+    return acc;
+}
+
+float3 DEMDynamicThread::getOwnerAngAcc(bodyID_t ownerID) const {
+    float3 aa;
+    aa.x = alphaX.at(ownerID);
+    aa.y = alphaY.at(ownerID);
+    aa.z = alphaZ.at(ownerID);
+    return aa;
 }
 
 float3 DEMDynamicThread::getOwnerVel(bodyID_t ownerID) const {
