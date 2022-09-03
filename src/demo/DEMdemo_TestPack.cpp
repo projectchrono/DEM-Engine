@@ -72,7 +72,7 @@ void EllpsiodFallingOver() {
         DEM_sim.WriteSphereFile(std::string(filename));
         std::cout << "Frame: " << i << std::endl;
         float4 oriQ = ellipsoid_tracker->OriQ();
-        float3 angVel = ellipsoid_tracker->AngVel();
+        float3 angVel = ellipsoid_tracker->AngVelLocal();
         std::cout << "Time: " << frame_time * i << std::endl;
         std::cout << "Quaternion of the ellipsoid: " << oriQ.x << ", " << oriQ.y << ", " << oriQ.z << ", " << oriQ.w
                   << std::endl;
@@ -123,7 +123,7 @@ void SphereRollUpIncline() {
             // }
             std::cout << "Frame: " << i << std::endl;
             float3 vel = sphere_tracker->Vel();
-            float3 angVel = sphere_tracker->AngVel();
+            float3 angVel = sphere_tracker->AngVelLocal();
             std::cout << "Time: " << step_time * i << std::endl;
             std::cout << "Velocity of the sphere: " << vel.x << ", " << vel.y << ", " << vel.z << std::endl;
             std::cout << "Angular velocity of the sphere: " << angVel.x << ", " << angVel.y << ", " << angVel.z
@@ -166,7 +166,7 @@ void SphereRollUpIncline() {
 
             DEM_sim.DoDynamicsThenSync(run_time);
             float3 vel = sphere_tracker->Vel();
-            float3 angVel = sphere_tracker->AngVel();
+            float3 angVel = sphere_tracker->AngVelLocal();
             float vel_mag = length(vel);
             float angVel_mag = length(angVel);
             std::cout << "Angle of incline: " << alpha << std::endl;

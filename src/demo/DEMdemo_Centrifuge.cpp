@@ -80,11 +80,11 @@ int main() {
     float CylHeight = 1.0;
     float CylMass = 1.0;
     float CylParticleRad = 0.05;
-    float IXX = CylMass * CylRad * CylRad / 2;
+    float IZZ = CylMass * CylRad * CylRad / 2;
     float IYY = (CylMass / 12) * (3 * CylRad * CylRad + CylHeight * CylHeight);
     auto Drum_particles = DEMCylSurfSampler(CylCenter, CylAxis, CylRad, CylHeight, CylParticleRad);
     auto Drum_template =
-        DEM_sim.LoadClumpType(CylMass, make_float3(IYY, IYY, IXX),
+        DEM_sim.LoadClumpType(CylMass, make_float3(IYY, IYY, IZZ),
                               std::vector<float>(Drum_particles.size(), CylParticleRad), Drum_particles, mat_type_drum);
     std::cout << Drum_particles.size() << " spheres make up the cylindrical wall" << std::endl;
 
@@ -115,7 +115,7 @@ int main() {
     // Drum is family 10
     unsigned int drum_family = 100;
     Drum->SetFamilies(drum_family);
-    // The drum rotates (facing X direction)
+    // The drum rotates (facing Z direction)
     DEM_sim.SetFamilyPrescribedAngVel(drum_family, "0", "0", "6.0");
     // Disable contacts within drum components
     DEM_sim.DisableContactBetweenFamilies(drum_family, drum_family);
@@ -140,7 +140,7 @@ int main() {
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEM_sim.SetCDUpdateFreq(10);
     // DEM_sim.SetExpandFactor(1e-3);
-    DEM_sim.SetMaxVelocity(20.);
+    DEM_sim.SetMaxVelocity(25.);
     DEM_sim.SetExpandSafetyParam(1.0);
     DEM_sim.Initialize();
 

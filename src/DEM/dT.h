@@ -164,7 +164,7 @@ class DEMDynamicThread {
     std::vector<float, ManagedAllocator<float>> vY;
     std::vector<float, ManagedAllocator<float>> vZ;
 
-    // The angular velocity
+    // Local angular velocity
     std::vector<float, ManagedAllocator<float>> omgBarX;
     std::vector<float, ManagedAllocator<float>> omgBarY;
     std::vector<float, ManagedAllocator<float>> omgBarZ;
@@ -174,7 +174,7 @@ class DEMDynamicThread {
     std::vector<float, ManagedAllocator<float>> aY;
     std::vector<float, ManagedAllocator<float>> aZ;
 
-    // Angular acceleration
+    // Local angular acceleration
     std::vector<float, ManagedAllocator<float>> alphaX;
     std::vector<float, ManagedAllocator<float>> alphaY;
     std::vector<float, ManagedAllocator<float>> alphaZ;

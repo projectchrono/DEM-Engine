@@ -82,19 +82,33 @@ class DEMTracker {
 
     // The tracked object
     std::shared_ptr<DEMTrackedObj> obj;
-    // Methods to get info from this owner
+    /// Get the position of this tracked object
     float3 Pos(size_t offset = 0);
-    float3 AngVel(size_t offset = 0);
+    /// Get the angular velocity of this tracked object in its own local coordinate system. Applying OriQ to it would
+    /// give you the ang vel in global frame.
+    float3 AngVelLocal(size_t offset = 0);
+    /// Get the velocity of this tracked object in global frame
     float3 Vel(size_t offset = 0);
+    /// Get the quaternion that represents the orientation of this tracked object's own coordinate system
     float4 OriQ(size_t offset = 0);
+
     // float3 Acc(size_t offset = 0);
     // float3 AngAcc(size_t offset = 0);
+
+    /// Get the a portion of the acceleration of this tracked object, that is the result of its contact with other
+    /// simulation entities. In most cases, this means excluding the gravitational acceleration. The acceleration is in
+    /// global frame.
     float3 ContactAcc(size_t offset = 0);
-    float3 ContactAngAcc(size_t offset = 0);
-    // Methods to set motions to this owner
+    /// Get the a portion of the angular acceleration of this tracked object, that is the result of its contact with
+    /// other simulation entities. The acceleration is in this object's local frame.
+    float3 ContactAngAccLocal(size_t offset = 0);
+    /// Set the position of this tracked object
     void SetPos(float3 pos, size_t offset = 0);
+    /// Set the angular velocity of this tracked object in its own local coordinate system
     void SetAngVel(float3 angVel, size_t offset = 0);
+    /// Set the velocity of this tracked object in global frame
     void SetVel(float3 vel, size_t offset = 0);
+    /// Set the quaternion which represents the orientation of this tracked object's coordinate system
     void SetOriQ(float4 oriQ, size_t offset = 0);
     /// Add an extra acc to the tracked body, for the next time step. Note if the user intends to add a persistent
     /// external force, then using family prescription is the better method.

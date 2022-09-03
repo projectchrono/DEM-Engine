@@ -34,15 +34,19 @@ int main() {
 
     // Define the wheel geometry
     float wheel_rad = 0.25;
-    float wheel_width = 0.2;
+    float wheel_width = 0.25;
     float wheel_mass = 10.0;
     // Our shelf wheel geometry is lying flat on ground with z being the axial direction
-    float wheel_IZZ = wheel_mass * wheel_rad * wheel_rad / 2;
+    float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
-    auto wheel_template = DEM_sim.LoadClumpType(wheel_mass, make_float3(wheel_IXX, wheel_IXX, wheel_IZZ),
+    auto wheel_template = DEM_sim.LoadClumpType(wheel_mass, make_float3(wheel_IXX, wheel_IYY, wheel_IXX),
                                                 "./data/clumps/ViperWheelSimple.csv", mat_type_wheel);
     // The file contains no wheel particles size info, so let's manually set them
     wheel_template->radii = std::vector<float>(wheel_template->nComp, 0.01);
+    // This wheel template is `lying down', but our reported MOI info is assuming it's in a position to roll along X
+    // direction. Let's make it clear its principal axes is not what we used to report its component sphere relative
+    // positions.
+    wheel_template->InformCentroidPrincipal(make_float3(0), make_float4(0.7071, 0.7071, 0, 0));
 
     // Then the ground particle template
     DEMClumpTemplate ellipsoid_template;
@@ -65,13 +69,10 @@ int main() {
 
     // Instantiate this wheel
     auto wheel = DEM_sim.AddClumps(wheel_template, make_float3(-1.2, 0, 0.4));
-    // Let's `flip' the wheel's initial position so... yeah, it's like how wheel operates normally
-    wheel->SetOriQ(make_float4(0.7071, 0.7071, 0, 0));
     // Give the wheel a family number so we can potentially add prescription
     wheel->SetFamily(10);
-    // Note that the added constant ang vel is wrt the wheel's own coord sys, therefore it should be on the z axis: in
-    // line with the orientation at which the wheel is loaded into the simulation system.
-    DEM_sim.SetFamilyPrescribedAngVel(10, "0", "0", "-2.0", false);
+    // Note that the added constant ang vel is wrt the wheel's own principal coord system
+    DEM_sim.SetFamilyPrescribedAngVel(10, "0", "2.0", "0", false);
 
     // Sample and add ground particles
     float3 sample_center = make_float3(0, 0, -0.3);
@@ -85,15 +86,18 @@ int main() {
     // Give ground particles a small initial velocity so they `collapse' at the start of the simulation
     ground_particles->SetVel(make_float3(0.002, 0, 0));
 
+    // Create an absv inspector
+    auto max_v_finder = DEM_sim.CreateInspector("clump_max_absv");
+
     // Make ready for simulation
     float step_size = 5e-6;
     DEM_sim.SetCoordSysOrigin("center");
     DEM_sim.SetInitTimeStep(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEM_sim.SetCDUpdateFreq(30);
+    DEM_sim.SetCDUpdateFreq(20);
     // DEM_sim.SetExpandFactor(1e-3);
-    DEM_sim.SetMaxVelocity(2.5);
+    DEM_sim.SetMaxVelocity(5.);
     DEM_sim.SetExpandSafetyParam(1.2);
     DEM_sim.SetInitBinSize(scaling / 1.5);
     DEM_sim.Initialize();
@@ -113,15 +117,16 @@ int main() {
             std::cout << "Frame: " << currframe << std::endl;
             DEM_sim.ShowThreadCollaborationStats();
             char filename[100];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
+            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
             DEM_sim.WriteSphereFile(std::string(filename));
-            currframe++;
+            float max_v = max_v_finder->GetValue();
+            std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
         }
 
         DEM_sim.DoDynamics(step_size);
         // We can query info out of this drum, since it is tracked
         // float3 drum_pos = Drum_tracker->Pos();
-        // float3 drum_angVel = Drum_tracker->AngVel();
+        // float3 drum_angVel = Drum_tracker->AngVelLocal();
         // std::cout << "Position of the drum: " << drum_pos.x << ", " << drum_pos.y << ", " << drum_pos.z
         //           << std::endl;
         // std::cout << "Angular velocity of the drum: " << drum_angVel.x << ", " << drum_angVel.y << ", "

@@ -360,10 +360,10 @@ class DEMClumpTemplate {
     // Position of this clump's CoM, in the frame which is used to report the positions of this clump's component
     // spheres. It is usually all 0, unless the user specifies it, in which case we need to process relPos such that
     // when the system is initialized, everything is still in the clump's CoM frame.
-    float3 CoM = make_float3(0);
+    // float3 CoM = make_float3(0);
     // CoM frame's orientation quaternion in the frame which is used to report the positions of this clump's component
     // spheres. Usually unit quaternion.
-    float4 CoM_oriQ = host_make_float4(1, 0, 0, 0);
+    // float4 CoM_oriQ = host_make_float4(1, 0, 0, 0);
     // Each clump template will have a unique mark number. When clumps are loaded to the system, this mark will help
     // find their type offset.
     unsigned int mark;
@@ -392,6 +392,42 @@ class DEMClumpTemplate {
 
         //// TODO: If there is an error while loading, we should report it
         return 0;
+    }
+
+    /// If this clump's component sphere relPos is not reported by the user in its CoM frame, then the user needs to
+    /// call this method immediately to report this clump's Volume Centroid and Principal Axes, and relPos will be
+    /// adjusted by this call.
+    void InformCentroidPrincipal(float3 center, float4 prin_Q) {
+        // Getting to Centroid and Principal is a translation then a rotation (local), so the undo order to undo
+        // rotation then translation
+        for (auto& pos : relPos) {
+            hostApplyOriQToVector3(pos.x, pos.y, pos.z, prin_Q.x, -prin_Q.y, -prin_Q.z, -prin_Q.w);
+            pos.x -= center.x;
+            pos.y -= center.y;
+            pos.z -= center.z;
+        }
+    }
+    /// The opposite of InformCentroidPrincipal, and it is another way to align this clump's coordinate system with its
+    /// centroid and principal system: rotate then move this clump, so that at the end of this operation, the original
+    /// `origin' point should hit the CoM of this clump.
+    void Move(float3 vec, float4 rot_Q) {
+        for (auto& pos : relPos) {
+            hostApplyOriQToVector3(pos.x, pos.y, pos.z, rot_Q.x, rot_Q.y, rot_Q.z, rot_Q.w);
+            pos.x += vec.x;
+            pos.y += vec.y;
+            pos.z += vec.z;
+        }
+    }
+    /// Scale all geometry component of this clump
+    void Scale(float s) {
+        for (auto& pos : relPos) {
+            pos.x *= s;
+            pos.y *= s;
+            pos.z *= s;
+        }
+        for (auto& rad : radii) {
+            rad *= s;
+        }
     }
 
     void AssignName(const std::string& some_name) { m_name = some_name; }

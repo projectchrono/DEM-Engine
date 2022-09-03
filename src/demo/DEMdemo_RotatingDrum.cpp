@@ -158,7 +158,7 @@ int main() {
         DEM_sim.DoDynamics(step_size);
         // We can query info out of this drum, since it is tracked
         // float3 drum_pos = Drum_tracker->Pos();
-        // float3 drum_angVel = Drum_tracker->AngVel();
+        // float3 drum_angVel = Drum_tracker->AngVelLocal();
         // std::cout << "Position of the drum: " << drum_pos.x << ", " << drum_pos.y << ", " << drum_pos.z
         //           << std::endl;
         // std::cout << "Angular velocity of the drum: " << drum_angVel.x << ", " << drum_angVel.y << ", "

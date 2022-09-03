@@ -380,7 +380,6 @@ void DEMSolver::preprocessClumpTemplates() {
         m_template_clump_mass.push_back(clump->mass);
         m_template_clump_moi.push_back(clump->MOI);
         m_template_sp_radii.push_back(clump->radii);
-        // TODO: If CoM is not all-0, then relPos should be massaged here
         m_template_sp_relPos.push_back(clump->relPos);
 
         // m_template_sp_mat_ids is an array of ints that represent the indices of the material array

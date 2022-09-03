@@ -114,7 +114,7 @@ void DEMInspector::initializeInspector(const std::unordered_map<std::string, std
 float3 DEMTracker::Pos(size_t offset) {
     return sys->GetOwnerPosition(obj->ownerID + offset);
 }
-float3 DEMTracker::AngVel(size_t offset) {
+float3 DEMTracker::AngVelLocal(size_t offset) {
     return sys->GetOwnerAngVel(obj->ownerID + offset);
 }
 float3 DEMTracker::Vel(size_t offset) {
@@ -136,7 +136,7 @@ float4 DEMTracker::OriQ(size_t offset) {
 float3 DEMTracker::ContactAcc(size_t offset) {
     return sys->GetOwnerAcc(obj->ownerID + offset);
 }
-float3 DEMTracker::ContactAngAcc(size_t offset) {
+float3 DEMTracker::ContactAngAccLocal(size_t offset) {
     return sys->GetOwnerAngAcc(obj->ownerID + offset);
 }
 
