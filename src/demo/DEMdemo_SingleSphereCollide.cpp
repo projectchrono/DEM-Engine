@@ -25,7 +25,8 @@ int main() {
     // srand(time(NULL));
     srand(4150);
 
-    auto mat_type_1 = DEM_sim.LoadMaterial(1e9, 0.3, 0.8);
+    auto mat_type_1 = DEM_sim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}});
+
     auto sph_type_1 = DEM_sim.LoadClumpSimpleSphere(11728., 1., mat_type_1);
 
     std::vector<float3> input_xyz1, input_xyz2;

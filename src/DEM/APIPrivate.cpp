@@ -1024,10 +1024,7 @@ inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::strin
     for (const auto& prop_name : m_material_prop_names) {
         materialDefs += line_header + prop_name + "[] = {";
         // See what each material says...
-        unsigned int col_num = 0;
         for (const auto& a_mat : m_loaded_materials) {
-            // Scan each loaded material, if they have a property value with appropriate name assigned, store it in the
-            // correct offset
             const auto& name_val_pairs = a_mat->mat_prop;
             float val = 0.0;
             if (check_exist(name_val_pairs, prop_name)) {
