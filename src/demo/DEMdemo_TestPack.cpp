@@ -44,7 +44,7 @@ void EllpsiodFallingOver() {
     // Then calculate mass and MOI
     float mass = 5.0;
     // E, nu, CoR, mu, Crr
-    auto mat_type_1 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.5, 0.25, 0.2);
+    auto mat_type_1 = DEM_sim.LoadMaterial(1e8, 0.3, 0.5, 0.25, 0.2);
     float3 MOI = make_float3(1. / 5. * mass * (0.2 * 0.2 + 0.5 * 0.5), 1. / 5. * mass * (0.2 * 0.2 + 0.5 * 0.5),
                              1. / 5. * mass * (0.2 * 0.2 + 0.2 * 0.2));
     auto ellipsoid_template = DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat_type_1);
@@ -92,7 +92,7 @@ void SphereRollUpIncline() {
         DEMSolver DEM_sim;
         SetSolverProp(DEM_sim);
 
-        auto mat_type_1 = DEM_sim.LoadMaterialType(1e9, 0.3, 0.5, mu, 0.15);
+        auto mat_type_1 = DEM_sim.LoadMaterial(1e9, 0.3, 0.5, mu, 0.15);
         // A ball
         auto sphere_template = DEM_sim.LoadClumpSimpleSphere(mass, sphere_rad, mat_type_1);
 
@@ -143,7 +143,7 @@ void SphereRollUpIncline() {
             SetSolverProp(DEM_sim);
             DEM_sim.SetVerbosity(QUIET);
 
-            auto mat_type_1 = DEM_sim.LoadMaterialType(1e9, 0.3, 0.5, mu, Crr);
+            auto mat_type_1 = DEM_sim.LoadMaterial(1e9, 0.3, 0.5, mu, Crr);
             // A ball
             auto sphere_template = DEM_sim.LoadClumpSimpleSphere(mass, sphere_rad, mat_type_1);
 
@@ -204,7 +204,7 @@ void SphereStack() {
                 SetSolverProp(DEM_sim);
                 DEM_sim.SetVerbosity(ERROR);
 
-                auto mat_type_1 = DEM_sim.LoadMaterialType(2e6, 0.3, 0.4, mu, Crr);
+                auto mat_type_1 = DEM_sim.LoadMaterial(2e6, 0.3, 0.4, mu, Crr);
                 // 2 types of spheres
                 auto sphere_top_template = DEM_sim.LoadClumpSimpleSphere(m_top, sphere_rad, mat_type_1);
                 auto sphere_bot_template = DEM_sim.LoadClumpSimpleSphere(m_bot, sphere_rad, mat_type_1);

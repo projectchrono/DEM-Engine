@@ -283,31 +283,27 @@ void DEMSolver::DisableFamilyOutput(unsigned int ID) {
     m_no_output_families.insert(ID);
 }
 
-std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterialType(DEMMaterial& mat) {
-    if (mat.CoR < SGPS_DEM_TINY_FLOAT) {
-        SGPS_DEM_WARNING("Material type %u is set to have 0 restitution. Please make sure this is intentional.",
-                         m_loaded_materials.size());
+std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterial(const std::unordered_map<std::string, float>& mat_prop) {
+    // Register material property names that appeared in this call
+    for (const auto& a_pair : mat_prop) {
+        m_material_prop_names.insert(a_pair.first);
+        if (a_pair.first == "CoR") {
+            if (a_pair.second < SGPS_DEM_TINY_FLOAT)
+                SGPS_DEM_WARNING("Material type %u is set to have 0 restitution. Please make sure this is intentional.",
+                                 m_loaded_materials.size());
+            if (a_pair.second > 1.f)
+                SGPS_DEM_WARNING(
+                    "Material type %u is set to have a restitution coefficient larger than 1. This is typically not "
+                    "physical and should destabilize the simulation.",
+                    m_loaded_materials.size());
+        }
     }
-    if (mat.CoR > 1.f) {
-        SGPS_DEM_WARNING(
-            "Material type %u is set to have a restitution coefficient larger than 1. This is typically not physical "
-            "and should destabilize the simulation.",
-            m_loaded_materials.size());
-    }
-    std::shared_ptr<DEMMaterial> ptr = std::make_shared<DEMMaterial>(std::move(mat));
+    DEMMaterial a_material(mat_prop);
+    std::shared_ptr<DEMMaterial> ptr = std::make_shared<DEMMaterial>(std::move(a_material));
+    ptr->load_order = m_loaded_materials.size();
     m_loaded_materials.push_back(ptr);
+    nMaterialsLoad++;
     return m_loaded_materials.back();
-}
-
-std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterialType(float E, float nu, float CoR, float mu, float Crr) {
-    struct DEMMaterial a_material;
-    a_material.E = E;
-    a_material.nu = nu;
-    a_material.CoR = CoR;
-    a_material.mu = mu;
-    a_material.Crr = Crr;
-
-    return LoadMaterialType(a_material);
 }
 
 std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clump) {
@@ -737,12 +733,6 @@ void DEMSolver::ReleaseFlattenedArrays() {
 
     deallocate_array(m_mesh_obj_mass);
     deallocate_array(m_mesh_obj_moi);
-
-    deallocate_array(m_E_proxy);
-    deallocate_array(m_nu_proxy);
-    deallocate_array(m_CoR_proxy);
-    deallocate_array(m_mu_proxy);
-    deallocate_array(m_Crr_proxy);
 }
 
 void DEMSolver::resetWorkerThreads() {

@@ -22,8 +22,9 @@ int main() {
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
     DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::ABSV);
 
-    auto mat_type_ball = DEM_sim.LoadMaterialType(1e10, 0.3, 0.3);
-    auto mat_type_terrain = DEM_sim.LoadMaterialType(5e9, 0.3, 0.2);
+    // E, nu, CoR, mu, Crr...
+    auto mat_type_ball = DEM_sim.LoadMaterial({{"E", 1e10}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.0}, {"Crr", 0.0}});
+    auto mat_type_terrain = DEM_sim.LoadMaterial({{"E", 5e9}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.0}, {"Crr", 0.0}});
 
     auto projectile = DEM_sim.AddWavefrontMeshObject("./data/mesh/sphere.obj", mat_type_ball);
     std::cout << "Total num of triangles: " << projectile->GetNumTriangles() << std::endl;

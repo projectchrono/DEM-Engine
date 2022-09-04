@@ -32,7 +32,7 @@ int main() {
     srand(777);
 
     // Formality
-    auto mat_type_1 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.0);
+    auto mat_type_1 = DEM_sim.LoadMaterial(1e8, 0.3, 0.0);
 
     float grid_size = 1.0;
     float r = (1.45 * grid_size) / 2.0;

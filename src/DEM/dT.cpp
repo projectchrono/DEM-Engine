@@ -84,11 +84,6 @@ void DEMDynamicThread::packDataPointers() {
     granData->mmiXX = mmiXX.data();
     granData->mmiYY = mmiYY.data();
     granData->mmiZZ = mmiZZ.data();
-    granData->EProxy = EProxy.data();
-    granData->nuProxy = nuProxy.data();
-    granData->CoRProxy = CoRProxy.data();
-    granData->muProxy = muProxy.data();
-    granData->CrrProxy = CrrProxy.data();
 }
 
 void DEMDynamicThread::packTransferPointers(DEMKinematicThread*& kT) {
@@ -307,11 +302,6 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
         SGPS_DEM_TRACKED_RESIZE(mmiYY, nOwnerBodies, "mmiYY", 0);
         SGPS_DEM_TRACKED_RESIZE(mmiZZ, nOwnerBodies, "mmiZZ", 0);
     }
-    SGPS_DEM_TRACKED_RESIZE(EProxy, nMatTuples, "EProxy", 0);
-    SGPS_DEM_TRACKED_RESIZE(nuProxy, nMatTuples, "nuProxy", 0);
-    SGPS_DEM_TRACKED_RESIZE(CoRProxy, nMatTuples, "CoRProxy", 0);
-    SGPS_DEM_TRACKED_RESIZE(muProxy, nMatTuples, "muProxy", 0);
-    SGPS_DEM_TRACKED_RESIZE(CrrProxy, nMatTuples, "CrrProxy", 0);
 
     // Arrays for contact info
     // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is ~ 4n, and I
@@ -366,17 +356,7 @@ void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, s
                                         const std::set<unsigned int>& no_output_families) {
     // No modification for the arrays in this function. They can only be completely re-constructed.
 
-    // Load in material properties
-    for (unsigned int i = 0; i < loaded_materials.size(); i++) {
-        std::shared_ptr<DEMMaterial> Mat = loaded_materials.at(i);
-        EProxy.at(i) = Mat->E;
-        nuProxy.at(i) = Mat->nu;
-        CoRProxy.at(i) = Mat->CoR;
-        muProxy.at(i) = Mat->mu;
-        CrrProxy.at(i) = Mat->Crr;
-    }
-
-    // Then load in mass and MOI template info
+    // Load in mass and MOI template info
     size_t k = 0;
     if (solverFlags.useMassJitify) {
         for (unsigned int i = 0; i < clumps_mass_types.size(); i++) {

@@ -116,19 +116,6 @@ inline std::string DEM_ANALYTICAL_COMPONENT_DEFINITIONS_JITIFIED() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// Material definition files
-////////////////////////////////////////////////////////////////////////////////
-
-inline std::string DEM_MATERIAL_DEFINITIONS_JITIFIED() {
-    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "MaterialDefJitify.cu";
-    if (!std::filesystem::exists(sourcefile)) {
-        SGPS_DEM_ERROR("The jitified material proxy array file %s is not found.", sourcefile.c_str());
-    }
-    return read_file_to_string(sourcefile);
-}
-
-////////////////////////////////////////////////////////////////////////////////
 // Mass and MOI definition and acquisition strategy files
 ////////////////////////////////////////////////////////////////////////////////
 

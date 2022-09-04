@@ -329,12 +329,21 @@ struct SolverFlags {
     bool useOneBinPerThread = false;
 };
 
-struct DEMMaterial {
-    float E = 1e8;    // Young's modulus
-    float nu = 0.3;   // Poission's ratio
-    float CoR = 0.5;  // Coeff of Restitution
-    float mu = 0.5;   // Static friction coeff
-    float Crr = 0.0;  // Rolling resistance coeff
+class DEMMaterial {
+  public:
+    // Material name--value pairs
+    std::unordered_map<std::string, float> mat_prop;
+
+    DEMMaterial(const std::unordered_map<std::string, float>& prop) { mat_prop = prop; }
+    ~DEMMaterial() {}
+    // float E = 1e8;    // Young's modulus
+    // float nu = 0.3;   // Poission's ratio
+    // float CoR = 0.5;  // Coeff of Restitution
+    // float mu = 0.5;   // Static friction coeff
+    // float Crr = 0.0;  // Rolling resistance coeff
+
+    // Its offset when this obj got loaded into the API-level user raw-input array
+    unsigned int load_order;
 };
 
 class DEMTriangle {

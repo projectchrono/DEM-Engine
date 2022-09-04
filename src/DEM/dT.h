@@ -124,13 +124,6 @@ class DEMDynamicThread {
     std::vector<float, ManagedAllocator<float>> sizeEntity2;
     std::vector<float, ManagedAllocator<float>> sizeEntity3;
 
-    // Stores the actual stiffness/damping, where the kernels will need offsets to index into them
-    std::vector<float, ManagedAllocator<float>> EProxy;
-    std::vector<float, ManagedAllocator<float>> nuProxy;
-    std::vector<float, ManagedAllocator<float>> CoRProxy;
-    std::vector<float, ManagedAllocator<float>> muProxy;
-    std::vector<float, ManagedAllocator<float>> CrrProxy;
-
     // What type is this owner? Clump? Analytical object? Meshed object?
     std::vector<ownerType_t, ManagedAllocator<ownerType_t>> ownerTypes;
 

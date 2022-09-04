@@ -28,8 +28,8 @@ int main() {
 
     // Shrink both mass and stiffness to make the settling not challenging
     float shrink_factor = 3e3;
-    auto mat_type_ball = DEM_sim.LoadMaterialType(1e9 / shrink_factor, 0.3, 0.3);
-    auto mat_type_terrain = DEM_sim.LoadMaterialType(1e9 / shrink_factor, 0.3, 0.2);
+    auto mat_type_ball = DEM_sim.LoadMaterial(1e9 / shrink_factor, 0.3, 0.3);
+    auto mat_type_terrain = DEM_sim.LoadMaterial(1e9 / shrink_factor, 0.3, 0.2);
 
     float ball_rad = 0.2;
     auto template_ball =

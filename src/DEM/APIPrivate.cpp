@@ -18,11 +18,6 @@
 
 namespace sgps {
 
-// Simple material util functions used by some DEM private methods
-inline bool is_DEM_material_same(const std::shared_ptr<DEMMaterial>& a, const std::shared_ptr<DEMMaterial>& b);
-inline unsigned int stash_material_in_templates(std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
-                                                const std::shared_ptr<DEMMaterial>& this_material);
-
 void DEMSolver::generatePolicyResources() {
     // Process the loaded materials. The pre-process of external objects and clumps could add more materials, so this
     // call need to go after those pre-process ones.
@@ -200,7 +195,7 @@ void DEMSolver::addAnalCompTemplate(const objType_t type,
                                     const float d3,
                                     const objNormal_t normal) {
     m_anal_types.push_back(type);
-    m_anal_materials.push_back(stash_material_in_templates(m_loaded_materials, material));
+    m_anal_materials.push_back(material->load_order);
     m_anal_owner.push_back(owner);
     m_anal_comp_pos.push_back(pos);
     m_anal_comp_rot.push_back(rot);
@@ -385,7 +380,7 @@ void DEMSolver::preprocessClumpTemplates() {
         // m_template_sp_mat_ids is an array of ints that represent the indices of the material array
         std::vector<unsigned int> this_clump_sp_mat_ids;
         for (const std::shared_ptr<DEMMaterial>& this_material : clump->materials) {
-            this_clump_sp_mat_ids.push_back(stash_material_in_templates(m_loaded_materials, this_material));
+            this_clump_sp_mat_ids.push_back(this_material->load_order);
         }
         m_template_sp_mat_ids.push_back(this_clump_sp_mat_ids);
         SGPS_DEM_DEBUG_EXEC(printf("Input clump No.%d has material types: ", m_template_clump_mass.size() - 1);
@@ -426,8 +421,7 @@ void DEMSolver::preprocessTriangleObjs() {
         m_input_mesh_obj_family.push_back(mesh_obj->family_code);
         m_mesh_facet_owner.insert(m_mesh_facet_owner.end(), mesh_obj->GetNumTriangles(), thisMeshObj);
         for (unsigned int i = 0; i < mesh_obj->GetNumTriangles(); i++) {
-            m_mesh_facet_materials.push_back(
-                stash_material_in_templates(m_loaded_materials, mesh_obj->materials.at(i)));
+            m_mesh_facet_materials.push_back(mesh_obj->materials.at(i)->load_order);
             DEMTriangle tri = mesh_obj->GetTriangle(i);
             // If we wish to correct surface orientation based on given vertex normals, rather than using RHR...
             if (mesh_obj->use_mesh_normals) {
@@ -455,22 +449,7 @@ void DEMSolver::preprocessTriangleObjs() {
 }
 
 void DEMSolver::figureOutMaterialProxies() {
-    // Use the info in m_loaded_materials to populate API-side proxy arrays
-    // These arrays are later passed to kTdT in initManagedArrays
-    unsigned int count = m_loaded_materials.size();
-    m_E_proxy.resize(count);
-    m_nu_proxy.resize(count);
-    m_CoR_proxy.resize(count);
-    m_mu_proxy.resize(count);
-    m_Crr_proxy.resize(count);
-    for (unsigned int i = 0; i < count; i++) {
-        std::shared_ptr<DEMMaterial>& Mat = m_loaded_materials.at(i);
-        m_E_proxy.at(i) = Mat->E;
-        m_nu_proxy.at(i) = Mat->nu;
-        m_CoR_proxy.at(i) = Mat->CoR;
-        m_mu_proxy.at(i) = Mat->mu;
-        m_Crr_proxy.at(i) = Mat->Crr;
-    }
+    // It now got completely integrated to the jitification part
 }
 
 void DEMSolver::figureOutFamilyMasks() {
@@ -792,43 +771,21 @@ void DEMSolver::validateUserInputs() {
     SetFamilyFixed(DEM_RESERVED_FAMILY_NUM);
 }
 
-// Test if 2 types of DEM materials are the same
-inline bool is_DEM_material_same(const std::shared_ptr<DEMMaterial>& a, const std::shared_ptr<DEMMaterial>& b) {
-    if (std::abs(a->E - b->E) > SGPS_DEM_TINY_FLOAT) {
-        return false;
-    }
-    if (std::abs(a->nu - b->nu) > SGPS_DEM_TINY_FLOAT) {
-        return false;
-    }
-    if (std::abs(a->CoR - b->CoR) > SGPS_DEM_TINY_FLOAT) {
-        return false;
-    }
-    if (std::abs(a->mu - b->mu) > SGPS_DEM_TINY_FLOAT) {
-        return false;
-    }
-    if (std::abs(a->Crr - b->Crr) > SGPS_DEM_TINY_FLOAT) {
-        return false;
-    }
-    return true;
-}
-
-/// Check if this_material is in loaded_materials: if yes, return the correspnding index in loaded_materials; if not,
-/// load it and return the correspnding index in loaded_materials (the last element)
-inline unsigned int stash_material_in_templates(std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
-                                                const std::shared_ptr<DEMMaterial>& this_material) {
-    auto is_same = [&](const std::shared_ptr<DEMMaterial>& ptr) { return is_DEM_material_same(ptr, this_material); };
-    // Is this material already loaded? (most likely yes)
-    auto it_mat = std::find_if(loaded_materials.begin(), loaded_materials.end(), is_same);
-    if (it_mat != loaded_materials.end()) {
-        // Already in, then just get where it's located in the m_loaded_materials array
-        return std::distance(loaded_materials.begin(), it_mat);
-    } else {
-        // Not already in, come on. Load it, and then get it into this_clump_sp_mat_ids. This is unlikely, unless the
-        // users made a shared_ptr themselves.
-        loaded_materials.push_back(this_material);
-        return loaded_materials.size() - 1;
-    }
-}
+// inline unsigned int stash_material_in_templates(std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
+//                                                 const std::shared_ptr<DEMMaterial>& this_material) {
+//     auto is_same = [&](const std::shared_ptr<DEMMaterial>& ptr) { return is_DEM_material_same(ptr, this_material); };
+//     // Is this material already loaded? (most likely yes)
+//     auto it_mat = std::find_if(loaded_materials.begin(), loaded_materials.end(), is_same);
+//     if (it_mat != loaded_materials.end()) {
+//         // Already in, then just get where it's located in the m_loaded_materials array
+//         return std::distance(loaded_materials.begin(), it_mat);
+//     } else {
+//         // Not already in, come on. Load it, and then get it into this_clump_sp_mat_ids. This is unlikely, unless the
+//         // users made a shared_ptr themselves.
+//         loaded_materials.push_back(this_material);
+//         return loaded_materials.size() - 1;
+//     }
+// }
 
 inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::string>& strMap) {
     std::string model = m_force_model;
@@ -1059,33 +1016,35 @@ inline void DEMSolver::equipMassMOI(std::unordered_map<std::string, std::string>
 }
 
 inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::string>& strMap) {
-    std::string E_proxy, nu_proxy, CoR_proxy, mu_proxy, Crr_proxy;
-    // Loop through all material templates to jitify them
-    for (unsigned int i = 0; i < nMatTuples; i++) {
-        E_proxy += to_string_with_precision(m_E_proxy.at(i)) + ",";
-        nu_proxy += to_string_with_precision(m_nu_proxy.at(i)) + ",";
-        CoR_proxy += to_string_with_precision(m_CoR_proxy.at(i)) + ",";
-        mu_proxy += to_string_with_precision(m_mu_proxy.at(i)) + ",";
-        Crr_proxy += to_string_with_precision(m_Crr_proxy.at(i)) + ",";
+    std::string materialDefs = " ";
+    if (m_material_prop_names.size() == 0)
+        return;
+    // Construct material arrays line by line
+    const std::string line_header = "__constant__ __device__ float ";
+    for (const auto& prop_name : m_material_prop_names) {
+        materialDefs += line_header + prop_name + "[] = {";
+        // See what each material says...
+        unsigned int col_num = 0;
+        for (const auto& a_mat : m_loaded_materials) {
+            // Scan each loaded material, if they have a property value with appropriate name assigned, store it in the
+            // correct offset
+            const auto& name_val_pairs = a_mat->mat_prop;
+            float val = 0.0;
+            if (check_exist(name_val_pairs, prop_name)) {
+                val = name_val_pairs.at(prop_name);
+            }  // If no such key exists, val defaults to 0
+            materialDefs += to_string_with_precision(val) + ",";
+        }
+        materialDefs += "};\n";
     }
-    if (nMatTuples == 0) {
-        // If the user looks for trouble, jitifies 0 material, then put some junk there to make it compilable: those
-        // kernels won't be executed anyway
-        E_proxy += "0";
-        nu_proxy += "0";
-        CoR_proxy += "0";
-        mu_proxy += "0";
-        Crr_proxy += "0";
-    }
-    std::unordered_map<std::string, std::string> array_content;
-    array_content["_EProxy_"] = E_proxy;
-    array_content["_nuProxy_"] = nu_proxy;
-    array_content["_CoRProxy_"] = CoR_proxy;
-    array_content["_muProxy_"] = mu_proxy;
-    array_content["_CrrProxy_"] = Crr_proxy;
+    SGPS_DEM_DEBUG_PRINTF("Material properties in kernel:");
+    SGPS_DEM_DEBUG_PRINTF("%s", materialDefs.c_str());
+    // Try imagining something like this...
+    //      steel   plastic
+    // E    1e9     1e8
+    // nu   0.33    0.3
+    // CoR  0.6     0.4
 
-    std::string materialDefs = DEM_MATERIAL_DEFINITIONS_JITIFIED();
-    materialDefs = replace_patterns(materialDefs, array_content);
     if (m_ensure_kernel_line_num) {
         materialDefs = compact_code(materialDefs);
     }

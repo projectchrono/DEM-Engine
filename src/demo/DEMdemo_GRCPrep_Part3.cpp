@@ -31,8 +31,8 @@ int main() {
     //
     float kg_g_conv = 1;
     // Define materials
-    auto mat_type_terrain = DEM_sim.LoadMaterialType(2e9 * kg_g_conv, 0.3, 0.3, 0.5, 0.0);
-    auto mat_type_wheel = DEM_sim.LoadMaterialType(1e9 * kg_g_conv, 0.3, 0.3, 0.5, 0.0);
+    auto mat_type_terrain = DEM_sim.LoadMaterial(2e9 * kg_g_conv, 0.3, 0.3, 0.5, 0.0);
+    auto mat_type_wheel = DEM_sim.LoadMaterial(1e9 * kg_g_conv, 0.3, 0.3, 0.5, 0.0);
 
     // Define the simulation world
     double world_y_size = 2.0;

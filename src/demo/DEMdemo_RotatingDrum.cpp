@@ -34,8 +34,8 @@ int main() {
     // We can scale this general template to make it smaller, like a DEM particle that you would actually use
     float scaling = 0.01;
 
-    auto mat_type_sand = DEM_sim.LoadMaterialType(1e9, 0.3, 0.3, 0.5, 0.01);
-    auto mat_type_drum = DEM_sim.LoadMaterialType(2e9, 0.3, 0.4, 0.5, 0.01);
+    auto mat_type_sand = DEM_sim.LoadMaterial(1e9, 0.3, 0.3, 0.5, 0.01);
+    auto mat_type_drum = DEM_sim.LoadMaterial(2e9, 0.3, 0.4, 0.5, 0.01);
 
     // Bin size needs to make sure no too-many-sphere-per-bin situation happens
     // DEM_sim.SetInitBinSize(scaling);

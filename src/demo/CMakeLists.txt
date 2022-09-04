@@ -13,19 +13,19 @@ SET(LIBRARIES
 # ------------------------------------------------------------------------------
 
 SET(DEMOS
-		DEMdemo_Pile
-		DEMdemo_Sieve
-		DEMdemo_SingleSphereCollide
-		DEMdemo_TestPack
-		DEMdemo_RotatingDrum
-		DEMdemo_Centrifuge
-		DEMdemo_GameOfLife
+		# DEMdemo_Pile
+		# DEMdemo_Sieve
+		# DEMdemo_SingleSphereCollide
+		# DEMdemo_TestPack
+		# DEMdemo_RotatingDrum
+		# DEMdemo_Centrifuge
+		# DEMdemo_GameOfLife
 		DEMdemo_BallDrop
-		DEMdemo_PolydisperseGeneration
-		DEMdemo_RoverWheel
-		DEMdemo_GRCPrep_Part1
-		DEMdemo_GRCPrep_Part2
-		DEMdemo_GRCPrep_Part3
+		# DEMdemo_PolydisperseGeneration
+		# DEMdemo_RoverWheel
+		# DEMdemo_GRCPrep_Part1
+		# DEMdemo_GRCPrep_Part2
+		# DEMdemo_GRCPrep_Part3
 		sphdemo
 		hello_world
 )

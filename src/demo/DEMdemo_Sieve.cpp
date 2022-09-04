@@ -35,8 +35,8 @@ int main() {
     float min_relpos = -0.015;
     float max_relpos = 0.015;
 
-    auto mat_type_1 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.2);
-    auto mat_type_2 = DEM_sim.LoadMaterialType(1e8, 0.3, 0.3);
+    auto mat_type_1 = DEM_sim.LoadMaterial(1e8, 0.3, 0.2);
+    auto mat_type_2 = DEM_sim.LoadMaterial(1e8, 0.3, 0.3);
 
     // First create clump type 0 for representing the sieve
     float sieve_sp_r = 0.05;

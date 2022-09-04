@@ -286,11 +286,6 @@ struct DEMDataDT {
     float* mmiXX;
     float* mmiYY;
     float* mmiZZ;
-    float* EProxy;
-    float* nuProxy;
-    float* CoRProxy;
-    float* muProxy;
-    float* CrrProxy;
 };
 
 // A struct that holds pointers to data arrays that kT uses

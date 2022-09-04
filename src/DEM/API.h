@@ -181,11 +181,7 @@ class DEMSolver {
 
     /// Load materials properties (Young's modulus, Poisson's ratio, Coeff of Restitution...) into
     /// the API-level cache. Return the ptr of the material type just loaded.
-    std::shared_ptr<DEMMaterial> LoadMaterialType(DEMMaterial& mat);
-    std::shared_ptr<DEMMaterial> LoadMaterialType(float E, float nu, float CoR, float mu, float Crr);
-    std::shared_ptr<DEMMaterial> LoadMaterialType(float E, float nu, float CoR) {
-        return LoadMaterialType(E, nu, CoR, 0.5, 0.0);
-    }
+    std::shared_ptr<DEMMaterial> LoadMaterial(const std::unordered_map<std::string, float>& mat_prop);
 
     /// Get position of a owner
     float3 GetOwnerPosition(bodyID_t ownerID) const;
@@ -551,6 +547,9 @@ class DEMSolver {
     // the user might as well reconstruct the simulator.
     ////////////////////////////////////////////////////////////////////////////////
 
+    // All material properties names
+    std::set<std::string> m_material_prop_names;
+
     // Cached tracked objects that can be leveraged by the user to assume explicit control over some simulation objects
     std::vector<std::shared_ptr<DEMTrackedObj>> m_tracked_objs;
     // std::vector<std::shared_ptr<DEMTracker>> m_trackers;
@@ -583,6 +582,8 @@ class DEMSolver {
     size_t nTriObjLoad = 0;
     // Number of clump templates loaded. Never decreases.
     size_t nClumpTemplateLoad = 0;
+    // Number of materials loaded. Never decreases.
+    size_t nMaterialsLoad = 0;
 
     // The above quantities, when they were last time initialized. Used for sanity checks at user re-initialization.
     size_t nLastTimeClumpTemplateLoad = 0;
@@ -757,13 +758,6 @@ class DEMSolver {
     std::set<float3> m_clumps_sp_location_types;
     std::vector<std::vector<distinctSphereRelativePositions_default_t>> m_clumps_sp_location_type_offset;
     */
-
-    // Materials info is processed at API level (on initialization) for generating proxy arrays
-    std::vector<float> m_E_proxy;
-    std::vector<float> m_nu_proxy;
-    std::vector<float> m_CoR_proxy;
-    std::vector<float> m_mu_proxy;
-    std::vector<float> m_Crr_proxy;
 
     ////////////////////////////////////////////////////////////////////////////////
     // DEM system's workers, helpers, friends
