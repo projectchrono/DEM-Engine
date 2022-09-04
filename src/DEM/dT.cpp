@@ -672,13 +672,13 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
     std::vector<size_t> prescans_batch_size;
     prescans_batch_size.push_back(0);
     for (const auto& a_batch : input_clump_batches) {
-        prescans_batch_size.push_back(a_batch->GetNumClumps());
+        prescans_batch_size.push_back(prescans_batch_size.back() + a_batch->GetNumClumps());
     }
     // Also take notes on num of facets of each mesh obj
     std::vector<size_t> prescans_mesh_size;
     prescans_mesh_size.push_back(0);
     for (const auto& a_mesh : input_mesh_objs) {
-        prescans_mesh_size.push_back(a_mesh->GetNumTriangles());
+        prescans_mesh_size.push_back(prescans_mesh_size.back() + a_mesh->GetNumTriangles());
     }
 
     // Provide feedback to the tracked objects, tell them the owner numbers they are looking for
