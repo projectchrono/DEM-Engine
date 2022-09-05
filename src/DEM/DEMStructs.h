@@ -21,6 +21,8 @@
 #include <unordered_map>
 #include <nvmath/helper_math.cuh>
 #include <DEM/HostSideHelpers.hpp>
+#include <filesystem>
+#include <cstring>
 
 namespace sgps {
 // Structs defined here will be used by some host classes in DEM.
@@ -228,16 +230,6 @@ inline void SGPS_DEM_DEVICE_PTR_ALLOC(T*& ptr, size_t size) {
 
 // #define DEM_OUTPUT_IF_GPU_FAILS(res) \
 //     { gpu_assert((res), __FILE__, __LINE__, false); throw std::runtime_error("GPU Assertion Failed!");}
-
-// =============================================================================
-// NOW SOME HOST-SIDE CONSTANTS
-// =============================================================================
-
-const std::string DEM_OUTPUT_FILE_X_COL_NAME = std::string("X");
-const std::string DEM_OUTPUT_FILE_Y_COL_NAME = std::string("Y");
-const std::string DEM_OUTPUT_FILE_Z_COL_NAME = std::string("Z");
-const std::string DEM_OUTPUT_FILE_R_COL_NAME = std::string("r");
-const std::string DEM_OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
 
 // =============================================================================
 // NOW SOME HOST-SIDE SIMPLE STRUCTS USED BY THE DEM MODULE
@@ -543,6 +535,18 @@ struct DEMTrackedObj {
     // If it is a tracked mesh, then this is the number of triangle facets that it has
     size_t nFacets;
 };
+
+// =============================================================================
+// SOME HOST-SIDE CONSTANTS
+// =============================================================================
+
+const std::string DEM_OUTPUT_FILE_X_COL_NAME = std::string("X");
+const std::string DEM_OUTPUT_FILE_Y_COL_NAME = std::string("Y");
+const std::string DEM_OUTPUT_FILE_Z_COL_NAME = std::string("Z");
+const std::string DEM_OUTPUT_FILE_R_COL_NAME = std::string("r");
+const std::string DEM_OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
+const std::filesystem::path DEM_USER_SCRIPT_PATH =
+    std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" / "DEMUserScripts";
 
 }  // namespace sgps
 

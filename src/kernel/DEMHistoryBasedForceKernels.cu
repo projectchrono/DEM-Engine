@@ -166,59 +166,22 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
         }
 
         if (myContactType != sgps::DEM_NOT_A_CONTACT) {
-            // Material properties and time (user referrable)
-            float E, G, CoR, mu, Crr, h;
-            {
-                h = simParams->h;
-                float E_A = EProxy[bodyAMatType];
-                float nu_A = nuProxy[bodyAMatType];
-                float CoR_A = CoRProxy[bodyAMatType];
-                float mu_A = muProxy[bodyAMatType];
-                float Crr_A = CrrProxy[bodyAMatType];
-                float E_B = EProxy[bodyBMatType];
-                float nu_B = nuProxy[bodyBMatType];
-                float CoR_B = CoRProxy[bodyBMatType];
-                float mu_B = muProxy[bodyBMatType];
-                float Crr_B = CrrProxy[bodyBMatType];
-                matProxy2ContactParam<float>(E, G, CoR, mu, Crr, E_A, nu_A, CoR_A, mu_A, Crr_A, E_B, nu_B, CoR_B, mu_B,
-                                             Crr_B);
-            }
-            // Variables that we need to report back (user referrable)
             float3 delta_tan;
             float3 force = make_float3(0, 0, 0);
             float3 torque_only_force = make_float3(0, 0, 0);
             float delta_time;
-            {
-                float3 locCPA = contactPnt - AOwnerPos;
-                float3 locCPB = contactPnt - BOwnerPos;
-                // Now map this contact point location to bodies' local ref
-                applyOriQToVector3<float, sgps::oriQ_t>(locCPA.x, locCPA.y, locCPA.z, AoriQ0, -AoriQ1, -AoriQ2,
-                                                        -AoriQ3);
-                applyOriQToVector3<float, sgps::oriQ_t>(locCPB.x, locCPB.y, locCPB.z, BoriQ0, -BoriQ1, -BoriQ2,
-                                                        -BoriQ3);
-                granData->contactPointGeometryA[myContactID] = locCPA;
-                granData->contactPointGeometryB[myContactID] = locCPB;
-                // We also need the relative velocity between A and B in global frame to use in the damping terms
-                // To get that, we need contact points' rotational velocity in GLOBAL frame
-                // This is local rotational velocity (the portion of linear vel contributed by rotation)
-                rotVelCPA = cross(ARotVel, locCPA);
-                rotVelCPB = cross(BRotVel, locCPB);
-                // This is mapping from local rotational velocity to global
-                applyOriQToVector3<float, sgps::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AoriQ0, AoriQ1, AoriQ2,
-                                                        AoriQ3);
-                applyOriQToVector3<float, sgps::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BoriQ0, BoriQ1, BoriQ2,
-                                                        BoriQ3);
-                // Get contact history from global memory
-                delta_tan = granData->contactHistory[myContactID];
-                // Get contact duration time from global memory
-                delta_time = granData->contactDuration[myContactID];
-            }
-
+            float3 locCPA = contactPnt - AOwnerPos;
+            float3 locCPB = contactPnt - BOwnerPos;
+            // Now map this contact point location to bodies' local ref
+            applyOriQToVector3<float, sgps::oriQ_t>(locCPA.x, locCPA.y, locCPA.z, AoriQ0, -AoriQ1, -AoriQ2, -AoriQ3);
+            applyOriQToVector3<float, sgps::oriQ_t>(locCPB.x, locCPB.y, locCPB.z, BoriQ0, -BoriQ1, -BoriQ2, -BoriQ3);
             // The following part, the force model, is user-specifiable
             // NOTE!! "force" and "delta_tan" and "delta_time" must be properly set by this piece of code
             { _DEMForceModel_; }
 
             // Write hard-earned values back to global memory
+            granData->contactPointGeometryA[myContactID] = locCPA;
+            granData->contactPointGeometryB[myContactID] = locCPB;
             granData->contactForces[myContactID] = force;
             granData->contactTorque_convToForce[myContactID] = torque_only_force;
             granData->contactHistory[myContactID] = delta_tan;

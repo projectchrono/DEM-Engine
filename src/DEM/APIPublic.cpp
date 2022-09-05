@@ -112,30 +112,33 @@ void DEMSolver::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsi
     explicit_nv_override = true;
 }
 
-void DEMSolver::DefineContactForceModel(const std::string& model) {
-    m_force_model = model;
-    use_user_defined_force_model = true;
+std::shared_ptr<DEMForceModel> DEMSolver::DefineContactForceModel(const std::string& model) {
+    DEMForceModel force_model;  // Custom
+    force_model.DefineCustomModel(model);
+    m_force_model = std::make_shared<DEMForceModel>(std::move(force_model));
+    return m_force_model;
 }
 
-void DEMSolver::SetSolverHistoryless(bool useHistoryless) {
-    m_isHistoryless = useHistoryless;
-    if (useHistoryless) {
-        SGPS_DEM_WARNING(
-            "Solver is manually set to be in historyless mode. This will require a compatible force model.\nThe user "
-            "can pick from the stock frictionless models, or define their own.");
+std::shared_ptr<DEMForceModel> DEMSolver::ReadContactForceModel(const std::string& filename) {
+    DEMForceModel force_model;  // Custom
+    std::filesystem::path sourcefile = DEM_USER_SCRIPT_PATH / filename;
+    if (!force_model.ReadCustomModelFile(sourcefile)) {
+        // If not in that folder, then maybe the user meant an absolute path
+        if (!force_model.ReadCustomModelFile(std::filesystem::path(filename)))
+            SGPS_DEM_ERROR("The force model file %s is not found.", filename.c_str());
     }
+    m_force_model = std::make_shared<DEMForceModel>(std::move(force_model));
+    return m_force_model;
 }
 
-void DEMSolver::UseFrictionalHertzianModel() {
-    m_isHistoryless = false;
-    m_force_model = DEM_HERTZIAN_FORCE_MODEL();
-    use_user_defined_force_model = false;
+std::shared_ptr<DEMForceModel> DEMSolver::UseFrictionalHertzianModel() {
+    m_force_model->SetForceModelType(DEM_FORCE_MODEL::HERTZIAN);
+    return m_force_model;
 }
 
-void DEMSolver::UseFrictionlessHertzianModel() {
-    m_isHistoryless = true;
-    m_force_model = DEM_HERTZIAN_FORCE_MODEL_FRICTIONLESS();
-    use_user_defined_force_model = false;
+std::shared_ptr<DEMForceModel> DEMSolver::UseFrictionlessHertzianModel() {
+    m_force_model->SetForceModelType(DEM_FORCE_MODEL::HERTZIAN_FRICTIONLESS);
+    return m_force_model;
 }
 
 void DEMSolver::SetFamilyFixed(unsigned int ID) {
@@ -757,7 +760,7 @@ void DEMSolver::resetWorkerThreads() {
 void DEMSolver::UpdateSimParams() {
     transferSolverParams();
     transferSimParams();
-    // TODO: inspect what sim params should be transferred and what should not
+    //// TODO: inspect what sim params should be transferred and what should not
 }
 
 void DEMSolver::UpdateClumps() {

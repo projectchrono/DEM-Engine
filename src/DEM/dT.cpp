@@ -1470,17 +1470,10 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
                                               Subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
     // Then force calculation kernels
-    // Depending on historyless-ness, we may want jitify different versions of kernels
     {
-        if (solverFlags.isHistoryless) {
-            cal_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-                "DEMHistorylessForceKernels", JitHelper::KERNEL_DIR / "DEMHistorylessForceKernels.cu", Subs,
-                {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
-        } else {
-            cal_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-                "DEMHistoryBasedForceKernels", JitHelper::KERNEL_DIR / "DEMHistoryBasedForceKernels.cu", Subs,
-                {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
-        }
+        cal_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMHistoryBasedForceKernels", JitHelper::KERNEL_DIR / "DEMHistoryBasedForceKernels.cu", Subs,
+            {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
     // Then force accumulation kernels
     {

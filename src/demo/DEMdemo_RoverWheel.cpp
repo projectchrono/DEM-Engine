@@ -21,6 +21,7 @@ int main() {
     DEM_sim.SetVerbosity(INFO);
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
     DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::ABSV);
+    std::cout << "Note: This is a relatively large demo and should take hours/days to run!!" << std::endl;
 
     // Define materials
     auto mat_type_terrain = DEM_sim.LoadMaterial({{"E", 2e9}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.01}});

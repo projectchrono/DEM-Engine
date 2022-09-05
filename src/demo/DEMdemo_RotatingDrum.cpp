@@ -21,7 +21,6 @@ int main() {
     DEM_sim.SetVerbosity(INFO);
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
     DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::ABSV);
-    std::cout << "Note: This is a relatively large demo and should take hours/days to run!!" << std::endl;
 
     // A general template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
     std::vector<float> radii = {1.0, 0.88, 0.64, 0.88, 0.64};

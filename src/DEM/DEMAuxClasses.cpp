@@ -6,6 +6,7 @@
 #include <DEM/API.h>
 #include <DEM/DEMAuxClasses.h>
 #include <DEM/HostSideHelpers.hpp>
+#include <DEM/DEMModels.h>
 
 namespace sgps {
 
@@ -157,6 +158,48 @@ void DEMTracker::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::v
     size_t offset = obj->ownerID;
     std::for_each(offsetted_IDs.begin(), offsetted_IDs.end(), [offset](bodyID_t& x) { x += offset; });
     sys->ChangeClumpSizes(offsetted_IDs, factors);
+}
+
+// =============================================================================
+// DEMForceModel class
+// =============================================================================
+
+void DEMForceModel::SetForceModelType(DEM_FORCE_MODEL model_type) {
+    type = model_type;
+    switch (model_type) {
+        case (DEM_FORCE_MODEL::HERTZIAN):
+            m_must_have_mat_props = {"E", "nu", "CoR", "mu", "Crr"};
+            m_force_model = DEM_HERTZIAN_FORCE_MODEL();
+            // History-based model uses these history-related arrays
+            m_contact_wildcards = {"delta_tan_x", "delta_tan_y", "delta_tan_z", "delta_time"};
+            break;
+        case (DEM_FORCE_MODEL::HERTZIAN_FRICTIONLESS):
+            m_must_have_mat_props = {"E", "nu", "CoR"};
+            m_force_model = DEM_HERTZIAN_FORCE_MODEL_FRICTIONLESS();
+            // No contact history needed for frictionless
+            m_contact_wildcards.clear();
+            break;
+        case (DEM_FORCE_MODEL::CUSTOM):
+            m_must_have_mat_props.clear();
+    }
+}
+
+void DEMForceModel::DefineCustomModel(const std::string& model) {
+    // If custom model is set, we don't care what materials needs to be set
+    m_must_have_mat_props.clear();
+    type = DEM_FORCE_MODEL::CUSTOM;
+    m_force_model = model;
+}
+
+int DEMForceModel::ReadCustomModelFile(const std::filesystem::path& sourcefile) {
+    if (!std::filesystem::exists(sourcefile)) {
+        return 1;
+    }
+    // If custom model is set, we don't care what materials needs to be set
+    m_must_have_mat_props.clear();
+    type = DEM_FORCE_MODEL::CUSTOM;
+    m_force_model = read_file_to_string(sourcefile);
+    return 0;
 }
 
 }  // END namespace sgps

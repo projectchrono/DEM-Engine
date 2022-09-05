@@ -26,7 +26,6 @@ int main() {
     // Output as CSV so no post-processing is needed
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
     DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::XYZ);
-    // DEM_sim.SetSolverHistoryless(true);
     DEM_sim.EnsureKernelErrMsgLineNum();
 
     srand(777);

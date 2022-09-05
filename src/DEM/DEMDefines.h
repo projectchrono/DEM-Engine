@@ -99,8 +99,6 @@ constexpr unsigned int DEM_THRESHOLD_CANT_JITIFY_ALL_COMP =
                  SGPS_DEM_THRESHOLD_TOO_MANY_SPHERE_COMP);
 
 // Some enums...
-// Friction mode
-enum class DEM_FRICTION_MODE { FRICTIONLESS, MULTI_STEP };
 // Verbosity
 enum DEM_VERBOSITY { QUIET = 0, ERROR = 10, WARNING = 20, INFO = 30, STEP_STATS = 32, STEP_METRIC = 35, DEBUG = 40 };
 // Stepping method
@@ -113,6 +111,8 @@ enum class DEM_INSPECT_ENTITY_TYPE { SPHERE, CLUMP, MESH, MESH_FACET };
 enum class DEM_CUB_REDUCE_FLAVOR { NONE, MAX, MIN, SUM };
 // Format of the output files
 enum class DEM_OUTPUT_FORMAT { CSV, BINARY, CHPF };
+// Force mode type
+enum class DEM_FORCE_MODEL { HERTZIAN, HERTZIAN_FRICTIONLESS, CUSTOM };
 // The info that should be present in the output files
 enum DEM_OUTPUT_CONTENT {
     XYZ = 0,

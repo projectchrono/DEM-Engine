@@ -10,6 +10,7 @@
 #include <sstream>
 #include <list>
 #include <cmath>
+#include <set>
 #include <vector>
 #include <numeric>
 #include <algorithm>
@@ -86,6 +87,14 @@ inline float4 host_make_float4(float a, float b, float c, float d) {
     f.z = c;
     f.w = d;
     return f;
+}
+
+/// Check if a word exists in a string as a whole word, from bames53 on StackOverflow
+/// https://stackoverflow.com/questions/22516463/how-do-i-find-a-complete-word-not-part-of-it-in-a-string-in-c
+inline bool match_whole_word(const std::string& sentence, const std::string& word) {
+    std::smatch m;
+    std::regex r("\\b" + word + "\\b");
+    return std::regex_search(sentence, m, r);
 }
 
 /// Replace all instances of a certain pattern from a string then return it
@@ -292,6 +301,11 @@ std::vector<T1> hostUniqueVector(const std::vector<T1>& vec) {
     auto tmp_it = std::unique(unique_vec.begin(), unique_vec.end());
     unique_vec.resize(std::distance(unique_vec.begin(), tmp_it));
     return unique_vec;
+}
+
+template <typename T1>
+inline bool check_exist(const std::set<T1>& the_set, const T1& key) {
+    return the_set.find(key) != the_set.end();
 }
 
 template <typename T1>

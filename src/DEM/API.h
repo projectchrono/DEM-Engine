@@ -103,14 +103,15 @@ class DEMSolver {
     /// simulation, since if the arrays are not long enough they will always be auto-resized.
     void InstructNumOwners(size_t numOwners) { m_instructed_num_owners = numOwners; }
 
-    /// Manually instruct the solver to save time by using historyless contact model (usually not needed to call)
-    void SetSolverHistoryless(bool useHistoryless = true);
-
     /// Instruct the solver to use frictonal (history-based) Hertzian contact force model
-    void UseFrictionalHertzianModel();
-
+    std::shared_ptr<DEMForceModel> UseFrictionalHertzianModel();
     /// Instruct the solver to use frictonless Hertzian contact force model
-    void UseFrictionlessHertzianModel();
+    std::shared_ptr<DEMForceModel> UseFrictionlessHertzianModel();
+    /// Define a custom contact force model by a string. Returns a shared_ptr to the force model in use.
+    std::shared_ptr<DEMForceModel> DefineContactForceModel(const std::string& model);
+    /// Read user custom contact force model from a file (which by default should reside in kernel/DEMUserScripts).
+    /// Returns a shared_ptr to the force model in use.
+    std::shared_ptr<DEMForceModel> ReadContactForceModel(const std::string& filename);
 
     /// Instruct the solver if contact pair arrays should be sorted before usage. This is needed if history-based model
     /// is in use.
@@ -285,9 +286,6 @@ class DEMSolver {
     /// therefore requiring sphere components to be store in flattened array (default behavior), not jitified templates.
     void ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors);
 
-    /// Define a custom contact force model by a string
-    void DefineContactForceModel(const std::string& model);
-
     /// If true, each jitification string substitution will do a one-liner to one-liner replacement, so that if the
     /// kernel compilation fails, the error meessage line number will reflex the actual spot where that happens (instead
     /// of some random number)
@@ -444,9 +442,6 @@ class DEMSolver {
     // If true, the solvers may need to do a per-step sweep to apply family number changes
     bool famnum_can_change_conditionally = false;
 
-    // Force model, as a string
-    std::string m_force_model = DEM_HERTZIAN_FORCE_MODEL();
-    bool use_user_defined_force_model = false;
     // Should jitify clump template into kernels
     bool jitify_clump_templates = false;
     // Should jitify mass/MOI properties into kernels
@@ -525,9 +520,6 @@ class DEMSolver {
     // newly produced contact-pair info (from kT) before proceeding.
     int m_updateFreq = 0;
 
-    // The contact model is historyless, or not. It affects jitification.
-    bool m_isHistoryless = false;
-
     // Where the user wants the origin of the coordinate system to be
     std::string m_user_instructed_origin = "explicit";
 
@@ -539,6 +531,10 @@ class DEMSolver {
 
     // If we should ensure that when kernel jitification fails, the line number reported reflexes where error happens
     bool m_ensure_kernel_line_num = false;
+
+    // The force model which will be used
+    std::shared_ptr<DEMForceModel> m_force_model =
+        std::make_shared<DEMForceModel>(std::move(DEMForceModel(DEM_FORCE_MODEL::HERTZIAN)));
 
     ////////////////////////////////////////////////////////////////////////////////
     // No user method is provided to modify the following key quantities, even if

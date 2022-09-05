@@ -117,6 +117,43 @@ class DEMTracker {
     void ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors);
 };
 
+class DEMForceModel {
+  protected:
+    // Those material property names that the user must set. This is non-empty usually when the user uses our on-shelf
+    // force models. If they use their custom models, then this will be empty.
+    std::set<std::string> m_must_have_mat_props;
+    // Custom or on-shelf
+    DEM_FORCE_MODEL type;
+    // The model
+    std::string m_force_model = " ";
+    // Quatity names that we want to associate each contact pair with. An array will be allocated for storing this, and
+    // it lives and die with contact pairs.
+    std::set<std::string> m_contact_wildcards;
+    // Quatity names that we want to associate each owner with. An array will be allocated for storing this, and it
+    // lives and die with its associated owner.
+    std::set<std::string> m_owner_wildcards;
+
+  public:
+    friend class DEMSolver;
+
+    DEMForceModel(DEM_FORCE_MODEL model_type = DEM_FORCE_MODEL::CUSTOM) { SetForceModelType(model_type); }
+    ~DEMForceModel() {}
+
+    /// Set the contact force model type
+    void SetForceModelType(DEM_FORCE_MODEL model_type);
+    /// Define user-custom force model with a string which is your force calculation code
+    void DefineCustomModel(const std::string& model);
+    /// Read user-custom force model from a file (which by default should reside in kernel/DEMUserScripts), which
+    /// contains your force calculation code. Returns 0 if read successfully, otherwise 1.
+    int ReadCustomModelFile(const std::filesystem::path& sourcefile);
+    /// Set the names for the extra quantities that will be associated with each contact pair. For example,
+    /// history-based models should have 3 float arrays to store contact history. Only float is supported.
+    void SetPerContactWildcards(const std::set<std::string>& wildcards) { m_contact_wildcards = wildcards; }
+    /// Set the names for the extra quantities that will be associated with each owner. For example, you can use this to
+    /// associate electric charge to each particle. Only float is supported.
+    void SetPerOwnerWildcards(const std::set<std::string>& wildcards) { m_owner_wildcards = wildcards; }
+};
+
 }  // END namespace sgps
 
 #endif

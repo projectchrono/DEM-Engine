@@ -22,7 +22,6 @@ int main() {
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
     // Output family numbers (used to identify the centrifuging effect)
     DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::FAMILY);
-    std::cout << "Note: This is a relatively large demo and should take hours/days to run!!" << std::endl;
 
     // What will be loaded from the file, is a template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
     DEMClumpTemplate ellipsoid;

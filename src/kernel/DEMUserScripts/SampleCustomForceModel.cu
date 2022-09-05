@@ -66,41 +66,6 @@ float3 vrel_tan;
     // printf("normal force: %f, %f, %f\n", force.x, force.y, force.z);
 }
 
-// Rolling resistance part
-if (Crr_cnt > 0.0) {
-    // Figure out if we should apply rolling resistance force
-    bool should_add_rolling_resistance = true;
-    {
-        const float R_eff = sqrtf((ARadius * BRadius) / (ARadius + BRadius));
-        const float kn_simple = sgps::FOUR_OVER_THREE * E_cnt * sqrtf(R_eff);
-        const float gn_simple = -2.f * sqrtf(sgps::FIVE_OVER_THREE * mass_eff * E_cnt) * beta * powf(R_eff, 0.25f);
-
-        const float d_coeff = gn_simple / (2.f * sqrtf(kn_simple * mass_eff));
-
-        if (d_coeff < 1.0) {
-            float t_collision = sgps::PI * sqrtf(mass_eff / (kn_simple * (1.f - d_coeff * d_coeff)));
-            if (delta_time <= t_collision) {
-                should_add_rolling_resistance = false;
-            }
-        }
-    }
-    // If should, then compute it (using Schwartz model)
-    if (should_add_rolling_resistance) {
-        // Tangential velocity (only rolling contribution) of B relative to A, at contact point, in global
-        const float3 v_rot = rotVelCPB - rotVelCPA;
-        // This v_rot is only used for identifying resistance direction
-        const float v_rot_mag = length(v_rot);
-        if (v_rot_mag > SGPS_DEM_TINY_FLOAT) {
-            // You should know that Crr_cnt * normal_force is the underlying formula, and in our model,
-            // it is a `force' that produces torque only, instead of also cancelling out friction.
-            // Its direction is that it `resists' rotation, see picture in
-            // https://en.wikipedia.org/wiki/Rolling_resistance.
-            torque_only_force = (v_rot / v_rot_mag) * (Crr_cnt * length(force));
-            // printf("torque force: %f, %f, %f\n", torque_only_force.x, torque_only_force.y, torque_only_force.z);
-        }
-    }
-}
-
 // Tangential force part
 if (mu_cnt > 0.0) {
     const float kt = 8. * G_cnt * sqrt_Rd;

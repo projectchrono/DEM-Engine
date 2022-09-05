@@ -293,11 +293,6 @@ void DEMSolver::reportInitStats() const {
     }
 
     SGPS_DEM_INFO("The number of material types: %u", nMatTuples);
-    if (m_isHistoryless) {
-        SGPS_DEM_INFO("This run uses HISTORYLESS solver setup");
-    } else {
-        SGPS_DEM_INFO("This run uses HISTORY-BASED solver setup");
-    }
     // TODO: The solver model, is it user-specified or internally defined?
 }
 
@@ -576,8 +571,8 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.outputFlags = m_out_content;
 
     // Transfer historyless-ness
-    kT->solverFlags.isHistoryless = m_isHistoryless;
-    dT->solverFlags.isHistoryless = m_isHistoryless;
+    kT->solverFlags.isHistoryless = (m_force_model->m_contact_wildcards.size() > 0);
+    dT->solverFlags.isHistoryless = (m_force_model->m_contact_wildcards.size() > 0);
 
     // Time step constant-ness and expand factor constant-ness
     dT->solverFlags.isStepConst = ts_size_is_const;
@@ -763,10 +758,6 @@ void DEMSolver::validateUserInputs() {
             "explicitly set a expand factor via SetExpandFactor.");
     }
 
-    if (use_user_defined_force_model) {
-        //// TODO: See if this user model makes sense
-    }
-
     // Fix the reserved family (reserved family number is in user family, not in impl family)
     SetFamilyFixed(DEM_RESERVED_FAMILY_NUM);
 }
@@ -788,7 +779,11 @@ void DEMSolver::validateUserInputs() {
 // }
 
 inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::string>& strMap) {
-    std::string model = m_force_model;
+    // Analyze this model... what does it require?
+    const std::string model = m_force_model->m_force_model;
+    // match_whole_word
+
+    // Check if force, and wildcards are all defined in the model
     if (m_ensure_kernel_line_num) {
         std::string model = compact_code(model);
     }
@@ -1016,9 +1011,15 @@ inline void DEMSolver::equipMassMOI(std::unordered_map<std::string, std::string>
 }
 
 inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::string>& strMap) {
+    // Depending on the force model, there could be a few material properties that should be specified by the user
+    const std::set<std::string> mat_prop_that_must_exist = m_force_model->m_must_have_mat_props;
+    // Those must-haves will be added to the pool
+    m_material_prop_names.insert(mat_prop_that_must_exist.begin(), mat_prop_that_must_exist.end());
     std::string materialDefs = " ";
+
     if (m_material_prop_names.size() == 0)
         return;
+
     // Construct material arrays line by line
     const std::string line_header = "__constant__ __device__ float ";
     for (const auto& prop_name : m_material_prop_names) {
@@ -1029,9 +1030,22 @@ inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::strin
             float val = 0.0;
             if (check_exist(name_val_pairs, prop_name)) {
                 val = name_val_pairs.at(prop_name);
-            }  // If no such key exists, val defaults to 0
+            } else {  // If no such key exists, val defaults to 0
+                // If prop_name does not exist for this material, then if prop_name is one of the
+                // mat_prop_that_must_exist, the user should know there is trouble...
+                if (check_exist(mat_prop_that_must_exist, prop_name))
+                    SGPS_DEM_WARNING(
+                        "A material does not have %s property specified. However, the force model you are using "
+                        "requires that information, so we are using default 0.\nPlease be sure this is intentional.",
+                        prop_name.c_str());
+            }
             materialDefs += to_string_with_precision(val) + ",";
         }
+        // If the user makes trouble and loaded 0 material, then we add some junk in it as placeholder
+        if (m_loaded_materials.size() == 0) {
+            materialDefs += "0";
+        }
+        // End the line
         materialDefs += "};\n";
     }
     SGPS_DEM_DEBUG_PRINTF("Material properties in kernel:");
