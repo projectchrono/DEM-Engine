@@ -571,8 +571,8 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.outputFlags = m_out_content;
 
     // Transfer historyless-ness
-    kT->solverFlags.isHistoryless = (m_force_model->m_contact_wildcards.size() > 0);
-    dT->solverFlags.isHistoryless = (m_force_model->m_contact_wildcards.size() > 0);
+    kT->solverFlags.isHistoryless = (m_force_model->m_contact_wildcards.size() == 0);
+    dT->solverFlags.isHistoryless = (m_force_model->m_contact_wildcards.size() == 0);
 
     // Time step constant-ness and expand factor constant-ness
     dT->solverFlags.isStepConst = ts_size_is_const;
