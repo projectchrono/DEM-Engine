@@ -780,14 +780,27 @@ void DEMSolver::validateUserInputs() {
 
 inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::string>& strMap) {
     // Analyze this model... what does it require?
-    const std::string model = m_force_model->m_force_model;
-    // match_whole_word
+    std::string model = m_force_model->m_force_model;
+    // It should have those following names in it
+    const std::set<std::string> contact_wildcard_names = m_force_model->m_contact_wildcards;
+    const std::set<std::string> owner_wildcard_names = m_force_model->m_owner_wildcards;
+    // If we spot that the force model requires an ingredient, we make sure that order goes to the ingredient
+    // acquisition module
+    std::string ingredient_definition = " ", ingredient_acquisition_A = " ", ingredient_acquisition_B = " ";
+    equip_force_model_ingr_acq(ingredient_definition, ingredient_acquisition_A, ingredient_acquisition_B, model);
 
-    // Check if force, and wildcards are all defined in the model
+    //// TODO: Check if force, and wildcards are all defined in the model
+
     if (m_ensure_kernel_line_num) {
-        std::string model = compact_code(model);
+        model = compact_code(model);
+        ingredient_definition = compact_code(ingredient_definition);
+        ingredient_acquisition_A = compact_code(ingredient_acquisition_A);
+        ingredient_acquisition_B = compact_code(ingredient_acquisition_B);
     }
     strMap["_DEMForceModel_"] = model;
+    strMap["_forceModelIngredientDefinition_"] = ingredient_definition;
+    strMap["_forceModelIngredientAcqForA_"] = ingredient_acquisition_A;
+    strMap["_forceModelIngredientAcqForB_"] = ingredient_acquisition_B;
 }
 
 inline void DEMSolver::equipFamilyOnFlyChanges(std::unordered_map<std::string, std::string>& strMap) {

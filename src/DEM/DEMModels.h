@@ -22,11 +22,8 @@ namespace sgps {
 ////////////////////////////////////////////////////////////////////////////////
 
 inline std::string DEM_HERTZIAN_FORCE_MODEL() {
-    // We now do not use R"V0G0N string to store the force mode; we instead use a file to store it for better
-    // readability std::string model = R"V0G0N( ... )V0G0N";
-
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "ForceCalcStrategy.cu";
+                                       "DEMCustomizablePolicies" / "FullHertzianForceModel.cu";
     if (!std::filesystem::exists(sourcefile)) {
         SGPS_DEM_ERROR("The force model file %s is not found.", sourcefile.c_str());
     }
@@ -34,32 +31,12 @@ inline std::string DEM_HERTZIAN_FORCE_MODEL() {
 }
 
 inline std::string DEM_HERTZIAN_FORCE_MODEL_FRICTIONLESS() {
-    std::string model;
-    model =
-        R"V0G0N(
-        // The (total) relative linear velocity of A relative to B
-        const float3 velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
-        const float projection = dot(velB2A, B2A);
-        // vrel_tan = velB2A - projection * B2A;
-
-        const float mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
-        float sqrt_Rd = sqrt(overlapDepth * (ARadius * BRadius) / (ARadius + BRadius));
-        const float Sn = 2. * E * sqrt_Rd;
-
-        const float loge = (CoR < SGPS_DEM_TINY_FLOAT) ? log(SGPS_DEM_TINY_FLOAT) : log(CoR);
-        float beta = loge / sqrt(loge * loge + sgps::PI_SQUARED);
-
-        const float k_n = sgps::TWO_OVER_THREE * Sn;
-        const float gamma_n = sgps::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
-
-        // normal force (that A feels)
-        // printf("overlapDepth: %f\n", overlapDepth);
-        // printf("kn * overlapDepth: %f\n", k_n * overlapDepth);
-        // printf("gn * projection: %f\n", gamma_n * projection);
-        force += (k_n * overlapDepth + gamma_n * projection) * B2A;
-    )V0G0N";
-
-    return model;
+    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
+                                       "DEMCustomizablePolicies" / "FrictionlessHertzianForceModel.cu";
+    if (!std::filesystem::exists(sourcefile)) {
+        SGPS_DEM_ERROR("The force model file %s is not found.", sourcefile.c_str());
+    }
+    return read_file_to_string(sourcefile);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -171,6 +148,47 @@ inline std::string DEM_MOI_ACQUISITION_FLATTENED() {
         SGPS_DEM_ERROR("The MOI loading strategy array file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Ingredient definition and acquisition module in DEM force models
+////////////////////////////////////////////////////////////////////////////////
+
+// Sweep through all ingredients...
+inline void equip_force_model_ingr_acq(std::string& definition,
+                                       std::string& acquisition_A,
+                                       std::string& acquisition_B,
+                                       const std::string& model) {
+    if (any_whole_word_match(model, {"ts"})) {
+        definition += "float ts = simParams->h;\n";
+    }
+    if (any_whole_word_match(model, {"AOwnerFamily", "BOwnerFamily"})) {
+        definition += "sgps::family_t AOwnerFamily, BOwnerFamily;\n";
+        acquisition_A += "AOwnerFamily = granData->familyID[myOwner];\n";
+        acquisition_B += "BOwnerFamily = granData->familyID[myOwner];\n";
+    }
+    if (any_whole_word_match(model, {"ALinVel", "BLinVel"})) {
+        definition += "float3 ALinVel, BLinVel;\n";
+        acquisition_A += R"V0G0N(ALinVel.x = granData->vX[myOwner];
+                                 ALinVel.y = granData->vY[myOwner];
+                                 ALinVel.z = granData->vZ[myOwner];
+                         )V0G0N";
+        acquisition_B += R"V0G0N(BLinVel.x = granData->vX[myOwner];
+                                 BLinVel.y = granData->vY[myOwner];
+                                 BLinVel.z = granData->vZ[myOwner];
+                         )V0G0N";
+    }
+    if (any_whole_word_match(model, {"ARotVel", "BRotVel"})) {
+        definition += "float3 ARotVel, BRotVel;\n";
+        acquisition_A += R"V0G0N(ARotVel.x = granData->omgBarX[myOwner];
+                                 ARotVel.y = granData->omgBarY[myOwner];
+                                 ARotVel.z = granData->omgBarZ[myOwner];
+                         )V0G0N";
+        acquisition_B += R"V0G0N(BRotVel.x = granData->omgBarX[myOwner];
+                                 BRotVel.y = granData->omgBarY[myOwner];
+                                 BRotVel.z = granData->omgBarZ[myOwner];
+                         )V0G0N";
+    }
 }
 
 }  // namespace sgps

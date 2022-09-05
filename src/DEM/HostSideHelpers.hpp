@@ -97,6 +97,14 @@ inline bool match_whole_word(const std::string& sentence, const std::string& wor
     return std::regex_search(sentence, m, r);
 }
 
+inline bool any_whole_word_match(const std::string& sentence, const std::vector<std::string>& words) {
+    for (const auto& word : words) {
+        if (match_whole_word(sentence, word))
+            return true;
+    }
+    return false;
+}
+
 /// Replace all instances of a certain pattern from a string then return it
 inline std::string replace_pattern(const std::string& in, const std::string& from, const std::string& to) {
     return std::regex_replace(in, std::regex(from), to);

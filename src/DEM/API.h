@@ -36,9 +36,7 @@ class DEMTracker;
 //            2. Allow ext obj init CoM setting
 //            3. Instruct how many dT steps should at LEAST do before receiving kT update
 //            4. Sleepers that don't participate CD or integration
-//            5. Make force model a struct, and inside it...
-//            6. Select whether to acquire mat, acquire what history, and whether
-//               to use a/several custom float arrays to store custom config data
+//            6. Force model has a/several custom owner arrays to store custom config data
 //            7. This custom array can be defined at clump template/anal obj/mesh obj generation
 //            9. wT takes care of an extra output when it crushes
 //////////////////////////////////////////////////////////////

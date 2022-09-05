@@ -16,17 +16,18 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
     if (myContactID < nContactPairs) {
         // Identify contact type first
         sgps::contact_t myContactType = granData->contactType[myContactID];
-        // Allocate the registers needed
+        // The following quantities are always calculated, regardless of force model
         double3 contactPnt;
         float3 B2A;  // Unit vector pointing from body B to body A (contact normal)
         double overlapDepth;
         double3 AOwnerPos, bodyAPos, BOwnerPos, bodyBPos;
-        float3 ALinVel, ARotVel, rotVelCPA, BLinVel, BRotVel, rotVelCPB;
         float AOwnerMass, ARadius, BOwnerMass, BRadius;
-        sgps::materialsOffset_t bodyAMatType, bodyBMatType;
         sgps::oriQ_t AoriQ0, AoriQ1, AoriQ2, AoriQ3;
         sgps::oriQ_t BoriQ0, BoriQ1, BoriQ2, BoriQ3;
-        sgps::family_t AOwnerFamily, BOwnerFamily;
+        sgps::materialsOffset_t bodyAMatType, bodyBMatType;
+        // Then allocate the optional quantities that will be needed in the force model (note: this one can't be in a
+        // curly bracket, obviously...)
+        _forceModelIngredientDefinition_;
         // Take care of 2 bodies in order, bodyA first, grab location and velocity to local cache
         // We know in this kernel, bodyA will be a sphere; bodyB can be something else
         {
@@ -48,10 +49,6 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
                 AOwnerMass = myMass;
             }
 
-            bodyAMatType = granData->sphereMaterialOffset[sphereID];
-
-            AOwnerFamily = granData->familyID[myOwner];
-
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 AOwnerPos.x, AOwnerPos.y, AOwnerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
                 granData->locY[myOwner], granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
@@ -64,13 +61,12 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             bodyAPos.x = AOwnerPos.x + (double)myRelPosX;
             bodyAPos.y = AOwnerPos.y + (double)myRelPosY;
             bodyAPos.z = AOwnerPos.z + (double)myRelPosZ;
-            ALinVel.x = granData->vX[myOwner];
-            ALinVel.y = granData->vY[myOwner];
-            ALinVel.z = granData->vZ[myOwner];
-            ARotVel.x = granData->omgBarX[myOwner];
-            ARotVel.y = granData->omgBarY[myOwner];
-            ARotVel.z = granData->omgBarZ[myOwner];
+
             ARadius = myRadius;
+            bodyAMatType = granData->sphereMaterialOffset[sphereID];
+
+            // Optional force model ingredients are loaded here...
+            _forceModelIngredientAcqForA_;
         }
 
         // Then bodyB, location and velocity
@@ -93,10 +89,6 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
                 BOwnerMass = myMass;
             }
 
-            bodyBMatType = granData->sphereMaterialOffset[sphereID];
-
-            BOwnerFamily = granData->familyID[myOwner];
-
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 BOwnerPos.x, BOwnerPos.y, BOwnerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
                 granData->locY[myOwner], granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
@@ -108,13 +100,11 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             bodyBPos.x = BOwnerPos.x + (double)myRelPosX;
             bodyBPos.y = BOwnerPos.y + (double)myRelPosY;
             bodyBPos.z = BOwnerPos.z + (double)myRelPosZ;
-            BLinVel.x = granData->vX[myOwner];
-            BLinVel.y = granData->vY[myOwner];
-            BLinVel.z = granData->vZ[myOwner];
-            BRotVel.x = granData->omgBarX[myOwner];
-            BRotVel.y = granData->omgBarY[myOwner];
-            BRotVel.z = granData->omgBarZ[myOwner];
+
             BRadius = myRadius;
+            bodyBMatType = granData->sphereMaterialOffset[sphereID];
+
+            _forceModelIngredientAcqForB_;
 
             myContactType = checkSpheresOverlap<double, float>(
                 bodyAPos.x, bodyAPos.y, bodyAPos.z, ARadius, bodyBPos.x, bodyBPos.y, bodyBPos.z, BRadius, contactPnt.x,
@@ -125,8 +115,8 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             sgps::bodyID_t myOwner = objOwner[bodyB];
             bodyBMatType = objMaterial[bodyB];
             BOwnerMass = objMass[bodyB];
-            // TODO: fix these...
-            BRadius = 10000.f;
+            //// TODO: Is this OK?
+            BRadius = SGPS_DEM_HUGE_FLOAT;
             float myRelPosX, myRelPosY, myRelPosZ;
             float3 bodyBRot;
 
@@ -151,12 +141,7 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             bodyBRot.z = objRotZ[bodyB];
             applyOriQToVector3<float, sgps::oriQ_t>(bodyBRot.x, bodyBRot.y, bodyBRot.z, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
 
-            BLinVel.x = granData->vX[myOwner];
-            BLinVel.y = granData->vY[myOwner];
-            BLinVel.z = granData->vZ[myOwner];
-            BRotVel.x = granData->omgBarX[myOwner];
-            BRotVel.y = granData->omgBarY[myOwner];
-            BRotVel.z = granData->omgBarZ[myOwner];
+            _forceModelIngredientAcqForB_;
 
             // Note for this test on dT side we don't enlarge entities
             myContactType = checkSphereEntityOverlap<double>(
@@ -167,9 +152,10 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
 
         if (myContactType != sgps::DEM_NOT_A_CONTACT) {
             float3 delta_tan;
+            float delta_time;
             float3 force = make_float3(0, 0, 0);
             float3 torque_only_force = make_float3(0, 0, 0);
-            float delta_time;
+            // Local position of the contact point is always a piece of info we require... regardless of force model
             float3 locCPA = contactPnt - AOwnerPos;
             float3 locCPB = contactPnt - BOwnerPos;
             // Now map this contact point location to bodies' local ref

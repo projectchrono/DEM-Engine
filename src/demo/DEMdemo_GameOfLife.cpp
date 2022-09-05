@@ -38,8 +38,8 @@ int main() {
     // Bin size can be somewhat large
     DEM_sim.SetInitBinSize(grid_size * 3.0);
 
-    // Material is formaility...
-    auto mat_type_1 = DEM_sim.LoadMaterial({{"E", 2e9}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", 0.5}, {"Crr", 0.01}});
+    // Material is formaility... you can opt not to set it at all, it works the same
+    auto mat_type_1 = DEM_sim.LoadMaterial({{"junk", 1.0}});
 
     auto template_sphere = DEM_sim.LoadClumpSimpleSphere(1.0, r, mat_type_1);
 

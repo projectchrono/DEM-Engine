@@ -1,9 +1,8 @@
 // DEM force calculation strategies, modifiable
 
 // Material properties and time (user referrable)
-float E_cnt, G_cnt, CoR_cnt, mu_cnt, Crr_cnt, h;
+float E_cnt, G_cnt, CoR_cnt, mu_cnt, Crr_cnt;
 {
-    h = simParams->h;
     float E_A = E[bodyAMatType];
     float nu_A = nu[bodyAMatType];
     float CoR_A = CoR[bodyAMatType];
@@ -18,6 +17,7 @@ float E_cnt, G_cnt, CoR_cnt, mu_cnt, Crr_cnt, h;
                                  CoR_B, mu_B, Crr_B);
 }
 
+float3 rotVelCPA, rotVelCPB;
 {
     // We also need the relative velocity between A and B in global frame to use in the damping terms
     // To get that, we need contact points' rotational velocity in GLOBAL frame
@@ -46,10 +46,10 @@ float3 vrel_tan;
 
     // Now we already have sufficient info to update contact history
     {
-        delta_tan += h * vrel_tan;
+        delta_tan += ts * vrel_tan;
         const float disp_proj = dot(delta_tan, B2A);
         delta_tan -= disp_proj * B2A;
-        delta_time += h;
+        delta_time += ts;
     }
 
     mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
