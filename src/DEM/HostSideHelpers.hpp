@@ -116,9 +116,10 @@ inline bool all_whole_word_match(const std::string& sentence,
                                  const std::set<std::string>& words,
                                  std::string& non_match) {
     for (const auto& word : words) {
-        if (!match_whole_word(sentence, word))
+        if (!match_whole_word(sentence, word)) {
             non_match = word;
-        return false;
+            return false;
+        }
     }
     return true;
 }

@@ -32,7 +32,7 @@ float3 rotVelCPA, rotVelCPB;
 // A few re-usables
 float mass_eff, sqrt_Rd, beta;
 float3 vrel_tan;
-const float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
+float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
 
 // Normal force part
 {

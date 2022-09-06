@@ -178,11 +178,6 @@ void DEMSolver::postResourceGenChecksAndTabKeeping() {
     nLastTimeMatNum = m_loaded_materials.size();
     nLastTimeClumpTemplateNum = m_templates.size();
     nLastTimeFamilyPreNum = m_input_family_prescription.size();
-
-    // Debug outputs
-    SGPS_DEM_DEBUG_EXEC(printf("These owners are tracked: ");
-                        for (const auto& tracked
-                             : m_tracked_objs) { printf("%zu, ", tracked->ownerID); } printf("\n"););
 }
 
 void DEMSolver::addAnalCompTemplate(const objType_t type,
@@ -293,7 +288,24 @@ void DEMSolver::reportInitStats() const {
     }
 
     SGPS_DEM_INFO("The number of material types: %u", nMatTuples);
-    // TODO: The solver model, is it user-specified or internally defined?
+    switch (m_force_model->type) {
+        case (DEM_FORCE_MODEL::HERTZIAN):
+            SGPS_DEM_INFO("History-based Hertzian contact model is in use");
+            break;
+        case (DEM_FORCE_MODEL::HERTZIAN_FRICTIONLESS):
+            SGPS_DEM_INFO("Frictionless Hertzian contact model is in use");
+            break;
+        case (DEM_FORCE_MODEL::CUSTOM):
+            SGPS_DEM_INFO("A user-custom force model is in use");
+            break;
+        default:
+            SGPS_DEM_INFO("An unknown force model is in use, this is probably not going well...");
+    }
+
+    // Debug outputs
+    SGPS_DEM_DEBUG_EXEC(printf("These owners are tracked: ");
+                        for (const auto& tracked
+                             : m_tracked_objs) { printf("%zu, ", tracked->ownerID); } printf("\n"););
 }
 
 void DEMSolver::preprocessAnalyticalObjs() {
@@ -624,6 +636,7 @@ void DEMSolver::transferSimParams() {
             "SGPS_DEM_MAX_WILDCARD_NUM and re-compile, if you indeed would like more wildcards.",
             SGPS_DEM_MAX_WILDCARD_NUM);
     }
+    SGPS_DEM_DEBUG_PRINTF("%u contact wildcards are in the force model.", nContactWildcards);
 
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
                      m_expand_factor, m_approx_max_vel, m_expand_safety_param, nContactWildcards, nOwnerWildcards);
@@ -803,13 +816,13 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     std::string non_match;
     if (!all_whole_word_match(model, contact_wildcard_names, non_match))
         SGPS_DEM_WARNING(
-            "Contact wildcard %s is not in your custom force model. Your force model will probably not produce what "
-            "you expect.",
+            "Contact wildcard %s is not used/set in your custom force model. Your force model will probably not "
+            "produce what you expect.",
             non_match.c_str());
     if (!all_whole_word_match(model, owner_wildcard_names, non_match))
         SGPS_DEM_WARNING(
-            "Owner wildcard %s is not in your custom force model. Your force model will probably not produce what you "
-            "expect.",
+            "Owner wildcard %s is not used/set in your custom force model. Your force model will probably not produce "
+            "what you expect.",
             non_match.c_str());
     if (!all_whole_word_match(model, {"force"}, non_match)) {
         SGPS_DEM_WARNING(

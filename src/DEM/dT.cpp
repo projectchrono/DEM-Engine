@@ -327,8 +327,8 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     SGPS_DEM_TRACKED_RESIZE(contactPointGeometryB, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactPointGeometryB",
                             make_float3(0));
     // Allocate memory for each wildcard array
-    // contactWildcards.resize(simParams->nContactWildcards);
-    // ownerWildcards.resize(simParams->nOwnerWildcards);
+    contactWildcards.resize(simParams->nContactWildcards);
+    ownerWildcards.resize(simParams->nOwnerWildcards);
     for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
         SGPS_DEM_TRACKED_RESIZE_FLOAT(contactWildcards[i], nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, 0);
     }
@@ -1177,8 +1177,8 @@ inline void DEMDynamicThread::migratePersistentContacts() {
         prep_force_kernels->kernel("rearrangeContactWildcards")
             .instantiate()
             .configure(dim3(blocks_needed_for_rearrange), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(granData->contactMapping, granData->contactWildcards, newWildcards, contactSentry,
-                    simParams->nContactWildcards, *stateOfSolver_resources.pNumContacts);
+            .launch(granData, newWildcards[0], contactSentry, simParams->nContactWildcards,
+                    *stateOfSolver_resources.pNumContacts);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 
