@@ -27,15 +27,12 @@ float3 rotVelCPA, rotVelCPB;
     // This is mapping from local rotational velocity to global
     applyOriQToVector3<float, sgps::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AoriQ0, AoriQ1, AoriQ2, AoriQ3);
     applyOriQToVector3<float, sgps::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
-    // Get contact history from global memory
-    delta_tan = granData->contactHistory[myContactID];
-    // Get contact duration time from global memory
-    delta_time = granData->contactDuration[myContactID];
 }
 
 // A few re-usables
 float mass_eff, sqrt_Rd, beta;
 float3 vrel_tan;
+const float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
 
 // Normal force part
 {

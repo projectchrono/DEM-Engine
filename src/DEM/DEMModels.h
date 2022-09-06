@@ -162,9 +162,12 @@ inline void equip_force_model_ingr_acq(std::string& definition,
     if (any_whole_word_match(model, {"ts"})) {
         definition += "float ts = simParams->h;\n";
     }
-    if (any_whole_word_match(model, {"AOwnerFamily", "BOwnerFamily"})) {
-        definition += "sgps::family_t AOwnerFamily, BOwnerFamily;\n";
+    if (any_whole_word_match(model, {"AOwnerFamily"})) {
+        definition += "sgps::family_t AOwnerFamily;\n";
         acquisition_A += "AOwnerFamily = granData->familyID[myOwner];\n";
+    }
+    if (any_whole_word_match(model, {"BOwnerFamily"})) {
+        definition += "sgps::family_t BOwnerFamily;\n";
         acquisition_B += "BOwnerFamily = granData->familyID[myOwner];\n";
     }
     if (any_whole_word_match(model, {"ALinVel", "BLinVel"})) {
@@ -188,6 +191,24 @@ inline void equip_force_model_ingr_acq(std::string& definition,
                                  BRotVel.y = granData->omgBarY[myOwner];
                                  BRotVel.z = granData->omgBarZ[myOwner];
                          )V0G0N";
+    }
+}
+
+// Massage contact wildcards (by that I mean those contact history arrays)
+inline void equip_contact_wildcards(std::string& acquisition,
+                                    std::string& write_back,
+                                    std::string& destroy_record,
+                                    const std::set<std::string>& names) {
+    unsigned int i = 0;
+    for (const auto& name : names) {
+        // Rigth now, supports float arrays only...
+        // Getting it from global mem
+        acquisition += "float " + name + " = granData->contactWildcards[" + std::to_string(i) + "][myContactID];\n";
+        // Write it back to global mem
+        write_back += "granData->contactWildcards[" + std::to_string(i) + "][myContactID] = " + name + ";\n";
+        // Destroy it (set to 0) if it is a fake contact
+        destroy_record += name + " = 0;\n";
+        i++;
     }
 }
 

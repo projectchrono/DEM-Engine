@@ -150,11 +150,10 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
                 0.0, contactPnt.x, contactPnt.y, contactPnt.z, B2A.x, B2A.y, B2A.z, overlapDepth);
         }
 
+        float3 force = make_float3(0, 0, 0);
+        float3 torque_only_force = make_float3(0, 0, 0);
+        _forceModelContactWildcardAcq_;
         if (myContactType != sgps::DEM_NOT_A_CONTACT) {
-            float3 delta_tan;
-            float delta_time;
-            float3 force = make_float3(0, 0, 0);
-            float3 torque_only_force = make_float3(0, 0, 0);
             // Local position of the contact point is always a piece of info we require... regardless of force model
             float3 locCPA = contactPnt - AOwnerPos;
             float3 locCPB = contactPnt - BOwnerPos;
@@ -165,19 +164,16 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             // NOTE!! "force" and "delta_tan" and "delta_time" must be properly set by this piece of code
             { _DEMForceModel_; }
 
-            // Write hard-earned values back to global memory
+            // Write contact location values back to global memory
             granData->contactPointGeometryA[myContactID] = locCPA;
             granData->contactPointGeometryB[myContactID] = locCPB;
-            granData->contactForces[myContactID] = force;
-            granData->contactTorque_convToForce[myContactID] = torque_only_force;
-            granData->contactHistory[myContactID] = delta_tan;
-            granData->contactDuration[myContactID] = delta_time;
         } else {
-            granData->contactForces[myContactID] = make_float3(0, 0, 0);
-            granData->contactTorque_convToForce[myContactID] = make_float3(0, 0, 0);
             // The contact is no longer active, so we need to destroy its contact history recording
-            granData->contactHistory[myContactID] = make_float3(0, 0, 0);
-            granData->contactDuration[myContactID] = 0;
+            _forceModelContactWildcardDestroy_;
         }
+        granData->contactForces[myContactID] = force;
+        granData->contactTorque_convToForce[myContactID] = torque_only_force;
+        // Updated contact wildcards need to be write back to global mem
+        _forceModelContactWildcardWrite_;
     }
 }

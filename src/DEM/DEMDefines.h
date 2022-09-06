@@ -27,6 +27,7 @@ namespace sgps {
 #define SGPS_DEM_HUGE_FLOAT 1e15
 #define SGPS_BITS_PER_BYTE 8
 #define SGPS_CUDA_WARP_SIZE 32
+#define SGPS_DEM_MAX_WILDCARD_NUM 8
 
 // A few pre-computed constants
 constexpr double TWO_OVER_THREE = 0.666666666666667;
@@ -195,6 +196,10 @@ struct DEMSimParams {
     float expSafetyParam;
     // Stepping method
     DEM_TIME_INTEGRATOR stepping = DEM_TIME_INTEGRATOR::FORWARD_EULER;
+
+    // Number of wildcards (extra property) arrays associated with contacts and owners
+    unsigned int nContactWildcards;
+    unsigned int nOwnerWildcards;
 };
 
 // A struct that holds pointers to data arrays that dT uses
@@ -244,8 +249,8 @@ struct DEMDataDT {
     float3* contactTorque_convToForce;
     float3* contactPointGeometryA;
     float3* contactPointGeometryB;
-    float3* contactHistory;
-    float* contactDuration;
+    // float3* contactHistory;
+    // float* contactDuration;
 
     // The offset info that indexes into the template arrays
     bodyID_t* ownerClumpBody;
@@ -286,6 +291,12 @@ struct DEMDataDT {
     float* mmiXX;
     float* mmiYY;
     float* mmiZZ;
+
+    // Wildcards. These are some quantities that you can associate with contact pairs and/or owner objects. Very
+    // typically, contact history info in Hertzian model in this DEM tool is a wildcard, and electric charges can be
+    // registered on granular particles with wildcards.
+    float* contactWildcards[SGPS_DEM_MAX_WILDCARD_NUM];
+    float* ownerWildcards[SGPS_DEM_MAX_WILDCARD_NUM];
 };
 
 // A struct that holds pointers to data arrays that kT uses

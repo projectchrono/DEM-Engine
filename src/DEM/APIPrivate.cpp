@@ -615,11 +615,20 @@ void DEMSolver::transferSimParams() {
             "stability.",
             m_updateFreq);
     }
+    // Compute the number of wildcards in our force model
+    unsigned int nContactWildcards = m_force_model->m_contact_wildcards.size();
+    unsigned int nOwnerWildcards = m_force_model->m_owner_wildcards.size();
+    if (nContactWildcards > SGPS_DEM_MAX_WILDCARD_NUM || nOwnerWildcards > SGPS_DEM_MAX_WILDCARD_NUM) {
+        SGPS_DEM_ERROR(
+            "You defined too many contact or owner wildcards! Currently the max amount is %u.\nYou can change constant "
+            "SGPS_DEM_MAX_WILDCARD_NUM and re-compile, if you indeed would like more wildcards.",
+            SGPS_DEM_MAX_WILDCARD_NUM);
+    }
 
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
-                     m_expand_factor, m_approx_max_vel, m_expand_safety_param);
+                     m_expand_factor, m_approx_max_vel, m_expand_safety_param, nContactWildcards, nOwnerWildcards);
     kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
-                     m_expand_factor, m_approx_max_vel, m_expand_safety_param);
+                     m_expand_factor, m_approx_max_vel, m_expand_safety_param, nContactWildcards, nOwnerWildcards);
 }
 
 void DEMSolver::allocateGPUArrays() {
@@ -786,10 +795,32 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     const std::set<std::string> owner_wildcard_names = m_force_model->m_owner_wildcards;
     // If we spot that the force model requires an ingredient, we make sure that order goes to the ingredient
     // acquisition module
-    std::string ingredient_definition = " ", ingredient_acquisition_A = " ", ingredient_acquisition_B = " ";
+    std::string ingredient_definition = " ", wildcard_acquisition = " ", ingredient_acquisition_A = " ",
+                ingredient_acquisition_B = " ", wildcard_write_back = " ", wildcard_destroy_record = " ";
     equip_force_model_ingr_acq(ingredient_definition, ingredient_acquisition_A, ingredient_acquisition_B, model);
 
-    //// TODO: Check if force, and wildcards are all defined in the model
+    // Check if force, and wildcards are all defined in the model
+    std::string non_match;
+    if (!all_whole_word_match(model, contact_wildcard_names, non_match))
+        SGPS_DEM_WARNING(
+            "Contact wildcard %s is not in your custom force model. Your force model will probably not produce what "
+            "you expect.",
+            non_match.c_str());
+    if (!all_whole_word_match(model, owner_wildcard_names, non_match))
+        SGPS_DEM_WARNING(
+            "Owner wildcard %s is not in your custom force model. Your force model will probably not produce what you "
+            "expect.",
+            non_match.c_str());
+    if (!all_whole_word_match(model, {"force"}, non_match)) {
+        SGPS_DEM_WARNING(
+            "Your custom force model does not set the variable %s at all. You probably will not see any contact in the "
+            "simulation.",
+            non_match.c_str());
+    }
+
+    // For contact wildcards, it needs to be brought from the global memory, and we expect the user's force model to use
+    // and modify them, and in the end we will write them back to global mem.
+    equip_contact_wildcards(wildcard_acquisition, wildcard_write_back, wildcard_destroy_record, contact_wildcard_names);
 
     if (m_ensure_kernel_line_num) {
         model = compact_code(model);
@@ -801,6 +832,10 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     strMap["_forceModelIngredientDefinition_"] = ingredient_definition;
     strMap["_forceModelIngredientAcqForA_"] = ingredient_acquisition_A;
     strMap["_forceModelIngredientAcqForB_"] = ingredient_acquisition_B;
+
+    strMap["_forceModelContactWildcardAcq_"] = wildcard_acquisition;
+    strMap["_forceModelContactWildcardWrite_"] = wildcard_write_back;
+    strMap["_forceModelContactWildcardDestroy_"] = wildcard_destroy_record;
 }
 
 inline void DEMSolver::equipFamilyOnFlyChanges(std::unordered_map<std::string, std::string>& strMap) {

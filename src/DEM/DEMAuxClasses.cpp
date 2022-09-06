@@ -171,7 +171,7 @@ void DEMForceModel::SetForceModelType(DEM_FORCE_MODEL model_type) {
             m_must_have_mat_props = {"E", "nu", "CoR", "mu", "Crr"};
             m_force_model = DEM_HERTZIAN_FORCE_MODEL();
             // History-based model uses these history-related arrays
-            m_contact_wildcards = {"delta_tan_x", "delta_tan_y", "delta_tan_z", "delta_time"};
+            m_contact_wildcards = {"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"};
             break;
         case (DEM_FORCE_MODEL::HERTZIAN_FRICTIONLESS):
             m_must_have_mat_props = {"E", "nu", "CoR"};
@@ -200,6 +200,29 @@ int DEMForceModel::ReadCustomModelFile(const std::filesystem::path& sourcefile) 
     type = DEM_FORCE_MODEL::CUSTOM;
     m_force_model = read_file_to_string(sourcefile);
     return 0;
+}
+
+void DEMForceModel::SetPerContactWildcards(const std::set<std::string>& wildcards) {
+    for (const auto& a_str : wildcards) {
+        if (match_pattern(a_str, " ")) {
+            // Wildcard array names cannot have spaces in them
+            std::stringstream ss;
+            ss << "Contact wildcard " << a_str << " is not valid: no spaces allowed in its name." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+    }
+    m_contact_wildcards = wildcards;
+}
+
+void DEMForceModel::SetPerOwnerWildcards(const std::set<std::string>& wildcards) {
+    for (const auto& a_str : wildcards) {
+        if (match_pattern(a_str, " ")) {
+            std::stringstream ss;
+            ss << "Owner wildcard " << a_str << " is not valid: no spaces allowed in its name." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+    }
+    m_owner_wildcards = wildcards;
 }
 
 }  // END namespace sgps

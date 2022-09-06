@@ -189,16 +189,23 @@ class DEMDynamicThread {
     // Local position of contact point of contact w.r.t. the reference frame of body A and B
     std::vector<float3, ManagedAllocator<float3>> contactPointGeometryA;
     std::vector<float3, ManagedAllocator<float3>> contactPointGeometryB;
+    // Wildcard (extra property) arrays associated with contacts and owners
+    std::vector<std::vector<float, ManagedAllocator<float>>,
+                ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
+        contactWildcards;
+    std::vector<std::vector<float, ManagedAllocator<float>>,
+                ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
+        ownerWildcards;
+    // std::vector<float, ManagedAllocator<float>> contactWildcards[SGPS_DEM_MAX_WILDCARD_NUM];
+    // std::vector<float, ManagedAllocator<float>> ownerWildcards[SGPS_DEM_MAX_WILDCARD_NUM];
+    // An example of such wildcard arrays is contact history: how much did the contact point move on the geometry
+    // surface compared to when the contact first emerged?
+
+    // std::vector<float3, ManagedAllocator<float3>> contactHistory;
+    // // Durations in time of persistent contact pairs
+    // std::vector<float, ManagedAllocator<float>> contactDuration;
     // The velocity of the contact points in the global frame: can be useful in determining the time step size
     // std::vector<float3, ManagedAllocator<float3>> contactPointVel;
-    // Contact history: how much did the contact point move on the geometry surface compared to when the contact first
-    // emerged?
-    // TODO: If it's that the contact point moves from a component of a clump to another component, history will also be
-    // destroyed; this is not physical, but also, considering the contact history tends to be miniscule, this is
-    // probably not a big problem either.
-    std::vector<float3, ManagedAllocator<float3>> contactHistory;
-    // Durations in time of persistent contact pairs
-    std::vector<float, ManagedAllocator<float>> contactDuration;
 
     size_t m_approx_bytes_used = 0;
 
@@ -292,7 +299,9 @@ class DEMDynamicThread {
                       double ts_size,
                       float expand_factor,
                       float approx_max_vel,
-                      float expand_safety_param);
+                      float expand_safety_param,
+                      unsigned int nContactWildcards,
+                      unsigned int nOwnerWildcards);
 
     /// Compute total KE of all entities
     float getKineticEnergy();
@@ -484,7 +493,7 @@ class DEMDynamicThread {
     unsigned int nTrackersProcessed = 0;
 
     // Migrate contact history to fit the structure of the newly received contact array
-    inline void migrateContactHistory();
+    inline void migratePersistentContacts();
 
     // Update clump-based acceleration array based on sphere-based force array
     inline void calculateForces();

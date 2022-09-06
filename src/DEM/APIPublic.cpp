@@ -300,6 +300,10 @@ std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterial(const std::unordered_map<st
                     "physical and should destabilize the simulation.",
                     m_loaded_materials.size());
         }
+        // Material names cannot have spaces in them
+        if (match_pattern(a_pair.first, " ")) {
+            SGPS_DEM_ERROR("Material property %s is not valid: no spaces allowed in its name.", a_pair.first.c_str());
+        }
     }
     DEMMaterial a_material(mat_prop);
     std::shared_ptr<DEMMaterial> ptr = std::make_shared<DEMMaterial>(std::move(a_material));

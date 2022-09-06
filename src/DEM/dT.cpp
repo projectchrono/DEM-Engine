@@ -59,8 +59,11 @@ void DEMDynamicThread::packDataPointers() {
     granData->contactTorque_convToForce = contactTorque_convToForce.data();
     granData->contactPointGeometryA = contactPointGeometryA.data();
     granData->contactPointGeometryB = contactPointGeometryB.data();
-    granData->contactHistory = contactHistory.data();
-    granData->contactDuration = contactDuration.data();
+    // granData->contactHistory = contactHistory.data();
+    // granData->contactDuration = contactDuration.data();
+    for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
+        granData->contactWildcards[i] = contactWildcards[i].data();
+    }
 
     // The offset info that indexes into the template arrays
     granData->ownerClumpBody = ownerClumpBody.data();
@@ -120,7 +123,9 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                     double ts_size,
                                     float expand_factor,
                                     float approx_max_vel,
-                                    float expand_safety_param) {
+                                    float expand_safety_param,
+                                    unsigned int nContactWildcards,
+                                    unsigned int nOwnerWildcards) {
     simParams->nvXp2 = nvXp2;
     simParams->nvYp2 = nvYp2;
     simParams->nvZp2 = nvZp2;
@@ -140,6 +145,9 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->nbX = nbX;
     simParams->nbY = nbY;
     simParams->nbZ = nbZ;
+
+    simParams->nContactWildcards = nContactWildcards;
+    simParams->nOwnerWildcards = nOwnerWildcards;
 }
 
 float DEMDynamicThread::getKineticEnergy() {
@@ -313,14 +321,20 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
                             make_float3(0));
     SGPS_DEM_TRACKED_RESIZE(contactTorque_convToForce, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER,
                             "contactTorque_convToForce", make_float3(0));
-    SGPS_DEM_TRACKED_RESIZE(contactHistory, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactHistory",
-                            make_float3(0));
-    SGPS_DEM_TRACKED_RESIZE(contactDuration, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactDuration", 0);
     SGPS_DEM_TRACKED_RESIZE(contactType, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactType", DEM_NOT_A_CONTACT);
     SGPS_DEM_TRACKED_RESIZE(contactPointGeometryA, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactPointGeometryA",
                             make_float3(0));
     SGPS_DEM_TRACKED_RESIZE(contactPointGeometryB, nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, "contactPointGeometryB",
                             make_float3(0));
+    // Allocate memory for each wildcard array
+    // contactWildcards.resize(simParams->nContactWildcards);
+    // ownerWildcards.resize(simParams->nOwnerWildcards);
+    for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
+        SGPS_DEM_TRACKED_RESIZE_FLOAT(contactWildcards[i], nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, 0);
+    }
+    for (unsigned int i = 0; i < simParams->nOwnerWildcards; i++) {
+        SGPS_DEM_TRACKED_RESIZE_FLOAT(ownerWildcards[i], nOwnerBodies * SGPS_DEM_INIT_CNT_MULTIPLIER, 0);
+    }
 
     // Transfer buffer arrays
     // The following several arrays will have variable sizes, so here we only used an estimate.
@@ -1043,14 +1057,14 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile) const {
 }
 
 inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
-    SGPS_DEM_TRACKED_RESIZE_NOPRINT(idGeometryA, nContactPairs);
-    SGPS_DEM_TRACKED_RESIZE_NOPRINT(idGeometryB, nContactPairs);
-    SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactType, nContactPairs);
-    SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactForces, nContactPairs);
-    SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactTorque_convToForce, nContactPairs);
+    SGPS_DEM_TRACKED_RESIZE_NOPRINT(idGeometryA, nContactPairs, 0);
+    SGPS_DEM_TRACKED_RESIZE_NOPRINT(idGeometryB, nContactPairs, 0);
+    SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactType, nContactPairs, DEM_NOT_A_CONTACT);
+    SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactForces, nContactPairs, make_float3(0));
+    SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactTorque_convToForce, nContactPairs, make_float3(0));
 
-    SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactPointGeometryA, nContactPairs);
-    SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactPointGeometryB, nContactPairs);
+    SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactPointGeometryA, nContactPairs, make_float3(0));
+    SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactPointGeometryB, nContactPairs, make_float3(0));
 
     // Re-pack pointers in case the arrays got reallocated
     granData->idGeometryA = idGeometryA.data();
@@ -1118,32 +1132,41 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
     }
 }
 
-inline void DEMDynamicThread::migrateContactHistory() {
+inline void DEMDynamicThread::migratePersistentContacts() {
     // Use this newHistory and newDuration to store temporarily the rearranged contact history.  Note we cannot use
-    // vector 0 or 1 since they may be in use.
-    size_t history_arr_bytes = (*stateOfSolver_resources.pNumContacts) * sizeof(float3);
-    size_t duration_arr_bytes = (*stateOfSolver_resources.pNumContacts) * sizeof(float);
-    size_t sentry_bytes = (*stateOfSolver_resources.pNumPrevContacts) * sizeof(notStupidBool_t);
-    float3* newHistory = (float3*)stateOfSolver_resources.allocateTempVector(2, history_arr_bytes);
-    float* newDuration = (float*)stateOfSolver_resources.allocateTempVector(3, duration_arr_bytes);
+    // vector 0 or 1 since they may be in use (1 is used by granData->contactMapping).
+
+    // All contact wildcards are the same type, so we can just allocate one temp array for all of them
+    float* newWildcards[SGPS_DEM_MAX_WILDCARD_NUM];
+    size_t wildcard_arr_bytes = (*stateOfSolver_resources.pNumContacts) * sizeof(float) * simParams->nContactWildcards;
+    newWildcards[0] = (float*)stateOfSolver_resources.allocateTempVector(2, wildcard_arr_bytes);
+    for (unsigned int i = 1; i < simParams->nContactWildcards; i++) {
+        newWildcards[i] = newWildcards[i - 1] + (*stateOfSolver_resources.pNumContacts);
+    }
+
     // This is used for checking if there are contact history got lost in the transition by surprise. But no need to
     // check if the user did not ask for it.
-    notStupidBool_t* contactSentry = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(4, sentry_bytes);
+    size_t sentry_bytes = (*stateOfSolver_resources.pNumPrevContacts) * sizeof(notStupidBool_t);
+    notStupidBool_t* contactSentry = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(3, sentry_bytes);
 
     // A sentry array is here to see if there exist a contact that dT thinks it's alive but kT doesn't map it to the new
-    // history array
+    // history array. This is just a quick and rough check: we only look at the first contact wildcard to see if it is
+    // non-0, whatever it represents.
     size_t blocks_needed_for_rearrange;
-    if (*stateOfSolver_resources.pNumPrevContacts > 0 && verbosity >= DEM_VERBOSITY::STEP_METRIC) {
-        // GPU_CALL(cudaMemset(contactSentry, 0, sentry_bytes));
-        blocks_needed_for_rearrange = (*stateOfSolver_resources.pNumPrevContacts + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) /
-                                      SGPS_DEM_MAX_THREADS_PER_BLOCK;
-        if (blocks_needed_for_rearrange > 0) {
-            prep_force_kernels->kernel("markAliveContacts")
-                .instantiate()
-                .configure(dim3(blocks_needed_for_rearrange), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0,
-                           streamInfo.stream)
-                .launch(granData->contactDuration, contactSentry, *stateOfSolver_resources.pNumPrevContacts);
-            GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    if (verbosity >= DEM_VERBOSITY::STEP_METRIC) {
+        if (*stateOfSolver_resources.pNumPrevContacts > 0) {
+            // GPU_CALL(cudaMemset(contactSentry, 0, sentry_bytes));
+            blocks_needed_for_rearrange =
+                (*stateOfSolver_resources.pNumPrevContacts + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) /
+                SGPS_DEM_MAX_THREADS_PER_BLOCK;
+            if (blocks_needed_for_rearrange > 0) {
+                prep_force_kernels->kernel("markAliveContacts")
+                    .instantiate()
+                    .configure(dim3(blocks_needed_for_rearrange), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0,
+                               streamInfo.stream)
+                    .launch(granData->contactWildcards[0], contactSentry, *stateOfSolver_resources.pNumPrevContacts);
+                GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+            }
         }
     }
 
@@ -1151,51 +1174,56 @@ inline void DEMDynamicThread::migrateContactHistory() {
     blocks_needed_for_rearrange =
         (*stateOfSolver_resources.pNumContacts + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) / SGPS_DEM_MAX_THREADS_PER_BLOCK;
     if (blocks_needed_for_rearrange > 0) {
-        prep_force_kernels->kernel("rearrangeContactHistory")
+        prep_force_kernels->kernel("rearrangeContactWildcards")
             .instantiate()
             .configure(dim3(blocks_needed_for_rearrange), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(granData->contactMapping, granData->contactHistory, granData->contactDuration, newHistory,
-                    newDuration, contactSentry, *stateOfSolver_resources.pNumContacts);
+            .launch(granData->contactMapping, granData->contactWildcards, newWildcards, contactSentry,
+                    simParams->nContactWildcards, *stateOfSolver_resources.pNumContacts);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 
     // Take a look, does the sentry indicate that there is an `alive' contact got lost?
-    if (*stateOfSolver_resources.pNumPrevContacts > 0 && verbosity >= DEM_VERBOSITY::STEP_METRIC) {
-        notStupidBool_t* lostContact =
-            (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(5, sizeof(notStupidBool_t));
-        boolMaxReduce(contactSentry, lostContact, *stateOfSolver_resources.pNumPrevContacts, streamInfo.stream,
-                      stateOfSolver_resources);
-        if (*lostContact && solverFlags.isAsync) {
-            SGPS_DEM_STEP_METRIC(
-                "At least one contact is active at time %.9g on dT, but it is not detected on kT, therefore being "
-                "removed unexpectedly!",
-                timeElapsed);
-            SGPS_DEM_DEBUG_PRINTF("New contact A:");
-            SGPS_DEM_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryA, *stateOfSolver_resources.pNumContacts));
-            SGPS_DEM_DEBUG_PRINTF("New contact B:");
-            SGPS_DEM_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryB, *stateOfSolver_resources.pNumContacts));
-            SGPS_DEM_DEBUG_PRINTF("Old contact history:");
-            SGPS_DEM_DEBUG_EXEC(displayFloat3(granData->contactHistory, *stateOfSolver_resources.pNumPrevContacts));
-            SGPS_DEM_DEBUG_PRINTF("History mapping:");
-            SGPS_DEM_DEBUG_EXEC(
-                displayArray<contactPairs_t>(granData->contactMapping, *stateOfSolver_resources.pNumContacts));
-            SGPS_DEM_DEBUG_PRINTF("Sentry:");
-            SGPS_DEM_DEBUG_EXEC(
-                displayArray<notStupidBool_t>(contactSentry, *stateOfSolver_resources.pNumPrevContacts));
+    if (verbosity >= DEM_VERBOSITY::STEP_METRIC) {
+        if (*stateOfSolver_resources.pNumPrevContacts > 0 && simParams->nContactWildcards > 0) {
+            notStupidBool_t* lostContact =
+                (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(4, sizeof(notStupidBool_t));
+            boolMaxReduce(contactSentry, lostContact, *stateOfSolver_resources.pNumPrevContacts, streamInfo.stream,
+                          stateOfSolver_resources);
+            if (*lostContact && solverFlags.isAsync) {
+                SGPS_DEM_STEP_METRIC(
+                    "At least one contact is active at time %.9g on dT, but it is not detected on kT, therefore being "
+                    "removed unexpectedly!",
+                    timeElapsed);
+                SGPS_DEM_DEBUG_PRINTF("New contact A:");
+                SGPS_DEM_DEBUG_EXEC(
+                    displayArray<bodyID_t>(granData->idGeometryA, *stateOfSolver_resources.pNumContacts));
+                SGPS_DEM_DEBUG_PRINTF("New contact B:");
+                SGPS_DEM_DEBUG_EXEC(
+                    displayArray<bodyID_t>(granData->idGeometryB, *stateOfSolver_resources.pNumContacts));
+                SGPS_DEM_DEBUG_PRINTF("Old version of the first contact wildcard:");
+                SGPS_DEM_DEBUG_EXEC(
+                    displayArray<float>(granData->contactWildcards[0], *stateOfSolver_resources.pNumPrevContacts));
+                SGPS_DEM_DEBUG_PRINTF("Old--new mapping:");
+                SGPS_DEM_DEBUG_EXEC(
+                    displayArray<contactPairs_t>(granData->contactMapping, *stateOfSolver_resources.pNumContacts));
+                SGPS_DEM_DEBUG_PRINTF("Sentry:");
+                SGPS_DEM_DEBUG_EXEC(
+                    displayArray<notStupidBool_t>(contactSentry, *stateOfSolver_resources.pNumPrevContacts));
+            }
         }
     }
 
     // Copy new history back to history array (after resizing the `main' history array)
-    if (*stateOfSolver_resources.pNumContacts > contactHistory.size()) {
-        SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactHistory, *stateOfSolver_resources.pNumContacts);
-        SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactDuration, *stateOfSolver_resources.pNumContacts);
-        granData->contactHistory = contactHistory.data();
-        granData->contactDuration = contactDuration.data();
+    if (*stateOfSolver_resources.pNumContacts > contactWildcards[0].size()) {
+        for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
+            SGPS_DEM_TRACKED_RESIZE_FLOAT(contactWildcards[i], *stateOfSolver_resources.pNumContacts, 0);
+            granData->contactWildcards[i] = contactWildcards[i].data();
+        }
     }
-    GPU_CALL(cudaMemcpy(granData->contactHistory, newHistory, (*stateOfSolver_resources.pNumContacts) * sizeof(float3),
-                        cudaMemcpyDeviceToDevice));
-    GPU_CALL(cudaMemcpy(granData->contactDuration, newDuration, (*stateOfSolver_resources.pNumContacts) * sizeof(float),
-                        cudaMemcpyDeviceToDevice));
+    for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
+        GPU_CALL(cudaMemcpy(granData->contactWildcards[i], newWildcards[i],
+                            (*stateOfSolver_resources.pNumContacts) * sizeof(float), cudaMemcpyDeviceToDevice));
+    }
 }
 
 inline void DEMDynamicThread::calculateForces() {
@@ -1359,7 +1387,7 @@ void DEMDynamicThread::workerThread() {
                 // If this is a history-based run, then when contacts are received, we need to migrate the contact
                 // history info, to match the structure of the new contact array
                 if (!solverFlags.isHistoryless) {
-                    migrateContactHistory();
+                    migratePersistentContacts();
                 }
                 timers.GetTimer("Unpack updates from kT").stop();
             }
@@ -1471,9 +1499,9 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     }
     // Then force calculation kernels
     {
-        cal_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMHistoryBasedForceKernels", JitHelper::KERNEL_DIR / "DEMHistoryBasedForceKernels.cu", Subs,
-            {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+        cal_force_kernels = std::make_shared<jitify::Program>(
+            std::move(JitHelper::buildProgram("DEMCalcForceKernels", JitHelper::KERNEL_DIR / "DEMCalcForceKernels.cu",
+                                              Subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
     // Then force accumulation kernels
     {

@@ -147,11 +147,13 @@ class DEMForceModel {
     /// contains your force calculation code. Returns 0 if read successfully, otherwise 1.
     int ReadCustomModelFile(const std::filesystem::path& sourcefile);
     /// Set the names for the extra quantities that will be associated with each contact pair. For example,
-    /// history-based models should have 3 float arrays to store contact history. Only float is supported.
-    void SetPerContactWildcards(const std::set<std::string>& wildcards) { m_contact_wildcards = wildcards; }
+    /// history-based models should have 3 float arrays to store contact history. Only float is supported. Note the
+    /// initial value of all contact wildcard arrays is automatically 0.
+    //// TODO: Maybe allow non-0 initialization?
+    void SetPerContactWildcards(const std::set<std::string>& wildcards);
     /// Set the names for the extra quantities that will be associated with each owner. For example, you can use this to
     /// associate electric charge to each particle. Only float is supported.
-    void SetPerOwnerWildcards(const std::set<std::string>& wildcards) { m_owner_wildcards = wildcards; }
+    void SetPerOwnerWildcards(const std::set<std::string>& wildcards);
 };
 
 }  // END namespace sgps

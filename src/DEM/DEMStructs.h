@@ -188,11 +188,22 @@ inline std::string pretty_format_bytes(size_t bytes) {
         }                                        \
     }
 
-#define SGPS_DEM_TRACKED_RESIZE_NOPRINT(vec, newsize)          \
+// I wasn't able to resolve a decltype problem with vector of vectors, so I have to create another macro for this kind
+// of tracked resize... not ideal.
+#define SGPS_DEM_TRACKED_RESIZE_FLOAT(vec, newsize, val)           \
+    {                                                              \
+        size_t old_size = vec.size();                              \
+        vec.resize(newsize, val);                                  \
+        size_t new_size = vec.size();                              \
+        size_t byte_delta = sizeof(float) * (new_size - old_size); \
+        m_approx_bytes_used += byte_delta;                         \
+    }
+
+#define SGPS_DEM_TRACKED_RESIZE_NOPRINT(vec, newsize, val)     \
     {                                                          \
         size_t item_size = sizeof(decltype(vec)::value_type);  \
         size_t old_size = vec.size();                          \
-        vec.resize(newsize);                                   \
+        vec.resize(newsize, val);                              \
         size_t new_size = vec.size();                          \
         size_t byte_delta = item_size * (new_size - old_size); \
         m_approx_bytes_used += byte_delta;                     \

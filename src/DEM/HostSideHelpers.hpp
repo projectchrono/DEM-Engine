@@ -89,6 +89,13 @@ inline float4 host_make_float4(float a, float b, float c, float d) {
     return f;
 }
 
+// Check if a word exists in a string (but it does not need to be a whole word)
+inline bool match_pattern(const std::string& sentence, const std::string& word) {
+    std::smatch m;
+    std::regex r(word);
+    return std::regex_search(sentence, m, r);
+}
+
 /// Check if a word exists in a string as a whole word, from bames53 on StackOverflow
 /// https://stackoverflow.com/questions/22516463/how-do-i-find-a-complete-word-not-part-of-it-in-a-string-in-c
 inline bool match_whole_word(const std::string& sentence, const std::string& word) {
@@ -97,12 +104,23 @@ inline bool match_whole_word(const std::string& sentence, const std::string& wor
     return std::regex_search(sentence, m, r);
 }
 
-inline bool any_whole_word_match(const std::string& sentence, const std::vector<std::string>& words) {
+inline bool any_whole_word_match(const std::string& sentence, const std::set<std::string>& words) {
     for (const auto& word : words) {
         if (match_whole_word(sentence, word))
             return true;
     }
     return false;
+}
+
+inline bool all_whole_word_match(const std::string& sentence,
+                                 const std::set<std::string>& words,
+                                 std::string& non_match) {
+    for (const auto& word : words) {
+        if (!match_whole_word(sentence, word))
+            non_match = word;
+        return false;
+    }
+    return true;
 }
 
 /// Replace all instances of a certain pattern from a string then return it
