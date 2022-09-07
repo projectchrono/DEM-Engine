@@ -18,10 +18,10 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEM_sim;
-    DEM_sim.SetVerbosity(INFO);
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
     // Output family numbers (used to identify the centrifuging effect)
     DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::FAMILY);
+    // DEM_sim.SetVerbosity(STEP_METRIC);
 
     // What will be loaded from the file, is a template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
     DEMClumpTemplate ellipsoid;
@@ -147,7 +147,7 @@ int main() {
     out_dir += "/DEMdemo_Centrifuge";
     create_directory(out_dir);
 
-    float time_end = 10.0;
+    float time_end = 20.0;
     unsigned int fps = 20;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 

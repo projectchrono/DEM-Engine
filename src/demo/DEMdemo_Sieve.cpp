@@ -18,7 +18,7 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEM_sim;
-    // DEM_sim.SetVerbosity(INFO);
+    // I generally use this demo to inspect if I have "lost contact pairs", so the verbosity is set to STEP_METRIC...
     DEM_sim.SetVerbosity(STEP_METRIC);
 
     srand(759);
@@ -57,7 +57,7 @@ int main() {
         std::vector<std::shared_ptr<DEMMaterial>> mat;
 
         // randomly generate clump template configurations
-        // the relPos of a sphere is always seeded from one of the already-generated sphere
+        // the relPos of a sphere is always seeded from one of some previously-generated spheres
         float3 seed_pos = make_float3(0);
         for (int j = 0; j < num_sphere; j++) {
             radii.push_back(((float)rand() / RAND_MAX) * (max_rad - min_rad) + min_rad);
@@ -75,7 +75,7 @@ int main() {
             relPos.push_back(tmp);
             mat.push_back(mat_type_1);
 
-            // seed relPos from one of the previously generated spheres
+            // seed relPos from one of the previously-generated spheres
             int choose_from = rand() % (j + 1);
             seed_pos = relPos.at(choose_from);
         }

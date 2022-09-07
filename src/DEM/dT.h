@@ -502,7 +502,7 @@ class DEMDynamicThread {
     inline void integrateClumpMotions();
 
     // If kT provides fresh CD results, we unpack and use it
-    inline void ifProduceFreshThenUseIt();
+    inline void ifProduceFreshThenUseItAndSendNewOrder();
 
     // Some per-step checks/modification, done before integration, but after force calculation (thus sort of in the
     // mid-step stage)

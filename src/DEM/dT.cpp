@@ -1323,7 +1323,7 @@ inline void DEMDynamicThread::routineChecks() {
     }
 }
 
-inline void DEMDynamicThread::ifProduceFreshThenUseIt() {
+inline void DEMDynamicThread::ifProduceFreshThenUseItAndSendNewOrder() {
     if (pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
         timers.GetTimer("Unpack updates from kT").start();
         {
@@ -1344,6 +1344,18 @@ inline void DEMDynamicThread::ifProduceFreshThenUseIt() {
             migratePersistentContacts();
         }
         timers.GetTimer("Unpack updates from kT").stop();
+
+        timers.GetTimer("Send to kT buffer").start();
+        // Acquire lock and refresh the work order for the kinematic
+        {
+            std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
+            sendToTheirBuffer();
+        }
+        pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
+        pSchedSupport->schedulingStats.nKinematicUpdates++;
+        timers.GetTimer("Send to kT buffer").stop();
+        // Signal the kinematic that it has data for a new work order
+        pSchedSupport->cv_KinematicCanProceed.notify_all();
     }
 }
 
@@ -1393,8 +1405,34 @@ void DEMDynamicThread::workerThread() {
         }
 
         for (double cycle = 0.0; cycle < cycleDuration; cycle += simParams->h) {
-            // If the produce is fresh, use it
-            ifProduceFreshThenUseIt();
+            // If the produce is fresh, use it, and then send kT a new work order.
+            // We used to send work order to kT whenever kT unpacks its buffer. This can lead to a situation where dT
+            // sends a new work order and then immediately bails out (user asks it to do something else). A bit later
+            // on, kT will update dT's buffer, and then kT will spot a new work order and work on the new order.
+            // However! If kT finishes this new order before dT comes back, the persistent contact wildcard map will be
+            // off (across 2 kT updates)! So, dT only send new work orders after kT finishes the old order and it
+            // unpacks it.
+            ifProduceFreshThenUseItAndSendNewOrder();
+
+            // Check if we need to wait; i.e., if dynamic drifted too much into future, then we must wait a bit before
+            // the next cycle begins
+            if (pSchedSupport->dynamicShouldWait()) {
+                timers.GetTimer("Wait for kT update").start();
+                // Wait for a signal from kT to indicate that kT has caught up
+                pSchedSupport->schedulingStats.nTimesDynamicHeldBack++;
+                std::unique_lock<std::mutex> lock(pSchedSupport->dynamicCanProceed);
+                while (!pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
+                    // Loop to avoid spurious wakeups
+                    pSchedSupport->cv_DynamicCanProceed.wait(lock);
+                }
+                timers.GetTimer("Wait for kT update").stop();
+            }
+            // NOTE: This ShouldWait check should follow the ifProduceFreshThenUseItAndSendNewOrder call. Because we
+            // need to avoid a scenario where dT is waiting here, and kT is also chilling waiting for an update. But
+            // with this ShouldWait check being here, if dynamicOwned_Prod2ConsBuffer_isFresh is true so
+            // ifProduceFreshThenUseItAndSendNewOrder is executed, then kT is is working for us, no worry; if
+            // dynamicOwned_Prod2ConsBuffer_isFresh is false so ifProduceFreshThenUseItAndSendNewOrder didn't run, then
+            // kT has to be in the process of doing a CD, we still will not be locked here.
 
             // If using variable ts size, only when a step is accepted can we move on
             bool step_accepted = false;
@@ -1421,44 +1459,10 @@ void DEMDynamicThread::workerThread() {
 
             // Dynamic wrapped up one cycle, record this fact into schedule support
             pSchedSupport->currentStampOfDynamic++;
-
-            // If the kinematic is idle, give it the opportunity to get busy again
-            if (!pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh) {
-                timers.GetTimer("Send to kT buffer").start();
-                // Acquire lock and refresh the work order for the kinematic
-                {
-                    std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
-                    sendToTheirBuffer();
-                }
-                pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
-                pSchedSupport->schedulingStats.nKinematicUpdates++;
-                timers.GetTimer("Send to kT buffer").stop();
-                // Signal the kinematic that it has data for a new work order
-                pSchedSupport->cv_KinematicCanProceed.notify_all();
-            }
-
-            // Check if we need to wait; i.e., if dynamic drifted too much into future, then we must wait a bit before
-            // the next cycle begins
-            if (pSchedSupport->dynamicShouldWait()) {
-                timers.GetTimer("Wait for kT update").start();
-                // Wait for a signal from kT to indicate that kT has caught up
-                pSchedSupport->schedulingStats.nTimesDynamicHeldBack++;
-                std::unique_lock<std::mutex> lock(pSchedSupport->dynamicCanProceed);
-                while (!pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
-                    // Loop to avoid spurious wakeups
-                    pSchedSupport->cv_DynamicCanProceed.wait(lock);
-                }
-                timers.GetTimer("Wait for kT update").stop();
-            }
-            // NOTE: This ShouldWait check is at the end of a dT cycle, not at the beginning, because dT could start a
-            // cycle and immediately be too much into future. If this is at the beginning, dT will stale while kT could
-            // also be chilling waiting for an update; but since it's at the end of a cycle, kT should got busy already
-            // due to that kinematicOwned_Cons2ProdBuffer_isFresh got set to true just before.
+            nTotalSteps++;
 
             //// TODO: make changes for variable time step size cases
             timeElapsed += simParams->h;
-
-            nTotalSteps++;
         }
 
         // When getting here, dT has finished one user call (although perhaps not at the end of the user script)
