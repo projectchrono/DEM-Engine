@@ -16,11 +16,19 @@ namespace sgps {
 // restrictions. Not much that I can do, other than writing them all out.
 
 void doubleSumReduce(double* d_in, double* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad) {
-    cubDEMSum<double, DEMSolverStateData>(d_in, d_out, n, this_stream, scratchPad);
+    cubDEMSum<double, double, DEMSolverStateData>(d_in, d_out, n, this_stream, scratchPad);
 }
 
 void floatSumReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad) {
-    cubDEMSum<float, DEMSolverStateData>(d_in, d_out, n, this_stream, scratchPad);
+    cubDEMSum<float, float, DEMSolverStateData>(d_in, d_out, n, this_stream, scratchPad);
+}
+
+void boolSumReduce(notStupidBool_t* d_in,
+                   size_t* d_out,
+                   size_t n,
+                   cudaStream_t& this_stream,
+                   DEMSolverStateData& scratchPad) {
+    cubDEMSum<notStupidBool_t, size_t, DEMSolverStateData>(d_in, d_out, n, this_stream, scratchPad);
 }
 
 void boolMaxReduce(notStupidBool_t* d_in,

@@ -70,19 +70,12 @@ int main() {
                               std::vector<float>(Drum_particles.size(), CylParticleRad), Drum_particles, mat_type_drum);
     std::cout << Drum_particles.size() << " spheres make up the rotating drum" << std::endl;
 
-    // Then add top and bottom planes to `close up' the drum
-    float safe_delta = 0.03;
-    auto top_bot_planes = DEM_sim.AddExternalObject();
-    top_bot_planes->AddPlane(make_float3(CylHeight / 2. - safe_delta, 0, 0), make_float3(-1, 0, 0), mat_type_drum);
-    top_bot_planes->AddPlane(make_float3(-CylHeight / 2. + safe_delta, 0, 0), make_float3(1, 0, 0), mat_type_drum);
-    // top_bot_planes->SetFamily(drum_family);
-    auto planes_tracker = DEM_sim.Track(top_bot_planes);
-
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_type;
     std::vector<float3> input_xyz;
     std::vector<unsigned int> family_code;
 
     // Then sample some particles inside the drum
+    float safe_delta = 0.03;
     float3 sample_center = make_float3(0, 0, 0);
     float sample_halfheight = CylHeight / 2.0 - 3.0 * safe_delta;
     float sample_halfwidth = CylRad / 1.5;
@@ -105,7 +98,6 @@ int main() {
 
     // Add drum
     auto Drum = DEM_sim.AddClumps(Drum_template, make_float3(0));
-    // Drum is family 10
     unsigned int drum_family = 100;
     Drum->SetFamilies(drum_family);
     // The drum rotates (facing X direction)
@@ -113,6 +105,13 @@ int main() {
     // Disable contacts within drum components
     DEM_sim.DisableContactBetweenFamilies(drum_family, drum_family);
     auto Drum_tracker = DEM_sim.Track(Drum);
+
+    // Then add planes to `close up' the drum
+    auto top_bot_planes = DEM_sim.AddExternalObject();
+    top_bot_planes->AddPlane(make_float3(CylHeight / 2. - safe_delta, 0, 0), make_float3(-1, 0, 0), mat_type_drum);
+    top_bot_planes->AddPlane(make_float3(-CylHeight / 2. + safe_delta, 0, 0), make_float3(1, 0, 0), mat_type_drum);
+    top_bot_planes->SetFamily(drum_family);
+    auto planes_tracker = DEM_sim.Track(top_bot_planes);
 
     float step_size = 5e-6;
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 5e-11);

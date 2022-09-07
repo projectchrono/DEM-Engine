@@ -14,6 +14,12 @@ void doubleSumReduce(double* d_in, double* d_out, size_t n, cudaStream_t& this_s
 
 void floatSumReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
 
+void boolSumReduce(notStupidBool_t* d_in,
+                   size_t* d_out,
+                   size_t n,
+                   cudaStream_t& this_stream,
+                   DEMSolverStateData& scratchPad);
+
 void boolMaxReduce(notStupidBool_t* d_in,
                    notStupidBool_t* d_out,
                    size_t n,

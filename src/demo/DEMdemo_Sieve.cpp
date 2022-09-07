@@ -35,8 +35,8 @@ int main() {
     float min_relpos = -0.015;
     float max_relpos = 0.015;
 
-    auto mat_type_1 = DEM_sim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}});
-    auto mat_type_2 = DEM_sim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.3}});
+    auto mat_type_1 = DEM_sim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}});
+    auto mat_type_2 = DEM_sim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
 
     // First create clump type 0 for representing the sieve
     float sieve_sp_r = 0.05;
@@ -128,13 +128,17 @@ int main() {
     // BC family does not interact with the sieve
     DEM_sim.DisableContactBetweenFamilies(1, 2);
 
+    // Keep tab of the max velocity in simulation
+    auto max_v_finder = DEM_sim.CreateInspector("clump_max_absv");
+    float max_v;
+
     float step_size = 5e-6;
     DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
     DEM_sim.SetCoordSysOrigin("center");
     DEM_sim.SetInitTimeStep(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEM_sim.SetCDUpdateFreq(30);
-    DEM_sim.SetExpandFactor(6.0 * 30 * step_size);
+    DEM_sim.SetExpandFactor(20.0 * 30 * step_size);
     DEM_sim.SetExpandSafetyParam(1.0);
 
     DEM_sim.Initialize();
@@ -157,6 +161,8 @@ int main() {
             char filename[100];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
             DEM_sim.WriteSphereFile(std::string(filename));
+            max_v = max_v_finder->GetValue();
+            std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
         }
 
         DEM_sim.DoDynamics(step_size);

@@ -118,3 +118,8 @@ if (mu_cnt > 0.0) {
     force += tangent_force;
     // printf("tangent force: %f, %f, %f\n", tangent_force.x, tangent_force.y, tangent_force.z);
 }
+
+// Finally, make sure we update those wildcards (in this case, contact history)
+delta_tan_x = delta_tan.x;
+delta_tan_y = delta_tan.y;
+delta_tan_z = delta_tan.z;

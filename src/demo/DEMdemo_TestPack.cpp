@@ -274,9 +274,9 @@ void SphereStack() {
 
 int main() {
     // Choose a validation test by uncommenting it
-    // SphereRollUpIncline();
+    SphereRollUpIncline();
     // EllpsiodFallingOver();
-    SphereStack();
+    // SphereStack();
 
     std::cout << "DEMdemo_TestPack exiting..." << std::endl;
     return 0;

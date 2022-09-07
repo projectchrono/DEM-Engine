@@ -1150,7 +1150,7 @@ inline void DEMDynamicThread::migratePersistentContacts() {
     notStupidBool_t* contactSentry = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(3, sentry_bytes);
 
     // A sentry array is here to see if there exist a contact that dT thinks it's alive but kT doesn't map it to the new
-    // history array. This is just a quick and rough check: we only look at the first contact wildcard to see if it is
+    // history array. This is just a quick and rough check: we only look at the last contact wildcard to see if it is
     // non-0, whatever it represents.
     size_t blocks_needed_for_rearrange;
     if (verbosity >= DEM_VERBOSITY::STEP_METRIC) {
@@ -1164,7 +1164,8 @@ inline void DEMDynamicThread::migratePersistentContacts() {
                     .instantiate()
                     .configure(dim3(blocks_needed_for_rearrange), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0,
                                streamInfo.stream)
-                    .launch(granData->contactWildcards[0], contactSentry, *stateOfSolver_resources.pNumPrevContacts);
+                    .launch(granData->contactWildcards[simParams->nContactWildcards - 1], contactSentry,
+                            *stateOfSolver_resources.pNumPrevContacts);
                 GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
             }
         }
@@ -1185,24 +1186,23 @@ inline void DEMDynamicThread::migratePersistentContacts() {
     // Take a look, does the sentry indicate that there is an `alive' contact got lost?
     if (verbosity >= DEM_VERBOSITY::STEP_METRIC) {
         if (*stateOfSolver_resources.pNumPrevContacts > 0 && simParams->nContactWildcards > 0) {
-            notStupidBool_t* lostContact =
-                (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(4, sizeof(notStupidBool_t));
-            boolMaxReduce(contactSentry, lostContact, *stateOfSolver_resources.pNumPrevContacts, streamInfo.stream,
+            size_t* lostContact = (size_t*)stateOfSolver_resources.allocateTempVector(4, sizeof(size_t));
+            boolSumReduce(contactSentry, lostContact, *stateOfSolver_resources.pNumPrevContacts, streamInfo.stream,
                           stateOfSolver_resources);
             if (*lostContact && solverFlags.isAsync) {
                 SGPS_DEM_STEP_METRIC(
-                    "At least one contact is active at time %.9g on dT, but it is not detected on kT, therefore being "
+                    "%zu contacts were active at time %.9g on dT, but they are not detected on kT, therefore being "
                     "removed unexpectedly!",
-                    timeElapsed);
+                    *lostContact, timeElapsed);
                 SGPS_DEM_DEBUG_PRINTF("New contact A:");
                 SGPS_DEM_DEBUG_EXEC(
                     displayArray<bodyID_t>(granData->idGeometryA, *stateOfSolver_resources.pNumContacts));
                 SGPS_DEM_DEBUG_PRINTF("New contact B:");
                 SGPS_DEM_DEBUG_EXEC(
                     displayArray<bodyID_t>(granData->idGeometryB, *stateOfSolver_resources.pNumContacts));
-                SGPS_DEM_DEBUG_PRINTF("Old version of the first contact wildcard:");
-                SGPS_DEM_DEBUG_EXEC(
-                    displayArray<float>(granData->contactWildcards[0], *stateOfSolver_resources.pNumPrevContacts));
+                SGPS_DEM_DEBUG_PRINTF("Old version of the last contact wildcard:");
+                SGPS_DEM_DEBUG_EXEC(displayArray<float>(granData->contactWildcards[simParams->nContactWildcards - 1],
+                                                        *stateOfSolver_resources.pNumPrevContacts));
                 SGPS_DEM_DEBUG_PRINTF("Old--new mapping:");
                 SGPS_DEM_DEBUG_EXEC(
                     displayArray<contactPairs_t>(granData->contactMapping, *stateOfSolver_resources.pNumContacts));
@@ -1323,6 +1323,30 @@ inline void DEMDynamicThread::routineChecks() {
     }
 }
 
+inline void DEMDynamicThread::ifProduceFreshThenUseIt() {
+    if (pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
+        timers.GetTimer("Unpack updates from kT").start();
+        {
+            // Acquire lock and use the content of the dynamic-owned transfer buffer
+            std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
+            unpackMyBuffer();
+            // Leave myself a mental note that I just obtained new produce from kT
+            contactPairArr_isFresh = true;
+            // pSchedSupport->schedulingStats.nDynamicReceives++;
+        }
+        // dT got the produce, now mark its buffer to be no longer fresh
+        pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
+        pSchedSupport->stampLastUpdateOfDynamic = (pSchedSupport->currentStampOfDynamic).load();
+
+        // If this is a history-based run, then when contacts are received, we need to migrate the contact
+        // history info, to match the structure of the new contact array
+        if (!solverFlags.isHistoryless) {
+            migratePersistentContacts();
+        }
+        timers.GetTimer("Unpack updates from kT").stop();
+    }
+}
+
 void DEMDynamicThread::workerThread() {
     // Set the gpu for this thread
     GPU_CALL(cudaSetDevice(streamInfo.device));
@@ -1370,27 +1394,7 @@ void DEMDynamicThread::workerThread() {
 
         for (double cycle = 0.0; cycle < cycleDuration; cycle += simParams->h) {
             // If the produce is fresh, use it
-            if (pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
-                timers.GetTimer("Unpack updates from kT").start();
-                {
-                    // Acquire lock and use the content of the dynamic-owned transfer buffer
-                    std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
-                    unpackMyBuffer();
-                    // Leave myself a mental note that I just obtained new produce from kT
-                    contactPairArr_isFresh = true;
-                    // pSchedSupport->schedulingStats.nDynamicReceives++;
-                }
-                // dT got the produce, now mark its buffer to be no longer fresh
-                pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
-                pSchedSupport->stampLastUpdateOfDynamic = (pSchedSupport->currentStampOfDynamic).load();
-
-                // If this is a history-based run, then when contacts are received, we need to migrate the contact
-                // history info, to match the structure of the new contact array
-                if (!solverFlags.isHistoryless) {
-                    migratePersistentContacts();
-                }
-                timers.GetTimer("Unpack updates from kT").stop();
-            }
+            ifProduceFreshThenUseIt();
 
             // If using variable ts size, only when a step is accepted can we move on
             bool step_accepted = false;
@@ -1451,7 +1455,7 @@ void DEMDynamicThread::workerThread() {
             // also be chilling waiting for an update; but since it's at the end of a cycle, kT should got busy already
             // due to that kinematicOwned_Cons2ProdBuffer_isFresh got set to true just before.
 
-            // TODO: make changes for variable time step size cases
+            //// TODO: make changes for variable time step size cases
             timeElapsed += simParams->h;
 
             nTotalSteps++;

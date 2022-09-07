@@ -849,6 +849,10 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     strMap["_forceModelContactWildcardAcq_"] = wildcard_acquisition;
     strMap["_forceModelContactWildcardWrite_"] = wildcard_write_back;
     strMap["_forceModelContactWildcardDestroy_"] = wildcard_destroy_record;
+
+    SGPS_DEM_DEBUG_PRINTF("Wildcard acquisition:\n%s", wildcard_acquisition.c_str());
+    SGPS_DEM_DEBUG_PRINTF("Wildcard write-back:\n%s", wildcard_write_back.c_str());
+    SGPS_DEM_DEBUG_PRINTF("Wildcard destroy inactive:\n%s", wildcard_destroy_record.c_str());
 }
 
 inline void DEMSolver::equipFamilyOnFlyChanges(std::unordered_map<std::string, std::string>& strMap) {

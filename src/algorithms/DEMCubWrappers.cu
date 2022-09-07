@@ -106,15 +106,26 @@ inline void cubDEMReduceByKeys(T1* d_keys_in,
     GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
-template <typename T1, typename T2>
-void cubDEMSum(T1* d_in, T1* d_out, size_t n, cudaStream_t& this_stream, T2& scratchPad) {
+template <typename T1, typename T2, typename T3>
+void cubDEMSum(T1* d_in, T2* d_out, size_t n, cudaStream_t& this_stream, T3& scratchPad) {
     size_t cub_scratch_bytes = 0;
-    cub::DeviceReduce::Sum(NULL, cub_scratch_bytes, d_in, d_out, n, this_stream, false);
+    cub::DeviceReduce::Reduce(NULL, cub_scratch_bytes, d_in, d_out, n, cub::Sum(), (T2)0, this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
-    cub::DeviceReduce::Sum(d_scratch_space, cub_scratch_bytes, d_in, d_out, n, this_stream, false);
+    cub::DeviceReduce::Reduce(d_scratch_space, cub_scratch_bytes, d_in, d_out, n, cub::Sum(), (T2)0, this_stream,
+                              false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
 }
+
+// template <typename T1, typename T2>
+// void cubDEMSum(T1* d_in, T1* d_out, size_t n, cudaStream_t& this_stream, T2& scratchPad) {
+//     size_t cub_scratch_bytes = 0;
+//     cub::DeviceReduce::Sum(NULL, cub_scratch_bytes, d_in, d_out, n, this_stream, false);
+//     GPU_CALL(cudaStreamSynchronize(this_stream));
+//     void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
+//     cub::DeviceReduce::Sum(d_scratch_space, cub_scratch_bytes, d_in, d_out, n, this_stream, false);
+//     GPU_CALL(cudaStreamSynchronize(this_stream));
+// }
 
 template <typename T1, typename T2>
 void cubDEMMax(T1* d_in, T1* d_out, size_t n, cudaStream_t& this_stream, T2& scratchPad) {

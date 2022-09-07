@@ -501,6 +501,9 @@ class DEMDynamicThread {
     // Update clump pos/oriQ and vel/omega based on acceleration
     inline void integrateClumpMotions();
 
+    // If kT provides fresh CD results, we unpack and use it
+    inline void ifProduceFreshThenUseIt();
+
     // Some per-step checks/modification, done before integration, but after force calculation (thus sort of in the
     // mid-step stage)
     inline void routineChecks();
