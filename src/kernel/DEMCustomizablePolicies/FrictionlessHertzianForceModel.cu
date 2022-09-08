@@ -15,8 +15,8 @@ float3 rotVelCPA, rotVelCPB;
     rotVelCPA = cross(ARotVel, locCPA);
     rotVelCPB = cross(BRotVel, locCPB);
     // This is mapping from local rotational velocity to global
-    applyOriQToVector3<float, sgps::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AoriQ0, AoriQ1, AoriQ2, AoriQ3);
-    applyOriQToVector3<float, sgps::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
+    applyOriQToVector3<float, smug::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AoriQw, AoriQx, AoriQy, AoriQz);
+    applyOriQToVector3<float, smug::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BoriQw, BoriQx, BoriQy, BoriQz);
 }
 
 // The (total) relative linear velocity of A relative to B
@@ -27,11 +27,11 @@ const float mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
 float sqrt_Rd = sqrt(overlapDepth * (ARadius * BRadius) / (ARadius + BRadius));
 const float Sn = 2. * E_cnt * sqrt_Rd;
 
-const float loge = (CoR_cnt < SGPS_DEM_TINY_FLOAT) ? log(SGPS_DEM_TINY_FLOAT) : log(CoR_cnt);
-float beta = loge / sqrt(loge * loge + sgps::PI_SQUARED);
+const float loge = (CoR_cnt < SMUG_DEM_TINY_FLOAT) ? log(SMUG_DEM_TINY_FLOAT) : log(CoR_cnt);
+float beta = loge / sqrt(loge * loge + smug::PI_SQUARED);
 
-const float k_n = sgps::TWO_OVER_THREE * Sn;
-const float gamma_n = sgps::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
+const float k_n = smug::TWO_OVER_THREE * Sn;
+const float gamma_n = smug::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
 
 // normal force (that A feels)
 force += (k_n * overlapDepth + gamma_n * projection) * B2A;

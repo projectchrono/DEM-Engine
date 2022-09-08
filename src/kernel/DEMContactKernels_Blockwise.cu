@@ -12,26 +12,26 @@ _clumpTemplateDefs_;
 // Family mask, _nFamilyMaskEntries_ elements are in this array
 // __constant__ __device__ bool familyMasks[] = {_familyMasks_};
 
-__global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
-                                           sgps::DEMDataKT* granData,
-                                           sgps::bodyID_t* sphereIDsEachBinTouches_sorted,
-                                           sgps::binID_t* activeBinIDs,
-                                           sgps::spheresBinTouches_t* numSpheresBinTouches,
-                                           sgps::binSphereTouchPairs_t* sphereIDsLookUpTable,
-                                           sgps::spheresBinTouches_t* numContactsInEachBin,
+__global__ void getNumberOfContactsEachBin(smug::DEMSimParams* simParams,
+                                           smug::DEMDataKT* granData,
+                                           smug::bodyID_t* sphereIDsEachBinTouches_sorted,
+                                           smug::binID_t* activeBinIDs,
+                                           smug::spheresBinTouches_t* numSpheresBinTouches,
+                                           smug::binSphereTouchPairs_t* sphereIDsLookUpTable,
+                                           smug::spheresBinTouches_t* numContactsInEachBin,
                                            size_t nActiveBins) {
     // shared storage for bodies involved in this bin. Pre-allocated so that each threads can easily use.
-    __shared__ sgps::bodyID_t ownerIDs[SGPS_DEM_MAX_SPHERES_PER_BIN];
-    __shared__ float radii[SGPS_DEM_MAX_SPHERES_PER_BIN];
-    __shared__ double bodyX[SGPS_DEM_MAX_SPHERES_PER_BIN];
-    __shared__ double bodyY[SGPS_DEM_MAX_SPHERES_PER_BIN];
-    __shared__ double bodyZ[SGPS_DEM_MAX_SPHERES_PER_BIN];
-    __shared__ sgps::family_t ownerFamilies[SGPS_DEM_MAX_SPHERES_PER_BIN];
+    __shared__ smug::bodyID_t ownerIDs[SMUG_DEM_MAX_SPHERES_PER_BIN];
+    __shared__ float radii[SMUG_DEM_MAX_SPHERES_PER_BIN];
+    __shared__ double bodyX[SMUG_DEM_MAX_SPHERES_PER_BIN];
+    __shared__ double bodyY[SMUG_DEM_MAX_SPHERES_PER_BIN];
+    __shared__ double bodyZ[SMUG_DEM_MAX_SPHERES_PER_BIN];
+    __shared__ smug::family_t ownerFamilies[SMUG_DEM_MAX_SPHERES_PER_BIN];
 
-    typedef cub::BlockReduce<sgps::spheresBinTouches_t, SGPS_DEM_MAX_SPHERES_PER_BIN> BlockReduceT;
+    typedef cub::BlockReduce<smug::spheresBinTouches_t, SMUG_DEM_MAX_SPHERES_PER_BIN> BlockReduceT;
     __shared__ typename BlockReduceT::TempStorage temp_storage;
 
-    const sgps::spheresBinTouches_t nBodiesInBin = numSpheresBinTouches[blockIdx.x];
+    const smug::spheresBinTouches_t nBodiesInBin = numSpheresBinTouches[blockIdx.x];
     if (nBodiesInBin <= 1) {
         // Important: mark 0 contacts before exiting
         if (threadIdx.x == 0) {
@@ -39,17 +39,17 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
         }
         return;
     }
-    if (threadIdx.x == 0 && nBodiesInBin > SGPS_DEM_MAX_SPHERES_PER_BIN) {
-        SGPS_DEM_ABORT_KERNEL("Bin %u contains %u sphere components, exceeding maximum allowance (%u)\n", blockIdx.x,
-                              nBodiesInBin, SGPS_DEM_MAX_SPHERES_PER_BIN);
+    if (threadIdx.x == 0 && nBodiesInBin > SMUG_DEM_MAX_SPHERES_PER_BIN) {
+        SMUG_DEM_ABORT_KERNEL("Bin %u contains %u sphere components, exceeding maximum allowance (%u)\n", blockIdx.x,
+                              nBodiesInBin, SMUG_DEM_MAX_SPHERES_PER_BIN);
     }
-    const sgps::binID_t binID = activeBinIDs[blockIdx.x];
-    sgps::spheresBinTouches_t myThreadID = threadIdx.x;
-    const sgps::binSphereTouchPairs_t thisBodiesTableEntry = sphereIDsLookUpTable[blockIdx.x];
+    const smug::binID_t binID = activeBinIDs[blockIdx.x];
+    smug::spheresBinTouches_t myThreadID = threadIdx.x;
+    const smug::binSphereTouchPairs_t thisBodiesTableEntry = sphereIDsLookUpTable[blockIdx.x];
     // If I need to work on shared memory allocation
     if (myThreadID < nBodiesInBin) {
-        sgps::bodyID_t sphereID = sphereIDsEachBinTouches_sorted[thisBodiesTableEntry + myThreadID];
-        sgps::bodyID_t ownerID = granData->ownerClumpBody[sphereID];
+        smug::bodyID_t sphereID = sphereIDsEachBinTouches_sorted[thisBodiesTableEntry + myThreadID];
+        smug::bodyID_t ownerID = granData->ownerClumpBody[sphereID];
         ownerIDs[myThreadID] = ownerID;
         ownerFamilies[myThreadID] = granData->familyID[ownerID];
         double ownerX, ownerY, ownerZ;
@@ -63,14 +63,14 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
             myRadius += simParams->beta;
         }
 
-        voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
+        voxelID2Position<double, smug::voxelID_t, smug::subVoxelPos_t>(
             ownerX, ownerY, ownerZ, granData->voxelID[ownerID], granData->locX[ownerID], granData->locY[ownerID],
             granData->locZ[ownerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-        float myOriQ0 = granData->oriQw[ownerID];
-        float myOriQ1 = granData->oriQx[ownerID];
-        float myOriQ2 = granData->oriQy[ownerID];
-        float myOriQ3 = granData->oriQz[ownerID];
-        applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2, myOriQ3);
+        float myOriQw = granData->oriQw[ownerID];
+        float myOriQx = granData->oriQx[ownerID];
+        float myOriQy = granData->oriQy[ownerID];
+        float myOriQz = granData->oriQz[ownerID];
+        applyOriQToVector3<float, smug::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQw, myOriQx, myOriQy, myOriQz);
         bodyX[myThreadID] = ownerX + (double)myRelPosX;
         bodyY[myThreadID] = ownerY + (double)myRelPosY;
         bodyZ[myThreadID] = ownerZ + (double)myRelPosZ;
@@ -83,9 +83,9 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
     // Note this distribution is not even, but we need all active threads to process the same amount of pairs, so that
     // each thread can easily know its offset
     const unsigned int nPairsEachHandles =
-        (nPairsNeedHandling + SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK - 1) / SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK;
+        (nPairsNeedHandling + SMUG_DEM_KT_CD_NTHREADS_PER_BLOCK - 1) / SMUG_DEM_KT_CD_NTHREADS_PER_BLOCK;
     {
-        sgps::spheresBinTouches_t contact_count = 0;
+        smug::spheresBinTouches_t contact_count = 0;
         // i, j are local sphere number in bin
         unsigned int bodyA, bodyB;
         // We can stop if this thread reaches the end of all potential pairs, nPairsNeedHandling
@@ -102,7 +102,7 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
             unsigned int bodyBFamily = ownerFamilies[bodyB];
             unsigned int maskMatID = locateMaskPair<unsigned int>(bodyAFamily, bodyBFamily);
             // If marked no contact, skip ths iteration
-            if (granData->familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
+            if (granData->familyMasks[maskMatID] != smug::DEM_DONT_PREVENT_CONTACT) {
                 continue;
             }
 
@@ -113,7 +113,7 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
             in_contact = checkSpheresOverlap<double>(bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], radii[bodyA],
                                                      bodyX[bodyB], bodyY[bodyB], bodyZ[bodyB], radii[bodyB],
                                                      contactPntX, contactPntY, contactPntZ);
-            sgps::binID_t contactPntBin = getPointBinID<sgps::binID_t>(
+            smug::binID_t contactPntBin = getPointBinID<smug::binID_t>(
                 contactPntX, contactPntY, contactPntZ, simParams->binSize, simParams->nbX, simParams->nbY);
 
             /*
@@ -135,51 +135,51 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
             }
         }
         __syncthreads();
-        sgps::spheresBinTouches_t total_count = BlockReduceT(temp_storage).Sum(contact_count);
+        smug::spheresBinTouches_t total_count = BlockReduceT(temp_storage).Sum(contact_count);
         if (myThreadID == 0) {
             numContactsInEachBin[blockIdx.x] = total_count;
         }
     }
 }
 
-__global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
-                                            sgps::DEMDataKT* granData,
-                                            sgps::bodyID_t* sphereIDsEachBinTouches_sorted,
-                                            sgps::binID_t* activeBinIDs,
-                                            sgps::spheresBinTouches_t* numSpheresBinTouches,
-                                            sgps::binSphereTouchPairs_t* sphereIDsLookUpTable,
-                                            sgps::contactPairs_t* contactReportOffsets,
-                                            sgps::bodyID_t* idSphA,
-                                            sgps::bodyID_t* idSphB,
+__global__ void populateContactPairsEachBin(smug::DEMSimParams* simParams,
+                                            smug::DEMDataKT* granData,
+                                            smug::bodyID_t* sphereIDsEachBinTouches_sorted,
+                                            smug::binID_t* activeBinIDs,
+                                            smug::spheresBinTouches_t* numSpheresBinTouches,
+                                            smug::binSphereTouchPairs_t* sphereIDsLookUpTable,
+                                            smug::contactPairs_t* contactReportOffsets,
+                                            smug::bodyID_t* idSphA,
+                                            smug::bodyID_t* idSphB,
                                             size_t nActiveBins) {
     // shared storage for bodies involved in this bin. Pre-allocated so that each threads can easily use.
-    __shared__ sgps::bodyID_t ownerIDs[SGPS_DEM_MAX_SPHERES_PER_BIN];
-    __shared__ sgps::bodyID_t bodyIDs[SGPS_DEM_MAX_SPHERES_PER_BIN];
-    __shared__ float radii[SGPS_DEM_MAX_SPHERES_PER_BIN];
-    __shared__ double bodyX[SGPS_DEM_MAX_SPHERES_PER_BIN];
-    __shared__ double bodyY[SGPS_DEM_MAX_SPHERES_PER_BIN];
-    __shared__ double bodyZ[SGPS_DEM_MAX_SPHERES_PER_BIN];
-    __shared__ sgps::family_t ownerFamilies[SGPS_DEM_MAX_SPHERES_PER_BIN];
+    __shared__ smug::bodyID_t ownerIDs[SMUG_DEM_MAX_SPHERES_PER_BIN];
+    __shared__ smug::bodyID_t bodyIDs[SMUG_DEM_MAX_SPHERES_PER_BIN];
+    __shared__ float radii[SMUG_DEM_MAX_SPHERES_PER_BIN];
+    __shared__ double bodyX[SMUG_DEM_MAX_SPHERES_PER_BIN];
+    __shared__ double bodyY[SMUG_DEM_MAX_SPHERES_PER_BIN];
+    __shared__ double bodyZ[SMUG_DEM_MAX_SPHERES_PER_BIN];
+    __shared__ smug::family_t ownerFamilies[SMUG_DEM_MAX_SPHERES_PER_BIN];
     __shared__ unsigned int blockPairCnt;
 
-    // typedef cub::BlockScan<sgps::spheresBinTouches_t, SGPS_DEM_MAX_SPHERES_PER_BIN> BlockScanT;
+    // typedef cub::BlockScan<smug::spheresBinTouches_t, SMUG_DEM_MAX_SPHERES_PER_BIN> BlockScanT;
     // __shared__ typename BlockScanT::TempStorage temp_storage;
 
-    const sgps::spheresBinTouches_t nBodiesInBin = numSpheresBinTouches[blockIdx.x];
+    const smug::spheresBinTouches_t nBodiesInBin = numSpheresBinTouches[blockIdx.x];
     if (nBodiesInBin <= 1) {
         return;
     }
     // No need to check max spheres one more time
 
-    const sgps::binID_t binID = activeBinIDs[blockIdx.x];
-    sgps::spheresBinTouches_t myThreadID = threadIdx.x;
-    const sgps::binSphereTouchPairs_t thisBodiesTableEntry = sphereIDsLookUpTable[blockIdx.x];
+    const smug::binID_t binID = activeBinIDs[blockIdx.x];
+    smug::spheresBinTouches_t myThreadID = threadIdx.x;
+    const smug::binSphereTouchPairs_t thisBodiesTableEntry = sphereIDsLookUpTable[blockIdx.x];
     // If I need to work on shared memory allocation
     if (myThreadID < nBodiesInBin) {
         if (myThreadID == 0)
             blockPairCnt = 0;
-        sgps::bodyID_t sphereID = sphereIDsEachBinTouches_sorted[thisBodiesTableEntry + myThreadID];
-        sgps::bodyID_t ownerID = granData->ownerClumpBody[sphereID];
+        smug::bodyID_t sphereID = sphereIDsEachBinTouches_sorted[thisBodiesTableEntry + myThreadID];
+        smug::bodyID_t ownerID = granData->ownerClumpBody[sphereID];
         bodyIDs[myThreadID] = sphereID;
         ownerIDs[myThreadID] = ownerID;
         ownerFamilies[myThreadID] = granData->familyID[ownerID];
@@ -194,14 +194,14 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
             myRadius += simParams->beta;
         }
 
-        voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
+        voxelID2Position<double, smug::voxelID_t, smug::subVoxelPos_t>(
             ownerX, ownerY, ownerZ, granData->voxelID[ownerID], granData->locX[ownerID], granData->locY[ownerID],
             granData->locZ[ownerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-        float myOriQ0 = granData->oriQw[ownerID];
-        float myOriQ1 = granData->oriQx[ownerID];
-        float myOriQ2 = granData->oriQy[ownerID];
-        float myOriQ3 = granData->oriQz[ownerID];
-        applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2, myOriQ3);
+        float myOriQw = granData->oriQw[ownerID];
+        float myOriQx = granData->oriQx[ownerID];
+        float myOriQy = granData->oriQy[ownerID];
+        float myOriQz = granData->oriQz[ownerID];
+        applyOriQToVector3<float, smug::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQw, myOriQx, myOriQy, myOriQz);
         bodyX[myThreadID] = ownerX + (double)myRelPosX;
         bodyY[myThreadID] = ownerY + (double)myRelPosY;
         bodyZ[myThreadID] = ownerZ + (double)myRelPosZ;
@@ -210,17 +210,17 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
     __syncthreads();
 
     // Get my offset for writing back to the global arrays that contain contact pair info
-    sgps::contactPairs_t myReportOffset = contactReportOffsets[blockIdx.x];
+    smug::contactPairs_t myReportOffset = contactReportOffsets[blockIdx.x];
     // We have n * (n - 1) / 2 pairs to compare. To ensure even workload, these pairs are distributed to all threads.
     const unsigned int nPairsNeedHandling = (unsigned int)nBodiesInBin * ((unsigned int)nBodiesInBin - 1) / 2;
     // Note this distribution is not even, but we need all active threads to process the same amount of pairs, so that
     // each thread can easily know its offset
     const unsigned int nPairsEachHandles =
-        (nPairsNeedHandling + SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK - 1) / SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK;
+        (nPairsNeedHandling + SMUG_DEM_KT_CD_NTHREADS_PER_BLOCK - 1) / SMUG_DEM_KT_CD_NTHREADS_PER_BLOCK;
 
     // First figure out blockwise report offset. Meaning redoing the previous kernel
     // Blockwise report offset
-    // sgps::spheresBinTouches_t blockwise_offset;
+    // smug::spheresBinTouches_t blockwise_offset;
     {
         // blockwise_offset = 0;
         // i, j are local sphere number in bin
@@ -239,7 +239,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
             unsigned int bodyBFamily = ownerFamilies[bodyB];
             unsigned int maskMatID = locateMaskPair<unsigned int>(bodyAFamily, bodyBFamily);
             // If marked no contact, skip ths iteration
-            if (granData->familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
+            if (granData->familyMasks[maskMatID] != smug::DEM_DONT_PREVENT_CONTACT) {
                 continue;
             }
 
@@ -250,7 +250,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
             in_contact = checkSpheresOverlap<double>(bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], radii[bodyA],
                                                      bodyX[bodyB], bodyY[bodyB], bodyZ[bodyB], radii[bodyB],
                                                      contactPntX, contactPntY, contactPntZ);
-            sgps::binID_t contactPntBin = getPointBinID<sgps::binID_t>(
+            smug::binID_t contactPntBin = getPointBinID<smug::binID_t>(
                 contactPntX, contactPntY, contactPntZ, simParams->binSize, simParams->nbX, simParams->nbY);
 
             if (in_contact && (contactPntBin == binID)) {
@@ -285,7 +285,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
     //         unsigned int bodyBFamily = ownerFamilies[bodyB];
     //         unsigned int maskMatID = locateMaskPair<unsigned int>(bodyAFamily, bodyBFamily);
     //         // If marked no contact, skip ths iteration
-    //         if (granData->familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
+    //         if (granData->familyMasks[maskMatID] != smug::DEM_DONT_PREVENT_CONTACT) {
     //             continue;
     //         }
 
@@ -296,7 +296,7 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
     //         in_contact = checkSpheresOverlap<double>(
     //             bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], CDRadii[compOffsets[bodyA]], bodyX[bodyB], bodyY[bodyB],
     //             bodyZ[bodyB], CDRadii[compOffsets[bodyB]], contactPntX, contactPntY, contactPntZ);
-    //         sgps::binID_t contactPntBin = getPointBinID<sgps::binID_t>(
+    //         smug::binID_t contactPntBin = getPointBinID<smug::binID_t>(
     //             contactPntX, contactPntY, contactPntZ, simParams->binSize, simParams->nbX, simParams->nbY);
 
     //         if (in_contact && (contactPntBin == binID)) {

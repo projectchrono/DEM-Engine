@@ -1,8 +1,8 @@
 // SPH-DualGPU
 // SPH system base class header
 
-#ifndef SGPS_SPH_SYSTEM_H
-#define SGPS_SPH_SYSTEM_H
+#ifndef SMUG_SPH_SYSTEM_H
+#define SMUG_SPH_SYSTEM_H
 
 #include <fstream>
 #include <iostream>
@@ -22,20 +22,20 @@ struct DataManager {
     float rho_0;
     float c;
     int k_n;  // total number of particles -> this number will not change as simulation proceeds
-    std::vector<float3, sgps::ManagedAllocator<float3>> m_pos;     // particle locations
-    std::vector<float3, sgps::ManagedAllocator<float3>> m_vel;     // particle velocities
-    std::vector<float3, sgps::ManagedAllocator<float3>> m_acc;     // particle accelerations
-    std::vector<char, sgps::ManagedAllocator<char>> m_fix;         // particle fixity
-    std::vector<int, sgps::ManagedAllocator<int>> m_idx;           // particle l2 domain idx
-    std::vector<int, sgps::ManagedAllocator<int>> m_offset;        // index offset array for the contact pair data
-    std::vector<float, sgps::ManagedAllocator<float>> m_rho;       // density of each particle location
-    std::vector<float, sgps::ManagedAllocator<float>> m_pressure;  // pressure associated with each particle
+    std::vector<float3, smug::ManagedAllocator<float3>> m_pos;     // particle locations
+    std::vector<float3, smug::ManagedAllocator<float3>> m_vel;     // particle velocities
+    std::vector<float3, smug::ManagedAllocator<float3>> m_acc;     // particle accelerations
+    std::vector<char, smug::ManagedAllocator<char>> m_fix;         // particle fixity
+    std::vector<int, smug::ManagedAllocator<int>> m_idx;           // particle l2 domain idx
+    std::vector<int, smug::ManagedAllocator<int>> m_offset;        // index offset array for the contact pair data
+    std::vector<float, smug::ManagedAllocator<float>> m_rho;       // density of each particle location
+    std::vector<float, smug::ManagedAllocator<float>> m_pressure;  // pressure associated with each particle
 
     // collision data
     int m_tot_collision;                                           // total number of collisions
-    std::vector<int, sgps::ManagedAllocator<int>> m_pair_i;        // i particle of collision pair
-    std::vector<int, sgps::ManagedAllocator<int>> m_pair_j;        // j particle of collision pair
-    std::vector<float3, sgps::ManagedAllocator<float3>> m_W_grad;  // w gradient for each collision pair
+    std::vector<int, smug::ManagedAllocator<int>> m_pair_i;        // i particle of collision pair
+    std::vector<int, smug::ManagedAllocator<int>> m_pair_j;        // j particle of collision pair
+    std::vector<float3, smug::ManagedAllocator<float3>> m_W_grad;  // w gradient for each collision pair
 };
 
 class SPHSystem;

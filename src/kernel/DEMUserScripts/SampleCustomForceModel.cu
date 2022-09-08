@@ -25,8 +25,8 @@ float3 rotVelCPA, rotVelCPB;
     rotVelCPA = cross(ARotVel, locCPA);
     rotVelCPB = cross(BRotVel, locCPB);
     // This is mapping from local rotational velocity to global
-    applyOriQToVector3<float, sgps::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AoriQ0, AoriQ1, AoriQ2, AoriQ3);
-    applyOriQToVector3<float, sgps::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
+    applyOriQToVector3<float, smug::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AoriQw, AoriQx, AoriQy, AoriQz);
+    applyOriQToVector3<float, smug::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BoriQw, BoriQx, BoriQy, BoriQz);
 }
 
 // A few re-usables
@@ -53,11 +53,11 @@ float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
     sqrt_Rd = sqrt(overlapDepth * (ARadius * BRadius) / (ARadius + BRadius));
     const float Sn = 2. * E_cnt * sqrt_Rd;
 
-    const float loge = (CoR_cnt < SGPS_DEM_TINY_FLOAT) ? log(SGPS_DEM_TINY_FLOAT) : log(CoR_cnt);
-    beta = loge / sqrt(loge * loge + sgps::PI_SQUARED);
+    const float loge = (CoR_cnt < SMUG_DEM_TINY_FLOAT) ? log(SMUG_DEM_TINY_FLOAT) : log(CoR_cnt);
+    beta = loge / sqrt(loge * loge + smug::PI_SQUARED);
 
-    const float k_n = sgps::TWO_OVER_THREE * Sn;
-    const float gamma_n = sgps::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
+    const float k_n = smug::TWO_OVER_THREE * Sn;
+    const float gamma_n = smug::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
 
     force += (k_n * overlapDepth + gamma_n * projection) * B2A;
     // printf("normal force: %f, %f, %f\n", force.x, force.y, force.z);
@@ -66,10 +66,10 @@ float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
 // Tangential force part
 if (mu_cnt > 0.0) {
     const float kt = 8. * G_cnt * sqrt_Rd;
-    const float gt = -sgps::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
+    const float gt = -smug::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
     float3 tangent_force = -kt * delta_tan - gt * vrel_tan;
     const float ft = length(tangent_force);
-    if (ft > SGPS_DEM_TINY_FLOAT) {
+    if (ft > SMUG_DEM_TINY_FLOAT) {
         // Reverse-engineer to get tangential displacement
         const float ft_max = length(force) * mu_cnt;
         if (ft > ft_max) {

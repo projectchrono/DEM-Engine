@@ -7,7 +7,7 @@
 
 #include <core/ApiVersion.h>
 
-namespace sgps {
+namespace smug {
 
 void versionInfo() {
 	// Project Info
@@ -18,4 +18,4 @@ void versionInfo() {
 	std::cout << "C++ Standard Revision: " << __cplusplus << std::endl;
 }
 
-} // namespace sgps
+} // namespace smug

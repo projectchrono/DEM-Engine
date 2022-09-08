@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SGPS_DEM_MODEL_STASH
-#define SGPS_DEM_MODEL_STASH
+#ifndef SMUG_DEM_MODEL_STASH
+#define SMUG_DEM_MODEL_STASH
 
 #include <cstring>
 #include <cmath>
@@ -15,7 +15,7 @@
 #include <DEM/DEMStructs.h>
 #include <DEM/HostSideHelpers.hpp>
 
-namespace sgps {
+namespace smug {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Contact force model storage files
@@ -25,7 +25,7 @@ inline std::string DEM_HERTZIAN_FORCE_MODEL() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "FullHertzianForceModel.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SGPS_DEM_ERROR("The force model file %s is not found.", sourcefile.c_str());
+        SMUG_DEM_ERROR("The force model file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -34,7 +34,7 @@ inline std::string DEM_HERTZIAN_FORCE_MODEL_FRICTIONLESS() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "FrictionlessHertzianForceModel.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SGPS_DEM_ERROR("The force model file %s is not found.", sourcefile.c_str());
+        SMUG_DEM_ERROR("The force model file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -47,7 +47,7 @@ inline std::string DEM_CLUMP_COMPONENT_ACQUISITION_ALL_JITIFIED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "ClumpCompAcqStratAllJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SGPS_DEM_ERROR("The clump component jitification strategy file %s is not found.", sourcefile.c_str());
+        SMUG_DEM_ERROR("The clump component jitification strategy file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -56,7 +56,7 @@ inline std::string DEM_CLUMP_COMPONENT_ACQUISITION_PARTIALLY_JITIFIED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "ClumpCompAcqStratPartialJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SGPS_DEM_ERROR("The clump component jitification strategy file %s is not found.", sourcefile.c_str());
+        SMUG_DEM_ERROR("The clump component jitification strategy file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -65,7 +65,7 @@ inline std::string DEM_CLUMP_COMPONENT_DEFINITIONS_JITIFIED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "ClumpCompDefJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SGPS_DEM_ERROR("The jitified clump component array file %s is not found.", sourcefile.c_str());
+        SMUG_DEM_ERROR("The jitified clump component array file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -74,7 +74,7 @@ inline std::string DEM_CLUMP_COMPONENT_ACQUISITION_FLATTENED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "ClumpCompAcqStratAllFlatten.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SGPS_DEM_ERROR("The clump component loading strategy file %s is not found.", sourcefile.c_str());
+        SMUG_DEM_ERROR("The clump component loading strategy file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -87,7 +87,7 @@ inline std::string DEM_ANALYTICAL_COMPONENT_DEFINITIONS_JITIFIED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "AnalyticalCompDefJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SGPS_DEM_ERROR("The jitified analytical object component array file %s is not found.", sourcefile.c_str());
+        SMUG_DEM_ERROR("The jitified analytical object component array file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -100,7 +100,7 @@ inline std::string DEM_MASS_DEFINITIONS_JITIFIED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "MassDefJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SGPS_DEM_ERROR("The mass property array file %s is not found.", sourcefile.c_str());
+        SMUG_DEM_ERROR("The mass property array file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -109,7 +109,7 @@ inline std::string DEM_MOI_DEFINITIONS_JITIFIED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "MOIDefJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SGPS_DEM_ERROR("The MOI property array file %s is not found.", sourcefile.c_str());
+        SMUG_DEM_ERROR("The MOI property array file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -118,7 +118,7 @@ inline std::string DEM_MASS_ACQUISITION_JITIFIED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "MassAcqStratJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SGPS_DEM_ERROR("The mass loading strategy array file %s is not found.", sourcefile.c_str());
+        SMUG_DEM_ERROR("The mass loading strategy array file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -127,7 +127,7 @@ inline std::string DEM_MASS_ACQUISITION_FLATTENED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "MassAcqStratFlatten.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SGPS_DEM_ERROR("The mass loading strategy array file %s is not found.", sourcefile.c_str());
+        SMUG_DEM_ERROR("The mass loading strategy array file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -136,7 +136,7 @@ inline std::string DEM_MOI_ACQUISITION_JITIFIED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "MOIAcqStratJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SGPS_DEM_ERROR("The MOI loading strategy array file %s is not found.", sourcefile.c_str());
+        SMUG_DEM_ERROR("The MOI loading strategy array file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -145,7 +145,7 @@ inline std::string DEM_MOI_ACQUISITION_FLATTENED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "MOIAcqStratFlatten.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SGPS_DEM_ERROR("The MOI loading strategy array file %s is not found.", sourcefile.c_str());
+        SMUG_DEM_ERROR("The MOI loading strategy array file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -163,11 +163,11 @@ inline void equip_force_model_ingr_acq(std::string& definition,
         definition += "float ts = simParams->h;\n";
     }
     if (any_whole_word_match(model, {"AOwnerFamily"})) {
-        definition += "sgps::family_t AOwnerFamily;\n";
+        definition += "smug::family_t AOwnerFamily;\n";
         acquisition_A += "AOwnerFamily = granData->familyID[myOwner];\n";
     }
     if (any_whole_word_match(model, {"BOwnerFamily"})) {
-        definition += "sgps::family_t BOwnerFamily;\n";
+        definition += "smug::family_t BOwnerFamily;\n";
         acquisition_B += "BOwnerFamily = granData->familyID[myOwner];\n";
     }
     if (any_whole_word_match(model, {"ALinVel", "BLinVel"})) {
@@ -212,6 +212,6 @@ inline void equip_contact_wildcards(std::string& acquisition,
     }
 }
 
-}  // namespace sgps
+}  // namespace smug
 
 #endif

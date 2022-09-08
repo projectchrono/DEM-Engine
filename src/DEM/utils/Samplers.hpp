@@ -30,8 +30,8 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SGPS_DEM_SAMPLERS_HPP
-#define SGPS_DEM_SAMPLERS_HPP
+#ifndef SMUG_DEM_SAMPLERS_HPP
+#define SMUG_DEM_SAMPLERS_HPP
 
 #include <cmath>
 #include <list>
@@ -40,7 +40,7 @@
 #include <vector>
 #include <DEM/HostSideHelpers.hpp>
 
-namespace sgps {
+namespace smug {
 
 /// Volumetric sampling method.
 enum class SamplingType {
@@ -268,6 +268,6 @@ inline std::vector<float3> DEMCylSurfSampler(float3 CylCenter,
     return points;
 }
 
-}  // namespace sgps
+}  // namespace smug
 
 #endif

@@ -12,7 +12,7 @@ inline __device__ void applyPrescribedVel(bool& LinPrescribed,
                                           T2& omgBarX,
                                           T2& omgBarY,
                                           T2& omgBarZ,
-                                          const sgps::family_t& family,
+                                          const smug::family_t& family,
                                           const float& t) {
     switch (family) {
         _velPrescriptionStrategy_;
@@ -33,7 +33,7 @@ inline __device__ void applyPrescribedPos(bool& LinPrescribed,
                                           T2& oriQx,
                                           T2& oriQy,
                                           T2& oriQz,
-                                          const sgps::family_t& family,
+                                          const smug::family_t& family,
                                           const float& t) {
     switch (family) {
         _posPrescriptionStrategy_;
@@ -43,12 +43,12 @@ inline __device__ void applyPrescribedPos(bool& LinPrescribed,
     }
 }
 
-inline __device__ void integrateVel(sgps::bodyID_t thisClump,
-                                    sgps::DEMSimParams* simParams,
-                                    sgps::DEMDataDT* granData,
+inline __device__ void integrateVel(smug::bodyID_t thisClump,
+                                    smug::DEMSimParams* simParams,
+                                    smug::DEMDataDT* granData,
                                     float h,
                                     float t) {
-    sgps::family_t family_code = granData->familyID[thisClump];
+    smug::family_t family_code = granData->familyID[thisClump];
     bool LinPrescribed = false, RotPrescribed = false;
     applyPrescribedVel<float, float>(LinPrescribed, RotPrescribed, granData->vX[thisClump], granData->vY[thisClump],
                                      granData->vZ[thisClump], granData->omgBarX[thisClump],
@@ -67,34 +67,34 @@ inline __device__ void integrateVel(sgps::bodyID_t thisClump,
     }
 }
 
-inline __device__ void locateNewVoxel(sgps::voxelID_t& voxel, int64_t& locX_tmp, int64_t& locY_tmp, int64_t& locZ_tmp) {
-    sgps::voxelID_t voxelX;
-    sgps::voxelID_t voxelY;
-    sgps::voxelID_t voxelZ;
-    IDChopper<sgps::voxelID_t, sgps::voxelID_t>(voxelX, voxelY, voxelZ, voxel, _nvXp2_, _nvYp2_);
+inline __device__ void locateNewVoxel(smug::voxelID_t& voxel, int64_t& locX_tmp, int64_t& locY_tmp, int64_t& locZ_tmp) {
+    smug::voxelID_t voxelX;
+    smug::voxelID_t voxelY;
+    smug::voxelID_t voxelZ;
+    IDChopper<smug::voxelID_t, smug::voxelID_t>(voxelX, voxelY, voxelZ, voxel, _nvXp2_, _nvYp2_);
 
     // DEM_MAX_SUBVOXEL is int64 and large enough to handle DEM_VOXEL_RES_POWER2 == 16 or 32
-    voxelX += div_floor<int64_t, int64_t>(locX_tmp, sgps::DEM_MAX_SUBVOXEL);
-    voxelY += div_floor<int64_t, int64_t>(locY_tmp, sgps::DEM_MAX_SUBVOXEL);
-    voxelZ += div_floor<int64_t, int64_t>(locZ_tmp, sgps::DEM_MAX_SUBVOXEL);
-    locX_tmp = mod_floor<int64_t, int64_t>(locX_tmp, sgps::DEM_MAX_SUBVOXEL);
-    locY_tmp = mod_floor<int64_t, int64_t>(locY_tmp, sgps::DEM_MAX_SUBVOXEL);
-    locZ_tmp = mod_floor<int64_t, int64_t>(locZ_tmp, sgps::DEM_MAX_SUBVOXEL);
+    voxelX += div_floor<int64_t, int64_t>(locX_tmp, smug::DEM_MAX_SUBVOXEL);
+    voxelY += div_floor<int64_t, int64_t>(locY_tmp, smug::DEM_MAX_SUBVOXEL);
+    voxelZ += div_floor<int64_t, int64_t>(locZ_tmp, smug::DEM_MAX_SUBVOXEL);
+    locX_tmp = mod_floor<int64_t, int64_t>(locX_tmp, smug::DEM_MAX_SUBVOXEL);
+    locY_tmp = mod_floor<int64_t, int64_t>(locY_tmp, smug::DEM_MAX_SUBVOXEL);
+    locZ_tmp = mod_floor<int64_t, int64_t>(locZ_tmp, smug::DEM_MAX_SUBVOXEL);
 
     // TODO: Should add a check here where, if negative voxel component spotted, stop the simulation
 
-    IDPacker<sgps::voxelID_t, sgps::voxelID_t>(voxel, voxelX, voxelY, voxelZ, _nvXp2_, _nvYp2_);
+    IDPacker<smug::voxelID_t, smug::voxelID_t>(voxel, voxelX, voxelY, voxelZ, _nvXp2_, _nvYp2_);
 }
 
-inline __device__ void integratePos(sgps::bodyID_t thisClump, sgps::DEMDataDT* granData, float h, float t) {
+inline __device__ void integratePos(smug::bodyID_t thisClump, smug::DEMDataDT* granData, float h, float t) {
     // Location accuracy is up to integer level anyway
     int64_t locX_tmp = (int64_t)granData->locX[thisClump];
     int64_t locY_tmp = (int64_t)granData->locY[thisClump];
     int64_t locZ_tmp = (int64_t)granData->locZ[thisClump];
 
-    sgps::family_t family_code = granData->familyID[thisClump];
+    smug::family_t family_code = granData->familyID[thisClump];
     bool LinPrescribed = false, RotPrescribed = false;
-    applyPrescribedPos<int64_t, sgps::oriQ_t>(
+    applyPrescribedPos<int64_t, smug::oriQ_t>(
         LinPrescribed, RotPrescribed, locX_tmp, locY_tmp, locZ_tmp, granData->oriQw[thisClump],
         granData->oriQx[thisClump], granData->oriQy[thisClump], granData->oriQz[thisClump], family_code, (float)t);
 
@@ -102,7 +102,7 @@ inline __device__ void integratePos(sgps::bodyID_t thisClump, sgps::DEMDataDT* g
         locX_tmp += (int64_t)((double)granData->vX[thisClump] / _l_ * h);
         locY_tmp += (int64_t)((double)granData->vY[thisClump] / _l_ * h);
         locZ_tmp += (int64_t)((double)granData->vZ[thisClump] / _l_ * h);
-        sgps::voxelID_t newVoxel = granData->voxelID[thisClump];
+        smug::voxelID_t newVoxel = granData->voxelID[thisClump];
         locateNewVoxel(newVoxel, locX_tmp, locY_tmp, locZ_tmp);
         granData->voxelID[thisClump] = newVoxel;
         granData->locX[thisClump] = locX_tmp;
@@ -135,8 +135,8 @@ inline __device__ void integratePos(sgps::bodyID_t thisClump, sgps::DEMDataDT* g
     }
 }
 
-__global__ void integrateClumps(sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData, float t) {
-    sgps::bodyID_t thisClump = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void integrateClumps(smug::DEMSimParams* simParams, smug::DEMDataDT* granData, float t) {
+    smug::bodyID_t thisClump = blockIdx.x * blockDim.x + threadIdx.x;
     if (thisClump < simParams->nOwnerBodies) {
         integrateVel(thisClump, simParams, granData, simParams->h, t);
         integratePos(thisClump, granData, simParams->h, t);

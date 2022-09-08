@@ -10,7 +10,7 @@
 #include <core/utils/GpuError.h>
 #include <algorithms/DEMCubWrappers.cu>
 
-namespace sgps {
+namespace smug {
 
 // These functions interconnecting the cub-part and cpp-part of the code cannot be templated... because of cmake
 // restrictions. Not much that I can do, other than writing them all out.
@@ -57,4 +57,4 @@ void floatMaxReduceByKey(notStupidBool_t* d_keys_in,
         d_keys_in, d_unique_out, d_vals_in, d_aggregates_out, d_num_out, add_op, n, this_stream, scratchPad);
 }
 
-}  // namespace sgps
+}  // namespace smug

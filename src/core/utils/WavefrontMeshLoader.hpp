@@ -28,8 +28,8 @@
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
-#ifndef SGPS_OBJ_MESH_LOADER_HPP
-#define SGPS_OBJ_MESH_LOADER_HPP
+#ifndef SMUG_OBJ_MESH_LOADER_HPP
+#define SMUG_OBJ_MESH_LOADER_HPP
 
 #include <algorithm>
 #include <cstdio>
@@ -39,7 +39,7 @@
 #include <cassert>
 #include <cstring>
 
-namespace sgps {
+namespace smug {
 
 namespace WAVEFRONT {
 
@@ -702,6 +702,6 @@ class BuildMesh : public GeometryInterface {
 
 }  // end namespace WAVEFRONT
 
-}  // end namespace sgps
+}  // end namespace smug
 
 #endif

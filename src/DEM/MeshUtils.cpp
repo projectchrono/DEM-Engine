@@ -37,7 +37,7 @@
 #include <DEM/DEMBdrsAndObjs.h>
 #include <core/utils/WavefrontMeshLoader.hpp>
 
-namespace sgps {
+namespace smug {
 
 using namespace WAVEFRONT;
 
@@ -165,4 +165,4 @@ void DEMMeshConnected::WriteWavefront(const std::string& filename, std::vector<D
     mf.close();
 }
 
-}  // end namespace sgps
+}  // end namespace smug

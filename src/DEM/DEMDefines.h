@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SGPS_DEM_MISC_DEFINES
-#define SGPS_DEM_MISC_DEFINES
+#ifndef SMUG_DEM_MISC_DEFINES
+#define SMUG_DEM_MISC_DEFINES
 
 #include <limits>
 #include <stdint.h>
@@ -13,21 +13,21 @@
 
 #include <DEM/VariableTypes.h>
 
-#define SGPS_DEM_MIN(a, b) ((a < b) ? a : b)
-#define SGPS_DEM_MAX(a, b) ((a > b) ? a : b)
+#define SMUG_DEM_MIN(a, b) ((a < b) ? a : b)
+#define SMUG_DEM_MAX(a, b) ((a > b) ? a : b)
 
-namespace sgps {
+namespace smug {
 // =============================================================================
 // NOW DEFINING CONSTANTS USED BY THE DEM MODULE
 // =============================================================================
-#define SGPS_GET_VAR_NAME(Variable) (#Variable)
-#define SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK 256
-#define SGPS_DEM_MAX_SPHERES_PER_BIN 256  ///< Can't be larger than SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK
-#define SGPS_DEM_TINY_FLOAT 1e-12
-#define SGPS_DEM_HUGE_FLOAT 1e15
-#define SGPS_BITS_PER_BYTE 8
-#define SGPS_CUDA_WARP_SIZE 32
-#define SGPS_DEM_MAX_WILDCARD_NUM 8
+#define SMUG_GET_VAR_NAME(Variable) (#Variable)
+#define SMUG_DEM_KT_CD_NTHREADS_PER_BLOCK 256
+#define SMUG_DEM_MAX_SPHERES_PER_BIN 256  ///< Can't be larger than SMUG_DEM_KT_CD_NTHREADS_PER_BLOCK
+#define SMUG_DEM_TINY_FLOAT 1e-12
+#define SMUG_DEM_HUGE_FLOAT 1e15
+#define SMUG_BITS_PER_BYTE 8
+#define SMUG_CUDA_WARP_SIZE 32
+#define SMUG_DEM_MAX_WILDCARD_NUM 8
 
 // A few pre-computed constants
 constexpr double TWO_OVER_THREE = 0.666666666666667;
@@ -37,24 +37,24 @@ constexpr double TWO_TIMES_SQRT_FIVE_OVER_SIX = 1.825741858350554;
 constexpr double PI = 3.1415926535897932385;
 constexpr double PI_SQUARED = 9.869604401089358;
 
-constexpr uint8_t DEM_VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * SGPS_BITS_PER_BYTE;
-constexpr uint8_t DEM_VOXEL_COUNT_POWER2 = sizeof(voxelID_t) * SGPS_BITS_PER_BYTE;
+constexpr uint8_t DEM_VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * SMUG_BITS_PER_BYTE;
+constexpr uint8_t DEM_VOXEL_COUNT_POWER2 = sizeof(voxelID_t) * SMUG_BITS_PER_BYTE;
 constexpr int64_t DEM_MAX_SUBVOXEL = (int64_t)1 << DEM_VOXEL_RES_POWER2;
 
-#define SGPS_DEM_NUM_BODIES_PER_BLOCK 512
-#define SGPS_DEM_MAX_THREADS_PER_BLOCK 1024
-#define SGPS_DEM_INIT_CNT_MULTIPLIER 5
+#define SMUG_DEM_NUM_BODIES_PER_BLOCK 512
+#define SMUG_DEM_MAX_THREADS_PER_BLOCK 1024
+#define SMUG_DEM_INIT_CNT_MULTIPLIER 5
 // If there are more than this number of analytical geometry, we may have difficulty jitify them all
-#define SGPS_DEM_THRESHOLD_TOO_MANY_ANAL_GEO 64
+#define SMUG_DEM_THRESHOLD_TOO_MANY_ANAL_GEO 64
 // If a clump has more than this number of sphere components, it is automatically considered a non-jitifiable big clump
-#define SGPS_DEM_THRESHOLD_BIG_CLUMP 256
+#define SMUG_DEM_THRESHOLD_BIG_CLUMP 256
 // If there are more than this number of sphere components across all clumps (excluding the clumps that are considered
 // big clumps), then some of them may have to stay in global memory, rather than being jitified
-#define SGPS_DEM_THRESHOLD_TOO_MANY_SPHERE_COMP 512
+#define SMUG_DEM_THRESHOLD_TOO_MANY_SPHERE_COMP 512
 // It should generally just be the warp size. When a block is launched, at least min(these_numbers) threads will be
 // launched so the template loading is always safe.
 constexpr clumpComponentOffset_t NUM_ACTIVE_TEMPLATE_LOADING_THREADS =
-    SGPS_DEM_MIN(SGPS_DEM_MIN(SGPS_CUDA_WARP_SIZE, SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK), SGPS_DEM_NUM_BODIES_PER_BLOCK);
+    SMUG_DEM_MIN(SMUG_DEM_MIN(SMUG_CUDA_WARP_SIZE, SMUG_DEM_KT_CD_NTHREADS_PER_BLOCK), SMUG_DEM_NUM_BODIES_PER_BLOCK);
 
 const objType_t DEM_ANAL_OBJ_TYPE_PLANE = 0;
 const objType_t DEM_ANAL_OBJ_TYPE_PLATE = 1;
@@ -76,29 +76,29 @@ const ownerType_t DEM_OWNER_T_MESH = 2;
 // This ID marks that this is a new contact, not present when we did contact detection last time
 // TODO: half max add half max... so stupid... Better way?? numeric_limit won't work...
 constexpr contactPairs_t DEM_NULL_MAPPING_PARTNER =
-    ((size_t)1 << (sizeof(contactPairs_t) * SGPS_BITS_PER_BYTE - 1)) +
-    ((size_t)1 << (sizeof(contactPairs_t) * SGPS_BITS_PER_BYTE - 1) - 1);
+    ((size_t)1 << (sizeof(contactPairs_t) * SMUG_BITS_PER_BYTE - 1)) +
+    ((size_t)1 << (sizeof(contactPairs_t) * SMUG_BITS_PER_BYTE - 1) - 1);
 // Reserved bodyID
-constexpr bodyID_t DEM_NULL_BODYID = ((size_t)1 << (sizeof(bodyID_t) * SGPS_BITS_PER_BYTE - 1)) +
-                                     ((size_t)1 << (sizeof(bodyID_t) * SGPS_BITS_PER_BYTE - 1) - 1);
+constexpr bodyID_t DEM_NULL_BODYID = ((size_t)1 << (sizeof(bodyID_t) * SMUG_BITS_PER_BYTE - 1)) +
+                                     ((size_t)1 << (sizeof(bodyID_t) * SMUG_BITS_PER_BYTE - 1) - 1);
 // Default (user) clump family number
 const unsigned int DEM_DEFAULT_CLUMP_FAMILY_NUM = 0;
 // Reserved (user) clump family number which is always used for fixities
-constexpr unsigned int DEM_RESERVED_FAMILY_NUM = ((unsigned int)1 << (sizeof(family_t) * SGPS_BITS_PER_BYTE)) - 1;
+constexpr unsigned int DEM_RESERVED_FAMILY_NUM = ((unsigned int)1 << (sizeof(family_t) * SMUG_BITS_PER_BYTE)) - 1;
 // The number of all possible families is known: it depends on family_t
-constexpr size_t DEM_NUM_AVAL_FAMILIES = (size_t)1 << (sizeof(family_t) * SGPS_BITS_PER_BYTE);
+constexpr size_t DEM_NUM_AVAL_FAMILIES = (size_t)1 << (sizeof(family_t) * SMUG_BITS_PER_BYTE);
 // Reserved clump template mark number, used to indicate the largest inertiaOffset number (currently not used since all
 // inertia properties are jitified)
 constexpr inertiaOffset_t DEM_RESERVED_INERTIA_OFFSET =
-    ((size_t)1 << (sizeof(inertiaOffset_t) * SGPS_BITS_PER_BYTE)) - 1;
+    ((size_t)1 << (sizeof(inertiaOffset_t) * SMUG_BITS_PER_BYTE)) - 1;
 // Reserved clump component offset number, used to indicate that this sphere's relative pos etc. won't be found in the
 // kernel, instead have to be brought from the global memory
 constexpr clumpComponentOffset_t DEM_RESERVED_CLUMP_COMPONENT_OFFSET =
-    ((size_t)1 << (sizeof(clumpComponentOffset_t) * SGPS_BITS_PER_BYTE)) - 1;
+    ((size_t)1 << (sizeof(clumpComponentOffset_t) * SMUG_BITS_PER_BYTE)) - 1;
 // Used to be compared against, so we know if some of the sphere components need to stay in global memory
 constexpr unsigned int DEM_THRESHOLD_CANT_JITIFY_ALL_COMP =
-    SGPS_DEM_MIN(SGPS_DEM_MIN(DEM_RESERVED_CLUMP_COMPONENT_OFFSET, SGPS_DEM_THRESHOLD_BIG_CLUMP),
-                 SGPS_DEM_THRESHOLD_TOO_MANY_SPHERE_COMP);
+    SMUG_DEM_MIN(SMUG_DEM_MIN(DEM_RESERVED_CLUMP_COMPONENT_OFFSET, SMUG_DEM_THRESHOLD_BIG_CLUMP),
+                 SMUG_DEM_THRESHOLD_TOO_MANY_SPHERE_COMP);
 
 // Some enums...
 // Verbosity
@@ -296,8 +296,8 @@ struct DEMDataDT {
     // Wildcards. These are some quantities that you can associate with contact pairs and/or owner objects. Very
     // typically, contact history info in Hertzian model in this DEM tool is a wildcard, and electric charges can be
     // registered on granular particles with wildcards.
-    float* contactWildcards[SGPS_DEM_MAX_WILDCARD_NUM];
-    float* ownerWildcards[SGPS_DEM_MAX_WILDCARD_NUM];
+    float* contactWildcards[SMUG_DEM_MAX_WILDCARD_NUM];
+    float* ownerWildcards[SMUG_DEM_MAX_WILDCARD_NUM];
 };
 
 // A struct that holds pointers to data arrays that kT uses
@@ -375,6 +375,6 @@ struct DEMDataKT {
 // typedef DEMDataDT* DEMDataDTPtr;
 // typedef DEMSimParams* DEMSimParamsPtr;
 
-}  // namespace sgps
+}  // namespace smug
 
 #endif

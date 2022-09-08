@@ -49,7 +49,7 @@
     #include <cmath>
 #endif
 
-namespace sgps {
+namespace smug {
 
 using uint = unsigned int;
 using ushort = unsigned short;
@@ -1205,16 +1205,16 @@ inline __device__ __host__ float4 smoothstep(float4 a, float4 b, float4 x) {
     return (y * y * (make_float4(3.0f) - (make_float4(2.0f) * y)));
 }
 
-}  // END namespace sgps
+}  // END namespace smug
 
 // Float3 < is an element-wise comparison where x, y, z components are assigned priorities in that order.
 // Must be in global namespace for std::less to pick it up.
 inline __host__ __device__ bool operator<(const float3& a, const float3& b) {
-    if (!sgps::Near(a.x, b.x))  // x component being different
+    if (!smug::Near(a.x, b.x))  // x component being different
         return a.x < b.x;
-    else if (!sgps::Near(a.y, b.y))  // x comp. same but y different
+    else if (!smug::Near(a.y, b.y))  // x comp. same but y different
         return a.y < b.y;
-    else if (!sgps::Near(a.z, b.z))  // y comp. same but z different
+    else if (!smug::Near(a.z, b.z))  // y comp. same but z different
         return a.z < b.z;
     else               // all components same
         return false;  // for constructing a set

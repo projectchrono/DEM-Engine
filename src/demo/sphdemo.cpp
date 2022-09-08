@@ -3,7 +3,7 @@
 
 #include <sph/SPHSystem.h>
 
-using namespace sgps;
+using namespace smug;
 
 int main(int argc, char* argv[]) {
     // initialize domain (boundary)

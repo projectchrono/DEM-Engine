@@ -36,8 +36,8 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SGPS_CSV_LOADER_H
-#define SGPS_CSV_LOADER_H
+#ifndef SMUG_CSV_LOADER_H
+#define SMUG_CSV_LOADER_H
 
 #include <vector>
 #include <string>
@@ -46,7 +46,7 @@
 #include <utility>
 #include <cstdio>
 #include <exception>
-#ifndef SGPS_CSV_IO_NO_THREAD
+#ifndef SMUG_CSV_IO_NO_THREAD
     #include <mutex>
     #include <thread>
     #include <condition_variable>
@@ -57,7 +57,7 @@
 #include <istream>
 #include <limits>
 
-namespace sgps {
+namespace smug {
 
 namespace io {
 ////////////////////////////////////////////////////////////////////////////
@@ -188,7 +188,7 @@ class NonOwningStringByteSource : public ByteSourceBase {
     long long remaining_byte_count;
 };
 
-#ifndef SGPS_CSV_IO_NO_THREAD
+#ifndef SMUG_CSV_IO_NO_THREAD
 class AsynchronousReader {
   public:
     void init(std::unique_ptr<ByteSourceBase> arg_byte_source) {
@@ -289,7 +289,7 @@ class LineReader {
   private:
     static const int block_len = 1 << 20;
     std::unique_ptr<char[]> buffer;  // must be constructed before (and thus destructed after) the reader!
-#ifdef SGPS_CSV_IO_NO_THREAD
+#ifdef SMUG_CSV_IO_NO_THREAD
     detail::SynchronousReader reader;
 #else
     detail::AsynchronousReader reader;
@@ -1163,5 +1163,5 @@ class CSVReader {
     }
 };
 }  // namespace io
-}  // namespace sgps
+}  // namespace smug
 #endif

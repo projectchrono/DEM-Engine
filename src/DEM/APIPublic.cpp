@@ -17,7 +17,7 @@
 #include <limits>
 #include <algorithm>
 
-namespace sgps {
+namespace smug {
 
 DEMSolver::DEMSolver(unsigned int nGPUs) {
     dTkT_InteractionManager = new ThreadManager();
@@ -92,9 +92,9 @@ void DEMSolver::InstructBoxDomainDimension(float x, float y, float z, DEM_SPATIA
 }
 
 void DEMSolver::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned char z, float len_unit) {
-    if (x + y + z != sizeof(voxelID_t) * SGPS_BITS_PER_BYTE) {
-        SGPS_DEM_ERROR("Please give voxel numbers (as powers of 2) along each direction such that they add up to %zu.",
-                       sizeof(voxelID_t) * SGPS_BITS_PER_BYTE);
+    if (x + y + z != sizeof(voxelID_t) * SMUG_BITS_PER_BYTE) {
+        SMUG_DEM_ERROR("Please give voxel numbers (as powers of 2) along each direction such that they add up to %zu.",
+                       sizeof(voxelID_t) * SMUG_BITS_PER_BYTE);
     }
     l = len_unit;
     nvXp2 = x;
@@ -126,7 +126,7 @@ std::shared_ptr<DEMForceModel> DEMSolver::ReadContactForceModel(const std::strin
     if (!force_model.ReadCustomModelFile(sourcefile)) {
         // If not in that folder, then maybe the user meant an absolute path
         if (!force_model.ReadCustomModelFile(std::filesystem::path(filename)))
-            SGPS_DEM_ERROR("The force model file %s is not found.", filename.c_str());
+            SMUG_DEM_ERROR("The force model file %s is not found.", filename.c_str());
     }
     m_force_model = std::make_shared<DEMForceModel>(std::move(force_model));
     return m_force_model;
@@ -144,7 +144,7 @@ std::shared_ptr<DEMForceModel> DEMSolver::UseFrictionlessHertzianModel() {
 
 void DEMSolver::SetFamilyFixed(unsigned int ID) {
     if (ID > std::numeric_limits<family_t>::max()) {
-        SGPS_DEM_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.",
+        SMUG_DEM_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.",
                        ID, std::numeric_limits<family_t>::max());
     }
     familyPrescription_t preInfo;
@@ -166,7 +166,7 @@ void DEMSolver::SetFamilyFixed(unsigned int ID) {
 
 void DEMSolver::ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const std::string& condition) {
     if (ID_from > std::numeric_limits<family_t>::max() || ID_to > std::numeric_limits<family_t>::max()) {
-        SGPS_DEM_ERROR(
+        SMUG_DEM_ERROR(
             "You instructed family number %u should change to %u, but family number should not be larger than %u.",
             ID_from, ID_to, std::numeric_limits<family_t>::max());
     }
@@ -183,13 +183,13 @@ void DEMSolver::ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const
 
 void DEMSolver::ChangeFamily(unsigned int ID_from, unsigned int ID_to) {
     // if (!check_exist(unique_user_families, ID_from)) {
-    //     SGPS_DEM_WARNING(
+    //     SMUG_DEM_WARNING(
     //         "Family %u (from-family) has no prior reference before a ChangeFamily call, therefore no work is done.",
     //         ID_from);
     //     return;
     // }
     // if (!check_exist(unique_user_families, ID_to)) {
-    //     SGPS_DEM_ERROR(
+    //     SMUG_DEM_ERROR(
     //         "Family %u (to-family) has no prior reference before a ChangeFamily call.\nThis is currently not allowed,
     //         " "as creating a family in mid-simulation usually requires re-jitification anyway.\nIf a family with no "
     //         "special prescription or masking is needed, then you can forward-declare this family via InsertFamily "
@@ -198,7 +198,7 @@ void DEMSolver::ChangeFamily(unsigned int ID_from, unsigned int ID_to) {
     //     return;
     // }
     if (ID_from > std::numeric_limits<family_t>::max() || ID_to > std::numeric_limits<family_t>::max()) {
-        SGPS_DEM_ERROR(
+        SMUG_DEM_ERROR(
             "You instructed family number %u should change to %u, but family number should not be larger than %u.",
             ID_from, ID_to, std::numeric_limits<family_t>::max());
     }
@@ -213,7 +213,7 @@ void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
                                           const std::string& velZ,
                                           bool dictate) {
     if (ID > std::numeric_limits<family_t>::max()) {
-        SGPS_DEM_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.",
+        SMUG_DEM_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.",
                        ID, std::numeric_limits<family_t>::max());
     }
     familyPrescription_t preInfo;
@@ -235,7 +235,7 @@ void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID,
                                           const std::string& velZ,
                                           bool dictate) {
     if (ID > std::numeric_limits<family_t>::max()) {
-        SGPS_DEM_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.",
+        SMUG_DEM_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.",
                        ID, std::numeric_limits<family_t>::max());
     }
     familyPrescription_t preInfo;
@@ -256,7 +256,7 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
                                             const std::string& Y,
                                             const std::string& Z) {
     if (ID > std::numeric_limits<family_t>::max()) {
-        SGPS_DEM_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.",
+        SMUG_DEM_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.",
                        ID, std::numeric_limits<family_t>::max());
     }
     familyPrescription_t preInfo;
@@ -274,14 +274,14 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
 
 void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula) {
     if (ID > std::numeric_limits<family_t>::max()) {
-        SGPS_DEM_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.",
+        SMUG_DEM_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.",
                        ID, std::numeric_limits<family_t>::max());
     }
 }
 
 void DEMSolver::DisableFamilyOutput(unsigned int ID) {
     if (ID > std::numeric_limits<family_t>::max()) {
-        SGPS_DEM_ERROR("You tried to disable output for family %u, but family number should not be larger than %u.", ID,
+        SMUG_DEM_ERROR("You tried to disable output for family %u, but family number should not be larger than %u.", ID,
                        std::numeric_limits<family_t>::max());
     }
     m_no_output_families.insert(ID);
@@ -292,18 +292,18 @@ std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterial(const std::unordered_map<st
     for (const auto& a_pair : mat_prop) {
         m_material_prop_names.insert(a_pair.first);
         if (a_pair.first == "CoR") {
-            if (a_pair.second < SGPS_DEM_TINY_FLOAT)
-                SGPS_DEM_WARNING("Material type %u is set to have 0 restitution. Please make sure this is intentional.",
+            if (a_pair.second < SMUG_DEM_TINY_FLOAT)
+                SMUG_DEM_WARNING("Material type %u is set to have 0 restitution. Please make sure this is intentional.",
                                  m_loaded_materials.size());
             if (a_pair.second > 1.f)
-                SGPS_DEM_WARNING(
+                SMUG_DEM_WARNING(
                     "Material type %u is set to have a restitution coefficient larger than 1. This is typically not "
                     "physical and should destabilize the simulation.",
                     m_loaded_materials.size());
         }
         // Material names cannot have spaces in them
         if (match_pattern(a_pair.first, " ")) {
-            SGPS_DEM_ERROR("Material property %s is not valid: no spaces allowed in its name.", a_pair.first.c_str());
+            SMUG_DEM_ERROR("Material property %s is not valid: no spaces allowed in its name.", a_pair.first.c_str());
         }
     }
     DEMMaterial a_material(mat_prop);
@@ -317,15 +317,15 @@ std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterial(const std::unordered_map<st
 std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clump) {
     if (clump.nComp != clump.radii.size() || clump.nComp != clump.relPos.size() ||
         clump.nComp != clump.materials.size()) {
-        SGPS_DEM_ERROR(
+        SMUG_DEM_ERROR(
             "Radii, relative positions and material arrays defining a clump topology, must all have the same length "
             "(%zu, as indicated by nComp).\nHowever it seems that their lengths are %zu, %zu, %zu, respectively.\nIf "
             "you constructed a DEMClumpTemplate struct yourself, you may need to carefully check if their lengths "
             "agree with nComp.",
             clump.nComp, clump.radii.size(), clump.relPos.size(), clump.materials.size());
     }
-    if (clump.mass < SGPS_DEM_TINY_FLOAT || length(clump.MOI) < SGPS_DEM_TINY_FLOAT) {
-        SGPS_DEM_WARNING(
+    if (clump.mass < SMUG_DEM_TINY_FLOAT || length(clump.MOI) < SMUG_DEM_TINY_FLOAT) {
+        SMUG_DEM_WARNING(
             "A type of clump is instructed to have 0 mass or moment of inertia. This will most likely destabilize the "
             "simulation.");
     }
@@ -430,7 +430,7 @@ std::shared_ptr<DEMExternObj> DEMSolver::AddBCPlane(const float3 pos,
 
 void DEMSolver::DisableContactBetweenFamilies(unsigned int ID1, unsigned int ID2) {
     if (ID1 > std::numeric_limits<family_t>::max() || ID2 > std::numeric_limits<family_t>::max()) {
-        SGPS_DEM_ERROR(
+        SMUG_DEM_ERROR(
             "You tried to disable contact between family number %u and %u, but family number should not be larger than "
             "%u.",
             ID1, ID2, std::numeric_limits<family_t>::max());
@@ -450,13 +450,13 @@ void DEMSolver::DisableContactBetweenFamilies(unsigned int ID1, unsigned int ID2
 
 void DEMSolver::EnableContactBetweenFamilies(unsigned int ID1, unsigned int ID2) {
     if (ID1 > std::numeric_limits<family_t>::max() || ID2 > std::numeric_limits<family_t>::max()) {
-        SGPS_DEM_ERROR(
+        SMUG_DEM_ERROR(
             "You tried to disable contact between family number %u and %u, but family number should not be larger than "
             "%u.",
             ID1, ID2, std::numeric_limits<family_t>::max());
     }
     if (!sys_initialized) {
-        SGPS_DEM_ERROR(
+        SMUG_DEM_ERROR(
             "There is no need to call EnableContactBetweenFamilies before system initialization.\nAll families have "
             "contacts with each other by default. Just do not disable them if you need that contact.");
     } else {
@@ -507,7 +507,7 @@ std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(DEMClumpBatch& input_batch) 
 std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& input_types,
                                                     const std::vector<float3>& input_xyz) {
     if (input_types.size() != input_xyz.size()) {
-        SGPS_DEM_ERROR("Arrays in the call AddClumps must all have the same length.");
+        SMUG_DEM_ERROR("Arrays in the call AddClumps must all have the same length.");
     }
     size_t nClumps = input_types.size();
     // We did not create defaults for families, and if the user did not specify families then they will be added at
@@ -521,7 +521,7 @@ std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(const std::vector<std::share
 
 std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(DEMMeshConnected& mesh) {
     if (mesh.GetNumTriangles() == 0) {
-        SGPS_DEM_WARNING("It seems that a mesh contains 0 triangle facet.");
+        SMUG_DEM_WARNING("It seems that a mesh contains 0 triangle facet.");
     }
     // load_order should beits position in the cache array, not nTriObjLoad
     mesh.load_order = cached_mesh_objs.size();
@@ -540,7 +540,7 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::s
     DEMMeshConnected mesh;
     bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
     if (!flag) {
-        SGPS_DEM_ERROR("Failed to load in mesh file %s.", filename.c_str());
+        SMUG_DEM_ERROR("Failed to load in mesh file %s.", filename.c_str());
     }
     mesh.SetMaterial(mat);
     return AddWavefrontMeshObject(mesh);
@@ -552,7 +552,7 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::s
     DEMMeshConnected mesh;
     bool flag = mesh.LoadWavefrontMesh(filename, load_normals, load_uv);
     if (!flag) {
-        SGPS_DEM_ERROR("Failed to load in mesh file %s.", filename.c_str());
+        SMUG_DEM_ERROR("Failed to load in mesh file %s.", filename.c_str());
     }
     return AddWavefrontMeshObject(mesh);
 }
@@ -608,7 +608,7 @@ void DEMSolver::WriteSphereFile(const std::string& outfilename) const {
             break;
         }
         default:
-            SGPS_DEM_ERROR("Clump output format is unknown. Please set it via SetOutputFormat.");
+            SMUG_DEM_ERROR("Clump output format is unknown. Please set it via SetOutputFormat.");
     }
 }
 
@@ -630,7 +630,7 @@ void DEMSolver::WriteClumpFile(const std::string& outfilename) const {
             break;
         }
         default:
-            SGPS_DEM_ERROR("Clump output format is unknown. Please set it via SetOutputFormat.");
+            SMUG_DEM_ERROR("Clump output format is unknown. Please set it via SetOutputFormat.");
     }
 }
 
@@ -681,19 +681,19 @@ void DEMSolver::ShowTimingStats() {
     dT->getTiming(dT_timer_names, dT_timer_vals);
     kT_total_time = vector_sum<double>(kT_timer_vals);
     dT_total_time = vector_sum<double>(dT_timer_vals);
-    SGPS_DEM_PRINTF("\n~~ kT TIMING STATISTICS ~~\n");
-    SGPS_DEM_PRINTF("kT total active time: %.9g seconds\n", kT_total_time);
+    SMUG_DEM_PRINTF("\n~~ kT TIMING STATISTICS ~~\n");
+    SMUG_DEM_PRINTF("kT total active time: %.9g seconds\n", kT_total_time);
     for (unsigned int i = 0; i < kT_timer_names.size(); i++) {
-        SGPS_DEM_PRINTF("%s: %.9g seconds, %.6g%% of kT total runtime\n", kT_timer_names.at(i).c_str(),
+        SMUG_DEM_PRINTF("%s: %.9g seconds, %.6g%% of kT total runtime\n", kT_timer_names.at(i).c_str(),
                         kT_timer_vals.at(i), kT_timer_vals.at(i) / kT_total_time * 100.);
     }
-    SGPS_DEM_PRINTF("\n~~ dT TIMING STATISTICS ~~\n");
-    SGPS_DEM_PRINTF("dT total active time: %.9g seconds\n", dT_total_time);
+    SMUG_DEM_PRINTF("\n~~ dT TIMING STATISTICS ~~\n");
+    SMUG_DEM_PRINTF("dT total active time: %.9g seconds\n", dT_total_time);
     for (unsigned int i = 0; i < dT_timer_names.size(); i++) {
-        SGPS_DEM_PRINTF("%s: %.9g seconds, %.6g%% of dT total runtime\n", dT_timer_names.at(i).c_str(),
+        SMUG_DEM_PRINTF("%s: %.9g seconds, %.6g%% of dT total runtime\n", dT_timer_names.at(i).c_str(),
                         dT_timer_vals.at(i), dT_timer_vals.at(i) / dT_total_time * 100.);
     }
-    SGPS_DEM_PRINTF("--------------------------\n");
+    SMUG_DEM_PRINTF("--------------------------\n");
 }
 
 void DEMSolver::ClearTimingStats() {
@@ -770,23 +770,23 @@ void DEMSolver::UpdateSimParams() {
 
 void DEMSolver::UpdateClumps() {
     if (!sys_initialized) {
-        SGPS_DEM_ERROR(
+        SMUG_DEM_ERROR(
             "Please call UpdateClumps only after the system is initialized, because it is for adding additional clumps "
             "to an initialized DEM system.");
     }
     if (nLastTimeExtObjLoad != nExtObjLoad) {
-        SGPS_DEM_ERROR(
+        SMUG_DEM_ERROR(
             "UpdateClumps cannot be used after loading new analytical objects. Consider re-initializing at this "
             "point.\nNumber of analytical objects at last initialization: %u\nNumber of analytical objects now: %u",
             nLastTimeExtObjLoad, nExtObjLoad);
     }
     if (nLastTimeClumpTemplateLoad != nClumpTemplateLoad) {
-        SGPS_DEM_ERROR(
+        SMUG_DEM_ERROR(
             "UpdateClumps cannot be used after loading new clump templates. Consider re-initializing at this "
             "point.\nNumber of clump templates at last initialization: %u\nNumber of clump templates now: %u",
             nLastTimeClumpTemplateLoad, nClumpTemplateLoad);
     }
-    SGPS_DEM_WARNING(
+    SMUG_DEM_WARNING(
         "UpdateClumps will add all currently cached clumps to the simulation.\nYou may want to ClearCache first, then "
         "AddClumps, then call this method, so the clumps cached earlier are forgotten before this method takes place.");
 
@@ -812,7 +812,7 @@ void DEMSolver::UpdateClumps() {
 
     // This method should not introduce new material or clump template or family prescription, let's check that
     if (nLastTimeMatNum != m_loaded_materials.size() || nLastTimeFamilyPreNum != m_input_family_prescription.size()) {
-        SGPS_DEM_ERROR(
+        SMUG_DEM_ERROR(
             "UpdateClumps should not be used if you introduce new material types or family prescription (which will "
             "need re-jitification).\nWe used to have %u materials, now we have %u.\nWe used to have %u family "
             "prescription, now we have %u.",
@@ -822,12 +822,12 @@ void DEMSolver::UpdateClumps() {
 
 void DEMSolver::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {
     if (!sys_initialized) {
-        SGPS_DEM_ERROR(
+        SMUG_DEM_ERROR(
             "ChangeClumpSizes operates on device-side arrays directly, so it requires the system to be initialized "
             "first.");
     }
     if (jitify_clump_templates || jitify_mass_moi) {
-        SGPS_DEM_ERROR(
+        SMUG_DEM_ERROR(
             "ChangeClumpSizes only works when the clump components are flattened (not jitified).\nConsider calling "
             "SetJitifyClumpTemplates(false) and SetJitifyMassProperties(false).");
     }
@@ -880,25 +880,25 @@ void DEMSolver::DoDynamicsThenSync(double thisCallDuration) {
 }
 
 void DEMSolver::ShowThreadCollaborationStats() {
-    SGPS_DEM_PRINTF("\n~~ kT--dT CO-OP STATISTICS ~~\n");
-    SGPS_DEM_PRINTF("Number of steps dynamic executed: %zu\n", dT->nTotalSteps);
-    SGPS_DEM_PRINTF("Number of updates dynamic gets: %zu\n",
+    SMUG_DEM_PRINTF("\n~~ kT--dT CO-OP STATISTICS ~~\n");
+    SMUG_DEM_PRINTF("Number of steps dynamic executed: %zu\n", dT->nTotalSteps);
+    SMUG_DEM_PRINTF("Number of updates dynamic gets: %zu\n",
                     (dTkT_InteractionManager->schedulingStats.nDynamicUpdates).load());
-    SGPS_DEM_PRINTF("Number of updates kinematic gets: %zu\n",
+    SMUG_DEM_PRINTF("Number of updates kinematic gets: %zu\n",
                     (dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load());
     if ((dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load() > 0)
-        SGPS_DEM_PRINTF(
+        SMUG_DEM_PRINTF(
             "Average steps per dynamic update: %.7g\n",
             (double)(dT->nTotalSteps) / (dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load());
-    // SGPS_DEM_PRINTF("Number of times dynamic loads buffer: %zu\n",
+    // SMUG_DEM_PRINTF("Number of times dynamic loads buffer: %zu\n",
     //                 (dTkT_InteractionManager->schedulingStats.nDynamicReceives).load());
-    // SGPS_DEM_PRINTF("Number of times kinematic loads buffer: %zu\n",
+    // SMUG_DEM_PRINTF("Number of times kinematic loads buffer: %zu\n",
     //                 (dTkT_InteractionManager->schedulingStats.nKinematicReceives).load());
-    SGPS_DEM_PRINTF("Number of times dynamic held back: %zu\n",
+    SMUG_DEM_PRINTF("Number of times dynamic held back: %zu\n",
                     (dTkT_InteractionManager->schedulingStats.nTimesDynamicHeldBack).load());
-    SGPS_DEM_PRINTF("Number of times kinematic held back: %zu\n",
+    SMUG_DEM_PRINTF("Number of times kinematic held back: %zu\n",
                     (dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack).load());
-    SGPS_DEM_PRINTF("-----------------------------\n");
+    SMUG_DEM_PRINTF("-----------------------------\n");
 }
 
 void DEMSolver::ClearThreadCollaborationStats() {
@@ -929,4 +929,4 @@ float DEMSolver::dTInspectReduce(const std::shared_ptr<jitify::Program>& inspect
     return *pRes;
 }
 
-}  // namespace sgps
+}  // namespace smug

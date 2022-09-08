@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SGPS_DEM_KT
-#define SGPS_DEM_KT
+#ifndef SMUG_DEM_KT
+#define SMUG_DEM_KT
 
 #include <mutex>
 #include <vector>
@@ -30,7 +30,7 @@ namespace jitify {
 class Program;
 }
 
-namespace sgps {
+namespace smug {
 
 // Implementation-level classes
 class DEMKinematicThread;
@@ -357,6 +357,6 @@ class DEMKinematicThread {
 
 };  // kT ends
 
-}  // namespace sgps
+}  // namespace smug
 
 #endif

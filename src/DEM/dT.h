@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SGPS_DEM_DT
-#define SGPS_DEM_DT
+#ifndef SMUG_DEM_DT
+#define SMUG_DEM_DT
 
 #include <mutex>
 #include <vector>
@@ -30,7 +30,7 @@ namespace jitify {
 class Program;
 }
 
-namespace sgps {
+namespace smug {
 
 // Implementation-level classes
 class DEMKinematicThread;
@@ -196,8 +196,8 @@ class DEMDynamicThread {
     std::vector<std::vector<float, ManagedAllocator<float>>,
                 ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
         ownerWildcards;
-    // std::vector<float, ManagedAllocator<float>> contactWildcards[SGPS_DEM_MAX_WILDCARD_NUM];
-    // std::vector<float, ManagedAllocator<float>> ownerWildcards[SGPS_DEM_MAX_WILDCARD_NUM];
+    // std::vector<float, ManagedAllocator<float>> contactWildcards[SMUG_DEM_MAX_WILDCARD_NUM];
+    // std::vector<float, ManagedAllocator<float>> ownerWildcards[SMUG_DEM_MAX_WILDCARD_NUM];
     // An example of such wildcard arrays is contact history: how much did the contact point move on the geometry
     // surface compared to when the contact first emerged?
 
@@ -525,6 +525,6 @@ class DEMDynamicThread {
     std::shared_ptr<jitify::Program> misc_kernels;
 };  // dT ends
 
-}  // namespace sgps
+}  // namespace smug
 
 #endif

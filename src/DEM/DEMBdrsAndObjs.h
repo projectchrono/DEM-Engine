@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SGPS_DEM_BOUNDARIES
-#define SGPS_DEM_BOUNDARIES
+#ifndef SMUG_DEM_BOUNDARIES
+#define SMUG_DEM_BOUNDARIES
 
 #include <vector>
 #include <string>
@@ -20,7 +20,7 @@
 #include <core/utils/ManagedAllocator.hpp>
 #include <DEM/HostSideHelpers.hpp>
 
-namespace sgps {
+namespace smug {
 
 /// External object type
 /// Note all of them are `shell', not solid objects. If you need a solid cylinder for example, then use one CYLINDER as
@@ -111,9 +111,9 @@ struct DEMExternObj {
     // Obj's initial orientation quaternion
     float4 init_oriQ = host_make_float4(0, 0, 0, 1);
     // Obj's mass (huge by default)
-    float mass = SGPS_DEM_HUGE_FLOAT;
+    float mass = SMUG_DEM_HUGE_FLOAT;
     // Obj's MOI (huge by default)
-    float3 MOI = make_float3(SGPS_DEM_HUGE_FLOAT);
+    float3 MOI = make_float3(SMUG_DEM_HUGE_FLOAT);
     // Its offset when this obj got loaded into the API-level user raw-input array
     unsigned int load_order;
 
@@ -304,6 +304,6 @@ class DEMMeshConnected {
     bool ComputeNeighbouringTriangleMap(std::vector<std::array<int, 4>>& tri_map) const;
 };
 
-}  // namespace sgps
+}  // namespace smug
 
 #endif

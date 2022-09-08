@@ -133,7 +133,7 @@ inline __device__ float3 normalize(float3 v) {
 }
 
 // Cause an error inside a kernel
-#define SGPS_DEM_ABORT_KERNEL(...) \
+#define SMUG_DEM_ABORT_KERNEL(...) \
     {                              \
         printf(__VA_ARGS__);       \
         __threadfence();           \

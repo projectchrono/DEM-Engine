@@ -3,14 +3,14 @@
 #include <kernel/DEMHelperKernels.cu>
 
 inline __device__ void cleanUpContactForces(size_t thisContact,
-                                            sgps::DEMSimParams* simParams,
-                                            sgps::DEMDataDT* granData) {
+                                            smug::DEMSimParams* simParams,
+                                            smug::DEMDataDT* granData) {
     const float3 zeros = make_float3(0, 0, 0);
     granData->contactForces[thisContact] = zeros;
     granData->contactTorque_convToForce[thisContact] = zeros;
 }
 
-inline __device__ void cleanUpAcc(size_t thisClump, sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData) {
+inline __device__ void cleanUpAcc(size_t thisClump, smug::DEMSimParams* simParams, smug::DEMDataDT* granData) {
     granData->aX[thisClump] = 0;
     granData->aY[thisClump] = 0;
     granData->aZ[thisClump] = 0;
@@ -20,7 +20,7 @@ inline __device__ void cleanUpAcc(size_t thisClump, sgps::DEMSimParams* simParam
     // TODO: Prescribed accelerations to be added here
 }
 
-__global__ void prepareForceArrays(sgps::DEMSimParams* simParams, sgps::DEMDataDT* granData, size_t nContactPairs) {
+__global__ void prepareForceArrays(smug::DEMSimParams* simParams, smug::DEMDataDT* granData, size_t nContactPairs) {
     size_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContactPairs) {
         cleanUpContactForces(myID, simParams, granData);
@@ -30,15 +30,15 @@ __global__ void prepareForceArrays(sgps::DEMSimParams* simParams, sgps::DEMDataD
     }
 }
 
-__global__ void rearrangeContactWildcards(sgps::DEMDataDT* granData,
+__global__ void rearrangeContactWildcards(smug::DEMDataDT* granData,
                                           float* newWildcards,
-                                          sgps::notStupidBool_t* sentry,
+                                          smug::notStupidBool_t* sentry,
                                           unsigned int nWildcards,
                                           size_t nContactPairs) {
     size_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContactPairs) {
-        sgps::contactPairs_t map_from = granData->contactMapping[myID];
-        if (map_from == sgps::DEM_NULL_MAPPING_PARTNER) {
+        smug::contactPairs_t map_from = granData->contactMapping[myID];
+        if (map_from == smug::DEM_NULL_MAPPING_PARTNER) {
             // If it is a NULL ID then kT says this contact is new. Initialize all wildcard arrays.
             for (size_t i = 0; i < nWildcards; i++) {
                 newWildcards[nContactPairs * i + myID] = 0;
@@ -54,12 +54,12 @@ __global__ void rearrangeContactWildcards(sgps::DEMDataDT* granData,
     }
 }
 
-__global__ void markAliveContacts(float* wildcard, sgps::notStupidBool_t* sentry, size_t nContactPairs) {
+__global__ void markAliveContacts(float* wildcard, smug::notStupidBool_t* sentry, size_t nContactPairs) {
     size_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < nContactPairs) {
         float myEntry = abs(wildcard[myID]);
         // If this is alive then mark it
-        if (myEntry > SGPS_DEM_TINY_FLOAT) {
+        if (myEntry > SMUG_DEM_TINY_FLOAT) {
             sentry[myID] = 1;
         } else {
             sentry[myID] = 0;

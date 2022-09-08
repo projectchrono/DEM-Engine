@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SGPS_DEM_HOST_STRUCTS
-#define SGPS_DEM_HOST_STRUCTS
+#ifndef SMUG_DEM_HOST_STRUCTS
+#define SMUG_DEM_HOST_STRUCTS
 
 #include <DEM/DEMDefines.h>
 #include <core/utils/ManagedAllocator.hpp>
@@ -24,7 +24,7 @@
 #include <filesystem>
 #include <cstring>
 
-namespace sgps {
+namespace smug {
 // Structs defined here will be used by some host classes in DEM.
 // NOTE: Data structs here need to be those complex ones (such as needing to include ManagedAllocator.hpp), which may
 // not be jitifiable.
@@ -119,14 +119,14 @@ inline std::string pretty_format_bytes(size_t bytes) {
 // NOW DEFINING MACRO COMMANDS USED BY THE DEM MODULE
 // =============================================================================
 
-#define SGPS_DEM_PRINTF(...)                    \
+#define SMUG_DEM_PRINTF(...)                    \
     {                                           \
         if (verbosity > DEM_VERBOSITY::QUIET) { \
             printf(__VA_ARGS__);                \
         }                                       \
     }
 
-#define SGPS_DEM_ERROR(...)                  \
+#define SMUG_DEM_ERROR(...)                  \
     {                                        \
         char error_message[1024];            \
         char func_name[1024];                \
@@ -140,7 +140,7 @@ inline std::string pretty_format_bytes(size_t bytes) {
         throw std::runtime_error(out);       \
     }
 
-#define SGPS_DEM_WARNING(...)                      \
+#define SMUG_DEM_WARNING(...)                      \
     {                                              \
         if (verbosity >= DEM_VERBOSITY::WARNING) { \
             printf("\nWARNING! ");                 \
@@ -149,7 +149,7 @@ inline std::string pretty_format_bytes(size_t bytes) {
         }                                          \
     }
 
-#define SGPS_DEM_INFO(...)                      \
+#define SMUG_DEM_INFO(...)                      \
     {                                           \
         if (verbosity >= DEM_VERBOSITY::INFO) { \
             printf(__VA_ARGS__);                \
@@ -157,7 +157,7 @@ inline std::string pretty_format_bytes(size_t bytes) {
         }                                       \
     }
 
-#define SGPS_DEM_STEP_STATS(...)                      \
+#define SMUG_DEM_STEP_STATS(...)                      \
     {                                                 \
         if (verbosity >= DEM_VERBOSITY::STEP_STATS) { \
             printf(__VA_ARGS__);                      \
@@ -165,7 +165,7 @@ inline std::string pretty_format_bytes(size_t bytes) {
         }                                             \
     }
 
-#define SGPS_DEM_STEP_METRIC(...)                      \
+#define SMUG_DEM_STEP_METRIC(...)                      \
     {                                                  \
         if (verbosity >= DEM_VERBOSITY::STEP_METRIC) { \
             printf(__VA_ARGS__);                       \
@@ -173,7 +173,7 @@ inline std::string pretty_format_bytes(size_t bytes) {
         }                                              \
     }
 
-#define SGPS_DEM_DEBUG_PRINTF(...)               \
+#define SMUG_DEM_DEBUG_PRINTF(...)               \
     {                                            \
         if (verbosity >= DEM_VERBOSITY::DEBUG) { \
             printf(__VA_ARGS__);                 \
@@ -181,7 +181,7 @@ inline std::string pretty_format_bytes(size_t bytes) {
         }                                        \
     }
 
-#define SGPS_DEM_DEBUG_EXEC(...)                 \
+#define SMUG_DEM_DEBUG_EXEC(...)                 \
     {                                            \
         if (verbosity >= DEM_VERBOSITY::DEBUG) { \
             __VA_ARGS__;                         \
@@ -190,7 +190,7 @@ inline std::string pretty_format_bytes(size_t bytes) {
 
 // I wasn't able to resolve a decltype problem with vector of vectors, so I have to create another macro for this kind
 // of tracked resize... not ideal.
-#define SGPS_DEM_TRACKED_RESIZE_FLOAT(vec, newsize, val)           \
+#define SMUG_DEM_TRACKED_RESIZE_FLOAT(vec, newsize, val)           \
     {                                                              \
         size_t old_size = vec.size();                              \
         vec.resize(newsize, val);                                  \
@@ -199,7 +199,7 @@ inline std::string pretty_format_bytes(size_t bytes) {
         m_approx_bytes_used += byte_delta;                         \
     }
 
-#define SGPS_DEM_TRACKED_RESIZE_NOPRINT(vec, newsize, val)     \
+#define SMUG_DEM_TRACKED_RESIZE_NOPRINT(vec, newsize, val)     \
     {                                                          \
         size_t item_size = sizeof(decltype(vec)::value_type);  \
         size_t old_size = vec.size();                          \
@@ -209,7 +209,7 @@ inline std::string pretty_format_bytes(size_t bytes) {
         m_approx_bytes_used += byte_delta;                     \
     }
 
-#define SGPS_DEM_TRACKED_RESIZE(vec, newsize, name, val)                                                               \
+#define SMUG_DEM_TRACKED_RESIZE(vec, newsize, name, val)                                                               \
     {                                                                                                                  \
         size_t item_size = sizeof(decltype(vec)::value_type);                                                          \
         size_t old_size = vec.size();                                                                                  \
@@ -217,14 +217,14 @@ inline std::string pretty_format_bytes(size_t bytes) {
         size_t new_size = vec.size();                                                                                  \
         size_t byte_delta = item_size * (new_size - old_size);                                                         \
         m_approx_bytes_used += byte_delta;                                                                             \
-        SGPS_DEM_STEP_STATS("Resizing vector %s, old size %zu, new size %zu, byte delta %s", name, old_size, new_size, \
+        SMUG_DEM_STEP_STATS("Resizing vector %s, old size %zu, new size %zu, byte delta %s", name, old_size, new_size, \
                             pretty_format_bytes(byte_delta).c_str());                                                  \
     }
 
 //// TODO: this is currently not tracked...
 // ptr being a reference to a pointer is crucial
 template <typename T>
-inline void SGPS_DEM_DEVICE_PTR_ALLOC(T*& ptr, size_t size) {
+inline void SMUG_DEM_DEVICE_PTR_ALLOC(T*& ptr, size_t size) {
     cudaPointerAttributes attrib;
     GPU_CALL(cudaPointerGetAttributes(&attrib, ptr));
 
@@ -234,9 +234,9 @@ inline void SGPS_DEM_DEVICE_PTR_ALLOC(T*& ptr, size_t size) {
 }
 
 // Managed advise doesn't seem to do anything...
-#define SGPS_DEM_ADVISE_DEVICE(vec, device) \
+#define SMUG_DEM_ADVISE_DEVICE(vec, device) \
     { advise(vec, ManagedAdvice::PREFERRED_LOC, device); }
-#define SGPS_DEM_MIGRATE_TO_DEVICE(vec, device, stream) \
+#define SMUG_DEM_MIGRATE_TO_DEVICE(vec, device, stream) \
     { migrate(vec, device, stream); }
 
 // #define DEM_OUTPUT_IF_GPU_FAILS(res) \
@@ -559,6 +559,6 @@ const std::string DEM_OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
 const std::filesystem::path DEM_USER_SCRIPT_PATH =
     std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" / "DEMUserScripts";
 
-}  // namespace sgps
+}  // namespace smug
 
 #endif

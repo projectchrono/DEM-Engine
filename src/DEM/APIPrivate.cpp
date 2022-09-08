@@ -16,7 +16,7 @@
 #include <limits>
 #include <algorithm>
 
-namespace sgps {
+namespace smug {
 
 void DEMSolver::generatePolicyResources() {
     // Process the loaded materials. The pre-process of external objects and clumps could add more materials, so this
@@ -127,7 +127,7 @@ void DEMSolver::postResourceGenChecksAndTabKeeping() {
             }
         }
         if (unable_jitify_all) {
-            SGPS_DEM_WARNING(
+            SMUG_DEM_WARNING(
                 "There are %u clump templates loaded, but only %u templates (totalling %u components) are jitifiable "
                 "due to some of the clumps are big and/or there are many types of clumps.\nIt is probably because you "
                 "have external objects represented by spherical decomposition (a.k.a. have big clumps).\nIn this case, "
@@ -142,7 +142,7 @@ void DEMSolver::postResourceGenChecksAndTabKeeping() {
     if (jitify_mass_moi) {
         // Sanity check for final number of mass properties/inertia offsets
         if (nDistinctMassProperties >= std::numeric_limits<inertiaOffset_t>::max()) {
-            SGPS_DEM_ERROR(
+            SMUG_DEM_ERROR(
                 "%u different mass properties (from the contribution of clump templates, analytical objects and meshed "
                 "objects) are loaded, but the max allowance is %u (No.%u is reserved).\nIn general, I suggest against "
                 "calling SetJitifyMassProperties to use jitification for mass properties and here, you definitely "
@@ -154,7 +154,7 @@ void DEMSolver::postResourceGenChecksAndTabKeeping() {
 
     // Do we have more bins that our data type can handle?
     if (m_num_bins > std::numeric_limits<binID_t>::max()) {
-        SGPS_DEM_ERROR(
+        SMUG_DEM_ERROR(
             "The simulation world has %zu bins (for domain partitioning in contact detection), but the largest bin ID "
             "that we can have is %zu.\nYou can try to make bins larger via SetInitBinSize, or redefine binID_t and "
             "recompile.",
@@ -162,8 +162,8 @@ void DEMSolver::postResourceGenChecksAndTabKeeping() {
     }
 
     // Sanity check for analytical geometries
-    if (nAnalGM > SGPS_DEM_THRESHOLD_TOO_MANY_ANAL_GEO) {
-        SGPS_DEM_WARNING(
+    if (nAnalGM > SMUG_DEM_THRESHOLD_TOO_MANY_ANAL_GEO) {
+        SMUG_DEM_WARNING(
             "%u analytical geometries are loaded. Because all analytical geometries are jitified, this is a relatively "
             "large amount.\nIf just-in-time compilation fails or kernels run slowly, this could be a cause.",
             nAnalGM);
@@ -253,7 +253,7 @@ void DEMSolver::figureOutNV() {
         XYZ[1] *= 2.;
     }
 
-    SGPS_DEM_DEBUG_PRINTF("2nd place uses %d more bits than 3rd, and 1st place uses %d more bits than 2rd.",
+    SMUG_DEM_DEBUG_PRINTF("2nd place uses %d more bits than 3rd, and 1st place uses %d more bits than 2rd.",
                           n_more_bits_for_me[0], n_more_bits_for_me[1]);
 
     // Then we know how many bits each one would have
@@ -273,7 +273,7 @@ void DEMSolver::figureOutNV() {
         }
         left_over--;
     }
-    SGPS_DEM_DEBUG_PRINTF("After assigning left-overs, 3rd, 2nd and 1st have bits: %d, %d, %d.", bits_3rd, bits_2nd,
+    SMUG_DEM_DEBUG_PRINTF("After assigning left-overs, 3rd, 2nd and 1st have bits: %d, %d, %d.", bits_3rd, bits_2nd,
                           bits_1st);
 
     int bits[3] = {bits_3rd, bits_2nd, bits_1st};
@@ -320,7 +320,7 @@ void DEMSolver::figureOutNV() {
                 (double)std::pow(2., bits[exact_dir_no]);
         }
     }
-    SGPS_DEM_DEBUG_PRINTF(
+    SMUG_DEM_DEBUG_PRINTF(
         "After final tweak concerning possible exact direction requirements, 3rd, 2nd and 1st have bits: %d, %d, %d.",
         bits[0], bits[1], bits[2]);
     nvXp2 = bits[find_array_offset(rankXYZ, DEM_SPATIAL_DIR::X, 3)];
@@ -345,18 +345,18 @@ void DEMSolver::decideBinSize() {
     }
 
     // TODO: What should be a default bin size?
-    if (m_smallest_radius > SGPS_DEM_TINY_FLOAT) {
+    if (m_smallest_radius > SMUG_DEM_TINY_FLOAT) {
         if (!use_user_defined_bin_size) {
             m_binSize = 2.0 * m_smallest_radius;
         }
     } else {
         if (!use_user_defined_bin_size) {
-            SGPS_DEM_ERROR(
+            SMUG_DEM_ERROR(
                 "There are spheres in clump templates that have 0 radii, and the user did not specify the bin size "
                 "(for contact detection)!\nBecause the bin size is supposed to be defaulted to the size of the "
                 "smallest sphere, now the solver does not know what to do.");
         } else {
-            SGPS_DEM_WARNING(
+            SMUG_DEM_WARNING(
                 "There are spheres in clump templates that have 0 radii!! Please make sure this is intentional.");
         }
     }
@@ -371,51 +371,51 @@ void DEMSolver::decideBinSize() {
 }
 
 void DEMSolver::reportInitStats() const {
-    SGPS_DEM_INFO("Number of total active devices: %d", dTkT_GpuManager->getNumDevices());
+    SMUG_DEM_INFO("Number of total active devices: %d", dTkT_GpuManager->getNumDevices());
 
-    SGPS_DEM_INFO("The dimension of the simulation world: %.17g, %.17g, %.17g", m_boxX, m_boxY, m_boxZ);
-    SGPS_DEM_INFO("Simulation world X range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_boxX);
-    SGPS_DEM_INFO("Simulation world Y range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_boxY);
-    SGPS_DEM_INFO("Simulation world Z range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_boxZ);
-    SGPS_DEM_INFO("User-specified dimensions are not larger than the above simulation world.");
-    SGPS_DEM_INFO("User-specified X-dimension range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_user_boxSize.x);
-    SGPS_DEM_INFO("User-specified Y-dimension range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_user_boxSize.y);
-    SGPS_DEM_INFO("User-specified Z-dimension range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_user_boxSize.z);
-    SGPS_DEM_INFO("The length unit in this simulation is: %.17g", l);
-    SGPS_DEM_INFO("The edge length of a voxel: %.17g", m_voxelSize);
+    SMUG_DEM_INFO("The dimension of the simulation world: %.17g, %.17g, %.17g", m_boxX, m_boxY, m_boxZ);
+    SMUG_DEM_INFO("Simulation world X range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_boxX);
+    SMUG_DEM_INFO("Simulation world Y range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_boxY);
+    SMUG_DEM_INFO("Simulation world Z range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_boxZ);
+    SMUG_DEM_INFO("User-specified dimensions are not larger than the above simulation world.");
+    SMUG_DEM_INFO("User-specified X-dimension range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_user_boxSize.x);
+    SMUG_DEM_INFO("User-specified Y-dimension range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_user_boxSize.y);
+    SMUG_DEM_INFO("User-specified Z-dimension range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_user_boxSize.z);
+    SMUG_DEM_INFO("The length unit in this simulation is: %.17g", l);
+    SMUG_DEM_INFO("The edge length of a voxel: %.17g", m_voxelSize);
 
-    SGPS_DEM_INFO("The edge length of a bin: %.17g", m_binSize);
-    SGPS_DEM_INFO("The total number of bins: %zu", m_num_bins);
+    SMUG_DEM_INFO("The edge length of a bin: %.17g", m_binSize);
+    SMUG_DEM_INFO("The total number of bins: %zu", m_num_bins);
 
-    SGPS_DEM_INFO("The total number of clumps: %zu", nOwnerClumps);
-    SGPS_DEM_INFO("The combined number of component spheres: %zu", nSpheresGM);
-    SGPS_DEM_INFO("The total number of analytical objects: %u", nExtObj);
-    SGPS_DEM_INFO("The total number of meshes: %u", nTriMeshes);
-    SGPS_DEM_INFO("Grand total number of owners: %zu", nOwnerBodies);
+    SMUG_DEM_INFO("The total number of clumps: %zu", nOwnerClumps);
+    SMUG_DEM_INFO("The combined number of component spheres: %zu", nSpheresGM);
+    SMUG_DEM_INFO("The total number of analytical objects: %u", nExtObj);
+    SMUG_DEM_INFO("The total number of meshes: %u", nTriMeshes);
+    SMUG_DEM_INFO("Grand total number of owners: %zu", nOwnerBodies);
 
     if (m_expand_factor > 0.0) {
-        SGPS_DEM_INFO("All geometries are enlarged/thickened by %.9g for contact detection purpose", m_expand_factor);
-        SGPS_DEM_INFO("This in the case of the smallest sphere, means enlarging radius by %.9g%%",
+        SMUG_DEM_INFO("All geometries are enlarged/thickened by %.9g for contact detection purpose", m_expand_factor);
+        SMUG_DEM_INFO("This in the case of the smallest sphere, means enlarging radius by %.9g%%",
                       (m_expand_factor / m_smallest_radius) * 100.0);
     }
 
-    SGPS_DEM_INFO("The number of material types: %u", nMatTuples);
+    SMUG_DEM_INFO("The number of material types: %u", nMatTuples);
     switch (m_force_model->type) {
         case (DEM_FORCE_MODEL::HERTZIAN):
-            SGPS_DEM_INFO("History-based Hertzian contact model is in use");
+            SMUG_DEM_INFO("History-based Hertzian contact model is in use");
             break;
         case (DEM_FORCE_MODEL::HERTZIAN_FRICTIONLESS):
-            SGPS_DEM_INFO("Frictionless Hertzian contact model is in use");
+            SMUG_DEM_INFO("Frictionless Hertzian contact model is in use");
             break;
         case (DEM_FORCE_MODEL::CUSTOM):
-            SGPS_DEM_INFO("A user-custom force model is in use");
+            SMUG_DEM_INFO("A user-custom force model is in use");
             break;
         default:
-            SGPS_DEM_INFO("An unknown force model is in use, this is probably not going well...");
+            SMUG_DEM_INFO("An unknown force model is in use, this is probably not going well...");
     }
 
     // Debug outputs
-    SGPS_DEM_DEBUG_EXEC(printf("These owners are tracked: ");
+    SMUG_DEM_DEBUG_EXEC(printf("These owners are tracked: ");
                         for (const auto& tracked
                              : m_tracked_objs) { printf("%zu, ", tracked->ownerID); } printf("\n"););
 }
@@ -453,7 +453,7 @@ void DEMSolver::preprocessAnalyticalObjs() {
                                         param.plate.normal, param.plate.h_dim_x, param.plate.h_dim_y);
                     break;
                 default:
-                    SGPS_DEM_ERROR("There is at least one analytical boundary that has a type not supported.");
+                    SMUG_DEM_ERROR("There is at least one analytical boundary that has a type not supported.");
             }
         }
         nAnalGM += this_num_anal_ent;
@@ -473,7 +473,7 @@ void DEMSolver::preprocessClumpTemplates() {
         std::unordered_map<unsigned int, unsigned int> old_mark_to_new;
         for (unsigned int i = 0; i < m_templates.size(); i++) {
             old_mark_to_new[m_templates.at(i)->mark] = i;
-            SGPS_DEM_DEBUG_PRINTF("Clump template re-order: %u->%u, nComp: %u", m_templates.at(i)->mark, i,
+            SMUG_DEM_DEBUG_PRINTF("Clump template re-order: %u->%u, nComp: %u", m_templates.at(i)->mark, i,
                                   m_templates.at(i)->nComp);
         }
         // If the user then add more clumps to the system (without adding templates, which mandates a
@@ -502,7 +502,7 @@ void DEMSolver::preprocessClumpTemplates() {
             this_clump_sp_mat_ids.push_back(this_material->load_order);
         }
         m_template_sp_mat_ids.push_back(this_clump_sp_mat_ids);
-        SGPS_DEM_DEBUG_EXEC(printf("Input clump No.%d has material types: ", m_template_clump_mass.size() - 1);
+        SMUG_DEM_DEBUG_EXEC(printf("Input clump No.%d has material types: ", m_template_clump_mass.size() - 1);
                             for (unsigned int i = 0; i < this_clump_sp_mat_ids.size();
                                  i++) { printf("%d, ", this_clump_sp_mat_ids.at(i)); } printf("\n"););
     }
@@ -525,7 +525,7 @@ void DEMSolver::preprocessTriangleObjs() {
     unsigned int thisMeshObj = 0;
     for (const auto& mesh_obj : cached_mesh_objs) {
         if (!(mesh_obj->isMaterialSet)) {
-            SGPS_DEM_ERROR(
+            SMUG_DEM_ERROR(
                 "A meshed object is loaded by does not have associated material.\nPlease assign material to meshes via "
                 "SetMaterial.");
         }
@@ -576,7 +576,7 @@ void DEMSolver::figureOutFamilyMasks() {
     std::vector<unsigned int> unique_clump_families = hostUniqueVector<unsigned int>(m_input_clump_family);
     if (any_of(unique_clump_families.begin(), unique_clump_families.end(),
                [](unsigned int i) { return i == DEM_RESERVED_FAMILY_NUM; })) {
-        SGPS_DEM_WARNING(
+        SMUG_DEM_WARNING(
             "Some clumps are instructed to have family number %u.\nThis family number is reserved for "
             "completely fixed boundaries. Using it on your simulation entities will make them fixed, regardless of "
             "your specification.\nYou can change family_t if you indeed need more families to work with.",
@@ -635,10 +635,10 @@ void DEMSolver::figureOutFamilyMasks() {
         this_family_info.externPos = this_family_info.externPos || preInfo.externPos;
         this_family_info.externVel = this_family_info.externVel || preInfo.externVel;
 
-        SGPS_DEM_DEBUG_PRINTF("User family %u has prescribed lin vel: %s, %s, %s", user_family,
+        SMUG_DEM_DEBUG_PRINTF("User family %u has prescribed lin vel: %s, %s, %s", user_family,
                               this_family_info.linVelX.c_str(), this_family_info.linVelY.c_str(),
                               this_family_info.linVelZ.c_str());
-        SGPS_DEM_DEBUG_PRINTF("User family %u has prescribed ang vel: %s, %s, %s", user_family,
+        SMUG_DEM_DEBUG_PRINTF("User family %u has prescribed ang vel: %s, %s, %s", user_family,
                               this_family_info.rotVelX.c_str(), this_family_info.rotVelY.c_str(),
                               this_family_info.rotVelZ.c_str());
     }
@@ -653,7 +653,7 @@ void DEMSolver::figureOutOrigin() {
         O = -(m_user_boxSize) / 2.0;
         m_boxLBF = O;
     } else {
-        SGPS_DEM_ERROR("Unrecognized location of system origin.");
+        SMUG_DEM_ERROR("Unrecognized location of system origin.");
     }
 }
 
@@ -732,7 +732,7 @@ void DEMSolver::transferSimParams() {
         m_expand_factor = m_approx_max_vel * m_ts_size * m_updateFreq * m_expand_safety_param;
     }
     if (m_expand_factor * m_expand_safety_param <= 0.0 && m_updateFreq > 0 && ts_size_is_const) {
-        SGPS_DEM_WARNING(
+        SMUG_DEM_WARNING(
             "You instructed that the physics can stretch %u time steps into the future, but did not instruct the "
             "geometries to expand via SetExpandFactor or SetMaxVelocity. The contact detection procedure will likely "
             "fail to detect some contact events before it is too late, hindering the simulation accuracy and "
@@ -742,13 +742,13 @@ void DEMSolver::transferSimParams() {
     // Compute the number of wildcards in our force model
     unsigned int nContactWildcards = m_force_model->m_contact_wildcards.size();
     unsigned int nOwnerWildcards = m_force_model->m_owner_wildcards.size();
-    if (nContactWildcards > SGPS_DEM_MAX_WILDCARD_NUM || nOwnerWildcards > SGPS_DEM_MAX_WILDCARD_NUM) {
-        SGPS_DEM_ERROR(
+    if (nContactWildcards > SMUG_DEM_MAX_WILDCARD_NUM || nOwnerWildcards > SMUG_DEM_MAX_WILDCARD_NUM) {
+        SMUG_DEM_ERROR(
             "You defined too many contact or owner wildcards! Currently the max amount is %u.\nYou can change constant "
-            "SGPS_DEM_MAX_WILDCARD_NUM and re-compile, if you indeed would like more wildcards.",
-            SGPS_DEM_MAX_WILDCARD_NUM);
+            "SMUG_DEM_MAX_WILDCARD_NUM and re-compile, if you indeed would like more wildcards.",
+            SMUG_DEM_MAX_WILDCARD_NUM);
     }
-    SGPS_DEM_DEBUG_PRINTF("%u contact wildcards are in the force model.", nContactWildcards);
+    SMUG_DEM_DEBUG_PRINTF("%u contact wildcards are in the force model.", nContactWildcards);
 
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
                      m_expand_factor, m_approx_max_vel, m_expand_safety_param, nContactWildcards, nOwnerWildcards);
@@ -869,25 +869,25 @@ void DEMSolver::packDataPointers() {
 void DEMSolver::validateUserInputs() {
     // Then some checks...
     // if (m_templates.size() == 0) {
-    //     SGPS_DEM_ERROR("Before initializing the system, at least one clump type should be defined via
+    //     SMUG_DEM_ERROR("Before initializing the system, at least one clump type should be defined via
     //     LoadClumpType.");
     // }
 
     if (m_user_boxSize.x <= 0.f || m_user_boxSize.y <= 0.f || m_user_boxSize.z <= 0.f) {
-        SGPS_DEM_ERROR(
+        SMUG_DEM_ERROR(
             "The size of the simulation world is set to be (or default to be) %f by %f by %f. It is impossibly small.",
             m_user_boxSize.x, m_user_boxSize.y, m_user_boxSize.z);
     }
 
     if (m_updateFreq < 0) {
-        SGPS_DEM_WARNING(
+        SMUG_DEM_WARNING(
             "The physics of the DEM system can drift into the future as much as it wants compared to contact "
             "detections, because SetCDUpdateFreq was called with a negative argument. Please make sure this is "
             "intended.");
     }
 
     if ((!ts_size_is_const) && (!use_user_defined_expand_factor) && (m_approx_max_vel <= 0.f)) {
-        SGPS_DEM_ERROR(
+        SMUG_DEM_ERROR(
             "When using variable time step size, this solver needs your approximated maximum body/point velocity to "
             "add margins for a safe contact detection.\nYou should either supply that via SetMaxVelocity, or "
             "explicitly set a expand factor via SetExpandFactor.");
@@ -928,17 +928,17 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     // Check if force, and wildcards are all defined in the model
     std::string non_match;
     if (!all_whole_word_match(model, contact_wildcard_names, non_match))
-        SGPS_DEM_WARNING(
+        SMUG_DEM_WARNING(
             "Contact wildcard %s is not used/set in your custom force model. Your force model will probably not "
             "produce what you expect.",
             non_match.c_str());
     if (!all_whole_word_match(model, owner_wildcard_names, non_match))
-        SGPS_DEM_WARNING(
+        SMUG_DEM_WARNING(
             "Owner wildcard %s is not used/set in your custom force model. Your force model will probably not produce "
             "what you expect.",
             non_match.c_str());
     if (!all_whole_word_match(model, {"force"}, non_match)) {
-        SGPS_DEM_WARNING(
+        SMUG_DEM_WARNING(
             "Your custom force model does not set the variable %s at all. You probably will not see any contact in the "
             "simulation.",
             non_match.c_str());
@@ -963,9 +963,9 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     strMap["_forceModelContactWildcardWrite_"] = wildcard_write_back;
     strMap["_forceModelContactWildcardDestroy_"] = wildcard_destroy_record;
 
-    SGPS_DEM_DEBUG_PRINTF("Wildcard acquisition:\n%s", wildcard_acquisition.c_str());
-    SGPS_DEM_DEBUG_PRINTF("Wildcard write-back:\n%s", wildcard_write_back.c_str());
-    SGPS_DEM_DEBUG_PRINTF("Wildcard destroy inactive:\n%s", wildcard_destroy_record.c_str());
+    SMUG_DEM_DEBUG_PRINTF("Wildcard acquisition:\n%s", wildcard_acquisition.c_str());
+    SMUG_DEM_DEBUG_PRINTF("Wildcard write-back:\n%s", wildcard_write_back.c_str());
+    SMUG_DEM_DEBUG_PRINTF("Wildcard destroy inactive:\n%s", wildcard_destroy_record.c_str());
 }
 
 inline void DEMSolver::equipFamilyOnFlyChanges(std::unordered_map<std::string, std::string>& strMap) {
@@ -1212,7 +1212,7 @@ inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::strin
                 // If prop_name does not exist for this material, then if prop_name is one of the
                 // mat_prop_that_must_exist, the user should know there is trouble...
                 if (check_exist(mat_prop_that_must_exist, prop_name))
-                    SGPS_DEM_WARNING(
+                    SMUG_DEM_WARNING(
                         "A material does not have %s property specified. However, the force model you are using "
                         "requires that information, so we are using default 0.\nPlease be sure this is intentional.",
                         prop_name.c_str());
@@ -1226,8 +1226,8 @@ inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::strin
         // End the line
         materialDefs += "};\n";
     }
-    SGPS_DEM_DEBUG_PRINTF("Material properties in kernel:");
-    SGPS_DEM_DEBUG_PRINTF("%s", materialDefs.c_str());
+    SMUG_DEM_DEBUG_PRINTF("Material properties in kernel:");
+    SMUG_DEM_DEBUG_PRINTF("%s", materialDefs.c_str());
     // Try imagining something like this...
     //      steel   plastic
     // E    1e9     1e8
@@ -1335,4 +1335,4 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_nMatTuples_"] = std::to_string(nMatTuples);
 }
 
-}  // namespace sgps
+}  // namespace smug

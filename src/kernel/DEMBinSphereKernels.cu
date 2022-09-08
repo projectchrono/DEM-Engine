@@ -9,21 +9,21 @@ _analyticalEntityDefs_;
 // Family mask, _nFamilyMaskEntries_ elements are in this array
 // __constant__ __device__ bool familyMasks[] = {_familyMasks_};
 
-__global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
-                                                 sgps::DEMDataKT* granData,
-                                                 sgps::binsSphereTouches_t* numBinsSphereTouches,
-                                                 sgps::objID_t* numAnalGeoSphereTouches) {
-    sgps::bodyID_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void getNumberOfBinsEachSphereTouches(smug::DEMSimParams* simParams,
+                                                 smug::DEMDataKT* granData,
+                                                 smug::binsSphereTouches_t* numBinsSphereTouches,
+                                                 smug::objID_t* numAnalGeoSphereTouches) {
+    smug::bodyID_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;
     if (sphereID < simParams->nSpheresGM) {
         // Register sphere--analytical geometry contacts
-        sgps::objID_t contact_count = 0;
+        smug::objID_t contact_count = 0;
         // Sphere's family ID
         unsigned int sphFamilyNum;
         double myPosX, myPosY, myPosZ;
         double myRadius;
         {
             // My sphere voxel ID and my relPos
-            sgps::bodyID_t myOwnerID = granData->ownerClumpBody[sphereID];
+            smug::bodyID_t myOwnerID = granData->ownerClumpBody[sphereID];
             sphFamilyNum = granData->familyID[myOwnerID];
             float myRelPosX, myRelPosY, myRelPosZ;
             double ownerX, ownerY, ownerZ;
@@ -36,15 +36,15 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
                 myRadius += simParams->beta;
             }
 
-            voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
+            voxelID2Position<double, smug::voxelID_t, smug::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[myOwnerID], granData->locX[myOwnerID],
                 granData->locY[myOwnerID], granData->locZ[myOwnerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            const float myOriQ0 = granData->oriQw[myOwnerID];
-            const float myOriQ1 = granData->oriQx[myOwnerID];
-            const float myOriQ2 = granData->oriQy[myOwnerID];
-            const float myOriQ3 = granData->oriQz[myOwnerID];
-            applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2,
-                                                    myOriQ3);
+            const float myOriQw = granData->oriQw[myOwnerID];
+            const float myOriQx = granData->oriQx[myOwnerID];
+            const float myOriQy = granData->oriQy[myOwnerID];
+            const float myOriQz = granData->oriQz[myOwnerID];
+            applyOriQToVector3<float, smug::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQw, myOriQx, myOriQy,
+                                                    myOriQz);
             // The bin number that I live in (with fractions)?
             myPosX = ownerX + (double)myRelPosX;
             myPosY = ownerY + (double)myRelPosY;
@@ -56,11 +56,11 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
             double myRadiusSpan = myRadius / simParams->binSize;
             // printf("myRadius: %f\n", myRadiusSpan);
             // Now, figure out how many bins I touch in each direction
-            sgps::binsSphereTouches_t numX =
+            smug::binsSphereTouches_t numX =
                 (unsigned int)(myBinX + myRadiusSpan) - (unsigned int)(myBinX - myRadiusSpan) + 1;
-            sgps::binsSphereTouches_t numY =
+            smug::binsSphereTouches_t numY =
                 (unsigned int)(myBinY + myRadiusSpan) - (unsigned int)(myBinY - myRadiusSpan) + 1;
-            sgps::binsSphereTouches_t numZ =
+            smug::binsSphereTouches_t numZ =
                 (unsigned int)(myBinZ + myRadiusSpan) - (unsigned int)(myBinZ - myRadiusSpan) + 1;
             // TODO: Add an error message if numX * numY * numZ > MAX(binsSphereTouches_t)
 
@@ -70,35 +70,35 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
         }
 
         // Each sphere entity should also check if it overlaps with an analytical boundary-type geometry
-        for (sgps::objID_t objB = 0; objB < simParams->nAnalGM; objB++) {
-            sgps::contact_t contact_type;
-            sgps::bodyID_t objBOwner = objOwner[objB];
+        for (smug::objID_t objB = 0; objB < simParams->nAnalGM; objB++) {
+            smug::contact_t contact_type;
+            smug::bodyID_t objBOwner = objOwner[objB];
             // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
             unsigned int objFamilyNum = granData->familyID[objBOwner];
             unsigned int maskMatID =
                 locateMaskPair<unsigned int>((unsigned int)sphFamilyNum, (unsigned int)objFamilyNum);
             // If marked no contact, skip ths iteration
-            if (granData->familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
+            if (granData->familyMasks[maskMatID] != smug::DEM_DONT_PREVENT_CONTACT) {
                 continue;
             }
             double ownerX, ownerY, ownerZ;
-            voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
+            voxelID2Position<double, smug::voxelID_t, smug::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[objBOwner], granData->locX[objBOwner],
                 granData->locY[objBOwner], granData->locZ[objBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            const float ownerOriQ0 = granData->oriQw[objBOwner];
-            const float ownerOriQ1 = granData->oriQx[objBOwner];
-            const float ownerOriQ2 = granData->oriQy[objBOwner];
-            const float ownerOriQ3 = granData->oriQz[objBOwner];
+            const float ownerOriQw = granData->oriQw[objBOwner];
+            const float ownerOriQx = granData->oriQx[objBOwner];
+            const float ownerOriQy = granData->oriQy[objBOwner];
+            const float ownerOriQz = granData->oriQz[objBOwner];
             float objBRelPosX = objRelPosX[objB];
             float objBRelPosY = objRelPosY[objB];
             float objBRelPosZ = objRelPosZ[objB];
             float objBRotX = objRotX[objB];
             float objBRotY = objRotY[objB];
             float objBRotZ = objRotZ[objB];
-            applyOriQToVector3<float, sgps::oriQ_t>(objBRelPosX, objBRelPosY, objBRelPosZ, ownerOriQ0, ownerOriQ1,
-                                                    ownerOriQ2, ownerOriQ3);
-            applyOriQToVector3<float, sgps::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQ0, ownerOriQ1, ownerOriQ2,
-                                                    ownerOriQ3);
+            applyOriQToVector3<float, smug::oriQ_t>(objBRelPosX, objBRelPosY, objBRelPosZ, ownerOriQw, ownerOriQx,
+                                                    ownerOriQy, ownerOriQz);
+            applyOriQToVector3<float, smug::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx, ownerOriQy,
+                                                    ownerOriQz);
             double objBPosX = ownerX + (double)objBRelPosX;
             double objBPosY = ownerY + (double)objBRelPosY;
             double objBPosZ = ownerZ + (double)objBRelPosZ;
@@ -114,24 +114,24 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
     }
 }
 
-__global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
-                                               sgps::DEMDataKT* granData,
-                                               sgps::binSphereTouchPairs_t* numBinsSphereTouchesScan,
-                                               sgps::binSphereTouchPairs_t* numAnalGeoSphereTouchesScan,
-                                               sgps::binID_t* binIDsEachSphereTouches,
-                                               sgps::bodyID_t* sphereIDsEachBinTouches,
-                                               sgps::bodyID_t* idGeoA,
-                                               sgps::bodyID_t* idGeoB,
-                                               sgps::contact_t* contactType) {
-    sgps::bodyID_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void populateBinSphereTouchingPairs(smug::DEMSimParams* simParams,
+                                               smug::DEMDataKT* granData,
+                                               smug::binSphereTouchPairs_t* numBinsSphereTouchesScan,
+                                               smug::binSphereTouchPairs_t* numAnalGeoSphereTouchesScan,
+                                               smug::binID_t* binIDsEachSphereTouches,
+                                               smug::bodyID_t* sphereIDsEachBinTouches,
+                                               smug::bodyID_t* idGeoA,
+                                               smug::bodyID_t* idGeoB,
+                                               smug::contact_t* contactType) {
+    smug::bodyID_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;
     if (sphereID < simParams->nSpheresGM) {
         double myPosX, myPosY, myPosZ;
         double myRadius;
         unsigned int sphFamilyNum;
-        sgps::binSphereTouchPairs_t mySphereGeoReportOffset = numAnalGeoSphereTouchesScan[sphereID];
+        smug::binSphereTouchPairs_t mySphereGeoReportOffset = numAnalGeoSphereTouchesScan[sphereID];
         {
             // My sphere voxel ID and my relPos
-            sgps::bodyID_t myOwnerID = granData->ownerClumpBody[sphereID];
+            smug::bodyID_t myOwnerID = granData->ownerClumpBody[sphereID];
             sphFamilyNum = granData->familyID[myOwnerID];
             float myRelPosX, myRelPosY, myRelPosZ;
             double ownerX, ownerY, ownerZ;
@@ -146,16 +146,16 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
 
             // Get the offset of my spot where I should start writing back to the global bin--sphere pair registration
             // array
-            sgps::binSphereTouchPairs_t myReportOffset = numBinsSphereTouchesScan[sphereID];
-            voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
+            smug::binSphereTouchPairs_t myReportOffset = numBinsSphereTouchesScan[sphereID];
+            voxelID2Position<double, smug::voxelID_t, smug::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[myOwnerID], granData->locX[myOwnerID],
                 granData->locY[myOwnerID], granData->locZ[myOwnerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            const float myOriQ0 = granData->oriQw[myOwnerID];
-            const float myOriQ1 = granData->oriQx[myOwnerID];
-            const float myOriQ2 = granData->oriQy[myOwnerID];
-            const float myOriQ3 = granData->oriQz[myOwnerID];
-            applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2,
-                                                    myOriQ3);
+            const float myOriQw = granData->oriQw[myOwnerID];
+            const float myOriQx = granData->oriQx[myOwnerID];
+            const float myOriQy = granData->oriQy[myOwnerID];
+            const float myOriQz = granData->oriQz[myOwnerID];
+            applyOriQToVector3<float, smug::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQw, myOriQx, myOriQy,
+                                                    myOriQz);
             // The bin number that I live in (with fractions)?
             myPosX = ownerX + (double)myRelPosX;
             myPosY = ownerY + (double)myRelPosY;
@@ -166,15 +166,15 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
             // How many bins my radius spans (with fractions)?
             double myRadiusSpan = myRadius / simParams->binSize;
             // Now, write the IDs of those bins that I touch, back to the global memory
-            sgps::binID_t thisBinID;
+            smug::binID_t thisBinID;
             for (unsigned int k = (unsigned int)(myBinZ - myRadiusSpan); k <= (unsigned int)(myBinZ + myRadiusSpan);
                  k++) {
                 for (unsigned int j = (unsigned int)(myBinY - myRadiusSpan); j <= (unsigned int)(myBinY + myRadiusSpan);
                      j++) {
                     for (unsigned int i = (unsigned int)(myBinX - myRadiusSpan);
                          i <= (unsigned int)(myBinX + myRadiusSpan); i++) {
-                        thisBinID = (sgps::binID_t)i + (sgps::binID_t)j * simParams->nbX +
-                                    (sgps::binID_t)k * simParams->nbX * simParams->nbY;
+                        thisBinID = (smug::binID_t)i + (smug::binID_t)j * simParams->nbX +
+                                    (smug::binID_t)k * simParams->nbX * simParams->nbY;
                         binIDsEachSphereTouches[myReportOffset] = thisBinID;
                         sphereIDsEachBinTouches[myReportOffset] = sphereID;
                         myReportOffset++;
@@ -184,34 +184,34 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
         }
 
         // Each sphere entity should also check if it overlaps with an analytical boundary-type geometry
-        for (sgps::objID_t objB = 0; objB < simParams->nAnalGM; objB++) {
-            sgps::contact_t contact_type;
-            sgps::bodyID_t objBOwner = objOwner[objB];
+        for (smug::objID_t objB = 0; objB < simParams->nAnalGM; objB++) {
+            smug::contact_t contact_type;
+            smug::bodyID_t objBOwner = objOwner[objB];
             // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
             unsigned int objFamilyNum = granData->familyID[objBOwner];
             unsigned int maskMatID = locateMaskPair<unsigned int>(sphFamilyNum, objFamilyNum);
             // If marked no contact, skip ths iteration
-            if (granData->familyMasks[maskMatID] != sgps::DEM_DONT_PREVENT_CONTACT) {
+            if (granData->familyMasks[maskMatID] != smug::DEM_DONT_PREVENT_CONTACT) {
                 continue;
             }
             double ownerX, ownerY, ownerZ;
-            voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
+            voxelID2Position<double, smug::voxelID_t, smug::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[objBOwner], granData->locX[objBOwner],
                 granData->locY[objBOwner], granData->locZ[objBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            const float ownerOriQ0 = granData->oriQw[objBOwner];
-            const float ownerOriQ1 = granData->oriQx[objBOwner];
-            const float ownerOriQ2 = granData->oriQy[objBOwner];
-            const float ownerOriQ3 = granData->oriQz[objBOwner];
+            const float ownerOriQw = granData->oriQw[objBOwner];
+            const float ownerOriQx = granData->oriQx[objBOwner];
+            const float ownerOriQy = granData->oriQy[objBOwner];
+            const float ownerOriQz = granData->oriQz[objBOwner];
             float objBRelPosX = objRelPosX[objB];
             float objBRelPosY = objRelPosY[objB];
             float objBRelPosZ = objRelPosZ[objB];
             float objBRotX = objRotX[objB];
             float objBRotY = objRotY[objB];
             float objBRotZ = objRotZ[objB];
-            applyOriQToVector3<float, sgps::oriQ_t>(objBRelPosX, objBRelPosY, objBRelPosZ, ownerOriQ0, ownerOriQ1,
-                                                    ownerOriQ2, ownerOriQ3);
-            applyOriQToVector3<float, sgps::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQ0, ownerOriQ1, ownerOriQ2,
-                                                    ownerOriQ3);
+            applyOriQToVector3<float, smug::oriQ_t>(objBRelPosX, objBRelPosY, objBRelPosZ, ownerOriQw, ownerOriQx,
+                                                    ownerOriQy, ownerOriQz);
+            applyOriQToVector3<float, smug::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx, ownerOriQy,
+                                                    ownerOriQz);
             double objBPosX = ownerX + (double)objBRelPosX;
             double objBPosY = ownerY + (double)objBRelPosY;
             double objBPosZ = ownerZ + (double)objBRelPosZ;
@@ -221,7 +221,7 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
 
             if (contact_type) {
                 idGeoA[mySphereGeoReportOffset] = sphereID;
-                idGeoB[mySphereGeoReportOffset] = (sgps::bodyID_t)objB;
+                idGeoB[mySphereGeoReportOffset] = (smug::bodyID_t)objB;
                 contactType[mySphereGeoReportOffset] = contact_type;
                 mySphereGeoReportOffset++;
             }

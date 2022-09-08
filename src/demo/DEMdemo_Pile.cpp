@@ -13,7 +13,7 @@
 #include <chrono>
 #include <filesystem>
 
-using namespace sgps;
+using namespace smug;
 using namespace std::filesystem;
 
 int main() {
@@ -36,8 +36,8 @@ int main() {
     float min_relpos = -0.01;
     float max_relpos = 0.01;
 
-    auto mat_type_1 = DEM_sim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.3}});
-    auto mat_type_2 = DEM_sim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.7}});
+    auto mat_type_1 = DEM_sim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
+    auto mat_type_2 = DEM_sim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.7}, {"mu", 0.5}});
 
     // First create clump type 0 for representing the ground
     float ground_sp_r = 0.02;

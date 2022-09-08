@@ -8,7 +8,7 @@
 #include <core/utils/GpuManager.h>
 #include <core/utils/ManagedAllocator.hpp>
 
-namespace sgps {
+namespace smug {
 
 void doubleSumReduce(double* d_in, double* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
 
@@ -65,4 +65,4 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
                           DEMSolverStateData& scratchPad,
                           SolverTimers& timers);
 
-}  // namespace sgps
+}  // namespace smug

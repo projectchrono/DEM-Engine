@@ -13,7 +13,7 @@
 #include <time.h>
 #include <filesystem>
 
-using namespace sgps;
+using namespace smug;
 using namespace std::filesystem;
 
 inline bool near(float a, float b, float t = 1e-6) {

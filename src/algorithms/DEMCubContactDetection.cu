@@ -15,7 +15,7 @@
 
 #include <core/utils/GpuError.h>
 
-namespace sgps {
+namespace smug {
 
 inline void contactEventArraysResize(size_t nContactPairs,
                                      std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& idGeometryA,
@@ -23,9 +23,9 @@ inline void contactEventArraysResize(size_t nContactPairs,
                                      std::vector<contact_t, ManagedAllocator<contact_t>>& contactType,
                                      DEMDataKT* granData) {
     // TODO: not tracked? Gotta do something on it
-    // SGPS_DEM_TRACKED_RESIZE_NOPRINT(idGeometryA, nContactPairs);
-    // SGPS_DEM_TRACKED_RESIZE_NOPRINT(idGeometryB, nContactPairs);
-    // SGPS_DEM_TRACKED_RESIZE_NOPRINT(contactType, nContactPairs);
+    // SMUG_DEM_TRACKED_RESIZE_NOPRINT(idGeometryA, nContactPairs);
+    // SMUG_DEM_TRACKED_RESIZE_NOPRINT(idGeometryB, nContactPairs);
+    // SMUG_DEM_TRACKED_RESIZE_NOPRINT(contactType, nContactPairs);
     idGeometryA.resize(nContactPairs);
     idGeometryB.resize(nContactPairs);
     contactType.resize(nContactPairs);
@@ -66,11 +66,11 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
     CD_temp_arr_bytes = simParams->nSpheresGM * sizeof(objID_t);
     objID_t* numAnalGeoSphereTouches = (objID_t*)scratchPad.allocateTempVector(2, CD_temp_arr_bytes);
     size_t blocks_needed_for_bodies =
-        (simParams->nSpheresGM + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
+        (simParams->nSpheresGM + SMUG_DEM_NUM_BODIES_PER_BLOCK - 1) / SMUG_DEM_NUM_BODIES_PER_BLOCK;
 
     bin_occupation_kernels->kernel("getNumberOfBinsEachSphereTouches")
         .instantiate()
-        .configure(dim3(blocks_needed_for_bodies), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
+        .configure(dim3(blocks_needed_for_bodies), dim3(SMUG_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(simParams, granData, numBinsSphereTouches, numAnalGeoSphereTouches);
     GPU_CALL(cudaStreamSynchronize(this_stream));
 
@@ -107,7 +107,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
     // This kernel is also responsible of figuring out sphere--analytical geometry pairs
     bin_occupation_kernels->kernel("populateBinSphereTouchingPairs")
         .instantiate()
-        .configure(dim3(blocks_needed_for_bodies), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
+        .configure(dim3(blocks_needed_for_bodies), dim3(SMUG_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(simParams, granData, numBinsSphereTouchesScan, numAnalGeoSphereTouchesScan, binIDsEachSphereTouches,
                 sphereIDsEachBinTouches, granData->idGeometryA, granData->idGeometryB, granData->contactType);
     GPU_CALL(cudaStreamSynchronize(this_stream));
@@ -177,12 +177,12 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
         (spheresBinTouches_t*)scratchPad.allocateTempVector(4, CD_temp_arr_bytes);
     size_t blocks_needed_for_bins =
         (solverFlags.useOneBinPerThread)
-            ? (*pNumActiveBins + SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK - 1) / SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK
+            ? (*pNumActiveBins + SMUG_DEM_KT_CD_NTHREADS_PER_BLOCK - 1) / SMUG_DEM_KT_CD_NTHREADS_PER_BLOCK
             : *pNumActiveBins;
     if (blocks_needed_for_bins > 0) {
         contact_detection_kernels->kernel("getNumberOfContactsEachBin")
             .instantiate()
-            .configure(dim3(blocks_needed_for_bins), dim3(SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
+            .configure(dim3(blocks_needed_for_bins), dim3(SMUG_DEM_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
             .launch(simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
                     sphereIDsLookUpTable, numContactsInEachBin, *pNumActiveBins);
         GPU_CALL(cudaStreamSynchronize(this_stream));
@@ -200,12 +200,12 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
         contactPairs_t* contactReportOffsets = (contactPairs_t*)scratchPad.allocateTempVector(5, CD_temp_arr_bytes);
         cubDEMPrefixScan<spheresBinTouches_t, contactPairs_t, DEMSolverStateData>(
             numContactsInEachBin, contactReportOffsets, *pNumActiveBins, this_stream, scratchPad);
-        // SGPS_DEM_DEBUG_PRINTF("Num contacts each bin:");
-        // SGPS_DEM_DEBUG_EXEC(displayArray<spheresBinTouches_t>(numContactsInEachBin, *pNumActiveBins));
-        // SGPS_DEM_DEBUG_PRINTF("Contact report offsets:");
-        // SGPS_DEM_DEBUG_EXEC(displayArray<contactPairs_t>(contactReportOffsets, *pNumActiveBins));
-        // SGPS_DEM_DEBUG_PRINTF("Family number:");
-        // SGPS_DEM_DEBUG_EXEC(displayArray<family_t>(granData->familyID, simParams->nOwnerBodies));
+        // SMUG_DEM_DEBUG_PRINTF("Num contacts each bin:");
+        // SMUG_DEM_DEBUG_EXEC(displayArray<spheresBinTouches_t>(numContactsInEachBin, *pNumActiveBins));
+        // SMUG_DEM_DEBUG_PRINTF("Contact report offsets:");
+        // SMUG_DEM_DEBUG_EXEC(displayArray<contactPairs_t>(contactReportOffsets, *pNumActiveBins));
+        // SMUG_DEM_DEBUG_PRINTF("Family number:");
+        // SMUG_DEM_DEBUG_EXEC(displayArray<family_t>(granData->familyID, simParams->nOwnerBodies));
 
         // Add sphere--sphere contacts together with sphere--analytical geometry contacts
         size_t nSphereGeoContact = *scratchPad.pNumContacts;
@@ -225,7 +225,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
         // Then fill in those contacts
         contact_detection_kernels->kernel("populateContactPairsEachBin")
             .instantiate()
-            .configure(dim3(blocks_needed_for_bins), dim3(SGPS_DEM_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
+            .configure(dim3(blocks_needed_for_bins), dim3(SMUG_DEM_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
             .launch(simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
                     sphereIDsLookUpTable, contactReportOffsets, idSphA, idSphB, *pNumActiveBins);
         GPU_CALL(cudaStreamSynchronize(this_stream));
@@ -256,12 +256,12 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
             GPU_CALL(cudaMemcpy(granData->idGeometryA, idA_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
             GPU_CALL(cudaMemcpy(granData->idGeometryB, idB_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
             GPU_CALL(cudaMemcpy(granData->contactType, contactType_sorted, type_arr_bytes, cudaMemcpyDeviceToDevice));
-            // SGPS_DEM_DEBUG_PRINTF("New contact IDs (A):");
-            // SGPS_DEM_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryA, *scratchPad.pNumContacts));
-            // SGPS_DEM_DEBUG_PRINTF("New contact IDs (B):");
-            // SGPS_DEM_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryB, *scratchPad.pNumContacts));
-            // SGPS_DEM_DEBUG_PRINTF("New contact types:");
-            // SGPS_DEM_DEBUG_EXEC(displayArray<contact_t>(granData->contactType, *scratchPad.pNumContacts));
+            // SMUG_DEM_DEBUG_PRINTF("New contact IDs (A):");
+            // SMUG_DEM_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryA, *scratchPad.pNumContacts));
+            // SMUG_DEM_DEBUG_PRINTF("New contact IDs (B):");
+            // SMUG_DEM_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryB, *scratchPad.pNumContacts));
+            // SMUG_DEM_DEBUG_PRINTF("New contact types:");
+            // SMUG_DEM_DEBUG_EXEC(displayArray<contact_t>(granData->contactType, *scratchPad.pNumContacts));
 
             // For history-based models, construct the persistent contact map
             if (!solverFlags.isHistoryless) {
@@ -299,30 +299,30 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                 GPU_CALL(cudaMemset((void*)new_idA_runlength_full, 0, run_length_bytes));
                 GPU_CALL(cudaMemset((void*)old_idA_runlength_full, 0, run_length_bytes));
                 size_t blocks_needed_for_mapping =
-                    (*pNumUniqueNewA + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) / SGPS_DEM_MAX_THREADS_PER_BLOCK;
+                    (*pNumUniqueNewA + SMUG_DEM_MAX_THREADS_PER_BLOCK - 1) / SMUG_DEM_MAX_THREADS_PER_BLOCK;
                 if (blocks_needed_for_mapping > 0) {
                     history_kernels->kernel("fillRunLengthArray")
                         .instantiate()
-                        .configure(dim3(blocks_needed_for_mapping), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0,
+                        .configure(dim3(blocks_needed_for_mapping), dim3(SMUG_DEM_MAX_THREADS_PER_BLOCK), 0,
                                    this_stream)
                         .launch(new_idA_runlength_full, unique_new_idA, new_idA_runlength, *pNumUniqueNewA);
                     GPU_CALL(cudaStreamSynchronize(this_stream));
                 }
 
                 blocks_needed_for_mapping =
-                    (*pNumUniqueOldA + SGPS_DEM_MAX_THREADS_PER_BLOCK - 1) / SGPS_DEM_MAX_THREADS_PER_BLOCK;
+                    (*pNumUniqueOldA + SMUG_DEM_MAX_THREADS_PER_BLOCK - 1) / SMUG_DEM_MAX_THREADS_PER_BLOCK;
                 if (blocks_needed_for_mapping > 0) {
                     history_kernels->kernel("fillRunLengthArray")
                         .instantiate()
-                        .configure(dim3(blocks_needed_for_mapping), dim3(SGPS_DEM_MAX_THREADS_PER_BLOCK), 0,
+                        .configure(dim3(blocks_needed_for_mapping), dim3(SMUG_DEM_MAX_THREADS_PER_BLOCK), 0,
                                    this_stream)
                         .launch(old_idA_runlength_full, unique_old_idA, old_idA_runlength, *pNumUniqueOldA);
                     GPU_CALL(cudaStreamSynchronize(this_stream));
                 }
-                // SGPS_DEM_DEBUG_PRINTF("Unique contact IDs (A):");
-                // SGPS_DEM_DEBUG_EXEC(displayArray<bodyID_t>(unique_new_idA, *pNumUniqueNewA));
-                // SGPS_DEM_DEBUG_PRINTF("Unique contacts run-length:");
-                // SGPS_DEM_DEBUG_EXEC(displayArray<geoSphereTouches_t>(new_idA_runlength, *pNumUniqueNewA));
+                // SMUG_DEM_DEBUG_PRINTF("Unique contact IDs (A):");
+                // SMUG_DEM_DEBUG_EXEC(displayArray<bodyID_t>(unique_new_idA, *pNumUniqueNewA));
+                // SMUG_DEM_DEBUG_PRINTF("Unique contacts run-length:");
+                // SMUG_DEM_DEBUG_EXEC(displayArray<geoSphereTouches_t>(new_idA_runlength, *pNumUniqueNewA));
 
                 // Then, prescan to find run-length offsets, in preparation for custom kernels
                 size_t scanned_runlength_bytes = nSpheresSafe * sizeof(contactPairs_t);
@@ -343,17 +343,17 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                     granData->contactMapping = contactMapping.data();
                 }
                 blocks_needed_for_mapping =
-                    (nSpheresSafe + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
+                    (nSpheresSafe + SMUG_DEM_NUM_BODIES_PER_BLOCK - 1) / SMUG_DEM_NUM_BODIES_PER_BLOCK;
                 if (blocks_needed_for_mapping > 0) {
                     history_kernels->kernel("buildPersistentMap")
                         .instantiate()
-                        .configure(dim3(blocks_needed_for_mapping), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
+                        .configure(dim3(blocks_needed_for_mapping), dim3(SMUG_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
                         .launch(new_idA_runlength_full, old_idA_runlength_full, new_idA_scanned_runlength,
                                 old_idA_scanned_runlength, granData->contactMapping, granData, nSpheresSafe);
                     GPU_CALL(cudaStreamSynchronize(this_stream));
                 }
-                // SGPS_DEM_DEBUG_PRINTF("Contact mapping:");
-                // SGPS_DEM_DEBUG_EXEC(displayArray<contactPairs_t>(granData->contactMapping,
+                // SMUG_DEM_DEBUG_PRINTF("Contact mapping:");
+                // SMUG_DEM_DEBUG_EXEC(displayArray<contactPairs_t>(granData->contactMapping,
                 // *scratchPad.pNumContacts));
 
                 // Finally, copy new contact array to old contact array for the record
@@ -389,7 +389,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
         double avg_cnts_per_geo =
             (*num_unique_idA > 0) ? (double)(*scratchPad.pNumContacts) / (double)(*num_unique_idA) : 0.0;
 
-        SGPS_DEM_DEBUG_PRINTF("Average number of contacts for each geometry: %.9g", avg_cnts_per_geo);
+        SMUG_DEM_DEBUG_PRINTF("Average number of contacts for each geometry: %.9g", avg_cnts_per_geo);
     }
 
     // Finally, don't forget to store the number of contacts for the next iteration, even if there is 0 contacts (in
@@ -399,4 +399,4 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
     *scratchPad.pNumPrevSpheres = simParams->nSpheresGM;
 }
 
-}  // namespace sgps
+}  // namespace smug

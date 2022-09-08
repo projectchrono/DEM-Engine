@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SGPS_JIT_HELPER_H
-#define SGPS_JIT_HELPER_H
+#ifndef SMUG_JIT_HELPER_H
+#define SMUG_JIT_HELPER_H
 
 #include <filesystem>
 #include <string>

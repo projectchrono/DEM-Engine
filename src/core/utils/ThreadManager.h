@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SGPS_THREAD_MANAGER_H
-#define SGPS_THREAD_MANAGER_H
+#ifndef SMUG_THREAD_MANAGER_H
+#define SMUG_THREAD_MANAGER_H
 
 #include <atomic>
 #include <condition_variable>

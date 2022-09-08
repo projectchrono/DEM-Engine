@@ -15,7 +15,7 @@
 
 #include <core/utils/GpuError.h>
 
-namespace sgps {
+namespace smug {
 
 void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernels,
                           DEMDataDT* granData,
@@ -39,24 +39,24 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
     // float3* moiAOwner = (float3*)scratchPad.allocateCachedMOI(cachedArraySizeMOI);
     // float3* moiBOwner = (float3*)(moiAOwner + nContactPairs);
 
-    // size_t blocks_needed_for_twice_contacts = (2 * nContactPairs + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) /
-    // SGPS_DEM_NUM_BODIES_PER_BLOCK;
+    // size_t blocks_needed_for_twice_contacts = (2 * nContactPairs + SMUG_DEM_NUM_BODIES_PER_BLOCK - 1) /
+    // SMUG_DEM_NUM_BODIES_PER_BLOCK;
     size_t blocks_needed_for_contacts =
-        (nContactPairs + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
+        (nContactPairs + SMUG_DEM_NUM_BODIES_PER_BLOCK - 1) / SMUG_DEM_NUM_BODIES_PER_BLOCK;
     if (contactPairArr_isFresh) {
         // First step, prepare the owner ID array (nContactPairs * bodyID_t) for usage in final reduction by key (do it
         // for both A and B)
         // Note for A, it is always a sphere or a triangle
         collect_force_kernels->kernel("cashInOwnerIndexA")
             .instantiate()
-            .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
+            .configure(dim3(blocks_needed_for_contacts), dim3(SMUG_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
             .launch(idAOwner, granData->idGeometryA, granData->ownerClumpBody, granData->contactType, nContactPairs);
         GPU_CALL(cudaStreamSynchronize(this_stream));
 
         // But for B, it can be sphere, triangle or some analytical geometries
         collect_force_kernels->kernel("cashInOwnerIndexB")
             .instantiate()
-            .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
+            .configure(dim3(blocks_needed_for_contacts), dim3(SMUG_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
             .launch(idBOwner, granData->idGeometryB, granData->ownerClumpBody, granData->contactType, nContactPairs);
         GPU_CALL(cudaStreamSynchronize(this_stream));
         // displayArray<bodyID_t>(idAOwner, nContactPairs);
@@ -84,13 +84,13 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
     // Somtimes 1.0 got converted to 0.f with the kernel call.
     collect_force_kernels->kernel("forceToAcc")
         .instantiate()
-        .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
+        .configure(dim3(blocks_needed_for_contacts), dim3(SMUG_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(acc_A, granData->contactForces, idAOwner, 1.f, nContactPairs, granData);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // and don't forget body B
     collect_force_kernels->kernel("forceToAcc")
         .instantiate()
-        .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
+        .configure(dim3(blocks_needed_for_contacts), dim3(SMUG_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(acc_B, granData->contactForces, idBOwner, -1.f, nContactPairs, granData);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // displayFloat3(acc_A, 2 * nContactPairs);
@@ -109,10 +109,10 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
         this_stream, scratchPad);
     // Then we stash acceleration
     size_t blocks_needed_for_stashing =
-        (*pForceCollectionRuns + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
+        (*pForceCollectionRuns + SMUG_DEM_NUM_BODIES_PER_BLOCK - 1) / SMUG_DEM_NUM_BODIES_PER_BLOCK;
     collect_force_kernels->kernel("stashElem")
         .instantiate()
-        .configure(dim3(blocks_needed_for_stashing), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
+        .configure(dim3(blocks_needed_for_stashing), dim3(SMUG_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(granData->aX, granData->aY, granData->aZ, uniqueOwner, accOwner, *pForceCollectionRuns);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // displayArray<float>(granData->aX, nClumps);
@@ -128,7 +128,7 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
     // collect angular accelerations for body A (modifier used to be h * h when we stored acc as h^2*acc)
     collect_force_kernels->kernel("forceToAngAcc")
         .instantiate()
-        .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
+        .configure(dim3(blocks_needed_for_contacts), dim3(SMUG_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(alpha_A, granData->contactPointGeometryA, granData->oriQw, granData->oriQx, granData->oriQy,
                 granData->oriQz, granData->contactForces, granData->contactTorque_convToForce, idAOwner, 1.f,
                 nContactPairs, granData);
@@ -136,7 +136,7 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
     // and don't forget body B
     collect_force_kernels->kernel("forceToAngAcc")
         .instantiate()
-        .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
+        .configure(dim3(blocks_needed_for_contacts), dim3(SMUG_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(alpha_B, granData->contactPointGeometryB, granData->oriQw, granData->oriQx, granData->oriQy,
                 granData->oriQz, granData->contactForces, granData->contactTorque_convToForce, idBOwner, -1.f,
                 nContactPairs, granData);
@@ -151,12 +151,12 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
         this_stream, scratchPad);
     // Then we stash angular acceleration
     blocks_needed_for_stashing =
-        (*pForceCollectionRuns + SGPS_DEM_NUM_BODIES_PER_BLOCK - 1) / SGPS_DEM_NUM_BODIES_PER_BLOCK;
+        (*pForceCollectionRuns + SMUG_DEM_NUM_BODIES_PER_BLOCK - 1) / SMUG_DEM_NUM_BODIES_PER_BLOCK;
     collect_force_kernels->kernel("stashElem")
         .instantiate()
-        .configure(dim3(blocks_needed_for_stashing), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
+        .configure(dim3(blocks_needed_for_stashing), dim3(SMUG_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(granData->alphaX, granData->alphaY, granData->alphaZ, uniqueOwner, accOwner, *pForceCollectionRuns);
     GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
-}  // namespace sgps
+}  // namespace smug

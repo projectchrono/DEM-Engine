@@ -9,7 +9,7 @@
 
 #include <core/utils/GpuError.h>
 
-namespace sgps {
+namespace smug {
 
 struct CubFloat3Add {
     CUB_RUNTIME_FUNCTION __forceinline__ __device__ __host__ float3 operator()(const float3& a, const float3& b) const {
@@ -50,11 +50,11 @@ inline void cubDEMSortByKeys(T1* d_keys_in,
                              T3& scratchPad) {
     size_t cub_scratch_bytes = 0;
     cub::DeviceRadixSort::SortPairs(NULL, cub_scratch_bytes, d_keys_in, d_keys_out, d_vals_in, d_vals_out, n, 0,
-                                    sizeof(T1) * SGPS_BITS_PER_BYTE, this_stream, false);
+                                    sizeof(T1) * SMUG_BITS_PER_BYTE, this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
     cub::DeviceRadixSort::SortPairs(d_scratch_space, cub_scratch_bytes, d_keys_in, d_keys_out, d_vals_in, d_vals_out, n,
-                                    0, sizeof(T1) * SGPS_BITS_PER_BYTE, this_stream, false);
+                                    0, sizeof(T1) * SMUG_BITS_PER_BYTE, this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
@@ -137,4 +137,4 @@ void cubDEMMax(T1* d_in, T1* d_out, size_t n, cudaStream_t& this_stream, T2& scr
     GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
-}  // namespace sgps
+}  // namespace smug

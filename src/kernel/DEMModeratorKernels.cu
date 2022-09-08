@@ -6,14 +6,14 @@
 _massDefs_;
 _moiDefs_;
 
-__global__ void applyFamilyChanges(sgps::DEMDataDT* granData, size_t nOwnerBodies, float h, float t) {
-    sgps::bodyID_t myOwner = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void applyFamilyChanges(smug::DEMDataDT* granData, size_t nOwnerBodies, float h, float t) {
+    smug::bodyID_t myOwner = blockIdx.x * blockDim.x + threadIdx.x;
     if (myOwner < nOwnerBodies) {
         // The user may make references to owner positions, velocities, accelerations and simulation time
         double3 pos;
         float3 vel, acc;
         float mass;
-        sgps::family_t family_code = granData->familyID[myOwner];
+        smug::family_t family_code = granData->familyID[myOwner];
         // Get my mass info from either jitified arrays or global memory
         // Outputs myMass
         // Use an input named exactly `myOwner' which is the id of this owner
@@ -22,7 +22,7 @@ __global__ void applyFamilyChanges(sgps::DEMDataDT* granData, size_t nOwnerBodie
             _massAcqStrat_;
             mass = myMass;
         }
-        voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
+        voxelID2Position<double, smug::voxelID_t, smug::subVoxelPos_t>(
             pos.x, pos.y, pos.z, granData->voxelID[myOwner], granData->locX[myOwner], granData->locY[myOwner],
             granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
         vel.x = granData->vX[myOwner];

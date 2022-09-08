@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SGPS_DEM_API
-#define SGPS_DEM_API
+#ifndef SMUG_DEM_API
+#define SMUG_DEM_API
 
 #include <vector>
 #include <set>
@@ -23,7 +23,7 @@
 #include <DEM/DEMModels.h>
 #include <DEM/DEMAuxClasses.h>
 
-namespace sgps {
+namespace smug {
 
 // class DEMKinematicThread;
 // class DEMDynamicThread;
@@ -125,7 +125,7 @@ class DEMSolver {
     void SetJitifyMassProperties(bool use = true) { jitify_mass_moi = use; }
 
     /// Instruct the contact detection process to use one thread to process a bin (if true), instead of using a block to
-    /// process a bin. This probably also requires you to manually set a smaller SGPS_DEM_MAX_SPHERES_PER_BIN. This can
+    /// process a bin. This probably also requires you to manually set a smaller SMUG_DEM_MAX_SPHERES_PER_BIN. This can
     /// potentially be faster especially in a scenario where the spheres are of similar sizes.
     void SetOneBinPerThread(bool use = true) { use_one_bin_per_thread = use; }
 
@@ -856,6 +856,6 @@ class DEMSolver {
     inline void equipForceModel(std::unordered_map<std::string, std::string>& strMap);
 };
 
-}  // namespace sgps
+}  // namespace smug
 
 #endif

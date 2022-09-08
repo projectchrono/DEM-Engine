@@ -3,15 +3,15 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SGPS_MANAGED_MEM_H
-#define SGPS_MANAGED_MEM_H
+#ifndef SMUG_MANAGED_MEM_H
+#define SMUG_MANAGED_MEM_H
 
 #include <vector>
 
 #include "ManagedAllocator.hpp"
 
 // Convenience functions to help with Managed Memory (allocated using ManagedAllocator, typically)
-namespace sgps {
+namespace smug {
 
 // Underlying implementation
 template <class T>
@@ -89,6 +89,6 @@ void advise(const std::vector<T>& data, ManagedAdvice advice, int device) {
     __advise_impl(data.data(), data.size(), advice, device);
 }
 
-}  // END namespace sgps
+}  // END namespace smug
 
 #endif

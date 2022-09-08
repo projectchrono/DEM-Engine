@@ -5,7 +5,7 @@
 # INCLUDE_DIRECTORIES(${ProjectIncludeRoot})
 
 SET(LIBRARIES
-	sbel_gpu_physics
+	simulator_multi_gpu
 )
 
 # ------------------------------------------------------------------------------

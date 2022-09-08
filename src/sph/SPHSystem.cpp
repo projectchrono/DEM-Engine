@@ -169,30 +169,30 @@ void KinematicThread::operator()() {
     int num_block = (k_n % num_thread != 0) ? (k_n / num_thread + 1) : (k_n / num_thread);
 
     // initial vector declaration
-    std::vector<int, sgps::ManagedAllocator<int>>
+    std::vector<int, smug::ManagedAllocator<int>>
         num_BSD_data;  // vector stores the number of BSD each particle touches
-    std::vector<int, sgps::ManagedAllocator<int>>
+    std::vector<int, smug::ManagedAllocator<int>>
         idx_track_data;  // vector to store original particle idx after sorting
-    std::vector<int, sgps::ManagedAllocator<int>>
+    std::vector<int, smug::ManagedAllocator<int>>
         offset_BSD_data;  // vector to store original particle idx after sorting
 
-    std::vector<int, sgps::ManagedAllocator<int>> pair_i_data;
-    std::vector<int, sgps::ManagedAllocator<int>> pair_j_data;
+    std::vector<int, smug::ManagedAllocator<int>> pair_i_data;
+    std::vector<int, smug::ManagedAllocator<int>> pair_j_data;
 
-    std::vector<float3, sgps::ManagedAllocator<float3>> pos_data;  // position data of all particles
-    std::vector<int, sgps::ManagedAllocator<int>> particle_idx;    // particle index tracking vector
-    std::vector<int, sgps::ManagedAllocator<int>> BSD_idx;         // BSD index tracking vector
-    std::vector<int, sgps::ManagedAllocator<int>>
+    std::vector<float3, smug::ManagedAllocator<float3>> pos_data;  // position data of all particles
+    std::vector<int, smug::ManagedAllocator<int>> particle_idx;    // particle index tracking vector
+    std::vector<int, smug::ManagedAllocator<int>> BSD_idx;         // BSD index tracking vector
+    std::vector<int, smug::ManagedAllocator<int>>
         BSD_iden_idx;  // BSD identification tracking vector, this vector identifies whether the current particle is in
                        // the buffer zone or in the actual SD (0 is not in buffer, 1 is in buffer)
-    std::vector<int, sgps::ManagedAllocator<int>> num_col;  // number of collision - the output of kinematic 1st pass
+    std::vector<int, smug::ManagedAllocator<int>> num_col;  // number of collision - the output of kinematic 1st pass
 
-    std::vector<float, sgps::ManagedAllocator<float>> rho_data;       // local density data
-    std::vector<float, sgps::ManagedAllocator<float>> pressure_data;  // local presusre dataf
+    std::vector<float, smug::ManagedAllocator<float>> rho_data;       // local density data
+    std::vector<float, smug::ManagedAllocator<float>> pressure_data;  // local presusre dataf
 
-    std::vector<float3, sgps::ManagedAllocator<float3>> W_grad_data;  // local W grad data
-    std::vector<int, sgps::ManagedAllocator<int>> temp_storage;       // temp storage space for cub functions
-    std::vector<char, sgps::ManagedAllocator<char>> fix_data;
+    std::vector<float3, smug::ManagedAllocator<float3>> W_grad_data;  // local W grad data
+    std::vector<int, smug::ManagedAllocator<int>> temp_storage;       // temp storage space for cub functions
+    std::vector<char, smug::ManagedAllocator<char>> fix_data;
 
     // initiate JitHelper to perform JITC
     auto kinematic_program = JitHelper::buildProgram(
@@ -289,9 +289,9 @@ void KinematicThread::operator()() {
         // 2nd: BSD_idx (key), BSD_iden_idx (value)
         // the output of this step will be BSD_idx_sorted, idx_track_data_sorted, and BSD_iden_idx_sorted
         // ==============================================================================================================
-        std::vector<int, sgps::ManagedAllocator<int>> BSD_idx_sorted;
-        std::vector<int, sgps::ManagedAllocator<int>> idx_track_data_sorted;
-        std::vector<int, sgps::ManagedAllocator<int>> BSD_iden_idx_sorted;
+        std::vector<int, smug::ManagedAllocator<int>> BSD_idx_sorted;
+        std::vector<int, smug::ManagedAllocator<int>> idx_track_data_sorted;
+        std::vector<int, smug::ManagedAllocator<int>> BSD_iden_idx_sorted;
 
         PairRadixSortAscendCub(BSD_idx, BSD_idx_sorted, idx_track_data, idx_track_data_sorted, BSD_idx.size(),
                                temp_storage);
@@ -308,9 +308,9 @@ void KinematicThread::operator()() {
         // Compute BSD Offsets and Lengths
         // cub::DeviceRunLengthEncode::Encode​ and cub::ExclusiveScan need to be called
         // ==============================================================================================================
-        std::vector<int, sgps::ManagedAllocator<int>> unique_BSD_idx;
-        std::vector<int, sgps::ManagedAllocator<int>> length_BSD_idx;
-        std::vector<int, sgps::ManagedAllocator<int>> offset_BSD_idx;
+        std::vector<int, smug::ManagedAllocator<int>> unique_BSD_idx;
+        std::vector<int, smug::ManagedAllocator<int>> length_BSD_idx;
+        std::vector<int, smug::ManagedAllocator<int>> offset_BSD_idx;
 
         RunLengthEncodeCub(BSD_idx_sorted, unique_BSD_idx, length_BSD_idx, BSD_idx_sorted.size(), temp_storage);
 
@@ -348,7 +348,7 @@ void KinematicThread::operator()() {
         // Compute offsets for num_coll_each_bsd
         // This is supposed to be a CUB exclusive scan
         // ==============================================================================================================
-        std::vector<int, sgps::ManagedAllocator<int>> num_col_offset;
+        std::vector<int, smug::ManagedAllocator<int>> num_col_offset;
 
         PrefixScanExclusiveCub(num_col, num_col_offset, num_col.size(), temp_storage);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -390,15 +390,15 @@ void KinematicThread::operator()() {
         // ==============================================================================================================
 
         // 1st pass to compute particle j's contribution to particle i's density
-        std::vector<int, sgps::ManagedAllocator<int>> i_data_sorted_1;
-        std::vector<int, sgps::ManagedAllocator<int>> j_data_sorted_1;
+        std::vector<int, smug::ManagedAllocator<int>> i_data_sorted_1;
+        std::vector<int, smug::ManagedAllocator<int>> j_data_sorted_1;
 
         PairRadixSortAscendCub(pair_i_data, i_data_sorted_1, pair_j_data, j_data_sorted_1, tot_collision, temp_storage);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        std::vector<int, sgps::ManagedAllocator<int>> i_unique;
-        std::vector<int, sgps::ManagedAllocator<int>> i_length;
-        std::vector<int, sgps::ManagedAllocator<int>> i_offset;
+        std::vector<int, smug::ManagedAllocator<int>> i_unique;
+        std::vector<int, smug::ManagedAllocator<int>> i_length;
+        std::vector<int, smug::ManagedAllocator<int>> i_offset;
 
         RunLengthEncodeCub(i_data_sorted_1, i_unique, i_length, i_data_sorted_1.size(), temp_storage);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -426,15 +426,15 @@ void KinematicThread::operator()() {
         // Computing particle i's contribution to particle j's density
         // ==============================================================================================================
         // 1st pass to compute particle j's contribution to particle i's density
-        std::vector<int, sgps::ManagedAllocator<int>> i_data_sorted_2;
-        std::vector<int, sgps::ManagedAllocator<int>> j_data_sorted_2;
+        std::vector<int, smug::ManagedAllocator<int>> i_data_sorted_2;
+        std::vector<int, smug::ManagedAllocator<int>> j_data_sorted_2;
 
         PairRadixSortAscendCub(pair_j_data, j_data_sorted_2, pair_i_data, i_data_sorted_2, tot_collision, temp_storage);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        std::vector<int, sgps::ManagedAllocator<int>> j_unique;
-        std::vector<int, sgps::ManagedAllocator<int>> j_length;
-        std::vector<int, sgps::ManagedAllocator<int>> j_offset;
+        std::vector<int, smug::ManagedAllocator<int>> j_unique;
+        std::vector<int, smug::ManagedAllocator<int>> j_length;
+        std::vector<int, smug::ManagedAllocator<int>> j_offset;
 
         RunLengthEncodeCub(j_data_sorted_2, j_unique, j_length, j_data_sorted_2.size(), temp_storage);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -506,7 +506,7 @@ void KinematicThread::operator()() {
 void DynamicThread::operator()() {
     // TOUCH CUDA CONTEXT BEFORE YOU DO ANYTHING
     // Option 1:
-    // std::vector<int, sgps::ManagedAllocator<int>> num_arr(dataManager.m_pos.size(), -1);
+    // std::vector<int, smug::ManagedAllocator<int>> num_arr(dataManager.m_pos.size(), -1);
 
     // Option 2:
     // cudaEvent_t ev;
@@ -516,21 +516,21 @@ void DynamicThread::operator()() {
     cudaStreamCreate(&streamInfo.stream);
 
     // create vector to store data from the dataManager
-    std::vector<int, sgps::ManagedAllocator<int>> pair_i_data;
-    std::vector<int, sgps::ManagedAllocator<int>> pair_j_data;
+    std::vector<int, smug::ManagedAllocator<int>> pair_i_data;
+    std::vector<int, smug::ManagedAllocator<int>> pair_j_data;
 
-    std::vector<float, sgps::ManagedAllocator<float>> rho_data;
-    std::vector<float, sgps::ManagedAllocator<float>> pressure_data;
-    std::vector<float3, sgps::ManagedAllocator<float3>> W_grad_data;
+    std::vector<float, smug::ManagedAllocator<float>> rho_data;
+    std::vector<float, smug::ManagedAllocator<float>> pressure_data;
+    std::vector<float3, smug::ManagedAllocator<float3>> W_grad_data;
 
-    std::vector<float3, sgps::ManagedAllocator<float3>> col_acc_data;
+    std::vector<float3, smug::ManagedAllocator<float3>> col_acc_data;
 
-    std::vector<int, sgps::ManagedAllocator<int>> offset_data;
-    std::vector<float3, sgps::ManagedAllocator<float3>> pos_data;
-    std::vector<float3, sgps::ManagedAllocator<float3>> vel_data;
-    std::vector<float3, sgps::ManagedAllocator<float3>> acc_data;
-    std::vector<char, sgps::ManagedAllocator<char>> fix_data;
-    std::vector<float3, sgps::ManagedAllocator<float3>> temp_storage;
+    std::vector<int, smug::ManagedAllocator<int>> offset_data;
+    std::vector<float3, smug::ManagedAllocator<float3>> pos_data;
+    std::vector<float3, smug::ManagedAllocator<float3>> vel_data;
+    std::vector<float3, smug::ManagedAllocator<float3>> acc_data;
+    std::vector<char, smug::ManagedAllocator<char>> fix_data;
+    std::vector<float3, smug::ManagedAllocator<float3>> temp_storage;
     float kernel_h;
     float m;
     float rho_0;
@@ -627,10 +627,10 @@ void DynamicThread::operator()() {
         // Dynamic Step 2
         // Reduce acceleration data w.r.t particle i, then add to acc_data for particle i
         // ==============================================================================================================
-        std::vector<int, sgps::ManagedAllocator<int>> pair_i_data_sorted_1;
-        std::vector<float3, sgps::ManagedAllocator<float3>> col_acc_data_sorted_1;
-        std::vector<int, sgps::ManagedAllocator<int>> pair_i_data_reduced_1;
-        std::vector<float3, sgps::ManagedAllocator<float3>> col_acc_data_reduced_1;
+        std::vector<int, smug::ManagedAllocator<int>> pair_i_data_sorted_1;
+        std::vector<float3, smug::ManagedAllocator<float3>> col_acc_data_sorted_1;
+        std::vector<int, smug::ManagedAllocator<int>> pair_i_data_reduced_1;
+        std::vector<float3, smug::ManagedAllocator<float3>> col_acc_data_reduced_1;
 
         // sort
         PairRadixSortAscendCub(pair_i_data, pair_i_data_sorted_1, col_acc_data, col_acc_data_sorted_1, tot_collision,
@@ -671,10 +671,10 @@ void DynamicThread::operator()() {
         // Dynamic Step 4
         // Reduce acceleration data w.r.t particle j, then add to acc_data for particle j
         // ==============================================================================================================
-        std::vector<int, sgps::ManagedAllocator<int>> pair_j_data_sorted_2;
-        std::vector<float3, sgps::ManagedAllocator<float3>> col_acc_data_sorted_2;
-        std::vector<int, sgps::ManagedAllocator<int>> pair_j_data_reduced_2;
-        std::vector<float3, sgps::ManagedAllocator<float3>> col_acc_data_reduced_2;
+        std::vector<int, smug::ManagedAllocator<int>> pair_j_data_sorted_2;
+        std::vector<float3, smug::ManagedAllocator<float3>> col_acc_data_sorted_2;
+        std::vector<int, smug::ManagedAllocator<int>> pair_j_data_reduced_2;
+        std::vector<float3, smug::ManagedAllocator<float3>> col_acc_data_reduced_2;
 
         // sort
         PairRadixSortAscendCub(pair_j_data, pair_j_data_sorted_2, col_acc_data, col_acc_data_sorted_2, tot_collision,

@@ -14,7 +14,7 @@
 #include <random>
 #include <filesystem>
 
-using namespace sgps;
+using namespace smug;
 using namespace std::filesystem;
 
 int main() {

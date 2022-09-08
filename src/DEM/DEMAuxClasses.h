@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SGPS_DEM_INSPECTOR_HPP
-#define SGPS_DEM_INSPECTOR_HPP
+#ifndef SMUG_DEM_INSPECTOR_HPP
+#define SMUG_DEM_INSPECTOR_HPP
 
 #include <unordered_map>
 #include <core/utils/JitHelper.h>
@@ -15,7 +15,7 @@ namespace jitify {
 class Program;
 }
 
-namespace sgps {
+namespace smug {
 
 class DEMSolver;
 
@@ -156,6 +156,6 @@ class DEMForceModel {
     void SetPerOwnerWildcards(const std::set<std::string>& wildcards);
 };
 
-}  // END namespace sgps
+}  // END namespace smug
 
 #endif

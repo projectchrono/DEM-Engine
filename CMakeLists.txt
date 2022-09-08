@@ -15,7 +15,7 @@ set(VERSION_MINOR   0)
 set(VERSION_PATCH   0)
 
 project(
-	SBEL-GPU-Physics 
+	Simulator-MUlti-Gpu 
 	VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
 	LANGUAGES CXX CUDA
 )
@@ -120,7 +120,7 @@ add_subdirectory(src/algorithms)
 # ---------------------------------------------------------------------------- #
 
 add_library(
-	sbel_gpu_physics 
+	simulator_multi_gpu 
 	STATIC
 	$<TARGET_OBJECTS:core>
 	$<TARGET_OBJECTS:DEM>
@@ -135,18 +135,18 @@ get_target_property(SPH_INTERFACE sph INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(ALGORITHMS_INTERFACE algorithms INTERFACE_INCLUDE_DIRECTORIES)
 
 # All targets use the same include directories, so we can cheat and just export one of them
-target_include_directories(sbel_gpu_physics 
+target_include_directories(simulator_multi_gpu 
 	PUBLIC ${CORE_INTERFACE}
 )
 
-target_link_libraries(sbel_gpu_physics
+target_link_libraries(simulator_multi_gpu
 	PUBLIC CUDA::cudart
 	PUBLIC CUDA::nvrtc
 	PUBLIC ${ChPF_IMPORTED_NAME}
 )
 
 # Attach include directories to the top-level library target
-set_target_properties(sbel_gpu_physics
+set_target_properties(simulator_multi_gpu
 	PROPERTIES
 	LINKER_LANGUAGE CUDA
 )
@@ -155,57 +155,57 @@ set_target_properties(sbel_gpu_physics
 # Export and Install The Generated Targets 
 # ---------------------------------------------------------------------------- #
 
-set(config_directory ${CMAKE_INSTALL_LIBDIR}/cmake/SGPS)
+set(config_directory ${CMAKE_INSTALL_LIBDIR}/cmake/SMUG)
 
 # Install the library, creating an export target for it as well 
 install(
-	TARGETS sbel_gpu_physics EXPORT SGPSTargets
+	TARGETS simulator_multi_gpu EXPORT SMUGTargets
 	LIBRARY
 		DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
 # Export the generated library target
-export(EXPORT SGPSTargets
-	FILE "${CMAKE_CURRENT_BINARY_DIR}/SGPS/SGPSTargets.cmake"
-	NAMESPACE SGPS::
+export(EXPORT SMUGTargets
+	FILE "${CMAKE_CURRENT_BINARY_DIR}/SMUG/SMUGTargets.cmake"
+	NAMESPACE SMUG::
 )
 
 # Set the install location for the exported target file 
 install(
-	EXPORT SGPSTargets
+	EXPORT SMUGTargets
 	DESTINATION 
 		${config_directory}
-	NAMESPACE SGPS::
+	NAMESPACE SMUG::
 )
 
 
 # These macros aid in the generation of the installable config files 
 
 
-# Generate the **Build Tree** version of SGPSConfig.cmake from the base file
+# Generate the **Build Tree** version of SMUGConfig.cmake from the base file
 set(CONF_INCLUDE_DIRS "${ProjectIncludeSource}" "${ProjectIncludeGenerated}")
 
-configure_file(cmake/SGPSConfig.cmake.in
-	"${CMAKE_CURRENT_BINARY_DIR}/SGPS/SGPSConfig.cmake"
+configure_file(cmake/SMUGConfig.cmake.in
+	"${CMAKE_CURRENT_BINARY_DIR}/SMUG/SMUGConfig.cmake"
 	@ONLY
 )
 
 
-# Generate the _Install Tree_ version of SGPSConfig.cmake from the base file
+# Generate the _Install Tree_ version of SMUGConfig.cmake from the base file
 file(RELATIVE_PATH REL_INCLUDE_DIR ${CMAKE_INSTALL_PREFIX}/${config_directory} ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR})
-set(CONF_INCLUDE_DIRS "\${SGPSCMakeDir}/${REL_INCLUDE_DIR}")
+set(CONF_INCLUDE_DIRS "\${SMUGCMakeDir}/${REL_INCLUDE_DIR}")
 
 # NOTE: This is placed in CMAKE_FILES_DIRECTORY to keep it out of the build tree
-configure_file(cmake/SGPSConfig.cmake.in
-	"${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/SGPSConfig.cmake"
+configure_file(cmake/SMUGConfig.cmake.in
+	"${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/SMUGConfig.cmake"
 	@ONLY
 )
 
 
-# Automatically generate a SGPSConfigVersion.cmake file
+# Automatically generate a SMUGConfigVersion.cmake file
 
 write_basic_package_version_file(
-	${CMAKE_CURRENT_BINARY_DIR}/SGPS/SGPSConfigVersion.cmake
+	${CMAKE_CURRENT_BINARY_DIR}/SMUG/SMUGConfigVersion.cmake
 	VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
 	COMPATIBILITY AnyNewerVersion
 )
@@ -213,8 +213,8 @@ write_basic_package_version_file(
 # Install the generated config files
 install(
 	FILES
-		"${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/SGPSConfig.cmake"
-		"${CMAKE_CURRENT_BINARY_DIR}/SGPS/SGPSConfigVersion.cmake"
+		"${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/SMUGConfig.cmake"
+		"${CMAKE_CURRENT_BINARY_DIR}/SMUG/SMUGConfigVersion.cmake"
 	DESTINATION
 		${config_directory}
 )

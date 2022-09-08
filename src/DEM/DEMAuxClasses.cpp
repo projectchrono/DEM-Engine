@@ -8,7 +8,7 @@
 #include <DEM/HostSideHelpers.hpp>
 #include <DEM/DEMModels.h>
 
-namespace sgps {
+namespace smug {
 
 // =============================================================================
 // DEMInspector class
@@ -42,7 +42,7 @@ const std::string DEM_INSP_CODE_SPHERE_HIGH_ABSV = R"V0G0N(
         // main reason for querying max absv for us. So, it should be fine.
         float3 pRotVel = cross(rotVel, relPos);
         // Map rotational contribution back to global
-        applyOriQToVector3<float, sgps::oriQ_t>(pRotVel.x, pRotVel.y, pRotVel.z, 
+        applyOriQToVector3<float, smug::oriQ_t>(pRotVel.x, pRotVel.y, pRotVel.z, 
                                                 oriQw, oriQx, oriQy, oriQz);
         vel = length(pRotVel + linVel);
     }
@@ -225,4 +225,4 @@ void DEMForceModel::SetPerOwnerWildcards(const std::set<std::string>& wildcards)
     m_owner_wildcards = wildcards;
 }
 
-}  // END namespace sgps
+}  // END namespace smug
