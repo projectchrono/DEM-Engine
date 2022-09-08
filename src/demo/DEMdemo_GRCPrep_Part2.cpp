@@ -103,16 +103,46 @@ int main() {
     base_batch.SetOriQ(in_quat);
     DEM_sim.AddClumps(base_batch);
 
+    // I also would like an `inverse batch', which is a batch of clumps that is the base batch flipped around
+    DEMClumpBatch inv_batch = base_batch;
+    std::vector<float3> inv_xyz = in_xyz;
+    std::vector<float4> inv_quat = in_quat;
+    float3 flip_center = make_float3(0, 0, bottom);
+    float3 flip_axis = make_float3(1, 0, 0);
+    std::for_each(inv_xyz.begin(), inv_xyz.end(), [flip_center, flip_axis](float3& xyz) {
+        xyz = flip_center + Rodrigues(xyz - flip_center, flip_axis, 3.14159);
+    });
+    std::for_each(inv_quat.begin(), inv_quat.end(), [flip_axis](float4& Q) { Q = RotateQuat(Q, flip_axis, 3.14159); });
+    // inv_batch.SetPos(inv_xyz);
+    inv_batch.SetOriQ(inv_quat);
+
     // Based on the `base_batch', we can create more batches. For example, another batch that is like copy-paste the
     // existing batch, then shift up for a small distance.
-    float shift_dist = 0.04;
-    // Add 5 layers of such graular bed
-    for (int i = 0; i < 5; i++) {
+    float shift_dist = 0.1;
+    // First put the inv batch above the base batch
+    std::for_each(inv_xyz.begin(), inv_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist / 2.0; });
+    inv_batch.SetPos(inv_xyz);
+    DEM_sim.AddClumps(inv_batch);
+    // Add 10 layers of such graular bed
+    for (int i = 0; i < 4; i++) {
         DEMClumpBatch another_batch = base_batch;
         std::for_each(in_xyz.begin(), in_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
         another_batch.SetPos(in_xyz);
         DEM_sim.AddClumps(another_batch);
+        DEMClumpBatch another_inv_batch = inv_batch;
+        std::for_each(inv_xyz.begin(), inv_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
+        another_inv_batch.SetPos(inv_xyz);
+        DEM_sim.AddClumps(another_inv_batch);
     }
+
+    // Now add a plane to compress the `road'
+    auto compressor = DEM_sim.AddExternalObject();
+    compressor->AddPlane(make_float3(0, 0, 0), make_float3(0, 0, -1), mat_type_terrain);
+    compressor->SetFamily(DEM_RESERVED_FAMILY_NUM);
+    auto compressor_tracker = DEM_sim.Track(compressor);
+
+    // And a z position inspector
+    auto max_z_finder = DEM_sim.CreateInspector("clump_max_z");
 
     // Make ready for simulation
     float step_size = 5e-7;
@@ -127,7 +157,6 @@ int main() {
     DEM_sim.SetInitBinSize(scales.at(2));
     DEM_sim.Initialize();
 
-    float time_end = 10.0;
     unsigned int fps = 20;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
@@ -138,7 +167,7 @@ int main() {
     unsigned int curr_step = 0;
 
     float settle_frame_time = 0.05;
-    float settle_batch_time = 1.2;
+    float settle_batch_time = 2.5;
 
     for (float t = 0; t < settle_batch_time; t += settle_frame_time) {
         std::cout << "Frame: " << currframe << std::endl;
@@ -149,8 +178,29 @@ int main() {
         DEM_sim.ShowThreadCollaborationStats();
     }
 
+    // Now compress it
+    float compress_time = 0.5;
+    float compressor_final_dist = 0.3;
+    float compressor_v = compressor_final_dist / compress_time;
+
+    float now_z = max_z_finder->GetValue();
+    compressor_tracker->SetPos(make_float3(0, 0, now_z));
+    for (float t = 0; t < compress_time; t += step_size, curr_step++) {
+        if (curr_step % out_steps == 0) {
+            std::cout << "Frame: " << currframe << std::endl;
+            std::cout << "Highest point is at " << now_z << std::endl;
+            DEM_sim.ShowThreadCollaborationStats();
+            char filename[200];
+            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
+            DEM_sim.WriteSphereFile(std::string(filename));
+        }
+        now_z -= compressor_v * step_size;
+        compressor_tracker->SetPos(make_float3(0, 0, now_z));
+        DEM_sim.DoDynamics(step_size);
+    }
+
     char cp_filename[200];
-    sprintf(cp_filename, "%s/GRC_1e6.csv", out_dir.c_str());
+    sprintf(cp_filename, "%s/GRC_2e6.csv", out_dir.c_str());
     DEM_sim.WriteClumpFile(std::string(cp_filename));
 
     DEM_sim.ClearThreadCollaborationStats();

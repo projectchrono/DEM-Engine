@@ -80,12 +80,12 @@ inline float3 host_make_float3(float a, float b, float c) {
     f.z = c;
     return f;
 }
-inline float4 host_make_float4(float a, float b, float c, float d) {
+inline float4 host_make_float4(float x, float y, float z, float w) {
     float4 f;
-    f.x = a;
-    f.y = b;
-    f.z = c;
-    f.w = d;
+    f.x = x;
+    f.y = y;
+    f.z = z;
+    f.w = w;
     return f;
 }
 
@@ -186,8 +186,36 @@ inline std::string compact_code(const std::string& prgm) {
     return res;
 }
 
+/// Get a quaternion from axis and angle
+inline float4 QuatFromAxisAngle(const float3& axis, const float& theta) {
+    float4 Q;
+    Q.x = axis.x * sin(theta / 2);
+    Q.y = axis.y * sin(theta / 2);
+    Q.z = axis.z * sin(theta / 2);
+    Q.w = cos(theta / 2);
+    return Q;
+}
+
+/// Host version of Quaternion product
+inline float4 hostHamiltonProduct(const float4& Q1, const float4& Q2) {
+    float4 Q;
+    Q.w = Q1.w * Q2.w - Q1.x * Q2.x - Q1.y * Q2.y - Q1.z * Q2.z;
+    Q.x = Q1.w * Q2.x + Q1.x * Q2.w + Q1.y * Q2.z - Q1.z * Q2.y;
+    Q.y = Q1.w * Q2.y - Q1.x * Q2.z + Q1.y * Q2.w + Q1.z * Q2.x;
+    Q.z = Q1.w * Q2.z + Q1.x * Q2.y - Q1.y * Q2.x + Q1.z * Q2.w;
+    return Q;
+}
+
+/// Rotate a quaternion about an unit axis by an angle
+inline float4 RotateQuat(const float4& quat, const float3& axis, const float& theta) {
+    // Rotation to quaternion first
+    float4 rot = QuatFromAxisAngle(axis, theta);
+    // Apply
+    return hostHamiltonProduct(rot, quat);
+}
+
 /// Rotate a vector about an unit axis by an angle
-inline float3 Rodrigues(const float3 vec, const float3 axis, const float theta) {
+inline float3 Rodrigues(const float3& vec, const float3& axis, const float& theta) {
     float3 res;
     res = vec * cos(theta) + cross(axis, vec) * sin(theta) + axis * dot(axis, vec) * (1. - cos(theta));
     return res;
@@ -353,16 +381,16 @@ inline size_t find_offset_in_list(const T1& list, const T2& key) {
 
 /// Host version of applying a quaternion to a vector
 template <typename T1, typename T2>
-inline void hostApplyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Q0, const T2& Q1, const T2& Q2, const T2& Q3) {
+inline void hostApplyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Qw, const T2& Qx, const T2& Qy, const T2& Qz) {
     T1 oldX = X;
     T1 oldY = Y;
     T1 oldZ = Z;
-    X = ((T2)2.0 * (Q0 * Q0 + Q1 * Q1) - (T2)1.0) * oldX + ((T2)2.0 * (Q1 * Q2 - Q0 * Q3)) * oldY +
-        ((T2)2.0 * (Q1 * Q3 + Q0 * Q2)) * oldZ;
-    Y = ((T2)2.0 * (Q1 * Q2 + Q0 * Q3)) * oldX + ((T2)2.0 * (Q0 * Q0 + Q2 * Q2) - (T2)1.0) * oldY +
-        ((T2)2.0 * (Q2 * Q3 - Q0 * Q1)) * oldZ;
-    Z = ((T2)2.0 * (Q1 * Q3 - Q0 * Q2)) * oldX + ((T2)2.0 * (Q2 * Q3 + Q0 * Q1)) * oldY +
-        ((T2)2.0 * (Q0 * Q0 + Q3 * Q3) - (T2)1.0) * oldZ;
+    X = ((T2)2.0 * (Qw * Qw + Qx * Qx) - (T2)1.0) * oldX + ((T2)2.0 * (Qx * Qy - Qw * Qz)) * oldY +
+        ((T2)2.0 * (Qx * Qz + Qw * Qy)) * oldZ;
+    Y = ((T2)2.0 * (Qx * Qy + Qw * Qz)) * oldX + ((T2)2.0 * (Qw * Qw + Qy * Qy) - (T2)1.0) * oldY +
+        ((T2)2.0 * (Qy * Qz - Qw * Qx)) * oldZ;
+    Z = ((T2)2.0 * (Qx * Qz - Qw * Qy)) * oldX + ((T2)2.0 * (Qy * Qz + Qw * Qx)) * oldY +
+        ((T2)2.0 * (Qw * Qw + Qz * Qz) - (T2)1.0) * oldZ;
 }
 
 // Default accuracy is 17. This accuracy is especially needed for MOIs and length-unit (l).
@@ -381,6 +409,16 @@ inline void deallocate_array(std::vector<T1>& arr) {
 template <typename T1, typename T2>
 inline void deallocate_array(std::unordered_map<T1, T2>& mapping) {
     mapping.clear();
+}
+
+/// Find the offset of an element in an array
+template <typename T1>
+inline size_t find_array_offset(T1* arr, T1 elem, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        if (arr[i] == elem)
+            return i;
+    }
+    return n;
 }
 
 // A smaller hasher that helps determine the indentifier type. Contribution from Nick and hare1039 on Stackoverflow,

@@ -221,7 +221,118 @@ void DEMSolver::jitifyKernels() {
     }
 }
 
-void DEMSolver::figureOutNV() {}
+void DEMSolver::figureOutNV() {
+    // Rank the size of XYZ, ascending
+    float XYZ[3] = {m_user_boxSize.x, m_user_boxSize.y, m_user_boxSize.z};
+    DEM_SPATIAL_DIR rankXYZ[3] = {DEM_SPATIAL_DIR::X, DEM_SPATIAL_DIR::Y, DEM_SPATIAL_DIR::Z};
+    for (int i = 0; i < 3 - 1; i++)
+        for (int j = i + 1; j < 3; j++)
+            if (XYZ[i] > XYZ[j]) {
+                elemSwap(XYZ + i, XYZ + j);
+                elemSwap(rankXYZ + i, rankXYZ + j);
+            }
+    // Record the size ranking
+    float userSize321[3] = {XYZ[0], XYZ[1], XYZ[2]};
+    // Inspect how many times larger the larger one is. Say it is 2 times larger, then one more bit is given to the
+    // larger one; say 4 times larger, then 2 more bits are given to the larger one. If in between (2, 4), then if it's
+    // more than sqrt(2) * 2 times larger, then 2 morebits; otherwise, 1 more bit. Why? Do that math then maybe you can
+    // agree this wastes as little bits as possible.
+    int n_more_bits_for_me[2] = {0, 0};
+    while (XYZ[0] < XYZ[1]) {
+        if (sqrt(2.) * XYZ[0] > XYZ[1]) {
+            break;
+        }
+        n_more_bits_for_me[0]++;
+        XYZ[0] *= 2.;
+    }
+    while (XYZ[1] < XYZ[2]) {
+        if (sqrt(2.) * XYZ[1] > XYZ[2]) {
+            break;
+        }
+        n_more_bits_for_me[1]++;
+        XYZ[1] *= 2.;
+    }
+
+    SGPS_DEM_DEBUG_PRINTF("2nd place uses %d more bits than 3rd, and 1st place uses %d more bits than 2rd.",
+                          n_more_bits_for_me[0], n_more_bits_for_me[1]);
+
+    // Then we know how many bits each one would have
+    int base_bits = ((int)DEM_VOXEL_COUNT_POWER2 - n_more_bits_for_me[0] - n_more_bits_for_me[1]) / 3;
+    int left_over = ((int)DEM_VOXEL_COUNT_POWER2 - n_more_bits_for_me[0] - n_more_bits_for_me[1]) % 3;
+    int bits_3rd = base_bits;
+    int bits_2nd = bits_3rd + n_more_bits_for_me[0];
+    int bits_1st = bits_2nd + n_more_bits_for_me[1];
+    while (left_over > 0) {
+        // Try giving to losers... unless the loser did not suffer bits penalty, in which case give to the larger one
+        if (bits_3rd < bits_2nd) {
+            bits_3rd++;
+        } else if (bits_2nd < bits_1st) {
+            bits_2nd++;
+        } else {
+            bits_1st++;
+        }
+        left_over--;
+    }
+    SGPS_DEM_DEBUG_PRINTF("After assigning left-overs, 3rd, 2nd and 1st have bits: %d, %d, %d.", bits_3rd, bits_2nd,
+                          bits_1st);
+
+    int bits[3] = {bits_3rd, bits_2nd, bits_1st};
+    if (m_box_dir_length_is_exact == DEM_SPATIAL_DIR::NONE) {
+        // Have to use the largest l, given the voxel budget
+        double l3 =
+            (double)userSize321[0] / (double)std::pow(2., (int)DEM_VOXEL_RES_POWER2) / (double)std::pow(2., bits_3rd);
+        double l2 =
+            (double)userSize321[1] / (double)std::pow(2., (int)DEM_VOXEL_RES_POWER2) / (double)std::pow(2., bits_2nd);
+        double l1 =
+            (double)userSize321[2] / (double)std::pow(2., (int)DEM_VOXEL_RES_POWER2) / (double)std::pow(2., bits_1st);
+        l = std::max(l3, std::max(l2, l1));
+    } else {
+        // Find which dir user wants to be exact
+        int exact_dir_no = find_array_offset(rankXYZ, m_box_dir_length_is_exact, 3);
+        int not_exact_dir[2];
+        if (exact_dir_no == 0) {
+            not_exact_dir[0] = 1;
+            not_exact_dir[1] = 2;
+        } else if (exact_dir_no == 1) {
+            not_exact_dir[0] = 0;
+            not_exact_dir[1] = 2;
+        } else {
+            not_exact_dir[0] = 0;
+            not_exact_dir[1] = 1;
+        }
+        // We hope this l is big enough...
+        l = (double)userSize321[exact_dir_no] / (double)std::pow(2., (int)DEM_VOXEL_RES_POWER2) /
+            (double)std::pow(2., bits[exact_dir_no]);
+        while (l * (double)std::pow(2., (int)DEM_VOXEL_RES_POWER2) * (double)std::pow(2., bits[not_exact_dir[1]]) <
+               userSize321[not_exact_dir[1]]) {
+            // Borrow a bit from this dir...
+            bits[exact_dir_no] -= 1;
+            bits[not_exact_dir[1]] += 1;
+            l = (double)userSize321[exact_dir_no] / (double)std::pow(2., (int)DEM_VOXEL_RES_POWER2) /
+                (double)std::pow(2., bits[exact_dir_no]);
+        }
+        while (l * (double)std::pow(2., (int)DEM_VOXEL_RES_POWER2) * (double)std::pow(2., bits[not_exact_dir[0]]) <
+               userSize321[not_exact_dir[0]]) {
+            // Borrow a bit from this dir...
+            bits[exact_dir_no] -= 1;
+            bits[not_exact_dir[0]] += 1;
+            l = (double)userSize321[exact_dir_no] / (double)std::pow(2., (int)DEM_VOXEL_RES_POWER2) /
+                (double)std::pow(2., bits[exact_dir_no]);
+        }
+    }
+    SGPS_DEM_DEBUG_PRINTF(
+        "After final tweak concerning possible exact direction requirements, 3rd, 2nd and 1st have bits: %d, %d, %d.",
+        bits[0], bits[1], bits[2]);
+    nvXp2 = bits[find_array_offset(rankXYZ, DEM_SPATIAL_DIR::X, 3)];
+    nvYp2 = bits[find_array_offset(rankXYZ, DEM_SPATIAL_DIR::Y, 3)];
+    nvZp2 = bits[find_array_offset(rankXYZ, DEM_SPATIAL_DIR::Z, 3)];
+
+    // Calculating `world' size by the input nvXp2 and l
+    m_voxelSize = (double)((size_t)1 << DEM_VOXEL_RES_POWER2) * (double)l;
+    m_boxX = m_voxelSize * (double)((size_t)1 << nvXp2);
+    m_boxY = m_voxelSize * (double)((size_t)1 << nvYp2);
+    m_boxZ = m_voxelSize * (double)((size_t)1 << nvZp2);
+}
 
 void DEMSolver::decideBinSize() {
     // find the smallest radius
@@ -279,6 +390,7 @@ void DEMSolver::reportInitStats() const {
     SGPS_DEM_INFO("The total number of clumps: %zu", nOwnerClumps);
     SGPS_DEM_INFO("The combined number of component spheres: %zu", nSpheresGM);
     SGPS_DEM_INFO("The total number of analytical objects: %u", nExtObj);
+    SGPS_DEM_INFO("The total number of meshes: %u", nTriMeshes);
     SGPS_DEM_INFO("Grand total number of owners: %zu", nOwnerBodies);
 
     if (m_expand_factor > 0.0) {
@@ -756,9 +868,10 @@ void DEMSolver::packDataPointers() {
 
 void DEMSolver::validateUserInputs() {
     // Then some checks...
-    if (m_templates.size() == 0) {
-        SGPS_DEM_ERROR("Before initializing the system, at least one clump type should be defined via LoadClumpType.");
-    }
+    // if (m_templates.size() == 0) {
+    //     SGPS_DEM_ERROR("Before initializing the system, at least one clump type should be defined via
+    //     LoadClumpType.");
+    // }
 
     if (m_user_boxSize.x <= 0.f || m_user_boxSize.y <= 0.f || m_user_boxSize.z <= 0.f) {
         SGPS_DEM_ERROR(
@@ -914,7 +1027,7 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
                 posStr += "Z = " + preInfo.linPosZ + ";";
             if (preInfo.oriQ != "none") {
                 posStr += "float4 myOriQ = " + preInfo.oriQ + ";";
-                posStr += "ori0 = myOriQ.x; ori1 = myOriQ.y; ori2 = myOriQ.z; ori3 = myOriQ.w;";
+                posStr += "oriQw = myOriQ.w; oriQx = myOriQ.x; oriQy = myOriQ.y; oriQz = myOriQ.z;";
             }
             posStr += "LinPrescribed = " + std::to_string(preInfo.linPosPrescribed) + ";";
             posStr += "RotPrescribed = " + std::to_string(preInfo.rotPosPrescribed) + ";";

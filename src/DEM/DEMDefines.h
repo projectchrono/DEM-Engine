@@ -38,6 +38,7 @@ constexpr double PI = 3.1415926535897932385;
 constexpr double PI_SQUARED = 9.869604401089358;
 
 constexpr uint8_t DEM_VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * SGPS_BITS_PER_BYTE;
+constexpr uint8_t DEM_VOXEL_COUNT_POWER2 = sizeof(voxelID_t) * SGPS_BITS_PER_BYTE;
 constexpr int64_t DEM_MAX_SUBVOXEL = (int64_t)1 << DEM_VOXEL_RES_POWER2;
 
 #define SGPS_DEM_NUM_BODIES_PER_BLOCK 512
@@ -130,7 +131,7 @@ enum DEM_OUTPUT_CONTENT {
     EXP_FACTOR = 256
 };
 // Output particles as individual (component) spheres, or as owner clumps (clump CoMs for location, as an example)?
-// enum class DEM_OUTPUT_MODE { SPHERE, CLUMP };
+enum class DEM_SPATIAL_DIR { X, Y, Z, NONE };
 
 // =============================================================================
 // NOW DEFINING SOME GPU-SIDE DATA STRUCTURES
@@ -215,10 +216,10 @@ struct DEMDataDT {
     subVoxelPos_t* locY;
     subVoxelPos_t* locZ;
 
-    oriQ_t* oriQ0;
-    oriQ_t* oriQ1;
-    oriQ_t* oriQ2;
-    oriQ_t* oriQ3;
+    oriQ_t* oriQw;
+    oriQ_t* oriQx;
+    oriQ_t* oriQy;
+    oriQ_t* oriQz;
 
     float* vX;
     float* vY;
@@ -307,10 +308,10 @@ struct DEMDataKT {
     subVoxelPos_t* locX;
     subVoxelPos_t* locY;
     subVoxelPos_t* locZ;
-    oriQ_t* oriQ0;
-    oriQ_t* oriQ1;
-    oriQ_t* oriQ2;
-    oriQ_t* oriQ3;
+    oriQ_t* oriQw;
+    oriQ_t* oriQx;
+    oriQ_t* oriQy;
+    oriQ_t* oriQz;
 
     // kT-owned buffer pointers, for itself's usage
     voxelID_t* voxelID_buffer;

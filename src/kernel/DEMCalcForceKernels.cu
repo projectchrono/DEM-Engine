@@ -53,10 +53,10 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
                 AOwnerPos.x, AOwnerPos.y, AOwnerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
                 granData->locY[myOwner], granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
 
-            AoriQ0 = granData->oriQ0[myOwner];
-            AoriQ1 = granData->oriQ1[myOwner];
-            AoriQ2 = granData->oriQ2[myOwner];
-            AoriQ3 = granData->oriQ3[myOwner];
+            AoriQ0 = granData->oriQw[myOwner];
+            AoriQ1 = granData->oriQx[myOwner];
+            AoriQ2 = granData->oriQy[myOwner];
+            AoriQ3 = granData->oriQz[myOwner];
             applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, AoriQ0, AoriQ1, AoriQ2, AoriQ3);
             bodyAPos.x = AOwnerPos.x + (double)myRelPosX;
             bodyAPos.y = AOwnerPos.y + (double)myRelPosY;
@@ -92,10 +92,10 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 BOwnerPos.x, BOwnerPos.y, BOwnerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
                 granData->locY[myOwner], granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            BoriQ0 = granData->oriQ0[myOwner];
-            BoriQ1 = granData->oriQ1[myOwner];
-            BoriQ2 = granData->oriQ2[myOwner];
-            BoriQ3 = granData->oriQ3[myOwner];
+            BoriQ0 = granData->oriQw[myOwner];
+            BoriQ1 = granData->oriQx[myOwner];
+            BoriQ2 = granData->oriQy[myOwner];
+            BoriQ3 = granData->oriQz[myOwner];
             applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
             bodyBPos.x = BOwnerPos.x + (double)myRelPosX;
             bodyBPos.y = BOwnerPos.y + (double)myRelPosY;
@@ -126,10 +126,10 @@ __global__ void calculateContactForces(sgps::DEMSimParams* simParams, sgps::DEMD
             myRelPosX = objRelPosX[bodyB];
             myRelPosY = objRelPosY[bodyB];
             myRelPosZ = objRelPosZ[bodyB];
-            BoriQ0 = granData->oriQ0[myOwner];
-            BoriQ1 = granData->oriQ1[myOwner];
-            BoriQ2 = granData->oriQ2[myOwner];
-            BoriQ3 = granData->oriQ3[myOwner];
+            BoriQ0 = granData->oriQw[myOwner];
+            BoriQ1 = granData->oriQx[myOwner];
+            BoriQ2 = granData->oriQy[myOwner];
+            BoriQ3 = granData->oriQz[myOwner];
             applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, BoriQ0, BoriQ1, BoriQ2, BoriQ3);
             bodyBPos.x = BOwnerPos.x + (double)myRelPosX;
             bodyBPos.y = BOwnerPos.y + (double)myRelPosY;

@@ -133,7 +133,7 @@ int main() {
     float max_v;
 
     float step_size = 5e-6;
-    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
+    DEM_sim.InstructBoxDomainDimension(12, 12, 25);
     DEM_sim.SetCoordSysOrigin("center");
     DEM_sim.SetInitTimeStep(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));

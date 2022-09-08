@@ -52,7 +52,7 @@ class DEMSolver {
     /// Instruct the dimension of the `world'. On initialization, this info will be used to figure out how to assign the
     /// num of voxels in each direction. If your `useful' domain is not box-shaped, then define a box that contains your
     /// domian. O is the coordinate of the left-bottom-front point of your simulation `world'.
-    void InstructBoxDomainDimension(float x, float y, float z, const std::string dir_exact = "none");
+    void InstructBoxDomainDimension(float x, float y, float z, DEM_SPATIAL_DIR dir_exact = DEM_SPATIAL_DIR::NONE);
 
     /// Explicitly instruct the number of voxels (as 2^{x,y,z}) along each direction, as well as the smallest unit
     /// length l. This is usually for test purposes, and will overwrite other size-related definitions of the big
@@ -339,10 +339,10 @@ class DEMSolver {
     static std::unordered_map<std::string, std::vector<float4>> ReadClumpQuatFromCsv(
         const std::string& infilename,
         const std::string& clump_header = DEM_OUTPUT_FILE_CLUMP_TYPE_NAME,
-        const std::string& q0_header = "Q0",
-        const std::string& q1_header = "Q1",
-        const std::string& q2_header = "Q2",
-        const std::string& q3_header = "Q3") {
+        const std::string& q0_header = "Qw",
+        const std::string& q1_header = "Qx",
+        const std::string& q2_header = "Qy",
+        const std::string& q3_header = "Qz") {
         std::unordered_map<std::string, std::vector<float4>> type_Q_map;
         io::CSVReader<5, io::trim_chars<' ', '\t'>, io::no_quote_escape<','>, io::throw_on_overflow,
                       io::empty_line_comment>
@@ -351,7 +351,7 @@ class DEMSolver {
         std::string type_name;
         float4 Q;
         size_t count = 0;
-        while (in.read_row(type_name, Q.x, Q.y, Q.z, Q.w)) {
+        while (in.read_row(type_name, Q.w, Q.x, Q.y, Q.z)) {
             type_Q_map[type_name].push_back(Q);
             count++;
         }
@@ -526,6 +526,9 @@ class DEMSolver {
     std::string m_user_add_bounding_box = "none";
     // And the material should be used for the bounding BCs
     std::shared_ptr<DEMMaterial> m_bounding_box_material;
+    // Along which direction the size of the simulation world representable with our integer-based voxels needs to be
+    // exactly the same as user-instructed simulation domain size?
+    DEM_SPATIAL_DIR m_box_dir_length_is_exact = DEM_SPATIAL_DIR::NONE;
 
     // If we should ensure that when kernel jitification fails, the line number reported reflexes where error happens
     bool m_ensure_kernel_line_num = false;

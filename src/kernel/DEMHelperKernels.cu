@@ -110,16 +110,16 @@ inline __device__ void voxelID2Position(T1& X,
 }
 
 template <typename T1, typename T2>
-inline __device__ void applyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Q0, const T2& Q1, const T2& Q2, const T2& Q3) {
+inline __device__ void applyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Qw, const T2& Qx, const T2& Qy, const T2& Qz) {
     T1 oldX = X;
     T1 oldY = Y;
     T1 oldZ = Z;
-    X = ((T2)2.0 * (Q0 * Q0 + Q1 * Q1) - (T2)1.0) * oldX + ((T2)2.0 * (Q1 * Q2 - Q0 * Q3)) * oldY +
-        ((T2)2.0 * (Q1 * Q3 + Q0 * Q2)) * oldZ;
-    Y = ((T2)2.0 * (Q1 * Q2 + Q0 * Q3)) * oldX + ((T2)2.0 * (Q0 * Q0 + Q2 * Q2) - (T2)1.0) * oldY +
-        ((T2)2.0 * (Q2 * Q3 - Q0 * Q1)) * oldZ;
-    Z = ((T2)2.0 * (Q1 * Q3 - Q0 * Q2)) * oldX + ((T2)2.0 * (Q2 * Q3 + Q0 * Q1)) * oldY +
-        ((T2)2.0 * (Q0 * Q0 + Q3 * Q3) - (T2)1.0) * oldZ;
+    X = ((T2)2.0 * (Qw * Qw + Qx * Qx) - (T2)1.0) * oldX + ((T2)2.0 * (Qx * Qy - Qw * Qz)) * oldY +
+        ((T2)2.0 * (Qx * Qz + Qw * Qy)) * oldZ;
+    Y = ((T2)2.0 * (Qx * Qy + Qw * Qz)) * oldX + ((T2)2.0 * (Qw * Qw + Qy * Qy) - (T2)1.0) * oldY +
+        ((T2)2.0 * (Qy * Qz - Qw * Qx)) * oldZ;
+    Z = ((T2)2.0 * (Qx * Qz - Qw * Qy)) * oldX + ((T2)2.0 * (Qy * Qz + Qw * Qx)) * oldY +
+        ((T2)2.0 * (Qw * Qw + Qz * Qz) - (T2)1.0) * oldZ;
 }
 
 template <typename T1>
@@ -274,16 +274,16 @@ inline __device__ float3 findLocalCoord(const T1& X,
                                         const T1& Ox,
                                         const T1& Oy,
                                         const T1& Oz,
-                                        const sgps::oriQ_t& oriQ0,
-                                        const sgps::oriQ_t& oriQ1,
-                                        const sgps::oriQ_t& oriQ2,
-                                        const sgps::oriQ_t& oriQ3) {
+                                        const sgps::oriQ_t& oriQw,
+                                        const sgps::oriQ_t& oriQx,
+                                        const sgps::oriQ_t& oriQy,
+                                        const sgps::oriQ_t& oriQz) {
     float locX, locY, locZ;
     locX = X - Ox;
     locY = Y - Oy;
     locZ = Z - Oz;
     // To find the contact point in the local (body) frame, just apply inverse quaternion to OP vector in global frame
-    applyOriQToVector3<float, sgps::oriQ_t>(locX, locY, locZ, oriQ0, -oriQ1, -oriQ2, -oriQ3);
+    applyOriQToVector3<float, sgps::oriQ_t>(locX, locY, locZ, oriQw, -oriQx, -oriQy, -oriQz);
     return make_float3(locX, locY, locZ);
 }
 

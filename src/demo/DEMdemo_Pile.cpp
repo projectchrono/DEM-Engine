@@ -121,8 +121,8 @@ int main() {
     auto the_pile = DEM_sim.AddClumps(input_pile_template_type, input_pile_xyz);
     the_pile->SetFamilies(family_code);
 
-    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
-    // DEM_sim.InstructBoxDomainNumVoxel(11, 11, 10, 1e-10);
+    // DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
+    DEM_sim.InstructBoxDomainDimension(20, 20, 30);
 
     // Planes are all defaulted to fixed
     DEM_sim.AddBCPlane(make_float3(0, 4.5, 0), make_float3(0, -1, 0), mat_type_2);

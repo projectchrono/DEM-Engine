@@ -39,7 +39,8 @@ int main() {
 
     float step_size = 1e-5;
     double world_size = 1.5;
-    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, world_size / std::pow(2, 16) / std::pow(2, 21));
+    // DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, world_size / std::pow(2, 16) / std::pow(2, 21));
+    DEM_sim.InstructBoxDomainDimension(world_size, world_size, 2 * world_size, DEM_SPATIAL_DIR::X);
     DEM_sim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
     DEM_sim.AddBCPlane(make_float3(0, 0, -world_size / 2), make_float3(0, 0, 1), mat_type_terrain);
     DEM_sim.SetCoordSysOrigin("center");

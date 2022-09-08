@@ -39,10 +39,10 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[myOwnerID], granData->locX[myOwnerID],
                 granData->locY[myOwnerID], granData->locZ[myOwnerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            const float myOriQ0 = granData->oriQ0[myOwnerID];
-            const float myOriQ1 = granData->oriQ1[myOwnerID];
-            const float myOriQ2 = granData->oriQ2[myOwnerID];
-            const float myOriQ3 = granData->oriQ3[myOwnerID];
+            const float myOriQ0 = granData->oriQw[myOwnerID];
+            const float myOriQ1 = granData->oriQx[myOwnerID];
+            const float myOriQ2 = granData->oriQy[myOwnerID];
+            const float myOriQ3 = granData->oriQz[myOwnerID];
             applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2,
                                                     myOriQ3);
             // The bin number that I live in (with fractions)?
@@ -85,10 +85,10 @@ __global__ void getNumberOfBinsEachSphereTouches(sgps::DEMSimParams* simParams,
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[objBOwner], granData->locX[objBOwner],
                 granData->locY[objBOwner], granData->locZ[objBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            const float ownerOriQ0 = granData->oriQ0[objBOwner];
-            const float ownerOriQ1 = granData->oriQ1[objBOwner];
-            const float ownerOriQ2 = granData->oriQ2[objBOwner];
-            const float ownerOriQ3 = granData->oriQ3[objBOwner];
+            const float ownerOriQ0 = granData->oriQw[objBOwner];
+            const float ownerOriQ1 = granData->oriQx[objBOwner];
+            const float ownerOriQ2 = granData->oriQy[objBOwner];
+            const float ownerOriQ3 = granData->oriQz[objBOwner];
             float objBRelPosX = objRelPosX[objB];
             float objBRelPosY = objRelPosY[objB];
             float objBRelPosZ = objRelPosZ[objB];
@@ -150,10 +150,10 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[myOwnerID], granData->locX[myOwnerID],
                 granData->locY[myOwnerID], granData->locZ[myOwnerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            const float myOriQ0 = granData->oriQ0[myOwnerID];
-            const float myOriQ1 = granData->oriQ1[myOwnerID];
-            const float myOriQ2 = granData->oriQ2[myOwnerID];
-            const float myOriQ3 = granData->oriQ3[myOwnerID];
+            const float myOriQ0 = granData->oriQw[myOwnerID];
+            const float myOriQ1 = granData->oriQx[myOwnerID];
+            const float myOriQ2 = granData->oriQy[myOwnerID];
+            const float myOriQ3 = granData->oriQz[myOwnerID];
             applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2,
                                                     myOriQ3);
             // The bin number that I live in (with fractions)?
@@ -198,10 +198,10 @@ __global__ void populateBinSphereTouchingPairs(sgps::DEMSimParams* simParams,
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[objBOwner], granData->locX[objBOwner],
                 granData->locY[objBOwner], granData->locZ[objBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            const float ownerOriQ0 = granData->oriQ0[objBOwner];
-            const float ownerOriQ1 = granData->oriQ1[objBOwner];
-            const float ownerOriQ2 = granData->oriQ2[objBOwner];
-            const float ownerOriQ3 = granData->oriQ3[objBOwner];
+            const float ownerOriQ0 = granData->oriQw[objBOwner];
+            const float ownerOriQ1 = granData->oriQx[objBOwner];
+            const float ownerOriQ2 = granData->oriQy[objBOwner];
+            const float ownerOriQ3 = granData->oriQz[objBOwner];
             float objBRelPosX = objRelPosX[objB];
             float objBRelPosY = objRelPosY[objB];
             float objBRelPosZ = objRelPosZ[objB];

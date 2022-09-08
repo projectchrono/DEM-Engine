@@ -86,10 +86,10 @@ __global__ void forceToAcc(float3* acc,
 // computes cross(a, b) ./ c
 __global__ void forceToAngAcc(float3* angAcc,
                               float3* cntPnt,
-                              sgps::oriQ_t* oriQ0,
-                              sgps::oriQ_t* oriQ1,
-                              sgps::oriQ_t* oriQ2,
-                              sgps::oriQ_t* oriQ3,
+                              sgps::oriQ_t* oriQw,
+                              sgps::oriQ_t* oriQx,
+                              sgps::oriQ_t* oriQy,
+                              sgps::oriQ_t* oriQz,
                               float3* F,
                               float3* torque_inForceForm,
                               sgps::bodyID_t* owner,
@@ -104,10 +104,10 @@ __global__ void forceToAngAcc(float3* angAcc,
         // Outputs myMOI
         // Use an input named exactly `myOwner' which is the id of this owner
         { _moiAcqStrat_; }
-        const sgps::oriQ_t myOriQ0 = oriQ0[myOwner];
-        const sgps::oriQ_t myOriQ1 = oriQ1[myOwner];
-        const sgps::oriQ_t myOriQ2 = oriQ2[myOwner];
-        const sgps::oriQ_t myOriQ3 = oriQ3[myOwner];
+        const sgps::oriQ_t myOriQ0 = oriQw[myOwner];
+        const sgps::oriQ_t myOriQ1 = oriQx[myOwner];
+        const sgps::oriQ_t myOriQ2 = oriQy[myOwner];
+        const sgps::oriQ_t myOriQ3 = oriQz[myOwner];
 
         float3 myCntPnt = cntPnt[myID];
         // torque_inForceForm is usually the contribution of rolling resistance and it contributes to torque only, not

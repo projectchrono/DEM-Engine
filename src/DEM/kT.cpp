@@ -56,13 +56,13 @@ inline void DEMKinematicThread::unpackMyBuffer() {
                         cudaMemcpyDeviceToDevice));
     GPU_CALL(cudaMemcpy(granData->locZ, granData->locZ_buffer, simParams->nOwnerBodies * sizeof(subVoxelPos_t),
                         cudaMemcpyDeviceToDevice));
-    GPU_CALL(cudaMemcpy(granData->oriQ0, granData->oriQ0_buffer, simParams->nOwnerBodies * sizeof(oriQ_t),
+    GPU_CALL(cudaMemcpy(granData->oriQw, granData->oriQ0_buffer, simParams->nOwnerBodies * sizeof(oriQ_t),
                         cudaMemcpyDeviceToDevice));
-    GPU_CALL(cudaMemcpy(granData->oriQ1, granData->oriQ1_buffer, simParams->nOwnerBodies * sizeof(oriQ_t),
+    GPU_CALL(cudaMemcpy(granData->oriQx, granData->oriQ1_buffer, simParams->nOwnerBodies * sizeof(oriQ_t),
                         cudaMemcpyDeviceToDevice));
-    GPU_CALL(cudaMemcpy(granData->oriQ2, granData->oriQ2_buffer, simParams->nOwnerBodies * sizeof(oriQ_t),
+    GPU_CALL(cudaMemcpy(granData->oriQy, granData->oriQ2_buffer, simParams->nOwnerBodies * sizeof(oriQ_t),
                         cudaMemcpyDeviceToDevice));
-    GPU_CALL(cudaMemcpy(granData->oriQ3, granData->oriQ3_buffer, simParams->nOwnerBodies * sizeof(oriQ_t),
+    GPU_CALL(cudaMemcpy(granData->oriQz, granData->oriQ3_buffer, simParams->nOwnerBodies * sizeof(oriQ_t),
                         cudaMemcpyDeviceToDevice));
 
     // Family number is a typical changable quantity on-the-fly. If this flag is on, kT received changes from dT.
@@ -278,10 +278,10 @@ void DEMKinematicThread::packDataPointers() {
     granData->locX = locX.data();
     granData->locY = locY.data();
     granData->locZ = locZ.data();
-    granData->oriQ0 = oriQ0.data();
-    granData->oriQ1 = oriQ1.data();
-    granData->oriQ2 = oriQ2.data();
-    granData->oriQ3 = oriQ3.data();
+    granData->oriQw = oriQw.data();
+    granData->oriQx = oriQx.data();
+    granData->oriQy = oriQy.data();
+    granData->oriQz = oriQz.data();
     granData->idGeometryA = idGeometryA.data();
     granData->idGeometryB = idGeometryB.data();
     granData->contactType = contactType.data();
@@ -408,10 +408,10 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     SGPS_DEM_TRACKED_RESIZE(locX, nOwnerBodies, "locX", 0);
     SGPS_DEM_TRACKED_RESIZE(locY, nOwnerBodies, "locY", 0);
     SGPS_DEM_TRACKED_RESIZE(locZ, nOwnerBodies, "locZ", 0);
-    SGPS_DEM_TRACKED_RESIZE(oriQ0, nOwnerBodies, "oriQ0", 1);
-    SGPS_DEM_TRACKED_RESIZE(oriQ1, nOwnerBodies, "oriQ1", 0);
-    SGPS_DEM_TRACKED_RESIZE(oriQ2, nOwnerBodies, "oriQ2", 0);
-    SGPS_DEM_TRACKED_RESIZE(oriQ3, nOwnerBodies, "oriQ3", 0);
+    SGPS_DEM_TRACKED_RESIZE(oriQw, nOwnerBodies, "oriQw", 1);
+    SGPS_DEM_TRACKED_RESIZE(oriQx, nOwnerBodies, "oriQx", 0);
+    SGPS_DEM_TRACKED_RESIZE(oriQy, nOwnerBodies, "oriQy", 0);
+    SGPS_DEM_TRACKED_RESIZE(oriQz, nOwnerBodies, "oriQz", 0);
 
     // Transfer buffer arrays
     // It is cudaMalloc-ed memory, not managed, because we want explicit locality control of buffers

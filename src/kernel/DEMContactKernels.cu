@@ -60,10 +60,10 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[ownerIDs[i]], granData->locX[ownerIDs[i]],
                 granData->locY[ownerIDs[i]], granData->locZ[ownerIDs[i]], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            float myOriQ0 = granData->oriQ0[ownerIDs[i]];
-            float myOriQ1 = granData->oriQ1[ownerIDs[i]];
-            float myOriQ2 = granData->oriQ2[ownerIDs[i]];
-            float myOriQ3 = granData->oriQ3[ownerIDs[i]];
+            float myOriQ0 = granData->oriQw[ownerIDs[i]];
+            float myOriQ1 = granData->oriQx[ownerIDs[i]];
+            float myOriQ2 = granData->oriQy[ownerIDs[i]];
+            float myOriQ3 = granData->oriQz[ownerIDs[i]];
             applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2,
                                                     myOriQ3);
             bodyX[i] = ownerX + (double)myRelPosX;
@@ -169,10 +169,10 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
             voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[ownerIDs[i]], granData->locX[ownerIDs[i]],
                 granData->locY[ownerIDs[i]], granData->locZ[ownerIDs[i]], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            float myOriQ0 = granData->oriQ0[ownerIDs[i]];
-            float myOriQ1 = granData->oriQ1[ownerIDs[i]];
-            float myOriQ2 = granData->oriQ2[ownerIDs[i]];
-            float myOriQ3 = granData->oriQ3[ownerIDs[i]];
+            float myOriQ0 = granData->oriQw[ownerIDs[i]];
+            float myOriQ1 = granData->oriQx[ownerIDs[i]];
+            float myOriQ2 = granData->oriQy[ownerIDs[i]];
+            float myOriQ3 = granData->oriQz[ownerIDs[i]];
             applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2,
                                                     myOriQ3);
             bodyX[i] = ownerX + (double)myRelPosX;

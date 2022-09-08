@@ -375,7 +375,7 @@ class DEMClumpTemplate {
     // float3 CoM = make_float3(0);
     // CoM frame's orientation quaternion in the frame which is used to report the positions of this clump's component
     // spheres. Usually unit quaternion.
-    // float4 CoM_oriQ = host_make_float4(1, 0, 0, 0);
+    // float4 CoM_oriQ = host_make_float4(0, 0, 0, 1);
     // Each clump template will have a unique mark number. When clumps are loaded to the system, this mark will help
     // find their type offset.
     unsigned int mark;
@@ -413,7 +413,7 @@ class DEMClumpTemplate {
         // Getting to Centroid and Principal is a translation then a rotation (local), so the undo order to undo
         // rotation then translation
         for (auto& pos : relPos) {
-            hostApplyOriQToVector3(pos.x, pos.y, pos.z, prin_Q.x, -prin_Q.y, -prin_Q.z, -prin_Q.w);
+            hostApplyOriQToVector3(pos.x, pos.y, pos.z, prin_Q.w, -prin_Q.x, -prin_Q.y, -prin_Q.z);
             pos.x -= center.x;
             pos.y -= center.y;
             pos.z -= center.z;
@@ -424,7 +424,7 @@ class DEMClumpTemplate {
     /// `origin' point should hit the CoM of this clump.
     void Move(float3 vec, float4 rot_Q) {
         for (auto& pos : relPos) {
-            hostApplyOriQToVector3(pos.x, pos.y, pos.z, rot_Q.x, rot_Q.y, rot_Q.z, rot_Q.w);
+            hostApplyOriQToVector3(pos.x, pos.y, pos.z, rot_Q.w, rot_Q.x, rot_Q.y, rot_Q.z);
             pos.x += vec.x;
             pos.y += vec.y;
             pos.z += vec.z;
@@ -474,7 +474,7 @@ class DEMClumpBatch {
         vel.resize(num, make_float3(0));
         angVel.resize(num, make_float3(0));
         xyz.resize(num);
-        oriQ.resize(num, host_make_float4(1, 0, 0, 0));
+        oriQ.resize(num, host_make_float4(0, 0, 0, 1));
     }
     ~DEMClumpBatch() {}
     size_t GetNumClumps() const { return nClumps; }

@@ -83,11 +83,12 @@ void DEMSolver::UseCompactForceKernel(bool use_compact) {
     }
 }
 
-void DEMSolver::InstructBoxDomainDimension(float x, float y, float z, const std::string dir_exact) {
+void DEMSolver::InstructBoxDomainDimension(float x, float y, float z, DEM_SPATIAL_DIR dir_exact) {
     m_user_boxSize.x = x;
     m_user_boxSize.y = y;
     m_user_boxSize.z = z;
-    // TODO: And the direction exact?
+    m_box_dir_length_is_exact = dir_exact;
+    explicit_nv_override = false;
 }
 
 void DEMSolver::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned char z, float len_unit) {

@@ -43,7 +43,7 @@ const std::string DEM_INSP_CODE_SPHERE_HIGH_ABSV = R"V0G0N(
         float3 pRotVel = cross(rotVel, relPos);
         // Map rotational contribution back to global
         applyOriQToVector3<float, sgps::oriQ_t>(pRotVel.x, pRotVel.y, pRotVel.z, 
-                                                oriQ0, oriQ1, oriQ2, oriQ3);
+                                                oriQw, oriQx, oriQy, oriQz);
         vel = length(pRotVel + linVel);
     }
     quantity[sphereID] = vel;

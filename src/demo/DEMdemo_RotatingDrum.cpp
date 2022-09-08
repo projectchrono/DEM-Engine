@@ -114,7 +114,7 @@ int main() {
     auto planes_tracker = DEM_sim.Track(top_bot_planes);
 
     float step_size = 5e-6;
-    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 5e-11);
+    DEM_sim.InstructBoxDomainDimension(5, 5, 5);
     DEM_sim.SetCoordSysOrigin("center");
     DEM_sim.SetInitTimeStep(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
@@ -149,8 +149,8 @@ int main() {
             // float4 plane_quat = planes_tracker->OriQ();
             // std::cout << "Vel of the planes: " << plane_vel.x << ", " << plane_vel.y << ", " << plane_vel.z
             //           << std::endl;
-            // std::cout << "Quaternion of the planes: " << plane_quat.x << ", " << plane_quat.y << ", " << plane_quat.z
-            //           << ", " << plane_quat.w << std::endl;
+            // std::cout << "Quaternion of the planes: " << plane_quat.w << ", " << plane_quat.x << ", " << plane_quat.y
+            //           << ", " << plane_quat.z << std::endl;
         }
 
         DEM_sim.DoDynamics(step_size);

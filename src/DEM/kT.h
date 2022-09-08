@@ -138,10 +138,10 @@ class DEMKinematicThread {
     std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locZ;
 
     // The clump quaternion
-    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ0;
-    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ1;
-    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ2;
-    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ3;
+    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQw;
+    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQx;
+    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQy;
+    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQz;
 
     // Clump's family identification code. Used in determining whether they can be contacts between two families, and
     // whether a family has prescribed motions.

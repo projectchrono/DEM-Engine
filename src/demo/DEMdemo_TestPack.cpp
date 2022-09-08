@@ -27,7 +27,7 @@ void SetSolverProp(DEMSolver& DEM_sim) {
     DEM_sim.SetVerbosity(DEBUG);
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
 
-    DEM_sim.InstructBoxDomainNumVoxel(22, 22, 20, 7.5e-11);
+    DEM_sim.InstructBoxDomainDimension(25, 25, 10);
     DEM_sim.SetCoordSysOrigin("center");
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEM_sim.SetCDUpdateFreq(0);
@@ -74,7 +74,7 @@ void EllpsiodFallingOver() {
         float4 oriQ = ellipsoid_tracker->OriQ();
         float3 angVel = ellipsoid_tracker->AngVelLocal();
         std::cout << "Time: " << frame_time * i << std::endl;
-        std::cout << "Quaternion of the ellipsoid: " << oriQ.x << ", " << oriQ.y << ", " << oriQ.z << ", " << oriQ.w
+        std::cout << "Quaternion of the ellipsoid: " << oriQ.w << ", " << oriQ.x << ", " << oriQ.y << ", " << oriQ.z
                   << std::endl;
         std::cout << "Angular velocity of the ellipsoid: " << angVel.x << ", " << angVel.y << ", " << angVel.z
                   << std::endl;

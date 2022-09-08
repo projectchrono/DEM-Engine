@@ -131,7 +131,8 @@ int main() {
     auto max_v_finder = DEM_sim.CreateInspector("clump_max_absv");
     float max_v;
 
-    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 5e-11);
+    // Make the domain large enough
+    DEM_sim.InstructBoxDomainDimension(5, 5, 5);
     float step_size = 5e-6;
     DEM_sim.SetCoordSysOrigin("center");
     DEM_sim.SetInitTimeStep(step_size);

@@ -35,10 +35,10 @@ void DEMDynamicThread::packDataPointers() {
     granData->vX = vX.data();
     granData->vY = vY.data();
     granData->vZ = vZ.data();
-    granData->oriQ0 = oriQ0.data();
-    granData->oriQ1 = oriQ1.data();
-    granData->oriQ2 = oriQ2.data();
-    granData->oriQ3 = oriQ3.data();
+    granData->oriQw = oriQw.data();
+    granData->oriQx = oriQx.data();
+    granData->oriQy = oriQy.data();
+    granData->oriQz = oriQz.data();
     granData->omgBarX = omgBarX.data();
     granData->omgBarY = omgBarY.data();
     granData->omgBarZ = omgBarZ.data();
@@ -246,10 +246,10 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     SGPS_DEM_TRACKED_RESIZE(locX, nOwnerBodies, "locX", 0);
     SGPS_DEM_TRACKED_RESIZE(locY, nOwnerBodies, "locY", 0);
     SGPS_DEM_TRACKED_RESIZE(locZ, nOwnerBodies, "locZ", 0);
-    SGPS_DEM_TRACKED_RESIZE(oriQ0, nOwnerBodies, "oriQ0", 1);
-    SGPS_DEM_TRACKED_RESIZE(oriQ1, nOwnerBodies, "oriQ1", 0);
-    SGPS_DEM_TRACKED_RESIZE(oriQ2, nOwnerBodies, "oriQ2", 0);
-    SGPS_DEM_TRACKED_RESIZE(oriQ3, nOwnerBodies, "oriQ3", 0);
+    SGPS_DEM_TRACKED_RESIZE(oriQw, nOwnerBodies, "oriQw", 1);
+    SGPS_DEM_TRACKED_RESIZE(oriQx, nOwnerBodies, "oriQx", 0);
+    SGPS_DEM_TRACKED_RESIZE(oriQy, nOwnerBodies, "oriQy", 0);
+    SGPS_DEM_TRACKED_RESIZE(oriQz, nOwnerBodies, "oriQz", 0);
     SGPS_DEM_TRACKED_RESIZE(vX, nOwnerBodies, "vX", 0);
     SGPS_DEM_TRACKED_RESIZE(vY, nOwnerBodies, "vY", 0);
     SGPS_DEM_TRACKED_RESIZE(vZ, nOwnerBodies, "vZ", 0);
@@ -567,10 +567,10 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
 
             // Set initial oriQ
             auto oriQ_of_this_clump = input_clump_oriQ.at(i);
-            oriQ0.at(nExistOwners + i) = oriQ_of_this_clump.x;
-            oriQ1.at(nExistOwners + i) = oriQ_of_this_clump.y;
-            oriQ2.at(nExistOwners + i) = oriQ_of_this_clump.z;
-            oriQ3.at(nExistOwners + i) = oriQ_of_this_clump.w;
+            oriQw.at(nExistOwners + i) = oriQ_of_this_clump.w;
+            oriQx.at(nExistOwners + i) = oriQ_of_this_clump.x;
+            oriQy.at(nExistOwners + i) = oriQ_of_this_clump.y;
+            oriQz.at(nExistOwners + i) = oriQ_of_this_clump.z;
 
             // Set initial velocity
             auto vel_of_this_clump = input_clump_vel.at(i);
@@ -647,10 +647,10 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
 
         // Set mesh owner's oriQ
         auto oriQ_of_this = input_mesh_obj_rot.at(i);
-        oriQ0.at(i + owner_offset_for_mesh_obj) = oriQ_of_this.x;
-        oriQ1.at(i + owner_offset_for_mesh_obj) = oriQ_of_this.y;
-        oriQ2.at(i + owner_offset_for_mesh_obj) = oriQ_of_this.z;
-        oriQ3.at(i + owner_offset_for_mesh_obj) = oriQ_of_this.w;
+        oriQw.at(i + owner_offset_for_mesh_obj) = oriQ_of_this.w;
+        oriQx.at(i + owner_offset_for_mesh_obj) = oriQ_of_this.x;
+        oriQy.at(i + owner_offset_for_mesh_obj) = oriQ_of_this.y;
+        oriQz.at(i + owner_offset_for_mesh_obj) = oriQ_of_this.z;
 
         //// TODO: and initial vel?
 
@@ -849,10 +849,10 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
         float this_sp_deviation_x = relPosSphereX.at(compOffset);
         float this_sp_deviation_y = relPosSphereY.at(compOffset);
         float this_sp_deviation_z = relPosSphereZ.at(compOffset);
-        float this_sp_rot_0 = oriQ0.at(this_owner);
-        float this_sp_rot_1 = oriQ1.at(this_owner);
-        float this_sp_rot_2 = oriQ2.at(this_owner);
-        float this_sp_rot_3 = oriQ3.at(this_owner);
+        float this_sp_rot_0 = oriQw.at(this_owner);
+        float this_sp_rot_1 = oriQx.at(this_owner);
+        float this_sp_rot_2 = oriQy.at(this_owner);
+        float this_sp_rot_3 = oriQz.at(this_owner);
         hostApplyOriQToVector3<float, float>(this_sp_deviation_x, this_sp_deviation_y, this_sp_deviation_z,
                                              this_sp_rot_0, this_sp_rot_1, this_sp_rot_2, this_sp_rot_3);
         posX.at(num_output_spheres) = CoM.x + this_sp_deviation_x;
@@ -943,10 +943,10 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
         this_sp_deviation.x = relPosSphereX.at(compOffset);
         this_sp_deviation.y = relPosSphereY.at(compOffset);
         this_sp_deviation.z = relPosSphereZ.at(compOffset);
-        float this_sp_rot_0 = oriQ0.at(this_owner);
-        float this_sp_rot_1 = oriQ1.at(this_owner);
-        float this_sp_rot_2 = oriQ2.at(this_owner);
-        float this_sp_rot_3 = oriQ3.at(this_owner);
+        float this_sp_rot_0 = oriQw.at(this_owner);
+        float this_sp_rot_1 = oriQx.at(this_owner);
+        float this_sp_rot_2 = oriQy.at(this_owner);
+        float this_sp_rot_3 = oriQz.at(this_owner);
         hostApplyOriQToVector3<float, float>(this_sp_deviation.x, this_sp_deviation.y, this_sp_deviation.z,
                                              this_sp_rot_0, this_sp_rot_1, this_sp_rot_2, this_sp_rot_3);
         pos = CoM + this_sp_deviation;
@@ -982,7 +982,7 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile) const {
 
     // xyz and quaternion are always there
     outstrstream << DEM_OUTPUT_FILE_X_COL_NAME + "," + DEM_OUTPUT_FILE_Y_COL_NAME + "," + DEM_OUTPUT_FILE_Z_COL_NAME +
-                        ",Q0,Q1,Q2,Q3," + DEM_OUTPUT_FILE_CLUMP_TYPE_NAME;
+                        ",Qw,Qx,Qy,Qz," + DEM_OUTPUT_FILE_CLUMP_TYPE_NAME;
     if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ABSV) {
         outstrstream << ",absv";
     }
@@ -1030,7 +1030,7 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile) const {
         outstrstream << CoM.x << "," << CoM.y << "," << CoM.z;
 
         // Then quaternions
-        outstrstream << "," << oriQ0.at(i) << "," << oriQ1.at(i) << "," << oriQ2.at(i) << "," << oriQ3.at(i);
+        outstrstream << "," << oriQw.at(i) << "," << oriQx.at(i) << "," << oriQy.at(i) << "," << oriQz.at(i);
 
         // Then type of clump
         unsigned int clump_mark = inertiaPropOffsets.at(i);
@@ -1115,13 +1115,13 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
                         cudaMemcpyDeviceToDevice));
     GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_locZ, granData->locZ, simParams->nOwnerBodies * sizeof(subVoxelPos_t),
                         cudaMemcpyDeviceToDevice));
-    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ0, granData->oriQ0, simParams->nOwnerBodies * sizeof(oriQ_t),
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ0, granData->oriQw, simParams->nOwnerBodies * sizeof(oriQ_t),
                         cudaMemcpyDeviceToDevice));
-    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ1, granData->oriQ1, simParams->nOwnerBodies * sizeof(oriQ_t),
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ1, granData->oriQx, simParams->nOwnerBodies * sizeof(oriQ_t),
                         cudaMemcpyDeviceToDevice));
-    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ2, granData->oriQ2, simParams->nOwnerBodies * sizeof(oriQ_t),
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ2, granData->oriQy, simParams->nOwnerBodies * sizeof(oriQ_t),
                         cudaMemcpyDeviceToDevice));
-    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ3, granData->oriQ3, simParams->nOwnerBodies * sizeof(oriQ_t),
+    GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ3, granData->oriQz, simParams->nOwnerBodies * sizeof(oriQ_t),
                         cudaMemcpyDeviceToDevice));
 
     // Family number is a typical changable quantity on-the-fly. If this flag is on, dT is responsible for sending this
@@ -1290,10 +1290,10 @@ inline void DEMDynamicThread::calculateForces() {
         //                    granData->alphaX, granData->alphaY, granData->alphaZ, granData->ownerClumpBody,
         //                    granData->mmiXX, granData->mmiYY, granData->mmiZZ, simParams->h,
         //                    *stateOfSolver_resources.pNumContacts, simParams->l);
-        // displayArray<float>(granData->oriQ0, simParams->nOwnerBodies);
-        // displayArray<float>(granData->oriQ1, simParams->nOwnerBodies);
-        // displayArray<float>(granData->oriQ2, simParams->nOwnerBodies);
-        // displayArray<float>(granData->oriQ3, simParams->nOwnerBodies);
+        // displayArray<float>(granData->oriQw, simParams->nOwnerBodies);
+        // displayArray<float>(granData->oriQx, simParams->nOwnerBodies);
+        // displayArray<float>(granData->oriQy, simParams->nOwnerBodies);
+        // displayArray<float>(granData->oriQz, simParams->nOwnerBodies);
         // displayArray<float>(granData->alphaX, simParams->nOwnerBodies);
         // displayArray<float>(granData->alphaY, simParams->nOwnerBodies);
         // displayArray<float>(granData->alphaZ, simParams->nOwnerBodies);
@@ -1593,10 +1593,10 @@ float3 DEMDynamicThread::getOwnerAngVel(bodyID_t ownerID) const {
 
 float4 DEMDynamicThread::getOwnerOriQ(bodyID_t ownerID) const {
     float4 oriQ;
-    oriQ.x = oriQ0.at(ownerID);
-    oriQ.y = oriQ1.at(ownerID);
-    oriQ.z = oriQ2.at(ownerID);
-    oriQ.w = oriQ3.at(ownerID);
+    oriQ.w = oriQw.at(ownerID);
+    oriQ.x = oriQx.at(ownerID);
+    oriQ.y = oriQy.at(ownerID);
+    oriQ.z = oriQz.at(ownerID);
     return oriQ;
 }
 
@@ -1657,10 +1657,10 @@ void DEMDynamicThread::setOwnerPos(bodyID_t ownerID, float3 pos) {
 }
 
 void DEMDynamicThread::setOwnerOriQ(bodyID_t ownerID, float4 oriQ) {
-    oriQ0.at(ownerID) = oriQ.x;
-    oriQ1.at(ownerID) = oriQ.y;
-    oriQ2.at(ownerID) = oriQ.z;
-    oriQ3.at(ownerID) = oriQ.w;
+    oriQw.at(ownerID) = oriQ.w;
+    oriQx.at(ownerID) = oriQ.x;
+    oriQy.at(ownerID) = oriQ.y;
+    oriQz.at(ownerID) = oriQ.z;
 }
 
 void DEMDynamicThread::setOwnerVel(bodyID_t ownerID, float3 vel) {

@@ -105,11 +105,11 @@ struct DEMExternObj {
     float3 CoM = make_float3(0);
     // CoM frame's orientation quaternion in the frame which is used to report all its components' properties. Usually
     // unit quaternion.
-    float4 CoM_oriQ = host_make_float4(1, 0, 0, 0);
+    float4 CoM_oriQ = host_make_float4(0, 0, 0, 1);
     // Obj's CoM initial position
     float3 init_pos = make_float3(0);
     // Obj's initial orientation quaternion
-    float4 init_oriQ = host_make_float4(1, 0, 0, 0);
+    float4 init_oriQ = host_make_float4(0, 0, 0, 1);
     // Obj's mass (huge by default)
     float mass = SGPS_DEM_HUGE_FLOAT;
     // Obj's MOI (huge by default)
@@ -214,11 +214,11 @@ class DEMMeshConnected {
     float3 CoM = make_float3(0);
     // CoM frame's orientation quaternion in the frame which is used to report all the mesh's node coordinates.
     // It is usually unit quaternion.
-    float4 CoM_oriQ = host_make_float4(1, 0, 0, 0);
+    float4 CoM_oriQ = host_make_float4(0, 0, 0, 1);
     // Obj's CoM initial position
     float3 init_pos = make_float3(0);
     // Obj's initial orientation quaternion
-    float4 init_oriQ = host_make_float4(1, 0, 0, 0);
+    float4 init_oriQ = host_make_float4(0, 0, 0, 1);
     // Obj's mass (huge by default)
     float mass = 1.f;
     // Obj's MOI (huge by default)

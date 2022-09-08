@@ -29,10 +29,10 @@ inline __device__ void applyPrescribedPos(bool& LinPrescribed,
                                           T1& X,
                                           T1& Y,
                                           T1& Z,
-                                          T2& ori0,
-                                          T2& ori1,
-                                          T2& ori2,
-                                          T2& ori3,
+                                          T2& oriQw,
+                                          T2& oriQx,
+                                          T2& oriQy,
+                                          T2& oriQz,
                                           const sgps::family_t& family,
                                           const float& t) {
     switch (family) {
@@ -95,8 +95,8 @@ inline __device__ void integratePos(sgps::bodyID_t thisClump, sgps::DEMDataDT* g
     sgps::family_t family_code = granData->familyID[thisClump];
     bool LinPrescribed = false, RotPrescribed = false;
     applyPrescribedPos<int64_t, sgps::oriQ_t>(
-        LinPrescribed, RotPrescribed, locX_tmp, locY_tmp, locZ_tmp, granData->oriQ0[thisClump],
-        granData->oriQ1[thisClump], granData->oriQ2[thisClump], granData->oriQ3[thisClump], family_code, (float)t);
+        LinPrescribed, RotPrescribed, locX_tmp, locY_tmp, locZ_tmp, granData->oriQw[thisClump],
+        granData->oriQx[thisClump], granData->oriQy[thisClump], granData->oriQz[thisClump], family_code, (float)t);
 
     if (!LinPrescribed) {
         locX_tmp += (int64_t)((double)granData->vX[thisClump] / _l_ * h);
@@ -128,9 +128,9 @@ inline __device__ void integratePos(sgps::bodyID_t thisClump, sgps::DEMDataDT* g
         }
         // Note: Yes it is Quat * deltaRot, not the other way around. Also, Hamilton product should automatically
         // maintain the unit-ness of quaternions.
-        HamiltonProduct<float>(granData->oriQ0[thisClump], granData->oriQ1[thisClump], granData->oriQ2[thisClump],
-                               granData->oriQ3[thisClump], granData->oriQ0[thisClump], granData->oriQ1[thisClump],
-                               granData->oriQ2[thisClump], granData->oriQ3[thisClump], deltaQ0, deltaQ1, deltaQ2,
+        HamiltonProduct<float>(granData->oriQw[thisClump], granData->oriQx[thisClump], granData->oriQy[thisClump],
+                               granData->oriQz[thisClump], granData->oriQw[thisClump], granData->oriQx[thisClump],
+                               granData->oriQy[thisClump], granData->oriQz[thisClump], deltaQ0, deltaQ1, deltaQ2,
                                deltaQ3);
     }
 }

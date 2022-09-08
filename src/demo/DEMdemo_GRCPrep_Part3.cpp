@@ -87,7 +87,7 @@ int main() {
     // // Instantiate this wheel
     // auto wheel = DEM_sim.AddClumps(wheel_template, make_float3(-0.5, 0, bottom + 0.38));
     // // Let's `flip' the wheel's initial position so... yeah, it's like how wheel operates normally
-    // wheel->SetOriQ(make_float4(0.7071, 0.7071, 0, 0));
+    // wheel->SetOriQ(make_float4(0.7071, 0, 0, 0.7071));
     // // Give the wheel a family number so we can potentially add prescription
     // wheel->SetFamily(101);
     // // Note that the added constant ang vel is wrt the wheel's own coord sys, therefore it should be on the z axis:

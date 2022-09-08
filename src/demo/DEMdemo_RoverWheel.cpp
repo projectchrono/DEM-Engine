@@ -29,7 +29,7 @@ int main() {
 
     // Define the simulation world
     double world_size = 1.5;
-    DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, world_size / std::pow(2, 16) / std::pow(2, 21));
+    DEM_sim.InstructBoxDomainDimension(2 * world_size, world_size, world_size);
     // Add 5 bounding planes around the simulation world, and leave the top open
     DEM_sim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
 
@@ -47,7 +47,7 @@ int main() {
     // This wheel template is `lying down', but our reported MOI info is assuming it's in a position to roll along X
     // direction. Let's make it clear its principal axes is not what we used to report its component sphere relative
     // positions.
-    wheel_template->InformCentroidPrincipal(make_float3(0), make_float4(0.7071, 0.7071, 0, 0));
+    wheel_template->InformCentroidPrincipal(make_float3(0), make_float4(0.7071, 0, 0, 0.7071));
 
     // Then the ground particle template
     DEMClumpTemplate ellipsoid_template;

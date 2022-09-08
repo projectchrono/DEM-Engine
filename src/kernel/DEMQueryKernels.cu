@@ -46,7 +46,7 @@ __global__ void inspectSphereProperty(sgps::DEMDataDT* granData,
         sgps::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
         float myRelPosX, myRelPosY, myRelPosZ;
         float myRadius;
-        float oriQ0, oriQ1, oriQ2, oriQ3;
+        float oriQw, oriQx, oriQy, oriQz;
         double ownerX, ownerY, ownerZ;
         // Get my component offset info from either jitified arrays or global memory
         // Outputs myRelPosXYZ, myRadius
@@ -56,11 +56,11 @@ __global__ void inspectSphereProperty(sgps::DEMDataDT* granData,
         voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
             ownerX, ownerY, ownerZ, granData->voxelID[myOwner], granData->locX[myOwner], granData->locY[myOwner],
             granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-        oriQ0 = granData->oriQ0[myOwner];
-        oriQ1 = granData->oriQ1[myOwner];
-        oriQ2 = granData->oriQ2[myOwner];
-        oriQ3 = granData->oriQ3[myOwner];
-        applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, oriQ0, oriQ1, oriQ2, oriQ3);
+        oriQw = granData->oriQw[myOwner];
+        oriQx = granData->oriQx[myOwner];
+        oriQy = granData->oriQy[myOwner];
+        oriQz = granData->oriQz[myOwner];
+        applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, oriQw, oriQx, oriQy, oriQz);
 
         // Use sphereXYZ to determine if this sphere is in the region that should be counted
         // And don't forget adding LBF as an offset

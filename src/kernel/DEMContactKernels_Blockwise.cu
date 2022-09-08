@@ -66,10 +66,10 @@ __global__ void getNumberOfContactsEachBin(sgps::DEMSimParams* simParams,
         voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
             ownerX, ownerY, ownerZ, granData->voxelID[ownerID], granData->locX[ownerID], granData->locY[ownerID],
             granData->locZ[ownerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-        float myOriQ0 = granData->oriQ0[ownerID];
-        float myOriQ1 = granData->oriQ1[ownerID];
-        float myOriQ2 = granData->oriQ2[ownerID];
-        float myOriQ3 = granData->oriQ3[ownerID];
+        float myOriQ0 = granData->oriQw[ownerID];
+        float myOriQ1 = granData->oriQx[ownerID];
+        float myOriQ2 = granData->oriQy[ownerID];
+        float myOriQ3 = granData->oriQz[ownerID];
         applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2, myOriQ3);
         bodyX[myThreadID] = ownerX + (double)myRelPosX;
         bodyY[myThreadID] = ownerY + (double)myRelPosY;
@@ -197,10 +197,10 @@ __global__ void populateContactPairsEachBin(sgps::DEMSimParams* simParams,
         voxelID2Position<double, sgps::voxelID_t, sgps::subVoxelPos_t>(
             ownerX, ownerY, ownerZ, granData->voxelID[ownerID], granData->locX[ownerID], granData->locY[ownerID],
             granData->locZ[ownerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-        float myOriQ0 = granData->oriQ0[ownerID];
-        float myOriQ1 = granData->oriQ1[ownerID];
-        float myOriQ2 = granData->oriQ2[ownerID];
-        float myOriQ3 = granData->oriQ3[ownerID];
+        float myOriQ0 = granData->oriQw[ownerID];
+        float myOriQ1 = granData->oriQx[ownerID];
+        float myOriQ2 = granData->oriQy[ownerID];
+        float myOriQ3 = granData->oriQz[ownerID];
         applyOriQToVector3<float, sgps::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQ0, myOriQ1, myOriQ2, myOriQ3);
         bodyX[myThreadID] = ownerX + (double)myRelPosX;
         bodyY[myThreadID] = ownerY + (double)myRelPosY;

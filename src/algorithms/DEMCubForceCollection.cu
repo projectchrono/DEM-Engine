@@ -129,16 +129,16 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
     collect_force_kernels->kernel("forceToAngAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(alpha_A, granData->contactPointGeometryA, granData->oriQ0, granData->oriQ1, granData->oriQ2,
-                granData->oriQ3, granData->contactForces, granData->contactTorque_convToForce, idAOwner, 1.f,
+        .launch(alpha_A, granData->contactPointGeometryA, granData->oriQw, granData->oriQx, granData->oriQy,
+                granData->oriQz, granData->contactForces, granData->contactTorque_convToForce, idAOwner, 1.f,
                 nContactPairs, granData);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // and don't forget body B
     collect_force_kernels->kernel("forceToAngAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(SGPS_DEM_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(alpha_B, granData->contactPointGeometryB, granData->oriQ0, granData->oriQ1, granData->oriQ2,
-                granData->oriQ3, granData->contactForces, granData->contactTorque_convToForce, idBOwner, -1.f,
+        .launch(alpha_B, granData->contactPointGeometryB, granData->oriQw, granData->oriQx, granData->oriQy,
+                granData->oriQz, granData->contactForces, granData->contactTorque_convToForce, idBOwner, -1.f,
                 nContactPairs, granData);
     GPU_CALL(cudaStreamSynchronize(this_stream));
     // Reducing the angular acceleration (2 * nContactPairs for both body A and B)
