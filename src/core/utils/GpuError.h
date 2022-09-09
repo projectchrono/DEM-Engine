@@ -13,9 +13,13 @@
 #define GPU_CALL(res) \
     { gpu_assert((res), __FILE__, __LINE__); }
 
+#define GPU_CALL_NOTHROW(res) \
+    { gpu_assert((res), __FILE__, __LINE__, false); }
+
 inline void gpu_assert(cudaError_t code, const char* filename, int line, bool except = true) {
     if (code != cudaSuccess) {
-        std::cerr << "GPU Assertion: " << cudaGetErrorString(code) << " in " << filename << ":" << line << "\n";
+        std::cerr << "GPU Assertion: " << cudaGetErrorString(code) << ". This happened in " << filename << ":" << line
+                  << "\n";
         if (except) {
             throw std::runtime_error("GPU Assertion Failed!");
         }
