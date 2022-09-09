@@ -359,8 +359,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
 }
 
 void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, std::string>& template_number_name_map,
-                                        const std::vector<float>& clumps_mass_types,
-                                        const std::vector<float3>& clumps_moi_types,
+                                        const ClumpTemplateFlatten& clump_templates,
                                         const std::vector<float>& ext_obj_mass_types,
                                         const std::vector<float3>& ext_obj_moi_types,
                                         const std::vector<float>& mesh_obj_mass_types,
@@ -373,9 +372,9 @@ void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, s
     // Load in mass and MOI template info
     size_t k = 0;
     if (solverFlags.useMassJitify) {
-        for (unsigned int i = 0; i < clumps_mass_types.size(); i++) {
-            massOwnerBody.at(k) = clumps_mass_types.at(i);
-            float3 this_moi = clumps_moi_types.at(i);
+        for (unsigned int i = 0; i < clump_templates.mass.size(); i++) {
+            massOwnerBody.at(k) = clump_templates.mass.at(i);
+            float3 this_moi = clump_templates.MOI.at(i);
             mmiXX.at(k) = this_moi.x;
             mmiYY.at(k) = this_moi.y;
             mmiZZ.at(k) = this_moi.z;
@@ -429,11 +428,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                                             const std::vector<unsigned int>& mesh_facet_owner,
                                             const std::vector<materialsOffset_t>& mesh_facet_materials,
                                             const std::vector<DEMTriangle>& mesh_facets,
-                                            const std::vector<std::vector<unsigned int>>& clumps_sp_mat_ids,
-                                            const std::vector<float>& clumps_mass_types,
-                                            const std::vector<float3>& clumps_moi_types,
-                                            const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                                            const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                                            const ClumpTemplateFlatten& clump_templates,
                                             const std::vector<float>& ext_obj_mass_types,
                                             const std::vector<float3>& ext_obj_moi_types,
                                             const std::vector<float>& mesh_obj_mass_types,
@@ -447,7 +442,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
     std::vector<unsigned int> prescans_comp;
     if (solverFlags.useClumpJitify) {
         prescans_comp.push_back(0);
-        for (const auto& elem : clumps_sp_radii_types) {
+        for (const auto& elem : clump_templates.spRadii) {
             for (const auto& radius : elem) {
                 radiiSphere.at(k) = radius;
                 k++;
@@ -457,7 +452,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         prescans_comp.pop_back();
         k = 0;
 
-        for (const auto& elem : clumps_sp_location_types) {
+        for (const auto& elem : clump_templates.spRelPos) {
             for (const auto& loc : elem) {
                 relPosSphereX.at(k) = loc.x;
                 relPosSphereY.at(k) = loc.y;
@@ -520,8 +515,8 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
             auto type_of_this_clump = input_clump_types.at(i);
             inertiaPropOffsets.at(nExistOwners + i) = type_of_this_clump;
             if (!solverFlags.useMassJitify) {
-                massOwnerBody.at(nExistOwners + i) = clumps_mass_types.at(type_of_this_clump);
-                const float3 this_moi = clumps_moi_types.at(type_of_this_clump);
+                massOwnerBody.at(nExistOwners + i) = clump_templates.mass.at(type_of_this_clump);
+                const float3 this_moi = clump_templates.MOI.at(type_of_this_clump);
                 mmiXX.at(nExistOwners + i) = this_moi.x;
                 mmiYY.at(nExistOwners + i) = this_moi.y;
                 mmiZZ.at(nExistOwners + i) = this_moi.z;
@@ -529,9 +524,9 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
 
             auto this_CoM_coord = input_clump_xyz.at(i) - LBF;
 
-            auto this_clump_no_sp_radii = clumps_sp_radii_types.at(type_of_this_clump);
-            auto this_clump_no_sp_relPos = clumps_sp_location_types.at(type_of_this_clump);
-            auto this_clump_no_sp_mat_ids = clumps_sp_mat_ids.at(type_of_this_clump);
+            auto this_clump_no_sp_radii = clump_templates.spRadii.at(type_of_this_clump);
+            auto this_clump_no_sp_relPos = clump_templates.spRelPos.at(type_of_this_clump);
+            auto this_clump_no_sp_mat_ids = clump_templates.matIDs.at(type_of_this_clump);
 
             for (size_t j = 0; j < this_clump_no_sp_radii.size(); j++) {
                 sphereMaterialOffset.at(nExistSpheres + k) = this_clump_no_sp_mat_ids.at(j);
@@ -739,11 +734,7 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
                                          const std::vector<materialsOffset_t>& mesh_facet_materials,
                                          const std::vector<DEMTriangle>& mesh_facets,
                                          const std::unordered_map<unsigned int, std::string>& template_number_name_map,
-                                         const std::vector<std::vector<unsigned int>>& clumps_sp_mat_ids,
-                                         const std::vector<float>& clumps_mass_types,
-                                         const std::vector<float3>& clumps_moi_types,
-                                         const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                                         const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                                         const ClumpTemplateFlatten& clump_templates,
                                          const std::vector<float>& ext_obj_mass_types,
                                          const std::vector<float3>& ext_obj_moi_types,
                                          const std::vector<float>& mesh_obj_mass_types,
@@ -755,15 +746,13 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
     // Get the info into the managed memory from the host side. Can this process be more efficient? Maybe, but it's
     // initialization anyway.
 
-    registerPolicies(template_number_name_map, clumps_mass_types, clumps_moi_types, ext_obj_mass_types,
-                     ext_obj_moi_types, mesh_obj_mass_types, mesh_obj_moi_types, loaded_materials, family_mask_matrix,
-                     no_output_families);
+    registerPolicies(template_number_name_map, clump_templates, ext_obj_mass_types, ext_obj_moi_types,
+                     mesh_obj_mass_types, mesh_obj_moi_types, loaded_materials, family_mask_matrix, no_output_families);
 
     // For initialization, owner array offset is 0
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_family, input_mesh_obj_xyz,
                          input_mesh_obj_rot, input_mesh_obj_family, mesh_facet_owner, mesh_facet_materials, mesh_facets,
-                         clumps_sp_mat_ids, clumps_mass_types, clumps_moi_types, clumps_sp_radii_types,
-                         clumps_sp_location_types, ext_obj_mass_types, ext_obj_moi_types, mesh_obj_mass_types,
+                         clump_templates, ext_obj_mass_types, ext_obj_moi_types, mesh_obj_mass_types,
                          mesh_obj_moi_types, 0, 0, 0);
 
     buildTrackedObjs(input_clump_batches, input_ext_obj_xyz, input_mesh_objs, tracked_objs, 0, 0);
@@ -779,11 +768,7 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                                              const std::vector<unsigned int>& mesh_facet_owner,
                                              const std::vector<materialsOffset_t>& mesh_facet_materials,
                                              const std::vector<DEMTriangle>& mesh_facets,
-                                             const std::vector<std::vector<unsigned int>>& clumps_sp_mat_ids,
-                                             const std::vector<float>& clumps_mass_types,
-                                             const std::vector<float3>& clumps_moi_types,
-                                             const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                                             const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                                             const ClumpTemplateFlatten& clump_templates,
                                              const std::vector<float>& ext_obj_mass_types,
                                              const std::vector<float3>& ext_obj_moi_types,
                                              const std::vector<float>& mesh_obj_mass_types,
@@ -802,8 +787,7 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
     // Analytical objects-related arrays should be empty
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_family, input_mesh_obj_xyz,
                          input_mesh_obj_rot, input_mesh_obj_family, mesh_facet_owner, mesh_facet_materials, mesh_facets,
-                         clumps_sp_mat_ids, clumps_mass_types, clumps_moi_types, clumps_sp_radii_types,
-                         clumps_sp_location_types, ext_obj_mass_types, ext_obj_moi_types, mesh_obj_mass_types,
+                         clump_templates, ext_obj_mass_types, ext_obj_moi_types, mesh_obj_mass_types,
                          mesh_obj_moi_types, nExistingOwners, nExistingSpheres, nExistingFacets);
 
     // Make changes to tracked objects (potentially add more)

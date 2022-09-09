@@ -304,6 +304,23 @@ struct familyPair_t {
 
 enum class DEM_VAR_TS_STRAT { CONST, MAX_VEL, INT_GAP };
 
+class ClumpTemplateFlatten {
+  public:
+    std::vector<float>& mass;
+    std::vector<float3>& MOI;
+    std::vector<std::vector<unsigned int>>& matIDs;
+    std::vector<std::vector<float>>& spRadii;
+    std::vector<std::vector<float3>>& spRelPos;
+
+    ClumpTemplateFlatten(std::vector<float>& ref_mass,
+                         std::vector<float3>& ref_MOI,
+                         std::vector<std::vector<unsigned int>>& ref_matIDs,
+                         std::vector<std::vector<float>>& ref_spRadii,
+                         std::vector<std::vector<float3>>& ref_spRelPos)
+        : mass(ref_mass), MOI(ref_MOI), matIDs(ref_matIDs), spRadii(ref_spRadii), spRelPos(ref_spRelPos) {}
+    ~ClumpTemplateFlatten() {}
+};
+
 struct SolverFlags {
     // Sort contact pair arrays before sending to kT
     bool should_sort_pairs = true;
@@ -383,6 +400,12 @@ class DEMClumpTemplate {
     bool isBigClump = false;
     // A name given by the user. It will be outputted to file to indicate the type of a clump.
     std::string m_name = "NULL";
+    // The volume of this type of clump.
+    //// TODO: Add a method to automatically compute its volume
+    float m_volume = 0.0;
+
+    /// Set the volume of this clump template. It is needed before you query the void ratio.
+    void SetVolume(float vol) { m_volume = vol; }
 
     /// Retrieve clump's sphere component information from a file
     int ReadComponentFromFile(const std::string filename,

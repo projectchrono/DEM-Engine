@@ -96,11 +96,11 @@ int main() {
     DEM_sim.SetInitTimeStep(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEM_sim.SetCDUpdateFreq(20);
+    DEM_sim.SetCDUpdateFreq(30);
     // DEM_sim.SetExpandFactor(1e-3);
     DEM_sim.SetMaxVelocity(5.);
     DEM_sim.SetExpandSafetyParam(1.2);
-    DEM_sim.SetInitBinSize(scaling / 1.5);
+    DEM_sim.SetInitBinSize(scaling * 2);
     DEM_sim.Initialize();
 
     float time_end = 10.0;

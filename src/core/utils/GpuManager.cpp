@@ -14,7 +14,7 @@ GpuManager::GpuManager(unsigned int total_streams) {
                      "devices, Maybe you should try rebooting or reinstalling cuda components?\n";
         throw std::runtime_error("No GPU device detected!");
     } else if (ndevices == 1) {
-        std::cerr << "\nExactly 1 GPU device is detected. Currently, we cannot guarantee SMUG runs well with 1 "
+        std::cerr << "\nExactly 1 GPU device is detected. Currently, SMUG's performance edge is limited with only 1 "
                      "GPU.\nTry allocating 2 GPU devices if possible.\n\n";
     }
 

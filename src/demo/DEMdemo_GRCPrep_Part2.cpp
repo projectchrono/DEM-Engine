@@ -167,7 +167,7 @@ int main() {
     unsigned int curr_step = 0;
 
     float settle_frame_time = 0.05;
-    float settle_batch_time = 2.5;
+    float settle_batch_time = 1.2;
 
     for (float t = 0; t < settle_batch_time; t += settle_frame_time) {
         std::cout << "Frame: " << currframe << std::endl;
@@ -180,11 +180,11 @@ int main() {
 
     // Now compress it
     float compress_time = 0.5;
-    float compressor_final_dist = 0.3;
-    float compressor_v = compressor_final_dist / compress_time;
 
     float now_z = max_z_finder->GetValue();
     compressor_tracker->SetPos(make_float3(0, 0, now_z));
+    float compressor_final_dist = (now_z > -0.43) ? now_z - (-0.43) : 0.0;
+    float compressor_v = compressor_final_dist / compress_time;
     for (float t = 0; t < compress_time; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
             std::cout << "Frame: " << currframe << std::endl;

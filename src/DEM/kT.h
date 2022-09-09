@@ -261,9 +261,7 @@ class DEMKinematicThread {
                               const std::vector<unsigned int>& input_mesh_obj_family,
                               const std::vector<unsigned int>& input_mesh_facet_owner,
                               const std::vector<DEMTriangle>& input_mesh_facets,
-                              const std::vector<float>& clumps_mass_types,
-                              const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                              const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                              const ClumpTemplateFlatten& clump_templates,
                               size_t nExistOwners,
                               size_t nExistSpheres,
                               size_t nExistingFacets);
@@ -275,9 +273,7 @@ class DEMKinematicThread {
                            const std::vector<unsigned int>& input_mesh_facet_owner,
                            const std::vector<DEMTriangle>& input_mesh_facets,
                            const std::vector<notStupidBool_t>& family_mask_matrix,
-                           const std::vector<float>& clumps_mass_types,
-                           const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                           const std::vector<std::vector<float3>>& clumps_sp_location_types);
+                           const ClumpTemplateFlatten& clump_templates);
 
     /// Add more clumps and/or meshes into the system, without re-initialization. It must be clump/mesh-addition only,
     /// no other changes to the system.
@@ -287,9 +283,7 @@ class DEMKinematicThread {
                                const std::vector<unsigned int>& input_mesh_facet_owner,
                                const std::vector<DEMTriangle>& input_mesh_facets,
                                const std::vector<notStupidBool_t>& family_mask_matrix,
-                               const std::vector<float>& clumps_mass_types,
-                               const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                               const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                               const ClumpTemplateFlatten& clump_templates,
                                size_t nExistingOwners,
                                size_t nExistingClumps,
                                size_t nExistingSpheres,

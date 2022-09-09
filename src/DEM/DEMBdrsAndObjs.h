@@ -134,11 +134,10 @@ struct DEMExternObj {
         family_code = code;
     }
 
-    /// Define object mass and MOI
-    void SetMassMOI(const float input_mass, const float3 input_MOI) {
-        mass = input_mass;
-        MOI = input_MOI;
-    }
+    /// Set mass
+    void SetMass(float mass) { this->mass = mass; }
+    /// Set MOI (in principal frame)
+    void SetMOI(float3 MOI) { this->MOI = MOI; }
 
     /// Add a plane with infinite size
     void AddPlane(const float3 pos, const float3 normal, const std::shared_ptr<DEMMaterial>& material) {
@@ -274,11 +273,10 @@ class DEMMeshConnected {
         this->face_col_indices.clear();
     }
 
-    /// Set mass and MOI (in principal frame)
-    void SetMassMOI(float mass, float3 MOI) {
-        this->mass = mass;
-        this->MOI = MOI;
-    }
+    /// Set mass
+    void SetMass(float mass) { this->mass = mass; }
+    /// Set MOI (in principal frame)
+    void SetMOI(float3 MOI) { this->MOI = MOI; }
 
     /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
     void SetMaterial(const std::vector<std::shared_ptr<DEMMaterial>>& input) {

@@ -509,9 +509,7 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
                                               const std::vector<unsigned int>& input_mesh_obj_family,
                                               const std::vector<unsigned int>& input_mesh_facet_owner,
                                               const std::vector<DEMTriangle>& input_mesh_facets,
-                                              const std::vector<float>& clumps_mass_types,
-                                              const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                                              const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                                              const ClumpTemplateFlatten& clump_templates,
                                               size_t nExistOwners,
                                               size_t nExistSpheres,
                                               size_t nExistingFacets) {
@@ -521,7 +519,7 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
 
     if (solverFlags.useClumpJitify) {
         prescans_comp.push_back(0);
-        for (auto elem : clumps_sp_radii_types) {
+        for (auto elem : clump_templates.spRadii) {
             for (auto radius : elem) {
                 radiiSphere.at(k) = radius;
                 k++;
@@ -531,7 +529,7 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
         prescans_comp.pop_back();
         k = 0;
 
-        for (auto elem : clumps_sp_location_types) {
+        for (auto elem : clump_templates.spRelPos) {
             for (auto loc : elem) {
                 relPosSphereX.at(k) = loc.x;
                 relPosSphereY.at(k) = loc.y;
@@ -565,8 +563,8 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
             auto type_of_this_clump = input_clump_types.at(i);
 
             // auto this_CoM_coord = input_clump_xyz.at(i) - LBF; // kT don't have to init owner xyz
-            auto this_clump_no_sp_radii = clumps_sp_radii_types.at(type_of_this_clump);
-            auto this_clump_no_sp_relPos = clumps_sp_location_types.at(type_of_this_clump);
+            auto this_clump_no_sp_radii = clump_templates.spRadii.at(type_of_this_clump);
+            auto this_clump_no_sp_relPos = clump_templates.spRelPos.at(type_of_this_clump);
 
             for (size_t j = 0; j < this_clump_no_sp_radii.size(); j++) {
                 ownerClumpBody.at(nExistSpheres + k) = nExistOwners + i;
@@ -636,17 +634,14 @@ void DEMKinematicThread::initManagedArrays(const std::vector<std::shared_ptr<DEM
                                            const std::vector<unsigned int>& input_mesh_facet_owner,
                                            const std::vector<DEMTriangle>& input_mesh_facets,
                                            const std::vector<notStupidBool_t>& family_mask_matrix,
-                                           const std::vector<float>& clumps_mass_types,
-                                           const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                                           const std::vector<std::vector<float3>>& clumps_sp_location_types) {
+                                           const ClumpTemplateFlatten& clump_templates) {
     // Get the info into the managed memory from the host side. Can this process be more efficient? Maybe, but it's
     // initialization anyway.
 
     registerPolicies(family_mask_matrix);
 
     populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, input_mesh_facet_owner,
-                         input_mesh_facets, clumps_mass_types, clumps_sp_radii_types, clumps_sp_location_types, 0, 0,
-                         0);
+                         input_mesh_facets, clump_templates, 0, 0, 0);
 }
 
 void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
@@ -655,17 +650,14 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
                                                const std::vector<unsigned int>& input_mesh_facet_owner,
                                                const std::vector<DEMTriangle>& input_mesh_facets,
                                                const std::vector<notStupidBool_t>& family_mask_matrix,
-                                               const std::vector<float>& clumps_mass_types,
-                                               const std::vector<std::vector<float>>& clumps_sp_radii_types,
-                                               const std::vector<std::vector<float3>>& clumps_sp_location_types,
+                                               const ClumpTemplateFlatten& clump_templates,
                                                size_t nExistingOwners,
                                                size_t nExistingClumps,
                                                size_t nExistingSpheres,
                                                size_t nExistingTriMesh,
                                                size_t nExistingFacets) {
     populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, input_mesh_facet_owner,
-                         input_mesh_facets, clumps_mass_types, clumps_sp_radii_types, clumps_sp_location_types,
-                         nExistingOwners, nExistingSpheres, nExistingFacets);
+                         input_mesh_facets, clump_templates, nExistingOwners, nExistingSpheres, nExistingFacets);
 }
 
 void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& Subs) {

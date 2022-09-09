@@ -489,7 +489,7 @@ void DEMSolver::preprocessClumpTemplates() {
         m_template_number_name_map[clump_template->mark] = clump_template->m_name;
     }
 
-    // Now we can flatten clump template and make ready for transfer
+    // Now we can flatten clump templates
     for (const auto& clump : m_templates) {
         m_template_clump_mass.push_back(clump->mass);
         m_template_clump_moi.push_back(clump->MOI);
@@ -775,6 +775,10 @@ void DEMSolver::allocateGPUArrays() {
 }
 
 void DEMSolver::initializeGPUArrays() {
+    // Pack clump templates together... that's easier to pass to dT kT
+    ClumpTemplateFlatten flattened_clump_templates(m_template_clump_mass, m_template_clump_moi, m_template_sp_mat_ids,
+                                                   m_template_sp_radii, m_template_sp_relPos);
+
     // Now we can feed those GPU-side arrays with the cached API-level simulation info
     dT->initManagedArrays(
         // Clump batchs' initial stats
@@ -787,7 +791,7 @@ void DEMSolver::initializeGPUArrays() {
         // Clump template name mapping
         m_template_number_name_map,
         // Clump template info (mass, sphere components, materials etc.)
-        m_template_sp_mat_ids, m_template_clump_mass, m_template_clump_moi, m_template_sp_radii, m_template_sp_relPos,
+        flattened_clump_templates,
         // Analytical obj `template' properties
         m_ext_obj_mass, m_ext_obj_moi,
         // Meshed obj `template' properties
@@ -809,7 +813,7 @@ void DEMSolver::initializeGPUArrays() {
         // Family mask
         m_family_mask_matrix,
         // Templates and misc.
-        m_template_clump_mass, m_template_sp_radii, m_template_sp_relPos);
+        flattened_clump_templates);
 }
 
 /// When more clumps/meshed objects got loaded, this method should be called to transfer them to the GPU-side in
@@ -820,6 +824,10 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
                                       size_t nSpheres,
                                       size_t nTriMesh,
                                       size_t nFacets) {
+    // Pack clump templates together... that's easier to pass to dT kT
+    ClumpTemplateFlatten flattened_clump_templates(m_template_clump_mass, m_template_clump_moi, m_template_sp_mat_ids,
+                                                   m_template_sp_radii, m_template_sp_relPos);
+
     dT->updateClumpMeshArrays(
         // Clump batchs' initial stats
         cached_input_clump_batches,
@@ -829,7 +837,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner,
         m_mesh_facet_materials, m_mesh_facets,
         // Clump template info (mass, sphere components, materials etc.)
-        m_template_sp_mat_ids, m_template_clump_mass, m_template_clump_moi, m_template_sp_radii, m_template_sp_relPos,
+        flattened_clump_templates,
         // Analytical obj `template' properties
         m_ext_obj_mass, m_ext_obj_moi,
         // Meshed obj `template' properties
@@ -852,7 +860,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // Family mask
         m_family_mask_matrix,
         // Templates and misc.
-        m_template_clump_mass, m_template_sp_radii, m_template_sp_relPos,
+        flattened_clump_templates,
         // Number of entities, old
         nOwners, nClumps, nSpheres, nTriMesh, nFacets);
 }
@@ -965,7 +973,7 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
 
     SMUG_DEM_DEBUG_PRINTF("Wildcard acquisition:\n%s", wildcard_acquisition.c_str());
     SMUG_DEM_DEBUG_PRINTF("Wildcard write-back:\n%s", wildcard_write_back.c_str());
-    SMUG_DEM_DEBUG_PRINTF("Wildcard destroy inactive:\n%s", wildcard_destroy_record.c_str());
+    SMUG_DEM_DEBUG_PRINTF("Wildcard destroy inactive contacts:\n%s", wildcard_destroy_record.c_str());
 }
 
 inline void DEMSolver::equipFamilyOnFlyChanges(std::unordered_map<std::string, std::string>& strMap) {
