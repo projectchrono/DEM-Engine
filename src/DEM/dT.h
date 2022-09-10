@@ -92,6 +92,9 @@ class DEMDynamicThread {
     std::vector<float, ManagedAllocator<float>> mmiYY;
     std::vector<float, ManagedAllocator<float>> mmiZZ;
 
+    // Volume values
+    std::vector<float, ManagedAllocator<float>> volumeOwnerBody;
+
     // The distinct sphere radii values
     std::vector<float, ManagedAllocator<float>> radiiSphere;
 

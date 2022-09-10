@@ -733,6 +733,7 @@ class DEMSolver {
     std::vector<std::vector<unsigned int>> m_template_sp_mat_ids;
     std::vector<std::vector<float>> m_template_sp_radii;
     std::vector<std::vector<float3>> m_template_sp_relPos;
+    std::vector<float> m_template_clump_volume;
     // Analytical objects that will be flatten and transferred into kernels upon Initialize()
     std::vector<float> m_ext_obj_mass;
     std::vector<float3> m_ext_obj_moi;
@@ -847,7 +848,7 @@ class DEMSolver {
     // Some JIT packaging helpers
     inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap);
     inline void equipSimParams(std::unordered_map<std::string, std::string>& strMap);
-    inline void equipMassMOI(std::unordered_map<std::string, std::string>& strMap);
+    inline void equipMassMoiVolume(std::unordered_map<std::string, std::string>& strMap);
     inline void equipMaterials(std::unordered_map<std::string, std::string>& strMap);
     inline void equipAnalGeoTemplates(std::unordered_map<std::string, std::string>& strMap);
     // inline void equipFamilyMasks(std::unordered_map<std::string, std::string>& strMap);

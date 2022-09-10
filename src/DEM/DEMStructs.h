@@ -311,13 +311,20 @@ class ClumpTemplateFlatten {
     std::vector<std::vector<unsigned int>>& matIDs;
     std::vector<std::vector<float>>& spRadii;
     std::vector<std::vector<float3>>& spRelPos;
+    std::vector<float>& volume;
 
     ClumpTemplateFlatten(std::vector<float>& ref_mass,
                          std::vector<float3>& ref_MOI,
                          std::vector<std::vector<unsigned int>>& ref_matIDs,
                          std::vector<std::vector<float>>& ref_spRadii,
-                         std::vector<std::vector<float3>>& ref_spRelPos)
-        : mass(ref_mass), MOI(ref_MOI), matIDs(ref_matIDs), spRadii(ref_spRadii), spRelPos(ref_spRelPos) {}
+                         std::vector<std::vector<float3>>& ref_spRelPos,
+                         std::vector<float>& ref_volume)
+        : mass(ref_mass),
+          MOI(ref_MOI),
+          matIDs(ref_matIDs),
+          spRadii(ref_spRadii),
+          spRelPos(ref_spRelPos),
+          volume(ref_volume) {}
     ~ClumpTemplateFlatten() {}
 };
 
@@ -402,10 +409,10 @@ class DEMClumpTemplate {
     std::string m_name = "NULL";
     // The volume of this type of clump.
     //// TODO: Add a method to automatically compute its volume
-    float m_volume = 0.0;
+    float volume = 0.0;
 
     /// Set the volume of this clump template. It is needed before you query the void ratio.
-    void SetVolume(float vol) { m_volume = vol; }
+    void SetVolume(float vol) { volume = vol; }
 
     /// Retrieve clump's sphere component information from a file
     int ReadComponentFromFile(const std::string filename,

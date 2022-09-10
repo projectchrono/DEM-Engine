@@ -735,6 +735,7 @@ void DEMSolver::ReleaseFlattenedArrays() {
     deallocate_array(m_template_sp_mat_ids);
     deallocate_array(m_template_sp_radii);
     deallocate_array(m_template_sp_relPos);
+    deallocate_array(m_template_clump_volume);
 
     deallocate_array(m_ext_obj_mass);
     deallocate_array(m_ext_obj_moi);

@@ -2,38 +2,9 @@
 #include <DEM/DEMDefines.h>
 #include <kernel/DEMHelperKernels.cu>
 
-// Mass properties are below, if jitified mass properties are in use
-_massDefs_;
-_moiDefs_;
-
-__global__ void computeKE(smug::DEMDataDT* granData, size_t nOwnerBodies, double* KE) {
-    smug::bodyID_t myOwner = blockIdx.x * blockDim.x + threadIdx.x;
-    if (myOwner < nOwnerBodies) {
-        float myMass;
-        float3 myMOI;
-        // Get my mass info from either jitified arrays or global memory
-        // Outputs myMass
-        // Use an input named exactly `myOwner' which is the id of this owner
-        { _massAcqStrat_; }
-
-        // Get my mass info from either jitified arrays or global memory
-        // Outputs myMOI
-        // Use an input named exactly `myOwner' which is the id of this owner
-        { _moiAcqStrat_; }
-
-        // First lin energy
-        double myVX = granData->vX[myOwner];
-        double myVY = granData->vY[myOwner];
-        double myVZ = granData->vZ[myOwner];
-        double myKE = 0.5 * myMass * (myVX * myVX + myVY * myVY + myVZ * myVZ);
-        // Then rot energy
-        myVX = granData->omgBarX[myOwner];
-        myVY = granData->omgBarY[myOwner];
-        myVZ = granData->omgBarZ[myOwner];
-        myKE += 0.5 * ((double)myMOI.x * myVX * myVX + (double)myMOI.y * myVY * myVY + (double)myMOI.z * myVZ * myVZ);
-        KE[myOwner] = myKE;
-    }
-}
+// Mass properties are below... but inspecting spheres doesn't seem to require mass or MOI
+// _massDefs_;
+// _moiDefs_;
 
 __global__ void inspectSphereProperty(smug::DEMDataDT* granData,
                                       smug::DEMSimParams* simParams,
@@ -64,9 +35,9 @@ __global__ void inspectSphereProperty(smug::DEMDataDT* granData,
 
         // Use sphereXYZ to determine if this sphere is in the region that should be counted
         // And don't forget adding LBF as an offset
-        float sphereX = ownerX + myRelPosX + simParams->LBFX;
-        float sphereY = ownerY + myRelPosY + simParams->LBFY;
-        float sphereZ = ownerZ + myRelPosZ + simParams->LBFZ;
+        float X = ownerX + myRelPosX + simParams->LBFX;
+        float Y = ownerY + myRelPosY + simParams->LBFY;
+        float Z = ownerZ + myRelPosZ + simParams->LBFZ;
         { _inRegionPolicy_; }
 
         // Now it's a problem of what quantity to query

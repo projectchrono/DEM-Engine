@@ -205,7 +205,7 @@ void DEMSolver::jitifyKernels() {
     std::unordered_map<std::string, std::string> Subs;
     equipClumpTemplates(Subs);
     equipSimParams(Subs);
-    equipMassMOI(Subs);
+    equipMassMoiVolume(Subs);
     equipMaterials(Subs);
     equipAnalGeoTemplates(Subs);
     // equipFamilyMasks(Subs);
@@ -495,6 +495,7 @@ void DEMSolver::preprocessClumpTemplates() {
         m_template_clump_moi.push_back(clump->MOI);
         m_template_sp_radii.push_back(clump->radii);
         m_template_sp_relPos.push_back(clump->relPos);
+        m_template_clump_volume.push_back(clump->volume);
 
         // m_template_sp_mat_ids is an array of ints that represent the indices of the material array
         std::vector<unsigned int> this_clump_sp_mat_ids;
@@ -777,7 +778,7 @@ void DEMSolver::allocateGPUArrays() {
 void DEMSolver::initializeGPUArrays() {
     // Pack clump templates together... that's easier to pass to dT kT
     ClumpTemplateFlatten flattened_clump_templates(m_template_clump_mass, m_template_clump_moi, m_template_sp_mat_ids,
-                                                   m_template_sp_radii, m_template_sp_relPos);
+                                                   m_template_sp_radii, m_template_sp_relPos, m_template_clump_volume);
 
     // Now we can feed those GPU-side arrays with the cached API-level simulation info
     dT->initManagedArrays(
@@ -826,7 +827,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
                                       size_t nFacets) {
     // Pack clump templates together... that's easier to pass to dT kT
     ClumpTemplateFlatten flattened_clump_templates(m_template_clump_mass, m_template_clump_moi, m_template_sp_mat_ids,
-                                                   m_template_sp_radii, m_template_sp_relPos);
+                                                   m_template_sp_radii, m_template_sp_relPos, m_template_clump_volume);
 
     dT->updateClumpMeshArrays(
         // Clump batchs' initial stats
@@ -1131,7 +1132,7 @@ inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std
     strMap["_objOwner_"] = objOwner;
 }
 
-inline void DEMSolver::equipMassMOI(std::unordered_map<std::string, std::string>& strMap) {
+inline void DEMSolver::equipMassMoiVolume(std::unordered_map<std::string, std::string>& strMap) {
     std::string massDefs, moiDefs, massAcqStrat, moiAcqStrat;
     // We only need to jitify and mass info offsets to kernels if we jitify them. If not, we just bring mass info as
     // floats from global memory.
@@ -1184,16 +1185,30 @@ inline void DEMSolver::equipMassMOI(std::unordered_map<std::string, std::string>
         massAcqStrat = DEM_MASS_ACQUISITION_FLATTENED();
         moiAcqStrat = DEM_MOI_ACQUISITION_FLATTENED();
     }
+
+    // Right now we always jitify clump volume info. This is because we don't use volume that often, probably only at
+    // void ratio computation. So let's save some memory...
+    std::string volumeDefs = "__constant__ __device__ float volumeProperties[] = {";
+    for (unsigned int i = 0; i < m_template_clump_volume.size(); i++) {
+        volumeDefs += to_string_with_precision(m_template_clump_volume.at(i)) + ",";
+    }
+    if (nDistinctMassProperties == 0) {
+        volumeDefs += "0";
+    }
+    volumeDefs += "};\n";
+
     if (m_ensure_kernel_line_num) {
         massDefs = compact_code(massDefs);
         moiDefs = compact_code(moiDefs);
         massAcqStrat = compact_code(massAcqStrat);
         moiAcqStrat = compact_code(moiAcqStrat);
+        volumeDefs = compact_code(volumeDefs);
     }
     strMap["_massDefs_"] = massDefs;
     strMap["_moiDefs_"] = moiDefs;
     strMap["_massAcqStrat_"] = massAcqStrat;
     strMap["_moiAcqStrat_"] = moiAcqStrat;
+    strMap["_volumeDefs_"] = volumeDefs;
 }
 
 inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::string>& strMap) {

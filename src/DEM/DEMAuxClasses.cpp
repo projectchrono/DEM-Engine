@@ -15,11 +15,11 @@ namespace smug {
 // =============================================================================
 
 const std::string DEM_INSP_CODE_SPHERE_HIGH_Z = R"V0G0N(
-    quantity[sphereID] = sphereZ + myRadius;
+    quantity[sphereID] = Z + myRadius;
 )V0G0N";
 
 const std::string DEM_INSP_CODE_SPHERE_LOW_Z = R"V0G0N(
-    quantity[sphereID] = sphereZ - myRadius;
+    quantity[sphereID] = Z - myRadius;
 )V0G0N";
 
 const std::string DEM_INSP_CODE_SPHERE_HIGH_ABSV = R"V0G0N(
@@ -101,9 +101,9 @@ void DEMInspector::initializeInspector(const std::unordered_map<std::string, std
         std::unordered_map<std::string, std::string> my_subs = Subs;
         my_subs["_inRegionPolicy_"] = in_region_code;
         my_subs["_quantityQueryProcess_"] = inspection_code;
-        inspection_kernel = std::make_shared<jitify::Program>(
-            std::move(JitHelper::buildProgram("DEMQueryKernels", JitHelper::KERNEL_DIR / "DEMQueryKernels.cu", my_subs,
-                                              {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+        inspection_kernel = std::make_shared<jitify::Program>(std::move(
+            JitHelper::buildProgram("DEMSphereQueryKernels", JitHelper::KERNEL_DIR / "DEMSphereQueryKernels.cu",
+                                    my_subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
     initialized = true;
 }

@@ -310,6 +310,8 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
         SMUG_DEM_TRACKED_RESIZE(mmiYY, nOwnerBodies, "mmiYY", 0);
         SMUG_DEM_TRACKED_RESIZE(mmiZZ, nOwnerBodies, "mmiZZ", 0);
     }
+    // Volume info is jitified
+    SMUG_DEM_TRACKED_RESIZE(volumeOwnerBody, nMassProperties, "volumeOwnerBody", 0);
 
     // Arrays for contact info
     // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is ~ 4n, and I
@@ -371,31 +373,41 @@ void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, s
 
     // Load in mass and MOI template info
     size_t k = 0;
-    if (solverFlags.useMassJitify) {
-        for (unsigned int i = 0; i < clump_templates.mass.size(); i++) {
+
+    for (unsigned int i = 0; i < clump_templates.mass.size(); i++) {
+        if (solverFlags.useMassJitify) {
             massOwnerBody.at(k) = clump_templates.mass.at(i);
             float3 this_moi = clump_templates.MOI.at(i);
             mmiXX.at(k) = this_moi.x;
             mmiYY.at(k) = this_moi.y;
             mmiZZ.at(k) = this_moi.z;
-            k++;
         }
-        for (unsigned int i = 0; i < ext_obj_mass_types.size(); i++) {
+        // Volume info is always registered, and even if the user does not use mass/MOI jitify, volume info may be
+        // needed in void ratio computation
+        volumeOwnerBody.at(k) = clump_templates.volume.at(i);
+        k++;
+    }
+    for (unsigned int i = 0; i < ext_obj_mass_types.size(); i++) {
+        if (solverFlags.useMassJitify) {
             massOwnerBody.at(k) = ext_obj_mass_types.at(i);
             float3 this_moi = ext_obj_moi_types.at(i);
             mmiXX.at(k) = this_moi.x;
             mmiYY.at(k) = this_moi.y;
             mmiZZ.at(k) = this_moi.z;
-            k++;
         }
-        for (unsigned int i = 0; i < mesh_obj_mass_types.size(); i++) {
+        // Currently analytical object volume is not used
+        k++;
+    }
+    for (unsigned int i = 0; i < mesh_obj_mass_types.size(); i++) {
+        if (solverFlags.useMassJitify) {
             massOwnerBody.at(k) = mesh_obj_mass_types.at(i);
             float3 this_moi = mesh_obj_moi_types.at(i);
             mmiXX.at(k) = this_moi.x;
             mmiYY.at(k) = this_moi.y;
             mmiZZ.at(k) = this_moi.z;
-            k++;
         }
+        // Currently mesh volume is not used
+        k++;
     }
 
     // Store family mask
@@ -1513,12 +1525,6 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
             std::move(JitHelper::buildProgram("DEMModeratorKernels", JitHelper::KERNEL_DIR / "DEMModeratorKernels.cu",
                                               Subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
-    // Then quarrying kernels
-    // {
-    //     quarry_stats_kernels = std::make_shared<jitify::Program>(
-    //         std::move(JitHelper::buildProgram("DEMQueryKernels", JitHelper::KERNEL_DIR / "DEMQueryKernels.cu", Subs,
-    //                                           {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
-    // }
     // Then misc kernels
     {
         misc_kernels = std::make_shared<jitify::Program>(
@@ -1536,8 +1542,9 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     size_t quarryTempSize = n * sizeof(float);
     float* resArr = (float*)stateOfSolver_resources.allocateTempVector(1, quarryTempSize);
     size_t regionTempSize = n * sizeof(notStupidBool_t);
-    notStupidBool_t* boolArr = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(2, regionTempSize);
-    GPU_CALL(cudaMemset(boolArr, 0, regionTempSize));
+    // If this boolArrExclude is 1 at an element, that means this element is exluded in the reduction
+    notStupidBool_t* boolArrExclude = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(2, regionTempSize);
+    GPU_CALL(cudaMemset(boolArrExclude, 0, regionTempSize));
 
     size_t returnSize = sizeof(float);
     float* res = (float*)stateOfSolver_resources.allocateTempVector(3, returnSize);
@@ -1545,7 +1552,7 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     inspection_kernel->kernel(kernel_name)
         .instantiate()
         .configure(dim3(blocks_needed), dim3(SMUG_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData, simParams, resArr, boolArr, n);
+        .launch(granData, simParams, resArr, boolArrExclude, n);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     if (all_domain) {
@@ -1559,7 +1566,8 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
             case (DEM_CUB_REDUCE_FLAVOR::NONE):
                 return resArr;
         }
-        // If this inspection is comfined in a region, then boolArr and resArr need to be sorted and reduce by key
+        // If this inspection is comfined in a region, then boolArrExclude and resArr need to be sorted and reduce by
+        // key
     } else {
         //// TODO: Implement it
     }
