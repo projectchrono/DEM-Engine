@@ -27,10 +27,12 @@ class DEMInspector {
 
     std::string inspection_code;
     std::string in_region_code;
+    std::string index_name;
     DEM_CUB_REDUCE_FLAVOR reduce_flavor = DEM_CUB_REDUCE_FLAVOR::NONE;
     DEM_INSPECT_ENTITY_TYPE thing_to_insp;
     std::string kernel_name;
     bool all_domain = true;
+    bool isVoidRatio = false;
 
     bool initialized = false;
 
@@ -55,7 +57,12 @@ class DEMInspector {
         in_region_code = " ";
         all_domain = true;
     }
-    DEMInspector(DEMSolver* sim_sys, const std::string& quantity, const std::string& region) : sys(sim_sys) {}
+    DEMInspector(DEMSolver* sim_sys, const std::string& quantity, const std::string& region) : sys(sim_sys) {
+        switch_quantity_type(quantity);
+        in_region_code = region;
+        all_domain = false;
+    }
+    //// TODO: Another overload for region definition
     ~DEMInspector() {}
 
     void SetInspectionCode(const std::string& code) { inspection_code = code; }

@@ -1209,6 +1209,9 @@ inline void DEMSolver::equipMassMoiVolume(std::unordered_map<std::string, std::s
     strMap["_massAcqStrat_"] = massAcqStrat;
     strMap["_moiAcqStrat_"] = moiAcqStrat;
     strMap["_volumeDefs_"] = volumeDefs;
+
+    SMUG_DEM_DEBUG_PRINTF("Volume properties in kernel:");
+    SMUG_DEM_DEBUG_PRINTF("%s", volumeDefs.c_str());
 }
 
 inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::string>& strMap) {

@@ -9,7 +9,7 @@
 __global__ void inspectSphereProperty(smug::DEMDataDT* granData,
                                       smug::DEMSimParams* simParams,
                                       float* quantity,
-                                      smug::notStupidBool_t* in_region,
+                                      smug::notStupidBool_t* not_in_region,
                                       size_t nSpheres) {
     size_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;
     if (sphereID < nSpheres) {

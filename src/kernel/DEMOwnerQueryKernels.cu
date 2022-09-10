@@ -39,7 +39,7 @@ __global__ void computeKE(smug::DEMDataDT* granData, size_t nOwnerBodies, double
 __global__ void inspectOwnerProperty(smug::DEMDataDT* granData,
                                      smug::DEMSimParams* simParams,
                                      float* quantity,
-                                     smug::notStupidBool_t* in_region,
+                                     smug::notStupidBool_t* not_in_region,
                                      size_t nOwnerBodies) {
     smug::bodyID_t myOwner = blockIdx.x * blockDim.x + threadIdx.x;
     if (myOwner < nOwnerBodies) {
@@ -67,9 +67,9 @@ __global__ void inspectOwnerProperty(smug::DEMDataDT* granData,
 
         // Use sphereXYZ to determine if this sphere is in the region that should be counted
         // And don't forget adding LBF as an offset
-        float X = ownerX + myRelPosX + simParams->LBFX;
-        float Y = ownerY + myRelPosY + simParams->LBFY;
-        float Z = ownerZ + myRelPosZ + simParams->LBFZ;
+        float X = ownerX + simParams->LBFX;
+        float Y = ownerY + simParams->LBFY;
+        float Z = ownerZ + simParams->LBFZ;
         { _inRegionPolicy_; }
 
         // Now it's a problem of what quantity to query

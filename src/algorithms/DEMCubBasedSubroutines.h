@@ -28,7 +28,7 @@ void boolMaxReduce(notStupidBool_t* d_in,
 
 void floatMaxReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
 
-void floatMaxReduceByKey(notStupidBool_t* d_keys_in,
+void floatSumReduceByKey(notStupidBool_t* d_keys_in,
                          notStupidBool_t* d_unique_out,
                          float* d_vals_in,
                          float* d_aggregates_out,
@@ -36,6 +36,14 @@ void floatMaxReduceByKey(notStupidBool_t* d_keys_in,
                          size_t n,
                          cudaStream_t& this_stream,
                          DEMSolverStateData& scratchPad);
+
+void floatSortByKey(notStupidBool_t* d_keys_in,
+                    notStupidBool_t* d_keys_out,
+                    float* d_vals_in,
+                    float* d_vals_out,
+                    size_t n,
+                    cudaStream_t& this_stream,
+                    DEMSolverStateData& scratchPad);
 
 void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                       std::shared_ptr<jitify::Program>& contact_detection_kernels,

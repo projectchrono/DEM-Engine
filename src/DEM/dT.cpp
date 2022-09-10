@@ -70,6 +70,7 @@ void DEMDynamicThread::packDataPointers() {
     granData->clumpComponentOffset = clumpComponentOffset.data();
     granData->clumpComponentOffsetExt = clumpComponentOffsetExt.data();
     granData->sphereMaterialOffset = sphereMaterialOffset.data();
+    granData->volumeOwnerBody = volumeOwnerBody.data();
 
     // Mesh-related
     granData->ownerMesh = ownerMesh.data();
@@ -1546,7 +1547,8 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     notStupidBool_t* boolArrExclude = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(2, regionTempSize);
     GPU_CALL(cudaMemset(boolArrExclude, 0, regionTempSize));
 
-    size_t returnSize = sizeof(float);
+    // We may actually have 2 reduced returns: in regional reduction, key 0 and 1 give one return each.
+    size_t returnSize = sizeof(float) * 2;
     float* res = (float*)stateOfSolver_resources.allocateTempVector(3, returnSize);
     size_t blocks_needed = (n + SMUG_DEM_MAX_THREADS_PER_BLOCK - 1) / SMUG_DEM_MAX_THREADS_PER_BLOCK;
     inspection_kernel->kernel(kernel_name)
@@ -1564,12 +1566,31 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
                 floatSumReduce(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
                 break;
             case (DEM_CUB_REDUCE_FLAVOR::NONE):
+                //// TODO: Query a full array w/o reducing doesn't seem like something useful...
                 return resArr;
         }
         // If this inspection is comfined in a region, then boolArrExclude and resArr need to be sorted and reduce by
         // key
     } else {
-        //// TODO: Implement it
+        // Extra arrays are needed for sort and reduce by key
+        notStupidBool_t* boolArrExclude_sorted =
+            (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(4, regionTempSize);
+        float* resArr_sorted = (float*)stateOfSolver_resources.allocateTempVector(5, quarryTempSize);
+        size_t* num_unique_out = (size_t*)stateOfSolver_resources.allocateTempVector(6, sizeof(size_t));
+        switch (reduce_flavor) {
+            case (DEM_CUB_REDUCE_FLAVOR::MAX):
+                //// TODO: Implement it
+                break;
+            case (DEM_CUB_REDUCE_FLAVOR::SUM):
+                // Sort first
+                floatSortByKey(boolArrExclude, boolArrExclude_sorted, resArr, resArr_sorted, n, streamInfo.stream,
+                               stateOfSolver_resources);
+                // Then reduce. We care about the sum for 0-marked entries only. Note boolArrExclude here is re-used for
+                // storing d_unique_out.
+                floatSumReduceByKey(boolArrExclude_sorted, boolArrExclude, resArr_sorted, res, num_unique_out, n,
+                                    streamInfo.stream, stateOfSolver_resources);
+                break;
+        }
     }
 
     return res;

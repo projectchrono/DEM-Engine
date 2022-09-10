@@ -590,6 +590,12 @@ std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quan
     return m_inspectors.back();
 }
 
+std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity, const std::string& region) {
+    DEMInspector insp(this, quantity, region);
+    m_inspectors.push_back(std::make_shared<DEMInspector>(std::move(insp)));
+    return m_inspectors.back();
+}
+
 void DEMSolver::WriteSphereFile(const std::string& outfilename) const {
     switch (m_out_format) {
         case (DEM_OUTPUT_FORMAT::CHPF): {

@@ -43,7 +43,7 @@ void floatMaxReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stre
     cubDEMMax<float, DEMSolverStateData>(d_in, d_out, n, this_stream, scratchPad);
 }
 
-void floatMaxReduceByKey(notStupidBool_t* d_keys_in,
+void floatSumReduceByKey(notStupidBool_t* d_keys_in,
                          notStupidBool_t* d_unique_out,
                          float* d_vals_in,
                          float* d_aggregates_out,
@@ -55,6 +55,17 @@ void floatMaxReduceByKey(notStupidBool_t* d_keys_in,
     CubFloatAdd add_op;
     cubDEMReduceByKeys<notStupidBool_t, float, CubFloatAdd, DEMSolverStateData>(
         d_keys_in, d_unique_out, d_vals_in, d_aggregates_out, d_num_out, add_op, n, this_stream, scratchPad);
+}
+
+void floatSortByKey(notStupidBool_t* d_keys_in,
+                    notStupidBool_t* d_keys_out,
+                    float* d_vals_in,
+                    float* d_vals_out,
+                    size_t n,
+                    cudaStream_t& this_stream,
+                    DEMSolverStateData& scratchPad) {
+    cubDEMSortByKeys<notStupidBool_t, float, DEMSolverStateData>(d_keys_in, d_keys_out, d_vals_in, d_vals_out, n,
+                                                                 this_stream, scratchPad);
 }
 
 }  // namespace smug

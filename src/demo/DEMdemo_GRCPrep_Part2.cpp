@@ -48,6 +48,7 @@ int main() {
     // Calculate its mass and MOI
     float mass = 2.6e3 * 5.5886717 * kg_g_conv;  // in kg or g
     float3 MOI = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3 * kg_g_conv;
+    float clump_vol = 5.5886717;
     // Scale the template we just created
     std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
     std::vector<double> scales = {0.0014, 0.00063, 0.00033, 0.00022, 0.00015, 0.00009};
@@ -66,6 +67,8 @@ int main() {
         std::for_each(this_template.radii.begin(), this_template.radii.end(), [scaling](float& r) { r *= scaling; });
         std::for_each(this_template.relPos.begin(), this_template.relPos.end(), [scaling](float3& r) { r *= scaling; });
         this_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(this_template.nComp, mat_type_terrain);
+        // Set the volume of this template
+        this_template.SetVolume((double)clump_vol * scaling * scaling * scaling);
         ground_particle_templates.push_back(DEM_sim.LoadClumpType(this_template));
     }
 
@@ -143,6 +146,8 @@ int main() {
 
     // And a z position inspector
     auto max_z_finder = DEM_sim.CreateInspector("clump_max_z");
+    auto void_ratio_finder =
+        DEM_sim.CreateInspector("volume", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) && (Z <= -0.45);");
 
     // Make ready for simulation
     float step_size = 5e-7;
@@ -169,6 +174,11 @@ int main() {
     float settle_frame_time = 0.05;
     float settle_batch_time = 1.2;
 
+    float total_volume = 0.96 * 0.96 * 0.05;
+    float matter_volume = void_ratio_finder->GetValue();
+
+    std::cout << "Initial void ratio " << (total_volume - matter_volume) / matter_volume << std::endl;
+
     for (float t = 0; t < settle_batch_time; t += settle_frame_time) {
         std::cout << "Frame: " << currframe << std::endl;
         char filename[200];
@@ -177,6 +187,13 @@ int main() {
         DEM_sim.DoDynamicsThenSync(settle_frame_time);
         DEM_sim.ShowThreadCollaborationStats();
     }
+
+    char cp_filename[200];
+    sprintf(cp_filename, "%s/GRC_2e6.csv", out_dir.c_str());
+    DEM_sim.WriteClumpFile(std::string(cp_filename));
+
+    matter_volume = void_ratio_finder->GetValue();
+    std::cout << "Void ratio after settling " << (total_volume - matter_volume) / matter_volume << std::endl;
 
     // Now compress it
     float compress_time = 0.5;
@@ -189,6 +206,8 @@ int main() {
         if (curr_step % out_steps == 0) {
             std::cout << "Frame: " << currframe << std::endl;
             std::cout << "Highest point is at " << now_z << std::endl;
+            matter_volume = void_ratio_finder->GetValue();
+            std::cout << "Void ratio in compression " << (total_volume - matter_volume) / matter_volume << std::endl;
             DEM_sim.ShowThreadCollaborationStats();
             char filename[200];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
@@ -199,8 +218,7 @@ int main() {
         DEM_sim.DoDynamics(step_size);
     }
 
-    char cp_filename[200];
-    sprintf(cp_filename, "%s/GRC_2e6.csv", out_dir.c_str());
+    // Final write
     DEM_sim.WriteClumpFile(std::string(cp_filename));
 
     DEM_sim.ClearThreadCollaborationStats();

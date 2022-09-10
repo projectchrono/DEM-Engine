@@ -49,6 +49,12 @@ const std::string DEM_INSP_CODE_SPHERE_HIGH_ABSV = R"V0G0N(
     quantity[sphereID] = vel;
 )V0G0N";
 
+const std::string DEM_INSP_CODE_CLUMP_APPROX_VOID = R"V0G0N(
+    size_t myVolOffset = granData->inertiaPropOffsets[myOwner];
+    float myVol = volumeProperties[myVolOffset];
+    quantity[myOwner] = myVol;
+)V0G0N";
+
 void DEMInspector::switch_quantity_type(const std::string& quantity) {
     switch (hash_charr(quantity.c_str())) {
         case ("clump_max_z"_):
@@ -56,12 +62,14 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
             reduce_flavor = DEM_CUB_REDUCE_FLAVOR::MAX;
             kernel_name = "inspectSphereProperty";
             thing_to_insp = DEM_INSPECT_ENTITY_TYPE::SPHERE;
+            index_name = "sphereID";
             break;
         case ("clump_min_z"_):
             inspection_code = DEM_INSP_CODE_SPHERE_LOW_Z;
             reduce_flavor = DEM_CUB_REDUCE_FLAVOR::MIN;
             kernel_name = "inspectSphereProperty";
             thing_to_insp = DEM_INSPECT_ENTITY_TYPE::SPHERE;
+            index_name = "sphereID";
             break;
         // case ("mesh_max_z"_):
         //     reduce_flavor = DEM_CUB_REDUCE_FLAVOR::MAX;
@@ -69,16 +77,23 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
         // case ("clump_com_max_z"_):
         //     // inspection_code = DEM_INSP_CODE_SPHERE_HIGH_Z;
         //     reduce_flavor = DEM_CUB_REDUCE_FLAVOR::MAX;
-        //     kernel_name = "inspectClumpProperty";
+        //     kernel_name = "inspectOwnerProperty";
         //     break;
-        //// TODO: void ratio will have its own query function
-        // case "void_ratio"_:
-        //     break;
+        //// TODO: Void ration here is a very rough approximation and should only work when domain is large and
+        ///particles are small
+        case ("volume"_):
+            inspection_code = DEM_INSP_CODE_CLUMP_APPROX_VOID;
+            reduce_flavor = DEM_CUB_REDUCE_FLAVOR::SUM;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = DEM_INSPECT_ENTITY_TYPE::CLUMP;
+            index_name = "myOwner";
+            break;
         case ("clump_max_absv"_):
             inspection_code = DEM_INSP_CODE_SPHERE_HIGH_ABSV;
             reduce_flavor = DEM_CUB_REDUCE_FLAVOR::MAX;
             kernel_name = "inspectSphereProperty";
             thing_to_insp = DEM_INSPECT_ENTITY_TYPE::SPHERE;
+            index_name = "sphereID";
             break;
         // case ("clump_absv"_):
         //     reduce_flavor = DEM_CUB_REDUCE_FLAVOR::NONE;
@@ -92,18 +107,41 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
 
 float DEMInspector::GetValue() {
     assertInit();
-    return sys->dTInspectReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+    float reduce_result =
+        sys->dTInspectReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+    return reduce_result;
 }
 
 void DEMInspector::initializeInspector(const std::unordered_map<std::string, std::string>& Subs) {
+    // We want to make sure if the in_region_code is legit, if it is not an all_domain query
+    std::string in_region_specifier = in_region_code, placeholder;
+    if (!all_domain) {
+        if (!any_whole_word_match(in_region_code, {"X", "Y", "Z"}) ||
+            !all_whole_word_match(in_region_code, {"return"}, placeholder)) {
+            std::stringstream ss;
+            ss << "One of your insepctors is set to query a specific region, but the domian is not properly "
+                  "defined.\nIt needs to return a bool variable that is a result of logical operations involving X, Y "
+                  "and Z."
+               << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        // Replace the return with our own variable
+        in_region_specifier = replace_pattern(in_region_specifier, "return", "bool isInRegion = ");
+        in_region_specifier += "if (!isInRegion) { not_in_region[" + index_name + "] = 1; return; }\n";
+    }
+
     // Add own substitutions to it
-    {
-        std::unordered_map<std::string, std::string> my_subs = Subs;
-        my_subs["_inRegionPolicy_"] = in_region_code;
-        my_subs["_quantityQueryProcess_"] = inspection_code;
+    std::unordered_map<std::string, std::string> my_subs = Subs;
+    my_subs["_inRegionPolicy_"] = in_region_specifier;
+    my_subs["_quantityQueryProcess_"] = inspection_code;
+    if (thing_to_insp == DEM_INSPECT_ENTITY_TYPE::SPHERE) {
         inspection_kernel = std::make_shared<jitify::Program>(std::move(
             JitHelper::buildProgram("DEMSphereQueryKernels", JitHelper::KERNEL_DIR / "DEMSphereQueryKernels.cu",
                                     my_subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+    } else if (thing_to_insp == DEM_INSPECT_ENTITY_TYPE::CLUMP) {
+        inspection_kernel = std::make_shared<jitify::Program>(
+            std::move(JitHelper::buildProgram("DEMOwnerQueryKernels", JitHelper::KERNEL_DIR / "DEMOwnerQueryKernels.cu",
+                                              my_subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }
     initialized = true;
 }

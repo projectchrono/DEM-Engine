@@ -292,6 +292,7 @@ struct DEMDataDT {
     float* mmiXX;
     float* mmiYY;
     float* mmiZZ;
+    float* volumeOwnerBody;
 
     // Wildcards. These are some quantities that you can associate with contact pairs and/or owner objects. Very
     // typically, contact history info in Hertzian model in this DEM tool is a wildcard, and electric charges can be

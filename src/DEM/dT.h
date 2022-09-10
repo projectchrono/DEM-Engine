@@ -61,7 +61,7 @@ class DEMDynamicThread {
     GpuManager::StreamInfo streamInfo;
 
     // A class that contains scratch pad and system status data (constructed with the number of temp arrays we need)
-    DEMSolverStateData stateOfSolver_resources = DEMSolverStateData(6);
+    DEMSolverStateData stateOfSolver_resources = DEMSolverStateData(7);
 
     // The number of for iterations dT does for a specific user "run simulation" call
     double cycleDuration;
