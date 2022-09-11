@@ -25,7 +25,7 @@ int main() {
     // E, nu, CoR, mu, Crr...
     auto mat_type_ball = DEM_sim.LoadMaterial({{"E", 1e10}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.0}, {"Crr", 0.0}});
 
-    auto projectile = DEM_sim.AddWavefrontMeshObject("./data/mesh/sphere.obj", mat_type_ball);
+    auto projectile = DEM_sim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/sphere.obj").string(), mat_type_ball);
     std::cout << "Total num of triangles: " << projectile->GetNumTriangles() << std::endl;
 
     float step_size = 1e-5;

@@ -52,14 +52,15 @@ int main() {
     // Our shelf wheel geometry is lying flat on ground with z being the axial direction
     float wheel_IZZ = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
-    auto wheel_template = DEM_sim.LoadClumpType(wheel_mass, make_float3(wheel_IXX, wheel_IXX, wheel_IZZ),
-                                                "./data/clumps/ViperWheelSimple.csv", mat_type_wheel);
+    auto wheel_template =
+        DEM_sim.LoadClumpType(wheel_mass, make_float3(wheel_IXX, wheel_IXX, wheel_IZZ),
+                              (GET_DATA_PATH() / "clumps/ViperWheelSimple.csv").string(), mat_type_wheel);
     // The file contains no wheel particles size info, so let's manually set them
     wheel_template->radii = std::vector<float>(wheel_template->nComp, 0.01);
 
     // Then the ground particle template
     DEMClumpTemplate shape_template;
-    shape_template.ReadComponentFromFile("./data/clumps/triangular_flat.csv");
+    shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
     // Calculate its mass and MOI
     float mass = 2.6e3 * 5.5886717 * kg_g_conv;  // in kg or g
     float3 MOI = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3 * kg_g_conv;

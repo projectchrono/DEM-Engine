@@ -23,9 +23,6 @@ int main() {
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
     DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::ABSV);
 
-    // auto projectile = DEM_sim.AddWavefrontMeshObject("./data/mesh/sphere.obj");
-    // std::cout << "Total num of triangles: " << projectile->GetNumTriangles() << std::endl;
-
     // Shrink both mass and stiffness to make the settling not challenging
     float shrink_factor = 3e3;
     auto mat_type_ball = DEM_sim.LoadMaterial({{"E", 1e9 / shrink_factor}, {"nu", 0.3}, {"CoR", 0.3}});
