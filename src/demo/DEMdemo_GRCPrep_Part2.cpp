@@ -147,7 +147,7 @@ int main() {
     // And a z position inspector
     auto max_z_finder = DEM_sim.CreateInspector("clump_max_z");
     auto void_ratio_finder =
-        DEM_sim.CreateInspector("volume", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) && (Z <= -0.45);");
+        DEM_sim.CreateInspector("clump_volume", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) && (Z <= -0.45);");
 
     // Make ready for simulation
     float step_size = 5e-7;

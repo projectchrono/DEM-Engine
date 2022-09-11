@@ -80,8 +80,8 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
         //     kernel_name = "inspectOwnerProperty";
         //     break;
         //// TODO: Void ration here is a very rough approximation and should only work when domain is large and
-        ///particles are small
-        case ("volume"_):
+        /// particles are small
+        case ("clump_volume"_):
             inspection_code = DEM_INSP_CODE_CLUMP_APPROX_VOID;
             reduce_flavor = DEM_CUB_REDUCE_FLAVOR::SUM;
             kernel_name = "inspectOwnerProperty";

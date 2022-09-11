@@ -310,6 +310,8 @@ class DEMSolver {
     /// Write the current status of `clumps' to a file, but not as clumps, instead, as each individual sphere. This may
     /// make small-scale rendering easier.
     void WriteSphereFile(const std::string& outfilename) const;
+    /// Write all contact pairs to a file
+    void WriteContactFile(const std::string& outfilename) const;
 
     /// Read clump coordinates from a CSV file (whose format is consistent with this solver's clump output file).
     /// Returns an unordered_map which maps each unique clump type name to a vector of float3 (XYZ coordinates).
@@ -339,15 +341,15 @@ class DEMSolver {
     static std::unordered_map<std::string, std::vector<float4>> ReadClumpQuatFromCsv(
         const std::string& infilename,
         const std::string& clump_header = DEM_OUTPUT_FILE_CLUMP_TYPE_NAME,
-        const std::string& q0_header = "Qw",
-        const std::string& q1_header = "Qx",
-        const std::string& q2_header = "Qy",
-        const std::string& q3_header = "Qz") {
+        const std::string& qw_header = "Qw",
+        const std::string& qx_header = "Qx",
+        const std::string& qy_header = "Qy",
+        const std::string& qz_header = "Qz") {
         std::unordered_map<std::string, std::vector<float4>> type_Q_map;
         io::CSVReader<5, io::trim_chars<' ', '\t'>, io::no_quote_escape<','>, io::throw_on_overflow,
                       io::empty_line_comment>
             in(infilename);
-        in.read_header(io::ignore_extra_column, clump_header, q0_header, q1_header, q2_header, q3_header);
+        in.read_header(io::ignore_extra_column, clump_header, qw_header, qx_header, qy_header, qz_header);
         std::string type_name;
         float4 Q;
         size_t count = 0;
@@ -416,8 +418,12 @@ class DEMSolver {
 
     /// Choose output format
     void SetOutputFormat(DEM_OUTPUT_FORMAT format) { m_out_format = format; }
-    /// Specify the information that needs to go into the output files
+    /// Specify the information that needs to go into the clump or sphere output files
     void SetOutputContent(unsigned int content) { m_out_content = content; }
+    /// Specify the file format of contact pairs
+    void SetContactOutputFormat(DEM_OUTPUT_FORMAT format) { m_cnt_out_format = format; }
+    /// Specify the information that needs to go into the contact pair output files
+    void SetContactOutputContent(unsigned int content) { m_cnt_out_content = content; }
 
     /// Let dT do this call and return the reduce value of the inspected quantity
     float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
@@ -453,9 +459,14 @@ class DEMSolver {
     bool use_user_defined_expand_factor = false;
 
     // I/O related flags
+    // The output file format for clumps and spheres
     // DEM_OUTPUT_MODE m_clump_out_mode = DEM_OUTPUT_MODE::SPHERE;
     DEM_OUTPUT_FORMAT m_out_format = DEM_OUTPUT_FORMAT::CSV;
     unsigned int m_out_content = DEM_OUTPUT_CONTENT::QUAT | DEM_OUTPUT_CONTENT::ABSV;
+    // The output file format for contact pairs
+    DEM_OUTPUT_FORMAT m_cnt_out_format = DEM_OUTPUT_FORMAT::CSV;
+    // The output file content for contact pairs
+    unsigned int m_cnt_out_content = DEM_CNT_OUTPUT_CONTENT::FORCE | DEM_CNT_OUTPUT_CONTENT::POINT;
 
     // User instructed simulation `world' size. Note it is an approximate of the true size and we will generate a world
     // not smaller than this.
@@ -737,6 +748,7 @@ class DEMSolver {
     // Analytical objects that will be flatten and transferred into kernels upon Initialize()
     std::vector<float> m_ext_obj_mass;
     std::vector<float3> m_ext_obj_moi;
+    std::vector<unsigned int> m_ext_obj_comp_num;  // number of component of each analytical obj
     // Meshed objects that will be flatten and transferred into kernels upon Initialize()
     std::vector<float> m_mesh_obj_mass;
     std::vector<float3> m_mesh_obj_moi;

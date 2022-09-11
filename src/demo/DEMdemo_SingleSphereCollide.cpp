@@ -21,6 +21,7 @@ int main() {
     DEMSolver DEM_sim;
     DEM_sim.SetVerbosity(DEBUG);
     DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
+    DEM_sim.SetContactOutputContent(OWNERS | FORCE | POINT | COMPONENT | NORMAL | TORQUE_ONLY_FORCE);
 
     // srand(time(NULL));
     srand(4150);
@@ -93,6 +94,10 @@ int main() {
         char filename[100];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
         DEM_sim.WriteSphereFile(std::string(filename));
+
+        char cnt_filename[100];
+        sprintf(cnt_filename, "%s/Contact_pairs_%04d.csv", out_dir.c_str(), i);
+        DEM_sim.WriteContactFile(std::string(cnt_filename));
 
         DEM_sim.DoDynamicsThenSync(1e-2);
         max_z = max_z_finder->GetValue();

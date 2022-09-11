@@ -63,7 +63,9 @@ const objNormal_t DEM_ENTITY_NORMAL_OUTWARD = 1;
 
 const contact_t DEM_NOT_A_CONTACT = 0;
 const contact_t DEM_SPHERE_SPHERE_CONTACT = 1;
-const contact_t DEM_SPHERE_PLANE_CONTACT = 2;
+const contact_t DEM_SPHERE_MESH_CONTACT = 2;
+const contact_t DEM_SPHERE_PLANE_CONTACT = 3;
+const contact_t DEM_SPHERE_PLATE_CONTACT = 4;
 
 const notStupidBool_t DEM_DONT_PREVENT_CONTACT = 0;
 const notStupidBool_t DEM_PREVENT_CONTACT = 1;
@@ -132,6 +134,16 @@ enum DEM_OUTPUT_CONTENT {
 };
 // Output particles as individual (component) spheres, or as owner clumps (clump CoMs for location, as an example)?
 enum class DEM_SPATIAL_DIR { X, Y, Z, NONE };
+// The info that should be present in the contact pair output files
+enum DEM_CNT_OUTPUT_CONTENT {
+    OWNERS = 0,     // Owner numbers and contact type
+    FORCE = 1,      // Force (that owner 1 feels) xyz components in global
+    POINT = 2,      // Contact point in global frame
+    COMPONENT = 4,  // The component numbers (such as triangle number for a mesh) that involved in this contact
+    NORMAL = 8,     // Contact normal direction in global frame
+    TORQUE_ONLY_FORCE =
+        16  // This is a standalone force and produces torque only (typical example: rolling resistance force)
+};
 
 // =============================================================================
 // NOW DEFINING SOME GPU-SIDE DATA STRUCTURES

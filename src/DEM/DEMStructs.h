@@ -343,6 +343,7 @@ struct SolverFlags {
     bool canFamilyChange = false;
     // Some output-related flags
     unsigned int outputFlags = DEM_OUTPUT_CONTENT::QUAT | DEM_OUTPUT_CONTENT::ABSV;
+    unsigned int cntOutFlags;
     // Time step constant-ness and expand factor constant-ness
     bool isStepConst = true;
     bool isExpandFactorFixed = true;
@@ -588,6 +589,30 @@ const std::string DEM_OUTPUT_FILE_R_COL_NAME = std::string("r");
 const std::string DEM_OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
 const std::filesystem::path DEM_USER_SCRIPT_PATH =
     std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" / "DEMUserScripts";
+// Column names for contact pair output file
+const std::string DEM_OUTPUT_FILE_OWNER_1_NAME = std::string("A");
+const std::string DEM_OUTPUT_FILE_OWNER_2_NAME = std::string("B");
+const std::string DEM_OUTPUT_FILE_COMP_1_NAME = std::string("compA");
+const std::string DEM_OUTPUT_FILE_COMP_2_NAME = std::string("compB");
+const std::string DEM_OUTPUT_FILE_CNT_TYPE_NAME = std::string("contact_type");
+const std::string DEM_OUTPUT_FILE_FORCE_X_NAME = std::string("f_x");
+const std::string DEM_OUTPUT_FILE_FORCE_Y_NAME = std::string("f_y");
+const std::string DEM_OUTPUT_FILE_FORCE_Z_NAME = std::string("f_z");
+const std::string DEM_OUTPUT_FILE_TOF_X_NAME = std::string("tof_x");
+const std::string DEM_OUTPUT_FILE_TOF_Y_NAME = std::string("tof_y");
+const std::string DEM_OUTPUT_FILE_TOF_Z_NAME = std::string("tof_z");
+const std::string DEM_OUTPUT_FILE_NORMAL_X_NAME = std::string("n_x");
+const std::string DEM_OUTPUT_FILE_NORMAL_Y_NAME = std::string("n_y");
+const std::string DEM_OUTPUT_FILE_NORMAL_Z_NAME = std::string("n_z");
+const std::string DEM_OUTPUT_FILE_SPH_SPH_CONTACT_NAME = std::string("SS");
+const std::string DEM_OUTPUT_FILE_SPH_ANAL_CONTACT_NAME = std::string("SA");
+const std::string DEM_OUTPUT_FILE_SPH_MESH_CONTACT_NAME = std::string("SM");
+const std::unordered_map<contact_t, std::string> contact_type_out_name_map = {
+    {DEM_NOT_A_CONTACT, "fake"},
+    {DEM_SPHERE_SPHERE_CONTACT, DEM_OUTPUT_FILE_SPH_SPH_CONTACT_NAME},
+    {DEM_SPHERE_MESH_CONTACT, DEM_OUTPUT_FILE_SPH_MESH_CONTACT_NAME},
+    {DEM_SPHERE_PLANE_CONTACT, DEM_OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
+    {DEM_SPHERE_PLATE_CONTACT, DEM_OUTPUT_FILE_SPH_ANAL_CONTACT_NAME}};
 
 }  // namespace smug
 

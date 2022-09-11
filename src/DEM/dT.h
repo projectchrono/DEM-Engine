@@ -225,6 +225,7 @@ class DEMDynamicThread {
     // Belonged-body ID
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerClumpBody;
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerMesh;
+    std::vector<bodyID_t> ownerAnalBody;
 
     // The ID that maps this sphere component's geometry-defining parameters, when this component is jitified
     std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> clumpComponentOffset;
@@ -367,6 +368,7 @@ class DEMDynamicThread {
                               const ClumpTemplateFlatten& clump_templates,
                               const std::vector<float>& ext_obj_mass_types,
                               const std::vector<float3>& ext_obj_moi_types,
+                              const std::vector<unsigned int>& ext_obj_comp_num,
                               const std::vector<float>& mesh_obj_mass_types,
                               const std::vector<float3>& mesh_obj_moi_types,
                               size_t nExistOwners,
@@ -397,6 +399,7 @@ class DEMDynamicThread {
                            const ClumpTemplateFlatten& clump_templates,
                            const std::vector<float>& ext_obj_mass_types,
                            const std::vector<float3>& ext_obj_moi_types,
+                           const std::vector<unsigned int>& ext_obj_comp_num,
                            const std::vector<float>& mesh_obj_mass_types,
                            const std::vector<float3>& mesh_obj_moi_types,
                            const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
@@ -419,6 +422,7 @@ class DEMDynamicThread {
                                const ClumpTemplateFlatten& clump_templates,
                                const std::vector<float>& ext_obj_mass_types,
                                const std::vector<float3>& ext_obj_moi_types,
+                               const std::vector<unsigned int>& ext_obj_comp_num,
                                const std::vector<float>& mesh_obj_mass_types,
                                const std::vector<float3>& mesh_obj_moi_types,
                                const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
@@ -442,6 +446,7 @@ class DEMDynamicThread {
     void writeSpheresAsCsv(std::ofstream& ptFile) const;
     void writeClumpsAsChpf(std::ofstream& ptFile) const;
     void writeClumpsAsCsv(std::ofstream& ptFile) const;
+    void writeContactsAsCsv(std::ofstream& ptFile) const;
 
     /// Called each time when the user calls DoDynamicsThenSync.
     void startThread();

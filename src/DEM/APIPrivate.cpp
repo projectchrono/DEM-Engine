@@ -457,6 +457,7 @@ void DEMSolver::preprocessAnalyticalObjs() {
             }
         }
         nAnalGM += this_num_anal_ent;
+        m_ext_obj_comp_num.push_back(this_num_anal_ent);
         thisExtObj++;
     }
 }
@@ -694,6 +695,7 @@ void DEMSolver::transferSolverParams() {
 
     // I/O policies (only output content matters for worker threads)
     dT->solverFlags.outputFlags = m_out_content;
+    dT->solverFlags.cntOutFlags = m_cnt_out_content;
 
     // Transfer historyless-ness
     kT->solverFlags.isHistoryless = (m_force_model->m_contact_wildcards.size() == 0);
@@ -794,7 +796,7 @@ void DEMSolver::initializeGPUArrays() {
         // Clump template info (mass, sphere components, materials etc.)
         flattened_clump_templates,
         // Analytical obj `template' properties
-        m_ext_obj_mass, m_ext_obj_moi,
+        m_ext_obj_mass, m_ext_obj_moi, m_ext_obj_comp_num,
         // Meshed obj `template' properties
         m_mesh_obj_mass, m_mesh_obj_moi,
         // Universal template info
@@ -840,7 +842,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // Clump template info (mass, sphere components, materials etc.)
         flattened_clump_templates,
         // Analytical obj `template' properties
-        m_ext_obj_mass, m_ext_obj_moi,
+        m_ext_obj_mass, m_ext_obj_moi, m_ext_obj_comp_num,
         // Meshed obj `template' properties
         m_mesh_obj_mass, m_mesh_obj_moi,
         // Universal template info

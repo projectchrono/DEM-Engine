@@ -296,6 +296,9 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     SMUG_DEM_TRACKED_RESIZE(relPosNode3, nTriGM, "relPosNode3", make_float3(0));
     SMUG_DEM_TRACKED_RESIZE(triMaterialOffset, nTriGM, "triMaterialOffset", 0);
 
+    // Resize to the number of analytical geometries
+    SMUG_DEM_TRACKED_RESIZE(ownerAnalBody, nAnalGM, "ownerAnalBody", 0);
+
     // Resize to number of owners
     SMUG_DEM_TRACKED_RESIZE(ownerTypes, nOwnerBodies, "ownerTypes", 0);
     SMUG_DEM_TRACKED_RESIZE(inertiaPropOffsets, nOwnerBodies, "inertiaPropOffsets", 0);
@@ -444,6 +447,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                                             const ClumpTemplateFlatten& clump_templates,
                                             const std::vector<float>& ext_obj_mass_types,
                                             const std::vector<float3>& ext_obj_moi_types,
+                                            const std::vector<unsigned int>& ext_obj_comp_num,
                                             const std::vector<float>& mesh_obj_mass_types,
                                             const std::vector<float3>& mesh_obj_moi_types,
                                             size_t nExistOwners,
@@ -600,11 +604,18 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
 
     // Load in initial positions and mass properties for the owners of those external objects
     // They go after clump owners
+    k = 0;
     size_t owner_offset_for_ext_obj = nExistOwners + input_clump_types.size();
     unsigned int offset_for_ext_obj_mass_template = simParams->nDistinctClumpBodyTopologies;
     for (size_t i = 0; i < input_ext_obj_xyz.size(); i++) {
         // If got here, it is an analytical obj
         ownerTypes.at(i + owner_offset_for_ext_obj) = DEM_OWNER_T_ANALYTICAL;
+        // For each analytical geometry component of this obj, it needs to know its owner number
+        for (size_t j = 0; j < ext_obj_comp_num.at(i); j++) {
+            ownerAnalBody.at(k) = i + owner_offset_for_ext_obj;
+            k++;
+        }
+
         // Analytical object mass properties are useful in force collection, but not useful in force calculation:
         // analytical component masses are jitified into kernels directly.
         inertiaPropOffsets.at(i + owner_offset_for_ext_obj) = i + offset_for_ext_obj_mass_template;
@@ -750,6 +761,7 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
                                          const ClumpTemplateFlatten& clump_templates,
                                          const std::vector<float>& ext_obj_mass_types,
                                          const std::vector<float3>& ext_obj_moi_types,
+                                         const std::vector<unsigned int>& ext_obj_comp_num,
                                          const std::vector<float>& mesh_obj_mass_types,
                                          const std::vector<float3>& mesh_obj_moi_types,
                                          const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
@@ -765,7 +777,7 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
     // For initialization, owner array offset is 0
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_family, input_mesh_obj_xyz,
                          input_mesh_obj_rot, input_mesh_obj_family, mesh_facet_owner, mesh_facet_materials, mesh_facets,
-                         clump_templates, ext_obj_mass_types, ext_obj_moi_types, mesh_obj_mass_types,
+                         clump_templates, ext_obj_mass_types, ext_obj_moi_types, ext_obj_comp_num, mesh_obj_mass_types,
                          mesh_obj_moi_types, 0, 0, 0);
 
     buildTrackedObjs(input_clump_batches, input_ext_obj_xyz, input_mesh_objs, tracked_objs, 0, 0);
@@ -784,6 +796,7 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                                              const ClumpTemplateFlatten& clump_templates,
                                              const std::vector<float>& ext_obj_mass_types,
                                              const std::vector<float3>& ext_obj_moi_types,
+                                             const std::vector<unsigned int>& ext_obj_comp_num,
                                              const std::vector<float>& mesh_obj_mass_types,
                                              const std::vector<float3>& mesh_obj_moi_types,
                                              const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
@@ -800,7 +813,7 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
     // Analytical objects-related arrays should be empty
     populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_family, input_mesh_obj_xyz,
                          input_mesh_obj_rot, input_mesh_obj_family, mesh_facet_owner, mesh_facet_materials, mesh_facets,
-                         clump_templates, ext_obj_mass_types, ext_obj_moi_types, mesh_obj_mass_types,
+                         clump_templates, ext_obj_mass_types, ext_obj_moi_types, ext_obj_comp_num, mesh_obj_mass_types,
                          mesh_obj_moi_types, nExistingOwners, nExistingSpheres, nExistingFacets);
 
     // Make changes to tracked objects (potentially add more)
@@ -888,28 +901,29 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
     std::ostringstream outstrstream;
 
     outstrstream << DEM_OUTPUT_FILE_X_COL_NAME + "," + DEM_OUTPUT_FILE_Y_COL_NAME + "," + DEM_OUTPUT_FILE_Z_COL_NAME +
-                        ",r";
+                        "," + DEM_OUTPUT_FILE_R_COL_NAME;
+
     if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ABSV) {
         outstrstream << ",absv";
     }
     if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::VEL) {
         outstrstream << ",v_x,v_y,v_z";
     }
-    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ANG_VEL) {
-        outstrstream << ",w_x,w_y,w_z";
-    }
-    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ACC) {
-        outstrstream << ",a_x,a_y,a_z";
-    }
-    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ANG_ACC) {
-        outstrstream << ",alpha_x,alpha_y,alpha_z";
-    }
+    // if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ANG_VEL) {
+    //     outstrstream << ",w_x,w_y,w_z";
+    // }
+    // if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ACC) {
+    //     outstrstream << ",a_x,a_y,a_z";
+    // }
+    // if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ANG_ACC) {
+    //     outstrstream << ",alpha_x,alpha_y,alpha_z";
+    // }
     if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
         outstrstream << ",family";
     }
-    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::MAT) {
-        outstrstream << ",material";
-    }
+    // if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::MAT) {
+    //     outstrstream << ",material";
+    // }
     outstrstream << "\n";
 
     for (size_t i = 0; i < simParams->nSpheresGM; i++) {
@@ -953,12 +967,15 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
         outstrstream << "," << radius;
 
         // Only linear velocity
+        float3 vxyz;
+        vxyz.x = vX.at(this_owner);
+        vxyz.y = vY.at(this_owner);
+        vxyz.z = vZ.at(this_owner);
         if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ABSV) {
-            float3 absv;
-            absv.x = vX.at(this_owner);
-            absv.y = vY.at(this_owner);
-            absv.z = vZ.at(this_owner);
-            outstrstream << "," << length(absv);
+            outstrstream << "," << length(vxyz);
+        }
+        if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::VEL) {
+            outstrstream << "," << vxyz.x << "," << vxyz.y << "," << vxyz.z;
         }
 
         // Family number needs to be user number
@@ -986,15 +1003,15 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile) const {
     if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::VEL) {
         outstrstream << ",v_x,v_y,v_z";
     }
-    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ANG_VEL) {
-        outstrstream << ",w_x,w_y,w_z";
-    }
-    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ACC) {
-        outstrstream << ",a_x,a_y,a_z";
-    }
-    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ANG_ACC) {
-        outstrstream << ",alpha_x,alpha_y,alpha_z";
-    }
+    // if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ANG_VEL) {
+    //     outstrstream << ",w_x,w_y,w_z";
+    // }
+    // if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ACC) {
+    //     outstrstream << ",a_x,a_y,a_z";
+    // }
+    // if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ANG_ACC) {
+    //     outstrstream << ",alpha_x,alpha_y,alpha_z";
+    // }
     if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
         outstrstream << ",family";
     }
@@ -1034,17 +1051,133 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile) const {
         outstrstream << "," << templateNumNameMap.at(clump_mark);
 
         // Only linear velocity
+        float3 vxyz;
+        vxyz.x = vX.at(i);
+        vxyz.y = vY.at(i);
+        vxyz.z = vZ.at(i);
         if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ABSV) {
-            float3 absv;
-            absv.x = vX.at(i);
-            absv.y = vY.at(i);
-            absv.z = vZ.at(i);
-            outstrstream << "," << length(absv);
+            outstrstream << "," << length(vxyz);
+        }
+        if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::VEL) {
+            outstrstream << "," << vxyz.x << "," << vxyz.y << "," << vxyz.z;
         }
 
         // Family number needs to be user number
         if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
             outstrstream << "," << +(this_family);
+        }
+
+        outstrstream << "\n";
+    }
+
+    ptFile << outstrstream.str();
+}
+
+void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
+    std::ostringstream outstrstream;
+
+    outstrstream << DEM_OUTPUT_FILE_OWNER_1_NAME + "," + DEM_OUTPUT_FILE_OWNER_2_NAME + "," +
+                        DEM_OUTPUT_FILE_CNT_TYPE_NAME;
+    if (solverFlags.cntOutFlags & DEM_CNT_OUTPUT_CONTENT::FORCE) {
+        outstrstream << "," + DEM_OUTPUT_FILE_FORCE_X_NAME + "," + DEM_OUTPUT_FILE_FORCE_Y_NAME + "," +
+                            DEM_OUTPUT_FILE_FORCE_Z_NAME;
+    }
+    if (solverFlags.cntOutFlags & DEM_CNT_OUTPUT_CONTENT::POINT) {
+        outstrstream << "," + DEM_OUTPUT_FILE_X_COL_NAME + "," + DEM_OUTPUT_FILE_Y_COL_NAME + "," +
+                            DEM_OUTPUT_FILE_Z_COL_NAME;
+    }
+    // if (solverFlags.cntOutFlags & DEM_CNT_OUTPUT_CONTENT::COMPONENT) {
+    //     outstrstream << ","+DEM_OUTPUT_FILE_COMP_1_NAME+","+DEM_OUTPUT_FILE_COMP_2_NAME;
+    // }
+    if (solverFlags.cntOutFlags & DEM_CNT_OUTPUT_CONTENT::NORMAL) {
+        outstrstream << "," + DEM_OUTPUT_FILE_NORMAL_X_NAME + "," + DEM_OUTPUT_FILE_NORMAL_Y_NAME + "," +
+                            DEM_OUTPUT_FILE_NORMAL_Z_NAME;
+    }
+    if (solverFlags.cntOutFlags & DEM_CNT_OUTPUT_CONTENT::TORQUE_ONLY_FORCE) {
+        outstrstream << "," + DEM_OUTPUT_FILE_TOF_X_NAME + "," + DEM_OUTPUT_FILE_TOF_Y_NAME + "," +
+                            DEM_OUTPUT_FILE_TOF_Z_NAME;
+    }
+    outstrstream << "\n";
+
+    for (size_t i = 0; i < *(stateOfSolver_resources.pNumContacts); i++) {
+        // Geos that are involved in this contact
+        auto geoA = idGeometryA.at(i);
+        auto geoB = idGeometryB.at(i);
+        auto type = contactType.at(i);
+        // We don't output fake contact
+        if (type == DEM_NOT_A_CONTACT)
+            continue;
+
+        // geoA's owner must be a sphere
+        auto ownerA = ownerClumpBody.at(geoA);
+        bodyID_t ownerB;
+        // geoB's owner depends...
+        switch (type) {
+            case (DEM_SPHERE_SPHERE_CONTACT):
+                ownerB = ownerClumpBody.at(geoB);
+                break;
+            case (DEM_SPHERE_MESH_CONTACT):
+                ownerB = ownerMesh.at(geoB);
+                break;
+            default:  // Default is sphere--analytical
+                ownerB = ownerAnalBody.at(geoB);
+        }
+        // Type is mapped to SS, SM and such....
+        outstrstream << ownerA << "," << ownerB << "," << contact_type_out_name_map.at(type);
+
+        // Force is already in global...
+        if (solverFlags.cntOutFlags & DEM_CNT_OUTPUT_CONTENT::FORCE) {
+            float3 forcexyz = contactForces.at(i);
+            outstrstream << "," << forcexyz.x << "," << forcexyz.y << "," << forcexyz.z;
+        }
+
+        // Contact point is in local frame. To make it global, first map that vector to axis-aligned global frame, then
+        // add the location of body A CoM
+        float4 oriQA;
+        float3 CoM, cntPntA;  // A's CoM
+        {
+            oriQA.w = oriQw.at(i);
+            oriQA.x = oriQx.at(i);
+            oriQA.y = oriQy.at(i);
+            oriQA.z = oriQz.at(i);
+            voxelID_t voxel = voxelID.at(ownerA);
+            subVoxelPos_t subVoxX = locX.at(ownerA);
+            subVoxelPos_t subVoxY = locY.at(ownerA);
+            subVoxelPos_t subVoxZ = locZ.at(ownerA);
+            hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(CoM.x, CoM.y, CoM.z, voxel, subVoxX, subVoxY,
+                                                                   subVoxZ, simParams->nvXp2, simParams->nvYp2,
+                                                                   simParams->voxelSize, simParams->l);
+            CoM.x += simParams->LBFX;
+            CoM.y += simParams->LBFY;
+            CoM.z += simParams->LBFZ;
+            cntPntA = contactPointGeometryA.at(i);
+            hostApplyOriQToVector3(cntPntA.x, cntPntA.y, cntPntA.z, oriQA.w, oriQA.x, oriQA.y, oriQA.z);
+            cntPntA += CoM;
+        }
+        if (solverFlags.cntOutFlags & DEM_CNT_OUTPUT_CONTENT::POINT) {
+            // oriQ is updated already... whereas the contact point is effectively last step's... That's unfortunate.
+            // Should we do somthing ahout it?
+            outstrstream << "," << cntPntA.x << "," << cntPntA.y << "," << cntPntA.z;
+        }
+
+        // To get contact normal: it's just contact point - sphereA center, that gives you the outward normal for body A
+        if (solverFlags.cntOutFlags & DEM_CNT_OUTPUT_CONTENT::NORMAL) {
+            size_t compOffset = (solverFlags.useClumpJitify) ? clumpComponentOffsetExt.at(geoA) : geoA;
+            float3 this_sp_deviation;
+            this_sp_deviation.x = relPosSphereX.at(compOffset);
+            this_sp_deviation.y = relPosSphereY.at(compOffset);
+            this_sp_deviation.z = relPosSphereZ.at(compOffset);
+            hostApplyOriQToVector3<float, float>(this_sp_deviation.x, this_sp_deviation.y, this_sp_deviation.z, oriQA.w,
+                                                 oriQA.x, oriQA.y, oriQA.z);
+            float3 pos = CoM + this_sp_deviation;
+            float3 normal = normalize(cntPntA - pos);
+            outstrstream << "," << normal.x << "," << normal.y << "," << normal.z;
+        }
+
+        // Torque is in global already...
+        if (solverFlags.cntOutFlags & DEM_CNT_OUTPUT_CONTENT::TORQUE_ONLY_FORCE) {
+            float3 forcexyz = contactTorque_convToForce.at(i);
+            outstrstream << "," << forcexyz.x << "," << forcexyz.y << "," << forcexyz.z;
         }
 
         outstrstream << "\n";

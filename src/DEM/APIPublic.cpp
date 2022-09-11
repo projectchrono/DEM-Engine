@@ -614,7 +614,7 @@ void DEMSolver::WriteSphereFile(const std::string& outfilename) const {
             break;
         }
         default:
-            SMUG_DEM_ERROR("Clump output format is unknown. Please set it via SetOutputFormat.");
+            SMUG_DEM_ERROR("Sphere output file format is unknown. Please set it via SetOutputFormat.");
     }
 }
 
@@ -636,7 +636,20 @@ void DEMSolver::WriteClumpFile(const std::string& outfilename) const {
             break;
         }
         default:
-            SMUG_DEM_ERROR("Clump output format is unknown. Please set it via SetOutputFormat.");
+            SMUG_DEM_ERROR("Clump output file format is unknown. Please set it via SetOutputFormat.");
+    }
+}
+
+void DEMSolver::WriteContactFile(const std::string& outfilename) const {
+    switch (m_cnt_out_format) {
+        case (DEM_OUTPUT_FORMAT::CSV): {
+            std::ofstream ptFile(outfilename, std::ios::out);
+            dT->writeContactsAsCsv(ptFile);
+            break;
+        }
+        default:
+            SMUG_DEM_ERROR(
+                "Contact pair output file format is unknown or not implemented. Please re-set it via SetOutputFormat.");
     }
 }
 
@@ -745,6 +758,7 @@ void DEMSolver::ReleaseFlattenedArrays() {
 
     deallocate_array(m_ext_obj_mass);
     deallocate_array(m_ext_obj_moi);
+    deallocate_array(m_ext_obj_comp_num);
 
     deallocate_array(m_mesh_obj_mass);
     deallocate_array(m_mesh_obj_moi);
