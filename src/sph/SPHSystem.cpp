@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <ostream>
+#include <fstream>
 #include <sph/SPHSystem.h>
 #include <core/utils/JitHelper.h>
 #include <thread>
@@ -13,6 +14,7 @@
 #include "SPHSystem.h"
 #include "datastruct.h"
 #include <algorithms/SPHCubHelperFunctions.h>
+#include <iterator>
 
 int X_SUB_NUM = 0;
 int Y_SUB_NUM = 0;
@@ -48,14 +50,14 @@ void SPHSystem::initialize(float kernel_h,
     cudaMemcpy(dataManager.m_pressure.data(), pres.data(), dataManager.k_n * sizeof(float), cudaMemcpyDefault);
     cudaMemcpy(dataManager.m_fix.data(), fix.data(), dataManager.k_n * sizeof(char), cudaMemcpyDefault);
 
-    this->domain_x = domain_x + 5 * kernel_h;
-    this->domain_y = domain_y + 5 * kernel_h;
-    this->domain_z = domain_z + 5 * kernel_h;
+    this->domain_x = domain_x + 6 * kernel_h;
+    this->domain_y = domain_y + 6 * kernel_h;
+    this->domain_z = domain_z + 6 * kernel_h;
 
     // redeclare the number of subdomain to be size/4 (4 is the BSD side length)
-    X_SUB_NUM = (int)(this->domain_x / kernel_h) / 2 + 2;
-    Y_SUB_NUM = (int)(this->domain_y / kernel_h) / 2 + 2;
-    Z_SUB_NUM = (int)(this->domain_z / kernel_h) / 2 + 2;
+    X_SUB_NUM = (int)(this->domain_x / kernel_h) / 4 + 1;
+    Y_SUB_NUM = (int)(this->domain_y / kernel_h) / 4 + 1;
+    Z_SUB_NUM = (int)(this->domain_z / kernel_h) / 4 + 1;
     printf("BSD num: %d, %d, %d\n", X_SUB_NUM, Y_SUB_NUM, Z_SUB_NUM);
 }
 
@@ -70,11 +72,11 @@ void SPHSystem::doStepDynamics(float time_step, float sim_time) {
     dynamics.join();
 
     // join the write-out thread only when write out mode is enabled
-    if (this->getPrintOut() == true) {
-        writeout.join();
-    } else {
-        writeout.detach();
-    }
+    // if (this->getPrintOut() == true) {
+    //     writeout.join();
+    // } else {
+    //     writeout.detach();
+    // }
 }
 
 void SPHSystem::printCSV(std::string filename, float3* pos_arr, int pos_n, float3* vel_arr) {
@@ -174,7 +176,7 @@ void KinematicThread::operator()() {
     std::vector<int, smug::ManagedAllocator<int>>
         idx_track_data;  // vector to store original particle idx after sorting
     std::vector<int, smug::ManagedAllocator<int>>
-        offset_BSD_data;  // vector to store original particle idx after sorting
+        num_BSD_data_offset;  // vector to store original particle idx after sorting
 
     std::vector<int, smug::ManagedAllocator<int>> pair_i_data;
     std::vector<int, smug::ManagedAllocator<int>> pair_j_data;
@@ -186,6 +188,7 @@ void KinematicThread::operator()() {
         BSD_iden_idx;  // BSD identification tracking vector, this vector identifies whether the current particle is in
                        // the buffer zone or in the actual SD (0 is not in buffer, 1 is in buffer)
     std::vector<int, smug::ManagedAllocator<int>> num_col;  // number of collision - the output of kinematic 1st pass
+    std::vector<int, smug::ManagedAllocator<int>> num_col_per_particle;
 
     std::vector<float, smug::ManagedAllocator<float>> rho_data;       // local density data
     std::vector<float, smug::ManagedAllocator<float>> pressure_data;  // local presusre dataf
@@ -215,7 +218,7 @@ void KinematicThread::operator()() {
 
         // for each step, the kinematic thread needs to do two passes
         // first pass - look for 'number' of potential contacts
-        // crate an array to store number of valid potential contacts
+        // create an array to store number of valid potential contacts
 
         if (getParentSystem().pos_data_isFresh == true) {
             const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
@@ -243,10 +246,10 @@ void KinematicThread::operator()() {
         num_BSD_data.resize(k_n);
         // resize the idx_track_data vector
         idx_track_data.resize(k_n);
-        // resize the offset_BSD_data vector
-        offset_BSD_data.resize(k_n);
+        // resize the num_BSD_data_offset vector
+        num_BSD_data_offset.resize(k_n);
 
-        kinematic_program.kernel("kinematicStep1")
+        kinematic_program.kernel("fillNumBSDByParticle")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), num_BSD_data.data(), k_n, multiplier * kernel_h, d_domain_x, d_domain_y,
@@ -255,11 +258,11 @@ void KinematicThread::operator()() {
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        PrefixScanExclusiveCub(num_BSD_data, offset_BSD_data, num_BSD_data.size(), temp_storage);
+        PrefixScanExclusiveCub(num_BSD_data, num_BSD_data_offset, num_BSD_data.size(), temp_storage);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        int TotLength = offset_BSD_data[k_n - 1] + num_BSD_data[k_n - 1];
+        int TotLength = num_BSD_data_offset[k_n - 1] + num_BSD_data[k_n - 1];
 
         // ==============================================================================================================
         // Kinematic Step 2
@@ -271,10 +274,10 @@ void KinematicThread::operator()() {
         BSD_idx.resize(TotLength);
         BSD_iden_idx.resize(TotLength);
 
-        kinematic_program.kernel("kinematicStep2")
+        kinematic_program.kernel("fillBSDIndexByParticle")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(pos_data.data(), offset_BSD_data.data(), BSD_iden_idx.data(), BSD_idx.data(), idx_track_data.data(),
+            .launch(pos_data.data(), num_BSD_data_offset.data(), BSD_iden_idx.data(), BSD_idx.data(), idx_track_data.data(),
                     k_n, TotLength, multiplier * kernel_h, d_domain_x, d_domain_y, d_domain_z, X_SUB_NUM, Y_SUB_NUM,
                     Z_SUB_NUM, getParentSystem().domain_x, getParentSystem().domain_y, getParentSystem().domain_z,
                     buffer_width);
@@ -306,7 +309,7 @@ void KinematicThread::operator()() {
         // ==============================================================================================================
         // Kinematic Step 4
         // Compute BSD Offsets and Lengths
-        // cub::DeviceRunLengthEncode::Encode​ and cub::ExclusiveScan need to be called
+        // cub::DeviceRunLengthEncode::Encode and cub::ExclusiveScan need to be called
         // ==============================================================================================================
         std::vector<int, smug::ManagedAllocator<int>> unique_BSD_idx;
         std::vector<int, smug::ManagedAllocator<int>> length_BSD_idx;
@@ -322,24 +325,25 @@ void KinematicThread::operator()() {
 
         // ==============================================================================================================
         // Kinematic Step 5
-        // Count Collision Events Number​
+        // Count Collision Events Number
         // (Kinematic First Pass)
         // ==============================================================================================================
 
-        num_col.resize(unique_BSD_idx.size() * MAX_PARTICLES_PER_BSD);
+        num_col.resize(unique_BSD_idx.size());
+        num_col_per_particle.resize(idx_track_data_sorted.size());
 
-        // set threads per block to be 512
+        // set threads per block to be MAX_PARTICLES_PER_BSD
         // set total number of block to be unique_BSD_idx.size()
         num_block = unique_BSD_idx.size();
         num_thread = MAX_PARTICLES_PER_BSD;
 
         // launch kinematic first pass kernel
-        kinematic_program.kernel("kinematicStep5")
+        kinematic_program.kernel("findNumCollisions")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), k_n, multiplier * kernel_h, idx_track_data_sorted.data(),
                     BSD_iden_idx_sorted.data(), offset_BSD_idx.data(), length_BSD_idx.data(), unique_BSD_idx.data(),
-                    num_col.data(), unique_BSD_idx.size(), buffer_width);
+                    num_col.data(), num_col_per_particle.data(), unique_BSD_idx.size(), buffer_width);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -349,9 +353,17 @@ void KinematicThread::operator()() {
         // This is supposed to be a CUB exclusive scan
         // ==============================================================================================================
         std::vector<int, smug::ManagedAllocator<int>> num_col_offset;
+        std::vector<int, smug::ManagedAllocator<int>> num_col_per_particle_offset;
 
         PrefixScanExclusiveCub(num_col, num_col_offset, num_col.size(), temp_storage);
+        PrefixScanExclusiveCub(num_col_per_particle, num_col_per_particle_offset, num_col_per_particle.size(), temp_storage);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+        std::cout << "unique bsd size: " << unique_BSD_idx.size() << std::endl;
+        // for (int i = 0; i < num_col.size(); i++) {
+        //     std::cout << "id: " << i << ", num_col: "<< num_col[i] << std::endl;
+        // }
+
 
         int tot_collision = num_col_offset[num_col_offset.size() - 1] + num_col[num_col.size() - 1];
 
@@ -363,6 +375,7 @@ void KinematicThread::operator()() {
         // ==============================================================================================================
 
         // resize contact pair data size
+        std::cout << pair_i_data.size() << std::endl;
         pair_i_data.resize(tot_collision);
         pair_j_data.resize(tot_collision);
         W_grad_data.resize(tot_collision);
@@ -373,101 +386,104 @@ void KinematicThread::operator()() {
         num_thread = MAX_PARTICLES_PER_BSD;
 
         // launch kinematic first pass kernel
-        kinematic_program.kernel("kinematicStep7")
+        kinematic_program.kernel("fillIJPairs")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), k_n, multiplier * kernel_h, idx_track_data_sorted.data(),
                     BSD_iden_idx_sorted.data(), offset_BSD_idx.data(), length_BSD_idx.data(), unique_BSD_idx.data(),
                     num_col.data(), unique_BSD_idx.size(), pair_i_data.data(), pair_j_data.data(),
-                    num_col_offset.data(), W_grad_data.data(), buffer_width);
+                    num_col_offset.data(), num_col_per_particle.data(), buffer_width);
 
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        bool getWgradInkT = false;
 
-        // ==============================================================================================================
-        // Kinematic Step 8
-        // This is the 1st step to compute density and pressure
-        // Computing particle j's contribution to particle i's density
-        // ==============================================================================================================
+        if (getWgradInkT) {
+            // ==============================================================================================================
+            // Kinematic Step 8
+            // This is the 1st step to compute density and pressure
+            // Computing particle j's contribution to particle i's density
+            // ==============================================================================================================
 
-        // 1st pass to compute particle j's contribution to particle i's density
-        std::vector<int, smug::ManagedAllocator<int>> i_data_sorted_1;
-        std::vector<int, smug::ManagedAllocator<int>> j_data_sorted_1;
+            // 1st pass to compute particle j's contribution to particle i's density
+            std::vector<int, smug::ManagedAllocator<int>> i_data_sorted_1;
+            std::vector<int, smug::ManagedAllocator<int>> j_data_sorted_1;
 
-        PairRadixSortAscendCub(pair_i_data, i_data_sorted_1, pair_j_data, j_data_sorted_1, tot_collision, temp_storage);
-        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+            PairRadixSortAscendCub(pair_i_data, i_data_sorted_1, pair_j_data, j_data_sorted_1, tot_collision, temp_storage);
+            GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        std::vector<int, smug::ManagedAllocator<int>> i_unique;
-        std::vector<int, smug::ManagedAllocator<int>> i_length;
-        std::vector<int, smug::ManagedAllocator<int>> i_offset;
+            std::vector<int, smug::ManagedAllocator<int>> i_unique;
+            std::vector<int, smug::ManagedAllocator<int>> i_length;
+            std::vector<int, smug::ManagedAllocator<int>> i_offset;
 
-        RunLengthEncodeCub(i_data_sorted_1, i_unique, i_length, i_data_sorted_1.size(), temp_storage);
-        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-        PrefixScanExclusiveCub(i_length, i_offset, i_length.size(), temp_storage);
-        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+            RunLengthEncodeCub(i_data_sorted_1, i_unique, i_length, i_data_sorted_1.size(), temp_storage);
+            GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+            PrefixScanExclusiveCub(i_length, i_offset, i_length.size(), temp_storage);
+            GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        // initialize density and pressure vectors
-        rho_data.resize(pos_data.size());
+            // initialize density and pressure vectors
+            rho_data.resize(pos_data.size());
 
-        num_thread = 512;
-        num_block =
-            (i_unique.size() % num_thread != 0) ? (i_unique.size() / num_thread + 1) : (i_unique.size() / num_thread);
+            num_thread = 512;
+            num_block =
+                (i_unique.size() % num_thread != 0) ? (i_unique.size() / num_thread + 1) : (i_unique.size() / num_thread);
 
-        kinematic_program.kernel("kinematicStep8")
-            .instantiate()
-            .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(pos_data.data(), rho_data.data(), pressure_data.data(), i_unique.data(), i_offset.data(),
-                    i_length.data(), j_data_sorted_1.data(), fix_data.data(), i_unique.size(), multiplier * kernel_h, m,
-                    rho_0);
-        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+            kinematic_program.kernel("computeDensityJToI")
+                .instantiate()
+                .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
+                .launch(pos_data.data(), rho_data.data(), pressure_data.data(), i_unique.data(), i_offset.data(),
+                        i_length.data(), j_data_sorted_1.data(), fix_data.data(), i_unique.size(), multiplier * kernel_h, m,
+                        rho_0);
+            GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        // ==============================================================================================================
-        // Kinematic Step 9
-        // This is the 2nd step to compute density and pressure
-        // Computing particle i's contribution to particle j's density
-        // ==============================================================================================================
-        // 1st pass to compute particle j's contribution to particle i's density
-        std::vector<int, smug::ManagedAllocator<int>> i_data_sorted_2;
-        std::vector<int, smug::ManagedAllocator<int>> j_data_sorted_2;
+            // ==============================================================================================================
+            // Kinematic Step 9
+            // This is the 2nd step to compute density and pressure
+            // Computing particle i's contribution to particle j's density
+            // ==============================================================================================================
+            // 1st pass to compute particle j's contribution to particle i's density
+            std::vector<int, smug::ManagedAllocator<int>> i_data_sorted_2;
+            std::vector<int, smug::ManagedAllocator<int>> j_data_sorted_2;
 
-        PairRadixSortAscendCub(pair_j_data, j_data_sorted_2, pair_i_data, i_data_sorted_2, tot_collision, temp_storage);
-        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+            PairRadixSortAscendCub(pair_j_data, j_data_sorted_2, pair_i_data, i_data_sorted_2, tot_collision, temp_storage);
+            GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        std::vector<int, smug::ManagedAllocator<int>> j_unique;
-        std::vector<int, smug::ManagedAllocator<int>> j_length;
-        std::vector<int, smug::ManagedAllocator<int>> j_offset;
+            std::vector<int, smug::ManagedAllocator<int>> j_unique;
+            std::vector<int, smug::ManagedAllocator<int>> j_length;
+            std::vector<int, smug::ManagedAllocator<int>> j_offset;
 
-        RunLengthEncodeCub(j_data_sorted_2, j_unique, j_length, j_data_sorted_2.size(), temp_storage);
-        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-        PrefixScanExclusiveCub(j_length, j_offset, j_length.size(), temp_storage);
-        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+            RunLengthEncodeCub(j_data_sorted_2, j_unique, j_length, j_data_sorted_2.size(), temp_storage);
+            GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+            PrefixScanExclusiveCub(j_length, j_offset, j_length.size(), temp_storage);
+            GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        num_thread = 512;
-        num_block =
-            (j_unique.size() % num_thread != 0) ? (j_unique.size() / num_thread + 1) : (j_unique.size() / num_thread);
+            num_thread = 512;
+            num_block =
+                (j_unique.size() % num_thread != 0) ? (j_unique.size() / num_thread + 1) : (j_unique.size() / num_thread);
 
-        kinematic_program.kernel("kinematicStep9")
-            .instantiate()
-            .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(pos_data.data(), rho_data.data(), pressure_data.data(), j_unique.data(), j_offset.data(),
-                    j_length.data(), i_data_sorted_2.data(), fix_data.data(), j_unique.size(), multiplier * kernel_h, m,
-                    rho_0);
-        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+            kinematic_program.kernel("computeDensityIToJ")
+                .instantiate()
+                .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
+                .launch(pos_data.data(), rho_data.data(), pressure_data.data(), j_unique.data(), j_offset.data(),
+                        j_length.data(), i_data_sorted_2.data(), fix_data.data(), j_unique.size(), multiplier * kernel_h, m,
+                        rho_0);
+            GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-        // ==============================================================================================================
-        // Kinematic Step 10
-        // Add particle k's contribution to particle k's density (add density of the particle itself)
-        // And compute pressure of each particle
-        // ==============================================================================================================
-        num_thread = 1024;
-        num_block =
-            (pos_data.size() % num_thread != 0) ? (pos_data.size() / num_thread + 1) : (pos_data.size() / num_thread);
+            // ==============================================================================================================
+            // Kinematic Step 10
+            // Add particle k's contribution to particle k's density (add density of the particle itself)
+            // And compute pressure of each particle
+            // ==============================================================================================================
+            num_thread = 1024;
+            num_block =
+                (pos_data.size() % num_thread != 0) ? (pos_data.size() / num_thread + 1) : (pos_data.size() / num_thread);
 
-        kinematic_program.kernel("kinematicStep10")
-            .instantiate()
-            .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(rho_data.data(), pressure_data.data(), fix_data.data(), pos_data.size(), multiplier * kernel_h, m,
-                    rho_0, c);
-        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+            kinematic_program.kernel("computePressure")
+                .instantiate()
+                .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
+                .launch(rho_data.data(), pressure_data.data(), fix_data.data(), pos_data.size(), multiplier * kernel_h, m,
+                        rho_0, c);
+            GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        }
 
         // copy data back to the dataManager
         {
@@ -476,18 +492,10 @@ void KinematicThread::operator()() {
             if (tot_collision > dataManager.m_pair_i.size()) {
                 dataManager.m_pair_i.resize(tot_collision);
                 dataManager.m_pair_j.resize(tot_collision);
-                dataManager.m_W_grad.resize(tot_collision);
-                dataManager.m_rho.resize(tot_collision);
-                dataManager.m_pressure.resize(tot_collision);
             }
             cudaMemcpy(dataManager.m_pair_i.data(), pair_i_data.data(), dataManager.m_tot_collision * sizeof(int),
                        cudaMemcpyDeviceToDevice);
             cudaMemcpy(dataManager.m_pair_j.data(), pair_j_data.data(), dataManager.m_tot_collision * sizeof(int),
-                       cudaMemcpyDeviceToDevice);
-            cudaMemcpy(dataManager.m_rho.data(), rho_data.data(), k_n * sizeof(float), cudaMemcpyDeviceToDevice);
-            cudaMemcpy(dataManager.m_pressure.data(), pressure_data.data(), k_n * sizeof(float),
-                       cudaMemcpyDeviceToDevice);
-            cudaMemcpy(dataManager.m_W_grad.data(), W_grad_data.data(), dataManager.m_tot_collision * sizeof(float3),
                        cudaMemcpyDeviceToDevice);
         }
 
@@ -530,11 +538,16 @@ void DynamicThread::operator()() {
     std::vector<float3, smug::ManagedAllocator<float3>> vel_data;
     std::vector<float3, smug::ManagedAllocator<float3>> acc_data;
     std::vector<char, smug::ManagedAllocator<char>> fix_data;
-    std::vector<float3, smug::ManagedAllocator<float3>> temp_storage;
+    std::vector<int, smug::ManagedAllocator<int>> temp_storage;
+    std::vector<float3, smug::ManagedAllocator<float3>> temp_storage3;
     float kernel_h;
     float m;
+    float c;
     float rho_0;
     int output_counter = 0;
+    float multiplier = 1.33;
+
+    int write_out_count = 0;
 
     auto dynamic_program = JitHelper::buildProgram("SPHDynamicKernels", JitHelper::KERNEL_DIR / "SPHDynamicKernels.cu",
                                                    std::unordered_map<std::string, std::string>(),
@@ -547,6 +560,8 @@ void DynamicThread::operator()() {
         const std::lock_guard<std::mutex> lock(getParentSystem().getMutexPos());
         k_n = dataManager.k_n;
         m = dataManager.m;
+        c = dataManager.c;
+        kernel_h = dataManager.kernel_h;
         rho_0 = dataManager.rho_0;
     }
 
@@ -574,22 +589,17 @@ void DynamicThread::operator()() {
                 pair_j_data.resize(tot_collision);
                 rho_data.resize(k_n);
                 pressure_data.resize(k_n);
-                W_grad_data.resize(tot_collision);
             } else {
                 if (tot_collision > pair_i_data.size()) {
                     pair_i_data.resize(tot_collision);
                     pair_j_data.resize(tot_collision);
-                    W_grad_data.resize(tot_collision);
                 }
             }
             cudaMemcpy(pair_i_data.data(), dataManager.m_pair_i.data(), tot_collision * sizeof(int),
                        cudaMemcpyDeviceToDevice);
             cudaMemcpy(pair_j_data.data(), dataManager.m_pair_j.data(), tot_collision * sizeof(int),
                        cudaMemcpyDeviceToDevice);
-            cudaMemcpy(rho_data.data(), dataManager.m_rho.data(), k_n * sizeof(float), cudaMemcpyDeviceToDevice);
             cudaMemcpy(pressure_data.data(), dataManager.m_pressure.data(), k_n * sizeof(float),
-                       cudaMemcpyDeviceToDevice);
-            cudaMemcpy(W_grad_data.data(), dataManager.m_W_grad.data(), tot_collision * sizeof(float3),
                        cudaMemcpyDeviceToDevice);
         }
 
@@ -601,26 +611,94 @@ void DynamicThread::operator()() {
         }
 
         // clear acc_data each step
+        acc_data.clear();
         acc_data.resize(pos_data.size());
+
+        // compute density and pressure
+        std::vector<int, smug::ManagedAllocator<int>> i_data_sorted_1;
+        std::vector<int, smug::ManagedAllocator<int>> j_data_sorted_1;
+
+        PairRadixSortAscendCub(pair_i_data, i_data_sorted_1, pair_j_data, j_data_sorted_1, tot_collision, temp_storage);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+        std::vector<int, smug::ManagedAllocator<int>> i_unique;
+        std::vector<int, smug::ManagedAllocator<int>> i_length;
+        std::vector<int, smug::ManagedAllocator<int>> i_offset;
+
+        RunLengthEncodeCub(i_data_sorted_1, i_unique, i_length, i_data_sorted_1.size(), temp_storage);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        PrefixScanExclusiveCub(i_length, i_offset, i_length.size(), temp_storage);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+        // initialize density and pressure vectors
+        rho_data.resize(pos_data.size());
+
+        int num_thread = 512;
+        int num_block =
+            (i_unique.size() % num_thread != 0) ? (i_unique.size() / num_thread + 1) : (i_unique.size() / num_thread);
+
+        dynamic_program.kernel("computeDensityJToI")
+            .instantiate()
+            .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
+            .launch(pos_data.data(), rho_data.data(), pressure_data.data(), i_unique.data(), i_offset.data(),
+                    i_length.data(), j_data_sorted_1.data(), fix_data.data(), i_unique.size(), multiplier * kernel_h, m,
+                    rho_0);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+        std::vector<int, smug::ManagedAllocator<int>> i_data_sorted_2;
+        std::vector<int, smug::ManagedAllocator<int>> j_data_sorted_2;
+
+        PairRadixSortAscendCub(pair_j_data, j_data_sorted_2, pair_i_data, i_data_sorted_2, tot_collision, temp_storage);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+        std::vector<int, smug::ManagedAllocator<int>> j_unique;
+        std::vector<int, smug::ManagedAllocator<int>> j_length;
+        std::vector<int, smug::ManagedAllocator<int>> j_offset;
+
+        RunLengthEncodeCub(j_data_sorted_2, j_unique, j_length, j_data_sorted_2.size(), temp_storage);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+        PrefixScanExclusiveCub(j_length, j_offset, j_length.size(), temp_storage);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+        num_thread = 512;
+        num_block =
+            (j_unique.size() % num_thread != 0) ? (j_unique.size() / num_thread + 1) : (j_unique.size() / num_thread);
+
+        dynamic_program.kernel("computeDensityIToJ")
+            .instantiate()
+            .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
+            .launch(pos_data.data(), rho_data.data(), pressure_data.data(), j_unique.data(), j_offset.data(),
+                    j_length.data(), i_data_sorted_2.data(), fix_data.data(), j_unique.size(), multiplier * kernel_h, m,
+                    rho_0);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+        num_thread = 1024;
+        num_block =
+            (pos_data.size() % num_thread != 0) ? (pos_data.size() / num_thread + 1) : (pos_data.size() / num_thread);
+
+        dynamic_program.kernel("computePressure")
+            .instantiate()
+            .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
+            .launch(rho_data.data(), pressure_data.data(), fix_data.data(), pos_data.size(), multiplier * kernel_h, m,
+                    rho_0, c);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // ==============================================================================================================
         // Dynamic Step 1
         // Use GPU to fill in the accelerations in each pair of contact data
         // ==============================================================================================================
         int block_size = 1024;
-        int num_thread = (block_size < tot_collision) ? block_size : tot_collision;
-        int num_block =
+        num_thread = (block_size < tot_collision) ? block_size : tot_collision;
+        num_block =
             (tot_collision % num_thread != 0) ? (tot_collision / num_thread + 1) : (tot_collision / num_thread);
 
         col_acc_data.resize(tot_collision);
 
-        // call dynamic first gpu pass
-        // this pass will fill the contact pair data vector
-        dynamic_program.kernel("dynamicStep1")
+        dynamic_program.kernel("getIndividualAcc")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
-            .launch(pair_i_data.data(), pair_j_data.data(), rho_data.data(), pressure_data.data(), col_acc_data.data(),
-                    W_grad_data.data(), tot_collision, m);
+            .launch(pair_i_data.data(), pair_j_data.data(), rho_data.data(), pressure_data.data(), 
+                    pos_data.data(), col_acc_data.data(), tot_collision, m, multiplier * kernel_h);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // ==============================================================================================================
@@ -634,19 +712,19 @@ void DynamicThread::operator()() {
 
         // sort
         PairRadixSortAscendCub(pair_i_data, pair_i_data_sorted_1, col_acc_data, col_acc_data_sorted_1, tot_collision,
-                               temp_storage);
+                               temp_storage3);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // reduce
         SumReduceByKeyCub(pair_i_data_sorted_1, pair_i_data_reduced_1, col_acc_data_sorted_1, col_acc_data_reduced_1,
-                          pair_i_data_sorted_1.size(), temp_storage);
+                          pair_i_data_sorted_1.size(), temp_storage3);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         block_size = 1024;
         num_thread = (block_size < pair_i_data_reduced_1.size()) ? block_size : pair_i_data_reduced_1.size();
         num_block = (pair_i_data_reduced_1.size() % num_thread != 0) ? (pair_i_data_reduced_1.size() / num_thread + 1)
                                                                      : (pair_i_data_reduced_1.size() / num_thread);
-        dynamic_program.kernel("dynamicStep2")
+        dynamic_program.kernel("assignAccData")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pair_i_data_reduced_1.data(), col_acc_data_reduced_1.data(), acc_data.data(),
@@ -661,7 +739,7 @@ void DynamicThread::operator()() {
         num_thread = (block_size < col_acc_data.size()) ? block_size : col_acc_data.size();
         num_block = (col_acc_data.size() % num_thread != 0) ? (col_acc_data.size() / num_thread + 1)
                                                             : (col_acc_data.size() / num_thread);
-        dynamic_program.kernel("dynamicStep3")
+        dynamic_program.kernel("negateColAccData")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(col_acc_data.data(), col_acc_data.size());
@@ -678,19 +756,19 @@ void DynamicThread::operator()() {
 
         // sort
         PairRadixSortAscendCub(pair_j_data, pair_j_data_sorted_2, col_acc_data, col_acc_data_sorted_2, tot_collision,
-                               temp_storage);
+                               temp_storage3);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // reduce
         SumReduceByKeyCub(pair_j_data_sorted_2, pair_j_data_reduced_2, col_acc_data_sorted_2, col_acc_data_reduced_2,
-                          pair_j_data_sorted_2.size(), temp_storage);
+                          pair_j_data_sorted_2.size(), temp_storage3);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         block_size = 1024;
         num_thread = (block_size < pair_j_data_reduced_2.size()) ? block_size : pair_j_data_reduced_2.size();
         num_block = (pair_j_data_reduced_2.size() % num_thread != 0) ? (pair_j_data_reduced_2.size() / num_thread + 1)
                                                                      : (pair_j_data_reduced_2.size() / num_thread);
-        dynamic_program.kernel("dynamicStep4")
+        dynamic_program.kernel("assignAccData")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pair_j_data_reduced_2.data(), col_acc_data_reduced_2.data(), acc_data.data(),
@@ -707,7 +785,7 @@ void DynamicThread::operator()() {
         num_block =
             (pos_data.size() % num_thread != 0) ? (pos_data.size() / num_thread + 1) : (pos_data.size() / num_thread);
 
-        dynamic_program.kernel("dynamicStep5")
+        dynamic_program.kernel("timeIntegration")
             .instantiate()
             .configure(dim3(num_block), dim3(num_thread), 0, streamInfo.stream)
             .launch(pos_data.data(), vel_data.data(), acc_data.data(), fix_data.data(), pos_data.size(), time_step);
@@ -735,6 +813,12 @@ void DynamicThread::operator()() {
 
         } else {
             getParentSystem().setCurPrint(getParentSystem().getCurPrint() + 1);
+        }
+        if (dynamicCounter % 2 == 0) {
+            getParentSystem().printCSV("sph_folder/test" + std::to_string(write_out_count) + ".csv",
+                                       pos_data.data(), pos_data.size(), vel_data.data(), acc_data.data(),
+                                       rho_data.data(), pressure_data.data());
+            write_out_count = write_out_count + 1;
         }
 
         // notify the system that the position data is fresh

@@ -45,20 +45,21 @@ __device__ float3 W_Grad(float3 r, float h) {
 // Kinematic 1st Step, this pass identifies number of BSDs touched by each particle
 // This kernel also fills the idx_track vector
 // =================================================================================================================
-__global__ void kinematicStep1(float3* pos_data,
-                               int* num_BSD_data,
-                               int k_n,
-                               float kernel_h,
-                               float d_domain_x,
-                               float d_domain_y,
-                               float d_domain_z,
-                               int num_domain_x,
-                               int num_domain_y,
-                               int num_domain_z,
-                               float domain_x,
-                               float domain_y,
-                               float domain_z,
-                               float buffer_width) {
+__global__ void fillNumBSDByParticle(
+    float3* pos_data,
+     int* num_BSD_data,
+     int k_n,
+     float kernel_h,
+     float d_domain_x,
+     float d_domain_y,
+     float d_domain_z,
+     int num_domain_x,
+     int num_domain_y,
+     int num_domain_z,
+     float domain_x,
+     float domain_y,
+     float domain_z,
+     float buffer_width) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= k_n) {
@@ -69,12 +70,9 @@ __global__ void kinematicStep1(float3* pos_data,
     float dy_2_0 = pos_data[idx].y - (-domain_y / 2);
     float dz_2_0 = pos_data[idx].z - (-domain_z / 2);
 
-    int x_idx = int(dx_2_0 / d_domain_x);
-    int y_idx = int(dy_2_0 / d_domain_y);
-    int z_idx = int(dz_2_0 / d_domain_z);
-
-    // the mother BD idx which the current particle belongs to
-    // int bd_idx = z_idx * num_domain_x * num_domain_y + y_idx * num_domain_x + x_idx;
+    int x_idx = (int)floor(dx_2_0 / d_domain_x);
+    int y_idx = (int)floor(dy_2_0 / d_domain_y);
+    int z_idx = (int)floor(dz_2_0 / d_domain_z);
 
     // count how many BSD the current particle belongs to
     int counter = 1;
@@ -252,31 +250,32 @@ __global__ void kinematicStep1(float3* pos_data,
 // This kernel also fills the BSD_iden_idx which also identifies whether the particle is in buffer (0 is not in buffer,
 // 1 is in buffer)
 // =================================================================================================================
-__global__ void kinematicStep2(float3* pos_data,
-                               int* offset_BSD_data,
-                               int* BSD_iden_idx,
-                               int* BSD_idx,
-                               int* idx_track_data,
-                               int k_n,
-                               float TotLength,
-                               float kernel_h,
-                               float d_domain_x,
-                               float d_domain_y,
-                               float d_domain_z,
-                               int num_domain_x,
-                               int num_domain_y,
-                               int num_domain_z,
-                               float domain_x,
-                               float domain_y,
-                               float domain_z,
-                               float buffer_width) {
+__global__ void fillBSDIndexByParticle(
+    float3* pos_data,
+    int* num_BSD_data_offset,
+    int* BSD_iden_idx,
+    int* BSD_idx,
+    int* idx_track_data,
+    int k_n,
+    float TotLength,
+    float kernel_h,
+    float d_domain_x,
+    float d_domain_y,
+    float d_domain_z,
+    int num_domain_x,
+    int num_domain_y,
+    int num_domain_z,
+    float domain_x,
+    float domain_y,
+    float domain_z,
+    float buffer_width) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= k_n) {
         return;
     }
 
-    int start_idx = offset_BSD_data[idx];
+    int start_idx = num_BSD_data_offset[idx];
 
     float dx_2_0 = pos_data[idx].x - (-domain_x / 2);
     float dy_2_0 = pos_data[idx].y - (-domain_y / 2);
@@ -476,64 +475,66 @@ __global__ void kinematicStep2(float3* pos_data,
 // but as they move, this constraint could be broken
 // =================================================================================================================
 
-__global__ void kinematicStep5(
+__global__ void findNumCollisions(
     float3* pos_data,            // particle position data vector
     int k_n,                     // total number of particles
     float kernel_h,              // kernel_h of the uni-kernel_h particles
     int* idx_track_data_sorted,  // sorted idx_track data
     int* BSD_iden_idx_sorted,    // vector to indicate whether a particle is in buffer zone or not
-    int* offset_BSD_data,        // length the same as unique_BSD_idx
+    int* num_BSD_data_offset,    // length the same as unique_BSD_idx
     int* length_BSD_data,        // length the same as unique_BSD_idx
     int* unique_BSD_idx,
     int* num_col,
+    int* num_col_per_particle,
     int unique_length,
     float buffer_width) {
     __shared__ float3 pos_local[MAX_PARTICLES_PER_BSD];  // request maximum capacity for the shared mem
     __shared__ int idx_local[MAX_PARTICLES_PER_BSD];     // request maximum capacity for track
     __shared__ int iden_local[MAX_PARTICLES_PER_BSD];
+    __shared__ int col_local[1];
 
     int sd_idx = blockIdx.x;
     int idx = threadIdx.x;
 
-    if (sd_idx >= unique_length) {
-        return;
-    }
-
-    int start_idx = offset_BSD_data[sd_idx];
+    int start_idx = num_BSD_data_offset[sd_idx];
+    int global_idx = start_idx + idx;
     int tot_in_bsd = length_BSD_data[sd_idx];
+    // if (idx == 0)
     // printf("bsd_idx: %d, tot_in_bsd: %d\n", sd_idx, tot_in_bsd);
-    if (idx < MAX_PARTICLES_PER_BSD && idx < length_BSD_data[sd_idx]) {
-        int global_idx = start_idx + idx;
-        pos_local[idx] = pos_data[idx_track_data_sorted[global_idx]];
-        idx_local[idx] = idx_track_data_sorted[global_idx];
-        iden_local[idx] = BSD_iden_idx_sorted[global_idx];
-    }
-
-    __syncthreads();
-
-    int count = 0;
 
     if (idx >= tot_in_bsd) {
         return;
     }
 
+    // there will be idle threads when there are less than 1024 particles
+    // in the BSD, but we try to maintain less than 1024 particles per BSD
+    // in order to use shared memory
+    // load data from global to shared memory
+    pos_local[idx] = pos_data[idx_track_data_sorted[global_idx]];
+    idx_local[idx] = idx_track_data_sorted[global_idx];
+    iden_local[idx] = BSD_iden_idx_sorted[global_idx];
+    __syncthreads();
+
     if (iden_local[idx] == 1) {
         return;
     }
+    int count = 0;
 
     for (int i = 0; i < tot_in_bsd; i++) {
         if (idx_local[idx] < idx_local[i]) {
             float dist2 = (pos_local[i].x - pos_local[idx].x) * (pos_local[i].x - pos_local[idx].x) +
                           (pos_local[i].y - pos_local[idx].y) * (pos_local[i].y - pos_local[idx].y) +
                           (pos_local[i].z - pos_local[idx].z) * (pos_local[i].z - pos_local[idx].z);
-
             if (dist2 <= kernel_h * buffer_width * kernel_h * buffer_width) {
                 count++;
             }
         }
     }
+    num_col_per_particle[global_idx] = count;
 
-    num_col[sd_idx * MAX_PARTICLES_PER_BSD + idx] = count;
+    atomicAdd(&col_local[0], count);
+        // printf("block id: %d, col per block: %d\n", sd_idx, col_local[0]);
+        num_col[sd_idx] = col_local[0];
 }
 
 // =================================================================================================================
@@ -542,13 +543,13 @@ __global__ void kinematicStep5(
 // the 2nd pass is going to fill in particle i-j pairs
 // =================================================================================================================
 
-__global__ void kinematicStep7(
+__global__ void fillIJPairs(
     float3* pos_data,            // particle position data vector
     int k_n,                     // total number of particles
     float kernel_h,              // kernel_h of the uni-kernel_h particles
     int* idx_track_data_sorted,  // sorted idx_track data
     int* BSD_iden_idx_sorted,    // vector to indicate whether a particle is in buffer zone or not
-    int* offset_BSD_data,        // length the same as unique_BSD_idx
+    int* num_BSD_data_offset,        // length the same as unique_BSD_idx
     int* length_BSD_data,        // length the same as unique_BSD_idx
     int* unique_BSD_idx,
     int* num_col,
@@ -556,7 +557,7 @@ __global__ void kinematicStep7(
     int* pair_i_data,
     int* pair_j_data,
     int* num_col_offset,
-    float3* W_grad_data,
+    int* num_col_per_particle_offset,
     float buffer_width) {
     __shared__ float3 pos_local[MAX_PARTICLES_PER_BSD];  // request maximum capacity for the shared mem
     __shared__ int idx_local[MAX_PARTICLES_PER_BSD];     // request maximum capacity for track
@@ -569,20 +570,10 @@ __global__ void kinematicStep7(
         return;
     }
 
-    int start_idx = offset_BSD_data[sd_idx];
+    int start_idx = num_BSD_data_offset[sd_idx];
+    int global_idx = start_idx + idx;
     int tot_in_bsd = length_BSD_data[sd_idx];
     // printf("bsd_idx: %d, tot_in_bsd: %d\n", sd_idx, tot_in_bsd);
-    if (idx < MAX_PARTICLES_PER_BSD && idx < length_BSD_data[sd_idx]) {
-        int global_idx = start_idx + idx;
-        pos_local[idx] = pos_data[idx_track_data_sorted[global_idx]];
-        idx_local[idx] = idx_track_data_sorted[global_idx];
-        iden_local[idx] = BSD_iden_idx_sorted[global_idx];
-    }
-
-    __syncthreads();
-
-    int count = 0;
-
     if (idx >= tot_in_bsd) {
         return;
     }
@@ -591,6 +582,12 @@ __global__ void kinematicStep7(
         return;
     }
 
+    pos_local[idx] = pos_data[idx_track_data_sorted[global_idx]];
+    idx_local[idx] = idx_track_data_sorted[global_idx];
+    iden_local[idx] = BSD_iden_idx_sorted[global_idx];
+
+    __syncthreads();
+
     for (int i = 0; i < tot_in_bsd; i++) {
         if (idx_local[idx] < idx_local[i]) {
             float dist2 = (pos_local[i].x - pos_local[idx].x) * (pos_local[i].x - pos_local[idx].x) +
@@ -598,20 +595,14 @@ __global__ void kinematicStep7(
                           (pos_local[i].z - pos_local[idx].z) * (pos_local[i].z - pos_local[idx].z);
 
             if (dist2 <= kernel_h * buffer_width * kernel_h * buffer_width) {
-                pair_i_data[num_col_offset[sd_idx * MAX_PARTICLES_PER_BSD + idx] + count] = idx_local[idx];
-                pair_j_data[num_col_offset[sd_idx * MAX_PARTICLES_PER_BSD + idx] + count] = idx_local[i];
-
-                float3 dir = pos_local[idx] - pos_local[i];
-
-                W_grad_data[num_col_offset[sd_idx * MAX_PARTICLES_PER_BSD + idx] + count] = W_Grad(dir, kernel_h);
-
-                count++;
+                pair_i_data[num_col_per_particle_offset[global_idx]] = idx_local[idx];
+                pair_j_data[num_col_per_particle_offset[global_idx]] = idx_local[i];
             }
         }
     }
 }
 
-__global__ void kinematicStep8(float3* pos_data,
+__global__ void computeDensityJToI(float3* pos_data,
                                float* rho_data,
                                float* pressure_data,
                                int* i_unique,
@@ -650,7 +641,7 @@ __global__ void kinematicStep8(float3* pos_data,
     rho_data[i_idx] = rho_sum;
 }
 
-__global__ void kinematicStep9(float3* pos_data,
+__global__ void computeDensityIToJ(float3* pos_data,
                                float* rho_data,
                                float* pressure_data,
                                int* j_unique,
@@ -690,7 +681,7 @@ __global__ void kinematicStep9(float3* pos_data,
     rho_data[j_idx] = rho_data[j_idx] + rho_sum;
 }
 
-__global__ void kinematicStep10(float* rho_data,
+__global__ void computePressure(float* rho_data,
                                 float* pressure_data,
                                 char* fix_data,
                                 int n_sample,
