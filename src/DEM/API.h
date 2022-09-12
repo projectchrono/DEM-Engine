@@ -44,7 +44,7 @@ class DEMTracker;
 class DEMSolver {
   public:
     DEMSolver(unsigned int nGPUs = 2);
-    virtual ~DEMSolver();
+    ~DEMSolver();
 
     /// Set output detail level
     void SetVerbosity(DEM_VERBOSITY verbose) { verbosity = verbose; }
@@ -88,6 +88,13 @@ class DEMSolver {
         m_boxLBF = O;
         m_user_instructed_origin = "explicit";
     }
+
+    /// Return whether this simulation system is initialized
+    bool GetInitStatus() { return sys_initialized; }
+
+    /// Get the jitification string substitution laundary list. It is needed by some of this simulation system's friend
+    /// classes.
+    std::unordered_map<std::string, std::string> GetJitStringSubs() { return m_subs; }
 
     /// Explicitly instruct the bin size (for contact detection) that the solver should use
     void SetInitBinSize(double bin_size) {
@@ -633,6 +640,9 @@ class DEMSolver {
     unsigned int nJitifiableClumpTopo;
     // Number of jitified clump components
     unsigned int nJitifiableClumpComponents;
+
+    // A big fat tab for all string replacement that the JIT compiler needs to consider
+    std::unordered_map<std::string, std::string> m_subs;
 
     ////////////////////////////////////////////////////////////////////////////////
     // Cached user's direct (raw) inputs concerning the actual physics objects

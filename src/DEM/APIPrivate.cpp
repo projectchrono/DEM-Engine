@@ -201,24 +201,21 @@ void DEMSolver::addAnalCompTemplate(const objType_t type,
 }
 
 void DEMSolver::jitifyKernels() {
-    // A big fat tab for all string replacement that the JIT compiler needs to consider
-    std::unordered_map<std::string, std::string> Subs;
-    equipClumpTemplates(Subs);
-    equipSimParams(Subs);
-    equipMassMoiVolume(Subs);
-    equipMaterials(Subs);
-    equipAnalGeoTemplates(Subs);
-    // equipFamilyMasks(Subs);
-    equipFamilyPrescribedMotions(Subs);
-    equipFamilyOnFlyChanges(Subs);
-    equipForceModel(Subs);
-    kT->jitifyKernels(Subs);
-    dT->jitifyKernels(Subs);
+    equipClumpTemplates(m_subs);
+    equipSimParams(m_subs);
+    equipMassMoiVolume(m_subs);
+    equipMaterials(m_subs);
+    equipAnalGeoTemplates(m_subs);
+    equipFamilyPrescribedMotions(m_subs);
+    equipFamilyOnFlyChanges(m_subs);
+    equipForceModel(m_subs);
+    kT->jitifyKernels(m_subs);
+    dT->jitifyKernels(m_subs);
 
-    // Now, inspectors need to be jitified too
-    for (auto& insp : m_inspectors) {
-        insp->initializeInspector(Subs);
-    }
+    // Now, inspectors need to be jitified too... but the current design jitify inspector kernels at the first time they
+    // are used. for (auto& insp : m_inspectors) {
+    //     insp->Initialize(Subs);
+    // }
 }
 
 void DEMSolver::figureOutNV() {

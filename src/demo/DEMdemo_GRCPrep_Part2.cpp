@@ -189,7 +189,7 @@ int main() {
     }
 
     char cp_filename[200];
-    sprintf(cp_filename, "%s/GRC_2e6.csv", out_dir.c_str());
+    sprintf(cp_filename, "%s/GRC_2e6_mid.csv", out_dir.c_str());
     DEM_sim.WriteClumpFile(std::string(cp_filename));
 
     matter_volume = void_ratio_finder->GetValue();
@@ -217,9 +217,27 @@ int main() {
         compressor_tracker->SetPos(make_float3(0, 0, now_z));
         DEM_sim.DoDynamics(step_size);
     }
+    // Then gradually remove the compressor
+    for (float t = 0; t < compress_time; t += step_size, curr_step++) {
+        if (curr_step % out_steps == 0) {
+            std::cout << "Frame: " << currframe << std::endl;
+            std::cout << "Highest point is at " << now_z << std::endl;
+            matter_volume = void_ratio_finder->GetValue();
+            std::cout << "Void ratio in compression " << (total_volume - matter_volume) / matter_volume << std::endl;
+            DEM_sim.ShowThreadCollaborationStats();
+            char filename[200];
+            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
+            DEM_sim.WriteSphereFile(std::string(filename));
+        }
+        now_z += compressor_v * step_size;
+        compressor_tracker->SetPos(make_float3(0, 0, now_z));
+        DEM_sim.DoDynamics(step_size);
+    }
 
     // Final write
-    DEM_sim.WriteClumpFile(std::string(cp_filename));
+    char cp2_filename[200];
+    sprintf(cp2_filename, "%s/GRC_2e6.csv", out_dir.c_str());
+    DEM_sim.WriteClumpFile(std::string(cp2_filename));
 
     DEM_sim.ClearThreadCollaborationStats();
 

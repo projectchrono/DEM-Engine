@@ -112,7 +112,20 @@ float DEMInspector::GetValue() {
     return reduce_result;
 }
 
-void DEMInspector::initializeInspector(const std::unordered_map<std::string, std::string>& Subs) {
+void DEMInspector::assertInit() {
+    if (!initialized) {
+        Initialize(sys->GetJitStringSubs());
+    }
+}
+
+void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>& Subs) {
+    if (!(sys->GetInitStatus())) {
+        std::stringstream ss;
+        ss << "Inspector should only be initialized or used after the simulation system is initialized (because it "
+              "uses device-side data)!"
+           << std::endl;
+        throw std::runtime_error(ss.str());
+    }
     // We want to make sure if the in_region_code is legit, if it is not an all_domain query
     std::string in_region_specifier = in_region_code, placeholder;
     if (!all_domain) {

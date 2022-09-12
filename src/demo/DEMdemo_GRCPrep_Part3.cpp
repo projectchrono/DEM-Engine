@@ -35,15 +35,14 @@ int main() {
     auto mat_type_wheel = DEM_sim.LoadMaterial({{"E", 1e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
 
     // Define the simulation world
-    double world_y_size = 2.0;
-    DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, (world_y_size) / std::pow(2, 16) / std::pow(2, 21));
+    double world_y_size = 2.2;
+    double world_x_size = 4.4;
+    DEM_sim.InstructBoxDomainDimension(world_x_size, world_y_size, world_y_size);
     float bottom = -0.5;
     DEM_sim.AddBCPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_terrain);
+    // Side bounding planes
     DEM_sim.AddBCPlane(make_float3(0, world_y_size / 2, 0), make_float3(0, -1, 0), mat_type_terrain);
     DEM_sim.AddBCPlane(make_float3(0, -world_y_size / 2, 0), make_float3(0, 1, 0), mat_type_terrain);
-    // X-dir bounding planes
-    DEM_sim.AddBCPlane(make_float3(-world_y_size * 2 / 2, 0, 0), make_float3(1, 0, 0), mat_type_terrain);
-    DEM_sim.AddBCPlane(make_float3(world_y_size * 2 / 2, 0, 0), make_float3(-1, 0, 0), mat_type_terrain);
 
     // Define the wheel geometry
     float wheel_rad = 0.25;
@@ -105,8 +104,8 @@ int main() {
     // DEM_sim.DisableContactBetweenFamilies(100, 100);
 
     // Now we load part1 clump locations from a part1 output file
-    auto part1_clump_xyz = DEM_sim.ReadClumpXyzFromCsv("GRC_1e6.csv");
-    auto part1_clump_quaternion = DEM_sim.ReadClumpQuatFromCsv("GRC_1e6.csv");
+    auto part1_clump_xyz = DEM_sim.ReadClumpXyzFromCsv("GRC_2e6.csv");
+    auto part1_clump_quaternion = DEM_sim.ReadClumpQuatFromCsv("GRC_2e6.csv");
     std::vector<float3> in_xyz;
     std::vector<float4> in_quat;
     std::vector<std::shared_ptr<DEMClumpTemplate>> in_types;
@@ -131,16 +130,37 @@ int main() {
         in_quat.insert(in_quat.end(), this_type_quat.begin(), this_type_quat.end());
         in_types.insert(in_types.end(), this_type.begin(), this_type.end());
     }
+    // Remove some elements maybe? I feel this making the surface flatter
+    std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
+    for (size_t i = 0; i < in_xyz.size(); i++) {
+        if (in_xyz.at(i).z > -0.44)
+            elem_to_remove.at(i) = 1;
+    }
+    in_xyz.erase(
+        std::remove_if(in_xyz.begin(), in_xyz.end(),
+                       [&elem_to_remove, &in_xyz](const float3& i) { return elem_to_remove.at(&i - in_xyz.data()); }),
+        in_xyz.end());
+    in_quat.erase(
+        std::remove_if(in_quat.begin(), in_quat.end(),
+                       [&elem_to_remove, &in_quat](const float4& i) { return elem_to_remove.at(&i - in_quat.data()); }),
+        in_quat.end());
+    in_types.erase(
+        std::remove_if(in_types.begin(), in_types.end(),
+                       [&elem_to_remove, &in_types](const auto& i) { return elem_to_remove.at(&i - in_types.data()); }),
+        in_types.end());
+
     // Finally, load the info into this batch
     DEMClumpBatch base_batch(in_xyz.size());
     base_batch.SetTypes(in_types);
     base_batch.SetPos(in_xyz);
     base_batch.SetOriQ(in_quat);
-    // DEM_sim.AddClumps(base_batch);
 
     // Based on the `base_batch', we can create more batches
-    std::vector<float> x_shift_dist = {-1.5, -0.5, 0.5, 1.5};
-    std::vector<float> y_shift_dist = {-0.5, 0.5};
+    std::vector<float> x_shift_dist = {-1.54, -0.52, 0.52};
+    std::vector<float> y_shift_dist = {-0.52, 0.52};
+    // X-dir bounding planes (we currently have 6 patches, and X-dir spans from -2 to 1)
+    DEM_sim.AddBCPlane(make_float3(-2.2, 0, 0), make_float3(1, 0, 0), mat_type_terrain);
+    DEM_sim.AddBCPlane(make_float3(1.1, 0, 0), make_float3(-1, 0, 0), mat_type_terrain);
     // Add some patches of such graular bed
     for (float x_shift : x_shift_dist) {
         for (float y_shift : y_shift_dist) {
@@ -155,19 +175,20 @@ int main() {
         }
     }
 
-    // Create a inspector to find out the highest point of this granular pile
-    auto max_z_finder = DEM_sim.CreateInspector("clump_max_z");
     // Keep tab of the max velocity in simulation
     auto max_v_finder = DEM_sim.CreateInspector("clump_max_absv");
-
-    // Now add a plane to compress the `road'
-    auto compressor = DEM_sim.AddExternalObject();
-    compressor->AddPlane(make_float3(0, 0, 0), make_float3(0, 0, -1), mat_type_terrain);
-    compressor->SetFamily(DEM_RESERVED_FAMILY_NUM);
-    auto compressor_tracker = DEM_sim.Track(compressor);
+    // Final void ratio inspection tool
+    auto void_ratio_finder =
+        DEM_sim.CreateInspector("clump_volume", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) && (Z <= -0.45);");
+    float total_volume = 0.96 * 0.96 * 0.05;
+    // // Mimic the compressor from the previous run
+    // auto compressor = DEM_sim.AddExternalObject();
+    // compressor->AddPlane(make_float3(0, 0, 0), make_float3(0, 0, -1), mat_type_terrain);
+    // compressor->SetFamily(DEM_RESERVED_FAMILY_NUM);
+    // auto compressor_tracker = DEM_sim.Track(compressor);
 
     // Make ready for simulation
-    float step_size = 1e-6;
+    float step_size = 5e-7;
     DEM_sim.SetCoordSysOrigin("center");
     DEM_sim.SetInitTimeStep(step_size);
     DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
@@ -179,8 +200,7 @@ int main() {
     DEM_sim.SetInitBinSize(scales.at(3));
     DEM_sim.Initialize();
 
-    float time_end = 10.0;
-    unsigned int fps = 20;
+    unsigned int fps = 200;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
     path out_dir = current_path();
@@ -190,15 +210,13 @@ int main() {
     unsigned int curr_step = 0;
 
     float settle_batch_time = 0.5;
-    float compressor_final_dist = 0.08;
-    float compressor_v = compressor_final_dist / settle_batch_time;
-
-    float now_z = max_z_finder->GetValue();
-    compressor_tracker->SetPos(make_float3(0, 0, now_z));
+    // bool change_step_size = false;
+    // float compressor_v = 0.05 / settle_batch_time;
+    // float now_z = -0.43;
+    // compressor_tracker->SetPos(make_float3(0, 0, now_z));
     for (float t = 0; t < settle_batch_time; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
             std::cout << "Frame: " << currframe << std::endl;
-            std::cout << "Highest point is at " << now_z << std::endl;
             float max_v = max_v_finder->GetValue();
             std::cout << "Max vel in simulation is " << max_v << std::endl;
             DEM_sim.ShowThreadCollaborationStats();
@@ -206,10 +224,19 @@ int main() {
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
             DEM_sim.WriteSphereFile(std::string(filename));
         }
-        now_z -= compressor_v * step_size;
-        compressor_tracker->SetPos(make_float3(0, 0, now_z));
+        // now_z += compressor_v * step_size;
+        // compressor_tracker->SetPos(make_float3(0, 0, now_z));
         DEM_sim.DoDynamics(step_size);
+        // if (t>0.1 && !change_step_size) {
+        //     DEM_sim.DoDynamicsThenSync(0);
+        //     DEM_sim.SetInitTimeStep(2*step_size);
+        //     DEM_sim.UpdateSimParams();
+        //     change_step_size = true;
+        // }
     }
+
+    float matter_volume = void_ratio_finder->GetValue();
+    std::cout << "Void ratio after settling " << (total_volume - matter_volume) / matter_volume << std::endl;
 
     DEM_sim.DoDynamicsThenSync(0);
     char cp_filename[200];

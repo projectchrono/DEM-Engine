@@ -42,15 +42,11 @@ class DEMInspector {
     // Based on user input...
     void switch_quantity_type(const std::string& quantity);
 
-    void assertInit() {
-        if (!initialized) {
-            std::stringstream ss;
-            ss << "Inspector should only be used for querying after system initialization!" << std::endl;
-            throw std::runtime_error(ss.str());
-        }
-    }
+    void assertInit();
 
   public:
+    friend class DEMSolver;
+
     DEMInspector(DEMSolver* sim_sys, const std::string& quantity) : sys(sim_sys) {
         switch_quantity_type(quantity);
         // In default constructor, all entities are considered `in-region'
@@ -68,7 +64,7 @@ class DEMInspector {
     void SetInspectionCode(const std::string& code) { inspection_code = code; }
 
     // Initialize with the DEM simulation system (user should not call this)
-    void initializeInspector(const std::unordered_map<std::string, std::string>& Subs);
+    void Initialize(const std::unordered_map<std::string, std::string>& Subs);
 
     /// Get the reduce value of the quantity that you wish to inspect
     float GetValue();

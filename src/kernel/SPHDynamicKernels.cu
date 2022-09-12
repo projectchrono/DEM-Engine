@@ -43,17 +43,17 @@ __device__ float3 W_Grad(float3 r, float h) {
 }
 
 __global__ void computeDensityJToI(float3* pos_data,
-                               float* rho_data,
-                               float* pressure_data,
-                               int* i_unique,
-                               int* i_offset,
-                               int* i_length,
-                               int* j_data_sorted,
-                               char* fix_data,
-                               int n_unique,
-                               float h,
-                               float m,
-                               float rho_0) {
+                                   float* rho_data,
+                                   float* pressure_data,
+                                   int* i_unique,
+                                   int* i_offset,
+                                   int* i_length,
+                                   int* j_data_sorted,
+                                   char* fix_data,
+                                   int n_unique,
+                                   float h,
+                                   float m,
+                                   float rho_0) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= n_unique) {
@@ -79,21 +79,20 @@ __global__ void computeDensityJToI(float3* pos_data,
         rho_sum = rho_sum + m * w;
     }
     rho_data[i_idx] = rho_sum;
-
 }
 
 __global__ void computeDensityIToJ(float3* pos_data,
-                               float* rho_data,
-                               float* pressure_data,
-                               int* j_unique,
-                               int* j_offset,
-                               int* j_length,
-                               int* i_data_sorted,
-                               char* fix_data,
-                               int n_unique,
-                               float h,
-                               float m,
-                               float rho_0) {
+                                   float* rho_data,
+                                   float* pressure_data,
+                                   int* j_unique,
+                                   int* j_offset,
+                                   int* j_length,
+                                   int* i_data_sorted,
+                                   char* fix_data,
+                                   int n_unique,
+                                   float h,
+                                   float m,
+                                   float rho_0) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= n_unique) {
@@ -146,16 +145,15 @@ __global__ void computePressure(float* rho_data,
 // Dynamic 1st Pass, this pass compute the contact force of each contact pair
 // the computed force will be filled in contact_force field in each contact pair
 // =================================================================================================================
-__global__ void getIndividualAcc(
-    int* pair_i_data,
-    int* pair_j_data,
-    float* rho_data,
-    float* pressure_data,
-    float3* pos_data,
-    float3* col_acc_data,
-    int n_col,
-    float m,
-    float kernel_h) {
+__global__ void getIndividualAcc(int* pair_i_data,
+                                 int* pair_j_data,
+                                 float* rho_data,
+                                 float* pressure_data,
+                                 float3* pos_data,
+                                 float3* col_acc_data,
+                                 int n_col,
+                                 float m,
+                                 float kernel_h) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= n_col) {
@@ -166,7 +164,7 @@ __global__ void getIndividualAcc(
     int j_idx = pair_j_data[idx];
 
     if (rho_data[i_idx] != 0 && rho_data[j_idx] != 0) {
-        float3 rij = pos_data[i_idx] - pos_data[j_idx]; 
+        float3 rij = pos_data[i_idx] - pos_data[j_idx];
         float coe = m * ((pressure_data[i_idx] / (rho_data[i_idx] * rho_data[i_idx])) +
                          (pressure_data[j_idx] / (rho_data[j_idx] * rho_data[j_idx])));
         col_acc_data[idx] = -coe * W_Grad(rij, kernel_h);
@@ -198,11 +196,11 @@ __global__ void negateColAccData(float3* col_acc_data, int n) {
 // ===========================================
 
 __global__ void timeIntegration(float3* pos_data,
-                             float3* vel_data,
-                             float3* acc_data,
-                             char* fix_data,
-                             int n,
-                             float time_step) {
+                                float3* vel_data,
+                                float3* acc_data,
+                                char* fix_data,
+                                int n,
+                                float time_step) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= n) {

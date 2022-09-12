@@ -45,21 +45,20 @@ __device__ float3 W_Grad(float3 r, float h) {
 // Kinematic 1st Step, this pass identifies number of BSDs touched by each particle
 // This kernel also fills the idx_track vector
 // =================================================================================================================
-__global__ void fillNumBSDByParticle(
-    float3* pos_data,
-     int* num_BSD_data,
-     int k_n,
-     float kernel_h,
-     float d_domain_x,
-     float d_domain_y,
-     float d_domain_z,
-     int num_domain_x,
-     int num_domain_y,
-     int num_domain_z,
-     float domain_x,
-     float domain_y,
-     float domain_z,
-     float buffer_width) {
+__global__ void fillNumBSDByParticle(float3* pos_data,
+                                     int* num_BSD_data,
+                                     int k_n,
+                                     float kernel_h,
+                                     float d_domain_x,
+                                     float d_domain_y,
+                                     float d_domain_z,
+                                     int num_domain_x,
+                                     int num_domain_y,
+                                     int num_domain_z,
+                                     float domain_x,
+                                     float domain_y,
+                                     float domain_z,
+                                     float buffer_width) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= k_n) {
@@ -250,25 +249,24 @@ __global__ void fillNumBSDByParticle(
 // This kernel also fills the BSD_iden_idx which also identifies whether the particle is in buffer (0 is not in buffer,
 // 1 is in buffer)
 // =================================================================================================================
-__global__ void fillBSDIndexByParticle(
-    float3* pos_data,
-    int* num_BSD_data_offset,
-    int* BSD_iden_idx,
-    int* BSD_idx,
-    int* idx_track_data,
-    int k_n,
-    float TotLength,
-    float kernel_h,
-    float d_domain_x,
-    float d_domain_y,
-    float d_domain_z,
-    int num_domain_x,
-    int num_domain_y,
-    int num_domain_z,
-    float domain_x,
-    float domain_y,
-    float domain_z,
-    float buffer_width) {
+__global__ void fillBSDIndexByParticle(float3* pos_data,
+                                       int* num_BSD_data_offset,
+                                       int* BSD_iden_idx,
+                                       int* BSD_idx,
+                                       int* idx_track_data,
+                                       int k_n,
+                                       float TotLength,
+                                       float kernel_h,
+                                       float d_domain_x,
+                                       float d_domain_y,
+                                       float d_domain_z,
+                                       int num_domain_x,
+                                       int num_domain_y,
+                                       int num_domain_z,
+                                       float domain_x,
+                                       float domain_y,
+                                       float domain_z,
+                                       float buffer_width) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= k_n) {
@@ -533,8 +531,8 @@ __global__ void findNumCollisions(
     num_col_per_particle[global_idx] = count;
 
     atomicAdd(&col_local[0], count);
-        // printf("block id: %d, col per block: %d\n", sd_idx, col_local[0]);
-        num_col[sd_idx] = col_local[0];
+    // printf("block id: %d, col per block: %d\n", sd_idx, col_local[0]);
+    num_col[sd_idx] = col_local[0];
 }
 
 // =================================================================================================================
@@ -543,22 +541,21 @@ __global__ void findNumCollisions(
 // the 2nd pass is going to fill in particle i-j pairs
 // =================================================================================================================
 
-__global__ void fillIJPairs(
-    float3* pos_data,            // particle position data vector
-    int k_n,                     // total number of particles
-    float kernel_h,              // kernel_h of the uni-kernel_h particles
-    int* idx_track_data_sorted,  // sorted idx_track data
-    int* BSD_iden_idx_sorted,    // vector to indicate whether a particle is in buffer zone or not
-    int* num_BSD_data_offset,        // length the same as unique_BSD_idx
-    int* length_BSD_data,        // length the same as unique_BSD_idx
-    int* unique_BSD_idx,
-    int* num_col,
-    int unique_length,
-    int* pair_i_data,
-    int* pair_j_data,
-    int* num_col_offset,
-    int* num_col_per_particle_offset,
-    float buffer_width) {
+__global__ void fillIJPairs(float3* pos_data,            // particle position data vector
+                            int k_n,                     // total number of particles
+                            float kernel_h,              // kernel_h of the uni-kernel_h particles
+                            int* idx_track_data_sorted,  // sorted idx_track data
+                            int* BSD_iden_idx_sorted,  // vector to indicate whether a particle is in buffer zone or not
+                            int* num_BSD_data_offset,  // length the same as unique_BSD_idx
+                            int* length_BSD_data,      // length the same as unique_BSD_idx
+                            int* unique_BSD_idx,
+                            int* num_col,
+                            int unique_length,
+                            int* pair_i_data,
+                            int* pair_j_data,
+                            int* num_col_offset,
+                            int* num_col_per_particle_offset,
+                            float buffer_width) {
     __shared__ float3 pos_local[MAX_PARTICLES_PER_BSD];  // request maximum capacity for the shared mem
     __shared__ int idx_local[MAX_PARTICLES_PER_BSD];     // request maximum capacity for track
     __shared__ int iden_local[MAX_PARTICLES_PER_BSD];
@@ -603,17 +600,17 @@ __global__ void fillIJPairs(
 }
 
 __global__ void computeDensityJToI(float3* pos_data,
-                               float* rho_data,
-                               float* pressure_data,
-                               int* i_unique,
-                               int* i_offset,
-                               int* i_length,
-                               int* j_data_sorted,
-                               char* fix_data,
-                               int n_unique,
-                               float h,
-                               float m,
-                               float rho_0) {
+                                   float* rho_data,
+                                   float* pressure_data,
+                                   int* i_unique,
+                                   int* i_offset,
+                                   int* i_length,
+                                   int* j_data_sorted,
+                                   char* fix_data,
+                                   int n_unique,
+                                   float h,
+                                   float m,
+                                   float rho_0) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= n_unique) {
@@ -642,17 +639,17 @@ __global__ void computeDensityJToI(float3* pos_data,
 }
 
 __global__ void computeDensityIToJ(float3* pos_data,
-                               float* rho_data,
-                               float* pressure_data,
-                               int* j_unique,
-                               int* j_offset,
-                               int* j_length,
-                               int* i_data_sorted,
-                               char* fix_data,
-                               int n_unique,
-                               float h,
-                               float m,
-                               float rho_0) {
+                                   float* rho_data,
+                                   float* pressure_data,
+                                   int* j_unique,
+                                   int* j_offset,
+                                   int* j_length,
+                                   int* i_data_sorted,
+                                   char* fix_data,
+                                   int n_unique,
+                                   float h,
+                                   float m,
+                                   float rho_0) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx >= n_unique) {
