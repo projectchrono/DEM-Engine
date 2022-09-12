@@ -1431,10 +1431,10 @@ inline void DEMDynamicThread::calculateForces() {
     }
 }
 
-inline void DEMDynamicThread::integrateClumpMotions() {
+inline void DEMDynamicThread::integrateOwnerMotions() {
     size_t blocks_needed_for_clumps =
         (simParams->nOwnerBodies + SMUG_DEM_NUM_BODIES_PER_BLOCK - 1) / SMUG_DEM_NUM_BODIES_PER_BLOCK;
-    integrator_kernels->kernel("integrateClumps")
+    integrator_kernels->kernel("integrateOwners")
         .instantiate()
         .configure(dim3(blocks_needed_for_clumps), dim3(SMUG_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
         .launch(simParams, granData, timeElapsed);
@@ -1572,7 +1572,7 @@ void DEMDynamicThread::workerThread() {
                 routineChecks();
 
                 timers.GetTimer("Integration").start();
-                integrateClumpMotions();
+                integrateOwnerMotions();
                 timers.GetTimer("Integration").stop();
 
                 step_accepted = true;

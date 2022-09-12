@@ -64,8 +64,7 @@ int main() {
 
         // Load a (ellipsoid-shaped) clump and a sphere
         clump_types.push_back(DEM_sim.LoadClumpType(ellipsoid_template));
-        clump_types.push_back(
-            DEM_sim.LoadClumpSimpleSphere(ellipsoid_template.mass, std::cbrt(2.0) * scaling, mat_type_sand));
+        clump_types.push_back(DEM_sim.LoadSphereType(ellipsoid_template.mass, std::cbrt(2.0) * scaling, mat_type_sand));
 
         // std::cout << "Adding a clump with mass: " << ellipsoid_template.mass << std::endl;
         // std::cout << "This clump's MOI: " << ellipsoid_template.MOI.x << ", " << ellipsoid_template.MOI.y << ", "

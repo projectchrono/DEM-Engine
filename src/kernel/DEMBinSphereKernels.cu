@@ -36,7 +36,7 @@ __global__ void getNumberOfBinsEachSphereTouches(smug::DEMSimParams* simParams,
                 myRadius += simParams->beta;
             }
 
-            voxelID2Position<double, smug::voxelID_t, smug::subVoxelPos_t>(
+            voxelIDToPosition<double, smug::voxelID_t, smug::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[myOwnerID], granData->locX[myOwnerID],
                 granData->locY[myOwnerID], granData->locZ[myOwnerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
             const float myOriQw = granData->oriQw[myOwnerID];
@@ -82,7 +82,7 @@ __global__ void getNumberOfBinsEachSphereTouches(smug::DEMSimParams* simParams,
                 continue;
             }
             double ownerX, ownerY, ownerZ;
-            voxelID2Position<double, smug::voxelID_t, smug::subVoxelPos_t>(
+            voxelIDToPosition<double, smug::voxelID_t, smug::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[objBOwner], granData->locX[objBOwner],
                 granData->locY[objBOwner], granData->locZ[objBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
             const float ownerOriQw = granData->oriQw[objBOwner];
@@ -147,7 +147,7 @@ __global__ void populateBinSphereTouchingPairs(smug::DEMSimParams* simParams,
             // Get the offset of my spot where I should start writing back to the global bin--sphere pair registration
             // array
             smug::binSphereTouchPairs_t myReportOffset = numBinsSphereTouchesScan[sphereID];
-            voxelID2Position<double, smug::voxelID_t, smug::subVoxelPos_t>(
+            voxelIDToPosition<double, smug::voxelID_t, smug::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[myOwnerID], granData->locX[myOwnerID],
                 granData->locY[myOwnerID], granData->locZ[myOwnerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
             const float myOriQw = granData->oriQw[myOwnerID];
@@ -195,7 +195,7 @@ __global__ void populateBinSphereTouchingPairs(smug::DEMSimParams* simParams,
                 continue;
             }
             double ownerX, ownerY, ownerZ;
-            voxelID2Position<double, smug::voxelID_t, smug::subVoxelPos_t>(
+            voxelIDToPosition<double, smug::voxelID_t, smug::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[objBOwner], granData->locX[objBOwner],
                 granData->locY[objBOwner], granData->locZ[objBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
             const float ownerOriQw = granData->oriQw[objBOwner];

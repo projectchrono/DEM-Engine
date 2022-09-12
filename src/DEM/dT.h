@@ -494,7 +494,7 @@ class DEMDynamicThread {
     inline void calculateForces();
 
     // Update clump pos/oriQ and vel/omega based on acceleration
-    inline void integrateClumpMotions();
+    inline void integrateOwnerMotions();
 
     // If kT provides fresh CD results, we unpack and use it
     inline void ifProduceFreshThenUseItAndSendNewOrder();

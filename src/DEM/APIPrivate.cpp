@@ -209,6 +209,7 @@ void DEMSolver::jitifyKernels() {
     equipFamilyPrescribedMotions(m_subs);
     equipFamilyOnFlyChanges(m_subs);
     equipForceModel(m_subs);
+    equipIntegrationScheme(m_subs);
     kT->jitifyKernels(m_subs);
     dT->jitifyKernels(m_subs);
 
@@ -1325,6 +1326,25 @@ inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::
     }
     strMap["_clumpTemplateDefs_"] = clump_template_arrays;
     strMap["_componentAcqStrat_"] = componentAcqStrat;
+}
+
+inline void DEMSolver::equipIntegrationScheme(std::unordered_map<std::string, std::string>& strMap) {
+    std::string strat;
+    switch (m_integrator) {
+        case (DEM_TIME_INTEGRATOR::FORWARD_EULER):
+            strat = DEM_VEL_TO_PASS_ON_FORWARD_EULER();
+            break;
+        case (DEM_TIME_INTEGRATOR::CENTERED_DIFFERENCE):
+            strat = DEM_VEL_TO_PASS_ON_CENTERED_DIFF();
+            break;
+        case (DEM_TIME_INTEGRATOR::EXTENDED_TAYLOR):
+            strat = DEM_VEL_TO_PASS_ON_EXTENDED_TAYLOR();
+            break;
+        default:
+            SMUG_DEM_ERROR(
+                "The integration type is unknown or not implemented. Please select another via SetIntegrator.");
+    }
+    strMap["_integrationVelocityPassOnStrategy_"] = strat;
 }
 
 inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::string>& strMap) {

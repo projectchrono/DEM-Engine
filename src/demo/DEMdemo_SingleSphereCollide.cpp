@@ -28,7 +28,7 @@ int main() {
 
     auto mat_type_1 = DEM_sim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}});
 
-    auto sph_type_1 = DEM_sim.LoadClumpSimpleSphere(11728., 1., mat_type_1);
+    auto sph_type_1 = DEM_sim.LoadSphereType(11728., 1., mat_type_1);
 
     std::vector<float3> input_xyz1, input_xyz2;
     std::vector<float3> input_vel1, input_vel2;
@@ -66,6 +66,7 @@ int main() {
     DEM_sim.SetCDUpdateFreq(10);
     DEM_sim.SetMaxVelocity(3.);
     DEM_sim.SetExpandSafetyParam(2.);
+    DEM_sim.SetIntegrator(DEM_TIME_INTEGRATOR::CENTERED_DIFFERENCE);
 
     DEM_sim.Initialize();
 

@@ -399,9 +399,9 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(float mass,
     return LoadClumpType(mass, moi, sp_radii, sp_locations_xyz, sp_materials);
 }
 
-std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpSimpleSphere(float mass,
-                                                                   float radius,
-                                                                   const std::shared_ptr<DEMMaterial>& material) {
+std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadSphereType(float mass,
+                                                            float radius,
+                                                            const std::shared_ptr<DEMMaterial>& material) {
     float3 I = make_float3(2.0 / 5.0 * mass * radius * radius);
     float3 pos = make_float3(0);
     return LoadClumpType(mass, I, std::vector<float>(1, radius), std::vector<float3>(1, pos),

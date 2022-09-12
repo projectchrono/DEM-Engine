@@ -49,7 +49,7 @@ __global__ void calculateContactForces(smug::DEMSimParams* simParams, smug::DEMD
                 AOwnerMass = myMass;
             }
 
-            voxelID2Position<double, smug::voxelID_t, smug::subVoxelPos_t>(
+            voxelIDToPosition<double, smug::voxelID_t, smug::subVoxelPos_t>(
                 AOwnerPos.x, AOwnerPos.y, AOwnerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
                 granData->locY[myOwner], granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
 
@@ -89,7 +89,7 @@ __global__ void calculateContactForces(smug::DEMSimParams* simParams, smug::DEMD
                 BOwnerMass = myMass;
             }
 
-            voxelID2Position<double, smug::voxelID_t, smug::subVoxelPos_t>(
+            voxelIDToPosition<double, smug::voxelID_t, smug::subVoxelPos_t>(
                 BOwnerPos.x, BOwnerPos.y, BOwnerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
                 granData->locY[myOwner], granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
             BoriQw = granData->oriQw[myOwner];
@@ -120,7 +120,7 @@ __global__ void calculateContactForces(smug::DEMSimParams* simParams, smug::DEMD
             float myRelPosX, myRelPosY, myRelPosZ;
             float3 bodyBRot;
 
-            voxelID2Position<double, smug::voxelID_t, smug::subVoxelPos_t>(
+            voxelIDToPosition<double, smug::voxelID_t, smug::subVoxelPos_t>(
                 BOwnerPos.x, BOwnerPos.y, BOwnerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
                 granData->locY[myOwner], granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
             myRelPosX = objRelPosX[bodyB];

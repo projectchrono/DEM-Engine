@@ -159,6 +159,37 @@ inline std::filesystem::path GET_DATA_PATH() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// Integration policies
+////////////////////////////////////////////////////////////////////////////////
+
+inline std::string DEM_VEL_TO_PASS_ON_FORWARD_EULER() {
+    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
+                                       "DEMCustomizablePolicies" / "IntegrationVelPassOnForwardEuler.cu";
+    if (!std::filesystem::exists(sourcefile)) {
+        SMUG_DEM_ERROR("The integration strategy file %s is not found.", sourcefile.c_str());
+    }
+    return read_file_to_string(sourcefile);
+}
+
+inline std::string DEM_VEL_TO_PASS_ON_EXTENDED_TAYLOR() {
+    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
+                                       "DEMCustomizablePolicies" / "IntegrationVelPassOnExtendedTaylor.cu";
+    if (!std::filesystem::exists(sourcefile)) {
+        SMUG_DEM_ERROR("The integration strategy file %s is not found.", sourcefile.c_str());
+    }
+    return read_file_to_string(sourcefile);
+}
+
+inline std::string DEM_VEL_TO_PASS_ON_CENTERED_DIFF() {
+    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
+                                       "DEMCustomizablePolicies" / "IntegrationVelPassOnCenteredDiff.cu";
+    if (!std::filesystem::exists(sourcefile)) {
+        SMUG_DEM_ERROR("The integration strategy file %s is not found.", sourcefile.c_str());
+    }
+    return read_file_to_string(sourcefile);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // Ingredient definition and acquisition module in DEM force models
 ////////////////////////////////////////////////////////////////////////////////
 

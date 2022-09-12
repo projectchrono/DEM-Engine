@@ -24,7 +24,7 @@ __global__ void inspectSphereProperty(smug::DEMDataDT* granData,
         // Use an input named exactly `sphereID' which is the id of this sphere component
         { _componentAcqStrat_; }
 
-        voxelID2Position<double, smug::voxelID_t, smug::subVoxelPos_t>(
+        voxelIDToPosition<double, smug::voxelID_t, smug::subVoxelPos_t>(
             ownerX, ownerY, ownerZ, granData->voxelID[myOwner], granData->locX[myOwner], granData->locY[myOwner],
             granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
         oriQw = granData->oriQw[myOwner];

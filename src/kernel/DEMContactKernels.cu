@@ -57,7 +57,7 @@ __global__ void getNumberOfContactsEachBin(smug::DEMSimParams* simParams,
                 myRadius += simParams->beta;
             }
 
-            voxelID2Position<double, smug::voxelID_t, smug::subVoxelPos_t>(
+            voxelIDToPosition<double, smug::voxelID_t, smug::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[ownerIDs[i]], granData->locX[ownerIDs[i]],
                 granData->locY[ownerIDs[i]], granData->locZ[ownerIDs[i]], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
             float myOriQw = granData->oriQw[ownerIDs[i]];
@@ -166,7 +166,7 @@ __global__ void populateContactPairsEachBin(smug::DEMSimParams* simParams,
                 myRadius += simParams->beta;
             }
 
-            voxelID2Position<double, smug::voxelID_t, smug::subVoxelPos_t>(
+            voxelIDToPosition<double, smug::voxelID_t, smug::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[ownerIDs[i]], granData->locX[ownerIDs[i]],
                 granData->locY[ownerIDs[i]], granData->locZ[ownerIDs[i]], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
             float myOriQw = granData->oriQw[ownerIDs[i]];

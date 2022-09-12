@@ -41,7 +41,7 @@ int main() {
 
     // First create clump type 0 for representing the ground
     float ground_sp_r = 0.02;
-    auto template_ground = DEM_sim.LoadClumpSimpleSphere(0.5, ground_sp_r, mat_type_1);
+    auto template_ground = DEM_sim.LoadSphereType(0.5, ground_sp_r, mat_type_1);
 
     // Make an array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;

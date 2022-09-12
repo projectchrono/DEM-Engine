@@ -41,7 +41,7 @@ int main() {
     // Material is formaility... you can opt not to set it at all, it works the same
     auto mat_type_1 = DEM_sim.LoadMaterial({{"junk", 1.0}});
 
-    auto template_sphere = DEM_sim.LoadClumpSimpleSphere(1.0, r, mat_type_1);
+    auto template_sphere = DEM_sim.LoadSphereType(1.0, r, mat_type_1);
 
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_num;
     std::vector<unsigned int> family_code;

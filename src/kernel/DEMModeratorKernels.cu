@@ -22,7 +22,7 @@ __global__ void applyFamilyChanges(smug::DEMDataDT* granData, size_t nOwnerBodie
             _massAcqStrat_;
             mass = myMass;
         }
-        voxelID2Position<double, smug::voxelID_t, smug::subVoxelPos_t>(
+        voxelIDToPosition<double, smug::voxelID_t, smug::subVoxelPos_t>(
             pos.x, pos.y, pos.z, granData->voxelID[myOwner], granData->locX[myOwner], granData->locY[myOwner],
             granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
         vel.x = granData->vX[myOwner];

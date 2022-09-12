@@ -57,7 +57,7 @@ __global__ void inspectOwnerProperty(smug::DEMDataDT* granData,
         // Use an input named exactly `myOwner' which is the id of this owner
         { _moiAcqStrat_; }
 
-        voxelID2Position<double, smug::voxelID_t, smug::subVoxelPos_t>(
+        voxelIDToPosition<double, smug::voxelID_t, smug::subVoxelPos_t>(
             ownerX, ownerY, ownerZ, granData->voxelID[myOwner], granData->locX[myOwner], granData->locY[myOwner],
             granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
         oriQw = granData->oriQw[myOwner];

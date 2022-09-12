@@ -31,11 +31,11 @@ int main() {
 
     // float ball_rad = 0.2;
     // auto template_ball =
-    //     DEM_sim.LoadClumpSimpleSphere(ball_rad * ball_rad * ball_rad * 7e3 * 4 / 3 * 3.14, ball_rad, mat_type_ball);
+    //     DEM_sim.LoadSphereType(ball_rad * ball_rad * ball_rad * 7e3 * 4 / 3 * 3.14, ball_rad, mat_type_ball);
 
     float terrain_rad = 0.005;
-    auto template_terrain = DEM_sim.LoadClumpSimpleSphere(
-        terrain_rad * terrain_rad * terrain_rad * 2.6e3 * 4 / 3 * 3.14, terrain_rad, mat_type_terrain);
+    auto template_terrain = DEM_sim.LoadSphereType(terrain_rad * terrain_rad * terrain_rad * 2.6e3 * 4 / 3 * 3.14,
+                                                   terrain_rad, mat_type_terrain);
 
     float step_size = 1e-5;
     double world_size = 1.5;

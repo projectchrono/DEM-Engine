@@ -46,77 +46,109 @@ inline __device__ void applyPrescribedPos(bool& LinPrescribed,
 inline __device__ void integrateVel(smug::bodyID_t thisClump,
                                     smug::DEMSimParams* simParams,
                                     smug::DEMDataDT* granData,
+                                    float3& v,
+                                    float3& omgBar,
                                     float h,
                                     float t) {
     smug::family_t family_code = granData->familyID[thisClump];
     bool LinPrescribed = false, RotPrescribed = false;
+
+    // Keep tab of the old... we'll need that
+    float3 old_v = make_float3(granData->vX[thisClump], granData->vY[thisClump], granData->vZ[thisClump]);
+    float3 old_omgBar =
+        make_float3(granData->omgBarX[thisClump], granData->omgBarY[thisClump], granData->omgBarZ[thisClump]);
+
+    // The user may directly change and omgBar info in global memory in applyPrescribedVel
     applyPrescribedVel<float, float>(LinPrescribed, RotPrescribed, granData->vX[thisClump], granData->vY[thisClump],
                                      granData->vZ[thisClump], granData->omgBarX[thisClump],
                                      granData->omgBarY[thisClump], granData->omgBarZ[thisClump], family_code, (float)t);
 
+    float3 v_update = make_float3(0, 0, 0), omgBar_update = make_float3(0, 0, 0);
+
     if (!LinPrescribed) {
-        granData->vX[thisClump] += (granData->aX[thisClump] + simParams->Gx) * h;
-        granData->vY[thisClump] += (granData->aY[thisClump] + simParams->Gy) * h;
-        granData->vZ[thisClump] += (granData->aZ[thisClump] + simParams->Gz) * h;
+        v_update.x = (granData->aX[thisClump] + simParams->Gx) * h;
+        v_update.y = (granData->aY[thisClump] + simParams->Gy) * h;
+        v_update.z = (granData->aZ[thisClump] + simParams->Gz) * h;
+        granData->vX[thisClump] += v_update.x;
+        granData->vY[thisClump] += v_update.y;
+        granData->vZ[thisClump] += v_update.z;
     }
 
     if (!RotPrescribed) {
-        granData->omgBarX[thisClump] += granData->alphaX[thisClump] * h;
-        granData->omgBarY[thisClump] += granData->alphaY[thisClump] * h;
-        granData->omgBarZ[thisClump] += granData->alphaZ[thisClump] * h;
+        omgBar_update.x = granData->alphaX[thisClump] * h;
+        omgBar_update.y = granData->alphaY[thisClump] * h;
+        omgBar_update.z = granData->alphaZ[thisClump] * h;
+        granData->omgBarX[thisClump] += omgBar_update.x;
+        granData->omgBarY[thisClump] += omgBar_update.y;
+        granData->omgBarZ[thisClump] += omgBar_update.z;
     }
+
+    // We need to set v and omgBar, and they will be used in position/quaternion update
+    _integrationVelocityPassOnStrategy_;
 }
 
-inline __device__ void locateNewVoxel(smug::voxelID_t& voxel, int64_t& locX_tmp, int64_t& locY_tmp, int64_t& locZ_tmp) {
-    smug::voxelID_t voxelX;
-    smug::voxelID_t voxelY;
-    smug::voxelID_t voxelZ;
-    IDChopper<smug::voxelID_t, smug::voxelID_t>(voxelX, voxelY, voxelZ, voxel, _nvXp2_, _nvYp2_);
+// inline __device__ void locateNewVoxel(smug::voxelID_t& voxel, int64_t& locX_tmp, int64_t& locY_tmp, int64_t&
+// locZ_tmp) {
+//     smug::voxelID_t voxelX;
+//     smug::voxelID_t voxelY;
+//     smug::voxelID_t voxelZ;
+//     IDChopper<smug::voxelID_t, smug::voxelID_t>(voxelX, voxelY, voxelZ, voxel, _nvXp2_, _nvYp2_);
 
-    // DEM_MAX_SUBVOXEL is int64 and large enough to handle DEM_VOXEL_RES_POWER2 == 16 or 32
-    voxelX += div_floor<int64_t, int64_t>(locX_tmp, smug::DEM_MAX_SUBVOXEL);
-    voxelY += div_floor<int64_t, int64_t>(locY_tmp, smug::DEM_MAX_SUBVOXEL);
-    voxelZ += div_floor<int64_t, int64_t>(locZ_tmp, smug::DEM_MAX_SUBVOXEL);
-    locX_tmp = mod_floor<int64_t, int64_t>(locX_tmp, smug::DEM_MAX_SUBVOXEL);
-    locY_tmp = mod_floor<int64_t, int64_t>(locY_tmp, smug::DEM_MAX_SUBVOXEL);
-    locZ_tmp = mod_floor<int64_t, int64_t>(locZ_tmp, smug::DEM_MAX_SUBVOXEL);
+//     // DEM_MAX_SUBVOXEL is int64 and large enough to handle DEM_VOXEL_RES_POWER2 == 16 or 32
+//     voxelX += div_floor<int64_t, int64_t>(locX_tmp, smug::DEM_MAX_SUBVOXEL);
+//     voxelY += div_floor<int64_t, int64_t>(locY_tmp, smug::DEM_MAX_SUBVOXEL);
+//     voxelZ += div_floor<int64_t, int64_t>(locZ_tmp, smug::DEM_MAX_SUBVOXEL);
+//     locX_tmp = mod_floor<int64_t, int64_t>(locX_tmp, smug::DEM_MAX_SUBVOXEL);
+//     locY_tmp = mod_floor<int64_t, int64_t>(locY_tmp, smug::DEM_MAX_SUBVOXEL);
+//     locZ_tmp = mod_floor<int64_t, int64_t>(locZ_tmp, smug::DEM_MAX_SUBVOXEL);
 
-    // TODO: Should add a check here where, if negative voxel component spotted, stop the simulation
+//     IDPacker<smug::voxelID_t, smug::voxelID_t>(voxel, voxelX, voxelY, voxelZ, _nvXp2_, _nvYp2_);
+// }
 
-    IDPacker<smug::voxelID_t, smug::voxelID_t>(voxel, voxelX, voxelY, voxelZ, _nvXp2_, _nvYp2_);
-}
+inline __device__ void integratePos(smug::bodyID_t thisClump,
+                                    smug::DEMDataDT* granData,
+                                    float3 v,
+                                    float3 omgBar,
+                                    float h,
+                                    float t) {
+    // This block is not needed, with our current way of integration...
+    // int64_t locX_tmp = (int64_t)granData->locX[thisClump];
+    // int64_t locY_tmp = (int64_t)granData->locY[thisClump];
+    // int64_t locZ_tmp = (int64_t)granData->locZ[thisClump];
+    // locateNewVoxel(newVoxel, locX_tmp, locY_tmp, locZ_tmp);
+    // locX_tmp += (int64_t)((double)v.x / _l_ * h);
+    // locY_tmp += (int64_t)((double)v.y / _l_ * h);
+    // locZ_tmp += (int64_t)((double)v.z / _l_ * h);
 
-inline __device__ void integratePos(smug::bodyID_t thisClump, smug::DEMDataDT* granData, float h, float t) {
-    // Location accuracy is up to integer level anyway
-    int64_t locX_tmp = (int64_t)granData->locX[thisClump];
-    int64_t locY_tmp = (int64_t)granData->locY[thisClump];
-    int64_t locZ_tmp = (int64_t)granData->locZ[thisClump];
+    double X, Y, Z;
+    // Now XYZ gets the old position. We can write them directly back, then it is equivalent to being LinPrescribed.
+    voxelIDToPosition<double, smug::voxelID_t, smug::subVoxelPos_t>(
+        X, Y, Z, granData->voxelID[thisClump], granData->locX[thisClump], granData->locY[thisClump],
+        granData->locZ[thisClump], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
 
     smug::family_t family_code = granData->familyID[thisClump];
     bool LinPrescribed = false, RotPrescribed = false;
-    applyPrescribedPos<int64_t, smug::oriQ_t>(
-        LinPrescribed, RotPrescribed, locX_tmp, locY_tmp, locZ_tmp, granData->oriQw[thisClump],
-        granData->oriQx[thisClump], granData->oriQy[thisClump], granData->oriQz[thisClump], family_code, (float)t);
+    applyPrescribedPos<double, smug::oriQ_t>(LinPrescribed, RotPrescribed, X, Y, Z, granData->oriQw[thisClump],
+                                             granData->oriQx[thisClump], granData->oriQy[thisClump],
+                                             granData->oriQz[thisClump], family_code, (float)t);
 
     if (!LinPrescribed) {
-        locX_tmp += (int64_t)((double)granData->vX[thisClump] / _l_ * h);
-        locY_tmp += (int64_t)((double)granData->vY[thisClump] / _l_ * h);
-        locZ_tmp += (int64_t)((double)granData->vZ[thisClump] / _l_ * h);
-        smug::voxelID_t newVoxel = granData->voxelID[thisClump];
-        locateNewVoxel(newVoxel, locX_tmp, locY_tmp, locZ_tmp);
-        granData->voxelID[thisClump] = newVoxel;
-        granData->locX[thisClump] = locX_tmp;
-        granData->locY[thisClump] = locY_tmp;
-        granData->locZ[thisClump] = locZ_tmp;
+        // Pos integration strategy here
+        X += (double)v.x * h;
+        Y += (double)v.y * h;
+        Z += (double)v.z * h;
     }
+    positionToVoxelID<smug::voxelID_t, smug::subVoxelPos_t, double>(
+        granData->voxelID[thisClump], granData->locX[thisClump], granData->locY[thisClump], granData->locZ[thisClump],
+        X, Y, Z, _nvXp2_, _nvYp2_, _voxelSize_, _l_);
 
     if (!RotPrescribed) {
         // Then integrate the quaternion
         // Exp map-based rotation angle calculation
         double deltaQ0 = 1;
-        double deltaQ1 = granData->omgBarX[thisClump];
-        double deltaQ2 = granData->omgBarY[thisClump];
-        double deltaQ3 = granData->omgBarZ[thisClump];
+        double deltaQ1 = omgBar.x;
+        double deltaQ2 = omgBar.y;
+        double deltaQ3 = omgBar.z;
         double len = sqrt(deltaQ1 * deltaQ1 + deltaQ2 * deltaQ2 + deltaQ3 * deltaQ3);
         double theta = 0.5 * h * len;  // 0.5*dt*len, delta rotation
         if (len > 0) {
@@ -135,10 +167,13 @@ inline __device__ void integratePos(smug::bodyID_t thisClump, smug::DEMDataDT* g
     }
 }
 
-__global__ void integrateClumps(smug::DEMSimParams* simParams, smug::DEMDataDT* granData, float t) {
+__global__ void integrateOwners(smug::DEMSimParams* simParams, smug::DEMDataDT* granData, float t) {
     smug::bodyID_t thisClump = blockIdx.x * blockDim.x + threadIdx.x;
     if (thisClump < simParams->nOwnerBodies) {
-        integrateVel(thisClump, simParams, granData, simParams->h, t);
-        integratePos(thisClump, granData, simParams->h, t);
+        // These 2 quantities mean the velocity and ang vel used for updating position/quaternion for this step.
+        // Depending on the integration scheme in use, they can be different.
+        float3 v, omgBar;
+        integrateVel(thisClump, simParams, granData, v, omgBar, simParams->h, t);
+        integratePos(thisClump, granData, v, omgBar, simParams->h, t);
     }
 }

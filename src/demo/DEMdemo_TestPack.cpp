@@ -94,7 +94,7 @@ void SphereRollUpIncline() {
 
         auto mat_type_1 = DEM_sim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu}, {"Crr", 0.15}});
         // A ball
-        auto sphere_template = DEM_sim.LoadClumpSimpleSphere(mass, sphere_rad, mat_type_1);
+        auto sphere_template = DEM_sim.LoadSphereType(mass, sphere_rad, mat_type_1);
 
         // Incline angle
         float alpha = 35.;
@@ -145,7 +145,7 @@ void SphereRollUpIncline() {
 
             auto mat_type_1 = DEM_sim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu}, {"Crr", Crr}});
             // A ball
-            auto sphere_template = DEM_sim.LoadClumpSimpleSphere(mass, sphere_rad, mat_type_1);
+            auto sphere_template = DEM_sim.LoadSphereType(mass, sphere_rad, mat_type_1);
 
             // Add the incline
             float3 normal_dir =
@@ -207,8 +207,8 @@ void SphereStack() {
                 auto mat_type_1 =
                     DEM_sim.LoadMaterial({{"E", 2e6}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", mu}, {"Crr", Crr}});
                 // 2 types of spheres
-                auto sphere_top_template = DEM_sim.LoadClumpSimpleSphere(m_top, sphere_rad, mat_type_1);
-                auto sphere_bot_template = DEM_sim.LoadClumpSimpleSphere(m_bot, sphere_rad, mat_type_1);
+                auto sphere_top_template = DEM_sim.LoadSphereType(m_top, sphere_rad, mat_type_1);
+                auto sphere_bot_template = DEM_sim.LoadSphereType(m_bot, sphere_rad, mat_type_1);
 
                 // Add the bottom plane
                 float3 normal_dir = make_float3(0, 0, 1);

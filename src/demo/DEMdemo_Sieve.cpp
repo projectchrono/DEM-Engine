@@ -40,7 +40,7 @@ int main() {
 
     // First create clump type 0 for representing the sieve
     float sieve_sp_r = 0.05;
-    auto template_sieve = DEM_sim.LoadClumpSimpleSphere(5.0, sieve_sp_r, mat_type_1);
+    auto template_sieve = DEM_sim.LoadSphereType(5.0, sieve_sp_r, mat_type_1);
 
     // An array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;

@@ -53,7 +53,7 @@ int main() {
 
     // Load particle template(s)
     clump_types.push_back(DEM_sim.LoadClumpType(this_mass, this_MOI, this_radii, this_relPos, mat_type_sand));
-    // clump_types.push_back(DEM_sim.LoadClumpSimpleSphere(this_mass, std::cbrt(2.0) * scaling, mat_type_sand));
+    // clump_types.push_back(DEM_sim.LoadSphereType(this_mass, std::cbrt(2.0) * scaling, mat_type_sand));
 
     // Drum is a `big clump', we now generate its template
     float3 CylCenter = make_float3(0, 0, 0);

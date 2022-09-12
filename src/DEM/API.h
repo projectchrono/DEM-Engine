@@ -89,6 +89,9 @@ class DEMSolver {
         m_user_instructed_origin = "explicit";
     }
 
+    /// Set the integrator for this simulator
+    void SetIntegrator(DEM_TIME_INTEGRATOR intg) { m_integrator = intg; }
+
     /// Return whether this simulation system is initialized
     bool GetInitStatus() { return sys_initialized; }
 
@@ -181,9 +184,9 @@ class DEMSolver {
                                                     const std::shared_ptr<DEMMaterial>& sp_material);
 
     /// A simplified version of LoadClumpType: it just loads a one-sphere clump template
-    std::shared_ptr<DEMClumpTemplate> LoadClumpSimpleSphere(float mass,
-                                                            float radius,
-                                                            const std::shared_ptr<DEMMaterial>& material);
+    std::shared_ptr<DEMClumpTemplate> LoadSphereType(float mass,
+                                                     float radius,
+                                                     const std::shared_ptr<DEMMaterial>& material);
 
     /// Load materials properties (Young's modulus, Poisson's ratio, Coeff of Restitution...) into
     /// the API-level cache. Return the ptr of the material type just loaded.
@@ -551,6 +554,9 @@ class DEMSolver {
     // If we should ensure that when kernel jitification fails, the line number reported reflexes where error happens
     bool m_ensure_kernel_line_num = false;
 
+    // Integrator type
+    DEM_TIME_INTEGRATOR m_integrator = DEM_TIME_INTEGRATOR::EXTENDED_TAYLOR;
+
     // The force model which will be used
     std::shared_ptr<DEMForceModel> m_force_model =
         std::make_shared<DEMForceModel>(std::move(DEMForceModel(DEM_FORCE_MODEL::HERTZIAN)));
@@ -877,6 +883,7 @@ class DEMSolver {
     inline void equipFamilyPrescribedMotions(std::unordered_map<std::string, std::string>& strMap);
     inline void equipFamilyOnFlyChanges(std::unordered_map<std::string, std::string>& strMap);
     inline void equipForceModel(std::unordered_map<std::string, std::string>& strMap);
+    inline void equipIntegrationScheme(std::unordered_map<std::string, std::string>& strMap);
 };
 
 }  // namespace smug
