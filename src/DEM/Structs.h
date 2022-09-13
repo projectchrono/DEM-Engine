@@ -3,10 +3,10 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SMUG_DEM_HOST_STRUCTS
-#define SMUG_DEM_HOST_STRUCTS
+#ifndef DEME_HOST_STRUCTS
+#define DEME_HOST_STRUCTS
 
-#include <DEM/DEMDefines.h>
+#include <DEM/Defines.h>
 #include <core/utils/ManagedAllocator.hpp>
 #include <core/utils/ManagedMemory.hpp>
 #include <core/utils/csv.hpp>
@@ -24,7 +24,7 @@
 #include <filesystem>
 #include <cstring>
 
-namespace smug {
+namespace deme {
 // Structs defined here will be used by some host classes in DEM.
 // NOTE: Data structs here need to be those complex ones (such as needing to include ManagedAllocator.hpp), which may
 // not be jitifiable.
@@ -119,14 +119,14 @@ inline std::string pretty_format_bytes(size_t bytes) {
 // NOW DEFINING MACRO COMMANDS USED BY THE DEM MODULE
 // =============================================================================
 
-#define SMUG_DEM_PRINTF(...)                    \
-    {                                           \
-        if (verbosity > DEM_VERBOSITY::QUIET) { \
-            printf(__VA_ARGS__);                \
-        }                                       \
+#define DEME_PRINTF(...)                    \
+    {                                       \
+        if (verbosity > VERBOSITY::QUIET) { \
+            printf(__VA_ARGS__);            \
+        }                                   \
     }
 
-#define SMUG_DEM_ERROR(...)                  \
+#define DEME_ERROR(...)                      \
     {                                        \
         char error_message[1024];            \
         char func_name[1024];                \
@@ -140,57 +140,57 @@ inline std::string pretty_format_bytes(size_t bytes) {
         throw std::runtime_error(out);       \
     }
 
-#define SMUG_DEM_WARNING(...)                      \
+#define DEME_WARNING(...)                      \
+    {                                          \
+        if (verbosity >= VERBOSITY::WARNING) { \
+            printf("\nWARNING! ");             \
+            printf(__VA_ARGS__);               \
+            printf("\n\n");                    \
+        }                                      \
+    }
+
+#define DEME_INFO(...)                      \
+    {                                       \
+        if (verbosity >= VERBOSITY::INFO) { \
+            printf(__VA_ARGS__);            \
+            printf("\n");                   \
+        }                                   \
+    }
+
+#define DEME_STEP_STATS(...)                      \
+    {                                             \
+        if (verbosity >= VERBOSITY::STEP_STATS) { \
+            printf(__VA_ARGS__);                  \
+            printf("\n");                         \
+        }                                         \
+    }
+
+#define DEME_STEP_METRIC(...)                      \
     {                                              \
-        if (verbosity >= DEM_VERBOSITY::WARNING) { \
-            printf("\nWARNING! ");                 \
+        if (verbosity >= VERBOSITY::STEP_METRIC) { \
             printf(__VA_ARGS__);                   \
-            printf("\n\n");                        \
+            printf("\n");                          \
         }                                          \
     }
 
-#define SMUG_DEM_INFO(...)                      \
-    {                                           \
-        if (verbosity >= DEM_VERBOSITY::INFO) { \
-            printf(__VA_ARGS__);                \
-            printf("\n");                       \
-        }                                       \
+#define DEME_DEBUG_PRINTF(...)               \
+    {                                        \
+        if (verbosity >= VERBOSITY::DEBUG) { \
+            printf(__VA_ARGS__);             \
+            printf("\n");                    \
+        }                                    \
     }
 
-#define SMUG_DEM_STEP_STATS(...)                      \
-    {                                                 \
-        if (verbosity >= DEM_VERBOSITY::STEP_STATS) { \
-            printf(__VA_ARGS__);                      \
-            printf("\n");                             \
-        }                                             \
-    }
-
-#define SMUG_DEM_STEP_METRIC(...)                      \
-    {                                                  \
-        if (verbosity >= DEM_VERBOSITY::STEP_METRIC) { \
-            printf(__VA_ARGS__);                       \
-            printf("\n");                              \
-        }                                              \
-    }
-
-#define SMUG_DEM_DEBUG_PRINTF(...)               \
-    {                                            \
-        if (verbosity >= DEM_VERBOSITY::DEBUG) { \
-            printf(__VA_ARGS__);                 \
-            printf("\n");                        \
-        }                                        \
-    }
-
-#define SMUG_DEM_DEBUG_EXEC(...)                 \
-    {                                            \
-        if (verbosity >= DEM_VERBOSITY::DEBUG) { \
-            __VA_ARGS__;                         \
-        }                                        \
+#define DEME_DEBUG_EXEC(...)                 \
+    {                                        \
+        if (verbosity >= VERBOSITY::DEBUG) { \
+            __VA_ARGS__;                     \
+        }                                    \
     }
 
 // I wasn't able to resolve a decltype problem with vector of vectors, so I have to create another macro for this kind
 // of tracked resize... not ideal.
-#define SMUG_DEM_TRACKED_RESIZE_FLOAT(vec, newsize, val)           \
+#define DEME_TRACKED_RESIZE_FLOAT(vec, newsize, val)               \
     {                                                              \
         size_t old_size = vec.size();                              \
         vec.resize(newsize, val);                                  \
@@ -199,7 +199,7 @@ inline std::string pretty_format_bytes(size_t bytes) {
         m_approx_bytes_used += byte_delta;                         \
     }
 
-#define SMUG_DEM_TRACKED_RESIZE_NOPRINT(vec, newsize, val)     \
+#define DEME_TRACKED_RESIZE_NOPRINT(vec, newsize, val)         \
     {                                                          \
         size_t item_size = sizeof(decltype(vec)::value_type);  \
         size_t old_size = vec.size();                          \
@@ -209,22 +209,22 @@ inline std::string pretty_format_bytes(size_t bytes) {
         m_approx_bytes_used += byte_delta;                     \
     }
 
-#define SMUG_DEM_TRACKED_RESIZE(vec, newsize, name, val)                                                               \
-    {                                                                                                                  \
-        size_t item_size = sizeof(decltype(vec)::value_type);                                                          \
-        size_t old_size = vec.size();                                                                                  \
-        vec.resize(newsize, val);                                                                                      \
-        size_t new_size = vec.size();                                                                                  \
-        size_t byte_delta = item_size * (new_size - old_size);                                                         \
-        m_approx_bytes_used += byte_delta;                                                                             \
-        SMUG_DEM_STEP_STATS("Resizing vector %s, old size %zu, new size %zu, byte delta %s", name, old_size, new_size, \
-                            pretty_format_bytes(byte_delta).c_str());                                                  \
+#define DEME_TRACKED_RESIZE(vec, newsize, name, val)                                                               \
+    {                                                                                                              \
+        size_t item_size = sizeof(decltype(vec)::value_type);                                                      \
+        size_t old_size = vec.size();                                                                              \
+        vec.resize(newsize, val);                                                                                  \
+        size_t new_size = vec.size();                                                                              \
+        size_t byte_delta = item_size * (new_size - old_size);                                                     \
+        m_approx_bytes_used += byte_delta;                                                                         \
+        DEME_STEP_STATS("Resizing vector %s, old size %zu, new size %zu, byte delta %s", name, old_size, new_size, \
+                        pretty_format_bytes(byte_delta).c_str());                                                  \
     }
 
 //// TODO: this is currently not tracked...
 // ptr being a reference to a pointer is crucial
 template <typename T>
-inline void SMUG_DEM_DEVICE_PTR_ALLOC(T*& ptr, size_t size) {
+inline void DEME_DEVICE_PTR_ALLOC(T*& ptr, size_t size) {
     cudaPointerAttributes attrib;
     GPU_CALL(cudaPointerGetAttributes(&attrib, ptr));
 
@@ -234,12 +234,12 @@ inline void SMUG_DEM_DEVICE_PTR_ALLOC(T*& ptr, size_t size) {
 }
 
 // Managed advise doesn't seem to do anything...
-#define SMUG_DEM_ADVISE_DEVICE(vec, device) \
+#define DEME_ADVISE_DEVICE(vec, device) \
     { advise(vec, ManagedAdvice::PREFERRED_LOC, device); }
-#define SMUG_DEM_MIGRATE_TO_DEVICE(vec, device, stream) \
+#define DEME_MIGRATE_TO_DEVICE(vec, device, stream) \
     { migrate(vec, device, stream); }
 
-// #define DEM_OUTPUT_IF_GPU_FAILS(res) \
+// #define OUTPUT_IF_GPU_FAILS(res) \
 //     { gpu_assert((res), __FILE__, __LINE__, false); throw std::runtime_error("GPU Assertion Failed!");}
 
 // =============================================================================
@@ -302,7 +302,7 @@ struct familyPair_t {
     unsigned int ID2;
 };
 
-enum class DEM_VAR_TS_STRAT { CONST, MAX_VEL, INT_GAP };
+enum class VAR_TS_STRAT { CONST, MAX_VEL, INT_GAP };
 
 class ClumpTemplateFlatten {
   public:
@@ -342,13 +342,13 @@ struct SolverFlags {
     // If family number can potentially change (at each time step) during the simulation, because of user intervention
     bool canFamilyChange = false;
     // Some output-related flags
-    unsigned int outputFlags = DEM_OUTPUT_CONTENT::QUAT | DEM_OUTPUT_CONTENT::ABSV;
+    unsigned int outputFlags = OUTPUT_CONTENT::QUAT | OUTPUT_CONTENT::ABSV;
     unsigned int cntOutFlags;
     // Time step constant-ness and expand factor constant-ness
     bool isStepConst = true;
     bool isExpandFactorFixed = true;
     // The strategy for selecting the variable time step size
-    DEM_VAR_TS_STRAT stepSizeStrat = DEM_VAR_TS_STRAT::CONST;
+    VAR_TS_STRAT stepSizeStrat = VAR_TS_STRAT::CONST;
     // Whether instructed to use jitification for mass properties and clump components (default to no and it is
     // recommended)
     bool useClumpJitify = false;
@@ -501,7 +501,7 @@ class DEMClumpBatch {
     size_t load_order;
     DEMClumpBatch(size_t num) : nClumps(num) {
         types.resize(num);
-        families.resize(num, DEM_DEFAULT_CLUMP_FAMILY_NUM);
+        families.resize(num, DEFAULT_CLUMP_FAMILY_NUM);
         vel.resize(num, make_float3(0));
         angVel.resize(num, make_float3(0));
         xyz.resize(num);
@@ -561,9 +561,9 @@ class DEMClumpBatch {
 // A struct to get or set tracked owner entities
 struct DEMTrackedObj {
     // ownerID will be updated by dT on initialization
-    bodyID_t ownerID = DEM_NULL_BODYID;
+    bodyID_t ownerID = NULL_BODYID;
     // Type of this tracked object
-    DEM_OWNER_TYPE type;
+    OWNER_TYPE type;
     // A tracker tracks a owner loaded into the system via its respective loading method, so load_order registers
     // the position of this object in the corresponding API-side array
     size_t load_order;
@@ -582,39 +582,39 @@ struct DEMTrackedObj {
 // SOME HOST-SIDE CONSTANTS
 // =============================================================================
 
-const std::string DEM_OUTPUT_FILE_X_COL_NAME = std::string("X");
-const std::string DEM_OUTPUT_FILE_Y_COL_NAME = std::string("Y");
-const std::string DEM_OUTPUT_FILE_Z_COL_NAME = std::string("Z");
-const std::string DEM_OUTPUT_FILE_R_COL_NAME = std::string("r");
-const std::string DEM_OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
-const std::filesystem::path DEM_USER_SCRIPT_PATH =
+const std::string OUTPUT_FILE_X_COL_NAME = std::string("X");
+const std::string OUTPUT_FILE_Y_COL_NAME = std::string("Y");
+const std::string OUTPUT_FILE_Z_COL_NAME = std::string("Z");
+const std::string OUTPUT_FILE_R_COL_NAME = std::string("r");
+const std::string OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
+const std::filesystem::path USER_SCRIPT_PATH =
     std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" / "DEMUserScripts";
-const std::filesystem::path DEM_SOURCE_DATA_PATH = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "data";
+const std::filesystem::path SOURCE_DATA_PATH = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "data";
 // Column names for contact pair output file
-const std::string DEM_OUTPUT_FILE_OWNER_1_NAME = std::string("A");
-const std::string DEM_OUTPUT_FILE_OWNER_2_NAME = std::string("B");
-const std::string DEM_OUTPUT_FILE_COMP_1_NAME = std::string("compA");
-const std::string DEM_OUTPUT_FILE_COMP_2_NAME = std::string("compB");
-const std::string DEM_OUTPUT_FILE_CNT_TYPE_NAME = std::string("contact_type");
-const std::string DEM_OUTPUT_FILE_FORCE_X_NAME = std::string("f_x");
-const std::string DEM_OUTPUT_FILE_FORCE_Y_NAME = std::string("f_y");
-const std::string DEM_OUTPUT_FILE_FORCE_Z_NAME = std::string("f_z");
-const std::string DEM_OUTPUT_FILE_TOF_X_NAME = std::string("tof_x");  // TOF means torque_only_force
-const std::string DEM_OUTPUT_FILE_TOF_Y_NAME = std::string("tof_y");
-const std::string DEM_OUTPUT_FILE_TOF_Z_NAME = std::string("tof_z");
-const std::string DEM_OUTPUT_FILE_NORMAL_X_NAME = std::string("n_x");
-const std::string DEM_OUTPUT_FILE_NORMAL_Y_NAME = std::string("n_y");
-const std::string DEM_OUTPUT_FILE_NORMAL_Z_NAME = std::string("n_z");
-const std::string DEM_OUTPUT_FILE_SPH_SPH_CONTACT_NAME = std::string("SS");
-const std::string DEM_OUTPUT_FILE_SPH_ANAL_CONTACT_NAME = std::string("SA");
-const std::string DEM_OUTPUT_FILE_SPH_MESH_CONTACT_NAME = std::string("SM");
+const std::string OUTPUT_FILE_OWNER_1_NAME = std::string("A");
+const std::string OUTPUT_FILE_OWNER_2_NAME = std::string("B");
+const std::string OUTPUT_FILE_COMP_1_NAME = std::string("compA");
+const std::string OUTPUT_FILE_COMP_2_NAME = std::string("compB");
+const std::string OUTPUT_FILE_CNT_TYPE_NAME = std::string("contact_type");
+const std::string OUTPUT_FILE_FORCE_X_NAME = std::string("f_x");
+const std::string OUTPUT_FILE_FORCE_Y_NAME = std::string("f_y");
+const std::string OUTPUT_FILE_FORCE_Z_NAME = std::string("f_z");
+const std::string OUTPUT_FILE_TOF_X_NAME = std::string("tof_x");  // TOF means torque_only_force
+const std::string OUTPUT_FILE_TOF_Y_NAME = std::string("tof_y");
+const std::string OUTPUT_FILE_TOF_Z_NAME = std::string("tof_z");
+const std::string OUTPUT_FILE_NORMAL_X_NAME = std::string("n_x");
+const std::string OUTPUT_FILE_NORMAL_Y_NAME = std::string("n_y");
+const std::string OUTPUT_FILE_NORMAL_Z_NAME = std::string("n_z");
+const std::string OUTPUT_FILE_SPH_SPH_CONTACT_NAME = std::string("SS");
+const std::string OUTPUT_FILE_SPH_ANAL_CONTACT_NAME = std::string("SA");
+const std::string OUTPUT_FILE_SPH_MESH_CONTACT_NAME = std::string("SM");
 const std::unordered_map<contact_t, std::string> contact_type_out_name_map = {
-    {DEM_NOT_A_CONTACT, "fake"},
-    {DEM_SPHERE_SPHERE_CONTACT, DEM_OUTPUT_FILE_SPH_SPH_CONTACT_NAME},
-    {DEM_SPHERE_MESH_CONTACT, DEM_OUTPUT_FILE_SPH_MESH_CONTACT_NAME},
-    {DEM_SPHERE_PLANE_CONTACT, DEM_OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
-    {DEM_SPHERE_PLATE_CONTACT, DEM_OUTPUT_FILE_SPH_ANAL_CONTACT_NAME}};
+    {NOT_A_CONTACT, "fake"},
+    {SPHERE_SPHERE_CONTACT, OUTPUT_FILE_SPH_SPH_CONTACT_NAME},
+    {SPHERE_MESH_CONTACT, OUTPUT_FILE_SPH_MESH_CONTACT_NAME},
+    {SPHERE_PLANE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
+    {SPHERE_PLATE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME}};
 
-}  // namespace smug
+}  // namespace deme
 
 #endif

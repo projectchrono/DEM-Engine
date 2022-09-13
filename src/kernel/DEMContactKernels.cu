@@ -1,5 +1,5 @@
 // DEM contact detection-related custom kernels
-#include <DEM/DEMDefines.h>
+#include <DEM/Defines.h>
 #include <kernel/DEMHelperKernels.cu>
 
 #include <cub/util_ptx.cuh>
@@ -9,41 +9,41 @@ _clumpTemplateDefs_;
 // Family mask, _nFamilyMaskEntries_ elements are in this array
 // __constant__ __device__ bool familyMasks[] = {_familyMasks_};
 
-__global__ void getNumberOfContactsEachBin(smug::DEMSimParams* simParams,
-                                           smug::DEMDataKT* granData,
-                                           smug::bodyID_t* sphereIDsEachBinTouches_sorted,
-                                           smug::binID_t* activeBinIDs,
-                                           smug::spheresBinTouches_t* numSpheresBinTouches,
-                                           smug::binSphereTouchPairs_t* sphereIDsLookUpTable,
-                                           smug::spheresBinTouches_t* numContactsInEachBin,
+__global__ void getNumberOfContactsEachBin(deme::DEMSimParams* simParams,
+                                           deme::DEMDataKT* granData,
+                                           deme::bodyID_t* sphereIDsEachBinTouches_sorted,
+                                           deme::binID_t* activeBinIDs,
+                                           deme::spheresBinTouches_t* numSpheresBinTouches,
+                                           deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
+                                           deme::spheresBinTouches_t* numContactsInEachBin,
                                            size_t nActiveBins) {
     // Only active bins got execute this...
-    smug::binID_t myActiveID = blockIdx.x * blockDim.x + threadIdx.x;
+    deme::binID_t myActiveID = blockIdx.x * blockDim.x + threadIdx.x;
     // I need to store all the sphereIDs that I am supposed to look into
     // A100 has about 164K shMem... these arrays really need to be small, or we can only fit a small number of bins in
     // one block
-    smug::bodyID_t ownerIDs[SMUG_DEM_MAX_SPHERES_PER_BIN];
-    float radii[SMUG_DEM_MAX_SPHERES_PER_BIN];
-    double bodyX[SMUG_DEM_MAX_SPHERES_PER_BIN];
-    double bodyY[SMUG_DEM_MAX_SPHERES_PER_BIN];
-    double bodyZ[SMUG_DEM_MAX_SPHERES_PER_BIN];
-    smug::family_t ownerFamily[SMUG_DEM_MAX_SPHERES_PER_BIN];
+    deme::bodyID_t ownerIDs[DEME_MAX_SPHERES_PER_BIN];
+    float radii[DEME_MAX_SPHERES_PER_BIN];
+    double bodyX[DEME_MAX_SPHERES_PER_BIN];
+    double bodyY[DEME_MAX_SPHERES_PER_BIN];
+    double bodyZ[DEME_MAX_SPHERES_PER_BIN];
+    deme::family_t ownerFamily[DEME_MAX_SPHERES_PER_BIN];
     if (myActiveID < nActiveBins) {
         // I got a true bin ID
-        smug::binID_t binID = activeBinIDs[myActiveID];
+        deme::binID_t binID = activeBinIDs[myActiveID];
 
-        smug::spheresBinTouches_t contact_count = 0;
+        deme::spheresBinTouches_t contact_count = 0;
         // Grab the bodies that I care, put into local memory
-        smug::spheresBinTouches_t nBodiesMeHandle = numSpheresBinTouches[myActiveID];
-        if (nBodiesMeHandle > SMUG_DEM_MAX_SPHERES_PER_BIN) {
-            SMUG_DEM_ABORT_KERNEL("Bin %u contains %u sphere components, exceeding maximum allowance (%u)\n",
-                                  myActiveID, nBodiesMeHandle, SMUG_DEM_MAX_SPHERES_PER_BIN);
+        deme::spheresBinTouches_t nBodiesMeHandle = numSpheresBinTouches[myActiveID];
+        if (nBodiesMeHandle > DEME_MAX_SPHERES_PER_BIN) {
+            DEME_ABORT_KERNEL("Bin %u contains %u sphere components, exceeding maximum allowance (%u)\n", myActiveID,
+                              nBodiesMeHandle, DEME_MAX_SPHERES_PER_BIN);
         }
 
-        smug::binSphereTouchPairs_t myBodiesTableEntry = sphereIDsLookUpTable[myActiveID];
+        deme::binSphereTouchPairs_t myBodiesTableEntry = sphereIDsLookUpTable[myActiveID];
         // printf("nBodies: %u\n", nBodiesMeHandle);
-        for (smug::spheresBinTouches_t i = 0; i < nBodiesMeHandle; i++) {
-            smug::bodyID_t sphereID = sphereIDsEachBinTouches_sorted[myBodiesTableEntry + i];
+        for (deme::spheresBinTouches_t i = 0; i < nBodiesMeHandle; i++) {
+            deme::bodyID_t sphereID = sphereIDsEachBinTouches_sorted[myBodiesTableEntry + i];
             ownerIDs[i] = granData->ownerClumpBody[sphereID];
             ownerFamily[i] = granData->familyID[ownerIDs[i]];
             double ownerX, ownerY, ownerZ;
@@ -57,14 +57,14 @@ __global__ void getNumberOfContactsEachBin(smug::DEMSimParams* simParams,
                 myRadius += simParams->beta;
             }
 
-            voxelIDToPosition<double, smug::voxelID_t, smug::subVoxelPos_t>(
+            voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[ownerIDs[i]], granData->locX[ownerIDs[i]],
                 granData->locY[ownerIDs[i]], granData->locZ[ownerIDs[i]], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
             float myOriQw = granData->oriQw[ownerIDs[i]];
             float myOriQx = granData->oriQx[ownerIDs[i]];
             float myOriQy = granData->oriQy[ownerIDs[i]];
             float myOriQz = granData->oriQz[ownerIDs[i]];
-            applyOriQToVector3<float, smug::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQw, myOriQx, myOriQy,
+            applyOriQToVector3<float, deme::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQw, myOriQx, myOriQy,
                                                     myOriQz);
             bodyX[i] = ownerX + (double)myRelPosX;
             bodyY[i] = ownerY + (double)myRelPosY;
@@ -72,8 +72,8 @@ __global__ void getNumberOfContactsEachBin(smug::DEMSimParams* simParams,
             radii[i] = myRadius;
         }
 
-        for (smug::spheresBinTouches_t bodyA = 0; bodyA < nBodiesMeHandle; bodyA++) {
-            for (smug::spheresBinTouches_t bodyB = bodyA + 1; bodyB < nBodiesMeHandle; bodyB++) {
+        for (deme::spheresBinTouches_t bodyA = 0; bodyA < nBodiesMeHandle; bodyA++) {
+            for (deme::spheresBinTouches_t bodyB = bodyA + 1; bodyB < nBodiesMeHandle; bodyB++) {
                 // For 2 bodies to be considered in contact, the contact point must be in this bin (to avoid
                 // double-counting), and they do not belong to the same clump
                 if (ownerIDs[bodyA] == ownerIDs[bodyB])
@@ -84,7 +84,7 @@ __global__ void getNumberOfContactsEachBin(smug::DEMSimParams* simParams,
                 unsigned int bodyBFamily = ownerFamily[bodyB];
                 unsigned int maskMatID = locateMaskPair<unsigned int>(bodyAFamily, bodyBFamily);
                 // If marked no contact, skip ths iteration
-                if (granData->familyMasks[maskMatID] != smug::DEM_DONT_PREVENT_CONTACT) {
+                if (granData->familyMasks[maskMatID] != deme::DONT_PREVENT_CONTACT) {
                     continue;
                 }
 
@@ -95,7 +95,7 @@ __global__ void getNumberOfContactsEachBin(smug::DEMSimParams* simParams,
                 in_contact = checkSpheresOverlap<double>(bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], radii[bodyA],
                                                          bodyX[bodyB], bodyY[bodyB], bodyZ[bodyB], radii[bodyB],
                                                          contactPntX, contactPntY, contactPntZ);
-                smug::binID_t contactPntBin = getPointBinID<smug::binID_t>(
+                deme::binID_t contactPntBin = getPointBinID<deme::binID_t>(
                     contactPntX, contactPntY, contactPntZ, simParams->binSize, simParams->nbX, simParams->nbY);
 
                 /*
@@ -121,37 +121,37 @@ __global__ void getNumberOfContactsEachBin(smug::DEMSimParams* simParams,
     }
 }
 
-__global__ void populateContactPairsEachBin(smug::DEMSimParams* simParams,
-                                            smug::DEMDataKT* granData,
-                                            smug::bodyID_t* sphereIDsEachBinTouches_sorted,
-                                            smug::binID_t* activeBinIDs,
-                                            smug::spheresBinTouches_t* numSpheresBinTouches,
-                                            smug::binSphereTouchPairs_t* sphereIDsLookUpTable,
-                                            smug::contactPairs_t* contactReportOffsets,
-                                            smug::bodyID_t* idSphA,
-                                            smug::bodyID_t* idSphB,
+__global__ void populateContactPairsEachBin(deme::DEMSimParams* simParams,
+                                            deme::DEMDataKT* granData,
+                                            deme::bodyID_t* sphereIDsEachBinTouches_sorted,
+                                            deme::binID_t* activeBinIDs,
+                                            deme::spheresBinTouches_t* numSpheresBinTouches,
+                                            deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
+                                            deme::contactPairs_t* contactReportOffsets,
+                                            deme::bodyID_t* idSphA,
+                                            deme::bodyID_t* idSphB,
                                             size_t nActiveBins) {
     // Only active bins got to execute this...
-    smug::binID_t myActiveID = blockIdx.x * blockDim.x + threadIdx.x;
+    deme::binID_t myActiveID = blockIdx.x * blockDim.x + threadIdx.x;
     // I need to store all the sphereIDs that I am supposed to look into
     // A100 has about 164K shMem... these arrays really need to be small, or we can only fit a small number of bins in
     // one block
-    smug::bodyID_t ownerIDs[SMUG_DEM_MAX_SPHERES_PER_BIN];
-    smug::bodyID_t bodyIDs[SMUG_DEM_MAX_SPHERES_PER_BIN];
-    float radii[SMUG_DEM_MAX_SPHERES_PER_BIN];
-    double bodyX[SMUG_DEM_MAX_SPHERES_PER_BIN];
-    double bodyY[SMUG_DEM_MAX_SPHERES_PER_BIN];
-    double bodyZ[SMUG_DEM_MAX_SPHERES_PER_BIN];
-    smug::family_t ownerFamily[SMUG_DEM_MAX_SPHERES_PER_BIN];
+    deme::bodyID_t ownerIDs[DEME_MAX_SPHERES_PER_BIN];
+    deme::bodyID_t bodyIDs[DEME_MAX_SPHERES_PER_BIN];
+    float radii[DEME_MAX_SPHERES_PER_BIN];
+    double bodyX[DEME_MAX_SPHERES_PER_BIN];
+    double bodyY[DEME_MAX_SPHERES_PER_BIN];
+    double bodyZ[DEME_MAX_SPHERES_PER_BIN];
+    deme::family_t ownerFamily[DEME_MAX_SPHERES_PER_BIN];
     if (myActiveID < nActiveBins) {
         // But I got a true bin ID
-        smug::binID_t binID = activeBinIDs[myActiveID];
+        deme::binID_t binID = activeBinIDs[myActiveID];
 
         // Grab the bodies that I care, put into local memory
-        smug::spheresBinTouches_t nBodiesMeHandle = numSpheresBinTouches[myActiveID];
-        smug::binSphereTouchPairs_t myBodiesTableEntry = sphereIDsLookUpTable[myActiveID];
-        for (smug::spheresBinTouches_t i = 0; i < nBodiesMeHandle; i++) {
-            smug::bodyID_t sphereID = sphereIDsEachBinTouches_sorted[myBodiesTableEntry + i];
+        deme::spheresBinTouches_t nBodiesMeHandle = numSpheresBinTouches[myActiveID];
+        deme::binSphereTouchPairs_t myBodiesTableEntry = sphereIDsLookUpTable[myActiveID];
+        for (deme::spheresBinTouches_t i = 0; i < nBodiesMeHandle; i++) {
+            deme::bodyID_t sphereID = sphereIDsEachBinTouches_sorted[myBodiesTableEntry + i];
             ownerIDs[i] = granData->ownerClumpBody[sphereID];
             ownerFamily[i] = granData->familyID[ownerIDs[i]];
             bodyIDs[i] = sphereID;
@@ -166,14 +166,14 @@ __global__ void populateContactPairsEachBin(smug::DEMSimParams* simParams,
                 myRadius += simParams->beta;
             }
 
-            voxelIDToPosition<double, smug::voxelID_t, smug::subVoxelPos_t>(
+            voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
                 ownerX, ownerY, ownerZ, granData->voxelID[ownerIDs[i]], granData->locX[ownerIDs[i]],
                 granData->locY[ownerIDs[i]], granData->locZ[ownerIDs[i]], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
             float myOriQw = granData->oriQw[ownerIDs[i]];
             float myOriQx = granData->oriQx[ownerIDs[i]];
             float myOriQy = granData->oriQy[ownerIDs[i]];
             float myOriQz = granData->oriQz[ownerIDs[i]];
-            applyOriQToVector3<float, smug::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQw, myOriQx, myOriQy,
+            applyOriQToVector3<float, deme::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQw, myOriQx, myOriQy,
                                                     myOriQz);
             bodyX[i] = ownerX + (double)myRelPosX;
             bodyY[i] = ownerY + (double)myRelPosY;
@@ -182,10 +182,10 @@ __global__ void populateContactPairsEachBin(smug::DEMSimParams* simParams,
         }
 
         // Get my offset for writing back to the global arrays that contain contact pair info
-        smug::contactPairs_t myReportOffset = contactReportOffsets[myActiveID];
+        deme::contactPairs_t myReportOffset = contactReportOffsets[myActiveID];
 
-        for (smug::spheresBinTouches_t bodyA = 0; bodyA < nBodiesMeHandle; bodyA++) {
-            for (smug::spheresBinTouches_t bodyB = bodyA + 1; bodyB < nBodiesMeHandle; bodyB++) {
+        for (deme::spheresBinTouches_t bodyA = 0; bodyA < nBodiesMeHandle; bodyA++) {
+            for (deme::spheresBinTouches_t bodyB = bodyA + 1; bodyB < nBodiesMeHandle; bodyB++) {
                 // For 2 bodies to be considered in contact, the contact point must be in this bin (to avoid
                 // double-counting), and they do not belong to the same clump
                 if (ownerIDs[bodyA] == ownerIDs[bodyB])
@@ -196,7 +196,7 @@ __global__ void populateContactPairsEachBin(smug::DEMSimParams* simParams,
                 unsigned int bodyBFamily = ownerFamily[bodyB];
                 unsigned int maskMatID = locateMaskPair<unsigned int>(bodyAFamily, bodyBFamily);
                 // If marked no contact, skip ths iteration
-                if (granData->familyMasks[maskMatID] != smug::DEM_DONT_PREVENT_CONTACT) {
+                if (granData->familyMasks[maskMatID] != deme::DONT_PREVENT_CONTACT) {
                     continue;
                 }
 
@@ -207,7 +207,7 @@ __global__ void populateContactPairsEachBin(smug::DEMSimParams* simParams,
                 in_contact = checkSpheresOverlap<double>(bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], radii[bodyA],
                                                          bodyX[bodyB], bodyY[bodyB], bodyZ[bodyB], radii[bodyB],
                                                          contactPntX, contactPntY, contactPntZ);
-                smug::binID_t contactPntBin = getPointBinID<smug::binID_t>(
+                deme::binID_t contactPntBin = getPointBinID<deme::binID_t>(
                     contactPntX, contactPntY, contactPntZ, simParams->binSize, simParams->nbX, simParams->nbY);
 
                 if (in_contact && (contactPntBin == binID)) {

@@ -10,7 +10,7 @@
 #include <core/utils/GpuError.h>
 #include <algorithms/DEMCubWrappers.cu>
 
-namespace smug {
+namespace deme {
 
 // These functions interconnecting the cub-part and cpp-part of the code cannot be templated... because of cmake
 // restrictions. Not much that I can do, other than writing them all out.
@@ -68,4 +68,4 @@ void floatSortByKey(notStupidBool_t* d_keys_in,
                                                                  this_stream, scratchPad);
 }
 
-}  // namespace smug
+}  // namespace deme

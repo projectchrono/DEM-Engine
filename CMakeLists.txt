@@ -112,7 +112,6 @@ include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
 add_subdirectory(src/core)
 add_subdirectory(src/DEM)
-add_subdirectory(src/sph)
 add_subdirectory(src/algorithms)
 
 # ---------------------------------------------------------------------------- #
@@ -124,14 +123,12 @@ add_library(
 	STATIC
 	$<TARGET_OBJECTS:core>
 	$<TARGET_OBJECTS:DEM>
-	$<TARGET_OBJECTS:sph>
 	$<TARGET_OBJECTS:algorithms>
 )
 
 # Extract include directories from the object bundles
 get_target_property(CORE_INTERFACE core INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(DEM_INTERFACE DEM INTERFACE_INCLUDE_DIRECTORIES)
-get_target_property(SPH_INTERFACE sph INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(ALGORITHMS_INTERFACE algorithms INTERFACE_INCLUDE_DIRECTORIES)
 
 # All targets use the same include directories, so we can cheat and just export one of them
@@ -155,57 +152,57 @@ set_target_properties(simulator_multi_gpu
 # Export and Install The Generated Targets 
 # ---------------------------------------------------------------------------- #
 
-set(config_directory ${CMAKE_INSTALL_LIBDIR}/cmake/SMUG)
+set(config_directory ${CMAKE_INSTALL_LIBDIR}/cmake/DEME)
 
 # Install the library, creating an export target for it as well 
 install(
-	TARGETS simulator_multi_gpu EXPORT SMUGTargets
+	TARGETS simulator_multi_gpu EXPORT DEMETargets
 	LIBRARY
 		DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
 # Export the generated library target
-export(EXPORT SMUGTargets
-	FILE "${CMAKE_CURRENT_BINARY_DIR}/SMUG/SMUGTargets.cmake"
-	NAMESPACE SMUG::
+export(EXPORT DEMETargets
+	FILE "${CMAKE_CURRENT_BINARY_DIR}/DEME/DEMETargets.cmake"
+	NAMESPACE DEME::
 )
 
 # Set the install location for the exported target file 
 install(
-	EXPORT SMUGTargets
+	EXPORT DEMETargets
 	DESTINATION 
 		${config_directory}
-	NAMESPACE SMUG::
+	NAMESPACE DEME::
 )
 
 
 # These macros aid in the generation of the installable config files 
 
 
-# Generate the **Build Tree** version of SMUGConfig.cmake from the base file
+# Generate the **Build Tree** version of DEMEConfig.cmake from the base file
 set(CONF_INCLUDE_DIRS "${ProjectIncludeSource}" "${ProjectIncludeGenerated}")
 
-configure_file(cmake/SMUGConfig.cmake.in
-	"${CMAKE_CURRENT_BINARY_DIR}/SMUG/SMUGConfig.cmake"
+configure_file(cmake/DEMEConfig.cmake.in
+	"${CMAKE_CURRENT_BINARY_DIR}/DEME/DEMEConfig.cmake"
 	@ONLY
 )
 
 
-# Generate the _Install Tree_ version of SMUGConfig.cmake from the base file
+# Generate the _Install Tree_ version of DEMEConfig.cmake from the base file
 file(RELATIVE_PATH REL_INCLUDE_DIR ${CMAKE_INSTALL_PREFIX}/${config_directory} ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR})
-set(CONF_INCLUDE_DIRS "\${SMUGCMakeDir}/${REL_INCLUDE_DIR}")
+set(CONF_INCLUDE_DIRS "\${DEMECMakeDir}/${REL_INCLUDE_DIR}")
 
 # NOTE: This is placed in CMAKE_FILES_DIRECTORY to keep it out of the build tree
-configure_file(cmake/SMUGConfig.cmake.in
-	"${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/SMUGConfig.cmake"
+configure_file(cmake/DEMEConfig.cmake.in
+	"${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/DEMEConfig.cmake"
 	@ONLY
 )
 
 
-# Automatically generate a SMUGConfigVersion.cmake file
+# Automatically generate a DEMEConfigVersion.cmake file
 
 write_basic_package_version_file(
-	${CMAKE_CURRENT_BINARY_DIR}/SMUG/SMUGConfigVersion.cmake
+	${CMAKE_CURRENT_BINARY_DIR}/DEME/DEMEConfigVersion.cmake
 	VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
 	COMPATIBILITY AnyNewerVersion
 )
@@ -213,8 +210,8 @@ write_basic_package_version_file(
 # Install the generated config files
 install(
 	FILES
-		"${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/SMUGConfig.cmake"
-		"${CMAKE_CURRENT_BINARY_DIR}/SMUG/SMUGConfigVersion.cmake"
+		"${CMAKE_CURRENT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/DEMEConfig.cmake"
+		"${CMAKE_CURRENT_BINARY_DIR}/DEME/DEMEConfigVersion.cmake"
 	DESTINATION
 		${config_directory}
 )

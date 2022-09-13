@@ -3,38 +3,38 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SMUG_DEM_MODEL_STASH
-#define SMUG_DEM_MODEL_STASH
+#ifndef DEME_MODEL_STASH
+#define DEME_MODEL_STASH
 
 #include <cstring>
 #include <cmath>
 #include <vector>
 #include <filesystem>
 
-#include <DEM/DEMDefines.h>
-#include <DEM/DEMStructs.h>
+#include <DEM/Defines.h>
+#include <DEM/Structs.h>
 #include <DEM/HostSideHelpers.hpp>
 
-namespace smug {
+namespace deme {
 
 ////////////////////////////////////////////////////////////////////////////////
 // Contact force model storage files
 ////////////////////////////////////////////////////////////////////////////////
 
-inline std::string DEM_HERTZIAN_FORCE_MODEL() {
+inline std::string HERTZIAN_FORCE_MODEL() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "FullHertzianForceModel.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SMUG_DEM_ERROR("The force model file %s is not found.", sourcefile.c_str());
+        DEME_ERROR("The force model file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
 
-inline std::string DEM_HERTZIAN_FORCE_MODEL_FRICTIONLESS() {
+inline std::string HERTZIAN_FORCE_MODEL_FRICTIONLESS() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "FrictionlessHertzianForceModel.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SMUG_DEM_ERROR("The force model file %s is not found.", sourcefile.c_str());
+        DEME_ERROR("The force model file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -43,38 +43,38 @@ inline std::string DEM_HERTZIAN_FORCE_MODEL_FRICTIONLESS() {
 // Clump template definition and acquisition strategy files
 ////////////////////////////////////////////////////////////////////////////////
 
-inline std::string DEM_CLUMP_COMPONENT_ACQUISITION_ALL_JITIFIED() {
+inline std::string CLUMP_COMPONENT_ACQUISITION_ALL_JITIFIED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "ClumpCompAcqStratAllJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SMUG_DEM_ERROR("The clump component jitification strategy file %s is not found.", sourcefile.c_str());
+        DEME_ERROR("The clump component jitification strategy file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
 
-inline std::string DEM_CLUMP_COMPONENT_ACQUISITION_PARTIALLY_JITIFIED() {
+inline std::string CLUMP_COMPONENT_ACQUISITION_PARTIALLY_JITIFIED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "ClumpCompAcqStratPartialJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SMUG_DEM_ERROR("The clump component jitification strategy file %s is not found.", sourcefile.c_str());
+        DEME_ERROR("The clump component jitification strategy file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
 
-inline std::string DEM_CLUMP_COMPONENT_DEFINITIONS_JITIFIED() {
+inline std::string CLUMP_COMPONENT_DEFINITIONS_JITIFIED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "ClumpCompDefJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SMUG_DEM_ERROR("The jitified clump component array file %s is not found.", sourcefile.c_str());
+        DEME_ERROR("The jitified clump component array file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
 
-inline std::string DEM_CLUMP_COMPONENT_ACQUISITION_FLATTENED() {
+inline std::string CLUMP_COMPONENT_ACQUISITION_FLATTENED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "ClumpCompAcqStratAllFlatten.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SMUG_DEM_ERROR("The clump component loading strategy file %s is not found.", sourcefile.c_str());
+        DEME_ERROR("The clump component loading strategy file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -83,11 +83,11 @@ inline std::string DEM_CLUMP_COMPONENT_ACQUISITION_FLATTENED() {
 // Analytical object definition files
 ////////////////////////////////////////////////////////////////////////////////
 
-inline std::string DEM_ANALYTICAL_COMPONENT_DEFINITIONS_JITIFIED() {
+inline std::string ANALYTICAL_COMPONENT_DEFINITIONS_JITIFIED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "AnalyticalCompDefJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SMUG_DEM_ERROR("The jitified analytical object component array file %s is not found.", sourcefile.c_str());
+        DEME_ERROR("The jitified analytical object component array file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -96,56 +96,56 @@ inline std::string DEM_ANALYTICAL_COMPONENT_DEFINITIONS_JITIFIED() {
 // Mass and MOI definition and acquisition strategy files
 ////////////////////////////////////////////////////////////////////////////////
 
-inline std::string DEM_MASS_DEFINITIONS_JITIFIED() {
+inline std::string MASS_DEFINITIONS_JITIFIED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "MassDefJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SMUG_DEM_ERROR("The mass property array file %s is not found.", sourcefile.c_str());
+        DEME_ERROR("The mass property array file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
 
-inline std::string DEM_MOI_DEFINITIONS_JITIFIED() {
+inline std::string MOI_DEFINITIONS_JITIFIED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "MOIDefJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SMUG_DEM_ERROR("The MOI property array file %s is not found.", sourcefile.c_str());
+        DEME_ERROR("The MOI property array file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
 
-inline std::string DEM_MASS_ACQUISITION_JITIFIED() {
+inline std::string MASS_ACQUISITION_JITIFIED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "MassAcqStratJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SMUG_DEM_ERROR("The mass loading strategy array file %s is not found.", sourcefile.c_str());
+        DEME_ERROR("The mass loading strategy array file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
 
-inline std::string DEM_MASS_ACQUISITION_FLATTENED() {
+inline std::string MASS_ACQUISITION_FLATTENED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "MassAcqStratFlatten.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SMUG_DEM_ERROR("The mass loading strategy array file %s is not found.", sourcefile.c_str());
+        DEME_ERROR("The mass loading strategy array file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
 
-inline std::string DEM_MOI_ACQUISITION_JITIFIED() {
+inline std::string MOI_ACQUISITION_JITIFIED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "MOIAcqStratJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SMUG_DEM_ERROR("The MOI loading strategy array file %s is not found.", sourcefile.c_str());
+        DEME_ERROR("The MOI loading strategy array file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
 
-inline std::string DEM_MOI_ACQUISITION_FLATTENED() {
+inline std::string MOI_ACQUISITION_FLATTENED() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "MOIAcqStratFlatten.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SMUG_DEM_ERROR("The MOI loading strategy array file %s is not found.", sourcefile.c_str());
+        DEME_ERROR("The MOI loading strategy array file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -155,36 +155,36 @@ inline std::string DEM_MOI_ACQUISITION_FLATTENED() {
 ////////////////////////////////////////////////////////////////////////////////
 
 inline std::filesystem::path GET_DATA_PATH() {
-    return DEM_SOURCE_DATA_PATH;
+    return SOURCE_DATA_PATH;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Integration policies
 ////////////////////////////////////////////////////////////////////////////////
 
-inline std::string DEM_VEL_TO_PASS_ON_FORWARD_EULER() {
+inline std::string VEL_TO_PASS_ON_FORWARD_EULER() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "IntegrationVelPassOnForwardEuler.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SMUG_DEM_ERROR("The integration strategy file %s is not found.", sourcefile.c_str());
+        DEME_ERROR("The integration strategy file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
 
-inline std::string DEM_VEL_TO_PASS_ON_EXTENDED_TAYLOR() {
+inline std::string VEL_TO_PASS_ON_EXTENDED_TAYLOR() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "IntegrationVelPassOnExtendedTaylor.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SMUG_DEM_ERROR("The integration strategy file %s is not found.", sourcefile.c_str());
+        DEME_ERROR("The integration strategy file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
 
-inline std::string DEM_VEL_TO_PASS_ON_CENTERED_DIFF() {
+inline std::string VEL_TO_PASS_ON_CENTERED_DIFF() {
     std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
                                        "DEMCustomizablePolicies" / "IntegrationVelPassOnCenteredDiff.cu";
     if (!std::filesystem::exists(sourcefile)) {
-        SMUG_DEM_ERROR("The integration strategy file %s is not found.", sourcefile.c_str());
+        DEME_ERROR("The integration strategy file %s is not found.", sourcefile.c_str());
     }
     return read_file_to_string(sourcefile);
 }
@@ -202,11 +202,11 @@ inline void equip_force_model_ingr_acq(std::string& definition,
         definition += "float ts = simParams->h;\n";
     }
     if (any_whole_word_match(model, {"AOwnerFamily"})) {
-        definition += "smug::family_t AOwnerFamily;\n";
+        definition += "deme::family_t AOwnerFamily;\n";
         acquisition_A += "AOwnerFamily = granData->familyID[myOwner];\n";
     }
     if (any_whole_word_match(model, {"BOwnerFamily"})) {
-        definition += "smug::family_t BOwnerFamily;\n";
+        definition += "deme::family_t BOwnerFamily;\n";
         acquisition_B += "BOwnerFamily = granData->familyID[myOwner];\n";
     }
     if (any_whole_word_match(model, {"ALinVel", "BLinVel"})) {
@@ -251,6 +251,6 @@ inline void equip_contact_wildcards(std::string& acquisition,
     }
 }
 
-}  // namespace smug
+}  // namespace deme
 
 #endif

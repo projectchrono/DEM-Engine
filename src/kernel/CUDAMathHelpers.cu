@@ -42,7 +42,7 @@
 // I suspect namespace problems. So they will for now just be defined here manually.
 ////////////////////////////////////////////////////////////////////////////////
 
-#include <DEM/DEMDefines.h>
+#include <DEM/Defines.h>
 
 inline __device__ float3 cross(float3 a, float3 b) {
     return make_float3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
@@ -133,9 +133,9 @@ inline __device__ float3 normalize(float3 v) {
 }
 
 // Cause an error inside a kernel
-#define SMUG_DEM_ABORT_KERNEL(...) \
-    {                              \
-        printf(__VA_ARGS__);       \
-        __threadfence();           \
-        cub::ThreadTrap();         \
+#define DEME_ABORT_KERNEL(...) \
+    {                          \
+        printf(__VA_ARGS__);   \
+        __threadfence();       \
+        cub::ThreadTrap();     \
     }

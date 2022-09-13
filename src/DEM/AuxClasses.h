@@ -3,19 +3,19 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SMUG_DEM_INSPECTOR_HPP
-#define SMUG_DEM_INSPECTOR_HPP
+#ifndef DEME_INSPECTOR_HPP
+#define DEME_INSPECTOR_HPP
 
 #include <unordered_map>
 #include <core/utils/JitHelper.h>
-#include <DEM/DEMDefines.h>
+#include <DEM/Defines.h>
 
 // Forward declare jitify::Program to avoid downstream dependency
 namespace jitify {
 class Program;
 }
 
-namespace smug {
+namespace deme {
 
 class DEMSolver;
 
@@ -28,8 +28,8 @@ class DEMInspector {
     std::string inspection_code;
     std::string in_region_code;
     std::string index_name;
-    DEM_CUB_REDUCE_FLAVOR reduce_flavor = DEM_CUB_REDUCE_FLAVOR::NONE;
-    DEM_INSPECT_ENTITY_TYPE thing_to_insp;
+    CUB_REDUCE_FLAVOR reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
+    INSPECT_ENTITY_TYPE thing_to_insp;
     std::string kernel_name;
     bool all_domain = true;
     bool isVoidRatio = false;
@@ -126,7 +126,7 @@ class DEMForceModel {
     // force models. If they use their custom models, then this will be empty.
     std::set<std::string> m_must_have_mat_props;
     // Custom or on-shelf
-    DEM_FORCE_MODEL type;
+    FORCE_MODEL type;
     // The model
     std::string m_force_model = " ";
     // Quatity names that we want to associate each contact pair with. An array will be allocated for storing this, and
@@ -139,11 +139,11 @@ class DEMForceModel {
   public:
     friend class DEMSolver;
 
-    DEMForceModel(DEM_FORCE_MODEL model_type = DEM_FORCE_MODEL::CUSTOM) { SetForceModelType(model_type); }
+    DEMForceModel(FORCE_MODEL model_type = FORCE_MODEL::CUSTOM) { SetForceModelType(model_type); }
     ~DEMForceModel() {}
 
     /// Set the contact force model type
-    void SetForceModelType(DEM_FORCE_MODEL model_type);
+    void SetForceModelType(FORCE_MODEL model_type);
     /// Define user-custom force model with a string which is your force calculation code
     void DefineCustomModel(const std::string& model);
     /// Read user-custom force model from a file (which by default should reside in kernel/DEMUserScripts), which
@@ -159,6 +159,6 @@ class DEMForceModel {
     void SetPerOwnerWildcards(const std::set<std::string>& wildcards);
 };
 
-}  // END namespace smug
+}  // END namespace deme
 
 #endif

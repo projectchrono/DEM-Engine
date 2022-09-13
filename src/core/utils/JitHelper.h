@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SMUG_JIT_HELPER_H
-#define SMUG_JIT_HELPER_H
+#ifndef DEME_JIT_HELPER_H
+#define DEME_JIT_HELPER_H
 
 #include <filesystem>
 #include <string>

@@ -5,7 +5,7 @@
 
 #include <core/ApiVersion.h>
 #include <DEM/API.h>
-#include <DEM/DEMDefines.h>
+#include <DEM/Defines.h>
 #include <DEM/HostSideHelpers.hpp>
 
 #include <iostream>
@@ -16,7 +16,7 @@
 #include <limits>
 #include <algorithm>
 
-namespace smug {
+namespace deme {
 
 void DEMSolver::generatePolicyResources() {
     // Process the loaded materials. The pre-process of external objects and clumps could add more materials, so this
@@ -120,14 +120,14 @@ void DEMSolver::postResourceGenChecksAndTabKeeping() {
         for (unsigned int i = 0; i < nDistinctClumpBodyTopologies; i++) {
             nDistinctClumpComponents += m_template_sp_radii.at(i).size();
             // Keep an eye on if the accumulated DistinctClumpComponents gets too many
-            if ((!unable_jitify_all) && (nDistinctClumpComponents > DEM_THRESHOLD_CANT_JITIFY_ALL_COMP)) {
+            if ((!unable_jitify_all) && (nDistinctClumpComponents > THRESHOLD_CANT_JITIFY_ALL_COMP)) {
                 nJitifiableClumpTopo = i;
                 nJitifiableClumpComponents = nDistinctClumpComponents - m_template_sp_radii.at(i).size();
                 unable_jitify_all = true;
             }
         }
         if (unable_jitify_all) {
-            SMUG_DEM_WARNING(
+            DEME_WARNING(
                 "There are %u clump templates loaded, but only %u templates (totalling %u components) are jitifiable "
                 "due to some of the clumps are big and/or there are many types of clumps.\nIt is probably because you "
                 "have external objects represented by spherical decomposition (a.k.a. have big clumps).\nIn this case, "
@@ -142,7 +142,7 @@ void DEMSolver::postResourceGenChecksAndTabKeeping() {
     if (jitify_mass_moi) {
         // Sanity check for final number of mass properties/inertia offsets
         if (nDistinctMassProperties >= std::numeric_limits<inertiaOffset_t>::max()) {
-            SMUG_DEM_ERROR(
+            DEME_ERROR(
                 "%u different mass properties (from the contribution of clump templates, analytical objects and meshed "
                 "objects) are loaded, but the max allowance is %u (No.%u is reserved).\nIn general, I suggest against "
                 "calling SetJitifyMassProperties to use jitification for mass properties and here, you definitely "
@@ -154,7 +154,7 @@ void DEMSolver::postResourceGenChecksAndTabKeeping() {
 
     // Do we have more bins that our data type can handle?
     if (m_num_bins > std::numeric_limits<binID_t>::max()) {
-        SMUG_DEM_ERROR(
+        DEME_ERROR(
             "The simulation world has %zu bins (for domain partitioning in contact detection), but the largest bin ID "
             "that we can have is %zu.\nYou can try to make bins larger via SetInitBinSize, or redefine binID_t and "
             "recompile.",
@@ -162,8 +162,8 @@ void DEMSolver::postResourceGenChecksAndTabKeeping() {
     }
 
     // Sanity check for analytical geometries
-    if (nAnalGM > SMUG_DEM_THRESHOLD_TOO_MANY_ANAL_GEO) {
-        SMUG_DEM_WARNING(
+    if (nAnalGM > DEME_THRESHOLD_TOO_MANY_ANAL_GEO) {
+        DEME_WARNING(
             "%u analytical geometries are loaded. Because all analytical geometries are jitified, this is a relatively "
             "large amount.\nIf just-in-time compilation fails or kernels run slowly, this could be a cause.",
             nAnalGM);
@@ -222,7 +222,7 @@ void DEMSolver::jitifyKernels() {
 void DEMSolver::figureOutNV() {
     // Rank the size of XYZ, ascending
     float XYZ[3] = {m_user_boxSize.x, m_user_boxSize.y, m_user_boxSize.z};
-    DEM_SPATIAL_DIR rankXYZ[3] = {DEM_SPATIAL_DIR::X, DEM_SPATIAL_DIR::Y, DEM_SPATIAL_DIR::Z};
+    SPATIAL_DIR rankXYZ[3] = {SPATIAL_DIR::X, SPATIAL_DIR::Y, SPATIAL_DIR::Z};
     for (int i = 0; i < 3 - 1; i++)
         for (int j = i + 1; j < 3; j++)
             if (XYZ[i] > XYZ[j]) {
@@ -251,12 +251,12 @@ void DEMSolver::figureOutNV() {
         XYZ[1] *= 2.;
     }
 
-    SMUG_DEM_DEBUG_PRINTF("2nd place uses %d more bits than 3rd, and 1st place uses %d more bits than 2rd.",
-                          n_more_bits_for_me[0], n_more_bits_for_me[1]);
+    DEME_DEBUG_PRINTF("2nd place uses %d more bits than 3rd, and 1st place uses %d more bits than 2rd.",
+                      n_more_bits_for_me[0], n_more_bits_for_me[1]);
 
     // Then we know how many bits each one would have
-    int base_bits = ((int)DEM_VOXEL_COUNT_POWER2 - n_more_bits_for_me[0] - n_more_bits_for_me[1]) / 3;
-    int left_over = ((int)DEM_VOXEL_COUNT_POWER2 - n_more_bits_for_me[0] - n_more_bits_for_me[1]) % 3;
+    int base_bits = ((int)VOXEL_COUNT_POWER2 - n_more_bits_for_me[0] - n_more_bits_for_me[1]) / 3;
+    int left_over = ((int)VOXEL_COUNT_POWER2 - n_more_bits_for_me[0] - n_more_bits_for_me[1]) % 3;
     int bits_3rd = base_bits;
     int bits_2nd = bits_3rd + n_more_bits_for_me[0];
     int bits_1st = bits_2nd + n_more_bits_for_me[1];
@@ -271,18 +271,18 @@ void DEMSolver::figureOutNV() {
         }
         left_over--;
     }
-    SMUG_DEM_DEBUG_PRINTF("After assigning left-overs, 3rd, 2nd and 1st have bits: %d, %d, %d.", bits_3rd, bits_2nd,
-                          bits_1st);
+    DEME_DEBUG_PRINTF("After assigning left-overs, 3rd, 2nd and 1st have bits: %d, %d, %d.", bits_3rd, bits_2nd,
+                      bits_1st);
 
     int bits[3] = {bits_3rd, bits_2nd, bits_1st};
-    if (m_box_dir_length_is_exact == DEM_SPATIAL_DIR::NONE) {
+    if (m_box_dir_length_is_exact == SPATIAL_DIR::NONE) {
         // Have to use the largest l, given the voxel budget
         double l3 =
-            (double)userSize321[0] / (double)std::pow(2., (int)DEM_VOXEL_RES_POWER2) / (double)std::pow(2., bits_3rd);
+            (double)userSize321[0] / (double)std::pow(2., (int)VOXEL_RES_POWER2) / (double)std::pow(2., bits_3rd);
         double l2 =
-            (double)userSize321[1] / (double)std::pow(2., (int)DEM_VOXEL_RES_POWER2) / (double)std::pow(2., bits_2nd);
+            (double)userSize321[1] / (double)std::pow(2., (int)VOXEL_RES_POWER2) / (double)std::pow(2., bits_2nd);
         double l1 =
-            (double)userSize321[2] / (double)std::pow(2., (int)DEM_VOXEL_RES_POWER2) / (double)std::pow(2., bits_1st);
+            (double)userSize321[2] / (double)std::pow(2., (int)VOXEL_RES_POWER2) / (double)std::pow(2., bits_1st);
         l = std::max(l3, std::max(l2, l1));
     } else {
         // Find which dir user wants to be exact
@@ -299,34 +299,34 @@ void DEMSolver::figureOutNV() {
             not_exact_dir[1] = 1;
         }
         // We hope this l is big enough...
-        l = (double)userSize321[exact_dir_no] / (double)std::pow(2., (int)DEM_VOXEL_RES_POWER2) /
+        l = (double)userSize321[exact_dir_no] / (double)std::pow(2., (int)VOXEL_RES_POWER2) /
             (double)std::pow(2., bits[exact_dir_no]);
-        while (l * (double)std::pow(2., (int)DEM_VOXEL_RES_POWER2) * (double)std::pow(2., bits[not_exact_dir[1]]) <
+        while (l * (double)std::pow(2., (int)VOXEL_RES_POWER2) * (double)std::pow(2., bits[not_exact_dir[1]]) <
                userSize321[not_exact_dir[1]]) {
             // Borrow a bit from this dir...
             bits[exact_dir_no] -= 1;
             bits[not_exact_dir[1]] += 1;
-            l = (double)userSize321[exact_dir_no] / (double)std::pow(2., (int)DEM_VOXEL_RES_POWER2) /
+            l = (double)userSize321[exact_dir_no] / (double)std::pow(2., (int)VOXEL_RES_POWER2) /
                 (double)std::pow(2., bits[exact_dir_no]);
         }
-        while (l * (double)std::pow(2., (int)DEM_VOXEL_RES_POWER2) * (double)std::pow(2., bits[not_exact_dir[0]]) <
+        while (l * (double)std::pow(2., (int)VOXEL_RES_POWER2) * (double)std::pow(2., bits[not_exact_dir[0]]) <
                userSize321[not_exact_dir[0]]) {
             // Borrow a bit from this dir...
             bits[exact_dir_no] -= 1;
             bits[not_exact_dir[0]] += 1;
-            l = (double)userSize321[exact_dir_no] / (double)std::pow(2., (int)DEM_VOXEL_RES_POWER2) /
+            l = (double)userSize321[exact_dir_no] / (double)std::pow(2., (int)VOXEL_RES_POWER2) /
                 (double)std::pow(2., bits[exact_dir_no]);
         }
     }
-    SMUG_DEM_DEBUG_PRINTF(
+    DEME_DEBUG_PRINTF(
         "After final tweak concerning possible exact direction requirements, 3rd, 2nd and 1st have bits: %d, %d, %d.",
         bits[0], bits[1], bits[2]);
-    nvXp2 = bits[find_array_offset(rankXYZ, DEM_SPATIAL_DIR::X, 3)];
-    nvYp2 = bits[find_array_offset(rankXYZ, DEM_SPATIAL_DIR::Y, 3)];
-    nvZp2 = bits[find_array_offset(rankXYZ, DEM_SPATIAL_DIR::Z, 3)];
+    nvXp2 = bits[find_array_offset(rankXYZ, SPATIAL_DIR::X, 3)];
+    nvYp2 = bits[find_array_offset(rankXYZ, SPATIAL_DIR::Y, 3)];
+    nvZp2 = bits[find_array_offset(rankXYZ, SPATIAL_DIR::Z, 3)];
 
     // Calculating `world' size by the input nvXp2 and l
-    m_voxelSize = (double)((size_t)1 << DEM_VOXEL_RES_POWER2) * (double)l;
+    m_voxelSize = (double)((size_t)1 << VOXEL_RES_POWER2) * (double)l;
     m_boxX = m_voxelSize * (double)((size_t)1 << nvXp2);
     m_boxY = m_voxelSize * (double)((size_t)1 << nvYp2);
     m_boxZ = m_voxelSize * (double)((size_t)1 << nvZp2);
@@ -343,18 +343,18 @@ void DEMSolver::decideBinSize() {
     }
 
     // TODO: What should be a default bin size?
-    if (m_smallest_radius > SMUG_DEM_TINY_FLOAT) {
+    if (m_smallest_radius > DEME_TINY_FLOAT) {
         if (!use_user_defined_bin_size) {
             m_binSize = 2.0 * m_smallest_radius;
         }
     } else {
         if (!use_user_defined_bin_size) {
-            SMUG_DEM_ERROR(
+            DEME_ERROR(
                 "There are spheres in clump templates that have 0 radii, and the user did not specify the bin size "
                 "(for contact detection)!\nBecause the bin size is supposed to be defaulted to the size of the "
                 "smallest sphere, now the solver does not know what to do.");
         } else {
-            SMUG_DEM_WARNING(
+            DEME_WARNING(
                 "There are spheres in clump templates that have 0 radii!! Please make sure this is intentional.");
         }
     }
@@ -369,53 +369,53 @@ void DEMSolver::decideBinSize() {
 }
 
 void DEMSolver::reportInitStats() const {
-    SMUG_DEM_INFO("Number of total active devices: %d", dTkT_GpuManager->getNumDevices());
+    DEME_INFO("Number of total active devices: %d", dTkT_GpuManager->getNumDevices());
 
-    SMUG_DEM_INFO("The dimension of the simulation world: %.17g, %.17g, %.17g", m_boxX, m_boxY, m_boxZ);
-    SMUG_DEM_INFO("Simulation world X range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_boxX);
-    SMUG_DEM_INFO("Simulation world Y range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_boxY);
-    SMUG_DEM_INFO("Simulation world Z range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_boxZ);
-    SMUG_DEM_INFO("User-specified dimensions are not larger than the above simulation world.");
-    SMUG_DEM_INFO("User-specified X-dimension range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_user_boxSize.x);
-    SMUG_DEM_INFO("User-specified Y-dimension range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_user_boxSize.y);
-    SMUG_DEM_INFO("User-specified Z-dimension range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_user_boxSize.z);
-    SMUG_DEM_INFO("The length unit in this simulation is: %.17g", l);
-    SMUG_DEM_INFO("The edge length of a voxel: %.17g", m_voxelSize);
+    DEME_INFO("The dimension of the simulation world: %.17g, %.17g, %.17g", m_boxX, m_boxY, m_boxZ);
+    DEME_INFO("Simulation world X range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_boxX);
+    DEME_INFO("Simulation world Y range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_boxY);
+    DEME_INFO("Simulation world Z range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_boxZ);
+    DEME_INFO("User-specified dimensions are not larger than the above simulation world.");
+    DEME_INFO("User-specified X-dimension range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_user_boxSize.x);
+    DEME_INFO("User-specified Y-dimension range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_user_boxSize.y);
+    DEME_INFO("User-specified Z-dimension range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_user_boxSize.z);
+    DEME_INFO("The length unit in this simulation is: %.17g", l);
+    DEME_INFO("The edge length of a voxel: %.17g", m_voxelSize);
 
-    SMUG_DEM_INFO("The edge length of a bin: %.17g", m_binSize);
-    SMUG_DEM_INFO("The total number of bins: %zu", m_num_bins);
+    DEME_INFO("The edge length of a bin: %.17g", m_binSize);
+    DEME_INFO("The total number of bins: %zu", m_num_bins);
 
-    SMUG_DEM_INFO("The total number of clumps: %zu", nOwnerClumps);
-    SMUG_DEM_INFO("The combined number of component spheres: %zu", nSpheresGM);
-    SMUG_DEM_INFO("The total number of analytical objects: %u", nExtObj);
-    SMUG_DEM_INFO("The total number of meshes: %u", nTriMeshes);
-    SMUG_DEM_INFO("Grand total number of owners: %zu", nOwnerBodies);
+    DEME_INFO("The total number of clumps: %zu", nOwnerClumps);
+    DEME_INFO("The combined number of component spheres: %zu", nSpheresGM);
+    DEME_INFO("The total number of analytical objects: %u", nExtObj);
+    DEME_INFO("The total number of meshes: %u", nTriMeshes);
+    DEME_INFO("Grand total number of owners: %zu", nOwnerBodies);
 
     if (m_expand_factor > 0.0) {
-        SMUG_DEM_INFO("All geometries are enlarged/thickened by %.9g for contact detection purpose", m_expand_factor);
-        SMUG_DEM_INFO("This in the case of the smallest sphere, means enlarging radius by %.9g%%",
-                      (m_expand_factor / m_smallest_radius) * 100.0);
+        DEME_INFO("All geometries are enlarged/thickened by %.9g for contact detection purpose", m_expand_factor);
+        DEME_INFO("This in the case of the smallest sphere, means enlarging radius by %.9g%%",
+                  (m_expand_factor / m_smallest_radius) * 100.0);
     }
 
-    SMUG_DEM_INFO("The number of material types: %u", nMatTuples);
+    DEME_INFO("The number of material types: %u", nMatTuples);
     switch (m_force_model->type) {
-        case (DEM_FORCE_MODEL::HERTZIAN):
-            SMUG_DEM_INFO("History-based Hertzian contact model is in use");
+        case (FORCE_MODEL::HERTZIAN):
+            DEME_INFO("History-based Hertzian contact model is in use");
             break;
-        case (DEM_FORCE_MODEL::HERTZIAN_FRICTIONLESS):
-            SMUG_DEM_INFO("Frictionless Hertzian contact model is in use");
+        case (FORCE_MODEL::HERTZIAN_FRICTIONLESS):
+            DEME_INFO("Frictionless Hertzian contact model is in use");
             break;
-        case (DEM_FORCE_MODEL::CUSTOM):
-            SMUG_DEM_INFO("A user-custom force model is in use");
+        case (FORCE_MODEL::CUSTOM):
+            DEME_INFO("A user-custom force model is in use");
             break;
         default:
-            SMUG_DEM_INFO("An unknown force model is in use, this is probably not going well...");
+            DEME_INFO("An unknown force model is in use, this is probably not going well...");
     }
 
     // Debug outputs
-    SMUG_DEM_DEBUG_EXEC(printf("These owners are tracked: ");
-                        for (const auto& tracked
-                             : m_tracked_objs) { printf("%zu, ", tracked->ownerID); } printf("\n"););
+    DEME_DEBUG_EXEC(printf("These owners are tracked: ");
+                    for (const auto& tracked
+                         : m_tracked_objs) { printf("%zu, ", tracked->ownerID); } printf("\n"););
 }
 
 void DEMSolver::preprocessAnalyticalObjs() {
@@ -442,16 +442,16 @@ void DEMSolver::preprocessAnalyticalObjs() {
             auto param = comp_params.at(this_num_anal_ent);
             this_num_anal_ent++;
             switch (ext_obj->types.at(i)) {
-                case DEM_OBJ_COMPONENT::PLANE:
-                    addAnalCompTemplate(DEM_ANAL_OBJ_TYPE_PLANE, comp_mat.at(i), thisExtObj, param.plane.position,
+                case OBJ_COMPONENT::PLANE:
+                    addAnalCompTemplate(ANAL_OBJ_TYPE_PLANE, comp_mat.at(i), thisExtObj, param.plane.position,
                                         param.plane.normal);
                     break;
-                case DEM_OBJ_COMPONENT::PLATE:
-                    addAnalCompTemplate(DEM_ANAL_OBJ_TYPE_PLATE, comp_mat.at(i), thisExtObj, param.plate.center,
+                case OBJ_COMPONENT::PLATE:
+                    addAnalCompTemplate(ANAL_OBJ_TYPE_PLATE, comp_mat.at(i), thisExtObj, param.plate.center,
                                         param.plate.normal, param.plate.h_dim_x, param.plate.h_dim_y);
                     break;
                 default:
-                    SMUG_DEM_ERROR("There is at least one analytical boundary that has a type not supported.");
+                    DEME_ERROR("There is at least one analytical boundary that has a type not supported.");
             }
         }
         nAnalGM += this_num_anal_ent;
@@ -472,8 +472,8 @@ void DEMSolver::preprocessClumpTemplates() {
         std::unordered_map<unsigned int, unsigned int> old_mark_to_new;
         for (unsigned int i = 0; i < m_templates.size(); i++) {
             old_mark_to_new[m_templates.at(i)->mark] = i;
-            SMUG_DEM_DEBUG_PRINTF("Clump template re-order: %u->%u, nComp: %u", m_templates.at(i)->mark, i,
-                                  m_templates.at(i)->nComp);
+            DEME_DEBUG_PRINTF("Clump template re-order: %u->%u, nComp: %u", m_templates.at(i)->mark, i,
+                              m_templates.at(i)->nComp);
         }
         // If the user then add more clumps to the system (without adding templates, which mandates a
         // re-initialization), mapping again is not needed, because now we redefine each template's mark to be the same
@@ -502,9 +502,9 @@ void DEMSolver::preprocessClumpTemplates() {
             this_clump_sp_mat_ids.push_back(this_material->load_order);
         }
         m_template_sp_mat_ids.push_back(this_clump_sp_mat_ids);
-        SMUG_DEM_DEBUG_EXEC(printf("Input clump No.%d has material types: ", m_template_clump_mass.size() - 1);
-                            for (unsigned int i = 0; i < this_clump_sp_mat_ids.size();
-                                 i++) { printf("%d, ", this_clump_sp_mat_ids.at(i)); } printf("\n"););
+        DEME_DEBUG_EXEC(printf("Input clump No.%d has material types: ", m_template_clump_mass.size() - 1);
+                        for (unsigned int i = 0; i < this_clump_sp_mat_ids.size();
+                             i++) { printf("%d, ", this_clump_sp_mat_ids.at(i)); } printf("\n"););
     }
 }
 
@@ -525,7 +525,7 @@ void DEMSolver::preprocessTriangleObjs() {
     unsigned int thisMeshObj = 0;
     for (const auto& mesh_obj : cached_mesh_objs) {
         if (!(mesh_obj->isMaterialSet)) {
-            SMUG_DEM_ERROR(
+            DEME_ERROR(
                 "A meshed object is loaded by does not have associated material.\nPlease assign material to meshes via "
                 "SetMaterial.");
         }
@@ -575,17 +575,17 @@ void DEMSolver::figureOutFamilyMasks() {
     // Figure out the unique family numbers for a sanity check
     std::vector<unsigned int> unique_clump_families = hostUniqueVector<unsigned int>(m_input_clump_family);
     if (any_of(unique_clump_families.begin(), unique_clump_families.end(),
-               [](unsigned int i) { return i == DEM_RESERVED_FAMILY_NUM; })) {
-        SMUG_DEM_WARNING(
+               [](unsigned int i) { return i == RESERVED_FAMILY_NUM; })) {
+        DEME_WARNING(
             "Some clumps are instructed to have family number %u.\nThis family number is reserved for "
             "completely fixed boundaries. Using it on your simulation entities will make them fixed, regardless of "
             "your specification.\nYou can change family_t if you indeed need more families to work with.",
-            DEM_RESERVED_FAMILY_NUM);
+            RESERVED_FAMILY_NUM);
     }
 
     // We always know the size of the mask matrix, and we init it as all-allow
     m_family_mask_matrix.clear();
-    m_family_mask_matrix.resize((DEM_NUM_AVAL_FAMILIES - 1) * DEM_NUM_AVAL_FAMILIES / 2, DEM_DONT_PREVENT_CONTACT);
+    m_family_mask_matrix.resize((NUM_AVAL_FAMILIES - 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
 
     // Then we figure out the masks
     for (const auto& a_pair : m_input_no_contact_pairs) {
@@ -594,12 +594,12 @@ void DEMSolver::figureOutFamilyMasks() {
         unsigned int implID2 = a_pair.ID2;
         // Now fill in the mask matrix
         unsigned int posInMat = locateMaskPair<unsigned int>(implID1, implID2);
-        m_family_mask_matrix.at(posInMat) = DEM_PREVENT_CONTACT;
+        m_family_mask_matrix.at(posInMat) = PREVENT_CONTACT;
     }
 
     // Then, figure out each family's prescription info and put it into an array
     // Multiple user prescription input entries can work on the same array entry
-    m_unique_family_prescription.resize(DEM_NUM_AVAL_FAMILIES);
+    m_unique_family_prescription.resize(NUM_AVAL_FAMILIES);
     for (const auto& preInfo : m_input_family_prescription) {
         unsigned int user_family = preInfo.family;
 
@@ -635,12 +635,12 @@ void DEMSolver::figureOutFamilyMasks() {
         this_family_info.externPos = this_family_info.externPos || preInfo.externPos;
         this_family_info.externVel = this_family_info.externVel || preInfo.externVel;
 
-        SMUG_DEM_DEBUG_PRINTF("User family %u has prescribed lin vel: %s, %s, %s", user_family,
-                              this_family_info.linVelX.c_str(), this_family_info.linVelY.c_str(),
-                              this_family_info.linVelZ.c_str());
-        SMUG_DEM_DEBUG_PRINTF("User family %u has prescribed ang vel: %s, %s, %s", user_family,
-                              this_family_info.rotVelX.c_str(), this_family_info.rotVelY.c_str(),
-                              this_family_info.rotVelZ.c_str());
+        DEME_DEBUG_PRINTF("User family %u has prescribed lin vel: %s, %s, %s", user_family,
+                          this_family_info.linVelX.c_str(), this_family_info.linVelY.c_str(),
+                          this_family_info.linVelZ.c_str());
+        DEME_DEBUG_PRINTF("User family %u has prescribed ang vel: %s, %s, %s", user_family,
+                          this_family_info.rotVelX.c_str(), this_family_info.rotVelY.c_str(),
+                          this_family_info.rotVelZ.c_str());
     }
 }
 
@@ -653,7 +653,7 @@ void DEMSolver::figureOutOrigin() {
         O = -(m_user_boxSize) / 2.0;
         m_boxLBF = O;
     } else {
-        SMUG_DEM_ERROR("Unrecognized location of system origin.");
+        DEME_ERROR("Unrecognized location of system origin.");
     }
 }
 
@@ -733,7 +733,7 @@ void DEMSolver::transferSimParams() {
         m_expand_factor = m_approx_max_vel * m_ts_size * m_updateFreq * m_expand_safety_param;
     }
     if (m_expand_factor * m_expand_safety_param <= 0.0 && m_updateFreq > 0 && ts_size_is_const) {
-        SMUG_DEM_WARNING(
+        DEME_WARNING(
             "You instructed that the physics can stretch %u time steps into the future, but did not instruct the "
             "geometries to expand via SetExpandFactor or SetMaxVelocity. The contact detection procedure will likely "
             "fail to detect some contact events before it is too late, hindering the simulation accuracy and "
@@ -743,13 +743,13 @@ void DEMSolver::transferSimParams() {
     // Compute the number of wildcards in our force model
     unsigned int nContactWildcards = m_force_model->m_contact_wildcards.size();
     unsigned int nOwnerWildcards = m_force_model->m_owner_wildcards.size();
-    if (nContactWildcards > SMUG_DEM_MAX_WILDCARD_NUM || nOwnerWildcards > SMUG_DEM_MAX_WILDCARD_NUM) {
-        SMUG_DEM_ERROR(
+    if (nContactWildcards > DEME_MAX_WILDCARD_NUM || nOwnerWildcards > DEME_MAX_WILDCARD_NUM) {
+        DEME_ERROR(
             "You defined too many contact or owner wildcards! Currently the max amount is %u.\nYou can change constant "
-            "SMUG_DEM_MAX_WILDCARD_NUM and re-compile, if you indeed would like more wildcards.",
-            SMUG_DEM_MAX_WILDCARD_NUM);
+            "DEME_MAX_WILDCARD_NUM and re-compile, if you indeed would like more wildcards.",
+            DEME_MAX_WILDCARD_NUM);
     }
-    SMUG_DEM_DEBUG_PRINTF("%u contact wildcards are in the force model.", nContactWildcards);
+    DEME_DEBUG_PRINTF("%u contact wildcards are in the force model.", nContactWildcards);
 
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
                      m_expand_factor, m_approx_max_vel, m_expand_safety_param, nContactWildcards, nOwnerWildcards);
@@ -878,37 +878,37 @@ void DEMSolver::packDataPointers() {
 void DEMSolver::validateUserInputs() {
     // Then some checks...
     // if (m_templates.size() == 0) {
-    //     SMUG_DEM_ERROR("Before initializing the system, at least one clump type should be defined via
+    //     DEME_ERROR("Before initializing the system, at least one clump type should be defined via
     //     LoadClumpType.");
     // }
 
     if (m_user_boxSize.x <= 0.f || m_user_boxSize.y <= 0.f || m_user_boxSize.z <= 0.f) {
-        SMUG_DEM_ERROR(
+        DEME_ERROR(
             "The size of the simulation world is set to be (or default to be) %f by %f by %f. It is impossibly small.",
             m_user_boxSize.x, m_user_boxSize.y, m_user_boxSize.z);
     }
 
     if (m_updateFreq < 0) {
-        SMUG_DEM_WARNING(
+        DEME_WARNING(
             "The physics of the DEM system can drift into the future as much as it wants compared to contact "
             "detections, because SetCDUpdateFreq was called with a negative argument. Please make sure this is "
             "intended.");
     }
 
     if ((!ts_size_is_const) && (!use_user_defined_expand_factor) && (m_approx_max_vel <= 0.f)) {
-        SMUG_DEM_ERROR(
+        DEME_ERROR(
             "When using variable time step size, this solver needs your approximated maximum body/point velocity to "
             "add margins for a safe contact detection.\nYou should either supply that via SetMaxVelocity, or "
             "explicitly set a expand factor via SetExpandFactor.");
     }
 
     // Fix the reserved family (reserved family number is in user family, not in impl family)
-    SetFamilyFixed(DEM_RESERVED_FAMILY_NUM);
+    SetFamilyFixed(RESERVED_FAMILY_NUM);
 }
 
 // inline unsigned int stash_material_in_templates(std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
 //                                                 const std::shared_ptr<DEMMaterial>& this_material) {
-//     auto is_same = [&](const std::shared_ptr<DEMMaterial>& ptr) { return is_DEM_material_same(ptr, this_material); };
+//     auto is_same = [&](const std::shared_ptr<DEMMaterial>& ptr) { return is_material_same(ptr, this_material); };
 //     // Is this material already loaded? (most likely yes)
 //     auto it_mat = std::find_if(loaded_materials.begin(), loaded_materials.end(), is_same);
 //     if (it_mat != loaded_materials.end()) {
@@ -937,17 +937,17 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     // Check if force, and wildcards are all defined in the model
     std::string non_match;
     if (!all_whole_word_match(model, contact_wildcard_names, non_match))
-        SMUG_DEM_WARNING(
+        DEME_WARNING(
             "Contact wildcard %s is not used/set in your custom force model. Your force model will probably not "
             "produce what you expect.",
             non_match.c_str());
     if (!all_whole_word_match(model, owner_wildcard_names, non_match))
-        SMUG_DEM_WARNING(
+        DEME_WARNING(
             "Owner wildcard %s is not used/set in your custom force model. Your force model will probably not produce "
             "what you expect.",
             non_match.c_str());
     if (!all_whole_word_match(model, {"force"}, non_match)) {
-        SMUG_DEM_WARNING(
+        DEME_WARNING(
             "Your custom force model does not set the variable %s at all. You probably will not see any contact in the "
             "simulation.",
             non_match.c_str());
@@ -972,9 +972,9 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     strMap["_forceModelContactWildcardWrite_"] = wildcard_write_back;
     strMap["_forceModelContactWildcardDestroy_"] = wildcard_destroy_record;
 
-    SMUG_DEM_DEBUG_PRINTF("Wildcard acquisition:\n%s", wildcard_acquisition.c_str());
-    SMUG_DEM_DEBUG_PRINTF("Wildcard write-back:\n%s", wildcard_write_back.c_str());
-    SMUG_DEM_DEBUG_PRINTF("Wildcard destroy inactive contacts:\n%s", wildcard_destroy_record.c_str());
+    DEME_DEBUG_PRINTF("Wildcard acquisition:\n%s", wildcard_acquisition.c_str());
+    DEME_DEBUG_PRINTF("Wildcard write-back:\n%s", wildcard_write_back.c_str());
+    DEME_DEBUG_PRINTF("Wildcard destroy inactive contacts:\n%s", wildcard_destroy_record.c_str());
 }
 
 inline void DEMSolver::equipFamilyOnFlyChanges(std::unordered_map<std::string, std::string>& strMap) {
@@ -1120,7 +1120,7 @@ inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std
     array_content["_objSize3_"] = objSize3;
     array_content["_objMass_"] = objMass;
 
-    std::string analyticalEntityDefs = DEM_ANALYTICAL_COMPONENT_DEFINITIONS_JITIFIED();
+    std::string analyticalEntityDefs = ANALYTICAL_COMPONENT_DEFINITIONS_JITIFIED();
     analyticalEntityDefs = replace_patterns(analyticalEntityDefs, array_content);
     if (m_ensure_kernel_line_num) {
         analyticalEntityDefs = compact_code(analyticalEntityDefs);
@@ -1169,21 +1169,21 @@ inline void DEMSolver::equipMassMoiVolume(std::unordered_map<std::string, std::s
         array_content["_moiY_"] = moiY;
         array_content["_moiZ_"] = moiZ;
 
-        massDefs = DEM_MASS_DEFINITIONS_JITIFIED();
-        moiDefs = DEM_MOI_DEFINITIONS_JITIFIED();
+        massDefs = MASS_DEFINITIONS_JITIFIED();
+        moiDefs = MOI_DEFINITIONS_JITIFIED();
 
         massDefs = replace_patterns(massDefs, array_content);
         moiDefs = replace_patterns(moiDefs, array_content);
 
-        massAcqStrat = DEM_MASS_ACQUISITION_JITIFIED();
-        moiAcqStrat = DEM_MOI_ACQUISITION_JITIFIED();
+        massAcqStrat = MASS_ACQUISITION_JITIFIED();
+        moiAcqStrat = MOI_ACQUISITION_JITIFIED();
     } else {
         // Here, no need to jitify any mass/MOI templates
         massDefs = " ";
         moiDefs = " ";
 
-        massAcqStrat = DEM_MASS_ACQUISITION_FLATTENED();
-        moiAcqStrat = DEM_MOI_ACQUISITION_FLATTENED();
+        massAcqStrat = MASS_ACQUISITION_FLATTENED();
+        moiAcqStrat = MOI_ACQUISITION_FLATTENED();
     }
 
     // Right now we always jitify clump volume info. This is because we don't use volume that often, probably only at
@@ -1210,8 +1210,8 @@ inline void DEMSolver::equipMassMoiVolume(std::unordered_map<std::string, std::s
     strMap["_moiAcqStrat_"] = moiAcqStrat;
     strMap["_volumeDefs_"] = volumeDefs;
 
-    SMUG_DEM_DEBUG_PRINTF("Volume properties in kernel:");
-    SMUG_DEM_DEBUG_PRINTF("%s", volumeDefs.c_str());
+    DEME_DEBUG_PRINTF("Volume properties in kernel:");
+    DEME_DEBUG_PRINTF("%s", volumeDefs.c_str());
 }
 
 inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::string>& strMap) {
@@ -1238,7 +1238,7 @@ inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::strin
                 // If prop_name does not exist for this material, then if prop_name is one of the
                 // mat_prop_that_must_exist, the user should know there is trouble...
                 if (check_exist(mat_prop_that_must_exist, prop_name))
-                    SMUG_DEM_WARNING(
+                    DEME_WARNING(
                         "A material does not have %s property specified. However, the force model you are using "
                         "requires that information, so we are using default 0.\nPlease be sure this is intentional.",
                         prop_name.c_str());
@@ -1252,8 +1252,8 @@ inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::strin
         // End the line
         materialDefs += "};\n";
     }
-    SMUG_DEM_DEBUG_PRINTF("Material properties in kernel:");
-    SMUG_DEM_DEBUG_PRINTF("%s", materialDefs.c_str());
+    DEME_DEBUG_PRINTF("Material properties in kernel:");
+    DEME_DEBUG_PRINTF("%s", materialDefs.c_str());
     // Try imagining something like this...
     //      steel   plastic
     // E    1e9     1e8
@@ -1272,7 +1272,7 @@ inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::
     std::string clump_template_arrays, componentAcqStrat;
     if (jitify_clump_templates) {
         // Prepare jitified clump template
-        clump_template_arrays = DEM_CLUMP_COMPONENT_DEFINITIONS_JITIFIED();
+        clump_template_arrays = CLUMP_COMPONENT_DEFINITIONS_JITIFIED();
         {
             std::unordered_map<std::string, std::string> array_content;
             std::string CDRadii, Radii, CDRelPosX, CDRelPosY, CDRelPosZ;
@@ -1307,15 +1307,15 @@ inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::
         // This part is different depending on whether we have clump templates that are in global memory only
         if (nJitifiableClumpTopo == nDistinctClumpBodyTopologies) {
             // In this case, all clump templates can be jitified
-            componentAcqStrat = DEM_CLUMP_COMPONENT_ACQUISITION_ALL_JITIFIED();
+            componentAcqStrat = CLUMP_COMPONENT_ACQUISITION_ALL_JITIFIED();
         } else if (nJitifiableClumpTopo < nDistinctClumpBodyTopologies) {
             // In this case, some clump templates are in the global memory
-            componentAcqStrat = DEM_CLUMP_COMPONENT_ACQUISITION_PARTIALLY_JITIFIED();
+            componentAcqStrat = CLUMP_COMPONENT_ACQUISITION_PARTIALLY_JITIFIED();
         }
 
     } else {
         // Compared to the jitified case, non-jitified version is much simpler: just bring them from global memory
-        componentAcqStrat = DEM_CLUMP_COMPONENT_ACQUISITION_FLATTENED();
+        componentAcqStrat = CLUMP_COMPONENT_ACQUISITION_FLATTENED();
         // And we do not need to define clump template in kernels, in this case
         clump_template_arrays = " ";
     }
@@ -1331,18 +1331,17 @@ inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::
 inline void DEMSolver::equipIntegrationScheme(std::unordered_map<std::string, std::string>& strMap) {
     std::string strat;
     switch (m_integrator) {
-        case (DEM_TIME_INTEGRATOR::FORWARD_EULER):
-            strat = DEM_VEL_TO_PASS_ON_FORWARD_EULER();
+        case (TIME_INTEGRATOR::FORWARD_EULER):
+            strat = VEL_TO_PASS_ON_FORWARD_EULER();
             break;
-        case (DEM_TIME_INTEGRATOR::CENTERED_DIFFERENCE):
-            strat = DEM_VEL_TO_PASS_ON_CENTERED_DIFF();
+        case (TIME_INTEGRATOR::CENTERED_DIFFERENCE):
+            strat = VEL_TO_PASS_ON_CENTERED_DIFF();
             break;
-        case (DEM_TIME_INTEGRATOR::EXTENDED_TAYLOR):
-            strat = DEM_VEL_TO_PASS_ON_EXTENDED_TAYLOR();
+        case (TIME_INTEGRATOR::EXTENDED_TAYLOR):
+            strat = VEL_TO_PASS_ON_EXTENDED_TAYLOR();
             break;
         default:
-            SMUG_DEM_ERROR(
-                "The integration type is unknown or not implemented. Please select another via SetIntegrator.");
+            DEME_ERROR("The integration type is unknown or not implemented. Please select another via SetIntegrator.");
     }
     strMap["_integrationVelocityPassOnStrategy_"] = strat;
 }
@@ -1380,4 +1379,4 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_nMatTuples_"] = std::to_string(nMatTuples);
 }
 
-}  // namespace smug
+}  // namespace deme

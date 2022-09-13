@@ -4,7 +4,7 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 // =============================================================================
-// This demo reproduces the Game of Life in SMUG DEM simulator, to showcase the flexibility of its APIs.
+// This demo reproduces the Game of Life in DEME simulator, to showcase the flexibility of its APIs.
 // =============================================================================
 
 #include <core/ApiVersion.h>
@@ -17,16 +17,16 @@
 #include <chrono>
 #include <filesystem>
 
-using namespace smug;
+using namespace deme;
 using namespace std::filesystem;
 
 int main() {
-    DEMSolver DEM_sim;
-    DEM_sim.SetVerbosity(INFO);
+    DEMSolver DEMSim;
+    DEMSim.SetVerbosity(INFO);
     // Output as CSV so no post-processing is needed
-    DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
-    DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::XYZ);
-    DEM_sim.EnsureKernelErrMsgLineNum();
+    DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
+    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ);
+    DEMSim.EnsureKernelErrMsgLineNum();
 
     srand(777);
 
@@ -36,12 +36,12 @@ int main() {
     unsigned int n_init = 10000;
 
     // Bin size can be somewhat large
-    DEM_sim.SetInitBinSize(grid_size * 3.0);
+    DEMSim.SetInitBinSize(grid_size * 3.0);
 
     // Material is formaility... you can opt not to set it at all, it works the same
-    auto mat_type_1 = DEM_sim.LoadMaterial({{"junk", 1.0}});
+    auto mat_type_1 = DEMSim.LoadMaterial({{"junk", 1.0}});
 
-    auto template_sphere = DEM_sim.LoadSphereType(1.0, r, mat_type_1);
+    auto template_sphere = DEMSim.LoadSphereType(1.0, r, mat_type_1);
 
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_num;
     std::vector<unsigned int> family_code;
@@ -55,7 +55,7 @@ int main() {
 
     // Use code 10 to represent dead cells, and don't output dead cells
     family_code.insert(family_code.end(), input_xyz.size(), 10);
-    DEM_sim.DisableFamilyOutput(10);
+    DEMSim.DisableFamilyOutput(10);
 
     // Init patterns adding...
     {
@@ -93,36 +93,36 @@ int main() {
     input_template_num.insert(input_template_num.end(), input_xyz.size(), template_sphere);
 
     // All objects in the game are fixed
-    DEM_sim.SetFamilyFixed(0);
-    DEM_sim.SetFamilyFixed(10);
+    DEMSim.SetFamilyFixed(0);
+    DEMSim.SetFamilyFixed(10);
 
     // The force model just serves as a contact number register here. So let's say if 2 spheres are in contact, the
     // force is constant 1, so you have 4+ neighbours if you feel 4+ force, and 2- if you got 2- neighbours.
     // To avoid force cancelling out, we let alive cells always get positive force, and dead cells negative.
-    DEM_sim.DefineContactForceModel(
+    DEMSim.DefineContactForceModel(
         "if (AOwnerFamily == 0) force = make_float3(0, 0, 1); else force = make_float3(0, 0, -1);");
-    DEM_sim.DisableContactBetweenFamilies(0, 0);
-    DEM_sim.DisableContactBetweenFamilies(10, 10);
+    DEMSim.DisableContactBetweenFamilies(0, 0);
+    DEMSim.DisableContactBetweenFamilies(10, 10);
 
     // The rule for changing family numbers is simple: you die, move to 10; live, move to 0. And then, family 10 will
     // not be outputted.
     // Dead to alive: if you have 3 alive neighbours
-    DEM_sim.ChangeFamilyWhen(
+    DEMSim.ChangeFamilyWhen(
         10, 0, "float my_neighbours = length(acc * mass); return (my_neighbours > 2.9) && (my_neighbours < 3.1);");
     // Alive to dead, if less than 2 alive neighbours, or more than 3 alive neighbours (more than 6 dead neighbors, or
     // less than 5 dead neighbors)
-    DEM_sim.ChangeFamilyWhen(
+    DEMSim.ChangeFamilyWhen(
         0, 10, "float my_neighbours = length(acc * mass); return (my_neighbours < 4.9) || (my_neighbours > 6.1);");
 
-    auto particles = DEM_sim.AddClumps(input_template_num, input_xyz);
+    auto particles = DEMSim.AddClumps(input_template_num, input_xyz);
     particles->SetFamilies(family_code);
-    DEM_sim.InstructBoxDomainNumVoxel(22, 22, 20, (world_size + grid_size) / std::pow(2, 16) / std::pow(2, 22));
+    DEMSim.InstructBoxDomainNumVoxel(22, 22, 20, (world_size + grid_size) / std::pow(2, 16) / std::pow(2, 22));
 
-    DEM_sim.SetCoordSysOrigin("center");
-    DEM_sim.SetInitTimeStep(1.);
-    DEM_sim.SetCDUpdateFreq(0);
+    DEMSim.SetCoordSysOrigin("center");
+    DEMSim.SetInitTimeStep(1.);
+    DEMSim.SetCDUpdateFreq(0);
 
-    DEM_sim.Initialize();
+    DEMSim.Initialize();
 
     path out_dir = current_path();
     out_dir += "/DEMdemo_GameOfLife";
@@ -132,10 +132,10 @@ int main() {
     for (int i = 0; i < 3000; i++) {
         char filename[100];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-        DEM_sim.WriteSphereFile(std::string(filename));
+        DEMSim.WriteSphereFile(std::string(filename));
         std::cout << "Frame: " << i << std::endl;
 
-        DEM_sim.DoDynamicsThenSync(1.);
+        DEMSim.DoDynamicsThenSync(1.);
     }
 
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();

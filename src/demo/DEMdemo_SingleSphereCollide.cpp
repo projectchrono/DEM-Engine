@@ -14,21 +14,21 @@
 #include <time.h>
 #include <filesystem>
 
-using namespace smug;
+using namespace deme;
 using namespace std::filesystem;
 
 int main() {
-    DEMSolver DEM_sim;
-    DEM_sim.SetVerbosity(DEBUG);
-    DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
-    DEM_sim.SetContactOutputContent(OWNERS | FORCE | POINT | COMPONENT | NORMAL | TORQUE_ONLY_FORCE);
+    DEMSolver DEMSim;
+    DEMSim.SetVerbosity(DEBUG);
+    DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
+    DEMSim.SetContactOutputContent(OWNERS | FORCE | POINT | COMPONENT | NORMAL | TORQUE_ONLY_FORCE);
 
     // srand(time(NULL));
     srand(4150);
 
-    auto mat_type_1 = DEM_sim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}});
+    auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}});
 
-    auto sph_type_1 = DEM_sim.LoadSphereType(11728., 1., mat_type_1);
+    auto sph_type_1 = DEMSim.LoadSphereType(11728., 1., mat_type_1);
 
     std::vector<float3> input_xyz1, input_xyz2;
     std::vector<float3> input_vel1, input_vel2;
@@ -42,41 +42,41 @@ int main() {
     input_vel1.push_back(make_float3(1.f, 0, 0));
     input_vel2.push_back(make_float3(-1.f, 0, 0));
 
-    auto particles1 = DEM_sim.AddClumps(input_clump_type, input_xyz1);
+    auto particles1 = DEMSim.AddClumps(input_clump_type, input_xyz1);
     particles1->SetVel(input_vel1);
     particles1->SetFamily(0);
-    auto tracker1 = DEM_sim.Track(particles1);
+    auto tracker1 = DEMSim.Track(particles1);
 
-    DEM_sim.DisableContactBetweenFamilies(0, 1);
+    DEMSim.DisableContactBetweenFamilies(0, 1);
 
-    DEM_sim.AddBCPlane(make_float3(0, 0, -1.25), make_float3(0, 0, 1), mat_type_1);
+    DEMSim.AddBCPlane(make_float3(0, 0, -1.25), make_float3(0, 0, 1), mat_type_1);
 
     // Create a inspector to find out stuff
-    auto max_z_finder = DEM_sim.CreateInspector("clump_max_z");
+    auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
     float max_z;
-    auto max_v_finder = DEM_sim.CreateInspector("clump_max_absv");
+    auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
     float max_v;
 
-    DEM_sim.InstructBoxDomainNumVoxel(22, 21, 21, 3e-11);
+    DEMSim.InstructBoxDomainNumVoxel(22, 21, 21, 3e-11);
 
-    DEM_sim.SetCoordSysOrigin("center");
-    DEM_sim.SetInitTimeStep(2e-5);
-    DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    DEMSim.SetCoordSysOrigin("center");
+    DEMSim.SetInitTimeStep(2e-5);
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // Velocity not to exceed 3.0
-    DEM_sim.SetCDUpdateFreq(10);
-    DEM_sim.SetMaxVelocity(3.);
-    DEM_sim.SetExpandSafetyParam(2.);
-    DEM_sim.SetIntegrator(DEM_TIME_INTEGRATOR::CENTERED_DIFFERENCE);
+    DEMSim.SetCDUpdateFreq(10);
+    DEMSim.SetMaxVelocity(3.);
+    DEMSim.SetExpandSafetyParam(2.);
+    DEMSim.SetIntegrator(TIME_INTEGRATOR::CENTERED_DIFFERENCE);
 
-    DEM_sim.Initialize();
+    DEMSim.Initialize();
 
     // You can add more clumps to simulation after initialization, like this...
-    DEM_sim.ClearCache();
-    auto particles2 = DEM_sim.AddClumps(input_clump_type, input_xyz2);
+    DEMSim.ClearCache();
+    auto particles2 = DEMSim.AddClumps(input_clump_type, input_xyz2);
     particles2->SetVel(input_vel2);
     particles2->SetFamily(1);
-    auto tracker2 = DEM_sim.Track(particles2);
-    DEM_sim.UpdateClumps();
+    auto tracker2 = DEMSim.Track(particles2);
+    DEMSim.UpdateClumps();
 
     // Ready simulation
     path out_dir = current_path();
@@ -87,20 +87,20 @@ int main() {
         std::cout << "Frame: " << i << std::endl;
 
         if ((!changed_family) && i >= 10) {
-            // DEM_sim.ChangeFamily(1, 0);
-            DEM_sim.EnableContactBetweenFamilies(0, 1);
+            // DEMSim.ChangeFamily(1, 0);
+            DEMSim.EnableContactBetweenFamilies(0, 1);
             changed_family = true;
         }
 
         char filename[100];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-        DEM_sim.WriteSphereFile(std::string(filename));
+        DEMSim.WriteSphereFile(std::string(filename));
 
         char cnt_filename[100];
         sprintf(cnt_filename, "%s/Contact_pairs_%04d.csv", out_dir.c_str(), i);
-        DEM_sim.WriteContactFile(std::string(cnt_filename));
+        DEMSim.WriteContactFile(std::string(cnt_filename));
 
-        DEM_sim.DoDynamicsThenSync(1e-2);
+        DEMSim.DoDynamicsThenSync(1e-2);
         max_z = max_z_finder->GetValue();
         max_v = max_v_finder->GetValue();
         std::cout << "Max Z coord is " << max_z << std::endl;

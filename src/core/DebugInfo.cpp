@@ -7,15 +7,15 @@
 
 #include <core/ApiVersion.h>
 
-namespace smug {
+namespace deme {
 
 void versionInfo() {
 	// Project Info
-	std::cout << "SBEL GPU Physics Solvers (c) 2021" << std::endl;
+	std::cout << "SBEL Multi-GPU DEM Solver (c) 2021" << std::endl;
 	std::cout << "Project Version: " << VERSION_MAJOR << "." << VERSION_MINOR << "." << VERSION_PATCH << std::endl;
 	
 	// C++ Info
 	std::cout << "C++ Standard Revision: " << __cplusplus << std::endl;
 }
 
-} // namespace smug
+} // namespace deme

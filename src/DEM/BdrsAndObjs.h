@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SMUG_DEM_BOUNDARIES
-#define SMUG_DEM_BOUNDARIES
+#ifndef DEME_BOUNDARIES
+#define DEME_BOUNDARIES
 
 #include <vector>
 #include <string>
@@ -15,19 +15,19 @@
 #include <cmath>
 
 #include <nvmath/helper_math.cuh>
-#include <DEM/DEMDefines.h>
-#include <DEM/DEMStructs.h>
+#include <DEM/Defines.h>
+#include <DEM/Structs.h>
 #include <core/utils/ManagedAllocator.hpp>
 #include <DEM/HostSideHelpers.hpp>
 
-namespace smug {
+namespace deme {
 
 /// External object type
 /// Note all of them are `shell', not solid objects. If you need a solid cylinder for example, then use one CYLINDER as
 /// the side plus 2 CIRCLE as the ends to emulate it. Please be sure to set OUTWARD CYLINDER normal in this case.
-enum class DEM_OBJ_COMPONENT { PLANE, SPHERE, PLATE, CIRCLE, CYLINDER, CYL_INF, CONE, CONE_INF, TRIANGLE };
+enum class OBJ_COMPONENT { PLANE, SPHERE, PLATE, CIRCLE, CYLINDER, CYL_INF, CONE, CONE_INF, TRIANGLE };
 /// Normal type: inward or outward?
-enum class DEM_OBJ_NORMAL { INWARD, OUTWARD };
+enum class OBJ_NORMAL { INWARD, OUTWARD };
 
 /// Sphere
 template <typename T, typename T3>
@@ -94,11 +94,11 @@ class DEMObjComponent {
 /// API-(Host-)side struct that holds cached user-input external objects
 struct DEMExternObj {
     // Component object types
-    std::vector<DEM_OBJ_COMPONENT> types;
+    std::vector<OBJ_COMPONENT> types;
     // Component object materials
     std::vector<std::shared_ptr<DEMMaterial>> materials;
     // Family code (used in prescribing its motions etc.)
-    unsigned int family_code = DEM_RESERVED_FAMILY_NUM;  ///< Means it is default to the `fixed' family
+    unsigned int family_code = RESERVED_FAMILY_NUM;  ///< Means it is default to the `fixed' family
     // The coordinate of the CoM of this external object, in the frame where all its components' properties are
     // reported. This is usually all-0 (meaning you should define the object's components in its CoM frame to begin
     // with), but it can be user-specified.
@@ -111,9 +111,9 @@ struct DEMExternObj {
     // Obj's initial orientation quaternion
     float4 init_oriQ = host_make_float4(0, 0, 0, 1);
     // Obj's mass (huge by default)
-    float mass = SMUG_DEM_HUGE_FLOAT;
+    float mass = DEME_HUGE_FLOAT;
     // Obj's MOI (huge by default)
-    float3 MOI = make_float3(SMUG_DEM_HUGE_FLOAT);
+    float3 MOI = make_float3(DEME_HUGE_FLOAT);
     // Its offset when this obj got loaded into the API-level user raw-input array
     unsigned int load_order;
 
@@ -141,7 +141,7 @@ struct DEMExternObj {
 
     /// Add a plane with infinite size
     void AddPlane(const float3 pos, const float3 normal, const std::shared_ptr<DEMMaterial>& material) {
-        types.push_back(DEM_OBJ_COMPONENT::PLANE);
+        types.push_back(OBJ_COMPONENT::PLANE);
         materials.push_back(material);
         DEMAnalEntParams params;
         params.plane.position = pos;
@@ -157,7 +157,7 @@ struct DEMExternObj {
                   const float xdim,
                   const float ydim,
                   const std::shared_ptr<DEMMaterial>& material) {
-        types.push_back(DEM_OBJ_COMPONENT::PLATE);
+        types.push_back(OBJ_COMPONENT::PLATE);
         materials.push_back(material);
         DEMAnalEntParams params;
         params.plate.center = pos;
@@ -206,7 +206,7 @@ class DEMMeshConnected {
     std::vector<std::shared_ptr<DEMMaterial>> materials;
     bool isMaterialSet = false;
     // Family code (used in prescribing its motions etc.)
-    unsigned int family_code = DEM_RESERVED_FAMILY_NUM;  ///< Means it is default to the `fixed' family
+    unsigned int family_code = RESERVED_FAMILY_NUM;  ///< Means it is default to the `fixed' family
     // The coordinate of the CoM of this meshed object, in the frame where all the mesh's node coordinates are
     // reported. This is usually all-0 (meaning you should define the object's components in its CoM frame to begin
     // with), but it can be user-specified.
@@ -302,6 +302,6 @@ class DEMMeshConnected {
     bool ComputeNeighbouringTriangleMap(std::vector<std::array<int, 4>>& tri_map) const;
 };
 
-}  // namespace smug
+}  // namespace deme
 
 #endif

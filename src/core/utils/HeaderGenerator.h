@@ -1,5 +1,5 @@
-#ifndef SMUG_HEADER_GENERATOR_H
-#define SMUG_HEADER_GENERATOR_H
+#ifndef DEME_HEADER_GENERATOR_H
+#define DEME_HEADER_GENERATOR_H
 
 #include <string>
 #include <unordered_map>

@@ -13,13 +13,13 @@
 #include <chrono>
 #include <filesystem>
 
-using namespace smug;
+using namespace deme;
 using namespace std::filesystem;
 
 int main() {
-    DEMSolver DEM_sim;
+    DEMSolver DEMSim;
     // I generally use this demo to inspect if I have "lost contact pairs", so the verbosity is set to STEP_METRIC...
-    DEM_sim.SetVerbosity(STEP_METRIC);
+    DEMSim.SetVerbosity(STEP_METRIC);
 
     srand(759);
 
@@ -35,12 +35,12 @@ int main() {
     float min_relpos = -0.015;
     float max_relpos = 0.015;
 
-    auto mat_type_1 = DEM_sim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}});
-    auto mat_type_2 = DEM_sim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
+    auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}});
+    auto mat_type_2 = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
 
     // First create clump type 0 for representing the sieve
     float sieve_sp_r = 0.05;
-    auto template_sieve = DEM_sim.LoadSphereType(5.0, sieve_sp_r, mat_type_1);
+    auto template_sieve = DEMSim.LoadSphereType(5.0, sieve_sp_r, mat_type_1);
 
     // An array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
@@ -81,7 +81,7 @@ int main() {
         }
 
         // LoadClumpType returns the pointer to this clump template we just loaded
-        clump_types.push_back(DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat));
+        clump_types.push_back(DEMSim.LoadClumpType(mass, MOI, radii, relPos, mat));
     }
 
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_type;
@@ -91,11 +91,11 @@ int main() {
     auto input_xyz = DEMBoxGridSampler(make_float3(0, 0, 0), make_float3(5.0, 5.0, 0.001), sieve_sp_r * 2.0);
     // The sieve is family 1
     family_code.insert(family_code.end(), input_xyz.size(), 1);
-    DEM_sim.SetFamilyPrescribedLinVel(1, "0", "0", "(t > 1.0) ? 2.0 * sin(5.0 * smug::PI * (t - 1.0)) : 0");
+    DEMSim.SetFamilyPrescribedLinVel(1, "0", "0", "(t > 1.0) ? 2.0 * sin(5.0 * deme::PI * (t - 1.0)) : 0");
     // No contact within family 1
-    DEM_sim.DisableContactBetweenFamilies(1, 1);
+    DEMSim.DisableContactBetweenFamilies(1, 1);
     input_template_type.insert(input_template_type.end(), input_xyz.size(), template_sieve);
-    auto sieve = DEM_sim.AddClumps(input_template_type, input_xyz);
+    auto sieve = DEMSim.AddClumps(input_template_type, input_xyz);
     sieve->SetFamilies(family_code);
 
     // Clear arrays and add the grains being sieved
@@ -113,10 +113,10 @@ int main() {
         input_template_type.push_back(clump_types.at(i % num_template));
         family_code.push_back(0);
     }
-    auto grains = DEM_sim.AddClumps(input_template_type, input_xyz);
+    auto grains = DEMSim.AddClumps(input_template_type, input_xyz);
     grains->SetFamilies(family_code);
 
-    std::shared_ptr<DEMExternObj> BCs = DEM_sim.AddExternalObject();
+    std::shared_ptr<DEMExternObj> BCs = DEMSim.AddExternalObject();
     BCs->SetFamily(2);
     BCs->AddPlane(make_float3(0, 4.8, 0), make_float3(0, -1, 0), mat_type_2);
     BCs->AddPlane(make_float3(0, -4.8, 0), make_float3(0, 1, 0), mat_type_2);
@@ -124,24 +124,24 @@ int main() {
     BCs->AddPlane(make_float3(-4.8, 0, 0), make_float3(1, 0, 0), mat_type_2);
     BCs->AddPlane(make_float3(0, 0, -10.0), make_float3(0, 0, 1), mat_type_2);
     BCs->AddPlane(make_float3(0, 0, 10.0), make_float3(0, 0, -1), mat_type_2);
-    DEM_sim.SetFamilyFixed(2);  // BCs are fixed!
+    DEMSim.SetFamilyFixed(2);  // BCs are fixed!
     // BC family does not interact with the sieve
-    DEM_sim.DisableContactBetweenFamilies(1, 2);
+    DEMSim.DisableContactBetweenFamilies(1, 2);
 
     // Keep tab of the max velocity in simulation
-    auto max_v_finder = DEM_sim.CreateInspector("clump_max_absv");
+    auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
     float max_v;
 
     float step_size = 5e-6;
-    DEM_sim.InstructBoxDomainDimension(12, 12, 25);
-    DEM_sim.SetCoordSysOrigin("center");
-    DEM_sim.SetInitTimeStep(step_size);
-    DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
-    DEM_sim.SetCDUpdateFreq(30);
-    DEM_sim.SetExpandFactor(20.0 * 30 * step_size);
-    DEM_sim.SetExpandSafetyParam(1.0);
+    DEMSim.InstructBoxDomainDimension(12, 12, 25);
+    DEMSim.SetCoordSysOrigin("center");
+    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    DEMSim.SetCDUpdateFreq(30);
+    DEMSim.SetExpandFactor(20.0 * 30 * step_size);
+    DEMSim.SetExpandSafetyParam(1.0);
 
-    DEM_sim.Initialize();
+    DEMSim.Initialize();
 
     path out_dir = current_path();
     out_dir += "/DEMdemo_Sieve";
@@ -160,19 +160,19 @@ int main() {
             std::cout << "Frame: " << currframe << std::endl;
             char filename[100];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-            DEM_sim.WriteSphereFile(std::string(filename));
+            DEMSim.WriteSphereFile(std::string(filename));
             max_v = max_v_finder->GetValue();
             std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
         }
 
-        DEM_sim.DoDynamics(step_size);
+        DEMSim.DoDynamics(step_size);
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
     std::cout << time_sec.count() << " seconds" << std::endl;
 
-    DEM_sim.ShowThreadCollaborationStats();
-    DEM_sim.ShowTimingStats();
+    DEMSim.ShowThreadCollaborationStats();
+    DEMSim.ShowTimingStats();
     std::cout << "DEMdemo_Sieve exiting..." << std::endl;
     return 0;
 }

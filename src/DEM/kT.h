@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SMUG_DEM_KT
-#define SMUG_DEM_KT
+#ifndef DEME_KT
+#define DEME_KT
 
 #include <mutex>
 #include <vector>
@@ -19,9 +19,9 @@
 #include <nvmath/helper_math.cuh>
 #include <core/utils/GpuError.h>
 
-#include <DEM/DEMBdrsAndObjs.h>
-#include <DEM/DEMDefines.h>
-#include <DEM/DEMStructs.h>
+#include <DEM/BdrsAndObjs.h>
+#include <DEM/Defines.h>
+#include <DEM/Structs.h>
 
 // #include <core/utils/JitHelper.h>
 
@@ -30,7 +30,7 @@ namespace jitify {
 class Program;
 }
 
-namespace smug {
+namespace deme {
 
 // Implementation-level classes
 class DEMKinematicThread;
@@ -44,7 +44,7 @@ class DEMKinematicThread {
     GpuManager* pGpuDistributor;
 
     // kT verbosity
-    DEM_VERBOSITY verbosity = INFO;
+    VERBOSITY verbosity = INFO;
 
     // Some behavior-related flags
     SolverFlags solverFlags;
@@ -351,6 +351,6 @@ class DEMKinematicThread {
 
 };  // kT ends
 
-}  // namespace smug
+}  // namespace deme
 
 #endif

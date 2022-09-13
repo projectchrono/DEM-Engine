@@ -1,5 +1,5 @@
-# SBEL GPU Physics Solvers
-_An internally-licensed implementation of GPU-based FSI and DEM solvers_
+# SBEL GPU DEM Engine
+_An internally-licensed implementation of GPU-based DEM solver_
 
 ### Licensing
 

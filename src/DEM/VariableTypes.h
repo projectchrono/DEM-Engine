@@ -3,10 +3,10 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SMUG_DEM_VAR_TYPES
-#define SMUG_DEM_VAR_TYPES
+#ifndef DEME_VAR_TYPES
+#define DEME_VAR_TYPES
 
-namespace smug {
+namespace deme {
 
 typedef uint16_t subVoxelPos_t;  ///< uint16 or uint32
 
@@ -47,6 +47,6 @@ typedef uint8_t ownerType_t;      ///< The type of a owner entity
 
 typedef uint8_t objType_t;
 typedef bool objNormal_t;
-}  // namespace smug
+}  // namespace deme
 
 #endif

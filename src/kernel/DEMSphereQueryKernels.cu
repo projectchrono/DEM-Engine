@@ -1,20 +1,20 @@
 // DEM kernels used for quarrying (statistical) information from the current simulation system
-#include <DEM/DEMDefines.h>
+#include <DEM/Defines.h>
 #include <kernel/DEMHelperKernels.cu>
 
 // Mass properties are below... but inspecting spheres doesn't seem to require mass or MOI
 // _massDefs_;
 // _moiDefs_;
 
-__global__ void inspectSphereProperty(smug::DEMDataDT* granData,
-                                      smug::DEMSimParams* simParams,
+__global__ void inspectSphereProperty(deme::DEMDataDT* granData,
+                                      deme::DEMSimParams* simParams,
                                       float* quantity,
-                                      smug::notStupidBool_t* not_in_region,
+                                      deme::notStupidBool_t* not_in_region,
                                       size_t nSpheres) {
     size_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;
     if (sphereID < nSpheres) {
         // Get my owner ID
-        smug::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
+        deme::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
         float myRelPosX, myRelPosY, myRelPosZ;
         float myRadius;
         float oriQw, oriQx, oriQy, oriQz;
@@ -24,14 +24,14 @@ __global__ void inspectSphereProperty(smug::DEMDataDT* granData,
         // Use an input named exactly `sphereID' which is the id of this sphere component
         { _componentAcqStrat_; }
 
-        voxelIDToPosition<double, smug::voxelID_t, smug::subVoxelPos_t>(
+        voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
             ownerX, ownerY, ownerZ, granData->voxelID[myOwner], granData->locX[myOwner], granData->locY[myOwner],
             granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
         oriQw = granData->oriQw[myOwner];
         oriQx = granData->oriQx[myOwner];
         oriQy = granData->oriQy[myOwner];
         oriQz = granData->oriQz[myOwner];
-        applyOriQToVector3<float, smug::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, oriQw, oriQx, oriQy, oriQz);
+        applyOriQToVector3<float, deme::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, oriQw, oriQx, oriQy, oriQz);
 
         // Use sphereXYZ to determine if this sphere is in the region that should be counted
         // And don't forget adding LBF as an offset

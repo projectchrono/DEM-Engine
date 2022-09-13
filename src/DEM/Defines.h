@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SMUG_DEM_MISC_DEFINES
-#define SMUG_DEM_MISC_DEFINES
+#ifndef DEME_MISC_DEFINES
+#define DEME_MISC_DEFINES
 
 #include <limits>
 #include <stdint.h>
@@ -13,21 +13,21 @@
 
 #include <DEM/VariableTypes.h>
 
-#define SMUG_DEM_MIN(a, b) ((a < b) ? a : b)
-#define SMUG_DEM_MAX(a, b) ((a > b) ? a : b)
+#define DEME_MIN(a, b) ((a < b) ? a : b)
+#define DEME_MAX(a, b) ((a > b) ? a : b)
 
-namespace smug {
+namespace deme {
 // =============================================================================
 // NOW DEFINING CONSTANTS USED BY THE DEM MODULE
 // =============================================================================
-#define SMUG_GET_VAR_NAME(Variable) (#Variable)
-#define SMUG_DEM_KT_CD_NTHREADS_PER_BLOCK 256
-#define SMUG_DEM_MAX_SPHERES_PER_BIN 256  ///< Can't be larger than SMUG_DEM_KT_CD_NTHREADS_PER_BLOCK
-#define SMUG_DEM_TINY_FLOAT 1e-12
-#define SMUG_DEM_HUGE_FLOAT 1e15
-#define SMUG_BITS_PER_BYTE 8
-#define SMUG_CUDA_WARP_SIZE 32
-#define SMUG_DEM_MAX_WILDCARD_NUM 8
+#define DEME_GET_VAR_NAME(Variable) (#Variable)
+#define DEME_KT_CD_NTHREADS_PER_BLOCK 256
+#define DEME_MAX_SPHERES_PER_BIN 256  ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
+#define DEME_TINY_FLOAT 1e-12
+#define DEME_HUGE_FLOAT 1e15
+#define DEME_BITS_PER_BYTE 8
+#define DEME_CUDA_WARP_SIZE 32
+#define DEME_MAX_WILDCARD_NUM 8
 
 // A few pre-computed constants
 constexpr double TWO_OVER_THREE = 0.666666666666667;
@@ -37,88 +37,85 @@ constexpr double TWO_TIMES_SQRT_FIVE_OVER_SIX = 1.825741858350554;
 constexpr double PI = 3.1415926535897932385;
 constexpr double PI_SQUARED = 9.869604401089358;
 
-constexpr uint8_t DEM_VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * SMUG_BITS_PER_BYTE;
-constexpr uint8_t DEM_VOXEL_COUNT_POWER2 = sizeof(voxelID_t) * SMUG_BITS_PER_BYTE;
-constexpr int64_t DEM_MAX_SUBVOXEL = (int64_t)1 << DEM_VOXEL_RES_POWER2;
+constexpr uint8_t VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * DEME_BITS_PER_BYTE;
+constexpr uint8_t VOXEL_COUNT_POWER2 = sizeof(voxelID_t) * DEME_BITS_PER_BYTE;
+constexpr int64_t MAX_SUBVOXEL = (int64_t)1 << VOXEL_RES_POWER2;
 
-#define SMUG_DEM_NUM_BODIES_PER_BLOCK 512
-#define SMUG_DEM_MAX_THREADS_PER_BLOCK 1024
-#define SMUG_DEM_INIT_CNT_MULTIPLIER 5
+#define DEME_NUM_BODIES_PER_BLOCK 512
+#define DEME_MAX_THREADS_PER_BLOCK 1024
+#define DEME_INIT_CNT_MULTIPLIER 5
 // If there are more than this number of analytical geometry, we may have difficulty jitify them all
-#define SMUG_DEM_THRESHOLD_TOO_MANY_ANAL_GEO 64
+#define DEME_THRESHOLD_TOO_MANY_ANAL_GEO 64
 // If a clump has more than this number of sphere components, it is automatically considered a non-jitifiable big clump
-#define SMUG_DEM_THRESHOLD_BIG_CLUMP 256
+#define DEME_THRESHOLD_BIG_CLUMP 256
 // If there are more than this number of sphere components across all clumps (excluding the clumps that are considered
 // big clumps), then some of them may have to stay in global memory, rather than being jitified
-#define SMUG_DEM_THRESHOLD_TOO_MANY_SPHERE_COMP 512
+#define DEME_THRESHOLD_TOO_MANY_SPHERE_COMP 512
 // It should generally just be the warp size. When a block is launched, at least min(these_numbers) threads will be
 // launched so the template loading is always safe.
 constexpr clumpComponentOffset_t NUM_ACTIVE_TEMPLATE_LOADING_THREADS =
-    SMUG_DEM_MIN(SMUG_DEM_MIN(SMUG_CUDA_WARP_SIZE, SMUG_DEM_KT_CD_NTHREADS_PER_BLOCK), SMUG_DEM_NUM_BODIES_PER_BLOCK);
+    DEME_MIN(DEME_MIN(DEME_CUDA_WARP_SIZE, DEME_KT_CD_NTHREADS_PER_BLOCK), DEME_NUM_BODIES_PER_BLOCK);
 
-const objType_t DEM_ANAL_OBJ_TYPE_PLANE = 0;
-const objType_t DEM_ANAL_OBJ_TYPE_PLATE = 1;
-const objNormal_t DEM_ENTITY_NORMAL_INWARD = 0;
-const objNormal_t DEM_ENTITY_NORMAL_OUTWARD = 1;
+const objType_t ANAL_OBJ_TYPE_PLANE = 0;
+const objType_t ANAL_OBJ_TYPE_PLATE = 1;
+const objNormal_t ENTITY_NORMAL_INWARD = 0;
+const objNormal_t ENTITY_NORMAL_OUTWARD = 1;
 
-const contact_t DEM_NOT_A_CONTACT = 0;
-const contact_t DEM_SPHERE_SPHERE_CONTACT = 1;
-const contact_t DEM_SPHERE_MESH_CONTACT = 2;
-const contact_t DEM_SPHERE_PLANE_CONTACT = 3;
-const contact_t DEM_SPHERE_PLATE_CONTACT = 4;
+const contact_t NOT_A_CONTACT = 0;
+const contact_t SPHERE_SPHERE_CONTACT = 1;
+const contact_t SPHERE_MESH_CONTACT = 2;
+const contact_t SPHERE_PLANE_CONTACT = 3;
+const contact_t SPHERE_PLATE_CONTACT = 4;
 
-const notStupidBool_t DEM_DONT_PREVENT_CONTACT = 0;
-const notStupidBool_t DEM_PREVENT_CONTACT = 1;
+const notStupidBool_t DONT_PREVENT_CONTACT = 0;
+const notStupidBool_t PREVENT_CONTACT = 1;
 
 // Codes for owner types. We just have a handful of types...
-const ownerType_t DEM_OWNER_T_CLUMP = 0;
-const ownerType_t DEM_OWNER_T_ANALYTICAL = 1;
-const ownerType_t DEM_OWNER_T_MESH = 2;
+const ownerType_t OWNER_T_CLUMP = 0;
+const ownerType_t OWNER_T_ANALYTICAL = 1;
+const ownerType_t OWNER_T_MESH = 2;
 
 // This ID marks that this is a new contact, not present when we did contact detection last time
 // TODO: half max add half max... so stupid... Better way?? numeric_limit won't work...
-constexpr contactPairs_t DEM_NULL_MAPPING_PARTNER =
-    ((size_t)1 << (sizeof(contactPairs_t) * SMUG_BITS_PER_BYTE - 1)) +
-    ((size_t)1 << (sizeof(contactPairs_t) * SMUG_BITS_PER_BYTE - 1) - 1);
+constexpr contactPairs_t NULL_MAPPING_PARTNER = ((size_t)1 << (sizeof(contactPairs_t) * DEME_BITS_PER_BYTE - 1)) +
+                                                ((size_t)1 << (sizeof(contactPairs_t) * DEME_BITS_PER_BYTE - 1) - 1);
 // Reserved bodyID
-constexpr bodyID_t DEM_NULL_BODYID = ((size_t)1 << (sizeof(bodyID_t) * SMUG_BITS_PER_BYTE - 1)) +
-                                     ((size_t)1 << (sizeof(bodyID_t) * SMUG_BITS_PER_BYTE - 1) - 1);
+constexpr bodyID_t NULL_BODYID = ((size_t)1 << (sizeof(bodyID_t) * DEME_BITS_PER_BYTE - 1)) +
+                                 ((size_t)1 << (sizeof(bodyID_t) * DEME_BITS_PER_BYTE - 1) - 1);
 // Default (user) clump family number
-const unsigned int DEM_DEFAULT_CLUMP_FAMILY_NUM = 0;
+const unsigned int DEFAULT_CLUMP_FAMILY_NUM = 0;
 // Reserved (user) clump family number which is always used for fixities
-constexpr unsigned int DEM_RESERVED_FAMILY_NUM = ((unsigned int)1 << (sizeof(family_t) * SMUG_BITS_PER_BYTE)) - 1;
+constexpr unsigned int RESERVED_FAMILY_NUM = ((unsigned int)1 << (sizeof(family_t) * DEME_BITS_PER_BYTE)) - 1;
 // The number of all possible families is known: it depends on family_t
-constexpr size_t DEM_NUM_AVAL_FAMILIES = (size_t)1 << (sizeof(family_t) * SMUG_BITS_PER_BYTE);
+constexpr size_t NUM_AVAL_FAMILIES = (size_t)1 << (sizeof(family_t) * DEME_BITS_PER_BYTE);
 // Reserved clump template mark number, used to indicate the largest inertiaOffset number (currently not used since all
 // inertia properties are jitified)
-constexpr inertiaOffset_t DEM_RESERVED_INERTIA_OFFSET =
-    ((size_t)1 << (sizeof(inertiaOffset_t) * SMUG_BITS_PER_BYTE)) - 1;
+constexpr inertiaOffset_t RESERVED_INERTIA_OFFSET = ((size_t)1 << (sizeof(inertiaOffset_t) * DEME_BITS_PER_BYTE)) - 1;
 // Reserved clump component offset number, used to indicate that this sphere's relative pos etc. won't be found in the
 // kernel, instead have to be brought from the global memory
-constexpr clumpComponentOffset_t DEM_RESERVED_CLUMP_COMPONENT_OFFSET =
-    ((size_t)1 << (sizeof(clumpComponentOffset_t) * SMUG_BITS_PER_BYTE)) - 1;
+constexpr clumpComponentOffset_t RESERVED_CLUMP_COMPONENT_OFFSET =
+    ((size_t)1 << (sizeof(clumpComponentOffset_t) * DEME_BITS_PER_BYTE)) - 1;
 // Used to be compared against, so we know if some of the sphere components need to stay in global memory
-constexpr unsigned int DEM_THRESHOLD_CANT_JITIFY_ALL_COMP =
-    SMUG_DEM_MIN(SMUG_DEM_MIN(DEM_RESERVED_CLUMP_COMPONENT_OFFSET, SMUG_DEM_THRESHOLD_BIG_CLUMP),
-                 SMUG_DEM_THRESHOLD_TOO_MANY_SPHERE_COMP);
+constexpr unsigned int THRESHOLD_CANT_JITIFY_ALL_COMP =
+    DEME_MIN(DEME_MIN(RESERVED_CLUMP_COMPONENT_OFFSET, DEME_THRESHOLD_BIG_CLUMP), DEME_THRESHOLD_TOO_MANY_SPHERE_COMP);
 
 // Some enums...
 // Verbosity
-enum DEM_VERBOSITY { QUIET = 0, ERROR = 10, WARNING = 20, INFO = 30, STEP_STATS = 32, STEP_METRIC = 35, DEBUG = 40 };
+enum VERBOSITY { QUIET = 0, ERROR = 10, WARNING = 20, INFO = 30, STEP_STATS = 32, STEP_METRIC = 35, DEBUG = 40 };
 // Stepping method
-enum class DEM_TIME_INTEGRATOR { FORWARD_EULER, CENTERED_DIFFERENCE, EXTENDED_TAYLOR, CHUNG };
+enum class TIME_INTEGRATOR { FORWARD_EULER, CENTERED_DIFFERENCE, EXTENDED_TAYLOR, CHUNG };
 // Owner types
-enum class DEM_OWNER_TYPE { CLUMP, ANALYTICAL, MESH };
+enum class OWNER_TYPE { CLUMP, ANALYTICAL, MESH };
 // Types of entities (can be either owner or geometry entity) that can be inspected by inspection methods
-enum class DEM_INSPECT_ENTITY_TYPE { SPHERE, CLUMP, MESH, MESH_FACET };
+enum class INSPECT_ENTITY_TYPE { SPHERE, CLUMP, MESH, MESH_FACET };
 // Which reduce operation is needed in an inspection
-enum class DEM_CUB_REDUCE_FLAVOR { NONE, MAX, MIN, SUM };
+enum class CUB_REDUCE_FLAVOR { NONE, MAX, MIN, SUM };
 // Format of the output files
-enum class DEM_OUTPUT_FORMAT { CSV, BINARY, CHPF };
+enum class OUTPUT_FORMAT { CSV, BINARY, CHPF };
 // Force mode type
-enum class DEM_FORCE_MODEL { HERTZIAN, HERTZIAN_FRICTIONLESS, CUSTOM };
+enum class FORCE_MODEL { HERTZIAN, HERTZIAN_FRICTIONLESS, CUSTOM };
 // The info that should be present in the output files
-enum DEM_OUTPUT_CONTENT {
+enum OUTPUT_CONTENT {
     XYZ = 0,
     QUAT = 1,
     ABSV = 2,
@@ -133,9 +130,9 @@ enum DEM_OUTPUT_CONTENT {
     EXP_FACTOR = 256
 };
 // Output particles as individual (component) spheres, or as owner clumps (clump CoMs for location, as an example)?
-enum class DEM_SPATIAL_DIR { X, Y, Z, NONE };
+enum class SPATIAL_DIR { X, Y, Z, NONE };
 // The info that should be present in the contact pair output files
-enum DEM_CNT_OUTPUT_CONTENT {
+enum CNT_OUTPUT_CONTENT {
     OWNERS = 0,     // Owner numbers and contact type
     FORCE = 1,      // Force (that owner 1 feels) xyz components in global
     POINT = 2,      // Contact point in global frame
@@ -151,7 +148,7 @@ enum DEM_CNT_OUTPUT_CONTENT {
 
 // Structs defined here will be used by GPUs.
 // NOTE: All data structs here need to be simple enough to jitify. In general, if you need to include something much
-// more complex than DEMDefines for example, then do it in DEMStructs.h.
+// more complex than DEMDefines for example, then do it in Structs.h.
 
 // A structure for storing simulation parameters.
 struct DEMSimParams {
@@ -208,7 +205,7 @@ struct DEMSimParams {
     // Expand safety parameter (multiplier for the CD envelope)
     float expSafetyParam;
     // Stepping method
-    DEM_TIME_INTEGRATOR stepping = DEM_TIME_INTEGRATOR::FORWARD_EULER;
+    TIME_INTEGRATOR stepping = TIME_INTEGRATOR::FORWARD_EULER;
 
     // Number of wildcards (extra property) arrays associated with contacts and owners
     unsigned int nContactWildcards;
@@ -309,8 +306,8 @@ struct DEMDataDT {
     // Wildcards. These are some quantities that you can associate with contact pairs and/or owner objects. Very
     // typically, contact history info in Hertzian model in this DEM tool is a wildcard, and electric charges can be
     // registered on granular particles with wildcards.
-    float* contactWildcards[SMUG_DEM_MAX_WILDCARD_NUM];
-    float* ownerWildcards[SMUG_DEM_MAX_WILDCARD_NUM];
+    float* contactWildcards[DEME_MAX_WILDCARD_NUM];
+    float* ownerWildcards[DEME_MAX_WILDCARD_NUM];
 };
 
 // A struct that holds pointers to data arrays that kT uses
@@ -388,6 +385,6 @@ struct DEMDataKT {
 // typedef DEMDataDT* DEMDataDTPtr;
 // typedef DEMSimParams* DEMSimParamsPtr;
 
-}  // namespace smug
+}  // namespace deme
 
 #endif

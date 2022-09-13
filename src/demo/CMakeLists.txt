@@ -27,15 +27,13 @@ SET(DEMOS
 		DEMdemo_GRCPrep_Part1
 		DEMdemo_GRCPrep_Part2
 		DEMdemo_GRCPrep_Part3
-		sphdemo
-		hello_world
 )
 
 # ------------------------------------------------------------------------------
 # Add all executables
 # ------------------------------------------------------------------------------
 
-message(STATUS "Demo programs for Gpu module...")
+message(STATUS "Demo programs for DEM solver...")
 
 FOREACH(PROGRAM ${DEMOS})
 		

@@ -16,31 +16,31 @@
 #include <random>
 #include <cmath>
 
-using namespace smug;
+using namespace deme;
 using namespace std::filesystem;
 
 int main() {
-    DEMSolver DEM_sim;
-    DEM_sim.SetVerbosity(INFO);
-    DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
-    // DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::FAMILY);
-    DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::XYZ);
+    DEMSolver DEMSim;
+    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
+    // DEMSim.SetOutputContent(OUTPUT_CONTENT::FAMILY);
+    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ);
 
     srand(759);
 
     //
     float kg_g_conv = 1;
     // Define materials
-    auto mat_type_terrain = DEM_sim.LoadMaterial({{"E", 2e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
-    auto mat_type_wheel = DEM_sim.LoadMaterial({{"E", 1e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
+    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 2e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
+    auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
 
     // Define the simulation world
     double world_y_size = 0.99;
-    DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, world_y_size / std::pow(2, 16) / std::pow(2, 21));
+    DEMSim.InstructBoxDomainNumVoxel(21, 21, 22, world_y_size / std::pow(2, 16) / std::pow(2, 21));
     // Add 5 bounding planes around the simulation world, and leave the top open
-    DEM_sim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
+    DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
     float bottom = -0.5;
-    DEM_sim.AddBCPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_terrain);
+    DEMSim.AddBCPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_terrain);
 
     // Then the ground particle template
     DEMClumpTemplate shape_template;
@@ -69,12 +69,12 @@ int main() {
         this_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(this_template.nComp, mat_type_terrain);
         // Set the volume of this template
         this_template.SetVolume((double)clump_vol * scaling * scaling * scaling);
-        ground_particle_templates.push_back(DEM_sim.LoadClumpType(this_template));
+        ground_particle_templates.push_back(DEMSim.LoadClumpType(this_template));
     }
 
     // Now we load part1 clump locations from a part1 output file
-    auto part1_clump_xyz = DEM_sim.ReadClumpXyzFromCsv("GRC_2e5.csv");
-    auto part1_clump_quaternion = DEM_sim.ReadClumpQuatFromCsv("GRC_2e5.csv");
+    auto part1_clump_xyz = DEMSim.ReadClumpXyzFromCsv("GRC_2e5.csv");
+    auto part1_clump_quaternion = DEMSim.ReadClumpQuatFromCsv("GRC_2e5.csv");
     std::vector<float3> in_xyz;
     std::vector<float4> in_quat;
     std::vector<std::shared_ptr<DEMClumpTemplate>> in_types;
@@ -104,7 +104,7 @@ int main() {
     base_batch.SetTypes(in_types);
     base_batch.SetPos(in_xyz);
     base_batch.SetOriQ(in_quat);
-    DEM_sim.AddClumps(base_batch);
+    DEMSim.AddClumps(base_batch);
 
     // I also would like an `inverse batch', which is a batch of clumps that is the base batch flipped around
     DEMClumpBatch inv_batch = base_batch;
@@ -125,42 +125,42 @@ int main() {
     // First put the inv batch above the base batch
     std::for_each(inv_xyz.begin(), inv_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist / 2.0; });
     inv_batch.SetPos(inv_xyz);
-    DEM_sim.AddClumps(inv_batch);
+    DEMSim.AddClumps(inv_batch);
     // Add 10 layers of such graular bed
     for (int i = 0; i < 4; i++) {
         DEMClumpBatch another_batch = base_batch;
         std::for_each(in_xyz.begin(), in_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
         another_batch.SetPos(in_xyz);
-        DEM_sim.AddClumps(another_batch);
+        DEMSim.AddClumps(another_batch);
         DEMClumpBatch another_inv_batch = inv_batch;
         std::for_each(inv_xyz.begin(), inv_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
         another_inv_batch.SetPos(inv_xyz);
-        DEM_sim.AddClumps(another_inv_batch);
+        DEMSim.AddClumps(another_inv_batch);
     }
 
     // Now add a plane to compress the `road'
-    auto compressor = DEM_sim.AddExternalObject();
+    auto compressor = DEMSim.AddExternalObject();
     compressor->AddPlane(make_float3(0, 0, 0), make_float3(0, 0, -1), mat_type_terrain);
-    compressor->SetFamily(DEM_RESERVED_FAMILY_NUM);
-    auto compressor_tracker = DEM_sim.Track(compressor);
+    compressor->SetFamily(RESERVED_FAMILY_NUM);
+    auto compressor_tracker = DEMSim.Track(compressor);
 
     // And a z position inspector
-    auto max_z_finder = DEM_sim.CreateInspector("clump_max_z");
+    auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
     auto void_ratio_finder =
-        DEM_sim.CreateInspector("clump_volume", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) && (Z <= -0.45);");
+        DEMSim.CreateInspector("clump_volume", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) && (Z <= -0.45);");
 
     // Make ready for simulation
     float step_size = 5e-7;
-    DEM_sim.SetCoordSysOrigin("center");
-    DEM_sim.SetInitTimeStep(step_size);
-    DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    DEMSim.SetCoordSysOrigin("center");
+    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEM_sim.SetCDUpdateFreq(10);
-    // DEM_sim.SetExpandFactor(1e-3);
-    DEM_sim.SetMaxVelocity(20.);
-    DEM_sim.SetExpandSafetyParam(1.2);
-    DEM_sim.SetInitBinSize(scales.at(2));
-    DEM_sim.Initialize();
+    DEMSim.SetCDUpdateFreq(10);
+    // DEMSim.SetExpandFactor(1e-3);
+    DEMSim.SetMaxVelocity(20.);
+    DEMSim.SetExpandSafetyParam(1.2);
+    DEMSim.SetInitBinSize(scales.at(2));
+    DEMSim.Initialize();
 
     unsigned int fps = 20;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
@@ -183,14 +183,14 @@ int main() {
         std::cout << "Frame: " << currframe << std::endl;
         char filename[200];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-        DEM_sim.WriteSphereFile(std::string(filename));
-        DEM_sim.DoDynamicsThenSync(settle_frame_time);
-        DEM_sim.ShowThreadCollaborationStats();
+        DEMSim.WriteSphereFile(std::string(filename));
+        DEMSim.DoDynamicsThenSync(settle_frame_time);
+        DEMSim.ShowThreadCollaborationStats();
     }
 
     char cp_filename[200];
     sprintf(cp_filename, "%s/GRC_2e6_mid.csv", out_dir.c_str());
-    DEM_sim.WriteClumpFile(std::string(cp_filename));
+    DEMSim.WriteClumpFile(std::string(cp_filename));
 
     matter_volume = void_ratio_finder->GetValue();
     std::cout << "Void ratio after settling " << (total_volume - matter_volume) / matter_volume << std::endl;
@@ -208,14 +208,14 @@ int main() {
             std::cout << "Highest point is at " << now_z << std::endl;
             matter_volume = void_ratio_finder->GetValue();
             std::cout << "Void ratio in compression " << (total_volume - matter_volume) / matter_volume << std::endl;
-            DEM_sim.ShowThreadCollaborationStats();
+            DEMSim.ShowThreadCollaborationStats();
             char filename[200];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-            DEM_sim.WriteSphereFile(std::string(filename));
+            DEMSim.WriteSphereFile(std::string(filename));
         }
         now_z -= compressor_v * step_size;
         compressor_tracker->SetPos(make_float3(0, 0, now_z));
-        DEM_sim.DoDynamics(step_size);
+        DEMSim.DoDynamics(step_size);
     }
     // Then gradually remove the compressor
     for (float t = 0; t < compress_time; t += step_size, curr_step++) {
@@ -224,22 +224,22 @@ int main() {
             std::cout << "Highest point is at " << now_z << std::endl;
             matter_volume = void_ratio_finder->GetValue();
             std::cout << "Void ratio in compression " << (total_volume - matter_volume) / matter_volume << std::endl;
-            DEM_sim.ShowThreadCollaborationStats();
+            DEMSim.ShowThreadCollaborationStats();
             char filename[200];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-            DEM_sim.WriteSphereFile(std::string(filename));
+            DEMSim.WriteSphereFile(std::string(filename));
         }
         now_z += compressor_v * step_size;
         compressor_tracker->SetPos(make_float3(0, 0, now_z));
-        DEM_sim.DoDynamics(step_size);
+        DEMSim.DoDynamics(step_size);
     }
 
     // Final write
     char cp2_filename[200];
     sprintf(cp2_filename, "%s/GRC_2e6.csv", out_dir.c_str());
-    DEM_sim.WriteClumpFile(std::string(cp2_filename));
+    DEMSim.WriteClumpFile(std::string(cp2_filename));
 
-    DEM_sim.ClearThreadCollaborationStats();
+    DEMSim.ClearThreadCollaborationStats();
 
     std::cout << "DEMdemo_GRCPrep_Part2 exiting..." << std::endl;
     return 0;

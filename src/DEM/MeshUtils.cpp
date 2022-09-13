@@ -34,10 +34,10 @@
 #include <unordered_map>
 
 #include <nvmath/helper_math.cuh>
-#include <DEM/DEMBdrsAndObjs.h>
+#include <DEM/BdrsAndObjs.h>
 #include <core/utils/WavefrontMeshLoader.hpp>
 
-namespace smug {
+namespace deme {
 
 using namespace WAVEFRONT;
 
@@ -165,4 +165,4 @@ void DEMMeshConnected::WriteWavefront(const std::string& filename, std::vector<D
     mf.close();
 }
 
-}  // end namespace smug
+}  // end namespace deme

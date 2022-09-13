@@ -13,14 +13,14 @@
 #include <chrono>
 #include <filesystem>
 
-using namespace smug;
+using namespace deme;
 using namespace std::filesystem;
 
 int main() {
-    DEMSolver DEM_sim;
-    DEM_sim.UseFrictionalHertzianModel();
-    DEM_sim.SetVerbosity(STEP_STATS);
-    DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
+    DEMSolver DEMSim;
+    DEMSim.UseFrictionalHertzianModel();
+    DEMSim.SetVerbosity(STEP_STATS);
+    DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
 
     srand(42);
 
@@ -36,12 +36,12 @@ int main() {
     float min_relpos = -0.01;
     float max_relpos = 0.01;
 
-    auto mat_type_1 = DEM_sim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
-    auto mat_type_2 = DEM_sim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.7}, {"mu", 0.5}});
+    auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
+    auto mat_type_2 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.7}, {"mu", 0.5}});
 
     // First create clump type 0 for representing the ground
     float ground_sp_r = 0.02;
-    auto template_ground = DEM_sim.LoadSphereType(0.5, ground_sp_r, mat_type_1);
+    auto template_ground = DEMSim.LoadSphereType(0.5, ground_sp_r, mat_type_1);
 
     // Make an array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
@@ -86,7 +86,7 @@ int main() {
         // LoadClumpType returns a shared_ptr that points to this template so you may modify it. Also, material can be
         // vector or a material shared ptr, and in the latter case it will just be applied to all component spheres this
         // clump has.
-        auto clump_ptr = DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat_type_1);
+        auto clump_ptr = DEMSim.LoadClumpType(mass, MOI, radii, relPos, mat_type_1);
         clump_types.push_back(clump_ptr);
     }
 
@@ -96,10 +96,10 @@ int main() {
     std::vector<unsigned int> family_code;
     auto input_ground_xyz = sampler1.SampleBox(make_float3(0, 0, -3.8), make_float3(5.0, 5.0, 0.001));
     family_code.insert(family_code.end(), input_ground_xyz.size(), 1);
-    DEM_sim.DisableContactBetweenFamilies(1, 1);
-    DEM_sim.SetFamilyFixed(1);
+    DEMSim.DisableContactBetweenFamilies(1, 1);
+    DEMSim.SetFamilyFixed(1);
     input_ground_clump_type.insert(input_ground_clump_type.end(), input_ground_xyz.size(), template_ground);
-    auto ground = DEM_sim.AddClumps(input_ground_clump_type, input_ground_xyz);
+    auto ground = DEMSim.AddClumps(input_ground_clump_type, input_ground_xyz);
     ground->SetFamilies(family_code);
 
     // Generate initial clumps for piling
@@ -118,30 +118,30 @@ int main() {
         family_code.push_back(0);
     }
     // Calling AddClumps a second time will just add more clumps to the system
-    auto the_pile = DEM_sim.AddClumps(input_pile_template_type, input_pile_xyz);
+    auto the_pile = DEMSim.AddClumps(input_pile_template_type, input_pile_xyz);
     the_pile->SetFamilies(family_code);
 
-    // DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
-    DEM_sim.InstructBoxDomainDimension(20, 20, 30);
+    // DEMSim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
+    DEMSim.InstructBoxDomainDimension(20, 20, 30);
 
     // Planes are all defaulted to fixed
-    DEM_sim.AddBCPlane(make_float3(0, 4.5, 0), make_float3(0, -1, 0), mat_type_2);
-    DEM_sim.AddBCPlane(make_float3(0, -4.5, 0), make_float3(0, 1, 0), mat_type_2);
-    DEM_sim.AddBCPlane(make_float3(4.5, 0, 0), make_float3(-1, 0, 0), mat_type_2);
-    std::shared_ptr<DEMExternObj> plane_a = DEM_sim.AddExternalObject();
+    DEMSim.AddBCPlane(make_float3(0, 4.5, 0), make_float3(0, -1, 0), mat_type_2);
+    DEMSim.AddBCPlane(make_float3(0, -4.5, 0), make_float3(0, 1, 0), mat_type_2);
+    DEMSim.AddBCPlane(make_float3(4.5, 0, 0), make_float3(-1, 0, 0), mat_type_2);
+    std::shared_ptr<DEMExternObj> plane_a = DEMSim.AddExternalObject();
     plane_a->AddPlane(make_float3(-4.5, 0, 0), make_float3(1, 0, 0), mat_type_2);
 
-    DEM_sim.SetCoordSysOrigin("center");
-    DEM_sim.SetInitTimeStep(5e-6);
-    DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    DEMSim.SetCoordSysOrigin("center");
+    DEMSim.SetInitTimeStep(5e-6);
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEM_sim.SetCDUpdateFreq(20);
-    // DEM_sim.SetExpandFactor(1e-3);
-    DEM_sim.SetMaxVelocity(10.);
-    DEM_sim.SetExpandSafetyParam(2.);
-    DEM_sim.Initialize();
+    DEMSim.SetCDUpdateFreq(20);
+    // DEMSim.SetExpandFactor(1e-3);
+    DEMSim.SetMaxVelocity(10.);
+    DEMSim.SetExpandSafetyParam(2.);
+    DEMSim.Initialize();
 
-    DEM_sim.UpdateSimParams();  // Not needed; just testing if this function works...
+    DEMSim.UpdateSimParams();  // Not needed; just testing if this function works...
 
     path out_dir = current_path();
     out_dir += "/DEMdemo_Pile";
@@ -150,14 +150,14 @@ int main() {
     for (int i = 0; i < 200; i++) {
         char filename[100];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-        DEM_sim.WriteSphereFile(std::string(filename));
+        DEMSim.WriteSphereFile(std::string(filename));
         std::cout << "Frame: " << i << std::endl;
-        // float KE = DEM_sim.GetTotalKineticEnergy();
+        // float KE = DEMSim.GetTotalKineticEnergy();
         // std::cout << "Total kinetic energy: " << KE << std::endl;
-        DEM_sim.DoDynamicsThenSync(5e-2);
+        DEMSim.DoDynamicsThenSync(5e-2);
     }
-    DEM_sim.ShowTimingStats();
-    DEM_sim.ClearTimingStats();
+    DEMSim.ShowTimingStats();
+    DEMSim.ClearTimingStats();
 
     std::cout << "DEMdemo_Pile exiting..." << std::endl;
     return 0;

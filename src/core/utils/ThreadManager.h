@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SMUG_THREAD_MANAGER_H
-#define SMUG_THREAD_MANAGER_H
+#ifndef DEME_THREAD_MANAGER_H
+#define DEME_THREAD_MANAGER_H
 
 #include <atomic>
 #include <condition_variable>

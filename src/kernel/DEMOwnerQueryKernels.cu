@@ -1,5 +1,5 @@
 // DEM kernels used for quarrying (statistical) information from the current simulation system
-#include <DEM/DEMDefines.h>
+#include <DEM/Defines.h>
 #include <kernel/DEMHelperKernels.cu>
 
 // Mass properties are below, if jitified mass properties are in use
@@ -7,8 +7,8 @@ _massDefs_;
 _moiDefs_;
 _volumeDefs_;
 
-__global__ void computeKE(smug::DEMDataDT* granData, size_t nOwnerBodies, double* KE) {
-    smug::bodyID_t myOwner = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void computeKE(deme::DEMDataDT* granData, size_t nOwnerBodies, double* KE) {
+    deme::bodyID_t myOwner = blockIdx.x * blockDim.x + threadIdx.x;
     if (myOwner < nOwnerBodies) {
         float myMass;
         float3 myMOI;
@@ -36,12 +36,12 @@ __global__ void computeKE(smug::DEMDataDT* granData, size_t nOwnerBodies, double
     }
 }
 
-__global__ void inspectOwnerProperty(smug::DEMDataDT* granData,
-                                     smug::DEMSimParams* simParams,
+__global__ void inspectOwnerProperty(deme::DEMDataDT* granData,
+                                     deme::DEMSimParams* simParams,
                                      float* quantity,
-                                     smug::notStupidBool_t* not_in_region,
+                                     deme::notStupidBool_t* not_in_region,
                                      size_t nOwnerBodies) {
-    smug::bodyID_t myOwner = blockIdx.x * blockDim.x + threadIdx.x;
+    deme::bodyID_t myOwner = blockIdx.x * blockDim.x + threadIdx.x;
     if (myOwner < nOwnerBodies) {
         float oriQw, oriQx, oriQy, oriQz;
         double ownerX, ownerY, ownerZ;
@@ -57,7 +57,7 @@ __global__ void inspectOwnerProperty(smug::DEMDataDT* granData,
         // Use an input named exactly `myOwner' which is the id of this owner
         { _moiAcqStrat_; }
 
-        voxelIDToPosition<double, smug::voxelID_t, smug::subVoxelPos_t>(
+        voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
             ownerX, ownerY, ownerZ, granData->voxelID[myOwner], granData->locX[myOwner], granData->locY[myOwner],
             granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
         oriQw = granData->oriQw[myOwner];

@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SMUG_DEM_HOST_HELPERS
-#define SMUG_DEM_HOST_HELPERS
+#ifndef DEME_HOST_HELPERS
+#define DEME_HOST_HELPERS
 
 #include <iostream>
 #include <sstream>
@@ -19,9 +19,9 @@
 #include <filesystem>
 #include <nvmath/helper_math.cuh>
 #include <DEM/VariableTypes.h>
-// #include <DEM/DEMDefines.h>
+// #include <DEM/Defines.h>
 
-namespace smug {
+namespace deme {
 
 // In an upper-triangular matrix, given i and j, this function returns the index of the corresponding flatten-ed
 // non-zero entries. This function does not assume i <= j.
@@ -438,6 +438,6 @@ inline std::string read_file_to_string(const std::filesystem::path& sourcefile) 
     return buffer.str();
 }
 
-}  // namespace smug
+}  // namespace deme
 
 #endif

@@ -1,5 +1,5 @@
-#ifndef SMUG_GPU_MANAGER_H
-#define SMUG_GPU_MANAGER_H
+#ifndef DEME_GPU_MANAGER_H
+#define DEME_GPU_MANAGER_H
 
 #include <cuda_runtime_api.h>
 #include <vector>

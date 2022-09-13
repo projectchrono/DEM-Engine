@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SMUG_DEM_API
-#define SMUG_DEM_API
+#ifndef DEME_API
+#define DEME_API
 
 #include <vector>
 #include <set>
@@ -17,13 +17,13 @@
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
 #include <nvmath/helper_math.cuh>
-#include <DEM/DEMDefines.h>
-#include <DEM/DEMStructs.h>
-#include <DEM/DEMBdrsAndObjs.h>
-#include <DEM/DEMModels.h>
-#include <DEM/DEMAuxClasses.h>
+#include <DEM/Defines.h>
+#include <DEM/Structs.h>
+#include <DEM/BdrsAndObjs.h>
+#include <DEM/Models.h>
+#include <DEM/AuxClasses.h>
 
-namespace smug {
+namespace deme {
 
 // class DEMKinematicThread;
 // class DEMDynamicThread;
@@ -47,12 +47,12 @@ class DEMSolver {
     ~DEMSolver();
 
     /// Set output detail level
-    void SetVerbosity(DEM_VERBOSITY verbose) { verbosity = verbose; }
+    void SetVerbosity(VERBOSITY verbose) { verbosity = verbose; }
 
     /// Instruct the dimension of the `world'. On initialization, this info will be used to figure out how to assign the
     /// num of voxels in each direction. If your `useful' domain is not box-shaped, then define a box that contains your
     /// domian. O is the coordinate of the left-bottom-front point of your simulation `world'.
-    void InstructBoxDomainDimension(float x, float y, float z, DEM_SPATIAL_DIR dir_exact = DEM_SPATIAL_DIR::NONE);
+    void InstructBoxDomainDimension(float x, float y, float z, SPATIAL_DIR dir_exact = SPATIAL_DIR::NONE);
 
     /// Explicitly instruct the number of voxels (as 2^{x,y,z}) along each direction, as well as the smallest unit
     /// length l. This is usually for test purposes, and will overwrite other size-related definitions of the big
@@ -90,7 +90,7 @@ class DEMSolver {
     }
 
     /// Set the integrator for this simulator
-    void SetIntegrator(DEM_TIME_INTEGRATOR intg) { m_integrator = intg; }
+    void SetIntegrator(TIME_INTEGRATOR intg) { m_integrator = intg; }
 
     /// Return whether this simulation system is initialized
     bool GetInitStatus() { return sys_initialized; }
@@ -135,7 +135,7 @@ class DEMSolver {
     void SetJitifyMassProperties(bool use = true) { jitify_mass_moi = use; }
 
     /// Instruct the contact detection process to use one thread to process a bin (if true), instead of using a block to
-    /// process a bin. This probably also requires you to manually set a smaller SMUG_DEM_MAX_SPHERES_PER_BIN. This can
+    /// process a bin. This probably also requires you to manually set a smaller DEME_MAX_SPHERES_PER_BIN. This can
     /// potentially be faster especially in a scenario where the spheres are of similar sizes.
     void SetOneBinPerThread(bool use = true) { use_one_bin_per_thread = use; }
 
@@ -327,10 +327,10 @@ class DEMSolver {
     /// Returns an unordered_map which maps each unique clump type name to a vector of float3 (XYZ coordinates).
     static std::unordered_map<std::string, std::vector<float3>> ReadClumpXyzFromCsv(
         const std::string& infilename,
-        const std::string& clump_header = DEM_OUTPUT_FILE_CLUMP_TYPE_NAME,
-        const std::string& x_header = DEM_OUTPUT_FILE_X_COL_NAME,
-        const std::string& y_header = DEM_OUTPUT_FILE_Y_COL_NAME,
-        const std::string& z_header = DEM_OUTPUT_FILE_Z_COL_NAME) {
+        const std::string& clump_header = OUTPUT_FILE_CLUMP_TYPE_NAME,
+        const std::string& x_header = OUTPUT_FILE_X_COL_NAME,
+        const std::string& y_header = OUTPUT_FILE_Y_COL_NAME,
+        const std::string& z_header = OUTPUT_FILE_Z_COL_NAME) {
         std::unordered_map<std::string, std::vector<float3>> type_xyz_map;
         io::CSVReader<4, io::trim_chars<' ', '\t'>, io::no_quote_escape<','>, io::throw_on_overflow,
                       io::empty_line_comment>
@@ -350,7 +350,7 @@ class DEMSolver {
     /// quaternion, (1, 0, 0, 0) means 0 rotation).
     static std::unordered_map<std::string, std::vector<float4>> ReadClumpQuatFromCsv(
         const std::string& infilename,
-        const std::string& clump_header = DEM_OUTPUT_FILE_CLUMP_TYPE_NAME,
+        const std::string& clump_header = OUTPUT_FILE_CLUMP_TYPE_NAME,
         const std::string& qw_header = "Qw",
         const std::string& qx_header = "Qx",
         const std::string& qy_header = "Qy",
@@ -421,25 +421,25 @@ class DEMSolver {
 
     // Choose between outputting particles as individual component spheres (results in larger files but less
     // post-processing), or as owner clumps (e.g. xyz location means clump CoM locations, etc.), by
-    // DEM_OUTPUT_MODE::SPHERE and DEM_OUTPUT_MODE::CLUMP options.
+    // OUTPUT_MODE::SPHERE and OUTPUT_MODE::CLUMP options.
     // NOTE: I did not implement this functionality; the flavor of output depends on the actual write-to-file function
     // call.
-    // void SetClumpOutputMode(DEM_OUTPUT_MODE mode) { m_clump_out_mode = mode; }
+    // void SetClumpOutputMode(OUTPUT_MODE mode) { m_clump_out_mode = mode; }
 
     /// Choose output format
-    void SetOutputFormat(DEM_OUTPUT_FORMAT format) { m_out_format = format; }
+    void SetOutputFormat(OUTPUT_FORMAT format) { m_out_format = format; }
     /// Specify the information that needs to go into the clump or sphere output files
     void SetOutputContent(unsigned int content) { m_out_content = content; }
     /// Specify the file format of contact pairs
-    void SetContactOutputFormat(DEM_OUTPUT_FORMAT format) { m_cnt_out_format = format; }
+    void SetContactOutputFormat(OUTPUT_FORMAT format) { m_cnt_out_format = format; }
     /// Specify the information that needs to go into the contact pair output files
     void SetContactOutputContent(unsigned int content) { m_cnt_out_content = content; }
 
     /// Let dT do this call and return the reduce value of the inspected quantity
     float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
                           const std::string& kernel_name,
-                          DEM_INSPECT_ENTITY_TYPE thing_to_insp,
-                          DEM_CUB_REDUCE_FLAVOR reduce_flavor,
+                          INSPECT_ENTITY_TYPE thing_to_insp,
+                          CUB_REDUCE_FLAVOR reduce_flavor,
                           bool all_domain);
 
   private:
@@ -448,7 +448,7 @@ class DEMSolver {
     ////////////////////////////////////////////////////////////////////////////////
 
     // Verbosity
-    DEM_VERBOSITY verbosity = INFO;
+    VERBOSITY verbosity = INFO;
     // If true, kT should sort contact arrays then transfer them to dT
     bool kT_should_sort = true;
     // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
@@ -470,13 +470,13 @@ class DEMSolver {
 
     // I/O related flags
     // The output file format for clumps and spheres
-    // DEM_OUTPUT_MODE m_clump_out_mode = DEM_OUTPUT_MODE::SPHERE;
-    DEM_OUTPUT_FORMAT m_out_format = DEM_OUTPUT_FORMAT::CSV;
-    unsigned int m_out_content = DEM_OUTPUT_CONTENT::QUAT | DEM_OUTPUT_CONTENT::ABSV;
+    // OUTPUT_MODE m_clump_out_mode = OUTPUT_MODE::SPHERE;
+    OUTPUT_FORMAT m_out_format = OUTPUT_FORMAT::CSV;
+    unsigned int m_out_content = OUTPUT_CONTENT::QUAT | OUTPUT_CONTENT::ABSV;
     // The output file format for contact pairs
-    DEM_OUTPUT_FORMAT m_cnt_out_format = DEM_OUTPUT_FORMAT::CSV;
+    OUTPUT_FORMAT m_cnt_out_format = OUTPUT_FORMAT::CSV;
     // The output file content for contact pairs
-    unsigned int m_cnt_out_content = DEM_CNT_OUTPUT_CONTENT::FORCE | DEM_CNT_OUTPUT_CONTENT::POINT;
+    unsigned int m_cnt_out_content = CNT_OUTPUT_CONTENT::FORCE | CNT_OUTPUT_CONTENT::POINT;
 
     // User instructed simulation `world' size. Note it is an approximate of the true size and we will generate a world
     // not smaller than this.
@@ -549,17 +549,17 @@ class DEMSolver {
     std::shared_ptr<DEMMaterial> m_bounding_box_material;
     // Along which direction the size of the simulation world representable with our integer-based voxels needs to be
     // exactly the same as user-instructed simulation domain size?
-    DEM_SPATIAL_DIR m_box_dir_length_is_exact = DEM_SPATIAL_DIR::NONE;
+    SPATIAL_DIR m_box_dir_length_is_exact = SPATIAL_DIR::NONE;
 
     // If we should ensure that when kernel jitification fails, the line number reported reflexes where error happens
     bool m_ensure_kernel_line_num = false;
 
     // Integrator type
-    DEM_TIME_INTEGRATOR m_integrator = DEM_TIME_INTEGRATOR::EXTENDED_TAYLOR;
+    TIME_INTEGRATOR m_integrator = TIME_INTEGRATOR::EXTENDED_TAYLOR;
 
     // The force model which will be used
     std::shared_ptr<DEMForceModel> m_force_model =
-        std::make_shared<DEMForceModel>(std::move(DEMForceModel(DEM_FORCE_MODEL::HERTZIAN)));
+        std::make_shared<DEMForceModel>(std::move(DEMForceModel(FORCE_MODEL::HERTZIAN)));
 
     ////////////////////////////////////////////////////////////////////////////////
     // No user method is provided to modify the following key quantities, even if
@@ -838,7 +838,7 @@ class DEMSolver {
     void allocateGPUArrays();
     /// Pack array pointers to a struct so they can be easily used as kernel arguments
     void packDataPointers();
-    /// Warn users if the data types defined in DEMDefines.h do not blend well with the user inputs (fist-round
+    /// Warn users if the data types defined in Defines.h do not blend well with the user inputs (fist-round
     /// coarse-grain sanity check)
     void validateUserInputs();
     /// Prepare the material/contact proxy matrix force computation kernels
@@ -871,7 +871,7 @@ class DEMSolver {
                              const float d1 = 0.f,
                              const float d2 = 0.f,
                              const float d3 = 0.f,
-                             const objNormal_t normal = DEM_ENTITY_NORMAL_INWARD);
+                             const objNormal_t normal = ENTITY_NORMAL_INWARD);
 
     // Some JIT packaging helpers
     inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap);
@@ -886,6 +886,6 @@ class DEMSolver {
     inline void equipIntegrationScheme(std::unordered_map<std::string, std::string>& strMap);
 };
 
-}  // namespace smug
+}  // namespace deme
 
 #endif

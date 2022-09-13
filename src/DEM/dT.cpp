@@ -15,11 +15,11 @@
 #include <DEM/kT.h>
 #include <DEM/HostSideHelpers.hpp>
 #include <nvmath/helper_math.cuh>
-#include <DEM/DEMDefines.h>
+#include <DEM/Defines.h>
 
 #include <algorithms/DEMCubBasedSubroutines.h>
 
-namespace smug {
+namespace deme {
 
 // Put sim data array pointers in place
 void DEMDynamicThread::packDataPointers() {
@@ -158,10 +158,10 @@ float DEMDynamicThread::getKineticEnergy() {
     // size_t returnSize = sizeof(double);
     // double* KE = (double*)stateOfSolver_resources.allocateTempVector(2, returnSize);
     // size_t blocks_needed_for_KE =
-    //     (simParams->nOwnerBodies + SMUG_DEM_MAX_THREADS_PER_BLOCK - 1) / SMUG_DEM_MAX_THREADS_PER_BLOCK;
+    //     (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     // quarry_stats_kernels->kernel("computeKE")
     //     .instantiate()
-    //     .configure(dim3(blocks_needed_for_KE), dim3(SMUG_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+    //     .configure(dim3(blocks_needed_for_KE), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
     //     .launch(granData, simParams->nOwnerBodies, KEArr);
     // GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     // // displayArray<double>(KEArr, simParams->nOwnerBodies);
@@ -190,22 +190,21 @@ void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const 
     notStupidBool_t* idBool = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(3, idBoolSize);
     GPU_CALL(cudaMemset(idBool, 0, idBoolSize));
     float* ownerFactors = (float*)stateOfSolver_resources.allocateTempVector(4, ownerFactorSize);
-    size_t blocks_needed_for_marking =
-        (IDs.size() + SMUG_DEM_MAX_THREADS_PER_BLOCK - 1) / SMUG_DEM_MAX_THREADS_PER_BLOCK;
+    size_t blocks_needed_for_marking = (IDs.size() + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
 
     // Mark on the bool array those owners that need a change
     misc_kernels->kernel("markOwnerToChange")
         .instantiate()
-        .configure(dim3(blocks_needed_for_marking), dim3(SMUG_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+        .configure(dim3(blocks_needed_for_marking), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
         .launch(idBool, ownerFactors, dIDs, dFactors, IDs.size());
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     // Change the size of the sphere components in question
     size_t blocks_needed_for_changing =
-        (simParams->nSpheresGM + SMUG_DEM_MAX_THREADS_PER_BLOCK - 1) / SMUG_DEM_MAX_THREADS_PER_BLOCK;
+        (simParams->nSpheresGM + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     misc_kernels->kernel("dTModifyComponents")
         .instantiate()
-        .configure(dim3(blocks_needed_for_changing), dim3(SMUG_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+        .configure(dim3(blocks_needed_for_changing), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
         .launch(granData, idBool, ownerFactors, simParams->nSpheresGM);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -242,125 +241,124 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     simParams->nMatTuples = nMatTuples;
 
     // Resize to the number of clumps
-    SMUG_DEM_TRACKED_RESIZE(familyID, nOwnerBodies, "familyID", 0);
-    SMUG_DEM_TRACKED_RESIZE(voxelID, nOwnerBodies, "voxelID", 0);
-    SMUG_DEM_TRACKED_RESIZE(locX, nOwnerBodies, "locX", 0);
-    SMUG_DEM_TRACKED_RESIZE(locY, nOwnerBodies, "locY", 0);
-    SMUG_DEM_TRACKED_RESIZE(locZ, nOwnerBodies, "locZ", 0);
-    SMUG_DEM_TRACKED_RESIZE(oriQw, nOwnerBodies, "oriQw", 1);
-    SMUG_DEM_TRACKED_RESIZE(oriQx, nOwnerBodies, "oriQx", 0);
-    SMUG_DEM_TRACKED_RESIZE(oriQy, nOwnerBodies, "oriQy", 0);
-    SMUG_DEM_TRACKED_RESIZE(oriQz, nOwnerBodies, "oriQz", 0);
-    SMUG_DEM_TRACKED_RESIZE(vX, nOwnerBodies, "vX", 0);
-    SMUG_DEM_TRACKED_RESIZE(vY, nOwnerBodies, "vY", 0);
-    SMUG_DEM_TRACKED_RESIZE(vZ, nOwnerBodies, "vZ", 0);
-    SMUG_DEM_TRACKED_RESIZE(omgBarX, nOwnerBodies, "omgBarX", 0);
-    SMUG_DEM_TRACKED_RESIZE(omgBarY, nOwnerBodies, "omgBarY", 0);
-    SMUG_DEM_TRACKED_RESIZE(omgBarZ, nOwnerBodies, "omgBarZ", 0);
-    SMUG_DEM_TRACKED_RESIZE(aX, nOwnerBodies, "aX", 0);
-    SMUG_DEM_TRACKED_RESIZE(aY, nOwnerBodies, "aY", 0);
-    SMUG_DEM_TRACKED_RESIZE(aZ, nOwnerBodies, "aZ", 0);
-    SMUG_DEM_TRACKED_RESIZE(alphaX, nOwnerBodies, "alphaX", 0);
-    SMUG_DEM_TRACKED_RESIZE(alphaY, nOwnerBodies, "alphaY", 0);
-    SMUG_DEM_TRACKED_RESIZE(alphaZ, nOwnerBodies, "alphaZ", 0);
+    DEME_TRACKED_RESIZE(familyID, nOwnerBodies, "familyID", 0);
+    DEME_TRACKED_RESIZE(voxelID, nOwnerBodies, "voxelID", 0);
+    DEME_TRACKED_RESIZE(locX, nOwnerBodies, "locX", 0);
+    DEME_TRACKED_RESIZE(locY, nOwnerBodies, "locY", 0);
+    DEME_TRACKED_RESIZE(locZ, nOwnerBodies, "locZ", 0);
+    DEME_TRACKED_RESIZE(oriQw, nOwnerBodies, "oriQw", 1);
+    DEME_TRACKED_RESIZE(oriQx, nOwnerBodies, "oriQx", 0);
+    DEME_TRACKED_RESIZE(oriQy, nOwnerBodies, "oriQy", 0);
+    DEME_TRACKED_RESIZE(oriQz, nOwnerBodies, "oriQz", 0);
+    DEME_TRACKED_RESIZE(vX, nOwnerBodies, "vX", 0);
+    DEME_TRACKED_RESIZE(vY, nOwnerBodies, "vY", 0);
+    DEME_TRACKED_RESIZE(vZ, nOwnerBodies, "vZ", 0);
+    DEME_TRACKED_RESIZE(omgBarX, nOwnerBodies, "omgBarX", 0);
+    DEME_TRACKED_RESIZE(omgBarY, nOwnerBodies, "omgBarY", 0);
+    DEME_TRACKED_RESIZE(omgBarZ, nOwnerBodies, "omgBarZ", 0);
+    DEME_TRACKED_RESIZE(aX, nOwnerBodies, "aX", 0);
+    DEME_TRACKED_RESIZE(aY, nOwnerBodies, "aY", 0);
+    DEME_TRACKED_RESIZE(aZ, nOwnerBodies, "aZ", 0);
+    DEME_TRACKED_RESIZE(alphaX, nOwnerBodies, "alphaX", 0);
+    DEME_TRACKED_RESIZE(alphaY, nOwnerBodies, "alphaY", 0);
+    DEME_TRACKED_RESIZE(alphaZ, nOwnerBodies, "alphaZ", 0);
 
     // Resize the family mask `matrix' (in fact it is flattened)
-    SMUG_DEM_TRACKED_RESIZE(familyMaskMatrix, (DEM_NUM_AVAL_FAMILIES - 1) * DEM_NUM_AVAL_FAMILIES / 2,
-                            "familyMaskMatrix", DEM_DONT_PREVENT_CONTACT);
+    DEME_TRACKED_RESIZE(familyMaskMatrix, (NUM_AVAL_FAMILIES - 1) * NUM_AVAL_FAMILIES / 2, "familyMaskMatrix",
+                        DONT_PREVENT_CONTACT);
 
     // Resize to the number of geometries
-    SMUG_DEM_TRACKED_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
-    SMUG_DEM_TRACKED_RESIZE(sphereMaterialOffset, nSpheresGM, "sphereMaterialOffset", 0);
+    DEME_TRACKED_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
+    DEME_TRACKED_RESIZE(sphereMaterialOffset, nSpheresGM, "sphereMaterialOffset", 0);
     // For clump component offset, it's only needed if clump components are jitified
     if (solverFlags.useClumpJitify) {
-        SMUG_DEM_TRACKED_RESIZE(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
+        DEME_TRACKED_RESIZE(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
         // This extended component offset array can hold offset numbers even for big clumps (whereas
         // clumpComponentOffset is typically uint_8, so it may not). If a sphere's component offset index falls in this
         // range then it is not jitified, and the kernel needs to look for it in the global memory.
-        SMUG_DEM_TRACKED_RESIZE(clumpComponentOffsetExt, nSpheresGM, "clumpComponentOffsetExt", 0);
-        SMUG_DEM_TRACKED_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);
-        SMUG_DEM_TRACKED_RESIZE(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
-        SMUG_DEM_TRACKED_RESIZE(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
-        SMUG_DEM_TRACKED_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
+        DEME_TRACKED_RESIZE(clumpComponentOffsetExt, nSpheresGM, "clumpComponentOffsetExt", 0);
+        DEME_TRACKED_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);
+        DEME_TRACKED_RESIZE(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
+        DEME_TRACKED_RESIZE(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
+        DEME_TRACKED_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
     } else {
-        SMUG_DEM_TRACKED_RESIZE(radiiSphere, nSpheresGM, "radiiSphere", 0);
-        SMUG_DEM_TRACKED_RESIZE(relPosSphereX, nSpheresGM, "relPosSphereX", 0);
-        SMUG_DEM_TRACKED_RESIZE(relPosSphereY, nSpheresGM, "relPosSphereY", 0);
-        SMUG_DEM_TRACKED_RESIZE(relPosSphereZ, nSpheresGM, "relPosSphereZ", 0);
+        DEME_TRACKED_RESIZE(radiiSphere, nSpheresGM, "radiiSphere", 0);
+        DEME_TRACKED_RESIZE(relPosSphereX, nSpheresGM, "relPosSphereX", 0);
+        DEME_TRACKED_RESIZE(relPosSphereY, nSpheresGM, "relPosSphereY", 0);
+        DEME_TRACKED_RESIZE(relPosSphereZ, nSpheresGM, "relPosSphereZ", 0);
     }
 
     // Resize to the number of triangle facets
-    SMUG_DEM_TRACKED_RESIZE(ownerMesh, nTriGM, "ownerMesh", 0);
-    SMUG_DEM_TRACKED_RESIZE(relPosNode1, nTriGM, "relPosNode1", make_float3(0));
-    SMUG_DEM_TRACKED_RESIZE(relPosNode2, nTriGM, "relPosNode2", make_float3(0));
-    SMUG_DEM_TRACKED_RESIZE(relPosNode3, nTriGM, "relPosNode3", make_float3(0));
-    SMUG_DEM_TRACKED_RESIZE(triMaterialOffset, nTriGM, "triMaterialOffset", 0);
+    DEME_TRACKED_RESIZE(ownerMesh, nTriGM, "ownerMesh", 0);
+    DEME_TRACKED_RESIZE(relPosNode1, nTriGM, "relPosNode1", make_float3(0));
+    DEME_TRACKED_RESIZE(relPosNode2, nTriGM, "relPosNode2", make_float3(0));
+    DEME_TRACKED_RESIZE(relPosNode3, nTriGM, "relPosNode3", make_float3(0));
+    DEME_TRACKED_RESIZE(triMaterialOffset, nTriGM, "triMaterialOffset", 0);
 
     // Resize to the number of analytical geometries
-    SMUG_DEM_TRACKED_RESIZE(ownerAnalBody, nAnalGM, "ownerAnalBody", 0);
+    DEME_TRACKED_RESIZE(ownerAnalBody, nAnalGM, "ownerAnalBody", 0);
 
     // Resize to number of owners
-    SMUG_DEM_TRACKED_RESIZE(ownerTypes, nOwnerBodies, "ownerTypes", 0);
-    SMUG_DEM_TRACKED_RESIZE(inertiaPropOffsets, nOwnerBodies, "inertiaPropOffsets", 0);
+    DEME_TRACKED_RESIZE(ownerTypes, nOwnerBodies, "ownerTypes", 0);
+    DEME_TRACKED_RESIZE(inertiaPropOffsets, nOwnerBodies, "inertiaPropOffsets", 0);
     // If we jitify mass properties, then
     if (solverFlags.useMassJitify) {
-        SMUG_DEM_TRACKED_RESIZE(massOwnerBody, nMassProperties, "massOwnerBody", 0);
-        SMUG_DEM_TRACKED_RESIZE(mmiXX, nMassProperties, "mmiXX", 0);
-        SMUG_DEM_TRACKED_RESIZE(mmiYY, nMassProperties, "mmiYY", 0);
-        SMUG_DEM_TRACKED_RESIZE(mmiZZ, nMassProperties, "mmiZZ", 0);
+        DEME_TRACKED_RESIZE(massOwnerBody, nMassProperties, "massOwnerBody", 0);
+        DEME_TRACKED_RESIZE(mmiXX, nMassProperties, "mmiXX", 0);
+        DEME_TRACKED_RESIZE(mmiYY, nMassProperties, "mmiYY", 0);
+        DEME_TRACKED_RESIZE(mmiZZ, nMassProperties, "mmiZZ", 0);
     } else {
-        SMUG_DEM_TRACKED_RESIZE(massOwnerBody, nOwnerBodies, "massOwnerBody", 0);
-        SMUG_DEM_TRACKED_RESIZE(mmiXX, nOwnerBodies, "mmiXX", 0);
-        SMUG_DEM_TRACKED_RESIZE(mmiYY, nOwnerBodies, "mmiYY", 0);
-        SMUG_DEM_TRACKED_RESIZE(mmiZZ, nOwnerBodies, "mmiZZ", 0);
+        DEME_TRACKED_RESIZE(massOwnerBody, nOwnerBodies, "massOwnerBody", 0);
+        DEME_TRACKED_RESIZE(mmiXX, nOwnerBodies, "mmiXX", 0);
+        DEME_TRACKED_RESIZE(mmiYY, nOwnerBodies, "mmiYY", 0);
+        DEME_TRACKED_RESIZE(mmiZZ, nOwnerBodies, "mmiZZ", 0);
     }
     // Volume info is jitified
-    SMUG_DEM_TRACKED_RESIZE(volumeOwnerBody, nMassProperties, "volumeOwnerBody", 0);
+    DEME_TRACKED_RESIZE(volumeOwnerBody, nMassProperties, "volumeOwnerBody", 0);
 
     // Arrays for contact info
     // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is ~ 4n, and I
     // think the max is 6n (although I can't prove it). Note the estimate should be large enough to decrease the number
     // of reallocations in the simulation, but not too large that eats too much memory.
-    SMUG_DEM_TRACKED_RESIZE(idGeometryA, nOwnerBodies * SMUG_DEM_INIT_CNT_MULTIPLIER, "idGeometryA", 0);
-    SMUG_DEM_TRACKED_RESIZE(idGeometryB, nOwnerBodies * SMUG_DEM_INIT_CNT_MULTIPLIER, "idGeometryB", 0);
-    SMUG_DEM_TRACKED_RESIZE(contactForces, nOwnerBodies * SMUG_DEM_INIT_CNT_MULTIPLIER, "contactForces",
-                            make_float3(0));
-    SMUG_DEM_TRACKED_RESIZE(contactTorque_convToForce, nOwnerBodies * SMUG_DEM_INIT_CNT_MULTIPLIER,
-                            "contactTorque_convToForce", make_float3(0));
-    SMUG_DEM_TRACKED_RESIZE(contactType, nOwnerBodies * SMUG_DEM_INIT_CNT_MULTIPLIER, "contactType", DEM_NOT_A_CONTACT);
-    SMUG_DEM_TRACKED_RESIZE(contactPointGeometryA, nOwnerBodies * SMUG_DEM_INIT_CNT_MULTIPLIER, "contactPointGeometryA",
-                            make_float3(0));
-    SMUG_DEM_TRACKED_RESIZE(contactPointGeometryB, nOwnerBodies * SMUG_DEM_INIT_CNT_MULTIPLIER, "contactPointGeometryB",
-                            make_float3(0));
+    DEME_TRACKED_RESIZE(idGeometryA, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "idGeometryA", 0);
+    DEME_TRACKED_RESIZE(idGeometryB, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "idGeometryB", 0);
+    DEME_TRACKED_RESIZE(contactForces, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "contactForces", make_float3(0));
+    DEME_TRACKED_RESIZE(contactTorque_convToForce, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "contactTorque_convToForce",
+                        make_float3(0));
+    DEME_TRACKED_RESIZE(contactType, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "contactType", NOT_A_CONTACT);
+    DEME_TRACKED_RESIZE(contactPointGeometryA, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "contactPointGeometryA",
+                        make_float3(0));
+    DEME_TRACKED_RESIZE(contactPointGeometryB, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "contactPointGeometryB",
+                        make_float3(0));
     // Allocate memory for each wildcard array
     contactWildcards.resize(simParams->nContactWildcards);
     ownerWildcards.resize(simParams->nOwnerWildcards);
     for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
-        SMUG_DEM_TRACKED_RESIZE_FLOAT(contactWildcards[i], nOwnerBodies * SMUG_DEM_INIT_CNT_MULTIPLIER, 0);
+        DEME_TRACKED_RESIZE_FLOAT(contactWildcards[i], nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, 0);
     }
     for (unsigned int i = 0; i < simParams->nOwnerWildcards; i++) {
-        SMUG_DEM_TRACKED_RESIZE_FLOAT(ownerWildcards[i], nOwnerBodies * SMUG_DEM_INIT_CNT_MULTIPLIER, 0);
+        DEME_TRACKED_RESIZE_FLOAT(ownerWildcards[i], nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, 0);
     }
 
     // Transfer buffer arrays
     // The following several arrays will have variable sizes, so here we only used an estimate.
     // It is cudaMalloc-ed memory, not managed, because we want explicit locality control of buffers
-    buffer_size = nOwnerBodies * SMUG_DEM_INIT_CNT_MULTIPLIER;
-    SMUG_DEM_DEVICE_PTR_ALLOC(granData->idGeometryA_buffer, buffer_size);
-    SMUG_DEM_DEVICE_PTR_ALLOC(granData->idGeometryB_buffer, buffer_size);
-    SMUG_DEM_DEVICE_PTR_ALLOC(granData->contactType_buffer, buffer_size);
-    // SMUG_DEM_TRACKED_RESIZE(idGeometryA_buffer, nOwnerBodies * SMUG_DEM_INIT_CNT_MULTIPLIER, "idGeometryA_buffer",
-    // 0); SMUG_DEM_TRACKED_RESIZE(idGeometryB_buffer, nOwnerBodies * SMUG_DEM_INIT_CNT_MULTIPLIER,
-    // "idGeometryB_buffer", 0); SMUG_DEM_TRACKED_RESIZE(contactType_buffer, nOwnerBodies *
-    // SMUG_DEM_INIT_CNT_MULTIPLIER, "contactType_buffer", DEM_NOT_A_CONTACT);
-    // SMUG_DEM_ADVISE_DEVICE(idGeometryA_buffer, streamInfo.device);
-    // SMUG_DEM_ADVISE_DEVICE(idGeometryB_buffer, streamInfo.device);
-    // SMUG_DEM_ADVISE_DEVICE(contactType_buffer, streamInfo.device);
+    buffer_size = nOwnerBodies * DEME_INIT_CNT_MULTIPLIER;
+    DEME_DEVICE_PTR_ALLOC(granData->idGeometryA_buffer, buffer_size);
+    DEME_DEVICE_PTR_ALLOC(granData->idGeometryB_buffer, buffer_size);
+    DEME_DEVICE_PTR_ALLOC(granData->contactType_buffer, buffer_size);
+    // DEME_TRACKED_RESIZE(idGeometryA_buffer, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "idGeometryA_buffer",
+    // 0); DEME_TRACKED_RESIZE(idGeometryB_buffer, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER,
+    // "idGeometryB_buffer", 0); DEME_TRACKED_RESIZE(contactType_buffer, nOwnerBodies *
+    // DEME_INIT_CNT_MULTIPLIER, "contactType_buffer", NOT_A_CONTACT);
+    // DEME_ADVISE_DEVICE(idGeometryA_buffer, streamInfo.device);
+    // DEME_ADVISE_DEVICE(idGeometryB_buffer, streamInfo.device);
+    // DEME_ADVISE_DEVICE(contactType_buffer, streamInfo.device);
     if (!solverFlags.isHistoryless) {
-        // SMUG_DEM_TRACKED_RESIZE(contactMapping_buffer, nOwnerBodies * SMUG_DEM_INIT_CNT_MULTIPLIER,
-        //                         "contactMapping_buffer", DEM_NULL_MAPPING_PARTNER);
-        // SMUG_DEM_ADVISE_DEVICE(contactMapping_buffer, streamInfo.device);
-        SMUG_DEM_DEVICE_PTR_ALLOC(granData->contactMapping_buffer, buffer_size);
+        // DEME_TRACKED_RESIZE(contactMapping_buffer, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER,
+        //                         "contactMapping_buffer", NULL_MAPPING_PARTNER);
+        // DEME_ADVISE_DEVICE(contactMapping_buffer, streamInfo.device);
+        DEME_DEVICE_PTR_ALLOC(granData->contactMapping_buffer, buffer_size);
     }
 }
 
@@ -430,8 +428,8 @@ void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, s
             familiesNoOutput.at(i) = *it;
         }
         std::sort(familiesNoOutput.begin(), familiesNoOutput.end());
-        SMUG_DEM_DEBUG_PRINTF("Impl-level families that will not be outputted:");
-        SMUG_DEM_DEBUG_EXEC(displayArray<family_t>(familiesNoOutput.data(), familiesNoOutput.size()));
+        DEME_DEBUG_PRINTF("Impl-level families that will not be outputted:");
+        DEME_DEBUG_EXEC(displayArray<family_t>(familiesNoOutput.data(), familiesNoOutput.size()));
     }
 }
 
@@ -512,22 +510,21 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
             input_clump_angVel.insert(input_clump_angVel.end(), a_batch->angVel.begin(), a_batch->angVel.end());
             // For family numbers, we check if the user has explicitly set them. If not, send a warning.
             if ((!a_batch->family_isSpecified) && (!pop_family_msg)) {
-                SMUG_DEM_WARNING("Some clumps do not have their family numbers specified, so defaulted to %u",
-                                 DEM_DEFAULT_CLUMP_FAMILY_NUM);
+                DEME_WARNING("Some clumps do not have their family numbers specified, so defaulted to %u",
+                             DEFAULT_CLUMP_FAMILY_NUM);
                 pop_family_msg = true;
             }
             input_clump_family.insert(input_clump_family.end(), a_batch->families.begin(), a_batch->families.end());
-            SMUG_DEM_DEBUG_PRINTF("Loaded a batch of %zu clumps.", a_batch->GetNumClumps());
+            DEME_DEBUG_PRINTF("Loaded a batch of %zu clumps.", a_batch->GetNumClumps());
         }
 
-        SMUG_DEM_DEBUG_PRINTF("Total number of transferred clumps this time: %zu", input_clump_types.size());
-        SMUG_DEM_DEBUG_PRINTF("Total number of existing owners in simulation: %zu", nExistOwners);
-        SMUG_DEM_DEBUG_PRINTF("Total number of owners in simulation after this init call: %zu",
-                              simParams->nOwnerBodies);
+        DEME_DEBUG_PRINTF("Total number of transferred clumps this time: %zu", input_clump_types.size());
+        DEME_DEBUG_PRINTF("Total number of existing owners in simulation: %zu", nExistOwners);
+        DEME_DEBUG_PRINTF("Total number of owners in simulation after this init call: %zu", simParams->nOwnerBodies);
 
         for (size_t i = 0; i < input_clump_types.size(); i++) {
             // If got here, this is a clump
-            ownerTypes.at(nExistOwners + i) = DEM_OWNER_T_CLUMP;
+            ownerTypes.at(nExistOwners + i) = OWNER_T_CLUMP;
 
             auto type_of_this_clump = input_clump_types.at(i);
             inertiaPropOffsets.at(nExistOwners + i) = type_of_this_clump;
@@ -558,7 +555,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                         clumpComponentOffset.at(nExistSpheres + k) = this_comp_offset;
                     } else {
                         // If not, an indicator will be put there
-                        clumpComponentOffset.at(nExistSpheres + k) = DEM_RESERVED_CLUMP_COMPONENT_OFFSET;
+                        clumpComponentOffset.at(nExistSpheres + k) = RESERVED_CLUMP_COMPONENT_OFFSET;
                     }
                 } else {
                     radiiSphere.at(nExistSpheres + k) = this_clump_no_sp_radii.at(j);
@@ -609,7 +606,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
     unsigned int offset_for_ext_obj_mass_template = simParams->nDistinctClumpBodyTopologies;
     for (size_t i = 0; i < input_ext_obj_xyz.size(); i++) {
         // If got here, it is an analytical obj
-        ownerTypes.at(i + owner_offset_for_ext_obj) = DEM_OWNER_T_ANALYTICAL;
+        ownerTypes.at(i + owner_offset_for_ext_obj) = OWNER_T_ANALYTICAL;
         // For each analytical geometry component of this obj, it needs to know its owner number
         for (size_t j = 0; j < ext_obj_comp_num.at(i); j++) {
             ownerAnalBody.at(k) = i + owner_offset_for_ext_obj;
@@ -647,7 +644,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
     k = 0;
     for (size_t i = 0; i < input_mesh_obj_xyz.size(); i++) {
         // If got here, it is a mesh
-        ownerTypes.at(i + owner_offset_for_mesh_obj) = DEM_OWNER_T_MESH;
+        ownerTypes.at(i + owner_offset_for_mesh_obj) = OWNER_T_MESH;
 
         inertiaPropOffsets.at(i + owner_offset_for_mesh_obj) = i + offset_for_mesh_obj_mass_template;
         if (!solverFlags.useMassJitify) {
@@ -690,8 +687,8 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         family_t this_family_num = input_mesh_obj_family.at(i);
         familyID.at(i + owner_offset_for_mesh_obj) = this_family_num;
 
-        SMUG_DEM_DEBUG_PRINTF("dT just loaded a mesh in family %u", +(this_family_num));
-        SMUG_DEM_DEBUG_PRINTF("Number of triangle facets loaded thus far: %zu", k);
+        DEME_DEBUG_PRINTF("dT just loaded a mesh in family %u", +(this_family_num));
+        DEME_DEBUG_PRINTF("Number of triangle facets loaded thus far: %zu", k);
     }
 }
 
@@ -721,17 +718,17 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
     for (unsigned int i = nTrackersProcessed; i < tracked_objs.size(); i++) {
         auto& tracked_obj = tracked_objs.at(i);
         switch (tracked_obj->type) {
-            case (DEM_OWNER_TYPE::CLUMP):
+            case (OWNER_TYPE::CLUMP):
                 tracked_obj->ownerID = nExistOwners + prescans_batch_size.at(tracked_obj->load_order);
                 tracked_obj->nSpanOwners = prescans_batch_size.at(tracked_obj->load_order + 1) -
                                            prescans_batch_size.at(tracked_obj->load_order);
                 break;
-            case (DEM_OWNER_TYPE::ANALYTICAL):
+            case (OWNER_TYPE::ANALYTICAL):
                 // prescans_batch_size.back() is the total num of loaded clumps this time
                 tracked_obj->ownerID = nExistOwners + tracked_obj->load_order + prescans_batch_size.back();
                 tracked_obj->nSpanOwners = 1;
                 break;
-            case (DEM_OWNER_TYPE::MESH):
+            case (OWNER_TYPE::MESH):
                 tracked_obj->ownerID =
                     nExistOwners + input_ext_obj_xyz.size() + prescans_batch_size.back() + tracked_obj->load_order;
                 tracked_obj->nSpanOwners = 1;
@@ -740,11 +737,11 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
                     prescans_mesh_size.at(tracked_obj->load_order + 1) - prescans_mesh_size.at(tracked_obj->load_order);
                 break;
             default:
-                SMUG_DEM_ERROR("A DEM tracked object has an unknown type.");
+                DEME_ERROR("A DEM tracked object has an unknown type.");
         }
     }
     nTrackersProcessed = tracked_objs.size();
-    SMUG_DEM_DEBUG_PRINTF("Total number of trackers on the record: %u", nTrackersProcessed);
+    DEME_DEBUG_PRINTF("Total number of trackers on the record: %u", nTrackersProcessed);
 }
 
 void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
@@ -829,7 +826,7 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
     std::vector<float> posZ(simParams->nSpheresGM);
     std::vector<float> spRadii(simParams->nSpheresGM);
     std::vector<unsigned int> families;
-    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::FAMILY) {
         families.resize(simParams->nSpheresGM);
     }
     size_t num_output_spheres = 0;
@@ -873,7 +870,7 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
         spRadii.at(num_output_spheres) = radiiSphere.at(compOffset);
 
         // Family number
-        if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::FAMILY) {
             families.at(num_output_spheres) = this_family;
         }
 
@@ -886,11 +883,10 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
     spRadii.resize(num_output_spheres);
     // TODO: Set {} to the list of column names
     pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT,
-             {DEM_OUTPUT_FILE_X_COL_NAME, DEM_OUTPUT_FILE_Y_COL_NAME, DEM_OUTPUT_FILE_Z_COL_NAME,
-              DEM_OUTPUT_FILE_R_COL_NAME},
-             posX, posY, posZ, spRadii);
+             {OUTPUT_FILE_X_COL_NAME, OUTPUT_FILE_Y_COL_NAME, OUTPUT_FILE_Z_COL_NAME, OUTPUT_FILE_R_COL_NAME}, posX,
+             posY, posZ, spRadii);
     // Write family numbers
-    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::FAMILY) {
         families.resize(num_output_spheres);
         // TODO: How to do that?
         // pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, {}, families);
@@ -900,28 +896,28 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
 void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
     std::ostringstream outstrstream;
 
-    outstrstream << DEM_OUTPUT_FILE_X_COL_NAME + "," + DEM_OUTPUT_FILE_Y_COL_NAME + "," + DEM_OUTPUT_FILE_Z_COL_NAME +
-                        "," + DEM_OUTPUT_FILE_R_COL_NAME;
+    outstrstream << OUTPUT_FILE_X_COL_NAME + "," + OUTPUT_FILE_Y_COL_NAME + "," + OUTPUT_FILE_Z_COL_NAME + "," +
+                        OUTPUT_FILE_R_COL_NAME;
 
-    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ABSV) {
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::ABSV) {
         outstrstream << ",absv";
     }
-    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::VEL) {
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::VEL) {
         outstrstream << ",v_x,v_y,v_z";
     }
-    // if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ANG_VEL) {
+    // if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_VEL) {
     //     outstrstream << ",w_x,w_y,w_z";
     // }
-    // if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ACC) {
+    // if (solverFlags.outputFlags & OUTPUT_CONTENT::ACC) {
     //     outstrstream << ",a_x,a_y,a_z";
     // }
-    // if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ANG_ACC) {
+    // if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_ACC) {
     //     outstrstream << ",alpha_x,alpha_y,alpha_z";
     // }
-    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::FAMILY) {
         outstrstream << ",family";
     }
-    // if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::MAT) {
+    // if (solverFlags.outputFlags & OUTPUT_CONTENT::MAT) {
     //     outstrstream << ",material";
     // }
     outstrstream << "\n";
@@ -971,15 +967,15 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
         vxyz.x = vX.at(this_owner);
         vxyz.y = vY.at(this_owner);
         vxyz.z = vZ.at(this_owner);
-        if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ABSV) {
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::ABSV) {
             outstrstream << "," << length(vxyz);
         }
-        if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::VEL) {
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::VEL) {
             outstrstream << "," << vxyz.x << "," << vxyz.y << "," << vxyz.z;
         }
 
         // Family number needs to be user number
-        if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::FAMILY) {
             outstrstream << "," << +(this_family);
         }
 
@@ -995,31 +991,31 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile) const {
     std::ostringstream outstrstream;
 
     // xyz and quaternion are always there
-    outstrstream << DEM_OUTPUT_FILE_X_COL_NAME + "," + DEM_OUTPUT_FILE_Y_COL_NAME + "," + DEM_OUTPUT_FILE_Z_COL_NAME +
-                        ",Qw,Qx,Qy,Qz," + DEM_OUTPUT_FILE_CLUMP_TYPE_NAME;
-    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ABSV) {
+    outstrstream << OUTPUT_FILE_X_COL_NAME + "," + OUTPUT_FILE_Y_COL_NAME + "," + OUTPUT_FILE_Z_COL_NAME +
+                        ",Qw,Qx,Qy,Qz," + OUTPUT_FILE_CLUMP_TYPE_NAME;
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::ABSV) {
         outstrstream << ",absv";
     }
-    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::VEL) {
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::VEL) {
         outstrstream << ",v_x,v_y,v_z";
     }
-    // if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ANG_VEL) {
+    // if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_VEL) {
     //     outstrstream << ",w_x,w_y,w_z";
     // }
-    // if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ACC) {
+    // if (solverFlags.outputFlags & OUTPUT_CONTENT::ACC) {
     //     outstrstream << ",a_x,a_y,a_z";
     // }
-    // if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ANG_ACC) {
+    // if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_ACC) {
     //     outstrstream << ",alpha_x,alpha_y,alpha_z";
     // }
-    if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::FAMILY) {
         outstrstream << ",family";
     }
     outstrstream << "\n";
 
     for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
         // i is this owner's number. And if it is not a clump, we can move on.
-        if (ownerTypes.at(i) != DEM_OWNER_T_CLUMP)
+        if (ownerTypes.at(i) != OWNER_T_CLUMP)
             continue;
 
         family_t this_family = familyID.at(i);
@@ -1055,15 +1051,15 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile) const {
         vxyz.x = vX.at(i);
         vxyz.y = vY.at(i);
         vxyz.z = vZ.at(i);
-        if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::ABSV) {
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::ABSV) {
             outstrstream << "," << length(vxyz);
         }
-        if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::VEL) {
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::VEL) {
             outstrstream << "," << vxyz.x << "," << vxyz.y << "," << vxyz.z;
         }
 
         // Family number needs to be user number
-        if (solverFlags.outputFlags & DEM_OUTPUT_CONTENT::FAMILY) {
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::FAMILY) {
             outstrstream << "," << +(this_family);
         }
 
@@ -1076,26 +1072,23 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile) const {
 void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
     std::ostringstream outstrstream;
 
-    outstrstream << DEM_OUTPUT_FILE_OWNER_1_NAME + "," + DEM_OUTPUT_FILE_OWNER_2_NAME + "," +
-                        DEM_OUTPUT_FILE_CNT_TYPE_NAME;
-    if (solverFlags.cntOutFlags & DEM_CNT_OUTPUT_CONTENT::FORCE) {
-        outstrstream << "," + DEM_OUTPUT_FILE_FORCE_X_NAME + "," + DEM_OUTPUT_FILE_FORCE_Y_NAME + "," +
-                            DEM_OUTPUT_FILE_FORCE_Z_NAME;
+    outstrstream << OUTPUT_FILE_OWNER_1_NAME + "," + OUTPUT_FILE_OWNER_2_NAME + "," + OUTPUT_FILE_CNT_TYPE_NAME;
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::FORCE) {
+        outstrstream << "," + OUTPUT_FILE_FORCE_X_NAME + "," + OUTPUT_FILE_FORCE_Y_NAME + "," +
+                            OUTPUT_FILE_FORCE_Z_NAME;
     }
-    if (solverFlags.cntOutFlags & DEM_CNT_OUTPUT_CONTENT::POINT) {
-        outstrstream << "," + DEM_OUTPUT_FILE_X_COL_NAME + "," + DEM_OUTPUT_FILE_Y_COL_NAME + "," +
-                            DEM_OUTPUT_FILE_Z_COL_NAME;
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::POINT) {
+        outstrstream << "," + OUTPUT_FILE_X_COL_NAME + "," + OUTPUT_FILE_Y_COL_NAME + "," + OUTPUT_FILE_Z_COL_NAME;
     }
-    // if (solverFlags.cntOutFlags & DEM_CNT_OUTPUT_CONTENT::COMPONENT) {
-    //     outstrstream << ","+DEM_OUTPUT_FILE_COMP_1_NAME+","+DEM_OUTPUT_FILE_COMP_2_NAME;
+    // if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::COMPONENT) {
+    //     outstrstream << ","+OUTPUT_FILE_COMP_1_NAME+","+OUTPUT_FILE_COMP_2_NAME;
     // }
-    if (solverFlags.cntOutFlags & DEM_CNT_OUTPUT_CONTENT::NORMAL) {
-        outstrstream << "," + DEM_OUTPUT_FILE_NORMAL_X_NAME + "," + DEM_OUTPUT_FILE_NORMAL_Y_NAME + "," +
-                            DEM_OUTPUT_FILE_NORMAL_Z_NAME;
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NORMAL) {
+        outstrstream << "," + OUTPUT_FILE_NORMAL_X_NAME + "," + OUTPUT_FILE_NORMAL_Y_NAME + "," +
+                            OUTPUT_FILE_NORMAL_Z_NAME;
     }
-    if (solverFlags.cntOutFlags & DEM_CNT_OUTPUT_CONTENT::TORQUE_ONLY_FORCE) {
-        outstrstream << "," + DEM_OUTPUT_FILE_TOF_X_NAME + "," + DEM_OUTPUT_FILE_TOF_Y_NAME + "," +
-                            DEM_OUTPUT_FILE_TOF_Z_NAME;
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE_ONLY_FORCE) {
+        outstrstream << "," + OUTPUT_FILE_TOF_X_NAME + "," + OUTPUT_FILE_TOF_Y_NAME + "," + OUTPUT_FILE_TOF_Z_NAME;
     }
     outstrstream << "\n";
 
@@ -1105,7 +1098,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
         auto geoB = idGeometryB.at(i);
         auto type = contactType.at(i);
         // We don't output fake contact
-        if (type == DEM_NOT_A_CONTACT)
+        if (type == NOT_A_CONTACT)
             continue;
 
         // geoA's owner must be a sphere
@@ -1113,10 +1106,10 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
         bodyID_t ownerB;
         // geoB's owner depends...
         switch (type) {
-            case (DEM_SPHERE_SPHERE_CONTACT):
+            case (SPHERE_SPHERE_CONTACT):
                 ownerB = ownerClumpBody.at(geoB);
                 break;
-            case (DEM_SPHERE_MESH_CONTACT):
+            case (SPHERE_MESH_CONTACT):
                 ownerB = ownerMesh.at(geoB);
                 break;
             default:  // Default is sphere--analytical
@@ -1126,7 +1119,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
         outstrstream << ownerA << "," << ownerB << "," << contact_type_out_name_map.at(type);
 
         // Force is already in global...
-        if (solverFlags.cntOutFlags & DEM_CNT_OUTPUT_CONTENT::FORCE) {
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::FORCE) {
             float3 forcexyz = contactForces.at(i);
             outstrstream << "," << forcexyz.x << "," << forcexyz.y << "," << forcexyz.z;
         }
@@ -1154,14 +1147,14 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
             hostApplyOriQToVector3(cntPntA.x, cntPntA.y, cntPntA.z, oriQA.w, oriQA.x, oriQA.y, oriQA.z);
             cntPntA += CoM;
         }
-        if (solverFlags.cntOutFlags & DEM_CNT_OUTPUT_CONTENT::POINT) {
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::POINT) {
             // oriQ is updated already... whereas the contact point is effectively last step's... That's unfortunate.
             // Should we do somthing ahout it?
             outstrstream << "," << cntPntA.x << "," << cntPntA.y << "," << cntPntA.z;
         }
 
         // To get contact normal: it's just contact point - sphereA center, that gives you the outward normal for body A
-        if (solverFlags.cntOutFlags & DEM_CNT_OUTPUT_CONTENT::NORMAL) {
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NORMAL) {
             size_t compOffset = (solverFlags.useClumpJitify) ? clumpComponentOffsetExt.at(geoA) : geoA;
             float3 this_sp_deviation;
             this_sp_deviation.x = relPosSphereX.at(compOffset);
@@ -1175,7 +1168,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
         }
 
         // Torque is in global already...
-        if (solverFlags.cntOutFlags & DEM_CNT_OUTPUT_CONTENT::TORQUE_ONLY_FORCE) {
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE_ONLY_FORCE) {
             float3 forcexyz = contactTorque_convToForce.at(i);
             outstrstream << "," << forcexyz.x << "," << forcexyz.y << "," << forcexyz.z;
         }
@@ -1187,14 +1180,14 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
 }
 
 inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
-    SMUG_DEM_TRACKED_RESIZE_NOPRINT(idGeometryA, nContactPairs, 0);
-    SMUG_DEM_TRACKED_RESIZE_NOPRINT(idGeometryB, nContactPairs, 0);
-    SMUG_DEM_TRACKED_RESIZE_NOPRINT(contactType, nContactPairs, DEM_NOT_A_CONTACT);
-    SMUG_DEM_TRACKED_RESIZE_NOPRINT(contactForces, nContactPairs, make_float3(0));
-    SMUG_DEM_TRACKED_RESIZE_NOPRINT(contactTorque_convToForce, nContactPairs, make_float3(0));
+    DEME_TRACKED_RESIZE_NOPRINT(idGeometryA, nContactPairs, 0);
+    DEME_TRACKED_RESIZE_NOPRINT(idGeometryB, nContactPairs, 0);
+    DEME_TRACKED_RESIZE_NOPRINT(contactType, nContactPairs, NOT_A_CONTACT);
+    DEME_TRACKED_RESIZE_NOPRINT(contactForces, nContactPairs, make_float3(0));
+    DEME_TRACKED_RESIZE_NOPRINT(contactTorque_convToForce, nContactPairs, make_float3(0));
 
-    SMUG_DEM_TRACKED_RESIZE_NOPRINT(contactPointGeometryA, nContactPairs, make_float3(0));
-    SMUG_DEM_TRACKED_RESIZE_NOPRINT(contactPointGeometryB, nContactPairs, make_float3(0));
+    DEME_TRACKED_RESIZE_NOPRINT(contactPointGeometryA, nContactPairs, make_float3(0));
+    DEME_TRACKED_RESIZE_NOPRINT(contactPointGeometryB, nContactPairs, make_float3(0));
 
     // Re-pack pointers in case the arrays got reallocated
     granData->idGeometryA = idGeometryA.data();
@@ -1267,7 +1260,7 @@ inline void DEMDynamicThread::migratePersistentContacts() {
     // vector 0 or 1 since they may be in use (1 is used by granData->contactMapping).
 
     // All contact wildcards are the same type, so we can just allocate one temp array for all of them
-    float* newWildcards[SMUG_DEM_MAX_WILDCARD_NUM];
+    float* newWildcards[DEME_MAX_WILDCARD_NUM];
     size_t wildcard_arr_bytes = (*stateOfSolver_resources.pNumContacts) * sizeof(float) * simParams->nContactWildcards;
     newWildcards[0] = (float*)stateOfSolver_resources.allocateTempVector(2, wildcard_arr_bytes);
     for (unsigned int i = 1; i < simParams->nContactWildcards; i++) {
@@ -1283,16 +1276,15 @@ inline void DEMDynamicThread::migratePersistentContacts() {
     // history array. This is just a quick and rough check: we only look at the last contact wildcard to see if it is
     // non-0, whatever it represents.
     size_t blocks_needed_for_rearrange;
-    if (verbosity >= DEM_VERBOSITY::STEP_METRIC) {
+    if (verbosity >= VERBOSITY::STEP_METRIC) {
         if (*stateOfSolver_resources.pNumPrevContacts > 0) {
             // GPU_CALL(cudaMemset(contactSentry, 0, sentry_bytes));
-            blocks_needed_for_rearrange =
-                (*stateOfSolver_resources.pNumPrevContacts + SMUG_DEM_MAX_THREADS_PER_BLOCK - 1) /
-                SMUG_DEM_MAX_THREADS_PER_BLOCK;
+            blocks_needed_for_rearrange = (*stateOfSolver_resources.pNumPrevContacts + DEME_MAX_THREADS_PER_BLOCK - 1) /
+                                          DEME_MAX_THREADS_PER_BLOCK;
             if (blocks_needed_for_rearrange > 0) {
                 prep_force_kernels->kernel("markAliveContacts")
                     .instantiate()
-                    .configure(dim3(blocks_needed_for_rearrange), dim3(SMUG_DEM_MAX_THREADS_PER_BLOCK), 0,
+                    .configure(dim3(blocks_needed_for_rearrange), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
                                streamInfo.stream)
                     .launch(granData->contactWildcards[simParams->nContactWildcards - 1], contactSentry,
                             *stateOfSolver_resources.pNumPrevContacts);
@@ -1303,41 +1295,39 @@ inline void DEMDynamicThread::migratePersistentContacts() {
 
     // Rearrange contact histories based on kT instruction
     blocks_needed_for_rearrange =
-        (*stateOfSolver_resources.pNumContacts + SMUG_DEM_MAX_THREADS_PER_BLOCK - 1) / SMUG_DEM_MAX_THREADS_PER_BLOCK;
+        (*stateOfSolver_resources.pNumContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed_for_rearrange > 0) {
         prep_force_kernels->kernel("rearrangeContactWildcards")
             .instantiate()
-            .configure(dim3(blocks_needed_for_rearrange), dim3(SMUG_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+            .configure(dim3(blocks_needed_for_rearrange), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
             .launch(granData, newWildcards[0], contactSentry, simParams->nContactWildcards,
                     *stateOfSolver_resources.pNumContacts);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 
     // Take a look, does the sentry indicate that there is an `alive' contact got lost?
-    if (verbosity >= DEM_VERBOSITY::STEP_METRIC) {
+    if (verbosity >= VERBOSITY::STEP_METRIC) {
         if (*stateOfSolver_resources.pNumPrevContacts > 0 && simParams->nContactWildcards > 0) {
             size_t* lostContact = (size_t*)stateOfSolver_resources.allocateTempVector(4, sizeof(size_t));
             boolSumReduce(contactSentry, lostContact, *stateOfSolver_resources.pNumPrevContacts, streamInfo.stream,
                           stateOfSolver_resources);
             if (*lostContact && solverFlags.isAsync) {
-                SMUG_DEM_STEP_METRIC(
+                DEME_STEP_METRIC(
                     "%zu contacts were active at time %.9g on dT, but they are not detected on kT, therefore being "
                     "removed unexpectedly!",
                     *lostContact, timeElapsed);
-                SMUG_DEM_DEBUG_PRINTF("New contact A:");
-                SMUG_DEM_DEBUG_EXEC(
-                    displayArray<bodyID_t>(granData->idGeometryA, *stateOfSolver_resources.pNumContacts));
-                SMUG_DEM_DEBUG_PRINTF("New contact B:");
-                SMUG_DEM_DEBUG_EXEC(
-                    displayArray<bodyID_t>(granData->idGeometryB, *stateOfSolver_resources.pNumContacts));
-                SMUG_DEM_DEBUG_PRINTF("Old version of the last contact wildcard:");
-                SMUG_DEM_DEBUG_EXEC(displayArray<float>(granData->contactWildcards[simParams->nContactWildcards - 1],
-                                                        *stateOfSolver_resources.pNumPrevContacts));
-                SMUG_DEM_DEBUG_PRINTF("Old--new mapping:");
-                SMUG_DEM_DEBUG_EXEC(
+                DEME_DEBUG_PRINTF("New contact A:");
+                DEME_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryA, *stateOfSolver_resources.pNumContacts));
+                DEME_DEBUG_PRINTF("New contact B:");
+                DEME_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryB, *stateOfSolver_resources.pNumContacts));
+                DEME_DEBUG_PRINTF("Old version of the last contact wildcard:");
+                DEME_DEBUG_EXEC(displayArray<float>(granData->contactWildcards[simParams->nContactWildcards - 1],
+                                                    *stateOfSolver_resources.pNumPrevContacts));
+                DEME_DEBUG_PRINTF("Old--new mapping:");
+                DEME_DEBUG_EXEC(
                     displayArray<contactPairs_t>(granData->contactMapping, *stateOfSolver_resources.pNumContacts));
-                SMUG_DEM_DEBUG_PRINTF("Sentry:");
-                SMUG_DEM_DEBUG_EXEC(
+                DEME_DEBUG_PRINTF("Sentry:");
+                DEME_DEBUG_EXEC(
                     displayArray<notStupidBool_t>(contactSentry, *stateOfSolver_resources.pNumPrevContacts));
             }
         }
@@ -1346,7 +1336,7 @@ inline void DEMDynamicThread::migratePersistentContacts() {
     // Copy new history back to history array (after resizing the `main' history array)
     if (*stateOfSolver_resources.pNumContacts > contactWildcards[0].size()) {
         for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
-            SMUG_DEM_TRACKED_RESIZE_FLOAT(contactWildcards[i], *stateOfSolver_resources.pNumContacts, 0);
+            DEME_TRACKED_RESIZE_FLOAT(contactWildcards[i], *stateOfSolver_resources.pNumContacts, 0);
             granData->contactWildcards[i] = contactWildcards[i].data();
         }
     }
@@ -1362,11 +1352,11 @@ inline void DEMDynamicThread::calculateForces() {
                                          ? simParams->nOwnerBodies
                                          : *stateOfSolver_resources.pNumContacts;
     size_t blocks_needed_for_prep =
-        (threads_needed_for_prep + SMUG_DEM_MAX_THREADS_PER_BLOCK - 1) / SMUG_DEM_MAX_THREADS_PER_BLOCK;
+        (threads_needed_for_prep + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
 
     prep_force_kernels->kernel("prepareForceArrays")
         .instantiate()
-        .configure(dim3(blocks_needed_for_prep), dim3(SMUG_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+        .configure(dim3(blocks_needed_for_prep), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
         .launch(simParams, granData, *stateOfSolver_resources.pNumContacts);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
@@ -1386,7 +1376,7 @@ inline void DEMDynamicThread::calculateForces() {
     //                     simParams->nOwnerBodies * sizeof(float)));
 
     size_t blocks_needed_for_contacts =
-        (*stateOfSolver_resources.pNumContacts + SMUG_DEM_NUM_BODIES_PER_BLOCK - 1) / SMUG_DEM_NUM_BODIES_PER_BLOCK;
+        (*stateOfSolver_resources.pNumContacts + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
     // If no contact then we don't have to calculate forces. Note there might still be forces, coming from prescription
     // or other sources.
     if (blocks_needed_for_contacts > 0) {
@@ -1394,7 +1384,7 @@ inline void DEMDynamicThread::calculateForces() {
         // a custom kernel to compute forces
         cal_force_kernels->kernel("calculateContactForces")
             .instantiate()
-            .configure(dim3(blocks_needed_for_contacts), dim3(SMUG_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+            .configure(dim3(blocks_needed_for_contacts), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
             .launch(simParams, granData, *stateOfSolver_resources.pNumContacts);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         // displayFloat3(granData->contactForces, *stateOfSolver_resources.pNumContacts);
@@ -1433,10 +1423,10 @@ inline void DEMDynamicThread::calculateForces() {
 
 inline void DEMDynamicThread::integrateOwnerMotions() {
     size_t blocks_needed_for_clumps =
-        (simParams->nOwnerBodies + SMUG_DEM_NUM_BODIES_PER_BLOCK - 1) / SMUG_DEM_NUM_BODIES_PER_BLOCK;
+        (simParams->nOwnerBodies + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
     integrator_kernels->kernel("integrateOwners")
         .instantiate()
-        .configure(dim3(blocks_needed_for_clumps), dim3(SMUG_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+        .configure(dim3(blocks_needed_for_clumps), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
         .launch(simParams, granData, timeElapsed);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
@@ -1444,10 +1434,10 @@ inline void DEMDynamicThread::integrateOwnerMotions() {
 inline void DEMDynamicThread::routineChecks() {
     if (solverFlags.canFamilyChange) {
         size_t blocks_needed_for_clumps =
-            (simParams->nOwnerBodies + SMUG_DEM_NUM_BODIES_PER_BLOCK - 1) / SMUG_DEM_NUM_BODIES_PER_BLOCK;
+            (simParams->nOwnerBodies + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
         mod_kernels->kernel("applyFamilyChanges")
             .instantiate()
-            .configure(dim3(blocks_needed_for_clumps), dim3(SMUG_DEM_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+            .configure(dim3(blocks_needed_for_clumps), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
             .launch(granData, simParams->nOwnerBodies, simParams->h, timeElapsed);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
@@ -1670,7 +1660,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
 float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
                                      const std::string& kernel_name,
                                      size_t n,
-                                     DEM_CUB_REDUCE_FLAVOR reduce_flavor,
+                                     CUB_REDUCE_FLAVOR reduce_flavor,
                                      bool all_domain) {
     // We can use temp vectors as we please
     size_t quarryTempSize = n * sizeof(float);
@@ -1683,22 +1673,22 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     // We may actually have 2 reduced returns: in regional reduction, key 0 and 1 give one return each.
     size_t returnSize = sizeof(float) * 2;
     float* res = (float*)stateOfSolver_resources.allocateTempVector(3, returnSize);
-    size_t blocks_needed = (n + SMUG_DEM_MAX_THREADS_PER_BLOCK - 1) / SMUG_DEM_MAX_THREADS_PER_BLOCK;
+    size_t blocks_needed = (n + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     inspection_kernel->kernel(kernel_name)
         .instantiate()
-        .configure(dim3(blocks_needed), dim3(SMUG_DEM_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+        .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
         .launch(granData, simParams, resArr, boolArrExclude, n);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     if (all_domain) {
         switch (reduce_flavor) {
-            case (DEM_CUB_REDUCE_FLAVOR::MAX):
+            case (CUB_REDUCE_FLAVOR::MAX):
                 floatMaxReduce(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
                 break;
-            case (DEM_CUB_REDUCE_FLAVOR::SUM):
+            case (CUB_REDUCE_FLAVOR::SUM):
                 floatSumReduce(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
                 break;
-            case (DEM_CUB_REDUCE_FLAVOR::NONE):
+            case (CUB_REDUCE_FLAVOR::NONE):
                 //// TODO: Query a full array w/o reducing doesn't seem like something useful...
                 return resArr;
         }
@@ -1711,10 +1701,10 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
         float* resArr_sorted = (float*)stateOfSolver_resources.allocateTempVector(5, quarryTempSize);
         size_t* num_unique_out = (size_t*)stateOfSolver_resources.allocateTempVector(6, sizeof(size_t));
         switch (reduce_flavor) {
-            case (DEM_CUB_REDUCE_FLAVOR::MAX):
+            case (CUB_REDUCE_FLAVOR::MAX):
                 //// TODO: Implement it
                 break;
-            case (DEM_CUB_REDUCE_FLAVOR::SUM):
+            case (CUB_REDUCE_FLAVOR::SUM):
                 // Sort first
                 floatSortByKey(boolArrExclude, boolArrExclude_sorted, resArr, resArr_sorted, n, streamInfo.stream,
                                stateOfSolver_resources);
@@ -1815,4 +1805,4 @@ void DEMDynamicThread::setOwnerVel(bodyID_t ownerID, float3 vel) {
     vZ.at(ownerID) = vel.z;
 }
 
-}  // namespace smug
+}  // namespace deme

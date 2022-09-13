@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SMUG_GPU_ERROR_H
-#define SMUG_GPU_ERROR_H
+#ifndef DEME_GPU_ERROR_H
+#define DEME_GPU_ERROR_H
 
 #include <iostream>
 #include <exception>

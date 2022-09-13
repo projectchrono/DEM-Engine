@@ -13,25 +13,25 @@
 #include <chrono>
 #include <filesystem>
 
-using namespace smug;
+using namespace deme;
 using namespace std::filesystem;
 
 int main() {
-    DEMSolver DEM_sim;
-    DEM_sim.SetVerbosity(INFO);
-    DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
-    DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::ABSV);
+    DEMSolver DEMSim;
+    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
+    DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     std::cout << "Note: This is a relatively large demo and should take hours/days to run!!" << std::endl;
 
     // Define materials
-    auto mat_type_terrain = DEM_sim.LoadMaterial({{"E", 2e9}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.01}});
-    auto mat_type_wheel = DEM_sim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.5}, {"Crr", 0.01}});
+    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 2e9}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.01}});
+    auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.5}, {"Crr", 0.01}});
 
     // Define the simulation world
     double world_size = 1.5;
-    DEM_sim.InstructBoxDomainDimension(2 * world_size, world_size, world_size);
+    DEMSim.InstructBoxDomainDimension(2 * world_size, world_size, world_size);
     // Add 5 bounding planes around the simulation world, and leave the top open
-    DEM_sim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
+    DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
 
     // Define the wheel geometry
     float wheel_rad = 0.25;
@@ -41,8 +41,8 @@ int main() {
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
     auto wheel_template =
-        DEM_sim.LoadClumpType(wheel_mass, make_float3(wheel_IXX, wheel_IYY, wheel_IXX),
-                              (GET_DATA_PATH() / "clumps/ViperWheelSimple.csv").string(), mat_type_wheel);
+        DEMSim.LoadClumpType(wheel_mass, make_float3(wheel_IXX, wheel_IYY, wheel_IXX),
+                             (GET_DATA_PATH() / "clumps/ViperWheelSimple.csv").string(), mat_type_wheel);
     // The file contains no wheel particles size info, so let's manually set them
     wheel_template->radii = std::vector<float>(wheel_template->nComp, 0.01);
     // This wheel template is `lying down', but our reported MOI info is assuming it's in a position to roll along X
@@ -67,14 +67,14 @@ int main() {
                   [scaling](float3& r) { r *= scaling; });
     ellipsoid_template.materials =
         std::vector<std::shared_ptr<DEMMaterial>>(ellipsoid_template.nComp, mat_type_terrain);
-    auto ground_particle_template = DEM_sim.LoadClumpType(ellipsoid_template);
+    auto ground_particle_template = DEMSim.LoadClumpType(ellipsoid_template);
 
     // Instantiate this wheel
-    auto wheel = DEM_sim.AddClumps(wheel_template, make_float3(-1.2, 0, 0.4));
+    auto wheel = DEMSim.AddClumps(wheel_template, make_float3(-1.2, 0, 0.4));
     // Give the wheel a family number so we can potentially add prescription
     wheel->SetFamily(10);
     // Note that the added constant ang vel is wrt the wheel's own principal coord system
-    DEM_sim.SetFamilyPrescribedAngVel(10, "0", "2.0", "0", false);
+    DEMSim.SetFamilyPrescribedAngVel(10, "0", "2.0", "0", false);
 
     // Sample and add ground particles
     float3 sample_center = make_float3(0, 0, -0.3);
@@ -84,25 +84,25 @@ int main() {
     auto ground_particles_xyz =
         DEMBoxGridSampler(sample_center, make_float3(sample_halfwidth_x, sample_halfwidth_y, sample_halfheight),
                           scaling * std::cbrt(2.0) * 2.1, scaling * std::cbrt(2.0) * 2.1, scaling * 2 * 2.1);
-    auto ground_particles = DEM_sim.AddClumps(ground_particle_template, ground_particles_xyz);
+    auto ground_particles = DEMSim.AddClumps(ground_particle_template, ground_particles_xyz);
     // Give ground particles a small initial velocity so they `collapse' at the start of the simulation
     ground_particles->SetVel(make_float3(0.002, 0, 0));
 
     // Create an absv inspector
-    auto max_v_finder = DEM_sim.CreateInspector("clump_max_absv");
+    auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
 
     // Make ready for simulation
     float step_size = 5e-6;
-    DEM_sim.SetCoordSysOrigin("center");
-    DEM_sim.SetInitTimeStep(step_size);
-    DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    DEMSim.SetCoordSysOrigin("center");
+    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEM_sim.SetCDUpdateFreq(30);
-    // DEM_sim.SetExpandFactor(1e-3);
-    DEM_sim.SetMaxVelocity(5.);
-    DEM_sim.SetExpandSafetyParam(1.2);
-    DEM_sim.SetInitBinSize(scaling * 2);
-    DEM_sim.Initialize();
+    DEMSim.SetCDUpdateFreq(30);
+    // DEMSim.SetExpandFactor(1e-3);
+    DEMSim.SetMaxVelocity(5.);
+    DEMSim.SetExpandSafetyParam(1.2);
+    DEMSim.SetInitBinSize(scaling * 2);
+    DEMSim.Initialize();
 
     float time_end = 10.0;
     unsigned int fps = 20;
@@ -117,15 +117,15 @@ int main() {
     for (double t = 0; t < (double)time_end; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
             std::cout << "Frame: " << currframe << std::endl;
-            DEM_sim.ShowThreadCollaborationStats();
+            DEMSim.ShowThreadCollaborationStats();
             char filename[100];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-            DEM_sim.WriteSphereFile(std::string(filename));
+            DEMSim.WriteSphereFile(std::string(filename));
             float max_v = max_v_finder->GetValue();
             std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
         }
 
-        DEM_sim.DoDynamics(step_size);
+        DEMSim.DoDynamics(step_size);
         // We can query info out of this drum, since it is tracked
         // float3 drum_pos = Drum_tracker->Pos();
         // float3 drum_angVel = Drum_tracker->AngVelLocal();
@@ -137,8 +137,8 @@ int main() {
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
     std::cout << (time_sec.count()) / time_end << " seconds (wall time) to finish 1 seconds' simulation" << std::endl;
-    DEM_sim.ShowThreadCollaborationStats();
-    DEM_sim.ClearThreadCollaborationStats();
+    DEMSim.ShowThreadCollaborationStats();
+    DEMSim.ClearThreadCollaborationStats();
 
     std::cout << "DEMdemo_RoverWheel exiting..." << std::endl;
     return 0;

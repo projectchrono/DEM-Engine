@@ -13,7 +13,7 @@
 #include <time.h>
 #include <filesystem>
 
-using namespace smug;
+using namespace deme;
 using namespace std::filesystem;
 
 inline bool near(float a, float b, float t = 1e-6) {
@@ -23,19 +23,19 @@ inline bool near(float a, float b, float t = 1e-6) {
     return false;
 }
 
-void SetSolverProp(DEMSolver& DEM_sim) {
-    DEM_sim.SetVerbosity(DEBUG);
-    DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
+void SetSolverProp(DEMSolver& DEMSim) {
+    DEMSim.SetVerbosity(DEBUG);
+    DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
 
-    DEM_sim.InstructBoxDomainDimension(25, 25, 10);
-    DEM_sim.SetCoordSysOrigin("center");
-    DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
-    DEM_sim.SetCDUpdateFreq(0);
+    DEMSim.InstructBoxDomainDimension(25, 25, 10);
+    DEMSim.SetCoordSysOrigin("center");
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    DEMSim.SetCDUpdateFreq(0);
 }
 
 void EllpsiodFallingOver() {
-    DEMSolver DEM_sim;
-    SetSolverProp(DEM_sim);
+    DEMSolver DEMSim;
+    SetSolverProp(DEMSim);
     // An ellipsoid a,b,c = 0.2,0.2,0.5, represented several sphere components
     std::vector<float> radii = {0.095, 0.136, 0.179, 0.204, 0.204, 0.179, 0.136, 0.095};
     std::vector<float3> relPos = {make_float3(0, 0, 0.4),    make_float3(0, 0, 0.342),  make_float3(0, 0, 0.228),
@@ -44,23 +44,23 @@ void EllpsiodFallingOver() {
     // Then calculate mass and MOI
     float mass = 5.0;
     // E, nu, CoR, mu, Crr
-    auto mat_type_1 = DEM_sim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.25}, {"Crr", 0.2}});
+    auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.25}, {"Crr", 0.2}});
     float3 MOI = make_float3(1. / 5. * mass * (0.2 * 0.2 + 0.5 * 0.5), 1. / 5. * mass * (0.2 * 0.2 + 0.5 * 0.5),
                              1. / 5. * mass * (0.2 * 0.2 + 0.2 * 0.2));
-    auto ellipsoid_template = DEM_sim.LoadClumpType(mass, MOI, radii, relPos, mat_type_1);
+    auto ellipsoid_template = DEMSim.LoadClumpType(mass, MOI, radii, relPos, mat_type_1);
 
     // Add the ground
     float3 normal_dir = make_float3(0, 0, 1);
     float3 tang_dir = make_float3(0, 1, 0);
-    DEM_sim.AddBCPlane(make_float3(0, 0, 0), normal_dir, mat_type_1);
+    DEMSim.AddBCPlane(make_float3(0, 0, 0), normal_dir, mat_type_1);
 
     // Add an ellipsoid with init vel
-    auto ellipsoid = DEM_sim.AddClumps(ellipsoid_template, normal_dir * 0.5);
+    auto ellipsoid = DEMSim.AddClumps(ellipsoid_template, normal_dir * 0.5);
     ellipsoid->SetVel(tang_dir * 0.3);
-    auto ellipsoid_tracker = DEM_sim.Track(ellipsoid);
+    auto ellipsoid_tracker = DEMSim.Track(ellipsoid);
 
-    DEM_sim.SetInitTimeStep(1e-3);
-    DEM_sim.Initialize();
+    DEMSim.SetInitTimeStep(1e-3);
+    DEMSim.Initialize();
 
     float frame_time = 1e-1;
     path out_dir = current_path();
@@ -69,7 +69,7 @@ void EllpsiodFallingOver() {
     for (int i = 0; i < 6.0 / frame_time; i++) {
         char filename[100];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-        DEM_sim.WriteSphereFile(std::string(filename));
+        DEMSim.WriteSphereFile(std::string(filename));
         std::cout << "Frame: " << i << std::endl;
         float4 oriQ = ellipsoid_tracker->OriQ();
         float3 angVel = ellipsoid_tracker->AngVelLocal();
@@ -79,7 +79,7 @@ void EllpsiodFallingOver() {
         std::cout << "Angular velocity of the ellipsoid: " << angVel.x << ", " << angVel.y << ", " << angVel.z
                   << std::endl;
 
-        DEM_sim.DoDynamics(frame_time);
+        DEMSim.DoDynamics(frame_time);
     }
 }
 
@@ -89,28 +89,28 @@ void SphereRollUpIncline() {
     float mass = 5.0;
     float mu = 0.25;
     {
-        DEMSolver DEM_sim;
-        SetSolverProp(DEM_sim);
+        DEMSolver DEMSim;
+        SetSolverProp(DEMSim);
 
-        auto mat_type_1 = DEM_sim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu}, {"Crr", 0.15}});
+        auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu}, {"Crr", 0.15}});
         // A ball
-        auto sphere_template = DEM_sim.LoadSphereType(mass, sphere_rad, mat_type_1);
+        auto sphere_template = DEMSim.LoadSphereType(mass, sphere_rad, mat_type_1);
 
         // Incline angle
         float alpha = 35.;
         // Add the incline
         float3 normal_dir = make_float3(-std::sin(2. * PI * (alpha / 360.)), 0., std::cos(2. * PI * (alpha / 360.)));
         float3 tang_dir = make_float3(std::cos(2. * PI * (alpha / 360.)), 0., std::sin(2. * PI * (alpha / 360.)));
-        DEM_sim.AddBCPlane(make_float3(0, 0, 0), normal_dir, mat_type_1);
+        DEMSim.AddBCPlane(make_float3(0, 0, 0), normal_dir, mat_type_1);
 
         // Add a ball rolling
-        auto sphere = DEM_sim.AddClumps(sphere_template, normal_dir * sphere_rad);
+        auto sphere = DEMSim.AddClumps(sphere_template, normal_dir * sphere_rad);
         sphere->SetVel(tang_dir * 0.5);
-        auto sphere_tracker = DEM_sim.Track(sphere);
+        auto sphere_tracker = DEMSim.Track(sphere);
 
         float step_time = 1e-5;
-        DEM_sim.SetInitTimeStep(step_time);
-        DEM_sim.Initialize();
+        DEMSim.SetInitTimeStep(step_time);
+        DEMSim.Initialize();
 
         path out_dir = current_path();
         out_dir += "/DEMdemo_TestPack";
@@ -119,7 +119,7 @@ void SphereRollUpIncline() {
             char filename[100];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
             // if (i % 100 == 0) {
-            //     DEM_sim.WriteSphereFile(std::string(filename));
+            //     DEMSim.WriteSphereFile(std::string(filename));
             // }
             std::cout << "Frame: " << i << std::endl;
             float3 vel = sphere_tracker->Vel();
@@ -129,7 +129,7 @@ void SphereRollUpIncline() {
             std::cout << "Angular velocity of the sphere: " << angVel.x << ", " << angVel.y << ", " << angVel.z
                       << std::endl;
 
-            DEM_sim.DoStepDynamics();
+            DEMSim.DoStepDynamics();
         }
     }
 
@@ -139,32 +139,32 @@ void SphereRollUpIncline() {
     unsigned int i = 0;
     for (float alpha = 60; alpha >= 1; alpha -= 1) {
         for (float Crr = 0.0; Crr <= 0.3; Crr += 0.01) {
-            DEMSolver DEM_sim;
-            SetSolverProp(DEM_sim);
-            DEM_sim.SetVerbosity(QUIET);
+            DEMSolver DEMSim;
+            SetSolverProp(DEMSim);
+            DEMSim.SetVerbosity(QUIET);
 
-            auto mat_type_1 = DEM_sim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu}, {"Crr", Crr}});
+            auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu}, {"Crr", Crr}});
             // A ball
-            auto sphere_template = DEM_sim.LoadSphereType(mass, sphere_rad, mat_type_1);
+            auto sphere_template = DEMSim.LoadSphereType(mass, sphere_rad, mat_type_1);
 
             // Add the incline
             float3 normal_dir =
                 make_float3(-std::sin(2. * PI * (alpha / 360.)), 0., std::cos(2. * PI * (alpha / 360.)));
             float3 tang_dir = make_float3(std::cos(2. * PI * (alpha / 360.)), 0., std::sin(2. * PI * (alpha / 360.)));
-            DEM_sim.AddBCPlane(make_float3(0, 0, 0), normal_dir, mat_type_1);
+            DEMSim.AddBCPlane(make_float3(0, 0, 0), normal_dir, mat_type_1);
 
             // Add a ball rolling
-            auto sphere = DEM_sim.AddClumps(sphere_template, normal_dir * sphere_rad);
+            auto sphere = DEMSim.AddClumps(sphere_template, normal_dir * sphere_rad);
             sphere->SetVel(tang_dir * 0.5);
-            auto sphere_tracker = DEM_sim.Track(sphere);
+            auto sphere_tracker = DEMSim.Track(sphere);
 
             float step_time = 1e-5;
-            DEM_sim.SetInitTimeStep(step_time);
-            DEM_sim.SetCDUpdateFreq(-1);
-            DEM_sim.SetMaxVelocity(1.0);
-            DEM_sim.Initialize();
+            DEMSim.SetInitTimeStep(step_time);
+            DEMSim.SetCDUpdateFreq(-1);
+            DEMSim.SetMaxVelocity(1.0);
+            DEMSim.Initialize();
 
-            DEM_sim.DoDynamicsThenSync(run_time);
+            DEMSim.DoDynamicsThenSync(run_time);
             float3 vel = sphere_tracker->Vel();
             float3 angVel = sphere_tracker->AngVelLocal();
             float vel_mag = length(vel);
@@ -200,38 +200,38 @@ void SphereStack() {
         for (float Crr = 0.03; Crr <= 0.3; Crr += 0.01) {
             bool found = false;
             for (float m_top = 0.1; m_top <= 50.0; m_top += 0.02) {
-                DEMSolver DEM_sim;
-                SetSolverProp(DEM_sim);
-                DEM_sim.SetVerbosity(ERROR);
+                DEMSolver DEMSim;
+                SetSolverProp(DEMSim);
+                DEMSim.SetVerbosity(ERROR);
 
                 auto mat_type_1 =
-                    DEM_sim.LoadMaterial({{"E", 2e6}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", mu}, {"Crr", Crr}});
+                    DEMSim.LoadMaterial({{"E", 2e6}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", mu}, {"Crr", Crr}});
                 // 2 types of spheres
-                auto sphere_top_template = DEM_sim.LoadSphereType(m_top, sphere_rad, mat_type_1);
-                auto sphere_bot_template = DEM_sim.LoadSphereType(m_bot, sphere_rad, mat_type_1);
+                auto sphere_top_template = DEMSim.LoadSphereType(m_top, sphere_rad, mat_type_1);
+                auto sphere_bot_template = DEMSim.LoadSphereType(m_bot, sphere_rad, mat_type_1);
 
                 // Add the bottom plane
                 float3 normal_dir = make_float3(0, 0, 1);
                 float3 tang_dir = make_float3(1, 0, 0);
-                DEM_sim.AddBCPlane(make_float3(0, 0, 0), normal_dir, mat_type_1);
+                DEMSim.AddBCPlane(make_float3(0, 0, 0), normal_dir, mat_type_1);
 
                 // Add 3 stacking spheres
-                auto sphere_bot_1 = DEM_sim.AddClumps(sphere_bot_template,
-                                                      -tang_dir * (gap / 2. + sphere_rad) + normal_dir * sphere_rad);
-                auto sphere_bot_2 = DEM_sim.AddClumps(sphere_bot_template,
-                                                      tang_dir * (gap / 2. + sphere_rad) + normal_dir * sphere_rad);
-                auto sphere_top = DEM_sim.AddClumps(
+                auto sphere_bot_1 = DEMSim.AddClumps(sphere_bot_template,
+                                                     -tang_dir * (gap / 2. + sphere_rad) + normal_dir * sphere_rad);
+                auto sphere_bot_2 =
+                    DEMSim.AddClumps(sphere_bot_template, tang_dir * (gap / 2. + sphere_rad) + normal_dir * sphere_rad);
+                auto sphere_top = DEMSim.AddClumps(
                     sphere_top_template,
                     normal_dir *
                         (std::sqrt(std::pow(2. * sphere_rad, 2) - std::pow(gap / 2. + sphere_rad, 2)) + sphere_rad));
-                auto sphere_tracker = DEM_sim.Track(sphere_top);
+                auto sphere_tracker = DEMSim.Track(sphere_top);
 
                 float step_time = 1e-5;
-                DEM_sim.SetInitTimeStep(step_time);
+                DEMSim.SetInitTimeStep(step_time);
                 // Just do CD once and we are all good
-                DEM_sim.SetCDUpdateFreq(-1);
-                DEM_sim.SetMaxVelocity(1.0);
-                DEM_sim.Initialize();
+                DEMSim.SetCDUpdateFreq(-1);
+                DEMSim.SetMaxVelocity(1.0);
+                DEMSim.Initialize();
 
                 float frame_time = 1e-1;
                 float top_sp_Z = 99999.9;
@@ -245,9 +245,9 @@ void SphereStack() {
                     if (run_num == 0) {
                         char filename[100];
                         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-                        DEM_sim.WriteSphereFile(std::string(filename));
+                        DEMSim.WriteSphereFile(std::string(filename));
                     }
-                    DEM_sim.DoDynamics(frame_time);
+                    DEMSim.DoDynamics(frame_time);
                     pos = sphere_tracker->Pos();
                     i++;
                 }

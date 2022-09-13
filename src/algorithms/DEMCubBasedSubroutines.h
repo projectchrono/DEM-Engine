@@ -3,12 +3,12 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#include <DEM/DEMStructs.h>
-#include <DEM/DEMDefines.h>
+#include <DEM/Structs.h>
+#include <DEM/Defines.h>
 #include <core/utils/GpuManager.h>
 #include <core/utils/ManagedAllocator.hpp>
 
-namespace smug {
+namespace deme {
 
 void doubleSumReduce(double* d_in, double* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
 
@@ -51,7 +51,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
                       DEMDataKT* granData,
                       DEMSimParams* simParams,
                       SolverFlags& solverFlags,
-                      DEM_VERBOSITY& verbosity,
+                      VERBOSITY& verbosity,
                       // The following arrays may need to change sizes, so we can't pass pointers
                       std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& idGeometryA,
                       std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& idGeometryB,
@@ -73,4 +73,4 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
                           DEMSolverStateData& scratchPad,
                           SolverTimers& timers);
 
-}  // namespace smug
+}  // namespace deme

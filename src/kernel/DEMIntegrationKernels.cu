@@ -1,6 +1,6 @@
 // DEM integration related custom kernels
 #include <kernel/DEMHelperKernels.cu>
-#include <DEM/DEMDefines.h>
+#include <DEM/Defines.h>
 
 // Apply presecibed velocity and report whether the `true' physics should be skipped, rather than added on top of that
 template <typename T1, typename T2>
@@ -12,7 +12,7 @@ inline __device__ void applyPrescribedVel(bool& LinPrescribed,
                                           T2& omgBarX,
                                           T2& omgBarY,
                                           T2& omgBarZ,
-                                          const smug::family_t& family,
+                                          const deme::family_t& family,
                                           const float& t) {
     switch (family) {
         _velPrescriptionStrategy_;
@@ -33,7 +33,7 @@ inline __device__ void applyPrescribedPos(bool& LinPrescribed,
                                           T2& oriQx,
                                           T2& oriQy,
                                           T2& oriQz,
-                                          const smug::family_t& family,
+                                          const deme::family_t& family,
                                           const float& t) {
     switch (family) {
         _posPrescriptionStrategy_;
@@ -43,14 +43,14 @@ inline __device__ void applyPrescribedPos(bool& LinPrescribed,
     }
 }
 
-inline __device__ void integrateVel(smug::bodyID_t thisClump,
-                                    smug::DEMSimParams* simParams,
-                                    smug::DEMDataDT* granData,
+inline __device__ void integrateVel(deme::bodyID_t thisClump,
+                                    deme::DEMSimParams* simParams,
+                                    deme::DEMDataDT* granData,
                                     float3& v,
                                     float3& omgBar,
                                     float h,
                                     float t) {
-    smug::family_t family_code = granData->familyID[thisClump];
+    deme::family_t family_code = granData->familyID[thisClump];
     bool LinPrescribed = false, RotPrescribed = false;
 
     // Keep tab of the old... we'll need that
@@ -87,26 +87,26 @@ inline __device__ void integrateVel(smug::bodyID_t thisClump,
     _integrationVelocityPassOnStrategy_;
 }
 
-// inline __device__ void locateNewVoxel(smug::voxelID_t& voxel, int64_t& locX_tmp, int64_t& locY_tmp, int64_t&
+// inline __device__ void locateNewVoxel(deme::voxelID_t& voxel, int64_t& locX_tmp, int64_t& locY_tmp, int64_t&
 // locZ_tmp) {
-//     smug::voxelID_t voxelX;
-//     smug::voxelID_t voxelY;
-//     smug::voxelID_t voxelZ;
-//     IDChopper<smug::voxelID_t, smug::voxelID_t>(voxelX, voxelY, voxelZ, voxel, _nvXp2_, _nvYp2_);
+//     deme::voxelID_t voxelX;
+//     deme::voxelID_t voxelY;
+//     deme::voxelID_t voxelZ;
+//     IDChopper<deme::voxelID_t, deme::voxelID_t>(voxelX, voxelY, voxelZ, voxel, _nvXp2_, _nvYp2_);
 
-//     // DEM_MAX_SUBVOXEL is int64 and large enough to handle DEM_VOXEL_RES_POWER2 == 16 or 32
-//     voxelX += div_floor<int64_t, int64_t>(locX_tmp, smug::DEM_MAX_SUBVOXEL);
-//     voxelY += div_floor<int64_t, int64_t>(locY_tmp, smug::DEM_MAX_SUBVOXEL);
-//     voxelZ += div_floor<int64_t, int64_t>(locZ_tmp, smug::DEM_MAX_SUBVOXEL);
-//     locX_tmp = mod_floor<int64_t, int64_t>(locX_tmp, smug::DEM_MAX_SUBVOXEL);
-//     locY_tmp = mod_floor<int64_t, int64_t>(locY_tmp, smug::DEM_MAX_SUBVOXEL);
-//     locZ_tmp = mod_floor<int64_t, int64_t>(locZ_tmp, smug::DEM_MAX_SUBVOXEL);
+//     // MAX_SUBVOXEL is int64 and large enough to handle VOXEL_RES_POWER2 == 16 or 32
+//     voxelX += div_floor<int64_t, int64_t>(locX_tmp, deme::MAX_SUBVOXEL);
+//     voxelY += div_floor<int64_t, int64_t>(locY_tmp, deme::MAX_SUBVOXEL);
+//     voxelZ += div_floor<int64_t, int64_t>(locZ_tmp, deme::MAX_SUBVOXEL);
+//     locX_tmp = mod_floor<int64_t, int64_t>(locX_tmp, deme::MAX_SUBVOXEL);
+//     locY_tmp = mod_floor<int64_t, int64_t>(locY_tmp, deme::MAX_SUBVOXEL);
+//     locZ_tmp = mod_floor<int64_t, int64_t>(locZ_tmp, deme::MAX_SUBVOXEL);
 
-//     IDPacker<smug::voxelID_t, smug::voxelID_t>(voxel, voxelX, voxelY, voxelZ, _nvXp2_, _nvYp2_);
+//     IDPacker<deme::voxelID_t, deme::voxelID_t>(voxel, voxelX, voxelY, voxelZ, _nvXp2_, _nvYp2_);
 // }
 
-inline __device__ void integratePos(smug::bodyID_t thisClump,
-                                    smug::DEMDataDT* granData,
+inline __device__ void integratePos(deme::bodyID_t thisClump,
+                                    deme::DEMDataDT* granData,
                                     float3 v,
                                     float3 omgBar,
                                     float h,
@@ -122,13 +122,13 @@ inline __device__ void integratePos(smug::bodyID_t thisClump,
 
     double X, Y, Z;
     // Now XYZ gets the old position. We can write them directly back, then it is equivalent to being LinPrescribed.
-    voxelIDToPosition<double, smug::voxelID_t, smug::subVoxelPos_t>(
+    voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
         X, Y, Z, granData->voxelID[thisClump], granData->locX[thisClump], granData->locY[thisClump],
         granData->locZ[thisClump], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
 
-    smug::family_t family_code = granData->familyID[thisClump];
+    deme::family_t family_code = granData->familyID[thisClump];
     bool LinPrescribed = false, RotPrescribed = false;
-    applyPrescribedPos<double, smug::oriQ_t>(LinPrescribed, RotPrescribed, X, Y, Z, granData->oriQw[thisClump],
+    applyPrescribedPos<double, deme::oriQ_t>(LinPrescribed, RotPrescribed, X, Y, Z, granData->oriQw[thisClump],
                                              granData->oriQx[thisClump], granData->oriQy[thisClump],
                                              granData->oriQz[thisClump], family_code, (float)t);
 
@@ -138,7 +138,7 @@ inline __device__ void integratePos(smug::bodyID_t thisClump,
         Y += (double)v.y * h;
         Z += (double)v.z * h;
     }
-    positionToVoxelID<smug::voxelID_t, smug::subVoxelPos_t, double>(
+    positionToVoxelID<deme::voxelID_t, deme::subVoxelPos_t, double>(
         granData->voxelID[thisClump], granData->locX[thisClump], granData->locY[thisClump], granData->locZ[thisClump],
         X, Y, Z, _nvXp2_, _nvYp2_, _voxelSize_, _l_);
 
@@ -167,8 +167,8 @@ inline __device__ void integratePos(smug::bodyID_t thisClump,
     }
 }
 
-__global__ void integrateOwners(smug::DEMSimParams* simParams, smug::DEMDataDT* granData, float t) {
-    smug::bodyID_t thisClump = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void integrateOwners(deme::DEMSimParams* simParams, deme::DEMDataDT* granData, float t) {
+    deme::bodyID_t thisClump = blockIdx.x * blockDim.x + threadIdx.x;
     if (thisClump < simParams->nOwnerBodies) {
         // These 2 quantities mean the velocity and ang vel used for updating position/quaternion for this step.
         // Depending on the integration scheme in use, they can be different.

@@ -30,12 +30,12 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef SMUG_TIMER_HPP
-#define SMUG_TIMER_HPP
+#ifndef DEME_TIMER_HPP
+#define DEME_TIMER_HPP
 
 #include <chrono>
 
-namespace smug {
+namespace deme {
 
 template <class seconds_type = double>
 class Timer {
@@ -99,6 +99,6 @@ class Timer {
     seconds_type operator()() const { return GetTimeSeconds(); }
 };
 
-}  // namespace smug
+}  // namespace deme
 
 #endif

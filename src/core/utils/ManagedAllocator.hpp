@@ -16,7 +16,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace smug {
+namespace deme {
 
 template <class T>
 struct ManagedAllocator {
@@ -33,7 +33,7 @@ struct ManagedAllocator {
 
     template <class U>
     struct rebind {
-        typedef typename smug::ManagedAllocator<U> other;
+        typedef typename deme::ManagedAllocator<U> other;
     };
 #endif
 
@@ -140,6 +140,6 @@ struct ManagedAllocator {
     }
 };
 
-}  // END namespace smug
+}  // END namespace deme
 
 #endif

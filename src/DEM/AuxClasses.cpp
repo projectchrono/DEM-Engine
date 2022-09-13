@@ -4,25 +4,25 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 #include <DEM/API.h>
-#include <DEM/DEMAuxClasses.h>
+#include <DEM/AuxClasses.h>
 #include <DEM/HostSideHelpers.hpp>
-#include <DEM/DEMModels.h>
+#include <DEM/Models.h>
 
-namespace smug {
+namespace deme {
 
 // =============================================================================
 // DEMInspector class
 // =============================================================================
 
-const std::string DEM_INSP_CODE_SPHERE_HIGH_Z = R"V0G0N(
+const std::string INSP_CODE_SPHERE_HIGH_Z = R"V0G0N(
     quantity[sphereID] = Z + myRadius;
 )V0G0N";
 
-const std::string DEM_INSP_CODE_SPHERE_LOW_Z = R"V0G0N(
+const std::string INSP_CODE_SPHERE_LOW_Z = R"V0G0N(
     quantity[sphereID] = Z - myRadius;
 )V0G0N";
 
-const std::string DEM_INSP_CODE_SPHERE_HIGH_ABSV = R"V0G0N(
+const std::string INSP_CODE_SPHERE_HIGH_ABSV = R"V0G0N(
     float3 relPos = make_float3(myRelPosX, myRelPosY, myRelPosZ);
     // Get owner's velocity
     float3 rotVel, linVel;
@@ -42,14 +42,14 @@ const std::string DEM_INSP_CODE_SPHERE_HIGH_ABSV = R"V0G0N(
         // main reason for querying max absv for us. So, it should be fine.
         float3 pRotVel = cross(rotVel, relPos);
         // Map rotational contribution back to global
-        applyOriQToVector3<float, smug::oriQ_t>(pRotVel.x, pRotVel.y, pRotVel.z, 
+        applyOriQToVector3<float, deme::oriQ_t>(pRotVel.x, pRotVel.y, pRotVel.z, 
                                                 oriQw, oriQx, oriQy, oriQz);
         vel = length(pRotVel + linVel);
     }
     quantity[sphereID] = vel;
 )V0G0N";
 
-const std::string DEM_INSP_CODE_CLUMP_APPROX_VOID = R"V0G0N(
+const std::string INSP_CODE_CLUMP_APPROX_VOID = R"V0G0N(
     size_t myVolOffset = granData->inertiaPropOffsets[myOwner];
     float myVol = volumeProperties[myVolOffset];
     quantity[myOwner] = myVol;
@@ -58,45 +58,45 @@ const std::string DEM_INSP_CODE_CLUMP_APPROX_VOID = R"V0G0N(
 void DEMInspector::switch_quantity_type(const std::string& quantity) {
     switch (hash_charr(quantity.c_str())) {
         case ("clump_max_z"_):
-            inspection_code = DEM_INSP_CODE_SPHERE_HIGH_Z;
-            reduce_flavor = DEM_CUB_REDUCE_FLAVOR::MAX;
+            inspection_code = INSP_CODE_SPHERE_HIGH_Z;
+            reduce_flavor = CUB_REDUCE_FLAVOR::MAX;
             kernel_name = "inspectSphereProperty";
-            thing_to_insp = DEM_INSPECT_ENTITY_TYPE::SPHERE;
+            thing_to_insp = INSPECT_ENTITY_TYPE::SPHERE;
             index_name = "sphereID";
             break;
         case ("clump_min_z"_):
-            inspection_code = DEM_INSP_CODE_SPHERE_LOW_Z;
-            reduce_flavor = DEM_CUB_REDUCE_FLAVOR::MIN;
+            inspection_code = INSP_CODE_SPHERE_LOW_Z;
+            reduce_flavor = CUB_REDUCE_FLAVOR::MIN;
             kernel_name = "inspectSphereProperty";
-            thing_to_insp = DEM_INSPECT_ENTITY_TYPE::SPHERE;
+            thing_to_insp = INSPECT_ENTITY_TYPE::SPHERE;
             index_name = "sphereID";
             break;
         // case ("mesh_max_z"_):
-        //     reduce_flavor = DEM_CUB_REDUCE_FLAVOR::MAX;
+        //     reduce_flavor = CUB_REDUCE_FLAVOR::MAX;
         //     break;
         // case ("clump_com_max_z"_):
-        //     // inspection_code = DEM_INSP_CODE_SPHERE_HIGH_Z;
-        //     reduce_flavor = DEM_CUB_REDUCE_FLAVOR::MAX;
+        //     // inspection_code = INSP_CODE_SPHERE_HIGH_Z;
+        //     reduce_flavor = CUB_REDUCE_FLAVOR::MAX;
         //     kernel_name = "inspectOwnerProperty";
         //     break;
         //// TODO: Void ration here is a very rough approximation and should only work when domain is large and
         /// particles are small
         case ("clump_volume"_):
-            inspection_code = DEM_INSP_CODE_CLUMP_APPROX_VOID;
-            reduce_flavor = DEM_CUB_REDUCE_FLAVOR::SUM;
+            inspection_code = INSP_CODE_CLUMP_APPROX_VOID;
+            reduce_flavor = CUB_REDUCE_FLAVOR::SUM;
             kernel_name = "inspectOwnerProperty";
-            thing_to_insp = DEM_INSPECT_ENTITY_TYPE::CLUMP;
+            thing_to_insp = INSPECT_ENTITY_TYPE::CLUMP;
             index_name = "myOwner";
             break;
         case ("clump_max_absv"_):
-            inspection_code = DEM_INSP_CODE_SPHERE_HIGH_ABSV;
-            reduce_flavor = DEM_CUB_REDUCE_FLAVOR::MAX;
+            inspection_code = INSP_CODE_SPHERE_HIGH_ABSV;
+            reduce_flavor = CUB_REDUCE_FLAVOR::MAX;
             kernel_name = "inspectSphereProperty";
-            thing_to_insp = DEM_INSPECT_ENTITY_TYPE::SPHERE;
+            thing_to_insp = INSPECT_ENTITY_TYPE::SPHERE;
             index_name = "sphereID";
             break;
         // case ("clump_absv"_):
-        //     reduce_flavor = DEM_CUB_REDUCE_FLAVOR::NONE;
+        //     reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
         //     break;
         default:
             std::stringstream ss;
@@ -147,11 +147,11 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
     std::unordered_map<std::string, std::string> my_subs = Subs;
     my_subs["_inRegionPolicy_"] = in_region_specifier;
     my_subs["_quantityQueryProcess_"] = inspection_code;
-    if (thing_to_insp == DEM_INSPECT_ENTITY_TYPE::SPHERE) {
+    if (thing_to_insp == INSPECT_ENTITY_TYPE::SPHERE) {
         inspection_kernel = std::make_shared<jitify::Program>(std::move(
             JitHelper::buildProgram("DEMSphereQueryKernels", JitHelper::KERNEL_DIR / "DEMSphereQueryKernels.cu",
                                     my_subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
-    } else if (thing_to_insp == DEM_INSPECT_ENTITY_TYPE::CLUMP) {
+    } else if (thing_to_insp == INSPECT_ENTITY_TYPE::CLUMP) {
         inspection_kernel = std::make_shared<jitify::Program>(
             std::move(JitHelper::buildProgram("DEMOwnerQueryKernels", JitHelper::KERNEL_DIR / "DEMOwnerQueryKernels.cu",
                                               my_subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
@@ -215,22 +215,22 @@ void DEMTracker::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::v
 // DEMForceModel class
 // =============================================================================
 
-void DEMForceModel::SetForceModelType(DEM_FORCE_MODEL model_type) {
+void DEMForceModel::SetForceModelType(FORCE_MODEL model_type) {
     type = model_type;
     switch (model_type) {
-        case (DEM_FORCE_MODEL::HERTZIAN):
+        case (FORCE_MODEL::HERTZIAN):
             m_must_have_mat_props = {"E", "nu", "CoR", "mu", "Crr"};
-            m_force_model = DEM_HERTZIAN_FORCE_MODEL();
+            m_force_model = HERTZIAN_FORCE_MODEL();
             // History-based model uses these history-related arrays
             m_contact_wildcards = {"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"};
             break;
-        case (DEM_FORCE_MODEL::HERTZIAN_FRICTIONLESS):
+        case (FORCE_MODEL::HERTZIAN_FRICTIONLESS):
             m_must_have_mat_props = {"E", "nu", "CoR"};
-            m_force_model = DEM_HERTZIAN_FORCE_MODEL_FRICTIONLESS();
+            m_force_model = HERTZIAN_FORCE_MODEL_FRICTIONLESS();
             // No contact history needed for frictionless
             m_contact_wildcards.clear();
             break;
-        case (DEM_FORCE_MODEL::CUSTOM):
+        case (FORCE_MODEL::CUSTOM):
             m_must_have_mat_props.clear();
     }
 }
@@ -238,7 +238,7 @@ void DEMForceModel::SetForceModelType(DEM_FORCE_MODEL model_type) {
 void DEMForceModel::DefineCustomModel(const std::string& model) {
     // If custom model is set, we don't care what materials needs to be set
     m_must_have_mat_props.clear();
-    type = DEM_FORCE_MODEL::CUSTOM;
+    type = FORCE_MODEL::CUSTOM;
     m_force_model = model;
 }
 
@@ -248,7 +248,7 @@ int DEMForceModel::ReadCustomModelFile(const std::filesystem::path& sourcefile) 
     }
     // If custom model is set, we don't care what materials needs to be set
     m_must_have_mat_props.clear();
-    type = DEM_FORCE_MODEL::CUSTOM;
+    type = FORCE_MODEL::CUSTOM;
     m_force_model = read_file_to_string(sourcefile);
     return 0;
 }
@@ -276,4 +276,4 @@ void DEMForceModel::SetPerOwnerWildcards(const std::set<std::string>& wildcards)
     m_owner_wildcards = wildcards;
 }
 
-}  // END namespace smug
+}  // END namespace deme

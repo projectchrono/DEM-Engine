@@ -13,14 +13,14 @@
 #include <chrono>
 #include <filesystem>
 
-using namespace smug;
+using namespace deme;
 using namespace std::filesystem;
 
 int main() {
-    DEMSolver DEM_sim;
-    DEM_sim.SetVerbosity(INFO);
-    DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
-    DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::ABSV);
+    DEMSolver DEMSim;
+    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
+    DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
 
     // A general template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
     std::vector<float> radii = {1.0, 0.88, 0.64, 0.88, 0.64};
@@ -33,12 +33,12 @@ int main() {
     // We can scale this general template to make it smaller, like a DEM particle that you would actually use
     float scaling = 0.01;
 
-    auto mat_type_sand = DEM_sim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}, {"Crr", 0.01}});
-    auto mat_type_drum = DEM_sim.LoadMaterial({{"E", 2e9}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", 0.5}, {"Crr", 0.01}});
+    auto mat_type_sand = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}, {"Crr", 0.01}});
+    auto mat_type_drum = DEMSim.LoadMaterial({{"E", 2e9}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", 0.5}, {"Crr", 0.01}});
 
     // Bin size needs to make sure no too-many-sphere-per-bin situation happens
-    // DEM_sim.SetInitBinSize(scaling);
-    DEM_sim.SetInitBinSize(4 * scaling);
+    // DEMSim.SetInitBinSize(scaling);
+    DEMSim.SetInitBinSize(4 * scaling);
 
     // Create some random clump templates for the filling materials
     // An array to store these generated clump templates
@@ -52,8 +52,8 @@ int main() {
     std::transform(relPos.begin(), relPos.end(), this_relPos.begin(), [scaling](float3& r) { return r * scaling; });
 
     // Load particle template(s)
-    clump_types.push_back(DEM_sim.LoadClumpType(this_mass, this_MOI, this_radii, this_relPos, mat_type_sand));
-    // clump_types.push_back(DEM_sim.LoadSphereType(this_mass, std::cbrt(2.0) * scaling, mat_type_sand));
+    clump_types.push_back(DEMSim.LoadClumpType(this_mass, this_MOI, this_radii, this_relPos, mat_type_sand));
+    // clump_types.push_back(DEMSim.LoadSphereType(this_mass, std::cbrt(2.0) * scaling, mat_type_sand));
 
     // Drum is a `big clump', we now generate its template
     float3 CylCenter = make_float3(0, 0, 0);
@@ -66,8 +66,8 @@ int main() {
     float IYY = (CylMass / 12) * (3 * CylRad * CylRad + CylHeight * CylHeight);
     auto Drum_particles = DEMCylSurfSampler(CylCenter, CylAxis, CylRad, CylHeight, CylParticleRad);
     auto Drum_template =
-        DEM_sim.LoadClumpType(CylMass, make_float3(IXX, IYY, IYY),
-                              std::vector<float>(Drum_particles.size(), CylParticleRad), Drum_particles, mat_type_drum);
+        DEMSim.LoadClumpType(CylMass, make_float3(IXX, IYY, IYY),
+                             std::vector<float>(Drum_particles.size(), CylParticleRad), Drum_particles, mat_type_drum);
     std::cout << Drum_particles.size() << " spheres make up the rotating drum" << std::endl;
 
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_type;
@@ -93,37 +93,37 @@ int main() {
     }
 
     // Finally, input to system
-    auto particles = DEM_sim.AddClumps(input_template_type, input_xyz);
+    auto particles = DEMSim.AddClumps(input_template_type, input_xyz);
     particles->SetFamilies(family_code);
 
     // Add drum
-    auto Drum = DEM_sim.AddClumps(Drum_template, make_float3(0));
+    auto Drum = DEMSim.AddClumps(Drum_template, make_float3(0));
     unsigned int drum_family = 100;
     Drum->SetFamilies(drum_family);
     // The drum rotates (facing X direction)
-    DEM_sim.SetFamilyPrescribedAngVel(drum_family, "0.1", "0", "0");
+    DEMSim.SetFamilyPrescribedAngVel(drum_family, "0.1", "0", "0");
     // Disable contacts within drum components
-    DEM_sim.DisableContactBetweenFamilies(drum_family, drum_family);
-    auto Drum_tracker = DEM_sim.Track(Drum);
+    DEMSim.DisableContactBetweenFamilies(drum_family, drum_family);
+    auto Drum_tracker = DEMSim.Track(Drum);
 
     // Then add planes to `close up' the drum
-    auto top_bot_planes = DEM_sim.AddExternalObject();
+    auto top_bot_planes = DEMSim.AddExternalObject();
     top_bot_planes->AddPlane(make_float3(CylHeight / 2. - safe_delta, 0, 0), make_float3(-1, 0, 0), mat_type_drum);
     top_bot_planes->AddPlane(make_float3(-CylHeight / 2. + safe_delta, 0, 0), make_float3(1, 0, 0), mat_type_drum);
     top_bot_planes->SetFamily(drum_family);
-    auto planes_tracker = DEM_sim.Track(top_bot_planes);
+    auto planes_tracker = DEMSim.Track(top_bot_planes);
 
     float step_size = 5e-6;
-    DEM_sim.InstructBoxDomainDimension(5, 5, 5);
-    DEM_sim.SetCoordSysOrigin("center");
-    DEM_sim.SetInitTimeStep(step_size);
-    DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    DEMSim.InstructBoxDomainDimension(5, 5, 5);
+    DEMSim.SetCoordSysOrigin("center");
+    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEM_sim.SetCDUpdateFreq(20);
-    // DEM_sim.SetExpandFactor(1e-3);
-    DEM_sim.SetMaxVelocity(3.);
-    DEM_sim.SetExpandSafetyParam(1.1);
-    DEM_sim.Initialize();
+    DEMSim.SetCDUpdateFreq(20);
+    // DEMSim.SetExpandFactor(1e-3);
+    DEMSim.SetMaxVelocity(3.);
+    DEMSim.SetExpandSafetyParam(1.1);
+    DEMSim.Initialize();
 
     path out_dir = current_path();
     out_dir += "/DEMdemo_RotatingDrum";
@@ -140,10 +140,10 @@ int main() {
     for (double t = 0; t < (double)time_end; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
             std::cout << "Frame: " << currframe << std::endl;
-            DEM_sim.ShowThreadCollaborationStats();
+            DEMSim.ShowThreadCollaborationStats();
             char filename[100];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            DEM_sim.WriteSphereFile(std::string(filename));
+            DEMSim.WriteSphereFile(std::string(filename));
             currframe++;
             // float3 plane_vel = planes_tracker->Vel();
             // float4 plane_quat = planes_tracker->OriQ();
@@ -153,7 +153,7 @@ int main() {
             //           << ", " << plane_quat.z << std::endl;
         }
 
-        DEM_sim.DoDynamics(step_size);
+        DEMSim.DoDynamics(step_size);
         // We can query info out of this drum, since it is tracked
         // float3 drum_pos = Drum_tracker->Pos();
         // float3 drum_angVel = Drum_tracker->AngVelLocal();
@@ -166,10 +166,10 @@ int main() {
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
     std::cout << (time_sec.count()) / time_end * 10.0 << " seconds (wall time) to finish 10 seconds' simulation"
               << std::endl;
-    DEM_sim.ShowThreadCollaborationStats();
-    DEM_sim.ClearThreadCollaborationStats();
+    DEMSim.ShowThreadCollaborationStats();
+    DEMSim.ClearThreadCollaborationStats();
 
-    DEM_sim.ShowTimingStats();
+    DEMSim.ShowTimingStats();
 
     std::cout << "DEMdemo_RotatingDrum exiting..." << std::endl;
     return 0;

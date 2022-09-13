@@ -13,46 +13,46 @@
 #include <chrono>
 #include <filesystem>
 
-using namespace smug;
+using namespace deme;
 using namespace std::filesystem;
 
 int main() {
-    DEMSolver DEM_sim;
-    DEM_sim.SetVerbosity(DEBUG);
-    DEM_sim.SetOutputFormat(DEM_OUTPUT_FORMAT::CSV);
-    DEM_sim.SetOutputContent(DEM_OUTPUT_CONTENT::ABSV);
+    DEMSolver DEMSim;
+    DEMSim.SetVerbosity(DEBUG);
+    DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
+    DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
 
     // E, nu, CoR, mu, Crr...
-    auto mat_type_ball = DEM_sim.LoadMaterial({{"E", 1e10}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.0}, {"Crr", 0.0}});
-    auto mat_type_terrain = DEM_sim.LoadMaterial({{"E", 5e9}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.0}, {"Crr", 0.0}});
+    auto mat_type_ball = DEMSim.LoadMaterial({{"E", 1e10}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.0}, {"Crr", 0.0}});
+    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 5e9}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.0}, {"Crr", 0.0}});
 
-    auto projectile = DEM_sim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/sphere.obj").string(), mat_type_ball);
+    auto projectile = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/sphere.obj").string(), mat_type_ball);
     std::cout << "Total num of triangles: " << projectile->GetNumTriangles() << std::endl;
 
     // float ball_rad = 0.2;
     // auto template_ball =
-    //     DEM_sim.LoadSphereType(ball_rad * ball_rad * ball_rad * 7e3 * 4 / 3 * 3.14, ball_rad, mat_type_ball);
+    //     DEMSim.LoadSphereType(ball_rad * ball_rad * ball_rad * 7e3 * 4 / 3 * 3.14, ball_rad, mat_type_ball);
 
     float terrain_rad = 0.005;
-    auto template_terrain = DEM_sim.LoadSphereType(terrain_rad * terrain_rad * terrain_rad * 2.6e3 * 4 / 3 * 3.14,
-                                                   terrain_rad, mat_type_terrain);
+    auto template_terrain = DEMSim.LoadSphereType(terrain_rad * terrain_rad * terrain_rad * 2.6e3 * 4 / 3 * 3.14,
+                                                  terrain_rad, mat_type_terrain);
 
     float step_size = 1e-5;
     double world_size = 1.5;
-    // DEM_sim.InstructBoxDomainNumVoxel(21, 21, 22, world_size / std::pow(2, 16) / std::pow(2, 21));
-    DEM_sim.InstructBoxDomainDimension(world_size, world_size, 2 * world_size, DEM_SPATIAL_DIR::X);
-    DEM_sim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
-    DEM_sim.AddBCPlane(make_float3(0, 0, -world_size / 2), make_float3(0, 0, 1), mat_type_terrain);
-    DEM_sim.SetCoordSysOrigin("center");
-    DEM_sim.SetInitTimeStep(step_size);
-    DEM_sim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    // DEMSim.InstructBoxDomainNumVoxel(21, 21, 22, world_size / std::pow(2, 16) / std::pow(2, 21));
+    DEMSim.InstructBoxDomainDimension(world_size, world_size, 2 * world_size, SPATIAL_DIR::X);
+    DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
+    DEMSim.AddBCPlane(make_float3(0, 0, -world_size / 2), make_float3(0, 0, 1), mat_type_terrain);
+    DEMSim.SetCoordSysOrigin("center");
+    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEM_sim.SetCDUpdateFreq(10);
-    // DEM_sim.SetExpandFactor(1e-3);
-    DEM_sim.SetMaxVelocity(2.);
-    DEM_sim.SetExpandSafetyParam(1.1);
-    DEM_sim.SetInitBinSize(4 * terrain_rad);
-    DEM_sim.Initialize();
+    DEMSim.SetCDUpdateFreq(10);
+    // DEMSim.SetExpandFactor(1e-3);
+    DEMSim.SetMaxVelocity(2.);
+    DEMSim.SetExpandSafetyParam(1.1);
+    DEMSim.SetInitBinSize(4 * terrain_rad);
+    DEMSim.Initialize();
 
     path out_dir = current_path();
     out_dir += "/DEMdemo_BallDrop";
@@ -72,41 +72,41 @@ int main() {
     // particles in simulation, until it reaches a certain number
     ///////////////////////////////////////////////////////////////
     float offset_z = 4 * terrain_rad - world_size / 2;
-    while (DEM_sim.GetNumClumps() < 100000) {
-        DEM_sim.ClearCache();
+    while (DEMSim.GetNumClumps() < 100000) {
+        DEMSim.ClearCache();
         float3 sample_center = make_float3(0, 0, offset_z);
         float sample_halfheight = 0.0001;
         float sample_halfwidth = world_size / 2 * 0.95;
         auto input_xyz = DEMBoxGridSampler(
             sample_center, make_float3(sample_halfwidth, sample_halfwidth, sample_halfheight), 2.01 * terrain_rad);
-        DEM_sim.AddClumps(template_terrain, input_xyz);
-        DEM_sim.UpdateClumps();
+        DEMSim.AddClumps(template_terrain, input_xyz);
+        DEMSim.UpdateClumps();
 
         // Allow for some settling
         // Must DoDynamicsThenSync (not DoDynamics), as adding entities to the simulation is only allowed at a sync-ed
         // point of time.
-        DEM_sim.DoDynamicsThenSync(0.1);
+        DEMSim.DoDynamicsThenSync(0.1);
 
-        DEM_sim.ShowThreadCollaborationStats();
+        DEMSim.ShowThreadCollaborationStats();
         char filename[200];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-        DEM_sim.WriteSphereFile(std::string(filename));
+        DEMSim.WriteSphereFile(std::string(filename));
 
         // Then prepare for adding another layer
         offset_z += 2.5 * terrain_rad;
 
-        std::cout << "Current number of clumps: " << DEM_sim.GetNumClumps() << std::endl;
+        std::cout << "Current number of clumps: " << DEMSim.GetNumClumps() << std::endl;
     }
-    DEM_sim.DoDynamicsThenSync(0.2);
+    DEMSim.DoDynamicsThenSync(0.2);
 
     // for (double t = 0; t < (double)sim_end; t += frame_time, currframe++) {
     //     std::cout << "Frame: " << currframe << std::endl;
-    //     DEM_sim.ShowThreadCollaborationStats();
+    //     DEMSim.ShowThreadCollaborationStats();
     //     char filename[200];
     //     sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-    //     DEM_sim.WriteSphereFile(std::string(filename));
+    //     DEMSim.WriteSphereFile(std::string(filename));
 
-    //     DEM_sim.DoDynamics(frame_time);
+    //     DEMSim.DoDynamics(frame_time);
 
     //     //
     // }

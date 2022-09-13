@@ -1,4 +1,4 @@
-smug::clumpComponentOffset_t myCompOffset = granData->clumpComponentOffset[sphereID];
+deme::clumpComponentOffset_t myCompOffset = granData->clumpComponentOffset[sphereID];
 myRelPosX = CDRelPosX[myCompOffset];
 myRelPosY = CDRelPosY[myCompOffset];
 myRelPosZ = CDRelPosZ[myCompOffset];

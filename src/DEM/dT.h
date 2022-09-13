@@ -3,8 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef SMUG_DEM_DT
-#define SMUG_DEM_DT
+#ifndef DEME_DT
+#define DEME_DT
 
 #include <mutex>
 #include <vector>
@@ -19,9 +19,9 @@
 #include <nvmath/helper_math.cuh>
 #include <core/utils/GpuError.h>
 
-#include <DEM/DEMBdrsAndObjs.h>
-#include <DEM/DEMDefines.h>
-#include <DEM/DEMStructs.h>
+#include <DEM/BdrsAndObjs.h>
+#include <DEM/Defines.h>
+#include <DEM/Structs.h>
 
 // #include <core/utils/JitHelper.h>
 
@@ -30,7 +30,7 @@ namespace jitify {
 class Program;
 }
 
-namespace smug {
+namespace deme {
 
 // Implementation-level classes
 class DEMKinematicThread;
@@ -45,7 +45,7 @@ class DEMDynamicThread {
     GpuManager* pGpuDistributor;
 
     // dT verbosity
-    DEM_VERBOSITY verbosity = INFO;
+    VERBOSITY verbosity = INFO;
 
     // Some behavior-related flags
     SolverFlags solverFlags;
@@ -199,8 +199,8 @@ class DEMDynamicThread {
     std::vector<std::vector<float, ManagedAllocator<float>>,
                 ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
         ownerWildcards;
-    // std::vector<float, ManagedAllocator<float>> contactWildcards[SMUG_DEM_MAX_WILDCARD_NUM];
-    // std::vector<float, ManagedAllocator<float>> ownerWildcards[SMUG_DEM_MAX_WILDCARD_NUM];
+    // std::vector<float, ManagedAllocator<float>> contactWildcards[DEME_MAX_WILDCARD_NUM];
+    // std::vector<float, ManagedAllocator<float>> ownerWildcards[DEME_MAX_WILDCARD_NUM];
     // An example of such wildcard arrays is contact history: how much did the contact point move on the geometry
     // surface compared to when the contact first emerged?
 
@@ -477,7 +477,7 @@ class DEMDynamicThread {
     float* inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
                        const std::string& kernel_name,
                        size_t n,
-                       DEM_CUB_REDUCE_FLAVOR reduce_flavor,
+                       CUB_REDUCE_FLAVOR reduce_flavor,
                        bool all_domain);
 
   private:
@@ -520,6 +520,6 @@ class DEMDynamicThread {
     std::shared_ptr<jitify::Program> misc_kernels;
 };  // dT ends
 
-}  // namespace smug
+}  // namespace deme
 
 #endif
