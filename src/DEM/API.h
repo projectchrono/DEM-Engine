@@ -212,6 +212,10 @@ class DEMSolver {
     void SetOwnerVelocity(bodyID_t ownerID, float3 vel);
     /// Set quaternion of a owner
     void SetOwnerOriQ(bodyID_t ownerID, float4 oriQ);
+    /// Rewrite the relative positions of the flattened triangle soup, starting from `start', using triangle nodal
+    /// positions in `triangles'. If `overwrite' is true, then it is overwriting the existing nodal info; otherwise it
+    /// just adds to it.
+    void SetTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite = true);
 
     /// Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial location
     /// means the location of the clumps' CoM coordinates in the global frame.
@@ -243,6 +247,8 @@ class DEMSolver {
     /// the first clump in this batch. The user can refer to other clumps in this batch by supplying an offset when
     /// using this tracker's querying or assignment methods.
     std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMClumpBatch>& obj);
+    /// Create a DEMTracker to allow direct control/modification/query to this triangle mesh object
+    std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMMeshConnected>& obj);
 
     /// Create a inspector object that can help query some statistical info of the clumps in the simulation
     std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity = "clump_max_z");
@@ -347,7 +353,7 @@ class DEMSolver {
     }
     /// Read clump quaternions from a CSV file (whose format is consistent with this solver's clump output file).
     /// Returns an unordered_map which maps each unique clump type name to a vector of float4 (4 components of the
-    /// quaternion, (1, 0, 0, 0) means 0 rotation).
+    /// quaternion, (Qx, Qy, Qz, Qw) = (0, 0, 0, 1) means 0 rotation).
     static std::unordered_map<std::string, std::vector<float4>> ReadClumpQuatFromCsv(
         const std::string& infilename,
         const std::string& clump_header = OUTPUT_FILE_CLUMP_TYPE_NAME,

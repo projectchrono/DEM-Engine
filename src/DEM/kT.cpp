@@ -688,4 +688,20 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
     }
 }
 
+void DEMKinematicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite) {
+    if (overwrite) {
+        for (size_t i = 0; i < triangles.size(); i++) {
+            relPosNode1[start + i] = triangles[i].p1;
+            relPosNode2[start + i] = triangles[i].p2;
+            relPosNode3[start + i] = triangles[i].p3;
+        }
+    } else {
+        for (size_t i = 0; i < triangles.size(); i++) {
+            relPosNode1[start + i] += triangles[i].p1;
+            relPosNode2[start + i] += triangles[i].p2;
+            relPosNode3[start + i] += triangles[i].p3;
+        }
+    }
+}
+
 }  // namespace deme

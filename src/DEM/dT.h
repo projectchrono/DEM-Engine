@@ -331,6 +331,10 @@ class DEMDynamicThread {
     void setOwnerOriQ(bodyID_t ownerID, float4 oriQ);
     /// Set this owner's velocity
     void setOwnerVel(bodyID_t ownerID, float3 vel);
+    /// Rewrite the relative positions of the flattened triangle soup, starting from `start', using triangle nodal
+    /// positions in `triangles'. If `overwrite' is true, then it is overwriting the existing nodal info; otherwise it
+    /// just adds to it.
+    void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite = true);
 
     /// Change all entities with (user-level) family number ID_from to have a new number ID_to
     void changeFamily(unsigned int ID_from, unsigned int ID_to);

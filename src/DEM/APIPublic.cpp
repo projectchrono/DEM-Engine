@@ -71,6 +71,10 @@ void DEMSolver::SetOwnerVelocity(bodyID_t ownerID, float3 vel) {
 void DEMSolver::SetOwnerOriQ(bodyID_t ownerID, float4 oriQ) {
     dT->setOwnerOriQ(ownerID, oriQ);
 }
+void DEMSolver::SetTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite) {
+    dT->setTriNodeRelPos(start, triangles, overwrite);
+    kT->setTriNodeRelPos(start, triangles, overwrite);
+}
 
 // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
 void DEMSolver::UseCompactForceKernel(bool use_compact) {
@@ -521,9 +525,9 @@ std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(const std::vector<std::share
 
 std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(DEMMeshConnected& mesh) {
     if (mesh.GetNumTriangles() == 0) {
-        DEME_WARNING("It seems that a mesh contains 0 triangle facet.");
+        DEME_WARNING("It seems that a mesh contains 0 triangle facet at the time it is loaded.");
     }
-    // load_order should beits position in the cache array, not nTriObjLoad
+    // load_order should be its position in the cache array, not nTriObjLoad
     mesh.load_order = cached_mesh_objs.size();
 
     // But we still need to record a tri-mesh loaded
@@ -564,6 +568,18 @@ std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMExternObj>& obj)
     DEMTrackedObj tracked_obj;
     tracked_obj.load_order = obj->load_order;
     tracked_obj.type = OWNER_TYPE::ANALYTICAL;
+    m_tracked_objs.push_back(std::make_shared<DEMTrackedObj>(std::move(tracked_obj)));
+
+    // Create a Tracker for this tracked object
+    DEMTracker tracker(this);
+    tracker.obj = m_tracked_objs.back();
+    return std::make_shared<DEMTracker>(std::move(tracker));
+}
+
+std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMMeshConnected>& obj) {
+    DEMTrackedObj tracked_obj;
+    tracked_obj.load_order = obj->load_order;
+    tracked_obj.type = OWNER_TYPE::MESH;
     m_tracked_objs.push_back(std::make_shared<DEMTrackedObj>(std::move(tracked_obj)));
 
     // Create a Tracker for this tracked object

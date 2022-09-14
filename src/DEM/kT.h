@@ -332,6 +332,11 @@ class DEMKinematicThread {
     // Jitify kT kernels (at initialization) based on existing knowledge of this run
     void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs);
 
+    /// Rewrite the relative positions of the flattened triangle soup, starting from `start', using triangle nodal
+    /// positions in `triangles'. If `overwrite' is true, then it is overwriting the existing nodal info; otherwise it
+    /// just adds to it.
+    void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite = true);
+
   private:
     const std::string Name = "kT";
 

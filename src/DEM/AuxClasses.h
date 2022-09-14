@@ -76,6 +76,8 @@ class DEMInspector {
 // A struct to get or set tracked owner entities, mainly for co-simulation
 class DEMTracker {
   private:
+    void assertMesh(const std::string& name);
+    void assertMeshSize(size_t input_length, const std::string& name);
     // Its parent DEMSolver system
     DEMSolver* sys;
 
@@ -118,6 +120,15 @@ class DEMTracker {
     void AddAcc(float3 force, size_t offset = 0);
     /// Change the size of clump entities
     void ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors);
+
+    /// Apply the mesh deformation such that the tracked mesh is replaced by the new_mesh. This affects triangle facets'
+    /// relative positions wrt the mesh center (CoM) only; mesh's overall position/rotation in simulation is not
+    /// affected.
+    void UpdateMesh(std::shared_ptr<DEMMeshConnected>& new_mesh);
+    /// Change the coordinates of each mesh node by the given amount. This is also for mesh deformation, but unlike
+    /// UpdateMesh, it adds to the existing node coordinate XYZs. The length of the argument vector must agree with the
+    /// number of nodes in the tracked mesh.
+    void UpdateMeshByIncrement(const std::vector<float3>& deformation);
 };
 
 class DEMForceModel {

@@ -526,8 +526,8 @@ void DEMSolver::preprocessTriangleObjs() {
     for (const auto& mesh_obj : cached_mesh_objs) {
         if (!(mesh_obj->isMaterialSet)) {
             DEME_ERROR(
-                "A meshed object is loaded by does not have associated material.\nPlease assign material to meshes via "
-                "SetMaterial.");
+                "A meshed object is loaded but does not have associated material.\nPlease assign material to meshes "
+                "via SetMaterial.");
         }
         m_mesh_obj_mass.push_back(mesh_obj->mass);
         m_mesh_obj_moi.push_back(mesh_obj->MOI);

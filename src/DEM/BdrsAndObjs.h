@@ -291,7 +291,7 @@ class DEMMeshConnected {
     /// Compute barycenter, mass and MOI in CoM frame
     void ComputeMassProperties(double& mass, float3& center, float3& inertia);
 
-    /// Transforme the meshed object so it gets to its initial position, before the simulation starts
+    /// Transform the meshed object so it gets to its initial position, before the simulation starts
     void Rotate(const float4 rotQ);
     void Translate(const float3 displ);
 

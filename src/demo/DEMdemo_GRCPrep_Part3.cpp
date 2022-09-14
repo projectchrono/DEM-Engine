@@ -31,12 +31,12 @@ int main() {
     //
     float kg_g_conv = 1;
     // Define materials
-    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 2e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
-    auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
+    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.0}});
+    auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.0}});
 
     // Define the simulation world
-    double world_y_size = 2.2;
-    double world_x_size = 4.4;
+    double world_y_size = 2.0;
+    double world_x_size = 4.0;
     DEMSim.InstructBoxDomainDimension(world_x_size, world_y_size, world_y_size);
     float bottom = -0.5;
     DEMSim.AddBCPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_terrain);
@@ -131,23 +131,26 @@ int main() {
         in_types.insert(in_types.end(), this_type.begin(), this_type.end());
     }
     // Remove some elements maybe? I feel this making the surface flatter
-    std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
-    for (size_t i = 0; i < in_xyz.size(); i++) {
-        if (in_xyz.at(i).z > -0.44)
-            elem_to_remove.at(i) = 1;
-    }
-    in_xyz.erase(
-        std::remove_if(in_xyz.begin(), in_xyz.end(),
-                       [&elem_to_remove, &in_xyz](const float3& i) { return elem_to_remove.at(&i - in_xyz.data()); }),
-        in_xyz.end());
-    in_quat.erase(
-        std::remove_if(in_quat.begin(), in_quat.end(),
-                       [&elem_to_remove, &in_quat](const float4& i) { return elem_to_remove.at(&i - in_quat.data()); }),
-        in_quat.end());
-    in_types.erase(
-        std::remove_if(in_types.begin(), in_types.end(),
-                       [&elem_to_remove, &in_types](const auto& i) { return elem_to_remove.at(&i - in_types.data()); }),
-        in_types.end());
+    // std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
+    // for (size_t i = 0; i < in_xyz.size(); i++) {
+    //     if (in_xyz.at(i).z > -0.44)
+    //         elem_to_remove.at(i) = 1;
+    // }
+    // in_xyz.erase(
+    //     std::remove_if(in_xyz.begin(), in_xyz.end(),
+    //                    [&elem_to_remove, &in_xyz](const float3& i) { return elem_to_remove.at(&i - in_xyz.data());
+    //                    }),
+    //     in_xyz.end());
+    // in_quat.erase(
+    //     std::remove_if(in_quat.begin(), in_quat.end(),
+    //                    [&elem_to_remove, &in_quat](const float4& i) { return elem_to_remove.at(&i - in_quat.data());
+    //                    }),
+    //     in_quat.end());
+    // in_types.erase(
+    //     std::remove_if(in_types.begin(), in_types.end(),
+    //                    [&elem_to_remove, &in_types](const auto& i) { return elem_to_remove.at(&i - in_types.data());
+    //                    }),
+    //     in_types.end());
 
     // Finally, load the info into this batch
     DEMClumpBatch base_batch(in_xyz.size());
@@ -156,11 +159,11 @@ int main() {
     base_batch.SetOriQ(in_quat);
 
     // Based on the `base_batch', we can create more batches
-    std::vector<float> x_shift_dist = {-1.54, -0.52, 0.52};
-    std::vector<float> y_shift_dist = {-0.52, 0.52};
+    std::vector<float> x_shift_dist = {-1.5, -0.5, 0.5};
+    std::vector<float> y_shift_dist = {-0.5, 0.5};
     // X-dir bounding planes (we currently have 6 patches, and X-dir spans from -2 to 1)
-    DEMSim.AddBCPlane(make_float3(-2.2, 0, 0), make_float3(1, 0, 0), mat_type_terrain);
-    DEMSim.AddBCPlane(make_float3(1.1, 0, 0), make_float3(-1, 0, 0), mat_type_terrain);
+    DEMSim.AddBCPlane(make_float3(-2.0, 0, 0), make_float3(1, 0, 0), mat_type_terrain);
+    DEMSim.AddBCPlane(make_float3(1.0, 0, 0), make_float3(-1, 0, 0), mat_type_terrain);
     // Add some patches of such graular bed
     for (float x_shift : x_shift_dist) {
         for (float y_shift : y_shift_dist) {
@@ -195,12 +198,12 @@ int main() {
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEMSim.SetCDUpdateFreq(10);
     // DEMSim.SetExpandFactor(1e-3);
-    DEMSim.SetMaxVelocity(3.);
+    DEMSim.SetMaxVelocity(15.);
     DEMSim.SetExpandSafetyParam(1.1);
-    DEMSim.SetInitBinSize(scales.at(3));
+    DEMSim.SetInitBinSize(scales.at(4) * 1.05);
     DEMSim.Initialize();
 
-    unsigned int fps = 200;
+    unsigned int fps = 40;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
     path out_dir = current_path();

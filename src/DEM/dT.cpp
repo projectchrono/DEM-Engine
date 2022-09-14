@@ -1805,4 +1805,20 @@ void DEMDynamicThread::setOwnerVel(bodyID_t ownerID, float3 vel) {
     vZ.at(ownerID) = vel.z;
 }
 
+void DEMDynamicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite) {
+    if (overwrite) {
+        for (size_t i = 0; i < triangles.size(); i++) {
+            relPosNode1[start + i] = triangles[i].p1;
+            relPosNode2[start + i] = triangles[i].p2;
+            relPosNode3[start + i] = triangles[i].p3;
+        }
+    } else {
+        for (size_t i = 0; i < triangles.size(); i++) {
+            relPosNode1[start + i] += triangles[i].p1;
+            relPosNode2[start + i] += triangles[i].p2;
+            relPosNode3[start + i] += triangles[i].p3;
+        }
+    }
+}
+
 }  // namespace deme

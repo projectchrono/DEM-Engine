@@ -163,6 +163,24 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
 // DEMTracker class
 // =============================================================================
 
+void DEMTracker::assertMesh(const std::string& name) {
+    if (obj->type != OWNER_TYPE::MESH) {
+        std::stringstream ss;
+        ss << name << " is only callable for trackers tracking a mesh!" << std::endl;
+        throw std::runtime_error(ss.str());
+    }
+}
+
+void DEMTracker::assertMeshSize(size_t input_length, const std::string& name) {
+    if (input_length != obj->nFacets) {
+        std::stringstream ss;
+        ss << name
+           << " is called with an input not the same size (number if triangles) as the original mesh!\nThe input has "
+           << input_length << " triangles with the original mesh has " << obj->nFacets << "." << std::endl;
+        throw std::runtime_error(ss.str());
+    }
+}
+
 float3 DEMTracker::Pos(size_t offset) {
     return sys->GetOwnerPosition(obj->ownerID + offset);
 }
@@ -209,6 +227,16 @@ void DEMTracker::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::v
     size_t offset = obj->ownerID;
     std::for_each(offsetted_IDs.begin(), offsetted_IDs.end(), [offset](bodyID_t& x) { x += offset; });
     sys->ChangeClumpSizes(offsetted_IDs, factors);
+}
+
+void DEMTracker::UpdateMesh(std::shared_ptr<DEMMeshConnected>& new_mesh) {
+    assertMesh("UpdateMesh");
+    assertMeshSize(new_mesh->GetNumTriangles(), "UpdateMesh");
+    std::vector<DEMTriangle> new_triangles(new_mesh->GetNumTriangles());
+    for (size_t i = 0; i < new_mesh->GetNumTriangles(); i++) {
+        new_triangles[i] = new_mesh->GetTriangle(i);
+    }
+    sys->SetTriNodeRelPos(obj->facetID, new_triangles, true);
 }
 
 // =============================================================================

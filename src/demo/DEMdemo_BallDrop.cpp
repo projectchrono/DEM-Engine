@@ -37,6 +37,9 @@ int main() {
     auto template_terrain = DEMSim.LoadSphereType(terrain_rad * terrain_rad * terrain_rad * 2.6e3 * 4 / 3 * 3.14,
                                                   terrain_rad, mat_type_terrain);
 
+    // Track the projectile
+    auto proj_tracker = DEMSim.Track(projectile);
+
     float step_size = 1e-5;
     double world_size = 1.5;
     // DEMSim.InstructBoxDomainNumVoxel(21, 21, 22, world_size / std::pow(2, 16) / std::pow(2, 21));
@@ -62,6 +65,9 @@ int main() {
     unsigned int fps = 20;
     float frame_time = 1.0 / fps;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
+
+    // Testing...
+    proj_tracker->UpdateMesh(projectile);
 
     std::cout << "Output at " << fps << " FPS" << std::endl;
     unsigned int currframe = 0;
