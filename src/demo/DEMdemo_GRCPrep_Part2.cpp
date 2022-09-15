@@ -31,8 +31,8 @@ int main() {
     //
     float kg_g_conv = 1;
     // Define materials
-    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.0}});
-    auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.0}});
+    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
+    auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
 
     // Define the simulation world
     double world_y_size = 0.99;
@@ -196,12 +196,12 @@ int main() {
     std::cout << "Void ratio after settling " << (total_volume - matter_volume) / matter_volume << std::endl;
 
     // Now compress it
-    float compress_time = 0.5;
+    float compress_time = 0.3;
 
     double now_z = max_z_finder->GetValue();
     compressor_tracker->SetPos(make_float3(0, 0, now_z));
-    float compressor_final_dist = (now_z > -0.43) ? now_z - (-0.43) : 0.0;
-    float compressor_v = compressor_final_dist / compress_time;
+    double compressor_final_dist = (now_z > -0.43) ? now_z - (-0.43) : 0.0;
+    double compressor_v = compressor_final_dist / compress_time;
     for (float t = 0; t < compress_time; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
             std::cout << "Frame: " << currframe << std::endl;

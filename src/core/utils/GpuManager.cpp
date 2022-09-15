@@ -11,7 +11,7 @@ GpuManager::GpuManager(unsigned int total_streams) {
 
     if (ndevices == 0) {
         std::cerr << "Exactly 0 GPU device is detected. Try lspci and see what you get.\nIf you indeed have GPU "
-                     "devices, Maybe you should try rebooting or reinstalling cuda components?\n";
+                     "devices, maybe you should try rebooting or reinstalling cuda components?\n";
         throw std::runtime_error("No GPU device detected!");
     } else if (ndevices == 1) {
         std::cerr << "\nExactly 1 GPU device is detected. Currently, DEME's performance edge is limited with only 1 "

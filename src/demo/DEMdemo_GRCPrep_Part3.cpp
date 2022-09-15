@@ -31,8 +31,8 @@ int main() {
     //
     float kg_g_conv = 1;
     // Define materials
-    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.0}});
-    auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.0}});
+    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
+    auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
 
     // Define the simulation world
     double world_y_size = 2.0;
@@ -198,12 +198,12 @@ int main() {
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEMSim.SetCDUpdateFreq(10);
     // DEMSim.SetExpandFactor(1e-3);
-    DEMSim.SetMaxVelocity(15.);
+    DEMSim.SetMaxVelocity(35.);
     DEMSim.SetExpandSafetyParam(1.1);
-    DEMSim.SetInitBinSize(scales.at(4) * 1.05);
+    DEMSim.SetInitBinSize(scales.at(3));
     DEMSim.Initialize();
 
-    unsigned int fps = 40;
+    unsigned int fps = 1000;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
     path out_dir = current_path();
@@ -212,7 +212,7 @@ int main() {
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
 
-    float settle_batch_time = 0.5;
+    float settle_batch_time = 0.1;
     // bool change_step_size = false;
     // float compressor_v = 0.05 / settle_batch_time;
     // float now_z = -0.43;
