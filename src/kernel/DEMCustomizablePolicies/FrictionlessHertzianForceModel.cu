@@ -1,6 +1,6 @@
 // DEM force calculation strategies, modifiable
 
-// Material properties and time (user referrable)
+// Material properties
 float E_cnt, CoR_cnt;
 {
     mat2ProxyContactParam<float>(E_cnt, CoR_cnt, E[bodyAMatType], nu[bodyAMatType], CoR[bodyAMatType], E[bodyBMatType],

@@ -1,6 +1,6 @@
 // DEM force calculation strategies, modifiable
 
-// Material properties and time (user referrable)
+// Material properties
 float E_cnt, G_cnt, CoR_cnt, mu_cnt, Crr_cnt;
 {
     float E_A = E[bodyAMatType];
