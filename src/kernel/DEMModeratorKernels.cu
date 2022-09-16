@@ -6,7 +6,7 @@
 _massDefs_;
 _moiDefs_;
 
-__global__ void applyFamilyChanges(deme::DEMDataDT* granData, size_t nOwnerBodies, float h, float t) {
+__global__ void applyFamilyChanges(deme::DEMSimParams* simParams, deme::DEMDataDT* granData, size_t nOwnerBodies) {
     deme::bodyID_t myOwner = blockIdx.x * blockDim.x + threadIdx.x;
     if (myOwner < nOwnerBodies) {
         // The user may make references to owner positions, velocities, accelerations and simulation time
@@ -31,6 +31,9 @@ __global__ void applyFamilyChanges(deme::DEMDataDT* granData, size_t nOwnerBodie
         acc.x = granData->aX[myOwner];
         acc.y = granData->aY[myOwner];
         acc.z = granData->aZ[myOwner];
+
+        float h = simParams->h;
+        float t = simParams->timeElapsed;
 
         // Carry out user's instructions
         { _familyChangeRules_; }

@@ -1315,7 +1315,7 @@ inline void DEMDynamicThread::migratePersistentContacts() {
                 DEME_STEP_METRIC(
                     "%zu contacts were active at time %.9g on dT, but they are not detected on kT, therefore being "
                     "removed unexpectedly!",
-                    *lostContact, timeElapsed);
+                    *lostContact, simParams->timeElapsed);
                 DEME_DEBUG_PRINTF("New contact A:");
                 DEME_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryA, *stateOfSolver_resources.pNumContacts));
                 DEME_DEBUG_PRINTF("New contact B:");
@@ -1427,7 +1427,7 @@ inline void DEMDynamicThread::integrateOwnerMotions() {
     integrator_kernels->kernel("integrateOwners")
         .instantiate()
         .configure(dim3(blocks_needed_for_clumps), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(simParams, granData, timeElapsed);
+        .launch(simParams, granData);
     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
@@ -1438,7 +1438,7 @@ inline void DEMDynamicThread::routineChecks() {
         mod_kernels->kernel("applyFamilyChanges")
             .instantiate()
             .configure(dim3(blocks_needed_for_clumps), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-            .launch(granData, simParams->nOwnerBodies, simParams->h, timeElapsed);
+            .launch(simParams, granData, simParams->nOwnerBodies);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 }
@@ -1582,7 +1582,7 @@ void DEMDynamicThread::workerThread() {
             nTotalSteps++;
 
             //// TODO: make changes for variable time step size cases
-            timeElapsed += simParams->h;
+            simParams->timeElapsed += (double)simParams->h;
         }
 
         // When getting here, dT has finished one user call (although perhaps not at the end of the user script)

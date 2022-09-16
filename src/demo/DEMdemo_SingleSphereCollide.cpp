@@ -59,6 +59,11 @@ int main() {
 
     DEMSim.InstructBoxDomainNumVoxel(22, 21, 21, 3e-11);
 
+    // A custom force model can be read in through a file and used by the simulation. Magic, right?
+    auto my_force_model = DEMSim.ReadContactForceModel("SampleCustomForceModel.cu");
+    // This custom force model still uses contact history arrays, so let's define it
+    my_force_model->SetPerContactWildcards({"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"});
+
     DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(2e-5);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));

@@ -201,6 +201,9 @@ inline void equip_force_model_ingr_acq(std::string& definition,
     if (any_whole_word_match(model, {"ts"})) {
         definition += "float ts = simParams->h;\n";
     }
+    if (any_whole_word_match(model, {"time"})) {
+        definition += "float time = simParams->timeElapsed;\n";
+    }
     if (any_whole_word_match(model, {"AOwnerFamily"})) {
         definition += "deme::family_t AOwnerFamily;\n";
         acquisition_A += "AOwnerFamily = granData->familyID[myOwner];\n";

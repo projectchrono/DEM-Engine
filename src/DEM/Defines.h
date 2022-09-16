@@ -199,6 +199,8 @@ struct DEMSimParams {
     float Gz;
     // Time step size
     float h;
+    // Time elappsed since start of simulation
+    double timeElapsed = 0;
     // Sphere radii/geometry thickness inflation amount (for safer contact detection)
     float beta;
     // Max velocity, user approximated, we verify during simulation

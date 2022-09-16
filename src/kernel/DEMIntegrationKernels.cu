@@ -167,13 +167,13 @@ inline __device__ void integratePos(deme::bodyID_t thisClump,
     }
 }
 
-__global__ void integrateOwners(deme::DEMSimParams* simParams, deme::DEMDataDT* granData, float t) {
+__global__ void integrateOwners(deme::DEMSimParams* simParams, deme::DEMDataDT* granData) {
     deme::bodyID_t thisClump = blockIdx.x * blockDim.x + threadIdx.x;
     if (thisClump < simParams->nOwnerBodies) {
         // These 2 quantities mean the velocity and ang vel used for updating position/quaternion for this step.
         // Depending on the integration scheme in use, they can be different.
         float3 v, omgBar;
-        integrateVel(thisClump, simParams, granData, v, omgBar, simParams->h, t);
-        integratePos(thisClump, granData, v, omgBar, simParams->h, t);
+        integrateVel(thisClump, simParams, granData, v, omgBar, simParams->h, simParams->timeElapsed);
+        integratePos(thisClump, granData, v, omgBar, simParams->h, simParams->timeElapsed);
     }
 }

@@ -212,8 +212,6 @@ class DEMDynamicThread {
 
     size_t m_approx_bytes_used = 0;
 
-    // Time elapsed in current simulation
-    float timeElapsed = 0.f;
     // dT's total steps run (since last time the collaboration stats cache is cleared)
     uint64_t nTotalSteps = 0;
 
