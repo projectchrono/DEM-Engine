@@ -40,6 +40,12 @@ typedef unsigned int contactPairs_t;
 // magnitudes of difference in size, which you should preferrably avoid.
 typedef unsigned short int geoSphereTouches_t;
 
+// How many triangle--sphere touch pairs can there be for one sphere, tops? This type should not need to be large.
+typedef unsigned int binsTriangleTouches_t;
+// This type needs to be large enough to hold the result of a prefix scan of the type binsTriangleTouches_t (and
+// objID_t).
+typedef unsigned int binsTriangleTouchPairs_t;
+
 typedef uint8_t notStupidBool_t;  ///< Ad-hoc bool (array) type
 typedef uint8_t contact_t;        ///< Contact type (sphere--sphere is 1, etc.)
 typedef uint8_t family_t;         ///< Data type for clump presecription type

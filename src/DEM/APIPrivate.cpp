@@ -688,10 +688,15 @@ void DEMSolver::addWorldBoundingBox() {
 
 // This is generally used to pass individual instructions on how the solver should behave
 void DEMSolver::transferSolverParams() {
+    // Verbosity
     kT->verbosity = verbosity;
     dT->verbosity = verbosity;
 
-    // I/O policies (only output content matters for worker threads)
+    // Whether there are meshes in the simulation
+    kT->solverFlags.hasMeshes = (nTriObjLoad > 0);
+    dT->solverFlags.hasMeshes = (nTriObjLoad > 0);
+
+    // I/O policies (only output content, not file format, matters for worker threads)
     dT->solverFlags.outputFlags = m_out_content;
     dT->solverFlags.cntOutFlags = m_cnt_out_content;
 

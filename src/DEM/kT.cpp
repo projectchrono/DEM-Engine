@@ -159,10 +159,10 @@ void DEMKinematicThread::workerThread() {
             // cudaDeviceGetAttribute.cudaDevAttrMaxSharedMemoryPerBlock
 
             // kT's main task, contact detection
-            contactDetection(bin_occupation_kernels, contact_detection_kernels, history_kernels, granData, simParams,
-                             solverFlags, verbosity, idGeometryA, idGeometryB, contactType, previous_idGeometryA,
-                             previous_idGeometryB, previous_contactType, contactMapping, streamInfo.stream,
-                             stateOfSolver_resources, timers);
+            contactDetection(bin_sphere_kernels, bin_triangle_kernels, contact_detection_kernels, history_kernels,
+                             granData, simParams, solverFlags, verbosity, idGeometryA, idGeometryB, contactType,
+                             previous_idGeometryA, previous_idGeometryB, previous_contactType, contactMapping,
+                             streamInfo.stream, stateOfSolver_resources, timers);
 
             timers.GetTimer("Send to dT buffer").start();
             {
@@ -658,9 +658,9 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
 }
 
 void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& Subs) {
-    // First one is bin_occupation_kernels kernels, which figure out the bin--sphere touch pairs
+    // First one is bin_sphere_kernels kernels, which figure out the bin--sphere touch pairs
     {
-        bin_occupation_kernels = std::make_shared<jitify::Program>(
+        bin_sphere_kernels = std::make_shared<jitify::Program>(
             std::move(JitHelper::buildProgram("DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
                                               Subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
     }

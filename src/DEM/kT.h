@@ -59,7 +59,7 @@ class DEMKinematicThread {
     GpuManager::StreamInfo streamInfo;
 
     // A class that contains scratch pad and system status data (constructed with the number of temp arrays we need)
-    DEMSolverStateData stateOfSolver_resources = DEMSolverStateData(6);
+    DEMSolverStateData stateOfSolver_resources = DEMSolverStateData(15);
 
     size_t m_approx_bytes_used = 0;
 
@@ -348,8 +348,9 @@ class DEMKinematicThread {
     inline void transferArraysResize(size_t nContactPairs);
 
     // Just-in-time compiled kernels
-    // jitify::Program bin_occupation_kernels = JitHelper::buildProgram("bin_occupation_kernels", " ");
-    std::shared_ptr<jitify::Program> bin_occupation_kernels;
+    // jitify::Program bin_sphere_kernels = JitHelper::buildProgram("bin_sphere_kernels", " ");
+    std::shared_ptr<jitify::Program> bin_sphere_kernels;
+    std::shared_ptr<jitify::Program> bin_triangle_kernels;
     std::shared_ptr<jitify::Program> contact_detection_kernels;
     std::shared_ptr<jitify::Program> history_kernels;
     std::shared_ptr<jitify::Program> misc_kernels;

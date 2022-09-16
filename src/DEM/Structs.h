@@ -355,6 +355,8 @@ struct SolverFlags {
     bool useMassJitify = false;
     // Contact detection uses a thread for a bin, not a block for a bin
     bool useOneBinPerThread = false;
+    // Whether the simulation involves meshes
+    bool hasMeshes = false;
 };
 
 class DEMMaterial {

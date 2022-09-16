@@ -45,7 +45,8 @@ void floatSortByKey(notStupidBool_t* d_keys_in,
                     cudaStream_t& this_stream,
                     DEMSolverStateData& scratchPad);
 
-void contactDetection(std::shared_ptr<jitify::Program>& bin_occupation_kernels,
+void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
+                      std::shared_ptr<jitify::Program>& bin_triangle_kernels,
                       std::shared_ptr<jitify::Program>& contact_detection_kernels,
                       std::shared_ptr<jitify::Program>& history_kernels,
                       DEMDataKT* granData,

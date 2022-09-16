@@ -42,6 +42,7 @@ constexpr uint8_t VOXEL_COUNT_POWER2 = sizeof(voxelID_t) * DEME_BITS_PER_BYTE;
 constexpr int64_t MAX_SUBVOXEL = (int64_t)1 << VOXEL_RES_POWER2;
 
 #define DEME_NUM_BODIES_PER_BLOCK 512
+#define DEME_NUM_TRIANGLE_PER_BLOCK 512
 #define DEME_MAX_THREADS_PER_BLOCK 1024
 #define DEME_INIT_CNT_MULTIPLIER 5
 // If there are more than this number of analytical geometry, we may have difficulty jitify them all
