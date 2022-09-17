@@ -634,16 +634,16 @@ void DEMSolver::WriteSphereFile(const std::string& outfilename) const {
     }
 }
 
-void DEMSolver::WriteClumpFile(const std::string& outfilename) const {
+void DEMSolver::WriteClumpFile(const std::string& outfilename, unsigned int accuracy) const {
     switch (m_out_format) {
         case (OUTPUT_FORMAT::CHPF): {
             std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
-            dT->writeClumpsAsChpf(ptFile);
+            dT->writeClumpsAsChpf(ptFile, accuracy);
             break;
         }
         case (OUTPUT_FORMAT::CSV): {
             std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeClumpsAsCsv(ptFile);
+            dT->writeClumpsAsCsv(ptFile, accuracy);
             break;
         }
         case (OUTPUT_FORMAT::BINARY): {

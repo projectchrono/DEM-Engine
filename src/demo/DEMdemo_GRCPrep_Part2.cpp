@@ -126,8 +126,8 @@ int main() {
     std::for_each(inv_xyz.begin(), inv_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist / 2.0; });
     inv_batch.SetPos(inv_xyz);
     DEMSim.AddClumps(inv_batch);
-    // Add 10 layers of such graular bed
-    for (int i = 0; i < 4; i++) {
+    // Add another 2 layers of such graular bed
+    for (int i = 0; i < 1; i++) {
         DEMClumpBatch another_batch = base_batch;
         std::for_each(in_xyz.begin(), in_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
         another_batch.SetPos(in_xyz);
@@ -147,7 +147,7 @@ int main() {
     // And a z position inspector
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
     auto void_ratio_finder =
-        DEMSim.CreateInspector("clump_volume", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) && (Z <= -0.45);");
+        DEMSim.CreateInspector("clump_volume", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) && (Z <= -0.47);");
 
     // Make ready for simulation
     float step_size = 5e-7;
@@ -174,7 +174,7 @@ int main() {
     float settle_frame_time = 0.05;
     float settle_batch_time = 1.0;
 
-    float total_volume = 0.96 * 0.96 * 0.05;
+    float total_volume = 0.96 * 0.96 * 0.03;
     float matter_volume = void_ratio_finder->GetValue();
 
     std::cout << "Initial void ratio " << (total_volume - matter_volume) / matter_volume << std::endl;
@@ -200,7 +200,7 @@ int main() {
 
     double now_z = max_z_finder->GetValue();
     compressor_tracker->SetPos(make_float3(0, 0, now_z));
-    double compressor_final_dist = (now_z > -0.43) ? now_z - (-0.43) : 0.0;
+    double compressor_final_dist = (now_z > -0.47) ? now_z - (-0.47) : 0.0;
     double compressor_v = compressor_final_dist / compress_time;
     for (float t = 0; t < compress_time; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {

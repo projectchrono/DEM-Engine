@@ -985,10 +985,11 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
     ptFile << outstrstream.str();
 }
 
-void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile) const {}
+void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy) const {}
 
-void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile) const {
+void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accuracy) const {
     std::ostringstream outstrstream;
+    outstrstream.precision(accuracy);
 
     // xyz and quaternion are always there
     outstrstream << OUTPUT_FILE_X_COL_NAME + "," + OUTPUT_FILE_Y_COL_NAME + "," + OUTPUT_FILE_Z_COL_NAME +
@@ -1502,7 +1503,7 @@ void DEMDynamicThread::workerThread() {
         // This is the `new-boot' case, where stampLastUpdateOfDynamic == -1; in any other situations, dT does not have
         // `drift-into-future-too-much' problem here, b/c if it has the problem then it would have been addressed at the
         // end of last DoDynamics call, the final `ShouldWait' check.
-        if (pSchedSupport->stampLastUpdateOfDynamic < 0) {
+        if (pSchedSupport->stampLastUpdateOfDynamic < 0 || nTotalSteps == 0) {
             // In this `new-boot' case, we send kT a work order, b/c dT needs results from CD to proceed. After this one
             // instance, kT and dT may work in an async fashion.
             {

@@ -322,7 +322,7 @@ class DEMSolver {
     //// TODO: float GetTotalKineticEnergy(std::vector<unsigned int> families) const;
 
     /// Write the current status of clumps to a file
-    void WriteClumpFile(const std::string& outfilename) const;
+    void WriteClumpFile(const std::string& outfilename, unsigned int accuracy = 10) const;
     /// Write the current status of `clumps' to a file, but not as clumps, instead, as each individual sphere. This may
     /// make small-scale rendering easier.
     void WriteSphereFile(const std::string& outfilename) const;
