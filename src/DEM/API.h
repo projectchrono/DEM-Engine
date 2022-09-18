@@ -51,7 +51,7 @@ class DEMSolver {
 
     /// Instruct the dimension of the `world'. On initialization, this info will be used to figure out how to assign the
     /// num of voxels in each direction. If your `useful' domain is not box-shaped, then define a box that contains your
-    /// domian. O is the coordinate of the left-bottom-front point of your simulation `world'.
+    /// domian.
     void InstructBoxDomainDimension(float x, float y, float z, SPATIAL_DIR dir_exact = SPATIAL_DIR::NONE);
 
     /// Explicitly instruct the number of voxels (as 2^{x,y,z}) along each direction, as well as the smallest unit
@@ -82,10 +82,13 @@ class DEMSolver {
     void SetCDUpdateFreq(int freq) { m_updateFreq = freq; }
     // TODO: Implement an API that allows setting ts size through a list
 
-    /// Sets the origin of your coordinate system
+    /// Sets the origin of the coordinate system (the coordinate system that all entities in this simulation are using).
+    /// This origin point should be reported as the vector pointing from the left-bottom-front point of your simulation
+    /// `world' (box domain), to the origin of the coordinate system. For example, if the world size is [2,2,2] and the
+    /// origin should be right at its center, then the argument for this call should be make_float3(1,1,1).
     void SetCoordSysOrigin(const std::string& where) { m_user_instructed_origin = where; }
     void SetCoordSysOrigin(float3 O) {
-        m_boxLBF = O;
+        m_boxLBF = -O;
         m_user_instructed_origin = "explicit";
     }
 
