@@ -141,9 +141,9 @@
 #include <math.h>
 #include <stdio.h>
 
-#define X 0
-#define Y 1
-#define Z 2
+#define DEME_DIR_X 0
+#define DEME_DIR_Y 1
+#define DEME_DIR_Z 2
 
 #define CROSS(dest, v1, v2)                  \
     dest[0] = v1[1] * v2[2] - v1[2] * v2[1]; \
@@ -176,7 +176,7 @@
 inline __device__ bool planeBoxOverlap(float normal[3], float vert[3], float maxbox[3]) {
     int q;
     float vmin[3], vmax[3], v;
-    for (q = X; q <= Z; q++) {
+    for (q = DEME_DIR_X; q <= DEME_DIR_Z; q++) {
         v = vert[q];
         if (normal[q] > 0.0f) {
             vmin[q] = -maxbox[q] - v;
@@ -195,91 +195,91 @@ inline __device__ bool planeBoxOverlap(float normal[3], float vert[3], float max
 }
 
 /*======================== X-tests ========================*/
-#define AXISTEST_X01(a, b, fa, fb)                   \
-    p0 = a * v0[Y] - b * v0[Z];                      \
-    p2 = a * v2[Y] - b * v2[Z];                      \
-    if (p0 < p2) {                                   \
-        min = p0;                                    \
-        max = p2;                                    \
-    } else {                                         \
-        min = p2;                                    \
-        max = p0;                                    \
-    }                                                \
-    rad = fa * boxhalfsize[Y] + fb * boxhalfsize[Z]; \
-    if (min > rad || max < -rad)                     \
+#define AXISTEST_X01(a, b, fa, fb)                                     \
+    p0 = a * v0[DEME_DIR_Y] - b * v0[DEME_DIR_Z];                      \
+    p2 = a * v2[DEME_DIR_Y] - b * v2[DEME_DIR_Z];                      \
+    if (p0 < p2) {                                                     \
+        min = p0;                                                      \
+        max = p2;                                                      \
+    } else {                                                           \
+        min = p2;                                                      \
+        max = p0;                                                      \
+    }                                                                  \
+    rad = fa * boxhalfsize[DEME_DIR_Y] + fb * boxhalfsize[DEME_DIR_Z]; \
+    if (min > rad || max < -rad)                                       \
         return false;
 
-#define AXISTEST_X2(a, b, fa, fb)                    \
-    p0 = a * v0[Y] - b * v0[Z];                      \
-    p1 = a * v1[Y] - b * v1[Z];                      \
-    if (p0 < p1) {                                   \
-        min = p0;                                    \
-        max = p1;                                    \
-    } else {                                         \
-        min = p1;                                    \
-        max = p0;                                    \
-    }                                                \
-    rad = fa * boxhalfsize[Y] + fb * boxhalfsize[Z]; \
-    if (min > rad || max < -rad)                     \
+#define AXISTEST_X2(a, b, fa, fb)                                      \
+    p0 = a * v0[DEME_DIR_Y] - b * v0[DEME_DIR_Z];                      \
+    p1 = a * v1[DEME_DIR_Y] - b * v1[DEME_DIR_Z];                      \
+    if (p0 < p1) {                                                     \
+        min = p0;                                                      \
+        max = p1;                                                      \
+    } else {                                                           \
+        min = p1;                                                      \
+        max = p0;                                                      \
+    }                                                                  \
+    rad = fa * boxhalfsize[DEME_DIR_Y] + fb * boxhalfsize[DEME_DIR_Z]; \
+    if (min > rad || max < -rad)                                       \
         return false;
 
 /*======================== Y-tests ========================*/
-#define AXISTEST_Y02(a, b, fa, fb)                   \
-    p0 = -a * v0[X] + b * v0[Z];                     \
-    p2 = -a * v2[X] + b * v2[Z];                     \
-    if (p0 < p2) {                                   \
-        min = p0;                                    \
-        max = p2;                                    \
-    } else {                                         \
-        min = p2;                                    \
-        max = p0;                                    \
-    }                                                \
-    rad = fa * boxhalfsize[X] + fb * boxhalfsize[Z]; \
-    if (min > rad || max < -rad)                     \
+#define AXISTEST_Y02(a, b, fa, fb)                                     \
+    p0 = -a * v0[DEME_DIR_X] + b * v0[DEME_DIR_Z];                     \
+    p2 = -a * v2[DEME_DIR_X] + b * v2[DEME_DIR_Z];                     \
+    if (p0 < p2) {                                                     \
+        min = p0;                                                      \
+        max = p2;                                                      \
+    } else {                                                           \
+        min = p2;                                                      \
+        max = p0;                                                      \
+    }                                                                  \
+    rad = fa * boxhalfsize[DEME_DIR_X] + fb * boxhalfsize[DEME_DIR_Z]; \
+    if (min > rad || max < -rad)                                       \
         return false;
 
-#define AXISTEST_Y1(a, b, fa, fb)                    \
-    p0 = -a * v0[X] + b * v0[Z];                     \
-    p1 = -a * v1[X] + b * v1[Z];                     \
-    if (p0 < p1) {                                   \
-        min = p0;                                    \
-        max = p1;                                    \
-    } else {                                         \
-        min = p1;                                    \
-        max = p0;                                    \
-    }                                                \
-    rad = fa * boxhalfsize[X] + fb * boxhalfsize[Z]; \
-    if (min > rad || max < -rad)                     \
+#define AXISTEST_Y1(a, b, fa, fb)                                      \
+    p0 = -a * v0[DEME_DIR_X] + b * v0[DEME_DIR_Z];                     \
+    p1 = -a * v1[DEME_DIR_X] + b * v1[DEME_DIR_Z];                     \
+    if (p0 < p1) {                                                     \
+        min = p0;                                                      \
+        max = p1;                                                      \
+    } else {                                                           \
+        min = p1;                                                      \
+        max = p0;                                                      \
+    }                                                                  \
+    rad = fa * boxhalfsize[DEME_DIR_X] + fb * boxhalfsize[DEME_DIR_Z]; \
+    if (min > rad || max < -rad)                                       \
         return false;
 
 /*======================== Z-tests ========================*/
 
-#define AXISTEST_Z12(a, b, fa, fb)                   \
-    p1 = a * v1[X] - b * v1[Y];                      \
-    p2 = a * v2[X] - b * v2[Y];                      \
-    if (p2 < p1) {                                   \
-        min = p2;                                    \
-        max = p1;                                    \
-    } else {                                         \
-        min = p1;                                    \
-        max = p2;                                    \
-    }                                                \
-    rad = fa * boxhalfsize[X] + fb * boxhalfsize[Y]; \
-    if (min > rad || max < -rad)                     \
+#define AXISTEST_Z12(a, b, fa, fb)                                     \
+    p1 = a * v1[DEME_DIR_X] - b * v1[DEME_DIR_Y];                      \
+    p2 = a * v2[DEME_DIR_X] - b * v2[DEME_DIR_Y];                      \
+    if (p2 < p1) {                                                     \
+        min = p2;                                                      \
+        max = p1;                                                      \
+    } else {                                                           \
+        min = p1;                                                      \
+        max = p2;                                                      \
+    }                                                                  \
+    rad = fa * boxhalfsize[DEME_DIR_X] + fb * boxhalfsize[DEME_DIR_Y]; \
+    if (min > rad || max < -rad)                                       \
         return false;
 
-#define AXISTEST_Z0(a, b, fa, fb)                    \
-    p0 = a * v0[X] - b * v0[Y];                      \
-    p1 = a * v1[X] - b * v1[Y];                      \
-    if (p0 < p1) {                                   \
-        min = p0;                                    \
-        max = p1;                                    \
-    } else {                                         \
-        min = p1;                                    \
-        max = p0;                                    \
-    }                                                \
-    rad = fa * boxhalfsize[X] + fb * boxhalfsize[Y]; \
-    if (min > rad || max < -rad)                     \
+#define AXISTEST_Z0(a, b, fa, fb)                                      \
+    p0 = a * v0[DEME_DIR_X] - b * v0[DEME_DIR_Y];                      \
+    p1 = a * v1[DEME_DIR_X] - b * v1[DEME_DIR_Y];                      \
+    if (p0 < p1) {                                                     \
+        min = p0;                                                      \
+        max = p1;                                                      \
+    } else {                                                           \
+        min = p1;                                                      \
+        max = p0;                                                      \
+    }                                                                  \
+    rad = fa * boxhalfsize[DEME_DIR_X] + fb * boxhalfsize[DEME_DIR_Y]; \
+    if (min > rad || max < -rad)                                       \
         return false;
 
 /**
@@ -319,26 +319,26 @@ inline __device__ bool check_TriangleBoxOverlap(float boxcenter[3],
 
     /* Case 3)  */
     /*  test the 9 tests first (this was faster) */
-    fex = fabsf(e0[X]);
-    fey = fabsf(e0[Y]);
-    fez = fabsf(e0[Z]);
-    AXISTEST_X01(e0[Z], e0[Y], fez, fey);
-    AXISTEST_Y02(e0[Z], e0[X], fez, fex);
-    AXISTEST_Z12(e0[Y], e0[X], fey, fex);
+    fex = fabsf(e0[DEME_DIR_X]);
+    fey = fabsf(e0[DEME_DIR_Y]);
+    fez = fabsf(e0[DEME_DIR_Z]);
+    AXISTEST_X01(e0[DEME_DIR_Z], e0[DEME_DIR_Y], fez, fey);
+    AXISTEST_Y02(e0[DEME_DIR_Z], e0[DEME_DIR_X], fez, fex);
+    AXISTEST_Z12(e0[DEME_DIR_Y], e0[DEME_DIR_X], fey, fex);
 
-    fex = fabsf(e1[X]);
-    fey = fabsf(e1[Y]);
-    fez = fabsf(e1[Z]);
-    AXISTEST_X01(e1[Z], e1[Y], fez, fey);
-    AXISTEST_Y02(e1[Z], e1[X], fez, fex);
-    AXISTEST_Z0(e1[Y], e1[X], fey, fex);
+    fex = fabsf(e1[DEME_DIR_X]);
+    fey = fabsf(e1[DEME_DIR_Y]);
+    fez = fabsf(e1[DEME_DIR_Z]);
+    AXISTEST_X01(e1[DEME_DIR_Z], e1[DEME_DIR_Y], fez, fey);
+    AXISTEST_Y02(e1[DEME_DIR_Z], e1[DEME_DIR_X], fez, fex);
+    AXISTEST_Z0(e1[DEME_DIR_Y], e1[DEME_DIR_X], fey, fex);
 
-    fex = fabsf(e2[X]);
-    fey = fabsf(e2[Y]);
-    fez = fabsf(e2[Z]);
-    AXISTEST_X2(e2[Z], e2[Y], fez, fey);
-    AXISTEST_Y1(e2[Z], e2[X], fez, fex);
-    AXISTEST_Z12(e2[Y], e2[X], fey, fex);
+    fex = fabsf(e2[DEME_DIR_X]);
+    fey = fabsf(e2[DEME_DIR_Y]);
+    fez = fabsf(e2[DEME_DIR_Z]);
+    AXISTEST_X2(e2[DEME_DIR_Z], e2[DEME_DIR_Y], fez, fey);
+    AXISTEST_Y1(e2[DEME_DIR_Z], e2[DEME_DIR_X], fez, fex);
+    AXISTEST_Z12(e2[DEME_DIR_Y], e2[DEME_DIR_X], fey, fex);
 
     /* Case 1) */
     /*  first test overlap in the {x,y,z}-directions */
@@ -346,19 +346,19 @@ inline __device__ bool check_TriangleBoxOverlap(float boxcenter[3],
     /*  that direction -- this is equivalent to testing a minimal AABB around */
     /*  the triangle against the AABB */
 
-    /* test in X-direction */
-    FINDMINMAX(v0[X], v1[X], v2[X], min, max);
-    if (min > boxhalfsize[X] || max < -boxhalfsize[X])
+    /* test in DEME_DIR_X-direction */
+    FINDMINMAX(v0[DEME_DIR_X], v1[DEME_DIR_X], v2[DEME_DIR_X], min, max);
+    if (min > boxhalfsize[DEME_DIR_X] || max < -boxhalfsize[DEME_DIR_X])
         return false;
 
-    /* test in Y-direction */
-    FINDMINMAX(v0[Y], v1[Y], v2[Y], min, max);
-    if (min > boxhalfsize[Y] || max < -boxhalfsize[Y])
+    /* test in DEME_DIR_Y-direction */
+    FINDMINMAX(v0[DEME_DIR_Y], v1[DEME_DIR_Y], v2[DEME_DIR_Y], min, max);
+    if (min > boxhalfsize[DEME_DIR_Y] || max < -boxhalfsize[DEME_DIR_Y])
         return false;
 
-    /* test in Z-direction */
-    FINDMINMAX(v0[Z], v1[Z], v2[Z], min, max);
-    if (min > boxhalfsize[Z] || max < -boxhalfsize[Z])
+    /* test in DEME_DIR_Z-direction */
+    FINDMINMAX(v0[DEME_DIR_Z], v1[DEME_DIR_Z], v2[DEME_DIR_Z], min, max);
+    if (min > boxhalfsize[DEME_DIR_Z] || max < -boxhalfsize[DEME_DIR_Z])
         return false;
 
     /* Case 2) */
