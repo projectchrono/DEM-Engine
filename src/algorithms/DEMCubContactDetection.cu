@@ -60,7 +60,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     {
         timers.GetTimer("Discretize domain").start();
         ////////////////////////////////////////////////////////////////////////////////
-        // Sphere--sphere & sphere--analytical contact detection
+        // Sphere-related discretization & sphere--analytical contact detection
         ////////////////////////////////////////////////////////////////////////////////
 
         // 1st step: register the number of sphere--bin touching pairs for each sphere for further processing
@@ -174,7 +174,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // displayArray<binSphereTouchPairs_t>(sphereIDsLookUpTable, *pNumActiveBins);
 
         ////////////////////////////////////////////////////////////////////////////////
-        // Sphere--triangle contact detection
+        // Triangle-related discretization
         ////////////////////////////////////////////////////////////////////////////////
 
         // If there are meshes, they need to be processed too. All sphere--related temp arrays are in use, so we have to
@@ -184,13 +184,13 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // obviously for our delayed contact detection safety. And finally, if a sphere's distance away from one of
             // the 2 prism surfaces is smaller than its radius, it has contact with this prism, hence potentially with
             // this triangle.
-            CD_temp_arr_bytes = simParams->nTriGM * sizeof(float3);
+            CD_temp_arr_bytes = simParams->nTriGM * sizeof(float3) * 3;
             float3* sandwichANode1 = (float3*)scratchPad.allocateTempVector(6, CD_temp_arr_bytes);
-            float3* sandwichANode2 = (float3*)scratchPad.allocateTempVector(7, CD_temp_arr_bytes);
-            float3* sandwichANode3 = (float3*)scratchPad.allocateTempVector(8, CD_temp_arr_bytes);
-            float3* sandwichBNode1 = (float3*)scratchPad.allocateTempVector(9, CD_temp_arr_bytes);
-            float3* sandwichBNode2 = (float3*)scratchPad.allocateTempVector(10, CD_temp_arr_bytes);
-            float3* sandwichBNode3 = (float3*)scratchPad.allocateTempVector(11, CD_temp_arr_bytes);
+            float3* sandwichANode2 = sandwichANode1 + simParams->nTriGM;
+            float3* sandwichANode3 = sandwichANode2 + simParams->nTriGM;
+            float3* sandwichBNode1 = (float3*)scratchPad.allocateTempVector(7, CD_temp_arr_bytes);
+            float3* sandwichBNode2 = sandwichBNode1 + simParams->nTriGM;
+            float3* sandwichBNode3 = sandwichBNode2 + simParams->nTriGM;
             size_t blocks_needed_for_tri =
                 (simParams->nTriGM + DEME_NUM_TRIANGLE_PER_BLOCK - 1) / DEME_NUM_TRIANGLE_PER_BLOCK;
             bin_triangle_kernels->kernel("makeTriangleSandwich")
@@ -199,20 +199,33 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 .launch(simParams, granData, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
                         sandwichBNode2, sandwichBNode3);
 
-            // 1st step: register the number of triangle--bin touching pairs for each sphere for further processing
-            CD_temp_arr_bytes = simParams->nTriGM * sizeof(binsTriangleTouches_t);
+            // 1st step: register the number of triangle--bin touching pairs for each triangle for further processing.
+            // Because we do a `sandwich' contact detection, we are
+            CD_temp_arr_bytes = simParams->nTriGM * sizeof(binsTriangleTouches_t) * 2;
             binsTriangleTouches_t* numBinsTriTouches =
-                (binsTriangleTouches_t*)scratchPad.allocateTempVector(12, CD_temp_arr_bytes);
-            bin_triangle_kernels->kernel("getNumberOfBinsEachTriangleTouches")
-                .instantiate()
-                .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
-                .launch(simParams, granData, numBinsTriTouches);
-            GPU_CALL(cudaStreamSynchronize(this_stream));
+                (binsTriangleTouches_t*)scratchPad.allocateTempVector(8, CD_temp_arr_bytes);
+            {
+                bin_triangle_kernels->kernel("getNumberOfBinsEachTriangleTouches")
+                    .instantiate()
+                    .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
+                    .launch(simParams, granData, numBinsTriTouches, sandwichANode1, sandwichANode2, sandwichANode3);
+                GPU_CALL(cudaStreamSynchronize(this_stream));
+                bin_triangle_kernels->kernel("getNumberOfBinsEachTriangleTouches")
+                    .instantiate()
+                    .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
+                    .launch(simParams, granData, numBinsTriTouches + simParams->nTriGM, sandwichBNode1, sandwichBNode2,
+                            sandwichBNode3);
+                GPU_CALL(cudaStreamSynchronize(this_stream));
+            }
+            std::cout << "numBinsTriTouches: " << std::endl;
+            displayArray<binsTriangleTouches_t>(numBinsTriTouches, simParams->nTriGM);
+            displayArray<binsTriangleTouches_t>(numBinsTriTouches + simParams->nTriGM, simParams->nTriGM);
 
+            /*
             // 2nd step: prefix scan sphere--bin touching pairs
             CD_temp_arr_bytes = simParams->nTriGM * sizeof(binsTriangleTouchPairs_t);
             binsTriangleTouchPairs_t* numBinTriTouchesScan =
-                (binsTriangleTouchPairs_t*)scratchPad.allocateTempVector(13, CD_temp_arr_bytes);
+                (binsTriangleTouchPairs_t*)scratchPad.allocateTempVector(9, CD_temp_arr_bytes);
             cubDEMPrefixScan<binsTriangleTouches_t, binsTriangleTouchPairs_t, DEMSolverStateData>(
                 numBinsTriTouches, numBinTriTouchesScan, simParams->nTriGM, this_stream, scratchPad);
             size_t* pNumBinTriTouchPairs = scratchPad.pTempSizeVar1;
@@ -222,17 +235,22 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // 3rd step: use a custom kernel to figure out all sphere--bin touching pairs. Note numBinsTriTouches can
             // retire now so we allocate on temp vector 12.
             CD_temp_arr_bytes = (*pNumBinTriTouchPairs) * sizeof(binID_t);
-            binID_t* binIDsEachTriTouches = (binID_t*)scratchPad.allocateTempVector(12, CD_temp_arr_bytes);
+            binID_t* binIDsEachTriTouches = (binID_t*)scratchPad.allocateTempVector(8, CD_temp_arr_bytes);
             CD_temp_arr_bytes = (*pNumBinTriTouchPairs) * sizeof(triID_t);
-            triID_t* triIDsEachBinTouches = (triID_t*)scratchPad.allocateTempVector(14, CD_temp_arr_bytes);
+            triID_t* triIDsEachBinTouches = (triID_t*)scratchPad.allocateTempVector(10, CD_temp_arr_bytes);
             // This kernel is also responsible of figuring out sphere--analytical geometry pairs
             bin_triangle_kernels->kernel("populateBinTriangleTouchingPairs")
                 .instantiate()
                 .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
                 .launch(simParams, granData, numBinTriTouchesScan, binIDsEachTriTouches, triIDsEachBinTouches);
             GPU_CALL(cudaStreamSynchronize(this_stream));
+            */
         }
         timers.GetTimer("Discretize domain").stop();
+
+        ////////////////////////////////////////////////////////////////////////////////
+        // Populating contact pairs
+        ////////////////////////////////////////////////////////////////////////////////
 
         timers.GetTimer("Find contact pairs").start();
         // 6th step: find the contact pairs. One-two punch: first find num of contacts in each bin, then prescan, then
@@ -301,6 +319,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         timers.GetTimer("Find contact pairs").stop();
     }
 
+    ////////////////////////////////////////////////////////////////////////////////
+    // Constructing contact history
+    ////////////////////////////////////////////////////////////////////////////////
+
     timers.GetTimer("Build history map").start();
     // Now, sort idGeometryAB by their owners. Needed for identifying persistent contacts in history-based models.
     if (*scratchPad.pNumContacts > 0) {
@@ -312,7 +334,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector(1, id_arr_bytes);
             bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector(2, id_arr_bytes);
 
-            // TODO: But do I have to SortByKey twice?? Can I zip these value arrays together??
+            //// TODO: But do I have to SortByKey twice?? Can I zip these value arrays together??
             cubDEMSortByKeys<bodyID_t, bodyID_t, DEMSolverStateData>(granData->idGeometryA, idA_sorted,
                                                                      granData->idGeometryB, idB_sorted,
                                                                      *scratchPad.pNumContacts, this_stream, scratchPad);
@@ -331,7 +353,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // DEME_DEBUG_PRINTF("New contact types:");
             // DEME_DEBUG_EXEC(displayArray<contact_t>(granData->contactType, *scratchPad.pNumContacts));
 
-            // For history-based models, construct the persistent contact map
+            // For history-based models, construct the persistent contact map. We dwell on the fact that idA is always
+            // for a sphere.
             if (!solverFlags.isHistoryless) {
                 // This CD run and previous CD run could have different number of spheres in them. We pick the larger
                 // number to refer in building the persistent contact map to avoid potential problems.
@@ -444,7 +467,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
 
     // Now, given the dT force kernel size, how many contacts should each thread takes care of so idA can be resonably
     // cached in shared memory?
-    if (solverFlags.use_compact_force_kernel && solverFlags.should_sort_pairs) {
+    if (verbosity >= VERBOSITY::STEP_DEBUG && solverFlags.should_sort_pairs) {
         // Figure out how many contacts an item in idA array typically has
         size_t unique_arr_bytes = (size_t)simParams->nSpheresGM * sizeof(bodyID_t);
         bodyID_t* unique_arr = (bodyID_t*)scratchPad.allocateTempVector(0, unique_arr_bytes);
@@ -454,7 +477,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         double avg_cnts_per_geo =
             (*num_unique_idA > 0) ? (double)(*scratchPad.pNumContacts) / (double)(*num_unique_idA) : 0.0;
 
-        DEME_DEBUG_PRINTF("Average number of contacts for each geometry: %.9g", avg_cnts_per_geo);
+        DEME_STEP_DEBUG_PRINTF("Average number of contacts for each geometry: %.9g", avg_cnts_per_geo);
     }
 
     // Finally, don't forget to store the number of contacts for the next iteration, even if there is 0 contacts (in

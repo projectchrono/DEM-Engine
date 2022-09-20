@@ -188,6 +188,14 @@ inline std::string pretty_format_bytes(size_t bytes) {
         }                                    \
     }
 
+#define DEME_STEP_DEBUG_PRINTF(...)               \
+    {                                             \
+        if (verbosity >= VERBOSITY::STEP_DEBUG) { \
+            printf(__VA_ARGS__);                  \
+            printf("\n");                         \
+        }                                         \
+    }
+
 // I wasn't able to resolve a decltype problem with vector of vectors, so I have to create another macro for this kind
 // of tracked resize... not ideal.
 #define DEME_TRACKED_RESIZE_FLOAT(vec, newsize, val)               \
@@ -331,10 +339,6 @@ class ClumpTemplateFlatten {
 struct SolverFlags {
     // Sort contact pair arrays before sending to kT
     bool should_sort_pairs = true;
-    // Whether to adopt a contact force calculation strategy where a thread takes care of multiple contacts so shared
-    // memory is leveraged
-    // NOTE: This is not implemented
-    bool use_compact_force_kernel = false;
     // This run is historyless
     bool isHistoryless = false;
     // This run uses contact detection in an async fashion (kT and dT working at different points in simulation time)

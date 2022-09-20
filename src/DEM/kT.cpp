@@ -674,6 +674,12 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
             "DEMContactKernels_Blockwise", JitHelper::KERNEL_DIR / "DEMContactKernels_Blockwise.cu", Subs,
             {"-I" + (JitHelper::KERNEL_DIR / "..").string(), "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
     }
+    // Then triangle-related kernels
+    {
+        bin_triangle_kernels = std::make_shared<jitify::Program>(std::move(
+            JitHelper::buildProgram("DEMBinTriangleKernels", JitHelper::KERNEL_DIR / "DEMBinTriangleKernels.cu", Subs,
+                                    {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+    }
     // Then contact history mapping kernels
     {
         history_kernels = std::make_shared<jitify::Program>(std::move(

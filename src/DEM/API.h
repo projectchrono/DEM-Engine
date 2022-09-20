@@ -82,13 +82,26 @@ class DEMSolver {
     void SetCDUpdateFreq(int freq) { m_updateFreq = freq; }
     // TODO: Implement an API that allows setting ts size through a list
 
+    /// Sets the origin of the coordinate system (the coordinate system that all entities in this simulation are using)
+    /// using a string identifier. Choose from "center" (being at the center of the user-specifier BoxDomain), or "0",
+    /// "1", ..., "13", "-1", ..., "-13", which are the balanced ternary-identifier for points in the 8 octants, see
+    /// https://en.wikipedia.org/wiki/Octant_(solid_geometry).
+    void SetCoordSysOrigin(const std::string& where) { m_user_instructed_origin = where; }
+
     /// Sets the origin of the coordinate system (the coordinate system that all entities in this simulation are using).
     /// This origin point should be reported as the vector pointing from the left-bottom-front point of your simulation
     /// `world' (box domain), to the origin of the coordinate system. For example, if the world size is [2,2,2] and the
-    /// origin should be right at its center, then the argument for this call should be make_float3(1,1,1).
-    void SetCoordSysOrigin(const std::string& where) { m_user_instructed_origin = where; }
+    /// origin should be right at its center, then the argument for this call should be make_float3(1,1,1). The other
+    /// alternative to achieve the same, is through calling SetBoxDomainLBFPoint.
     void SetCoordSysOrigin(float3 O) {
         m_boxLBF = -O;
+        m_user_instructed_origin = "explicit";
+    }
+
+    /// Set the left-bottom-front point of the box domain (or the user-specified simulation `world'), in the user's
+    /// global coordinate system. The other alternative to achieve the same, is through calling SetCoordSysOrigin.
+    void SetBoxDomainLBFPoint(float3 O) {
+        m_boxLBF = O;
         m_user_instructed_origin = "explicit";
     }
 
@@ -549,7 +562,7 @@ class DEMSolver {
     int m_updateFreq = 0;
 
     // Where the user wants the origin of the coordinate system to be
-    std::string m_user_instructed_origin = "explicit";
+    std::string m_user_instructed_origin = "center";
 
     // If and how we should add boundaries to the simulation world upon initialization. Choose between none, all and
     // top_open.

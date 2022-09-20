@@ -28,6 +28,9 @@ namespace deme {
 #define DEME_BITS_PER_BYTE 8
 #define DEME_CUDA_WARP_SIZE 32
 #define DEME_MAX_WILDCARD_NUM 8
+// In bin--triangle intersection scan, all bins are enlarged by a factor of this following constant, so that no triangle
+// lies in between bins and not picked up by any bins.
+#define DEME_BIN_ENLARGE_RATIO_FOR_FACETS 0.001
 
 // A few pre-computed constants
 constexpr double TWO_OVER_THREE = 0.666666666666667;
@@ -102,7 +105,16 @@ constexpr unsigned int THRESHOLD_CANT_JITIFY_ALL_COMP =
 
 // Some enums...
 // Verbosity
-enum VERBOSITY { QUIET = 0, ERROR = 10, WARNING = 20, INFO = 30, STEP_STATS = 32, STEP_METRIC = 35, DEBUG = 40 };
+enum VERBOSITY {
+    QUIET = 0,
+    ERROR = 10,
+    WARNING = 20,
+    INFO = 30,
+    STEP_STATS = 32,
+    STEP_METRIC = 35,
+    DEBUG = 40,
+    STEP_DEBUG = 50
+};
 // Stepping method
 enum class TIME_INTEGRATOR { FORWARD_EULER, CENTERED_DIFFERENCE, EXTENDED_TAYLOR, CHUNG };
 // Owner types

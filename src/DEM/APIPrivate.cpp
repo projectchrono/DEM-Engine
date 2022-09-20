@@ -649,10 +649,16 @@ void DEMSolver::figureOutOrigin() {
         return;
     }
     float3 O;
-    if (m_user_instructed_origin == "center") {
+    if (m_user_instructed_origin == "center" || m_user_instructed_origin == "0") {
         O = -(m_user_boxSize) / 2.0;
         m_boxLBF = O;
+    } else if (m_user_instructed_origin == "-13") {
+        O.x = 0;
+        O.y = 0;
+        O.z = 0;
+        m_boxLBF = O;
     } else {
+        //// TODO: Implement all of them
         DEME_ERROR("Unrecognized location of system origin.");
     }
 }
@@ -727,9 +733,6 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.canFamilyChange = famnum_can_change_conditionally;
 
     kT->solverFlags.should_sort_pairs = kT_should_sort;
-
-    // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
-    kT->solverFlags.use_compact_force_kernel = use_compact_sweep_force_strat;
 }
 
 void DEMSolver::transferSimParams() {

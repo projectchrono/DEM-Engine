@@ -63,6 +63,16 @@ inline __device__ void recoverCntPair(T1& i, T1& j, const T1& ind, const T1& n) 
     j = ind + i + 1 + (n - i) * ((n - i) - 1) / 2 - n * (n - 1) / 2;
 }
 
+// Make sure a T1 type triplet falls in a range, then output as T2 type
+template <typename T1, typename T2>
+inline __device__ T2 clampBetween(const T1& data, const T2& low, const T2& high) {
+    T2 res;
+    res.x = DEME_MIN(DEME_MAX(data.x, low.x), high.x);
+    res.y = DEME_MIN(DEME_MAX(data.y, low.y), high.y);
+    res.z = DEME_MIN(DEME_MAX(data.z, low.z), high.z);
+    return res;
+}
+
 // Chops a long ID (typically voxelID) into XYZ components
 template <typename T1, typename T2>
 inline __device__ void IDChopper(T1& X,
@@ -163,6 +173,11 @@ inline __device__ void normalizeVector3(T1& x, T1& y, T1& z) {
     x /= magnitude;
     y /= magnitude;
     z /= magnitude;
+}
+
+// Calculate the centroid of a triangle
+inline __device__ float3 triangleCentroid(const float3& p1, const float3& p2, const float3& p3) {
+    return (p1 + p2 + p3) / 3.;
 }
 
 // Hamilton product of 2 quaternions
@@ -442,4 +457,46 @@ inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& xA,
         default:
             return deme::NOT_A_CONTACT;
     }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Triangle-specific helper kernels
+////////////////////////////////////////////////////////////////////////////////
+
+/// Takes in a triangle ID and figures out an SD AABB for broadphase use
+__inline__ __device__ void boundingBoxIntersectBin(unsigned int* L,
+                                                   unsigned int* U,
+                                                   const float3& vA,
+                                                   const float3& vB,
+                                                   const float3& vC,
+                                                   deme::DEMSimParams* simParams) {
+    float3 min_pt;
+    min_pt.x = DEME_MIN(vA.x, DEME_MIN(vB.x, vC.x));
+    min_pt.y = DEME_MIN(vA.y, DEME_MIN(vB.y, vC.y));
+    min_pt.z = DEME_MIN(vA.z, DEME_MIN(vB.z, vC.z));
+
+    // Enlarge bounding box, so that no triangle lies right between 2 layers of bins
+    min_pt -= DEME_BIN_ENLARGE_RATIO_FOR_FACETS * simParams->binSize;
+    // A point on a mesh can be out of the simulation world. In this case, becasue we only need to detect their contact
+    // with spheres, and spheres are all in the simulation world, so we just clamp out the bins that are outside the
+    // simulation world.
+    int3 min_bin = clampBetween<float3, int3>(min_pt / simParams->binSize, make_int3(0, 0, 0),
+                                              make_int3(simParams->nbX, simParams->nbY, simParams->nbZ));
+
+    float3 max_pt;
+    max_pt.x = DEME_MAX(vA.x, DEME_MAX(vB.x, vC.x));
+    max_pt.y = DEME_MAX(vA.y, DEME_MAX(vB.y, vC.y));
+    max_pt.z = DEME_MAX(vA.z, DEME_MAX(vB.z, vC.z));
+
+    max_pt += DEME_BIN_ENLARGE_RATIO_FOR_FACETS * simParams->binSize;
+    int3 max_bin = clampBetween<float3, int3>(max_pt / simParams->binSize, make_int3(0, 0, 0),
+                                              make_int3(simParams->nbX, simParams->nbY, simParams->nbZ));
+
+    L[0] = min_bin.x;
+    L[1] = min_bin.y;
+    L[2] = min_bin.z;
+
+    U[0] = max_bin.x;
+    U[1] = max_bin.y;
+    U[2] = max_bin.z;
 }
