@@ -125,7 +125,7 @@ int main() {
     DEMSim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/DEMdemo_GameOfLife";
+    out_dir += "/DemoOutput_GameOfLife";
     create_directory(out_dir);
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();

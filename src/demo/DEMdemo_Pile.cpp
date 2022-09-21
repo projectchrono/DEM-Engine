@@ -144,7 +144,7 @@ int main() {
     DEMSim.UpdateSimParams();  // Not needed; just testing if this function works...
 
     path out_dir = current_path();
-    out_dir += "/DEMdemo_Pile";
+    out_dir += "/DemoOutput_Pile";
     create_directory(out_dir);
 
     for (int i = 0; i < 200; i++) {

@@ -167,14 +167,13 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
             double myRadiusSpan = myRadius / simParams->binSize;
             // Now, write the IDs of those bins that I touch, back to the global memory
             deme::binID_t thisBinID;
-            for (unsigned int k = (unsigned int)(myBinZ - myRadiusSpan); k <= (unsigned int)(myBinZ + myRadiusSpan);
+            for (deme::binID_t k = (deme::binID_t)(myBinZ - myRadiusSpan); k <= (deme::binID_t)(myBinZ + myRadiusSpan);
                  k++) {
-                for (unsigned int j = (unsigned int)(myBinY - myRadiusSpan); j <= (unsigned int)(myBinY + myRadiusSpan);
-                     j++) {
-                    for (unsigned int i = (unsigned int)(myBinX - myRadiusSpan);
-                         i <= (unsigned int)(myBinX + myRadiusSpan); i++) {
-                        thisBinID = (deme::binID_t)i + (deme::binID_t)j * simParams->nbX +
-                                    (deme::binID_t)k * simParams->nbX * simParams->nbY;
+                for (deme::binID_t j = (deme::binID_t)(myBinY - myRadiusSpan);
+                     j <= (deme::binID_t)(myBinY + myRadiusSpan); j++) {
+                    for (deme::binID_t i = (deme::binID_t)(myBinX - myRadiusSpan);
+                         i <= (deme::binID_t)(myBinX + myRadiusSpan); i++) {
+                        thisBinID = binIDFrom3Indices<deme::binID_t>(i, j, k, simParams->nbX, simParams->nbY);
                         binIDsEachSphereTouches[myReportOffset] = thisBinID;
                         sphereIDsEachBinTouches[myReportOffset] = sphereID;
                         myReportOffset++;

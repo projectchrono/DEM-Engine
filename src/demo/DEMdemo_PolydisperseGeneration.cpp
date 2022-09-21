@@ -66,7 +66,7 @@ int main() {
     DEMSim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/DEMdemo_PolydisperseGeneration";
+    out_dir += "/DemoOutput_PolydisperseGeneration";
     create_directory(out_dir);
 
     unsigned int currframe = 0;

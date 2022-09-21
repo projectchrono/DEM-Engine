@@ -217,34 +217,44 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                             sandwichBNode3);
                 GPU_CALL(cudaStreamSynchronize(this_stream));
             }
-            std::cout << "numBinsTriTouches: " << std::endl;
-            displayArray<binsTriangleTouches_t>(numBinsTriTouches, simParams->nTriGM);
-            displayArray<binsTriangleTouches_t>(numBinsTriTouches + simParams->nTriGM, simParams->nTriGM);
+            // std::cout << "numBinsTriTouches: " << std::endl;
+            // displayArray<binsTriangleTouches_t>(numBinsTriTouches, simParams->nTriGM);
+            // displayArray<binsTriangleTouches_t>(numBinsTriTouches + simParams->nTriGM, simParams->nTriGM);
 
-            /*
             // 2nd step: prefix scan sphere--bin touching pairs
-            CD_temp_arr_bytes = simParams->nTriGM * sizeof(binsTriangleTouchPairs_t);
+            CD_temp_arr_bytes = simParams->nTriGM * sizeof(binsTriangleTouchPairs_t) * 2;
             binsTriangleTouchPairs_t* numBinTriTouchesScan =
                 (binsTriangleTouchPairs_t*)scratchPad.allocateTempVector(9, CD_temp_arr_bytes);
             cubDEMPrefixScan<binsTriangleTouches_t, binsTriangleTouchPairs_t, DEMSolverStateData>(
-                numBinsTriTouches, numBinTriTouchesScan, simParams->nTriGM, this_stream, scratchPad);
-            size_t* pNumBinTriTouchPairs = scratchPad.pTempSizeVar1;
-            *pNumBinTriTouchPairs =
-                (size_t)numBinTriTouchesScan[simParams->nTriGM - 1] + (size_t)numBinsTriTouches[simParams->nTriGM - 1];
+                numBinsTriTouches, numBinTriTouchesScan, simParams->nTriGM * 2, this_stream, scratchPad);
+            // Half is about the side A of the triangle sandwich, full is about the side B of the triangle sandwich
+            size_t numBinTriTouchPairsFull = (size_t)numBinTriTouchesScan[simParams->nTriGM * 2 - 1] +
+                                             (size_t)numBinsTriTouches[simParams->nTriGM * 2 - 1];
 
             // 3rd step: use a custom kernel to figure out all sphere--bin touching pairs. Note numBinsTriTouches can
             // retire now so we allocate on temp vector 12.
-            CD_temp_arr_bytes = (*pNumBinTriTouchPairs) * sizeof(binID_t);
+            CD_temp_arr_bytes = numBinTriTouchPairsFull * sizeof(binID_t);
             binID_t* binIDsEachTriTouches = (binID_t*)scratchPad.allocateTempVector(8, CD_temp_arr_bytes);
-            CD_temp_arr_bytes = (*pNumBinTriTouchPairs) * sizeof(triID_t);
+            CD_temp_arr_bytes = numBinTriTouchPairsFull * sizeof(triID_t);
             triID_t* triIDsEachBinTouches = (triID_t*)scratchPad.allocateTempVector(10, CD_temp_arr_bytes);
-            // This kernel is also responsible of figuring out sphere--analytical geometry pairs
-            bin_triangle_kernels->kernel("populateBinTriangleTouchingPairs")
-                .instantiate()
-                .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
-                .launch(simParams, granData, numBinTriTouchesScan, binIDsEachTriTouches, triIDsEachBinTouches);
-            GPU_CALL(cudaStreamSynchronize(this_stream));
-            */
+            {
+                bin_triangle_kernels->kernel("populateBinTriangleTouchingPairs")
+                    .instantiate()
+                    .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
+                    .launch(simParams, granData, numBinTriTouchesScan, binIDsEachTriTouches, triIDsEachBinTouches,
+                            sandwichANode1, sandwichANode2, sandwichANode3);
+                GPU_CALL(cudaStreamSynchronize(this_stream));
+                bin_triangle_kernels->kernel("populateBinTriangleTouchingPairs")
+                    .instantiate()
+                    .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
+                    .launch(simParams, granData, numBinTriTouchesScan + simParams->nTriGM, binIDsEachTriTouches,
+                            triIDsEachBinTouches, sandwichBNode1, sandwichBNode2, sandwichBNode3);
+                GPU_CALL(cudaStreamSynchronize(this_stream));
+            }
+            // std::cout << "binIDsEachTriTouches: " << std::endl;
+            // displayArray<binsTriangleTouches_t>(binIDsEachTriTouches, numBinTriTouchesScan[simParams->nTriGM]);
+            // displayArray<binsTriangleTouches_t>(binIDsEachTriTouches + numBinTriTouchesScan[simParams->nTriGM],
+            //                                     numBinTriTouchPairsFull - numBinTriTouchesScan[simParams->nTriGM]);
         }
         timers.GetTimer("Discretize domain").stop();
 

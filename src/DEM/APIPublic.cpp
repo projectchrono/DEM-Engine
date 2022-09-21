@@ -76,17 +76,6 @@ void DEMSolver::SetTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& t
     kT->setTriNodeRelPos(start, triangles, overwrite);
 }
 
-// NOTE: compact force calculation (in the hope to use shared memory) is not implemented
-void DEMSolver::UseCompactForceKernel(bool use_compact) {
-    // This method works only if kT sort contact arrays first
-    if (use_compact) {
-        kT_should_sort = use_compact;
-        use_compact_sweep_force_strat = use_compact;
-    } else {
-        use_compact_sweep_force_strat = use_compact;
-    }
-}
-
 void DEMSolver::InstructBoxDomainDimension(float x, float y, float z, SPATIAL_DIR dir_exact) {
     m_user_boxSize.x = x;
     m_user_boxSize.y = y;

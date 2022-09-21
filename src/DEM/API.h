@@ -473,8 +473,6 @@ class DEMSolver {
     VERBOSITY verbosity = INFO;
     // If true, kT should sort contact arrays then transfer them to dT
     bool kT_should_sort = true;
-    // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
-    bool use_compact_sweep_force_strat = false;
     // If true, the solvers may need to do a per-step sweep to apply family number changes
     bool famnum_can_change_conditionally = false;
 

@@ -207,7 +207,7 @@ int main() {
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
     path out_dir = current_path();
-    out_dir += "/DEMdemo_GRCPrep_Part3";
+    out_dir += "/DemoOutput_GRCPrep_Part3";
     create_directory(out_dir);
     unsigned int currframe = 0;
     unsigned int curr_step = 0;

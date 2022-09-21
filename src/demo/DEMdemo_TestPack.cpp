@@ -64,7 +64,7 @@ void EllpsiodFallingOver() {
 
     float frame_time = 1e-1;
     path out_dir = current_path();
-    out_dir += "/DEMdemo_TestPack";
+    out_dir += "/DemoOutput_TestPack";
     create_directory(out_dir);
     for (int i = 0; i < 6.0 / frame_time; i++) {
         char filename[100];
@@ -113,7 +113,7 @@ void SphereRollUpIncline() {
         DEMSim.Initialize();
 
         path out_dir = current_path();
-        out_dir += "/DEMdemo_TestPack";
+        out_dir += "/DemoOutput_TestPack";
         create_directory(out_dir);
         for (int i = 0; i < 0.15 / step_time; i++) {
             char filename[100];
@@ -237,7 +237,7 @@ void SphereStack() {
                 float top_sp_Z = 99999.9;
                 float3 pos = make_float3(0);
                 path out_dir = current_path();
-                out_dir += "/DEMdemo_TestPack";
+                out_dir += "/DemoOutput_TestPack";
                 create_directory(out_dir);
                 int i = 0;
                 while (!near(pos.z, top_sp_Z, 1e-4)) {

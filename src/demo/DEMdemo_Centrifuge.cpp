@@ -144,7 +144,7 @@ int main() {
     DEMSim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/DEMdemo_Centrifuge";
+    out_dir += "/DemoOutput_Centrifuge";
     create_directory(out_dir);
 
     float time_end = 20.0;

@@ -109,7 +109,7 @@ int main() {
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
     path out_dir = current_path();
-    out_dir += "/DEMdemo_RoverWheel";
+    out_dir += "/DemoOutput_RoverWheel";
     create_directory(out_dir);
     unsigned int currframe = 0;
     unsigned int curr_step = 0;

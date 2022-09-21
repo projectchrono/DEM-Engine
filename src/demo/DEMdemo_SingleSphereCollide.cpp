@@ -22,6 +22,7 @@ int main() {
     DEMSim.SetVerbosity(DEBUG);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetContactOutputContent(OWNERS | FORCE | POINT | COMPONENT | NORMAL | TORQUE_ONLY_FORCE);
+    DEMSim.EnsureKernelErrMsgLineNum();
 
     // srand(time(NULL));
     srand(4150);
@@ -85,7 +86,7 @@ int main() {
 
     // Ready simulation
     path out_dir = current_path();
-    out_dir += "/DEMdemo_SingleSphereCollide";
+    out_dir += "/DemoOutput_SingleSphereCollide";
     create_directory(out_dir);
     bool changed_family = false;
     for (int i = 0; i < 100; i++) {

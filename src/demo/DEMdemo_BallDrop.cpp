@@ -58,7 +58,7 @@ int main() {
     DEMSim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/DEMdemo_BallDrop";
+    out_dir += "/DemoOutput_BallDrop";
     create_directory(out_dir);
 
     float sim_end = 20.0;

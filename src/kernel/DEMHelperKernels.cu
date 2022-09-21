@@ -278,6 +278,7 @@ inline __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
     return deme::SPHERE_SPHERE_CONTACT;
 }
 
+// Compute the binID for a point in space
 template <typename T1>
 inline __device__ T1
 getPointBinID(const double& X, const double& Y, const double& Z, const double& binSize, const T1& nbX, const T1& nbY) {
@@ -285,6 +286,12 @@ getPointBinID(const double& X, const double& Y, const double& Z, const double& b
     T1 binIDY = Y / binSize;
     T1 binIDZ = Z / binSize;
     return binIDX + binIDY * nbX + binIDZ * nbX * nbY;
+}
+
+// Compute the binID using its indices in X, Y and Z directions
+template <typename T1>
+inline __device__ T1 binIDFrom3Indices(const T1& X, const T1& Y, const T1& Z, const T1& nbX, const T1& nbY) {
+    return X + Y * nbX + Z * nbX * nbY;
 }
 
 /**
@@ -464,8 +471,8 @@ inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& xA,
 ////////////////////////////////////////////////////////////////////////////////
 
 /// Takes in a triangle ID and figures out an SD AABB for broadphase use
-__inline__ __device__ void boundingBoxIntersectBin(unsigned int* L,
-                                                   unsigned int* U,
+__inline__ __device__ void boundingBoxIntersectBin(deme::binID_t* L,
+                                                   deme::binID_t* U,
                                                    const float3& vA,
                                                    const float3& vB,
                                                    const float3& vC,
