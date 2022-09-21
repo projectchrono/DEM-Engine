@@ -294,6 +294,29 @@ inline __device__ T1 binIDFrom3Indices(const T1& X, const T1& Y, const T1& Z, co
     return X + Y * nbX + Z * nbX * nbY;
 }
 
+// Binary search on GPU, which is probably quite divergent... use if absolutely needs to
+template <typename T1, typename T2>
+inline __device__ bool cuda_binary_search(T1* A, const T1& val, T2 imin, T2 imax, T2& res) {
+    while (imax > imin) {
+        T2 imid = (imin + imax) / 2;
+        if (val == A[imid]) {
+            res = imid;
+            return true;
+        } else if (val > A[imid]) {
+            imin = imid + 1;
+        } else {
+            imax = imid - 1;
+        }
+    }
+
+    if (A[imin] == val) {
+        res = imin;
+        return true;
+    } else {
+        return false;
+    }
+}
+
 /**
  * Template arguments:
  *   - T1: the floating point accuracy level for the point coordinates

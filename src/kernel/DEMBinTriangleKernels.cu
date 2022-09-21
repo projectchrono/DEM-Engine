@@ -169,3 +169,22 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
         }
     }
 }
+
+__global__ void mapTriActiveBinsToSphActiveBins(deme::binID_t* activeBinIDsForTri,
+                                                deme::binID_t* activeBinIDs,
+                                                deme::binID_t* mapTriActBinToSphActBin,
+                                                size_t numActiveBinsForTri,
+                                                size_t numActiveBinsForSph) {
+    size_t threadID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (threadID < numActiveBinsForTri) {
+        deme::binID_t binID = activeBinIDsForTri[threadID];
+        deme::binID_t indexInOther;
+        bool found =
+            cuda_binary_search<deme::binID_t, deme::binID_t>(activeBinIDs, binID, 0, numActiveBinsForSph, indexInOther);
+        if (found) {
+            mapTriActBinToSphActBin[threadID] = indexInOther;
+        } else {
+            mapTriActBinToSphActBin[threadID] = deme::NULL_BINID;
+        }
+    }
+}

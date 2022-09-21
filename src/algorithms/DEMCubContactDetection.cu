@@ -22,7 +22,7 @@ inline void contactEventArraysResize(size_t nContactPairs,
                                      std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& idGeometryB,
                                      std::vector<contact_t, ManagedAllocator<contact_t>>& contactType,
                                      DEMDataKT* granData) {
-    // TODO: not tracked? Gotta do something on it
+    //// TODO: not tracked? Gotta do something on it
     // DEME_TRACKED_RESIZE_NOPRINT(idGeometryA, nContactPairs);
     // DEME_TRACKED_RESIZE_NOPRINT(idGeometryB, nContactPairs);
     // DEME_TRACKED_RESIZE_NOPRINT(contactType, nContactPairs);
@@ -123,7 +123,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // displayArray<bodyID_t>(sphereIDsEachBinTouches, *pNumBinSphereTouchPairs);
 
         // 4th step: allocate and populate SORTED binIDsEachSphereTouches and sphereIDsEachBinTouches. Note
-        // numBinsSphereTouchesScan can retire now so we allocate on vector 1 and re-use vector 3.
+        // numBinsSphereTouchesScan can retire now so we re-use vector 1 and 3 (analytical contacts have been
+        // processed).
         CD_temp_arr_bytes = (*pNumBinSphereTouchPairs) * sizeof(bodyID_t);
         bodyID_t* sphereIDsEachBinTouches_sorted = (bodyID_t*)scratchPad.allocateTempVector(1, CD_temp_arr_bytes);
         CD_temp_arr_bytes = (*pNumBinSphereTouchPairs) * sizeof(binID_t);
@@ -179,6 +180,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
 
         // If there are meshes, they need to be processed too. All sphere--related temp arrays are in use, so we have to
         // start from 6.
+        size_t* pNumActiveBinsForTri = scratchPad.pTempSizeVar1;  // TempVar1 is now free (Temp2 is not tho)
+        binID_t *mapTriActBinToSphActBin, *activeBinIDsForTri;
+        triID_t* triIDsEachBinTouches_sorted;
+        trianglesBinTouches_t* numTrianglesBinTouches;
         if (simParams->nTriGM > 0) {
             // 0-th step: Make `sandwich' for each triangle (or say, create a prism out of each triangle). This is
             // obviously for our delayed contact detection safety. And finally, if a sphere's distance away from one of
@@ -227,12 +232,11 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 (binsTriangleTouchPairs_t*)scratchPad.allocateTempVector(9, CD_temp_arr_bytes);
             cubDEMPrefixScan<binsTriangleTouches_t, binsTriangleTouchPairs_t, DEMSolverStateData>(
                 numBinsTriTouches, numBinTriTouchesScan, simParams->nTriGM * 2, this_stream, scratchPad);
-            // Half is about the side A of the triangle sandwich, full is about the side B of the triangle sandwich
             size_t numBinTriTouchPairsFull = (size_t)numBinTriTouchesScan[simParams->nTriGM * 2 - 1] +
                                              (size_t)numBinsTriTouches[simParams->nTriGM * 2 - 1];
 
             // 3rd step: use a custom kernel to figure out all sphere--bin touching pairs. Note numBinsTriTouches can
-            // retire now so we allocate on temp vector 12.
+            // retire now so we allocate on temp vector 8.
             CD_temp_arr_bytes = numBinTriTouchPairsFull * sizeof(binID_t);
             binID_t* binIDsEachTriTouches = (binID_t*)scratchPad.allocateTempVector(8, CD_temp_arr_bytes);
             CD_temp_arr_bytes = numBinTriTouchPairsFull * sizeof(triID_t);
@@ -255,6 +259,50 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // displayArray<binsTriangleTouches_t>(binIDsEachTriTouches, numBinTriTouchesScan[simParams->nTriGM]);
             // displayArray<binsTriangleTouches_t>(binIDsEachTriTouches + numBinTriTouchesScan[simParams->nTriGM],
             //                                     numBinTriTouchPairsFull - numBinTriTouchesScan[simParams->nTriGM]);
+
+            // 4th step: allocate and populate SORTED binIDsEachTriTouches and triIDsEachBinTouches. Note
+            // numBinTriTouchesScan can retire now so we re-use vector 9 and allocate 11.
+            CD_temp_arr_bytes = numBinTriTouchPairsFull * sizeof(bodyID_t);
+            triIDsEachBinTouches_sorted = (bodyID_t*)scratchPad.allocateTempVector(9, CD_temp_arr_bytes);
+            CD_temp_arr_bytes = numBinTriTouchPairsFull * sizeof(binID_t);
+            binID_t* binIDsEachTriTouches_sorted = (binID_t*)scratchPad.allocateTempVector(11, CD_temp_arr_bytes);
+            cubDEMSortByKeys<binID_t, triID_t, DEMSolverStateData>(binIDsEachTriTouches, binIDsEachTriTouches_sorted,
+                                                                   triIDsEachBinTouches, triIDsEachBinTouches_sorted,
+                                                                   numBinTriTouchPairsFull, this_stream, scratchPad);
+
+            // 5th step: use DeviceRunLengthEncode to identify those active (that have tris in them) bins.
+            // Also, binIDsEachTriTouches is large enough for a unique scan because total sphere--bin pairs are more
+            // than active bins.
+            binID_t* binIDsUnique = (binID_t*)binIDsEachTriTouches;
+            cubDEMUnique<binID_t, DEMSolverStateData>(binIDsEachTriTouches_sorted, binIDsUnique, pNumActiveBinsForTri,
+                                                      numBinTriTouchPairsFull, this_stream, scratchPad);
+            // Allocate space for encoding output, and run it. Note the (unsorted) binIDsEachTriTouches and
+            // triIDsEachBinTouches can retire now, so we allocate on temp vectors 8 and 10.
+            CD_temp_arr_bytes = (*pNumActiveBinsForTri) * sizeof(binID_t);
+            activeBinIDsForTri = (binID_t*)scratchPad.allocateTempVector(8, CD_temp_arr_bytes);
+            CD_temp_arr_bytes = (*pNumActiveBinsForTri) * sizeof(trianglesBinTouches_t);
+            numTrianglesBinTouches = (trianglesBinTouches_t*)scratchPad.allocateTempVector(10, CD_temp_arr_bytes);
+            cubDEMRunLengthEncode<binID_t, trianglesBinTouches_t, DEMSolverStateData>(
+                binIDsEachTriTouches_sorted, activeBinIDsForTri, numTrianglesBinTouches, pNumActiveBinsForTri,
+                numBinTriTouchPairsFull, this_stream, scratchPad);
+
+            // 6th step: map activeBinIDsForTri to activeBinIDs, so that when we are processing the bins in
+            // activeBinIDsForTri, we know where to find the corresponding bin that resides in activeBinIDs, to bring
+            // spheres into this bin-wise contact detection sweep.
+            CD_temp_arr_bytes = *pNumActiveBinsForTri * sizeof(binID_t);
+            mapTriActBinToSphActBin = (binID_t*)scratchPad.allocateTempVector(12, CD_temp_arr_bytes);
+            {
+                size_t blocks_needed_for_map =
+                    (*pNumActiveBinsForTri + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+                bin_triangle_kernels->kernel("mapTriActiveBinsToSphActiveBins")
+                    .instantiate()
+                    .configure(dim3(blocks_needed_for_map), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream)
+                    .launch(activeBinIDsForTri, activeBinIDs, mapTriActBinToSphActBin, *pNumActiveBinsForTri,
+                            *pNumActiveBins);
+                GPU_CALL(cudaStreamSynchronize(this_stream));
+            }
+            // std::cout << "mapTriActBinToSphActBin: " << std::endl;
+            // displayArray<binID_t>(mapTriActBinToSphActBin, *pNumActiveBinsForTri);
         }
         timers.GetTimer("Discretize domain").stop();
 

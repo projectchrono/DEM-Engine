@@ -82,10 +82,13 @@ const ownerType_t OWNER_T_MESH = 2;
 // This ID marks that this is a new contact, not present when we did contact detection last time
 // TODO: half max add half max... so stupid... Better way?? numeric_limit won't work...
 constexpr contactPairs_t NULL_MAPPING_PARTNER = ((size_t)1 << (sizeof(contactPairs_t) * DEME_BITS_PER_BYTE - 1)) +
-                                                ((size_t)1 << (sizeof(contactPairs_t) * DEME_BITS_PER_BYTE - 1) - 1);
+                                                (((size_t)1 << (sizeof(contactPairs_t) * DEME_BITS_PER_BYTE - 1)) - 1);
 // Reserved bodyID
 constexpr bodyID_t NULL_BODYID = ((size_t)1 << (sizeof(bodyID_t) * DEME_BITS_PER_BYTE - 1)) +
-                                 ((size_t)1 << (sizeof(bodyID_t) * DEME_BITS_PER_BYTE - 1) - 1);
+                                 (((size_t)1 << (sizeof(bodyID_t) * DEME_BITS_PER_BYTE - 1)) - 1);
+// Reserved binID
+constexpr binID_t NULL_BINID = ((size_t)1 << (sizeof(binID_t) * DEME_BITS_PER_BYTE - 1)) +
+                               (((size_t)1 << (sizeof(binID_t) * DEME_BITS_PER_BYTE - 1)) - 1);
 // Default (user) clump family number
 const unsigned int DEFAULT_CLUMP_FAMILY_NUM = 0;
 // Reserved (user) clump family number which is always used for fixities

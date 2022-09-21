@@ -45,6 +45,8 @@ typedef unsigned int binsTriangleTouches_t;
 // This type needs to be large enough to hold the result of a prefix scan of the type binsTriangleTouches_t (and
 // objID_t).
 typedef unsigned int binsTriangleTouchPairs_t;
+// How many triangles a bin can touch, tops? We can assume it will not be too large to save GPU memory.
+typedef unsigned short int trianglesBinTouches_t;
 
 typedef uint8_t notStupidBool_t;  ///< Ad-hoc bool (array) type
 typedef uint8_t contact_t;        ///< Contact type (sphere--sphere is 1, etc.)
