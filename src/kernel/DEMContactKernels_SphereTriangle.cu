@@ -1,6 +1,7 @@
 // DEM contact detection-related custom kernels
 #include <DEM/Defines.h>
 #include <kernel/DEMHelperKernels.cu>
+#include <kernel/DEMCollisionKernels.cu>
 
 // #include <cub/block/block_load.cuh>
 // #include <cub/block/block_store.cuh>
@@ -159,8 +160,13 @@ __global__ void getNumberOfSphTriContactsEachBin(deme::DEMSimParams* simParams,
             float3 cntPnt, normal;
             float depth;
             bool in_contact;
-            in_contact = face_sphere_cd<float3, float>(triANode1[ind], triANode2[ind], triANode3[ind], sphXYZ, myRadius,
-                                                       normal, depth, cntPnt);
+            // NOTE: triangle_sphere_CD_directional, instead of triangle_sphere_CD, is in use here. This is because if
+            // the later is in use, then if a sphere is between 2 sandwiching triangles, then its potential contact with
+            // the original triangle will not be registered. At the same time, we don't want to use
+            // triangle_sphere_CD_directional for the real force calculation, and the concern is mainly "sphere near
+            // needle tip" scenario. Think about it.
+            in_contact = triangle_sphere_CD_directional<float3, float>(triANode1[ind], triANode2[ind], triANode3[ind],
+                                                                       sphXYZ, myRadius, normal, depth, cntPnt);
             deme::binID_t contactPntBin = getPointBinID<deme::binID_t>(cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize,
                                                                        simParams->nbX, simParams->nbY);
 
@@ -170,8 +176,8 @@ __global__ void getNumberOfSphTriContactsEachBin(deme::DEMSimParams* simParams,
                 continue;
             }
             // And triangle B...
-            in_contact = face_sphere_cd<float3, float>(triBNode1[ind], triBNode2[ind], triBNode3[ind], sphXYZ, myRadius,
-                                                       normal, depth, cntPnt);
+            in_contact = triangle_sphere_CD_directional<float3, float>(triBNode1[ind], triBNode2[ind], triBNode3[ind],
+                                                                       sphXYZ, myRadius, normal, depth, cntPnt);
             contactPntBin = getPointBinID<deme::binID_t>(cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize,
                                                          simParams->nbX, simParams->nbY);
             if (in_contact && (contactPntBin == binID)) {

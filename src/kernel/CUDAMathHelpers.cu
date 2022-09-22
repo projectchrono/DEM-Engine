@@ -42,6 +42,9 @@
 // I suspect namespace problems. So they will for now just be defined here manually.
 ////////////////////////////////////////////////////////////////////////////////
 
+#ifndef DEME_CUDA_HELPER_MATH_CU
+#define DEME_CUDA_HELPER_MATH_CU
+
 #include <DEM/Defines.h>
 
 inline __device__ float3 cross(float3 a, float3 b) {
@@ -199,3 +202,5 @@ inline __device__ float3 normalize(float3 v) {
         __threadfence();       \
         cub::ThreadTrap();     \
     }
+
+#endif
