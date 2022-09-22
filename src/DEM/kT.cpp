@@ -159,10 +159,10 @@ void DEMKinematicThread::workerThread() {
             // cudaDeviceGetAttribute.cudaDevAttrMaxSharedMemoryPerBlock
 
             // kT's main task, contact detection
-            contactDetection(bin_sphere_kernels, bin_triangle_kernels, contact_detection_kernels, history_kernels,
-                             granData, simParams, solverFlags, verbosity, idGeometryA, idGeometryB, contactType,
-                             previous_idGeometryA, previous_idGeometryB, previous_contactType, contactMapping,
-                             streamInfo.stream, stateOfSolver_resources, timers);
+            contactDetection(bin_sphere_kernels, bin_triangle_kernels, contact_detection_kernels,
+                             sphere_triangle_kernels, history_kernels, granData, simParams, solverFlags, verbosity,
+                             idGeometryA, idGeometryB, contactType, previous_idGeometryA, previous_idGeometryB,
+                             previous_contactType, contactMapping, streamInfo.stream, stateOfSolver_resources, timers);
 
             timers.GetTimer("Send to dT buffer").start();
             {
@@ -674,11 +674,17 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
             "DEMContactKernels_Blockwise", JitHelper::KERNEL_DIR / "DEMContactKernels_Blockwise.cu", Subs,
             {"-I" + (JitHelper::KERNEL_DIR / "..").string(), "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
     }
-    // Then triangle-related kernels
+    // Then triangle--bin intersection-related kernels
     {
         bin_triangle_kernels = std::make_shared<jitify::Program>(std::move(
             JitHelper::buildProgram("DEMBinTriangleKernels", JitHelper::KERNEL_DIR / "DEMBinTriangleKernels.cu", Subs,
                                     {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+    }
+    // Then sphere--triangle contact detection-related kernels
+    {
+        sphere_triangle_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMContactKernels_SphereTriangle", JitHelper::KERNEL_DIR / "DEMContactKernels_SphereTriangle.cu", Subs,
+            {"-I" + (JitHelper::KERNEL_DIR / "..").string(), "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
     }
     // Then contact history mapping kernels
     {

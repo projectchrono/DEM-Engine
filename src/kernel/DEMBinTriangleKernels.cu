@@ -29,7 +29,7 @@ __global__ void makeTriangleSandwich(deme::DEMSimParams* simParams,
         // Get the controid of this triangle
         const float3 centroid = triangleCentroid(p1, p2, p3);
         // Generate normal using RHR from nodes 1, 2, and 3
-        float3 triNormal = normalize(cross(p2 - p1, p3 - p1));
+        float3 triNormal = face_normal<float3>(p1, p2, p3);
 
         sandwichANode1[triID] = sandwichVertex(p1, centroid, triNormal, simParams->beta);
         sandwichANode2[triID] = sandwichVertex(p2, centroid, triNormal, simParams->beta);

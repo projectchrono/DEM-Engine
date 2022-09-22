@@ -12,14 +12,14 @@ _clumpTemplateDefs_;
 // Family mask, _nFamilyMaskEntries_ elements are in this array
 // __constant__ __device__ bool familyMasks[] = {_familyMasks_};
 
-__global__ void getNumberOfContactsEachBin(deme::DEMSimParams* simParams,
-                                           deme::DEMDataKT* granData,
-                                           deme::bodyID_t* sphereIDsEachBinTouches_sorted,
-                                           deme::binID_t* activeBinIDs,
-                                           deme::spheresBinTouches_t* numSpheresBinTouches,
-                                           deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
-                                           deme::spheresBinTouches_t* numContactsInEachBin,
-                                           size_t nActiveBins) {
+__global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
+                                                 deme::DEMDataKT* granData,
+                                                 deme::bodyID_t* sphereIDsEachBinTouches_sorted,
+                                                 deme::binID_t* activeBinIDs,
+                                                 deme::spheresBinTouches_t* numSpheresBinTouches,
+                                                 deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
+                                                 deme::spheresBinTouches_t* numContactsInEachBin,
+                                                 size_t nActiveBins) {
     // shared storage for bodies involved in this bin. Pre-allocated so that each threads can easily use.
     __shared__ deme::bodyID_t ownerIDs[DEME_MAX_SPHERES_PER_BIN];
     __shared__ float radii[DEME_MAX_SPHERES_PER_BIN];

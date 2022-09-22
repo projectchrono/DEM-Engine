@@ -9,14 +9,14 @@ _clumpTemplateDefs_;
 // Family mask, _nFamilyMaskEntries_ elements are in this array
 // __constant__ __device__ bool familyMasks[] = {_familyMasks_};
 
-__global__ void getNumberOfContactsEachBin(deme::DEMSimParams* simParams,
-                                           deme::DEMDataKT* granData,
-                                           deme::bodyID_t* sphereIDsEachBinTouches_sorted,
-                                           deme::binID_t* activeBinIDs,
-                                           deme::spheresBinTouches_t* numSpheresBinTouches,
-                                           deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
-                                           deme::spheresBinTouches_t* numContactsInEachBin,
-                                           size_t nActiveBins) {
+__global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
+                                                 deme::DEMDataKT* granData,
+                                                 deme::bodyID_t* sphereIDsEachBinTouches_sorted,
+                                                 deme::binID_t* activeBinIDs,
+                                                 deme::spheresBinTouches_t* numSpheresBinTouches,
+                                                 deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
+                                                 deme::spheresBinTouches_t* numContactsInEachBin,
+                                                 size_t nActiveBins) {
     // Only active bins got execute this...
     deme::binID_t myActiveID = blockIdx.x * blockDim.x + threadIdx.x;
     // I need to store all the sphereIDs that I am supposed to look into
