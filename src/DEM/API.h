@@ -290,6 +290,9 @@ class DEMSolver {
                                    const std::string& velY,
                                    const std::string& velZ,
                                    bool dictate = true);
+    /// Let the linear velocities of all entites in this family always keep `as is', and not fluenced by the force
+    /// exerted from other simulation entites.
+    void SetFamilyPrescribedLinVel(unsigned int ID);
     /// Set the prescribed angular velocity to all entities in a family. If dictate is set to true, then this
     /// prescription completely dictates this family's motions.
     void SetFamilyPrescribedAngVel(unsigned int ID,
@@ -297,6 +300,16 @@ class DEMSolver {
                                    const std::string& velY,
                                    const std::string& velZ,
                                    bool dictate = true);
+    /// Let the linear velocities of all entites in this family always keep `as is', and not fluenced by the force
+    /// exerted from other simulation entites.
+    void SetFamilyPrescribedAngVel(unsigned int ID);
+
+    /// Keep the positions of all entites in this family to remain exactly the user-specified values
+    void SetFamilyPrescribedPosition(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
+    /// Let the positions of all entites in this family always keep `as is'
+    void SetFamilyPrescribedPosition(unsigned int ID);
+    /// Keep the orientation quaternions of all entites in this family to remain exactly the user-specified values
+    void SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula);
 
     /// Change all entities with family number ID_from to have a new number ID_to, when the condition defined by the
     /// string is satisfied by the entities in question. This should be called before initialization, and will be baked
@@ -306,11 +319,6 @@ class DEMSolver {
     /// Change all entities with family number ID_from to have a new number ID_to, immediately. This is callable when kT
     /// and dT are hanging, not when they are actively working, or the behavior is not defined.
     void ChangeFamily(unsigned int ID_from, unsigned int ID_to);
-
-    ///
-    void SetFamilyPrescribedPosition(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
-    ///
-    void SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula);
 
     /// Change the sizes of the clumps by a factor. This method directly works on the clump components spheres,
     /// therefore requiring sphere components to be store in flattened array (default behavior), not jitified templates.

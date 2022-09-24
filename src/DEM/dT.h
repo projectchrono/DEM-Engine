@@ -219,6 +219,10 @@ class DEMDynamicThread {
     // freshly obtained from kT.
     bool contactPairArr_isFresh = true;
 
+    // If true, something critical (such as new clumps loaded, ts size changed...) just happened, and dT will need a kT
+    // update to proceed.
+    bool pendingCriticalUpdate = true;
+
     // Template-related arrays in managed memory
     // Belonged-body ID
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerClumpBody;
@@ -333,6 +337,10 @@ class DEMDynamicThread {
     /// positions in `triangles'. If `overwrite' is true, then it is overwriting the existing nodal info; otherwise it
     /// just adds to it.
     void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite = true);
+
+    /// Let dT know that it needs a kT update, as something important may have changed, and old contact pair info is no
+    /// longer valid.
+    void announceCritical() { pendingCriticalUpdate = true; }
 
     /// Change all entities with (user-level) family number ID_from to have a new number ID_to
     void changeFamily(unsigned int ID_from, unsigned int ID_to);

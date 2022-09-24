@@ -1499,11 +1499,13 @@ void DEMDynamicThread::workerThread() {
             }
         }
 
-        // There is only one situation where dT needs to wait for kT to provide one initial CD result...
-        // This is the `new-boot' case, where stampLastUpdateOfDynamic == -1; in any other situations, dT does not have
-        // `drift-into-future-too-much' problem here, b/c if it has the problem then it would have been addressed at the
-        // end of last DoDynamics call, the final `ShouldWait' check.
-        if (pSchedSupport->stampLastUpdateOfDynamic < 0 || nTotalSteps == 0) {
+        // There is only 2 situations where dT needs to wait for kT to provide one initial CD result...
+        // Those are the `new-boot after previous sync' case, or the user significantly changed the simulation
+        // environment; in any other situations, dT does not have `drift-into-future-too-much' problem here, b/c if it
+        // has the problem then it would have been addressed at the end of last DoDynamics call, the final `ShouldWait'
+        // check. Note: pendingCriticalUpdate is not fail-safe at all right now. The user still needs to sync before
+        // making critical changes to the system to ensure safety.
+        if (pSchedSupport->stampLastUpdateOfDynamic < 0 || pendingCriticalUpdate) {
             // In this `new-boot' case, we send kT a work order, b/c dT needs results from CD to proceed. After this one
             // instance, kT and dT may work in an async fashion.
             {
@@ -1585,6 +1587,9 @@ void DEMDynamicThread::workerThread() {
             //// TODO: make changes for variable time step size cases
             simParams->timeElapsed += (double)simParams->h;
         }
+
+        // Unless the user did something critical, must we wait for a kT update before next step
+        pendingCriticalUpdate = false;
 
         // When getting here, dT has finished one user call (although perhaps not at the end of the user script)
         pPagerToMain->userCallDone = true;

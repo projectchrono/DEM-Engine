@@ -222,6 +222,21 @@ void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
     m_input_family_prescription.push_back(preInfo);
 }
 
+void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID) {
+    if (ID > std::numeric_limits<family_t>::max()) {
+        DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
+                   std::numeric_limits<family_t>::max());
+    }
+    familyPrescription_t preInfo;
+    preInfo.family = ID;
+
+    preInfo.linVelPrescribed = true;
+    preInfo.rotVelPrescribed = true;
+    preInfo.used = true;
+
+    m_input_family_prescription.push_back(preInfo);
+}
+
 void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID,
                                           const std::string& velX,
                                           const std::string& velY,
@@ -244,6 +259,21 @@ void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID,
     m_input_family_prescription.push_back(preInfo);
 }
 
+void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID) {
+    if (ID > std::numeric_limits<family_t>::max()) {
+        DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
+                   std::numeric_limits<family_t>::max());
+    }
+    familyPrescription_t preInfo;
+    preInfo.family = ID;
+
+    preInfo.linVelPrescribed = true;
+    preInfo.rotVelPrescribed = true;
+    preInfo.used = true;
+
+    m_input_family_prescription.push_back(preInfo);
+}
+
 void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
                                             const std::string& X,
                                             const std::string& Y,
@@ -258,6 +288,21 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
     preInfo.linPosY = Y;
     preInfo.linPosZ = Z;
     // Both rot and lin pos are fixed. Use other methods if this is not intended.
+    preInfo.rotPosPrescribed = true;
+    preInfo.linPosPrescribed = true;
+    preInfo.used = true;
+
+    m_input_family_prescription.push_back(preInfo);
+}
+
+void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID) {
+    if (ID > std::numeric_limits<family_t>::max()) {
+        DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
+                   std::numeric_limits<family_t>::max());
+    }
+    familyPrescription_t preInfo;
+    preInfo.family = ID;
+    // Both rot and lin pos are fixed.
     preInfo.rotPosPrescribed = true;
     preInfo.linPosPrescribed = true;
     preInfo.used = true;
@@ -695,6 +740,9 @@ void DEMSolver::Initialize() {
     //// TODO: Give a warning if sys_initialized is true and the system is re-initialized: in that case, the user should
     /// know what they are doing
     sys_initialized = true;
+
+    // Initialization is critical
+    dT->announceCritical();
 }
 
 void DEMSolver::ShowTimingStats() {
@@ -792,6 +840,9 @@ void DEMSolver::UpdateSimParams() {
     transferSolverParams();
     transferSimParams();
     //// TODO: inspect what sim params should be transferred and what should not
+
+    // Updating sim environment is critical
+    dT->announceCritical();
 }
 
 void DEMSolver::UpdateClumps() {
@@ -835,6 +886,8 @@ void DEMSolver::UpdateClumps() {
     updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old);
     packDataPointers();
     ReleaseFlattenedArrays();
+    // Updating clumps is very critical
+    dT->announceCritical();
 
     // This method should not introduce new material or clump template or family prescription, let's check that
     if (nLastTimeMatNum != m_loaded_materials.size() || nLastTimeFamilyPreNum != m_input_family_prescription.size()) {
@@ -865,6 +918,9 @@ void DEMSolver::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::ve
     std::thread kThread = std::move(std::thread([this, IDs, factors]() { this->kT->changeOwnerSizes(IDs, factors); }));
     dThread.join();
     kThread.join();
+
+    // Size changes are critical
+    dT->announceCritical();
 }
 
 /// Removes all entities associated with a family from the arrays (to save memory space). This method should only be
