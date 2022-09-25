@@ -47,10 +47,11 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
             ownerIDs[i] = granData->ownerClumpBody[sphereID];
             ownerFamily[i] = granData->familyID[ownerIDs[i]];
             double ownerX, ownerY, ownerZ;
-            float myRelPosX, myRelPosY, myRelPosZ, myRadius;
+            float myRadius;
+            float3 myRelPos;
 
             // Get my component offset info from either jitified arrays or global memory
-            // Outputs myRelPosXYZ, myRadius (in CD kernels, radius needs to be expanded)
+            // Outputs myRelPos, myRadius (in CD kernels, radius needs to be expanded)
             // Use an input named exactly `sphereID' which is the id of this sphere component
             {
                 _componentAcqStrat_;
@@ -64,11 +65,11 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
             float myOriQx = granData->oriQx[ownerIDs[i]];
             float myOriQy = granData->oriQy[ownerIDs[i]];
             float myOriQz = granData->oriQz[ownerIDs[i]];
-            applyOriQToVector3<float, deme::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQw, myOriQx, myOriQy,
+            applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, myOriQw, myOriQx, myOriQy,
                                                     myOriQz);
-            bodyX[i] = ownerX + (double)myRelPosX;
-            bodyY[i] = ownerY + (double)myRelPosY;
-            bodyZ[i] = ownerZ + (double)myRelPosZ;
+            bodyX[i] = ownerX + (double)myRelPos.x;
+            bodyY[i] = ownerY + (double)myRelPos.y;
+            bodyZ[i] = ownerZ + (double)myRelPos.z;
             radii[i] = myRadius;
         }
 
@@ -157,10 +158,11 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
             ownerFamily[i] = granData->familyID[ownerIDs[i]];
             bodyIDs[i] = sphereID;
             double ownerX, ownerY, ownerZ;
-            float myRelPosX, myRelPosY, myRelPosZ, myRadius;
+            float myRadius;
+            float3 myRelPos;
 
             // Get my component offset info from either jitified arrays or global memory
-            // Outputs myRelPosXYZ, myRadius (in CD kernels, radius needs to be expanded)
+            // Outputs myRelPos, myRadius (in CD kernels, radius needs to be expanded)
             // Use an input named exactly `sphereID' which is the id of this sphere component
             {
                 _componentAcqStrat_;
@@ -174,11 +176,11 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
             float myOriQx = granData->oriQx[ownerIDs[i]];
             float myOriQy = granData->oriQy[ownerIDs[i]];
             float myOriQz = granData->oriQz[ownerIDs[i]];
-            applyOriQToVector3<float, deme::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQw, myOriQx, myOriQy,
+            applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, myOriQw, myOriQx, myOriQy,
                                                     myOriQz);
-            bodyX[i] = ownerX + (double)myRelPosX;
-            bodyY[i] = ownerY + (double)myRelPosY;
-            bodyZ[i] = ownerZ + (double)myRelPosZ;
+            bodyX[i] = ownerX + (double)myRelPos.x;
+            bodyY[i] = ownerY + (double)myRelPos.y;
+            bodyZ[i] = ownerZ + (double)myRelPos.z;
             radii[i] = myRadius;
         }
 

@@ -53,10 +53,11 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
         ownerIDs[myThreadID] = ownerID;
         ownerFamilies[myThreadID] = granData->familyID[ownerID];
         double ownerX, ownerY, ownerZ;
-        float myRelPosX, myRelPosY, myRelPosZ, myRadius;
+        float myRadius;
+        float3 myRelPos;
 
         // Get my component offset info from either jitified arrays or global memory
-        // Outputs myRelPosXYZ, myRadius (in CD kernels, radius needs to be expanded)
+        // Outputs myRelPos, myRadius (in CD kernels, radius needs to be expanded)
         // Use an input named exactly `sphereID' which is the id of this sphere component
         {
             _componentAcqStrat_;
@@ -70,10 +71,10 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
         float myOriQx = granData->oriQx[ownerID];
         float myOriQy = granData->oriQy[ownerID];
         float myOriQz = granData->oriQz[ownerID];
-        applyOriQToVector3<float, deme::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQw, myOriQx, myOriQy, myOriQz);
-        bodyX[myThreadID] = ownerX + (double)myRelPosX;
-        bodyY[myThreadID] = ownerY + (double)myRelPosY;
-        bodyZ[myThreadID] = ownerZ + (double)myRelPosZ;
+        applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, myOriQw, myOriQx, myOriQy, myOriQz);
+        bodyX[myThreadID] = ownerX + (double)myRelPos.x;
+        bodyY[myThreadID] = ownerY + (double)myRelPos.y;
+        bodyZ[myThreadID] = ownerZ + (double)myRelPos.z;
         radii[myThreadID] = myRadius;
     }
     __syncthreads();
@@ -185,10 +186,11 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
         ownerIDs[myThreadID] = ownerID;
         ownerFamilies[myThreadID] = granData->familyID[ownerID];
         double ownerX, ownerY, ownerZ;
-        float myRelPosX, myRelPosY, myRelPosZ, myRadius;
+        float myRadius;
+        float3 myRelPos;
 
         // Get my component offset info from either jitified arrays or global memory
-        // Outputs myRelPosXYZ, myRadius (in CD kernels, radius needs to be expanded)
+        // Outputs myRelPos, myRadius (in CD kernels, radius needs to be expanded)
         // Use an input named exactly `sphereID' which is the id of this sphere component
         {
             _componentAcqStrat_;
@@ -202,10 +204,10 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
         float myOriQx = granData->oriQx[ownerID];
         float myOriQy = granData->oriQy[ownerID];
         float myOriQz = granData->oriQz[ownerID];
-        applyOriQToVector3<float, deme::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQw, myOriQx, myOriQy, myOriQz);
-        bodyX[myThreadID] = ownerX + (double)myRelPosX;
-        bodyY[myThreadID] = ownerY + (double)myRelPosY;
-        bodyZ[myThreadID] = ownerZ + (double)myRelPosZ;
+        applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, myOriQw, myOriQx, myOriQy, myOriQz);
+        bodyX[myThreadID] = ownerX + (double)myRelPos.x;
+        bodyY[myThreadID] = ownerY + (double)myRelPos.y;
+        bodyZ[myThreadID] = ownerZ + (double)myRelPos.z;
         radii[myThreadID] = myRadius;
     }
     __syncthreads();

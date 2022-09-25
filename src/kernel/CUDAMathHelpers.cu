@@ -50,12 +50,21 @@
 inline __device__ float3 cross(float3 a, float3 b) {
     return make_float3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
 }
+inline __device__ double3 cross(double3 a, double3 b) {
+    return make_double3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+}
 
 inline __device__ float dot(float3 a, float3 b) {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
+inline __device__ double dot(double3 a, double3 b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
 
 inline __device__ float length(float3 v) {
+    return sqrt(dot(v, v));
+}
+inline __device__ double length(double3 v) {
     return sqrt(dot(v, v));
 }
 
@@ -75,12 +84,11 @@ inline __device__ float3 operator-(float3 a, float3 b) {
     return make_float3(a.x - b.x, a.y - b.y, a.z - b.z);
 }
 
-//// TODO: Why convert double3 to float3 automatically?
-inline __device__ float3 operator+(double3 a, double3 b) {
-    return make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
+inline __device__ double3 operator+(double3 a, double3 b) {
+    return make_double3(a.x + b.x, a.y + b.y, a.z + b.z);
 }
-inline __device__ float3 operator-(double3 a, double3 b) {
-    return make_float3(a.x - b.x, a.y - b.y, a.z - b.z);
+inline __device__ double3 operator-(double3 a, double3 b) {
+    return make_double3(a.x - b.x, a.y - b.y, a.z - b.z);
 }
 
 inline __device__ float3 operator+(double3 a, float3 b) {
@@ -132,6 +140,48 @@ inline __device__ void operator-=(double3& a, double b) {
     a.z -= b;
 }
 
+inline __device__ void operator+=(float3& a, double3 b) {
+    a.x += b.x;
+    a.y += b.y;
+    a.z += b.z;
+}
+inline __device__ void operator-=(float3& a, double3 b) {
+    a.x -= b.x;
+    a.y -= b.y;
+    a.z -= b.z;
+}
+inline __device__ void operator+=(float3& a, double b) {
+    a.x += b;
+    a.y += b;
+    a.z += b;
+}
+inline __device__ void operator-=(float3& a, double b) {
+    a.x -= b;
+    a.y -= b;
+    a.z -= b;
+}
+
+inline __device__ void operator+=(double3& a, float3 b) {
+    a.x += b.x;
+    a.y += b.y;
+    a.z += b.z;
+}
+inline __device__ void operator-=(double3& a, float3 b) {
+    a.x -= b.x;
+    a.y -= b.y;
+    a.z -= b.z;
+}
+inline __device__ void operator+=(double3& a, float b) {
+    a.x += b;
+    a.y += b;
+    a.z += b;
+}
+inline __device__ void operator-=(double3& a, float b) {
+    a.x -= b;
+    a.y -= b;
+    a.z -= b;
+}
+
 // Multiplication
 
 inline __device__ float3 operator*(float3 a, float3 b) {
@@ -154,6 +204,26 @@ inline __device__ void operator*=(float3& a, float b) {
     a.z *= b;
 }
 
+inline __device__ double3 operator*(double3 a, double3 b) {
+    return make_double3(a.x * b.x, a.y * b.y, a.z * b.z);
+}
+inline __device__ void operator*=(double3& a, double3 b) {
+    a.x *= b.x;
+    a.y *= b.y;
+    a.z *= b.z;
+}
+inline __device__ double3 operator*(double3 a, double b) {
+    return make_double3(a.x * b, a.y * b, a.z * b);
+}
+inline __device__ double3 operator*(double b, double3 a) {
+    return make_double3(b * a.x, b * a.y, b * a.z);
+}
+inline __device__ void operator*=(double3& a, double b) {
+    a.x *= b;
+    a.y *= b;
+    a.z *= b;
+}
+
 // Division
 
 inline __device__ float3 operator/(float3 a, float3 b) {
@@ -165,6 +235,9 @@ inline __device__ void operator/=(float3& a, float3 b) {
     a.z /= b.z;
 }
 inline __device__ float3 operator/(float3 a, float b) {
+    return make_float3(a.x / b, a.y / b, a.z / b);
+}
+inline __device__ float3 operator/(float3 a, double b) {
     return make_float3(a.x / b, a.y / b, a.z / b);
 }
 inline __device__ void operator/=(float3& a, float b) {
@@ -184,6 +257,9 @@ inline __device__ void operator/=(double3& a, double3 b) {
 inline __device__ double3 operator/(double3 a, double b) {
     return make_double3(a.x / b, a.y / b, a.z / b);
 }
+inline __device__ double3 operator/(double3 a, float b) {
+    return make_double3(a.x / b, a.y / b, a.z / b);
+}
 inline __device__ void operator/=(double3& a, double b) {
     a.x /= b;
     a.y /= b;
@@ -193,6 +269,30 @@ inline __device__ void operator/=(double3& a, double b) {
 inline __device__ float3 normalize(float3 v) {
     float invLen = rsqrtf(dot(v, v));
     return v * invLen;
+}
+inline __device__ double3 normalize(double3 v) {
+    double invLen = rsqrtf(dot(v, v));
+    return v * invLen;
+}
+
+// Assignment
+
+template <typename T1>
+inline __device__ float3 to_float3(const T1& a) {
+    float3 b;
+    b.x = a.x;
+    b.y = a.y;
+    b.z = a.z;
+    return b;
+}
+
+template <typename T1>
+inline __device__ double3 to_double3(const T1& a) {
+    double3 b;
+    b.x = a.x;
+    b.y = a.y;
+    b.z = a.z;
+    return b;
 }
 
 // Cause an error inside a kernel

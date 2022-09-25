@@ -27,7 +27,7 @@ __global__ void makeTriangleSandwich(deme::DEMSimParams* simParams,
         const float3 p3 = granData->relPosNode3[triID];
 
         // Get the controid of this triangle
-        const float3 centroid = triangleCentroid(p1, p2, p3);
+        const float3 centroid = triangleCentroid<float3>(p1, p2, p3);
         // Generate normal using RHR from nodes 1, 2, and 3
         float3 triNormal = face_normal<float3>(p1, p2, p3);
 

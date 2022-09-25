@@ -1,4 +1,4 @@
-myRelPosX = granData->relPosSphereX[sphereID];
-myRelPosY = granData->relPosSphereY[sphereID];
-myRelPosZ = granData->relPosSphereZ[sphereID];
+myRelPos.x = granData->relPosSphereX[sphereID];
+myRelPos.y = granData->relPosSphereY[sphereID];
+myRelPos.z = granData->relPosSphereZ[sphereID];
 myRadius = granData->radiiSphere[sphereID];

@@ -21,6 +21,7 @@ int main() {
     DEMSim.SetVerbosity(DEBUG);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
+    DEMSim.EnsureKernelErrMsgLineNum();
 
     // E, nu, CoR, mu, Crr...
     auto mat_type_ball = DEMSim.LoadMaterial({{"E", 1e10}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.0}, {"Crr", 0.0}});

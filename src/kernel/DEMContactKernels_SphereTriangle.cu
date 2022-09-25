@@ -119,9 +119,9 @@ __global__ void getNumberOfSphTriContactsEachBin(deme::DEMSimParams* simParams,
         float myRadius;
         float3 sphXYZ;
         {
-            float myRelPosX, myRelPosY, myRelPosZ;
+            float3 myRelPos;
             // Get my component offset info from either jitified arrays or global memory
-            // Outputs myRelPosXYZ, myRadius (in CD kernels, radius needs to be expanded)
+            // Outputs myRelPos, myRadius (in CD kernels, radius needs to be expanded)
             // Use an input named exactly `sphereID' which is the id of this sphere component
             {
                 _componentAcqStrat_;
@@ -136,11 +136,11 @@ __global__ void getNumberOfSphTriContactsEachBin(deme::DEMSimParams* simParams,
             float myOriQx = granData->oriQx[ownerID];
             float myOriQy = granData->oriQy[ownerID];
             float myOriQz = granData->oriQz[ownerID];
-            applyOriQToVector3<float, deme::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQw, myOriQx, myOriQy,
+            applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, myOriQw, myOriQx, myOriQy,
                                                     myOriQz);
-            sphXYZ.x = ownerX + (double)myRelPosX;
-            sphXYZ.y = ownerY + (double)myRelPosY;
-            sphXYZ.z = ownerZ + (double)myRelPosZ;
+            sphXYZ.x = ownerX + (double)myRelPos.x;
+            sphXYZ.y = ownerY + (double)myRelPos.y;
+            sphXYZ.z = ownerZ + (double)myRelPos.z;
         }
 
         // We can stop if this thread reaches the end of all potential pairs, nPairsNeedHandling
@@ -302,9 +302,9 @@ __global__ void populateTriSphContactsEachBin(deme::DEMSimParams* simParams,
         float myRadius;
         float3 sphXYZ;
         {
-            float myRelPosX, myRelPosY, myRelPosZ;
+            float3 myRelPos;
             // Get my component offset info from either jitified arrays or global memory
-            // Outputs myRelPosXYZ, myRadius (in CD kernels, radius needs to be expanded)
+            // Outputs myRelPos, myRadius (in CD kernels, radius needs to be expanded)
             // Use an input named exactly `sphereID' which is the id of this sphere component
             {
                 _componentAcqStrat_;
@@ -319,11 +319,11 @@ __global__ void populateTriSphContactsEachBin(deme::DEMSimParams* simParams,
             float myOriQx = granData->oriQx[ownerID];
             float myOriQy = granData->oriQy[ownerID];
             float myOriQz = granData->oriQz[ownerID];
-            applyOriQToVector3<float, deme::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQw, myOriQx, myOriQy,
+            applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, myOriQw, myOriQx, myOriQy,
                                                     myOriQz);
-            sphXYZ.x = ownerX + (double)myRelPosX;
-            sphXYZ.y = ownerY + (double)myRelPosY;
-            sphXYZ.z = ownerZ + (double)myRelPosZ;
+            sphXYZ.x = ownerX + (double)myRelPos.x;
+            sphXYZ.y = ownerY + (double)myRelPos.y;
+            sphXYZ.z = ownerZ + (double)myRelPos.z;
         }
 
         // We can stop if this thread reaches the end of all potential pairs, nPairsNeedHandling

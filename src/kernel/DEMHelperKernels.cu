@@ -180,7 +180,8 @@ inline __device__ void normalizeVector3(T1& x, T1& y, T1& z) {
 }
 
 // Calculate the centroid of a triangle
-inline __device__ float3 triangleCentroid(const float3& p1, const float3& p2, const float3& p3) {
+template <typename T1>
+inline __device__ T1 triangleCentroid(const T1& p1, const T1& p2, const T1& p3) {
     return (p1 + p2 + p3) / 3.;
 }
 

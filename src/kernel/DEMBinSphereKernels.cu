@@ -25,11 +25,11 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
             // My sphere voxel ID and my relPos
             deme::bodyID_t myOwnerID = granData->ownerClumpBody[sphereID];
             sphFamilyNum = granData->familyID[myOwnerID];
-            float myRelPosX, myRelPosY, myRelPosZ;
+            float3 myRelPos;
             double ownerX, ownerY, ownerZ;
 
             // Get my component offset info from either jitified arrays or global memory
-            // Outputs myRelPosXYZ, myRadius (in CD kernels, radius needs to be expanded)
+            // Outputs myRelPos, myRadius (in CD kernels, radius needs to be expanded)
             // Use an input named exactly `sphereID' which is the id of this sphere component
             {
                 _componentAcqStrat_;
@@ -43,12 +43,12 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
             const float myOriQx = granData->oriQx[myOwnerID];
             const float myOriQy = granData->oriQy[myOwnerID];
             const float myOriQz = granData->oriQz[myOwnerID];
-            applyOriQToVector3<float, deme::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQw, myOriQx, myOriQy,
+            applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, myOriQw, myOriQx, myOriQy,
                                                     myOriQz);
             // The bin number that I live in (with fractions)?
-            myPosX = ownerX + (double)myRelPosX;
-            myPosY = ownerY + (double)myRelPosY;
-            myPosZ = ownerZ + (double)myRelPosZ;
+            myPosX = ownerX + (double)myRelPos.x;
+            myPosY = ownerY + (double)myRelPos.y;
+            myPosZ = ownerZ + (double)myRelPos.z;
             double myBinX = myPosX / simParams->binSize;
             double myBinY = myPosY / simParams->binSize;
             double myBinZ = myPosZ / simParams->binSize;
@@ -133,11 +133,11 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
             // My sphere voxel ID and my relPos
             deme::bodyID_t myOwnerID = granData->ownerClumpBody[sphereID];
             sphFamilyNum = granData->familyID[myOwnerID];
-            float myRelPosX, myRelPosY, myRelPosZ;
+            float3 myRelPos;
             double ownerX, ownerY, ownerZ;
 
             // Get my component offset info from either jitified arrays or global memory
-            // Outputs myRelPosXYZ, myRadius (in CD kernels, radius needs to be expanded)
+            // Outputs myRelPos, myRadius (in CD kernels, radius needs to be expanded)
             // Use an input named exactly `sphereID' which is the id of this sphere component
             {
                 _componentAcqStrat_;
@@ -154,12 +154,12 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
             const float myOriQx = granData->oriQx[myOwnerID];
             const float myOriQy = granData->oriQy[myOwnerID];
             const float myOriQz = granData->oriQz[myOwnerID];
-            applyOriQToVector3<float, deme::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, myOriQw, myOriQx, myOriQy,
+            applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, myOriQw, myOriQx, myOriQy,
                                                     myOriQz);
             // The bin number that I live in (with fractions)?
-            myPosX = ownerX + (double)myRelPosX;
-            myPosY = ownerY + (double)myRelPosY;
-            myPosZ = ownerZ + (double)myRelPosZ;
+            myPosX = ownerX + (double)myRelPos.x;
+            myPosY = ownerY + (double)myRelPos.y;
+            myPosZ = ownerZ + (double)myRelPos.z;
             double myBinX = myPosX / simParams->binSize;
             double myBinY = myPosY / simParams->binSize;
             double myBinZ = myPosZ / simParams->binSize;

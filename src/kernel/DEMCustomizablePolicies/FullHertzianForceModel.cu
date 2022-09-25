@@ -25,8 +25,8 @@ float3 rotVelCPA, rotVelCPB;
     rotVelCPA = cross(ARotVel, locCPA);
     rotVelCPB = cross(BRotVel, locCPB);
     // This is mapping from local rotational velocity to global
-    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AoriQw, AoriQx, AoriQy, AoriQz);
-    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BoriQw, BoriQx, BoriQy, BoriQz);
+    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x, AOriQ.y, AOriQ.z);
+    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
 }
 
 // A few re-usables

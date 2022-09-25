@@ -15,12 +15,12 @@ __global__ void inspectSphereProperty(deme::DEMDataDT* granData,
     if (sphereID < nSpheres) {
         // Get my owner ID
         deme::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
-        float myRelPosX, myRelPosY, myRelPosZ;
+        float3 myRelPos;
         float myRadius;
         float oriQw, oriQx, oriQy, oriQz;
         double ownerX, ownerY, ownerZ;
         // Get my component offset info from either jitified arrays or global memory
-        // Outputs myRelPosXYZ, myRadius
+        // Outputs myRelPos, myRadius
         // Use an input named exactly `sphereID' which is the id of this sphere component
         { _componentAcqStrat_; }
 
@@ -31,13 +31,13 @@ __global__ void inspectSphereProperty(deme::DEMDataDT* granData,
         oriQx = granData->oriQx[myOwner];
         oriQy = granData->oriQy[myOwner];
         oriQz = granData->oriQz[myOwner];
-        applyOriQToVector3<float, deme::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, oriQw, oriQx, oriQy, oriQz);
+        applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, oriQw, oriQx, oriQy, oriQz);
 
         // Use sphereXYZ to determine if this sphere is in the region that should be counted
         // And don't forget adding LBF as an offset
-        float X = ownerX + myRelPosX + simParams->LBFX;
-        float Y = ownerY + myRelPosY + simParams->LBFY;
-        float Z = ownerZ + myRelPosZ + simParams->LBFZ;
+        float X = ownerX + myRelPos.x + simParams->LBFX;
+        float Y = ownerY + myRelPos.y + simParams->LBFY;
+        float Z = ownerZ + myRelPos.z + simParams->LBFZ;
         { _inRegionPolicy_; }
 
         // Now it's a problem of what quantity to query

@@ -1,6 +1,7 @@
 // DEM force computation related custom kernels
 #include <DEM/Defines.h>
 #include <kernel/DEMHelperKernels.cu>
+#include <kernel/DEMCollisionKernels.cu>
 
 // If clump templates are jitified, they will be below
 _clumpTemplateDefs_;
@@ -10,6 +11,26 @@ _analyticalEntityDefs_;
 _materialDefs_;
 // If mass properties are jitified, then they are below
 _massDefs_;
+
+template <typename T1>
+inline __device__ void equipOwnerPosRot(deme::DEMDataDT* granData,
+                                        const deme::bodyID_t& myOwner,
+                                        T1& relPos,
+                                        double3& ownerPos,
+                                        double3& bodyPos,
+                                        float4& oriQ) {
+    voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
+        ownerPos.x, ownerPos.y, ownerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
+        granData->locY[myOwner], granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
+    oriQ.w = granData->oriQw[myOwner];
+    oriQ.x = granData->oriQx[myOwner];
+    oriQ.y = granData->oriQy[myOwner];
+    oriQ.z = granData->oriQz[myOwner];
+    applyOriQToVector3(relPos.x, relPos.y, relPos.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+    bodyPos.x = ownerPos.x + (double)relPos.x;
+    bodyPos.y = ownerPos.y + (double)relPos.y;
+    bodyPos.z = ownerPos.z + (double)relPos.z;
+}
 
 __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMDataDT* granData, size_t nContactPairs) {
     deme::contactPairs_t myContactID = blockIdx.x * blockDim.x + threadIdx.x;
@@ -22,8 +43,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
         double overlapDepth;
         double3 AOwnerPos, bodyAPos, BOwnerPos, bodyBPos;
         float AOwnerMass, ARadius, BOwnerMass, BRadius;
-        deme::oriQ_t AoriQw, AoriQx, AoriQy, AoriQz;
-        deme::oriQ_t BoriQw, BoriQx, BoriQy, BoriQz;
+        float4 AOriQ, BOriQ;
         deme::materialsOffset_t bodyAMatType, bodyBMatType;
         // Then allocate the optional quantities that will be needed in the force model (note: this one can't be in a
         // curly bracket, obviously...)
@@ -34,9 +54,10 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             deme::bodyID_t sphereID = granData->idGeometryA[myContactID];
             deme::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
 
-            float myRelPosX, myRelPosY, myRelPosZ, myRadius;
+            float3 myRelPos;
+            float myRadius;
             // Get my component offset info from either jitified arrays or global memory
-            // Outputs myRelPosXYZ, myRadius
+            // Outputs myRelPos, myRadius
             // Use an input named exactly `sphereID' which is the id of this sphere component
             { _componentAcqStrat_; }
 
@@ -49,18 +70,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                 AOwnerMass = myMass;
             }
 
-            voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
-                AOwnerPos.x, AOwnerPos.y, AOwnerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
-                granData->locY[myOwner], granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-
-            AoriQw = granData->oriQw[myOwner];
-            AoriQx = granData->oriQx[myOwner];
-            AoriQy = granData->oriQy[myOwner];
-            AoriQz = granData->oriQz[myOwner];
-            applyOriQToVector3<float, deme::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, AoriQw, AoriQx, AoriQy, AoriQz);
-            bodyAPos.x = AOwnerPos.x + (double)myRelPosX;
-            bodyAPos.y = AOwnerPos.y + (double)myRelPosY;
-            bodyAPos.z = AOwnerPos.z + (double)myRelPosZ;
+            equipOwnerPosRot(granData, myOwner, myRelPos, AOwnerPos, bodyAPos, AOriQ);
 
             ARadius = myRadius;
             bodyAMatType = granData->sphereMaterialOffset[sphereID];
@@ -74,9 +84,10 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             deme::bodyID_t sphereID = granData->idGeometryB[myContactID];
             deme::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
 
-            float myRelPosX, myRelPosY, myRelPosZ, myRadius;
+            float3 myRelPos;
+            float myRadius;
             // Get my component offset info from either jitified arrays or global memory
-            // Outputs myRelPosXYZ, myRadius
+            // Outputs myRelPos, myRadius
             // Use an input named exactly `sphereID' which is the id of this sphere component
             { _componentAcqStrat_; }
 
@@ -89,17 +100,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                 BOwnerMass = myMass;
             }
 
-            voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
-                BOwnerPos.x, BOwnerPos.y, BOwnerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
-                granData->locY[myOwner], granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            BoriQw = granData->oriQw[myOwner];
-            BoriQx = granData->oriQx[myOwner];
-            BoriQy = granData->oriQy[myOwner];
-            BoriQz = granData->oriQz[myOwner];
-            applyOriQToVector3<float, deme::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, BoriQw, BoriQx, BoriQy, BoriQz);
-            bodyBPos.x = BOwnerPos.x + (double)myRelPosX;
-            bodyBPos.y = BOwnerPos.y + (double)myRelPosY;
-            bodyBPos.z = BOwnerPos.z + (double)myRelPosZ;
+            equipOwnerPosRot(granData, myOwner, myRelPos, BOwnerPos, bodyBPos, BOriQ);
 
             BRadius = myRadius;
             bodyBMatType = granData->sphereMaterialOffset[sphereID];
@@ -110,6 +111,45 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                 bodyAPos.x, bodyAPos.y, bodyAPos.z, ARadius, bodyBPos.x, bodyBPos.y, bodyBPos.z, BRadius, contactPnt.x,
                 contactPnt.y, contactPnt.z, B2A.x, B2A.y, B2A.z, overlapDepth);
         } else if (myContactType == deme::SPHERE_MESH_CONTACT) {
+            deme::bodyID_t triB = granData->idGeometryB[myContactID];
+            deme::bodyID_t myOwner = granData->ownerMesh[triB];
+            //// TODO: Is this OK?
+            BRadius = DEME_HUGE_FLOAT;
+            bodyBMatType = granData->sphereMaterialOffset[triB];
+
+            double3 triNode1 = to_double3(granData->relPosNode1[triB]);
+            double3 triNode2 = to_double3(granData->relPosNode2[triB]);
+            double3 triNode3 = to_double3(granData->relPosNode3[triB]);
+
+            // Get my mass info from either jitified arrays or global memory
+            // Outputs myMass
+            // Use an input named exactly `myOwner' which is the id of this owner
+            {
+                float myMass;
+                _massAcqStrat_;
+                BOwnerMass = myMass;
+            }
+
+            // bodyBPos is for now a place holder
+            equipOwnerPosRot(granData, myOwner, triNode1, BOwnerPos, bodyBPos, BOriQ);
+            // Do this to node 2 and 3 as well
+            applyOriQToVector3(triNode2.x, triNode2.y, triNode2.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
+            triNode2 += BOwnerPos;
+            applyOriQToVector3(triNode3.x, triNode3.y, triNode3.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
+            triNode3 += BOwnerPos;
+            // Assign the correct bodyBPos
+            bodyBPos = triangleCentroid<double3>(triNode1, triNode2, triNode3);
+
+            _forceModelIngredientAcqForB_;
+
+            double3 contact_normal;
+            bool in_contact = triangle_sphere_CD<double3, double>(triNode1, triNode2, triNode3, bodyAPos, ARadius,
+                                                                  contact_normal, overlapDepth, contactPnt);
+            B2A = to_float3(contact_normal);
+            // If not in contact, correct myContactType
+            if (!in_contact) {
+                myContactType = in_contact;
+            }
         } else {
             // If B is analytical entity, its owner, relative location, material info is jitified
             deme::objID_t bodyB = granData->idGeometryB[myContactID];
@@ -118,29 +158,20 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             BOwnerMass = objMass[bodyB];
             //// TODO: Is this OK?
             BRadius = DEME_HUGE_FLOAT;
-            float myRelPosX, myRelPosY, myRelPosZ;
+            float3 myRelPos;
             float3 bodyBRot;
+            myRelPos.x = objRelPosX[bodyB];
+            myRelPos.y = objRelPosY[bodyB];
+            myRelPos.z = objRelPosZ[bodyB];
 
-            voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
-                BOwnerPos.x, BOwnerPos.y, BOwnerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
-                granData->locY[myOwner], granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
-            myRelPosX = objRelPosX[bodyB];
-            myRelPosY = objRelPosY[bodyB];
-            myRelPosZ = objRelPosZ[bodyB];
-            BoriQw = granData->oriQw[myOwner];
-            BoriQx = granData->oriQx[myOwner];
-            BoriQy = granData->oriQy[myOwner];
-            BoriQz = granData->oriQz[myOwner];
-            applyOriQToVector3<float, deme::oriQ_t>(myRelPosX, myRelPosY, myRelPosZ, BoriQw, BoriQx, BoriQy, BoriQz);
-            bodyBPos.x = BOwnerPos.x + (double)myRelPosX;
-            bodyBPos.y = BOwnerPos.y + (double)myRelPosY;
-            bodyBPos.z = BOwnerPos.z + (double)myRelPosZ;
+            equipOwnerPosRot(granData, myOwner, myRelPos, BOwnerPos, bodyBPos, BOriQ);
 
             // B's orientation (such as plane normal) is rotated with its owner too
             bodyBRot.x = objRotX[bodyB];
             bodyBRot.y = objRotY[bodyB];
             bodyBRot.z = objRotZ[bodyB];
-            applyOriQToVector3<float, deme::oriQ_t>(bodyBRot.x, bodyBRot.y, bodyBRot.z, BoriQw, BoriQx, BoriQy, BoriQz);
+            applyOriQToVector3<float, deme::oriQ_t>(bodyBRot.x, bodyBRot.y, bodyBRot.z, BOriQ.w, BOriQ.x, BOriQ.y,
+                                                    BOriQ.z);
 
             _forceModelIngredientAcqForB_;
 
@@ -154,13 +185,15 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
         float3 force = make_float3(0, 0, 0);
         float3 torque_only_force = make_float3(0, 0, 0);
         _forceModelContactWildcardAcq_;
-        if (myContactType != deme::NOT_A_CONTACT && myContactType != deme::SPHERE_MESH_CONTACT) {
+        if (myContactType != deme::NOT_A_CONTACT) {
             // Local position of the contact point is always a piece of info we require... regardless of force model
-            float3 locCPA = contactPnt - AOwnerPos;
-            float3 locCPB = contactPnt - BOwnerPos;
+            float3 locCPA = to_float3(contactPnt - AOwnerPos);
+            float3 locCPB = to_float3(contactPnt - BOwnerPos);
             // Now map this contact point location to bodies' local ref
-            applyOriQToVector3<float, deme::oriQ_t>(locCPA.x, locCPA.y, locCPA.z, AoriQw, -AoriQx, -AoriQy, -AoriQz);
-            applyOriQToVector3<float, deme::oriQ_t>(locCPB.x, locCPB.y, locCPB.z, BoriQw, -BoriQx, -BoriQy, -BoriQz);
+            applyOriQToVector3<float, deme::oriQ_t>(locCPA.x, locCPA.y, locCPA.z, AOriQ.w, -AOriQ.x, -AOriQ.y,
+                                                    -AOriQ.z);
+            applyOriQToVector3<float, deme::oriQ_t>(locCPB.x, locCPB.y, locCPB.z, BOriQ.w, -BOriQ.x, -BOriQ.y,
+                                                    -BOriQ.z);
             // The following part, the force model, is user-specifiable
             // NOTE!! "force" and "delta_tan" and "delta_time" must be properly set by this piece of code
             { _DEMForceModel_; }

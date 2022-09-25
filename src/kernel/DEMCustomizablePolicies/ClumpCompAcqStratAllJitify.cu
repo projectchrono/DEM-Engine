@@ -1,5 +1,5 @@
 deme::clumpComponentOffset_t myCompOffset = granData->clumpComponentOffset[sphereID];
-myRelPosX = CDRelPosX[myCompOffset];
-myRelPosY = CDRelPosY[myCompOffset];
-myRelPosZ = CDRelPosZ[myCompOffset];
+myRelPos.x = CDRelPosX[myCompOffset];
+myRelPos.y = CDRelPosY[myCompOffset];
+myRelPos.z = CDRelPosZ[myCompOffset];
 myRadius = Radii[myCompOffset];

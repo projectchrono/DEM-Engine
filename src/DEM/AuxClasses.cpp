@@ -23,7 +23,7 @@ const std::string INSP_CODE_SPHERE_LOW_Z = R"V0G0N(
 )V0G0N";
 
 const std::string INSP_CODE_SPHERE_HIGH_ABSV = R"V0G0N(
-    float3 relPos = make_float3(myRelPosX, myRelPosY, myRelPosZ);
+    float3 relPos = myRelPos;
     // Get owner's velocity
     float3 rotVel, linVel;
     linVel.x = granData->vX[myOwner];
