@@ -109,6 +109,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             myContactType = checkSpheresOverlap<double, float>(
                 bodyAPos.x, bodyAPos.y, bodyAPos.z, ARadius, bodyBPos.x, bodyBPos.y, bodyBPos.z, BRadius, contactPnt.x,
                 contactPnt.y, contactPnt.z, B2A.x, B2A.y, B2A.z, overlapDepth);
+        } else if (myContactType == deme::SPHERE_MESH_CONTACT) {
         } else {
             // If B is analytical entity, its owner, relative location, material info is jitified
             deme::objID_t bodyB = granData->idGeometryB[myContactID];
@@ -153,7 +154,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
         float3 force = make_float3(0, 0, 0);
         float3 torque_only_force = make_float3(0, 0, 0);
         _forceModelContactWildcardAcq_;
-        if (myContactType != deme::NOT_A_CONTACT) {
+        if (myContactType != deme::NOT_A_CONTACT && myContactType != deme::SPHERE_MESH_CONTACT) {
             // Local position of the contact point is always a piece of info we require... regardless of force model
             float3 locCPA = contactPnt - AOwnerPos;
             float3 locCPB = contactPnt - BOwnerPos;

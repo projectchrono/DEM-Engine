@@ -389,8 +389,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             }
             // DEME_DEBUG_PRINTF("Num contacts each bin:");
             // DEME_DEBUG_EXEC(displayArray<spheresBinTouches_t>(numSphContactsInEachBin, *pNumActiveBins));
-            // DEME_DEBUG_PRINTF("Contact report offsets:");
-            // DEME_DEBUG_EXEC(displayArray<contactPairs_t>(sphSphContactReportOffsets, *pNumActiveBins));
+            // DEME_DEBUG_PRINTF("Tri contact report offsets:");
+            // DEME_DEBUG_EXEC(displayArray<contactPairs_t>(triSphContactReportOffsets, *pNumActiveBinsForTri));
             // DEME_DEBUG_PRINTF("Family number:");
             // DEME_DEBUG_EXEC(displayArray<family_t>(granData->familyID, simParams->nOwnerBodies));
 
@@ -433,8 +433,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                             idSphA, idTriB, dType, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
                             sandwichBNode2, sandwichBNode3, *pNumActiveBinsForTri);
                 GPU_CALL(cudaStreamSynchronize(this_stream));
-                std::cout << "Contact types: " << std::endl;
-                displayArray<contact_t>(dType, *scratchPad.pNumContacts);
+                // std::cout << "Contact types: " << std::endl;
+                // displayArray<contact_t>(dType, *scratchPad.pNumContacts);
             }
         }  // End of bin-wise contact detection subroutine
         timers.GetTimer("Find contact pairs").stop();

@@ -288,7 +288,7 @@ __global__ void populateTriSphContactsEachBin(deme::DEMSimParams* simParams,
     __syncthreads();
 
     // Get my offset for writing back to the global arrays that contain contact pair info
-    deme::contactPairs_t myReportOffset = triSphContactReportOffsets[blockIdx.x];
+    const deme::contactPairs_t myReportOffset = triSphContactReportOffsets[blockIdx.x];
 
     const deme::spheresBinTouches_t nSphInBin = numSpheresBinTouches[indForAcqSphInfo];
     if (myThreadID < nSphInBin) {
@@ -353,26 +353,25 @@ __global__ void populateTriSphContactsEachBin(deme::DEMSimParams* simParams,
             deme::binID_t contactPntBin = getPointBinID<deme::binID_t>(cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize,
                                                                        simParams->nbX, simParams->nbY);
 
-            // // If already in contact with A, no need to do B
-            // if (in_contact && (contactPntBin == binID)) {
-            //     unsigned int inBlockOffset = atomicAdd_block(&blockPairCnt, 1);
-            //     idSphA[myReportOffset + inBlockOffset] = sphereID;
-            //     idTriB[myReportOffset + inBlockOffset] = triIDs[ind];
-            //     dType[myReportOffset + inBlockOffset] = deme::SPHERE_MESH_CONTACT;
-            //     continue;
-            // }
-            // // And triangle B...
-            // in_contact = triangle_sphere_CD_directional<float3, float>(triBNode1[ind], triBNode2[ind],
-            // triBNode3[ind],
-            //                                                            sphXYZ, myRadius, normal, depth, cntPnt);
-            // contactPntBin = getPointBinID<deme::binID_t>(cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize,
-            //                                              simParams->nbX, simParams->nbY);
-            // if (in_contact && (contactPntBin == binID)) {
-            //     unsigned int inBlockOffset = atomicAdd_block(&blockPairCnt, 1);
-            //     idSphA[myReportOffset + inBlockOffset] = sphereID;
-            //     idTriB[myReportOffset + inBlockOffset] = triIDs[ind];
-            //     dType[myReportOffset + inBlockOffset] = deme::SPHERE_MESH_CONTACT;
-            // }
+            // If already in contact with A, no need to do B
+            if (in_contact && (contactPntBin == binID)) {
+                unsigned int inBlockOffset = atomicAdd_block(&blockPairCnt, 1);
+                idSphA[myReportOffset + inBlockOffset] = sphereID;
+                idTriB[myReportOffset + inBlockOffset] = triIDs[ind];
+                dType[myReportOffset + inBlockOffset] = deme::SPHERE_MESH_CONTACT;
+                continue;
+            }
+            // And triangle B...
+            in_contact = triangle_sphere_CD_directional<float3, float>(triBNode1[ind], triBNode2[ind], triBNode3[ind],
+                                                                       sphXYZ, myRadius, normal, depth, cntPnt);
+            contactPntBin = getPointBinID<deme::binID_t>(cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize,
+                                                         simParams->nbX, simParams->nbY);
+            if (in_contact && (contactPntBin == binID)) {
+                unsigned int inBlockOffset = atomicAdd_block(&blockPairCnt, 1);
+                idSphA[myReportOffset + inBlockOffset] = sphereID;
+                idTriB[myReportOffset + inBlockOffset] = triIDs[ind];
+                dType[myReportOffset + inBlockOffset] = deme::SPHERE_MESH_CONTACT;
+            }
         }
     }
 }
