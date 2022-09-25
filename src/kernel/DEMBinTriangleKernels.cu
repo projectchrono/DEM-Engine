@@ -19,7 +19,7 @@ __global__ void makeTriangleSandwich(deme::DEMSimParams* simParams,
                                      float3* sandwichBNode1,
                                      float3* sandwichBNode2,
                                      float3* sandwichBNode3) {
-    deme::triID_t triID = blockIdx.x * blockDim.x + threadIdx.x;
+    deme::bodyID_t triID = blockIdx.x * blockDim.x + threadIdx.x;
     if (triID < simParams->nTriGM) {
         // Get my component offset info from global array
         const float3 p1 = granData->relPosNode1[triID];
@@ -46,7 +46,7 @@ __global__ void getNumberOfBinsEachTriangleTouches(deme::DEMSimParams* simParams
                                                    float3* node1,
                                                    float3* node2,
                                                    float3* node3) {
-    deme::triID_t triID = blockIdx.x * blockDim.x + threadIdx.x;
+    deme::bodyID_t triID = blockIdx.x * blockDim.x + threadIdx.x;
     if (triID < simParams->nTriGM) {
         // 3 vertices of the triangle
         float3 vA, vB, vC;
@@ -108,7 +108,7 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                                                  deme::DEMDataKT* granData,
                                                  deme::binsTriangleTouchPairs_t* numBinTriTouchesScan,
                                                  deme::binID_t* binIDsEachTriTouches,
-                                                 deme::triID_t* triIDsEachBinTouches,
+                                                 deme::bodyID_t* triIDsEachBinTouches,
                                                  float3* node1,
                                                  float3* node2,
                                                  float3* node3) {

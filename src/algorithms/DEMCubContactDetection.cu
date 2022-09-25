@@ -38,8 +38,8 @@ inline void contactEventArraysResize(size_t nContactPairs,
 
 void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       std::shared_ptr<jitify::Program>& bin_triangle_kernels,
-                      std::shared_ptr<jitify::Program>& contact_detection_kernels,
-                      std::shared_ptr<jitify::Program>& sphere_triangle_kernels,
+                      std::shared_ptr<jitify::Program>& sphere_contact_kernels,
+                      std::shared_ptr<jitify::Program>& sphTri_contact_kernels,
                       std::shared_ptr<jitify::Program>& history_kernels,
                       DEMDataKT* granData,
                       DEMSimParams* simParams,
@@ -183,7 +183,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // start from 6.
         size_t* pNumActiveBinsForTri = scratchPad.pTempSizeVar1;  // TempVar1 is now free (Temp2 is not tho)
         binID_t *mapTriActBinToSphActBin, *activeBinIDsForTri;
-        triID_t* triIDsEachBinTouches_sorted;
+        bodyID_t* triIDsEachBinTouches_sorted;
         trianglesBinTouches_t* numTrianglesBinTouches;
         binsTriangleTouchPairs_t* triIDsLookUpTable;
         float3 *sandwichANode1, *sandwichANode2, *sandwichANode3, *sandwichBNode1, *sandwichBNode2, *sandwichBNode3;
@@ -242,8 +242,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // retire now so we allocate on temp vector 8.
             CD_temp_arr_bytes = numBinTriTouchPairsFull * sizeof(binID_t);
             binID_t* binIDsEachTriTouches = (binID_t*)scratchPad.allocateTempVector(8, CD_temp_arr_bytes);
-            CD_temp_arr_bytes = numBinTriTouchPairsFull * sizeof(triID_t);
-            triID_t* triIDsEachBinTouches = (triID_t*)scratchPad.allocateTempVector(10, CD_temp_arr_bytes);
+            CD_temp_arr_bytes = numBinTriTouchPairsFull * sizeof(bodyID_t);
+            bodyID_t* triIDsEachBinTouches = (bodyID_t*)scratchPad.allocateTempVector(10, CD_temp_arr_bytes);
             {
                 bin_triangle_kernels->kernel("populateBinTriangleTouchingPairs")
                     .instantiate()
@@ -269,9 +269,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             triIDsEachBinTouches_sorted = (bodyID_t*)scratchPad.allocateTempVector(9, CD_temp_arr_bytes);
             CD_temp_arr_bytes = numBinTriTouchPairsFull * sizeof(binID_t);
             binID_t* binIDsEachTriTouches_sorted = (binID_t*)scratchPad.allocateTempVector(11, CD_temp_arr_bytes);
-            cubDEMSortByKeys<binID_t, triID_t, DEMSolverStateData>(binIDsEachTriTouches, binIDsEachTriTouches_sorted,
-                                                                   triIDsEachBinTouches, triIDsEachBinTouches_sorted,
-                                                                   numBinTriTouchPairsFull, this_stream, scratchPad);
+            cubDEMSortByKeys<binID_t, bodyID_t, DEMSolverStateData>(binIDsEachTriTouches, binIDsEachTriTouches_sorted,
+                                                                    triIDsEachBinTouches, triIDsEachBinTouches_sorted,
+                                                                    numBinTriTouchPairsFull, this_stream, scratchPad);
 
             // 5th step: use DeviceRunLengthEncode to identify those active (that have tris in them) bins.
             // Also, binIDsEachTriTouches is large enough for a unique scan because total sphere--bin pairs are more
@@ -343,7 +343,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         }
 
         if (blocks_needed_for_bins_sph > 0) {
-            contact_detection_kernels->kernel("getNumberOfSphereContactsEachBin")
+            sphere_contact_kernels->kernel("getNumberOfSphereContactsEachBin")
                 .instantiate()
                 .configure(dim3(blocks_needed_for_bins_sph), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
                 .launch(simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
@@ -351,7 +351,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             GPU_CALL(cudaStreamSynchronize(this_stream));
 
             if (blocks_needed_for_bins_tri > 0) {
-                sphere_triangle_kernels->kernel("getNumberOfSphTriContactsEachBin")
+                sphTri_contact_kernels->kernel("getNumberOfSphTriContactsEachBin")
                     .instantiate()
                     .configure(dim3(blocks_needed_for_bins_tri), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
                     .launch(simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
@@ -372,23 +372,37 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             /// geometry to be supported). This kernel integrates tri--boundary CD. / TODO: remember that boundary types
             /// are either all jitified or non-jitified. In principal, they should be all jitified.
 
-            // Prescan numSphContactsInEachBin to get the final contactReportOffsets. A new vector is needed.
+            // Prescan numSphContactsInEachBin to get the final sphSphContactReportOffsets and
+            // triSphContactReportOffsets. New vectors are needed.
             CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(contactPairs_t);
-            contactPairs_t* contactReportOffsets = (contactPairs_t*)scratchPad.allocateTempVector(5, CD_temp_arr_bytes);
+            contactPairs_t* sphSphContactReportOffsets =
+                (contactPairs_t*)scratchPad.allocateTempVector(5, CD_temp_arr_bytes);
             cubDEMPrefixScan<spheresBinTouches_t, contactPairs_t, DEMSolverStateData>(
-                numSphContactsInEachBin, contactReportOffsets, *pNumActiveBins, this_stream, scratchPad);
+                numSphContactsInEachBin, sphSphContactReportOffsets, *pNumActiveBins, this_stream, scratchPad);
+            contactPairs_t* triSphContactReportOffsets;
+            if (simParams->nTriGM > 0) {
+                CD_temp_arr_bytes = (*pNumActiveBinsForTri) * sizeof(contactPairs_t);
+                triSphContactReportOffsets = (contactPairs_t*)scratchPad.allocateTempVector(14, CD_temp_arr_bytes);
+                cubDEMPrefixScan<spheresBinTouches_t, contactPairs_t, DEMSolverStateData>(
+                    numTriSphContactsInEachBin, triSphContactReportOffsets, *pNumActiveBinsForTri, this_stream,
+                    scratchPad);
+            }
             // DEME_DEBUG_PRINTF("Num contacts each bin:");
             // DEME_DEBUG_EXEC(displayArray<spheresBinTouches_t>(numSphContactsInEachBin, *pNumActiveBins));
             // DEME_DEBUG_PRINTF("Contact report offsets:");
-            // DEME_DEBUG_EXEC(displayArray<contactPairs_t>(contactReportOffsets, *pNumActiveBins));
+            // DEME_DEBUG_EXEC(displayArray<contactPairs_t>(sphSphContactReportOffsets, *pNumActiveBins));
             // DEME_DEBUG_PRINTF("Family number:");
             // DEME_DEBUG_EXEC(displayArray<family_t>(granData->familyID, simParams->nOwnerBodies));
 
             // Add sphere--sphere contacts together with sphere--analytical geometry contacts
             size_t nSphereGeoContact = *scratchPad.pNumContacts;
             size_t nSphereSphereContact = (size_t)numSphContactsInEachBin[*pNumActiveBins - 1] +
-                                          (size_t)contactReportOffsets[*pNumActiveBins - 1];
-            *scratchPad.pNumContacts = nSphereSphereContact + nSphereGeoContact;
+                                          (size_t)sphSphContactReportOffsets[*pNumActiveBins - 1];
+            size_t nTriSphereContact = (simParams->nTriGM > 0)
+                                           ? (size_t)numTriSphContactsInEachBin[*pNumActiveBinsForTri - 1] +
+                                                 (size_t)triSphContactReportOffsets[*pNumActiveBinsForTri - 1]
+                                           : 0;
+            *scratchPad.pNumContacts = nSphereSphereContact + nSphereGeoContact + nTriSphereContact;
             if (*scratchPad.pNumContacts > idGeometryA.size()) {
                 contactEventArraysResize(*scratchPad.pNumContacts, idGeometryA, idGeometryB, contactType, granData);
             }
@@ -396,17 +410,32 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // Sphere--sphere contact pairs go after sphere--anal-geo contacts
             bodyID_t* idSphA = (granData->idGeometryA + nSphereGeoContact);
             bodyID_t* idSphB = (granData->idGeometryB + nSphereGeoContact);
-            // In next kernel call, all contacts registered there will be sphere--sphere contacts
-            GPU_CALL(cudaMemset((void*)(granData->contactType + nSphereGeoContact), SPHERE_SPHERE_CONTACT,
-                                nSphereSphereContact * sizeof(contact_t)));
+            contact_t* dType = (granData->contactType + nSphereGeoContact);
             // Then fill in those contacts
-            contact_detection_kernels->kernel("populateContactPairsEachBin")
+            sphere_contact_kernels->kernel("populateSphSphContactPairsEachBin")
                 .instantiate()
                 .configure(dim3(blocks_needed_for_bins_sph), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
                 .launch(simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
-                        sphereIDsLookUpTable, contactReportOffsets, idSphA, idSphB, *pNumActiveBins);
+                        sphereIDsLookUpTable, sphSphContactReportOffsets, idSphA, idSphB, dType, *pNumActiveBins);
             GPU_CALL(cudaStreamSynchronize(this_stream));
 
+            // Triangle--sphere contact pairs go after sphere--sphere contacts. Remember to mark their type.
+            if (blocks_needed_for_bins_tri > 0) {
+                idSphA = (granData->idGeometryA + nSphereGeoContact + nSphereSphereContact);
+                bodyID_t* idTriB = (granData->idGeometryB + nSphereGeoContact + nSphereSphereContact);
+                dType = (granData->contactType + nSphereGeoContact + nSphereSphereContact);
+                sphTri_contact_kernels->kernel("populateTriSphContactsEachBin")
+                    .instantiate()
+                    .configure(dim3(blocks_needed_for_bins_tri), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
+                    .launch(simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
+                            sphereIDsLookUpTable, mapTriActBinToSphActBin, triIDsEachBinTouches_sorted,
+                            activeBinIDsForTri, numTrianglesBinTouches, triIDsLookUpTable, triSphContactReportOffsets,
+                            idSphA, idTriB, dType, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
+                            sandwichBNode2, sandwichBNode3, *pNumActiveBinsForTri);
+                GPU_CALL(cudaStreamSynchronize(this_stream));
+                std::cout << "Contact types: " << std::endl;
+                displayArray<contact_t>(dType, *scratchPad.pNumContacts);
+            }
         }  // End of bin-wise contact detection subroutine
         timers.GetTimer("Find contact pairs").stop();
     }

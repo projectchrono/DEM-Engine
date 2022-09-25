@@ -142,16 +142,17 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
     }
 }
 
-__global__ void populateContactPairsEachBin(deme::DEMSimParams* simParams,
-                                            deme::DEMDataKT* granData,
-                                            deme::bodyID_t* sphereIDsEachBinTouches_sorted,
-                                            deme::binID_t* activeBinIDs,
-                                            deme::spheresBinTouches_t* numSpheresBinTouches,
-                                            deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
-                                            deme::contactPairs_t* contactReportOffsets,
-                                            deme::bodyID_t* idSphA,
-                                            deme::bodyID_t* idSphB,
-                                            size_t nActiveBins) {
+__global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
+                                                  deme::DEMDataKT* granData,
+                                                  deme::bodyID_t* sphereIDsEachBinTouches_sorted,
+                                                  deme::binID_t* activeBinIDs,
+                                                  deme::spheresBinTouches_t* numSpheresBinTouches,
+                                                  deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
+                                                  deme::contactPairs_t* contactReportOffsets,
+                                                  deme::bodyID_t* idSphA,
+                                                  deme::bodyID_t* idSphB,
+                                                  deme::contact_t* dType,
+                                                  size_t nActiveBins) {
     // shared storage for bodies involved in this bin. Pre-allocated so that each threads can easily use.
     __shared__ deme::bodyID_t ownerIDs[DEME_MAX_SPHERES_PER_BIN];
     __shared__ deme::bodyID_t bodyIDs[DEME_MAX_SPHERES_PER_BIN];
@@ -258,6 +259,7 @@ __global__ void populateContactPairsEachBin(deme::DEMSimParams* simParams,
                 unsigned int inBlockOffset = atomicAdd_block(&blockPairCnt, 1);
                 idSphA[myReportOffset + inBlockOffset] = bodyIDs[bodyA];
                 idSphB[myReportOffset + inBlockOffset] = bodyIDs[bodyB];
+                dType[myReportOffset + inBlockOffset] = deme::SPHERE_SPHERE_CONTACT;
             }
         }
         // __syncthreads();

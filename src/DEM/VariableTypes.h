@@ -14,7 +14,6 @@ typedef uint64_t voxelID_t;
 typedef float oriQ_t;
 typedef unsigned int bodyID_t;
 typedef unsigned int binID_t;
-typedef unsigned int triID_t;
 typedef uint8_t objID_t;
 typedef uint8_t materialsOffset_t;
 typedef uint8_t inertiaOffset_t;

@@ -189,7 +189,7 @@ struct DEMSimParams {
     double binSize;
     // Number of clumps, spheres, triangles, mesh-represented objects, analytical components, external objs...
     bodyID_t nSpheresGM;
-    triID_t nTriGM;
+    bodyID_t nTriGM;
     objID_t nAnalGM;
     bodyID_t nOwnerBodies;
     bodyID_t nOwnerClumps;
@@ -197,7 +197,7 @@ struct DEMSimParams {
     bodyID_t nTriMeshes;
 
     // bodyID_t nSpheresJitified;
-    // triID_t nTriJitified;
+    // bodyID_t nTriJitified;
 
     // Number of the templates (or say the ``types'') of clumps and spheres
     unsigned int nDistinctClumpBodyTopologies;

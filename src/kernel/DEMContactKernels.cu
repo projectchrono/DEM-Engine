@@ -121,16 +121,17 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
     }
 }
 
-__global__ void populateContactPairsEachBin(deme::DEMSimParams* simParams,
-                                            deme::DEMDataKT* granData,
-                                            deme::bodyID_t* sphereIDsEachBinTouches_sorted,
-                                            deme::binID_t* activeBinIDs,
-                                            deme::spheresBinTouches_t* numSpheresBinTouches,
-                                            deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
-                                            deme::contactPairs_t* contactReportOffsets,
-                                            deme::bodyID_t* idSphA,
-                                            deme::bodyID_t* idSphB,
-                                            size_t nActiveBins) {
+__global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
+                                                  deme::DEMDataKT* granData,
+                                                  deme::bodyID_t* sphereIDsEachBinTouches_sorted,
+                                                  deme::binID_t* activeBinIDs,
+                                                  deme::spheresBinTouches_t* numSpheresBinTouches,
+                                                  deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
+                                                  deme::contactPairs_t* contactReportOffsets,
+                                                  deme::bodyID_t* idSphA,
+                                                  deme::bodyID_t* idSphB,
+                                                  deme::contact_t* dType,
+                                                  size_t nActiveBins) {
     // Only active bins got to execute this...
     deme::binID_t myActiveID = blockIdx.x * blockDim.x + threadIdx.x;
     // I need to store all the sphereIDs that I am supposed to look into
@@ -213,6 +214,7 @@ __global__ void populateContactPairsEachBin(deme::DEMSimParams* simParams,
                 if (in_contact && (contactPntBin == binID)) {
                     idSphA[myReportOffset] = bodyIDs[bodyA];
                     idSphB[myReportOffset] = bodyIDs[bodyB];
+                    dType[myReportOffset] = deme::SPHERE_SPHERE_CONTACT;
                     myReportOffset++;
                 }
             }

@@ -351,8 +351,8 @@ class DEMKinematicThread {
     // jitify::Program bin_sphere_kernels = JitHelper::buildProgram("bin_sphere_kernels", " ");
     std::shared_ptr<jitify::Program> bin_sphere_kernels;
     std::shared_ptr<jitify::Program> bin_triangle_kernels;
-    std::shared_ptr<jitify::Program> sphere_triangle_kernels;
-    std::shared_ptr<jitify::Program> contact_detection_kernels;
+    std::shared_ptr<jitify::Program> sphTri_contact_kernels;
+    std::shared_ptr<jitify::Program> sphere_contact_kernels;
     std::shared_ptr<jitify::Program> history_kernels;
     std::shared_ptr<jitify::Program> misc_kernels;
 
