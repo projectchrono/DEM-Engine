@@ -23,6 +23,7 @@ __global__ void cashInOwnerIndexA(deme::bodyID_t* idOwner,
 __global__ void cashInOwnerIndexB(deme::bodyID_t* idOwner,
                                   deme::bodyID_t* id,
                                   deme::bodyID_t* ownerClumpBody,
+                                  deme::bodyID_t* ownerMesh,
                                   deme::contact_t* contactType,
                                   size_t nContactPairs) {
     deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
@@ -31,6 +32,8 @@ __global__ void cashInOwnerIndexB(deme::bodyID_t* idOwner,
         deme::contact_t thisCntType = contactType[myID];
         if (thisCntType == deme::SPHERE_SPHERE_CONTACT) {
             idOwner[myID] = ownerClumpBody[thisBodyID];
+        } else if (thisCntType == deme::SPHERE_MESH_CONTACT) {
+            idOwner[myID] = ownerMesh[thisBodyID];
         } else {
             // This is a sphere--analytical geometry contact, its owner is jitified
             idOwner[myID] = objOwner[thisBodyID];

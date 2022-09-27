@@ -544,8 +544,8 @@ void DEMSolver::preprocessTriangleObjs() {
             DEMTriangle tri = mesh_obj->GetTriangle(i);
             // If we wish to correct surface orientation based on given vertex normals, rather than using RHR...
             if (mesh_obj->use_mesh_normals) {
-                int normal_i = mesh_obj->face_n_indices.at(i).x;  // normals at each vertex of this triangle
-                float3 normal = mesh_obj->normals.at(normal_i);
+                int normal_i = mesh_obj->m_face_n_indices.at(i).x;  // normals at each vertex of this triangle
+                float3 normal = mesh_obj->m_normals.at(normal_i);
 
                 // Generate normal using RHR from nodes 1, 2, and 3
                 float3 AB = tri.p2 - tri.p1;

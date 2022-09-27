@@ -56,7 +56,8 @@ void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernel
         collect_force_kernels->kernel("cashInOwnerIndexB")
             .instantiate()
             .configure(dim3(blocks_needed_for_contacts), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
-            .launch(idBOwner, granData->idGeometryB, granData->ownerClumpBody, granData->contactType, nContactPairs);
+            .launch(idBOwner, granData->idGeometryB, granData->ownerClumpBody, granData->ownerMesh,
+                    granData->contactType, nContactPairs);
         GPU_CALL(cudaStreamSynchronize(this_stream));
         // displayArray<bodyID_t>(idAOwner, nContactPairs);
         // displayArray<bodyID_t>(idBOwner, nContactPairs);

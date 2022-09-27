@@ -703,6 +703,19 @@ void DEMSolver::WriteContactFile(const std::string& outfilename) const {
     }
 }
 
+void DEMSolver::WriteMeshFile(const std::string& outfilename) const {
+    switch (m_mesh_out_format) {
+        case (MESH_FORMAT::VTK): {
+            std::ofstream ptFile(outfilename, std::ios::out);
+            dT->writeMeshesAsVtk(ptFile);
+            break;
+        }
+        default:
+            DEME_ERROR(
+                "Mesh output file format is unknown or not implemented. Please re-set it via SetMeshOutputFormat.");
+    }
+}
+
 // The method should be called after user inputs are in place, and before starting the simulation. It figures out a part
 // of the required simulation information such as the scale of the poblem domain, and makes sure these info live in
 // managed memory.

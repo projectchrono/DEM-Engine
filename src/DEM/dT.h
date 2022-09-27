@@ -369,6 +369,7 @@ class DEMDynamicThread {
     void populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                               const std::vector<float3>& input_ext_obj_xyz,
                               const std::vector<unsigned int>& input_ext_obj_family,
+                              const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
                               const std::vector<float3>& input_mesh_obj_xyz,
                               const std::vector<float4>& input_mesh_obj_rot,
                               const std::vector<unsigned int>& input_mesh_obj_family,
@@ -457,6 +458,7 @@ class DEMDynamicThread {
     void writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy = 10) const;
     void writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accuracy = 10) const;
     void writeContactsAsCsv(std::ofstream& ptFile) const;
+    void writeMeshesAsVtk(std::ofstream& ptFile);
 
     /// Called each time when the user calls DoDynamicsThenSync.
     void startThread();
@@ -492,6 +494,9 @@ class DEMDynamicThread {
 
   private:
     const std::string Name = "dT";
+
+    // Meshes cached on dT side that has corresponding owner number associated. Useful for outputting meshes.
+    std::vector<std::shared_ptr<DEMMeshConnected>> m_meshes;
 
     // Number of trackers I already processed before (if I see a tracked_obj array longer than this in initialization, I
     // know I have to process the new-comers)

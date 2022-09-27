@@ -36,8 +36,10 @@ class DEMTracker;
 //            2. Allow ext obj init CoM setting
 //            3. Instruct how many dT steps should at LEAST do before receiving kT update
 //            4. Sleepers that don't participate CD or integration
+//            5. Check if entities are initially in box
 //            6. Force model has a/several custom owner arrays to store custom config data
 //            7. This custom array can be defined at clump template/anal obj/mesh obj generation
+//            8. Right now force model position is wrt LBF, not user origin...
 //            9. wT takes care of an extra output when it crushes
 //////////////////////////////////////////////////////////////
 
@@ -352,6 +354,8 @@ class DEMSolver {
     void WriteSphereFile(const std::string& outfilename) const;
     /// Write all contact pairs to a file
     void WriteContactFile(const std::string& outfilename) const;
+    /// Write the current status of all meshes to a file
+    void WriteMeshFile(const std::string& outfilename) const;
 
     /// Read clump coordinates from a CSV file (whose format is consistent with this solver's clump output file).
     /// Returns an unordered_map which maps each unique clump type name to a vector of float3 (XYZ coordinates).
@@ -464,6 +468,8 @@ class DEMSolver {
     void SetContactOutputFormat(OUTPUT_FORMAT format) { m_cnt_out_format = format; }
     /// Specify the information that needs to go into the contact pair output files
     void SetContactOutputContent(unsigned int content) { m_cnt_out_content = content; }
+    /// Specify the file format of meshes
+    void SetMeshOutputFormat(MESH_FORMAT format) { m_mesh_out_format = format; }
 
     /// Let dT do this call and return the reduce value of the inspected quantity
     float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
@@ -505,6 +511,8 @@ class DEMSolver {
     OUTPUT_FORMAT m_cnt_out_format = OUTPUT_FORMAT::CSV;
     // The output file content for contact pairs
     unsigned int m_cnt_out_content = CNT_OUTPUT_CONTENT::FORCE | CNT_OUTPUT_CONTENT::POINT;
+    // The output file format for meshes
+    MESH_FORMAT m_mesh_out_format = MESH_FORMAT::VTK;
 
     // User instructed simulation `world' size. Note it is an approximate of the true size and we will generate a world
     // not smaller than this.

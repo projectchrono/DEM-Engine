@@ -436,6 +436,7 @@ void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, s
 void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                             const std::vector<float3>& input_ext_obj_xyz,
                                             const std::vector<unsigned int>& input_ext_obj_family,
+                                            const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
                                             const std::vector<float3>& input_mesh_obj_xyz,
                                             const std::vector<float4>& input_mesh_obj_rot,
                                             const std::vector<unsigned int>& input_mesh_obj_family,
@@ -642,9 +643,13 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
     unsigned int offset_for_mesh_obj_mass_template = offset_for_ext_obj_mass_template + input_ext_obj_xyz.size();
     // k for indexing the triangle facets
     k = 0;
-    for (size_t i = 0; i < input_mesh_obj_xyz.size(); i++) {
+    for (size_t i = 0; i < input_mesh_objs.size(); i++) {
         // If got here, it is a mesh
         ownerTypes.at(i + owner_offset_for_mesh_obj) = OWNER_T_MESH;
+
+        // Store this mesh in dT's cache
+        input_mesh_objs.at(i)->owner = i + owner_offset_for_mesh_obj;
+        m_meshes.push_back(input_mesh_objs.at(i));
 
         inertiaPropOffsets.at(i + owner_offset_for_mesh_obj) = i + offset_for_mesh_obj_mass_template;
         if (!solverFlags.useMassJitify) {
@@ -688,6 +693,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         familyID.at(i + owner_offset_for_mesh_obj) = this_family_num;
 
         DEME_DEBUG_PRINTF("dT just loaded a mesh in family %u", +(this_family_num));
+        DEME_DEBUG_PRINTF("This mesh is owner %u", (i + owner_offset_for_mesh_obj));
         DEME_DEBUG_PRINTF("Number of triangle facets loaded thus far: %zu", k);
     }
 }
@@ -772,10 +778,10 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
                      mesh_obj_mass_types, mesh_obj_moi_types, loaded_materials, family_mask_matrix, no_output_families);
 
     // For initialization, owner array offset is 0
-    populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_family, input_mesh_obj_xyz,
-                         input_mesh_obj_rot, input_mesh_obj_family, mesh_facet_owner, mesh_facet_materials, mesh_facets,
-                         clump_templates, ext_obj_mass_types, ext_obj_moi_types, ext_obj_comp_num, mesh_obj_mass_types,
-                         mesh_obj_moi_types, 0, 0, 0);
+    populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_family, input_mesh_objs,
+                         input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family, mesh_facet_owner,
+                         mesh_facet_materials, mesh_facets, clump_templates, ext_obj_mass_types, ext_obj_moi_types,
+                         ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, 0, 0, 0);
 
     buildTrackedObjs(input_clump_batches, input_ext_obj_xyz, input_mesh_objs, tracked_objs, 0, 0);
 }
@@ -808,10 +814,11 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
     // No policy changes here
 
     // Analytical objects-related arrays should be empty
-    populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_family, input_mesh_obj_xyz,
-                         input_mesh_obj_rot, input_mesh_obj_family, mesh_facet_owner, mesh_facet_materials, mesh_facets,
-                         clump_templates, ext_obj_mass_types, ext_obj_moi_types, ext_obj_comp_num, mesh_obj_mass_types,
-                         mesh_obj_moi_types, nExistingOwners, nExistingSpheres, nExistingFacets);
+    populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_family, input_mesh_objs,
+                         input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family, mesh_facet_owner,
+                         mesh_facet_materials, mesh_facets, clump_templates, ext_obj_mass_types, ext_obj_moi_types,
+                         ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, nExistingOwners, nExistingSpheres,
+                         nExistingFacets);
 
     // Make changes to tracked objects (potentially add more)
     buildTrackedObjs(input_clump_batches, input_ext_obj_xyz, input_mesh_objs, tracked_objs, nExistingOwners,
@@ -1098,7 +1105,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
         auto geoA = idGeometryA.at(i);
         auto geoB = idGeometryB.at(i);
         auto type = contactType.at(i);
-        // We don't output fake contact
+        // We don't output fake contacts
         if (type == NOT_A_CONTACT)
             continue;
 
@@ -1130,10 +1137,10 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
         float4 oriQA;
         float3 CoM, cntPntA;  // A's CoM
         {
-            oriQA.w = oriQw.at(i);
-            oriQA.x = oriQx.at(i);
-            oriQA.y = oriQy.at(i);
-            oriQA.z = oriQz.at(i);
+            oriQA.w = oriQw.at(ownerA);
+            oriQA.x = oriQx.at(ownerA);
+            oriQA.y = oriQy.at(ownerA);
+            oriQA.z = oriQz.at(ownerA);
             voxelID_t voxel = voxelID.at(ownerA);
             subVoxelPos_t subVoxX = locX.at(ownerA);
             subVoxelPos_t subVoxY = locY.at(ownerA);
@@ -1178,6 +1185,70 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
     }
 
     ptFile << outstrstream.str();
+}
+
+void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
+    std::ostringstream ostream;
+
+    std::vector<size_t> vertexOffset(m_meshes.size() + 1, 0);
+    size_t total_f = 0;
+    size_t total_v = 0;
+
+    ostream << "# vtk DataFile Version 2.0\n";
+    ostream << "VTK from DEM simulation\n";
+    ostream << "ASCII\n";
+    ostream << "\n\n";
+
+    ostream << "DATASET UNSTRUCTURED_GRID\n";
+
+    // Prescan the V and F: to write all meshes to one file, we need vertex number offset info
+    unsigned int mesh_num = 0;
+    for (const auto& mmesh : m_meshes) {
+        vertexOffset[mesh_num + 1] = mmesh->getCoordsVertices().size();
+        total_v += mmesh->getCoordsVertices().size();
+        total_f += mmesh->getIndicesVertexes().size();
+        mesh_num++;
+    }
+    for (unsigned int i = 1; i < m_meshes.size(); i++)
+        vertexOffset[i] = vertexOffset[i] + vertexOffset[i - 1];
+
+    // Writing m_vertices
+    ostream << "POINTS " << total_v << " float" << std::endl;
+    mesh_num = 0;
+    for (const auto& mmesh : m_meshes) {
+        bodyID_t mowner = mmesh->getOwner();
+        float3 ownerPos = this->getOwnerPos(mowner);
+        float4 ownerOriQ = this->getOwnerOriQ(mowner);
+        for (const auto& v : mmesh->getCoordsVertices()) {
+            float3 point = v;
+            hostApplyFrameTransform(point, ownerPos, ownerOriQ);
+            ostream << point.x << " " << point.y << " " << point.z << std::endl;
+        }
+        mesh_num++;
+    }
+
+    // Writing faces
+    ostream << "\n\n";
+    ostream << "CELLS " << total_f << " " << 4 * total_f << std::endl;
+    mesh_num = 0;
+    for (const auto& mmesh : m_meshes) {
+        for (const auto& f : mmesh->getIndicesVertexes()) {
+            ostream << "3 " << (size_t)f.x + vertexOffset[mesh_num] << " " << (size_t)f.y + vertexOffset[mesh_num]
+                    << " " << (size_t)f.z + vertexOffset[mesh_num] << std::endl;
+        }
+        mesh_num++;
+    }
+
+    // Writing face types. Type 5 is generally triangles
+    ostream << "\n\n";
+    ostream << "CELL_TYPES " << total_f << std::endl;
+    for (const auto& mmesh : m_meshes) {
+        auto nfaces = mmesh->getIndicesVertexes().size();
+        for (size_t j = 0; j < nfaces; j++)
+            ostream << "5 " << std::endl;
+    }
+
+    ptFile << ostream.str();
 }
 
 inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
@@ -1377,7 +1448,8 @@ inline void DEMDynamicThread::calculateForces() {
     //                     simParams->nOwnerBodies * sizeof(float)));
 
     size_t blocks_needed_for_contacts =
-        (*stateOfSolver_resources.pNumContacts + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
+        ((*stateOfSolver_resources.pNumContacts) + DEME_DT_FORCE_CALC_NTHREADS_PER_BLOCK - 1) /
+        DEME_DT_FORCE_CALC_NTHREADS_PER_BLOCK;
     // If no contact then we don't have to calculate forces. Note there might still be forces, coming from prescription
     // or other sources.
     if (blocks_needed_for_contacts > 0) {
@@ -1385,10 +1457,12 @@ inline void DEMDynamicThread::calculateForces() {
         // a custom kernel to compute forces
         cal_force_kernels->kernel("calculateContactForces")
             .instantiate()
-            .configure(dim3(blocks_needed_for_contacts), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+            .configure(dim3(blocks_needed_for_contacts), dim3(DEME_DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0,
+                       streamInfo.stream)
             .launch(simParams, granData, *stateOfSolver_resources.pNumContacts);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         // displayFloat3(granData->contactForces, *stateOfSolver_resources.pNumContacts);
+        // displayArray<contact_t>(granData->contactType, *stateOfSolver_resources.pNumContacts);
         // std::cout << "===========================" << std::endl;
         timers.GetTimer("Calculate contact forces").stop();
 
@@ -1401,7 +1475,7 @@ inline void DEMDynamicThread::calculateForces() {
         collectContactForces(collect_force_kernels, granData, *stateOfSolver_resources.pNumContacts,
                              simParams->nOwnerBodies, contactPairArr_isFresh, streamInfo.stream,
                              stateOfSolver_resources, timers);
-        // displayArray<float>(granData->aX, simParams->nOwnerBodies);
+        // displayArray<float>(granData->aZ, simParams->nOwnerBodies);
         // displayFloat3(granData->contactForces, *stateOfSolver_resources.pNumContacts);
         // std::cout << *stateOfSolver_resources.pNumContacts << std::endl;
 

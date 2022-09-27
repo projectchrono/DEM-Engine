@@ -115,7 +115,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             deme::bodyID_t myOwner = granData->ownerMesh[triB];
             //// TODO: Is this OK?
             BRadius = DEME_HUGE_FLOAT;
-            bodyBMatType = granData->sphereMaterialOffset[triB];
+            bodyBMatType = granData->triMaterialOffset[triB];
 
             double3 triNode1 = to_double3(granData->relPosNode1[triB]);
             double3 triNode2 = to_double3(granData->relPosNode2[triB]);
@@ -130,8 +130,9 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                 BOwnerMass = myMass;
             }
 
-            // bodyBPos is for now a place holder
+            // bodyBPos is for a place holder for the outcome triNode1 position
             equipOwnerPosRot(granData, myOwner, triNode1, BOwnerPos, bodyBPos, BOriQ);
+            triNode1 = bodyBPos;
             // Do this to node 2 and 3 as well
             applyOriQToVector3(triNode2.x, triNode2.y, triNode2.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
             triNode2 += BOwnerPos;
@@ -146,9 +147,11 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             bool in_contact = triangle_sphere_CD<double3, double>(triNode1, triNode2, triNode3, bodyAPos, ARadius,
                                                                   contact_normal, overlapDepth, contactPnt);
             B2A = to_float3(contact_normal);
+            overlapDepth = -overlapDepth;  // triangle_sphere_CD gives neg. number for overlapping cases
+
             // If not in contact, correct myContactType
             if (!in_contact) {
-                myContactType = in_contact;
+                myContactType = deme::NOT_A_CONTACT;
             }
         } else {
             // If B is analytical entity, its owner, relative location, material info is jitified

@@ -102,7 +102,7 @@ __device__ bool triangle_sphere_CD(const T1& A,           ///< First vertex of t
                                    const T1& sphere_pos,  ///< Location of the center of the sphere
                                    const T2 radius,       ///< Sphere radius
                                    T1& normal,            ///< contact normal
-                                   T2& depth,             ///< penetration
+                                   T2& depth,             ///< penetration (negative if in contact)
                                    T1& pt1                ///< contact point on triangle
 ) {
     // Calculate face normal using RHR
@@ -173,7 +173,7 @@ __device__ bool triangle_sphere_CD_directional(const T1& A,           ///< First
                                                const T1& sphere_pos,  ///< Location of the center of the sphere
                                                const T2 radius,       ///< Sphere radius
                                                T1& normal,            ///< contact normal
-                                               T2& depth,             ///< penetration
+                                               T2& depth,             ///< penetration (negative if in contact)
                                                T1& pt1                ///< contact point on triangle
 ) {
     // Calculate face normal using RHR

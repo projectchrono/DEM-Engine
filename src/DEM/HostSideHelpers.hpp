@@ -71,6 +71,25 @@ inline void elemSwap(T1* x, T1* y) {
     *y = tmp;
 }
 
+template <typename T1>
+inline void hostMergeSearchMapGen(T1* arr1, T1* arr2, T1* map, size_t size1, size_t size2, T1 NULL_ID) {
+    size_t ind2 = 0;
+    for (size_t ind1 = 0; ind1 < size1; ind1++) {
+        map[ind1] = NULL_ID;
+        while (ind2 < size2) {
+            if (arr1[ind1] < arr2[ind2]) {
+                // arr1 should be one step ahead, but if not, no math is in arr2
+                break;
+            } else if (arr1[ind1] == arr2[ind2]) {
+                map[ind1] = ind2;
+                break;
+            } else {
+                ind2++;
+            }
+        }
+    }
+}
+
 //// TODO: Why is there a namespace (?) issue that makes us able to use make_float3 properly in demo scripts, but not in
 /// any of these DEM system h or cpp files?
 inline float3 host_make_float3(float a, float b, float c) {
@@ -391,6 +410,15 @@ inline void hostApplyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Qw, const T2& 
         ((T2)2.0 * (Qy * Qz - Qw * Qx)) * oldZ;
     Z = ((T2)2.0 * (Qx * Qz - Qw * Qy)) * oldX + ((T2)2.0 * (Qy * Qz + Qw * Qx)) * oldY +
         ((T2)2.0 * (Qw * Qw + Qz * Qz) - (T2)1.0) * oldZ;
+}
+
+/// Host version of applying a local rotation then a translation
+template <typename T1, typename T2, typename T3>
+inline void hostApplyFrameTransform(T1& pos, const T2& vec, const T3& rot_Q) {
+    hostApplyOriQToVector3(pos.x, pos.y, pos.z, rot_Q.w, rot_Q.x, rot_Q.y, rot_Q.z);
+    pos.x += vec.x;
+    pos.y += vec.y;
+    pos.z += vec.z;
 }
 
 // Default accuracy is 17. This accuracy is especially needed for MOIs and length-unit (l).

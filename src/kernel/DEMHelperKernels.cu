@@ -310,8 +310,8 @@ inline __device__ T1 face_normal(const T1& A, const T1& B, const T1& C) {
 // Binary search on GPU, which is probably quite divergent... use if absolutely needs to
 template <typename T1, typename T2>
 inline __device__ bool cuda_binary_search(T1* A, const T1& val, T2 imin, T2 imax, T2& res) {
-    while (imax > imin) {
-        T2 imid = (imin + imax) / 2;
+    while (imax >= imin) {
+        T2 imid = imin + (imax - imin) / 2;
         if (val == A[imid]) {
             res = imid;
             return true;
@@ -322,13 +322,18 @@ inline __device__ bool cuda_binary_search(T1* A, const T1& val, T2 imin, T2 imax
         }
     }
 
-    if (A[imin] == val) {
-        res = imin;
-        return true;
-    } else {
-        return false;
-    }
+    return false;
 }
+// inline __device__ bool cuda_binary_search(T1* A, const T1& val, T2 imin, T2 imax, T2& res) {
+//     for (T2 i=imin; i<=imax; i++) {
+//         if (val == A[i]) {
+//             res = i;
+//             return true;
+//         }
+//     }
+
+//     return false;
+// }
 
 /**
  * Template arguments:

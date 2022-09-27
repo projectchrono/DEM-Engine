@@ -192,15 +192,30 @@ class DEMMeshConnected {
     // Number of triangle facets in the mesh
     size_t nTri = 0;
 
-    std::vector<float3> vertices;
-    std::vector<float3> normals;
-    std::vector<float3> UV;
-    std::vector<float3> colors;
+    // Owner number in DEM simulation
+    bodyID_t owner = NULL_BODYID;
 
-    std::vector<int3> face_v_indices;
-    std::vector<int3> face_n_indices;
-    std::vector<int3> face_uv_indices;
-    std::vector<int3> face_col_indices;
+    std::vector<float3> m_vertices;
+    std::vector<float3> m_normals;
+    std::vector<float3> m_UV;
+    std::vector<float3> m_colors;
+
+    std::vector<int3> m_face_v_indices;
+    std::vector<int3> m_face_n_indices;
+    std::vector<int3> m_face_uv_indices;
+    std::vector<int3> m_face_col_indices;
+
+    bodyID_t getOwner() { return owner; }
+
+    std::vector<float3>& getCoordsVertices() { return m_vertices; }
+    std::vector<float3>& getCoordsNormals() { return m_normals; }
+    std::vector<float3>& getCoordsUV() { return m_UV; }
+    std::vector<float3>& getCoordsColors() { return m_colors; }
+
+    std::vector<int3>& getIndicesVertexes() { return m_face_v_indices; }
+    std::vector<int3>& getIndicesNormals() { return m_face_n_indices; }
+    std::vector<int3>& getIndicesUV() { return m_face_uv_indices; }
+    std::vector<int3>& getIndicesColors() { return m_face_col_indices; }
 
     // Material types for each mesh facet
     std::vector<std::shared_ptr<DEMMaterial>> materials;
@@ -257,26 +272,29 @@ class DEMMeshConnected {
 
     /// Access the n-th triangle in mesh
     DEMTriangle GetTriangle(size_t index) const {
-        return DEMTriangle(vertices[face_v_indices[index].x], vertices[face_v_indices[index].y],
-                           vertices[face_v_indices[index].z]);
+        return DEMTriangle(m_vertices[m_face_v_indices[index].x], m_vertices[m_face_v_indices[index].y],
+                           m_vertices[m_face_v_indices[index].z]);
     }
 
     /// Clear all data
     void Clear() {
-        this->vertices.clear();
-        this->normals.clear();
-        this->UV.clear();
-        this->colors.clear();
-        this->face_v_indices.clear();
-        this->face_n_indices.clear();
-        this->face_uv_indices.clear();
-        this->face_col_indices.clear();
+        this->m_vertices.clear();
+        this->m_normals.clear();
+        this->m_UV.clear();
+        this->m_colors.clear();
+        this->m_face_v_indices.clear();
+        this->m_face_n_indices.clear();
+        this->m_face_uv_indices.clear();
+        this->m_face_col_indices.clear();
+        this->owner = NULL_BODYID;
     }
 
     /// Set mass
     void SetMass(float mass) { this->mass = mass; }
     /// Set MOI (in principal frame)
     void SetMOI(float3 MOI) { this->MOI = MOI; }
+    /// Set mesh family number
+    void SetFamily(unsigned int num) { this->family_code = num; }
 
     /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
     void SetMaterial(const std::vector<std::shared_ptr<DEMMaterial>>& input) {
@@ -292,8 +310,8 @@ class DEMMeshConnected {
     void ComputeMassProperties(double& mass, float3& center, float3& inertia);
 
     /// Transform the meshed object so it gets to its initial position, before the simulation starts
-    void Rotate(const float4 rotQ);
-    void Translate(const float3 displ);
+    void Rotate(const float4 rotQ) { init_oriQ = hostHamiltonProduct(rotQ, init_oriQ); }
+    void Translate(const float3 displ) { init_pos += displ; }
 
     /// Create a map of neighboring triangles, vector of:
     /// [Ti TieA TieB TieC]

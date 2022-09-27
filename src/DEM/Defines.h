@@ -22,6 +22,7 @@ namespace deme {
 // =============================================================================
 #define DEME_GET_VAR_NAME(Variable) (#Variable)
 #define DEME_KT_CD_NTHREADS_PER_BLOCK 256
+#define DEME_DT_FORCE_CALC_NTHREADS_PER_BLOCK 256
 #define DEME_MAX_SPHERES_PER_BIN 256    ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
 #define DEME_MAX_TRIANGLES_PER_BIN 256  ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
 #define DEME_TINY_FLOAT 1e-12
@@ -129,6 +130,8 @@ enum class INSPECT_ENTITY_TYPE { SPHERE, CLUMP, MESH, MESH_FACET };
 enum class CUB_REDUCE_FLAVOR { NONE, MAX, MIN, SUM };
 // Format of the output files
 enum class OUTPUT_FORMAT { CSV, BINARY, CHPF };
+// Mesh output format
+enum class MESH_FORMAT { VTK, OBJ };
 // Force mode type
 enum class FORCE_MODEL { HERTZIAN, HERTZIAN_FRICTIONLESS, CUSTOM };
 // The info that should be present in the output files

@@ -50,7 +50,8 @@ int main() {
 
     DEMSim.DisableContactBetweenFamilies(0, 1);
 
-    DEMSim.AddBCPlane(make_float3(0, 0, -1.25), make_float3(0, 0, 1), mat_type_1);
+    auto bot_plane = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/plane_20by20.obj").string(), mat_type_1);
+    bot_plane->Translate(make_float3(0, 0, -1.25));
 
     // Create a inspector to find out stuff
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
@@ -105,6 +106,10 @@ int main() {
         char cnt_filename[100];
         sprintf(cnt_filename, "%s/Contact_pairs_%04d.csv", out_dir.c_str(), i);
         DEMSim.WriteContactFile(std::string(cnt_filename));
+
+        char meshfilename[100];
+        sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), i);
+        DEMSim.WriteMeshFile(std::string(meshfilename));
 
         DEMSim.DoDynamicsThenSync(1e-2);
         max_z = max_z_finder->GetValue();
