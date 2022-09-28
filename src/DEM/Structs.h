@@ -473,6 +473,8 @@ class DEMClumpTemplate {
         for (auto& rad : radii) {
             rad *= s;
         }
+        mass *= (double)s * (double)s * (double)s;
+        MOI *= (double)s * (double)s * (double)s * (double)s * (double)s;
     }
 
     void AssignName(const std::string& some_name) { m_name = some_name; }
