@@ -84,11 +84,14 @@ int main() {
 
     for (float t = 0; t < sim_end; t += frame_time) {
         std::cout << "Frame: " << currframe << std::endl;
-        char filename[200], meshfilename[200];
+        char filename[200], meshfilename[200], cnt_filename[200];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-        sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
+        sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
+        // sprintf(cnt_filename, "%s/Contact_pairs_%04d.csv", out_dir.c_str(), currframe);
         DEMSim.WriteSphereFile(std::string(filename));
         DEMSim.WriteMeshFile(std::string(meshfilename));
+        // DEMSim.WriteContactFile(std::string(cnt_filename));
+        currframe++;
 
         DEMSim.DoDynamicsThenSync(frame_time);
         DEMSim.ShowThreadCollaborationStats();

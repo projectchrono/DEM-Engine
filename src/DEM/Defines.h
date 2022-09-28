@@ -74,6 +74,7 @@ const contact_t SPHERE_MESH_CONTACT = 2;
 const contact_t SPHERE_PLANE_CONTACT = 3;
 const contact_t SPHERE_PLATE_CONTACT = 4;
 const contact_t SPHERE_CYL_CONTACT = 5;
+const contact_t SPHERE_CONE_CONTACT = 6;
 
 const notStupidBool_t DONT_PREVENT_CONTACT = 0;
 const notStupidBool_t PREVENT_CONTACT = 1;
