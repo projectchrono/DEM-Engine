@@ -424,13 +424,10 @@ inline void matProxy2ContactParam(T1& E_eff,
 
 template <typename T1, typename T2>
 inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
-
                                                            const T2& radA,
                                                            const deme::objType_t& typeB,
                                                            const T1& B,
-
                                                            const float3& dirB,
-
                                                            const float& size1B,
                                                            const float& size2B,
                                                            const float& size3B,
@@ -471,22 +468,17 @@ inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
 // Another version of checkSphereEntityOverlap which gives contact point and contact normal
 template <typename T1, typename T2, typename T3>
 inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
-
                                                            const T2& radA,
                                                            const deme::objType_t& typeB,
                                                            const T1& B,
-
                                                            const float3& dirB,
-
                                                            const float& size1B,
                                                            const float& size2B,
                                                            const float& size3B,
                                                            const float& normal_sign,
                                                            const float& beta4Entity,
                                                            T1& CP,
-
                                                            float3& cntNormal,
-
                                                            T3& overlapDepth) {
     switch (typeB) {
         case (deme::ANAL_OBJ_TYPE_PLANE): {
