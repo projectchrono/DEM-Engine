@@ -779,9 +779,9 @@ class DEMSolver {
     std::vector<float> m_anal_size_3;
     // Component object types
     std::vector<objType_t> m_anal_types;
-    // Component object normal direction, defaulting to inward. If this object is topologically a plane then this param
-    // is meaningless, since its normal is determined by its rotation.
-    std::vector<objNormal_t> m_anal_normals;
+    // Component object normal direction (represented by sign, 1 or -1), defaulting to inward (1). If this object is
+    // topologically a plane then this param is meaningless, since its normal is determined by its rotation.
+    std::vector<float> m_anal_normals;
 
     // These extra mesh facets' owners' ID will be appended to analytical entities'
     std::vector<unsigned int> m_mesh_facet_owner;

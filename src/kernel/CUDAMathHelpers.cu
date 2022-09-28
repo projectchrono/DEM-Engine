@@ -60,6 +60,9 @@ inline __device__ float dot(float3 a, float3 b) {
 inline __device__ double dot(double3 a, double3 b) {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
+inline __device__ float dot(double3 a, float3 b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
 
 inline __device__ float length(float3 v) {
     return sqrt(dot(v, v));
@@ -289,6 +292,15 @@ inline __device__ float3 to_float3(const T1& a) {
 template <typename T1>
 inline __device__ double3 to_double3(const T1& a) {
     double3 b;
+    b.x = a.x;
+    b.y = a.y;
+    b.z = a.z;
+    return b;
+}
+
+template <typename T1, typename T2>
+inline __device__ T2 to_real3(const T1& a) {
+    T2 b;
     b.x = a.x;
     b.y = a.y;
     b.z = a.z;

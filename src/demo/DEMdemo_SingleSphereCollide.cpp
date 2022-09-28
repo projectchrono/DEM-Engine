@@ -51,7 +51,7 @@ int main() {
     DEMSim.DisableContactBetweenFamilies(0, 1);
 
     auto bot_plane = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/plane_20by20.obj").string(), mat_type_1);
-    bot_plane->Translate(make_float3(0, 0, -1.25));
+    bot_plane->SetInitPos(make_float3(0, 0, -1.25));
 
     // Create a inspector to find out stuff
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");

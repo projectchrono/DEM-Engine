@@ -179,10 +179,9 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             _forceModelIngredientAcqForB_;
 
             // Note for this test on dT side we don't enlarge entities
-            myContactType = checkSphereEntityOverlap<double>(
-                bodyAPos.x, bodyAPos.y, bodyAPos.z, ARadius, objType[bodyB], bodyBPos.x, bodyBPos.y, bodyBPos.z,
-                bodyBRot.x, bodyBRot.y, bodyBRot.z, objSize1[bodyB], objSize2[bodyB], objSize3[bodyB], objNormal[bodyB],
-                0.0, contactPnt.x, contactPnt.y, contactPnt.z, B2A.x, B2A.y, B2A.z, overlapDepth);
+            myContactType = checkSphereEntityOverlap<double3, float, double>(
+                bodyAPos, ARadius, objType[bodyB], bodyBPos, bodyBRot, objSize1[bodyB], objSize2[bodyB],
+                objSize3[bodyB], objNormal[bodyB], 0.0, contactPnt, B2A, overlapDepth);
         }
 
         float3 force = make_float3(0, 0, 0);

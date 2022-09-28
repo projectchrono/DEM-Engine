@@ -166,6 +166,12 @@ inline __device__ T1 distSquared(const T1& x1, const T1& y1, const T1& z1, const
     return (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2) + (z1 - z2) * (z1 - z2);
 }
 
+// Get the maginitude of a 3-component vector
+template <typename T1>
+inline __device__ T1 magVector3(T1& x, T1& y, T1& z) {
+    return magnitude = sqrt(x * x + y * y + z * z);
+}
+
 // Normalize a 3-component vector
 template <typename T1>
 inline __device__ void normalizeVector3(T1& x, T1& y, T1& z) {
@@ -416,37 +422,46 @@ inline void matProxy2ContactParam(T1& E_eff,
     CoR = min(CoR1, CoR2);
 }
 
-template <typename T1>
-inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& xA,
-                                                           const T1& yA,
-                                                           const T1& zA,
-                                                           const T1& radA,
+template <typename T1, typename T2>
+inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
+
+                                                           const T2& radA,
                                                            const deme::objType_t& typeB,
-                                                           const T1& xB,
-                                                           const T1& yB,
-                                                           const T1& zB,
-                                                           const T1& dirxB,
-                                                           const T1& diryB,
-                                                           const T1& dirzB,
-                                                           const T1& size1B,
-                                                           const T1& size2B,
-                                                           const T1& size3B,
-                                                           const bool& normalB,
+                                                           const T1& B,
+
+                                                           const float3& dirB,
+
+                                                           const float& size1B,
+                                                           const float& size2B,
+                                                           const float& size3B,
+                                                           const float& normal_sign,
                                                            const float& beta4Entity) {
     switch (typeB) {
         case (deme::ANAL_OBJ_TYPE_PLANE): {
-            const T1 plane2sphX = xA - xB;
-            const T1 plane2sphY = yA - yB;
-            const T1 plane2sphZ = zA - zB;
+            const T1 plane2sph = A - B;
             // Plane is directional, and the direction is given by plane rotation
-            const T1 dist = dot3<T1>(plane2sphX, plane2sphY, plane2sphZ, dirxB, diryB, dirzB);
-            if (dist > radA + beta4Entity) {
+            const double dist = dot(plane2sph, dirB);
+            const double overlapDepth = (radA + beta4Entity - dist);
+            if (overlapDepth < 0.0) {
                 return deme::NOT_A_CONTACT;
             }
             return deme::SPHERE_PLANE_CONTACT;
         }
         case (deme::ANAL_OBJ_TYPE_PLATE): {
             return deme::NOT_A_CONTACT;
+        }
+        case (deme::ANAL_OBJ_TYPE_CYL_INF): {
+            T1 sph2cyl = B - A;
+            // Projection along cyl axis direction
+            const double proj_dist = dot(sph2cyl, dirB);
+            // Radial vector from cylinder center to sphere center, along inward direction
+            sph2cyl -= proj_dist * dirB;
+            const double dist_delta_r = length(sph2cyl);
+            const double overlapDepth = radA - abs(size1B - dist_delta_r - beta4Entity);
+            if (overlapDepth <= DEME_TINY_FLOAT) {
+                return deme::NOT_A_CONTACT;
+            }
+            return deme::SPHERE_CYL_CONTACT;
         }
         default:
             return deme::NOT_A_CONTACT;
@@ -454,53 +469,58 @@ inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& xA,
 }
 
 // Another version of checkSphereEntityOverlap which gives contact point and contact normal
-template <typename T1, typename T2>
-inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& xA,
-                                                           const T1& yA,
-                                                           const T1& zA,
-                                                           const T1& radA,
+template <typename T1, typename T2, typename T3>
+inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
+
+                                                           const T2& radA,
                                                            const deme::objType_t& typeB,
-                                                           const T1& xB,
-                                                           const T1& yB,
-                                                           const T1& zB,
-                                                           const T1& dirxB,
-                                                           const T1& diryB,
-                                                           const T1& dirzB,
-                                                           const T1& size1B,
-                                                           const T1& size2B,
-                                                           const T1& size3B,
-                                                           const bool& normalB,
+                                                           const T1& B,
+
+                                                           const float3& dirB,
+
+                                                           const float& size1B,
+                                                           const float& size2B,
+                                                           const float& size3B,
+                                                           const float& normal_sign,
                                                            const float& beta4Entity,
-                                                           T1& CPX,
-                                                           T1& CPY,
-                                                           T1& CPZ,
-                                                           T2& normalX,
-                                                           T2& normalY,
-                                                           T2& normalZ,
-                                                           T1& overlapDepth) {
+                                                           T1& CP,
+
+                                                           float3& cntNormal,
+
+                                                           T3& overlapDepth) {
     switch (typeB) {
         case (deme::ANAL_OBJ_TYPE_PLANE): {
-            const T1 plane2sphX = xA - xB;
-            const T1 plane2sphY = yA - yB;
-            const T1 plane2sphZ = zA - zB;
+            const T1 plane2sph = A - B;
             // Plane is directional, and the direction is given by plane rotation
-            const T1 dist = dot3<T1>(plane2sphX, plane2sphY, plane2sphZ, dirxB, diryB, dirzB);
-            overlapDepth = (radA + beta4Entity - dist) / 2.0;
+            const T3 dist = dot(plane2sph, dirB);
+            overlapDepth = (radA + beta4Entity - dist);
             if (overlapDepth < 0.0) {
                 return deme::NOT_A_CONTACT;
             }
-            // From sphere center, go along negative plane normal for (dist + overlapDepth)
-            CPX = xA - dirxB * (dist + overlapDepth);
-            CPY = yA - diryB * (dist + overlapDepth);
-            CPZ = zA - dirzB * (dist + overlapDepth);
+            // From sphere center, go along negative plane normal for (dist + overlapDepth / 2)
+            CP = A - to_real3<float3, T1>(dirB * (dist + overlapDepth / 2.0));
             // Contact normal (B to A) is the same as plane normal
-            normalX = dirxB;
-            normalY = diryB;
-            normalZ = dirzB;
+            cntNormal = dirB;
             return deme::SPHERE_PLANE_CONTACT;
         }
         case (deme::ANAL_OBJ_TYPE_PLATE): {
             return deme::NOT_A_CONTACT;
+        }
+        case (deme::ANAL_OBJ_TYPE_CYL_INF): {
+            T1 sph2cyl = B - A;
+            // Projection along cyl axis direction
+            const T3 proj_dist = dot(sph2cyl, dirB);
+            // Radial vector from cylinder center to sphere center, along inward direction
+            sph2cyl -= proj_dist * dirB;
+            const T3 dist_delta_r = length(sph2cyl);
+            overlapDepth = radA - abs(size1B - dist_delta_r - beta4Entity);
+            if (overlapDepth <= DEME_TINY_FLOAT) {
+                return deme::NOT_A_CONTACT;
+            }
+            // dist_delta_r is 0 only when cylinder is thinner than sphere rad...
+            cntNormal = to_real3<T1, float3>(normal_sign / dist_delta_r * sph2cyl);
+            CP = A - to_real3<float3, T1>(cntNormal * (radA - overlapDepth / 2.0));
+            return deme::SPHERE_CYL_CONTACT;
         }
         default:
             return deme::NOT_A_CONTACT;

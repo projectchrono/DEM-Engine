@@ -71,6 +71,24 @@ inline void elemSwap(T1* x, T1* y) {
     *y = tmp;
 }
 
+/// Return a perpendicular unit vector of the input vector. Will not work well if the input vector is too short;
+/// consider normalizing it if it is the case.
+template <typename T1>
+inline T1 findPerpendicular(const T1& input_vec) {
+    T1 PerpVec;
+    PerpVec.x = -input_vec.z;
+    PerpVec.y = 0.;
+    PerpVec.z = input_vec.x;
+    if (length(PerpVec) < 1e-6) {
+        PerpVec.x = 0.;
+        PerpVec.y = -input_vec.z;
+        PerpVec.z = input_vec.y;
+    }
+    return normalize(PerpVec);
+}
+
+/// Generate a mapping between arr1 and arr2, where this mapping has the same length as arr1, and each element i in the
+/// mapping is arr1[i]'s corresponding (same) element number in arr2. Both arr1 and arr2 need to be sorted.
 template <typename T1>
 inline void hostMergeSearchMapGen(T1* arr1, T1* arr2, T1* map, size_t size1, size_t size2, T1 NULL_ID) {
     size_t ind2 = 0;
@@ -78,7 +96,7 @@ inline void hostMergeSearchMapGen(T1* arr1, T1* arr2, T1* map, size_t size1, siz
         map[ind1] = NULL_ID;
         while (ind2 < size2) {
             if (arr1[ind1] < arr2[ind2]) {
-                // arr1 should be one step ahead, but if not, no math is in arr2
+                // arr1 should be one step ahead, but if not, no match is in arr2
                 break;
             } else if (arr1[ind1] == arr2[ind2]) {
                 map[ind1] = ind2;

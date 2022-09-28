@@ -241,19 +241,7 @@ inline std::vector<float3> DEMCylSurfSampler(float3 CylCenter,
     float RadIncr = 2.0 * PI / (float)(NumRows);
     float SideIncr = spacing * ParticleRad;
     float3 UnitCylAxis = normalize(CylAxis);
-    float3 RadDir;
-    {
-        float3 PerpVec;
-        PerpVec.x = -UnitCylAxis.z;
-        PerpVec.y = 0.f;
-        PerpVec.z = UnitCylAxis.x;
-        if (length(PerpVec) < 1e-6) {
-            PerpVec.x = 0.f;
-            PerpVec.y = -UnitCylAxis.z;
-            PerpVec.z = UnitCylAxis.y;
-        }
-        RadDir = normalize(PerpVec);
-    }
+    float3 RadDir = findPerpendicular<float3>(UnitCylAxis);
     for (unsigned int i = 0; i < NumRows; i++) {
         std::vector<float3> thisRow;
         float3 thisRowSt = CylCenter + UnitCylAxis * (CylHeight / 2.) + RadDir * CylRad;

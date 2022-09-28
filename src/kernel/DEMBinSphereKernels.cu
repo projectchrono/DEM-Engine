@@ -19,14 +19,14 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
         deme::objID_t contact_count = 0;
         // Sphere's family ID
         unsigned int sphFamilyNum;
-        double myPosX, myPosY, myPosZ;
+        double3 myPosXYZ;
         double myRadius;
         {
             // My sphere voxel ID and my relPos
             deme::bodyID_t myOwnerID = granData->ownerClumpBody[sphereID];
             sphFamilyNum = granData->familyID[myOwnerID];
             float3 myRelPos;
-            double ownerX, ownerY, ownerZ;
+            double3 ownerXYZ;
 
             // Get my component offset info from either jitified arrays or global memory
             // Outputs myRelPos, myRadius (in CD kernels, radius needs to be expanded)
@@ -37,7 +37,7 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
             }
 
             voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
-                ownerX, ownerY, ownerZ, granData->voxelID[myOwnerID], granData->locX[myOwnerID],
+                ownerXYZ.x, ownerXYZ.y, ownerXYZ.z, granData->voxelID[myOwnerID], granData->locX[myOwnerID],
                 granData->locY[myOwnerID], granData->locZ[myOwnerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
             const float myOriQw = granData->oriQw[myOwnerID];
             const float myOriQx = granData->oriQx[myOwnerID];
@@ -46,12 +46,10 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
             applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, myOriQw, myOriQx, myOriQy,
                                                     myOriQz);
             // The bin number that I live in (with fractions)?
-            myPosX = ownerX + (double)myRelPos.x;
-            myPosY = ownerY + (double)myRelPos.y;
-            myPosZ = ownerZ + (double)myRelPos.z;
-            double myBinX = myPosX / simParams->binSize;
-            double myBinY = myPosY / simParams->binSize;
-            double myBinZ = myPosZ / simParams->binSize;
+            myPosXYZ = ownerXYZ + to_double3(myRelPos);
+            double myBinX = myPosXYZ.x / simParams->binSize;
+            double myBinY = myPosXYZ.y / simParams->binSize;
+            double myBinZ = myPosXYZ.z / simParams->binSize;
             // How many bins my radius spans (with fractions)?
             double myRadiusSpan = myRadius / simParams->binSize;
             // printf("myRadius: %f\n", myRadiusSpan);
@@ -81,9 +79,9 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
             if (granData->familyMasks[maskMatID] != deme::DONT_PREVENT_CONTACT) {
                 continue;
             }
-            double ownerX, ownerY, ownerZ;
+            double3 ownerXYZ;
             voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
-                ownerX, ownerY, ownerZ, granData->voxelID[objBOwner], granData->locX[objBOwner],
+                ownerXYZ.x, ownerXYZ.y, ownerXYZ.z, granData->voxelID[objBOwner], granData->locX[objBOwner],
                 granData->locY[objBOwner], granData->locZ[objBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
             const float ownerOriQw = granData->oriQw[objBOwner];
             const float ownerOriQx = granData->oriQx[objBOwner];
@@ -99,12 +97,10 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                                                     ownerOriQy, ownerOriQz);
             applyOriQToVector3<float, deme::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx, ownerOriQy,
                                                     ownerOriQz);
-            double objBPosX = ownerX + (double)objBRelPosX;
-            double objBPosY = ownerY + (double)objBRelPosY;
-            double objBPosZ = ownerZ + (double)objBRelPosZ;
-            contact_type = checkSphereEntityOverlap<double>(
-                myPosX, myPosY, myPosZ, myRadius, objType[objB], objBPosX, objBPosY, objBPosZ, objBRotX, objBRotY,
-                objBRotZ, objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], simParams->beta);
+            double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
+            contact_type = checkSphereEntityOverlap<double3, float>(
+                myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], simParams->beta);
 
             if (contact_type) {
                 contact_count++;
@@ -125,7 +121,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                                                deme::contact_t* contactType) {
     deme::bodyID_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;
     if (sphereID < simParams->nSpheresGM) {
-        double myPosX, myPosY, myPosZ;
+        double3 myPosXYZ;
         double myRadius;
         unsigned int sphFamilyNum;
         deme::binSphereTouchPairs_t mySphereGeoReportOffset = numAnalGeoSphereTouchesScan[sphereID];
@@ -134,7 +130,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
             deme::bodyID_t myOwnerID = granData->ownerClumpBody[sphereID];
             sphFamilyNum = granData->familyID[myOwnerID];
             float3 myRelPos;
-            double ownerX, ownerY, ownerZ;
+            double3 ownerXYZ;
 
             // Get my component offset info from either jitified arrays or global memory
             // Outputs myRelPos, myRadius (in CD kernels, radius needs to be expanded)
@@ -148,7 +144,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
             // array
             deme::binSphereTouchPairs_t myReportOffset = numBinsSphereTouchesScan[sphereID];
             voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
-                ownerX, ownerY, ownerZ, granData->voxelID[myOwnerID], granData->locX[myOwnerID],
+                ownerXYZ.x, ownerXYZ.y, ownerXYZ.z, granData->voxelID[myOwnerID], granData->locX[myOwnerID],
                 granData->locY[myOwnerID], granData->locZ[myOwnerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
             const float myOriQw = granData->oriQw[myOwnerID];
             const float myOriQx = granData->oriQx[myOwnerID];
@@ -157,12 +153,10 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
             applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, myOriQw, myOriQx, myOriQy,
                                                     myOriQz);
             // The bin number that I live in (with fractions)?
-            myPosX = ownerX + (double)myRelPos.x;
-            myPosY = ownerY + (double)myRelPos.y;
-            myPosZ = ownerZ + (double)myRelPos.z;
-            double myBinX = myPosX / simParams->binSize;
-            double myBinY = myPosY / simParams->binSize;
-            double myBinZ = myPosZ / simParams->binSize;
+            myPosXYZ = ownerXYZ + to_double3(myRelPos);
+            double myBinX = myPosXYZ.x / simParams->binSize;
+            double myBinY = myPosXYZ.y / simParams->binSize;
+            double myBinZ = myPosXYZ.z / simParams->binSize;
             // How many bins my radius spans (with fractions)?
             double myRadiusSpan = myRadius / simParams->binSize;
             // Now, write the IDs of those bins that I touch, back to the global memory
@@ -193,9 +187,9 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
             if (granData->familyMasks[maskMatID] != deme::DONT_PREVENT_CONTACT) {
                 continue;
             }
-            double ownerX, ownerY, ownerZ;
+            double3 ownerXYZ;
             voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
-                ownerX, ownerY, ownerZ, granData->voxelID[objBOwner], granData->locX[objBOwner],
+                ownerXYZ.x, ownerXYZ.y, ownerXYZ.z, granData->voxelID[objBOwner], granData->locX[objBOwner],
                 granData->locY[objBOwner], granData->locZ[objBOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
             const float ownerOriQw = granData->oriQw[objBOwner];
             const float ownerOriQx = granData->oriQx[objBOwner];
@@ -211,12 +205,10 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                                                     ownerOriQy, ownerOriQz);
             applyOriQToVector3<float, deme::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx, ownerOriQy,
                                                     ownerOriQz);
-            double objBPosX = ownerX + (double)objBRelPosX;
-            double objBPosY = ownerY + (double)objBRelPosY;
-            double objBPosZ = ownerZ + (double)objBRelPosZ;
-            contact_type = checkSphereEntityOverlap<double>(
-                myPosX, myPosY, myPosZ, myRadius, objType[objB], objBPosX, objBPosY, objBPosZ, objBRotX, objBRotY,
-                objBRotZ, objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], simParams->beta);
+            double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
+            contact_type = checkSphereEntityOverlap<double3, float>(
+                myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], simParams->beta);
 
             if (contact_type) {
                 idGeoA[mySphereGeoReportOffset] = sphereID;

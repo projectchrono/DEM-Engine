@@ -197,7 +197,8 @@ void DEMSolver::addAnalCompTemplate(const objType_t type,
     m_anal_size_1.push_back(d1);
     m_anal_size_2.push_back(d2);
     m_anal_size_3.push_back(d3);
-    m_anal_normals.push_back(normal);
+    float normal_sign = (normal == ENTITY_NORMAL_INWARD) ? 1 : -1;
+    m_anal_normals.push_back(normal_sign);
 }
 
 void DEMSolver::jitifyKernels() {
@@ -449,6 +450,10 @@ void DEMSolver::preprocessAnalyticalObjs() {
                 case OBJ_COMPONENT::PLATE:
                     addAnalCompTemplate(ANAL_OBJ_TYPE_PLATE, comp_mat.at(i), thisExtObj, param.plate.center,
                                         param.plate.normal, param.plate.h_dim_x, param.plate.h_dim_y);
+                    break;
+                case OBJ_COMPONENT::CYL_INF:
+                    addAnalCompTemplate(ANAL_OBJ_TYPE_CYL_INF, comp_mat.at(i), thisExtObj, param.cyl.center,
+                                        param.cyl.dir, param.cyl.radius, 0, 0, param.cyl.normal);
                     break;
                 default:
                     DEME_ERROR("There is at least one analytical boundary that has a type not supported.");
@@ -1079,7 +1084,7 @@ inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std
         objOwner += std::to_string(myOwner) + ",";
         objType += std::to_string(m_anal_types.at(i)) + ",";
         objMat += std::to_string(m_anal_materials.at(i)) + ",";
-        objNormal += std::to_string(m_anal_normals.at(i)) + ",";
+        objNormal += to_string_with_precision(m_anal_normals.at(i)) + ",";
         objRelPosX += to_string_with_precision(m_anal_comp_pos.at(i).x) + ",";
         objRelPosY += to_string_with_precision(m_anal_comp_pos.at(i).y) + ",";
         objRelPosZ += to_string_with_precision(m_anal_comp_pos.at(i).z) + ",";

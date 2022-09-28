@@ -468,9 +468,7 @@ class DEMClumpTemplate {
     /// Scale all geometry component of this clump
     void Scale(float s) {
         for (auto& pos : relPos) {
-            pos.x *= s;
-            pos.y *= s;
-            pos.z *= s;
+            pos *= s;
         }
         for (auto& rad : radii) {
             rad *= s;

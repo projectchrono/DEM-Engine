@@ -25,25 +25,21 @@ namespace deme {
 /// External object type
 /// Note all of them are `shell', not solid objects. If you need a solid cylinder for example, then use one CYLINDER as
 /// the side plus 2 CIRCLE as the ends to emulate it. Please be sure to set OUTWARD CYLINDER normal in this case.
-enum class OBJ_COMPONENT { PLANE, SPHERE, PLATE, CIRCLE, CYLINDER, CYL_INF, CONE, CONE_INF, TRIANGLE };
-/// Normal type: inward or outward?
-enum class OBJ_NORMAL { INWARD, OUTWARD };
+enum class OBJ_COMPONENT { PLANE, SPHERE, PLATE, CIRCLE, CYL, CYL_INF, CONE, CONE_INF, TRIANGLE };
 
 /// Sphere
-template <typename T, typename T3>
 struct DEMSphereParams_t {
     float radius;
-    T normal_sign;
+    objNormal_t normal;
 };
 
 /// Cone (pos is tip pos)
-template <typename T, typename T3>
 struct DEMConeParams_t {
-    T3 cone_tip;
+    float3 cone_tip;
     float slope;
-    T hmax;
-    T hmin;
-    T normal_sign;
+    float hmax;
+    float hmin;
+    objNormal_t normal;
 };
 
 /// Infinite Plane defined by point in plane and normal
@@ -61,11 +57,11 @@ struct DEMPlateParams_t {
 };
 
 /// Infinite Z-aligned cylinder
-template <typename T, typename T3>
 struct DEMCylinderParams_t {
-    T3 center;
-    T radius;
-    T normal_sign;
+    float3 center;
+    float3 dir;
+    float radius;
+    objNormal_t normal;
 };
 
 /// GPU-side struct that holds external object component info. Only component, not their parents, so this is the
@@ -120,6 +116,7 @@ struct DEMExternObj {
     union DEMAnalEntParams {
         DEMPlateParams_t plate;
         DEMPlaneParams_t plane;
+        DEMCylinderParams_t cyl;
     };
     std::vector<DEMAnalEntParams> entity_params;
 
@@ -165,6 +162,35 @@ struct DEMExternObj {
         params.plate.normal = unit_normal;
         params.plate.h_dim_x = xdim / 2.0;
         params.plate.h_dim_y = ydim / 2.0;
+        entity_params.push_back(params);
+    }
+    /// Add a z-axis-aligned cylinder of infinite length
+    void AddZCylinder(const float3 pos,
+                      const float rad,
+                      const std::shared_ptr<DEMMaterial>& material,
+                      const objNormal_t normal = ENTITY_NORMAL_INWARD) {
+        types.push_back(OBJ_COMPONENT::CYL_INF);
+        materials.push_back(material);
+        DEMAnalEntParams params;
+        params.cyl.center = pos;
+        params.cyl.radius = rad;
+        params.cyl.dir = host_make_float3(0, 0, 1);
+        params.cyl.normal = normal;
+        entity_params.push_back(params);
+    }
+    /// Add a cylinder of infinite length, which is along a user-specific axis
+    void AddCylinder(const float3 pos,
+                     const float3 axis,
+                     const float rad,
+                     const std::shared_ptr<DEMMaterial>& material,
+                     const objNormal_t normal = ENTITY_NORMAL_INWARD) {
+        types.push_back(OBJ_COMPONENT::CYL_INF);
+        materials.push_back(material);
+        DEMAnalEntParams params;
+        params.cyl.center = pos;
+        params.cyl.radius = rad;
+        params.cyl.dir = normalize(axis);
+        params.cyl.normal = normal;
         entity_params.push_back(params);
     }
 };
@@ -310,8 +336,42 @@ class DEMMeshConnected {
     void ComputeMassProperties(double& mass, float3& center, float3& inertia);
 
     /// Transform the meshed object so it gets to its initial position, before the simulation starts
-    void Rotate(const float4 rotQ) { init_oriQ = hostHamiltonProduct(rotQ, init_oriQ); }
-    void Translate(const float3 displ) { init_pos += displ; }
+    void SetInitQuat(const float4 rotQ) { init_oriQ = rotQ; }
+    void SetInitPos(const float3 displ) { init_pos = displ; }
+
+    /// If this mesh's component sphere relPos is not reported by the user in its CoM frame, then the user needs to
+    /// call this method immediately to report this mesh's Volume Centroid and Principal Axes, and relPos will be
+    /// adjusted by this call.
+    void InformCentroidPrincipal(float3 center, float4 prin_Q) {
+        // Getting to Centroid and Principal is a translation then a rotation (local), so the undo order to undo
+        // rotation then translation
+        float4 g_to_loc_prin_Q = prin_Q;
+        g_to_loc_prin_Q.x = -g_to_loc_prin_Q.x;
+        g_to_loc_prin_Q.y = -g_to_loc_prin_Q.y;
+        g_to_loc_prin_Q.z = -g_to_loc_prin_Q.z;
+        for (auto& node : m_vertices) {
+            hostApplyFrameTransform(node, -center, g_to_loc_prin_Q);
+        }
+    }
+    /// The opposite of InformCentroidPrincipal, and it is another way to align this mesh's coordinate system with its
+    /// centroid and principal system: rotate then move this clump, so that at the end of this operation, the original
+    /// `origin' point should hit the CoM of this mesh.
+    void Move(float3 vec, float4 rot_Q) {
+        for (auto& node : m_vertices) {
+            hostApplyFrameTransform(node, vec, rot_Q);
+        }
+    }
+    /// Scale all geometry component of this mesh
+    void Scale(float s) {
+        for (auto& node : m_vertices) {
+            node *= s;
+        }
+    }
+    void Scale(float3 s) {
+        for (auto& node : m_vertices) {
+            node = node * s;
+        }
+    }
 
     /// Create a map of neighboring triangles, vector of:
     /// [Ti TieA TieB TieC]

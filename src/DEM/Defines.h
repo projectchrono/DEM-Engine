@@ -64,6 +64,7 @@ constexpr clumpComponentOffset_t NUM_ACTIVE_TEMPLATE_LOADING_THREADS =
 
 const objType_t ANAL_OBJ_TYPE_PLANE = 0;
 const objType_t ANAL_OBJ_TYPE_PLATE = 1;
+const objType_t ANAL_OBJ_TYPE_CYL_INF = 2;
 const objNormal_t ENTITY_NORMAL_INWARD = 0;
 const objNormal_t ENTITY_NORMAL_OUTWARD = 1;
 
@@ -72,6 +73,7 @@ const contact_t SPHERE_SPHERE_CONTACT = 1;
 const contact_t SPHERE_MESH_CONTACT = 2;
 const contact_t SPHERE_PLANE_CONTACT = 3;
 const contact_t SPHERE_PLATE_CONTACT = 4;
+const contact_t SPHERE_CYL_CONTACT = 5;
 
 const notStupidBool_t DONT_PREVENT_CONTACT = 0;
 const notStupidBool_t PREVENT_CONTACT = 1;

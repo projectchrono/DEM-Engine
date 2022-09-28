@@ -25,8 +25,8 @@ int main() {
     DEMSim.EnsureKernelErrMsgLineNum();
 
     // E, nu, CoR, mu, Crr...
-    auto mat_type_ball = DEMSim.LoadMaterial({{"E", 1e10}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.0}, {"Crr", 0.0}});
-    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 5e9}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.0}, {"Crr", 0.0}});
+    auto mat_type_ball = DEMSim.LoadMaterial({{"E", 1e10}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.3}, {"Crr", 0.01}});
+    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 5e9}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.3}, {"Crr", 0.01}});
 
     float step_size = 1e-5;
     double world_size = 10;
@@ -37,9 +37,10 @@ int main() {
     auto projectile = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/sphere.obj").string(), mat_type_ball);
     std::cout << "Total num of triangles: " << projectile->GetNumTriangles() << std::endl;
 
-    projectile->Translate(make_float3(world_size / 2, world_size / 2, world_size / 3 * 2));
-    projectile->SetMass(10);
-    projectile->SetMOI(make_float3(10, 10, 10));
+    projectile->SetInitPos(make_float3(world_size / 2, world_size / 2, world_size / 3 * 2));
+    float ball_mass = 2.6e3 * 4 / 3 * 3.1416;
+    projectile->SetMass(ball_mass);
+    projectile->SetMOI(make_float3(ball_mass * 2 / 5, ball_mass * 2 / 5, ball_mass * 2 / 5));
     projectile->SetFamily(1);
 
     float terrain_rad = 0.05;

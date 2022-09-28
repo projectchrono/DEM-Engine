@@ -1,7 +1,7 @@
 // nAnalGM elements are in these arrays
 __constant__ __device__ deme::objType_t objType[] = {_objType_};
 __constant__ __device__ deme::bodyID_t objOwner[] = {_objOwner_};
-__constant__ __device__ bool objNormal[] = {_objNormal_};
+__constant__ __device__ float objNormal[] = {_objNormal_};
 __constant__ __device__ deme::materialsOffset_t objMaterial[] = {_objMaterial_};
 __constant__ __device__ float objRelPosX[] = {_objRelPosX_};
 __constant__ __device__ float objRelPosY[] = {_objRelPosY_};
