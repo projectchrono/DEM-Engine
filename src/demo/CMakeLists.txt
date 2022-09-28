@@ -23,6 +23,8 @@ SET(DEMOS
 		DEMdemo_GameOfLife
 		DEMdemo_BallDrop
 		DEMdemo_Mixer
+		DEMdemo_MixerTiming
+		DEMdemo_MixerTiming_Clumps
 		DEMdemo_PolydisperseGeneration
 		DEMdemo_RoverWheel
 		DEMdemo_GRCPrep_Part1
