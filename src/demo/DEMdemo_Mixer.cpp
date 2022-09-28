@@ -49,15 +49,21 @@ int main() {
     // Define the prescribed motion of mixer
     DEMSim.SetFamilyPrescribedAngVel(10, "0", "0", "2 * 3.14159");
 
-    float granular_rad = 0.005;
-    auto template_granular = DEMSim.LoadSphereType(granular_rad * granular_rad * granular_rad * 2.8e3 * 4 / 3 * 3.14,
-                                                   granular_rad, mat_type_granular);
+    float granular_rad = 0.0039685;
+    DEMClumpTemplate shape_template;
+    shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
+    // Calculate its mass and MOI
+    shape_template.mass = 2.6e3 * 5.5886717;  // in kg or g
+    shape_template.MOI = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3;
+    shape_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(shape_template.nComp, mat_type_granular);
+    shape_template.Scale(granular_rad);
+    auto template_granular = DEMSim.LoadClumpType(shape_template);
 
     // Track the mixer
     auto mixer_tracker = DEMSim.Track(mixer);
 
     // Sampler to use
-    HCPSampler sampler(2.1f * granular_rad);
+    HCPSampler sampler(3.f * granular_rad);
     float3 fill_center = make_float3(0, 0, fill_bottom + fill_height / 2);
     const float fill_radius = world_size / 2. - 2. * granular_rad;
     auto input_xyz = sampler.SampleCylinderZ(fill_center, fill_radius, fill_height / 2);

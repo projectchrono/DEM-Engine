@@ -30,7 +30,8 @@ int main() {
 
         // E, nu, CoR, mu, Crr...
         auto mat_type_mixer = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
-        auto mat_type_granular = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
+        auto mat_type_granular =
+            DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
 
         float step_size = 1e-5;
         const double world_size = 1;
@@ -47,15 +48,16 @@ int main() {
         auto walls = DEMSim.AddExternalObject();
         walls->AddCylinder(make_float3(0), make_float3(0, 0, 1), world_size / 2., mat_type_mixer, 0);
 
-        auto mixer = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/internal_mixer.obj").string(), mat_type_mixer);
+        auto mixer =
+            DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/internal_mixer.obj").string(), mat_type_mixer);
         std::cout << "Total num of triangles: " << mixer->GetNumTriangles() << std::endl;
         mixer->Scale(make_float3(world_size / 2, world_size / 2, chamber_height));
         mixer->SetFamily(10);
         // Define the prescribed motion of mixer
         DEMSim.SetFamilyPrescribedAngVel(10, "0", "0", "2 * 3.14159");
 
-        auto template_granular = DEMSim.LoadSphereType(granular_rad * granular_rad * granular_rad * 2.8e3 * 4 / 3 * 3.14,
-                                                    granular_rad, mat_type_granular);
+        auto template_granular = DEMSim.LoadSphereType(
+            granular_rad * granular_rad * granular_rad * 2.8e3 * 4 / 3 * 3.14, granular_rad, mat_type_granular);
 
         // Track the mixer
         auto mixer_tracker = DEMSim.Track(mixer);
@@ -94,9 +96,10 @@ int main() {
         DEMSim.ShowThreadCollaborationStats();
         std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
-        std::cout << (time_sec.count()) / sim_end << " seconds (wall time) to finish 1 second's simulation" << std::endl;
+        std::cout << (time_sec.count()) / sim_end << " seconds (wall time) to finish 1 second's simulation"
+                  << std::endl;
 
-        granular_rad *= std::pow(0.5, 1./3.);
+        granular_rad *= std::pow(0.5, 1. / 3.);
     }
 
     return 0;
