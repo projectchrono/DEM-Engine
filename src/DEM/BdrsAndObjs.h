@@ -366,11 +366,19 @@ class DEMMeshConnected {
         for (auto& node : m_vertices) {
             node *= s;
         }
+        mass *= (double)s * (double)s * (double)s;
+        MOI *= (double)s * (double)s * (double)s * (double)s * (double)s;
     }
     void Scale(float3 s) {
         for (auto& node : m_vertices) {
             node = node * s;
         }
+        // Really just an estimate. The user should reset mass properties manually afterwards.
+        double prod = (double)s.x * (double)s.y * (double)s.z;
+        mass *= prod;
+        MOI.x *= prod * s.x * s.x;
+        MOI.y *= prod * s.y * s.y;
+        MOI.z *= prod * s.z * s.z;
     }
 
     /// Create a map of neighboring triangles, vector of:
