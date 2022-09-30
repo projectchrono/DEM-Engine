@@ -27,8 +27,8 @@ int main() {
     auto mat_type_mixer = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
     auto mat_type_granular = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
 
-    float step_size = 1e-5;
-    const double world_size = 1;
+    float step_size = 5e-6;
+    const double world_size = 2;
     const float chamber_height = world_size / 3.;
     const float fill_height = chamber_height;
     const float chamber_bottom = -world_size / 2.;
@@ -49,7 +49,7 @@ int main() {
     // Define the prescribed motion of mixer
     DEMSim.SetFamilyPrescribedAngVel(10, "0", "0", "2 * 3.14159");
 
-    float granular_rad = 0.0039685;
+    float granular_rad = 0.005;
     DEMClumpTemplate shape_template;
     shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
     // Calculate its mass and MOI
@@ -75,7 +75,7 @@ int main() {
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEMSim.SetCDUpdateFreq(10);
     // DEMSim.SetExpandFactor(1e-3);
-    DEMSim.SetMaxVelocity(10.);
+    DEMSim.SetMaxVelocity(20.);
     DEMSim.SetExpandSafetyParam(1.0);
     DEMSim.SetInitBinSize(4 * granular_rad);
     DEMSim.Initialize();
@@ -98,13 +98,11 @@ int main() {
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_end; t += frame_time) {
         std::cout << "Frame: " << currframe << std::endl;
-        char filename[200], meshfilename[200], cnt_filename[200];
+        char filename[200], meshfilename[200];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-        sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
-        sprintf(cnt_filename, "%s/Contact_pairs_%04d.csv", out_dir.c_str(), currframe++);
+        sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
         DEMSim.WriteSphereFile(std::string(filename));
         DEMSim.WriteMeshFile(std::string(meshfilename));
-        DEMSim.WriteContactFile(std::string(cnt_filename));
 
         float max_v = max_v_finder->GetValue();
         std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;

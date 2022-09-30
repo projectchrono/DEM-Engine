@@ -20,6 +20,8 @@ using namespace std::filesystem;
 int main() {
     float granular_rad = 0.005;
     unsigned int num_particles = 0;
+    double world_size = 4.32675;
+    double CDFreq = 8.1;
 
     while (num_particles < 3e8) {
         DEMSolver DEMSim;
@@ -33,8 +35,7 @@ int main() {
         auto mat_type_granular =
             DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
 
-        float step_size = 5e-6;
-        const double world_size = 1;
+        float step_size = 2.5e-6;
         const float chamber_height = world_size / 3.;
         const float fill_height = chamber_height;
         const float chamber_bottom = -world_size / 2.;
@@ -78,11 +79,12 @@ int main() {
         std::cout << "Particle size: " << granular_rad << std::endl;
         std::cout << "Total num of particles: " << num_particles << std::endl;
         std::cout << "Total num of spheres: " << num_particles * 3 << std::endl;
+        std::cout << "World size: " << world_size << std::endl;
 
         DEMSim.SetInitTimeStep(step_size);
         DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
         // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-        DEMSim.SetCDUpdateFreq(10);
+        DEMSim.SetCDUpdateFreq((unsigned int)CDFreq);
         // DEMSim.SetExpandFactor(1e-3);
         DEMSim.SetMaxVelocity(20.);
         DEMSim.SetExpandSafetyParam(1.0);
@@ -93,7 +95,7 @@ int main() {
         out_dir += "/DemoOutput_Mixer";
         create_directory(out_dir);
 
-        float sim_end = 3.0;
+        float sim_end = 1.5;
         unsigned int fps = 20;
 
         mixer_tracker->SetPos(make_float3(0, 0, chamber_bottom + chamber_height / 2.0));
@@ -101,13 +103,16 @@ int main() {
 
         DEMSim.DoDynamicsThenSync(sim_end);
         DEMSim.ShowThreadCollaborationStats();
+        DEMSim.ShowTimingStats();
         std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
-        std::cout << (time_sec.count()) / sim_end / 2. << " seconds (wall time) to finish 1 second's simulation"
+        std::cout << (time_sec.count()) / sim_end / 4. << " seconds (wall time) to finish 1 second's simulation"
                   << std::endl;
         // Compensate for smaller ts
 
-        granular_rad *= std::pow(0.5, 1. / 3.);
+        // granular_rad *= std::pow(0.5, 1. / 3.);
+        world_size *= std::pow(3., 1. / 3.);
+        // CDFreq *= std::pow(0.95, 1. / 3.);
     }
 
     return 0;
