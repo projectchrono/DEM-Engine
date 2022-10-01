@@ -17,14 +17,14 @@
 
 namespace deme {
 
-void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernels,
-                          DEMDataDT* granData,
-                          const size_t nContactPairs,
-                          const size_t nClumps,
-                          bool contactPairArr_isFresh,
-                          cudaStream_t& this_stream,
-                          DEMSolverStateData& scratchPad,
-                          SolverTimers& timers) {
+void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force_kernels,
+                                 DEMDataDT* granData,
+                                 const size_t nContactPairs,
+                                 const size_t nClumps,
+                                 bool contactPairArr_isFresh,
+                                 cudaStream_t& this_stream,
+                                 DEMSolverStateData& scratchPad,
+                                 SolverTimers& timers) {
     // Preparation: allocate enough temp array memory and chop it to pieces, for the usage of cub operations. Note that
     // if contactPairArr_isFresh is false, then this allocation should not alter the size and content of the temp array
     // space, so the information in it can be used in the next iteration.

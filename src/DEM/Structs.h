@@ -361,6 +361,8 @@ struct SolverFlags {
     bool useOneBinPerThread = false;
     // Whether the simulation involves meshes
     bool hasMeshes = false;
+    // Whether the force collection (acceleration calc and reduction) process should be using CUB
+    bool useCubForceCollect = false;
 };
 
 class DEMMaterial {
