@@ -20,8 +20,9 @@ using namespace std::filesystem;
 int main() {
     float granular_rad = 0.005;
     unsigned int num_particles = 0;
-    double CDFreq = 8.1;
+    double CDFreq = 20.1;
     double world_size = 1;
+    double pi = 3.14159;
 
     while (num_particles < 3e8) {
         DEMSolver DEMSim;
@@ -55,7 +56,7 @@ int main() {
         mixer->Scale(make_float3(world_size / 2, world_size / 2, chamber_height));
         mixer->SetFamily(10);
         // Define the prescribed motion of mixer
-        DEMSim.SetFamilyPrescribedAngVel(10, "0", "0", "2 * 3.14159");
+        DEMSim.SetFamilyPrescribedAngVel(10, "0", "0", "2 * " + to_string_with_precision(pi / world_size));
 
         auto template_granular = DEMSim.LoadSphereType(
             granular_rad * granular_rad * granular_rad * 2.8e3 * 4 / 3 * 3.14, granular_rad, mat_type_granular);
@@ -78,8 +79,8 @@ int main() {
         DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
         // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
         DEMSim.SetCDUpdateFreq((unsigned int)CDFreq);
-        // DEMSim.SetExpandFactor(1e-3);
-        DEMSim.SetMaxVelocity(10.);
+        DEMSim.SetMaxVelocity(6.);
+        // DEMSim.SetMaxVelocity(3. + 3.14 * world_size);
         DEMSim.SetExpandSafetyParam(1.0);
         DEMSim.SetInitBinSize(4 * granular_rad);
         DEMSim.Initialize();

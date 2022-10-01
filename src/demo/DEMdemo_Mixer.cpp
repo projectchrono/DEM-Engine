@@ -28,7 +28,7 @@ int main() {
     auto mat_type_granular = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
 
     float step_size = 5e-6;
-    const double world_size = 2;
+    const double world_size = 1;
     const float chamber_height = world_size / 3.;
     const float fill_height = chamber_height;
     const float chamber_bottom = -world_size / 2.;
@@ -73,7 +73,7 @@ int main() {
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEMSim.SetCDUpdateFreq(10);
+    DEMSim.SetCDUpdateFreq(15);
     // DEMSim.SetExpandFactor(1e-3);
     DEMSim.SetMaxVelocity(20.);
     DEMSim.SetExpandSafetyParam(1.0);
@@ -84,7 +84,7 @@ int main() {
     out_dir += "/DemoOutput_Mixer";
     create_directory(out_dir);
 
-    float sim_end = 3.0;
+    float sim_end = 6.;
     unsigned int fps = 20;
     float frame_time = 1.0 / fps;
 
