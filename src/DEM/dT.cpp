@@ -1466,7 +1466,6 @@ inline void DEMDynamicThread::calculateForces() {
         // std::cout << "===========================" << std::endl;
         timers.GetTimer("Calculate contact forces").stop();
 
-        timers.GetTimer("Collect contact forces").start();
         // Reflect those body-wise forces on their owner clumps
         // hostCollectForces(granData->inertiaPropOffsets, granData->idGeometryA, granData->idGeometryB,
         //                   granData->contactForces, granData->aX, granData->aY, granData->aZ,
@@ -1492,7 +1491,6 @@ inline void DEMDynamicThread::calculateForces() {
         // displayArray<float>(granData->alphaX, simParams->nOwnerBodies);
         // displayArray<float>(granData->alphaY, simParams->nOwnerBodies);
         // displayArray<float>(granData->alphaZ, simParams->nOwnerBodies);
-        timers.GetTimer("Collect contact forces").stop();
     }
 }
 
