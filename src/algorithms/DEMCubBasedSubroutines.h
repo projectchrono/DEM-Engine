@@ -66,13 +66,13 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       DEMSolverStateData& scratchPad,
                       SolverTimers& timers);
 
-void collectContactForces(std::shared_ptr<jitify::Program>& collect_force_kernels,
-                          DEMDataDT* granData,
-                          const size_t nContactPairs,
-                          const size_t nClumps,
-                          bool contactPairArr_isFresh,
-                          cudaStream_t& this_stream,
-                          DEMSolverStateData& scratchPad,
-                          SolverTimers& timers);
+void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force_kernels,
+                                 DEMDataDT* granData,
+                                 const size_t nContactPairs,
+                                 const size_t nClumps,
+                                 bool contactPairArr_isFresh,
+                                 cudaStream_t& this_stream,
+                                 DEMSolverStateData& scratchPad,
+                                 SolverTimers& timers);
 
 }  // namespace deme

@@ -737,6 +737,10 @@ void DEMSolver::transferSolverParams() {
     kT->solverFlags.canFamilyChange = famnum_can_change_conditionally;
     dT->solverFlags.canFamilyChange = famnum_can_change_conditionally;
 
+    // Force reduction strategy
+    kT->solverFlags.useCubForceCollect = use_cub_to_reduce_force;
+    dT->solverFlags.useCubForceCollect = use_cub_to_reduce_force;
+
     kT->solverFlags.should_sort_pairs = kT_should_sort;
 }
 
@@ -970,7 +974,7 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     // and modify them, and in the end we will write them back to global mem.
     equip_contact_wildcards(wildcard_acquisition, wildcard_write_back, wildcard_destroy_record, contact_wildcard_names);
 
-    if (m_ensure_kernel_line_num) {
+    if (ensure_kernel_line_num) {
         model = compact_code(model);
         ingredient_definition = compact_code(ingredient_definition);
         ingredient_acquisition_A = compact_code(ingredient_acquisition_A);
@@ -1002,7 +1006,7 @@ inline void DEMSolver::equipFamilyOnFlyChanges(std::unordered_map<std::string, s
         // The conditions will be handled by a series of if statements
         std::string cond = "if (family_code == " + std::to_string(implID1) + ") { bool shouldMakeChange = false;";
         std::string user_str = replace_pattern(m_family_change_conditions.at(i), "return", "shouldMakeChange = ");
-        if (m_ensure_kernel_line_num) {
+        if (ensure_kernel_line_num) {
             user_str = compact_code(user_str);
         }
         cond += user_str;
@@ -1135,7 +1139,7 @@ inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std
 
     std::string analyticalEntityDefs = ANALYTICAL_COMPONENT_DEFINITIONS_JITIFIED();
     analyticalEntityDefs = replace_patterns(analyticalEntityDefs, array_content);
-    if (m_ensure_kernel_line_num) {
+    if (ensure_kernel_line_num) {
         analyticalEntityDefs = compact_code(analyticalEntityDefs);
     }
     strMap["_analyticalEntityDefs_"] = analyticalEntityDefs;
@@ -1210,7 +1214,7 @@ inline void DEMSolver::equipMassMoiVolume(std::unordered_map<std::string, std::s
     }
     volumeDefs += "};\n";
 
-    if (m_ensure_kernel_line_num) {
+    if (ensure_kernel_line_num) {
         massDefs = compact_code(massDefs);
         moiDefs = compact_code(moiDefs);
         massAcqStrat = compact_code(massAcqStrat);
@@ -1273,7 +1277,7 @@ inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::strin
     // nu   0.33    0.3
     // CoR  0.6     0.4
 
-    if (m_ensure_kernel_line_num) {
+    if (ensure_kernel_line_num) {
         materialDefs = compact_code(materialDefs);
     }
     strMap["_materialDefs_"] = materialDefs;
@@ -1333,7 +1337,7 @@ inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::
         clump_template_arrays = " ";
     }
 
-    if (m_ensure_kernel_line_num) {
+    if (ensure_kernel_line_num) {
         clump_template_arrays = compact_code(clump_template_arrays);
         componentAcqStrat = compact_code(componentAcqStrat);
     }
