@@ -329,7 +329,12 @@ class DEMSolver {
     /// If true, each jitification string substitution will do a one-liner to one-liner replacement, so that if the
     /// kernel compilation fails, the error meessage line number will reflex the actual spot where that happens (instead
     /// of some random number)
-    void EnsureKernelErrMsgLineNum(bool flag = true) { m_ensure_kernel_line_num = flag; }
+    void EnsureKernelErrMsgLineNum(bool flag = true) { ensure_kernel_line_num = flag; }
+
+    /// Whether the force collection (acceleration calc and reduction) process should be using CUB. If true, the
+    /// acceleration array is flattened and reduced using CUB; if false, the acceleration is computed and directly
+    /// applied to each body through atomic operations.
+    void UseCubForceCollection(bool flag = true) { use_cub_to_reduce_force = flag; }
 
     /// Add an (analytical or clump-represented) external object to the simulation system
     std::shared_ptr<DEMExternObj> AddExternalObject();
@@ -588,7 +593,10 @@ class DEMSolver {
     SPATIAL_DIR m_box_dir_length_is_exact = SPATIAL_DIR::NONE;
 
     // If we should ensure that when kernel jitification fails, the line number reported reflexes where error happens
-    bool m_ensure_kernel_line_num = false;
+    bool ensure_kernel_line_num = false;
+
+    // If we should flatten then reduce forces (true), or use atomic operation to reduce forces (false)
+    bool use_cub_to_reduce_force = false;
 
     // Integrator type
     TIME_INTEGRATOR m_integrator = TIME_INTEGRATOR::EXTENDED_TAYLOR;
