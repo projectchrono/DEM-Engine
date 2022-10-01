@@ -95,16 +95,22 @@ int main() {
         out_dir += "/DemoOutput_Mixer";
         create_directory(out_dir);
 
-        float sim_end = 1.5;
+        float sim_end = 0.5;
         unsigned int fps = 20;
 
         mixer_tracker->SetPos(make_float3(0, 0, chamber_bottom + chamber_height / 2.0));
+        DEMSim.DoDynamicsThenSync(0.5);
+        DEMSim.ClearThreadCollaborationStats();
+        DEMSim.ClearTimingStats();
         std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
 
         DEMSim.DoDynamicsThenSync(sim_end);
+
+        std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+
         DEMSim.ShowThreadCollaborationStats();
         DEMSim.ShowTimingStats();
-        std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+
         std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
         std::cout << (time_sec.count()) / sim_end / 4. << " seconds (wall time) to finish 1 second's simulation"
                   << std::endl;
