@@ -105,7 +105,7 @@ int main() {
 
         char cnt_filename[100];
         sprintf(cnt_filename, "%s/Contact_pairs_%04d.csv", out_dir.c_str(), i);
-        DEMSim.WriteContactFile(std::string(cnt_filename));
+        // DEMSim.WriteContactFile(std::string(cnt_filename));
 
         char meshfilename[100];
         sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), i);
