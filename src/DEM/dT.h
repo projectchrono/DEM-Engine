@@ -252,8 +252,10 @@ class DEMDynamicThread {
     std::unordered_map<unsigned int, std::string> templateNumNameMap;
 
     // dT's timers
-    std::vector<std::string> timer_names = {"Calculate contact forces", "Collect contact forces", "Integration",
-                                            "Unpack updates from kT",   "Send to kT buffer",      "Wait for kT update"};
+    std::vector<std::string> timer_names = {
+        "Calculate contact forces", "Flatten owners",    "Calc acc (calc)", "Calc acc (sort)",
+        "Calc acc (reduce)",        "Stash items",       "Integration",     "Unpack updates from kT",
+        "Send to kT buffer",        "Wait for kT update"};
     SolverTimers timers = SolverTimers(timer_names);
 
   public:
