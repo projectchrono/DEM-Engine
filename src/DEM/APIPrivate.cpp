@@ -740,6 +740,8 @@ void DEMSolver::transferSolverParams() {
     // Force reduction strategy
     kT->solverFlags.useCubForceCollect = use_cub_to_reduce_force;
     dT->solverFlags.useCubForceCollect = use_cub_to_reduce_force;
+    dT->solverFlags.useNoContactRecord = no_recording_contact_forces;
+    dT->solverFlags.useForceCollectInPlace = collect_force_in_force_kernel;
 
     kT->solverFlags.should_sort_pairs = kT_should_sort;
 }
@@ -940,6 +942,8 @@ void DEMSolver::validateUserInputs() {
 // }
 
 inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::string>& strMap) {
+    // Empty ingr list
+    auto added_ingredients = force_kernel_ingredient_stats;
     // Analyze this model... what does it require?
     std::string model = m_force_model->m_force_model;
     // It should have those following names in it
@@ -949,7 +953,21 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     // acquisition module
     std::string ingredient_definition = " ", wildcard_acquisition = " ", ingredient_acquisition_A = " ",
                 ingredient_acquisition_B = " ", wildcard_write_back = " ", wildcard_destroy_record = " ";
-    equip_force_model_ingr_acq(ingredient_definition, ingredient_acquisition_A, ingredient_acquisition_B, model);
+    scan_force_model_ingr(added_ingredients, model);
+    if (collect_force_in_force_kernel) {
+        add_force_model_ingr(added_ingredients, "AOwner");
+        add_force_model_ingr(added_ingredients, "BOwner");
+        add_force_model_ingr(added_ingredients, "AOwnerMOI");
+        add_force_model_ingr(added_ingredients, "BOwnerMOI");
+    }
+
+    // Equip those acquisition strategies that need to be there
+    equip_force_model_ingr_acq(ingredient_definition, ingredient_acquisition_A, ingredient_acquisition_B,
+                               added_ingredients);
+
+    // Acq strategies may have moi acq strategy in them that needs to be replaced first...
+    ingredient_acquisition_A = replace_patterns(ingredient_acquisition_A, strMap);
+    ingredient_acquisition_B = replace_patterns(ingredient_acquisition_B, strMap);
 
     // Check if force, and wildcards are all defined in the model
     std::string non_match;
@@ -974,11 +992,25 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     // and modify them, and in the end we will write them back to global mem.
     equip_contact_wildcards(wildcard_acquisition, wildcard_write_back, wildcard_destroy_record, contact_wildcard_names);
 
+    // If the user wants to reduce force in the calculation kernel...
+    std::string whether_reduce_in_kernel = " ";
+    if (collect_force_in_force_kernel) {
+        whether_reduce_in_kernel = FORCE_REDUCTION_RIGHT_AFTER_CALC_STRAT();
+    }
+
+    // If the user doesn't want to keep tab of contact forces...
+    std::string contact_info_write_strat = " ";
+    if (!no_recording_contact_forces) {
+        contact_info_write_strat = FORCE_INFO_WRITE_BACK_STRAT();
+    }
+
     if (ensure_kernel_line_num) {
         model = compact_code(model);
         ingredient_definition = compact_code(ingredient_definition);
         ingredient_acquisition_A = compact_code(ingredient_acquisition_A);
         ingredient_acquisition_B = compact_code(ingredient_acquisition_B);
+        whether_reduce_in_kernel = compact_code(whether_reduce_in_kernel);
+        contact_info_write_strat = compact_code(contact_info_write_strat);
     }
     strMap["_DEMForceModel_"] = model;
     strMap["_forceModelIngredientDefinition_"] = ingredient_definition;
@@ -989,9 +1021,14 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     strMap["_forceModelContactWildcardWrite_"] = wildcard_write_back;
     strMap["_forceModelContactWildcardDestroy_"] = wildcard_destroy_record;
 
+    strMap["_forceCollectInPlaceStrat_"] = whether_reduce_in_kernel;
+    strMap["_contactInfoWrite_"] = contact_info_write_strat;
+
     DEME_DEBUG_PRINTF("Wildcard acquisition:\n%s", wildcard_acquisition.c_str());
     DEME_DEBUG_PRINTF("Wildcard write-back:\n%s", wildcard_write_back.c_str());
     DEME_DEBUG_PRINTF("Wildcard destroy inactive contacts:\n%s", wildcard_destroy_record.c_str());
+
+    // DEME_DEBUG_PRINTF("Contact info writing strategy:\n%s", contact_info_write_strat.c_str());
 }
 
 inline void DEMSolver::equipFamilyOnFlyChanges(std::unordered_map<std::string, std::string>& strMap) {

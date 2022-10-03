@@ -39,6 +39,24 @@ inline std::string HERTZIAN_FORCE_MODEL_FRICTIONLESS() {
     return read_file_to_string(sourcefile);
 }
 
+inline std::string FORCE_REDUCTION_RIGHT_AFTER_CALC_STRAT() {
+    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
+                                       "DEMCustomizablePolicies" / "ForceInKernelReductionStrat.cu";
+    if (!std::filesystem::exists(sourcefile)) {
+        DEME_ERROR("A strategy file %s is not found.", sourcefile.c_str());
+    }
+    return read_file_to_string(sourcefile);
+}
+
+inline std::string FORCE_INFO_WRITE_BACK_STRAT() {
+    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
+                                       "DEMCustomizablePolicies" / "ContactInfoWriteBack.cu";
+    if (!std::filesystem::exists(sourcefile)) {
+        DEME_ERROR("A strategy file %s is not found.", sourcefile.c_str());
+    }
+    return read_file_to_string(sourcefile);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Clump template definition and acquisition strategy files
 ////////////////////////////////////////////////////////////////////////////////
@@ -193,26 +211,59 @@ inline std::string VEL_TO_PASS_ON_CENTERED_DIFF() {
 // Ingredient definition and acquisition module in DEM force models
 ////////////////////////////////////////////////////////////////////////////////
 
+inline void add_force_model_ingr(std::unordered_map<std::string, bool>& added_ingredients, const std::string& str) {
+    added_ingredients[str] = true;
+}
+inline void scan_force_model_ingr(std::unordered_map<std::string, bool>& added_ingredients, const std::string& model) {
+    if (any_whole_word_match(model, {"ts"})) {
+        added_ingredients["ts"] = true;
+    }
+    if (any_whole_word_match(model, {"time"})) {
+        added_ingredients["time"] = true;
+    }
+    if (any_whole_word_match(model, {"AOwnerFamily"})) {
+        added_ingredients["AOwnerFamily"] = true;
+    }
+    if (any_whole_word_match(model, {"BOwnerFamily"})) {
+        added_ingredients["BOwnerFamily"] = true;
+    }
+    if (any_whole_word_match(model, {"ALinVel", "BLinVel"})) {
+        added_ingredients["ALinVel"] = true;
+        added_ingredients["BLinVel"] = true;
+    }
+    if (any_whole_word_match(model, {"ARotVel", "BRotVel"})) {
+        added_ingredients["ARotVel"] = true;
+        added_ingredients["BRotVel"] = true;
+    }
+    if (any_whole_word_match(model, {"AOwner", "BOwner"})) {
+        added_ingredients["AOwner"] = true;
+        added_ingredients["BOwner"] = true;
+    }
+    if (any_whole_word_match(model, {"AOwnerMOI", "BOwnerMOI"})) {
+        added_ingredients["AOwnerMOI"] = true;
+        added_ingredients["BOwnerMOI"] = true;
+    }
+}
 // Sweep through all ingredients...
 inline void equip_force_model_ingr_acq(std::string& definition,
                                        std::string& acquisition_A,
                                        std::string& acquisition_B,
-                                       const std::string& model) {
-    if (any_whole_word_match(model, {"ts"})) {
+                                       std::unordered_map<std::string, bool>& added_ingredients) {
+    if (added_ingredients["ts"]) {
         definition += "float ts = simParams->h;\n";
     }
-    if (any_whole_word_match(model, {"time"})) {
+    if (added_ingredients["time"]) {
         definition += "float time = simParams->timeElapsed;\n";
     }
-    if (any_whole_word_match(model, {"AOwnerFamily"})) {
+    if (added_ingredients["AOwnerFamily"]) {
         definition += "deme::family_t AOwnerFamily;\n";
         acquisition_A += "AOwnerFamily = granData->familyID[myOwner];\n";
     }
-    if (any_whole_word_match(model, {"BOwnerFamily"})) {
+    if (added_ingredients["BOwnerFamily"]) {
         definition += "deme::family_t BOwnerFamily;\n";
         acquisition_B += "BOwnerFamily = granData->familyID[myOwner];\n";
     }
-    if (any_whole_word_match(model, {"ALinVel", "BLinVel"})) {
+    if (added_ingredients["ALinVel"] || added_ingredients["BLinVel"]) {
         definition += "float3 ALinVel, BLinVel;\n";
         acquisition_A += R"V0G0N(ALinVel.x = granData->vX[myOwner];
                                  ALinVel.y = granData->vY[myOwner];
@@ -223,7 +274,7 @@ inline void equip_force_model_ingr_acq(std::string& definition,
                                  BLinVel.z = granData->vZ[myOwner];
                          )V0G0N";
     }
-    if (any_whole_word_match(model, {"ARotVel", "BRotVel"})) {
+    if (added_ingredients["ARotVel"] || added_ingredients["BRotVel"]) {
         definition += "float3 ARotVel, BRotVel;\n";
         acquisition_A += R"V0G0N(ARotVel.x = granData->omgBarX[myOwner];
                                  ARotVel.y = granData->omgBarY[myOwner];
@@ -233,6 +284,22 @@ inline void equip_force_model_ingr_acq(std::string& definition,
                                  BRotVel.y = granData->omgBarY[myOwner];
                                  BRotVel.z = granData->omgBarZ[myOwner];
                          )V0G0N";
+    }
+    if (added_ingredients["AOwner"] || added_ingredients["BOwner"]) {
+        definition += "deme::bodyID_t AOwner, BOwner;\n";
+        acquisition_A += "AOwner = myOwner;";
+        acquisition_B += "BOwner = myOwner;";
+    }
+    if (added_ingredients["AOwnerMOI"] || added_ingredients["BOwnerMOI"]) {
+        definition += "float3 AOwnerMOI, BOwnerMOI;\n";
+        acquisition_A += R"V0G0N(float3 myMOI;
+                                 _moiAcqStrat_;
+                                 AOwnerMOI = myMOI;
+                        )V0G0N";
+        acquisition_B += R"V0G0N(float3 myMOI;
+                                _moiAcqStrat_;
+                                BOwnerMOI = myMOI;
+                        )V0G0N";
     }
 }
 

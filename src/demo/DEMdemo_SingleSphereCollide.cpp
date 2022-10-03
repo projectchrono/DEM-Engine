@@ -23,6 +23,7 @@ int main() {
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetContactOutputContent(OWNERS | FORCE | POINT | COMPONENT | NORMAL | TORQUE_ONLY_FORCE);
     DEMSim.EnsureKernelErrMsgLineNum();
+    DEMSim.SetNoForceRecord();
 
     // srand(time(NULL));
     srand(4150);
@@ -64,7 +65,7 @@ int main() {
     // A custom force model can be read in through a file and used by the simulation. Magic, right?
     auto my_force_model = DEMSim.ReadContactForceModel("SampleCustomForceModel.cu");
     // This custom force model still uses contact history arrays, so let's define it
-    my_force_model->SetPerContactWildcards({"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"});
+    my_force_model->SetPerContactWildcards({"delta_tan_x", "delta_tan_y", "delta_tan_z"});
 
     DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(2e-5);
@@ -120,6 +121,8 @@ int main() {
         std::cout << "Particle 2 X coord is " << tracker2->Pos().x << std::endl;
     }
 
+    DEMSim.ShowThreadCollaborationStats();
+    DEMSim.ShowTimingStats();
     std::cout << "DEMdemo_SingleSphereCollide exiting..." << std::endl;
     return 0;
 }

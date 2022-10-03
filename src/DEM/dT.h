@@ -223,6 +223,9 @@ class DEMDynamicThread {
     // update to proceed.
     bool pendingCriticalUpdate = true;
 
+    // Number of threads per block for dT force calculation kernels
+    unsigned int DT_FORCE_CALC_NTHREADS_PER_BLOCK = 256;
+
     // Template-related arrays in managed memory
     // Belonged-body ID
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerClumpBody;

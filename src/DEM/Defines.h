@@ -22,7 +22,6 @@ namespace deme {
 // =============================================================================
 #define DEME_GET_VAR_NAME(Variable) (#Variable)
 #define DEME_KT_CD_NTHREADS_PER_BLOCK 256
-#define DEME_DT_FORCE_CALC_NTHREADS_PER_BLOCK 256
 #define DEME_MAX_SPHERES_PER_BIN 256    ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
 #define DEME_MAX_TRIANGLES_PER_BIN 256  ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
 #define DEME_TINY_FLOAT 1e-12

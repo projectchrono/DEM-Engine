@@ -39,13 +39,12 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
         deme::contact_t myContactType = granData->contactType[myContactID];
         // The following quantities are always calculated, regardless of force model
         double3 contactPnt;
-        float3 B2A, AOwnerMOI, BOwnerMOI;  // Unit vector pointing from body B to body A (contact normal)
+        float3 B2A;  // Unit vector pointing from body B to body A (contact normal)
         double overlapDepth;
         double3 AOwnerPos, bodyAPos, BOwnerPos, bodyBPos;
         float AOwnerMass, ARadius, BOwnerMass, BRadius;
         float4 AOriQ, BOriQ;
         deme::materialsOffset_t bodyAMatType, bodyBMatType;
-        deme::bodyID_t AOwner, BOwner;
         // Then allocate the optional quantities that will be needed in the force model (note: this one can't be in a
         // curly bracket, obviously...)
         _forceModelIngredientDefinition_;
@@ -54,7 +53,6 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
         {
             deme::bodyID_t sphereID = granData->idGeometryA[myContactID];
             deme::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
-            AOwner = myOwner;
 
             float3 myRelPos;
             float myRadius;
@@ -68,11 +66,8 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             // Use an input named exactly `myOwner' which is the id of this owner
             {
                 float myMass;
-                float3 myMOI;
                 _massAcqStrat_;
-                _moiAcqStrat_;
                 AOwnerMass = myMass;
-                AOwnerMOI = myMOI;
             }
 
             equipOwnerPosRot(granData, myOwner, myRelPos, AOwnerPos, bodyAPos, AOriQ);
@@ -88,7 +83,6 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
         if (myContactType == deme::SPHERE_SPHERE_CONTACT) {
             deme::bodyID_t sphereID = granData->idGeometryB[myContactID];
             deme::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
-            BOwner = myOwner;
 
             float3 myRelPos;
             float myRadius;
@@ -102,11 +96,8 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             // Use an input named exactly `myOwner' which is the id of this owner
             {
                 float myMass;
-                float3 myMOI;
                 _massAcqStrat_;
-                _moiAcqStrat_;
                 BOwnerMass = myMass;
-                BOwnerMOI = myMOI;
             }
 
             equipOwnerPosRot(granData, myOwner, myRelPos, BOwnerPos, bodyBPos, BOriQ);
@@ -122,7 +113,6 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
         } else if (myContactType == deme::SPHERE_MESH_CONTACT) {
             deme::bodyID_t triB = granData->idGeometryB[myContactID];
             deme::bodyID_t myOwner = granData->ownerMesh[triB];
-            BOwner = myOwner;
 
             //// TODO: Is this OK?
             BRadius = DEME_HUGE_FLOAT;
@@ -137,11 +127,8 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             // Use an input named exactly `myOwner' which is the id of this owner
             {
                 float myMass;
-                float3 myMOI;
                 _massAcqStrat_;
-                _moiAcqStrat_;
                 BOwnerMass = myMass;
-                BOwnerMOI = myMOI;
             }
 
             // bodyBPos is for a place holder for the outcome triNode1 position
@@ -172,18 +159,14 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             deme::objID_t bodyB = granData->idGeometryB[myContactID];
             deme::bodyID_t myOwner = objOwner[bodyB];
             bodyBMatType = objMaterial[bodyB];
-            BOwner = myOwner;
 
             // Get my mass info from either jitified arrays or global memory
             // Outputs myMass
             // Use an input named exactly `myOwner' which is the id of this owner
             {
                 float myMass;
-                float3 myMOI;
                 _massAcqStrat_;
-                _moiAcqStrat_;
                 BOwnerMass = myMass;
-                BOwnerMOI = myMOI;
             }
             //// TODO: Is this OK?
             BRadius = DEME_HUGE_FLOAT;
@@ -210,10 +193,10 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                 objSize3[bodyB], objNormal[bodyB], 0.0, contactPnt, B2A, overlapDepth);
         }
 
-        float3 force = make_float3(0, 0, 0);
-        float3 torque_only_force = make_float3(0, 0, 0);
         _forceModelContactWildcardAcq_;
         if (myContactType != deme::NOT_A_CONTACT) {
+            float3 force = make_float3(0, 0, 0);
+            float3 torque_only_force = make_float3(0, 0, 0);
             // Local position of the contact point is always a piece of info we require... regardless of force model
             float3 locCPA = to_float3(contactPnt - AOwnerPos);
             float3 locCPB = to_float3(contactPnt - BOwnerPos);
@@ -227,49 +210,14 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             { _DEMForceModel_; }
 
             // Write contact location values back to global memory
-            // granData->contactPointGeometryA[myContactID] = locCPA;
-            // granData->contactPointGeometryB[myContactID] = locCPB;
+            _contactInfoWrite_;
 
-            // Take care of A
-            {
-                atomicAdd(granData->aX + AOwner, force.x / AOwnerMass);
-                atomicAdd(granData->aY + AOwner, force.y / AOwnerMass);
-                atomicAdd(granData->aZ + AOwner, force.z / AOwnerMass);
-
-                // torque_inForceForm is usually the contribution of rolling resistance and it contributes to torque
-                // only, not linear velocity
-                float3 myF = (force + torque_only_force);
-                // F is in global frame, but it needs to be in local to coordinate with moi and cntPnt
-                applyOriQToVector3<float, deme::oriQ_t>(myF.x, myF.y, myF.z, AOriQ.w, -AOriQ.x, -AOriQ.y, -AOriQ.z);
-                const float3 angAcc = cross(locCPA, myF) / AOwnerMOI;
-                atomicAdd(granData->alphaX + AOwner, angAcc.x);
-                atomicAdd(granData->alphaY + AOwner, angAcc.y);
-                atomicAdd(granData->alphaZ + AOwner, angAcc.z);
-            }
-
-            // Take care of B
-            {
-                atomicAdd(granData->aX + BOwner, -force.x / BOwnerMass);
-                atomicAdd(granData->aY + BOwner, -force.y / BOwnerMass);
-                atomicAdd(granData->aZ + BOwner, -force.z / BOwnerMass);
-
-                // torque_inForceForm is usually the contribution of rolling resistance and it contributes to torque
-                // only, not linear velocity
-                float3 myF = (force + torque_only_force);
-                // F is in global frame, but it needs to be in local to coordinate with moi and cntPnt
-                applyOriQToVector3<float, deme::oriQ_t>(myF.x, myF.y, myF.z, BOriQ.w, -BOriQ.w, -BOriQ.y, -BOriQ.z);
-                const float3 angAcc = cross(locCPB, -myF) / BOwnerMOI;
-                atomicAdd(granData->alphaX + BOwner, angAcc.x);
-                atomicAdd(granData->alphaY + BOwner, angAcc.y);
-                atomicAdd(granData->alphaZ + BOwner, angAcc.z);
-            }
-
+            // Optionally, the forces can be reduced to acc right here (may be faster for polydisperse spheres)
+            _forceCollectInPlaceStrat_;
         } else {
             // The contact is no longer active, so we need to destroy its contact history recording
             _forceModelContactWildcardDestroy_;
         }
-        // granData->contactForces[myContactID] = force;
-        // granData->contactTorque_convToForce[myContactID] = torque_only_force;
 
         // Updated contact wildcards need to be write back to global mem
         _forceModelContactWildcardWrite_;

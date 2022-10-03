@@ -322,15 +322,18 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     // of reallocations in the simulation, but not too large that eats too much memory.
     DEME_TRACKED_RESIZE(idGeometryA, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "idGeometryA", 0);
     DEME_TRACKED_RESIZE(idGeometryB, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "idGeometryB", 0);
-    // DEME_TRACKED_RESIZE(contactForces, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "contactForces", make_float3(0));
-    // DEME_TRACKED_RESIZE(contactTorque_convToForce, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER,
-    // "contactTorque_convToForce",
-    //                     make_float3(0));
     DEME_TRACKED_RESIZE(contactType, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "contactType", NOT_A_CONTACT);
-    // DEME_TRACKED_RESIZE(contactPointGeometryA, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "contactPointGeometryA",
-    //                     make_float3(0));
-    // DEME_TRACKED_RESIZE(contactPointGeometryB, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "contactPointGeometryB",
-    //                     make_float3(0));
+
+    if (!solverFlags.useNoContactRecord) {
+        DEME_TRACKED_RESIZE(contactForces, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "contactForces", make_float3(0));
+        DEME_TRACKED_RESIZE(contactTorque_convToForce, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER,
+                            "contactTorque_convToForce", make_float3(0));
+        DEME_TRACKED_RESIZE(contactPointGeometryA, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "contactPointGeometryA",
+                            make_float3(0));
+        DEME_TRACKED_RESIZE(contactPointGeometryB, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "contactPointGeometryB",
+                            make_float3(0));
+    }
+
     // Allocate memory for each wildcard array
     contactWildcards.resize(simParams->nContactWildcards);
     ownerWildcards.resize(simParams->nOwnerWildcards);
@@ -1254,11 +1257,13 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     DEME_TRACKED_RESIZE_NOPRINT(idGeometryA, nContactPairs, 0);
     DEME_TRACKED_RESIZE_NOPRINT(idGeometryB, nContactPairs, 0);
     DEME_TRACKED_RESIZE_NOPRINT(contactType, nContactPairs, NOT_A_CONTACT);
-    // DEME_TRACKED_RESIZE_NOPRINT(contactForces, nContactPairs, make_float3(0));
-    // DEME_TRACKED_RESIZE_NOPRINT(contactTorque_convToForce, nContactPairs, make_float3(0));
 
-    // DEME_TRACKED_RESIZE_NOPRINT(contactPointGeometryA, nContactPairs, make_float3(0));
-    // DEME_TRACKED_RESIZE_NOPRINT(contactPointGeometryB, nContactPairs, make_float3(0));
+    if (!solverFlags.useNoContactRecord) {
+        DEME_TRACKED_RESIZE_NOPRINT(contactForces, nContactPairs, make_float3(0));
+        DEME_TRACKED_RESIZE_NOPRINT(contactTorque_convToForce, nContactPairs, make_float3(0));
+        DEME_TRACKED_RESIZE_NOPRINT(contactPointGeometryA, nContactPairs, make_float3(0));
+        DEME_TRACKED_RESIZE_NOPRINT(contactPointGeometryB, nContactPairs, make_float3(0));
+    }
 
     // Re-pack pointers in case the arrays got reallocated
     granData->idGeometryA = idGeometryA.data();
@@ -1425,11 +1430,15 @@ inline void DEMDynamicThread::calculateForces() {
     size_t blocks_needed_for_prep =
         (threads_needed_for_prep + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
 
-    prep_force_kernels->kernel("prepareForceArrays")
-        .instantiate()
-        .configure(dim3(blocks_needed_for_prep), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(simParams, granData, nContactPairs);
-    GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    // prepareForceArrays needs to clear contact force arrays, only if the user asks us to record contact forces. So...
+    {
+        size_t nContactThatMatters = (solverFlags.useNoContactRecord) ? 0 : nContactPairs;
+        prep_force_kernels->kernel("prepareForceArrays")
+            .instantiate()
+            .configure(dim3(blocks_needed_for_prep), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+            .launch(simParams, granData, nContactThatMatters);
+        GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    }
 
     // TODO: is there a better way??? Like memset?
     // GPU_CALL(cudaMemset(granData->contactForces, zeros, nContactPairs * sizeof(float3)));
@@ -1447,7 +1456,7 @@ inline void DEMDynamicThread::calculateForces() {
     //                     simParams->nOwnerBodies * sizeof(float)));
 
     size_t blocks_needed_for_contacts =
-        (nContactPairs + DEME_DT_FORCE_CALC_NTHREADS_PER_BLOCK - 1) / DEME_DT_FORCE_CALC_NTHREADS_PER_BLOCK;
+        (nContactPairs + DT_FORCE_CALC_NTHREADS_PER_BLOCK - 1) / DT_FORCE_CALC_NTHREADS_PER_BLOCK;
     // If no contact then we don't have to calculate forces. Note there might still be forces, coming from prescription
     // or other sources.
     if (blocks_needed_for_contacts > 0) {
@@ -1455,8 +1464,7 @@ inline void DEMDynamicThread::calculateForces() {
         // a custom kernel to compute forces
         cal_force_kernels->kernel("calculateContactForces")
             .instantiate()
-            .configure(dim3(blocks_needed_for_contacts), dim3(DEME_DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0,
-                       streamInfo.stream)
+            .configure(dim3(blocks_needed_for_contacts), dim3(DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0, streamInfo.stream)
             .launch(simParams, granData, nContactPairs);
         GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         // displayFloat3(granData->contactForces, nContactPairs);
@@ -1464,25 +1472,27 @@ inline void DEMDynamicThread::calculateForces() {
         // std::cout << "===========================" << std::endl;
         timers.GetTimer("Calculate contact forces").stop();
 
-        // timers.GetTimer("Collect contact forces").start();
-        // // Reflect those body-wise forces on their owner clumps
-        // if (solverFlags.useCubForceCollect) {
-        //     collectContactForcesThruCub(collect_force_kernels, granData, nContactPairs, simParams->nOwnerBodies,
-        //                                 contactPairArr_isFresh, streamInfo.stream, stateOfSolver_resources, timers);
-        // } else {
-        //     blocks_needed_for_contacts = (nContactPairs + DEME_MAX_THREADS_PER_BLOCK - 1) /
-        //     DEME_MAX_THREADS_PER_BLOCK;
-        //     // This does both acc and ang acc
-        //     collect_force_kernels->kernel("forceToAcc")
-        //         .instantiate()
-        //         .configure(dim3(blocks_needed_for_contacts), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        //         .launch(granData, nContactPairs);
-        //     GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-        // }
-        // // displayArray<float>(granData->aZ, simParams->nOwnerBodies);
-        // // displayFloat3(granData->contactForces, nContactPairs);
-        // // std::cout << nContactPairs << std::endl;
-        // timers.GetTimer("Collect contact forces").stop();
+        if (!solverFlags.useForceCollectInPlace) {
+            timers.GetTimer("Collect contact forces").start();
+            // Reflect those body-wise forces on their owner clumps
+            if (solverFlags.useCubForceCollect) {
+                collectContactForcesThruCub(collect_force_kernels, granData, nContactPairs, simParams->nOwnerBodies,
+                                            contactPairArr_isFresh, streamInfo.stream, stateOfSolver_resources, timers);
+            } else {
+                blocks_needed_for_contacts =
+                    (nContactPairs + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+                // This does both acc and ang acc
+                collect_force_kernels->kernel("forceToAcc")
+                    .instantiate()
+                    .configure(dim3(blocks_needed_for_contacts), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+                    .launch(granData, nContactPairs);
+                GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+            }
+            // displayArray<float>(granData->aZ, simParams->nOwnerBodies);
+            // displayFloat3(granData->contactForces, nContactPairs);
+            // std::cout << nContactPairs << std::endl;
+            timers.GetTimer("Collect contact forces").stop();
+        }
     }
 }
 
