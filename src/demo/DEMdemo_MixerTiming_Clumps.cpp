@@ -21,7 +21,7 @@ int main() {
     float granular_rad = 0.005;
     unsigned int num_particles = 0;
     double world_size = 1;
-    double CDFreq = 50.1;
+    double CDFreq = 25.1;
     double pi = 3.14159;
 
     while (num_particles < 3e8) {
@@ -90,7 +90,7 @@ int main() {
         DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
         // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
         DEMSim.SetCDUpdateFreq((unsigned int)CDFreq);
-        DEMSim.SetMaxVelocity(10.);
+        DEMSim.SetMaxVelocity(8.);
         // DEMSim.SetMaxVelocity(3. + 3.14 * world_size);
         DEMSim.SetExpandSafetyParam(1.0);
         DEMSim.SetInitBinSize(4 * granular_rad);

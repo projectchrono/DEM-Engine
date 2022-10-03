@@ -1269,10 +1269,10 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     granData->idGeometryA = idGeometryA.data();
     granData->idGeometryB = idGeometryB.data();
     granData->contactType = contactType.data();
-    // granData->contactForces = contactForces.data();
-    // granData->contactTorque_convToForce = contactTorque_convToForce.data();
-    // granData->contactPointGeometryA = contactPointGeometryA.data();
-    // granData->contactPointGeometryB = contactPointGeometryB.data();
+    granData->contactForces = contactForces.data();
+    granData->contactTorque_convToForce = contactTorque_convToForce.data();
+    granData->contactPointGeometryA = contactPointGeometryA.data();
+    granData->contactPointGeometryB = contactPointGeometryB.data();
 }
 
 inline void DEMDynamicThread::unpackMyBuffer() {
