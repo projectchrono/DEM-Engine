@@ -363,6 +363,10 @@ struct SolverFlags {
     bool hasMeshes = false;
     // Whether the force collection (acceleration calc and reduction) process should be using CUB
     bool useCubForceCollect = false;
+    // Does not record contact forces, contact point etc.
+    bool useNoContactRecord = false;
+    // Collect force (reduce to acc) right in the force calculation kernel
+    bool useForceCollectInPlace = false;
 };
 
 class DEMMaterial {
@@ -622,6 +626,12 @@ const std::unordered_map<contact_t, std::string> contact_type_out_name_map = {
     {SPHERE_PLATE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
     {SPHERE_CYL_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
     {SPHERE_CONE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME}};
+
+// Possible force model ingredients. This map is used to ensure we don't double-add them.
+const std::unordered_map<std::string, bool> force_kernel_ingredient_stats = {
+    {"ts", false},      {"time", false},    {"AOwnerFamily", false}, {"BOwnerFamily", false},
+    {"ALinVel", false}, {"BLinVel", false}, {"ARotVel", false},      {"BRotVel", false},
+    {"AOwner", false},  {"BOwner", false},  {"AOwnerMOI", false},    {"BOwnerMOI", false}};
 
 }  // namespace deme
 

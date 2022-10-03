@@ -184,10 +184,10 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                 objSize3[bodyB], objNormal[bodyB], 0.0, contactPnt, B2A, overlapDepth);
         }
 
-        float3 force = make_float3(0, 0, 0);
-        float3 torque_only_force = make_float3(0, 0, 0);
         _forceModelContactWildcardAcq_;
         if (myContactType != deme::NOT_A_CONTACT) {
+            float3 force = make_float3(0, 0, 0);
+            float3 torque_only_force = make_float3(0, 0, 0);
             // Local position of the contact point is always a piece of info we require... regardless of force model
             float3 locCPA = to_float3(contactPnt - AOwnerPos);
             float3 locCPB = to_float3(contactPnt - BOwnerPos);
@@ -201,14 +201,15 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             { _DEMForceModel_; }
 
             // Write contact location values back to global memory
-            granData->contactPointGeometryA[myContactID] = locCPA;
-            granData->contactPointGeometryB[myContactID] = locCPB;
+            _contactInfoWrite_;
+
+            // Optionally, the forces can be reduced to acc right here (may be faster for polydisperse spheres)
+            _forceCollectInPlaceStrat_;
         } else {
             // The contact is no longer active, so we need to destroy its contact history recording
             _forceModelContactWildcardDestroy_;
         }
-        granData->contactForces[myContactID] = force;
-        granData->contactTorque_convToForce[myContactID] = torque_only_force;
+
         // Updated contact wildcards need to be write back to global mem
         _forceModelContactWildcardWrite_;
     }

@@ -42,7 +42,6 @@ float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
         delta_tan += ts * vrel_tan;
         const float disp_proj = dot(delta_tan, B2A);
         delta_tan -= disp_proj * B2A;
-        delta_time += ts;
     }
 
     mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);

@@ -175,6 +175,9 @@ class DEMSolver {
     /// can handle.
     void SetExpandSafetyParam(float param) { m_expand_safety_param = param; }
 
+    /// Set the number of threads per block in force calculation (default 256)
+    void SetForceCalcThreadsPerBlock(unsigned int nTh) { dT->DT_FORCE_CALC_NTHREADS_PER_BLOCK = nTh; }
+
     /// Load possible clump types into the API-level cache
     /// Return the shared ptr to the clump type just loaded
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
@@ -335,6 +338,20 @@ class DEMSolver {
     /// acceleration array is flattened and reduced using CUB; if false, the acceleration is computed and directly
     /// applied to each body through atomic operations.
     void UseCubForceCollection(bool flag = true) { use_cub_to_reduce_force = flag; }
+
+    /// Reduce contact forces to accelerations right after calculating them, in the same kernel. This may give some
+    /// performance boost if you have only polydisperse spheres, no clumps.
+    void SetCollectAccRightAfterForceCalc(bool flag = true) { collect_force_in_force_kernel = flag; }
+
+    /// Instruct the solver that there is no need to record the contact force (and contact point location etc.) in an
+    /// array. If set to true, the contact forces must be reduced to accelerations right in the force calculation kernel
+    /// (meaning SetCollectAccRightAfterForceCalc is effectively called too). Calling this method could reduce some
+    /// memory usage, but will disable contact pair output.
+    void SetNoForceRecord(bool flag = true) {
+        no_recording_contact_forces = flag;
+        if (flag)
+            collect_force_in_force_kernel = flag;
+    }
 
     /// Add an (analytical or clump-represented) external object to the simulation system
     std::shared_ptr<DEMExternObj> AddExternalObject();
@@ -597,6 +614,11 @@ class DEMSolver {
 
     // If we should flatten then reduce forces (true), or use atomic operation to reduce forces (false)
     bool use_cub_to_reduce_force = false;
+
+    // See SetNoForceRecord
+    bool no_recording_contact_forces = false;
+    // See SetCollectAccRightAfterForceCalc
+    bool collect_force_in_force_kernel = false;
 
     // Integrator type
     TIME_INTEGRATOR m_integrator = TIME_INTEGRATOR::EXTENDED_TAYLOR;
