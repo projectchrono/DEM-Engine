@@ -20,7 +20,7 @@ using namespace std::filesystem;
 int main() {
     float granular_rad = 0.005;
     unsigned int num_particles = 0;
-    double CDFreq = 20.1;
+    double CDFreq = 30.1;
     double world_size = 1;
     double pi = 3.14159;
 
@@ -45,6 +45,10 @@ int main() {
         DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
         DEMSim.InstructBoxDomainBoundingBC("all", mat_type_granular);
         DEMSim.SetCoordSysOrigin("center");
+        // A custom force model can be read in through a file and used by the simulation. Magic, right?
+        auto my_force_model = DEMSim.ReadContactForceModel("SampleCustomForceModel.cu");
+        // This custom force model still uses contact history arrays, so let's define it
+        my_force_model->SetPerContactWildcards({"delta_tan_x", "delta_tan_y", "delta_tan_z"});
 
         // Now add a cylinderical boundary
         auto walls = DEMSim.AddExternalObject();
@@ -110,7 +114,7 @@ int main() {
                   << std::endl;
 
         // granular_rad *= std::pow(0.5, 1. / 3.);
-        world_size *= std::pow(3., 1. / 3.);
+        world_size *= std::pow(2., 1. / 3.);
         // CDFreq *= std::pow(0.95, 1. / 3.);
     }
 
