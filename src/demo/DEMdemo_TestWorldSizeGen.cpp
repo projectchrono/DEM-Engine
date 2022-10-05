@@ -32,6 +32,14 @@ int main() {
     double x_size = 15.;
     double y_size = 2;
     double z_size = 2.2;
+
+    auto pairs = DEMSim.ReadContactPairsFromCsv("example_cnt_pairs.csv");
+    auto wcs = DEMSim.ReadContactWildcardsFromCsv("example_cnt_pairs.csv");
+    for (int i = 0; i < pairs.size(); i++) {
+        std::cout << "Body pair: " << pairs[i].first << ", " << pairs[i].second << std::endl;
+        std::cout << "delta_time: " << wcs.at("delta_time")[i] << std::endl;
+    }
+
     // DEMSim.InstructBoxDomainNumVoxel(21, 21, 22, world_size / std::pow(2, 16) / std::pow(2, 21));
     DEMSim.InstructBoxDomainDimension(x_size, y_size, z_size, SPATIAL_DIR::X);
     DEMSim.SetCoordSysOrigin("center");

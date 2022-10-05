@@ -204,6 +204,10 @@ class DEMDynamicThread {
     // An example of such wildcard arrays is contact history: how much did the contact point move on the geometry
     // surface compared to when the contact first emerged?
 
+    // Storage for the names of the contact wildcards
+    std::set<std::string> m_contact_wildcard_names;
+    std::set<std::string> m_owner_wildcard_names;
+
     // std::vector<float3, ManagedAllocator<float3>> contactHistory;
     // // Durations in time of persistent contact pairs
     // std::vector<float, ManagedAllocator<float>> contactDuration;
@@ -309,8 +313,8 @@ class DEMDynamicThread {
                       float expand_factor,
                       float approx_max_vel,
                       float expand_safety_param,
-                      unsigned int nContactWildcards,
-                      unsigned int nOwnerWildcards);
+                      const std::set<std::string>& contact_wildcards,
+                      const std::set<std::string>& owner_wildcards);
 
     /// Compute total KE of all entities
     float getKineticEnergy();

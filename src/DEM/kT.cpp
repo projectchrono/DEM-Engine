@@ -343,8 +343,8 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
                                       float expand_factor,
                                       float approx_max_vel,
                                       float expand_safety_param,
-                                      unsigned int nContactWildcards,
-                                      unsigned int nOwnerWildcards) {
+                                      const std::set<std::string>& contact_wildcards,
+                                      const std::set<std::string>& owner_wildcards) {
     simParams->nvXp2 = nvXp2;
     simParams->nvYp2 = nvYp2;
     simParams->nvZp2 = nvZp2;
@@ -365,8 +365,8 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
     simParams->nbY = nbY;
     simParams->nbZ = nbZ;
 
-    simParams->nContactWildcards = nContactWildcards;
-    simParams->nOwnerWildcards = nOwnerWildcards;
+    simParams->nContactWildcards = contact_wildcards.size();
+    simParams->nOwnerWildcards = owner_wildcards.size();
 }
 
 void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,

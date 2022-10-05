@@ -125,8 +125,8 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                     float expand_factor,
                                     float approx_max_vel,
                                     float expand_safety_param,
-                                    unsigned int nContactWildcards,
-                                    unsigned int nOwnerWildcards) {
+                                    const std::set<std::string>& contact_wildcards,
+                                    const std::set<std::string>& owner_wildcards) {
     simParams->nvXp2 = nvXp2;
     simParams->nvYp2 = nvYp2;
     simParams->nvZp2 = nvZp2;
@@ -147,8 +147,11 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->nbY = nbY;
     simParams->nbZ = nbZ;
 
-    simParams->nContactWildcards = nContactWildcards;
-    simParams->nOwnerWildcards = nOwnerWildcards;
+    simParams->nContactWildcards = contact_wildcards.size();
+    simParams->nOwnerWildcards = owner_wildcards.size();
+
+    m_contact_wildcard_names = contact_wildcards;
+    m_owner_wildcard_names = owner_wildcards;
 }
 
 float DEMDynamicThread::getKineticEnergy() {
@@ -1083,7 +1086,13 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
 void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
     std::ostringstream outstrstream;
 
-    outstrstream << OUTPUT_FILE_OWNER_1_NAME + "," + OUTPUT_FILE_OWNER_2_NAME + "," + OUTPUT_FILE_CNT_TYPE_NAME;
+    outstrstream << OUTPUT_FILE_CNT_TYPE_NAME;
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::OWNER) {
+        outstrstream << "," + OUTPUT_FILE_OWNER_1_NAME + "," + OUTPUT_FILE_OWNER_2_NAME;
+    }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::GEO_ID) {
+        outstrstream << "," + OUTPUT_FILE_GEO_ID_1_NAME + "," + OUTPUT_FILE_GEO_ID_2_NAME;
+    }
     if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::FORCE) {
         outstrstream << "," + OUTPUT_FILE_FORCE_X_NAME + "," + OUTPUT_FILE_FORCE_Y_NAME + "," +
                             OUTPUT_FILE_FORCE_Z_NAME;
@@ -1094,12 +1103,21 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
     // if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::COMPONENT) {
     //     outstrstream << ","+OUTPUT_FILE_COMP_1_NAME+","+OUTPUT_FILE_COMP_2_NAME;
     // }
+    // if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NICKNAME) {
+    //     outstrstream << ","+OUTPUT_FILE_OWNER_NICKNAME_1_NAME+","+OUTPUT_FILE_OWNER_NICKNAME_2_NAME;
+    // }
     if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NORMAL) {
         outstrstream << "," + OUTPUT_FILE_NORMAL_X_NAME + "," + OUTPUT_FILE_NORMAL_Y_NAME + "," +
                             OUTPUT_FILE_NORMAL_Z_NAME;
     }
     if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE_ONLY_FORCE) {
         outstrstream << "," + OUTPUT_FILE_TOF_X_NAME + "," + OUTPUT_FILE_TOF_Y_NAME + "," + OUTPUT_FILE_TOF_Z_NAME;
+    }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::WILDCARD) {
+        // Write all wildcard names as header
+        for (const auto& w_name : m_contact_wildcard_names) {
+            outstrstream << "," + w_name;
+        }
     }
     outstrstream << "\n";
 
@@ -1127,7 +1145,15 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
                 ownerB = ownerAnalBody.at(geoB);
         }
         // Type is mapped to SS, SM and such....
-        outstrstream << ownerA << "," << ownerB << "," << contact_type_out_name_map.at(type);
+        outstrstream << contact_type_out_name_map.at(type);
+
+        // (Internal) ownerID and/or geometry ID
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::OWNER) {
+            outstrstream << "," << ownerA << "," << ownerB;
+        }
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::GEO_ID) {
+            outstrstream << "," << geoA << "," << geoB;
+        }
 
         // Force is already in global...
         if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::FORCE) {
@@ -1182,6 +1208,13 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
         if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE_ONLY_FORCE) {
             float3 forcexyz = contactTorque_convToForce.at(i);
             outstrstream << "," << forcexyz.x << "," << forcexyz.y << "," << forcexyz.z;
+        }
+
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::WILDCARD) {
+            // The order shouldn't be an issue... the same set is being processed here and in equip_contact_wildcards
+            for (unsigned int j = 0; j < m_contact_wildcard_names.size(); j++) {
+                outstrstream << "," << contactWildcards[j][i];
+            }
         }
 
         outstrstream << "\n";

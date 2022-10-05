@@ -416,6 +416,17 @@ inline size_t find_offset_in_list(const T1& list, const T2& key) {
     return std::distance(list.begin(), it);
 }
 
+inline std::vector<std::string> parse_string_line(const std::string& in_str, const char separator = ',') {
+    std::vector<std::string> result;
+    std::stringstream s_stream(in_str);
+    while (s_stream.good()) {
+        std::string substr;
+        getline(s_stream, substr, separator);
+        result.push_back(substr);
+    }
+    return result;
+}
+
 /// Host version of applying a quaternion to a vector
 template <typename T1, typename T2>
 inline void hostApplyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Qw, const T2& Qx, const T2& Qy, const T2& Qz) {

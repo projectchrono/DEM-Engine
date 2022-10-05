@@ -306,8 +306,8 @@ class DEMKinematicThread {
                       float expand_factor,
                       float approx_max_vel,
                       float expand_safety_param,
-                      unsigned int nContactWildcards,
-                      unsigned int nOwnerWildcards);
+                      const std::set<std::string>& contact_wildcards,
+                      const std::set<std::string>& owner_wildcards);
 
     // Put sim data array pointers in place
     void packDataPointers();

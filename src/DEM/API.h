@@ -41,6 +41,9 @@ class DEMTracker;
 //            7. This custom array can be defined at clump template/anal obj/mesh obj generation
 //            8. Right now force model position is wrt LBF, not user origin...
 //            9. wT takes care of an extra output when it crushes
+//            10. Recover sph--mesh contact pairs in restarted sim by mesh name
+//            11. A dry-run to map contact pair file with current clump batch based on cnt points location
+//                  (this is done by fake an initialization with this batch)
 //////////////////////////////////////////////////////////////
 
 class DEMSolver {
@@ -426,6 +429,67 @@ class DEMSolver {
         return type_Q_map;
     }
 
+    /// Read all contact pairs (geometry ID) from a contact file
+    static std::vector<std::pair<bodyID_t, bodyID_t>> ReadContactPairsFromCsv(
+        const std::string& infilename,
+        const std::string& cntType = OUTPUT_FILE_SPH_SPH_CONTACT_NAME,
+        const std::string& cntColName = OUTPUT_FILE_CNT_TYPE_NAME,
+        const std::string& first_name = OUTPUT_FILE_GEO_ID_1_NAME,
+        const std::string& second_name = OUTPUT_FILE_GEO_ID_2_NAME) {
+        io::CSVReader<3, io::trim_chars<' ', '\t'>, io::no_quote_escape<','>, io::throw_on_overflow,
+                      io::empty_line_comment>
+            in(infilename);
+        in.read_header(io::ignore_extra_column, cntColName, first_name, second_name);
+        bodyID_t A, B;
+        std::string cnt_type_name;
+        std::vector<std::pair<bodyID_t, bodyID_t>> pairs;
+        size_t count = 0;
+        while (in.read_row(cnt_type_name, A, B)) {
+            if (cnt_type_name == cntType) {  // only the type of contact we care
+                pairs.push_back(std::pair<bodyID_t, bodyID_t>(A, B));
+                count++;
+            }
+        }
+        return pairs;
+    }
+
+    /// Read all contact wildcards from a contact file
+    static std::unordered_map<std::string, std::vector<float>> ReadContactWildcardsFromCsv(
+        const std::string& infilename,
+        const std::string& cntType = OUTPUT_FILE_SPH_SPH_CONTACT_NAME,
+        const std::string& cntColName = OUTPUT_FILE_CNT_TYPE_NAME) {
+        io::LineReader in_header(infilename);
+        char* f_header = in_header.next_line();
+        std::vector<std::string> header_names = parse_string_line(std::string(f_header));
+        std::vector<std::string> wildcard_names;
+        // Find those col names that are not contact file standard names: they have to be wildcard names
+        for (const auto& col_name : header_names) {
+            if (!check_exist(CNT_FILE_KNOWN_COL_NAMES, col_name)) {
+                wildcard_names.push_back(col_name);
+            }
+        }
+        // Now parse in the csv file
+        std::unordered_map<std::string, std::vector<float>> w_vals;
+        size_t count = 0;
+        for (const auto& wildcard_name : wildcard_names) {
+            io::CSVReader<2, io::trim_chars<' ', '\t'>, io::no_quote_escape<','>, io::throw_on_overflow,
+                          io::empty_line_comment>
+                in(infilename);
+            in.read_header(io::ignore_extra_column, OUTPUT_FILE_CNT_TYPE_NAME, wildcard_name);
+            std::string cnt_type_name;
+            float w_val;
+
+            while (in.read_row(cnt_type_name, w_val)) {
+                if (cnt_type_name == cntType) {  // only the type of contact we care
+                    w_vals[wildcard_name].push_back(w_val);
+                    count++;
+                }
+            }
+        }
+
+        return w_vals;
+    }
+
     /// Intialize the simulation system
     void Initialize();
 
@@ -532,7 +596,8 @@ class DEMSolver {
     // The output file format for contact pairs
     OUTPUT_FORMAT m_cnt_out_format = OUTPUT_FORMAT::CSV;
     // The output file content for contact pairs
-    unsigned int m_cnt_out_content = CNT_OUTPUT_CONTENT::FORCE | CNT_OUTPUT_CONTENT::POINT;
+    unsigned int m_cnt_out_content = CNT_OUTPUT_CONTENT::GEO_ID | CNT_OUTPUT_CONTENT::FORCE |
+                                     CNT_OUTPUT_CONTENT::POINT | CNT_OUTPUT_CONTENT::WILDCARD;
     // The output file format for meshes
     MESH_FORMAT m_mesh_out_format = MESH_FORMAT::VTK;
 

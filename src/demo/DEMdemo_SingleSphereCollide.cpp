@@ -21,7 +21,7 @@ int main() {
     DEMSolver DEMSim;
     DEMSim.SetVerbosity(DEBUG);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.SetContactOutputContent(OWNERS | FORCE | POINT | COMPONENT | NORMAL | TORQUE_ONLY_FORCE);
+    DEMSim.SetContactOutputContent(OWNER | FORCE | POINT | COMPONENT | NORMAL | TORQUE_ONLY_FORCE);
     DEMSim.EnsureKernelErrMsgLineNum();
     DEMSim.SetNoForceRecord();
 

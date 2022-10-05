@@ -27,7 +27,7 @@ int main() {
     auto mat_type_mixer = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
     auto mat_type_granular = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
 
-    float step_size = 1e-5;
+    float step_size = 5e-6;
     const double world_size = 1;
     const float chamber_height = world_size / 3.;
     const float fill_height = chamber_height;
@@ -50,14 +50,22 @@ int main() {
     DEMSim.SetFamilyPrescribedAngVel(10, "0", "0", "2 * 3.14159");
 
     float granular_rad = 0.005;
-    auto template_granular = DEMSim.LoadSphereType(granular_rad * granular_rad * granular_rad * 2.8e3 * 4 / 3 * 3.14,
-                                                   granular_rad, mat_type_granular);
+    // auto template_granular = DEMSim.LoadSphereType(granular_rad * granular_rad * granular_rad * 2.8e3 * 4 / 3 * 3.14,
+    //                                                granular_rad, mat_type_granular);
+    DEMClumpTemplate shape_template;
+    shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
+    // Calculate its mass and MOI
+    shape_template.mass = 2.6e3 * 5.5886717;  // in kg or g
+    shape_template.MOI = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3;
+    shape_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(shape_template.nComp, mat_type_granular);
+    shape_template.Scale(granular_rad);
+    auto template_granular = DEMSim.LoadClumpType(shape_template);
 
     // Track the mixer
     auto mixer_tracker = DEMSim.Track(mixer);
 
     // Sampler to use
-    HCPSampler sampler(2.1f * granular_rad);
+    HCPSampler sampler(3.f * granular_rad);
     float3 fill_center = make_float3(0, 0, fill_bottom + fill_height / 2);
     const float fill_radius = world_size / 2. - 2. * granular_rad;
     auto input_xyz = sampler.SampleCylinderZ(fill_center, fill_radius, fill_height / 2);
@@ -78,7 +86,7 @@ int main() {
     out_dir += "/DemoOutput_Mixer";
     create_directory(out_dir);
 
-    float sim_end = 3.0;
+    float sim_end = 10.0;
     unsigned int fps = 20;
     float frame_time = 1.0 / fps;
 
@@ -108,7 +116,8 @@ int main() {
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
-    std::cout << (time_sec.count()) / sim_end << " seconds (wall time) to finish 1 second's simulation" << std::endl;
+    std::cout << (time_sec.count()) / sim_end / (1e-5 / step_size)
+              << " seconds (wall time) to finish 1e5 steps' simulation" << std::endl;
 
     std::cout << "DEMdemo_Mixer exiting..." << std::endl;
     return 0;

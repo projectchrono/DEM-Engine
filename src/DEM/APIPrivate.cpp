@@ -376,7 +376,7 @@ void DEMSolver::reportInitStats() const {
     DEME_INFO("Simulation world X range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_boxX);
     DEME_INFO("Simulation world Y range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_boxY);
     DEME_INFO("Simulation world Z range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_boxZ);
-    DEME_INFO("User-specified dimensions are not larger than the above simulation world.");
+    DEME_INFO("User-specified dimensions should NOT be larger than the above simulation world.");
     DEME_INFO("User-specified X-dimension range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_user_boxSize.x);
     DEME_INFO("User-specified Y-dimension range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_user_boxSize.y);
     DEME_INFO("User-specified Z-dimension range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_user_boxSize.z);
@@ -771,9 +771,11 @@ void DEMSolver::transferSimParams() {
     DEME_DEBUG_PRINTF("%u contact wildcards are in the force model.", nContactWildcards);
 
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
-                     m_expand_factor, m_approx_max_vel, m_expand_safety_param, nContactWildcards, nOwnerWildcards);
+                     m_expand_factor, m_approx_max_vel, m_expand_safety_param, m_force_model->m_contact_wildcards,
+                     m_force_model->m_owner_wildcards);
     kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
-                     m_expand_factor, m_approx_max_vel, m_expand_safety_param, nContactWildcards, nOwnerWildcards);
+                     m_expand_factor, m_approx_max_vel, m_expand_safety_param, m_force_model->m_contact_wildcards,
+                     m_force_model->m_owner_wildcards);
 }
 
 void DEMSolver::allocateGPUArrays() {
