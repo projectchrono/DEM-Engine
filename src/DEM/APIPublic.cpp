@@ -834,6 +834,8 @@ void DEMSolver::ReleaseFlattenedArrays() {
 
     deallocate_array(m_mesh_obj_mass);
     deallocate_array(m_mesh_obj_moi);
+
+    nExtraContacts = 0;
 }
 
 void DEMSolver::resetWorkerThreads() {

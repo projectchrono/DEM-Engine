@@ -480,7 +480,7 @@ class DEMSolver {
             float w_val;
 
             while (in.read_row(cnt_type_name, w_val)) {
-                if (cnt_type_name == cntType) {  // only the type of contact we care
+                if (cnt_type_name == cntType) {  // only the type of contact we care (SS by default)
                     w_vals[wildcard_name].push_back(w_val);
                     count++;
                 }
@@ -915,6 +915,11 @@ class DEMSolver {
     std::set<float3> m_clumps_sp_location_types;
     std::vector<std::vector<distinctSphereRelativePositions_default_t>> m_clumps_sp_location_type_offset;
     */
+
+    // Number of contact pairs that the user manually added for this initialization call. Note unlike nTriGM or
+    // nOwnerBodies and such, this number is temporary, and becomes useless after an initialization call, as we don't
+    // generally know the number of contacts, that's kT dT's problem.
+    size_t nExtraContacts = 0;
 
     ////////////////////////////////////////////////////////////////////////////////
     // DEM system's workers, helpers, friends

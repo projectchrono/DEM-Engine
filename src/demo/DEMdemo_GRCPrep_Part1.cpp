@@ -50,8 +50,9 @@ int main() {
     float3 MOI = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3 * kg_g_conv;
     // Scale the template we just created
     std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
-    std::vector<double> scales = {0.0014, 0.00063, 0.00033, 0.00022, 0.00015, 0.00009};
-    std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 10.; });
+    // std::vector<double> scales = {0.0014, 0.00063, 0.00033, 0.00022, 0.00015, 0.00009};
+    std::vector<double> scales = {0.00063, 0.00033, 0.00022, 0.00015, 0.00009};
+    std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 20.; });
     unsigned int t_num = 0;
     for (double scaling : scales) {
         t_num++;
@@ -77,7 +78,8 @@ int main() {
         ground_particle_templates.push_back(DEMSim.LoadClumpType(this_template));
     }
 
-    std::vector<double> weight_perc = {0.18, 0.20, 0.14, 0.16, 0.17, 0.15};
+    // std::vector<double> weight_perc = {0.18, 0.20, 0.14, 0.16, 0.17, 0.15};
+    std::vector<double> weight_perc = {0.2439, 0.1707, 0.1951, 0.2073, 0.1829};
     std::vector<double> grain_perc;
     for (int i = 0; i < scales.size(); i++) {
         grain_perc.push_back(weight_perc.at(i) / std::pow(scales.at(i), 3));
@@ -124,7 +126,7 @@ int main() {
     float offset_z = bottom + sample_halfheight + 0.15;
     float settle_frame_time = 0.2;
     float settle_batch_time = 2.0;
-    while (DEMSim.GetNumClumps() < 0.2e6) {
+    while (DEMSim.GetNumClumps() < 0.5e6) {
         DEMSim.ClearCache();
         float3 sample_center = make_float3(0, 0, offset_z);
         std::vector<std::shared_ptr<DEMClumpTemplate>> heap_template_in_use;

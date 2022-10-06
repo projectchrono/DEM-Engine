@@ -514,8 +514,10 @@ void DEMSolver::preprocessClumpTemplates() {
 }
 
 void DEMSolver::preprocessClumps() {
+    nExtraContacts = 0;
     for (const auto& a_batch : cached_input_clump_batches) {
         nOwnerClumps += a_batch->GetNumClumps();
+        nExtraContacts += a_batch->GetNumContacts();
         for (size_t i = 0; i < a_batch->GetNumClumps(); i++) {
             unsigned int nComp = a_batch->types.at(i)->nComp;
             nSpheresGM += nComp;
@@ -523,6 +525,7 @@ void DEMSolver::preprocessClumps() {
         // Family number is flattened here, only because figureOutFamilyMasks() needs it
         m_input_clump_family.insert(m_input_clump_family.end(), a_batch->families.begin(), a_batch->families.end());
     }
+    DEME_DEBUG_PRINTF("This time, %zu existing contact pairs were loaded by user", nExtraContacts);
 }
 
 void DEMSolver::preprocessTriangleObjs() {
@@ -781,16 +784,16 @@ void DEMSolver::transferSimParams() {
 void DEMSolver::allocateGPUArrays() {
     // Resize managed arrays based on the statistical data we had from the previous step
     std::thread dThread = std::move(std::thread([this]() {
-        this->dT->allocateManagedArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
-                                        this->nSpheresGM, this->nTriGM, this->nAnalGM, this->nDistinctMassProperties,
-                                        this->nDistinctClumpBodyTopologies, this->nDistinctClumpComponents,
-                                        this->nJitifiableClumpComponents, this->nMatTuples);
+        this->dT->allocateManagedArrays(
+            this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes, this->nSpheresGM, this->nTriGM,
+            this->nAnalGM, this->nExtraContacts, this->nDistinctMassProperties, this->nDistinctClumpBodyTopologies,
+            this->nDistinctClumpComponents, this->nJitifiableClumpComponents, this->nMatTuples);
     }));
     std::thread kThread = std::move(std::thread([this]() {
-        this->kT->allocateManagedArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
-                                        this->nSpheresGM, this->nTriGM, this->nAnalGM, this->nDistinctMassProperties,
-                                        this->nDistinctClumpBodyTopologies, this->nDistinctClumpComponents,
-                                        this->nJitifiableClumpComponents, this->nMatTuples);
+        this->kT->allocateManagedArrays(
+            this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes, this->nSpheresGM, this->nTriGM,
+            this->nAnalGM, this->nExtraContacts, this->nDistinctMassProperties, this->nDistinctClumpBodyTopologies,
+            this->nDistinctClumpComponents, this->nJitifiableClumpComponents, this->nMatTuples);
     }));
     dThread.join();
     kThread.join();

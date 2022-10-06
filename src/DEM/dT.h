@@ -360,6 +360,7 @@ class DEMDynamicThread {
                                size_t nSpheresGM,
                                size_t nTriGM,
                                unsigned int nAnalGM,
+                               size_t nExtraContacts,
                                unsigned int nMassProperties,
                                unsigned int nClumpTopo,
                                unsigned int nClumpComponents,

@@ -137,8 +137,8 @@ int main() {
     DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
-    DEMSim.SetCDUpdateFreq(30);
-    DEMSim.SetExpandFactor(20.0 * 30 * step_size);
+    DEMSim.SetCDUpdateFreq(60);
+    DEMSim.SetExpandFactor(20.0 * 60 * step_size);
     DEMSim.SetExpandSafetyParam(1.0);
 
     DEMSim.Initialize();

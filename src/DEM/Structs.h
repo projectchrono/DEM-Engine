@@ -494,6 +494,7 @@ class DEMClumpTemplate {
 class DEMClumpBatch {
   private:
     const size_t nClumps;
+    size_t nExistContacts = 0;
     void assertLength(size_t len, const std::string name) {
         if (len != nClumps) {
             std::stringstream ss;
@@ -512,7 +513,8 @@ class DEMClumpBatch {
     std::vector<float3> xyz;
     std::vector<float4> oriQ;
     // Existing contact/contact wildcard info. If it is a new simulation, they should be empty; but if it is a restarted
-    // one, it can have some existing contacts/wildcards.
+    // one, it can have some existing contacts/wildcards. Note that all of them are "SS" type of contact. The contact
+    // pair IDs are relative to this batch (starting from 0, up to num of this batch - 1, that is).
     std::vector<std::pair<bodyID_t, bodyID_t>> contact_pairs;
     std::unordered_map<std::string, std::vector<float>> contact_wildcards;
     // Its offset when this obj got loaded into the API-level user raw-input array
@@ -574,6 +576,22 @@ class DEMClumpBatch {
     }
     void SetFamilies(unsigned int input) { SetFamilies(std::vector<unsigned int>(nClumps, input)); }
     void SetFamily(unsigned int input) { SetFamilies(std::vector<unsigned int>(nClumps, input)); }
+    void SetExistingContacts(const std::vector<std::pair<bodyID_t, bodyID_t>>& pairs) {
+        contact_pairs = pairs;
+        nExistContacts = pairs.size();
+    }
+    void SetExistingContactWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
+        if (wildcards.begin()->second.size() != nExistContacts) {
+            std::stringstream ss;
+            ss << "SetExistingContactWildcards needs to be called after SetExistingContacts, with each wildcard array "
+                  "having the same length as the number of contact pairs.\n This way, each wildcard will have an "
+                  "associated contact pair."
+               << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        contact_wildcards = wildcards;
+    }
+    size_t GetNumContacts() const { return nExistContacts; }
 };
 
 // A struct to get or set tracked owner entities

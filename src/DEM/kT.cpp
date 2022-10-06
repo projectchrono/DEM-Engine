@@ -376,6 +376,7 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
                                                size_t nSpheresGM,
                                                size_t nTriGM,
                                                unsigned int nAnalGM,
+                                               size_t nExtraContacts,
                                                unsigned int nMassProperties,
                                                unsigned int nClumpTopo,
                                                unsigned int nClumpComponents,
@@ -482,15 +483,15 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     // The following several arrays will have variable sizes, so here we only used an estimate. My estimate of total
     // contact pairs is 2n, and I think the max is 6n (although I can't prove it). Note the estimate should be large
     // enough to decrease the number of reallocations in the simulation, but not too large that eats too much memory.
-    DEME_TRACKED_RESIZE(idGeometryA, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "idGeometryA", 0);
-    DEME_TRACKED_RESIZE(idGeometryB, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "idGeometryB", 0);
-    DEME_TRACKED_RESIZE(contactType, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "contactType", NOT_A_CONTACT);
+    DEME_TRACKED_RESIZE(idGeometryA, nSpheresGM * DEME_INIT_CNT_MULTIPLIER, "idGeometryA", 0);
+    DEME_TRACKED_RESIZE(idGeometryB, nSpheresGM * DEME_INIT_CNT_MULTIPLIER, "idGeometryB", 0);
+    DEME_TRACKED_RESIZE(contactType, nSpheresGM * DEME_INIT_CNT_MULTIPLIER, "contactType", NOT_A_CONTACT);
     if (!solverFlags.isHistoryless) {
-        DEME_TRACKED_RESIZE(previous_idGeometryA, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "previous_idGeometryA", 0);
-        DEME_TRACKED_RESIZE(previous_idGeometryB, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "previous_idGeometryB", 0);
-        DEME_TRACKED_RESIZE(previous_contactType, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "previous_contactType",
+        DEME_TRACKED_RESIZE(previous_idGeometryA, nSpheresGM * DEME_INIT_CNT_MULTIPLIER, "previous_idGeometryA", 0);
+        DEME_TRACKED_RESIZE(previous_idGeometryB, nSpheresGM * DEME_INIT_CNT_MULTIPLIER, "previous_idGeometryB", 0);
+        DEME_TRACKED_RESIZE(previous_contactType, nSpheresGM * DEME_INIT_CNT_MULTIPLIER, "previous_contactType",
                             NOT_A_CONTACT);
-        DEME_TRACKED_RESIZE(contactMapping, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "contactMapping",
+        DEME_TRACKED_RESIZE(contactMapping, nSpheresGM * DEME_INIT_CNT_MULTIPLIER, "contactMapping",
                             NULL_MAPPING_PARTNER);
     }
 }
