@@ -378,7 +378,7 @@ class DEMSolver {
     /// make small-scale rendering easier.
     void WriteSphereFile(const std::string& outfilename) const;
     /// Write all contact pairs to a file
-    void WriteContactFile(const std::string& outfilename) const;
+    void WriteContactFile(const std::string& outfilename, float force_thres = DEME_TINY_FLOAT) const;
     /// Write the current status of all meshes to a file
     void WriteMeshFile(const std::string& outfilename) const;
 

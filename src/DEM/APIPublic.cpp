@@ -690,7 +690,7 @@ void DEMSolver::WriteClumpFile(const std::string& outfilename, unsigned int accu
     }
 }
 
-void DEMSolver::WriteContactFile(const std::string& outfilename) const {
+void DEMSolver::WriteContactFile(const std::string& outfilename, float force_thres) const {
     if (no_recording_contact_forces) {
         DEME_WARNING(
             "The solver is instructed to not record contact force info, so no work is done in a WriteContactFile "
@@ -700,7 +700,7 @@ void DEMSolver::WriteContactFile(const std::string& outfilename) const {
     switch (m_cnt_out_format) {
         case (OUTPUT_FORMAT::CSV): {
             std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeContactsAsCsv(ptFile);
+            dT->writeContactsAsCsv(ptFile, force_thres);
             break;
         }
         default:

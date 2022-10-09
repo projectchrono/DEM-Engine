@@ -465,7 +465,7 @@ class DEMDynamicThread {
     void writeSpheresAsCsv(std::ofstream& ptFile) const;
     void writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy = 10) const;
     void writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accuracy = 10) const;
-    void writeContactsAsCsv(std::ofstream& ptFile) const;
+    void writeContactsAsCsv(std::ofstream& ptFile, float force_thres = DEME_TINY_FLOAT) const;
     void writeMeshesAsVtk(std::ofstream& ptFile);
 
     /// Called each time when the user calls DoDynamicsThenSync.

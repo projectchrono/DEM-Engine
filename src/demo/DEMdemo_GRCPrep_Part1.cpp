@@ -36,7 +36,7 @@ int main() {
 
     // Define the simulation world
     double world_y_size = 0.99;
-    DEMSim.InstructBoxDomainNumVoxel(21, 21, 22, world_y_size / std::pow(2, 16) / std::pow(2, 21));
+    DEMSim.InstructBoxDomainDimension(world_y_size, world_y_size, world_y_size);
     // Add 5 bounding planes around the simulation world, and leave the top open
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
     float bottom = -0.5;
@@ -55,7 +55,6 @@ int main() {
     std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 20.; });
     unsigned int t_num = 0;
     for (double scaling : scales) {
-        t_num++;
         auto this_template = shape_template;
         this_template.mass = (double)mass * scaling * scaling * scaling;
         this_template.MOI.x = (double)MOI.x * (double)(scaling * scaling * scaling * scaling * scaling);
@@ -70,12 +69,12 @@ int main() {
         std::for_each(this_template.relPos.begin(), this_template.relPos.end(), [scaling](float3& r) { r *= scaling; });
         this_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(this_template.nComp, mat_type_terrain);
 
-        // Give these templates names, 0001, 0002 etc. I wanted to give 0000 to some other templates so I made t_num
-        // start from 0001. If no user-defined names are given then it uses system default, which starts from 0000.
+        // Give these templates names, 0000, 0001 etc.
         char t_name[20];
         sprintf(t_name, "%04d", t_num);
         this_template.AssignName(std::string(t_name));
         ground_particle_templates.push_back(DEMSim.LoadClumpType(this_template));
+        t_num++;
     }
 
     // std::vector<double> weight_perc = {0.18, 0.20, 0.14, 0.16, 0.17, 0.15};
@@ -103,7 +102,7 @@ int main() {
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEMSim.SetCDUpdateFreq(10);
+    DEMSim.SetCDUpdateFreq(30);
     // DEMSim.SetExpandFactor(1e-3);
     DEMSim.SetMaxVelocity(15.);
     DEMSim.SetExpandSafetyParam(1.2);
@@ -126,7 +125,7 @@ int main() {
     float offset_z = bottom + sample_halfheight + 0.15;
     float settle_frame_time = 0.2;
     float settle_batch_time = 2.0;
-    while (DEMSim.GetNumClumps() < 0.5e6) {
+    while (DEMSim.GetNumClumps() < 0.25e6) {
         DEMSim.ClearCache();
         float3 sample_center = make_float3(0, 0, offset_z);
         std::vector<std::shared_ptr<DEMClumpTemplate>> heap_template_in_use;
@@ -159,12 +158,20 @@ int main() {
 
         DEMSim.ShowThreadCollaborationStats();
     }
+
+    // Settle for some time more
+    DEMSim.DoDynamicsThenSync(1.0);
+
     char cp_filename[200];
-    sprintf(cp_filename, "%s/GRC_2e5.csv", out_dir.c_str());
+    sprintf(cp_filename, "%s/GRC_3e5.csv", out_dir.c_str());
     DEMSim.WriteClumpFile(std::string(cp_filename));
 
     DEMSim.ShowThreadCollaborationStats();
     DEMSim.ClearThreadCollaborationStats();
+
+    char cnt_filename[200];
+    sprintf(cnt_filename, "%s/Contact_pairs_3e5.csv", out_dir.c_str());
+    DEMSim.WriteContactFile(std::string(cnt_filename));
 
     std::cout << "DEMdemo_GRCPrep_Part1 exiting..." << std::endl;
     return 0;

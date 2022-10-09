@@ -1112,7 +1112,7 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
     ptFile << outstrstream.str();
 }
 
-void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
+void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thres) const {
     std::ostringstream outstrstream;
 
     outstrstream << OUTPUT_FILE_CNT_TYPE_NAME;
@@ -1155,9 +1155,16 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
         auto geoA = idGeometryA.at(i);
         auto geoB = idGeometryB.at(i);
         auto type = contactType.at(i);
-        // We don't output fake contacts
-        if (type == NOT_A_CONTACT)
+        // We don't output fake contacts; but right now, no contact will be marked fake by kT, so no need to check that
+        // if (type == NOT_A_CONTACT)
+        //     continue;
+
+        float3 forcexyz = contactForces.at(i);
+        float3 torque = contactTorque_convToForce.at(i);
+        // If this force+torque is too small, then it's not an active contact
+        if (length(forcexyz + torque) < force_thres) {
             continue;
+        }
 
         // geoA's owner must be a sphere
         auto ownerA = ownerClumpBody.at(geoA);
@@ -1173,6 +1180,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
             default:  // Default is sphere--analytical
                 ownerB = ownerAnalBody.at(geoB);
         }
+
         // Type is mapped to SS, SM and such....
         outstrstream << contact_type_out_name_map.at(type);
 
@@ -1186,7 +1194,6 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
 
         // Force is already in global...
         if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::FORCE) {
-            float3 forcexyz = contactForces.at(i);
             outstrstream << "," << forcexyz.x << "," << forcexyz.y << "," << forcexyz.z;
         }
 
@@ -1235,8 +1242,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
 
         // Torque is in global already...
         if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE_ONLY_FORCE) {
-            float3 forcexyz = contactTorque_convToForce.at(i);
-            outstrstream << "," << forcexyz.x << "," << forcexyz.y << "," << forcexyz.z;
+            outstrstream << "," << torque.x << "," << torque.y << "," << torque.z;
         }
 
         if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::WILDCARD) {

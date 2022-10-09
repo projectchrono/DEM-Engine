@@ -47,6 +47,7 @@ set(core_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/WavefrontMeshLoader.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/csv.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/Timer.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/Paths.hpp
 )
 
 set(core_sources

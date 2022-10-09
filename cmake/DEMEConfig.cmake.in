@@ -28,5 +28,6 @@ if (NOT TARGET simulator_multi_gpu AND NOT DEME_BINARY_DIR)
 endif()
 
 set(DEME_INCLUDE_DIRS @CONF_INCLUDE_DIRS@)
+set(DEME_DATA_DIRS @CONF_SHARE_DATA_DIRS@)
 set(DEME_LIBRARIES DEME::simulator_multi_gpu)
 
