@@ -1031,7 +1031,7 @@ float DEMSolver::dTInspectReduce(const std::shared_ptr<jitify::Program>& inspect
             n = nOwnerClumps;
             break;
     }
-    double* pRes = dT->inspectCall(inspection_kernel, kernel_name, n, reduce_flavor, all_domain);
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, n, reduce_flavor, all_domain);
     return (float)(*pRes);
 }
 

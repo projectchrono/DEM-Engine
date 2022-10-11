@@ -497,11 +497,11 @@ class DEMDynamicThread {
     void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs);
 
     // Execute this kernel, then return the reduced value
-    double* inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
-                        const std::string& kernel_name,
-                        size_t n,
-                        CUB_REDUCE_FLAVOR reduce_flavor,
-                        bool all_domain);
+    float* inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
+                       const std::string& kernel_name,
+                       size_t n,
+                       CUB_REDUCE_FLAVOR reduce_flavor,
+                       bool all_domain);
 
   private:
     // Name for this class

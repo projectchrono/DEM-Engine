@@ -1833,22 +1833,22 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     }
 }
 
-double* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
-                                      const std::string& kernel_name,
-                                      size_t n,
-                                      CUB_REDUCE_FLAVOR reduce_flavor,
-                                      bool all_domain) {
+float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
+                                     const std::string& kernel_name,
+                                     size_t n,
+                                     CUB_REDUCE_FLAVOR reduce_flavor,
+                                     bool all_domain) {
     // We can use temp vectors as we please
-    size_t quarryTempSize = n * sizeof(double);
-    double* resArr = (double*)stateOfSolver_resources.allocateTempVector(1, quarryTempSize);
+    size_t quarryTempSize = n * sizeof(float);
+    float* resArr = (float*)stateOfSolver_resources.allocateTempVector(1, quarryTempSize);
     size_t regionTempSize = n * sizeof(notStupidBool_t);
     // If this boolArrExclude is 1 at an element, that means this element is exluded in the reduction
     notStupidBool_t* boolArrExclude = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(2, regionTempSize);
     GPU_CALL(cudaMemset(boolArrExclude, 0, regionTempSize));
 
     // We may actually have 2 reduced returns: in regional reduction, key 0 and 1 give one return each.
-    size_t returnSize = sizeof(double) * 2;
-    double* res = (double*)stateOfSolver_resources.allocateTempVector(3, returnSize);
+    size_t returnSize = sizeof(float) * 2;
+    float* res = (float*)stateOfSolver_resources.allocateTempVector(3, returnSize);
     size_t blocks_needed = (n + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     inspection_kernel->kernel(kernel_name)
         .instantiate()
@@ -1859,10 +1859,10 @@ double* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& in
     if (all_domain) {
         switch (reduce_flavor) {
             case (CUB_REDUCE_FLAVOR::MAX):
-                doubleMaxReduce(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
+                floatMaxReduce(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
                 break;
             case (CUB_REDUCE_FLAVOR::SUM):
-                doubleSumReduce(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
+                floatSumReduce(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
                 break;
             case (CUB_REDUCE_FLAVOR::NONE):
                 //// TODO: Query a full array w/o reducing doesn't seem like something useful...
@@ -1874,7 +1874,7 @@ double* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& in
         // Extra arrays are needed for sort and reduce by key
         notStupidBool_t* boolArrExclude_sorted =
             (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(4, regionTempSize);
-        double* resArr_sorted = (double*)stateOfSolver_resources.allocateTempVector(5, quarryTempSize);
+        float* resArr_sorted = (float*)stateOfSolver_resources.allocateTempVector(5, quarryTempSize);
         size_t* num_unique_out = (size_t*)stateOfSolver_resources.allocateTempVector(6, sizeof(size_t));
         switch (reduce_flavor) {
             case (CUB_REDUCE_FLAVOR::MAX):
@@ -1882,12 +1882,12 @@ double* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& in
                 break;
             case (CUB_REDUCE_FLAVOR::SUM):
                 // Sort first
-                doubleSortByKey(boolArrExclude, boolArrExclude_sorted, resArr, resArr_sorted, n, streamInfo.stream,
-                                stateOfSolver_resources);
+                floatSortByKey(boolArrExclude, boolArrExclude_sorted, resArr, resArr_sorted, n, streamInfo.stream,
+                               stateOfSolver_resources);
                 // Then reduce. We care about the sum for 0-marked entries only. Note boolArrExclude here is re-used for
                 // storing d_unique_out.
-                doubleSumReduceByKey(boolArrExclude_sorted, boolArrExclude, resArr_sorted, res, num_unique_out, n,
-                                     streamInfo.stream, stateOfSolver_resources);
+                floatSumReduceByKey(boolArrExclude_sorted, boolArrExclude, resArr_sorted, res, num_unique_out, n,
+                                    streamInfo.stream, stateOfSolver_resources);
                 break;
         }
     }

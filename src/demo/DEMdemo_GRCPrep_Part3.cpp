@@ -180,8 +180,8 @@ int main() {
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEMSim.SetCDUpdateFreq(20);
     // DEMSim.SetExpandFactor(1e-3);
-    DEMSim.SetMaxVelocity(10.);
-    DEMSim.SetExpandSafetyParam(2.1);
+    DEMSim.SetMaxVelocity(5.);
+    DEMSim.SetExpandSafetyParam(1.1);
     DEMSim.SetInitBinSize(scales.at(1));
     DEMSim.Initialize();
 
