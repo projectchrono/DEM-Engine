@@ -24,7 +24,7 @@ int main() {
     double world_size = 1;
     double pi = 3.14159;
 
-    while (num_particles < 3e8) {
+    while (num_particles < 30e6) {
         DEMSolver DEMSim;
         DEMSim.SetVerbosity(ERROR);
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
@@ -37,7 +37,7 @@ int main() {
         auto mat_type_granular =
             DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
 
-        float step_size = 1e-5;
+        float step_size = 5e-6;
         const float chamber_height = world_size / 3.;
         const float fill_height = chamber_height;
         const float chamber_bottom = -world_size / 2.;
@@ -111,8 +111,8 @@ int main() {
         DEMSim.ShowTimingStats();
 
         std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
-        std::cout << (time_sec.count()) / sim_end << " seconds (wall time) to finish 1 second's simulation"
-                  << std::endl;
+        std::cout << (time_sec.count()) / sim_end / (1e-5 / 5e-6)
+                  << " seconds (wall time) to finish 1 second's simulation" << std::endl;
 
         // granular_rad *= std::pow(0.5, 1. / 3.);
         world_size *= std::pow(2., 1. / 3.);

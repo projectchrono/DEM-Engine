@@ -30,14 +30,14 @@ int main() {
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
         DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
         DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
-        DEMSim.SetNoForceRecord();
+        // DEMSim.SetNoForceRecord();
 
         // E, nu, CoR, mu, Crr...
         auto mat_type_mixer = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
         auto mat_type_granular =
             DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
 
-        float step_size = 5e-6;
+        float step_size = 3e-6;
         const float chamber_height = world_size / 3.;
         const float fill_height = chamber_height;
         const float chamber_bottom = -world_size / 2.;
@@ -64,10 +64,10 @@ int main() {
         DEMSim.SetFamilyPrescribedAngVel(10, "0", "0", "2 * " + to_string_with_precision(pi / world_size));
 
         DEMClumpTemplate shape_template;
-        shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
+        shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/spiky_sphere.csv").string());
         // Calculate its mass and MOI
-        shape_template.mass = 2.6e3 * 4. / 3. * 3.14159;  // in kg or g
-        shape_template.MOI = make_float3(shape_template.mass * 2. / 5.);
+        shape_template.mass = 2.6e3 * 5.5886717;  // in kg or g
+        shape_template.MOI = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3;
         shape_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(shape_template.nComp, mat_type_granular);
         shape_template.Scale(granular_rad);
         auto template_granular = DEMSim.LoadClumpType(shape_template);
@@ -76,7 +76,7 @@ int main() {
         auto mixer_tracker = DEMSim.Track(mixer);
 
         // Sampler to use
-        HCPSampler sampler(2.2f * granular_rad);
+        HCPSampler sampler(3.f * granular_rad);
         float3 fill_center = make_float3(0, 0, fill_bottom + fill_height / 2);
         const float fill_radius = world_size / 2. - 2. * granular_rad;
         auto input_xyz = sampler.SampleCylinderZ(fill_center, fill_radius, fill_height / 2);
@@ -118,8 +118,8 @@ int main() {
         DEMSim.ShowTimingStats();
 
         std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
-        std::cout << (time_sec.count()) / sim_end / 2. << " seconds (wall time) to finish 1 second's simulation"
-                  << std::endl;
+        std::cout << (time_sec.count()) / sim_end / (1e-5 / 3e-6)
+                  << " seconds (wall time) to finish 1 second's simulation" << std::endl;
         // Compensate for smaller ts
 
         // granular_rad *= std::pow(0.5, 1. / 3.);

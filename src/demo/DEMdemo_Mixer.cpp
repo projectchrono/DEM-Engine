@@ -49,7 +49,7 @@ int main() {
     // Define the prescribed motion of mixer
     DEMSim.SetFamilyPrescribedAngVel(10, "0", "0", "2 * 3.14159");
 
-    float granular_rad = 0.005;
+    float granular_rad = 0.003;
     DEMClumpTemplate shape_template;
     shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
     // Calculate its mass and MOI

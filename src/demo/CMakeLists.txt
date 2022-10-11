@@ -25,6 +25,7 @@ SET(DEMOS
 		DEMdemo_Mixer
 		DEMdemo_MixerTiming
 		DEMdemo_MixerTiming_Clumps
+		DEMdemo_MixerTiming_Clumps_5
 		DEMdemo_PolydisperseGeneration
 		DEMdemo_RoverWheel
 		DEMdemo_GRCPrep_Part1
