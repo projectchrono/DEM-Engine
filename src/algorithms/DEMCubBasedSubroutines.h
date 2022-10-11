@@ -11,7 +11,6 @@
 namespace deme {
 
 void doubleSumReduce(double* d_in, double* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
-
 void floatSumReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
 
 void boolSumReduce(notStupidBool_t* d_in,
@@ -27,6 +26,7 @@ void boolMaxReduce(notStupidBool_t* d_in,
                    DEMSolverStateData& scratchPad);
 
 void floatMaxReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
+void doubleMaxReduce(double* d_in, double* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
 
 void floatSumReduceByKey(notStupidBool_t* d_keys_in,
                          notStupidBool_t* d_unique_out,
@@ -36,6 +36,14 @@ void floatSumReduceByKey(notStupidBool_t* d_keys_in,
                          size_t n,
                          cudaStream_t& this_stream,
                          DEMSolverStateData& scratchPad);
+void doubleSumReduceByKey(notStupidBool_t* d_keys_in,
+                          notStupidBool_t* d_unique_out,
+                          double* d_vals_in,
+                          double* d_aggregates_out,
+                          size_t* d_num_out,
+                          size_t n,
+                          cudaStream_t& this_stream,
+                          DEMSolverStateData& scratchPad);
 
 void floatSortByKey(notStupidBool_t* d_keys_in,
                     notStupidBool_t* d_keys_out,
@@ -44,6 +52,13 @@ void floatSortByKey(notStupidBool_t* d_keys_in,
                     size_t n,
                     cudaStream_t& this_stream,
                     DEMSolverStateData& scratchPad);
+void doubleSortByKey(notStupidBool_t* d_keys_in,
+                     notStupidBool_t* d_keys_out,
+                     double* d_vals_in,
+                     double* d_vals_out,
+                     size_t n,
+                     cudaStream_t& this_stream,
+                     DEMSolverStateData& scratchPad);
 
 void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       std::shared_ptr<jitify::Program>& bin_triangle_kernels,
@@ -74,5 +89,15 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
                                  cudaStream_t& this_stream,
                                  DEMSolverStateData& scratchPad,
                                  SolverTimers& timers);
+
+void overwritePrevContactArrays(DEMDataKT* kT_data,
+                                DEMDataDT* dT_data,
+                                std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& previous_idGeometryA,
+                                std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& previous_idGeometryB,
+                                std::vector<contact_t, ManagedAllocator<contact_t>>& previous_contactType,
+                                DEMSimParams* simParams,
+                                DEMSolverStateData& scratchPad,
+                                cudaStream_t& this_stream,
+                                size_t nContacts);
 
 }  // namespace deme

@@ -142,9 +142,9 @@ class DEMSolver {
     /// Returns a shared_ptr to the force model in use.
     std::shared_ptr<DEMForceModel> ReadContactForceModel(const std::string& filename);
 
-    /// Instruct the solver if contact pair arrays should be sorted before usage. This is needed if history-based model
-    /// is in use.
-    void SetSortContactPairs(bool use_sort) { kT_should_sort = use_sort; }
+    /// Instruct the solver if contact pair arrays should be sorted (based on the types of contacts) before usage. This
+    /// can potentially make dT run faster. This is currently not implemented due to technical difficulties.
+    void SetSortContactPairs(bool use_sort = true) { should_sort_contacts = use_sort; }
 
     /// Instruct the solver to rearrange and consolidate clump templates information, then jitify it into GPU kernels
     /// (if set to true), rather than using flattened sphere component configuration arrays whose entries are associated
@@ -571,8 +571,8 @@ class DEMSolver {
 
     // Verbosity
     VERBOSITY verbosity = INFO;
-    // If true, kT should sort contact arrays then transfer them to dT
-    bool kT_should_sort = true;
+    // If true, dT should sort contact arrays (based on contact type) before usage (not implemented)
+    bool should_sort_contacts = false;
     // If true, the solvers may need to do a per-step sweep to apply family number changes
     bool famnum_can_change_conditionally = false;
 

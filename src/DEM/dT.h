@@ -53,6 +53,9 @@ class DEMDynamicThread {
     // The std::thread that binds to this instance
     std::thread th;
 
+    // Friend system DEMKinematicThread
+    DEMKinematicThread* kT;
+
     // Number of items in the buffer array (which is not a managed vector, due to our need to explicitly control where
     // it is allocated)
     size_t buffer_size;
@@ -494,14 +497,20 @@ class DEMDynamicThread {
     void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs);
 
     // Execute this kernel, then return the reduced value
-    float* inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
-                       const std::string& kernel_name,
-                       size_t n,
-                       CUB_REDUCE_FLAVOR reduce_flavor,
-                       bool all_domain);
+    double* inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
+                        const std::string& kernel_name,
+                        size_t n,
+                        CUB_REDUCE_FLAVOR reduce_flavor,
+                        bool all_domain);
 
   private:
+    // Name for this class
     const std::string Name = "dT";
+
+    // If true, then the user manually loaded extra contacts to the system. In this case, not only we need to wait for
+    // an initial update from kT, we also need to update kT's previous-step contact arrays, so it properly builds
+    // contact map for dT.
+    bool new_contacts_loaded = false;
 
     // Meshes cached on dT side that has corresponding owner number associated. Useful for outputting meshes.
     std::vector<std::shared_ptr<DEMMeshConnected>> m_meshes;

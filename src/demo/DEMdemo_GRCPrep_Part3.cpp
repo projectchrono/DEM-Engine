@@ -21,7 +21,7 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity(STEP_METRIC);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     // DEMSim.SetOutputContent(OUTPUT_CONTENT::FAMILY);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ);
@@ -58,7 +58,7 @@ int main() {
     std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
     // std::vector<double> scales = {0.0014, 0.00063, 0.00033, 0.00022, 0.00015, 0.00009};
     std::vector<double> scales = {0.00063, 0.00033, 0.00022, 0.00015, 0.00009};
-    std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 10.; });
+    std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 20.; });
     for (double scaling : scales) {
         auto this_template = shape_template;
         this_template.mass = (double)mass * scaling * scaling * scaling;
@@ -77,9 +77,11 @@ int main() {
         ground_particle_templates.push_back(DEMSim.LoadClumpType(this_template));
     }
 
-    // Now we load part1 clump locations from a part1 output file
-    auto part1_clump_xyz = DEMSim.ReadClumpXyzFromCsv("GRC_3e6.csv");
-    auto part1_clump_quaternion = DEMSim.ReadClumpQuatFromCsv("GRC_3e6.csv");
+    // Now we load part2 clump locations from a part1 output file
+    auto part2_clump_xyz = DEMSim.ReadClumpXyzFromCsv("GRC_3e6.csv");
+    auto part2_clump_quaternion = DEMSim.ReadClumpQuatFromCsv("GRC_3e6.csv");
+    auto part2_pairs = DEMSim.ReadContactPairsFromCsv("Contact_pairs_3e6.csv");
+    auto part2_wcs = DEMSim.ReadContactWildcardsFromCsv("Contact_pairs_3e6.csv");
     std::vector<float3> in_xyz;
     std::vector<float4> in_quat;
     std::vector<std::shared_ptr<DEMClumpTemplate>> in_types;
@@ -88,8 +90,8 @@ int main() {
         char t_name[20];
         sprintf(t_name, "%04d", t_num);
 
-        auto this_type_xyz = part1_clump_xyz[std::string(t_name)];
-        auto this_type_quat = part1_clump_quaternion[std::string(t_name)];
+        auto this_type_xyz = part2_clump_xyz[std::string(t_name)];
+        auto this_type_quat = part2_clump_quaternion[std::string(t_name)];
 
         size_t n_clump_this_type = this_type_xyz.size();
         // Prepare clump type identification vector for loading into the system (don't forget type 0 in
@@ -132,6 +134,8 @@ int main() {
     base_batch.SetTypes(in_types);
     base_batch.SetPos(in_xyz);
     base_batch.SetOriQ(in_quat);
+    base_batch.SetExistingContacts(part2_pairs);
+    base_batch.SetExistingContactWildcards(part2_wcs);
 
     // Based on the `base_batch', we can create more batches
     std::vector<float> x_shift_dist = {-1.5, -0.5, 0.5, 1.5};
@@ -153,7 +157,9 @@ int main() {
     // Now add a plane to compress the `road'
     auto compressor = DEMSim.AddExternalObject();
     compressor->AddPlane(make_float3(0, 0, 0), make_float3(0, 0, -1), mat_type_terrain);
-    compressor->SetFamily(RESERVED_FAMILY_NUM);
+    compressor->SetFamily(1);
+    DEMSim.DisableContactBetweenFamilies(0, 1);
+    DEMSim.SetFamilyFixed(1);
     auto compressor_tracker = DEMSim.Track(compressor);
 
     // And a z position inspector
@@ -164,23 +170,19 @@ int main() {
     auto void_ratio_finder =
         DEMSim.CreateInspector("clump_volume", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) && (Z <= -0.44);");
     float total_volume = 0.96 * 0.96 * 0.06;
-    // // Mimic the compressor from the previous run
-    // auto compressor = DEMSim.AddExternalObject();
-    // compressor->AddPlane(make_float3(0, 0, 0), make_float3(0, 0, -1), mat_type_terrain);
-    // compressor->SetFamily(RESERVED_FAMILY_NUM);
-    // auto compressor_tracker = DEMSim.Track(compressor);
+    ;
 
     // Make ready for simulation
-    float step_size = 5e-7;
+    double step_size = 1e-6;
     DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEMSim.SetCDUpdateFreq(40);
+    DEMSim.SetCDUpdateFreq(20);
     // DEMSim.SetExpandFactor(1e-3);
-    DEMSim.SetMaxVelocity(35.);
-    DEMSim.SetExpandSafetyParam(1.1);
-    DEMSim.SetInitBinSize(scales.at(2));
+    DEMSim.SetMaxVelocity(10.);
+    DEMSim.SetExpandSafetyParam(2.1);
+    DEMSim.SetInitBinSize(scales.at(1));
     DEMSim.Initialize();
 
     unsigned int fps = 20;
@@ -193,22 +195,24 @@ int main() {
     unsigned int curr_step = 0;
 
     // Now compress it
-    float compress_time = 0.3;
+    DEMSim.EnableContactBetweenFamilies(0, 1);
+    double compress_time = 0.3;
 
     float matter_volume = void_ratio_finder->GetValue();
-
     std::cout << "Initial void ratio " << (total_volume - matter_volume) / matter_volume << std::endl;
 
     double now_z = max_z_finder->GetValue();
     compressor_tracker->SetPos(make_float3(0, 0, now_z));
     double compressor_final_dist = (now_z > -0.41) ? now_z - (-0.41) : 0.0;
     double compressor_v = compressor_final_dist / compress_time;
-    for (float t = 0; t < compress_time; t += step_size, curr_step++) {
+    for (double t = 0; t < compress_time; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
             std::cout << "Frame: " << currframe << std::endl;
             std::cout << "Highest point is at " << now_z << std::endl;
             matter_volume = void_ratio_finder->GetValue();
             std::cout << "Void ratio in compression " << (total_volume - matter_volume) / matter_volume << std::endl;
+            float max_v = max_v_finder->GetValue();
+            std::cout << "Highest velocity is " << max_v << std::endl;
             DEMSim.ShowThreadCollaborationStats();
             char filename[200];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
@@ -219,12 +223,14 @@ int main() {
         DEMSim.DoDynamics(step_size);
     }
     // Then gradually remove the compressor
-    for (float t = 0; t < compress_time + 0.1; t += step_size, curr_step++) {
+    for (double t = 0; t < compress_time; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
             std::cout << "Frame: " << currframe << std::endl;
             std::cout << "Highest point is at " << now_z << std::endl;
             matter_volume = void_ratio_finder->GetValue();
             std::cout << "Void ratio in compression " << (total_volume - matter_volume) / matter_volume << std::endl;
+            float max_v = max_v_finder->GetValue();
+            std::cout << "Highest velocity is " << max_v << std::endl;
             DEMSim.ShowThreadCollaborationStats();
             char filename[200];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
@@ -235,10 +241,12 @@ int main() {
         DEMSim.DoDynamics(step_size);
     }
 
+    DEMSim.DoDynamicsThenSync(0);
+    DEMSim.DisableContactBetweenFamilies(0, 1);
+    DEMSim.DoDynamicsThenSync(0.3);
     matter_volume = void_ratio_finder->GetValue();
     std::cout << "Void ratio after settling " << (total_volume - matter_volume) / matter_volume << std::endl;
 
-    DEMSim.DoDynamicsThenSync(0);
     char cp_filename[200];
     sprintf(cp_filename, "%s/GRC_20e6.csv", out_dir.c_str());
     DEMSim.WriteClumpFile(std::string(cp_filename));

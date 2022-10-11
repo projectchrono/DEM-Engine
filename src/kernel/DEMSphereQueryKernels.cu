@@ -8,7 +8,7 @@
 
 __global__ void inspectSphereProperty(deme::DEMDataDT* granData,
                                       deme::DEMSimParams* simParams,
-                                      float* quantity,
+                                      double* quantity,
                                       deme::notStupidBool_t* not_in_region,
                                       size_t nSpheres) {
     size_t sphereID = blockIdx.x * blockDim.x + threadIdx.x;

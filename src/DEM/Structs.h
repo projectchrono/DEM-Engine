@@ -341,8 +341,8 @@ class ClumpTemplateFlatten {
 };
 
 struct SolverFlags {
-    // Sort contact pair arrays before sending to kT
-    bool should_sort_pairs = true;
+    // Sort contact pair arrays (based on contact type) before sending to dT
+    bool should_sort_pairs = false;
     // This run is historyless
     bool isHistoryless = false;
     // This run uses contact detection in an async fashion (kT and dT working at different points in simulation time)

@@ -240,6 +240,9 @@ int main() {
         DEMSim.DoDynamics(step_size);
     }
 
+    DEMSim.DoDynamicsThenSync(0);
+    DEMSim.DisableContactBetweenFamilies(0, 1);
+    DEMSim.DoDynamicsThenSync(0.3);
     matter_volume = void_ratio_finder->GetValue();
     std::cout << "Void ratio after settling " << (total_volume - matter_volume) / matter_volume << std::endl;
 

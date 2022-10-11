@@ -1,0 +1,3 @@
+contact_type,geoA,geoB,f_x,f_y,f_z,X,Y,Z,delta_tan_x,delta_tan_y,delta_tan_z,delta_time
+SS,0,1,0,0,-853410,0,0,-6.0042,0,0,0,7.84117
+SA,0,0,0,0,1.70689e+06,0,0,-10.0015,0,0,0,7.9345

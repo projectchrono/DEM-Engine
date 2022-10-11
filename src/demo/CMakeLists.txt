@@ -17,7 +17,7 @@ SET(DEMOS
 		DEMdemo_Sieve
 		DEMdemo_SingleSphereCollide
 		DEMdemo_TestPack
-		DEMdemo_TestWorldSizeGen
+		DEMdemo_TestRestart
 		DEMdemo_RotatingDrum
 		DEMdemo_Centrifuge
 		DEMdemo_GameOfLife

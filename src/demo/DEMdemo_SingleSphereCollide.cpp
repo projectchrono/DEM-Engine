@@ -49,7 +49,7 @@ int main() {
     particles1->SetFamily(0);
     auto tracker1 = DEMSim.Track(particles1);
 
-    DEMSim.DisableContactBetweenFamilies(0, 1);
+    // DEMSim.DisableContactBetweenFamilies(0, 1);
 
     auto bot_plane = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/plane_20by20.obj").string(), mat_type_1);
     bot_plane->SetInitPos(make_float3(0, 0, -1.25));
@@ -90,15 +90,15 @@ int main() {
     path out_dir = current_path();
     out_dir += "/DemoOutput_SingleSphereCollide";
     create_directory(out_dir);
-    bool changed_family = false;
+    // bool changed_family = false;
     for (int i = 0; i < 100; i++) {
         std::cout << "Frame: " << i << std::endl;
 
-        if ((!changed_family) && i >= 10) {
-            // DEMSim.ChangeFamily(1, 0);
-            DEMSim.EnableContactBetweenFamilies(0, 1);
-            changed_family = true;
-        }
+        // if ((!changed_family) && i >= 10) {
+        //     // DEMSim.ChangeFamily(1, 0);
+        //     DEMSim.EnableContactBetweenFamilies(0, 1);
+        //     changed_family = true;
+        // }
 
         char filename[100];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);

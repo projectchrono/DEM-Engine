@@ -28,7 +28,11 @@ DEMSolver::DEMSolver(unsigned int nGPUs) {
     dTkT_GpuManager = new GpuManager(2);
 
     dT = new DEMDynamicThread(dTMain_InteractionManager, dTkT_InteractionManager, dTkT_GpuManager);
-    kT = new DEMKinematicThread(kTMain_InteractionManager, dTkT_InteractionManager, dTkT_GpuManager, dT);
+    kT = new DEMKinematicThread(kTMain_InteractionManager, dTkT_InteractionManager, dTkT_GpuManager);
+
+    // Make friends
+    dT->kT = kT;
+    kT->dT = dT;
 }
 
 DEMSolver::~DEMSolver() {
@@ -1027,8 +1031,8 @@ float DEMSolver::dTInspectReduce(const std::shared_ptr<jitify::Program>& inspect
             n = nOwnerClumps;
             break;
     }
-    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, n, reduce_flavor, all_domain);
-    return *pRes;
+    double* pRes = dT->inspectCall(inspection_kernel, kernel_name, n, reduce_flavor, all_domain);
+    return (float)(*pRes);
 }
 
 }  // namespace deme

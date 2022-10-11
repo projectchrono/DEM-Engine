@@ -483,16 +483,18 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     // The following several arrays will have variable sizes, so here we only used an estimate. My estimate of total
     // contact pairs is 2n, and I think the max is 6n (although I can't prove it). Note the estimate should be large
     // enough to decrease the number of reallocations in the simulation, but not too large that eats too much memory.
-    DEME_TRACKED_RESIZE(idGeometryA, nSpheresGM * DEME_INIT_CNT_MULTIPLIER, "idGeometryA", 0);
-    DEME_TRACKED_RESIZE(idGeometryB, nSpheresGM * DEME_INIT_CNT_MULTIPLIER, "idGeometryB", 0);
-    DEME_TRACKED_RESIZE(contactType, nSpheresGM * DEME_INIT_CNT_MULTIPLIER, "contactType", NOT_A_CONTACT);
-    if (!solverFlags.isHistoryless) {
-        DEME_TRACKED_RESIZE(previous_idGeometryA, nSpheresGM * DEME_INIT_CNT_MULTIPLIER, "previous_idGeometryA", 0);
-        DEME_TRACKED_RESIZE(previous_idGeometryB, nSpheresGM * DEME_INIT_CNT_MULTIPLIER, "previous_idGeometryB", 0);
-        DEME_TRACKED_RESIZE(previous_contactType, nSpheresGM * DEME_INIT_CNT_MULTIPLIER, "previous_contactType",
-                            NOT_A_CONTACT);
-        DEME_TRACKED_RESIZE(contactMapping, nSpheresGM * DEME_INIT_CNT_MULTIPLIER, "contactMapping",
-                            NULL_MAPPING_PARTNER);
+    {
+        size_t cnt_arr_size =
+            DEME_MAX(*stateOfSolver_resources.pNumPrevContacts, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
+        DEME_TRACKED_RESIZE(idGeometryA, cnt_arr_size, "idGeometryA", 0);
+        DEME_TRACKED_RESIZE(idGeometryB, cnt_arr_size, "idGeometryB", 0);
+        DEME_TRACKED_RESIZE(contactType, cnt_arr_size, "contactType", NOT_A_CONTACT);
+        if (!solverFlags.isHistoryless) {
+            DEME_TRACKED_RESIZE(previous_idGeometryA, cnt_arr_size, "previous_idGeometryA", 0);
+            DEME_TRACKED_RESIZE(previous_idGeometryB, cnt_arr_size, "previous_idGeometryB", 0);
+            DEME_TRACKED_RESIZE(previous_contactType, cnt_arr_size, "previous_contactType", NOT_A_CONTACT);
+            DEME_TRACKED_RESIZE(contactMapping, cnt_arr_size, "contactMapping", NULL_MAPPING_PARTNER);
+        }
     }
 }
 
@@ -656,6 +658,14 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
                                                size_t nExistingFacets) {
     populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, input_mesh_facet_owner,
                          input_mesh_facets, clump_templates, nExistingOwners, nExistingSpheres, nExistingFacets);
+}
+
+void DEMKinematicThread::updatePrevContactArrays(DEMDataDT* dT_data, size_t nContacts) {
+    // Store the incoming info in temp arrays
+    overwritePrevContactArrays(granData, dT_data, previous_idGeometryA, previous_idGeometryB, previous_contactType,
+                               simParams, stateOfSolver_resources, streamInfo.stream, nContacts);
+    DEME_DEBUG_PRINTF("Number of contacts after a user-manual contact load: %zu", nContacts);
+    DEME_DEBUG_PRINTF("Number of spheres after a user-manual contact load: %zu", simParams->nSpheresGM);
 }
 
 void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& Subs) {

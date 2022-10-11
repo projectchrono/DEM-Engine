@@ -746,7 +746,9 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.useNoContactRecord = no_recording_contact_forces;
     dT->solverFlags.useForceCollectInPlace = collect_force_in_force_kernel;
 
-    kT->solverFlags.should_sort_pairs = kT_should_sort;
+    // Whether sorts contact before using them (not implemented)
+    kT->solverFlags.should_sort_pairs = should_sort_contacts;
+    dT->solverFlags.should_sort_pairs = should_sort_contacts;
 }
 
 void DEMSolver::transferSimParams() {

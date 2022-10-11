@@ -18,7 +18,6 @@ namespace deme {
 void doubleSumReduce(double* d_in, double* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad) {
     cubDEMSum<double, double, DEMSolverStateData>(d_in, d_out, n, this_stream, scratchPad);
 }
-
 void floatSumReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad) {
     cubDEMSum<float, float, DEMSolverStateData>(d_in, d_out, n, this_stream, scratchPad);
 }
@@ -42,6 +41,9 @@ void boolMaxReduce(notStupidBool_t* d_in,
 void floatMaxReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad) {
     cubDEMMax<float, DEMSolverStateData>(d_in, d_out, n, this_stream, scratchPad);
 }
+void doubleMaxReduce(double* d_in, double* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad) {
+    cubDEMMax<double, DEMSolverStateData>(d_in, d_out, n, this_stream, scratchPad);
+}
 
 void floatSumReduceByKey(notStupidBool_t* d_keys_in,
                          notStupidBool_t* d_unique_out,
@@ -56,6 +58,19 @@ void floatSumReduceByKey(notStupidBool_t* d_keys_in,
     cubDEMReduceByKeys<notStupidBool_t, float, CubFloatAdd, DEMSolverStateData>(
         d_keys_in, d_unique_out, d_vals_in, d_aggregates_out, d_num_out, add_op, n, this_stream, scratchPad);
 }
+void doubleSumReduceByKey(notStupidBool_t* d_keys_in,
+                          notStupidBool_t* d_unique_out,
+                          double* d_vals_in,
+                          double* d_aggregates_out,
+                          size_t* d_num_out,
+                          size_t n,
+                          cudaStream_t& this_stream,
+                          DEMSolverStateData& scratchPad) {
+    // I'm not sure how to pass cuda cub::Sum() as a template argument here, so I used a custom add...
+    CubFloatAdd add_op;
+    cubDEMReduceByKeys<notStupidBool_t, double, CubFloatAdd, DEMSolverStateData>(
+        d_keys_in, d_unique_out, d_vals_in, d_aggregates_out, d_num_out, add_op, n, this_stream, scratchPad);
+}
 
 void floatSortByKey(notStupidBool_t* d_keys_in,
                     notStupidBool_t* d_keys_out,
@@ -66,6 +81,16 @@ void floatSortByKey(notStupidBool_t* d_keys_in,
                     DEMSolverStateData& scratchPad) {
     cubDEMSortByKeys<notStupidBool_t, float, DEMSolverStateData>(d_keys_in, d_keys_out, d_vals_in, d_vals_out, n,
                                                                  this_stream, scratchPad);
+}
+void doubleSortByKey(notStupidBool_t* d_keys_in,
+                     notStupidBool_t* d_keys_out,
+                     double* d_vals_in,
+                     double* d_vals_out,
+                     size_t n,
+                     cudaStream_t& this_stream,
+                     DEMSolverStateData& scratchPad) {
+    cubDEMSortByKeys<notStupidBool_t, double, DEMSolverStateData>(d_keys_in, d_keys_out, d_vals_in, d_vals_out, n,
+                                                                  this_stream, scratchPad);
 }
 
 }  // namespace deme
