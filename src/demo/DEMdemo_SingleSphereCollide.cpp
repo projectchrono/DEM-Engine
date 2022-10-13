@@ -37,7 +37,7 @@ int main() {
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_clump_type(1, sph_type_1);
     // std::vector<unsigned int> input_clump_type(1, sph_type_1);
 
-    // Inputs are just 2 sphere
+    // Inputs are just 2 spheres
     float sphPos = 1.2f;
     input_xyz1.push_back(make_float3(-sphPos, 0, 0));
     input_xyz2.push_back(make_float3(sphPos, 0, 0));

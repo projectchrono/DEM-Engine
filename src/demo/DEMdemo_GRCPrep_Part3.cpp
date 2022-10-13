@@ -21,7 +21,7 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(STEP_METRIC);
+    DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     // DEMSim.SetOutputContent(OUTPUT_CONTENT::FAMILY);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ);
@@ -180,7 +180,7 @@ int main() {
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEMSim.SetCDUpdateFreq(20);
     // DEMSim.SetExpandFactor(1e-3);
-    DEMSim.SetMaxVelocity(5.);
+    DEMSim.SetMaxVelocity(15.);
     DEMSim.SetExpandSafetyParam(1.1);
     DEMSim.SetInitBinSize(scales.at(1));
     DEMSim.Initialize();
@@ -193,6 +193,11 @@ int main() {
     create_directory(out_dir);
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
+
+    // Settle a bit
+    DEMSim.DoDynamicsThenSync(0.3);
+    DEMSim.SetInitTimeStep(5e-7);
+    DEMSim.UpdateSimParams();
 
     // Now compress it
     DEMSim.EnableContactBetweenFamilies(0, 1);
@@ -243,7 +248,7 @@ int main() {
 
     DEMSim.DoDynamicsThenSync(0);
     DEMSim.DisableContactBetweenFamilies(0, 1);
-    DEMSim.DoDynamicsThenSync(0.3);
+    DEMSim.DoDynamicsThenSync(0.2);
     matter_volume = void_ratio_finder->GetValue();
     std::cout << "Void ratio after settling " << (total_volume - matter_volume) / matter_volume << std::endl;
 

@@ -132,14 +132,15 @@ int main() {
     auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
     float max_v;
 
-    float step_size = 5e-6;
+    float step_size = 1e-5;
     DEMSim.InstructBoxDomainDimension(12, 12, 25);
     DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
-    DEMSim.SetCDUpdateFreq(100);
-    DEMSim.SetExpandFactor(20.0 * 100 * step_size);
+    DEMSim.SetCDUpdateFreq(30);
+    DEMSim.SetExpandFactor(20.0 * 30 * step_size);
     DEMSim.SetExpandSafetyParam(1.0);
+    DEMSim.SetInitBinSize(0.1);
 
     DEMSim.Initialize();
 
