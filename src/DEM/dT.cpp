@@ -125,8 +125,8 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                     float expand_factor,
                                     float approx_max_vel,
                                     float expand_safety_param,
-                                    unsigned int nContactWildcards,
-                                    unsigned int nOwnerWildcards) {
+                                    const std::set<std::string>& contact_wildcards,
+                                    const std::set<std::string>& owner_wildcards) {
     simParams->nvXp2 = nvXp2;
     simParams->nvYp2 = nvYp2;
     simParams->nvZp2 = nvZp2;
@@ -147,8 +147,11 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->nbY = nbY;
     simParams->nbZ = nbZ;
 
-    simParams->nContactWildcards = nContactWildcards;
-    simParams->nOwnerWildcards = nOwnerWildcards;
+    simParams->nContactWildcards = contact_wildcards.size();
+    simParams->nOwnerWildcards = owner_wildcards.size();
+
+    m_contact_wildcard_names = contact_wildcards;
+    m_owner_wildcard_names = owner_wildcards;
 }
 
 float DEMDynamicThread::getKineticEnergy() {
@@ -218,6 +221,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
                                              size_t nSpheresGM,
                                              size_t nTriGM,
                                              unsigned int nAnalGM,
+                                             size_t nExtraContacts,
                                              unsigned int nMassProperties,
                                              unsigned int nClumpTopo,
                                              unsigned int nClumpComponents,
@@ -317,49 +321,52 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     DEME_TRACKED_RESIZE(volumeOwnerBody, nMassProperties, "volumeOwnerBody", 0);
 
     // Arrays for contact info
-    // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is ~ 4n, and I
+    // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is ~ 2n, and I
     // think the max is 6n (although I can't prove it). Note the estimate should be large enough to decrease the number
     // of reallocations in the simulation, but not too large that eats too much memory.
-    DEME_TRACKED_RESIZE(idGeometryA, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "idGeometryA", 0);
-    DEME_TRACKED_RESIZE(idGeometryB, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "idGeometryB", 0);
-    DEME_TRACKED_RESIZE(contactType, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "contactType", NOT_A_CONTACT);
+    {
+        // In any case, in this initialization process we should not make contact arrays smaller than it used to be, or
+        // we may lose data. Also, if this is a new-boot, we allocate this array for at least
+        // nSpheresGM*DEME_INIT_CNT_MULTIPLIER elements.
+        size_t cnt_arr_size =
+            DEME_MAX(*stateOfSolver_resources.pNumContacts + nExtraContacts, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
+        DEME_TRACKED_RESIZE(idGeometryA, cnt_arr_size, "idGeometryA", 0);
+        DEME_TRACKED_RESIZE(idGeometryB, cnt_arr_size, "idGeometryB", 0);
+        DEME_TRACKED_RESIZE(contactType, cnt_arr_size, "contactType", NOT_A_CONTACT);
 
-    if (!solverFlags.useNoContactRecord) {
-        DEME_TRACKED_RESIZE(contactForces, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "contactForces", make_float3(0));
-        DEME_TRACKED_RESIZE(contactTorque_convToForce, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER,
-                            "contactTorque_convToForce", make_float3(0));
-        DEME_TRACKED_RESIZE(contactPointGeometryA, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "contactPointGeometryA",
-                            make_float3(0));
-        DEME_TRACKED_RESIZE(contactPointGeometryB, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "contactPointGeometryB",
-                            make_float3(0));
-    }
-
-    // Allocate memory for each wildcard array
-    contactWildcards.resize(simParams->nContactWildcards);
-    ownerWildcards.resize(simParams->nOwnerWildcards);
-    for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
-        DEME_TRACKED_RESIZE_FLOAT(contactWildcards[i], nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, 0);
-    }
-    for (unsigned int i = 0; i < simParams->nOwnerWildcards; i++) {
-        DEME_TRACKED_RESIZE_FLOAT(ownerWildcards[i], nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, 0);
+        if (!solverFlags.useNoContactRecord) {
+            DEME_TRACKED_RESIZE(contactForces, cnt_arr_size, "contactForces", make_float3(0));
+            DEME_TRACKED_RESIZE(contactTorque_convToForce, cnt_arr_size, "contactTorque_convToForce", make_float3(0));
+            DEME_TRACKED_RESIZE(contactPointGeometryA, cnt_arr_size, "contactPointGeometryA", make_float3(0));
+            DEME_TRACKED_RESIZE(contactPointGeometryB, cnt_arr_size, "contactPointGeometryB", make_float3(0));
+        }
+        // Allocate memory for each wildcard array
+        contactWildcards.resize(simParams->nContactWildcards);
+        ownerWildcards.resize(simParams->nOwnerWildcards);
+        for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
+            DEME_TRACKED_RESIZE_FLOAT(contactWildcards[i], cnt_arr_size, 0);
+        }
+        for (unsigned int i = 0; i < simParams->nOwnerWildcards; i++) {
+            DEME_TRACKED_RESIZE_FLOAT(ownerWildcards[i], cnt_arr_size, 0);
+        }
     }
 
     // Transfer buffer arrays
     // The following several arrays will have variable sizes, so here we only used an estimate.
     // It is cudaMalloc-ed memory, not managed, because we want explicit locality control of buffers
-    buffer_size = nOwnerBodies * DEME_INIT_CNT_MULTIPLIER;
+    buffer_size = nSpheresGM * DEME_INIT_CNT_MULTIPLIER;
     DEME_DEVICE_PTR_ALLOC(granData->idGeometryA_buffer, buffer_size);
     DEME_DEVICE_PTR_ALLOC(granData->idGeometryB_buffer, buffer_size);
     DEME_DEVICE_PTR_ALLOC(granData->contactType_buffer, buffer_size);
-    // DEME_TRACKED_RESIZE(idGeometryA_buffer, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER, "idGeometryA_buffer",
-    // 0); DEME_TRACKED_RESIZE(idGeometryB_buffer, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER,
-    // "idGeometryB_buffer", 0); DEME_TRACKED_RESIZE(contactType_buffer, nOwnerBodies *
+    // DEME_TRACKED_RESIZE(idGeometryA_buffer, nSpheresGM * DEME_INIT_CNT_MULTIPLIER, "idGeometryA_buffer",
+    // 0); DEME_TRACKED_RESIZE(idGeometryB_buffer, nSpheresGM * DEME_INIT_CNT_MULTIPLIER,
+    // "idGeometryB_buffer", 0); DEME_TRACKED_RESIZE(contactType_buffer, nSpheresGM *
     // DEME_INIT_CNT_MULTIPLIER, "contactType_buffer", NOT_A_CONTACT);
     // DEME_ADVISE_DEVICE(idGeometryA_buffer, streamInfo.device);
     // DEME_ADVISE_DEVICE(idGeometryB_buffer, streamInfo.device);
     // DEME_ADVISE_DEVICE(contactType_buffer, streamInfo.device);
     if (!solverFlags.isHistoryless) {
-        // DEME_TRACKED_RESIZE(contactMapping_buffer, nOwnerBodies * DEME_INIT_CNT_MULTIPLIER,
+        // DEME_TRACKED_RESIZE(contactMapping_buffer, nSpheresGM * DEME_INIT_CNT_MULTIPLIER,
         //                         "contactMapping_buffer", NULL_MAPPING_PARTNER);
         // DEME_ADVISE_DEVICE(contactMapping_buffer, streamInfo.device);
         DEME_DEVICE_PTR_ALLOC(granData->contactMapping_buffer, buffer_size);
@@ -488,126 +495,158 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
     LBF.y = simParams->LBFY;
     LBF.z = simParams->LBFZ;
     k = 0;
-    // Then, load in input clumps
-    std::vector<unsigned int> input_clump_types;
+
+    size_t nTotalClumpsThisCall = 0;
     {
+        // Use i to record the current index of clump being processed
+        size_t i = 0;
+        // Pop family number-related warning only once
         bool pop_family_msg = false;
-        std::vector<float3> input_clump_xyz;
-        std::vector<float4> input_clump_oriQ;
-        std::vector<float3> input_clump_vel;
-        std::vector<float3> input_clump_angVel;
-        std::vector<unsigned int> input_clump_family;
-        // Flatten the input clump batches (because by design we transfer flatten clump info to GPU)
+        // Keep tab of the number of sphere components processed in this initialization call, especially if there are
+        // multiple batches loaded for this initialization call
+        size_t n_processed_sp_comp = 0;
+        // This number serves as an offset for loading existing contact pairs/history. Contact array should have been
+        // enlarged for loading these user-manually added contact pairs. Those pairs go after existing contact pairs.
+        size_t cnt_arr_offset = *stateOfSolver_resources.pNumContacts;
         for (const auto& a_batch : input_clump_batches) {
             // Decode type number and flatten
             std::vector<unsigned int> type_marks(a_batch->GetNumClumps());
-            for (size_t i = 0; i < a_batch->GetNumClumps(); i++) {
-                type_marks.at(i) = a_batch->types.at(i)->mark;
+            for (size_t j = 0; j < a_batch->GetNumClumps(); j++) {
+                type_marks.at(j) = a_batch->types.at(j)->mark;
             }
-            input_clump_types.insert(input_clump_types.end(), type_marks.begin(), type_marks.end());
-            // Now xyz
-            input_clump_xyz.insert(input_clump_xyz.end(), a_batch->xyz.begin(), a_batch->xyz.end());
-            // Now vel
-            input_clump_vel.insert(input_clump_vel.end(), a_batch->vel.begin(), a_batch->vel.end());
-            // Now quaternion
-            input_clump_oriQ.insert(input_clump_oriQ.end(), a_batch->oriQ.begin(), a_batch->oriQ.end());
-            // Now angular velocity
-            input_clump_angVel.insert(input_clump_angVel.end(), a_batch->angVel.begin(), a_batch->angVel.end());
+            // Now a ref to xyz
+            const std::vector<float3>& input_clump_xyz = a_batch->xyz;
+            // Now a ref to vel
+            const std::vector<float3>& input_clump_vel = a_batch->vel;
+            // Now a ref to quaternion
+            const std::vector<float4>& input_clump_oriQ = a_batch->oriQ;
+            // Now a ref to angular velocity
+            const std::vector<float3>& input_clump_angVel = a_batch->angVel;
             // For family numbers, we check if the user has explicitly set them. If not, send a warning.
             if ((!a_batch->family_isSpecified) && (!pop_family_msg)) {
                 DEME_WARNING("Some clumps do not have their family numbers specified, so defaulted to %u",
                              DEFAULT_CLUMP_FAMILY_NUM);
                 pop_family_msg = true;
             }
-            input_clump_family.insert(input_clump_family.end(), a_batch->families.begin(), a_batch->families.end());
-            DEME_DEBUG_PRINTF("Loaded a batch of %zu clumps.", a_batch->GetNumClumps());
-        }
+            const std::vector<unsigned int>& input_clump_family = a_batch->families;
 
-        DEME_DEBUG_PRINTF("Total number of transferred clumps this time: %zu", input_clump_types.size());
-        DEME_DEBUG_PRINTF("Total number of existing owners in simulation: %zu", nExistOwners);
-        DEME_DEBUG_PRINTF("Total number of owners in simulation after this init call: %zu", simParams->nOwnerBodies);
+            for (size_t j = 0; j < a_batch->GetNumClumps(); j++) {
+                // If got here, this is a clump
+                ownerTypes.at(nExistOwners + i) = OWNER_T_CLUMP;
 
-        for (size_t i = 0; i < input_clump_types.size(); i++) {
-            // If got here, this is a clump
-            ownerTypes.at(nExistOwners + i) = OWNER_T_CLUMP;
-
-            auto type_of_this_clump = input_clump_types.at(i);
-            inertiaPropOffsets.at(nExistOwners + i) = type_of_this_clump;
-            if (!solverFlags.useMassJitify) {
-                massOwnerBody.at(nExistOwners + i) = clump_templates.mass.at(type_of_this_clump);
-                const float3 this_moi = clump_templates.MOI.at(type_of_this_clump);
-                mmiXX.at(nExistOwners + i) = this_moi.x;
-                mmiYY.at(nExistOwners + i) = this_moi.y;
-                mmiZZ.at(nExistOwners + i) = this_moi.z;
-            }
-
-            auto this_CoM_coord = input_clump_xyz.at(i) - LBF;
-
-            auto this_clump_no_sp_radii = clump_templates.spRadii.at(type_of_this_clump);
-            auto this_clump_no_sp_relPos = clump_templates.spRelPos.at(type_of_this_clump);
-            auto this_clump_no_sp_mat_ids = clump_templates.matIDs.at(type_of_this_clump);
-
-            for (size_t j = 0; j < this_clump_no_sp_radii.size(); j++) {
-                sphereMaterialOffset.at(nExistSpheres + k) = this_clump_no_sp_mat_ids.at(j);
-                ownerClumpBody.at(nExistSpheres + k) = nExistOwners + i;
-
-                // Depending on whether we jitify or flatten
-                if (solverFlags.useClumpJitify) {
-                    // This component offset, is it too large that can't live in the jitified array?
-                    unsigned int this_comp_offset = prescans_comp.at(type_of_this_clump) + j;
-                    clumpComponentOffsetExt.at(nExistSpheres + k) = this_comp_offset;
-                    if (this_comp_offset < simParams->nJitifiableClumpComponents) {
-                        clumpComponentOffset.at(nExistSpheres + k) = this_comp_offset;
-                    } else {
-                        // If not, an indicator will be put there
-                        clumpComponentOffset.at(nExistSpheres + k) = RESERVED_CLUMP_COMPONENT_OFFSET;
-                    }
-                } else {
-                    radiiSphere.at(nExistSpheres + k) = this_clump_no_sp_radii.at(j);
-                    const float3 relPos = this_clump_no_sp_relPos.at(j);
-                    relPosSphereX.at(nExistSpheres + k) = relPos.x;
-                    relPosSphereY.at(nExistSpheres + k) = relPos.y;
-                    relPosSphereZ.at(nExistSpheres + k) = relPos.z;
+                auto type_of_this_clump = type_marks.at(j);
+                inertiaPropOffsets.at(nExistOwners + i) = type_of_this_clump;
+                if (!solverFlags.useMassJitify) {
+                    massOwnerBody.at(nExistOwners + i) = clump_templates.mass.at(type_of_this_clump);
+                    const float3 this_moi = clump_templates.MOI.at(type_of_this_clump);
+                    mmiXX.at(nExistOwners + i) = this_moi.x;
+                    mmiYY.at(nExistOwners + i) = this_moi.y;
+                    mmiZZ.at(nExistOwners + i) = this_moi.z;
                 }
 
-                k++;
-                // std::cout << "Sphere Rel Pos offset: " << this_clump_no_sp_loc_offsets.at(j) << std::endl;
+                auto this_CoM_coord = input_clump_xyz.at(j) - LBF;
+
+                auto this_clump_no_sp_radii = clump_templates.spRadii.at(type_of_this_clump);
+                auto this_clump_no_sp_relPos = clump_templates.spRelPos.at(type_of_this_clump);
+                auto this_clump_no_sp_mat_ids = clump_templates.matIDs.at(type_of_this_clump);
+
+                for (size_t jj = 0; jj < this_clump_no_sp_radii.size(); jj++) {
+                    sphereMaterialOffset.at(nExistSpheres + k) = this_clump_no_sp_mat_ids.at(jj);
+                    ownerClumpBody.at(nExistSpheres + k) = nExistOwners + i;
+
+                    // Depending on whether we jitify or flatten
+                    if (solverFlags.useClumpJitify) {
+                        // This component offset, is it too large that can't live in the jitified array?
+                        unsigned int this_comp_offset = prescans_comp.at(type_of_this_clump) + jj;
+                        clumpComponentOffsetExt.at(nExistSpheres + k) = this_comp_offset;
+                        if (this_comp_offset < simParams->nJitifiableClumpComponents) {
+                            clumpComponentOffset.at(nExistSpheres + k) = this_comp_offset;
+                        } else {
+                            // If not, an indicator will be put there
+                            clumpComponentOffset.at(nExistSpheres + k) = RESERVED_CLUMP_COMPONENT_OFFSET;
+                        }
+                    } else {
+                        radiiSphere.at(nExistSpheres + k) = this_clump_no_sp_radii.at(jj);
+                        const float3 relPos = this_clump_no_sp_relPos.at(jj);
+                        relPosSphereX.at(nExistSpheres + k) = relPos.x;
+                        relPosSphereY.at(nExistSpheres + k) = relPos.y;
+                        relPosSphereZ.at(nExistSpheres + k) = relPos.z;
+                    }
+
+                    k++;
+                    // std::cout << "Sphere Rel Pos offset: " << this_clump_no_sp_loc_offsets.at(j) << std::endl;
+                }
+
+                hostPositionToVoxelID<voxelID_t, subVoxelPos_t, double>(
+                    voxelID.at(nExistOwners + i), locX.at(nExistOwners + i), locY.at(nExistOwners + i),
+                    locZ.at(nExistOwners + i), (double)this_CoM_coord.x, (double)this_CoM_coord.y,
+                    (double)this_CoM_coord.z, simParams->nvXp2, simParams->nvYp2, simParams->voxelSize, simParams->l);
+
+                // Set initial oriQ
+                auto oriQ_of_this_clump = input_clump_oriQ.at(j);
+                oriQw.at(nExistOwners + i) = oriQ_of_this_clump.w;
+                oriQx.at(nExistOwners + i) = oriQ_of_this_clump.x;
+                oriQy.at(nExistOwners + i) = oriQ_of_this_clump.y;
+                oriQz.at(nExistOwners + i) = oriQ_of_this_clump.z;
+
+                // Set initial velocity
+                auto vel_of_this_clump = input_clump_vel.at(j);
+                vX.at(nExistOwners + i) = vel_of_this_clump.x;
+                vY.at(nExistOwners + i) = vel_of_this_clump.y;
+                vZ.at(nExistOwners + i) = vel_of_this_clump.z;
+
+                // Set initial angular velocity
+                auto angVel_of_this_clump = input_clump_angVel.at(j);
+                omgBarX.at(nExistOwners + i) = angVel_of_this_clump.x;
+                omgBarY.at(nExistOwners + i) = angVel_of_this_clump.y;
+                omgBarZ.at(nExistOwners + i) = angVel_of_this_clump.z;
+
+                // Set family code
+                family_t this_family_num = input_clump_family.at(j);
+                familyID.at(nExistOwners + i) = this_family_num;
+
+                i++;
+            }
+            DEME_DEBUG_PRINTF("Loaded a batch of %zu clumps.", a_batch->GetNumClumps());
+
+            // Write the extra contact pairs to memory
+            for (size_t jj = 0; jj < a_batch->GetNumContacts(); jj++) {
+                const auto& idPair = a_batch->contact_pairs.at(jj);
+                // idPair.first + n_processed_sp_comp can take into account the sphere components that have been loaded
+                // in previous batches, makes this loading process scalable.
+                idGeometryA.at(cnt_arr_offset) = idPair.first + n_processed_sp_comp + nExistSpheres;
+                idGeometryB.at(cnt_arr_offset) = idPair.second + n_processed_sp_comp + nExistSpheres;
+                contactType.at(cnt_arr_offset) = SPHERE_SPHERE_CONTACT;  // Only sph--sph cnt for now
+                unsigned int w_num = 0;
+                for (const auto& w_name : m_contact_wildcard_names) {
+                    contactWildcards[w_num].at(cnt_arr_offset) = a_batch->contact_wildcards.at(w_name).at(jj);
+                    w_num++;
+                }
+                cnt_arr_offset++;
             }
 
-            hostPositionToVoxelID<voxelID_t, subVoxelPos_t, double>(
-                voxelID.at(nExistOwners + i), locX.at(nExistOwners + i), locY.at(nExistOwners + i),
-                locZ.at(nExistOwners + i), (double)this_CoM_coord.x, (double)this_CoM_coord.y, (double)this_CoM_coord.z,
-                simParams->nvXp2, simParams->nvYp2, simParams->voxelSize, simParams->l);
+            // Make ready for the next batch, update contact history offset
+            n_processed_sp_comp = k;
+        }
 
-            // Set initial oriQ
-            auto oriQ_of_this_clump = input_clump_oriQ.at(i);
-            oriQw.at(nExistOwners + i) = oriQ_of_this_clump.w;
-            oriQx.at(nExistOwners + i) = oriQ_of_this_clump.x;
-            oriQy.at(nExistOwners + i) = oriQ_of_this_clump.y;
-            oriQz.at(nExistOwners + i) = oriQ_of_this_clump.z;
+        DEME_DEBUG_PRINTF("Total number of transferred clumps this time: %zu", i);
+        DEME_DEBUG_PRINTF("Total number of existing owners in simulation: %zu", nExistOwners);
+        DEME_DEBUG_PRINTF("Total number of owners in simulation after this init call: %zu", simParams->nOwnerBodies);
+        nTotalClumpsThisCall = i;
 
-            // Set initial velocity
-            auto vel_of_this_clump = input_clump_vel.at(i);
-            vX.at(nExistOwners + i) = vel_of_this_clump.x;
-            vY.at(nExistOwners + i) = vel_of_this_clump.y;
-            vZ.at(nExistOwners + i) = vel_of_this_clump.z;
-
-            // Set initial angular velocity
-            auto angVel_of_this_clump = input_clump_angVel.at(i);
-            omgBarX.at(nExistOwners + i) = angVel_of_this_clump.x;
-            omgBarY.at(nExistOwners + i) = angVel_of_this_clump.y;
-            omgBarZ.at(nExistOwners + i) = angVel_of_this_clump.z;
-
-            // Set family code
-            family_t this_family_num = input_clump_family.at(i);
-            familyID.at(nExistOwners + i) = this_family_num;
+        // If user loaded contact pairs, we need to inform kT on the first time step...
+        if (cnt_arr_offset > *stateOfSolver_resources.pNumContacts) {
+            *stateOfSolver_resources.pNumContacts = cnt_arr_offset;
+            new_contacts_loaded = true;
+            DEME_DEBUG_PRINTF("Total number of contact pairs this sim starts with: %zu",
+                              *stateOfSolver_resources.pNumContacts);
         }
     }
 
     // Load in initial positions and mass properties for the owners of those external objects
     // They go after clump owners
     k = 0;
-    size_t owner_offset_for_ext_obj = nExistOwners + input_clump_types.size();
+    size_t owner_offset_for_ext_obj = nExistOwners + nTotalClumpsThisCall;
     unsigned int offset_for_ext_obj_mass_template = simParams->nDistinctClumpBodyTopologies;
     for (size_t i = 0; i < input_ext_obj_xyz.size(); i++) {
         // If got here, it is an analytical obj
@@ -1079,10 +1118,16 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
     ptFile << outstrstream.str();
 }
 
-void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
+void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thres) const {
     std::ostringstream outstrstream;
 
-    outstrstream << OUTPUT_FILE_OWNER_1_NAME + "," + OUTPUT_FILE_OWNER_2_NAME + "," + OUTPUT_FILE_CNT_TYPE_NAME;
+    outstrstream << OUTPUT_FILE_CNT_TYPE_NAME;
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::OWNER) {
+        outstrstream << "," + OUTPUT_FILE_OWNER_1_NAME + "," + OUTPUT_FILE_OWNER_2_NAME;
+    }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::GEO_ID) {
+        outstrstream << "," + OUTPUT_FILE_GEO_ID_1_NAME + "," + OUTPUT_FILE_GEO_ID_2_NAME;
+    }
     if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::FORCE) {
         outstrstream << "," + OUTPUT_FILE_FORCE_X_NAME + "," + OUTPUT_FILE_FORCE_Y_NAME + "," +
                             OUTPUT_FILE_FORCE_Z_NAME;
@@ -1093,12 +1138,21 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
     // if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::COMPONENT) {
     //     outstrstream << ","+OUTPUT_FILE_COMP_1_NAME+","+OUTPUT_FILE_COMP_2_NAME;
     // }
+    // if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NICKNAME) {
+    //     outstrstream << ","+OUTPUT_FILE_OWNER_NICKNAME_1_NAME+","+OUTPUT_FILE_OWNER_NICKNAME_2_NAME;
+    // }
     if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NORMAL) {
         outstrstream << "," + OUTPUT_FILE_NORMAL_X_NAME + "," + OUTPUT_FILE_NORMAL_Y_NAME + "," +
                             OUTPUT_FILE_NORMAL_Z_NAME;
     }
     if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE_ONLY_FORCE) {
         outstrstream << "," + OUTPUT_FILE_TOF_X_NAME + "," + OUTPUT_FILE_TOF_Y_NAME + "," + OUTPUT_FILE_TOF_Z_NAME;
+    }
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::WILDCARD) {
+        // Write all wildcard names as header
+        for (const auto& w_name : m_contact_wildcard_names) {
+            outstrstream << "," + w_name;
+        }
     }
     outstrstream << "\n";
 
@@ -1107,9 +1161,16 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
         auto geoA = idGeometryA.at(i);
         auto geoB = idGeometryB.at(i);
         auto type = contactType.at(i);
-        // We don't output fake contacts
-        if (type == NOT_A_CONTACT)
+        // We don't output fake contacts; but right now, no contact will be marked fake by kT, so no need to check that
+        // if (type == NOT_A_CONTACT)
+        //     continue;
+
+        float3 forcexyz = contactForces.at(i);
+        float3 torque = contactTorque_convToForce.at(i);
+        // If this force+torque is too small, then it's not an active contact
+        if (length(forcexyz + torque) < force_thres) {
             continue;
+        }
 
         // geoA's owner must be a sphere
         auto ownerA = ownerClumpBody.at(geoA);
@@ -1125,12 +1186,20 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
             default:  // Default is sphere--analytical
                 ownerB = ownerAnalBody.at(geoB);
         }
+
         // Type is mapped to SS, SM and such....
-        outstrstream << ownerA << "," << ownerB << "," << contact_type_out_name_map.at(type);
+        outstrstream << contact_type_out_name_map.at(type);
+
+        // (Internal) ownerID and/or geometry ID
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::OWNER) {
+            outstrstream << "," << ownerA << "," << ownerB;
+        }
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::GEO_ID) {
+            outstrstream << "," << geoA << "," << geoB;
+        }
 
         // Force is already in global...
         if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::FORCE) {
-            float3 forcexyz = contactForces.at(i);
             outstrstream << "," << forcexyz.x << "," << forcexyz.y << "," << forcexyz.z;
         }
 
@@ -1179,8 +1248,14 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile) const {
 
         // Torque is in global already...
         if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE_ONLY_FORCE) {
-            float3 forcexyz = contactTorque_convToForce.at(i);
-            outstrstream << "," << forcexyz.x << "," << forcexyz.y << "," << forcexyz.z;
+            outstrstream << "," << torque.x << "," << torque.y << "," << torque.z;
+        }
+
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::WILDCARD) {
+            // The order shouldn't be an issue... the same set is being processed here and in equip_contact_wildcards
+            for (unsigned int j = 0; j < m_contact_wildcard_names.size(); j++) {
+                outstrstream << "," << contactWildcards[j][i];
+            }
         }
 
         outstrstream << "\n";
@@ -1392,6 +1467,8 @@ inline void DEMDynamicThread::migratePersistentContacts() {
                     "%zu contacts were active at time %.9g on dT, but they are not detected on kT, therefore being "
                     "removed unexpectedly!",
                     *lostContact, simParams->timeElapsed);
+                DEME_DEBUG_PRINTF("New number of contacts: %zu", *stateOfSolver_resources.pNumContacts);
+                DEME_DEBUG_PRINTF("Old number of contacts: %zu", *stateOfSolver_resources.pNumPrevContacts);
                 DEME_DEBUG_PRINTF("New contact A:");
                 DEME_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryA, *stateOfSolver_resources.pNumContacts));
                 DEME_DEBUG_PRINTF("New contact B:");
@@ -1580,6 +1657,19 @@ void DEMDynamicThread::workerThread() {
         // check. Note: pendingCriticalUpdate is not fail-safe at all right now. The user still needs to sync before
         // making critical changes to the system to ensure safety.
         if (pSchedSupport->stampLastUpdateOfDynamic < 0 || pendingCriticalUpdate) {
+            // If the user loaded contact manually, there is an extra thing we need to do: update kT prev_contact
+            // arrays. Note the user can add anything only from a sync-ed stance anyway, so this check needs to be done
+            // only here.
+            if (new_contacts_loaded) {
+                // If wildcard-less, then prev-contact arrays are not important
+                if (!solverFlags.isHistoryless) {
+                    // Note *stateOfSolver_resources.pNumContacts is now the num of contact after considering the newly
+                    // added ones
+                    kT->updatePrevContactArrays(granData, *stateOfSolver_resources.pNumContacts);
+                }
+                new_contacts_loaded = false;
+            }
+
             // In this `new-boot' case, we send kT a work order, b/c dT needs results from CD to proceed. After this one
             // instance, kT and dT may work in an async fashion.
             {

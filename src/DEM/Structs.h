@@ -23,6 +23,7 @@
 #include <DEM/HostSideHelpers.hpp>
 #include <filesystem>
 #include <cstring>
+#include <cassert>
 
 namespace deme {
 // Structs defined here will be used by some host classes in DEM.
@@ -247,6 +248,9 @@ inline void DEME_DEVICE_PTR_ALLOC(T*& ptr, size_t size) {
 #define DEME_MIGRATE_TO_DEVICE(vec, device, stream) \
     { migrate(vec, device, stream); }
 
+// Use (void) to silence unused warnings.
+#define assertm(exp, msg) assert(((void)msg, exp))
+
 // #define OUTPUT_IF_GPU_FAILS(res) \
 //     { gpu_assert((res), __FILE__, __LINE__, false); throw std::runtime_error("GPU Assertion Failed!");}
 
@@ -337,8 +341,8 @@ class ClumpTemplateFlatten {
 };
 
 struct SolverFlags {
-    // Sort contact pair arrays before sending to kT
-    bool should_sort_pairs = true;
+    // Sort contact pair arrays (based on contact type) before sending to dT
+    bool should_sort_pairs = false;
     // This run is historyless
     bool isHistoryless = false;
     // This run uses contact detection in an async fashion (kT and dT working at different points in simulation time)
@@ -490,6 +494,7 @@ class DEMClumpTemplate {
 class DEMClumpBatch {
   private:
     const size_t nClumps;
+    size_t nExistContacts = 0;
     void assertLength(size_t len, const std::string name) {
         if (len != nClumps) {
             std::stringstream ss;
@@ -507,6 +512,11 @@ class DEMClumpBatch {
     std::vector<float3> angVel;
     std::vector<float3> xyz;
     std::vector<float4> oriQ;
+    // Existing contact/contact wildcard info. If it is a new simulation, they should be empty; but if it is a restarted
+    // one, it can have some existing contacts/wildcards. Note that all of them are "SS" type of contact. The contact
+    // pair IDs are relative to this batch (starting from 0, up to num of this batch - 1, that is).
+    std::vector<std::pair<bodyID_t, bodyID_t>> contact_pairs;
+    std::unordered_map<std::string, std::vector<float>> contact_wildcards;
     // Its offset when this obj got loaded into the API-level user raw-input array
     size_t load_order;
     DEMClumpBatch(size_t num) : nClumps(num) {
@@ -566,6 +576,22 @@ class DEMClumpBatch {
     }
     void SetFamilies(unsigned int input) { SetFamilies(std::vector<unsigned int>(nClumps, input)); }
     void SetFamily(unsigned int input) { SetFamilies(std::vector<unsigned int>(nClumps, input)); }
+    void SetExistingContacts(const std::vector<std::pair<bodyID_t, bodyID_t>>& pairs) {
+        contact_pairs = pairs;
+        nExistContacts = pairs.size();
+    }
+    void SetExistingContactWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
+        if (wildcards.begin()->second.size() != nExistContacts) {
+            std::stringstream ss;
+            ss << "SetExistingContactWildcards needs to be called after SetExistingContacts, with each wildcard array "
+                  "having the same length as the number of contact pairs.\n This way, each wildcard will have an "
+                  "associated contact pair."
+               << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        contact_wildcards = wildcards;
+    }
+    size_t GetNumContacts() const { return nExistContacts; }
 };
 
 // A struct to get or set tracked owner entities
@@ -605,6 +631,10 @@ const std::string OUTPUT_FILE_OWNER_1_NAME = std::string("A");
 const std::string OUTPUT_FILE_OWNER_2_NAME = std::string("B");
 const std::string OUTPUT_FILE_COMP_1_NAME = std::string("compA");
 const std::string OUTPUT_FILE_COMP_2_NAME = std::string("compB");
+const std::string OUTPUT_FILE_GEO_ID_1_NAME = std::string("geoA");
+const std::string OUTPUT_FILE_GEO_ID_2_NAME = std::string("geoB");
+const std::string OUTPUT_FILE_OWNER_NICKNAME_1_NAME = std::string("nameA");
+const std::string OUTPUT_FILE_OWNER_NICKNAME_2_NAME = std::string("nameB");
 const std::string OUTPUT_FILE_CNT_TYPE_NAME = std::string("contact_type");
 const std::string OUTPUT_FILE_FORCE_X_NAME = std::string("f_x");
 const std::string OUTPUT_FILE_FORCE_Y_NAME = std::string("f_y");
@@ -618,6 +648,29 @@ const std::string OUTPUT_FILE_NORMAL_Z_NAME = std::string("n_z");
 const std::string OUTPUT_FILE_SPH_SPH_CONTACT_NAME = std::string("SS");
 const std::string OUTPUT_FILE_SPH_ANAL_CONTACT_NAME = std::string("SA");
 const std::string OUTPUT_FILE_SPH_MESH_CONTACT_NAME = std::string("SM");
+const std::set<std::string> CNT_FILE_KNOWN_COL_NAMES = {OUTPUT_FILE_OWNER_1_NAME,
+                                                        OUTPUT_FILE_OWNER_2_NAME,
+                                                        OUTPUT_FILE_COMP_1_NAME,
+                                                        OUTPUT_FILE_COMP_2_NAME,
+                                                        OUTPUT_FILE_GEO_ID_1_NAME,
+                                                        OUTPUT_FILE_GEO_ID_2_NAME,
+                                                        OUTPUT_FILE_OWNER_NICKNAME_1_NAME,
+                                                        OUTPUT_FILE_OWNER_NICKNAME_2_NAME,
+                                                        OUTPUT_FILE_CNT_TYPE_NAME,
+                                                        OUTPUT_FILE_FORCE_X_NAME,
+                                                        OUTPUT_FILE_FORCE_Y_NAME,
+                                                        OUTPUT_FILE_FORCE_Z_NAME,
+                                                        OUTPUT_FILE_TOF_X_NAME,
+                                                        OUTPUT_FILE_TOF_Y_NAME,
+                                                        OUTPUT_FILE_TOF_Z_NAME,
+                                                        OUTPUT_FILE_NORMAL_X_NAME,
+                                                        OUTPUT_FILE_NORMAL_Y_NAME,
+                                                        OUTPUT_FILE_NORMAL_Z_NAME,
+                                                        OUTPUT_FILE_SPH_SPH_CONTACT_NAME,
+                                                        OUTPUT_FILE_SPH_ANAL_CONTACT_NAME,
+                                                        OUTPUT_FILE_SPH_MESH_CONTACT_NAME};
+
+// Map contact type identifier to their names
 const std::unordered_map<contact_t, std::string> contact_type_out_name_map = {
     {NOT_A_CONTACT, "fake"},
     {SPHERE_SPHERE_CONTACT, OUTPUT_FILE_SPH_SPH_CONTACT_NAME},

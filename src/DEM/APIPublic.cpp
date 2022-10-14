@@ -28,7 +28,11 @@ DEMSolver::DEMSolver(unsigned int nGPUs) {
     dTkT_GpuManager = new GpuManager(2);
 
     dT = new DEMDynamicThread(dTMain_InteractionManager, dTkT_InteractionManager, dTkT_GpuManager);
-    kT = new DEMKinematicThread(kTMain_InteractionManager, dTkT_InteractionManager, dTkT_GpuManager, dT);
+    kT = new DEMKinematicThread(kTMain_InteractionManager, dTkT_InteractionManager, dTkT_GpuManager);
+
+    // Make friends
+    dT->kT = kT;
+    kT->dT = dT;
 }
 
 DEMSolver::~DEMSolver() {
@@ -690,7 +694,7 @@ void DEMSolver::WriteClumpFile(const std::string& outfilename, unsigned int accu
     }
 }
 
-void DEMSolver::WriteContactFile(const std::string& outfilename) const {
+void DEMSolver::WriteContactFile(const std::string& outfilename, float force_thres) const {
     if (no_recording_contact_forces) {
         DEME_WARNING(
             "The solver is instructed to not record contact force info, so no work is done in a WriteContactFile "
@@ -700,7 +704,7 @@ void DEMSolver::WriteContactFile(const std::string& outfilename) const {
     switch (m_cnt_out_format) {
         case (OUTPUT_FORMAT::CSV): {
             std::ofstream ptFile(outfilename, std::ios::out);
-            dT->writeContactsAsCsv(ptFile);
+            dT->writeContactsAsCsv(ptFile, force_thres);
             break;
         }
         default:
@@ -834,6 +838,8 @@ void DEMSolver::ReleaseFlattenedArrays() {
 
     deallocate_array(m_mesh_obj_mass);
     deallocate_array(m_mesh_obj_moi);
+
+    nExtraContacts = 0;
 }
 
 void DEMSolver::resetWorkerThreads() {
@@ -1026,7 +1032,7 @@ float DEMSolver::dTInspectReduce(const std::shared_ptr<jitify::Program>& inspect
             break;
     }
     float* pRes = dT->inspectCall(inspection_kernel, kernel_name, n, reduce_flavor, all_domain);
-    return *pRes;
+    return (float)(*pRes);
 }
 
 }  // namespace deme

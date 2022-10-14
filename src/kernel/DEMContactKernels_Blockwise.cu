@@ -118,6 +118,15 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
                 contactPntX, contactPntY, contactPntZ, simParams->binSize, simParams->nbX, simParams->nbY);
 
             /*
+            if (in_contact) {
+                printf("Contact point I see: %e, %e, %e\n", contactPntX, contactPntY, contactPntZ);
+            } else {
+                printf("Distance: %e\n", sqrt( (bodyX[bodyA]-bodyX[bodyB])*(bodyX[bodyA]-bodyX[bodyB])
+                                                + (bodyY[bodyA]-bodyY[bodyB])*(bodyY[bodyA]-bodyY[bodyB])
+                                                + (bodyZ[bodyA]-bodyZ[bodyB])*(bodyZ[bodyA]-bodyZ[bodyB])  ));
+                printf("Sum of radii: %e\n", radii[bodyA] + radii[bodyB]);
+            }
+
             printf("contactPntBin: %u, %u, %u\n", (unsigned int)(contactPntX/_binSize_),
                                                     (unsigned int)(contactPntY/_binSize_),
                                                     (unsigned int)(contactPntZ/_binSize_));
@@ -136,6 +145,7 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
             }
         }
         __syncthreads();
+
         deme::spheresBinTouches_t total_count = BlockReduceT(temp_storage).Sum(contact_count);
         if (myThreadID == 0) {
             numContactsInEachBin[blockIdx.x] = total_count;

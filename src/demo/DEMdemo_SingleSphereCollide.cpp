@@ -21,7 +21,7 @@ int main() {
     DEMSolver DEMSim;
     DEMSim.SetVerbosity(DEBUG);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.SetContactOutputContent(OWNERS | FORCE | POINT | COMPONENT | NORMAL | TORQUE_ONLY_FORCE);
+    DEMSim.SetContactOutputContent(OWNER | FORCE | POINT | COMPONENT | NORMAL | TORQUE_ONLY_FORCE);
     DEMSim.EnsureKernelErrMsgLineNum();
     DEMSim.SetNoForceRecord();
 
@@ -37,7 +37,7 @@ int main() {
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_clump_type(1, sph_type_1);
     // std::vector<unsigned int> input_clump_type(1, sph_type_1);
 
-    // Inputs are just 2 sphere
+    // Inputs are just 2 spheres
     float sphPos = 1.2f;
     input_xyz1.push_back(make_float3(-sphPos, 0, 0));
     input_xyz2.push_back(make_float3(sphPos, 0, 0));
@@ -49,7 +49,7 @@ int main() {
     particles1->SetFamily(0);
     auto tracker1 = DEMSim.Track(particles1);
 
-    DEMSim.DisableContactBetweenFamilies(0, 1);
+    // DEMSim.DisableContactBetweenFamilies(0, 1);
 
     auto bot_plane = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/plane_20by20.obj").string(), mat_type_1);
     bot_plane->SetInitPos(make_float3(0, 0, -1.25));
@@ -90,15 +90,15 @@ int main() {
     path out_dir = current_path();
     out_dir += "/DemoOutput_SingleSphereCollide";
     create_directory(out_dir);
-    bool changed_family = false;
+    // bool changed_family = false;
     for (int i = 0; i < 100; i++) {
         std::cout << "Frame: " << i << std::endl;
 
-        if ((!changed_family) && i >= 10) {
-            // DEMSim.ChangeFamily(1, 0);
-            DEMSim.EnableContactBetweenFamilies(0, 1);
-            changed_family = true;
-        }
+        // if ((!changed_family) && i >= 10) {
+        //     // DEMSim.ChangeFamily(1, 0);
+        //     DEMSim.EnableContactBetweenFamilies(0, 1);
+        //     changed_family = true;
+        // }
 
         char filename[100];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);

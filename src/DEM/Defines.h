@@ -48,7 +48,7 @@ constexpr int64_t MAX_SUBVOXEL = (int64_t)1 << VOXEL_RES_POWER2;
 #define DEME_NUM_BODIES_PER_BLOCK 512
 #define DEME_NUM_TRIANGLE_PER_BLOCK 512
 #define DEME_MAX_THREADS_PER_BLOCK 1024
-#define DEME_INIT_CNT_MULTIPLIER 5
+#define DEME_INIT_CNT_MULTIPLIER 2
 // If there are more than this number of analytical geometry, we may have difficulty jitify them all
 #define DEME_THRESHOLD_TOO_MANY_ANAL_GEO 64
 // If a clump has more than this number of sphere components, it is automatically considered a non-jitifiable big clump
@@ -155,13 +155,17 @@ enum OUTPUT_CONTENT {
 enum class SPATIAL_DIR { X, Y, Z, NONE };
 // The info that should be present in the contact pair output files
 enum CNT_OUTPUT_CONTENT {
-    OWNERS = 0,     // Owner numbers and contact type
+    CNT_TYPE = 0,   // Owner numbers and contact type
     FORCE = 1,      // Force (that owner 1 feels) xyz components in global
     POINT = 2,      // Contact point in global frame
     COMPONENT = 4,  // The component numbers (such as triangle number for a mesh) that involved in this contact
     NORMAL = 8,     // Contact normal direction in global frame
     TORQUE_ONLY_FORCE =
-        16  // This is a standalone force and produces torque only (typical example: rolling resistance force)
+        16,  // This is a standalone force and produces torque only (typical example: rolling resistance force)
+    WILDCARD = 32,
+    OWNER = 64,
+    GEO_ID = 128,
+    NICKNAME = 256
 };
 
 // =============================================================================

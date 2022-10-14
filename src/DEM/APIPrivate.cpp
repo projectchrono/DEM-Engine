@@ -376,7 +376,7 @@ void DEMSolver::reportInitStats() const {
     DEME_INFO("Simulation world X range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_boxX);
     DEME_INFO("Simulation world Y range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_boxY);
     DEME_INFO("Simulation world Z range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_boxZ);
-    DEME_INFO("User-specified dimensions are not larger than the above simulation world.");
+    DEME_INFO("User-specified dimensions should NOT be larger than the above simulation world.");
     DEME_INFO("User-specified X-dimension range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_user_boxSize.x);
     DEME_INFO("User-specified Y-dimension range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_user_boxSize.y);
     DEME_INFO("User-specified Z-dimension range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_user_boxSize.z);
@@ -514,8 +514,10 @@ void DEMSolver::preprocessClumpTemplates() {
 }
 
 void DEMSolver::preprocessClumps() {
+    nExtraContacts = 0;
     for (const auto& a_batch : cached_input_clump_batches) {
         nOwnerClumps += a_batch->GetNumClumps();
+        nExtraContacts += a_batch->GetNumContacts();
         for (size_t i = 0; i < a_batch->GetNumClumps(); i++) {
             unsigned int nComp = a_batch->types.at(i)->nComp;
             nSpheresGM += nComp;
@@ -523,6 +525,7 @@ void DEMSolver::preprocessClumps() {
         // Family number is flattened here, only because figureOutFamilyMasks() needs it
         m_input_clump_family.insert(m_input_clump_family.end(), a_batch->families.begin(), a_batch->families.end());
     }
+    DEME_DEBUG_PRINTF("This time, %zu existing contact pairs were loaded by user", nExtraContacts);
 }
 
 void DEMSolver::preprocessTriangleObjs() {
@@ -743,7 +746,9 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.useNoContactRecord = no_recording_contact_forces;
     dT->solverFlags.useForceCollectInPlace = collect_force_in_force_kernel;
 
-    kT->solverFlags.should_sort_pairs = kT_should_sort;
+    // Whether sorts contact before using them (not implemented)
+    kT->solverFlags.should_sort_pairs = should_sort_contacts;
+    dT->solverFlags.should_sort_pairs = should_sort_contacts;
 }
 
 void DEMSolver::transferSimParams() {
@@ -771,24 +776,26 @@ void DEMSolver::transferSimParams() {
     DEME_DEBUG_PRINTF("%u contact wildcards are in the force model.", nContactWildcards);
 
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
-                     m_expand_factor, m_approx_max_vel, m_expand_safety_param, nContactWildcards, nOwnerWildcards);
+                     m_expand_factor, m_approx_max_vel, m_expand_safety_param, m_force_model->m_contact_wildcards,
+                     m_force_model->m_owner_wildcards);
     kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
-                     m_expand_factor, m_approx_max_vel, m_expand_safety_param, nContactWildcards, nOwnerWildcards);
+                     m_expand_factor, m_approx_max_vel, m_expand_safety_param, m_force_model->m_contact_wildcards,
+                     m_force_model->m_owner_wildcards);
 }
 
 void DEMSolver::allocateGPUArrays() {
     // Resize managed arrays based on the statistical data we had from the previous step
     std::thread dThread = std::move(std::thread([this]() {
-        this->dT->allocateManagedArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
-                                        this->nSpheresGM, this->nTriGM, this->nAnalGM, this->nDistinctMassProperties,
-                                        this->nDistinctClumpBodyTopologies, this->nDistinctClumpComponents,
-                                        this->nJitifiableClumpComponents, this->nMatTuples);
+        this->dT->allocateManagedArrays(
+            this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes, this->nSpheresGM, this->nTriGM,
+            this->nAnalGM, this->nExtraContacts, this->nDistinctMassProperties, this->nDistinctClumpBodyTopologies,
+            this->nDistinctClumpComponents, this->nJitifiableClumpComponents, this->nMatTuples);
     }));
     std::thread kThread = std::move(std::thread([this]() {
-        this->kT->allocateManagedArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
-                                        this->nSpheresGM, this->nTriGM, this->nAnalGM, this->nDistinctMassProperties,
-                                        this->nDistinctClumpBodyTopologies, this->nDistinctClumpComponents,
-                                        this->nJitifiableClumpComponents, this->nMatTuples);
+        this->kT->allocateManagedArrays(
+            this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes, this->nSpheresGM, this->nTriGM,
+            this->nAnalGM, this->nExtraContacts, this->nDistinctMassProperties, this->nDistinctClumpBodyTopologies,
+            this->nDistinctClumpComponents, this->nJitifiableClumpComponents, this->nMatTuples);
     }));
     dThread.join();
     kThread.join();

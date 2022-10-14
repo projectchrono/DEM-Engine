@@ -53,6 +53,9 @@ class DEMDynamicThread {
     // The std::thread that binds to this instance
     std::thread th;
 
+    // Friend system DEMKinematicThread
+    DEMKinematicThread* kT;
+
     // Number of items in the buffer array (which is not a managed vector, due to our need to explicitly control where
     // it is allocated)
     size_t buffer_size;
@@ -204,6 +207,10 @@ class DEMDynamicThread {
     // An example of such wildcard arrays is contact history: how much did the contact point move on the geometry
     // surface compared to when the contact first emerged?
 
+    // Storage for the names of the contact wildcards
+    std::set<std::string> m_contact_wildcard_names;
+    std::set<std::string> m_owner_wildcard_names;
+
     // std::vector<float3, ManagedAllocator<float3>> contactHistory;
     // // Durations in time of persistent contact pairs
     // std::vector<float, ManagedAllocator<float>> contactDuration;
@@ -318,8 +325,8 @@ class DEMDynamicThread {
                       float expand_factor,
                       float approx_max_vel,
                       float expand_safety_param,
-                      unsigned int nContactWildcards,
-                      unsigned int nOwnerWildcards);
+                      const std::set<std::string>& contact_wildcards,
+                      const std::set<std::string>& owner_wildcards);
 
     /// Compute total KE of all entities
     float getKineticEnergy();
@@ -365,6 +372,7 @@ class DEMDynamicThread {
                                size_t nSpheresGM,
                                size_t nTriGM,
                                unsigned int nAnalGM,
+                               size_t nExtraContacts,
                                unsigned int nMassProperties,
                                unsigned int nClumpTopo,
                                unsigned int nClumpComponents,
@@ -469,7 +477,7 @@ class DEMDynamicThread {
     void writeSpheresAsCsv(std::ofstream& ptFile) const;
     void writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy = 10) const;
     void writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accuracy = 10) const;
-    void writeContactsAsCsv(std::ofstream& ptFile) const;
+    void writeContactsAsCsv(std::ofstream& ptFile, float force_thres = DEME_TINY_FLOAT) const;
     void writeMeshesAsVtk(std::ofstream& ptFile);
 
     /// Called each time when the user calls DoDynamicsThenSync.
@@ -505,7 +513,13 @@ class DEMDynamicThread {
                        bool all_domain);
 
   private:
+    // Name for this class
     const std::string Name = "dT";
+
+    // If true, then the user manually loaded extra contacts to the system. In this case, not only we need to wait for
+    // an initial update from kT, we also need to update kT's previous-step contact arrays, so it properly builds
+    // contact map for dT.
+    bool new_contacts_loaded = false;
 
     // Meshes cached on dT side that has corresponding owner number associated. Useful for outputting meshes.
     std::vector<std::shared_ptr<DEMMeshConnected>> m_meshes;

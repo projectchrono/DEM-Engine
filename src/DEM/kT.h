@@ -184,19 +184,13 @@ class DEMKinematicThread {
     friend class DEMSolver;
     friend class DEMDynamicThread;
 
-    DEMKinematicThread(WorkerReportChannel* pPager,
-                       ThreadManager* pSchedSup,
-                       GpuManager* pGpuDist,
-                       DEMDynamicThread* dT)
+    DEMKinematicThread(WorkerReportChannel* pPager, ThreadManager* pSchedSup, GpuManager* pGpuDist)
         : pPagerToMain(pPager), pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
         GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
         GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataKT), cudaMemAttachGlobal));
 
         // Get a device/stream ID to use from the GPU Manager
         streamInfo = pGpuDistributor->getAvailableStream();
-
-        // My friend dT
-        this->dT = dT;
 
         pPagerToMain->userCallDone = false;
         pSchedSupport->kinematicShouldJoin = false;
@@ -248,6 +242,7 @@ class DEMKinematicThread {
                                size_t nSpheresGM,
                                size_t nTriGM,
                                unsigned int nAnalGM,
+                               size_t nExtraContacts,
                                unsigned int nMassProperties,
                                unsigned int nClumpTopo,
                                unsigned int nClumpComponents,
@@ -306,8 +301,8 @@ class DEMKinematicThread {
                       float expand_factor,
                       float approx_max_vel,
                       float expand_safety_param,
-                      unsigned int nContactWildcards,
-                      unsigned int nOwnerWildcards);
+                      const std::set<std::string>& contact_wildcards,
+                      const std::set<std::string>& owner_wildcards);
 
     // Put sim data array pointers in place
     void packDataPointers();
@@ -336,6 +331,9 @@ class DEMKinematicThread {
     /// positions in `triangles'. If `overwrite' is true, then it is overwriting the existing nodal info; otherwise it
     /// just adds to it.
     void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite = true);
+
+    /// Update (overwrite) kT's previous contact array based on input
+    void updatePrevContactArrays(DEMDataDT* dT_data, size_t nContacts);
 
   private:
     const std::string Name = "kT";

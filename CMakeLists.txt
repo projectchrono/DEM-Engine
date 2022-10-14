@@ -191,6 +191,7 @@ configure_file(cmake/DEMEConfig.cmake.in
 # Generate the _Install Tree_ version of DEMEConfig.cmake from the base file
 file(RELATIVE_PATH REL_INCLUDE_DIR ${CMAKE_INSTALL_PREFIX}/${config_directory} ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR})
 set(CONF_INCLUDE_DIRS "\${DEMECMakeDir}/${REL_INCLUDE_DIR}")
+set(CONF_SHARE_DATA_DIRS "\${DEMECMakeDir}/${REL_INCLUDE_DIR}/../share/data")
 
 # NOTE: This is placed in CMAKE_FILES_DIRECTORY to keep it out of the build tree
 configure_file(cmake/DEMEConfig.cmake.in

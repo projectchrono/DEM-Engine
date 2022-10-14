@@ -41,6 +41,9 @@ class DEMTracker;
 //            7. This custom array can be defined at clump template/anal obj/mesh obj generation
 //            8. Right now force model position is wrt LBF, not user origin...
 //            9. wT takes care of an extra output when it crushes
+//            10. Recover sph--mesh contact pairs in restarted sim by mesh name
+//            11. A dry-run to map contact pair file with current clump batch based on cnt points location
+//                  (this is done by fake an initialization with this batch)
 //////////////////////////////////////////////////////////////
 
 class DEMSolver {
@@ -139,9 +142,9 @@ class DEMSolver {
     /// Returns a shared_ptr to the force model in use.
     std::shared_ptr<DEMForceModel> ReadContactForceModel(const std::string& filename);
 
-    /// Instruct the solver if contact pair arrays should be sorted before usage. This is needed if history-based model
-    /// is in use.
-    void SetSortContactPairs(bool use_sort) { kT_should_sort = use_sort; }
+    /// Instruct the solver if contact pair arrays should be sorted (based on the types of contacts) before usage. This
+    /// can potentially make dT run faster. This is currently not implemented due to technical difficulties.
+    void SetSortContactPairs(bool use_sort = true) { should_sort_contacts = use_sort; }
 
     /// Instruct the solver to rearrange and consolidate clump templates information, then jitify it into GPU kernels
     /// (if set to true), rather than using flattened sphere component configuration arrays whose entries are associated
@@ -375,7 +378,7 @@ class DEMSolver {
     /// make small-scale rendering easier.
     void WriteSphereFile(const std::string& outfilename) const;
     /// Write all contact pairs to a file
-    void WriteContactFile(const std::string& outfilename) const;
+    void WriteContactFile(const std::string& outfilename, float force_thres = DEME_TINY_FLOAT) const;
     /// Write the current status of all meshes to a file
     void WriteMeshFile(const std::string& outfilename) const;
 
@@ -424,6 +427,67 @@ class DEMSolver {
             count++;
         }
         return type_Q_map;
+    }
+
+    /// Read all contact pairs (geometry ID) from a contact file
+    static std::vector<std::pair<bodyID_t, bodyID_t>> ReadContactPairsFromCsv(
+        const std::string& infilename,
+        const std::string& cntType = OUTPUT_FILE_SPH_SPH_CONTACT_NAME,
+        const std::string& cntColName = OUTPUT_FILE_CNT_TYPE_NAME,
+        const std::string& first_name = OUTPUT_FILE_GEO_ID_1_NAME,
+        const std::string& second_name = OUTPUT_FILE_GEO_ID_2_NAME) {
+        io::CSVReader<3, io::trim_chars<' ', '\t'>, io::no_quote_escape<','>, io::throw_on_overflow,
+                      io::empty_line_comment>
+            in(infilename);
+        in.read_header(io::ignore_extra_column, cntColName, first_name, second_name);
+        bodyID_t A, B;
+        std::string cnt_type_name;
+        std::vector<std::pair<bodyID_t, bodyID_t>> pairs;
+        size_t count = 0;
+        while (in.read_row(cnt_type_name, A, B)) {
+            if (cnt_type_name == cntType) {  // only the type of contact we care
+                pairs.push_back(std::pair<bodyID_t, bodyID_t>(A, B));
+                count++;
+            }
+        }
+        return pairs;
+    }
+
+    /// Read all contact wildcards from a contact file
+    static std::unordered_map<std::string, std::vector<float>> ReadContactWildcardsFromCsv(
+        const std::string& infilename,
+        const std::string& cntType = OUTPUT_FILE_SPH_SPH_CONTACT_NAME,
+        const std::string& cntColName = OUTPUT_FILE_CNT_TYPE_NAME) {
+        io::LineReader in_header(infilename);
+        char* f_header = in_header.next_line();
+        std::vector<std::string> header_names = parse_string_line(std::string(f_header));
+        std::vector<std::string> wildcard_names;
+        // Find those col names that are not contact file standard names: they have to be wildcard names
+        for (const auto& col_name : header_names) {
+            if (!check_exist(CNT_FILE_KNOWN_COL_NAMES, col_name)) {
+                wildcard_names.push_back(col_name);
+            }
+        }
+        // Now parse in the csv file
+        std::unordered_map<std::string, std::vector<float>> w_vals;
+        size_t count = 0;
+        for (const auto& wildcard_name : wildcard_names) {
+            io::CSVReader<2, io::trim_chars<' ', '\t'>, io::no_quote_escape<','>, io::throw_on_overflow,
+                          io::empty_line_comment>
+                in(infilename);
+            in.read_header(io::ignore_extra_column, OUTPUT_FILE_CNT_TYPE_NAME, wildcard_name);
+            std::string cnt_type_name;
+            float w_val;
+
+            while (in.read_row(cnt_type_name, w_val)) {
+                if (cnt_type_name == cntType) {  // only the type of contact we care (SS by default)
+                    w_vals[wildcard_name].push_back(w_val);
+                    count++;
+                }
+            }
+        }
+
+        return w_vals;
     }
 
     /// Intialize the simulation system
@@ -507,8 +571,8 @@ class DEMSolver {
 
     // Verbosity
     VERBOSITY verbosity = INFO;
-    // If true, kT should sort contact arrays then transfer them to dT
-    bool kT_should_sort = true;
+    // If true, dT should sort contact arrays (based on contact type) before usage (not implemented)
+    bool should_sort_contacts = false;
     // If true, the solvers may need to do a per-step sweep to apply family number changes
     bool famnum_can_change_conditionally = false;
 
@@ -532,7 +596,8 @@ class DEMSolver {
     // The output file format for contact pairs
     OUTPUT_FORMAT m_cnt_out_format = OUTPUT_FORMAT::CSV;
     // The output file content for contact pairs
-    unsigned int m_cnt_out_content = CNT_OUTPUT_CONTENT::FORCE | CNT_OUTPUT_CONTENT::POINT;
+    unsigned int m_cnt_out_content = CNT_OUTPUT_CONTENT::GEO_ID | CNT_OUTPUT_CONTENT::FORCE |
+                                     CNT_OUTPUT_CONTENT::POINT | CNT_OUTPUT_CONTENT::WILDCARD;
     // The output file format for meshes
     MESH_FORMAT m_mesh_out_format = MESH_FORMAT::VTK;
 
@@ -850,6 +915,11 @@ class DEMSolver {
     std::set<float3> m_clumps_sp_location_types;
     std::vector<std::vector<distinctSphereRelativePositions_default_t>> m_clumps_sp_location_type_offset;
     */
+
+    // Number of contact pairs that the user manually added for this initialization call. Note unlike nTriGM or
+    // nOwnerBodies and such, this number is temporary, and becomes useless after an initialization call, as we don't
+    // generally know the number of contacts, that's kT dT's problem.
+    size_t nExtraContacts = 0;
 
     ////////////////////////////////////////////////////////////////////////////////
     // DEM system's workers, helpers, friends
