@@ -137,7 +137,7 @@ int main() {
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEMSim.SetCDUpdateFreq(10);
+    DEMSim.SetCDUpdateFreq(25);
     // DEMSim.SetExpandFactor(1e-3);
     DEMSim.SetMaxVelocity(25.);
     DEMSim.SetExpandSafetyParam(1.0);

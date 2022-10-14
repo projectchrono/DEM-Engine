@@ -663,11 +663,17 @@ void overwritePrevContactArrays(DEMDataKT* kT_data,
     bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector(3, nContacts * sizeof(bodyID_t));
     bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector(4, nContacts * sizeof(bodyID_t));
     contact_t* cType_sorted = (contact_t*)scratchPad.allocateTempVector(5, nContacts * sizeof(contact_t));
-    //// TODO: But do I have to SortByKey twice?? Can I zip these value arrays together??
-    cubDEMSortByKeys<bodyID_t, bodyID_t, DEMSolverStateData>(idA, idA_sorted, idB, idB_sorted, nContacts, this_stream,
-                                                             scratchPad);
-    cubDEMSortByKeys<bodyID_t, contact_t, DEMSolverStateData>(idA, idA_sorted, cType, cType_sorted, nContacts,
-                                                              this_stream, scratchPad);
+    //// TODO: Why the CUB-based routine will just not run here? Is it related to when and where this method is called?
+    ///I have to for now use the host to do the sorting.
+    GPU_CALL(cudaMemcpy(idA_sorted, idA, nContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(idB_sorted, idB, nContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+    GPU_CALL(cudaMemcpy(cType_sorted, cType, nContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
+    hostSortByKey(idA, idB_sorted, nContacts);
+    hostSortByKey(idA_sorted, cType_sorted, nContacts);
+    // cubDEMSortByKeys<bodyID_t, bodyID_t, DEMSolverStateData>(idA, idA_sorted, idB, idB_sorted, nContacts,
+    //                                                          this_stream, scratchPad);
+    // cubDEMSortByKeys<bodyID_t, contact_t, DEMSolverStateData>(idA, idA_sorted, cType, cType_sorted, nContacts,
+    //                                                           this_stream, scratchPad);
 
     // Finally, copy sorted user contact array to the storage
     if (nContacts > previous_idGeometryA.size()) {
