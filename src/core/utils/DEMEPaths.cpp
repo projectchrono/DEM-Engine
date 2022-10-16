@@ -1,16 +1,17 @@
-#ifndef DEME_PATHS_HPP
-#define DEME_PATHS_HPP
+//  Copyright (c) 2021, SBEL GPU Development Team
+//  Copyright (c) 2021, University of Wisconsin - Madison
+//
+//	SPDX-License-Identifier: BSD-3-Clause
 
 #include <filesystem>
 #include <cstring>
+#include "DEMEPaths.h"
 
 namespace deme {
 
 // -----------------------------------------------------------------------------
 // Functions for manipulating the DEME data directory
 // -----------------------------------------------------------------------------
-
-static std::filesystem::path DEME_data_path("../data/");
 
 // Set the path to the DEME data directory (ATTENTION: not thread safe)
 void SetDEMEDataPath(const std::string& path) {
@@ -29,5 +30,3 @@ std::string GetDEMEDataFile(const std::string& filename) {
 }
 
 }  // namespace deme
-
-#endif

@@ -47,13 +47,14 @@ set(core_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/WavefrontMeshLoader.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/csv.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/Timer.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/utils/Paths.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/DEMEPaths.h
 )
 
 set(core_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/DebugInfo.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/GpuManager.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/JitHelper.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/DEMEPaths.cpp
 )
 
 target_sources(

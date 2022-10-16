@@ -664,7 +664,7 @@ void overwritePrevContactArrays(DEMDataKT* kT_data,
     bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector(4, nContacts * sizeof(bodyID_t));
     contact_t* cType_sorted = (contact_t*)scratchPad.allocateTempVector(5, nContacts * sizeof(contact_t));
     //// TODO: Why the CUB-based routine will just not run here? Is it related to when and where this method is called?
-    ///I have to for now use the host to do the sorting.
+    /// I have to for now use the host to do the sorting.
     GPU_CALL(cudaMemcpy(idA_sorted, idA, nContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     GPU_CALL(cudaMemcpy(idB_sorted, idB, nContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     GPU_CALL(cudaMemcpy(cType_sorted, cType, nContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));

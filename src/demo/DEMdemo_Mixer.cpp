@@ -42,7 +42,8 @@ int main() {
     auto walls = DEMSim.AddExternalObject();
     walls->AddCylinder(make_float3(0), make_float3(0, 0, 1), world_size / 2., mat_type_mixer, 0);
 
-    auto mixer = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/internal_mixer.obj").string(), mat_type_mixer);
+    auto mixer =
+        DEMSim.AddWavefrontMeshObject((GET_SOURCE_DATA_PATH() / "mesh/internal_mixer.obj").string(), mat_type_mixer);
     std::cout << "Total num of triangles: " << mixer->GetNumTriangles() << std::endl;
     mixer->Scale(make_float3(world_size / 2, world_size / 2, chamber_height));
     mixer->SetFamily(10);
@@ -53,7 +54,7 @@ int main() {
     // auto template_granular = DEMSim.LoadSphereType(granular_rad * granular_rad * granular_rad * 2.8e3 * 4 / 3 * 3.14,
     //                                                granular_rad, mat_type_granular);
     DEMClumpTemplate shape_template;
-    shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
+    shape_template.ReadComponentFromFile((GET_SOURCE_DATA_PATH() / "clumps/triangular_flat.csv").string());
     // Calculate its mass and MOI
     shape_template.mass = 2.6e3 * 5.5886717;  // in kg or g
     shape_template.MOI = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3;

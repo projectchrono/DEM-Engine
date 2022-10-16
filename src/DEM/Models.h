@@ -172,7 +172,7 @@ inline std::string MOI_ACQUISITION_FLATTENED() {
 // Data path and other paths
 ////////////////////////////////////////////////////////////////////////////////
 
-inline std::filesystem::path GET_DATA_PATH() {
+inline std::filesystem::path GET_SOURCE_DATA_PATH() {
     return SOURCE_DATA_PATH;
 }
 

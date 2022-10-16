@@ -16,6 +16,7 @@
 #include <core/utils/ManagedAllocator.hpp>
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
+#include <core/utils/DEMEPaths.h>
 #include <nvmath/helper_math.cuh>
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
@@ -40,10 +41,11 @@ class DEMTracker;
 //            6. Force model has a/several custom owner arrays to store custom config data
 //            7. This custom array can be defined at clump template/anal obj/mesh obj generation
 //            8. Right now force model position is wrt LBF, not user origin...
-//            9. wT takes care of an extra output when it crushes
+//            9. wT takes care of an extra output when it crashes
 //            10. Recover sph--mesh contact pairs in restarted sim by mesh name
 //            11. A dry-run to map contact pair file with current clump batch based on cnt points location
 //                  (this is done by fake an initialization with this batch)
+//            12. Right now, the force model file is loaded from source, not install dir?
 //////////////////////////////////////////////////////////////
 
 class DEMSolver {
