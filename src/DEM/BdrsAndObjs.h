@@ -255,13 +255,13 @@ class DEMMeshConnected {
     // CoM frame's orientation quaternion in the frame which is used to report all the mesh's node coordinates.
     // It is usually unit quaternion.
     float4 CoM_oriQ = host_make_float4(0, 0, 0, 1);
-    // Obj's CoM initial position
+    // Mesh's CoM initial position
     float3 init_pos = make_float3(0);
-    // Obj's initial orientation quaternion
+    // Mesh's initial orientation quaternion
     float4 init_oriQ = host_make_float4(0, 0, 0, 1);
-    // Obj's mass (huge by default)
+    // Mesh's mass
     float mass = 1.f;
-    // Obj's MOI (huge by default)
+    // Mesh's MOI
     float3 MOI = make_float3(1.f);
     // Its offset when this obj got loaded into the API-level user raw-input array
     unsigned int load_order;
@@ -359,6 +359,18 @@ class DEMMeshConnected {
     void Move(float3 vec, float4 rot_Q) {
         for (auto& node : m_vertices) {
             hostApplyFrameTransform(node, vec, rot_Q);
+        }
+    }
+    /// Mirror all points in the mesh about a plane. If this changes the mass properties of this mesh, it is the user's
+    /// responsibility to reset them.
+    void Mirror(float3 plane_point, float3 plane_normal) {
+        plane_normal = normalize(plane_normal);
+        for (auto& node : m_vertices) {
+            float3 node2plane = plane_point - node;
+            float proj = dot(node2plane, plane_normal);
+            // If proj is negative, we need to go along the neg dir of plane normal anyway; if proj is positive, we need
+            // to go along the positive dir of the plane anyway
+            node += 2 * proj * plane_normal;
         }
     }
     /// Scale all geometry component of this mesh
