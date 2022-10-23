@@ -166,11 +166,12 @@ int main() {
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
     // Keep tab of the max velocity in simulation
     auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
-    // Final void ratio inspection tool
-    auto void_ratio_finder =
-        DEMSim.CreateInspector("clump_volume", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) && (Z <= -0.44);");
+    // Final mass inspection tool
+    // auto total_volume_finder = DEMSim.CreateInspector("clump_volume", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) &&
+    // (Z <= -0.44);");
+    auto total_mass_finder =
+        DEMSim.CreateInspector("clump_mass", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) && (Z <= -0.44);");
     float total_volume = 0.96 * 0.96 * 0.06;
-    ;
 
     // Make ready for simulation
     double step_size = 1e-6;
@@ -203,8 +204,8 @@ int main() {
     DEMSim.EnableContactBetweenFamilies(0, 1);
     double compress_time = 0.3;
 
-    float matter_volume = void_ratio_finder->GetValue();
-    std::cout << "Initial void ratio " << (total_volume - matter_volume) / matter_volume << std::endl;
+    float matter_mass = total_mass_finder->GetValue();
+    std::cout << "Initial bulk density " << matter_mass / total_volume << std::endl;
 
     double now_z = max_z_finder->GetValue();
     compressor_tracker->SetPos(make_float3(0, 0, now_z));
@@ -214,8 +215,8 @@ int main() {
         if (curr_step % out_steps == 0) {
             std::cout << "Frame: " << currframe << std::endl;
             std::cout << "Highest point is at " << now_z << std::endl;
-            matter_volume = void_ratio_finder->GetValue();
-            std::cout << "Void ratio in compression " << (total_volume - matter_volume) / matter_volume << std::endl;
+            matter_mass = total_mass_finder->GetValue();
+            std::cout << "Bulk density in compression " << matter_mass / total_volume << std::endl;
             float max_v = max_v_finder->GetValue();
             std::cout << "Highest velocity is " << max_v << std::endl;
             DEMSim.ShowThreadCollaborationStats();
@@ -232,8 +233,8 @@ int main() {
         if (curr_step % out_steps == 0) {
             std::cout << "Frame: " << currframe << std::endl;
             std::cout << "Highest point is at " << now_z << std::endl;
-            matter_volume = void_ratio_finder->GetValue();
-            std::cout << "Void ratio in compression " << (total_volume - matter_volume) / matter_volume << std::endl;
+            matter_mass = total_mass_finder->GetValue();
+            std::cout << "Bulk density in compression " << matter_mass / total_volume << std::endl;
             float max_v = max_v_finder->GetValue();
             std::cout << "Highest velocity is " << max_v << std::endl;
             DEMSim.ShowThreadCollaborationStats();
@@ -249,8 +250,8 @@ int main() {
     DEMSim.DoDynamicsThenSync(0);
     DEMSim.DisableContactBetweenFamilies(0, 1);
     DEMSim.DoDynamicsThenSync(0.2);
-    matter_volume = void_ratio_finder->GetValue();
-    std::cout << "Void ratio after settling " << (total_volume - matter_volume) / matter_volume << std::endl;
+    matter_mass = total_mass_finder->GetValue();
+    std::cout << "Bulk density after settling " << matter_mass / total_volume << std::endl;
 
     char cp_filename[200];
     sprintf(cp_filename, "%s/GRC_20e6.csv", out_dir.c_str());

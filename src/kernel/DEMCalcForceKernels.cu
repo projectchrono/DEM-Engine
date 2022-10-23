@@ -203,6 +203,9 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             // Write contact location values back to global memory
             _contactInfoWrite_;
 
+            // If force model modifies owner wildcards, write them back here
+            _forceModelOwnerWildcardWrite_;
+
             // Optionally, the forces can be reduced to acc right here (may be faster for polydisperse spheres)
             _forceCollectInPlaceStrat_;
         } else {
@@ -210,7 +213,8 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             _forceModelContactWildcardDestroy_;
         }
 
-        // Updated contact wildcards need to be write back to global mem
+        // Updated contact wildcards need to be write back to global mem. It is here because contact wildcard may need
+        // to be destroyed for non-contact, so it has to go last.
         _forceModelContactWildcardWrite_;
     }
 }

@@ -49,10 +49,14 @@ const std::string INSP_CODE_SPHERE_HIGH_ABSV = R"V0G0N(
     quantity[sphereID] = vel;
 )V0G0N";
 
-const std::string INSP_CODE_CLUMP_APPROX_VOID = R"V0G0N(
+const std::string INSP_CODE_CLUMP_APPROX_VOL = R"V0G0N(
     size_t myVolOffset = granData->inertiaPropOffsets[myOwner];
     float myVol = volumeProperties[myVolOffset];
     quantity[myOwner] = myVol;
+)V0G0N";
+
+const std::string INSP_CODE_CLUMP_APPROX_MASS = R"V0G0N(
+    quantity[myOwner] = myMass;
 )V0G0N";
 
 void DEMInspector::switch_quantity_type(const std::string& quantity) {
@@ -82,7 +86,14 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
         //// TODO: Void ration here is a very rough approximation and should only work when domain is large and
         /// particles are small
         case ("clump_volume"_):
-            inspection_code = INSP_CODE_CLUMP_APPROX_VOID;
+            inspection_code = INSP_CODE_CLUMP_APPROX_VOL;
+            reduce_flavor = CUB_REDUCE_FLAVOR::SUM;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::CLUMP;
+            index_name = "myOwner";
+            break;
+        case ("clump_mass"_):
+            inspection_code = INSP_CODE_CLUMP_APPROX_MASS;
             reduce_flavor = CUB_REDUCE_FLAVOR::SUM;
             kernel_name = "inspectOwnerProperty";
             thing_to_insp = INSPECT_ENTITY_TYPE::CLUMP;

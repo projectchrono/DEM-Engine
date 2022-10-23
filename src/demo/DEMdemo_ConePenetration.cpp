@@ -187,8 +187,10 @@ int main() {
 
     // Some inspectors
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
-    auto void_ratio_finder =
-        DEMSim.CreateInspector("clump_volume", "return (X * X + Y * Y <= 0.25 * 0.25) && (Z <= -0.3);");
+    // auto total_volume_finder = DEMSim.CreateInspector("clump_volume", "return (X * X + Y * Y <= 0.25 * 0.25) && (Z <=
+    // -0.3);");
+    auto total_mass_finder =
+        DEMSim.CreateInspector("clump_mass", "return (X * X + Y * Y <= 0.25 * 0.25) && (Z <= -0.3);");
     float total_volume = 0.2 * math_PI * (0.25 * 0.25);
 
     DEMSim.SetInitTimeStep(step_size);
@@ -213,9 +215,8 @@ int main() {
     double tip_z_when_first_hit;
     bool hit_terrain = false;
     for (float t = 0; t < sim_end; t += frame_time) {
-        float matter_volume = void_ratio_finder->GetValue();
-        float void_ratio = (total_volume - matter_volume) / matter_volume;
-        float bulk_density = matter_volume / total_volume * terrain_density;
+        float matter_mass = total_mass_finder->GetValue();
+        float bulk_density = matter_mass / total_volume;
         // float terrain_max_z = max_z_finder->GetValue();
         float3 forces = tip_tracker->ContactAcc();
         // Note cone_mass is not the true mass, b/c we scaled the the cone tip!
@@ -227,7 +228,6 @@ int main() {
         }
         float penetration = (hit_terrain) ? tip_z_when_first_hit - tip_z : 0;
         std::cout << "Time: " << t << std::endl;
-        std::cout << "Void ratio: " << void_ratio << std::endl;
         std::cout << "Bulk density: " << bulk_density << std::endl;
         std::cout << "Penetration: " << penetration << std::endl;
         std::cout << "Force on cone: " << forces.x << ", " << forces.y << ", " << forces.z << std::endl;

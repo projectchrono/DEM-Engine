@@ -303,6 +303,24 @@ inline void equip_force_model_ingr_acq(std::string& definition,
     }
 }
 
+// Sweep through all ingredients...
+inline void equip_owner_wildcards(std::string& definition,
+                                  std::string& acquisition_A,
+                                  std::string& acquisition_B,
+                                  std::string& writeback,
+                                  const std::set<std::string>& added_ingredients) {
+    unsigned int i = 0;
+    for (const auto& name : added_ingredients) {
+        definition += "float " + name + "_A;\n";
+        definition += "float " + name + "_B;\n";
+        acquisition_A += name + "_A = granData->ownerWildcards[" + std::to_string(i) + "][myOwner];\n";
+        acquisition_B += name + "_B = granData->ownerWildcards[" + std::to_string(i) + "][myOwner];\n";
+        writeback += "granData->ownerWildcards[" + std::to_string(i) + "][AOwner] = " + name + "_A;\n" +
+                     "granData->ownerWildcards[" + std::to_string(i) + "][BOwner] = " + name + "_B;\n";
+        i++;
+    }
+}
+
 // Massage contact wildcards (by that I mean those contact history arrays)
 inline void equip_contact_wildcards(std::string& acquisition,
                                     std::string& write_back,

@@ -55,7 +55,10 @@ float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
     const float gamma_n = deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
 
     force += (k_n * overlapDepth + gamma_n * projection) * B2A;
-    // printf("normal force: %f, %f, %f\n", force.x, force.y, force.z);
+
+    // Let's pretend there is a cohesion force because of electric charges (but still due to DEM restrains, they need to
+    // be in contact for this interaction to happen)
+    force += (-1000. * electric_charge_A * electric_charge_B) * B2A;
 }
 
 // Tangential force part

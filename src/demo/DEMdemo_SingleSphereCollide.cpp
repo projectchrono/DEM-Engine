@@ -67,6 +67,8 @@ int main() {
     auto my_force_model = DEMSim.ReadContactForceModel("SampleCustomForceModel.cu");
     // This custom force model still uses contact history arrays, so let's define it
     my_force_model->SetPerContactWildcards({"delta_tan_x", "delta_tan_y", "delta_tan_z"});
+    // Test owner wildcards
+    my_force_model->SetPerOwnerWildcards({"electric_charge"});
 
     DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(2e-5);

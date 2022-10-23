@@ -27,6 +27,7 @@ class DEMInspector {
 
     std::string inspection_code;
     std::string in_region_code;
+    // The name for the index of that quantity that is being inspected
     std::string index_name;
     CUB_REDUCE_FLAVOR reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
     INSPECT_ENTITY_TYPE thing_to_insp;

@@ -951,6 +951,7 @@ void DEMSolver::validateUserInputs() {
 inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::string>& strMap) {
     // Empty ingr list
     auto added_ingredients = force_kernel_ingredient_stats;
+    std::set<std::string> added_owner_wildcards;
     // Analyze this model... what does it require?
     std::string model = m_force_model->m_force_model;
     // It should have those following names in it
@@ -958,8 +959,9 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     const std::set<std::string> owner_wildcard_names = m_force_model->m_owner_wildcards;
     // If we spot that the force model requires an ingredient, we make sure that order goes to the ingredient
     // acquisition module
-    std::string ingredient_definition = " ", wildcard_acquisition = " ", ingredient_acquisition_A = " ",
-                ingredient_acquisition_B = " ", wildcard_write_back = " ", wildcard_destroy_record = " ";
+    std::string ingredient_definition = " ", cnt_wildcard_acquisition = " ", ingredient_acquisition_A = " ",
+                ingredient_acquisition_B = " ", owner_wildcard_write_back = " ", cnt_wildcard_write_back = " ",
+                cnt_wildcard_destroy_record = " ";
     scan_force_model_ingr(added_ingredients, model);
     if (collect_force_in_force_kernel) {
         add_force_model_ingr(added_ingredients, "AOwner");
@@ -967,10 +969,29 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         add_force_model_ingr(added_ingredients, "AOwnerMOI");
         add_force_model_ingr(added_ingredients, "BOwnerMOI");
     }
+    // Then, owner wildcards should be added to the ingredient list too. But first we check whether a owner wildcard
+    // shares name with existing ingredients. If not, we add them to the list.
+    for (const auto& owner_wildcard_name : owner_wildcard_names) {
+        if (added_ingredients.find(owner_wildcard_name) != added_ingredients.end()) {
+            DEME_ERROR(
+                "Owner wildcard %s shares its name with a reserved contact force model ingredient.\nPlease select a "
+                "different name for this wildcard and try again.",
+                owner_wildcard_name);
+        }
+        added_owner_wildcards.insert(owner_wildcard_name);
+    }
+    // Owner write-back needs ABOwner number
+    if (owner_wildcard_names.size() > 0) {
+        add_force_model_ingr(added_ingredients, "AOwner");
+        add_force_model_ingr(added_ingredients, "BOwner");
+    }
 
     // Equip those acquisition strategies that need to be there
     equip_force_model_ingr_acq(ingredient_definition, ingredient_acquisition_A, ingredient_acquisition_B,
                                added_ingredients);
+    // Then equip acquisition strategies for owner wildcards
+    equip_owner_wildcards(ingredient_definition, ingredient_acquisition_A, ingredient_acquisition_B,
+                          owner_wildcard_write_back, added_owner_wildcards);
 
     // Acq strategies may have moi acq strategy in them that needs to be replaced first...
     ingredient_acquisition_A = replace_patterns(ingredient_acquisition_A, strMap);
@@ -997,7 +1018,8 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
 
     // For contact wildcards, it needs to be brought from the global memory, and we expect the user's force model to use
     // and modify them, and in the end we will write them back to global mem.
-    equip_contact_wildcards(wildcard_acquisition, wildcard_write_back, wildcard_destroy_record, contact_wildcard_names);
+    equip_contact_wildcards(cnt_wildcard_acquisition, cnt_wildcard_write_back, cnt_wildcard_destroy_record,
+                            contact_wildcard_names);
 
     // If the user wants to reduce force in the calculation kernel...
     std::string whether_reduce_in_kernel = " ";
@@ -1024,16 +1046,18 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     strMap["_forceModelIngredientAcqForA_"] = ingredient_acquisition_A;
     strMap["_forceModelIngredientAcqForB_"] = ingredient_acquisition_B;
 
-    strMap["_forceModelContactWildcardAcq_"] = wildcard_acquisition;
-    strMap["_forceModelContactWildcardWrite_"] = wildcard_write_back;
-    strMap["_forceModelContactWildcardDestroy_"] = wildcard_destroy_record;
+    strMap["_forceModelOwnerWildcardWrite_"] = owner_wildcard_write_back;
+
+    strMap["_forceModelContactWildcardAcq_"] = cnt_wildcard_acquisition;
+    strMap["_forceModelContactWildcardWrite_"] = cnt_wildcard_write_back;
+    strMap["_forceModelContactWildcardDestroy_"] = cnt_wildcard_destroy_record;
 
     strMap["_forceCollectInPlaceStrat_"] = whether_reduce_in_kernel;
     strMap["_contactInfoWrite_"] = contact_info_write_strat;
 
-    DEME_DEBUG_PRINTF("Wildcard acquisition:\n%s", wildcard_acquisition.c_str());
-    DEME_DEBUG_PRINTF("Wildcard write-back:\n%s", wildcard_write_back.c_str());
-    DEME_DEBUG_PRINTF("Wildcard destroy inactive contacts:\n%s", wildcard_destroy_record.c_str());
+    DEME_DEBUG_PRINTF("Wildcard acquisition:\n%s", cnt_wildcard_acquisition.c_str());
+    DEME_DEBUG_PRINTF("Wildcard write-back:\n%s", cnt_wildcard_write_back.c_str());
+    DEME_DEBUG_PRINTF("Wildcard destroy inactive contacts:\n%s", cnt_wildcard_destroy_record.c_str());
 
     // DEME_DEBUG_PRINTF("Contact info writing strategy:\n%s", contact_info_write_strat.c_str());
 }

@@ -64,6 +64,9 @@ void DEMDynamicThread::packDataPointers() {
     for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
         granData->contactWildcards[i] = contactWildcards[i].data();
     }
+    for (unsigned int i = 0; i < simParams->nOwnerWildcards; i++) {
+        granData->ownerWildcards[i] = ownerWildcards[i].data();
+    }
 
     // The offset info that indexes into the template arrays
     granData->ownerClumpBody = ownerClumpBody.data();
@@ -347,7 +350,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
             DEME_TRACKED_RESIZE_FLOAT(contactWildcards[i], cnt_arr_size, 0);
         }
         for (unsigned int i = 0; i < simParams->nOwnerWildcards; i++) {
-            DEME_TRACKED_RESIZE_FLOAT(ownerWildcards[i], cnt_arr_size, 0);
+            DEME_TRACKED_RESIZE_FLOAT(ownerWildcards[i], nOwnerBodies, 0);
         }
     }
 
