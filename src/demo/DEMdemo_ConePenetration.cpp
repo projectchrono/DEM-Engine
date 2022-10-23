@@ -47,9 +47,9 @@ int main() {
     shape_template.ReadComponentFromFile(GetDEMEDataFile("clumps/triangular_flat.csv"));
     // Calculate its mass and MOI
     float terrain_density = 2.6e3;
-    float mass = terrain_density * 5.5886717;  // in kg or g
-    float3 MOI = make_float3(1.8327927, 2.1580013, 0.77010059) * (double)2.6e3;
     double clump_vol = 5.5886717;
+    float mass = terrain_density * clump_vol;  // in kg or g
+    float3 MOI = make_float3(1.8327927, 2.1580013, 0.77010059) * (double)2.6e3;
     // Scale the template we just created
     std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
     std::vector<double> scales = {0.00063, 0.00033, 0.00022, 0.00015, 0.00009};
@@ -185,13 +185,18 @@ int main() {
     // In fact, because the cone's motion is completely pre-determined, we can just prescribe family 1
     DEMSim.SetFamilyPrescribedLinVel(1, "0", "0", "-" + to_string_with_precision(cone_speed));
 
+    // Now add a plane to compress the sample
+    auto compressor = DEMSim.AddExternalObject();
+    compressor->AddPlane(make_float3(0, 0, 0), make_float3(0, 0, -1), mat_type_terrain);
+    compressor->SetFamily(10);
+    DEMSim.SetFamilyFixed(10);
+    auto compressor_tracker = DEMSim.Track(compressor);
+
     // Some inspectors
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
     // auto total_volume_finder = DEMSim.CreateInspector("clump_volume", "return (X * X + Y * Y <= 0.25 * 0.25) && (Z <=
     // -0.3);");
-    auto total_mass_finder =
-        DEMSim.CreateInspector("clump_mass", "return (X * X + Y * Y <= 0.25 * 0.25) && (Z <= -0.3);");
-    float total_volume = 0.2 * math_PI * (0.25 * 0.25);
+    auto total_mass_finder = DEMSim.CreateInspector("clump_mass");
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
@@ -201,13 +206,42 @@ int main() {
     DEMSim.SetInitBinSize(2 * scales.at(2));
     DEMSim.Initialize();
 
-    // std::filesystem::path out_dir = std::filesystem::current_path();
-    // out_dir += "/Cone_Penetration";
-    // std::filesystem::create_directory(out_dir);
+    std::filesystem::path out_dir = std::filesystem::current_path();
+    out_dir += "/Cone_Penetration";
+    std::filesystem::create_directory(out_dir);
 
+    // Compress until dense enough
     unsigned int currframe = 0;
+    unsigned int curr_step = 0;
+    unsigned int fps = 20;
+    unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
+    double compressor_vel = 0.3;
+    float terrain_max_z = max_z_finder->GetValue();
+    float bulk_density = -10000.;
+    while (bulk_density < 1600.) {
+        float matter_mass = total_mass_finder->GetValue();
+        float total_volume = math_PI * (soil_bin_diameter * soil_bin_diameter / 4) * (terrain_max_z - bottom);
+        bulk_density = matter_mass / total_volume;
+        if (curr_step % out_steps == 0) {
+            char filename[200];
+            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
+            DEMSim.WriteSphereFile(std::string(filename));
+            std::cout << "Compression bulk density: " << bulk_density << std::endl;
+        }
+
+        terrain_max_z -= compressor_vel * step_size;
+        compressor_tracker->SetPos(make_float3(0, 0, terrain_max_z));
+        DEMSim.DoDynamics(step_size);
+        curr_step++;
+    }
+
+    // Remove compressor
+    DEMSim.DisableContactBetweenFamilies(0, 10);
+    DEMSim.DoDynamicsThenSync(0.2);
+    terrain_max_z = max_z_finder->GetValue();
+
     float sim_end = 15.0;
-    unsigned int fps = 2500;
+    fps = 2500;
     float frame_time = 1.0 / fps;
     std::cout << "Output at " << fps << " FPS" << std::endl;
 
@@ -216,6 +250,7 @@ int main() {
     bool hit_terrain = false;
     for (float t = 0; t < sim_end; t += frame_time) {
         float matter_mass = total_mass_finder->GetValue();
+        float total_volume = math_PI * (soil_bin_diameter * soil_bin_diameter / 4) * (terrain_max_z - bottom);
         float bulk_density = matter_mass / total_volume;
         // float terrain_max_z = max_z_finder->GetValue();
         float3 forces = tip_tracker->ContactAcc();
