@@ -140,6 +140,7 @@ std::shared_ptr<DEMForceModel> DEMSolver::UseFrictionlessHertzianModel() {
 }
 
 void DEMSolver::SetFamilyFixed(unsigned int ID) {
+    assertSysNotInit("SetFamilyFixed");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());
@@ -162,6 +163,7 @@ void DEMSolver::SetFamilyFixed(unsigned int ID) {
 }
 
 void DEMSolver::ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const std::string& condition) {
+    assertSysNotInit("ChangeFamilyWhen");
     if (ID_from > std::numeric_limits<family_t>::max() || ID_to > std::numeric_limits<family_t>::max()) {
         DEME_ERROR(
             "You instructed family number %u should change to %u, but family number should not be larger than %u.",
@@ -179,6 +181,7 @@ void DEMSolver::ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const
 }
 
 void DEMSolver::ChangeFamily(unsigned int ID_from, unsigned int ID_to) {
+    assertSysInit("ChangeFamily");
     // if (!check_exist(unique_user_families, ID_from)) {
     //     DEME_WARNING(
     //         "Family %u (from-family) has no prior reference before a ChangeFamily call, therefore no work is done.",
@@ -209,6 +212,7 @@ void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
                                           const std::string& velY,
                                           const std::string& velZ,
                                           bool dictate) {
+    assertSysNotInit("SetFamilyPrescribedLinVel");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());
@@ -227,6 +231,7 @@ void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
 }
 
 void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID) {
+    assertSysNotInit("SetFamilyPrescribedLinVel");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());
@@ -246,6 +251,7 @@ void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID,
                                           const std::string& velY,
                                           const std::string& velZ,
                                           bool dictate) {
+    assertSysNotInit("SetFamilyPrescribedAngVel");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());
@@ -264,6 +270,7 @@ void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID,
 }
 
 void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID) {
+    assertSysNotInit("SetFamilyPrescribedAngVel");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());
@@ -282,6 +289,7 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
                                             const std::string& X,
                                             const std::string& Y,
                                             const std::string& Z) {
+    assertSysNotInit("SetFamilyPrescribedPosition");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());
@@ -300,6 +308,7 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
 }
 
 void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID) {
+    assertSysNotInit("SetFamilyPrescribedPosition");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());
@@ -315,13 +324,36 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID) {
 }
 
 void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula) {
+    assertSysNotInit("SetFamilyPrescribedQuaternion");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());
     }
 }
 
+void DEMSolver::SetOwnerWildcardValue(const std::string& name, float val) {
+    assertSysInit("SetOwnerWildcardValue");
+    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
+        DEME_ERROR(
+            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerOwnerWildcards first.",
+            name);
+    }
+    dT->setOwnerWildcardValue(m_owner_wc_num.at(name), val);
+}
+void DEMSolver::SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, float val) {
+    assertSysInit("SetFamilyOwnerWildcardValue");
+    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
+        DEME_ERROR(
+            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerOwnerWildcards first.",
+            name);
+    }
+    dT->setFamilyOwnerWildcardValue(N, m_owner_wc_num.at(name), val);
+}
+
 void DEMSolver::DisableFamilyOutput(unsigned int ID) {
+    assertSysNotInit("DisableFamilyOutput");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You tried to disable output for family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());

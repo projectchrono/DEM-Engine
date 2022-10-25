@@ -311,12 +311,17 @@ inline void equip_owner_wildcards(std::string& definition,
                                   const std::set<std::string>& added_ingredients) {
     unsigned int i = 0;
     for (const auto& name : added_ingredients) {
-        definition += "float " + name + "_A;\n";
-        definition += "float " + name + "_B;\n";
+        // Owner wildcards are given as alias, because unlike contact wildcard which is pair-wise, there is some
+        // ambiguity in which contact pair should update a owner property. So, this management is completely given to
+        // the user, and they may choose to atomically update them if needed.
+        definition += "float* " + name + " = granData->ownerWildcards[" + std::to_string(i) + "];\n";
+        // Because of using alias, no acquisition or write-back needed
+        /*
         acquisition_A += name + "_A = granData->ownerWildcards[" + std::to_string(i) + "][myOwner];\n";
         acquisition_B += name + "_B = granData->ownerWildcards[" + std::to_string(i) + "][myOwner];\n";
         writeback += "granData->ownerWildcards[" + std::to_string(i) + "][AOwner] = " + name + "_A;\n" +
                      "granData->ownerWildcards[" + std::to_string(i) + "][BOwner] = " + name + "_B;\n";
+        */
         i++;
     }
 }

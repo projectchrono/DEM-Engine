@@ -517,6 +517,8 @@ class DEMClumpBatch {
     // pair IDs are relative to this batch (starting from 0, up to num of this batch - 1, that is).
     std::vector<std::pair<bodyID_t, bodyID_t>> contact_pairs;
     std::unordered_map<std::string, std::vector<float>> contact_wildcards;
+    // Initial owner wildcard that this batch of clumps should have
+    std::unordered_map<std::string, std::vector<float>> owner_wildcards;
     // Its offset when this obj got loaded into the API-level user raw-input array
     size_t load_order;
     DEMClumpBatch(size_t num) : nClumps(num) {
@@ -584,13 +586,49 @@ class DEMClumpBatch {
         if (wildcards.begin()->second.size() != nExistContacts) {
             std::stringstream ss;
             ss << "SetExistingContactWildcards needs to be called after SetExistingContacts, with each wildcard array "
-                  "having the same length as the number of contact pairs.\n This way, each wildcard will have an "
+                  "having the same length as the number of contact pairs.\nThis way, each wildcard will have an "
                   "associated contact pair."
                << std::endl;
             throw std::runtime_error(ss.str());
         }
         contact_wildcards = wildcards;
     }
+    void AddExistingContactWildcard(const std::string& name, const std::vector<float>& vals) {
+        if (vals.size() != nClumps) {
+            std::stringstream ss;
+            ss << "AddExistingContactWildcard needs to be called after SetExistingContacts, with the input wildcard "
+                  "array having the same length as the number of contact pairs.\nThis way, each wildcard will have an "
+                  "associated contact pair."
+               << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        contact_wildcards[name] = vals;
+    }
+
+    void SetOwnerWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
+        if (wildcards.begin()->second.size() != nClumps) {
+            std::stringstream ss;
+            ss << "Input owner wildcard arrays in a SetOwnerWildcards call must all have the same size as the number "
+                  "of clumps in this batch.\nHere, the input array has length "
+               << wildcards.begin()->second.size() << " but this batch has " << nClumps << " clumps." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        owner_wildcards = wildcards;
+    }
+    void AddOwnerWildcard(const std::string& name, const std::vector<float>& vals) {
+        if (vals.size() != nClumps) {
+            std::stringstream ss;
+            ss << "Input owner wildcard array in a AddOwnerWildcard call must have the same size as the number of "
+                  "clumps in this batch.\nHere, the input array has length "
+               << vals.size() << " but this batch has " << nClumps << " clumps." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        owner_wildcards[name] = vals;
+    }
+    void AddOwnerWildcard(const std::string& name, float val) {
+        AddOwnerWildcard(name, std::vector<float>(nClumps, val));
+    }
+
     size_t GetNumContacts() const { return nExistContacts; }
 };
 

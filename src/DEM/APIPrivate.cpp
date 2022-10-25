@@ -18,6 +18,18 @@
 
 namespace deme {
 
+void DEMSolver::assertSysInit(const std::string& method_name) {
+    if (!sys_initialized) {
+        DEME_ERROR("DEMSolver's method %s can only be called after calling Initialize()", method_name);
+    }
+}
+
+void DEMSolver::assertSysNotInit(const std::string& method_name) {
+    if (sys_initialized) {
+        DEME_ERROR("DEMSolver's method %s can only be called before calling Initialize()", method_name);
+    }
+}
+
 void DEMSolver::generatePolicyResources() {
     // Process the loaded materials. The pre-process of external objects and clumps could add more materials, so this
     // call need to go after those pre-process ones.
@@ -957,6 +969,7 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     // It should have those following names in it
     const std::set<std::string> contact_wildcard_names = m_force_model->m_contact_wildcards;
     const std::set<std::string> owner_wildcard_names = m_force_model->m_owner_wildcards;
+    m_owner_wc_num.clear();
     // If we spot that the force model requires an ingredient, we make sure that order goes to the ingredient
     // acquisition module
     std::string ingredient_definition = " ", cnt_wildcard_acquisition = " ", ingredient_acquisition_A = " ",
@@ -971,6 +984,7 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     }
     // Then, owner wildcards should be added to the ingredient list too. But first we check whether a owner wildcard
     // shares name with existing ingredients. If not, we add them to the list.
+    unsigned int owner_wc_num = 0;
     for (const auto& owner_wildcard_name : owner_wildcard_names) {
         if (added_ingredients.find(owner_wildcard_name) != added_ingredients.end()) {
             DEME_ERROR(
@@ -979,6 +993,10 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
                 owner_wildcard_name);
         }
         added_owner_wildcards.insert(owner_wildcard_name);
+        // Finally, owner wildcards are subject to user modification, so it is better to keep tab of their numbering for
+        // later use.
+        m_owner_wc_num[owner_wildcard_name] = owner_wc_num;
+        owner_wc_num++;
     }
     // Owner write-back needs ABOwner number
     if (owner_wildcard_names.size() > 0) {
@@ -1055,10 +1073,11 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     strMap["_forceCollectInPlaceStrat_"] = whether_reduce_in_kernel;
     strMap["_contactInfoWrite_"] = contact_info_write_strat;
 
-    DEME_DEBUG_PRINTF("Wildcard acquisition:\n%s", cnt_wildcard_acquisition.c_str());
-    DEME_DEBUG_PRINTF("Wildcard write-back:\n%s", cnt_wildcard_write_back.c_str());
-    DEME_DEBUG_PRINTF("Wildcard destroy inactive contacts:\n%s", cnt_wildcard_destroy_record.c_str());
+    DEME_DEBUG_PRINTF("Model ingredient definition:\n%s", ingredient_definition.c_str());
 
+    // DEME_DEBUG_PRINTF("Wildcard acquisition:\n%s", cnt_wildcard_acquisition.c_str());
+    // DEME_DEBUG_PRINTF("Wildcard write-back:\n%s", cnt_wildcard_write_back.c_str());
+    // DEME_DEBUG_PRINTF("Wildcard destroy inactive contacts:\n%s", cnt_wildcard_destroy_record.c_str());
     // DEME_DEBUG_PRINTF("Contact info writing strategy:\n%s", contact_info_write_strat.c_str());
 }
 

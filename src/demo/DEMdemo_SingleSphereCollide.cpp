@@ -47,6 +47,9 @@ int main() {
     auto particles1 = DEMSim.AddClumps(input_clump_type, input_xyz1);
     particles1->SetVel(input_vel1);
     particles1->SetFamily(0);
+    particles1->AddOwnerWildcard("mu_custom", 0.5);
+    // This one is never used in force model, yet it should not create an error
+    particles1->AddOwnerWildcard("some_property", 1.0);
     auto tracker1 = DEMSim.Track(particles1);
 
     // DEMSim.DisableContactBetweenFamilies(0, 1);
@@ -67,8 +70,8 @@ int main() {
     auto my_force_model = DEMSim.ReadContactForceModel("SampleCustomForceModel.cu");
     // This custom force model still uses contact history arrays, so let's define it
     my_force_model->SetPerContactWildcards({"delta_tan_x", "delta_tan_y", "delta_tan_z"});
-    // Test owner wildcards
-    my_force_model->SetPerOwnerWildcards({"electric_charge"});
+    // Owner wildcards. In this demo, we define a changable friction coefficient mu_custom.
+    my_force_model->SetPerOwnerWildcards({"mu_custom"});
 
     DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(2e-5);
@@ -94,6 +97,9 @@ int main() {
     out_dir += "/DemoOutput_SingleSphereCollide";
     create_directory(out_dir);
     // bool changed_family = false;
+
+    // We can give particle 2 this mu_custom property too
+    DEMSim.SetFamilyOwnerWildcardValue(1, "mu_custom", 0.5);
     for (int i = 0; i < 100; i++) {
         std::cout << "Frame: " << i << std::endl;
 

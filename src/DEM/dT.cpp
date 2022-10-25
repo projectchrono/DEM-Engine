@@ -610,6 +610,26 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
 
                 i++;
             }
+            // If this batch as owner wildcards, we load it in
+            {
+                unsigned int w_num = 0;
+                for (const auto& w_name : m_owner_wildcard_names) {
+                    if (a_batch->owner_wildcards.find(w_name) == a_batch->owner_wildcards.end()) {
+                        // No such wildcard loaded
+                        DEME_WARNING(
+                            "Owner wildcard %s is needed by force model, yet not specified for a batch of "
+                            "clumps.\nTheir initial values are defauled to 0.",
+                            w_name);
+                    } else {
+                        for (size_t jj = 0; jj < a_batch->GetNumClumps(); jj++) {
+                            ownerWildcards[w_num].at(nExistOwners + nTotalClumpsThisCall + jj) =
+                                a_batch->owner_wildcards[w_name].at(jj);
+                        }
+                    }
+                    w_num++;
+                }
+            }
+
             DEME_DEBUG_PRINTF("Loaded a batch of %zu clumps.", a_batch->GetNumClumps());
 
             // Write the extra contact pairs to memory
@@ -1896,6 +1916,20 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     }
 
     return res;
+}
+
+void DEMDynamicThread::setOwnerWildcardValue(unsigned int wc_num, float val) {
+    for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
+        ownerWildcards[wc_num].at(i) = val;
+    }
+}
+
+void DEMDynamicThread::setFamilyOwnerWildcardValue(unsigned int family_num, unsigned int wc_num, float val) {
+    for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
+        if (familyID[i] == family_num) {
+            ownerWildcards[wc_num].at(i) = val;
+        }
+    }
 }
 
 float3 DEMDynamicThread::getOwnerAngVel(bodyID_t ownerID) const {

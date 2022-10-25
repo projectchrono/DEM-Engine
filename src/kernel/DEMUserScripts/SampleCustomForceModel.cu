@@ -1,4 +1,5 @@
-// A custom DEM force model which does not have rolling resistance, and its friction coefficient is ramping up with time
+// A custom DEM force model which does not have rolling resistance, and its friction coefficient is determined
+// externally
 
 float E_cnt, G_cnt, CoR_cnt;
 {
@@ -55,23 +56,20 @@ float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
     const float gamma_n = deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
 
     force += (k_n * overlapDepth + gamma_n * projection) * B2A;
-
-    // Let's pretend there is a cohesion force because of electric charges (but still due to DEM restrains, they need to
-    // be in contact for this interaction to happen)
-    force += (-1000. * electric_charge_A * electric_charge_B) * B2A;
 }
 
 // Tangential force part
 {
-    // mu_cnt is a function of elapsed time in simulation
-    float mu_cnt = (5. * time > 0.5) ? 0.5 : 5. * time;
+    // mu is obtained from a `owner wildcard', which is a custom array where the user can associated any quantity with
+    // each owner. In this case, it is mu_custom.
+    float mu = DEME_MAX(mu_custom[AOwner], mu_custom[BOwner]);
     const float kt = 8. * G_cnt * sqrt_Rd;
     const float gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
     float3 tangent_force = -kt * delta_tan - gt * vrel_tan;
     const float ft = length(tangent_force);
     if (ft > DEME_TINY_FLOAT) {
         // Reverse-engineer to get tangential displacement
-        const float ft_max = length(force) * mu_cnt;
+        const float ft_max = length(force) * mu;
         if (ft > ft_max) {
             tangent_force = (ft_max / ft) * tangent_force;
             delta_tan = (tangent_force + gt * vrel_tan) / (-kt);

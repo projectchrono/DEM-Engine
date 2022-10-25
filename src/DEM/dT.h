@@ -348,6 +348,11 @@ class DEMDynamicThread {
     /// just adds to it.
     void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite = true);
 
+    /// Globally modify a owner wildcard's value
+    void setOwnerWildcardValue(unsigned int wc_num, float val);
+    /// Modify the owner wildcard values of all entities in family family_num
+    void setFamilyOwnerWildcardValue(unsigned int family_num, unsigned int wc_num, float val);
+
     /// Let dT know that it needs a kT update, as something important may have changed, and old contact pair info is no
     /// longer valid.
     void announceCritical() { pendingCriticalUpdate = true; }

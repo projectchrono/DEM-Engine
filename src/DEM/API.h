@@ -321,6 +321,11 @@ class DEMSolver {
     /// Keep the orientation quaternions of all entites in this family to remain exactly the user-specified values
     void SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula);
 
+    /// Globally modify a owner wildcard's value
+    void SetOwnerWildcardValue(const std::string& name, float val);
+    /// Modify the owner wildcard values of all entities in family N
+    void SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, float val);
+
     /// Change all entities with family number ID_from to have a new number ID_to, when the condition defined by the
     /// string is satisfied by the entities in question. This should be called before initialization, and will be baked
     /// into the solver, so the conditions will be checked and changes applied every time step.
@@ -783,6 +788,9 @@ class DEMSolver {
     // A big fat tab for all string replacement that the JIT compiler needs to consider
     std::unordered_map<std::string, std::string> m_subs;
 
+    // A map that records the numbering for user-defined owner wildcards
+    std::unordered_map<std::string, unsigned int> m_owner_wc_num;
+
     ////////////////////////////////////////////////////////////////////////////////
     // Cached user's direct (raw) inputs concerning the actual physics objects
     // presented in the simulation, which need to be processed before shipment,
@@ -1010,6 +1018,10 @@ class DEMSolver {
                              const float d2 = 0.f,
                              const float d3 = 0.f,
                              const objNormal_t normal = ENTITY_NORMAL_INWARD);
+    /// Assert that the DEM simulation system is initialized
+    void assertSysInit(const std::string& method_name);
+    /// Assert that the DEM simulation system is not initialized
+    void assertSysNotInit(const std::string& method_name);
 
     // Some JIT packaging helpers
     inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap);
