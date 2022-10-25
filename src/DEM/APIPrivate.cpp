@@ -20,13 +20,13 @@ namespace deme {
 
 void DEMSolver::assertSysInit(const std::string& method_name) {
     if (!sys_initialized) {
-        DEME_ERROR("DEMSolver's method %s can only be called after calling Initialize()", method_name);
+        DEME_ERROR("DEMSolver's method %s can only be called after calling Initialize()", method_name.c_str());
     }
 }
 
 void DEMSolver::assertSysNotInit(const std::string& method_name) {
     if (sys_initialized) {
-        DEME_ERROR("DEMSolver's method %s can only be called before calling Initialize()", method_name);
+        DEME_ERROR("DEMSolver's method %s can only be called before calling Initialize()", method_name.c_str());
     }
 }
 
@@ -990,7 +990,7 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
             DEME_ERROR(
                 "Owner wildcard %s shares its name with a reserved contact force model ingredient.\nPlease select a "
                 "different name for this wildcard and try again.",
-                owner_wildcard_name);
+                owner_wildcard_name.c_str());
         }
         added_owner_wildcards.insert(owner_wildcard_name);
         // Finally, owner wildcards are subject to user modification, so it is better to keep tab of their numbering for

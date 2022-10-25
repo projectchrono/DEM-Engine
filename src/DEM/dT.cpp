@@ -619,7 +619,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                         DEME_WARNING(
                             "Owner wildcard %s is needed by force model, yet not specified for a batch of "
                             "clumps.\nTheir initial values are defauled to 0.",
-                            w_name);
+                            w_name.c_str());
                     } else {
                         for (size_t jj = 0; jj < a_batch->GetNumClumps(); jj++) {
                             ownerWildcards[w_num].at(nExistOwners + nTotalClumpsThisCall + jj) =

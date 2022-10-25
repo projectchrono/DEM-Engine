@@ -337,7 +337,7 @@ void DEMSolver::SetOwnerWildcardValue(const std::string& name, float val) {
         DEME_ERROR(
             "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
             "SetPerOwnerWildcards first.",
-            name);
+            name.c_str());
     }
     dT->setOwnerWildcardValue(m_owner_wc_num.at(name), val);
 }
@@ -347,7 +347,7 @@ void DEMSolver::SetFamilyOwnerWildcardValue(unsigned int N, const std::string& n
         DEME_ERROR(
             "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
             "SetPerOwnerWildcards first.",
-            name);
+            name.c_str());
     }
     dT->setFamilyOwnerWildcardValue(N, m_owner_wc_num.at(name), val);
 }
