@@ -24,6 +24,7 @@
 #include <DEM/Models.h>
 #include <DEM/AuxClasses.h>
 
+/// Main namespace for the DEM-Engine package.
 namespace deme {
 
 // class DEMKinematicThread;
@@ -48,6 +49,7 @@ class DEMTracker;
 //            12. Right now, the force model file is loaded from source, not install dir?
 //////////////////////////////////////////////////////////////
 
+/// Main DEM-Engine solver.
 class DEMSolver {
   public:
     DEMSolver(unsigned int nGPUs = 2);
