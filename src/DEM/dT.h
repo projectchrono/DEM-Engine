@@ -498,6 +498,11 @@ class DEMDynamicThread {
         }
     }
 
+    /// Get the simulation time passed since the start of simulation
+    double getSimTime() const;
+    /// Set the simulation time manually
+    void setSimTime(double time);
+
     // Jitify dT kernels (at initialization) based on existing knowledge of this run
     void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs);
 

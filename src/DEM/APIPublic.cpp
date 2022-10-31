@@ -80,6 +80,14 @@ void DEMSolver::SetTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& t
     kT->setTriNodeRelPos(start, triangles, overwrite);
 }
 
+double DEMSolver::GetSimTime() const {
+    return dT->getSimTime();
+}
+
+void DEMSolver::SetSimTime(double time) {
+    dT->setSimTime(time);
+}
+
 void DEMSolver::InstructBoxDomainDimension(float x, float y, float z, SPATIAL_DIR dir_exact) {
     m_user_boxSize.x = x;
     m_user_boxSize.y = y;

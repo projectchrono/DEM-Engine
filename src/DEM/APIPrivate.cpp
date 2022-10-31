@@ -268,8 +268,8 @@ void DEMSolver::figureOutNV() {
                       n_more_bits_for_me[0], n_more_bits_for_me[1]);
 
     // Then we know how many bits each one would have
-    int base_bits = ((int)VOXEL_COUNT_POWER2 - n_more_bits_for_me[0] - n_more_bits_for_me[1]) / 3;
-    int left_over = ((int)VOXEL_COUNT_POWER2 - n_more_bits_for_me[0] - n_more_bits_for_me[1]) % 3;
+    int base_bits = ((int)VOXEL_COUNT_POWER2 - 2 * n_more_bits_for_me[0] - n_more_bits_for_me[1]) / 3;
+    int left_over = ((int)VOXEL_COUNT_POWER2 - 2 * n_more_bits_for_me[0] - n_more_bits_for_me[1]) % 3;
     int bits_3rd = base_bits;
     int bits_2nd = bits_3rd + n_more_bits_for_me[0];
     int bits_1st = bits_2nd + n_more_bits_for_me[1];

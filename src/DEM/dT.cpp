@@ -691,6 +691,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
             mmiZZ.at(i + owner_offset_for_ext_obj) = this_moi.z;
         }
         auto this_CoM_coord = input_ext_obj_xyz.at(i) - LBF;
+        // std::cout << this_CoM_coord.x << "," << this_CoM_coord.y << "," << this_CoM_coord.z << std::endl;
         hostPositionToVoxelID<voxelID_t, subVoxelPos_t, double>(
             voxelID.at(i + owner_offset_for_ext_obj), locX.at(i + owner_offset_for_ext_obj),
             locY.at(i + owner_offset_for_ext_obj), locZ.at(i + owner_offset_for_ext_obj), (double)this_CoM_coord.x,
@@ -1884,6 +1885,9 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
             case (CUB_REDUCE_FLAVOR::MAX):
                 floatMaxReduce(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
                 break;
+            case (CUB_REDUCE_FLAVOR::MIN):
+                floatMinReduce(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
+                break;
             case (CUB_REDUCE_FLAVOR::SUM):
                 floatSumReduce(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
                 break;
@@ -1900,9 +1904,6 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
         float* resArr_sorted = (float*)stateOfSolver_resources.allocateTempVector(5, quarryTempSize);
         size_t* num_unique_out = (size_t*)stateOfSolver_resources.allocateTempVector(6, sizeof(size_t));
         switch (reduce_flavor) {
-            case (CUB_REDUCE_FLAVOR::MAX):
-                //// TODO: Implement it
-                break;
             case (CUB_REDUCE_FLAVOR::SUM):
                 // Sort first
                 floatSortByKey(boolArrExclude, boolArrExclude_sorted, resArr, resArr_sorted, n, streamInfo.stream,
@@ -1912,10 +1913,33 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
                 floatSumReduceByKey(boolArrExclude_sorted, boolArrExclude, resArr_sorted, res, num_unique_out, n,
                                     streamInfo.stream, stateOfSolver_resources);
                 break;
+            case (CUB_REDUCE_FLAVOR::MAX):
+                floatSortByKey(boolArrExclude, boolArrExclude_sorted, resArr, resArr_sorted, n, streamInfo.stream,
+                               stateOfSolver_resources);
+                floatMaxReduceByKey(boolArrExclude_sorted, boolArrExclude, resArr_sorted, res, num_unique_out, n,
+                                    streamInfo.stream, stateOfSolver_resources);
+                break;
+            case (CUB_REDUCE_FLAVOR::MIN):
+                floatSortByKey(boolArrExclude, boolArrExclude_sorted, resArr, resArr_sorted, n, streamInfo.stream,
+                               stateOfSolver_resources);
+                floatMinReduceByKey(boolArrExclude_sorted, boolArrExclude, resArr_sorted, res, num_unique_out, n,
+                                    streamInfo.stream, stateOfSolver_resources);
+                break;
+            case (CUB_REDUCE_FLAVOR::NONE):
+                //// TODO: Query a full array w/o reducing doesn't seem like something useful...
+                return resArr;
         }
     }
 
     return res;
+}
+
+double DEMDynamicThread::getSimTime() const {
+    return simParams->timeElapsed;
+}
+
+void DEMDynamicThread::setSimTime(double time) {
+    simParams->timeElapsed = time;
 }
 
 void DEMDynamicThread::setOwnerWildcardValue(unsigned int wc_num, float val) {

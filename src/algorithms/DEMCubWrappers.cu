@@ -23,6 +23,18 @@ struct CubFloatAdd {
     }
 };
 
+// Custom float min and max functor
+struct CubFloatMin {
+    CUB_RUNTIME_FUNCTION __forceinline__ __device__ __host__ float operator()(const float& a, const float& b) const {
+        return (b < a) ? b : a;
+    }
+};
+struct CubFloatMax {
+    CUB_RUNTIME_FUNCTION __forceinline__ __device__ __host__ float operator()(const float& a, const float& b) const {
+        return (b > a) ? b : a;
+    }
+};
+
 template <typename T1, typename T2, typename T3>
 inline void cubDEMPrefixScan(T1* d_in, T2* d_out, size_t n, cudaStream_t& this_stream, T3& scratchPad) {
     // NOTE!!! Why did I not use ExclusiveSum? I found that when for a cub scan operation, if the d_in and d_out are of
@@ -134,6 +146,16 @@ void cubDEMMax(T1* d_in, T1* d_out, size_t n, cudaStream_t& this_stream, T2& scr
     GPU_CALL(cudaStreamSynchronize(this_stream));
     void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
     cub::DeviceReduce::Max(d_scratch_space, cub_scratch_bytes, d_in, d_out, n, this_stream, false);
+    GPU_CALL(cudaStreamSynchronize(this_stream));
+}
+
+template <typename T1, typename T2>
+void cubDEMMin(T1* d_in, T1* d_out, size_t n, cudaStream_t& this_stream, T2& scratchPad) {
+    size_t cub_scratch_bytes = 0;
+    cub::DeviceReduce::Min(NULL, cub_scratch_bytes, d_in, d_out, n, this_stream, false);
+    GPU_CALL(cudaStreamSynchronize(this_stream));
+    void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
+    cub::DeviceReduce::Min(d_scratch_space, cub_scratch_bytes, d_in, d_out, n, this_stream, false);
     GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 

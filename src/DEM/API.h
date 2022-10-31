@@ -89,6 +89,10 @@ class DEMSolver {
     float GetExpandFactor();
     /// Set the number of dT steps before it waits for a contact-pair info update from kT
     void SetCDUpdateFreq(int freq) { m_updateFreq = freq; }
+    /// Get the simulation time passed since the start of simulation
+    double GetSimTime() const;
+    /// Set the simulation time manually
+    void SetSimTime(double time);
     // TODO: Implement an API that allows setting ts size through a list
 
     /// Sets the origin of the coordinate system (the coordinate system that all entities in this simulation are using)
