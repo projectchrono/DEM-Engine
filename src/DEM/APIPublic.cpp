@@ -147,29 +147,6 @@ std::shared_ptr<DEMForceModel> DEMSolver::UseFrictionlessHertzianModel() {
     return m_force_model;
 }
 
-void DEMSolver::SetFamilyFixed(unsigned int ID) {
-    assertSysNotInit("SetFamilyFixed");
-    if (ID > std::numeric_limits<family_t>::max()) {
-        DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
-                   std::numeric_limits<family_t>::max());
-    }
-    familyPrescription_t preInfo;
-    preInfo.family = ID;
-    preInfo.linVelX = "0";
-    preInfo.linVelY = "0";
-    preInfo.linVelZ = "0";
-    preInfo.rotVelX = "0";
-    preInfo.rotVelY = "0";
-    preInfo.rotVelZ = "0";
-    preInfo.linVelPrescribed = true;
-    preInfo.rotVelPrescribed = true;
-    preInfo.rotPosPrescribed = true;
-    preInfo.linPosPrescribed = true;
-    preInfo.used = true;
-
-    m_input_family_prescription.push_back(preInfo);
-}
-
 void DEMSolver::ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const std::string& condition) {
     assertSysNotInit("ChangeFamilyWhen");
     if (ID_from > std::numeric_limits<family_t>::max() || ID_to > std::numeric_limits<family_t>::max()) {
@@ -215,6 +192,37 @@ void DEMSolver::ChangeFamily(unsigned int ID_from, unsigned int ID_to) {
     kT->changeFamily(ID_from, ID_to);
 }
 
+void DEMSolver::SetFamilyFixed(unsigned int ID) {
+    assertSysNotInit("SetFamilyFixed");
+    if (ID > std::numeric_limits<family_t>::max()) {
+        DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
+                   std::numeric_limits<family_t>::max());
+    }
+    familyPrescription_t preInfo;
+    preInfo.family = ID;
+
+    preInfo.linVelXPrescribed = true;
+    preInfo.linVelYPrescribed = true;
+    preInfo.linVelZPrescribed = true;
+    preInfo.rotVelXPrescribed = true;
+    preInfo.rotVelYPrescribed = true;
+    preInfo.rotVelZPrescribed = true;
+
+    preInfo.rotPosPrescribed = true;
+    preInfo.linPosPrescribed = true;
+
+    preInfo.linVelX = "0";
+    preInfo.linVelY = "0";
+    preInfo.linVelZ = "0";
+    preInfo.rotVelX = "0";
+    preInfo.rotVelY = "0";
+    preInfo.rotVelZ = "0";
+
+    preInfo.used = true;
+
+    m_input_family_prescription.push_back(preInfo);
+}
+
 void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
                                           const std::string& velX,
                                           const std::string& velY,
@@ -227,12 +235,18 @@ void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
     }
     familyPrescription_t preInfo;
     preInfo.family = ID;
+
+    preInfo.linVelXPrescribed = dictate;
+    preInfo.linVelYPrescribed = dictate;
+    preInfo.linVelZPrescribed = dictate;
+    preInfo.rotVelXPrescribed = dictate;
+    preInfo.rotVelYPrescribed = dictate;
+    preInfo.rotVelZPrescribed = dictate;
+
     preInfo.linVelX = velX;
     preInfo.linVelY = velY;
     preInfo.linVelZ = velZ;
 
-    preInfo.linVelPrescribed = dictate;
-    preInfo.rotVelPrescribed = dictate;
     preInfo.used = true;
 
     m_input_family_prescription.push_back(preInfo);
@@ -247,8 +261,9 @@ void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID) {
     familyPrescription_t preInfo;
     preInfo.family = ID;
 
-    preInfo.linVelPrescribed = true;
-    preInfo.rotVelPrescribed = true;
+    preInfo.linVelXPrescribed = true;
+    preInfo.linVelYPrescribed = true;
+    preInfo.linVelZPrescribed = true;
     preInfo.used = true;
 
     m_input_family_prescription.push_back(preInfo);
@@ -266,12 +281,18 @@ void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID,
     }
     familyPrescription_t preInfo;
     preInfo.family = ID;
+
+    preInfo.linVelXPrescribed = dictate;
+    preInfo.linVelYPrescribed = dictate;
+    preInfo.linVelZPrescribed = dictate;
+    preInfo.rotVelXPrescribed = dictate;
+    preInfo.rotVelYPrescribed = dictate;
+    preInfo.rotVelZPrescribed = dictate;
+
     preInfo.rotVelX = velX;
     preInfo.rotVelY = velY;
     preInfo.rotVelZ = velZ;
 
-    preInfo.linVelPrescribed = dictate;
-    preInfo.rotVelPrescribed = dictate;
     preInfo.used = true;
 
     m_input_family_prescription.push_back(preInfo);
@@ -286,8 +307,9 @@ void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID) {
     familyPrescription_t preInfo;
     preInfo.family = ID;
 
-    preInfo.linVelPrescribed = true;
-    preInfo.rotVelPrescribed = true;
+    preInfo.rotVelXPrescribed = true;
+    preInfo.rotVelYPrescribed = true;
+    preInfo.rotVelZPrescribed = true;
     preInfo.used = true;
 
     m_input_family_prescription.push_back(preInfo);
@@ -304,12 +326,15 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
     }
     familyPrescription_t preInfo;
     preInfo.family = ID;
-    preInfo.linPosX = X;
-    preInfo.linPosY = Y;
-    preInfo.linPosZ = Z;
+
     // Both rot and lin pos are fixed. Use other methods if this is not intended.
     preInfo.rotPosPrescribed = true;
     preInfo.linPosPrescribed = true;
+
+    preInfo.linPosX = X;
+    preInfo.linPosY = Y;
+    preInfo.linPosZ = Z;
+
     preInfo.used = true;
 
     m_input_family_prescription.push_back(preInfo);
@@ -323,14 +348,14 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID) {
     }
     familyPrescription_t preInfo;
     preInfo.family = ID;
-    // Both rot and lin pos are fixed.
-    preInfo.rotPosPrescribed = true;
+
     preInfo.linPosPrescribed = true;
     preInfo.used = true;
 
     m_input_family_prescription.push_back(preInfo);
 }
 
+//// TODO: Implement it
 void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula) {
     assertSysNotInit("SetFamilyPrescribedQuaternion");
     if (ID > std::numeric_limits<family_t>::max()) {

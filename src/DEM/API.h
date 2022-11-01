@@ -299,8 +299,8 @@ class DEMSolver {
 
     /// Mark all entities in this family to be fixed
     void SetFamilyFixed(unsigned int ID);
-    /// Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this
-    /// prescription completely dictates this family's motions.
+    /// Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this family will
+    /// not be fluenced by the force exerted from other simulation entites (both linear and rotational motions).
     void SetFamilyPrescribedLinVel(unsigned int ID,
                                    const std::string& velX,
                                    const std::string& velY,
@@ -309,8 +309,8 @@ class DEMSolver {
     /// Let the linear velocities of all entites in this family always keep `as is', and not fluenced by the force
     /// exerted from other simulation entites.
     void SetFamilyPrescribedLinVel(unsigned int ID);
-    /// Set the prescribed angular velocity to all entities in a family. If dictate is set to true, then this
-    /// prescription completely dictates this family's motions.
+    /// Set the prescribed angular velocity to all entities in a family. If dictate is set to true, then this family
+    /// will not be fluenced by the force exerted from other simulation entites (both linear and rotational motions).
     void SetFamilyPrescribedAngVel(unsigned int ID,
                                    const std::string& velX,
                                    const std::string& velY,

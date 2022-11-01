@@ -298,13 +298,14 @@ struct familyPrescription_t {
     std::string rotVelZ = "none";
     // Is this prescribed motion dictating the motion of the entities (true), or just added on top of the true
     // physics (false)
-    bool linVelPrescribed = false;
-    bool rotVelPrescribed = false;
+    bool linVelXPrescribed = false;
+    bool linVelYPrescribed = false;
+    bool linVelZPrescribed = false;
+    bool rotVelXPrescribed = false;
+    bool rotVelYPrescribed = false;
+    bool rotVelZPrescribed = false;
     bool rotPosPrescribed = false;
     bool linPosPrescribed = false;
-    // This family will receive external updates of velocity and position (overwrites analytical prescription)
-    bool externVel = false;
-    bool externPos = false;
     // A switch to mark if there is any prescription going on for this family at all
     bool used = false;
 };

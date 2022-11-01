@@ -27,8 +27,8 @@ int main() {
     DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
     // E, nu, CoR, mu, Crr...
-    auto mat_type_cone = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}, {"Crr", 0.00}});
-    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}, {"Crr", 0.00}});
+    auto mat_type_cone = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.2}, {"Crr", 0.00}});
+    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.2}, {"Crr", 0.00}});
 
     float shake_amp = 0.1;
     float shake_speed = 4;  // Num of periods per second

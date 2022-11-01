@@ -4,8 +4,12 @@
 
 // Apply presecibed velocity and report whether the `true' physics should be skipped, rather than added on top of that
 template <typename T1, typename T2>
-inline __device__ void applyPrescribedVel(bool& LinPrescribed,
-                                          bool& RotPrescribed,
+inline __device__ void applyPrescribedVel(bool& LinXPrescribed,
+                                          bool& LinYPrescribed,
+                                          bool& LinZPrescribed,
+                                          bool& RotXPrescribed,
+                                          bool& RotYPrescribed,
+                                          bool& RotZPrescribed,
                                           T1& vX,
                                           T1& vY,
                                           T1& vZ,
@@ -17,8 +21,10 @@ inline __device__ void applyPrescribedVel(bool& LinPrescribed,
     switch (family) {
         _velPrescriptionStrategy_;
         default:
-            LinPrescribed = false;
-            RotPrescribed = false;
+            // Default can just do nothing
+            // LinPrescribed = false;
+            // RotPrescribed = false;
+            return;
     }
 }
 
@@ -38,8 +44,10 @@ inline __device__ void applyPrescribedPos(bool& LinPrescribed,
     switch (family) {
         _posPrescriptionStrategy_;
         default:
-            LinPrescribed = false;
-            RotPrescribed = false;
+            // Default can just do nothing
+            // LinPrescribed = false;
+            // RotPrescribed = false;
+            return;
     }
 }
 
@@ -51,35 +59,45 @@ inline __device__ void integrateVel(deme::bodyID_t thisClump,
                                     float h,
                                     float t) {
     deme::family_t family_code = granData->familyID[thisClump];
-    bool LinPrescribed = false, RotPrescribed = false;
+    bool LinXPrescribed = false, LinYPrescribed = false, LinZPrescribed = false, RotXPrescribed = false,
+         RotYPrescribed = false, RotZPrescribed = false;
 
     // Keep tab of the old... we'll need that
     float3 old_v = make_float3(granData->vX[thisClump], granData->vY[thisClump], granData->vZ[thisClump]);
     float3 old_omgBar =
         make_float3(granData->omgBarX[thisClump], granData->omgBarY[thisClump], granData->omgBarZ[thisClump]);
 
-    // The user may directly change and omgBar info in global memory in applyPrescribedVel
-    applyPrescribedVel<float, float>(LinPrescribed, RotPrescribed, granData->vX[thisClump], granData->vY[thisClump],
+    // The user may directly change v and omgBar info in global memory in applyPrescribedVel
+    applyPrescribedVel<float, float>(LinXPrescribed, LinYPrescribed, LinZPrescribed, RotXPrescribed, RotYPrescribed,
+                                     RotZPrescribed, granData->vX[thisClump], granData->vY[thisClump],
                                      granData->vZ[thisClump], granData->omgBarX[thisClump],
                                      granData->omgBarY[thisClump], granData->omgBarZ[thisClump], family_code, (float)t);
 
     float3 v_update = make_float3(0, 0, 0), omgBar_update = make_float3(0, 0, 0);
 
-    if (!LinPrescribed) {
+    if (!LinXPrescribed) {
         v_update.x = (granData->aX[thisClump] + simParams->Gx) * h;
-        v_update.y = (granData->aY[thisClump] + simParams->Gy) * h;
-        v_update.z = (granData->aZ[thisClump] + simParams->Gz) * h;
         granData->vX[thisClump] += v_update.x;
+    }
+    if (!LinYPrescribed) {
+        v_update.y = (granData->aY[thisClump] + simParams->Gy) * h;
         granData->vY[thisClump] += v_update.y;
+    }
+    if (!LinZPrescribed) {
+        v_update.z = (granData->aZ[thisClump] + simParams->Gz) * h;
         granData->vZ[thisClump] += v_update.z;
     }
 
-    if (!RotPrescribed) {
+    if (!RotXPrescribed) {
         omgBar_update.x = granData->alphaX[thisClump] * h;
-        omgBar_update.y = granData->alphaY[thisClump] * h;
-        omgBar_update.z = granData->alphaZ[thisClump] * h;
         granData->omgBarX[thisClump] += omgBar_update.x;
+    }
+    if (!RotYPrescribed) {
+        omgBar_update.y = granData->alphaY[thisClump] * h;
         granData->omgBarY[thisClump] += omgBar_update.y;
+    }
+    if (!RotZPrescribed) {
+        omgBar_update.z = granData->alphaZ[thisClump] * h;
         granData->omgBarZ[thisClump] += omgBar_update.z;
     }
 

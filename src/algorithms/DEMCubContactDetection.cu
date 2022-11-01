@@ -55,6 +55,14 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       cudaStream_t& this_stream,
                       DEMSolverStateData& scratchPad,
                       SolverTimers& timers) {
+    // A dumb check
+    if (simParams->nSpheresGM == 0) {
+        *scratchPad.pNumContacts = 0;
+        *scratchPad.pNumPrevContacts = 0;
+        *scratchPad.pNumPrevSpheres = 0;
+        return;
+    }
+
     // total bytes needed for temp arrays in contact detection
     size_t CD_temp_arr_bytes = 0;
 

@@ -627,33 +627,64 @@ void DEMSolver::figureOutFamilyMasks() {
 
         this_family_info.used = true;
         this_family_info.family = user_family;
-        if (preInfo.linPosX != "none")
+
+        // If one positional coord is fixed then all of this object is fixed... this is just my design choice. If the
+        // user want to prescribe X but not Y, why don't they just prescribe velocity instead?
+        if (preInfo.linPosX != "none") {
             this_family_info.linPosX = preInfo.linPosX;
-        if (preInfo.linPosY != "none")
+            this_family_info.linPosPrescribed = true;
+        }
+        if (preInfo.linPosY != "none") {
             this_family_info.linPosY = preInfo.linPosY;
-        if (preInfo.linPosZ != "none")
+            this_family_info.linPosPrescribed = true;
+        }
+        if (preInfo.linPosZ != "none") {
             this_family_info.linPosZ = preInfo.linPosZ;
-        if (preInfo.oriQ != "none")
+            this_family_info.linPosPrescribed = true;
+        }
+        if (preInfo.oriQ != "none") {
             this_family_info.oriQ = preInfo.oriQ;
-        if (preInfo.linVelX != "none")
+            this_family_info.rotPosPrescribed = true;
+        }
+
+        // If it is not none, then it is automatically dictated by prescribed motion and will not accept influence by
+        // other sim entities
+        if (preInfo.linVelX != "none") {
             this_family_info.linVelX = preInfo.linVelX;
-        if (preInfo.linVelY != "none")
+            this_family_info.linVelXPrescribed = true;
+        }
+        if (preInfo.linVelY != "none") {
             this_family_info.linVelY = preInfo.linVelY;
-        if (preInfo.linVelZ != "none")
+            this_family_info.linVelYPrescribed = true;
+        }
+        if (preInfo.linVelZ != "none") {
             this_family_info.linVelZ = preInfo.linVelZ;
-        if (preInfo.rotVelX != "none")
+            this_family_info.linVelZPrescribed = true;
+        }
+        if (preInfo.rotVelX != "none") {
             this_family_info.rotVelX = preInfo.rotVelX;
-        if (preInfo.rotVelY != "none")
+            this_family_info.rotVelXPrescribed = true;
+        }
+        if (preInfo.rotVelY != "none") {
             this_family_info.rotVelY = preInfo.rotVelY;
-        if (preInfo.rotVelZ != "none")
+            this_family_info.rotVelYPrescribed = true;
+        }
+        if (preInfo.rotVelZ != "none") {
             this_family_info.rotVelZ = preInfo.rotVelZ;
-        this_family_info.linVelPrescribed = this_family_info.linVelPrescribed || preInfo.linVelPrescribed;
-        this_family_info.rotVelPrescribed = this_family_info.rotVelPrescribed || preInfo.rotVelPrescribed;
+            this_family_info.rotVelZPrescribed = true;
+        }
+
+        // Possibly the user explicitly ordered this family to not accept influence from other sim entities; if it is
+        // the case, we enforce that here.
+        this_family_info.linVelXPrescribed = this_family_info.linVelXPrescribed || preInfo.linVelXPrescribed;
+        this_family_info.linVelYPrescribed = this_family_info.linVelYPrescribed || preInfo.linVelYPrescribed;
+        this_family_info.linVelZPrescribed = this_family_info.linVelZPrescribed || preInfo.linVelZPrescribed;
+        this_family_info.rotVelXPrescribed = this_family_info.rotVelXPrescribed || preInfo.rotVelXPrescribed;
+        this_family_info.rotVelYPrescribed = this_family_info.rotVelYPrescribed || preInfo.rotVelYPrescribed;
+        this_family_info.rotVelZPrescribed = this_family_info.rotVelZPrescribed || preInfo.rotVelZPrescribed;
+
         this_family_info.rotPosPrescribed = this_family_info.rotPosPrescribed || preInfo.rotPosPrescribed;
         this_family_info.linPosPrescribed = this_family_info.linPosPrescribed || preInfo.linPosPrescribed;
-
-        this_family_info.externPos = this_family_info.externPos || preInfo.externPos;
-        this_family_info.externVel = this_family_info.externVel || preInfo.externVel;
 
         DEME_DEBUG_PRINTF("User family %u has prescribed lin vel: %s, %s, %s", user_family,
                           this_family_info.linVelX.c_str(), this_family_info.linVelY.c_str(),
@@ -1114,7 +1145,7 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
         }
         velStr += "case " + std::to_string(preInfo.family) + ": {";
         posStr += "case " + std::to_string(preInfo.family) + ": {";
-        if (!preInfo.externVel) {
+        {
             if (preInfo.linVelX != "none")
                 velStr += "vX = " + preInfo.linVelX + ";";
             if (preInfo.linVelY != "none")
@@ -1127,11 +1158,15 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
                 velStr += "omgBarY = " + preInfo.rotVelY + ";";
             if (preInfo.rotVelZ != "none")
                 velStr += "omgBarZ = " + preInfo.rotVelZ + ";";
-            velStr += "LinPrescribed = " + std::to_string(preInfo.linVelPrescribed) + ";";
-            velStr += "RotPrescribed = " + std::to_string(preInfo.rotVelPrescribed) + ";";
-        }  // TODO: add externVel==True case, loading from external vectors
+            velStr += "LinXPrescribed = " + std::to_string(preInfo.linVelXPrescribed) + ";";
+            velStr += "LinYPrescribed = " + std::to_string(preInfo.linVelYPrescribed) + ";";
+            velStr += "LinZPrescribed = " + std::to_string(preInfo.linVelZPrescribed) + ";";
+            velStr += "RotXPrescribed = " + std::to_string(preInfo.rotVelXPrescribed) + ";";
+            velStr += "RotYPrescribed = " + std::to_string(preInfo.rotVelYPrescribed) + ";";
+            velStr += "RotZPrescribed = " + std::to_string(preInfo.rotVelZPrescribed) + ";";
+        }
         velStr += "break; }";
-        if (!preInfo.externPos) {
+        {
             if (preInfo.linPosX != "none")
                 posStr += "X = " + preInfo.linPosX + ";";
             if (preInfo.linPosY != "none")
@@ -1144,7 +1179,7 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
             }
             posStr += "LinPrescribed = " + std::to_string(preInfo.linPosPrescribed) + ";";
             posStr += "RotPrescribed = " + std::to_string(preInfo.rotPosPrescribed) + ";";
-        }  // TODO: add externPos==True case, loading from external vectors
+        }
         posStr += "break; }";
     }
     strMap["_velPrescriptionStrategy_"] = velStr;
