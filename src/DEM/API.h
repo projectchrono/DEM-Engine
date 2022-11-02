@@ -300,13 +300,13 @@ class DEMSolver {
     /// Mark all entities in this family to be fixed
     void SetFamilyFixed(unsigned int ID);
     /// Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this family will
-    /// not be fluenced by the force exerted from other simulation entites (both linear and rotational motions).
+    /// not be influenced by the force exerted from other simulation entites (both linear and rotational motions).
     void SetFamilyPrescribedLinVel(unsigned int ID,
                                    const std::string& velX,
                                    const std::string& velY,
                                    const std::string& velZ,
                                    bool dictate = true);
-    /// Let the linear velocities of all entites in this family always keep `as is', and not fluenced by the force
+    /// Let the linear velocities of all entites in this family always keep `as is', and not influenced by the force
     /// exerted from other simulation entites.
     void SetFamilyPrescribedLinVel(unsigned int ID);
     /// Set the prescribed angular velocity to all entities in a family. If dictate is set to true, then this family
@@ -316,7 +316,7 @@ class DEMSolver {
                                    const std::string& velY,
                                    const std::string& velZ,
                                    bool dictate = true);
-    /// Let the linear velocities of all entites in this family always keep `as is', and not fluenced by the force
+    /// Let the linear velocities of all entites in this family always keep `as is', and not influenced by the force
     /// exerted from other simulation entites.
     void SetFamilyPrescribedAngVel(unsigned int ID);
 
@@ -377,13 +377,6 @@ class DEMSolver {
 
     /// Remove host-side cached vectors (so you can re-define them, and then re-initialize system)
     void ClearCache();
-
-    /// Return total kinetic energy of all entities
-    float GetTotalKineticEnergy() const;
-    /// Return the kinetic energy of all clumps in a set of families
-    //// TODO: Implement it
-    float GetClumpKineticEnergy() const;
-    //// TODO: float GetTotalKineticEnergy(std::vector<unsigned int> families) const;
 
     /// Write the current status of clumps to a file
     void WriteClumpFile(const std::string& outfilename, unsigned int accuracy = 10) const;

@@ -78,7 +78,7 @@ class DEMInspector {
 class DEMTracker {
   private:
     void assertMesh(const std::string& name);
-    void assertMeshSize(size_t input_length, const std::string& name);
+    void assertMeshFaceSize(size_t input_length, const std::string& name);
     // Its parent DEMSolver system
     DEMSolver* sys;
 

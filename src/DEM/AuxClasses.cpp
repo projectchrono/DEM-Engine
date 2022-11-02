@@ -33,7 +33,7 @@ const std::string INSP_CODE_SPHERE_HIGH_ABSV = R"V0G0N(
     rotVel.x = granData->omgBarX[myOwner];
     rotVel.y = granData->omgBarY[myOwner];
     rotVel.z = granData->omgBarZ[myOwner];
-    // 2 potential points on sphere that are the fastest
+
     float vel;
     {
         // It is indeed an estimation, since it accounts for center of sphere
@@ -47,6 +47,21 @@ const std::string INSP_CODE_SPHERE_HIGH_ABSV = R"V0G0N(
         vel = length(pRotVel + linVel);
     }
     quantity[sphereID] = vel;
+)V0G0N";
+
+const std::string INSP_CODE_CLUMP_KE = R"V0G0N(
+    // First lin energy
+    double myVX = granData->vX[myOwner];
+    double myVY = granData->vY[myOwner];
+    double myVZ = granData->vZ[myOwner];
+    double myKE = 0.5 * myMass * (myVX * myVX + myVY * myVY + myVZ * myVZ);
+    // Then rot energy
+    myVX = granData->omgBarX[myOwner];
+    myVY = granData->omgBarY[myOwner];
+    myVZ = granData->omgBarZ[myOwner];
+    myKE += 0.5 * ((double)myMOI.x * myVX * myVX + (double)myMOI.y * myVY * myVY + (double)myMOI.z * myVZ * myVZ);
+
+    quantity[myOwner] = myKE;
 )V0G0N";
 
 const std::string INSP_CODE_CLUMP_APPROX_VOL = R"V0G0N(
@@ -109,6 +124,13 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
         // case ("clump_absv"_):
         //     reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
         //     break;
+        case ("clump_kinetic_energy"_):
+            inspection_code = INSP_CODE_CLUMP_KE;
+            reduce_flavor = CUB_REDUCE_FLAVOR::SUM;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::CLUMP;
+            index_name = "myOwner";
+            break;
         default:
             std::stringstream ss;
             ss << quantity << " is not a known query type." << std::endl;
@@ -181,8 +203,7 @@ void DEMTracker::assertMesh(const std::string& name) {
         throw std::runtime_error(ss.str());
     }
 }
-
-void DEMTracker::assertMeshSize(size_t input_length, const std::string& name) {
+void DEMTracker::assertMeshFaceSize(size_t input_length, const std::string& name) {
     if (input_length != obj->nFacets) {
         std::stringstream ss;
         ss << name
@@ -242,12 +263,18 @@ void DEMTracker::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::v
 
 void DEMTracker::UpdateMesh(std::shared_ptr<DEMMeshConnected>& new_mesh) {
     assertMesh("UpdateMesh");
-    assertMeshSize(new_mesh->GetNumTriangles(), "UpdateMesh");
+    assertMeshFaceSize(new_mesh->GetNumTriangles(), "UpdateMesh");
     std::vector<DEMTriangle> new_triangles(new_mesh->GetNumTriangles());
     for (size_t i = 0; i < new_mesh->GetNumTriangles(); i++) {
         new_triangles[i] = new_mesh->GetTriangle(i);
     }
     sys->SetTriNodeRelPos(obj->facetID, new_triangles, true);
+}
+//// TODO: Implement it
+void DEMTracker::UpdateMeshByIncrement(const std::vector<float3>& deformation) {
+    assertMesh("UpdateMeshByIncrement");
+    // This method should interface sys then dT directly passing deformation to dT, and let dT interpret this
+    // information based on its cached m_meshes
 }
 
 // =============================================================================

@@ -319,9 +319,6 @@ class DEMDynamicThread {
                       const std::set<std::string>& contact_wildcards,
                       const std::set<std::string>& owner_wildcards);
 
-    /// Compute total KE of all entities
-    float getKineticEnergy();
-
     /// Get this owner's position in user unit
     float3 getOwnerPos(bodyID_t ownerID) const;
     /// Get this owner's angular velocity

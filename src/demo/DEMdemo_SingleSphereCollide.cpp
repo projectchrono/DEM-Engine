@@ -63,6 +63,8 @@ int main() {
     float max_z;
     auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
     float max_v;
+    auto KE_finder = DEMSim.CreateInspector("clump_kinetic_energy");
+    float KE;
 
     DEMSim.InstructBoxDomainNumVoxel(22, 21, 21, 3e-11);
 
@@ -124,8 +126,10 @@ int main() {
         DEMSim.DoDynamicsThenSync(1e-2);
         max_z = max_z_finder->GetValue();
         max_v = max_v_finder->GetValue();
+        KE = KE_finder->GetValue();
         std::cout << "Max Z coord is " << max_z << std::endl;
         std::cout << "Max velocity of any point is " << max_v << std::endl;
+        std::cout << "Total kinetic energy is " << KE << std::endl;
         std::cout << "Particle 1 X coord is " << tracker1->Pos().x << std::endl;
         std::cout << "Particle 2 X coord is " << tracker2->Pos().x << std::endl;
     }

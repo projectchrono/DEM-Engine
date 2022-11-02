@@ -595,13 +595,6 @@ void DEMSolver::ClearCache() {
     // m_family_change_conditions;
 }
 
-float DEMSolver::GetTotalKineticEnergy() const {
-    if (nOwnerBodies == 0) {
-        return 0.0;
-    }
-    return dT->getKineticEnergy();
-}
-
 std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(DEMClumpBatch& input_batch) {
     // load_order should beits position in the cache array, not nBatchClumpsLoad
     input_batch.load_order = cached_input_clump_batches.size();

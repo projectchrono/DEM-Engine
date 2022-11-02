@@ -152,8 +152,6 @@ int main() {
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
         DEMSim.WriteSphereFile(std::string(filename));
         std::cout << "Frame: " << i << std::endl;
-        // float KE = DEMSim.GetTotalKineticEnergy();
-        // std::cout << "Total kinetic energy: " << KE << std::endl;
         DEMSim.DoDynamicsThenSync(5e-2);
     }
     DEMSim.ShowTimingStats();

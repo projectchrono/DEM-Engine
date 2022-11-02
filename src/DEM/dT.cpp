@@ -157,25 +157,6 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     m_owner_wildcard_names = owner_wildcards;
 }
 
-float DEMDynamicThread::getKineticEnergy() {
-    // // We can use temp vectors as we please
-    // size_t quarryTempSize = (size_t)simParams->nOwnerBodies * sizeof(double);
-    // double* KEArr = (double*)stateOfSolver_resources.allocateTempVector(1, quarryTempSize);
-    // size_t returnSize = sizeof(double);
-    // double* KE = (double*)stateOfSolver_resources.allocateTempVector(2, returnSize);
-    // size_t blocks_needed_for_KE =
-    //     (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-    // quarry_stats_kernels->kernel("computeKE")
-    //     .instantiate()
-    //     .configure(dim3(blocks_needed_for_KE), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-    //     .launch(granData, simParams->nOwnerBodies, KEArr);
-    // GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-    // // displayArray<double>(KEArr, simParams->nOwnerBodies);
-    // doubleSumReduce(KEArr, KE, simParams->nOwnerBodies, streamInfo.stream, stateOfSolver_resources);
-    // return *KE;
-    return 0;
-}
-
 void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {
     // Set the gpu for this thread
     // cudaSetDevice(streamInfo.device);
