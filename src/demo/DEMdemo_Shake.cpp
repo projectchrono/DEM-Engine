@@ -27,11 +27,11 @@ int main() {
     DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
     // E, nu, CoR, mu, Crr...
-    auto mat_type_cone = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.1}, {"Crr", 0.00}});
-    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.1}, {"Crr", 0.00}});
+    auto mat_type_cone = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}, {"Crr", 0.00}});
+    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}, {"Crr", 0.00}});
 
     float shake_amp = 0.1;
-    float shake_speed = 4;  // Num of periods per second
+    float shake_speed = 2;  // Num of periods per second
     float step_size = 1e-6;
     double world_size = 2;
     double soil_bin_diameter = 0.584;
@@ -164,6 +164,7 @@ int main() {
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
     auto min_z_finder = DEMSim.CreateInspector("clump_min_z");
     auto total_mass_finder = DEMSim.CreateInspector("clump_mass");
+    auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
@@ -193,6 +194,7 @@ int main() {
             char filename[200];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
             DEMSim.WriteSphereFile(std::string(filename));
+            std::cout << "Max system velocity: " << max_v_finder->GetValue() << std::endl;
             DEMSim.ShowThreadCollaborationStats();
         }
 

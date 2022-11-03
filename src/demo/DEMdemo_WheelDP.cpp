@@ -23,7 +23,8 @@ int main() {
     out_dir += "/DEMdemo_WheelDP";
     std::filesystem::create_directory(out_dir);
 
-    float TRs[] = {0.9, 0.7, 0.5, 0.3, 0.2, 0.1, 0.05};
+    float TRs[] = {0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9};
+    // float TRs[] = {0.9, 0.7, 0.5, 0.3, 0.2, 0.1, 0.05};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
 
@@ -42,9 +43,9 @@ int main() {
 
         // `World'
         float G_mag = 9.81;
-        float step_size = 1e-6;
+        float step_size = 5e-7;
         double world_size_y = 0.52;
-        double world_size_x = 1.02;
+        double world_size_x = 1.53;
         double world_size_z = 4.0;
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
@@ -137,7 +138,7 @@ int main() {
             std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
             for (size_t i = 0; i < in_xyz.size(); i++) {
                 if (std::abs(in_xyz.at(i).y) > (world_size_y - 0.03) / 2 ||
-                    std::abs(in_xyz.at(i).x) > (world_size_x - 0.05) / 2)
+                    std::abs(in_xyz.at(i).x) > (world_size_x - 0.06) / 2)
                     elem_to_remove.at(i) = 1;
             }
             in_xyz.erase(std::remove_if(in_xyz.begin(), in_xyz.end(),
@@ -191,7 +192,7 @@ int main() {
         float w_r = math_PI / 3;
         float v_ref = w_r * wheel_rad;
 
-        double sim_end = 3.0;
+        double sim_end = 2.5;
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
         // (move freely linearly)
         DEMSim.SetFamilyPrescribedAngVel(1, "0", to_string_with_precision(w_r), "0", false);
@@ -206,11 +207,12 @@ int main() {
         auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
         auto min_z_finder = DEMSim.CreateInspector("clump_min_z");
         auto total_mass_finder = DEMSim.CreateInspector("clump_mass");
+        auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
 
         DEMSim.SetInitTimeStep(step_size);
         DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -G_mag));
-        DEMSim.SetCDUpdateFreq(20);
-        DEMSim.SetMaxVelocity(10.);
+        DEMSim.SetCDUpdateFreq(15);
+        DEMSim.SetMaxVelocity(30.);
         DEMSim.SetExpandSafetyParam(1.1);
         DEMSim.SetInitBinSize(2 * scales.at(2));
         DEMSim.Initialize();
@@ -226,9 +228,10 @@ int main() {
 
         // Put the wheel in place, then let the wheel sink in initially
         float max_z = max_z_finder->GetValue();
-        wheel_tracker->SetPos(make_float3(-0.2, 0, max_z + 0.02 + wheel_rad));
+        wheel_tracker->SetPos(make_float3(-0.45, 0, max_z + 0.02 + wheel_rad));
         for (double t = 0; t < 0.5; t += frame_time) {
             char filename[200], meshname[200];
+            std::cout << "Outputting frame: " << currframe << std::endl;
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
             sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
             DEMSim.WriteSphereFile(std::string(filename));
@@ -243,10 +246,13 @@ int main() {
 
         // Switch wheel from free fall into DP test
         DEMSim.ChangeFamily(1, 2);
+        DEMSim.SetInitTimeStep(step_size * 2);
+        DEMSim.UpdateSimParams();
 
         for (double t = 0; t < sim_end; t += step_size, curr_step++) {
             if (curr_step % out_steps == 0) {
                 char filename[200], meshname[200];
+                std::cout << "Outputting frame: " << currframe << std::endl;
                 sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
                 sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
                 DEMSim.WriteSphereFile(std::string(filename));
@@ -258,8 +264,10 @@ int main() {
                 float3 forces = wheel_tracker->ContactAcc();
                 forces *= wheel_mass;
                 std::cout << "Current run mode: " << run_mode << std::endl;
+                std::cout << "Time: " << t << std::endl;
                 std::cout << "Force on wheel: " << forces.x << ", " << forces.y << ", " << forces.z << std::endl;
                 std::cout << "Drawbar pull coeff: " << forces.x / (wheel_mass * G_mag) << std::endl;
+                std::cout << "Max system velocity: " << max_v_finder->GetValue() << std::endl;
             }
 
             DEMSim.DoDynamics(step_size);
