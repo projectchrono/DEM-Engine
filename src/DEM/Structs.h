@@ -296,8 +296,8 @@ struct familyPrescription_t {
     std::string rotVelX = "none";
     std::string rotVelY = "none";
     std::string rotVelZ = "none";
-    // Is this prescribed motion dictating the motion of the entities (true), or just added on top of the true
-    // physics (false)
+    // Is this prescribed motion dictating the motion of the entities (true), or should still accept the influence from
+    // other contact forces (false)
     bool linVelXPrescribed = false;
     bool linVelYPrescribed = false;
     bool linVelZPrescribed = false;
@@ -306,6 +306,13 @@ struct familyPrescription_t {
     bool rotVelZPrescribed = false;
     bool rotPosPrescribed = false;
     bool linPosPrescribed = false;
+    // Prescribed acc and ang acc; they are added to entities, sort of like gravity
+    std::string accX = "none";
+    std::string accY = "none";
+    std::string accZ = "none";
+    std::string angAccX = "none";
+    std::string angAccY = "none";
+    std::string angAccZ = "none";
     // A switch to mark if there is any prescription going on for this family at all
     bool used = false;
 };

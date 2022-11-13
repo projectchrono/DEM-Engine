@@ -34,8 +34,8 @@ __global__ void makeTriangleSandwich(deme::DEMSimParams* simParams,
         sandwichANode1[triID] = sandwichVertex(p1, centroid, triNormal, simParams->beta);
         sandwichANode2[triID] = sandwichVertex(p2, centroid, triNormal, simParams->beta);
         sandwichANode3[triID] = sandwichVertex(p3, centroid, triNormal, simParams->beta);
+        // The other sandwich triangle needs to have an opposite normal direction
         sandwichBNode1[triID] = sandwichVertex(p1, centroid, -triNormal, simParams->beta);
-        // This triangle needs to have flipped normal direction!!
         sandwichBNode2[triID] = sandwichVertex(p3, centroid, -triNormal, simParams->beta);
         sandwichBNode3[triID] = sandwichVertex(p2, centroid, -triNormal, simParams->beta);
     }

@@ -364,6 +364,46 @@ void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string
     }
 }
 
+void DEMSolver::AddFamilyPrescribedAcc(unsigned int ID,
+                                       const std::string& X,
+                                       const std::string& Y,
+                                       const std::string& Z) {
+    assertSysNotInit("AddFamilyPrescribedAcc");
+    if (ID > std::numeric_limits<family_t>::max()) {
+        DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
+                   std::numeric_limits<family_t>::max());
+    }
+    familyPrescription_t preInfo;
+    preInfo.family = ID;
+
+    preInfo.accX = X;
+    preInfo.accY = Y;
+    preInfo.accZ = Z;
+
+    preInfo.used = true;
+    m_input_family_prescription.push_back(preInfo);
+}
+
+void DEMSolver::AddFamilyPrescribedAngAcc(unsigned int ID,
+                                          const std::string& X,
+                                          const std::string& Y,
+                                          const std::string& Z) {
+    assertSysNotInit("AddFamilyPrescribedAngAcc");
+    if (ID > std::numeric_limits<family_t>::max()) {
+        DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
+                   std::numeric_limits<family_t>::max());
+    }
+    familyPrescription_t preInfo;
+    preInfo.family = ID;
+
+    preInfo.angAccX = X;
+    preInfo.angAccY = Y;
+    preInfo.angAccZ = Z;
+
+    preInfo.used = true;
+    m_input_family_prescription.push_back(preInfo);
+}
+
 void DEMSolver::SetOwnerWildcardValue(const std::string& name, float val) {
     assertSysInit("SetOwnerWildcardValue");
     if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
