@@ -20,7 +20,7 @@ const double math_PI = 3.14159;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_WheelDP_15degRV";
+    out_dir += "/DEMdemo_WheelDP_0.6";
     std::filesystem::create_directory(out_dir);
 
     // float TRs[] = {0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9};
@@ -37,9 +37,9 @@ int main() {
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
         // E, nu, CoR, mu, Crr...
-        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.8}, {"Crr", 0.00}});
+        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.6}, {"Crr", 0.00}});
         auto mat_type_terrain =
-            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.8}, {"Crr", 0.00}});
+            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.6}, {"Crr", 0.00}});
 
         // `World'
         float G_mag = 9.81;
@@ -255,7 +255,6 @@ int main() {
 
         // Switch wheel from free fall into DP test
         DEMSim.ChangeFamily(1, 2);
-
         if (TR < 0.4) {
             DEMSim.SetInitTimeStep(step_size * 2);
             DEMSim.UpdateSimParams();

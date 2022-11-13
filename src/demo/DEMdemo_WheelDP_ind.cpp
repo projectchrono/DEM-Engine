@@ -20,11 +20,11 @@ const double math_PI = 3.14159;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_WheelDP_15degRV";
+    out_dir += "/DEMdemo_WheelDP_individual";
     std::filesystem::create_directory(out_dir);
 
     // float TRs[] = {0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9};
-    float TRs[] = {0.9, 0.7, 0.5, 0.3, 0.2, 0.1, 0.05};
+    float TRs[] = {0.9};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
 
@@ -44,7 +44,7 @@ int main() {
         // `World'
         float G_mag = 9.81;
         float step_size = 5e-7;
-        double world_size_y = 0.52;
+        double world_size_y = 0.82;
         double world_size_x = 1.53;
         double world_size_z = 4.0;
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
@@ -192,7 +192,7 @@ int main() {
         float w_r = math_PI / 12.;
         float v_ref = w_r * wheel_rad;
 
-        double sim_end = 2.;
+        double sim_end = 15.;
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
         // (move freely linearly)
         DEMSim.SetFamilyPrescribedAngVel(1, "0", to_string_with_precision(w_r), "0", false);
@@ -215,7 +215,7 @@ int main() {
         DEMSim.SetInitTimeStep(step_size);
         DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -G_mag));
         DEMSim.SetCDUpdateFreq(25);
-        DEMSim.SetMaxVelocity(30.);
+        DEMSim.SetMaxVelocity(10.);
         DEMSim.SetExpandSafetyParam(1.1);
         DEMSim.SetInitBinSize(2 * scales.at(2));
         DEMSim.Initialize();

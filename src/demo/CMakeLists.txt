@@ -31,6 +31,8 @@ SET(DEMOS
 		DEMdemo_ConePenetration
 		DEMdemo_Shake
 		DEMdemo_WheelDP
+		DEMdemo_WheelDP_alt
+		DEMdemo_WheelDP_ind
 )
 
 # ------------------------------------------------------------------------------

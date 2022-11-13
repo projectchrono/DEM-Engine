@@ -185,6 +185,10 @@ __device__ bool triangle_sphere_CD_directional(const T1& A,           ///< First
     if (h >= radius) {
         return false;
     }
+    // else {
+    //     snap_to_face<T1, T2>(A, B, C, sphere_pos, pt1);
+    //     return true;
+    // }
 
     // Find the closest point on the face to the sphere center and determine
     // whether or not this location is inside the face or on an edge.
