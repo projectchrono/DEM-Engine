@@ -327,6 +327,11 @@ class DEMSolver {
     /// Keep the orientation quaternions of all entites in this family to remain exactly the user-specified values
     void SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula);
 
+    /// The entities in this family will always experienced an extra acceleration defined using this method
+    void AddFamilyPrescribedAcc(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
+    /// The entities in this family will always experienced an extra angular acceleration defined using this method
+    void AddFamilyPrescribedAngAcc(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
+
     /// Globally modify a owner wildcard's value
     void SetOwnerWildcardValue(const std::string& name, float val);
     /// Modify the owner wildcard values of all entities in family N

@@ -686,6 +686,26 @@ void DEMSolver::figureOutFamilyMasks() {
         this_family_info.rotPosPrescribed = this_family_info.rotPosPrescribed || preInfo.rotPosPrescribed;
         this_family_info.linPosPrescribed = this_family_info.linPosPrescribed || preInfo.linPosPrescribed;
 
+        // Then register the accelerations that are added on top of `normal physics'
+        if (preInfo.accX != "none") {
+            this_family_info.accX = preInfo.accX;
+        }
+        if (preInfo.accY != "none") {
+            this_family_info.accY = preInfo.accY;
+        }
+        if (preInfo.accZ != "none") {
+            this_family_info.accZ = preInfo.accZ;
+        }
+        if (preInfo.angAccX != "none") {
+            this_family_info.angAccX = preInfo.angAccX;
+        }
+        if (preInfo.angAccY != "none") {
+            this_family_info.angAccY = preInfo.angAccY;
+        }
+        if (preInfo.angAccZ != "none") {
+            this_family_info.angAccZ = preInfo.angAccZ;
+        }
+
         DEME_DEBUG_PRINTF("User family %u has prescribed lin vel: %s, %s, %s", user_family,
                           this_family_info.linVelX.c_str(), this_family_info.linVelY.c_str(),
                           this_family_info.linVelZ.c_str());
@@ -1138,13 +1158,14 @@ inline void DEMSolver::equipFamilyOnFlyChanges(std::unordered_map<std::string, s
 }
 
 inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::string, std::string>& strMap) {
-    std::string velStr = " ", posStr = " ";
+    std::string velStr = " ", posStr = " ", accStr = " ";
     for (const auto& preInfo : m_unique_family_prescription) {
         if (!preInfo.used) {
             continue;
         }
         velStr += "case " + std::to_string(preInfo.family) + ": {";
         posStr += "case " + std::to_string(preInfo.family) + ": {";
+        accStr += "case " + std::to_string(preInfo.family) + ": {";
         {
             if (preInfo.linVelX != "none")
                 velStr += "vX = " + preInfo.linVelX + ";";
@@ -1181,9 +1202,25 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
             posStr += "RotPrescribed = " + std::to_string(preInfo.rotPosPrescribed) + ";";
         }
         posStr += "break; }";
+        {
+            if (preInfo.accX != "none")
+                accStr += "accX = " + preInfo.accX + ";";
+            if (preInfo.accY != "none")
+                accStr += "accY = " + preInfo.accY + ";";
+            if (preInfo.accZ != "none")
+                accStr += "accZ = " + preInfo.accZ + ";";
+            if (preInfo.angAccX != "none")
+                accStr += "angAccX = " + preInfo.angAccX + ";";
+            if (preInfo.angAccY != "none")
+                accStr += "angAccY = " + preInfo.angAccY + ";";
+            if (preInfo.angAccZ != "none")
+                accStr += "angAccZ = " + preInfo.angAccZ + ";";
+        }
+        accStr += "break; }";
     }
     strMap["_velPrescriptionStrategy_"] = velStr;
     strMap["_posPrescriptionStrategy_"] = posStr;
+    strMap["_accPrescriptionStrategy_"] = accStr;
 }
 
 // Family mask is no longer jitified... but stored in global array

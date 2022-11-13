@@ -51,6 +51,23 @@ inline __device__ void applyPrescribedPos(bool& LinPrescribed,
     }
 }
 
+// Apply extra accelerations for family numbers
+template <typename T1, typename T2>
+inline __device__ void applyAddedAcceleration(T1& accX,
+                                              T1& accY,
+                                              T1& accZ,
+                                              T2& angAccX,
+                                              T2& angAccY,
+                                              T2& angAccZ,
+                                              const deme::family_t& family,
+                                              const float& t) {
+    switch (family) {
+        _accPrescriptionStrategy_;
+        default:
+            return;
+    }
+}
+
 inline __device__ void integrateVel(deme::bodyID_t thisClump,
                                     deme::DEMSimParams* simParams,
                                     deme::DEMDataDT* granData,
@@ -74,30 +91,35 @@ inline __device__ void integrateVel(deme::bodyID_t thisClump,
                                      granData->omgBarY[thisClump], granData->omgBarZ[thisClump], family_code, (float)t);
 
     float3 v_update = make_float3(0, 0, 0), omgBar_update = make_float3(0, 0, 0);
+    float3 extra_acc = make_float3(0, 0, 0), extra_angAcc = make_float3(0, 0, 0);
+    // User's addition of accelerations won't affect acc arrays in global memory; that is, if the user query the contact
+    // acceleration, still they don't get the part they applied in this acc prescription
+    applyAddedAcceleration<float, float>(extra_acc.x, extra_acc.y, extra_acc.z, extra_angAcc.x, extra_angAcc.y,
+                                         extra_angAcc.z, family_code, (float)t);
 
     if (!LinXPrescribed) {
-        v_update.x = (granData->aX[thisClump] + simParams->Gx) * h;
+        v_update.x = (granData->aX[thisClump] + extra_acc.x + simParams->Gx) * h;
         granData->vX[thisClump] += v_update.x;
     }
     if (!LinYPrescribed) {
-        v_update.y = (granData->aY[thisClump] + simParams->Gy) * h;
+        v_update.y = (granData->aY[thisClump] + extra_acc.y + simParams->Gy) * h;
         granData->vY[thisClump] += v_update.y;
     }
     if (!LinZPrescribed) {
-        v_update.z = (granData->aZ[thisClump] + simParams->Gz) * h;
+        v_update.z = (granData->aZ[thisClump] + extra_acc.z + simParams->Gz) * h;
         granData->vZ[thisClump] += v_update.z;
     }
 
     if (!RotXPrescribed) {
-        omgBar_update.x = granData->alphaX[thisClump] * h;
+        omgBar_update.x = (granData->alphaX[thisClump] + extra_angAcc.x) * h;
         granData->omgBarX[thisClump] += omgBar_update.x;
     }
     if (!RotYPrescribed) {
-        omgBar_update.y = granData->alphaY[thisClump] * h;
+        omgBar_update.y = (granData->alphaY[thisClump] + extra_angAcc.y) * h;
         granData->omgBarY[thisClump] += omgBar_update.y;
     }
     if (!RotZPrescribed) {
-        omgBar_update.z = granData->alphaZ[thisClump] * h;
+        omgBar_update.z = (granData->alphaZ[thisClump] + extra_angAcc.z) * h;
         granData->omgBarZ[thisClump] += omgBar_update.z;
     }
 
