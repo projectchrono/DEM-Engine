@@ -2,6 +2,8 @@
 #include <kernel/DEMHelperKernels.cu>
 #include <DEM/Defines.h>
 
+#include <cub/util_ptx.cuh>
+
 // Apply presecibed velocity and report whether the `true' physics should be skipped, rather than added on top of that
 template <typename T1, typename T2>
 inline __device__ void applyPrescribedVel(bool& LinXPrescribed,
@@ -204,6 +206,16 @@ inline __device__ void integratePos(deme::bodyID_t thisClump,
                                granData->oriQz[thisClump], granData->oriQw[thisClump], granData->oriQx[thisClump],
                                granData->oriQy[thisClump], granData->oriQz[thisClump], deltaQ0, deltaQ1, deltaQ2,
                                deltaQ3);
+
+        double mag = granData->oriQw[thisClump] * granData->oriQw[thisClump] +
+                     granData->oriQx[thisClump] * granData->oriQx[thisClump] +
+                     granData->oriQy[thisClump] * granData->oriQy[thisClump] +
+                     granData->oriQz[thisClump] * granData->oriQz[thisClump];
+        if (mag > 1.05 || mag < 0.95) {
+            DEME_ABORT_KERNEL("OriQ is too weird: %e, %e, %e, %e (magnitude: %e)\n", granData->oriQw[thisClump],
+                              granData->oriQx[thisClump], granData->oriQy[thisClump], granData->oriQz[thisClump],
+                              sqrt(mag));
+        }
     }
 }
 

@@ -1820,9 +1820,9 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     }
     // Then integration kernels
     {
-        integrator_kernels = std::make_shared<jitify::Program>(std::move(
-            JitHelper::buildProgram("DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu", Subs,
-                                    {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+        integrator_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu", Subs,
+            {"-I" + (JitHelper::KERNEL_DIR / "..").string(), "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
     }
     // Then kernels that are... wildcards, which make on-the-fly changes to solver data
     if (solverFlags.canFamilyChange) {

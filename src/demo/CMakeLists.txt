@@ -33,6 +33,8 @@ SET(DEMOS
 		DEMdemo_WheelDP
 		DEMdemo_WheelDP_alt
 		DEMdemo_WheelDP_ind
+		DEMdemo_WheelDP_Slip
+		DEMdemo_WheelDP_Slip_ind
 )
 
 # ------------------------------------------------------------------------------
