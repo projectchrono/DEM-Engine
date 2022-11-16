@@ -64,10 +64,26 @@ inline __device__ float dot(double3 a, float3 b) {
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
+inline __device__ float dot(float4 a, float4 b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+}
+inline __device__ double dot(double4 a, double4 b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+}
+inline __device__ float dot(double4 a, float4 b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+}
+
 inline __device__ float length(float3 v) {
     return sqrt(dot(v, v));
 }
 inline __device__ double length(double3 v) {
+    return sqrt(dot(v, v));
+}
+inline __device__ float length(float4 v) {
+    return sqrt(dot(v, v));
+}
+inline __device__ double length(double4 v) {
     return sqrt(dot(v, v));
 }
 
@@ -267,6 +283,32 @@ inline __device__ void operator/=(double3& a, double b) {
     a.x /= b;
     a.y /= b;
     a.z /= b;
+}
+
+inline __device__ float4 operator/(float4 a, float b) {
+    return make_float4(a.x / b, a.y / b, a.z / b, a.w / b);
+}
+inline __device__ float4 operator/(float4 a, double b) {
+    return make_float4(a.x / b, a.y / b, a.z / b, a.w / b);
+}
+inline __device__ void operator/=(float4& a, float b) {
+    a.x /= b;
+    a.y /= b;
+    a.z /= b;
+    a.w /= b;
+}
+
+inline __device__ double4 operator/(double4 a, float b) {
+    return make_double4(a.x / b, a.y / b, a.z / b, a.w / b);
+}
+inline __device__ double4 operator/(double4 a, double b) {
+    return make_double4(a.x / b, a.y / b, a.z / b, a.w / b);
+}
+inline __device__ void operator/=(double4& a, float b) {
+    a.x /= b;
+    a.y /= b;
+    a.z /= b;
+    a.w /= b;
 }
 
 inline __device__ float3 normalize(float3 v) {

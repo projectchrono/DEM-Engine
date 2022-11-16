@@ -192,19 +192,19 @@ inline __device__ T1 triangleCentroid(const T1& p1, const T1& p2, const T1& p3) 
 }
 
 // Hamilton product of 2 quaternions
-template <typename T1>
+template <typename T1, typename T2, typename T3>
 inline __device__ void HamiltonProduct(T1& A,
                                        T1& B,
                                        T1& C,
                                        T1& D,
-                                       const T1 a1,
-                                       const T1 b1,
-                                       const T1 c1,
-                                       const T1 d1,
-                                       const T1 a2,
-                                       const T1 b2,
-                                       const T1 c2,
-                                       const T1 d2) {
+                                       const T2 a1,
+                                       const T2 b1,
+                                       const T2 c1,
+                                       const T2 d1,
+                                       const T3 a2,
+                                       const T3 b2,
+                                       const T3 c2,
+                                       const T3 d2) {
     A = a1 * a2 - b1 * b2 - c1 * c2 - d1 * d2;
     B = a1 * b2 + b1 * a2 + c1 * d2 - d1 * c2;
     C = a1 * c2 - b1 * d2 + c1 * a2 + d1 * b2;
