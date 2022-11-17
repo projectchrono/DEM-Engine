@@ -64,7 +64,7 @@ int main() {
         auto bot_wall = DEMSim.AddBCPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_terrain);
         auto bot_wall_tracker = DEMSim.Track(bot_wall);
 
-        auto wheel = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/rover_wheels/curiosity_wheel_remeshed.obj"),
+        auto wheel = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/rover_wheels/curiosity_wheel_surface.obj"),
                                                    mat_type_wheel);
         wheel->SetMass(wheel_mass);
         wheel->SetMOI(make_float3(wheel_IXX, wheel_IYY, wheel_IXX));
