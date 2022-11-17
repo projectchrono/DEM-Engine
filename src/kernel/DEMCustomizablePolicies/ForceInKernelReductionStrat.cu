@@ -23,10 +23,10 @@
 
     // torque_inForceForm is usually the contribution of rolling resistance and it contributes to torque
     // only, not linear velocity
-    float3 myF = (force + torque_only_force);
+    float3 myF = -1.f * (force + torque_only_force);
     // F is in global frame, but it needs to be in local to coordinate with moi and cntPnt
     applyOriQToVector3<float, deme::oriQ_t>(myF.x, myF.y, myF.z, BOriQ.w, -BOriQ.w, -BOriQ.y, -BOriQ.z);
-    const float3 angAcc = cross(locCPB, -myF) / BOwnerMOI;
+    const float3 angAcc = cross(locCPB, myF) / BOwnerMOI;
     atomicAdd(granData->alphaX + BOwner, angAcc.x);
     atomicAdd(granData->alphaY + BOwner, angAcc.y);
     atomicAdd(granData->alphaZ + BOwner, angAcc.z);

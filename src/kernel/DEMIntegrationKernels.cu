@@ -183,55 +183,21 @@ inline __device__ void integratePos(deme::bodyID_t thisClump,
         X, Y, Z, _nvXp2_, _nvYp2_, _voxelSize_, _l_);
 
     if (!RotPrescribed) {
-        // // Then integrate the quaternion
-        // // Exp map-based rotation angle calculation. First use it to record delta rotation...
-        // // Refer to
-        // https://stackoverflow.com/questions/24197182/efficient-quaternion-angular-velocity/24201879#24201879 double4
-        // oriQ = make_double4(omgBar.x,omgBar.y,omgBar.z,1.0); // xyzw double len = length(omgBar); double theta = 0.5
-        // * h * len;  // 0.5*dt*len, delta rotation if (len > 0) {
-        //     oriQ.w = cos(theta);
-        //     double s = sin(theta) / len;
-        //     oriQ.x *= s;
-        //     oriQ.y *= s;
-        //     oriQ.z *= s;
-        // }
-        // // Note: Yes it is Quat * deltaRot, not the other way around. Then store result in oriQ.
-        // double4 oriQ1;
-        // HamiltonProduct(oriQ1.w, oriQ1.x, oriQ1.y, oriQ1.z, granData->oriQw[thisClump], granData->oriQx[thisClump],
-        //                        granData->oriQy[thisClump], granData->oriQz[thisClump], oriQ.w, oriQ.x, oriQ.y,
-        //                        oriQ.z);
-        // // HamiltonProduct(oriQ.w, oriQ.x, oriQ.y, oriQ.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z,
-        // granData->oriQw[thisClump], granData->oriQx[thisClump],
-        // //                         granData->oriQy[thisClump], granData->oriQz[thisClump]);
-        // // Normalizing it is essential. Note even if you use an exp map to update quaternion, you still need to
-        // normalize.
-        // // oriQ /= length(oriQ);
-        // granData->oriQw[thisClump] = oriQ1.w;
-        // granData->oriQx[thisClump] = oriQ1.x;
-        // granData->oriQy[thisClump] = oriQ1.y;
-        // granData->oriQz[thisClump] = oriQ1.z;
-
         // Then integrate the quaternion
-        // Exp map-based rotation angle calculation
-        double deltaQ0 = 1;
-        double deltaQ1 = omgBar.x;
-        double deltaQ2 = omgBar.y;
-        double deltaQ3 = omgBar.z;
-        double len = sqrt(deltaQ1 * deltaQ1 + deltaQ2 * deltaQ2 + deltaQ3 * deltaQ3);
-        double theta = 0.5 * h * len;  // 0.5*dt*len, delta rotation
-        if (len > 0) {
-            deltaQ0 = cos(theta);
-            double s = sin(theta) / len;
-            deltaQ1 *= s;
-            deltaQ2 *= s;
-            deltaQ3 *= s;
-        }
-        // Note: Yes it is Quat * deltaRot, not the other way around. Also, Hamilton product should automatically
-        // maintain the unit-ness of quaternions.
-        HamiltonProduct<float>(granData->oriQw[thisClump], granData->oriQx[thisClump], granData->oriQy[thisClump],
-                               granData->oriQz[thisClump], granData->oriQw[thisClump], granData->oriQx[thisClump],
-                               granData->oriQy[thisClump], granData->oriQz[thisClump], deltaQ0, deltaQ1, deltaQ2,
-                               deltaQ3);
+        // 1st Taylor series multiplier. First use it to record delta rotation...
+        // Refer to https://stackoverflow.com/questions/24197182/efficient-quaternion-angular-velocity/24201879#24201879
+        const float3 ha = 0.5 * h * omgBar;
+        float4 oriQ = make_float4(ha.x, ha.y, ha.z, 1.0);  // xyzw
+        // Note: Yes it is Quat * deltaRot, not the other way around. Then store result in oriQ.
+        HamiltonProduct(oriQ.w, oriQ.x, oriQ.y, oriQ.z, granData->oriQw[thisClump], granData->oriQx[thisClump],
+                        granData->oriQy[thisClump], granData->oriQz[thisClump], oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+        // Normalizing it is essential. Note even if you use an exp map to update quaternion, you still need to
+        // normalize.
+        oriQ /= length(oriQ);
+        granData->oriQw[thisClump] = oriQ.w;
+        granData->oriQx[thisClump] = oriQ.x;
+        granData->oriQy[thisClump] = oriQ.y;
+        granData->oriQz[thisClump] = oriQ.z;
     }
 }
 

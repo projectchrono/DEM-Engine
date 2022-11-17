@@ -59,7 +59,7 @@ void EllpsiodFallingOver() {
     ellipsoid->SetVel(tang_dir * 0.3);
     auto ellipsoid_tracker = DEMSim.Track(ellipsoid);
 
-    DEMSim.SetInitTimeStep(1e-3);
+    DEMSim.SetInitTimeStep(1e-4);
     // DEMSim.SetIntegrator(TIME_INTEGRATOR::FORWARD_EULER);
     DEMSim.Initialize();
 
@@ -161,8 +161,8 @@ void SphereRollUpIncline() {
 
             float step_time = 1e-5;
             DEMSim.SetInitTimeStep(step_time);
-            DEMSim.SetCDUpdateFreq(-1);
-            DEMSim.SetMaxVelocity(1.0);
+            DEMSim.SetCDUpdateFreq(10);
+            DEMSim.SetMaxVelocity(2.0);
             DEMSim.Initialize();
 
             DEMSim.DoDynamicsThenSync(run_time);
@@ -275,8 +275,8 @@ void SphereStack() {
 
 int main() {
     // Choose a validation test by uncommenting it
-    // SphereRollUpIncline();
-    EllpsiodFallingOver();
+    SphereRollUpIncline();
+    // EllpsiodFallingOver();
     // SphereStack();
 
     std::cout << "DEMdemo_TestPack exiting..." << std::endl;
