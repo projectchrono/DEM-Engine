@@ -161,7 +161,7 @@ void SphereRollUpIncline() {
 
             float step_time = 1e-5;
             DEMSim.SetInitTimeStep(step_time);
-            DEMSim.SetCDUpdateFreq(10);
+            DEMSim.SetCDUpdateFreq(50);
             DEMSim.SetMaxVelocity(2.0);
             DEMSim.Initialize();
 

@@ -293,6 +293,9 @@ class DEMDynamicThread {
         startThread();
         th.join();
         cudaStreamDestroy(streamInfo.stream);
+
+        GPU_CALL(cudaFree(simParams));
+        GPU_CALL(cudaFree(granData));
     }
 
     void setCycleDuration(double val) { cycleDuration = val; }
