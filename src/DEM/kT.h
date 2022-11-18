@@ -212,6 +212,9 @@ class DEMKinematicThread {
         th.join();
 
         cudaStreamDestroy(streamInfo.stream);
+
+        GPU_CALL(cudaFree(simParams));
+        GPU_CALL(cudaFree(granData));
     }
 
     // buffer exchange methods

@@ -77,6 +77,12 @@ class DEMSolverStateData {
         GPU_CALL(cudaFree(pTempSizeVar2));
         GPU_CALL(cudaFree(pNumPrevContacts));
         GPU_CALL(cudaFree(pNumPrevSpheres));
+
+        cubScratchSpace.clear();
+        for (unsigned int i = 0; i < numTempArrays; i++) {
+            threadTempVectors.at(i).clear();
+        }
+        threadTempVectors.clear();
     }
 
     // Return raw pointer to swath of device memory that is at least "sizeNeeded" large
