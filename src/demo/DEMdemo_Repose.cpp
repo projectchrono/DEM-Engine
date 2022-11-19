@@ -100,31 +100,26 @@ int main() {
         clump_types.push_back(clump_ptr);
     }
 
-    /*
-    HCPSampler sampler1(ground_sp_r * 1.3);
-    std::vector<std::shared_ptr<DEMClumpTemplate>> input_ground_clump_type;
-    std::vector<unsigned int> family_code;
-    auto input_ground_xyz = sampler1.SampleBox(make_float3(0, 0, -3.8), make_float3(5.0, 5.0, 0.001));
-    family_code.insert(family_code.end(), input_ground_xyz.size(), 1);
-    DEMSim.DisableContactBetweenFamilies(1, 1);
-    input_ground_clump_type.insert(input_ground_clump_type.end(), input_ground_xyz.size(), template_ground);
-    auto ground = DEMSim.AddClumps(input_ground_clump_type, input_ground_xyz);
-    ground->SetFamilies(family_code);
-    */
-
     // Generate initial clumps for piling
     float spacing = 0.08 * scaling;
     float fill_width = 5.f;
     float fill_height = 2.f * fill_width;
     float fill_bottom = funnel_bottom + fill_width + spacing;
-    HCPSampler sampler(spacing);
+    PDSampler sampler(spacing);
+    // Use a PDSampler-based clump generation process
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
-    float3 sample_center = make_float3(0, 0, fill_bottom + fill_height / 2);
-    auto input_pile_xyz = sampler.SampleCylinderZ(sample_center, fill_width, fill_height / 2);
-    unsigned int num_clumps = input_pile_xyz.size();
-    // Casually select from generated clump types
-    for (unsigned int i = 0; i < num_clumps; i++) {
-        input_pile_template_type.push_back(clump_types.at(i % num_template));
+    std::vector<float3> input_pile_xyz;
+    float layer_z = 0;
+    while (layer_z < fill_height) {
+        float3 sample_center = make_float3(0, 0, fill_bottom + layer_z + spacing / 2);
+        auto layer_xyz = sampler.SampleCylinderZ(sample_center, fill_width, 0);
+        unsigned int num_clumps = layer_xyz.size();
+        // Select from available clump types
+        for (unsigned int i = 0; i < num_clumps; i++) {
+            input_pile_template_type.push_back(clump_types.at(i % num_template));
+        }
+        input_pile_xyz.insert(input_pile_xyz.end(), layer_xyz.begin(), layer_xyz.end());
+        layer_z += spacing;
     }
     // Calling AddClumps a second time will just add more clumps to the system
     auto the_pile = DEMSim.AddClumps(input_pile_template_type, input_pile_xyz);
@@ -137,7 +132,7 @@ int main() {
     DEMSim.SetInitTimeStep(5e-6);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEMSim.SetCDUpdateFreq(45);
+    DEMSim.SetCDUpdateFreq(60);
     // DEMSim.SetExpandFactor(1e-3);
     DEMSim.SetMaxVelocity(25.);
     DEMSim.SetExpandSafetyParam(2.);

@@ -42,6 +42,32 @@
 
 namespace deme {
 
+// -----------------------------------------------------------------------------
+// Construct a single random engine (on first use)
+//
+// Note that this object is never destructed (but this is OK)
+// -----------------------------------------------------------------------------
+inline std::default_random_engine& rengine() {
+    static std::default_random_engine* re = new std::default_random_engine;
+    return *re;
+}
+
+// -----------------------------------------------------------------------------
+// sampleTruncatedDist
+//
+// Utility function for generating samples from a truncated normal distribution.
+// -----------------------------------------------------------------------------
+template <typename T>
+inline T sampleTruncatedDist(std::normal_distribution<T>& distribution, T minVal, T maxVal) {
+    T val;
+
+    do {
+        val = distribution(rengine());
+    } while (val < minVal || val > maxVal);
+
+    return val;
+}
+
 /// Volumetric sampling method.
 enum class SamplingType {
     REGULAR_GRID,  ///< Regular (equidistant) grid
@@ -130,6 +156,275 @@ class Sampler {
     float3 m_size;       ///< half dimensions of the bounding box of the sampling volume
 };
 
+class PDGrid {
+  public:
+    typedef std::pair<float3, bool> Content;
+
+    PDGrid() {}
+
+    int GetDimX() const { return m_dimX; }
+    int GetDimY() const { return m_dimY; }
+    int GetDimZ() const { return m_dimZ; }
+
+    void Resize(int dimX, int dimY, int dimZ) {
+        m_dimX = dimX;
+        m_dimY = dimY;
+        m_dimZ = dimZ;
+        m_data.resize(dimX * dimY * dimZ, Content(host_make_float3(0, 0, 0), true));
+    }
+
+    void SetCellPoint(int i, int j, int k, const float3& p) {
+        int ii = index(i, j, k);
+        m_data[ii].first = p;
+        m_data[ii].second = false;
+    }
+
+    const float3& GetCellPoint(int i, int j, int k) const { return m_data[index(i, j, k)].first; }
+
+    bool IsCellEmpty(int i, int j, int k) const {
+        if (i < 0 || i >= m_dimX || j < 0 || j >= m_dimY || k < 0 || k >= m_dimZ)
+            return true;
+
+        return m_data[index(i, j, k)].second;
+    }
+
+    Content& operator()(int i, int j, int k) { return m_data[index(i, j, k)]; }
+    const Content& operator()(int i, int j, int k) const { return m_data[index(i, j, k)]; }
+
+  private:
+    int index(int i, int j, int k) const { return i * m_dimY * m_dimZ + j * m_dimZ + k; }
+
+    int m_dimX;
+    int m_dimY;
+    int m_dimZ;
+    std::vector<Content> m_data;
+};
+
+// PD
+class PDSampler : public Sampler {
+  public:
+    typedef std::vector<float3> PointVector;
+    typedef std::list<float3> PointList;
+
+    /// Construct a Poisson Disk sampler with specified minimum distance.
+    PDSampler(float separation, int pointsPerIteration = m_ppi_default)
+        : Sampler(separation), m_ppi(pointsPerIteration), m_realDist(0.0, 1.0) {
+        m_gridLoc.resize(3);
+        m_realDist.reset();
+        rengine().seed(0);
+    }
+
+  private:
+    enum Direction2D { NONE, X_DIR, Y_DIR, Z_DIR };
+
+    /// Worker function for sampling the given domain.
+    virtual PointVector Sample(VolumeType t) override {
+        PointVector out_points;
+
+        // Check 2D/3D. If the size in one direction (e.g. z) is less than the
+        // minimum distance, we switch to a 2D sampling. All sample points will
+        // have p.z = m_center.z
+        if (this->m_size.z < this->m_separation) {
+            m_2D = Z_DIR;
+            m_cellSize = this->m_separation / std::sqrt(2.0);
+            this->m_size.z = 0;
+        } else if (this->m_size.y < this->m_separation) {
+            m_2D = Y_DIR;
+            m_cellSize = this->m_separation / std::sqrt(2.0);
+            this->m_size.y = 0;
+        } else if (this->m_size.x < this->m_separation) {
+            m_2D = X_DIR;
+            m_cellSize = this->m_separation / std::sqrt(2.0);
+            this->m_size.x = 0;
+        } else {
+            m_2D = NONE;
+            m_cellSize = this->m_separation / std::sqrt(3.0);
+        }
+
+        m_bl = this->m_center - this->m_size;
+        m_tr = this->m_center + this->m_size;
+
+        m_grid.Resize((int)(2 * this->m_size.x / m_cellSize) + 1, (int)(2 * this->m_size.y / m_cellSize) + 1,
+                      (int)(2 * this->m_size.z / m_cellSize) + 1);
+
+        // Add the first output point (and initialize active list)
+        AddFirstPoint(t, out_points);
+
+        // As long as there are active points...
+        while (m_active.size() != 0) {
+            // ... select one of them at random
+            std::uniform_int_distribution<int> intDist(0, (int)m_active.size() - 1);
+
+            typename PointList::iterator point = m_active.begin();
+            std::advance(point, intDist(rengine()));
+
+            // ... attempt to add points near the active one
+            bool found = false;
+
+            for (int k = 0; k < m_ppi; k++)
+                found |= AddNextPoint(t, *point, out_points);
+
+            // ... if not possible, remove the current active point
+            if (!found)
+                m_active.erase(point);
+        }
+
+        return out_points;
+    }
+
+    /// Add the first point in the volume (selected randomly).
+    void AddFirstPoint(VolumeType t, PointVector& out_points) {
+        float3 p;
+
+        // Generate a random point in the domain
+        do {
+            p.x = m_bl.x + m_realDist(rengine()) * 2 * this->m_size.x;
+            p.y = m_bl.y + m_realDist(rengine()) * 2 * this->m_size.y;
+            p.z = m_bl.z + m_realDist(rengine()) * 2 * this->m_size.z;
+        } while (!this->accept(t, p));
+
+        // Place the point in the grid, add it to the active list, and add it
+        // to output.
+        MapToGrid(p);
+
+        m_grid.SetCellPoint(m_gridLoc[0], m_gridLoc[1], m_gridLoc[2], p);
+        m_active.push_back(p);
+        out_points.push_back(p);
+    }
+
+    /// Attempt to add a new point, close to the specified one.
+    bool AddNextPoint(VolumeType t, const float3& point, PointVector& out_points) {
+        // Generate a random candidate point in the neighborhood of the
+        // specified point.
+        float3 q = GenerateRandomNeighbor(point);
+
+        // Check if point is in the domain.
+        if (!this->accept(t, q))
+            return false;
+
+        // Check distance from candidate point to any existing point in the grid
+        // (note that we only need to check 5x5x5 surrounding grid cells).
+        MapToGrid(q);
+
+        for (int i = m_gridLoc[0] - 2; i < m_gridLoc[0] + 3; i++) {
+            for (int j = m_gridLoc[1] - 2; j < m_gridLoc[1] + 3; j++) {
+                for (int k = m_gridLoc[2] - 2; k < m_gridLoc[2] + 3; k++) {
+                    if (m_grid.IsCellEmpty(i, j, k))
+                        continue;
+                    float3 dist = q - m_grid.GetCellPoint(i, j, k);
+                    if (dot(dist, dist) < this->m_separation * this->m_separation)
+                        return false;
+                }
+            }
+        }
+
+        // The candidate point is acceptable.
+        // Place it in the grid, add it to the active list, and add it to the
+        // output.
+        m_grid.SetCellPoint(m_gridLoc[0], m_gridLoc[1], m_gridLoc[2], q);
+        m_active.push_back(q);
+        out_points.push_back(q);
+
+        return true;
+    }
+
+    /// Return a random point in spherical anulus between sep and 2*sep centered at given point.
+    float3 GenerateRandomNeighbor(const float3& point) {
+        float x, y, z;
+
+        switch (m_2D) {
+            case Z_DIR: {
+                float radius = this->m_separation * (1 + m_realDist(rengine()));
+                float angle = 2 * PI * m_realDist(rengine());
+                x = point.x + radius * std::cos(angle);
+                y = point.y + radius * std::sin(angle);
+                z = this->m_center.z;
+            } break;
+            case Y_DIR: {
+                float radius = this->m_separation * (1 + m_realDist(rengine()));
+                float angle = 2 * PI * m_realDist(rengine());
+                x = point.x + radius * std::cos(angle);
+                y = this->m_center.y;
+                z = point.z + radius * std::sin(angle);
+            } break;
+            case X_DIR: {
+                float radius = this->m_separation * (1 + m_realDist(rengine()));
+                float angle = 2 * PI * m_realDist(rengine());
+                x = this->m_center.x;
+                y = point.y + radius * std::cos(angle);
+                z = point.z + radius * std::sin(angle);
+            } break;
+            default:
+            case NONE: {
+                float radius = this->m_separation * (1 + m_realDist(rengine()));
+                float angle1 = 2 * PI * m_realDist(rengine());
+                float angle2 = 2 * PI * m_realDist(rengine());
+                x = point.x + radius * std::cos(angle1) * std::sin(angle2);
+                y = point.y + radius * std::sin(angle1) * std::sin(angle2);
+                z = point.z + radius * std::cos(angle2);
+            } break;
+        }
+
+        return host_make_float3(x, y, z);
+    }
+
+    /// Map point location to a 3D grid location.
+    void MapToGrid(float3 point) {
+        m_gridLoc[0] = (int)((point.x - m_bl.x) / m_cellSize);
+        m_gridLoc[1] = (int)((point.y - m_bl.y) / m_cellSize);
+        m_gridLoc[2] = (int)((point.z - m_bl.z) / m_cellSize);
+    }
+
+    PDGrid m_grid;
+    PointList m_active;
+
+    Direction2D m_2D;  ///< 2D or 3D sampling
+    float3 m_bl;       ///< bottom-left corner of sampling domain
+    float3 m_tr;       ///< top-right corner of sampling domain      REMOVE?
+    float m_cellSize;  ///< grid cell size
+
+    std::vector<int> m_gridLoc;
+    int m_ppi;  ///< maximum points per iteration
+
+    /// Generate real numbers uniformly distributed in (0,1)
+    std::uniform_real_distribution<float> m_realDist;
+
+    static const int m_ppi_default = 30;
+};
+
+/// Poisson Disk sampler for sampling a 3D box in layers.
+/// The computational efficiency of PD sampling degrades as points are added, especially for large volumes.
+/// This class provides an alternative sampling method where PD sampling is done in 2D layers, separated by a specified
+/// distance (padding_factor * diam). This significantly improves computational efficiency of the sampling but at the
+/// cost of discarding the PD uniform distribution properties in the direction orthogonal to the layers.
+std::vector<float3> PDLayerSampler_BOX(float3 center,                ///< Center of axis-aligned box to fill
+                                       float3 hdims,                 ///< Half-dimensions along the x, y, and z axes
+                                       float diam,                   ///< Particle diameter
+                                       float padding_factor = 1.02,  ///< Multiplier on particle diameter for spacing
+                                       bool verbose = false          ///< Output progress during generation
+) {
+    float fill_bottom = center.z - hdims.z;
+    float fill_top = center.z + hdims.z;
+
+    // set center to bottom
+    center.z = fill_bottom;
+    // 2D layer
+    hdims.z = 0;
+
+    PDSampler sampler(diam * padding_factor);
+    std::vector<float3> points_full;
+    while (center.z < fill_top) {
+        if (verbose) {
+            std::cout << "Create layer at " << center.z << std::endl;
+        }
+        auto points = sampler.SampleBox(center, hdims);
+        points_full.insert(points_full.end(), points.begin(), points.end());
+        center.z += diam * padding_factor;
+    }
+    return points_full;
+}
+
+// HCP
 class HCPSampler : public Sampler {
   public:
     HCPSampler(float separation) : Sampler(separation) {}
@@ -167,6 +462,7 @@ class HCPSampler : public Sampler {
     }
 };
 
+// Grid
 class GridSampler : public Sampler {
   public:
     GridSampler(float separation) : Sampler(separation) {
