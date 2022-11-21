@@ -20,18 +20,18 @@ const double math_PI = 3.14159;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_WheelDP_Force_mu0.6";
+    out_dir += "/DEMdemo_WheelDP_Force_mu0.9";
     std::filesystem::create_directory(out_dir);
 
     // `World'
     float G_mag = 9.81;
-    float step_size = 5e-7;
+    float step_size = 1e-6;
     double world_size_y = 0.52;
     double world_size_x = 1.53;
     double world_size_z = 4.0;
 
     // Define the wheel geometry
-    float wheel_rad = 0.25;
+    float wheel_rad = 0.25 - 0.025;
     float wheel_width = 0.25;
     float wheel_mass = 8.7;
     float total_pressure = 480.0;
@@ -53,9 +53,9 @@ int main() {
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
         // E, nu, CoR, mu, Crr...
-        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.6}, {"Crr", 0.00}});
+        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.9}, {"Crr", 0.00}});
         auto mat_type_terrain =
-            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.6}, {"Crr", 0.00}});
+            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.9}, {"Crr", 0.00}});
 
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
@@ -196,7 +196,7 @@ int main() {
         float w_r = math_PI / 12.;
         float v_ref = w_r * wheel_rad;
 
-        double sim_end = 3.;
+        double sim_end = 4.;
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
         // (move freely linearly)
         DEMSim.SetFamilyPrescribedAngVel(1, "0", to_string_with_precision(w_r), "0", false);
@@ -217,7 +217,7 @@ int main() {
 
         DEMSim.SetInitTimeStep(step_size);
         DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -G_mag));
-        DEMSim.SetCDUpdateFreq(20);
+        DEMSim.SetCDUpdateFreq(15);
         DEMSim.SetMaxVelocity(30.);
         DEMSim.SetExpandSafetyParam(1.1);
         DEMSim.SetInitBinSize(2 * scales.at(2));
@@ -274,7 +274,7 @@ int main() {
                 DEMSim.ShowThreadCollaborationStats();
             }
 
-            if (t >= 0.5 && !start_measure) {
+            if (t >= 1.5 && !start_measure) {
                 start_measure = true;
             }
 
@@ -282,6 +282,7 @@ int main() {
                 float3 forces = wheel_tracker->ContactAcc();
                 forces *= wheel_mass;
                 std::cout << "Current run mode: " << run_mode << std::endl;
+                std::cout << "Slip: " << TR << std::endl;
                 std::cout << "Time: " << t << std::endl;
                 std::cout << "Force on wheel: " << forces.x << ", " << forces.y << ", " << forces.z << std::endl;
                 std::cout << "Drawbar pull coeff: " << forces.x / total_pressure << std::endl;

@@ -20,14 +20,14 @@ const double math_PI = 3.1415927;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_WheelDP_SlopeSlip_Moon_alt2";
+    out_dir += "/DEMdemo_WheelDP_SlopeSlip_Moon";
     std::filesystem::create_directory(out_dir);
 
     // `World'
     float G_mag = 1.62;
-    float step_size = 1e-6;
+    float step_size = 2e-6;
     double world_size_y = 0.52;
-    double world_size_x = 1.53;
+    double world_size_x = 2.04;
     double world_size_z = 4.0;
 
     // Define the wheel geometry
@@ -39,8 +39,7 @@ int main() {
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
-    // float Slopes_deg[] = {10, 13, 16, 20};
-    float Slopes_deg[] = {6, 4, 2};
+    float Slopes_deg[] = {5, 7, 10, 13, 16, 20};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
 
@@ -53,9 +52,9 @@ int main() {
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
         // E, nu, CoR, mu, Crr...
-        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 1.2}, {"Crr", 0.00}});
+        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.9}, {"Crr", 0.00}});
         auto mat_type_terrain =
-            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 1.2}, {"Crr", 0.00}});
+            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.9}, {"Crr", 0.00}});
 
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
@@ -195,11 +194,11 @@ int main() {
         // auto compressor_tracker = DEMSim.Track(compressor);
 
         // Families' prescribed motions (Earth)
-        float w_r = 0.4;
+        float w_r = 0.8;
         float v_ref = w_r * wheel_rad;
         double G_ang = Slope_deg * math_PI / 180.;
 
-        double sim_end = 3.;
+        double sim_end = 5.;
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
         // (move freely linearly)
         DEMSim.SetFamilyPrescribedAngVel(1, "0", to_string_with_precision(w_r), "0", false);
@@ -220,8 +219,8 @@ int main() {
         float G_mag_ramp = G_mag_earth;
 
         DEMSim.SetInitTimeStep(step_size);
-        DEMSim.SetCDUpdateFreq(20);
-        DEMSim.SetMaxVelocity(30.);
+        DEMSim.SetCDUpdateFreq(15);
+        DEMSim.SetMaxVelocity(50.);
         DEMSim.SetExpandSafetyParam(1.1);
         DEMSim.SetInitBinSize(2 * scales.at(2));
         DEMSim.Initialize();
@@ -237,8 +236,10 @@ int main() {
 
         // Put the wheel in place, then let the wheel sink in initially
         float max_z = -0.39;
-        float init_x = -0.4;
-        // init_x = 0.;
+        float init_x = 0;
+        if (Slope_deg < 10) {
+            init_x = -0.6;
+        }
         wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.03 + wheel_rad));
 
         // Settling (G change)
@@ -270,7 +271,7 @@ int main() {
                 currframe++;
             }
 
-            if (t >= 1.5 && !start_measure) {
+            if (t >= 3. && !start_measure) {
                 start_measure = true;
             }
 
@@ -281,6 +282,7 @@ int main() {
                 std::cout << "Current slope: " << Slope_deg << std::endl;
                 std::cout << "Time: " << t << std::endl;
                 // std::cout << "Distance: " << dist_moved << std::endl;
+                std::cout << "X: " << wheel_tracker->Pos().x << std::endl;
                 std::cout << "V: " << V.x << std::endl;
                 std::cout << "Slip: " << slip << std::endl;
                 std::cout << "Max system velocity: " << max_v_finder->GetValue() << std::endl;
