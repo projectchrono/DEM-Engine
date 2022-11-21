@@ -35,6 +35,8 @@ SET(DEMOS
 		DEMdemo_WheelDP_ind
 		DEMdemo_WheelDP_Slip
 		DEMdemo_WheelDP_Slip_ind
+		DEMdemo_WheelDP_SlopeSlip
+		DEMdemo_WheelDP_SlopeSlip_Moon
 )
 
 # ------------------------------------------------------------------------------
