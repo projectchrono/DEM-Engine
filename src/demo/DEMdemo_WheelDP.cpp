@@ -16,11 +16,11 @@
 
 using namespace deme;
 
-const double math_PI = 3.14159;
+const double math_PI = 3.1415927;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_WheelDP";
+    out_dir += "/DemoOutput_WheelDP";
     std::filesystem::create_directory(out_dir);
 
     float TRs[] = {0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9};
