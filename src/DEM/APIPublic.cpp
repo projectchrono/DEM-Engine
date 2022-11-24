@@ -36,7 +36,6 @@ DEMSolver::DEMSolver(unsigned int nGPUs) {
 }
 
 DEMSolver::~DEMSolver() {
-    
     delete kT;
     delete dT;
     delete kTMain_InteractionManager;

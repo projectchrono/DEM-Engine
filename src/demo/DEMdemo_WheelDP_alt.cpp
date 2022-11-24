@@ -74,7 +74,7 @@ int main() {
         wheel->SetMass(wheel_mass);
         wheel->SetMOI(make_float3(wheel_IXX, wheel_IYY, wheel_IXX));
         // Give the wheel a family number so we can potentially add prescription
-        wheel->SetFamily(1);
+        wheel->SetFamily(10);
         // Track it
         auto wheel_tracker = DEMSim.Track(wheel);
 
@@ -215,10 +215,13 @@ int main() {
         DEMSim.SetFamilyPrescribedLinVel(2, to_string_with_precision(v_ref * (1. - TR)), "0", "none", false);
         DEMSim.AddFamilyPrescribedAcc(2, "none", "none", to_string_with_precision(-added_pressure / wheel_mass));
 
+        // For settling
+        DEMSim.SetFamilyFixed(10);
+
         // Some inspectors
         auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
         auto min_z_finder = DEMSim.CreateInspector("clump_min_z");
-        auto total_mass_finder = DEMSim.CreateInspector("clump_mass");
+        auto total_mass_finder = DEMSim.CreateInspector("clump_mass", "return Z <= -0.4;");
         auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
 
         DEMSim.SetInitTimeStep(step_size);
@@ -244,7 +247,9 @@ int main() {
         if (TR > 0.6) {
             init_x = 0.;
         }
-        wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.02 + wheel_rad));
+        wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.03 + wheel_rad));
+
+        // Settle
         for (double t = 0; t < 0.6; t += frame_time) {
             char filename[200], meshname[200];
             std::cout << "Outputting frame: " << currframe << std::endl;
@@ -259,16 +264,33 @@ int main() {
             // std::cout << "Bottom wall force: " << force.x << ", " << force.y << ", " << force.z << std::endl;
             DEMSim.DoDynamicsThenSync(frame_time);
         }
-
-        float bulk_den =
-            total_mass_finder->GetValue() / ((max_z_finder->GetValue() + 0.5) * world_size_x * world_size_y);
+        DEMSim.ChangeFamily(10, 1);
+        float bulk_den = total_mass_finder->GetValue() / ((-0.4 + 0.5) * world_size_x * world_size_y);
         std::cout << "Bulk density: " << bulk_den << std::endl;
-        // Switch wheel from free fall into DP test
-        DEMSim.ChangeFamily(1, 2);
 
         // Ready for real sim
         DEMSim.SetFamilyOwnerWildcardValue(0, "mu_custom", 0.9);
+        DEMSim.SetFamilyOwnerWildcardValue(1, "mu_custom", 0.9);
+        DEMSim.SetFamilyOwnerWildcardValue(2, "mu_custom", 0.9);
         DEMSim.SetFamilyOwnerWildcardValue(RESERVED_FAMILY_NUM, "mu_custom", 0.9);
+
+        for (double t = 0; t < 0.4; t += frame_time) {
+            char filename[200], meshname[200];
+            std::cout << "Outputting frame: " << currframe << std::endl;
+            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
+            sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
+            DEMSim.WriteSphereFile(std::string(filename));
+            DEMSim.WriteMeshFile(std::string(meshname));
+
+            // float3 pos = bot_wall_tracker->Pos();
+            // float3 force = bot_wall_tracker->ContactAcc();
+            // std::cout << "Bottom wall pos: " << pos.x << ", " << pos.y << ", " << pos.z << std::endl;
+            // std::cout << "Bottom wall force: " << force.x << ", " << force.y << ", " << force.z << std::endl;
+            DEMSim.DoDynamicsThenSync(frame_time);
+        }
+
+        // Switch wheel from free fall into DP test
+        DEMSim.ChangeFamily(1, 2);
 
         // if (TR < 0.4) {
         //     DEMSim.SetInitTimeStep(step_size * 2);
