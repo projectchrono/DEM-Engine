@@ -20,7 +20,7 @@ const double math_PI = 3.1415927;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_WheelDP_SlopeSlip_Earth_ControlGroup";
+    out_dir += "/DEMdemo_WheelDP_SlopeSlip_Earth_lowSlope";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -39,7 +39,8 @@ int main() {
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
-    float Slopes_deg[] = {5, 7, 10, 13, 16, 20};
+    // float Slopes_deg[] = {5, 7, 10, 13, 16, 20};
+    float Slopes_deg[] = {0, 2, 4};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
 
@@ -194,8 +195,8 @@ int main() {
         // auto compressor_tracker = DEMSim.Track(compressor);
 
         // Families' prescribed motions (Earth)
-        // float w_r = 0.8 * 2.45;
-        float w_r = 0.8;
+        float w_r = 0.8 * 2.45;
+        // float w_r = 0.8;
         float v_ref = w_r * wheel_rad;
         double G_ang = Slope_deg * math_PI / 180.;
 
