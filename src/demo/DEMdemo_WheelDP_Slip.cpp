@@ -25,13 +25,13 @@ int main() {
 
     // `World'
     float G_mag = 9.81;
-    float step_size = 5e-7;
+    float step_size = 1e-6;
     double world_size_y = 0.52;
     double world_size_x = 1.53;
     double world_size_z = 4.0;
 
     // Define the wheel geometry
-    float wheel_rad = 0.22;  // 1.5 cm grousers
+    float wheel_rad = 0.25;  // 1.5 cm grousers
     float wheel_width = 0.25;
     float wheel_mass = 8.7;
     float total_pressure = 480.0;
@@ -53,9 +53,9 @@ int main() {
 
         // E, nu, CoR, mu, Crr...
         // 0.8 is the default
-        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.3}, {"Crr", 0.00}});
+        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.9}, {"Crr", 0.00}});
         auto mat_type_terrain =
-            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.3}, {"Crr", 0.00}});
+            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.9}, {"Crr", 0.00}});
 
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);

@@ -20,7 +20,7 @@ const double math_PI = 3.1415927;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_WheelDP_Force_mu0.3";
+    out_dir += "/DEMdemo_WheelDP_Force_mu0.9";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -31,7 +31,7 @@ int main() {
     double world_size_z = 4.0;
 
     // Define the wheel geometry
-    float wheel_rad = 0.25 - 0.025;
+    float wheel_rad = 0.25;
     float wheel_width = 0.25;
     float wheel_mass = 8.7;
     float total_pressure = 480.0;
@@ -53,9 +53,9 @@ int main() {
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
         // E, nu, CoR, mu, Crr...
-        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.3}, {"Crr", 0.00}});
+        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.9}, {"Crr", 0.00}});
         auto mat_type_terrain =
-            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.3}, {"Crr", 0.00}});
+            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.9}, {"Crr", 0.00}});
 
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
@@ -196,7 +196,7 @@ int main() {
         float w_r = math_PI / 12.;
         float v_ref = w_r * wheel_rad;
 
-        double sim_end = 4.;
+        double sim_end = 6.;
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
         // (move freely linearly)
         DEMSim.SetFamilyPrescribedAngVel(1, "0", to_string_with_precision(w_r), "0", false);
@@ -212,7 +212,8 @@ int main() {
         // Some inspectors
         auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
         auto min_z_finder = DEMSim.CreateInspector("clump_min_z");
-        auto total_mass_finder = DEMSim.CreateInspector("clump_mass", "return Z <= -0.4;");
+        auto total_mass_finder = DEMSim.CreateInspector("clump_mass", "return Z <= -0.41;");
+        auto total_mass_finder_all = DEMSim.CreateInspector("clump_mass");
         auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
 
         DEMSim.SetInitTimeStep(step_size);
@@ -240,8 +241,10 @@ int main() {
         }
         wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.03 + wheel_rad));
 
-        float bulk_den = total_mass_finder->GetValue() / ((-0.4 + 0.5) * world_size_x * world_size_y);
-        std::cout << "Bulk density: " << bulk_den << std::endl;
+        float bulk_den_high = total_mass_finder->GetValue() / ((-0.41 + 0.5) * world_size_x * world_size_y);
+        float bulk_den_low = total_mass_finder_all->GetValue() / ((max_z + 0.5) * world_size_x * world_size_y);
+        std::cout << "Bulk density high: " << bulk_den_high << std::endl;
+        std::cout << "Bulk density low: " << bulk_den_low << std::endl;
 
         for (double t = 0; t < 0.6; t += frame_time) {
             char filename[200], meshname[200];
@@ -261,11 +264,6 @@ int main() {
         // Switch wheel from free fall into DP test
         DEMSim.ChangeFamily(1, 2);
 
-        // if (TR < 0.4) {
-        //     DEMSim.SetInitTimeStep(step_size * 2);
-        //     DEMSim.UpdateSimParams();
-        // }
-
         bool start_measure = false;
         for (double t = 0; t < sim_end; t += step_size, curr_step++) {
             if (curr_step % out_steps == 0) {
@@ -278,7 +276,7 @@ int main() {
                 DEMSim.ShowThreadCollaborationStats();
             }
 
-            if (t >= 1.5 && !start_measure) {
+            if (t >= 2. && !start_measure) {
                 start_measure = true;
             }
 
