@@ -20,7 +20,7 @@ const double math_PI = 3.1415927;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon";
+    out_dir += "/DEMdemo_Temp";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon_SamePressureAsEarth_new";
     std::filesystem::create_directory(out_dir);
 
@@ -44,9 +44,9 @@ int main() {
     float moon_added_pressure = (22. * 1.62 - wheel_mass * G_mag);
 
     // float Slopes_deg[] = {5, 10, 15, 20, 25};
-    float Slopes_deg[] = {15, 20, 25};
+    float Slopes_deg[] = {0, 2, 4};
     unsigned int run_mode = 0;
-    unsigned int currframe = 82;
+    unsigned int currframe = 0;
 
     for (float Slope_deg : Slopes_deg) {
         DEMSolver DEMSim;
@@ -217,6 +217,7 @@ int main() {
         auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
         auto min_z_finder = DEMSim.CreateInspector("clump_min_z");
         auto total_mass_finder = DEMSim.CreateInspector("clump_mass");
+        auto partial_mass_finder = DEMSim.CreateInspector("clump_mass", "return (Z <= -0.41);");
         auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
 
         float G_mag_earth = 9.81;
@@ -265,6 +266,11 @@ int main() {
 
             DEMSim.DoDynamicsThenSync(0.05);
         }
+
+        float bulk_den_high = partial_mass_finder->GetValue() / ((-0.41 + 0.5) * world_size_x * world_size_y);
+        float bulk_den_low = total_mass_finder->GetValue() / ((max_z + 0.5) * world_size_x * world_size_y);
+        std::cout << "Bulk density high: " << bulk_den_high << std::endl;
+        std::cout << "Bulk density low: " << bulk_den_low << std::endl;
 
         DEMSim.ChangeFamily(10, 1);
         // for (double t = 0; t < 0.5; t += frame_time) {

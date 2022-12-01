@@ -20,7 +20,8 @@ const double math_PI = 3.1415927;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
+    out_dir += "/DEMdemo_Temp";
+    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled";
     std::filesystem::create_directory(out_dir);
 
@@ -41,7 +42,7 @@ int main() {
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
     // float Slopes_deg[] = {5, 10, 15, 20, 25};
-    float Slopes_deg[] = {15, 20, 25};
+    float Slopes_deg[] = {0, 2, 4};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
 
@@ -194,8 +195,8 @@ int main() {
         // auto compressor_tracker = DEMSim.Track(compressor);
 
         // Families' prescribed motions (Earth)
-        // float w_r = 0.8 * 2.45;
-        float w_r = 0.8;
+        float w_r = 0.8 * 2.45;
+        // float w_r = 0.8;
         float v_ref = w_r * wheel_rad;
         double G_ang = Slope_deg * math_PI / 180.;
 
@@ -211,6 +212,7 @@ int main() {
         auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
         auto min_z_finder = DEMSim.CreateInspector("clump_min_z");
         auto total_mass_finder = DEMSim.CreateInspector("clump_mass");
+        auto partial_mass_finder = DEMSim.CreateInspector("clump_mass", "return (Z <= -0.41);");
         auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
 
         float3 this_G = make_float3(-G_mag * std::sin(G_ang), 0, -G_mag * std::cos(G_ang));
@@ -245,6 +247,11 @@ int main() {
         for (double t = 0; t < 0.4; t += 0.05) {
             DEMSim.DoDynamicsThenSync(0.05);
         }
+
+        float bulk_den_high = partial_mass_finder->GetValue() / ((-0.41 + 0.5) * world_size_x * world_size_y);
+        float bulk_den_low = total_mass_finder->GetValue() / ((max_z + 0.5) * world_size_x * world_size_y);
+        std::cout << "Bulk density high: " << bulk_den_high << std::endl;
+        std::cout << "Bulk density low: " << bulk_den_low << std::endl;
 
         DEMSim.ChangeFamily(10, 1);
 
