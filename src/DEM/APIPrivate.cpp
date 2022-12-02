@@ -364,10 +364,9 @@ void DEMSolver::decideBinSize() {
         }
     }
 
-    //// TODO: What should be a default bin size?
     if (m_smallest_radius > DEME_TINY_FLOAT) {
         if (!use_user_defined_bin_size) {
-            m_binSize = 4.0 * m_smallest_radius;
+            m_binSize = m_binSize_as_multiple * m_smallest_radius;
         }
     } else {
         if (!use_user_defined_bin_size) {
@@ -427,10 +426,33 @@ void DEMSolver::reportInitStats() const {
     DEME_INFO("The total number of meshes: %u", nTriMeshes);
     DEME_INFO("Grand total number of owners: %zu", nOwnerBodies);
 
-    if (m_expand_factor > 0.0) {
-        DEME_INFO("All geometries are enlarged/thickened by %.9g for contact detection purpose", m_expand_factor);
-        DEME_INFO("This in the case of the smallest sphere, means enlarging radius by %.9g%%",
+    if (use_user_defined_expand_factor) {
+        DEME_INFO(
+            "All geometries are enlarged/thickened by %.6g (estimated the initial step size and update frequency) for "
+            "contact detection purpose",
+            m_expand_factor);
+        DEME_INFO("This in the case of the smallest sphere, means enlarging radius by %.6g%%",
                   (m_expand_factor / m_smallest_radius) * 100.0);
+    } else {
+        float expand_factor;
+        if (m_max_v_finder_type == MARGIN_FINDER_TYPE::MANUAL_MAX) {
+            expand_factor = (m_expand_safety_multi * m_approx_max_vel + m_expand_base_vel) * m_updateFreq * m_ts_size;
+            DEME_INFO(
+                "All geometries should be enlarged/thickened by %.6g (estimated the initial step size, update "
+                "frequency and max velocity) for contact detection purpose",
+                expand_factor);
+        } else {
+            expand_factor = (m_expand_safety_multi * AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE + m_expand_base_vel) *
+                            m_updateFreq * m_ts_size;
+            DEME_INFO("Suppose the maximum velocity encountered in the simulation is %.6g for example, then...",
+                      AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE);
+            DEME_INFO(
+                "All geometries should be enlarged/thickened by %.6g (estimated the initial step size, update "
+                "frequency) for contact detection purpose",
+                expand_factor);
+        }
+        DEME_INFO("This in the case of the smallest sphere, means enlarging radius by %.6g%%",
+                  (expand_factor / m_smallest_radius) * 100.0);
     }
 
     DEME_INFO("The number of material types: %u", nMatTuples);

@@ -129,10 +129,16 @@ class DEMSolver {
     /// classes.
     std::unordered_map<std::string, std::string> GetJitStringSubs() { return m_subs; }
 
-    /// Explicitly instruct the bin size (for contact detection) that the solver should use
+    /// Explicitly instruct the bin size (for contact detection) that the solver should use.
     void SetInitBinSize(double bin_size) {
         use_user_defined_bin_size = true;
         m_binSize = bin_size;
+    }
+    /// Explicitly instruct the bin size (for contact detection) that the solver should use, as a multiple of the radius
+    /// of the smallest sphere in simulation.
+    void SetInitBinSizeAsMultipleOfSmallestSphere(float bin_size) {
+        use_user_defined_bin_size = false;
+        m_binSize_as_multiple = bin_size;
     }
 
     /// Explicitly instruct the sizes for the arrays at initialization time. This is useful when the number of owners
@@ -655,6 +661,8 @@ class DEMSolver {
     float l = FLT_MAX;
     // The edge length of a bin (for contact detection)
     double m_binSize;
+    // User-instructed initial bin size as a multiple of smallest sphere radius
+    float m_binSize_as_multiple = 4.0;
     // Total number of bins
     size_t m_num_bins;
     // Number of bins on each direction

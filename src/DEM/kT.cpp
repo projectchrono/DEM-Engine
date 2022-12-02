@@ -72,7 +72,9 @@ inline void DEMKinematicThread::unpackMyBuffer() {
         simParams->beta = (granData->maxVel_buffer * simParams->expSafetyMulti + simParams->expSafetyAdder) *
                           (granData->ts_buffer * solverFlags.updateFreq);
     }
-    DEME_STEP_DEBUG_PRINTF("kT received a velocity update: %.6g", granData->maxVel_buffer);
+    DEME_GPU_CALL(cudaMemcpy(&(granData->ts), &(granData->ts_buffer), sizeof(float), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(&(granData->maxVel), &(granData->maxVel_buffer), sizeof(float), cudaMemcpyDeviceToDevice));
+    DEME_STEP_DEBUG_PRINTF("kT received a velocity update: %.6g", granData->maxVel);
     DEME_STEP_DEBUG_PRINTF("A margin of thickness %.6g is added", simParams->beta);
 
     // Family number is a typical changable quantity on-the-fly. If this flag is on, kT received changes from dT.

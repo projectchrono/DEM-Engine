@@ -356,8 +356,10 @@ struct DEMDataKT {
     oriQ_t* oriQz;
 
     // kT-owned buffer pointers, for itself's usage
-    float maxVel_buffer;
-    float ts_buffer;
+    float maxVel_buffer;  // buffer for the current max vel sent by dT
+    float maxVel;         // kT's own storage of max vel
+    float ts_buffer;      // buffer for the current ts size sent by dT
+    float ts;             // kT's own storage of ts size
     voxelID_t* voxelID_buffer;
     subVoxelPos_t* locX_buffer;
     subVoxelPos_t* locY_buffer;
@@ -418,6 +420,14 @@ struct DEMDataKT {
 
 // typedef DEMDataDT* DEMDataDTPtr;
 // typedef DEMSimParams* DEMSimParamsPtr;
+
+// =============================================================================
+// MISC AND LESS IMPORTANT ONES...
+// =============================================================================
+
+// At init, we wish to show the user how thick approximately the CD margin will be added. This number will help deriving
+// that approximation. It can be anything really, 1 or 10, ro 8.
+const float AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE = 10.f;
 
 }  // namespace deme
 
