@@ -186,8 +186,8 @@ class DEMKinematicThread {
 
     DEMKinematicThread(WorkerReportChannel* pPager, ThreadManager* pSchedSup, GpuManager* pGpuDist)
         : pPagerToMain(pPager), pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
-        GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
-        GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataKT), cudaMemAttachGlobal));
+        DEME_GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
+        DEME_GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataKT), cudaMemAttachGlobal));
 
         // Get a device/stream ID to use from the GPU Manager
         streamInfo = pGpuDistributor->getAvailableStream();
@@ -213,8 +213,8 @@ class DEMKinematicThread {
 
         cudaStreamDestroy(streamInfo.stream);
 
-        GPU_CALL(cudaFree(simParams));
-        GPU_CALL(cudaFree(granData));
+        DEME_GPU_CALL(cudaFree(simParams));
+        DEME_GPU_CALL(cudaFree(granData));
     }
 
     // buffer exchange methods
@@ -304,6 +304,7 @@ class DEMKinematicThread {
                       float expand_factor,
                       float approx_max_vel,
                       float expand_safety_param,
+                      float expand_safety_adder,
                       const std::set<std::string>& contact_wildcards,
                       const std::set<std::string>& owner_wildcards);
 

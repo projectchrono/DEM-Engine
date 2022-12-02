@@ -22,6 +22,7 @@
 #include <DEM/BdrsAndObjs.h>
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
+#include <DEM/AuxClasses.h>
 
 // #include <core/utils/JitHelper.h>
 
@@ -272,8 +273,8 @@ class DEMDynamicThread {
 
     DEMDynamicThread(WorkerReportChannel* pPager, ThreadManager* pSchedSup, GpuManager* pGpuDist)
         : pPagerToMain(pPager), pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
-        GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
-        GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataDT), cudaMemAttachGlobal));
+        DEME_GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
+        DEME_GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataDT), cudaMemAttachGlobal));
 
         cycleDuration = 0;
 
@@ -294,8 +295,8 @@ class DEMDynamicThread {
         th.join();
         cudaStreamDestroy(streamInfo.stream);
 
-        GPU_CALL(cudaFree(simParams));
-        GPU_CALL(cudaFree(granData));
+        DEME_GPU_CALL(cudaFree(simParams));
+        DEME_GPU_CALL(cudaFree(granData));
     }
 
     void setCycleDuration(double val) { cycleDuration = val; }
@@ -319,6 +320,7 @@ class DEMDynamicThread {
                       float expand_factor,
                       float approx_max_vel,
                       float expand_safety_param,
+                      float expand_safety_adder,
                       const std::set<std::string>& contact_wildcards,
                       const std::set<std::string>& owner_wildcards);
 
@@ -509,7 +511,7 @@ class DEMDynamicThread {
     // Execute this kernel, then return the reduced value
     float* inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
                        const std::string& kernel_name,
-                       size_t n,
+                       INSPECT_ENTITY_TYPE thing_to_insp,
                        CUB_REDUCE_FLAVOR reduce_flavor,
                        bool all_domain);
 
@@ -529,6 +531,12 @@ class DEMDynamicThread {
     // know I have to process the new-comers)
     unsigned int nTrackersProcessed = 0;
 
+    // A pointer that points to the location that holds the current max_vel info, which will soon be transferred to kT
+    float* pCycleMaxVel;
+
+    // The inspector for calculating max vel for this cycle
+    std::shared_ptr<DEMInspector> approxMaxVelFunc;
+
     // Migrate contact history to fit the structure of the newly received contact array
     inline void migratePersistentContacts();
 
@@ -540,6 +548,9 @@ class DEMDynamicThread {
 
     // If kT provides fresh CD results, we unpack and use it
     inline void ifProduceFreshThenUseItAndSendNewOrder();
+
+    // Determine the max vel for this cycle, kT needs it
+    inline float* determineSysMaxVel();
 
     // Some per-step checks/modification, done before integration, but after force calculation (thus sort of in the
     // mid-step stage)

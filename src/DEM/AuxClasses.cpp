@@ -145,14 +145,19 @@ float DEMInspector::GetValue() {
     return reduce_result;
 }
 
+float* DEMInspector::dT_GetValue() {
+    // assertInit(); // This one the user should not use
+    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+}
+
 void DEMInspector::assertInit() {
     if (!initialized) {
         Initialize(sys->GetJitStringSubs());
     }
 }
 
-void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>& Subs) {
-    if (!(sys->GetInitStatus())) {
+void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>& Subs, bool force) {
+    if (!(sys->GetInitStatus()) && !force) {
         std::stringstream ss;
         ss << "Inspector should only be initialized or used after the simulation system is initialized (because it "
               "uses device-side data)!"

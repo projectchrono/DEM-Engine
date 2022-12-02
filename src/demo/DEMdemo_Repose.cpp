@@ -135,7 +135,7 @@ int main() {
     DEMSim.SetCDUpdateFreq(60);
     // DEMSim.SetExpandFactor(1e-3);
     DEMSim.SetMaxVelocity(25.);
-    DEMSim.SetExpandSafetyParam(2.);
+    DEMSim.SetExpandSafetyMultiplier(2.);
     DEMSim.SetInitBinSize(min_rad * 6);
     DEMSim.Initialize();
 

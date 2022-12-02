@@ -40,6 +40,9 @@ void DEMSolver::generatePolicyResources() {
 
     // Decide bin size (for contact detection)
     decideBinSize();
+
+    // The method of deciding the thickness of contact margin
+    decideCDMarginStrat();
 }
 
 void DEMSolver::generateEntityResources() {
@@ -228,8 +231,14 @@ void DEMSolver::jitifyKernels() {
 
     // Now, inspectors need to be jitified too... but the current design jitify inspector kernels at the first time they
     // are used. for (auto& insp : m_inspectors) {
-    //     insp->Initialize(Subs);
+    //     insp->Initialize(m_subs);
     // }
+
+    // Solver system's own max vel inspector should be init-ed. Don't bother init-ing it while using, because it is
+    // called at high frequency, let's save an if check. Forced initialization (since doing it before system completes
+    // init).
+    m_approx_max_vel_func->Initialize(m_subs, true);
+    dT->approxMaxVelFunc = m_approx_max_vel_func;
 }
 
 void DEMSolver::figureOutNV() {
@@ -355,10 +364,10 @@ void DEMSolver::decideBinSize() {
         }
     }
 
-    // TODO: What should be a default bin size?
+    //// TODO: What should be a default bin size?
     if (m_smallest_radius > DEME_TINY_FLOAT) {
         if (!use_user_defined_bin_size) {
-            m_binSize = 2.0 * m_smallest_radius;
+            m_binSize = 4.0 * m_smallest_radius;
         }
     } else {
         if (!use_user_defined_bin_size) {
@@ -379,6 +388,20 @@ void DEMSolver::decideBinSize() {
     // It's better to compute num of bins this way, rather than...
     // (uint64_t)(m_boxX / m_binSize + 1) * (uint64_t)(m_boxY / m_binSize + 1) * (uint64_t)(m_boxZ / m_binSize + 1);
     // because the space bins and voxels can cover may be larger than the user-defined sim domain
+}
+
+void DEMSolver::decideCDMarginStrat() {
+    switch (m_max_v_finder_type) {
+        case (MARGIN_FINDER_TYPE::MANUAL_MAX):
+            break;
+        case (MARGIN_FINDER_TYPE::DEM_INSPECTOR):
+            break;
+        case (MARGIN_FINDER_TYPE::DEFAULT):
+            // Default strategy is to use an inspector
+            m_approx_max_vel_func = this->CreateInspector("clump_max_absv");
+            m_max_v_finder_type = MARGIN_FINDER_TYPE::DEM_INSPECTOR;
+            break;
+    }
 }
 
 void DEMSolver::reportInitStats() const {
@@ -798,6 +821,8 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.isAsync = !(m_updateFreq == 0);
     // Make sure dT kT understand the lock--waiting policy of this run
     dTkT_InteractionManager->dynamicRequestedUpdateFrequency = m_updateFreq;
+    kT->solverFlags.updateFreq = m_updateFreq;
+    dT->solverFlags.updateFreq = m_updateFreq;
 
     // Tell kT and dT whether the user enforeced potential on-the-fly family number changes
     kT->solverFlags.canFamilyChange = famnum_can_change_conditionally;
@@ -809,23 +834,34 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.useNoContactRecord = no_recording_contact_forces;
     dT->solverFlags.useForceCollectInPlace = collect_force_in_force_kernel;
 
+    // Max velocity decision strategy
+    kT->solverFlags.maxVelQuery = (m_max_v_finder_type != MARGIN_FINDER_TYPE::MANUAL_MAX);
+    dT->solverFlags.maxVelQuery = (m_max_v_finder_type != MARGIN_FINDER_TYPE::MANUAL_MAX);
+
     // Whether sorts contact before using them (not implemented)
     kT->solverFlags.should_sort_pairs = should_sort_contacts;
     dT->solverFlags.should_sort_pairs = should_sort_contacts;
 }
 
 void DEMSolver::transferSimParams() {
-    // Figure out ts size and the envelope to add to geometries (for CD safety)
-    if ((!use_user_defined_expand_factor) && ts_size_is_const) {
-        m_expand_factor = m_approx_max_vel * m_ts_size * m_updateFreq * m_expand_safety_param;
-    }
-    if (m_expand_factor * m_expand_safety_param <= 0.0 && m_updateFreq > 0 && ts_size_is_const) {
+    if ((!use_user_defined_expand_factor) &&
+        (m_approx_max_vel < 1e-4f && m_max_v_finder_type == MARGIN_FINDER_TYPE::MANUAL_MAX) && m_updateFreq > 0) {
         DEME_WARNING(
-            "You instructed that the physics can stretch %u time steps into the future, but did not instruct the "
-            "geometries to expand via SetExpandFactor or SetMaxVelocity. The contact detection procedure will likely "
-            "fail to detect some contact events before it is too late, hindering the simulation accuracy and "
-            "stability.",
-            m_updateFreq);
+            "You instructed that the physics can stretch %u time steps into the future, and specified the maximum "
+            "velocity in this system is %.6g.\nThis is quite a small velocity, and the contact detection procedure "
+            "will likely fail to detect some contact events before it is too late, hindering the simulation accuracy "
+            "and stability.",
+            m_updateFreq, m_approx_max_vel);
+    }
+    if ((!use_user_defined_expand_factor) && (m_expand_base_vel < 1e-4f || m_expand_safety_multi < 1.f) &&
+        m_max_v_finder_type != MARGIN_FINDER_TYPE::MANUAL_MAX && m_updateFreq > 0) {
+        DEME_WARNING(
+            "You instructed that the physics can stretch %u time steps into the future, and specified that\nthe "
+            "multiplier for the maximum velocity is %.6g and adder %.6g.\nThey will make the solver estimate the "
+            "evolution of the maximum velocity to less similar to or less than historical values.\nThe contact "
+            "detection procedure will likely fail to detect some contact events before it is too late, hindering the "
+            "simulation accuracy and stability.",
+            m_updateFreq, m_expand_safety_multi, m_expand_base_vel);
     }
     // Compute the number of wildcards in our force model
     unsigned int nContactWildcards = m_force_model->m_contact_wildcards.size();
@@ -839,11 +875,11 @@ void DEMSolver::transferSimParams() {
     DEME_DEBUG_PRINTF("%u contact wildcards are in the force model.", nContactWildcards);
 
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
-                     m_expand_factor, m_approx_max_vel, m_expand_safety_param, m_force_model->m_contact_wildcards,
-                     m_force_model->m_owner_wildcards);
+                     m_expand_factor, m_approx_max_vel, m_expand_safety_multi, m_expand_base_vel,
+                     m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards);
     kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
-                     m_expand_factor, m_approx_max_vel, m_expand_safety_param, m_force_model->m_contact_wildcards,
-                     m_force_model->m_owner_wildcards);
+                     m_expand_factor, m_approx_max_vel, m_expand_safety_multi, m_expand_base_vel,
+                     m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards);
 }
 
 void DEMSolver::allocateGPUArrays() {

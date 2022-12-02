@@ -50,7 +50,7 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
             .instantiate()
             .configure(dim3(blocks_needed_for_contacts), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
             .launch(idAOwner, granData->idGeometryA, granData->ownerClumpBody, granData->contactType, nContactPairs);
-        GPU_CALL(cudaStreamSynchronize(this_stream));
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 
         // But for B, it can be sphere, triangle or some analytical geometries
         collect_force_kernels->kernel("cashInOwnerIndexB")
@@ -58,7 +58,7 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
             .configure(dim3(blocks_needed_for_contacts), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
             .launch(idBOwner, granData->idGeometryB, granData->ownerClumpBody, granData->ownerMesh,
                     granData->contactType, nContactPairs);
-        GPU_CALL(cudaStreamSynchronize(this_stream));
+        DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
         // displayArray<bodyID_t>(idAOwner, nContactPairs);
         // displayArray<bodyID_t>(idBOwner, nContactPairs);
     }
@@ -86,13 +86,13 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(acc_A, granData->contactForces, idAOwner, 1.f, nContactPairs, granData);
-    GPU_CALL(cudaStreamSynchronize(this_stream));
+    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     // and don't forget body B
     collect_force_kernels->kernel("forceToAcc")
         .instantiate()
         .configure(dim3(blocks_needed_for_contacts), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(acc_B, granData->contactForces, idBOwner, -1.f, nContactPairs, granData);
-    GPU_CALL(cudaStreamSynchronize(this_stream));
+    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     // displayFloat3(acc_A, 2 * nContactPairs);
     // displayFloat3(granData->contactForces, nContactPairs);
 
@@ -114,7 +114,7 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
         .instantiate()
         .configure(dim3(blocks_needed_for_stashing), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(granData->aX, granData->aY, granData->aZ, uniqueOwner, accOwner, *pForceCollectionRuns);
-    GPU_CALL(cudaStreamSynchronize(this_stream));
+    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     // displayArray<float>(granData->aX, nClumps);
     // displayArray<float>(granData->aY, nClumps);
     // displayArray<float>(granData->aZ, nClumps);
@@ -132,7 +132,7 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
         .launch(alpha_A, granData->contactPointGeometryA, granData->oriQw, granData->oriQx, granData->oriQy,
                 granData->oriQz, granData->contactForces, granData->contactTorque_convToForce, idAOwner, 1.f,
                 nContactPairs, granData);
-    GPU_CALL(cudaStreamSynchronize(this_stream));
+    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     // and don't forget body B
     collect_force_kernels->kernel("forceToAngAcc")
         .instantiate()
@@ -140,7 +140,7 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
         .launch(alpha_B, granData->contactPointGeometryB, granData->oriQw, granData->oriQx, granData->oriQy,
                 granData->oriQz, granData->contactForces, granData->contactTorque_convToForce, idBOwner, -1.f,
                 nContactPairs, granData);
-    GPU_CALL(cudaStreamSynchronize(this_stream));
+    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     // Reducing the angular acceleration (2 * nContactPairs for both body A and B)
     // Note: to do this, idAOwner needs to be sorted along with alpha_A. So we sort first.
     cubDEMSortByKeys<bodyID_t, float3, DEMSolverStateData>(idAOwner, idAOwner_sorted, alpha_A, alpha_A_sorted,
@@ -155,7 +155,7 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
         .instantiate()
         .configure(dim3(blocks_needed_for_stashing), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(granData->alphaX, granData->alphaY, granData->alphaZ, uniqueOwner, accOwner, *pForceCollectionRuns);
-    GPU_CALL(cudaStreamSynchronize(this_stream));
+    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
 }  // namespace deme

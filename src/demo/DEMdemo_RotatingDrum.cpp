@@ -122,7 +122,7 @@ int main() {
     DEMSim.SetCDUpdateFreq(30);
     // DEMSim.SetExpandFactor(1e-3);
     DEMSim.SetMaxVelocity(3.);
-    DEMSim.SetExpandSafetyParam(1.1);
+    DEMSim.SetExpandSafetyMultiplier(1.1);
     DEMSim.Initialize();
 
     path out_dir = current_path();

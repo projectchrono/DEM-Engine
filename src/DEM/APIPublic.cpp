@@ -88,6 +88,37 @@ void DEMSolver::SetSimTime(double time) {
     dT->setSimTime(time);
 }
 
+void DEMSolver::WatchForMaxVelocity(float max_vel) {
+    if (m_max_v_finder_type == MARGIN_FINDER_TYPE::MANUAL_MAX) {
+        DEME_WARNING(
+            "A WatchForMaxVelocity call has no effect because currently the solver is set to trust a user-specified "
+            "maximum velocity and never check it.\nYou can instead consider adding a call SetMaxVelocity(\"auto\") to "
+            "allow the solver to derive maximum clump velocity automatically.");
+    }
+    m_approx_max_vel = max_vel;
+}
+
+void DEMSolver::SetMaxVelocity(float max_vel, bool force) {
+    if (force) {
+        m_max_v_finder_type = MARGIN_FINDER_TYPE::MANUAL_MAX;
+    } else {
+        DEME_WARNING(
+            "Setting maximum velocity without the `force' argument being true will only instruct the solver to output "
+            "warnings when this velocity is exceeded.\nIt does not change the way the solver adds contact margins.");
+    }
+    m_approx_max_vel = max_vel;
+}
+
+void DEMSolver::SetMaxVelocity(const std::string& insp_type) {
+    if (insp_type == "auto") {
+        m_max_v_finder_type = MARGIN_FINDER_TYPE::DEFAULT;
+    } else {
+        DEME_ERROR(
+            "If a string is provided as the argument for SetMaxVelocity, it must be \"auto\" to instruct auto "
+            "selection of contact margin.");
+    }
+}
+
 void DEMSolver::InstructBoxDomainDimension(float x, float y, float z, SPATIAL_DIR dir_exact) {
     m_user_boxSize.x = x;
     m_user_boxSize.y = y;
@@ -737,13 +768,13 @@ std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMClumpBatch>& obj
 }
 
 std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity) {
-    DEMInspector insp(this, quantity);
+    DEMInspector insp(this, this->dT, quantity);
     m_inspectors.push_back(std::make_shared<DEMInspector>(std::move(insp)));
     return m_inspectors.back();
 }
 
 std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity, const std::string& region) {
-    DEMInspector insp(this, quantity, region);
+    DEMInspector insp(this, this->dT, quantity, region);
     m_inspectors.push_back(std::make_shared<DEMInspector>(std::move(insp)));
     return m_inspectors.back();
 }
@@ -1120,16 +1151,7 @@ float DEMSolver::dTInspectReduce(const std::shared_ptr<jitify::Program>& inspect
                                  INSPECT_ENTITY_TYPE thing_to_insp,
                                  CUB_REDUCE_FLAVOR reduce_flavor,
                                  bool all_domain) {
-    size_t n;
-    switch (thing_to_insp) {
-        case (INSPECT_ENTITY_TYPE::SPHERE):
-            n = nSpheresGM;
-            break;
-        case (INSPECT_ENTITY_TYPE::CLUMP):
-            n = nOwnerClumps;
-            break;
-    }
-    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, n, reduce_flavor, all_domain);
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
     return (float)(*pRes);
 }
 

@@ -230,8 +230,10 @@ struct DEMSimParams {
     float beta;
     // Max velocity, user approximated, we verify during simulation
     float approxMaxVel;
-    // Expand safety parameter (multiplier for the CD envelope)
-    float expSafetyParam;
+    // Expand safety parameter (multiplier for the max vel)
+    float expSafetyMulti;
+    // Expand safety parameter (adder for the max vel)
+    float expSafetyAdder;
     // Stepping method
     TIME_INTEGRATOR stepping = TIME_INTEGRATOR::FORWARD_EULER;
 
@@ -309,6 +311,8 @@ struct DEMDataDT {
     contactPairs_t* contactMapping_buffer;
 
     // pointer to remote buffer where kinematic thread stores work-order data provided by the dynamic thread
+    float* pKTOwnedBuffer_maxVel = NULL;
+    float* pKTOwnedBuffer_ts = NULL;
     voxelID_t* pKTOwnedBuffer_voxelID = NULL;
     subVoxelPos_t* pKTOwnedBuffer_locX = NULL;
     subVoxelPos_t* pKTOwnedBuffer_locY = NULL;
@@ -352,6 +356,8 @@ struct DEMDataKT {
     oriQ_t* oriQz;
 
     // kT-owned buffer pointers, for itself's usage
+    float maxVel_buffer;
+    float ts_buffer;
     voxelID_t* voxelID_buffer;
     subVoxelPos_t* locX_buffer;
     subVoxelPos_t* locY_buffer;
