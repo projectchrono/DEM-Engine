@@ -41,18 +41,21 @@ inline bool gpu_assert_watch_beta(cudaError_t code,
                                   bool except = true) {
     if (code != cudaSuccess) {
         if (except) {
+            std::stringstream out_msg;
+            out_msg << "\n\n-------- Simulation crashed due to too many geometries in a bin --------\n";
+            out_msg << "Right now, the dT reported (by user-specification or by calculation) max velocity is ";
+            out_msg << max_vel << "\n";
+            out_msg << "The contact margin thickness is ";
+            out_msg << beta << "\n";
+            out_msg << "If the velocity is extremely large, then the simulation probably diverged due to encountering "
+                       "large particle velocities, and decreasing the step size could help.\n";
+            out_msg << "If the velocity is fair but the margin is large compared to particle sizes, then perhaps too "
+                       "many contact geometries are in one bin, and decreasing the step size, update frequency or the "
+                       "bin size could help.\n\n";
+            std::cerr << out_msg.str();
             std::stringstream out;
             out << "GPU Assertion: " << cudaGetErrorString(code) << ". This happened in " << filename << ":" << line
                 << "\n";
-            out << "Right now, the dT reported (by user-specification or by calculation) max velocity is ";
-            out << max_vel << "\n";
-            out << "The contact margin thickness is ";
-            out << beta << "\n";
-            out << "If the velocity is extremely large, then the simulation probably diverged due to encountering "
-                   "large particle velocities, and decreasing the step size could help.\n";
-            out << "If the velocity is fair but the margin is large compared to particle sizes, then perhaps too many "
-                   "contact geometries are in one bin, and decreasing the step size, update frequency or the bin size "
-                   "could help.\n";
             throw std::runtime_error(out.str());
         }
         return false;
