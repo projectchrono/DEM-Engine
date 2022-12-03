@@ -65,7 +65,7 @@ int main() {
     DEMSim.SetCDUpdateFreq(20);
     // DEMSim.SetExpandFactor(1e-3);
     DEMSim.SetMaxVelocity(15.);
-    DEMSim.SetExpandSafetyParam(1.1);
+    DEMSim.SetExpandSafetyMultiplier(1.1);
     DEMSim.SetInitBinSize(4 * terrain_rad);
     DEMSim.Initialize();
 

@@ -9,6 +9,7 @@
 #include <vector>
 #include <set>
 #include <cfloat>
+#include <functional>
 
 #include <core/ApiVersion.h>
 #include <DEM/kT.h>
@@ -128,10 +129,16 @@ class DEMSolver {
     /// classes.
     std::unordered_map<std::string, std::string> GetJitStringSubs() { return m_subs; }
 
-    /// Explicitly instruct the bin size (for contact detection) that the solver should use
+    /// Explicitly instruct the bin size (for contact detection) that the solver should use.
     void SetInitBinSize(double bin_size) {
         use_user_defined_bin_size = true;
         m_binSize = bin_size;
+    }
+    /// Explicitly instruct the bin size (for contact detection) that the solver should use, as a multiple of the radius
+    /// of the smallest sphere in simulation.
+    void SetInitBinSizeAsMultipleOfSmallestSphere(float bin_size) {
+        use_user_defined_bin_size = false;
+        m_binSize_as_multiple = bin_size;
     }
 
     /// Explicitly instruct the sizes for the arrays at initialization time. This is useful when the number of owners
@@ -180,11 +187,23 @@ class DEMSolver {
     }
     /// Input the maximum expected particle velocity. This is mainly to help the solver automatically select a expand
     /// factor and do sanity checks during the simulation.
-    void SetMaxVelocity(float max_vel) { m_approx_max_vel = max_vel; }
-    /// Further enlarge the safety perimeter needed by the input amount. Large number means even safer contact detection
-    /// (missing no contacts), but creates more false positives, and risks leading to more bodies in a bin than a block
-    /// can handle.
-    void SetExpandSafetyParam(float param) { m_expand_safety_param = param; }
+    void SetMaxVelocity(float max_vel, bool force = true);
+    void SetMaxVelocity(const std::shared_ptr<DEMInspector>& insp) {
+        m_max_v_finder_type = MARGIN_FINDER_TYPE::DEM_INSPECTOR;
+        m_approx_max_vel_func = insp;
+    }
+    void SetMaxVelocity(const std::string& insp_type);
+    /// Assign a multiplier to our estimated maximum system velocity, when deriving the thinckness of the contact
+    /// `safety' margin. This can be greater than one if the simulation velocity can increase significantly in one kT
+    /// update cycle, but this is not common and should be close to 1 in general.
+    void SetExpandSafetyMultiplier(float param) { m_expand_safety_multi = param; }
+    /// Set a `base' velocity, which we will always add to our estimated maximum system velocity, when deriving the
+    /// thinckness of the contact `safety' margin. This need not to be large unless the simulation velocity can increase
+    /// significantly in one kT update cycle.
+    void SetExpandSafetyAdder(float vel) { m_expand_base_vel = vel; }
+    /// Instruct the solver to output warnings when it registers an entities velocity (rely on SetMaxVelocity to
+    /// determine method to query it) larger than this limit.
+    void WatchForMaxVelocity(float max_vel);
 
     /// Set the number of threads per block in force calculation (default 256)
     void SetForceCalcThreadsPerBlock(unsigned int nTh) { dT->DT_FORCE_CALC_NTHREADS_PER_BLOCK = nTh; }
@@ -642,6 +661,8 @@ class DEMSolver {
     float l = FLT_MAX;
     // The edge length of a bin (for contact detection)
     double m_binSize;
+    // User-instructed initial bin size as a multiple of smallest sphere radius
+    float m_binSize_as_multiple = 4.0;
     // Total number of bins
     size_t m_num_bins;
     // Number of bins on each direction
@@ -654,9 +675,19 @@ class DEMSolver {
     // multiplied by this expand_safety_param, so the geometries over-expand for CD purposes. This creates more false
     // positives, and risks leading to more bodies in a bin than a block can handle, but helps prevent contacts being
     // left undiscovered by CD.
-    float m_expand_safety_param = 1.f;
+    float m_expand_safety_multi = 1.f;
+    // The `base' velocity we always consider entities to have, when determining the thickness of the margin to add for
+    // contact detection.
+    float m_expand_base_vel = 0.5f;
+
+    // The method of determining the thickness of the margin added to CD
+    // Default is using a max_vel inspector of the clumps to decide it
+    enum class MARGIN_FINDER_TYPE { MANUAL_MAX, DEM_INSPECTOR, DEFAULT };
+    MARGIN_FINDER_TYPE m_max_v_finder_type = MARGIN_FINDER_TYPE::DEFAULT;
     // User-instructed approximate maximum velocity (of any point on a body in the simulation)
     float m_approx_max_vel = -1.f;
+    // The inspector that will be used for querying system max velocity
+    std::shared_ptr<DEMInspector> m_approx_max_vel_func;
 
     // The number of user-estimated (max) number of owners that will be present in the simulation. If 0, then the arrays
     // will just be resized at intialization based on the input size.
@@ -975,6 +1006,8 @@ class DEMSolver {
     void figureOutOrigin();
     /// Set the default bin (for contact detection) size to be the same of the smallest sphere
     void decideBinSize();
+    /// The method of deciding the thickness of contact margin (user-specified max vel; or a custom inspector)
+    void decideCDMarginStrat();
     /// Add boundaries to the simulation `world' based on user instructions
     void addWorldBoundingBox();
     /// Transfer cached solver preferences/instructions to dT and kT.

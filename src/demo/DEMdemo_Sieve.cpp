@@ -138,8 +138,8 @@ int main() {
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEMSim.SetCDUpdateFreq(30);
-    DEMSim.SetExpandFactor(20.0 * 30 * step_size);
-    DEMSim.SetExpandSafetyParam(1.0);
+    DEMSim.SetExpandSafetyMultiplier(1.0);
+    DEMSim.SetExpandSafetyAdder(1.0);
     DEMSim.SetInitBinSize(0.1);
 
     DEMSim.Initialize();

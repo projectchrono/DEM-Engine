@@ -18,6 +18,7 @@ class Program;
 namespace deme {
 
 class DEMSolver;
+class DEMDynamicThread;
 
 /// A class that the user can construct to inspect a certain property (such as void ratio, maximum Z coordinate...) of
 /// their simulation entites, in a given region.
@@ -37,8 +38,9 @@ class DEMInspector {
 
     bool initialized = false;
 
-    // Its parent DEMSolver system
+    // Its parent DEMSolver and dT system
     DEMSolver* sys;
+    DEMDynamicThread* dT;
 
     // Based on user input...
     void switch_quantity_type(const std::string& quantity);
@@ -47,14 +49,16 @@ class DEMInspector {
 
   public:
     friend class DEMSolver;
+    friend class DEMDynamicThread;
 
-    DEMInspector(DEMSolver* sim_sys, const std::string& quantity) : sys(sim_sys) {
+    DEMInspector(DEMSolver* sim_sys, DEMDynamicThread* dT_sys, const std::string& quantity) : sys(sim_sys), dT(dT_sys) {
         switch_quantity_type(quantity);
         // In default constructor, all entities are considered `in-region'
         in_region_code = " ";
         all_domain = true;
     }
-    DEMInspector(DEMSolver* sim_sys, const std::string& quantity, const std::string& region) : sys(sim_sys) {
+    DEMInspector(DEMSolver* sim_sys, DEMDynamicThread* dT_sys, const std::string& quantity, const std::string& region)
+        : sys(sim_sys), dT(dT_sys) {
         switch_quantity_type(quantity);
         in_region_code = region;
         all_domain = false;
@@ -65,13 +69,16 @@ class DEMInspector {
     void SetInspectionCode(const std::string& code) { inspection_code = code; }
 
     // Initialize with the DEM simulation system (user should not call this)
-    void Initialize(const std::unordered_map<std::string, std::string>& Subs);
+    void Initialize(const std::unordered_map<std::string, std::string>& Subs, bool force = false);
 
     /// Get the reduce value of the quantity that you wish to inspect
     float GetValue();
 
     /// Get the value (as a vector) of the quantity that you wish to inspect
     // std::vector<float> GetVector();
+
+    /// Get value directly within dT
+    float* dT_GetValue();
 };
 
 // A struct to get or set tracked owner entities, mainly for co-simulation

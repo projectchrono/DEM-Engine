@@ -230,8 +230,10 @@ struct DEMSimParams {
     float beta;
     // Max velocity, user approximated, we verify during simulation
     float approxMaxVel;
-    // Expand safety parameter (multiplier for the CD envelope)
-    float expSafetyParam;
+    // Expand safety parameter (multiplier for the max vel)
+    float expSafetyMulti;
+    // Expand safety parameter (adder for the max vel)
+    float expSafetyAdder;
     // Stepping method
     TIME_INTEGRATOR stepping = TIME_INTEGRATOR::FORWARD_EULER;
 
@@ -309,6 +311,8 @@ struct DEMDataDT {
     contactPairs_t* contactMapping_buffer;
 
     // pointer to remote buffer where kinematic thread stores work-order data provided by the dynamic thread
+    float* pKTOwnedBuffer_maxVel = NULL;
+    float* pKTOwnedBuffer_ts = NULL;
     voxelID_t* pKTOwnedBuffer_voxelID = NULL;
     subVoxelPos_t* pKTOwnedBuffer_locX = NULL;
     subVoxelPos_t* pKTOwnedBuffer_locY = NULL;
@@ -352,6 +356,10 @@ struct DEMDataKT {
     oriQ_t* oriQz;
 
     // kT-owned buffer pointers, for itself's usage
+    float maxVel_buffer;  // buffer for the current max vel sent by dT
+    float maxVel;         // kT's own storage of max vel
+    float ts_buffer;      // buffer for the current ts size sent by dT
+    float ts;             // kT's own storage of ts size
     voxelID_t* voxelID_buffer;
     subVoxelPos_t* locX_buffer;
     subVoxelPos_t* locY_buffer;
@@ -412,6 +420,14 @@ struct DEMDataKT {
 
 // typedef DEMDataDT* DEMDataDTPtr;
 // typedef DEMSimParams* DEMSimParamsPtr;
+
+// =============================================================================
+// MISC AND LESS IMPORTANT ONES...
+// =============================================================================
+
+// At init, we wish to show the user how thick approximately the CD margin will be added. This number will help deriving
+// that approximation. It can be anything really, 1 or 10, ro 8.
+const float AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE = 10.f;
 
 }  // namespace deme
 

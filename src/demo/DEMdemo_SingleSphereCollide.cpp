@@ -19,7 +19,7 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(DEBUG);
+    DEMSim.SetVerbosity(STEP_DEBUG);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetContactOutputContent(OWNER | FORCE | POINT | COMPONENT | NORMAL | TORQUE_ONLY_FORCE);
     DEMSim.EnsureKernelErrMsgLineNum();
@@ -78,10 +78,9 @@ int main() {
     DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(2e-5);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
-    // Velocity not to exceed 3.0
     DEMSim.SetCDUpdateFreq(10);
-    DEMSim.SetMaxVelocity(3.);
-    DEMSim.SetExpandSafetyParam(2.);
+    // DEMSim.SetMaxVelocity(3.);
+    DEMSim.SetExpandSafetyMultiplier(1.2);
     DEMSim.SetIntegrator(TIME_INTEGRATOR::CENTERED_DIFFERENCE);
 
     DEMSim.Initialize();
@@ -111,15 +110,15 @@ int main() {
         //     changed_family = true;
         // }
 
-        char filename[100];
+        char filename[200];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
         DEMSim.WriteSphereFile(std::string(filename));
 
-        char cnt_filename[100];
+        char cnt_filename[200];
         sprintf(cnt_filename, "%s/Contact_pairs_%04d.csv", out_dir.c_str(), i);
         // DEMSim.WriteContactFile(std::string(cnt_filename));
 
-        char meshfilename[100];
+        char meshfilename[200];
         sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), i);
         DEMSim.WriteMeshFile(std::string(meshfilename));
 

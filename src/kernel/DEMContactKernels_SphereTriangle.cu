@@ -227,11 +227,6 @@ __global__ void populateTriSphContactsEachBin(deme::DEMSimParams* simParams,
     __shared__ unsigned int blockPairCnt;
 
     const deme::trianglesBinTouches_t nTriInBin = numTrianglesBinTouches[blockIdx.x];
-    // No need to check if spheres exceed max now... already did in another kernel
-    if (threadIdx.x == 0 && nTriInBin > DEME_MAX_TRIANGLES_PER_BIN) {
-        DEME_ABORT_KERNEL("Bin %u contains %u triangular mesh facets, exceeding maximum allowance (%u)\n", blockIdx.x,
-                          nTriInBin, DEME_MAX_TRIANGLES_PER_BIN);
-    }
     deme::spheresBinTouches_t myThreadID = threadIdx.x;
     const deme::binID_t binID = activeBinIDsForTri[blockIdx.x];
     // But what is the index of the same binID in array activeBinIDs? Well, mapTriActBinToSphActBin comes to rescure.

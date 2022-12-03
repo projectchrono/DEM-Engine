@@ -139,8 +139,8 @@ int main() {
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEMSim.SetCDUpdateFreq(25);
     // DEMSim.SetExpandFactor(1e-3);
-    DEMSim.SetMaxVelocity(25.);
-    DEMSim.SetExpandSafetyParam(1.0);
+    DEMSim.SetMaxVelocity("auto");
+    DEMSim.SetExpandSafetyMultiplier(1.0);
     DEMSim.Initialize();
 
     path out_dir = current_path();

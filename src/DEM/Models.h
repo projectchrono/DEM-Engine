@@ -14,6 +14,7 @@
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
 #include <DEM/HostSideHelpers.hpp>
+#include <core/utils/DEMEPaths.h>
 
 namespace deme {
 

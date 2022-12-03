@@ -7,7 +7,7 @@
 
 GpuManager::GpuManager(unsigned int total_streams) {
     int ndevices = 0;
-    GPU_CALL(cudaGetDeviceCount(&ndevices));
+    DEME_GPU_CALL(cudaGetDeviceCount(&ndevices));
 
     if (ndevices == 0) {
         std::cerr << "Exactly 0 GPU device is detected. Try lspci and see what you get.\nIf you indeed have GPU "

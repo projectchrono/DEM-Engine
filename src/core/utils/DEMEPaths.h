@@ -9,13 +9,19 @@
 #include <filesystem>
 #include <cstring>
 
+#include <core/ApiVersion.h>
+
 namespace deme {
 
 // -----------------------------------------------------------------------------
 // Functions for manipulating the DEME data directory
 // -----------------------------------------------------------------------------
 
-static std::filesystem::path DEME_data_path("../data/");
+const std::filesystem::path SOURCE_DATA_PATH = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "data";
+//// TODO: And binary directory?
+// const std::filesystem::path BINARY_DATA_PATH
+
+static std::filesystem::path DEME_data_path(SOURCE_DATA_PATH);
 
 // Set the path to the DEME data directory (ATTENTION: not thread safe)
 void SetDEMEDataPath(const std::string& path);

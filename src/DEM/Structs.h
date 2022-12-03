@@ -61,22 +61,22 @@ class DEMSolverStateData {
     size_t* pNumPrevSpheres;
 
     DEMSolverStateData(unsigned int nArrays) : numTempArrays(nArrays) {
-        GPU_CALL(cudaMallocManaged(&pNumContacts, sizeof(size_t)));
-        GPU_CALL(cudaMallocManaged(&pTempSizeVar1, sizeof(size_t)));
-        GPU_CALL(cudaMallocManaged(&pTempSizeVar2, sizeof(size_t)));
-        GPU_CALL(cudaMallocManaged(&pNumPrevContacts, sizeof(size_t)));
-        GPU_CALL(cudaMallocManaged(&pNumPrevSpheres, sizeof(size_t)));
+        DEME_GPU_CALL(cudaMallocManaged(&pNumContacts, sizeof(size_t)));
+        DEME_GPU_CALL(cudaMallocManaged(&pTempSizeVar1, sizeof(size_t)));
+        DEME_GPU_CALL(cudaMallocManaged(&pTempSizeVar2, sizeof(size_t)));
+        DEME_GPU_CALL(cudaMallocManaged(&pNumPrevContacts, sizeof(size_t)));
+        DEME_GPU_CALL(cudaMallocManaged(&pNumPrevSpheres, sizeof(size_t)));
         *pNumContacts = 0;
         *pNumPrevContacts = 0;
         *pNumPrevSpheres = 0;
         threadTempVectors.resize(numTempArrays);
     }
     ~DEMSolverStateData() {
-        GPU_CALL(cudaFree(pNumContacts));
-        GPU_CALL(cudaFree(pTempSizeVar1));
-        GPU_CALL(cudaFree(pTempSizeVar2));
-        GPU_CALL(cudaFree(pNumPrevContacts));
-        GPU_CALL(cudaFree(pNumPrevSpheres));
+        DEME_GPU_CALL(cudaFree(pNumContacts));
+        DEME_GPU_CALL(cudaFree(pTempSizeVar1));
+        DEME_GPU_CALL(cudaFree(pTempSizeVar2));
+        DEME_GPU_CALL(cudaFree(pNumPrevContacts));
+        DEME_GPU_CALL(cudaFree(pNumPrevSpheres));
 
         cubScratchSpace.clear();
         for (unsigned int i = 0; i < numTempArrays; i++) {
@@ -241,11 +241,11 @@ inline std::string pretty_format_bytes(size_t bytes) {
 template <typename T>
 inline void DEME_DEVICE_PTR_ALLOC(T*& ptr, size_t size) {
     cudaPointerAttributes attrib;
-    GPU_CALL(cudaPointerGetAttributes(&attrib, ptr));
+    DEME_GPU_CALL(cudaPointerGetAttributes(&attrib, ptr));
 
     if (attrib.type != cudaMemoryType::cudaMemoryTypeUnregistered)
-        GPU_CALL(cudaFree(ptr));
-    GPU_CALL(cudaMalloc((void**)&ptr, size * sizeof(T)));
+        DEME_GPU_CALL(cudaFree(ptr));
+    DEME_GPU_CALL(cudaMalloc((void**)&ptr, size * sizeof(T)));
 }
 
 // Managed advise doesn't seem to do anything...
@@ -385,6 +385,10 @@ struct SolverFlags {
     bool useNoContactRecord = false;
     // Collect force (reduce to acc) right in the force calculation kernel
     bool useForceCollectInPlace = false;
+    // How dT should decide the max velocity in the system (true: query an inspector; false: use a constant)
+    bool maxVelQuery = true;
+    // kT--dT communication frequency
+    int updateFreq;
 };
 
 class DEMMaterial {
@@ -677,7 +681,6 @@ const std::string OUTPUT_FILE_R_COL_NAME = std::string("r");
 const std::string OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
 const std::filesystem::path USER_SCRIPT_PATH =
     std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" / "DEMUserScripts";
-const std::filesystem::path SOURCE_DATA_PATH = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "data";
 // Column names for contact pair output file
 const std::string OUTPUT_FILE_OWNER_1_NAME = std::string("A");
 const std::string OUTPUT_FILE_OWNER_2_NAME = std::string("B");
