@@ -219,8 +219,7 @@ int main() {
         DEMSim.SetInitTimeStep(step_size);
         DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -G_mag));
         DEMSim.SetCDUpdateFreq(15);
-        DEMSim.SetMaxVelocity(30.);
-        DEMSim.SetExpandSafetyMultiplier(1.1);
+        DEMSim.SetExpandSafetyAdder(0.5);
         DEMSim.SetInitBinSize(2 * scales.at(2));
         DEMSim.Initialize();
 

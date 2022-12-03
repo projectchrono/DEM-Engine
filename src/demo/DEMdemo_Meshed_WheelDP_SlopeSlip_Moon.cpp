@@ -44,7 +44,7 @@ int main() {
     float moon_added_pressure = (22. * 1.62 - wheel_mass * G_mag);
 
     // float Slopes_deg[] = {5, 10, 15, 20, 25};
-    float Slopes_deg[] = {0, 2, 4};
+    float Slopes_deg[] = {11.6667, 13.3333};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
 
@@ -201,7 +201,7 @@ int main() {
         float v_ref = w_r * wheel_rad;
         double G_ang = Slope_deg * math_PI / 180.;
 
-        double sim_end = 4.;
+        double sim_end = 5.;
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
         // (move freely linearly)
         DEMSim.SetFamilyPrescribedAngVel(1, "0", to_string_with_precision(w_r), "0", false);
@@ -228,8 +228,7 @@ int main() {
 
         DEMSim.SetInitTimeStep(step_size);
         DEMSim.SetCDUpdateFreq(15);
-        DEMSim.SetMaxVelocity(30.);
-        DEMSim.SetExpandSafetyParam(1.1);
+        DEMSim.SetExpandSafetyAdder(0.5);
         DEMSim.SetInitBinSize(2 * scales.at(2));
         DEMSim.Initialize();
 
@@ -244,7 +243,7 @@ int main() {
 
         // Put the wheel in place, then let the wheel sink in initially
         float init_x = -1.0;
-        if (Slope_deg < 14) {
+        if (Slope_deg <= 10) {
             init_x = -1.6;
         }
 
@@ -273,23 +272,23 @@ int main() {
         std::cout << "Bulk density low: " << bulk_den_low << std::endl;
 
         DEMSim.ChangeFamily(10, 1);
-        // for (double t = 0; t < 0.5; t += frame_time) {
-        //     if (curr_step % out_steps == 0) {
-        //         char filename[200], meshname[200];
-        //         std::cout << "Outputting frame: " << currframe << std::endl;
-        //         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-        //         sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
-        //         DEMSim.WriteSphereFile(std::string(filename));
-        //         DEMSim.WriteMeshFile(std::string(meshname));
-        //         DEMSim.ShowThreadCollaborationStats();
-        //         currframe++;
-        //     }
+        for (double t = 0; t < 0.5; t += frame_time) {
+            if (curr_step % out_steps == 0) {
+                char filename[200], meshname[200];
+                std::cout << "Outputting frame: " << currframe << std::endl;
+                sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
+                sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
+                DEMSim.WriteSphereFile(std::string(filename));
+                DEMSim.WriteMeshFile(std::string(meshname));
+                DEMSim.ShowThreadCollaborationStats();
+                currframe++;
+            }
 
-        //     DEMSim.DoDynamicsThenSync(frame_time);
-        // }
+            DEMSim.DoDynamicsThenSync(frame_time);
+        }
 
         // Change pressure amount
-        // DEMSim.ChangeFamily(1, 2);
+        DEMSim.ChangeFamily(1, 2);
         bool start_measure = false;
         for (double t = 0; t < sim_end; t += step_size, curr_step++) {
             if (curr_step % out_steps == 0) {
@@ -303,7 +302,7 @@ int main() {
                 currframe++;
             }
 
-            if (t >= 2. && !start_measure) {
+            if (t >= 3. && !start_measure) {
                 start_measure = true;
             }
 
