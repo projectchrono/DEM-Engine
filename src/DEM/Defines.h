@@ -117,7 +117,7 @@ enum VERBOSITY {
     ERROR = 10,
     WARNING = 20,
     INFO = 30,
-    STEP_STATS = 32,
+    STEP_ANOMALY = 32,
     STEP_METRIC = 35,
     DEBUG = 40,
     STEP_DEBUG = 50

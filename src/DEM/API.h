@@ -185,9 +185,10 @@ class DEMSolver {
         m_expand_factor = beta;
         use_user_defined_expand_factor = fix;
     }
-    /// Input the maximum expected particle velocity. This is mainly to help the solver automatically select a expand
-    /// factor and do sanity checks during the simulation.
-    void SetMaxVelocity(float max_vel, bool force = true);
+    /// Input the maximum expected particle velocity. If `force' is set to false, the solver will not use a velocity
+    /// larger than max_vel for determining the margin thickness; if `force' is set to true, the solver will not
+    /// calculate maximum system velocity and will always use max_vel to calculate the margin thickness.
+    void SetMaxVelocity(float max_vel, bool force = false);
     void SetMaxVelocity(const std::shared_ptr<DEMInspector>& insp) {
         m_max_v_finder_type = MARGIN_FINDER_TYPE::DEM_INSPECTOR;
         m_approx_max_vel_func = insp;
@@ -201,9 +202,6 @@ class DEMSolver {
     /// thinckness of the contact `safety' margin. This need not to be large unless the simulation velocity can increase
     /// significantly in one kT update cycle.
     void SetExpandSafetyAdder(float vel) { m_expand_base_vel = vel; }
-    /// Instruct the solver to output warnings when it registers an entities velocity (rely on SetMaxVelocity to
-    /// determine method to query it) larger than this limit.
-    void WatchForMaxVelocity(float max_vel);
 
     /// Set the number of threads per block in force calculation (default 256)
     void SetForceCalcThreadsPerBlock(unsigned int nTh) { dT->DT_FORCE_CALC_NTHREADS_PER_BLOCK = nTh; }
@@ -548,6 +546,9 @@ class DEMSolver {
     /// Show the wall time and percentages of wall time spend on various solver tasks
     void ShowTimingStats();
 
+    /// Show potential anomalies that may have been there in the simulation, then clear the anomaly log.
+    void ShowAnomalies();
+
     /// Reset the collaboration stats between dT and kT back to the initial value (0). You should call this if you want
     /// to start over and re-inspect the stats of the new run; otherwise, it is generally not needed, you can go ahead
     /// and destroy DEMSolver.
@@ -685,7 +686,7 @@ class DEMSolver {
     enum class MARGIN_FINDER_TYPE { MANUAL_MAX, DEM_INSPECTOR, DEFAULT };
     MARGIN_FINDER_TYPE m_max_v_finder_type = MARGIN_FINDER_TYPE::DEFAULT;
     // User-instructed approximate maximum velocity (of any point on a body in the simulation)
-    float m_approx_max_vel = -1.f;
+    float m_approx_max_vel = DEME_HUGE_FLOAT;
     // The inspector that will be used for querying system max velocity
     std::shared_ptr<DEMInspector> m_approx_max_vel_func;
 
@@ -1059,6 +1060,8 @@ class DEMSolver {
     void assertSysInit(const std::string& method_name);
     /// Assert that the DEM simulation system is not initialized
     void assertSysNotInit(const std::string& method_name);
+    /// Print due information on worker threads reported anomalies
+    bool goThroughWorkerAnomalies();
 
     // Some JIT packaging helpers
     inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap);

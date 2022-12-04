@@ -65,15 +65,24 @@ inline void DEMKinematicThread::unpackMyBuffer() {
     DEME_GPU_CALL(cudaMemcpy(granData->oriQz, granData->oriQ3_buffer, simParams->nOwnerBodies * sizeof(oriQ_t),
                              cudaMemcpyDeviceToDevice));
 
+    DEME_GPU_CALL(cudaMemcpy(&(granData->ts), &(granData->ts_buffer), sizeof(float), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(&(granData->maxVel), &(granData->maxVel_buffer), sizeof(float), cudaMemcpyDeviceToDevice));
     // kT will need to derive the thickness of the CD margin, based on dT's info on system max vel
     // If isExpandFactorFixed, then that expand factor is in beta already, no work needed
     if (!solverFlags.isExpandFactorFixed) {
+        // If maxVel is larger than the user estimation, that is an anomaly
+        float max_vel = granData->maxVel;
+        if (max_vel > simParams->approxMaxVel) {
+            DEME_STEP_ANOMALY("Simulation entity velocity reached %.6g, over the user-estimated %.6g", max_vel,
+                              simParams->approxMaxVel);
+            anomalies.over_max_vel = true;
+            max_vel = simParams->approxMaxVel;
+        }
         // If dT decides to change ts size, it already informed kT then
-        simParams->beta = (granData->maxVel_buffer * simParams->expSafetyMulti + simParams->expSafetyAdder) *
+        simParams->beta = (max_vel * simParams->expSafetyMulti + simParams->expSafetyAdder) *
                           (granData->ts_buffer * solverFlags.updateFreq);
     }
-    DEME_GPU_CALL(cudaMemcpy(&(granData->ts), &(granData->ts_buffer), sizeof(float), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(&(granData->maxVel), &(granData->maxVel_buffer), sizeof(float), cudaMemcpyDeviceToDevice));
+
     DEME_STEP_DEBUG_PRINTF("kT received a velocity update: %.6g", granData->maxVel);
     DEME_STEP_DEBUG_PRINTF("A margin of thickness %.6g is added", simParams->beta);
 
@@ -413,19 +422,19 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     simParams->nMatTuples = nMatTuples;
 
     // Resize the family mask `matrix' (in fact it is flattened)
-    DEME_TRACKED_RESIZE(familyMaskMatrix, (NUM_AVAL_FAMILIES - 1) * NUM_AVAL_FAMILIES / 2, "familyMaskMatrix",
-                        DONT_PREVENT_CONTACT);
+    DEME_TRACKED_RESIZE_DEBUGPRINT(familyMaskMatrix, (NUM_AVAL_FAMILIES - 1) * NUM_AVAL_FAMILIES / 2,
+                                   "familyMaskMatrix", DONT_PREVENT_CONTACT);
 
     // Resize to the number of clumps
-    DEME_TRACKED_RESIZE(familyID, nOwnerBodies, "familyID", 0);
-    DEME_TRACKED_RESIZE(voxelID, nOwnerBodies, "voxelID", 0);
-    DEME_TRACKED_RESIZE(locX, nOwnerBodies, "locX", 0);
-    DEME_TRACKED_RESIZE(locY, nOwnerBodies, "locY", 0);
-    DEME_TRACKED_RESIZE(locZ, nOwnerBodies, "locZ", 0);
-    DEME_TRACKED_RESIZE(oriQw, nOwnerBodies, "oriQw", 1);
-    DEME_TRACKED_RESIZE(oriQx, nOwnerBodies, "oriQx", 0);
-    DEME_TRACKED_RESIZE(oriQy, nOwnerBodies, "oriQy", 0);
-    DEME_TRACKED_RESIZE(oriQz, nOwnerBodies, "oriQz", 0);
+    DEME_TRACKED_RESIZE_DEBUGPRINT(familyID, nOwnerBodies, "familyID", 0);
+    DEME_TRACKED_RESIZE_DEBUGPRINT(voxelID, nOwnerBodies, "voxelID", 0);
+    DEME_TRACKED_RESIZE_DEBUGPRINT(locX, nOwnerBodies, "locX", 0);
+    DEME_TRACKED_RESIZE_DEBUGPRINT(locY, nOwnerBodies, "locY", 0);
+    DEME_TRACKED_RESIZE_DEBUGPRINT(locZ, nOwnerBodies, "locZ", 0);
+    DEME_TRACKED_RESIZE_DEBUGPRINT(oriQw, nOwnerBodies, "oriQw", 1);
+    DEME_TRACKED_RESIZE_DEBUGPRINT(oriQx, nOwnerBodies, "oriQx", 0);
+    DEME_TRACKED_RESIZE_DEBUGPRINT(oriQy, nOwnerBodies, "oriQy", 0);
+    DEME_TRACKED_RESIZE_DEBUGPRINT(oriQz, nOwnerBodies, "oriQz", 0);
 
     // Transfer buffer arrays
     // It is cudaMalloc-ed memory, not managed, because we want explicit locality control of buffers
@@ -441,14 +450,14 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
         DEME_DEVICE_PTR_ALLOC(granData->oriQ2_buffer, nOwnerBodies);
         DEME_DEVICE_PTR_ALLOC(granData->oriQ3_buffer, nOwnerBodies);
 
-        // DEME_TRACKED_RESIZE(voxelID_buffer, nOwnerBodies, "voxelID_buffer", 0);
-        // DEME_TRACKED_RESIZE(locX_buffer, nOwnerBodies, "locX_buffer", 0);
-        // DEME_TRACKED_RESIZE(locY_buffer, nOwnerBodies, "locY_buffer", 0);
-        // DEME_TRACKED_RESIZE(locZ_buffer, nOwnerBodies, "locZ_buffer", 0);
-        // DEME_TRACKED_RESIZE(oriQ0_buffer, nOwnerBodies, "oriQ0_buffer", 0);
-        // DEME_TRACKED_RESIZE(oriQ1_buffer, nOwnerBodies, "oriQ1_buffer", 0);
-        // DEME_TRACKED_RESIZE(oriQ2_buffer, nOwnerBodies, "oriQ2_buffer", 0);
-        // DEME_TRACKED_RESIZE(oriQ3_buffer, nOwnerBodies, "oriQ3_buffer", 0);
+        // DEME_TRACKED_RESIZE_DEBUGPRINT(voxelID_buffer, nOwnerBodies, "voxelID_buffer", 0);
+        // DEME_TRACKED_RESIZE_DEBUGPRINT(locX_buffer, nOwnerBodies, "locX_buffer", 0);
+        // DEME_TRACKED_RESIZE_DEBUGPRINT(locY_buffer, nOwnerBodies, "locY_buffer", 0);
+        // DEME_TRACKED_RESIZE_DEBUGPRINT(locZ_buffer, nOwnerBodies, "locZ_buffer", 0);
+        // DEME_TRACKED_RESIZE_DEBUGPRINT(oriQ0_buffer, nOwnerBodies, "oriQ0_buffer", 0);
+        // DEME_TRACKED_RESIZE_DEBUGPRINT(oriQ1_buffer, nOwnerBodies, "oriQ1_buffer", 0);
+        // DEME_TRACKED_RESIZE_DEBUGPRINT(oriQ2_buffer, nOwnerBodies, "oriQ2_buffer", 0);
+        // DEME_TRACKED_RESIZE_DEBUGPRINT(oriQ3_buffer, nOwnerBodies, "oriQ3_buffer", 0);
         // DEME_ADVISE_DEVICE(voxelID_buffer, dT->streamInfo.device);
         // DEME_ADVISE_DEVICE(locX_buffer, dT->streamInfo.device);
         // DEME_ADVISE_DEVICE(locY_buffer, dT->streamInfo.device);
@@ -458,7 +467,7 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
         // DEME_ADVISE_DEVICE(oriQ2_buffer, dT->streamInfo.device);
         // DEME_ADVISE_DEVICE(oriQ3_buffer, dT->streamInfo.device);
         if (solverFlags.canFamilyChange) {
-            // DEME_TRACKED_RESIZE(familyID_buffer, nOwnerBodies, "familyID_buffer", 0);
+            // DEME_TRACKED_RESIZE_DEBUGPRINT(familyID_buffer, nOwnerBodies, "familyID_buffer", 0);
             // DEME_ADVISE_DEVICE(familyID_buffer, dT->streamInfo.device);
             DEME_DEVICE_PTR_ALLOC(granData->familyID_buffer, nOwnerBodies);
         }
@@ -467,30 +476,30 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     }
 
     // Resize to the number of spheres (or plus num of triangle facets)
-    DEME_TRACKED_RESIZE(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
+    DEME_TRACKED_RESIZE_DEBUGPRINT(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
 
     // Resize to the number of triangle facets
-    DEME_TRACKED_RESIZE(ownerMesh, nTriGM, "ownerMesh", 0);
-    DEME_TRACKED_RESIZE(relPosNode1, nTriGM, "relPosNode1", make_float3(0));
-    DEME_TRACKED_RESIZE(relPosNode2, nTriGM, "relPosNode2", make_float3(0));
-    DEME_TRACKED_RESIZE(relPosNode3, nTriGM, "relPosNode3", make_float3(0));
+    DEME_TRACKED_RESIZE_DEBUGPRINT(ownerMesh, nTriGM, "ownerMesh", 0);
+    DEME_TRACKED_RESIZE_DEBUGPRINT(relPosNode1, nTriGM, "relPosNode1", make_float3(0));
+    DEME_TRACKED_RESIZE_DEBUGPRINT(relPosNode2, nTriGM, "relPosNode2", make_float3(0));
+    DEME_TRACKED_RESIZE_DEBUGPRINT(relPosNode3, nTriGM, "relPosNode3", make_float3(0));
 
     if (solverFlags.useClumpJitify) {
-        DEME_TRACKED_RESIZE(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
+        DEME_TRACKED_RESIZE_DEBUGPRINT(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
         // This extended component offset array can hold offset numbers even for big clumps (whereas
         // clumpComponentOffset is typically uint_8, so it may not). If a sphere's component offset index falls in this
         // range then it is not jitified, and the kernel needs to look for it in the global memory.
-        DEME_TRACKED_RESIZE(clumpComponentOffsetExt, nSpheresGM, "clumpComponentOffsetExt", 0);
+        DEME_TRACKED_RESIZE_DEBUGPRINT(clumpComponentOffsetExt, nSpheresGM, "clumpComponentOffsetExt", 0);
         // Resize to the length of the clump templates
-        DEME_TRACKED_RESIZE(radiiSphere, nClumpComponents, "radiiSphere", 0);
-        DEME_TRACKED_RESIZE(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
-        DEME_TRACKED_RESIZE(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
-        DEME_TRACKED_RESIZE(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
+        DEME_TRACKED_RESIZE_DEBUGPRINT(radiiSphere, nClumpComponents, "radiiSphere", 0);
+        DEME_TRACKED_RESIZE_DEBUGPRINT(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
+        DEME_TRACKED_RESIZE_DEBUGPRINT(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
+        DEME_TRACKED_RESIZE_DEBUGPRINT(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
     } else {
-        DEME_TRACKED_RESIZE(radiiSphere, nSpheresGM, "radiiSphere", 0);
-        DEME_TRACKED_RESIZE(relPosSphereX, nSpheresGM, "relPosSphereX", 0);
-        DEME_TRACKED_RESIZE(relPosSphereY, nSpheresGM, "relPosSphereY", 0);
-        DEME_TRACKED_RESIZE(relPosSphereZ, nSpheresGM, "relPosSphereZ", 0);
+        DEME_TRACKED_RESIZE_DEBUGPRINT(radiiSphere, nSpheresGM, "radiiSphere", 0);
+        DEME_TRACKED_RESIZE_DEBUGPRINT(relPosSphereX, nSpheresGM, "relPosSphereX", 0);
+        DEME_TRACKED_RESIZE_DEBUGPRINT(relPosSphereY, nSpheresGM, "relPosSphereY", 0);
+        DEME_TRACKED_RESIZE_DEBUGPRINT(relPosSphereZ, nSpheresGM, "relPosSphereZ", 0);
     }
 
     // Arrays for kT produced contact info
@@ -500,14 +509,14 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     {
         size_t cnt_arr_size =
             DEME_MAX(*stateOfSolver_resources.pNumPrevContacts, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
-        DEME_TRACKED_RESIZE(idGeometryA, cnt_arr_size, "idGeometryA", 0);
-        DEME_TRACKED_RESIZE(idGeometryB, cnt_arr_size, "idGeometryB", 0);
-        DEME_TRACKED_RESIZE(contactType, cnt_arr_size, "contactType", NOT_A_CONTACT);
+        DEME_TRACKED_RESIZE_DEBUGPRINT(idGeometryA, cnt_arr_size, "idGeometryA", 0);
+        DEME_TRACKED_RESIZE_DEBUGPRINT(idGeometryB, cnt_arr_size, "idGeometryB", 0);
+        DEME_TRACKED_RESIZE_DEBUGPRINT(contactType, cnt_arr_size, "contactType", NOT_A_CONTACT);
         if (!solverFlags.isHistoryless) {
-            DEME_TRACKED_RESIZE(previous_idGeometryA, cnt_arr_size, "previous_idGeometryA", 0);
-            DEME_TRACKED_RESIZE(previous_idGeometryB, cnt_arr_size, "previous_idGeometryB", 0);
-            DEME_TRACKED_RESIZE(previous_contactType, cnt_arr_size, "previous_contactType", NOT_A_CONTACT);
-            DEME_TRACKED_RESIZE(contactMapping, cnt_arr_size, "contactMapping", NULL_MAPPING_PARTNER);
+            DEME_TRACKED_RESIZE_DEBUGPRINT(previous_idGeometryA, cnt_arr_size, "previous_idGeometryA", 0);
+            DEME_TRACKED_RESIZE_DEBUGPRINT(previous_idGeometryB, cnt_arr_size, "previous_idGeometryB", 0);
+            DEME_TRACKED_RESIZE_DEBUGPRINT(previous_contactType, cnt_arr_size, "previous_contactType", NOT_A_CONTACT);
+            DEME_TRACKED_RESIZE_DEBUGPRINT(contactMapping, cnt_arr_size, "contactMapping", NULL_MAPPING_PARTNER);
         }
     }
 }
