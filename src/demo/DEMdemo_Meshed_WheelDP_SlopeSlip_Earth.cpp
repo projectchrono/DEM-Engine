@@ -42,7 +42,7 @@ int main() {
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
     // float Slopes_deg[] = {5, 10, 15, 20, 25};
-    float Slopes_deg[] = {0, 2, 4};
+    float Slopes_deg[] = {20, 25};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
 
@@ -195,12 +195,12 @@ int main() {
         // auto compressor_tracker = DEMSim.Track(compressor);
 
         // Families' prescribed motions (Earth)
-        float w_r = 0.8 * 2.45;
-        // float w_r = 0.8;
+        // float w_r = 0.8 * 2.45;
+        float w_r = 0.8;
         float v_ref = w_r * wheel_rad;
         double G_ang = Slope_deg * math_PI / 180.;
 
-        double sim_end = 4.;
+        double sim_end = 7.;
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
         // (move freely linearly)
         DEMSim.SetFamilyPrescribedAngVel(1, "0", to_string_with_precision(w_r), "0", false);
@@ -219,8 +219,9 @@ int main() {
         DEMSim.SetGravitationalAcceleration(this_G);
 
         DEMSim.SetInitTimeStep(step_size);
-        DEMSim.SetCDUpdateFreq(15);
+        DEMSim.SetCDUpdateFreq(20);
         DEMSim.SetExpandSafetyAdder(0.5);
+        DEMSim.SetMaxVelocity(40);
         DEMSim.SetInitBinSize(2 * scales.at(2));
         DEMSim.Initialize();
 
@@ -267,7 +268,7 @@ int main() {
                 currframe++;
             }
 
-            if (t >= 2. && !start_measure) {
+            if (t >= 4. && !start_measure) {
                 start_measure = true;
             }
 
@@ -289,6 +290,7 @@ int main() {
 
         run_mode++;
         DEMSim.ShowTimingStats();
+        DEMSim.ShowAnomalies();
     }
 
     std::cout << "DEMdemo_WheelDP_SlopeSlip demo exiting..." << std::endl;
