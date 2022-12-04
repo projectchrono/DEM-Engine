@@ -44,7 +44,8 @@ int main() {
     float moon_added_pressure = (22. * 1.62 - wheel_mass * G_mag);
 
     // float Slopes_deg[] = {5, 10, 15, 20, 25};
-    float Slopes_deg[] = {11.6667, 13.3333};
+    // float Slopes_deg[] = {11.6667, 13.3333};
+    float Slopes_deg[] = {0, 2};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
 
@@ -201,7 +202,7 @@ int main() {
         float v_ref = w_r * wheel_rad;
         double G_ang = Slope_deg * math_PI / 180.;
 
-        double sim_end = 5.;
+        double sim_end = 4.;
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
         // (move freely linearly)
         DEMSim.SetFamilyPrescribedAngVel(1, "0", to_string_with_precision(w_r), "0", false);
@@ -302,7 +303,7 @@ int main() {
                 currframe++;
             }
 
-            if (t >= 3. && !start_measure) {
+            if (t >= 2. && !start_measure) {
                 start_measure = true;
             }
 
