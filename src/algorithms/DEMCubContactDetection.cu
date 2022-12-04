@@ -23,9 +23,9 @@ inline void contactEventArraysResize(size_t nContactPairs,
                                      std::vector<contact_t, ManagedAllocator<contact_t>>& contactType,
                                      DEMDataKT* granData) {
     //// TODO: not tracked? Gotta do something on it
-    // DEME_TRACKED_RESIZE_NOPRINT(idGeometryA, nContactPairs);
-    // DEME_TRACKED_RESIZE_NOPRINT(idGeometryB, nContactPairs);
-    // DEME_TRACKED_RESIZE_NOPRINT(contactType, nContactPairs);
+    // DEME_TRACKED_RESIZE(idGeometryA, nContactPairs);
+    // DEME_TRACKED_RESIZE(idGeometryB, nContactPairs);
+    // DEME_TRACKED_RESIZE(contactType, nContactPairs);
     idGeometryA.resize(nContactPairs);
     idGeometryB.resize(nContactPairs);
     contactType.resize(nContactPairs);

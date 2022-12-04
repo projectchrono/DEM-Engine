@@ -85,6 +85,9 @@ class DEMDynamicThread {
     // Pointers to those data arrays defined below, stored in a struct
     DEMDataDT* granData;
 
+    // Log for anomalies in the simulation
+    WorkerAnomalies anomalies = WorkerAnomalies();
+
     // Body-related arrays in managed memory, for dT's personal use (not transfer buffer)
 
     // Those are the smaller ones, the unique, template ones

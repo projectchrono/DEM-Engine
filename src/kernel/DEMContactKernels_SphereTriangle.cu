@@ -46,7 +46,6 @@ __global__ void getNumberOfSphTriContactsEachBin(deme::DEMSimParams* simParams,
     __shared__ typename BlockReduceT::TempStorage temp_storage;
 
     const deme::trianglesBinTouches_t nTriInBin = numTrianglesBinTouches[blockIdx.x];
-    // No need to check if spheres exceed max now... already did in another kernel
     if (threadIdx.x == 0 && nTriInBin > DEME_MAX_TRIANGLES_PER_BIN) {
         DEME_ABORT_KERNEL("Bin %u contains %u triangular mesh facets, exceeding maximum allowance (%u)\n", blockIdx.x,
                           nTriInBin, DEME_MAX_TRIANGLES_PER_BIN);

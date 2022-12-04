@@ -1055,6 +1055,17 @@ void DEMSolver::validateUserInputs() {
     SetFamilyFixed(RESERVED_FAMILY_NUM);
 }
 
+bool DEMSolver::goThroughWorkerAnomalies() {
+    bool there_is = false;
+    if (kT->anomalies.over_max_vel || dT->anomalies.over_max_vel) {
+        DEME_PRINTF(
+            "Workers reported there are simulation entities reached user-specified maximum velocity.\nDetails can be "
+            "shown by re-running with \"STEP_ANOMALY\" verbosity level.\n");
+        there_is = true;
+    }
+    return there_is;
+}
+
 // inline unsigned int stash_material_in_templates(std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
 //                                                 const std::shared_ptr<DEMMaterial>& this_material) {
 //     auto is_same = [&](const std::shared_ptr<DEMMaterial>& ptr) { return is_material_same(ptr, this_material); };

@@ -164,12 +164,13 @@ inline std::string pretty_format_bytes(size_t bytes) {
         }                                   \
     }
 
-#define DEME_STEP_STATS(...)                      \
-    {                                             \
-        if (verbosity >= VERBOSITY::STEP_STATS) { \
-            printf(__VA_ARGS__);                  \
-            printf("\n");                         \
-        }                                         \
+#define DEME_STEP_ANOMALY(...)                              \
+    {                                                       \
+        if (verbosity >= VERBOSITY::STEP_ANOMALY) {         \
+            printf("\n-------- SIM ANOMALY!!! --------\n"); \
+            printf(__VA_ARGS__);                            \
+            printf("\n\n");                                 \
+        }                                                   \
     }
 
 #define DEME_STEP_METRIC(...)                      \
@@ -214,7 +215,7 @@ inline std::string pretty_format_bytes(size_t bytes) {
         m_approx_bytes_used += byte_delta;                         \
     }
 
-#define DEME_TRACKED_RESIZE_NOPRINT(vec, newsize, val)         \
+#define DEME_TRACKED_RESIZE(vec, newsize, val)                 \
     {                                                          \
         size_t item_size = sizeof(decltype(vec)::value_type);  \
         size_t old_size = vec.size();                          \
@@ -224,16 +225,16 @@ inline std::string pretty_format_bytes(size_t bytes) {
         m_approx_bytes_used += byte_delta;                     \
     }
 
-#define DEME_TRACKED_RESIZE(vec, newsize, name, val)                                                               \
-    {                                                                                                              \
-        size_t item_size = sizeof(decltype(vec)::value_type);                                                      \
-        size_t old_size = vec.size();                                                                              \
-        vec.resize(newsize, val);                                                                                  \
-        size_t new_size = vec.size();                                                                              \
-        size_t byte_delta = item_size * (new_size - old_size);                                                     \
-        m_approx_bytes_used += byte_delta;                                                                         \
-        DEME_STEP_STATS("Resizing vector %s, old size %zu, new size %zu, byte delta %s", name, old_size, new_size, \
-                        pretty_format_bytes(byte_delta).c_str());                                                  \
+#define DEME_TRACKED_RESIZE_DEBUGPRINT(vec, newsize, name, val)                                                      \
+    {                                                                                                                \
+        size_t item_size = sizeof(decltype(vec)::value_type);                                                        \
+        size_t old_size = vec.size();                                                                                \
+        vec.resize(newsize, val);                                                                                    \
+        size_t new_size = vec.size();                                                                                \
+        size_t byte_delta = item_size * (new_size - old_size);                                                       \
+        m_approx_bytes_used += byte_delta;                                                                           \
+        DEME_DEBUG_PRINTF("Resizing vector %s, old size %zu, new size %zu, byte delta %s", name, old_size, new_size, \
+                          pretty_format_bytes(byte_delta).c_str());                                                  \
     }
 
 //// TODO: this is currently not tracked...
@@ -263,6 +264,16 @@ inline void DEME_DEVICE_PTR_ALLOC(T*& ptr, size_t size) {
 // =============================================================================
 // NOW SOME HOST-SIDE SIMPLE STRUCTS USED BY THE DEM MODULE
 // =============================================================================
+
+// Anomalies log
+class WorkerAnomalies {
+  public:
+    WorkerAnomalies() {}
+
+    bool over_max_vel = false;
+
+    void Clear() { over_max_vel = false; }
+};
 
 // Timers used by kT and dT
 class SolverTimers {

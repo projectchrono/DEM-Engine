@@ -88,23 +88,13 @@ void DEMSolver::SetSimTime(double time) {
     dT->setSimTime(time);
 }
 
-void DEMSolver::WatchForMaxVelocity(float max_vel) {
-    if (m_max_v_finder_type == MARGIN_FINDER_TYPE::MANUAL_MAX) {
-        DEME_WARNING(
-            "A WatchForMaxVelocity call has no effect because currently the solver is set to trust a user-specified "
-            "maximum velocity and never check it.\nYou can instead consider adding a call SetMaxVelocity(\"auto\") to "
-            "allow the solver to derive maximum clump velocity automatically.");
-    }
-    m_approx_max_vel = max_vel;
-}
-
 void DEMSolver::SetMaxVelocity(float max_vel, bool force) {
     if (force) {
         m_max_v_finder_type = MARGIN_FINDER_TYPE::MANUAL_MAX;
-    } else {
         DEME_WARNING(
-            "Setting maximum velocity without the `force' argument being true will only instruct the solver to output "
-            "warnings when this velocity is exceeded.\nIt does not change the way the solver adds contact margins.");
+            "Setting maximum velocity with the `force' argument being true will disable automatic maximum velocity "
+            "derivation, and use this user-supplied number to determine CD margin thickness always.\nUnusually large "
+            "velocities will not be detected automatically.");
     }
     m_approx_max_vel = max_vel;
 }
@@ -1134,6 +1124,17 @@ void DEMSolver::ShowThreadCollaborationStats() {
     DEME_PRINTF("Number of times kinematic held back: %zu\n",
                 (dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack).load());
     DEME_PRINTF("-----------------------------\n");
+}
+
+void DEMSolver::ShowAnomalies() {
+    DEME_PRINTF("\n~~ Simulation anomaly report ~~\n");
+    bool there_is_anomaly = goThroughWorkerAnomalies();
+    if (!there_is_anomaly) {
+        DEME_PRINTF("There is no simulation anomalies on record.\n");
+    }
+    DEME_PRINTF("-----------------------------\n");
+    kT->anomalies.Clear();
+    dT->anomalies.Clear();
 }
 
 void DEMSolver::ClearThreadCollaborationStats() {

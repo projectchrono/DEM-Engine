@@ -72,6 +72,9 @@ class DEMKinematicThread {
     // Pointers to those data arrays defined below, stored in a struct
     DEMDataKT* granData;
 
+    // Log for anomalies in the simulation
+    WorkerAnomalies anomalies = WorkerAnomalies();
+
     // Buffer arrays for storing info from the dT side.
     // dT modifies these arrays; kT uses them only.
 
