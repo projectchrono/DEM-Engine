@@ -18,11 +18,13 @@ namespace deme {
 // Functions for manipulating the DEME data directory
 // -----------------------------------------------------------------------------
 
-const std::filesystem::path SOURCE_DATA_PATH = RuntimeDataHelper::path;
+// Build or installation data path
+const std::filesystem::path BUILD_DATA_PATH = RuntimeDataHelper::path / "data";
+
 //// TODO: And binary directory?
 // const std::filesystem::path BINARY_DATA_PATH
 
-static std::filesystem::path DEME_data_path(SOURCE_DATA_PATH);
+static std::filesystem::path DEME_data_path(BUILD_DATA_PATH);
 
 // Set the path to the DEME data directory (ATTENTION: not thread safe)
 void SetDEMEDataPath(const std::string& path);

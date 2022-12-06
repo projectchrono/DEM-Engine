@@ -3,15 +3,14 @@
 //
 //  SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef RUNTIMEDATA_H 
-#define RUNTIMEDATA_H 
+#ifndef RUNTIMEDATA_H
+#define RUNTIMEDATA_H
 
 #include <filesystem>
 
 class RuntimeDataHelper {
-public:
-	static std::filesystem::path path;
+  public:
+    static std::filesystem::path path;
 };
 
 #endif
-

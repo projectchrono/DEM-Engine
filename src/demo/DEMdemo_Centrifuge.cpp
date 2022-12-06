@@ -25,7 +25,7 @@ int main() {
 
     // What will be loaded from the file, is a template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
     DEMClumpTemplate ellipsoid;
-    ellipsoid.ReadComponentFromFile((GET_SOURCE_DATA_PATH() / "clumps/ellipsoid_2_1_1.csv").string());
+    ellipsoid.ReadComponentFromFile((GET_DATA_PATH() / "clumps/ellipsoid_2_1_1.csv").string());
     // Calculate its mass and MOI
     float mass = 2.6e3 * 4. / 3. * PI * 2 * 1 * 1;
     float3 MOI = make_float3(1. / 5. * mass * (1 * 1 + 2 * 2), 1. / 5. * mass * (1 * 1 + 2 * 2),
