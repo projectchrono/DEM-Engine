@@ -10,6 +10,7 @@
 #include <cstring>
 
 #include <core/ApiVersion.h>
+#include <core/utils/RuntimeData.h>
 
 namespace deme {
 
@@ -17,7 +18,7 @@ namespace deme {
 // Functions for manipulating the DEME data directory
 // -----------------------------------------------------------------------------
 
-const std::filesystem::path SOURCE_DATA_PATH = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "data";
+const std::filesystem::path SOURCE_DATA_PATH = RuntimeDataHelper::path;
 //// TODO: And binary directory?
 // const std::filesystem::path BINARY_DATA_PATH
 

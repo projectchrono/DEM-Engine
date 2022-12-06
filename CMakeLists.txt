@@ -140,6 +140,7 @@ target_link_libraries(simulator_multi_gpu
 	PUBLIC CUDA::cudart
 	PUBLIC CUDA::nvrtc
 	PUBLIC ${ChPF_IMPORTED_NAME}
+	PUBLIC DEMERuntimeDataHelper
 )
 
 # Attach include directories to the top-level library target
@@ -156,7 +157,8 @@ set(config_directory ${CMAKE_INSTALL_LIBDIR}/cmake/DEME)
 
 # Install the library, creating an export target for it as well 
 install(
-	TARGETS simulator_multi_gpu EXPORT DEMETargets
+	TARGETS simulator_multi_gpu DEMERuntimeDataHelper
+	EXPORT DEMETargets
 	LIBRARY
 		DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
@@ -220,9 +222,14 @@ install(
 # ---------------------------------------------------------------------------- #
 # Copy data directory over
 # ---------------------------------------------------------------------------- #
-# set(DataDir "data")
 file(COPY ${CMAKE_CURRENT_LIST_DIR}/data/ DESTINATION ${CMAKE_BINARY_DIR}/data/)
-install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/data/ DESTINATION ${CMAKE_INSTALL_DATADIR}/data/)
+install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/data/ DESTINATION ${CMAKE_INSTALL_DATADIR}/DEME/data/)
+
+# ---------------------------------------------------------------------------- #
+# Copy kernels over
+# ---------------------------------------------------------------------------- #
+file(COPY ${CMAKE_CURRENT_LIST_DIR}/src/kernel/ DESTINATION ${CMAKE_BINARY_DIR}/kernels/)
+install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/src/kernel/ DESTINATION ${CMAKE_INSTALL_DATADIR}/DEME/kernels/)
 
 # ---------------------------------------------------------------------------- #
 # Build embedded demos

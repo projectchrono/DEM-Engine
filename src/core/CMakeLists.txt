@@ -13,6 +13,8 @@ configure_file(
 	@ONLY
 )
 
+
+
 message(STATUS "${core_message} Extracting NVIDIA Jitify header...") 
 configure_file(
 	${NVIDIAJitifyPath}/jitify.hpp
@@ -48,6 +50,7 @@ set(core_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/csv.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/Timer.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/DEMEPaths.h
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/RuntimeData.h
 )
 
 set(core_sources
@@ -98,4 +101,67 @@ install(
 	DESTINATION 
 		${CMAKE_INSTALL_INCLUDEDIR}/jitify
 )
+
+
+# --------------------------------------------------------- #
+# Runtime data path helper library 
+# --------------------------------------------------------- #
+
+
+message(STATUS "${core_message} Generating Runtime Data helper (build)...")
+set(RUNTIME_DATA_DIRECTORY "${CMAKE_BINARY_DIR}")
+configure_file(
+	utils/RuntimeData.cpp.in utils/RuntimeDataBuild.cpp
+	@ONLY
+)
+
+message(STATUS "${core_message} Generating Runtime Data helper (install)...")
+set(RUNTIME_DATA_DIRECTORY "${CMAKE_INSTALL_DATADIR}/DEME")
+configure_file(
+	utils/RuntimeData.cpp.in utils/RuntimeDataInstall.cpp
+	@ONLY
+)
+
+# Build tree version
+
+add_library(DEMERuntimeDataHelper SHARED)
+
+target_sources(DEMERuntimeDataHelper
+	PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils/RuntimeData.h> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/utils/RuntimeData.h>
+	PRIVATE "${CMAKE_BINARY_DIR}/src/core/utils/RuntimeDataBuild.cpp" 
+)
+
+target_include_directories(
+	DEMERuntimeDataHelper
+	PUBLIC $<BUILD_INTERFACE:${ProjectIncludeSource}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
+set_target_properties(
+	DEMERuntimeDataHelper PROPERTIES
+	POSITION_INDEPENDENT_CODE True
+	CXX_STANDARD ${CXXSTD_SUPPORTED}
+)
+
+# Install tree version
+
+#add_library(DEMERuntimeDataHelper_install SHARED)
+
+#target_sources(DEMERuntimeDataHelper_install
+#	PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/utils/RuntimeData.h"
+#	PRIVATE "${CMAKE_BINARY_DIR}/src/core/utils/RuntimeDataInstall.cpp"
+#)
+
+#target_link_options(DEMERuntimeDataHelper_install
+#	PUBLIC "LINKER:-soname,libDEMERuntimeDataHelper.so"
+#)
+
+#set_target_properties(
+#	DEMERuntimeDataHelper_install PROPERTIES
+#	POSITION_INDEPENDENT_CODE True
+#	CXX_STANDARD ${CXXSTD_SUPPORTED}
+#	LIBRARY_OUTPUT_NAME "DEMERuntimeDataHelper"
+#	LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib_install"
+#)
+
+
 
