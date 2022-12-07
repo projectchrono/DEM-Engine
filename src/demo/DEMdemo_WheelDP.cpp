@@ -20,7 +20,7 @@ const double math_PI = 3.1415927;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_WheelDP_Force_mu0.9";
+    out_dir += "/DEMdemo_WheelDP_Force_mu0.9_750N";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -33,16 +33,17 @@ int main() {
     // Define the wheel geometry
     float wheel_rad = 0.25;
     float wheel_width = 0.25;
-    float wheel_mass = 8.7;
-    float total_pressure = 480.0;
+    float wheel_mass = 11.;
+    // float total_pressure = 480.0;
+    float total_pressure = 750.0;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
-    float TRs[] = {0.1, 0.05};
-    // float TRs[] = {0.9, 0.7, 0.5, 0.3, 0.2, 0.1, 0.05};
+    // float TRs[] = {0.1, 0.05};
+    float TRs[] = {0.9, 0.7, 0.5, 0.3, 0.2, 0.1, 0.05};
     unsigned int run_mode = 0;
-    unsigned int currframe = 402;
+    unsigned int currframe = 0;
 
     for (float TR : TRs) {
         DEMSolver DEMSim;
@@ -196,7 +197,7 @@ int main() {
         float w_r = math_PI / 12.;
         float v_ref = w_r * wheel_rad;
 
-        double sim_end = 6.;
+        double sim_end = 8.;
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
         // (move freely linearly)
         DEMSim.SetFamilyPrescribedAngVel(1, "0", to_string_with_precision(w_r), "0", false);
@@ -276,7 +277,7 @@ int main() {
                 DEMSim.ShowThreadCollaborationStats();
             }
 
-            if (t >= 2. && !start_measure) {
+            if (t >= 4. && !start_measure) {
                 start_measure = true;
             }
 

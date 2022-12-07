@@ -40,6 +40,7 @@ SET(DEMOS
 		DEMdemo_WheelSlopeSlip
 		DEMdemo_Meshed_WheelDP_SlopeSlip_Moon
 		DEMdemo_Meshed_WheelDP_SlopeSlip_Earth
+		DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_AllSph
 )
 
 # ------------------------------------------------------------------------------
