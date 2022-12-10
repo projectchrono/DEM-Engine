@@ -49,7 +49,7 @@ int main() {
 
     // Then the ground particle template
     DEMClumpTemplate shape_template;
-    shape_template.ReadComponentFromFile((GET_SOURCE_DATA_PATH() / "clumps/triangular_flat.csv").string());
+    shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
     // Calculate its mass and MOI
     float mass = 2.6e3 * 5.5886717 * kg_g_conv;  // in kg or g
     float3 MOI = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3 * kg_g_conv;

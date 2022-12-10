@@ -663,7 +663,7 @@ class DEMSolver {
     // The edge length of a bin (for contact detection)
     double m_binSize;
     // User-instructed initial bin size as a multiple of smallest sphere radius
-    float m_binSize_as_multiple = 4.0;
+    float m_binSize_as_multiple = 2.0;
     // Total number of bins
     size_t m_num_bins;
     // Number of bins on each direction

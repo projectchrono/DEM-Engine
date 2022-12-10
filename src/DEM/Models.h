@@ -14,6 +14,7 @@
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
 #include <DEM/HostSideHelpers.hpp>
+#include <core/utils/RuntimeData.h>
 #include <core/utils/DEMEPaths.h>
 
 namespace deme {
@@ -23,8 +24,8 @@ namespace deme {
 ////////////////////////////////////////////////////////////////////////////////
 
 inline std::string HERTZIAN_FORCE_MODEL() {
-    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "FullHertzianForceModel.cu";
+    std::filesystem::path sourcefile =
+        RuntimeDataHelper::path / "kernel" / "DEMCustomizablePolicies" / "FullHertzianForceModel.cu";
     if (!std::filesystem::exists(sourcefile)) {
         DEME_ERROR("The force model file %s is not found.", sourcefile.c_str());
     }
@@ -32,8 +33,8 @@ inline std::string HERTZIAN_FORCE_MODEL() {
 }
 
 inline std::string HERTZIAN_FORCE_MODEL_FRICTIONLESS() {
-    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "FrictionlessHertzianForceModel.cu";
+    std::filesystem::path sourcefile =
+        RuntimeDataHelper::path / "kernel" / "DEMCustomizablePolicies" / "FrictionlessHertzianForceModel.cu";
     if (!std::filesystem::exists(sourcefile)) {
         DEME_ERROR("The force model file %s is not found.", sourcefile.c_str());
     }
@@ -41,8 +42,8 @@ inline std::string HERTZIAN_FORCE_MODEL_FRICTIONLESS() {
 }
 
 inline std::string FORCE_REDUCTION_RIGHT_AFTER_CALC_STRAT() {
-    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "ForceInKernelReductionStrat.cu";
+    std::filesystem::path sourcefile =
+        RuntimeDataHelper::path / "kernel" / "DEMCustomizablePolicies" / "ForceInKernelReductionStrat.cu";
     if (!std::filesystem::exists(sourcefile)) {
         DEME_ERROR("A strategy file %s is not found.", sourcefile.c_str());
     }
@@ -50,8 +51,8 @@ inline std::string FORCE_REDUCTION_RIGHT_AFTER_CALC_STRAT() {
 }
 
 inline std::string FORCE_INFO_WRITE_BACK_STRAT() {
-    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "ContactInfoWriteBack.cu";
+    std::filesystem::path sourcefile =
+        RuntimeDataHelper::path / "kernel" / "DEMCustomizablePolicies" / "ContactInfoWriteBack.cu";
     if (!std::filesystem::exists(sourcefile)) {
         DEME_ERROR("A strategy file %s is not found.", sourcefile.c_str());
     }
@@ -63,8 +64,8 @@ inline std::string FORCE_INFO_WRITE_BACK_STRAT() {
 ////////////////////////////////////////////////////////////////////////////////
 
 inline std::string CLUMP_COMPONENT_ACQUISITION_ALL_JITIFIED() {
-    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "ClumpCompAcqStratAllJitify.cu";
+    std::filesystem::path sourcefile =
+        RuntimeDataHelper::path / "kernel" / "DEMCustomizablePolicies" / "ClumpCompAcqStratAllJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
         DEME_ERROR("The clump component jitification strategy file %s is not found.", sourcefile.c_str());
     }
@@ -72,8 +73,8 @@ inline std::string CLUMP_COMPONENT_ACQUISITION_ALL_JITIFIED() {
 }
 
 inline std::string CLUMP_COMPONENT_ACQUISITION_PARTIALLY_JITIFIED() {
-    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "ClumpCompAcqStratPartialJitify.cu";
+    std::filesystem::path sourcefile =
+        RuntimeDataHelper::path / "kernel" / "DEMCustomizablePolicies" / "ClumpCompAcqStratPartialJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
         DEME_ERROR("The clump component jitification strategy file %s is not found.", sourcefile.c_str());
     }
@@ -81,8 +82,8 @@ inline std::string CLUMP_COMPONENT_ACQUISITION_PARTIALLY_JITIFIED() {
 }
 
 inline std::string CLUMP_COMPONENT_DEFINITIONS_JITIFIED() {
-    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "ClumpCompDefJitify.cu";
+    std::filesystem::path sourcefile =
+        RuntimeDataHelper::path / "kernel" / "DEMCustomizablePolicies" / "ClumpCompDefJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
         DEME_ERROR("The jitified clump component array file %s is not found.", sourcefile.c_str());
     }
@@ -90,8 +91,8 @@ inline std::string CLUMP_COMPONENT_DEFINITIONS_JITIFIED() {
 }
 
 inline std::string CLUMP_COMPONENT_ACQUISITION_FLATTENED() {
-    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "ClumpCompAcqStratAllFlatten.cu";
+    std::filesystem::path sourcefile =
+        RuntimeDataHelper::path / "kernel" / "DEMCustomizablePolicies" / "ClumpCompAcqStratAllFlatten.cu";
     if (!std::filesystem::exists(sourcefile)) {
         DEME_ERROR("The clump component loading strategy file %s is not found.", sourcefile.c_str());
     }
@@ -103,8 +104,8 @@ inline std::string CLUMP_COMPONENT_ACQUISITION_FLATTENED() {
 ////////////////////////////////////////////////////////////////////////////////
 
 inline std::string ANALYTICAL_COMPONENT_DEFINITIONS_JITIFIED() {
-    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "AnalyticalCompDefJitify.cu";
+    std::filesystem::path sourcefile =
+        RuntimeDataHelper::path / "kernel" / "DEMCustomizablePolicies" / "AnalyticalCompDefJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
         DEME_ERROR("The jitified analytical object component array file %s is not found.", sourcefile.c_str());
     }
@@ -116,8 +117,8 @@ inline std::string ANALYTICAL_COMPONENT_DEFINITIONS_JITIFIED() {
 ////////////////////////////////////////////////////////////////////////////////
 
 inline std::string MASS_DEFINITIONS_JITIFIED() {
-    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "MassDefJitify.cu";
+    std::filesystem::path sourcefile =
+        RuntimeDataHelper::path / "kernel" / "DEMCustomizablePolicies" / "MassDefJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
         DEME_ERROR("The mass property array file %s is not found.", sourcefile.c_str());
     }
@@ -125,8 +126,8 @@ inline std::string MASS_DEFINITIONS_JITIFIED() {
 }
 
 inline std::string MOI_DEFINITIONS_JITIFIED() {
-    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "MOIDefJitify.cu";
+    std::filesystem::path sourcefile =
+        RuntimeDataHelper::path / "kernel" / "DEMCustomizablePolicies" / "MOIDefJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
         DEME_ERROR("The MOI property array file %s is not found.", sourcefile.c_str());
     }
@@ -134,8 +135,8 @@ inline std::string MOI_DEFINITIONS_JITIFIED() {
 }
 
 inline std::string MASS_ACQUISITION_JITIFIED() {
-    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "MassAcqStratJitify.cu";
+    std::filesystem::path sourcefile =
+        RuntimeDataHelper::path / "kernel" / "DEMCustomizablePolicies" / "MassAcqStratJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
         DEME_ERROR("The mass loading strategy array file %s is not found.", sourcefile.c_str());
     }
@@ -143,8 +144,8 @@ inline std::string MASS_ACQUISITION_JITIFIED() {
 }
 
 inline std::string MASS_ACQUISITION_FLATTENED() {
-    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "MassAcqStratFlatten.cu";
+    std::filesystem::path sourcefile =
+        RuntimeDataHelper::path / "kernel" / "DEMCustomizablePolicies" / "MassAcqStratFlatten.cu";
     if (!std::filesystem::exists(sourcefile)) {
         DEME_ERROR("The mass loading strategy array file %s is not found.", sourcefile.c_str());
     }
@@ -152,8 +153,8 @@ inline std::string MASS_ACQUISITION_FLATTENED() {
 }
 
 inline std::string MOI_ACQUISITION_JITIFIED() {
-    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "MOIAcqStratJitify.cu";
+    std::filesystem::path sourcefile =
+        RuntimeDataHelper::path / "kernel" / "DEMCustomizablePolicies" / "MOIAcqStratJitify.cu";
     if (!std::filesystem::exists(sourcefile)) {
         DEME_ERROR("The MOI loading strategy array file %s is not found.", sourcefile.c_str());
     }
@@ -161,8 +162,8 @@ inline std::string MOI_ACQUISITION_JITIFIED() {
 }
 
 inline std::string MOI_ACQUISITION_FLATTENED() {
-    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "MOIAcqStratFlatten.cu";
+    std::filesystem::path sourcefile =
+        RuntimeDataHelper::path / "kernel" / "DEMCustomizablePolicies" / "MOIAcqStratFlatten.cu";
     if (!std::filesystem::exists(sourcefile)) {
         DEME_ERROR("The MOI loading strategy array file %s is not found.", sourcefile.c_str());
     }
@@ -173,8 +174,8 @@ inline std::string MOI_ACQUISITION_FLATTENED() {
 // Data path and other paths
 ////////////////////////////////////////////////////////////////////////////////
 
-inline std::filesystem::path GET_SOURCE_DATA_PATH() {
-    return SOURCE_DATA_PATH;
+inline std::filesystem::path GET_DATA_PATH() {
+    return BUILD_DATA_PATH;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -182,8 +183,8 @@ inline std::filesystem::path GET_SOURCE_DATA_PATH() {
 ////////////////////////////////////////////////////////////////////////////////
 
 inline std::string VEL_TO_PASS_ON_FORWARD_EULER() {
-    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "IntegrationVelPassOnForwardEuler.cu";
+    std::filesystem::path sourcefile =
+        RuntimeDataHelper::path / "kernel" / "DEMCustomizablePolicies" / "IntegrationVelPassOnForwardEuler.cu";
     if (!std::filesystem::exists(sourcefile)) {
         DEME_ERROR("The integration strategy file %s is not found.", sourcefile.c_str());
     }
@@ -191,8 +192,8 @@ inline std::string VEL_TO_PASS_ON_FORWARD_EULER() {
 }
 
 inline std::string VEL_TO_PASS_ON_EXTENDED_TAYLOR() {
-    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "IntegrationVelPassOnExtendedTaylor.cu";
+    std::filesystem::path sourcefile =
+        RuntimeDataHelper::path / "kernel" / "DEMCustomizablePolicies" / "IntegrationVelPassOnExtendedTaylor.cu";
     if (!std::filesystem::exists(sourcefile)) {
         DEME_ERROR("The integration strategy file %s is not found.", sourcefile.c_str());
     }
@@ -200,8 +201,8 @@ inline std::string VEL_TO_PASS_ON_EXTENDED_TAYLOR() {
 }
 
 inline std::string VEL_TO_PASS_ON_CENTERED_DIFF() {
-    std::filesystem::path sourcefile = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" /
-                                       "DEMCustomizablePolicies" / "IntegrationVelPassOnCenteredDiff.cu";
+    std::filesystem::path sourcefile =
+        RuntimeDataHelper::path / "kernel" / "DEMCustomizablePolicies" / "IntegrationVelPassOnCenteredDiff.cu";
     if (!std::filesystem::exists(sourcefile)) {
         DEME_ERROR("The integration strategy file %s is not found.", sourcefile.c_str());
     }

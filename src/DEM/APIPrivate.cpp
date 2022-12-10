@@ -869,12 +869,14 @@ void DEMSolver::transferSolverParams() {
 
 void DEMSolver::transferSimParams() {
     if ((!use_user_defined_expand_factor) &&
-        (m_approx_max_vel < 1e-4f && m_max_v_finder_type == MARGIN_FINDER_TYPE::MANUAL_MAX) && m_updateFreq > 0) {
+        ((m_approx_max_vel < 1e-4f || m_approx_max_vel > 1e4) &&
+         m_max_v_finder_type == MARGIN_FINDER_TYPE::MANUAL_MAX) &&
+        m_updateFreq > 0) {
         DEME_WARNING(
-            "You instructed that the physics can stretch %u time steps into the future, and specified the maximum "
-            "velocity in this system is %.6g.\nThis is quite a small velocity, and the contact detection procedure "
-            "will likely fail to detect some contact events before it is too late, hindering the simulation accuracy "
-            "and stability.",
+            "You instructed that the physics can stretch %u time steps into the future, and explicitly specified the "
+            "maximum velocity stays at %.6g.\nThis appears to be an unusual velocity, and the contact detection "
+            "procedure will likely fail to detect some contact events before it is too late,\nor create contact "
+            "margins that are too thick resulting in a \"too many spheres in bin\" failure.",
             m_updateFreq, m_approx_max_vel);
     }
     if ((!use_user_defined_expand_factor) && (m_expand_base_vel < 1e-4f || m_expand_safety_multi < 1.f) &&

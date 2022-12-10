@@ -12,6 +12,7 @@
 #include <core/utils/csv.hpp>
 #include <core/utils/GpuError.h>
 #include <core/utils/Timer.hpp>
+#include <core/utils/RuntimeData.h>
 
 #include <sstream>
 #include <exception>
@@ -690,8 +691,7 @@ const std::string OUTPUT_FILE_Y_COL_NAME = std::string("Y");
 const std::string OUTPUT_FILE_Z_COL_NAME = std::string("Z");
 const std::string OUTPUT_FILE_R_COL_NAME = std::string("r");
 const std::string OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
-const std::filesystem::path USER_SCRIPT_PATH =
-    std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" / "DEMUserScripts";
+const std::filesystem::path USER_SCRIPT_PATH = RuntimeDataHelper::path / "kernel" / "DEMUserScripts";
 // Column names for contact pair output file
 const std::string OUTPUT_FILE_OWNER_1_NAME = std::string("A");
 const std::string OUTPUT_FILE_OWNER_2_NAME = std::string("B");

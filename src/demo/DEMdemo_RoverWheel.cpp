@@ -42,7 +42,7 @@ int main() {
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
     auto wheel_template =
         DEMSim.LoadClumpType(wheel_mass, make_float3(wheel_IXX, wheel_IYY, wheel_IXX),
-                             (GET_SOURCE_DATA_PATH() / "clumps/ViperWheelSimple.csv").string(), mat_type_wheel);
+                             (GET_DATA_PATH() / "clumps/ViperWheelSimple.csv").string(), mat_type_wheel);
     // The file contains no wheel particles size info, so let's manually set them
     wheel_template->radii = std::vector<float>(wheel_template->nComp, 0.01);
     // This wheel template is `lying down', but our reported MOI info is assuming it's in a position to roll along X
@@ -52,7 +52,7 @@ int main() {
 
     // Then the ground particle template
     DEMClumpTemplate ellipsoid_template;
-    ellipsoid_template.ReadComponentFromFile((GET_SOURCE_DATA_PATH() / "clumps/ellipsoid_2_1_1.csv").string());
+    ellipsoid_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/ellipsoid_2_1_1.csv").string());
     // Calculate its mass and MOI
     float mass = 2.6e3 * 4. / 3. * PI * 2 * 1 * 1;
     float3 MOI = make_float3(1. / 5. * mass * (1 * 1 + 2 * 2), 1. / 5. * mass * (1 * 1 + 2 * 2),

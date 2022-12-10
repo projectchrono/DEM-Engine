@@ -1,0 +1,13 @@
+//  Copyright (c) 2021, SBEL GPU Development Team
+//  Copyright (c) 2021, University of Wisconsin - Madison
+//
+//  SPDX-License-Identifier: BSD-3-Clause
+
+#include <core/utils/RuntimeData.h>
+
+#define RUNTIME_DATA_DIRECTORY "@RUNTIME_DATA_DIRECTORY@"
+
+std::filesystem::path RuntimeDataHelper::path = std::filesystem::path(RUNTIME_DATA_DIRECTORY);
+
+
+
