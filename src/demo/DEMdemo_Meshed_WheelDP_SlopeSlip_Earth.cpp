@@ -20,8 +20,8 @@ const double math_PI = 3.1415927;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_Temp";
-    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
+    // out_dir += "/DEMdemo_Temp";
+    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled";
     std::filesystem::create_directory(out_dir);
 
@@ -41,8 +41,8 @@ int main() {
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
-    // float Slopes_deg[] = {5, 10, 15, 20, 25};
-    float Slopes_deg[] = {20, 25};
+    float Slopes_deg[] = {5, 10, 15, 20, 25};
+    // float Slopes_deg[] = {20, 25};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
 
@@ -200,7 +200,7 @@ int main() {
         float v_ref = w_r * wheel_rad;
         double G_ang = Slope_deg * math_PI / 180.;
 
-        double sim_end = 7.;
+        double sim_end = 8.;
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
         // (move freely linearly)
         DEMSim.SetFamilyPrescribedAngVel(1, "0", to_string_with_precision(w_r), "0", false);
