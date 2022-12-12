@@ -22,7 +22,7 @@ int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
     // out_dir += "/DEMdemo_Temp";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon_SamePressureAsEarth";
-    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon_0.3friction";
+    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -58,9 +58,9 @@ int main() {
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
         // E, nu, CoR, mu, Crr...
-        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.3}, {"Crr", 0.00}});
+        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.9}, {"Crr", 0.00}});
         auto mat_type_terrain =
-            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.3}, {"Crr", 0.00}});
+            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.9}, {"Crr", 0.00}});
 
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
@@ -202,7 +202,7 @@ int main() {
         float v_ref = w_r * wheel_rad;
         double G_ang = Slope_deg * math_PI / 180.;
 
-        double sim_end = 6.;
+        double sim_end = 8.;
         if (Slope_deg >= 20) {
             sim_end = 8.;
         }
@@ -306,7 +306,7 @@ int main() {
                 currframe++;
             }
 
-            if (t >= 3. && !start_measure) {
+            if (t >= 4. && !start_measure) {
                 start_measure = true;
             }
 
