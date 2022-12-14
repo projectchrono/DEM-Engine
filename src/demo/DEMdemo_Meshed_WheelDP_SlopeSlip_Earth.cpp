@@ -41,8 +41,8 @@ int main() {
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
-    float Slopes_deg[] = {5, 10, 15, 20, 25};
-    // float Slopes_deg[] = {20, 25};
+    // float Slopes_deg[] = {5, 10, 15, 20, 25};
+    float Slopes_deg[] = {0, 2, 4};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
 
