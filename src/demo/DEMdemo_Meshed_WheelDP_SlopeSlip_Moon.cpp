@@ -44,8 +44,8 @@ int main() {
 
     float moon_added_pressure = (22. * 1.62 - wheel_mass * G_mag);
 
-    float Slopes_deg[] = {5, 10, 15, 20, 25};
-    // float Slopes_deg[] = {11.6667, 13.3333};
+    // float Slopes_deg[] = {5, 10, 15, 20, 25};
+    float Slopes_deg[] = {0, 2};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
 
