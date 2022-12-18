@@ -105,8 +105,10 @@ class DEMTracker {
     /// Get the quaternion that represents the orientation of this tracked object's own coordinate system
     float4 OriQ(size_t offset = 0);
 
-    // float3 Acc(size_t offset = 0);
-    // float3 AngAcc(size_t offset = 0);
+    /// @brief Get the clumps that are in contact with this tracked owner as a vector.
+    /// @param offset Offset to the first item this tracker is tracking. Default is 0.
+    /// @return Clump owner IDs in contact with this owner.
+    std::vector<bodyID_t> GetContactClumps(size_t offset = 0);
 
     /// Get the a portion of the acceleration of this tracked object, that is the result of its contact with other
     /// simulation entities. In most cases, this means excluding the gravitational acceleration. The acceleration is in

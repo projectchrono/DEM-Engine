@@ -156,6 +156,8 @@ class DEMSolver {
     /// Read user custom contact force model from a file (which by default should reside in kernel/DEMUserScripts).
     /// Returns a shared_ptr to the force model in use.
     std::shared_ptr<DEMForceModel> ReadContactForceModel(const std::string& filename);
+    /// Get the current force model.
+    std::shared_ptr<DEMForceModel> GetContactForceModel() { return m_force_model; }
 
     /// Instruct the solver if contact pair arrays should be sorted (based on the types of contacts) before usage. This
     /// can potentially make dT run faster. This is currently not implemented due to technical difficulties.
@@ -241,6 +243,10 @@ class DEMSolver {
     /// the API-level cache. Return the ptr of the material type just loaded.
     std::shared_ptr<DEMMaterial> LoadMaterial(const std::unordered_map<std::string, float>& mat_prop);
 
+    /// @brief Get the clumps that are in contact with this owner as a vector.
+    /// @param ownerID The ID of the owner that is being queried.
+    /// @return Clump owner IDs in contact with this owner.
+    std::vector<bodyID_t> GetOwnerContactClumps(bodyID_t ownerID) const;
     /// Get position of a owner
     float3 GetOwnerPosition(bodyID_t ownerID) const;
     /// Get angular velocity of a owner
@@ -253,7 +259,7 @@ class DEMSolver {
     float3 GetOwnerAcc(bodyID_t ownerID) const;
     /// Get the angular acceleration of a owner
     float3 GetOwnerAngAcc(bodyID_t ownerID) const;
-    /// Set position of a owner in user unit
+    /// Set position of a owner
     void SetOwnerPosition(bodyID_t ownerID, float3 pos);
     /// Set angular velocity of a owner
     void SetOwnerAngVel(bodyID_t ownerID, float3 angVel);
@@ -349,10 +355,26 @@ class DEMSolver {
     /// The entities in this family will always experienced an extra angular acceleration defined using this method
     void AddFamilyPrescribedAngAcc(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
 
-    /// Globally modify a owner wildcard's value
-    void SetOwnerWildcardValue(const std::string& name, float val);
-    /// Modify the owner wildcard values of all entities in family N
-    void SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, float val);
+    /// @brief Set the names for the extra quantities that will be associated with each contact pair.
+    void SetContactWildcards(const std::set<std::string>& wildcards);
+    /// @brief Set the names for the extra quantities that will be associated with each owner.
+    void SetOwnerWildcards(const std::set<std::string>& wildcards);
+
+    /// Globally modify a owner wildcard's values
+    void SetOwnerWildcardValue(const std::string& name, const std::vector<float>& vals);
+    void SetOwnerWildcardValue(const std::string& name, float val) {
+        SetOwnerWildcardValue(name, std::vector<float>(1, val));
+    }
+    /// Modify the owner wildcard's values of all entities in family N
+    void SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, const std::vector<float>& vals);
+    void SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, float val) {
+        SetFamilyOwnerWildcardValue(N, name, std::vector<float>(1, val));
+    }
+
+    /// @brief Get the owner wildcard's values of all entities.
+    std::vector<float> GetOwnerWildcardValue(const std::string& name, float val);
+    /// @brief Get the owner wildcard's values of all entities in family N.
+    std::vector<float> GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, float val);
 
     /// Change all entities with family number ID_from to have a new number ID_to, when the condition defined by the
     /// string is satisfied by the entities in question. This should be called before initialization, and will be baked
@@ -587,6 +609,10 @@ class DEMSolver {
     void SetContactOutputContent(unsigned int content) { m_cnt_out_content = content; }
     /// Specify the file format of meshes
     void SetMeshOutputFormat(MESH_FORMAT format) { m_mesh_out_format = format; }
+    /// Enable/disable outputting owner wildcard values to file.
+    void EnableOwnerWildcardOutput(bool enable = true) { m_is_out_owner_wildcards = enable; }
+    /// Enable/disable outputting contact wildcard values to the contact file.
+    void EnableContactWildcardOutput(bool enable = true) { m_is_out_cnt_wildcards = enable; }
 
     /// Let dT do this call and return the reduce value of the inspected quantity
     float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
@@ -628,9 +654,12 @@ class DEMSolver {
     OUTPUT_FORMAT m_cnt_out_format = OUTPUT_FORMAT::CSV;
     // The output file content for contact pairs
     unsigned int m_cnt_out_content = CNT_OUTPUT_CONTENT::GEO_ID | CNT_OUTPUT_CONTENT::FORCE |
-                                     CNT_OUTPUT_CONTENT::POINT | CNT_OUTPUT_CONTENT::WILDCARD;
+                                     CNT_OUTPUT_CONTENT::POINT | CNT_OUTPUT_CONTENT::CNT_WILDCARD;
     // The output file format for meshes
     MESH_FORMAT m_mesh_out_format = MESH_FORMAT::VTK;
+    // If the solver should output wildcards to file
+    bool m_is_out_owner_wildcards = false;
+    bool m_is_out_cnt_wildcards = false;
 
     // User instructed simulation `world' size. Note it is an approximate of the true size and we will generate a world
     // not smaller than this.

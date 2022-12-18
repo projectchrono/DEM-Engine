@@ -32,6 +32,7 @@ SET(DEMOS
 		DEMdemo_Shake
 		DEMdemo_WheelDP
 		DEMdemo_WheelSlopeSlip
+		DEMdemo_Indentation
 )
 
 # ------------------------------------------------------------------------------

@@ -44,6 +44,69 @@ DEMSolver::~DEMSolver() {
     delete dTkT_GpuManager;
 }
 
+std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
+    // Is this owner a clump?
+    ownerType_t this_type = dT->ownerTypes.at(ownerID);
+    std::vector<bodyID_t> geo_to_watch;  // geo IDs that need to scan
+    switch (this_type) {
+        case OWNER_T_CLUMP:
+            for (bodyID_t i = 0; i < nSpheresGM; i++) {
+                if (ownerID == dT->ownerClumpBody.at(i))
+                    geo_to_watch.push_back(i);
+            }
+            break;
+        case OWNER_T_ANALYTICAL:
+            for (bodyID_t i = 0; i < nAnalGM; i++) {
+                if (ownerID == dT->ownerAnalBody.at(i))
+                    geo_to_watch.push_back(i);
+            }
+            break;
+        case OWNER_T_MESH:
+            for (bodyID_t i = 0; i < nTriGM; i++) {
+                if (ownerID == dT->ownerMesh.at(i))
+                    geo_to_watch.push_back(i);
+            }
+            break;
+    }
+
+    std::vector<bodyID_t> clumps_in_cnt;
+    // If this is not clump, then checking idB for it is enough
+    if (this_type != OWNER_T_CLUMP) {
+        for (size_t i = 0; i < dT->getNumContacts(); i++) {
+            auto idA = dT->idGeometryA.at(i);
+            auto idB = dT->idGeometryB.at(i);
+            if (!check_exist(geo_to_watch, idB))
+                continue;
+            auto cnt_type = dT->contactType.at(i);
+            // If it is a mesh facet, then contact type needs to match
+            if (this_type == OWNER_T_MESH) {
+                if (cnt_type == SPHERE_MESH_CONTACT) {
+                    clumps_in_cnt.push_back(idA);
+                }
+            } else {  // If analytical, then contact type larger than PLANE is fine
+                if (cnt_type >= SPHERE_PLANE_CONTACT) {
+                    clumps_in_cnt.push_back(idA);
+                }
+            }
+        }
+    } else {  // If a clump, then both idA and idB need to be checked
+        for (size_t i = 0; i < dT->getNumContacts(); i++) {
+            auto idA = dT->idGeometryA.at(i);
+            auto idB = dT->idGeometryB.at(i);
+            auto cnt_type = dT->contactType.at(i);
+            if (check_exist(geo_to_watch, idA)) {
+                if (cnt_type == SPHERE_SPHERE_CONTACT) {
+                    clumps_in_cnt.push_back(idB);
+                }
+            } else if (check_exist(geo_to_watch, idB)) {
+                if (cnt_type == SPHERE_SPHERE_CONTACT) {
+                    clumps_in_cnt.push_back(idA);
+                }
+            }
+        }
+    }
+    return clumps_in_cnt;
+}
 float3 DEMSolver::GetOwnerPosition(bodyID_t ownerID) const {
     return dT->getOwnerPos(ownerID);
 }
@@ -425,7 +488,7 @@ void DEMSolver::AddFamilyPrescribedAngAcc(unsigned int ID,
     m_input_family_prescription.push_back(preInfo);
 }
 
-void DEMSolver::SetOwnerWildcardValue(const std::string& name, float val) {
+void DEMSolver::SetOwnerWildcardValue(const std::string& name, const std::vector<float>& vals) {
     assertSysInit("SetOwnerWildcardValue");
     if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
         DEME_ERROR(
@@ -433,9 +496,9 @@ void DEMSolver::SetOwnerWildcardValue(const std::string& name, float val) {
             "SetPerOwnerWildcards first.",
             name.c_str());
     }
-    dT->setOwnerWildcardValue(m_owner_wc_num.at(name), val);
+    dT->setOwnerWildcardValue(m_owner_wc_num.at(name), vals);
 }
-void DEMSolver::SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, float val) {
+void DEMSolver::SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, const std::vector<float>& vals) {
     assertSysInit("SetFamilyOwnerWildcardValue");
     if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
         DEME_ERROR(
@@ -443,7 +506,41 @@ void DEMSolver::SetFamilyOwnerWildcardValue(unsigned int N, const std::string& n
             "SetPerOwnerWildcards first.",
             name.c_str());
     }
-    dT->setFamilyOwnerWildcardValue(N, m_owner_wc_num.at(name), val);
+    dT->setFamilyOwnerWildcardValue(N, m_owner_wc_num.at(name), vals);
+}
+
+std::vector<float> DEMSolver::GetOwnerWildcardValue(const std::string& name, float val) {
+    assertSysInit("GetOwnerWildcardValue");
+    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
+        DEME_ERROR(
+            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerOwnerWildcards first.",
+            name.c_str());
+    }
+    std::vector<float> res;
+    dT->getOwnerWildcardValue(res, m_owner_wc_num.at(name));
+    return res;
+}
+
+std::vector<float> DEMSolver::GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, float val) {
+    assertSysInit("GetFamilyOwnerWildcardValue");
+    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
+        DEME_ERROR(
+            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerOwnerWildcards first.",
+            name.c_str());
+    }
+    std::vector<float> res;
+    dT->getFamilyOwnerWildcardValue(res, N, m_owner_wc_num.at(name));
+    return res;
+}
+
+void DEMSolver::SetContactWildcards(const std::set<std::string>& wildcards) {
+    m_force_model->SetPerContactWildcards(wildcards);
+}
+
+void DEMSolver::SetOwnerWildcards(const std::set<std::string>& wildcards) {
+    m_force_model->SetPerOwnerWildcards(wildcards);
 }
 
 void DEMSolver::DisableFamilyOutput(unsigned int ID) {

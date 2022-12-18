@@ -218,6 +218,10 @@ void DEMTracker::assertMeshFaceSize(size_t input_length, const std::string& name
     }
 }
 
+std::vector<bodyID_t> DEMTracker::GetContactClumps(size_t offset) {
+    return sys->GetOwnerContactClumps(obj->ownerID + offset);
+}
+
 float3 DEMTracker::Pos(size_t offset) {
     return sys->GetOwnerPosition(obj->ownerID + offset);
 }

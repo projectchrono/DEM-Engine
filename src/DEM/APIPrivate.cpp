@@ -821,8 +821,16 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.hasMeshes = (nTriObjLoad > 0);
 
     // I/O policies (only output content, not file format, matters for worker threads)
-    dT->solverFlags.outputFlags = m_out_content;
-    dT->solverFlags.cntOutFlags = m_cnt_out_content;
+    auto output_level = m_out_content;
+    if (m_is_out_owner_wildcards) {
+        output_level = output_level | OUTPUT_CONTENT::OWNER_WILDCARD;
+    }
+    dT->solverFlags.outputFlags = output_level;
+    output_level = m_cnt_out_content;
+    if (m_is_out_cnt_wildcards) {
+        output_level = output_level | CNT_OUTPUT_CONTENT::CNT_WILDCARD;
+    }
+    dT->solverFlags.cntOutFlags = output_level;
 
     // Transfer historyless-ness
     kT->solverFlags.isHistoryless = (m_force_model->m_contact_wildcards.size() == 0);

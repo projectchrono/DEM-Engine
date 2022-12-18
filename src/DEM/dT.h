@@ -211,7 +211,8 @@ class DEMDynamicThread {
     // An example of such wildcard arrays is contact history: how much did the contact point move on the geometry
     // surface compared to when the contact first emerged?
 
-    // Storage for the names of the contact wildcards
+    // Storage for the names of the contact wildcards (whose order agrees with the impl-level wildcard numbering, from 1
+    // to n)
     std::set<std::string> m_contact_wildcard_names;
     std::set<std::string> m_owner_wildcard_names;
 
@@ -241,7 +242,7 @@ class DEMDynamicThread {
     // Belonged-body ID
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerClumpBody;
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerMesh;
-    std::vector<bodyID_t> ownerAnalBody;
+    std::vector<bodyID_t> ownerAnalBody;  // Not managed since all analytical bodies are jitified
 
     // The ID that maps this sphere component's geometry-defining parameters, when this component is jitified
     std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> clumpComponentOffset;
@@ -327,6 +328,9 @@ class DEMDynamicThread {
                       const std::set<std::string>& contact_wildcards,
                       const std::set<std::string>& owner_wildcards);
 
+    /// @brief Get total number of contacts.
+    /// @return Number of contacts.
+    size_t getNumContacts() const;
     /// Get this owner's position in user unit
     float3 getOwnerPos(bodyID_t ownerID) const;
     /// Get this owner's angular velocity
@@ -354,15 +358,20 @@ class DEMDynamicThread {
     void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite = true);
 
     /// Globally modify a owner wildcard's value
-    void setOwnerWildcardValue(unsigned int wc_num, float val);
+    void setOwnerWildcardValue(unsigned int wc_num, const std::vector<float>& vals);
     /// Modify the owner wildcard values of all entities in family family_num
-    void setFamilyOwnerWildcardValue(unsigned int family_num, unsigned int wc_num, float val);
+    void setFamilyOwnerWildcardValue(unsigned int family_num, unsigned int wc_num, const std::vector<float>& vals);
+
+    /// @brief  Fill res with the wc_num wildcard value.
+    void getOwnerWildcardValue(std::vector<float>& res, unsigned int wc_num);
+    /// @brief  Fill res with the wc_num wildcard value for entities with family number family_num.
+    void getFamilyOwnerWildcardValue(std::vector<float>& res, unsigned int family_num, unsigned int wc_num);
 
     /// Let dT know that it needs a kT update, as something important may have changed, and old contact pair info is no
     /// longer valid.
     void announceCritical() { pendingCriticalUpdate = true; }
 
-    /// Change all entities with (user-level) family number ID_from to have a new number ID_to
+    /// @brief Change all entities with (user-level) family number ID_from to have a new number ID_to.
     void changeFamily(unsigned int ID_from, unsigned int ID_to);
 
     /// Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
