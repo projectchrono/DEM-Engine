@@ -21,28 +21,27 @@ const double math_PI = 3.1415927;
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
     // out_dir += "/DEMdemo_Temp";
-    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
-    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled";
+    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
+    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled_HighSlope";
     std::filesystem::create_directory(out_dir);
 
     // `World'
     float G_mag = 9.81;
     float step_size = 1e-6;
     double world_size_y = 0.52;
-    double world_size_x = 4.08;
+    double world_size_x = 2.04;
     double world_size_z = 4.0;
 
     // Define the wheel geometry
     float wheel_rad = 0.25;
     float wheel_width = 0.2;
-    float wheel_mass = 8.7;
+    float wheel_mass = 11.;
     float total_pressure = 22. * 9.81;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
-    // float Slopes_deg[] = {2, 5, 10, 15, 20, 25};
-    float Slopes_deg[] = {0, 2};
+    float Slopes_deg[] = {20, 25};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
 
@@ -157,7 +156,7 @@ int main() {
             std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
             for (size_t i = 0; i < in_xyz.size(); i++) {
                 if (std::abs(in_xyz.at(i).y) > (world_size_y - 0.05) / 2 ||
-                    std::abs(in_xyz.at(i).x) > (world_size_x) / 2)
+                    std::abs(in_xyz.at(i).x) > (world_size_x - 0.04) / 2)
                     elem_to_remove.at(i) = 1;
             }
             in_xyz.erase(std::remove_if(in_xyz.begin(), in_xyz.end(),
@@ -180,23 +179,19 @@ int main() {
             base_batch.SetPos(in_xyz);
             base_batch.SetOriQ(in_quat);
 
-            /*
-            std::vector<float> x_shift_dist = {-0.5, 0.5};
-            std::vector<float> y_shift_dist = {0};
+        
+            std::vector<float> z_shift_dist = {0.1};
             // Add some patches of such graular bed
-            for (float x_shift : x_shift_dist) {
-                for (float y_shift : y_shift_dist) {
-                    DEMClumpBatch another_batch = base_batch;
-                    std::vector<float3> my_xyz = in_xyz;
-                    std::for_each(my_xyz.begin(), my_xyz.end(), [x_shift, y_shift](float3& xyz) {
-                        xyz.x += x_shift;
-                        xyz.y += y_shift;
-                    });
-                    another_batch.SetPos(my_xyz);
-                    DEMSim.AddClumps(another_batch);
-                }
+            for (float z_shift : z_shift_dist) {
+                DEMClumpBatch another_batch = base_batch;
+                std::vector<float3> my_xyz = in_xyz;
+                std::for_each(my_xyz.begin(), my_xyz.end(), [z_shift](float3& xyz) {
+                    xyz.z += z_shift;
+                });
+                another_batch.SetPos(my_xyz);
+                DEMSim.AddClumps(another_batch);
             }
-            */
+            
 
             DEMSim.AddClumps(base_batch);
         }
@@ -208,8 +203,8 @@ int main() {
         // auto compressor_tracker = DEMSim.Track(compressor);
 
         // Families' prescribed motions (Earth)
-        // float w_r = 0.8 * 2.45;
-        float w_r = 0.8;
+        float w_r = 0.8 * 2.45;
+        // float w_r = 0.8;
         float v_ref = w_r * wheel_rad;
         double G_ang = Slope_deg * math_PI / 180.;
 
@@ -234,7 +229,7 @@ int main() {
         DEMSim.SetInitTimeStep(step_size);
         DEMSim.SetCDUpdateFreq(20);
         DEMSim.SetExpandSafetyAdder(0.5);
-        DEMSim.SetMaxVelocity(40);
+        DEMSim.SetMaxVelocity(10);
         DEMSim.SetInitBinSize(2 * scales.at(2));
         DEMSim.Initialize();
 
@@ -248,10 +243,7 @@ int main() {
         std::cout << "Output at " << fps << " FPS" << std::endl;
 
         // Put the wheel in place, then let the wheel sink in initially
-        float init_x = -1.0;
-        if (Slope_deg < 14) {
-            init_x = -1.6;
-        }
+        float init_x = -0.5;
         // Put the wheel in place, then let the wheel sink in initially
         float max_z = max_z_finder->GetValue();
         wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.03 + wheel_rad));
