@@ -227,8 +227,8 @@ int main() {
         DEMSim.SetGravitationalAcceleration(this_G);
 
         DEMSim.SetInitTimeStep(step_size);
-        DEMSim.SetCDUpdateFreq(20);
-        DEMSim.SetExpandSafetyAdder(0.5);
+        DEMSim.SetCDUpdateFreq(40);
+        DEMSim.SetExpandSafetyAdder(0.3);
         DEMSim.SetMaxVelocity(10);
         DEMSim.SetInitBinSize(2 * scales.at(2));
         DEMSim.Initialize();
