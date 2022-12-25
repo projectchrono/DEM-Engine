@@ -21,15 +21,15 @@ const double math_PI = 3.1415927;
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
     // out_dir += "/DEMdemo_Temp";
-    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
-    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled_HighSlope_0";
+    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled_HighSlope";
+    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled_HighSlope_0";
     std::filesystem::create_directory(out_dir);
 
     // `World'
     float G_mag = 9.81;
     float step_size = 1e-6;
     double world_size_y = 0.52;
-    double world_size_x = 3.06;
+    double world_size_x = 2.04;
     double world_size_z = 4.0;
 
     // Define the wheel geometry
@@ -41,7 +41,7 @@ int main() {
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
-    float Slopes_deg[] = {10, 15};
+    float Slopes_deg[] = {10, 15, 20, 25};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
 
@@ -203,7 +203,7 @@ int main() {
         // auto compressor_tracker = DEMSim.Track(compressor);
 
         // Families' prescribed motions (Earth)
-        float w_r = 0.8 * 2.45;
+        float w_r = 0.8;
         // float w_r = 0.8;
         float v_ref = w_r * wheel_rad;
         double G_ang = Slope_deg * math_PI / 180.;
@@ -243,7 +243,7 @@ int main() {
         std::cout << "Output at " << fps << " FPS" << std::endl;
 
         // Put the wheel in place, then let the wheel sink in initially
-        float init_x = -1.2;
+        float init_x = -1.2 + 0.5;
         // Put the wheel in place, then let the wheel sink in initially
         float max_z = max_z_finder->GetValue();
         wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.03 + wheel_rad));

@@ -20,9 +20,9 @@ const double math_PI = 3.1415927;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    // out_dir += "/DEMdemo_Temp";
+    out_dir += "/DEMdemo_Temp";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon_SamePressureAsEarth";
-    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon_HighSlope";
+    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon_HighSlope";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -45,7 +45,7 @@ int main() {
     float moon_added_pressure = (22. * 1.62 - wheel_mass * G_mag);
 
     // float Slopes_deg[] = {0, 2, 5, 10, 15, 20, 25};
-    float Slopes_deg[] = {15, 20, 25};
+    float Slopes_deg[] = {10};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
 
