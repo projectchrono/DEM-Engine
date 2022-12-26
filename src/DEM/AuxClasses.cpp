@@ -222,6 +222,10 @@ std::vector<bodyID_t> DEMTracker::GetContactClumps(size_t offset) {
     return sys->GetOwnerContactClumps(obj->ownerID + offset);
 }
 
+bodyID_t DEMTracker::GetOwnerID(size_t offset) {
+    return obj->ownerID + offset;
+}
+
 float3 DEMTracker::Pos(size_t offset) {
     return sys->GetOwnerPosition(obj->ownerID + offset);
 }

@@ -272,6 +272,25 @@ class DEMSolver {
     /// just adds to it.
     void SetTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite = true);
 
+    /// @brief Get all clump--clump contacts in the simulation system.
+    /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
+    /// body A, and Second is that of contact body B.
+    std::vector<std::pair<bodyID_t, bodyID_t>> GetClumpContacts() const;
+
+    /// @brief Get all clump--clump contacts in the simulation system.
+    /// @param family_to_include Contacts that involve a body in a family not listed in this argument are ignored.
+    /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
+    /// body A, and Second is that of contact body B.
+    std::vector<std::pair<bodyID_t, bodyID_t>> GetClumpContacts(const std::set<family_t>& family_to_include) const;
+
+    /// @brief Get all clump--clump contacts in the simulation system.
+    /// @param family_pair Functions returns a vector of contact body family number pairs. First is the family number of
+    /// contact body A, and Second is that of contact body B.
+    /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
+    /// body A, and Second is that of contact body B.
+    std::vector<std::pair<bodyID_t, bodyID_t>> GetClumpContacts(
+        std::vector<std::pair<family_t, family_t>>& family_pair) const;
+
     /// Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial location
     /// means the location of the clumps' CoM coordinates in the global frame.
     std::shared_ptr<DEMClumpBatch> AddClumps(DEMClumpBatch& input_batch);
@@ -1091,6 +1110,17 @@ class DEMSolver {
     void assertSysNotInit(const std::string& method_name);
     /// Print due information on worker threads reported anomalies
     bool goThroughWorkerAnomalies();
+    /// @brief Get the owner ID of this geometry, depending on the contact type.
+    /// @return Owner ID of this geometry.
+    bodyID_t getGeoOwnerID(const bodyID_t& geoID, const contact_t& cnt_type) const;
+    /// @brief Implementation of getting (unsorted) contact pairs from dT.
+    /// @param type_func Exclude certain contact types from being outputted if this evaluates to false.
+    void getContacts_impl(std::vector<bodyID_t>& idA,
+                          std::vector<bodyID_t>& idB,
+                          std::vector<contact_t>& cnt_type,
+                          std::vector<family_t>& famA,
+                          std::vector<family_t>& famB,
+                          std::function<bool(contact_t)> type_func) const;
 
     // Some JIT packaging helpers
     inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap);

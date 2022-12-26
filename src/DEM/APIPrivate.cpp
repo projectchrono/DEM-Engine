@@ -241,6 +241,50 @@ void DEMSolver::jitifyKernels() {
     dT->approxMaxVelFunc = m_approx_max_vel_func;
 }
 
+bodyID_t DEMSolver::getGeoOwnerID(const bodyID_t& geoID, const contact_t& cnt_type) const {
+    switch (cnt_type) {
+        case NOT_A_CONTACT:
+            return NULL_BODYID;
+        case SPHERE_SPHERE_CONTACT:
+            return dT->ownerClumpBody.at(geoID);
+        case SPHERE_MESH_CONTACT:
+            return dT->ownerMesh.at(geoID);
+        default:
+            return dT->ownerAnalBody.at(geoID);
+    }
+}
+
+void DEMSolver::getContacts_impl(std::vector<bodyID_t>& idA,
+                                 std::vector<bodyID_t>& idB,
+                                 std::vector<contact_t>& cnt_type,
+                                 std::vector<family_t>& famA,
+                                 std::vector<family_t>& famB,
+                                 std::function<bool(contact_t)> type_func) const {
+    size_t num_contacts = dT->getNumContacts();
+    idA.resize(num_contacts);
+    idB.resize(num_contacts);
+    cnt_type.resize(num_contacts);
+    famA.resize(num_contacts);
+    famB.resize(num_contacts);
+    size_t useful_contacts = 0;
+    for (size_t i = 0; i < num_contacts; i++) {
+        contact_t this_type = dT->contactType.at(i);
+        if (type_func(this_type)) {
+            idA[useful_contacts] = getGeoOwnerID(dT->idGeometryA.at(i), this_type);
+            idB[useful_contacts] = getGeoOwnerID(dT->idGeometryB.at(i), this_type);
+            cnt_type[useful_contacts] = this_type;
+            famA[useful_contacts] = dT->familyID.at(idA[useful_contacts]);
+            famB[useful_contacts] = dT->familyID.at(idB[useful_contacts]);
+            useful_contacts++;
+        }
+    }
+    idA.resize(useful_contacts);
+    idB.resize(useful_contacts);
+    cnt_type.resize(useful_contacts);
+    famA.resize(useful_contacts);
+    famB.resize(useful_contacts);
+}
+
 void DEMSolver::figureOutNV() {
     // Rank the size of XYZ, ascending
     float XYZ[3] = {m_user_boxSize.x, m_user_boxSize.y, m_user_boxSize.z};
