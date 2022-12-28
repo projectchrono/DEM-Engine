@@ -16,7 +16,7 @@
 
 jitify::JitCache JitHelper::kcache;
 
-const std::filesystem::path JitHelper::KERNEL_DIR = RuntimeDataHelper::path / "src" / "kernel";
+const std::filesystem::path JitHelper::KERNEL_DIR = RuntimeDataHelper::path / "kernel";
 
 JitHelper::Header::Header(const std::filesystem::path& sourcefile) {
     this->_source = JitHelper::loadSourceFile(sourcefile);

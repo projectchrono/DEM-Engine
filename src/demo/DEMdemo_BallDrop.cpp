@@ -34,8 +34,7 @@ int main() {
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
     DEMSim.SetCoordSysOrigin("-13");
 
-    auto projectile =
-        DEMSim.AddWavefrontMeshObject((GET_SOURCE_DATA_PATH() / "mesh/sphere.obj").string(), mat_type_ball);
+    auto projectile = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/sphere.obj").string(), mat_type_ball);
     std::cout << "Total num of triangles: " << projectile->GetNumTriangles() << std::endl;
 
     projectile->SetInitPos(make_float3(world_size / 2, world_size / 2, world_size / 3 * 2));

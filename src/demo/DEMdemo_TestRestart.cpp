@@ -33,8 +33,8 @@ int main() {
     double y_size = 4;
     double z_size = 20;
 
-    auto pairs = DEMSim.ReadContactPairsFromCsv((GET_SOURCE_DATA_PATH() / "sim_data/example_cnt_pairs.csv").string());
-    auto wcs = DEMSim.ReadContactWildcardsFromCsv((GET_SOURCE_DATA_PATH() / "sim_data/example_cnt_pairs.csv").string());
+    auto pairs = DEMSim.ReadContactPairsFromCsv((GET_DATA_PATH() / "sim_data/example_cnt_pairs.csv").string());
+    auto wcs = DEMSim.ReadContactWildcardsFromCsv((GET_DATA_PATH() / "sim_data/example_cnt_pairs.csv").string());
 
     float rad = 2;
     auto template_sphere = DEMSim.LoadSphereType(rad * rad * rad * 2.6e3 * 4 / 3 * 3.14, rad, mat_type);

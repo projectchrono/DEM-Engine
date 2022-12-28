@@ -950,7 +950,7 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
     // Write family numbers
     if (solverFlags.outputFlags & OUTPUT_CONTENT::FAMILY) {
         families.resize(num_output_spheres);
-        // TODO: How to do that?
+        //// TODO: How to do that?
         // pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, {}, families);
     }
 }
@@ -982,6 +982,11 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
     // if (solverFlags.outputFlags & OUTPUT_CONTENT::MAT) {
     //     outstrstream << ",material";
     // }
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::OWNER_WILDCARD) {
+        for (const auto& name : m_owner_wildcard_names) {
+            outstrstream << "," + name;
+        }
+    }
     outstrstream << "\n";
 
     for (size_t i = 0; i < simParams->nSpheresGM; i++) {
@@ -1041,13 +1046,99 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
             outstrstream << "," << +(this_family);
         }
 
+        // Wildcards
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::OWNER_WILDCARD) {
+            // The order shouldn't be an issue... the same set is being processed here and in equip_owner_wildcards, see
+            // Model.h
+            for (unsigned int j = 0; j < m_owner_wildcard_names.size(); j++) {
+                outstrstream << "," << ownerWildcards[j][i];
+            }
+        }
+
         outstrstream << "\n";
     }
 
     ptFile << outstrstream.str();
 }
 
-void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy) const {}
+void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy) const {
+    //// TODO: Note using accuracy
+    chpf::Writer pw;
+    std::vector<float> posX(simParams->nOwnerBodies);
+    std::vector<float> posY(simParams->nOwnerBodies);
+    std::vector<float> posZ(simParams->nOwnerBodies);
+    std::vector<float> Qw(simParams->nOwnerBodies);
+    std::vector<float> Qx(simParams->nOwnerBodies);
+    std::vector<float> Qy(simParams->nOwnerBodies);
+    std::vector<float> Qz(simParams->nOwnerBodies);
+    std::vector<std::string> clump_type(simParams->nOwnerBodies);
+    std::vector<unsigned int> families;
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::FAMILY) {
+        families.resize(simParams->nOwnerBodies);
+    }
+    size_t num_output_clumps = 0;
+
+    for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
+        auto this_owner = ownerClumpBody.at(i);
+        family_t this_family = familyID.at(this_owner);
+        // If this (impl-level) family is in the no-output list, skip it
+        if (std::binary_search(familiesNoOutput.begin(), familiesNoOutput.end(), this_family)) {
+            continue;
+        }
+
+        float3 CoM;
+        float X, Y, Z;
+        voxelID_t voxel = voxelID.at(i);
+        subVoxelPos_t subVoxX = locX.at(i);
+        subVoxelPos_t subVoxY = locY.at(i);
+        subVoxelPos_t subVoxZ = locZ.at(i);
+        hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ,
+                                                               simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
+                                                               simParams->l);
+        CoM.x = X + simParams->LBFX;
+        CoM.y = Y + simParams->LBFY;
+        CoM.z = Z + simParams->LBFZ;
+        posX.at(num_output_clumps) = CoM.x;
+        posY.at(num_output_clumps) = CoM.y;
+        posZ.at(num_output_clumps) = CoM.z;
+
+        // Then quaternions
+        Qw.at(num_output_clumps) = oriQw.at(i);
+        Qx.at(num_output_clumps) = oriQx.at(i);
+        Qy.at(num_output_clumps) = oriQy.at(i);
+        Qz.at(num_output_clumps) = oriQz.at(i);
+
+        // Then type of clump
+        unsigned int clump_mark = inertiaPropOffsets.at(i);
+        clump_type.at(num_output_clumps) = templateNumNameMap.at(clump_mark);
+
+        // Family number
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::FAMILY) {
+            families.at(num_output_clumps) = this_family;
+        }
+
+        num_output_clumps++;
+    }
+    // Write basics
+    posX.resize(num_output_clumps);
+    posY.resize(num_output_clumps);
+    posZ.resize(num_output_clumps);
+    Qw.resize(num_output_clumps);
+    Qx.resize(num_output_clumps);
+    Qy.resize(num_output_clumps);
+    Qz.resize(num_output_clumps);
+    clump_type.resize(num_output_clumps);
+    pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT,
+             {OUTPUT_FILE_X_COL_NAME, OUTPUT_FILE_Y_COL_NAME, OUTPUT_FILE_Z_COL_NAME, "Qw", "Qx", "Qy", "Qz",
+              OUTPUT_FILE_CLUMP_TYPE_NAME},
+             posX, posY, posZ, Qw, Qx, Qy, Qz, clump_type);
+    // Write family numbers
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::FAMILY) {
+        families.resize(num_output_clumps);
+        //// TODO: How to do that?
+        // pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, {}, families);
+    }
+}
 
 void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accuracy) const {
     std::ostringstream outstrstream;
@@ -1073,6 +1164,11 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
     // }
     if (solverFlags.outputFlags & OUTPUT_CONTENT::FAMILY) {
         outstrstream << ",family";
+    }
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::OWNER_WILDCARD) {
+        for (const auto& name : m_owner_wildcard_names) {
+            outstrstream << "," + name;
+        }
     }
     outstrstream << "\n";
 
@@ -1126,6 +1222,15 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
             outstrstream << "," << +(this_family);
         }
 
+        // Wildcards
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::OWNER_WILDCARD) {
+            // The order shouldn't be an issue... the same set is being processed here and in equip_owner_wildcards, see
+            // Model.h
+            for (unsigned int j = 0; j < m_owner_wildcard_names.size(); j++) {
+                outstrstream << "," << ownerWildcards[j][i];
+            }
+        }
+
         outstrstream << "\n";
     }
 
@@ -1162,7 +1267,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
     if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE_ONLY_FORCE) {
         outstrstream << "," + OUTPUT_FILE_TOF_X_NAME + "," + OUTPUT_FILE_TOF_Y_NAME + "," + OUTPUT_FILE_TOF_Z_NAME;
     }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::WILDCARD) {
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_WILDCARD) {
         // Write all wildcard names as header
         for (const auto& w_name : m_contact_wildcard_names) {
             outstrstream << "," + w_name;
@@ -1265,8 +1370,10 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
             outstrstream << "," << torque.x << "," << torque.y << "," << torque.z;
         }
 
-        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::WILDCARD) {
-            // The order shouldn't be an issue... the same set is being processed here and in equip_contact_wildcards
+        // Contact wildcards
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_WILDCARD) {
+            // The order shouldn't be an issue... the same set is being processed here and in equip_contact_wildcards,
+            // see Model.h
             for (unsigned int j = 0; j < m_contact_wildcard_names.size(); j++) {
                 outstrstream << "," << contactWildcards[j][i];
             }
@@ -1947,6 +2054,10 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     return res;
 }
 
+size_t DEMDynamicThread::getNumContacts() const {
+    return *(stateOfSolver_resources.pNumContacts);
+}
+
 double DEMDynamicThread::getSimTime() const {
     return simParams->timeElapsed;
 }
@@ -1955,18 +2066,49 @@ void DEMDynamicThread::setSimTime(double time) {
     simParams->timeElapsed = time;
 }
 
-void DEMDynamicThread::setOwnerWildcardValue(unsigned int wc_num, float val) {
+void DEMDynamicThread::setOwnerWildcardValue(unsigned int wc_num, const std::vector<float>& vals) {
+    size_t count = 0;
     for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
-        ownerWildcards[wc_num].at(i) = val;
+        ownerWildcards[wc_num].at(i) = vals.at(count);
+        if (count + 1 < vals.size()) {
+            count++;
+        }
     }
 }
 
-void DEMDynamicThread::setFamilyOwnerWildcardValue(unsigned int family_num, unsigned int wc_num, float val) {
+void DEMDynamicThread::setFamilyOwnerWildcardValue(unsigned int family_num,
+                                                   unsigned int wc_num,
+                                                   const std::vector<float>& vals) {
+    size_t count = 0;
     for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
         if (familyID[i] == family_num) {
-            ownerWildcards[wc_num].at(i) = val;
+            ownerWildcards[wc_num].at(i) = vals.at(count);
+            if (count + 1 < vals.size()) {
+                count++;
+            }
         }
     }
+}
+
+void DEMDynamicThread::getOwnerWildcardValue(std::vector<float>& res, unsigned int wc_num) {
+    res.resize(simParams->nOwnerBodies);
+    for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
+        res.at(i) = ownerWildcards[wc_num].at(i);
+    }
+}
+
+void DEMDynamicThread::getFamilyOwnerWildcardValue(std::vector<float>& res,
+                                                   unsigned int family_num,
+                                                   unsigned int wc_num) {
+    res.resize(simParams->nOwnerBodies);
+    size_t count = 0;
+    for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
+        if (familyID[i] == family_num) {
+            res.at(count) = ownerWildcards[wc_num].at(i);
+            count++;
+        }
+    }
+    res.resize(count);
 }
 
 float3 DEMDynamicThread::getOwnerAngVel(bodyID_t ownerID) const {

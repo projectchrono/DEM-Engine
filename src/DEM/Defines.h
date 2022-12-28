@@ -23,7 +23,7 @@ namespace deme {
 #define DEME_GET_VAR_NAME(Variable) (#Variable)
 #define DEME_KT_CD_NTHREADS_PER_BLOCK 256
 #define DEME_MAX_SPHERES_PER_BIN 256    ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
-#define DEME_MAX_TRIANGLES_PER_BIN 256  ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
+#define DEME_MAX_TRIANGLES_PER_BIN 128  ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
 #define DEME_TINY_FLOAT 1e-12
 #define DEME_HUGE_FLOAT 1e15
 #define DEME_BITS_PER_BYTE 8
@@ -70,10 +70,10 @@ const objNormal_t ENTITY_NORMAL_OUTWARD = 1;
 const contact_t NOT_A_CONTACT = 0;
 const contact_t SPHERE_SPHERE_CONTACT = 1;
 const contact_t SPHERE_MESH_CONTACT = 2;
-const contact_t SPHERE_PLANE_CONTACT = 3;
-const contact_t SPHERE_PLATE_CONTACT = 4;
-const contact_t SPHERE_CYL_CONTACT = 5;
-const contact_t SPHERE_CONE_CONTACT = 6;
+const contact_t SPHERE_PLANE_CONTACT = 11;
+const contact_t SPHERE_PLATE_CONTACT = 12;
+const contact_t SPHERE_CYL_CONTACT = 13;
+const contact_t SPHERE_CONE_CONTACT = 14;
 
 const notStupidBool_t DONT_PREVENT_CONTACT = 0;
 const notStupidBool_t PREVENT_CONTACT = 1;
@@ -147,9 +147,10 @@ enum OUTPUT_CONTENT {
     ANG_ACC = 32,
     FAMILY = 64,
     MAT = 128,
+    OWNER_WILDCARD = 256,
     // How much this clump expanded in size via ChangeClumpSizes, compared to its `vanilla' template. Can be useful if
     // the user imposed some fine-grain clump size control.
-    EXP_FACTOR = 256
+    EXP_FACTOR = 512
 };
 // Output particles as individual (component) spheres, or as owner clumps (clump CoMs for location, as an example)?
 enum class SPATIAL_DIR { X, Y, Z, NONE };
@@ -162,7 +163,7 @@ enum CNT_OUTPUT_CONTENT {
     NORMAL = 8,     // Contact normal direction in global frame
     TORQUE_ONLY_FORCE =
         16,  // This is a standalone force and produces torque only (typical example: rolling resistance force)
-    WILDCARD = 32,
+    CNT_WILDCARD = 32,
     OWNER = 64,
     GEO_ID = 128,
     NICKNAME = 256
