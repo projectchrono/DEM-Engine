@@ -22,22 +22,21 @@ int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_AllSph_HalfSize";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_AllSph_OneAndHalfSize";
-    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_AllSph_0.0002Size";
-    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled_AllSph";
+    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon_AllSph_HalfSize";
     std::filesystem::create_directory(out_dir);
 
     // `World'
-    float G_mag = 9.81;
+    float G_mag = 1.62;
     float step_size = 2e-6;
     double world_size_y = 0.52;
-    double world_size_x = 4.08;
+    double world_size_x = 2.04;
     double world_size_z = 4.0;
 
     // Define the wheel geometry
     float wheel_rad = 0.25;
     float wheel_width = 0.2;
     float wheel_mass = 8.7;
-    float total_pressure = 22. * 9.81;
+    float total_pressure = 22. * 1.62;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
@@ -95,8 +94,8 @@ int main() {
         // auto compressor_tracker = DEMSim.Track(compressor);
 
         // Families' prescribed motions (Earth)
-        float w_r = 0.8 * 2.45;
-        // float w_r = 0.8;
+        // float w_r = 0.8 * 2.45;
+        float w_r = 0.8;
         float v_ref = w_r * wheel_rad;
         double G_ang = Slope_deg * math_PI / 180.;
 
@@ -135,9 +134,9 @@ int main() {
         std::cout << "Output at " << fps << " FPS" << std::endl;
 
         // Put the wheel in place, then let the wheel sink in initially
-        float init_x = -0.0 - 1.0;
+        float init_x = -0.0;
         if (Slope_deg < 14) {
-            init_x = -0.6 - 1.0;
+            init_x = -0.6;
         }
         // Put the wheel in place, then let the wheel sink in initially
         float max_z = max_z_finder->GetValue();
