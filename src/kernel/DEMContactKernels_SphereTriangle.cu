@@ -50,7 +50,7 @@ __global__ void getNumberOfSphTriContactsEachBin(deme::DEMSimParams* simParams,
         DEME_ABORT_KERNEL("Bin %u contains %u triangular mesh facets, exceeding maximum allowance (%u)\n", blockIdx.x,
                           nTriInBin, DEME_MAX_TRIANGLES_PER_BIN);
     }
-    deme::spheresBinTouches_t myThreadID = threadIdx.x;
+    const deme::spheresBinTouches_t myThreadID = threadIdx.x;
     const deme::binID_t binID = activeBinIDsForTri[blockIdx.x];
     // But what is the index of the same binID in array activeBinIDs? Well, mapTriActBinToSphActBin comes to rescure.
     const deme::binID_t indForAcqSphInfo = mapTriActBinToSphActBin[blockIdx.x];
@@ -226,7 +226,7 @@ __global__ void populateTriSphContactsEachBin(deme::DEMSimParams* simParams,
     __shared__ unsigned int blockPairCnt;
 
     const deme::trianglesBinTouches_t nTriInBin = numTrianglesBinTouches[blockIdx.x];
-    deme::spheresBinTouches_t myThreadID = threadIdx.x;
+    const deme::spheresBinTouches_t myThreadID = threadIdx.x;
     const deme::binID_t binID = activeBinIDsForTri[blockIdx.x];
     // But what is the index of the same binID in array activeBinIDs? Well, mapTriActBinToSphActBin comes to rescure.
     const deme::binID_t indForAcqSphInfo = mapTriActBinToSphActBin[blockIdx.x];
@@ -349,7 +349,7 @@ __global__ void populateTriSphContactsEachBin(deme::DEMSimParams* simParams,
 
             // If already in contact with A, no need to do B
             if (in_contact && (contactPntBin == binID)) {
-                unsigned int inBlockOffset = atomicAdd_block(&blockPairCnt, 1);
+                unsigned int inBlockOffset = atomicAdd(&blockPairCnt, 1);
                 idSphA[myReportOffset + inBlockOffset] = sphereID;
                 idTriB[myReportOffset + inBlockOffset] = triIDs[ind];
                 dType[myReportOffset + inBlockOffset] = deme::SPHERE_MESH_CONTACT;
@@ -361,7 +361,7 @@ __global__ void populateTriSphContactsEachBin(deme::DEMSimParams* simParams,
             contactPntBin = getPointBinID<deme::binID_t>(cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize,
                                                          simParams->nbX, simParams->nbY);
             if (in_contact && (contactPntBin == binID)) {
-                unsigned int inBlockOffset = atomicAdd_block(&blockPairCnt, 1);
+                unsigned int inBlockOffset = atomicAdd(&blockPairCnt, 1);
                 idSphA[myReportOffset + inBlockOffset] = sphereID;
                 idTriB[myReportOffset + inBlockOffset] = triIDs[ind];
                 dType[myReportOffset + inBlockOffset] = deme::SPHERE_MESH_CONTACT;

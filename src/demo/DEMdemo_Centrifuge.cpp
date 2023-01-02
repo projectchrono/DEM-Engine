@@ -46,9 +46,6 @@ int main() {
     // Define material type for the particles (on a per-sphere-component basis)
     ellipsoid.materials = std::vector<std::shared_ptr<DEMMaterial>>(ellipsoid.nComp, mat_type_sand);
 
-    // Bin size needs to make sure no too-many-sphere-per-bin situation happens
-    DEMSim.SetInitBinSize(2 * scaling);
-
     // Create some random clump templates for the filling materials
     // An array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
@@ -135,12 +132,14 @@ int main() {
     float step_size = 5e-6;
     DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(step_size);
-    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEMSim.SetCDUpdateFreq(25);
     // DEMSim.SetExpandFactor(1e-3);
     DEMSim.SetMaxVelocity("auto");
-    DEMSim.SetExpandSafetyMultiplier(1.0);
+    // This might be added for safety: The particles hitting the centrifuge can suddenly change velocity and this change
+    // can be somewhat larger than normal cases
+    DEMSim.SetExpandSafetyAdder(3.0);
     DEMSim.Initialize();
 
     path out_dir = current_path();

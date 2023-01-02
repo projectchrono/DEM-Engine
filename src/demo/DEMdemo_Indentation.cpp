@@ -54,7 +54,6 @@ int main() {
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
-    // DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV | OUTPUT_CONTENT::VEL);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     // You can enforce owner wildcard output by the following call, or directly include OUTPUT_CONTENT::OWNER_WILDCARD
     // in SetOutputContent
@@ -73,8 +72,8 @@ int main() {
                                                    granular_rad, mat_type_granular);
 
     float step_size = 1e-6;
-    const double world_size = 0.5;
-    const float fill_height = 0.2;
+    const double world_size = 0.6;
+    const float fill_height = 0.3;
     const float chamber_bottom = -world_size / 2.;
     const float fill_bottom = chamber_bottom + granular_rad;
 
@@ -91,7 +90,7 @@ int main() {
     // Make the cube about 10cm by 2cm
     float cube_width = 0.1;
     float cube_height = 0.04;
-    double cube_speed = 0.05;  // 0.1 and 0.02, try them too... very similar though
+    double cube_speed = 0.25;  // 0.1 and 0.02, try them too... very similar though
     cube->Scale(make_float3(cube_width, cube_width, cube_height));
     cube->SetFamily(10);
     DEMSim.SetFamilyFixed(10);
@@ -100,7 +99,7 @@ int main() {
     auto cube_tracker = DEMSim.Track(cube);
 
     // Sampler to use
-    const float spacing = 2.0005f * granular_rad;
+    const float spacing = 2.05f * granular_rad;
     const float fill_radius = world_size / 2. - 2. * granular_rad;
 
     PDSampler sampler(spacing);
@@ -132,7 +131,7 @@ int main() {
     // Or simply DEMSim.SetOwnerWildcards({"gran_strain"}); it does the job too
 
     // Low mu at start. This will make the terrain settle into a more densely-packed configuration.
-    particles->AddOwnerWildcard("mu_custom", 0.0);
+    particles->AddOwnerWildcard("mu_custom", 0.4);
 
     unsigned int num_particles = input_xyz.size();
     std::cout << "Total num of particles: " << num_particles << std::endl;
@@ -144,8 +143,8 @@ int main() {
     DEMSim.SetInitBinSize(4 * granular_rad);
     DEMSim.Initialize();
 
-    float sim_end = cube_height * 1.0 / cube_speed;  // 3.0;
-    unsigned int fps = 60;                           // 20;
+    float sim_end = cube_height * 1.5 / cube_speed;  // 3.0;
+    unsigned int fps = 200;                          // 20;
     float frame_time = 1.0 / fps;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 

@@ -541,7 +541,7 @@ __inline__ __device__ void boundingBoxIntersectBin(deme::binID_t* L,
     // with spheres, and spheres are all in the simulation world, so we just clamp out the bins that are outside the
     // simulation world.
     int3 min_bin = clampBetween<float3, int3>(min_pt / simParams->binSize, make_int3(0, 0, 0),
-                                              make_int3(simParams->nbX, simParams->nbY, simParams->nbZ));
+                                              make_int3(simParams->nbX - 1, simParams->nbY - 1, simParams->nbZ - 1));
 
     float3 max_pt;
     max_pt.x = DEME_MAX(vA.x, DEME_MAX(vB.x, vC.x));
@@ -550,7 +550,7 @@ __inline__ __device__ void boundingBoxIntersectBin(deme::binID_t* L,
 
     max_pt += DEME_BIN_ENLARGE_RATIO_FOR_FACETS * simParams->binSize;
     int3 max_bin = clampBetween<float3, int3>(max_pt / simParams->binSize, make_int3(0, 0, 0),
-                                              make_int3(simParams->nbX, simParams->nbY, simParams->nbZ));
+                                              make_int3(simParams->nbX - 1, simParams->nbY - 1, simParams->nbZ - 1));
 
     L[0] = min_bin.x;
     L[1] = min_bin.y;

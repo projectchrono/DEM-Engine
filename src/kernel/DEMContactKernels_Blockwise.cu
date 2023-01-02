@@ -268,7 +268,7 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
 
             if (in_contact && (contactPntBin == binID)) {
                 // blockwise_offset++;
-                unsigned int inBlockOffset = atomicAdd_block(&blockPairCnt, 1);
+                unsigned int inBlockOffset = atomicAdd(&blockPairCnt, 1);
                 idSphA[myReportOffset + inBlockOffset] = bodyIDs[bodyA];
                 idSphB[myReportOffset + inBlockOffset] = bodyIDs[bodyB];
                 dType[myReportOffset + inBlockOffset] = deme::SPHERE_SPHERE_CONTACT;
