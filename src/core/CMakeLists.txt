@@ -139,7 +139,7 @@ target_include_directories(
 set_target_properties(
 	DEMERuntimeDataHelper PROPERTIES
 	POSITION_INDEPENDENT_CODE True
-	CXX_STANDARD ${CXXSTD_SUPPORTED}
+	CXX_STANDARD "${CXXSTD_SUPPORTED}"
 )
 
 # Install tree version

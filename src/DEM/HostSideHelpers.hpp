@@ -258,6 +258,30 @@ inline float3 Rodrigues(const float3& vec, const float3& axis, const float& thet
     return res;
 }
 
+// Remove elements of a vector based on bool array
+template <typename T1>
+inline std::vector<T1> hostRemoveElem(const std::vector<T1>& vec, const std::vector<bool>& flags) {
+    auto v = vec;
+    v.erase(std::remove_if(v.begin(), v.end(), [&flags, &v](const T1& i) { return flags.at(&i - v.data()); }), v.end());
+    return v;
+}
+
+// Contribution from https://stackoverflow.com/questions/1577475/c-sorting-and-keeping-track-of-indexes
+template <typename T1>
+inline std::vector<size_t> hostSortIndices(const std::vector<T1>& v) {
+    // initialize original index locations
+    std::vector<size_t> idx(v.size());
+    std::iota(idx.begin(), idx.end(), 0);
+
+    // sort indexes based on comparing values in v
+    // using std::stable_sort instead of std::sort
+    // to avoid unnecessary index re-orderings
+    // when v contains elements of equal values
+    std::stable_sort(idx.begin(), idx.end(), [&v](size_t i1, size_t i2) { return v[i1] < v[i2]; });
+
+    return idx;
+}
+
 template <typename T1, typename T2>
 inline void hostSortByKey(T1* keys, T2* vals, size_t n) {
     // Just bubble sort it
