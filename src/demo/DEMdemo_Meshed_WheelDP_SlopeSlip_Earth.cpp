@@ -20,8 +20,8 @@ const double math_PI = 3.1415927;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    // out_dir += "/DEMdemo_Temp";
-    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
+    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_110kg";
+    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled";
     std::filesystem::create_directory(out_dir);
 
@@ -35,14 +35,14 @@ int main() {
     // Define the wheel geometry
     float wheel_rad = 0.25;
     float wheel_width = 0.2;
-    float wheel_mass = 8.7;
-    float total_pressure = 22. * 9.81;
+    float wheel_mass = 11.; // 8.7;
+    float total_pressure = 110. * 9.81; // 22. * 9.81;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
     // float Slopes_deg[] = {2, 5, 10, 15, 20, 25};
-    float Slopes_deg[] = {0, 2};
+    float Slopes_deg[] = {0, 2.5, 5, 7.5, 10, 12.5};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
 

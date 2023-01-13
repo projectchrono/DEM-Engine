@@ -35,7 +35,7 @@ int main() {
     // Define the wheel geometry
     float wheel_rad = 0.25;
     float wheel_width = 0.2;
-    float wheel_mass = 8.7;
+    float wheel_mass = 11.;
     float total_pressure = 22. * 9.81;
     // float total_pressure = 22. * 1.62;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
@@ -44,10 +44,10 @@ int main() {
 
     float moon_added_pressure = (22. * 1.62 - wheel_mass * G_mag);
 
-    // float Slopes_deg[] = {0, 2, 5, 10, 15, 20, 25};
-    float Slopes_deg[] = {25};
+    float Slopes_deg[] = {0, 2, 5, 10, 15, 20, 25};
+    // float Slopes_deg[] = {25};
     unsigned int run_mode = 0;
-    unsigned int currframe = 487;
+    unsigned int currframe = 0;
 
     for (float Slope_deg : Slopes_deg) {
         DEMSolver DEMSim;
@@ -58,9 +58,9 @@ int main() {
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
         // E, nu, CoR, mu, Crr...
-        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.9}, {"Crr", 0.00}});
+        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.5}, {"Crr", 0.00}});
         auto mat_type_terrain =
-            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.9}, {"Crr", 0.00}});
+            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.5}, {"Crr", 0.00}});
 
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
@@ -216,9 +216,6 @@ int main() {
         double G_ang = Slope_deg * math_PI / 180.;
 
         double sim_end = 8.;
-        if (Slope_deg >= 20) {
-            sim_end = 8.;
-        }
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
         // (move freely linearly)
         DEMSim.SetFamilyPrescribedAngVel(1, "0", to_string_with_precision(w_r), "0", false);
