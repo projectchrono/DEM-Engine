@@ -399,8 +399,15 @@ struct SolverFlags {
     bool useForceCollectInPlace = false;
     // How dT should decide the max velocity in the system (true: query an inspector; false: use a constant)
     bool maxVelQuery = true;
-    // kT--dT communication frequency
-    int updateFreq;
+    // Max number of steps dT is allowed to be ahead of kT
+    int maxFutureDrift;
+
+    // The `top speed' of the change of bin size
+    float binTopChangeRate = 0.05;
+    // The `current speed' fo the change of bin size
+    float binCurrentChangeRate = 0.01;
+    // The `acceleration' of bin size change rate, (0, 1]: 1 means each time a change is applied, it's at top speed
+    float binChangeRateAcc = 0.1;
 };
 
 class DEMMaterial {

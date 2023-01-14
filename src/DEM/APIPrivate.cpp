@@ -496,14 +496,15 @@ void DEMSolver::reportInitStats() const {
     } else {
         float expand_factor;
         if (m_max_v_finder_type == MARGIN_FINDER_TYPE::MANUAL_MAX) {
-            expand_factor = (m_expand_safety_multi * m_approx_max_vel + m_expand_base_vel) * m_updateFreq * m_ts_size;
+            expand_factor =
+                (m_expand_safety_multi * m_approx_max_vel + m_expand_base_vel) * m_dTMaxFutureDrift * m_ts_size;
             DEME_INFO(
                 "All geometries should be enlarged/thickened by %.6g (estimated with the initial step size, update "
                 "frequency and max velocity) for contact detection purpose",
                 expand_factor);
         } else {
             expand_factor = (m_expand_safety_multi * AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE + m_expand_base_vel) *
-                            m_updateFreq * m_ts_size;
+                            m_dTMaxFutureDrift * m_ts_size;
             DEME_INFO("Suppose the maximum velocity encountered in the simulation is %.6g for example, then...",
                       AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE);
             DEME_INFO(
@@ -892,13 +893,18 @@ void DEMSolver::transferSolverParams() {
     // CD strategy
     kT->solverFlags.useOneBinPerThread = use_one_bin_per_thread;
 
-    // Tell kT and dT if this run is async
-    kT->solverFlags.isAsync = !(m_updateFreq == 0);
-    dT->solverFlags.isAsync = !(m_updateFreq == 0);
-    // Make sure dT kT understand the lock--waiting policy of this run
-    dTkT_InteractionManager->dynamicRequestedUpdateFrequency = m_updateFreq;
-    kT->solverFlags.updateFreq = m_updateFreq;
-    dT->solverFlags.updateFreq = m_updateFreq;
+    // Tell kT and dT if and how this run is async
+    kT->solverFlags.isAsync = !(m_dTMaxFutureDrift == 0);
+    dT->solverFlags.isAsync = !(m_dTMaxFutureDrift == 0);
+    kT->solverFlags.maxFutureDrift = m_dTMaxFutureDrift;
+    dT->solverFlags.maxFutureDrift = m_dTMaxFutureDrift;
+    // The reason why we use dTMaxFutureDrift rather than m_updateFreq is the following...
+    // dT's contact pair info is actually in a `double stale' situation. kT-supplied contact pairs are based on some old
+    // position info already (because kT needs time to run after a dT's order is placed), and dT needs to use this
+    // contact info for some extra steps. That's why 2 * m_updateFreq (m_updateFreq can be used-estimated and derived
+    // from kT--dT collab stats, so the solver has no control over how it is inputted; it just has to use it wisely) is
+    // actually a better guess for the max dT-into-future steps.
+    dTkT_InteractionManager->dynamicMaxFutureDrift = m_dTMaxFutureDrift;
 
     // Tell kT and dT whether the user enforeced potential on-the-fly family number changes
     kT->solverFlags.canFamilyChange = famnum_can_change_conditionally;
@@ -923,23 +929,23 @@ void DEMSolver::transferSimParams() {
     if ((!use_user_defined_expand_factor) &&
         ((m_approx_max_vel < 1e-4f || m_approx_max_vel > 1e4) &&
          m_max_v_finder_type == MARGIN_FINDER_TYPE::MANUAL_MAX) &&
-        m_updateFreq > 0) {
+        m_dTMaxFutureDrift > 0) {
         DEME_WARNING(
             "You instructed that the physics can stretch %u time steps into the future, and explicitly specified the "
             "maximum velocity stays at %.6g.\nThis appears to be an unusual velocity, and the contact detection "
             "procedure will likely fail to detect some contact events before it is too late,\nor create contact "
             "margins that are too thick resulting in a \"too many spheres in bin\" failure.",
-            m_updateFreq, m_approx_max_vel);
+            m_dTMaxFutureDrift, m_approx_max_vel);
     }
     if ((!use_user_defined_expand_factor) && (m_expand_base_vel < 1e-4f || m_expand_safety_multi < 1.f) &&
-        m_max_v_finder_type != MARGIN_FINDER_TYPE::MANUAL_MAX && m_updateFreq > 0) {
+        m_max_v_finder_type != MARGIN_FINDER_TYPE::MANUAL_MAX && m_dTMaxFutureDrift > 0) {
         DEME_WARNING(
             "You instructed that the physics can stretch %u time steps into the future, and specified that\nthe "
             "multiplier for the maximum velocity is %.6g and adder %.6g.\nThey will make the solver estimate the "
             "evolution of the maximum velocity to less similar to or less than historical values.\nThe contact "
             "detection procedure will likely fail to detect some contact events before it is too late, hindering the "
             "simulation accuracy and stability.",
-            m_updateFreq, m_expand_safety_multi, m_expand_base_vel);
+            m_dTMaxFutureDrift, m_expand_safety_multi, m_expand_base_vel);
     }
     // Compute the number of wildcards in our force model
     unsigned int nContactWildcards = m_force_model->m_contact_wildcards.size();
@@ -1091,7 +1097,7 @@ void DEMSolver::validateUserInputs() {
             m_user_boxSize.x, m_user_boxSize.y, m_user_boxSize.z);
     }
 
-    if (m_updateFreq < 0) {
+    if (m_dTMaxFutureDrift < 0) {
         DEME_WARNING(
             "The physics of the DEM system can drift into the future as much as it wants compared to contact "
             "detections, because SetCDUpdateFreq was called with a negative argument. Please make sure this is "

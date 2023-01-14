@@ -80,7 +80,7 @@ inline void DEMKinematicThread::unpackMyBuffer() {
         }
         // If dT decides to change ts size, it already informed kT then
         simParams->beta = (max_vel * simParams->expSafetyMulti + simParams->expSafetyAdder) *
-                          (granData->ts_buffer * solverFlags.updateFreq);
+                          (granData->ts_buffer * solverFlags.maxFutureDrift);
     }
 
     DEME_STEP_DEBUG_PRINTF("kT received a velocity update: %.6g", granData->maxVel);
@@ -285,6 +285,8 @@ void DEMKinematicThread::resetUserCallStat() {
     // Reset kT stats variables, making ready for next user call
     pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = false;
     kTShouldReset = false;
+    // My ingredient production date is... unknown now
+    pSchedSupport->kinematicIngredProdDateStamp = -1;
 }
 
 size_t DEMKinematicThread::estimateMemUsage() const {
