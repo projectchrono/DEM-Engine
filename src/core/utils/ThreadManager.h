@@ -36,9 +36,10 @@ class ManagerStatistics {
 // production-consumption interplay
 class ThreadManager {
   public:
-    std::atomic<int64_t> stampLastUpdateOfDynamic;
+    std::atomic<int64_t> stampLastDynamicUpdateProdDate;
     std::atomic<int64_t> currentStampOfDynamic;
-    std::atomic<int64_t> dynamicRequestedUpdateFrequency;
+    std::atomic<int64_t> dynamicMaxFutureDrift;
+    std::atomic<int64_t> kinematicIngredProdDateStamp;
     std::atomic<bool> dynamicDone;
 
     std::atomic<bool> dynamicOwned_Prod2ConsBuffer_isFresh;
@@ -66,8 +67,9 @@ class ThreadManager {
 
     ThreadManager() noexcept {
         // that is, let dynamic advance into future as much as it wants, if it is -1
-        dynamicRequestedUpdateFrequency = -1;
-        stampLastUpdateOfDynamic = -1;
+        dynamicMaxFutureDrift = -1;
+        stampLastDynamicUpdateProdDate = -1;
+        kinematicIngredProdDateStamp = -1;
         currentStampOfDynamic = 0;
         dynamicDone = false;
         dynamicOwned_Prod2ConsBuffer_isFresh = false;
@@ -80,15 +82,15 @@ class ThreadManager {
         // do not hold dynamic back under the following circustances:
         // * the update frequency is negative, dynamic can drift into future
         // * the kinematic is done
-        if (dynamicRequestedUpdateFrequency < 0)
+        if (dynamicMaxFutureDrift < 0)
             return false;
 
         // The dynamic should wait if it moved too far into the future.
-        // stampLastUpdateOfDynamic stamps the last time when dT acquires something from kT.
-        // dynamicRequestedUpdateFrequency is the max number of cycles dT can run with no new information form kT,
+        // stampLastDynamicUpdateProdDate stamps the last time when dT acquires something from kT.
+        // dynamicMaxFutureDrift is the max number of cycles dT can run with no new information form kT,
         // defaulting to -1 (just keep going, no waiting for kT).
         bool shouldWait =
-            (currentStampOfDynamic > stampLastUpdateOfDynamic + dynamicRequestedUpdateFrequency ? true : false);
+            (currentStampOfDynamic > stampLastDynamicUpdateProdDate + dynamicMaxFutureDrift ? true : false);
         return shouldWait;
     }
 };

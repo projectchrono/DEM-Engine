@@ -1529,6 +1529,9 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
         DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_familyID, granData->familyID,
                                  simParams->nOwnerBodies * sizeof(family_t), cudaMemcpyDeviceToDevice));
     }
+
+    // This subroutine also includes recording the time stamp of this batch ingredient we sent to kT
+    pSchedSupport->kinematicIngredProdDateStamp = (pSchedSupport->currentStampOfDynamic).load();
 }
 
 inline void DEMDynamicThread::migratePersistentContacts() {
@@ -1741,7 +1744,9 @@ inline void DEMDynamicThread::ifProduceFreshThenUseItAndSendNewOrder() {
         }
         // dT got the produce, now mark its buffer to be no longer fresh
         pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
-        pSchedSupport->stampLastUpdateOfDynamic = (pSchedSupport->currentStampOfDynamic).load();
+        // dT needs to know how fresh the contact pair info is, and that is determined by when kT received this batch of
+        // ingredients.
+        pSchedSupport->stampLastDynamicUpdateProdDate = (pSchedSupport->kinematicIngredProdDateStamp).load();
 
         // If this is a history-based run, then when contacts are received, we need to migrate the contact
         // history info, to match the structure of the new contact array
@@ -1750,7 +1755,7 @@ inline void DEMDynamicThread::ifProduceFreshThenUseItAndSendNewOrder() {
         }
         timers.GetTimer("Unpack updates from kT").stop();
 
-        // Unpacking is done; now we can use tep arrays again to derive max velocity and send to kT
+        // Unpacking is done; now we can use temp arrays again to derive max velocity and send to kT
         pCycleMaxVel = determineSysMaxVel();
 
         timers.GetTimer("Send to kT buffer").start();
@@ -1792,7 +1797,7 @@ void DEMDynamicThread::workerThread() {
         // has the problem then it would have been addressed at the end of last DoDynamics call, the final `ShouldWait'
         // check. Note: pendingCriticalUpdate is not fail-safe at all right now. The user still needs to sync before
         // making critical changes to the system to ensure safety.
-        if (pSchedSupport->stampLastUpdateOfDynamic < 0 || pendingCriticalUpdate) {
+        if (pSchedSupport->stampLastDynamicUpdateProdDate < 0 || pendingCriticalUpdate) {
             // If the user loaded contact manually, there is an extra thing we need to do: update kT prev_contact
             // arrays. Note the user can add anything only from a sync-ed stance anyway, so this check needs to be done
             // only here.
@@ -1913,7 +1918,7 @@ void DEMDynamicThread::startThread() {
 
 void DEMDynamicThread::resetUserCallStat() {
     // Reset last kT-side data receiving cycle time stamp.
-    pSchedSupport->stampLastUpdateOfDynamic = -1;
+    pSchedSupport->stampLastDynamicUpdateProdDate = -1;
     pSchedSupport->currentStampOfDynamic = 0;
     // Reset dT stats variables, making ready for next user call
     pSchedSupport->dynamicDone = false;

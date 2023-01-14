@@ -3,7 +3,7 @@
 #ifndef DEME_HELPER_KERNELS_CU
 #define DEME_HELPER_KERNELS_CU
 
-//#include <thirdparty/nvidia_helper_math/helper_math.cuh>
+// #include <thirdparty/nvidia_helper_math/helper_math.cuh>
 #include <DEM/Defines.h>
 
 // I can only include CUDAMathHelpers.cu here and if I do it in other kernel files such as DEMBinSphereKernels.cu too,

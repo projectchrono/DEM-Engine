@@ -89,7 +89,10 @@ class DEMSolver {
     /// Getthe current expand factor in simulation
     float GetExpandFactor();
     /// Set the number of dT steps before it waits for a contact-pair info update from kT
-    void SetCDUpdateFreq(int freq) { m_updateFreq = freq; }
+    void SetCDUpdateFreq(int freq) {
+        m_updateFreq = freq;
+        m_dTMaxFutureDrift = 2 * freq;
+    }
     /// Get the simulation time passed since the start of simulation
     double GetSimTime() const;
     /// Set the simulation time manually
@@ -204,6 +207,30 @@ class DEMSolver {
     /// thinckness of the contact `safety' margin. This need not to be large unless the simulation velocity can increase
     /// significantly in one kT update cycle.
     void SetExpandSafetyAdder(float vel) { m_expand_base_vel = vel; }
+
+    /// @brief Used to force the solver to error out when there are too many spheres in a bin.
+    /// @param max_sph Max number of spheres in a bin.
+    /// @param err_out If the solver should error out when max sphere number is exceeded.
+    void SetMaxSphereInBin(unsigned int max_sph, bool err_out = true) {
+        error_out_when_too_many_item_in_bin = err_out;
+        threshold_too_sphere_item_in_bin = max_sph;
+    }
+
+    /// @brief Set the velocity which when exceeded, the solver errors out. A huge number can be used to discourage this
+    /// error type.
+    /// @param vel Error-out velocity.
+    void SetErrorOutVelocity(float vel) { threshold_error_out_vel = vel; }
+
+    /// @brief Enable or disable the use of adaptive bin size (by default it is on).
+    /// @param use Enable or disable.
+    void UseAdaptiveBinSize(bool use = true) { auto_adjust_bin_size = use; }
+    /// @brief Disable the use of adaptive bin size (always use initial size).
+    void DisableAdaptiveBinSize() { auto_adjust_bin_size = false; }
+    /// @brief Enable or disable the use of adaptive max update step count (by default it is on).
+    /// @param use Enable or disable.
+    void UseAdaptiveUpdateFreq(bool use = true) { auto_adjust_update_freq = use; }
+    /// @brief Disable the use of adaptive max update step count (always use initial update frequency).
+    void DisableAdaptiveUpdateFreq() { auto_adjust_update_freq = false; }
 
     /// Set the number of threads per block in force calculation (default 256)
     void SetForceCalcThreadsPerBlock(unsigned int nTh) { dT->DT_FORCE_CALC_NTHREADS_PER_BLOCK = nTh; }
@@ -749,9 +776,15 @@ class DEMSolver {
     // Smallest sphere radius (used to let the user know whether the expand factor is sufficient)
     float m_smallest_radius = FLT_MAX;
 
-    // The number of dT steps before it waits for a kT update. The default value 0 means every dT step will wait for a
+    // The number of dT steps before it waits for a kT update. The default value means every dT step will wait for a
     // newly produced contact-pair info (from kT) before proceeding.
+    int m_dTMaxFutureDrift = 0;
+
+    // This is an unused variable which is supposed to be related to m_dTMaxFutureDrift...
     int m_updateFreq = 0;
+
+    // Max number of spheres in a bin before it errors out
+    unsigned int threshold_too_sphere_item_in_bin = 65536;
 
     // Where the user wants the origin of the coordinate system to be
     std::string m_user_instructed_origin = "center";
@@ -770,6 +803,16 @@ class DEMSolver {
 
     // If we should flatten then reduce forces (true), or use atomic operation to reduce forces (false)
     bool use_cub_to_reduce_force = false;
+
+    // If the solver should error out when seeing there are more geometries in a bin than a pre-defined `maximum'
+    bool error_out_when_too_many_item_in_bin = false;
+    // The `maximum' we mentioned in the previous line
+    unsigned int threshold_too_many_item_in_bin = DEME_MAX_SPHERES_PER_BIN * 10;
+    // The max velocity at which the simulation should error out
+    float threshold_error_out_vel = 1e9;
+    // Whether to auto-adjust the bin size and the max update frequency
+    bool auto_adjust_bin_size = true;
+    bool auto_adjust_update_freq = true;
 
     // See SetNoForceRecord
     bool no_recording_contact_forces = false;

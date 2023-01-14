@@ -109,6 +109,8 @@ constexpr clumpComponentOffset_t RESERVED_CLUMP_COMPONENT_OFFSET =
 // Used to be compared against, so we know if some of the sphere components need to stay in global memory
 constexpr unsigned int THRESHOLD_CANT_JITIFY_ALL_COMP =
     DEME_MIN(DEME_MIN(RESERVED_CLUMP_COMPONENT_OFFSET, DEME_THRESHOLD_BIG_CLUMP), DEME_THRESHOLD_TOO_MANY_SPHERE_COMP);
+// Max size change the bin auto-adjust algorithm can apply to the bin size per step
+constexpr float BIN_SIZE_MAX_CHANGE_RATE = 0.2;
 
 // Some enums...
 // Verbosity
@@ -205,9 +207,6 @@ struct DEMSimParams {
     bodyID_t nOwnerClumps;
     objID_t nExtObj;
     bodyID_t nTriMeshes;
-
-    // bodyID_t nSpheresJitified;
-    // bodyID_t nTriJitified;
 
     // Number of the templates (or say the ``types'') of clumps and spheres
     unsigned int nDistinctClumpBodyTopologies;
@@ -427,7 +426,7 @@ struct DEMDataKT {
 // =============================================================================
 
 // At init, we wish to show the user how thick approximately the CD margin will be added. This number will help deriving
-// that approximation. It can be anything really, 1 or 10, ro 8.
+// that approximation. It can be anything really, 1 or 10, or 8.
 const float AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE = 10.f;
 
 }  // namespace deme
