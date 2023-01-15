@@ -256,7 +256,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     DEME_TRACKED_RESIZE_DEBUGPRINT(alphaZ, nOwnerBodies, "alphaZ", 0);
 
     // Resize the family mask `matrix' (in fact it is flattened)
-    DEME_TRACKED_RESIZE_DEBUGPRINT(familyMaskMatrix, (NUM_AVAL_FAMILIES - 1) * NUM_AVAL_FAMILIES / 2,
+    DEME_TRACKED_RESIZE_DEBUGPRINT(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2,
                                    "familyMaskMatrix", DONT_PREVENT_CONTACT);
 
     // Resize to the number of geometries
