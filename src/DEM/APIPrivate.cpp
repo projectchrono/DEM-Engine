@@ -697,7 +697,7 @@ void DEMSolver::figureOutFamilyMasks() {
 
     // We always know the size of the mask matrix, and we init it as all-allow
     m_family_mask_matrix.clear();
-    m_family_mask_matrix.resize((NUM_AVAL_FAMILIES - 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
+    m_family_mask_matrix.resize((NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
 
     // Then we figure out the masks
     for (const auto& a_pair : m_input_no_contact_pairs) {
