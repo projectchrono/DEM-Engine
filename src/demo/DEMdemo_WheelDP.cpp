@@ -40,10 +40,10 @@ int main() {
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
-    // float TRs[] = {0.1, 0.05};
-    float TRs[] = {0.7, 0.5, 0.3, 0.2, 0.1, 0.05, 0};
+    float TRs[] = {0.1, 0.05, 0};
+    // float TRs[] = {0.7, 0.5, 0.3, 0.2, 0.1, 0.05, 0};
     unsigned int run_mode = 0;
-    unsigned int currframe = 0;
+    unsigned int currframe = 348;
 
     for (float TR : TRs) {
         DEMSolver DEMSim;
@@ -233,7 +233,7 @@ int main() {
 
         DEMSim.SetInitTimeStep(step_size);
         DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -G_mag));
-        DEMSim.SetCDUpdateFreq(20);
+        DEMSim.SetCDUpdateFreq(30);
         DEMSim.SetExpandSafetyAdder(0.5);
         DEMSim.SetMaxVelocity(40);
         DEMSim.SetInitBinSizeAsMultipleOfSmallestSphere(2);

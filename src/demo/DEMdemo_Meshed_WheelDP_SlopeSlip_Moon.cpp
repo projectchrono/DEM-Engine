@@ -22,7 +22,7 @@ int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
     // out_dir += "/DEMdemo_Temp";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon_SamePressureAsEarth";
-    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon";
+    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon_110kg";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -36,16 +36,16 @@ int main() {
     float wheel_rad = 0.25;
     float wheel_width = 0.2;
     float wheel_mass = 11.;
-    float total_pressure = 22. * 9.81;
-    // float total_pressure = 22. * 1.62;
+    float img_mass = 110.; // 22.
+    float total_pressure = img_mass * 9.81;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
-    float moon_added_pressure = (22. * 1.62 - wheel_mass * G_mag);
+    float moon_added_pressure = (img_mass * 1.62 - wheel_mass * G_mag);
 
-    float Slopes_deg[] = {0, 2, 5, 10, 15, 20, 25};
-    // float Slopes_deg[] = {25};
+    // float Slopes_deg[] = {0, 2, 5, 10, 15, 20, 25};
+    float Slopes_deg[] = {0, 2.5, 5, 7.5, 10, 12.5};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
 
@@ -243,7 +243,7 @@ int main() {
         float G_mag_ramp = G_mag_earth;
 
         DEMSim.SetInitTimeStep(step_size);
-        DEMSim.SetCDUpdateFreq(20);
+        DEMSim.SetCDUpdateFreq(30);
         DEMSim.SetExpandSafetyAdder(0.5);
         DEMSim.SetInitBinSize(2 * scales.at(2));
         DEMSim.Initialize();
@@ -259,7 +259,7 @@ int main() {
 
         // Put the wheel in place, then let the wheel sink in initially
         float init_x = -0.0;
-        if (Slope_deg <= 10) {
+        if (Slope_deg <= 5) {
             init_x = -0.6;
         }
 
