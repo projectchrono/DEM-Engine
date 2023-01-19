@@ -243,7 +243,7 @@ int main() {
         float G_mag_ramp = G_mag_earth;
 
         DEMSim.SetInitTimeStep(step_size);
-        DEMSim.SetCDUpdateFreq(30);
+        DEMSim.SetCDUpdateFreq(20);
         DEMSim.SetExpandSafetyAdder(0.5);
         DEMSim.SetInitBinSize(2 * scales.at(2));
         DEMSim.Initialize();
