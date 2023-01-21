@@ -20,7 +20,7 @@ const double math_PI = 3.1415927;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_WheelDP_Force_mu0.5_480N";
+    out_dir += "/DEMdemo_WheelDP_Force_mu0.5_750N";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -34,16 +34,16 @@ int main() {
     float wheel_rad = 0.25;
     float wheel_width = 0.25;
     float wheel_mass = 11.;
+    float total_pressure = 750.0;
     // float total_pressure = 480.0;
-    float total_pressure = 480.0;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
-    float TRs[] = {0.1, 0.05, 0};
+    float TRs[] = {0.2, 0.1, 0.05, 0};
     // float TRs[] = {0.7, 0.5, 0.3, 0.2, 0.1, 0.05, 0};
     unsigned int run_mode = 0;
-    unsigned int currframe = 348;
+    unsigned int currframe = 251;
 
     for (float TR : TRs) {
         DEMSolver DEMSim;
