@@ -153,6 +153,9 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
         U1[2] = DEME_MAX(U1[2], U2[2]);
 
         deme::binsTriangleTouchPairs_t myReportOffset = numBinsTriTouchesScan[triID];
+        // In case this sweep does not agree with the previous one, we need to intercept such potential segfaults
+        const deme::binsTriangleTouchPairs_t myReportOffset_end = numBinsTriTouchesScan[triID + 1];
+
         // Triangle may span a collection of bins...
         float BinCenter[3];
         float BinHalfSizes[3];
@@ -172,9 +175,17 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                             binIDFrom3Indices<deme::binID_t>(i, j, k, simParams->nbX, simParams->nbY);
                         triIDsEachBinTouches[myReportOffset] = triID;
                         myReportOffset++;
+                        if (myReportOffset >= myReportOffset_end) {
+                            return;  // Don't step on the next triangle's domain
+                        }
                     }
                 }
             }
+        }
+        // This can happen for like 1 in 10^9 chance, for the tri--bin contact algorithm has stochasticity on GPU
+        for (; myReportOffset < myReportOffset_end; myReportOffset++) {
+            binIDsEachTriTouches[myReportOffset] = deme::NULL_BINID;
+            triIDsEachBinTouches[myReportOffset] = triID;
         }
     }
 }

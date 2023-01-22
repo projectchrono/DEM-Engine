@@ -142,7 +142,7 @@ __global__ void getNumberOfSphTriContactsEachBin(deme::DEMSimParams* simParams,
             sphXYZ.z = ownerZ + (double)myRelPos.z;
         }
 
-        // We can stop if this thread reaches the end of all potential pairs, nPairsNeedHandling
+        // Test contact with each triangle in this bin
         for (unsigned int ind = 0; ind < nTriInBin; ind++) {
             // A mesh facet and a sphere may have the same owner... although it is not possible with the current
             // implementation...
