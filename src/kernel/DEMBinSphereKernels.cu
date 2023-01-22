@@ -149,6 +149,8 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
             // Get the offset of my spot where I should start writing back to the global bin--sphere pair registration
             // array
             deme::binSphereTouchPairs_t myReportOffset = numBinsSphereTouchesScan[sphereID];
+            const deme::binSphereTouchPairs_t myReportOffset_end = numBinsSphereTouchesScan[sphereID + 1];
+
             {
                 voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
                     ownerXYZ.x, ownerXYZ.y, ownerXYZ.z, granData->voxelID[myOwnerID], granData->locX[myOwnerID],
@@ -176,12 +178,21 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                      j <= (deme::binID_t)(myBinY + myRadiusSpan); j++) {
                     for (deme::binID_t i = (deme::binID_t)((myBinX - myRadiusSpan > 0.0) ? myBinX - myRadiusSpan : 0.0);
                          i <= (deme::binID_t)(myBinX + myRadiusSpan); i++) {
+                        if (myReportOffset >= myReportOffset_end) {
+                            continue;  // No stepping on the next one's domain
+                        }
                         thisBinID = binIDFrom3Indices<deme::binID_t>(i, j, k, simParams->nbX, simParams->nbY);
                         binIDsEachSphereTouches[myReportOffset] = thisBinID;
                         sphereIDsEachBinTouches[myReportOffset] = sphereID;
                         myReportOffset++;
                     }
                 }
+            }
+            // First found that this `not filled' problem can happen in the triangle bin--tri intersection detections
+            // part... Quite peculiar.
+            for (; myReportOffset < myReportOffset_end; myReportOffset++) {
+                binIDsEachSphereTouches[myReportOffset] = deme::NULL_BINID;
+                sphereIDsEachBinTouches[myReportOffset] = sphereID;
             }
         }
 
