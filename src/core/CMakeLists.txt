@@ -116,7 +116,7 @@ configure_file(
 )
 
 message(STATUS "${core_message} Generating Runtime Data helper (install)...")
-set(RUNTIME_DATA_DIRECTORY "${CMAKE_INSTALL_DATADIR}/DEME")
+set(RUNTIME_DATA_DIRECTORY "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/DEME")
 configure_file(
 	utils/RuntimeData.cpp.in utils/RuntimeDataInstall.cpp
 	@ONLY
@@ -144,24 +144,35 @@ set_target_properties(
 
 # Install tree version
 
-#add_library(DEMERuntimeDataHelper_install SHARED)
+##
+## This MUST be installed after the Build tree version as it overwrites the .so file 
+##
 
-#target_sources(DEMERuntimeDataHelper_install
-#	PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/utils/RuntimeData.h"
-#	PRIVATE "${CMAKE_BINARY_DIR}/src/core/utils/RuntimeDataInstall.cpp"
-#)
+add_library(DEMERuntimeDataHelper_install SHARED)
 
-#target_link_options(DEMERuntimeDataHelper_install
-#	PUBLIC "LINKER:-soname,libDEMERuntimeDataHelper.so"
-#)
-
-#set_target_properties(
-#	DEMERuntimeDataHelper_install PROPERTIES
-#	POSITION_INDEPENDENT_CODE True
-#	CXX_STANDARD ${CXXSTD_SUPPORTED}
-#	LIBRARY_OUTPUT_NAME "DEMERuntimeDataHelper"
-#	LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib_install"
-#)
+target_sources(DEMERuntimeDataHelper_install
+	PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils/RuntimeData.h> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/core/utils/RuntimeData.h>
+	PRIVATE "${CMAKE_BINARY_DIR}/src/core/utils/RuntimeDataInstall.cpp" 
+)
 
 
+target_link_options(DEMERuntimeDataHelper_install
+	PUBLIC "LINKER:-soname,libDEMERuntimeDataHelper.so"
+)
+
+target_include_directories(
+	DEMERuntimeDataHelper_install
+	PUBLIC $<BUILD_INTERFACE:${ProjectIncludeSource}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
+set_target_properties(
+	DEMERuntimeDataHelper_install PROPERTIES
+	POSITION_INDEPENDENT_CODE True
+	CXX_STANDARD ${CXXSTD_SUPPORTED}
+	LIBRARY_OUTPUT_NAME "DEMERuntimeDataHelper"
+	LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib_install"
+)
+
+# Make sure this target is generated **AFTER** the build-tree version 
+add_dependencies(DEMERuntimeDataHelper_install DEMERuntimeDataHelper)
 
