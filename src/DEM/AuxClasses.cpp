@@ -186,13 +186,13 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
     my_subs["_inRegionPolicy_"] = in_region_specifier;
     my_subs["_quantityQueryProcess_"] = inspection_code;
     if (thing_to_insp == INSPECT_ENTITY_TYPE::SPHERE) {
-        inspection_kernel = std::make_shared<jitify::Program>(std::move(
-            JitHelper::buildProgram("DEMSphereQueryKernels", JitHelper::KERNEL_DIR / "DEMSphereQueryKernels.cu",
-                                    my_subs, {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string()})));
+        inspection_kernel = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMSphereQueryKernels", JitHelper::KERNEL_DIR / "DEMSphereQueryKernels.cu", my_subs,
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string()})));
     } else if (thing_to_insp == INSPECT_ENTITY_TYPE::CLUMP) {
-        inspection_kernel = std::make_shared<jitify::Program>(
-            std::move(JitHelper::buildProgram("DEMOwnerQueryKernels", JitHelper::KERNEL_DIR / "DEMOwnerQueryKernels.cu",
-                                              my_subs, {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string()})));
+        inspection_kernel = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMOwnerQueryKernels", JitHelper::KERNEL_DIR / "DEMOwnerQueryKernels.cu", my_subs,
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string()})));
     }
     initialized = true;
 }

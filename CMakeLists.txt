@@ -164,7 +164,7 @@ install(
 )
 
 install(CODE "message(\"Removing build-tree libraries from installation target...\")")
-install(CODE "file(REMOVE \"$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libDEMERuntimeDataHelper.so\")")
+install(CODE "file(REMOVE \"$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libDEMERuntimeDataHelper.so\")")
 
 install(
 	TARGETS DEMERuntimeDataHelper_install

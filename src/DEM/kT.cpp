@@ -696,43 +696,46 @@ void DEMKinematicThread::updatePrevContactArrays(DEMDataDT* dT_data, size_t nCon
 void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& Subs) {
     // First one is bin_sphere_kernels kernels, which figure out the bin--sphere touch pairs
     {
-        bin_sphere_kernels = std::make_shared<jitify::Program>(
-            std::move(JitHelper::buildProgram("DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
-                                              Subs, {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string()})));
+        bin_sphere_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu", Subs,
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string()})));
     }
     // Then CD kernels
     if (solverFlags.useOneBinPerThread) {
         sphere_contact_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu", Subs,
-            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(),
+             "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
     } else {
         sphere_contact_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMContactKernels_Blockwise", JitHelper::KERNEL_DIR / "DEMContactKernels_Blockwise.cu", Subs,
-            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(),
+             "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
     }
     // Then triangle--bin intersection-related kernels
     {
-        bin_triangle_kernels = std::make_shared<jitify::Program>(std::move(
-            JitHelper::buildProgram("DEMBinTriangleKernels", JitHelper::KERNEL_DIR / "DEMBinTriangleKernels.cu", Subs,
-                                    {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string()})));
+        bin_triangle_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMBinTriangleKernels", JitHelper::KERNEL_DIR / "DEMBinTriangleKernels.cu", Subs,
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string()})));
     }
     // Then sphere--triangle contact detection-related kernels
     {
         sphTri_contact_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMContactKernels_SphereTriangle", JitHelper::KERNEL_DIR / "DEMContactKernels_SphereTriangle.cu", Subs,
-            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(),
+             "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
     }
     // Then contact history mapping kernels
     {
-        history_kernels = std::make_shared<jitify::Program>(std::move(
-            JitHelper::buildProgram("DEMHistoryMappingKernels", JitHelper::KERNEL_DIR / "DEMHistoryMappingKernels.cu",
-                                    Subs, {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string()})));
+        history_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMHistoryMappingKernels", JitHelper::KERNEL_DIR / "DEMHistoryMappingKernels.cu", Subs,
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string()})));
     }
     // Then misc kernels
     {
-        misc_kernels = std::make_shared<jitify::Program>(
-            std::move(JitHelper::buildProgram("DEMMiscKernels", JitHelper::KERNEL_DIR / "DEMMiscKernels.cu", Subs,
-                                              {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string()})));
+        misc_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMMiscKernels", JitHelper::KERNEL_DIR / "DEMMiscKernels.cu", Subs,
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string()})));
     }
 }
 

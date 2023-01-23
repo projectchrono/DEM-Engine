@@ -1,6 +1,6 @@
 // DEM kernels used for quarrying (statistical) information from the current simulation system
 #include <DEM/Defines.h>
-#include <kernel/DEMHelperKernels.cu>
+#include <DEMHelperKernels.cu>
 
 // Mass properties are below... but inspecting spheres doesn't seem to require mass or MOI
 // _massDefs_;

@@ -8,7 +8,7 @@
 
 // I can only include CUDAMathHelpers.cu here and if I do it in other kernel files such as DEMBinSphereKernels.cu too,
 // there will be double-load problem where operators are re-defined. Not sure how to resolve it.
-#include <kernel/CUDAMathHelpers.cu>
+#include <CUDAMathHelpers.cu>
 
 // inline __device__ voxelID_t position2VoxelID
 

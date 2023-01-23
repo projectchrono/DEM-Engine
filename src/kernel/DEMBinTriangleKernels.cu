@@ -1,7 +1,7 @@
 // DEM bin--sphere relations-related custom kernels
 #include <DEM/Defines.h>
-#include <kernel/DEMHelperKernels.cu>
-#include <kernel/DEMTriangleBoxIntersect.cu>
+#include <DEMHelperKernels.cu>
+#include <DEMTriangleBoxIntersect.cu>
 
 inline __device__ float3 sandwichVertex(float3 vertex, const float3& centroid, const float3& normal, float beta) {
     // The vector along which we enlarge the triangle

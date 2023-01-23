@@ -1,6 +1,6 @@
 // DEM contact detection-related custom kernels
 #include <DEM/Defines.h>
-#include <kernel/DEMHelperKernels.cu>
+#include <DEMHelperKernels.cu>
 
 #include <cub/util_ptx.cuh>
 
