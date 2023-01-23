@@ -1935,41 +1935,41 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
     {
         prep_force_kernels = std::make_shared<jitify::Program>(
             std::move(JitHelper::buildProgram("DEMPrepForceKernels", JitHelper::KERNEL_DIR / "DEMPrepForceKernels.cu",
-                                              Subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+                                              Subs, {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string()})));
     }
     // Then force calculation kernels
     {
         cal_force_kernels = std::make_shared<jitify::Program>(
             std::move(JitHelper::buildProgram("DEMCalcForceKernels", JitHelper::KERNEL_DIR / "DEMCalcForceKernels.cu",
-                                              Subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+                                              Subs, {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string()})));
     }
     // Then force accumulation kernels
     if (solverFlags.useCubForceCollect) {
         collect_force_kernels = std::make_shared<jitify::Program>(std::move(
             JitHelper::buildProgram("DEMCollectForceKernels", JitHelper::KERNEL_DIR / "DEMCollectForceKernels.cu", Subs,
-                                    {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+                                    {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string()})));
     } else {
         collect_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMCollectForceKernels_Compact", JitHelper::KERNEL_DIR / "DEMCollectForceKernels_Compact.cu", Subs,
-            {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string()})));
     }
     // Then integration kernels
     {
         integrator_kernels = std::make_shared<jitify::Program>(std::move(
             JitHelper::buildProgram("DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu", Subs,
-                                    {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+                                    {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string()})));
     }
     // Then kernels that are... wildcards, which make on-the-fly changes to solver data
     if (solverFlags.canFamilyChange) {
         mod_kernels = std::make_shared<jitify::Program>(
             std::move(JitHelper::buildProgram("DEMModeratorKernels", JitHelper::KERNEL_DIR / "DEMModeratorKernels.cu",
-                                              Subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+                                              Subs, {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string()})));
     }
     // Then misc kernels
     {
         misc_kernels = std::make_shared<jitify::Program>(
             std::move(JitHelper::buildProgram("DEMMiscKernels", JitHelper::KERNEL_DIR / "DEMMiscKernels.cu", Subs,
-                                              {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+                                              {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string()})));
     }
 }
 

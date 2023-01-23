@@ -10,7 +10,8 @@
 
 class RuntimeDataHelper {
   public:
-    static std::filesystem::path path;
+    static std::filesystem::path data_path;
+    static std::filesystem::path include_path;
 };
 
 #endif

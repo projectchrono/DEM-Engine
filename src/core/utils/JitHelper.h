@@ -39,6 +39,7 @@ class JitHelper {
     // );
 
     static const std::filesystem::path KERNEL_DIR;
+    static const std::filesystem::path KERNEL_INCLUDE_DIR;
 
   private:
     static jitify::JitCache kcache;
