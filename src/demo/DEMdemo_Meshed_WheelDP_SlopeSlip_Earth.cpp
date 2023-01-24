@@ -42,9 +42,10 @@ int main() {
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
     // float Slopes_deg[] = {2, 5, 10, 15, 20, 25};
-    float Slopes_deg[] = {0, 2.5, 5, 7.5, 10, 12.5};
+    // float Slopes_deg[] = {0, 2.5, 5, 7.5, 10, 12.5};
+    float Slopes_deg[] = {12.5};
     unsigned int run_mode = 0;
-    unsigned int currframe = 0;
+    unsigned int currframe = 410;
 
     for (float Slope_deg : Slopes_deg) {
         DEMSolver DEMSim;
