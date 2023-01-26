@@ -22,8 +22,8 @@ namespace deme {
 // =============================================================================
 #define DEME_GET_VAR_NAME(Variable) (#Variable)
 #define DEME_KT_CD_NTHREADS_PER_BLOCK 256
-#define DEME_MAX_SPHERES_PER_BIN 256    ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
-#define DEME_MAX_TRIANGLES_PER_BIN 128  ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
+#define DEME_NUM_SPHERES_PER_CD_BATCH 256    ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
+#define DEME_NUM_TRIANGLES_PER_CD_BATCH 128  ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
 #define DEME_TINY_FLOAT 1e-12
 #define DEME_HUGE_FLOAT 1e15
 #define DEME_BITS_PER_BYTE 8
@@ -240,6 +240,13 @@ struct DEMSimParams {
     // Number of wildcards (extra property) arrays associated with contacts and owners
     unsigned int nContactWildcards;
     unsigned int nOwnerWildcards;
+
+    // The max vel at which the solver errors out
+    float errOutVel = DEME_HUGE_FLOAT;
+    // The max num of spheres per bin before solver errors out
+    unsigned int errOutBinSphNum = 32768;
+    // The max num of triangles per bin before solver errors out
+    unsigned int errOutBinTriNum = 32768;
 };
 
 // A struct that holds pointers to data arrays that dT uses

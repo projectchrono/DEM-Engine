@@ -342,10 +342,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(spheresBinTouches_t);
         spheresBinTouches_t* numSphContactsInEachBin =
             (spheresBinTouches_t*)scratchPad.allocateTempVector(4, CD_temp_arr_bytes);
-        size_t blocks_needed_for_bins_sph =
-            (solverFlags.useOneBinPerThread)
-                ? (*pNumActiveBins + DEME_KT_CD_NTHREADS_PER_BLOCK - 1) / DEME_KT_CD_NTHREADS_PER_BLOCK
-                : *pNumActiveBins;
+        size_t blocks_needed_for_bins_sph = *pNumActiveBins;
         // Some quantities and arrays for triangles as well, should we need them
         size_t blocks_needed_for_bins_tri = 0;
         // spheresBinTouches_t also doubles as the type for the number of tri--sph contact pairs
@@ -388,14 +385,16 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
 
             // Prescan numSphContactsInEachBin to get the final sphSphContactReportOffsets and
             // triSphContactReportOffsets. New vectors are needed.
-            CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(contactPairs_t);
+            // The extra entry is maybe superfluous and is for extra safety, in case the 2 sweeps do not agree with each
+            // other.
+            CD_temp_arr_bytes = (*pNumActiveBins + 1) * sizeof(contactPairs_t);
             contactPairs_t* sphSphContactReportOffsets =
                 (contactPairs_t*)scratchPad.allocateTempVector(5, CD_temp_arr_bytes);
             cubDEMPrefixScan<spheresBinTouches_t, contactPairs_t, DEMSolverStateData>(
                 numSphContactsInEachBin, sphSphContactReportOffsets, *pNumActiveBins, this_stream, scratchPad);
             contactPairs_t* triSphContactReportOffsets;
             if (simParams->nTriGM > 0) {
-                CD_temp_arr_bytes = (*pNumActiveBinsForTri) * sizeof(contactPairs_t);
+                CD_temp_arr_bytes = (*pNumActiveBinsForTri + 1) * sizeof(contactPairs_t);
                 triSphContactReportOffsets = (contactPairs_t*)scratchPad.allocateTempVector(14, CD_temp_arr_bytes);
                 cubDEMPrefixScan<spheresBinTouches_t, contactPairs_t, DEMSolverStateData>(
                     numTriSphContactsInEachBin, triSphContactReportOffsets, *pNumActiveBinsForTri, this_stream,
@@ -412,10 +411,14 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             size_t nSphereGeoContact = *scratchPad.pNumContacts;
             size_t nSphereSphereContact = (size_t)numSphContactsInEachBin[*pNumActiveBins - 1] +
                                           (size_t)sphSphContactReportOffsets[*pNumActiveBins - 1];
-            size_t nTriSphereContact = (simParams->nTriGM > 0)
-                                           ? (size_t)numTriSphContactsInEachBin[*pNumActiveBinsForTri - 1] +
-                                                 (size_t)triSphContactReportOffsets[*pNumActiveBinsForTri - 1]
-                                           : 0;
+            sphSphContactReportOffsets[*pNumActiveBins] = nSphereSphereContact;
+
+            size_t nTriSphereContact = 0;
+            if (simParams->nTriGM > 0) {
+                nTriSphereContact = (size_t)numTriSphContactsInEachBin[*pNumActiveBinsForTri - 1] +
+                                    (size_t)triSphContactReportOffsets[*pNumActiveBinsForTri - 1];
+                triSphContactReportOffsets[*pNumActiveBinsForTri] = nTriSphereContact;
+            }
             // std::cout << "nSphereGeoContact: " << nSphereGeoContact << std::endl;
             // std::cout << "nSphereSphereContact: " << nSphereSphereContact << std::endl;
 

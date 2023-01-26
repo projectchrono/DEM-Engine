@@ -890,9 +890,6 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.useMassJitify = jitify_mass_moi;
     kT->solverFlags.useClumpJitify = jitify_clump_templates;
 
-    // CD strategy
-    kT->solverFlags.useOneBinPerThread = use_one_bin_per_thread;
-
     // Tell kT and dT if and how this run is async
     kT->solverFlags.isAsync = !(m_dTMaxFutureDrift == 0);
     dT->solverFlags.isAsync = !(m_dTMaxFutureDrift == 0);
@@ -923,6 +920,14 @@ void DEMSolver::transferSolverParams() {
     // Whether sorts contact before using them (not implemented)
     kT->solverFlags.should_sort_pairs = should_sort_contacts;
     dT->solverFlags.should_sort_pairs = should_sort_contacts;
+
+    // Error out policies
+    kT->simParams->errOutBinSphNum = threshold_too_many_spheres_in_bin;
+    dT->simParams->errOutBinSphNum = threshold_too_many_spheres_in_bin;
+    kT->simParams->errOutBinTriNum = threshold_too_many_tri_in_bin;
+    dT->simParams->errOutBinTriNum = threshold_too_many_tri_in_bin;
+    kT->simParams->errOutVel = threshold_error_out_vel;
+    dT->simParams->errOutVel = threshold_error_out_vel;
 }
 
 void DEMSolver::transferSimParams() {

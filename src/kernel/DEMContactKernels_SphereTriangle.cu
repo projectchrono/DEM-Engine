@@ -33,22 +33,24 @@ __global__ void getNumberOfSphTriContactsEachBin(deme::DEMSimParams* simParams,
                                                  float3* sandwichBNode3,
                                                  size_t nActiveBinsForTri) {
     // Shared storage for bodies involved in this bin. Pre-allocated so that each threads can easily use.
-    __shared__ deme::bodyID_t triOwnerIDs[DEME_MAX_TRIANGLES_PER_BIN];
-    __shared__ float3 triANode1[DEME_MAX_TRIANGLES_PER_BIN];
-    __shared__ float3 triANode2[DEME_MAX_TRIANGLES_PER_BIN];
-    __shared__ float3 triANode3[DEME_MAX_TRIANGLES_PER_BIN];
-    __shared__ float3 triBNode1[DEME_MAX_TRIANGLES_PER_BIN];
-    __shared__ float3 triBNode2[DEME_MAX_TRIANGLES_PER_BIN];
-    __shared__ float3 triBNode3[DEME_MAX_TRIANGLES_PER_BIN];
-    __shared__ deme::family_t triOwnerFamilies[DEME_MAX_TRIANGLES_PER_BIN];
+    __shared__ deme::bodyID_t triOwnerIDs[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ float3 triANode1[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ float3 triANode2[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ float3 triANode3[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ float3 triBNode1[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ float3 triBNode2[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ float3 triBNode3[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ deme::family_t triOwnerFamilies[DEME_NUM_TRIANGLES_PER_CD_BATCH];
 
-    typedef cub::BlockReduce<deme::spheresBinTouches_t, DEME_MAX_SPHERES_PER_BIN> BlockReduceT;
+    typedef cub::BlockReduce<deme::spheresBinTouches_t, DEME_NUM_SPHERES_PER_CD_BATCH> BlockReduceT;
     __shared__ typename BlockReduceT::TempStorage temp_storage;
 
     const deme::trianglesBinTouches_t nTriInBin = numTrianglesBinTouches[blockIdx.x];
-    if (threadIdx.x == 0 && nTriInBin > DEME_MAX_TRIANGLES_PER_BIN) {
-        DEME_ABORT_KERNEL("Bin %u contains %u triangular mesh facets, exceeding maximum allowance (%u)\n", blockIdx.x,
-                          nTriInBin, DEME_MAX_TRIANGLES_PER_BIN);
+    if (threadIdx.x == 0 && nTriInBin > simParams->errOutBinTriNum) {
+        DEME_ABORT_KERNEL(
+            "Bin %u contains %u triangular mesh facets, exceeding maximum allowance (%u).\nIf you want the solver to "
+            "run despite this, set allowance higher via SetMaxTriangleInBin before simulation starts.",
+            blockIdx.x, nTriInBin, simParams->errOutBinTriNum);
     }
     const deme::spheresBinTouches_t myThreadID = threadIdx.x;
     const deme::binID_t binID = activeBinIDsForTri[blockIdx.x];
@@ -214,15 +216,15 @@ __global__ void populateTriSphContactsEachBin(deme::DEMSimParams* simParams,
                                               float3* sandwichBNode3,
                                               size_t nActiveBinsForTri) {
     // Shared storage for bodies involved in this bin. Pre-allocated so that each threads can easily use.
-    __shared__ deme::bodyID_t triOwnerIDs[DEME_MAX_TRIANGLES_PER_BIN];
-    __shared__ deme::bodyID_t triIDs[DEME_MAX_TRIANGLES_PER_BIN];
-    __shared__ float3 triANode1[DEME_MAX_TRIANGLES_PER_BIN];
-    __shared__ float3 triANode2[DEME_MAX_TRIANGLES_PER_BIN];
-    __shared__ float3 triANode3[DEME_MAX_TRIANGLES_PER_BIN];
-    __shared__ float3 triBNode1[DEME_MAX_TRIANGLES_PER_BIN];
-    __shared__ float3 triBNode2[DEME_MAX_TRIANGLES_PER_BIN];
-    __shared__ float3 triBNode3[DEME_MAX_TRIANGLES_PER_BIN];
-    __shared__ deme::family_t triOwnerFamilies[DEME_MAX_TRIANGLES_PER_BIN];
+    __shared__ deme::bodyID_t triOwnerIDs[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ deme::bodyID_t triIDs[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ float3 triANode1[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ float3 triANode2[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ float3 triANode3[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ float3 triBNode1[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ float3 triBNode2[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ float3 triBNode3[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ deme::family_t triOwnerFamilies[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ unsigned int blockPairCnt;
 
     const deme::trianglesBinTouches_t nTriInBin = numTrianglesBinTouches[blockIdx.x];

@@ -387,8 +387,6 @@ struct SolverFlags {
     // recommended)
     bool useClumpJitify = false;
     bool useMassJitify = false;
-    // Contact detection uses a thread for a bin, not a block for a bin
-    bool useOneBinPerThread = false;
     // Whether the simulation involves meshes
     bool hasMeshes = false;
     // Whether the force collection (acceleration calc and reduction) process should be using CUB

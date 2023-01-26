@@ -67,6 +67,13 @@ inline void DEMKinematicThread::unpackMyBuffer() {
 
     DEME_GPU_CALL(cudaMemcpy(&(granData->ts), &(granData->ts_buffer), sizeof(float), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(&(granData->maxVel), &(granData->maxVel_buffer), sizeof(float), cudaMemcpyDeviceToDevice));
+    // Check if max velocity is exceeded
+    if (granData->maxVel > simParams->errOutVel) {
+        DEME_ERROR(
+            "System max velocity is %.7g, exceeded max allowance (%.7g).\nIf this velocity is not abnormal and you "
+            "want to increase this allowance, use SetErrorOutVelocity before initializing simulation.",
+            granData->maxVel, simParams->errOutVel);
+    }
     // kT will need to derive the thickness of the CD margin, based on dT's info on system max vel
     // If isExpandFactorFixed, then that expand factor is in beta already, no work needed
     if (!solverFlags.isExpandFactorFixed) {
@@ -701,14 +708,9 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
             {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string()})));
     }
     // Then CD kernels
-    if (solverFlags.useOneBinPerThread) {
+    {
         sphere_contact_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu", Subs,
-            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(),
-             "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
-    } else {
-        sphere_contact_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMContactKernels_Blockwise", JitHelper::KERNEL_DIR / "DEMContactKernels_Blockwise.cu", Subs,
+            "DEMContactKernels_SphereSphere", JitHelper::KERNEL_DIR / "DEMContactKernels_SphereSphere.cu", Subs,
             {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(),
              "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
     }
