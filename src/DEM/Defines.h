@@ -22,6 +22,7 @@ namespace deme {
 // =============================================================================
 #define DEME_GET_VAR_NAME(Variable) (#Variable)
 #define DEME_KT_CD_NTHREADS_PER_BLOCK 256
+// It is better to keep DEME_NUM_SPHERES_PER_CD_BATCH == DEME_KT_CD_NTHREADS_PER_BLOCK for better performance
 #define DEME_NUM_SPHERES_PER_CD_BATCH 256    ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
 #define DEME_NUM_TRIANGLES_PER_CD_BATCH 128  ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
 #define DEME_TINY_FLOAT 1e-12

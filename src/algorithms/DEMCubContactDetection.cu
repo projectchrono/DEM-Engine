@@ -339,18 +339,18 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // find the actual pair names. A new temp array is needed for this numSphContactsInEachBin. Note we assume the
         // number of contact in each bin is the same level as the number of spheres in each bin (capped by the same data
         // type).
-        CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(spheresBinTouches_t);
-        spheresBinTouches_t* numSphContactsInEachBin =
-            (spheresBinTouches_t*)scratchPad.allocateTempVector(4, CD_temp_arr_bytes);
+        CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(binContactPairs_t);
+        binContactPairs_t* numSphContactsInEachBin =
+            (binContactPairs_t*)scratchPad.allocateTempVector(4, CD_temp_arr_bytes);
         size_t blocks_needed_for_bins_sph = *pNumActiveBins;
         // Some quantities and arrays for triangles as well, should we need them
         size_t blocks_needed_for_bins_tri = 0;
-        // spheresBinTouches_t also doubles as the type for the number of tri--sph contact pairs
-        spheresBinTouches_t* numTriSphContactsInEachBin;
+        // binContactPairs_t also doubles as the type for the number of tri--sph contact pairs
+        binContactPairs_t* numTriSphContactsInEachBin;
         if (simParams->nTriGM > 0) {
             blocks_needed_for_bins_tri = *pNumActiveBinsForTri;
-            CD_temp_arr_bytes = (*pNumActiveBinsForTri) * sizeof(spheresBinTouches_t);
-            numTriSphContactsInEachBin = (spheresBinTouches_t*)scratchPad.allocateTempVector(13, CD_temp_arr_bytes);
+            CD_temp_arr_bytes = (*pNumActiveBinsForTri) * sizeof(binContactPairs_t);
+            numTriSphContactsInEachBin = (binContactPairs_t*)scratchPad.allocateTempVector(13, CD_temp_arr_bytes);
         }
 
         if (blocks_needed_for_bins_sph > 0) {
@@ -372,7 +372,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                             sandwichBNode3, *pNumActiveBinsForTri);
                 DEME_GPU_CALL_WATCH_BETA(cudaStreamSynchronize(this_stream));
                 // std::cout << "numTriSphContactsInEachBin: " << std::endl;
-                // displayArray<spheresBinTouches_t>(numTriSphContactsInEachBin, *pNumActiveBinsForTri);
+                // displayArray<binContactPairs_t>(numTriSphContactsInEachBin, *pNumActiveBinsForTri);
             }
 
             //// TODO: sphere should have jitified and non-jitified part. Use a component ID > max_comp_id to signal
@@ -390,18 +390,18 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             CD_temp_arr_bytes = (*pNumActiveBins + 1) * sizeof(contactPairs_t);
             contactPairs_t* sphSphContactReportOffsets =
                 (contactPairs_t*)scratchPad.allocateTempVector(5, CD_temp_arr_bytes);
-            cubDEMPrefixScan<spheresBinTouches_t, contactPairs_t, DEMSolverStateData>(
+            cubDEMPrefixScan<binContactPairs_t, contactPairs_t, DEMSolverStateData>(
                 numSphContactsInEachBin, sphSphContactReportOffsets, *pNumActiveBins, this_stream, scratchPad);
             contactPairs_t* triSphContactReportOffsets;
             if (simParams->nTriGM > 0) {
                 CD_temp_arr_bytes = (*pNumActiveBinsForTri + 1) * sizeof(contactPairs_t);
                 triSphContactReportOffsets = (contactPairs_t*)scratchPad.allocateTempVector(14, CD_temp_arr_bytes);
-                cubDEMPrefixScan<spheresBinTouches_t, contactPairs_t, DEMSolverStateData>(
+                cubDEMPrefixScan<binContactPairs_t, contactPairs_t, DEMSolverStateData>(
                     numTriSphContactsInEachBin, triSphContactReportOffsets, *pNumActiveBinsForTri, this_stream,
                     scratchPad);
             }
             // DEME_DEBUG_PRINTF("Num contacts each bin:");
-            // DEME_DEBUG_EXEC(displayArray<spheresBinTouches_t>(numSphContactsInEachBin, *pNumActiveBins));
+            // DEME_DEBUG_EXEC(displayArray<binContactPairs_t>(numSphContactsInEachBin, *pNumActiveBins));
             // DEME_DEBUG_PRINTF("Tri contact report offsets:");
             // DEME_DEBUG_EXEC(displayArray<contactPairs_t>(triSphContactReportOffsets, *pNumActiveBinsForTri));
             // DEME_DEBUG_PRINTF("Family number:");

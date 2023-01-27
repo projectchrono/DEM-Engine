@@ -12,6 +12,7 @@ _clumpTemplateDefs_;
 // Family mask, _nFamilyMaskEntries_ elements are in this array
 // __constant__ __device__ bool familyMasks[] = {_familyMasks_};
 
+template <typename T1, typename T2>
 inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
                                             deme::DEMDataKT* granData,
                                             const deme::spheresBinTouches_t& myThreadID,
@@ -19,10 +20,10 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
                                             deme::bodyID_t* ownerIDs,
                                             deme::bodyID_t* bodyIDs,
                                             deme::family_t* ownerFamilies,
-                                            float* radii,
-                                            double* bodyX,
-                                            double* bodyY,
-                                            double* bodyZ) {
+                                            T1* radii,
+                                            T2* bodyX,
+                                            T2* bodyY,
+                                            T2* bodyZ) {
     deme::bodyID_t ownerID = granData->ownerClumpBody[sphereID];
     bodyIDs[myThreadID] = sphereID;
     ownerIDs[myThreadID] = ownerID;
@@ -79,7 +80,7 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
                                                  deme::binID_t* activeBinIDs,
                                                  deme::spheresBinTouches_t* numSpheresBinTouches,
                                                  deme::binSphereTouchPairs_t* sphereIDsLookUpTable,
-                                                 deme::spheresBinTouches_t* numContactsInEachBin,
+                                                 deme::binContactPairs_t* numContactsInEachBin,
                                                  size_t nActiveBins) {
     // shared storage for bodies involved in this bin. Pre-allocated so that each threads can easily use.
     __shared__ deme::bodyID_t ownerIDs[DEME_NUM_SPHERES_PER_CD_BATCH];
@@ -90,7 +91,7 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
     __shared__ double bodyZ[DEME_NUM_SPHERES_PER_CD_BATCH];
     __shared__ deme::family_t ownerFamilies[DEME_NUM_SPHERES_PER_CD_BATCH];
 
-    typedef cub::BlockReduce<deme::spheresBinTouches_t, DEME_NUM_SPHERES_PER_CD_BATCH> BlockReduceT;
+    typedef cub::BlockReduce<deme::binContactPairs_t, DEME_KT_CD_NTHREADS_PER_BLOCK> BlockReduceT;
     __shared__ typename BlockReduceT::TempStorage temp_storage;
 
     const deme::spheresBinTouches_t nBodiesInBin = numSpheresBinTouches[blockIdx.x];
@@ -110,7 +111,7 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
     const deme::binID_t binID = activeBinIDs[blockIdx.x];
     const deme::spheresBinTouches_t myThreadID = threadIdx.x;
     const deme::binSphereTouchPairs_t thisBodiesTableEntry = sphereIDsLookUpTable[blockIdx.x];
-    deme::spheresBinTouches_t contact_count = 0;
+    deme::binContactPairs_t contact_count = 0;
 
     // This bin may have more than 256 (default) spheres, so we process it by 256-sphere batch
     for (deme::spheresBinTouches_t processed_count = 0; processed_count < nBodiesInBin;
@@ -127,8 +128,8 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
         if (myThreadID < this_batch_active_count) {
             deme::bodyID_t sphereID =
                 sphereIDsEachBinTouches_sorted[thisBodiesTableEntry + processed_count + myThreadID];
-            fillSharedMemSpheres(simParams, granData, myThreadID, sphereID, ownerIDs, bodyIDs, ownerFamilies, radii,
-                                 bodyX, bodyY, bodyZ);
+            fillSharedMemSpheres<float, double>(simParams, granData, myThreadID, sphereID, ownerIDs, bodyIDs,
+                                                ownerFamilies, radii, bodyX, bodyY, bodyZ);
         }
         __syncthreads();
 
@@ -211,8 +212,9 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
 
                     // Get the info of this sphere in question here. Note this is a broadcast so should be relatively
                     // fast.
-                    fillSharedMemSpheres(simParams, granData, 0, cur_sphereID, &cur_ownerID, &cur_bodyID,
-                                         &cur_ownerFamily, &cur_radii, &cur_bodyX, &cur_bodyY, &cur_bodyZ);
+                    fillSharedMemSpheres<float, double>(simParams, granData, 0, cur_sphereID, &cur_ownerID, &cur_bodyID,
+                                                        &cur_ownerFamily, &cur_radii, &cur_bodyX, &cur_bodyY,
+                                                        &cur_bodyZ);
                 }
                 // Then each in-shared-mem sphere compares against it. But first, check if same owner...
                 if (ownerIDs[myThreadID] == cur_ownerID)
@@ -238,7 +240,7 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
         }
         __syncthreads();
     }  // End of sphere-batch for loop
-    deme::spheresBinTouches_t total_count = BlockReduceT(temp_storage).Sum(contact_count);
+    deme::binContactPairs_t total_count = BlockReduceT(temp_storage).Sum(contact_count);
     if (myThreadID == 0) {
         numContactsInEachBin[blockIdx.x] = total_count;
     }
@@ -263,10 +265,7 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
     __shared__ double bodyY[DEME_NUM_SPHERES_PER_CD_BATCH];
     __shared__ double bodyZ[DEME_NUM_SPHERES_PER_CD_BATCH];
     __shared__ deme::family_t ownerFamilies[DEME_NUM_SPHERES_PER_CD_BATCH];
-    __shared__ unsigned int blockPairCnt;
-
-    // typedef cub::BlockScan<deme::spheresBinTouches_t, DEME_NUM_SPHERES_PER_CD_BATCH> BlockScanT;
-    // __shared__ typename BlockScanT::TempStorage temp_storage;
+    __shared__ deme::binContactPairs_t blockPairCnt;
 
     const deme::spheresBinTouches_t nBodiesInBin = numSpheresBinTouches[blockIdx.x];
     if (nBodiesInBin <= 1) {
@@ -278,10 +277,10 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
     const deme::spheresBinTouches_t myThreadID = threadIdx.x;
     const deme::binSphereTouchPairs_t thisBodiesTableEntry = sphereIDsLookUpTable[blockIdx.x];
     if (myThreadID == 0)
-            blockPairCnt = 0;
+        blockPairCnt = 0;
     // Get my offset for writing back to the global arrays that contain contact pair info
-    deme::contactPairs_t myReportOffset = contactReportOffsets[blockIdx.x];
-    deme::contactPairs_t myReportOffset_end = contactReportOffsets[blockIdx.x+1];
+    const deme::contactPairs_t myReportOffset = contactReportOffsets[blockIdx.x];
+    const deme::contactPairs_t myReportOffset_end = contactReportOffsets[blockIdx.x + 1];
     __syncthreads();
 
     // This bin may have more than 256 (default) spheres, so we process it by 256-sphere batch
@@ -299,8 +298,8 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
         if (myThreadID < this_batch_active_count) {
             deme::bodyID_t sphereID =
                 sphereIDsEachBinTouches_sorted[thisBodiesTableEntry + processed_count + myThreadID];
-            fillSharedMemSpheres(simParams, granData, myThreadID, sphereID, ownerIDs, bodyIDs, ownerFamilies, radii,
-                                 bodyX, bodyY, bodyZ);
+            fillSharedMemSpheres<float, double>(simParams, granData, myThreadID, sphereID, ownerIDs, bodyIDs,
+                                                ownerFamilies, radii, bodyX, bodyY, bodyZ);
         }
         __syncthreads();
 
@@ -319,7 +318,7 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
             unsigned int bodyA, bodyB;
             // We can stop if this thread reaches the end of all potential pairs, nPairsNeedHandling
             for (unsigned int ind = nPairsEachHandles * myThreadID;
-                    ind < nPairsNeedHandling && ind < nPairsEachHandles * (myThreadID + 1); ind++) {
+                 ind < nPairsNeedHandling && ind < nPairsEachHandles * (myThreadID + 1); ind++) {
                 recoverCntPair<unsigned int>(bodyA, bodyB, ind, this_batch_active_count);
                 // For 2 bodies to be considered in contact, the contact point must be in this bin (to avoid
                 // double-counting), and they do not belong to the same clump
@@ -336,21 +335,24 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
                 }
 
                 deme::binID_t contactPntBin;
-                bool in_contact = calcContactPoint(simParams, bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], radii[bodyA], bodyX[bodyB], bodyY[bodyB], bodyZ[bodyB], radii[bodyB], contactPntBin);
-        
+                bool in_contact =
+                    calcContactPoint(simParams, bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], radii[bodyA], bodyX[bodyB],
+                                     bodyY[bodyB], bodyZ[bodyB], radii[bodyB], contactPntBin);
+
                 if (in_contact && (contactPntBin == binID)) {
-                    deme::contactPairs_t inBlockOffset = myReportOffset+atomicAdd(&blockPairCnt, 1);
-                    // The chance of offset going out-of-bound is very low, lower than sph--bin CD step, but I put it here anyway
-                    if (inBlockOffset<myReportOffset_end) {
+                    deme::contactPairs_t inBlockOffset = myReportOffset + atomicAdd(&blockPairCnt, 1);
+                    // The chance of offset going out-of-bound is very low, lower than sph--bin CD step, but I put it
+                    // here anyway
+                    if (inBlockOffset < myReportOffset_end) {
                         idSphA[inBlockOffset] = bodyIDs[bodyA];
                         idSphB[inBlockOffset] = bodyIDs[bodyB];
                         dType[inBlockOffset] = deme::SPHERE_SPHERE_CONTACT;
                     }
                 }
-            }  
-        } // End of a batch-wise contact pair detection
+            }
+        }  // End of a batch-wise contact pair detection
         __syncthreads();
-        
+
         // Take care of the left-overs. If there are left-overs, then this is a full block. But we still need to do the
         // check, because we could have more threads in a block than max_sphere_num.
         if (myThreadID < this_batch_active_count) {
@@ -365,8 +367,9 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
 
                     // Get the info of this sphere in question here. Note this is a broadcast so should be relatively
                     // fast.
-                    fillSharedMemSpheres(simParams, granData, 0, cur_sphereID, &cur_ownerID, &cur_bodyID,
-                                         &cur_ownerFamily, &cur_radii, &cur_bodyX, &cur_bodyY, &cur_bodyZ);
+                    fillSharedMemSpheres<float, double>(simParams, granData, 0, cur_sphereID, &cur_ownerID, &cur_bodyID,
+                                                        &cur_ownerFamily, &cur_radii, &cur_bodyX, &cur_bodyY,
+                                                        &cur_bodyZ);
                 }
                 // Then each in-shared-mem sphere compares against it. But first, check if same owner...
                 if (ownerIDs[myThreadID] == cur_ownerID)
@@ -386,17 +389,18 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
                                      radii[myThreadID], cur_bodyX, cur_bodyY, cur_bodyZ, cur_radii, contactPntBin);
 
                 if (in_contact && (contactPntBin == binID)) {
-                    deme::contactPairs_t inBlockOffset = myReportOffset+atomicAdd(&blockPairCnt, 1);
-                    // The chance of offset going out-of-bound is very low, lower than sph--bin CD step, but I put it here anyway
-                    if (inBlockOffset<myReportOffset_end) {
+                    deme::contactPairs_t inBlockOffset = myReportOffset + atomicAdd(&blockPairCnt, 1);
+                    // The chance of offset going out-of-bound is very low, lower than sph--bin CD step, but I put it
+                    // here anyway
+                    if (inBlockOffset < myReportOffset_end) {
                         idSphA[inBlockOffset] = bodyIDs[myThreadID];
                         idSphB[inBlockOffset] = cur_bodyID;
                         dType[inBlockOffset] = deme::SPHERE_SPHERE_CONTACT;
                     }
                 }
             }
-        } // End of a lef-over sweep
+        }  // End of a lef-over sweep
         __syncthreads();
 
-    } // End of sphere-batch for loop
+    }  // End of sphere-batch for loop
 }

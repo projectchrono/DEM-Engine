@@ -74,9 +74,9 @@ int main() {
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
-    DEMSim.SetCDUpdateFreq(20);
+    DEMSim.SetCDUpdateFreq(60);
     DEMSim.SetExpandSafetyMultiplier(1.0);
-    DEMSim.SetInitBinSize(4 * granular_rad);
+    DEMSim.SetInitBinSize(20 * granular_rad);
     DEMSim.Initialize();
 
     path out_dir = current_path();
