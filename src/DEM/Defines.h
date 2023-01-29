@@ -80,9 +80,9 @@ const notStupidBool_t DONT_PREVENT_CONTACT = 0;
 const notStupidBool_t PREVENT_CONTACT = 1;
 
 // Codes for owner types. We just have a handful of types...
-const ownerType_t OWNER_T_CLUMP = 0;
-const ownerType_t OWNER_T_ANALYTICAL = 1;
-const ownerType_t OWNER_T_MESH = 2;
+const ownerType_t OWNER_T_CLUMP = 1;
+const ownerType_t OWNER_T_ANALYTICAL = 2;
+const ownerType_t OWNER_T_MESH = 4;
 
 // This ID marks that this is a new contact, not present when we did contact detection last time
 // TODO: half max add half max... so stupid... Better way?? numeric_limit won't work...
@@ -130,7 +130,7 @@ enum class TIME_INTEGRATOR { FORWARD_EULER, CENTERED_DIFFERENCE, EXTENDED_TAYLOR
 // Owner types
 enum class OWNER_TYPE { CLUMP, ANALYTICAL, MESH };
 // Types of entities (can be either owner or geometry entity) that can be inspected by inspection methods
-enum class INSPECT_ENTITY_TYPE { SPHERE, CLUMP, MESH, MESH_FACET };
+enum class INSPECT_ENTITY_TYPE { SPHERE, CLUMP, MESH, MESH_FACET, EVERYTHING };
 // Which reduce operation is needed in an inspection
 enum class CUB_REDUCE_FLAVOR { NONE, MAX, MIN, SUM };
 // Format of the output files
@@ -258,6 +258,8 @@ struct DEMDataDT {
     family_t* familyID;
 
     voxelID_t* voxelID;
+
+    ownerType_t* ownerTypes;
 
     subVoxelPos_t* locX;
     subVoxelPos_t* locY;

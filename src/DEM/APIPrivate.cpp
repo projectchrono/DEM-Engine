@@ -438,7 +438,7 @@ void DEMSolver::decideCDMarginStrat() {
             break;
         case (MARGIN_FINDER_TYPE::DEFAULT):
             // Default strategy is to use an inspector
-            m_approx_max_vel_func = this->CreateInspector("clump_max_absv");
+            m_approx_max_vel_func = this->CreateInspector("max_absv");
             m_max_v_finder_type = MARGIN_FINDER_TYPE::DEM_INSPECTOR;
             break;
     }

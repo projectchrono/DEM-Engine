@@ -154,6 +154,11 @@ inline size_t hostCalcBinNum(binID_t& nbX,
     return (size_t)nbX * (size_t)nbY * (size_t)nbZ;
 }
 
+/// @brief  Check if the string has only spaces.
+inline bool is_all_spaces(const std::string& str) {
+    return str.find_first_not_of(' ') == str.npos;
+}
+
 // Check if a word exists in a string (but it does not need to be a whole word)
 inline bool match_pattern(const std::string& sentence, const std::string& word) {
     std::smatch m;

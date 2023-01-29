@@ -26,6 +26,7 @@ void DEMDynamicThread::packDataPointers() {
     granData->inertiaPropOffsets = inertiaPropOffsets.data();
     granData->familyID = familyID.data();
     granData->voxelID = voxelID.data();
+    granData->ownerTypes = ownerTypes.data();
     granData->locX = locX.data();
     granData->locY = locY.data();
     granData->locZ = locZ.data();
@@ -1733,6 +1734,27 @@ inline float* DEMDynamicThread::determineSysMaxVel() {
     }
 }
 
+inline void DEMDynamicThread::ifProduceFreshThenUseIt() {
+    if (pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
+        {
+            // Acquire lock and use the content of the dynamic-owned transfer buffer
+            std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
+            unpackMyBuffer();
+            // Leave myself a mental note that I just obtained new produce from kT
+            contactPairArr_isFresh = true;
+            // pSchedSupport->schedulingStats.nDynamicReceives++;
+        }
+        // dT got the produce, now mark its buffer to be no longer fresh
+        pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
+
+        // If this is a history-based run, then when contacts are received, we need to migrate the contact
+        // history info, to match the structure of the new contact array
+        if (!solverFlags.isHistoryless) {
+            migratePersistentContacts();
+        }
+    }
+}
+
 inline void DEMDynamicThread::ifProduceFreshThenUseItAndSendNewOrder() {
     if (pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
         timers.GetTimer("Unpack updates from kT").start();
@@ -1800,6 +1822,9 @@ void DEMDynamicThread::workerThread() {
         // check. Note: pendingCriticalUpdate is not fail-safe at all right now. The user still needs to sync before
         // making critical changes to the system to ensure safety.
         if (pSchedSupport->stampLastDynamicUpdateProdDate < 0 || pendingCriticalUpdate) {
+            // This is possible: If it is after a user-manual sync
+            ifProduceFreshThenUseIt();
+
             // If the user loaded contact manually, there is an extra thing we need to do: update kT prev_contact
             // arrays. Note the user can add anything only from a sync-ed stance anyway, so this check needs to be done
             // only here.
@@ -1924,7 +1949,10 @@ void DEMDynamicThread::resetUserCallStat() {
     pSchedSupport->currentStampOfDynamic = 0;
     // Reset dT stats variables, making ready for next user call
     pSchedSupport->dynamicDone = false;
-    pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
+    // Do not let user artificially set dynamicOwned_Prod2ConsBuffer_isFresh false. B/c only dT has the say on that. It
+    // could be that kT has a new produce ready, but dT idled for long and do not want to use it and want a new produce.
+    // Then dT needs to unpack this one first to get the contact mapping, then issue new work order, and that requires
+    // no manually setting this to false. pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
     contactPairArr_isFresh = true;
 }
 
@@ -1981,12 +2009,18 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
                                      CUB_REDUCE_FLAVOR reduce_flavor,
                                      bool all_domain) {
     size_t n;
+    ownerType_t owner_type = 0;
     switch (thing_to_insp) {
         case (INSPECT_ENTITY_TYPE::SPHERE):
             n = simParams->nSpheresGM;
             break;
         case (INSPECT_ENTITY_TYPE::CLUMP):
-            n = simParams->nOwnerClumps;
+            n = simParams->nOwnerBodies;
+            owner_type = OWNER_T_CLUMP;
+            break;
+        case (INSPECT_ENTITY_TYPE::EVERYTHING):
+            n = simParams->nOwnerBodies;
+            owner_type = OWNER_T_CLUMP | OWNER_T_MESH | OWNER_T_ANALYTICAL;
             break;
     }
     // We can use temp vectors as we please
@@ -2004,7 +2038,7 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     inspection_kernel->kernel(kernel_name)
         .instantiate()
         .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData, simParams, resArr, boolArrExclude, n);
+        .launch(granData, simParams, resArr, boolArrExclude, n, owner_type);
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     if (all_domain) {

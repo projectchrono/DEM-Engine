@@ -49,6 +49,15 @@ const std::string INSP_CODE_SPHERE_HIGH_ABSV = R"V0G0N(
     quantity[sphereID] = vel;
 )V0G0N";
 
+const std::string INSP_CODE_EVERYTHING_ABSV = R"V0G0N(
+    double myVX = granData->vX[myOwner];
+    double myVY = granData->vY[myOwner];
+    double myVZ = granData->vZ[myOwner];
+    double myABSV = sqrt(myVX * myVX + myVY * myVY + myVZ * myVZ);
+
+    quantity[myOwner] = myABSV;
+)V0G0N";
+
 const std::string INSP_CODE_CLUMP_KE = R"V0G0N(
     // First lin energy
     double myVX = granData->vX[myOwner];
@@ -90,6 +99,13 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
             thing_to_insp = INSPECT_ENTITY_TYPE::SPHERE;
             index_name = "sphereID";
             break;
+        case ("clump_max_absv"_):
+            inspection_code = INSP_CODE_SPHERE_HIGH_ABSV;
+            reduce_flavor = CUB_REDUCE_FLAVOR::MAX;
+            kernel_name = "inspectSphereProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::SPHERE;
+            index_name = "sphereID";
+            break;
         // case ("mesh_max_z"_):
         //     reduce_flavor = CUB_REDUCE_FLAVOR::MAX;
         //     break;
@@ -106,6 +122,7 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
             kernel_name = "inspectOwnerProperty";
             thing_to_insp = INSPECT_ENTITY_TYPE::CLUMP;
             index_name = "myOwner";
+            all_domain = false;  // Only clumps, so not all domain owners
             break;
         case ("clump_mass"_):
             inspection_code = INSP_CODE_CLUMP_APPROX_MASS;
@@ -113,23 +130,22 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
             kernel_name = "inspectOwnerProperty";
             thing_to_insp = INSPECT_ENTITY_TYPE::CLUMP;
             index_name = "myOwner";
+            all_domain = false;  // Only clumps, so not all domain owners
             break;
-        case ("clump_max_absv"_):
-            inspection_code = INSP_CODE_SPHERE_HIGH_ABSV;
+        case ("max_absv"_):
+            inspection_code = INSP_CODE_EVERYTHING_ABSV;
             reduce_flavor = CUB_REDUCE_FLAVOR::MAX;
-            kernel_name = "inspectSphereProperty";
-            thing_to_insp = INSPECT_ENTITY_TYPE::SPHERE;
-            index_name = "sphereID";
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
+            index_name = "myOwner";
             break;
-        // case ("clump_absv"_):
-        //     reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
-        //     break;
         case ("clump_kinetic_energy"_):
             inspection_code = INSP_CODE_CLUMP_KE;
             reduce_flavor = CUB_REDUCE_FLAVOR::SUM;
             kernel_name = "inspectOwnerProperty";
             thing_to_insp = INSPECT_ENTITY_TYPE::CLUMP;
             index_name = "myOwner";
+            all_domain = false;  // Only clumps, so not all domain owners
             break;
         default:
             std::stringstream ss;
@@ -166,13 +182,14 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
     }
     // We want to make sure if the in_region_code is legit, if it is not an all_domain query
     std::string in_region_specifier = in_region_code, placeholder;
-    if (!all_domain) {
+    // But if the in_region_code is all spaces, it's fine, probably they don't care
+    if ((!all_domain) && (!is_all_spaces(in_region_code))) {
         if (!any_whole_word_match(in_region_code, {"X", "Y", "Z"}) ||
             !all_whole_word_match(in_region_code, {"return"}, placeholder)) {
             std::stringstream ss;
             ss << "One of your insepctors is set to query a specific region, but the domian is not properly "
                   "defined.\nIt needs to return a bool variable that is a result of logical operations involving X, Y "
-                  "and Z."
+                  "and Z.\nYou can remove the region argument if all simulation entities should be considered."
                << std::endl;
             throw std::runtime_error(ss.str());
         }
@@ -189,10 +206,16 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
         inspection_kernel = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMSphereQueryKernels", JitHelper::KERNEL_DIR / "DEMSphereQueryKernels.cu", my_subs,
             {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string()})));
-    } else if (thing_to_insp == INSPECT_ENTITY_TYPE::CLUMP) {
+    } else if (thing_to_insp == INSPECT_ENTITY_TYPE::CLUMP || thing_to_insp == INSPECT_ENTITY_TYPE::EVERYTHING) {
         inspection_kernel = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMOwnerQueryKernels", JitHelper::KERNEL_DIR / "DEMOwnerQueryKernels.cu", my_subs,
             {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string()})));
+    } else {
+        std::stringstream ss;
+        ss << "Sorry, an inspector object you are using is not implemented yet.\nConsider letting the developers know "
+              "this and they may help you."
+           << std::endl;
+        throw std::runtime_error(ss.str());
     }
     initialized = true;
 }

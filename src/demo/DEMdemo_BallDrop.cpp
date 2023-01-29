@@ -66,7 +66,7 @@ int main() {
     // DEMSim.SetExpandFactor(1e-3);
     DEMSim.SetMaxVelocity(15.);
     // The projectile can be fast... and its velocity is not accounted for by the default max vel estimator
-    DEMSim.SetExpandSafetyAdder(20.);
+    DEMSim.SetExpandSafetyAdder(5.);
     DEMSim.SetInitBinSize(4 * terrain_rad);
     DEMSim.Initialize();
 
