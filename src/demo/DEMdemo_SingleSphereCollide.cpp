@@ -84,6 +84,8 @@ int main() {
 
     DEMSim.Initialize();
 
+    DEMSim.UpdateSimParams();  // Not needed; just testing if this function works...
+
     // You can add more clumps to simulation after initialization, like this...
     DEMSim.ClearCache();
     auto particles2 = DEMSim.AddClumps(input_clump_type, input_xyz2);

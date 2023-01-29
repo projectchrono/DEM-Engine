@@ -54,7 +54,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>>& contactMapping,
                       cudaStream_t& this_stream,
                       DEMSolverStateData& scratchPad,
-                      SolverTimers& timers) {
+                      SolverTimers& timers,
+                      kTStateParams& stateParams) {
     // A dumb check
     if (simParams->nSpheresGM == 0) {
         *scratchPad.pNumContacts = 0;
@@ -175,6 +176,12 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // displayArray<spheresBinTouches_t>(numSpheresBinTouches, *pNumActiveBins);
         // std::cout << "binIDsEachSphereTouches_sorted: ";
         // displayArray<binID_t>(binIDsEachSphereTouches_sorted, *pNumBinSphereTouchPairs);
+
+        // We find the max geo num in a bin for the purpose of adjusting bin size.
+        spheresBinTouches_t* pMaxGeoInBin = (spheresBinTouches_t*)scratchPad.pTempSizeVar3;
+        cubDEMMax<spheresBinTouches_t, DEMSolverStateData>(numSpheresBinTouches, pMaxGeoInBin, *pNumActiveBins,
+                                                           this_stream, scratchPad);
+        stateParams.maxSphFoundInBin = (size_t)(*pMaxGeoInBin);
 
         // Then, scan to find the offsets that are used to index into sphereIDsEachBinTouches_sorted to obtain bin-wise
         // spheres. Note binIDsEachSphereTouches_sorted can retire so we allocate on temp vector 3.
@@ -297,6 +304,13 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // displayArray<binID_t>(activeBinIDs, *pNumActiveBins);
             // std::cout << "NumActiveBinsForTri: " << *pNumActiveBinsForTri << std::endl;
             // std::cout << "NumActiveBins: " << *pNumActiveBins << std::endl;
+
+            // We find the max geo num in a bin for the purpose of adjusting bin size.
+            // TempVar1 fulfilled its purpose at this point, and now it is used as a temp var.
+            trianglesBinTouches_t* pMaxGeoInBin = (trianglesBinTouches_t*)scratchPad.pTempSizeVar3;
+            cubDEMMax<trianglesBinTouches_t, DEMSolverStateData>(numTrianglesBinTouches, pMaxGeoInBin,
+                                                                 *pNumActiveBinsForTri, this_stream, scratchPad);
+            stateParams.maxTriFoundInBin = (size_t)(*pMaxGeoInBin);
 
             // 6th step: map activeBinIDsForTri to activeBinIDs, so that when we are processing the bins in
             // activeBinIDsForTri, we know where to find the corresponding bin that resides in activeBinIDs, to bring

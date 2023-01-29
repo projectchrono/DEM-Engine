@@ -246,8 +246,7 @@ int main() {
 
         // Switch wheel from free fall into DP test
         DEMSim.ChangeFamily(1, 2);
-        DEMSim.SetInitTimeStep(step_size * 2);
-        DEMSim.UpdateSimParams();
+        DEMSim.UpdateStepSize(step_size * 2);
 
         for (double t = 0; t < sim_end; t += step_size, curr_step++) {
             if (curr_step % out_steps == 0) {

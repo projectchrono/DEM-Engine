@@ -47,6 +47,60 @@ inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
 }
 
+void DEMKinematicThread::calibrateParams() {
+    // Auto-adjust bin size
+    if (solverFlags.autoBinSize) {
+        double prev_time, curr_time;
+        // If it is true, then it's the AccumTimer telling us it is the right time to decide how to change bin size
+        if (CDAccumTimer.QueryOn(prev_time, curr_time, stateParams.binChangeObserveSteps)) {
+            int speed_dir = sign_func(stateParams.binCurrentChangeRate);
+            // Note the speed can be 0, yet we find performance variance. Then this is purely noise. We still wish the
+            // bin size to change in the next iteration, so we assign a direction randomly.
+            if (speed_dir == 0)
+                speed_dir = 1;
+            float speed_update;
+            if (curr_time < prev_time) {
+                // If there is improvement, then we accelerate the current change direction
+                speed_update = speed_dir * stateParams.binChangeRateAcc * stateParams.binTopChangeRate;
+            } else {
+                // If no improvement, revert the direction
+                speed_update = -speed_dir * stateParams.binChangeRateAcc * stateParams.binTopChangeRate;
+            }
+            // But, if the bin size is going to get too big or too small, a penalty is enforced
+            if (stateParams.maxSphFoundInBin > stateParams.binChangeUpperSafety * simParams->errOutBinSphNum ||
+                stateParams.maxTriFoundInBin > stateParams.binChangeUpperSafety * simParams->errOutBinTriNum) {
+                // Then the size must start to decrease
+                speed_update = -1.0 * stateParams.binChangeRateAcc * stateParams.binTopChangeRate;
+            }
+            if (stateParams.numBins >
+                stateParams.binChangeLowerSafety * (size_t)(std::numeric_limits<binID_t>::max())) {
+                // Then size must start to increase
+                speed_update = 1.0 * stateParams.binChangeRateAcc * stateParams.binTopChangeRate;
+            }
+
+            // Acc is done. Now apply it to bin size change speed
+            stateParams.binCurrentChangeRate += speed_update;
+            // But, the speed must fall in range
+            stateParams.binCurrentChangeRate = hostClampBetween(
+                stateParams.binCurrentChangeRate, -stateParams.binTopChangeRate, stateParams.binTopChangeRate);
+
+            // Change bin size
+            if (stateParams.binCurrentChangeRate > 0) {
+                simParams->binSize *= (1. + stateParams.binCurrentChangeRate);
+            } else {
+                simParams->binSize /= (1. - stateParams.binCurrentChangeRate);
+            }
+            // Register the new bin size
+            stateParams.numBins =
+                hostCalcBinNum(simParams->nbX, simParams->nbY, simParams->nbZ, simParams->voxelSize, simParams->binSize,
+                               simParams->nvXp2, simParams->nvYp2, simParams->nvZp2);
+
+            DEME_DEBUG_PRINTF("Bin size is now: %.7g", simParams->binSize);
+            DEME_DEBUG_PRINTF("Total num of bins is now: %zu", stateParams.numBins);
+        }
+    }
+}
+
 inline void DEMKinematicThread::unpackMyBuffer() {
     DEME_GPU_CALL(cudaMemcpy(granData->voxelID, granData->voxelID_buffer, simParams->nOwnerBodies * sizeof(voxelID_t),
                              cudaMemcpyDeviceToDevice));
@@ -186,11 +240,19 @@ void DEMKinematicThread::workerThread() {
             // figure out the amount of shared mem
             // cudaDeviceGetAttribute.cudaDevAttrMaxSharedMemoryPerBlock
 
-            // kT's main task, contact detection
+            // kT's main task, contact detection.
+            // For auto-adjusting bin size, this part of code is encapsuled in an accumulative timer.
+            CDAccumTimer.Begin();
             contactDetection(bin_sphere_kernels, bin_triangle_kernels, sphere_contact_kernels, sphTri_contact_kernels,
                              history_kernels, granData, simParams, solverFlags, verbosity, idGeometryA, idGeometryB,
                              contactType, previous_idGeometryA, previous_idGeometryB, previous_contactType,
-                             contactMapping, streamInfo.stream, stateOfSolver_resources, timers);
+                             contactMapping, streamInfo.stream, stateOfSolver_resources, timers, stateParams);
+            CDAccumTimer.End();
+
+            // kT will reflect on how good the choice of parameters is
+            timers.GetTimer("Adjust parameters").start();
+            calibrateParams();
+            timers.GetTimer("Adjust parameters").stop();
 
             timers.GetTimer("Send to dT buffer").start();
             {
@@ -294,6 +356,11 @@ void DEMKinematicThread::resetUserCallStat() {
     kTShouldReset = false;
     // My ingredient production date is... unknown now
     pSchedSupport->kinematicIngredProdDateStamp = -1;
+
+    // We also reset the CD timer (for adjusting bin size)
+    CDAccumTimer.Clear();
+    // Reset bin size change speed
+    stateParams.binCurrentChangeRate = 0.;
 }
 
 size_t DEMKinematicThread::estimateMemUsage() const {
@@ -389,7 +456,7 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
     simParams->Gy = G.y;
     simParams->Gz = G.z;
     simParams->h = ts_size;
-    simParams->beta = expand_factor;
+    simParams->beta = expand_factor;  // If beta is auto-adapting, this assignment has no effect
     simParams->approxMaxVel = approx_max_vel;
     simParams->expSafetyMulti = expand_safety_param;
     simParams->expSafetyAdder = expand_safety_adder;

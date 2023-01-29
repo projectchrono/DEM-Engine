@@ -18,6 +18,7 @@
 #include <core/utils/GpuManager.h>
 #include <nvmath/helper_math.cuh>
 #include <core/utils/GpuError.h>
+#include <core/utils/Timer.hpp>
 
 #include <DEM/BdrsAndObjs.h>
 #include <DEM/Defines.h>
@@ -180,8 +181,11 @@ class DEMKinematicThread {
 
     // kT's timers
     std::vector<std::string> timer_names = {"Discretize domain",      "Find contact pairs", "Build history map",
-                                            "Unpack updates from dT", "Send to dT buffer",  "Wait for dT update"};
+                                            "Unpack updates from dT", "Send to dT buffer",  "Wait for dT update",
+                                            "Adjust parameters"};
     SolverTimers timers = SolverTimers(timer_names);
+
+    kTStateParams stateParams;
 
   public:
     friend class DEMSolver;
@@ -351,6 +355,8 @@ class DEMKinematicThread {
     void sendToTheirBuffer();
     // Resize dT's buffer arrays based on the number of contact pairs
     inline void transferArraysResize(size_t nContactPairs);
+    // Automatic adjustments to sim params
+    void calibrateParams();
 
     // Just-in-time compiled kernels
     // jitify::Program bin_sphere_kernels = JitHelper::buildProgram("bin_sphere_kernels", " ");
@@ -360,6 +366,50 @@ class DEMKinematicThread {
     std::shared_ptr<jitify::Program> sphere_contact_kernels;
     std::shared_ptr<jitify::Program> history_kernels;
     std::shared_ptr<jitify::Program> misc_kernels;
+
+    // Adjuster for bin size
+    class AccumTimer {
+      private:
+        double prev_time = DEME_HUGE_FLOAT;
+        unsigned int cached_count = 0;
+        Timer<double> timer;
+
+      public:
+        AccumTimer() { timer = Timer<double>(); }
+        void Begin() { timer.start(); }
+        void End() {
+            timer.stop();
+            cached_count++;
+        }
+
+        void Query(double& prev, double& curr) {
+            double avg_time = timer.GetTimeSeconds() / cached_count;
+            prev = prev_time;
+            curr = avg_time;
+            // Record the time for this run
+            prev_time = avg_time;
+            timer.reset();
+            cached_count = 0;
+        }
+
+        bool QueryOn(double& prev, double& curr, unsigned int n) {
+            if (cached_count >= n) {
+                Query(prev, curr);
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        // Return this accumulator to initial state
+        void Clear() {
+            prev_time = -1.0;
+            cached_count = 0;
+            timer.reset();
+        }
+    };
+
+    AccumTimer CDAccumTimer = AccumTimer();
 
 };  // kT ends
 

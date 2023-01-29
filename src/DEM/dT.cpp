@@ -146,7 +146,7 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->Gy = G.y;
     simParams->Gz = G.z;
     simParams->h = ts_size;
-    simParams->beta = expand_factor;
+    simParams->beta = expand_factor;  // If beta is auto-adapting, this assignment has no effect
     simParams->approxMaxVel = approx_max_vel;
     simParams->expSafetyMulti = expand_safety_param;
     simParams->expSafetyAdder = expand_safety_adder;
@@ -1595,20 +1595,22 @@ inline void DEMDynamicThread::migratePersistentContacts() {
                     "%zu contacts were active at time %.9g on dT, but they are not detected on kT, therefore being "
                     "removed unexpectedly!",
                     *lostContact, simParams->timeElapsed);
-                DEME_DEBUG_PRINTF("New number of contacts: %zu", *stateOfSolver_resources.pNumContacts);
-                DEME_DEBUG_PRINTF("Old number of contacts: %zu", *stateOfSolver_resources.pNumPrevContacts);
-                DEME_DEBUG_PRINTF("New contact A:");
-                DEME_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryA, *stateOfSolver_resources.pNumContacts));
-                DEME_DEBUG_PRINTF("New contact B:");
-                DEME_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryB, *stateOfSolver_resources.pNumContacts));
-                DEME_DEBUG_PRINTF("Old version of the last contact wildcard:");
-                DEME_DEBUG_EXEC(displayArray<float>(granData->contactWildcards[simParams->nContactWildcards - 1],
-                                                    *stateOfSolver_resources.pNumPrevContacts));
-                DEME_DEBUG_PRINTF("Old--new mapping:");
-                DEME_DEBUG_EXEC(
+                DEME_STEP_DEBUG_PRINTF("New number of contacts: %zu", *stateOfSolver_resources.pNumContacts);
+                DEME_STEP_DEBUG_PRINTF("Old number of contacts: %zu", *stateOfSolver_resources.pNumPrevContacts);
+                DEME_STEP_DEBUG_PRINTF("New contact A:");
+                DEME_STEP_DEBUG_EXEC(
+                    displayArray<bodyID_t>(granData->idGeometryA, *stateOfSolver_resources.pNumContacts));
+                DEME_STEP_DEBUG_PRINTF("New contact B:");
+                DEME_STEP_DEBUG_EXEC(
+                    displayArray<bodyID_t>(granData->idGeometryB, *stateOfSolver_resources.pNumContacts));
+                DEME_STEP_DEBUG_PRINTF("Old version of the last contact wildcard:");
+                DEME_STEP_DEBUG_EXEC(displayArray<float>(granData->contactWildcards[simParams->nContactWildcards - 1],
+                                                         *stateOfSolver_resources.pNumPrevContacts));
+                DEME_STEP_DEBUG_PRINTF("Old--new mapping:");
+                DEME_STEP_DEBUG_EXEC(
                     displayArray<contactPairs_t>(granData->contactMapping, *stateOfSolver_resources.pNumContacts));
-                DEME_DEBUG_PRINTF("Sentry:");
-                DEME_DEBUG_EXEC(
+                DEME_STEP_DEBUG_PRINTF("Sentry:");
+                DEME_STEP_DEBUG_EXEC(
                     displayArray<notStupidBool_t>(contactSentry, *stateOfSolver_resources.pNumPrevContacts));
             }
         }

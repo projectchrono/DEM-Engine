@@ -53,6 +53,7 @@ class DEMSolverStateData {
     // Temp size_t variables that can be reused
     size_t* pTempSizeVar1;
     size_t* pTempSizeVar2;
+    size_t* pTempSizeVar3;
 
     // Number of contacts in this CD step
     size_t* pNumContacts;
@@ -65,6 +66,7 @@ class DEMSolverStateData {
         DEME_GPU_CALL(cudaMallocManaged(&pNumContacts, sizeof(size_t)));
         DEME_GPU_CALL(cudaMallocManaged(&pTempSizeVar1, sizeof(size_t)));
         DEME_GPU_CALL(cudaMallocManaged(&pTempSizeVar2, sizeof(size_t)));
+        DEME_GPU_CALL(cudaMallocManaged(&pTempSizeVar3, sizeof(size_t)));
         DEME_GPU_CALL(cudaMallocManaged(&pNumPrevContacts, sizeof(size_t)));
         DEME_GPU_CALL(cudaMallocManaged(&pNumPrevSpheres, sizeof(size_t)));
         *pNumContacts = 0;
@@ -76,6 +78,7 @@ class DEMSolverStateData {
         DEME_GPU_CALL(cudaFree(pNumContacts));
         DEME_GPU_CALL(cudaFree(pTempSizeVar1));
         DEME_GPU_CALL(cudaFree(pTempSizeVar2));
+        DEME_GPU_CALL(cudaFree(pTempSizeVar3));
         DEME_GPU_CALL(cudaFree(pNumPrevContacts));
         DEME_GPU_CALL(cudaFree(pNumPrevSpheres));
 
@@ -100,6 +103,30 @@ class DEMSolverStateData {
         }
         return threadTempVectors.at(i).data();
     }
+};
+
+struct kTStateParams {
+    // The `top speed' of the change of bin size
+    float binTopChangeRate = 0.05;
+    // The `current speed' fo the change of bin size
+    float binCurrentChangeRate = 0.0;
+    // The `acceleration' of bin size change rate, (0, 1]: 1 means each time a change is applied, it's at top speed
+    float binChangeRateAcc = 0.1;
+    // Number of CD steps before the solver makes a decision on how to change the bin size
+    unsigned int binChangeObserveSteps = 5;
+    // Past the point that (this number * error out bin geometry count)-many geometries found in a bin, the solver will
+    // force the bin to shrink
+    float binChangeUpperSafety = 0.5;
+    // Past the point that (this number * max num of bin)-many bins in the domain, the solver will force the bin to
+    // expand
+    float binChangeLowerSafety = 0.85;
+
+    // The max num of geometries in a bin that appeared in the CD process
+    size_t maxSphFoundInBin;
+    size_t maxTriFoundInBin;
+
+    // Num of bins, currently
+    size_t numBins = 0;
 };
 
 inline std::string pretty_format_bytes(size_t bytes) {
@@ -202,6 +229,13 @@ inline std::string pretty_format_bytes(size_t bytes) {
         if (verbosity >= VERBOSITY::STEP_DEBUG) { \
             printf(__VA_ARGS__);                  \
             printf("\n");                         \
+        }                                         \
+    }
+
+#define DEME_STEP_DEBUG_EXEC(...)                 \
+    {                                             \
+        if (verbosity >= VERBOSITY::STEP_DEBUG) { \
+            __VA_ARGS__;                          \
         }                                         \
     }
 
@@ -400,12 +434,9 @@ struct SolverFlags {
     // Max number of steps dT is allowed to be ahead of kT
     int maxFutureDrift;
 
-    // The `top speed' of the change of bin size
-    float binTopChangeRate = 0.05;
-    // The `current speed' fo the change of bin size
-    float binCurrentChangeRate = 0.01;
-    // The `acceleration' of bin size change rate, (0, 1]: 1 means each time a change is applied, it's at top speed
-    float binChangeRateAcc = 0.1;
+    // Whether the solver auto-update those sim params
+    bool autoBinSize = true;
+    bool autoUpdateFreq = true;
 };
 
 class DEMMaterial {

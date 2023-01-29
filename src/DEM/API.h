@@ -228,6 +228,28 @@ class DEMSolver {
     void UseAdaptiveUpdateFreq(bool use = true) { auto_adjust_update_freq = use; }
     /// @brief Disable the use of adaptive max update step count (always use initial update frequency).
     void DisableAdaptiveUpdateFreq() { auto_adjust_update_freq = false; }
+    /// @brief Adjust how frequent kT updates the bin size.
+    /// @param n Number of contact detections before kT makes one adjustment to bin size.
+    void SetAdaptiveBinSizeDelaySteps(unsigned int n) { auto_adjust_observe_steps = n; }
+    /// @brief Set the max rate that the bin size can change in one adjustment.
+    /// @param rate 0: never changes; 1: can double or halve size in one go; suggest using 0.05.
+    void SetAdaptiveBinSizeMaxRate(float rate) { auto_adjust_max_rate = (rate > 0) ? rate : 0; }
+    /// @brief Set how fast kT changes the direction of bin size adjustmemt when there's a more beneficial direction.
+    /// @param acc 0.01: slowly change direction; 1: quickly change direction
+    void SetAdaptiveBinSizeAcc(float acc) { auto_adjust_acc = hostClampBetween(acc, 0.01, 1.0); }
+    /// @brief Set how proactive the solver is in avoiding the bin being too big (leading to too many geometries in a
+    /// bin).
+    /// @param ratio 0: not proavtive; 1: very proactive.
+    void SetAdaptiveBinSizeUpperProactivity(float ratio) {
+        auto_adjust_upper_proactive_ratio = hostClampBetween(ratio, 0.0, 1.0);
+        ;
+    }
+    /// @brief Set how proactive the solver is in avoiding the bin being too small (leading to too many bins in domain).
+    /// @param ratio 0: not proavtive; 1: very proactive.
+    void SetAdaptiveBinSizeLowerProactivity(float ratio) {
+        auto_adjust_lower_proactive_ratio = hostClampBetween(ratio, 0.0, 1.0);
+        ;
+    }
 
     /// Set the number of threads per block in force calculation (default 256).
     void SetForceCalcThreadsPerBlock(unsigned int nTh) { dT->DT_FORCE_CALC_NTHREADS_PER_BLOCK = nTh; }
@@ -597,12 +619,16 @@ class DEMSolver {
     /// Equivalent to calling DoDynamics with the time step size as the argument
     void DoStepDynamics() { DoDynamics(m_ts_size); }
 
-    /// Copy the cached sim params to the GPU-accessible managed memory, so that they are picked up from the next ts of
-    /// simulation. Usually used when you want to change simulation parameters after the system is already Intialized.
+    /// @brief Transferthe cached sim params to the workers. Used for sim environment modification after system
+    /// initialization.
     void UpdateSimParams();
 
-    /// Transfer newly loaded clumps to the GPU-side in mid-simulation
+    /// @brief TTransfer newly loaded clumps to the GPU-side in mid-simulation.
     void UpdateClumps();
+
+    /// @brief Update the time step size. Used after system initialization.
+    /// @param ts Time step size.
+    void UpdateStepSize(float ts = -1.0);
 
     /// Show the collaboration stats between dT and kT. This is more useful for tweaking the number of time steps that
     /// dT should be allowed to be in advance of kT.
@@ -749,7 +775,7 @@ class DEMSolver {
     float m_expand_safety_multi = 1.f;
     // The `base' velocity we always consider entities to have, when determining the thickness of the margin to add for
     // contact detection.
-    float m_expand_base_vel = 0.5f;
+    float m_expand_base_vel = 3.f;
 
     // The method of determining the thickness of the margin added to CD
     // Default is using a max_vel inspector of the clumps to decide it
@@ -805,6 +831,13 @@ class DEMSolver {
     // Whether to auto-adjust the bin size and the max update frequency
     bool auto_adjust_bin_size = true;
     bool auto_adjust_update_freq = true;
+    // Num of steps that kT takes average before making a conclusion on the performance of this bin size
+    unsigned int auto_adjust_observe_steps = 5;
+    // See corresponding method for those...
+    float auto_adjust_max_rate = 0.05;
+    float auto_adjust_acc = 0.1;
+    float auto_adjust_upper_proactive_ratio = 1.0;
+    float auto_adjust_lower_proactive_ratio = 0.3;
 
     // See SetNoForceRecord
     bool no_recording_contact_forces = false;

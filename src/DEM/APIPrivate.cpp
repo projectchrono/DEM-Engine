@@ -424,10 +424,7 @@ void DEMSolver::decideBinSize() {
         }
     }
 
-    nbX = (binID_t)(m_voxelSize * (double)((size_t)1 << nvXp2) / m_binSize) + 1;
-    nbY = (binID_t)(m_voxelSize * (double)((size_t)1 << nvYp2) / m_binSize) + 1;
-    nbZ = (binID_t)(m_voxelSize * (double)((size_t)1 << nvZp2) / m_binSize) + 1;
-    m_num_bins = (uint64_t)nbX * (uint64_t)nbY * (uint64_t)nbZ;
+    m_num_bins = hostCalcBinNum(nbX, nbY, nbZ, m_voxelSize, m_binSize, nvXp2, nvYp2, nvZp2);
     // It's better to compute num of bins this way, rather than...
     // (uint64_t)(m_boxX / m_binSize + 1) * (uint64_t)(m_boxY / m_binSize + 1) * (uint64_t)(m_boxZ / m_binSize + 1);
     // because the space bins and voxels can cover may be larger than the user-defined sim domain
@@ -928,6 +925,19 @@ void DEMSolver::transferSolverParams() {
     dT->simParams->errOutBinTriNum = threshold_too_many_tri_in_bin;
     kT->simParams->errOutVel = threshold_error_out_vel;
     dT->simParams->errOutVel = threshold_error_out_vel;
+
+    // Whether the solver should auto-update those values
+    kT->solverFlags.autoBinSize = auto_adjust_bin_size;
+    kT->solverFlags.autoUpdateFreq = auto_adjust_update_freq;
+    {
+        kT->stateParams.binChangeObserveSteps = auto_adjust_observe_steps;
+        kT->stateParams.binTopChangeRate = auto_adjust_max_rate;
+        kT->stateParams.binChangeRateAcc = auto_adjust_acc;
+        // Suppose for avoiding bins too big, the most proactive thing you can do is starting to shrink it when half max
+        // geo count is reached...
+        kT->stateParams.binChangeUpperSafety = 0.5 + (1. - auto_adjust_upper_proactive_ratio) * 0.5;
+        kT->stateParams.binChangeLowerSafety = 0.5 + (1. - auto_adjust_lower_proactive_ratio) * 0.5;
+    }
 }
 
 void DEMSolver::transferSimParams() {
@@ -1592,7 +1602,7 @@ inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::
             for (unsigned int i = 0; i < nJitifiableClumpTopo; i++) {
                 for (unsigned int j = 0; j < m_template_sp_radii.at(i).size(); j++) {
                     Radii += to_string_with_precision(m_template_sp_radii.at(i).at(j)) + ",";
-                    CDRadii += to_string_with_precision(m_template_sp_radii.at(i).at(j) + m_expand_factor) + ",";
+                    CDRadii += to_string_with_precision(m_template_sp_radii.at(i).at(j)) + ",";
                     CDRelPosX += to_string_with_precision(m_template_sp_relPos.at(i).at(j).x) + ",";
                     CDRelPosY += to_string_with_precision(m_template_sp_relPos.at(i).at(j).y) + ",";
                     CDRelPosZ += to_string_with_precision(m_template_sp_relPos.at(i).at(j).z) + ",";
@@ -1663,10 +1673,6 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_nvYp2_"] = std::to_string(nvYp2);
     strMap["_nvZp2_"] = std::to_string(nvZp2);
 
-    // strMap["_nbX_"] = std::to_string(nbX);
-    // strMap["_nbY_"] = std::to_string(nbY);
-    // strMap["_nbZ_"] = std::to_string(nbZ);
-
     strMap["_l_"] = to_string_with_precision(l);
     strMap["_voxelSize_"] = to_string_with_precision(m_voxelSize);
     // strMap["_binSize_"] = to_string_with_precision(m_binSize);
@@ -1677,10 +1683,6 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_LBFX_"] = to_string_with_precision(m_boxLBF.x);
     strMap["_LBFY_"] = to_string_with_precision(m_boxLBF.y);
     strMap["_LBFZ_"] = to_string_with_precision(m_boxLBF.z);
-    // strMap["_Gx_"] = to_string_with_precision(G.x);
-    // strMap["_Gy_"] = to_string_with_precision(G.y);
-    // strMap["_Gz_"] = to_string_with_precision(G.z);
-    // strMap["_beta_"] = to_string_with_precision(m_expand_factor);
 
     // Some constants that we should consider using or not using
     // strMap["_nAnalGM_"] = std::to_string(nAnalGM);

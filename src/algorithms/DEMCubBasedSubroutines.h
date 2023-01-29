@@ -120,7 +120,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>>& contactMapping,
                       cudaStream_t& this_stream,
                       DEMSolverStateData& scratchPad,
-                      SolverTimers& timers);
+                      SolverTimers& timers,
+                      kTStateParams& stateParams);
 
 void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force_kernels,
                                  DEMDataDT* granData,

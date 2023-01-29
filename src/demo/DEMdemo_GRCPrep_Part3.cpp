@@ -198,7 +198,7 @@ int main() {
     // Settle a bit
     DEMSim.DoDynamicsThenSync(0.3);
     DEMSim.SetInitTimeStep(5e-7);
-    DEMSim.UpdateSimParams();
+    DEMSim.UpdateStepSize();
 
     // Now compress it
     DEMSim.EnableContactBetweenFamilies(0, 1);
