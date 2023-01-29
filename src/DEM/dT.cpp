@@ -967,15 +967,12 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
     if (solverFlags.outputFlags & OUTPUT_CONTENT::VEL) {
         outstrstream << ",v_x,v_y,v_z";
     }
-    // if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_VEL) {
-    //     outstrstream << ",w_x,w_y,w_z";
-    // }
-    // if (solverFlags.outputFlags & OUTPUT_CONTENT::ACC) {
-    //     outstrstream << ",a_x,a_y,a_z";
-    // }
-    // if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_ACC) {
-    //     outstrstream << ",alpha_x,alpha_y,alpha_z";
-    // }
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::ABS_ACC) {
+        outstrstream << ",abs_acc";
+    }
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::ACC) {
+        outstrstream << ",a_x,a_y,a_z";
+    }
     if (solverFlags.outputFlags & OUTPUT_CONTENT::FAMILY) {
         outstrstream << ",family";
     }
@@ -1030,15 +1027,24 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
         outstrstream << "," << radius;
 
         // Only linear velocity
-        float3 vxyz;
+        float3 vxyz, acc;
         vxyz.x = vX.at(this_owner);
         vxyz.y = vY.at(this_owner);
         vxyz.z = vZ.at(this_owner);
+        acc.x = aX.at(this_owner);
+        acc.y = aY.at(this_owner);
+        acc.z = aZ.at(this_owner);
         if (solverFlags.outputFlags & OUTPUT_CONTENT::ABSV) {
             outstrstream << "," << length(vxyz);
         }
         if (solverFlags.outputFlags & OUTPUT_CONTENT::VEL) {
             outstrstream << "," << vxyz.x << "," << vxyz.y << "," << vxyz.z;
+        }
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::ABS_ACC) {
+            outstrstream << "," << length(acc);
+        }
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::ACC) {
+            outstrstream << "," << acc.x << "," << acc.y << "," << acc.z;
         }
 
         // Family number needs to be user number
@@ -1153,15 +1159,18 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
     if (solverFlags.outputFlags & OUTPUT_CONTENT::VEL) {
         outstrstream << ",v_x,v_y,v_z";
     }
-    // if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_VEL) {
-    //     outstrstream << ",w_x,w_y,w_z";
-    // }
-    // if (solverFlags.outputFlags & OUTPUT_CONTENT::ACC) {
-    //     outstrstream << ",a_x,a_y,a_z";
-    // }
-    // if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_ACC) {
-    //     outstrstream << ",alpha_x,alpha_y,alpha_z";
-    // }
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_VEL) {
+        outstrstream << ",w_x,w_y,w_z";
+    }
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::ABS_ACC) {
+        outstrstream << ",abs_acc";
+    }
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::ACC) {
+        outstrstream << ",a_x,a_y,a_z";
+    }
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_ACC) {
+        outstrstream << ",alpha_x,alpha_y,alpha_z";
+    }
     if (solverFlags.outputFlags & OUTPUT_CONTENT::FAMILY) {
         outstrstream << ",family";
     }
@@ -1206,15 +1215,36 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
         outstrstream << "," << templateNumNameMap.at(clump_mark);
 
         // Only linear velocity
-        float3 vxyz;
+        float3 vxyz, ang_v, acc, ang_acc;
         vxyz.x = vX.at(i);
         vxyz.y = vY.at(i);
         vxyz.z = vZ.at(i);
+        acc.x = aX.at(i);
+        acc.y = aY.at(i);
+        acc.z = aZ.at(i);
         if (solverFlags.outputFlags & OUTPUT_CONTENT::ABSV) {
             outstrstream << "," << length(vxyz);
         }
         if (solverFlags.outputFlags & OUTPUT_CONTENT::VEL) {
             outstrstream << "," << vxyz.x << "," << vxyz.y << "," << vxyz.z;
+        }
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_VEL) {
+            ang_v.x = omgBarX.at(i);
+            ang_v.y = omgBarY.at(i);
+            ang_v.z = omgBarZ.at(i);
+            outstrstream << "," << ang_v.x << "," << ang_v.y << "," << ang_v.z;
+        }
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::ABS_ACC) {
+            outstrstream << "," << length(acc);
+        }
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::ACC) {
+            outstrstream << "," << acc.x << "," << acc.y << "," << acc.z;
+        }
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_ACC) {
+            ang_acc.x = alphaX.at(i);
+            ang_acc.y = alphaY.at(i);
+            ang_acc.z = alphaZ.at(i);
+            outstrstream << "," << ang_acc.x << "," << ang_acc.y << "," << ang_acc.z;
         }
 
         // Family number needs to be user number
