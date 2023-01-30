@@ -439,6 +439,8 @@ struct DEMDataKT {
 // At init, we wish to show the user how thick approximately the CD margin will be added. This number will help deriving
 // that approximation. It can be anything really, 1 or 10, or 8.
 const float AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE = 10.f;
+// After changing bin size, this many kT steps are not included in the performance gauging.
+const unsigned int NUM_STEPS_RESERVED_AFTER_CHANGING_BIN_SIZE = 5;
 
 }  // namespace deme
 

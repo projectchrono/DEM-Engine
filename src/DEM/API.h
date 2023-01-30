@@ -232,7 +232,7 @@ class DEMSolver {
     /// @param n Number of contact detections before kT makes one adjustment to bin size.
     void SetAdaptiveBinSizeDelaySteps(unsigned int n) { auto_adjust_observe_steps = n; }
     /// @brief Set the max rate that the bin size can change in one adjustment.
-    /// @param rate 0: never changes; 1: can double or halve size in one go; suggest using 0.05.
+    /// @param rate 0: never changes; 1: can double or halve size in one go; suggest using default.
     void SetAdaptiveBinSizeMaxRate(float rate) { auto_adjust_max_rate = (rate > 0) ? rate : 0; }
     /// @brief Set how fast kT changes the direction of bin size adjustmemt when there's a more beneficial direction.
     /// @param acc 0.01: slowly change direction; 1: quickly change direction
@@ -832,10 +832,10 @@ class DEMSolver {
     bool auto_adjust_bin_size = true;
     bool auto_adjust_update_freq = true;
     // Num of steps that kT takes average before making a conclusion on the performance of this bin size
-    unsigned int auto_adjust_observe_steps = 5;
+    unsigned int auto_adjust_observe_steps = 20;
     // See corresponding method for those...
-    float auto_adjust_max_rate = 0.05;
-    float auto_adjust_acc = 0.1;
+    float auto_adjust_max_rate = 0.03;
+    float auto_adjust_acc = 0.2;
     float auto_adjust_upper_proactive_ratio = 1.0;
     float auto_adjust_lower_proactive_ratio = 0.3;
 

@@ -48,11 +48,11 @@ inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
 }
 
 void DEMKinematicThread::calibrateParams() {
-    // Auto-adjust bin size
-    if (solverFlags.autoBinSize) {
-        double prev_time, curr_time;
-        // If it is true, then it's the AccumTimer telling us it is the right time to decide how to change bin size
-        if (CDAccumTimer.QueryOn(prev_time, curr_time, stateParams.binChangeObserveSteps)) {
+    double prev_time, curr_time;
+    // If it is true, then it's the AccumTimer telling us it is the right time to decide how to change bin size
+    if (CDAccumTimer.QueryOn(prev_time, curr_time, stateParams.binChangeObserveSteps)) {
+        // Auto-adjust bin size
+        if (solverFlags.autoBinSize) {
             int speed_dir = sign_func(stateParams.binCurrentChangeRate);
             // Note the speed can be 0, yet we find performance variance. Then this is purely noise. We still wish the
             // bin size to change in the next iteration, so we assign a direction randomly.
@@ -73,7 +73,7 @@ void DEMKinematicThread::calibrateParams() {
                 speed_update = -1.0 * stateParams.binChangeRateAcc * stateParams.binTopChangeRate;
             }
             if (stateParams.numBins >
-                stateParams.binChangeLowerSafety * (size_t)(std::numeric_limits<binID_t>::max())) {
+                stateParams.binChangeLowerSafety * (double)(std::numeric_limits<binID_t>::max())) {
                 // Then size must start to increase
                 speed_update = 1.0 * stateParams.binChangeRateAcc * stateParams.binTopChangeRate;
             }
@@ -98,6 +98,7 @@ void DEMKinematicThread::calibrateParams() {
             DEME_DEBUG_PRINTF("Bin size is now: %.7g", simParams->binSize);
             DEME_DEBUG_PRINTF("Total num of bins is now: %zu", stateParams.numBins);
         }
+        DEME_DEBUG_PRINTF("kT runtime per step: %.7gs", CDAccumTimer.GetPrevTime());
     }
 }
 
@@ -144,8 +145,8 @@ inline void DEMKinematicThread::unpackMyBuffer() {
                           (granData->ts_buffer * solverFlags.maxFutureDrift);
     }
 
-    DEME_STEP_DEBUG_PRINTF("kT received a velocity update: %.6g", granData->maxVel);
-    DEME_STEP_DEBUG_PRINTF("A margin of thickness %.6g is added", simParams->beta);
+    DEME_DEBUG_PRINTF("kT received a velocity update: %.6g", granData->maxVel);
+    DEME_DEBUG_PRINTF("A margin of thickness %.6g is added", simParams->beta);
 
     // Family number is a typical changable quantity on-the-fly. If this flag is on, kT received changes from dT.
     if (solverFlags.canFamilyChange) {

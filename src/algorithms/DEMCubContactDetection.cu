@@ -63,6 +63,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         *scratchPad.pNumPrevSpheres = 0;
         return;
     }
+    // These are needed for the solver to keep tab... But you know, we may have no triangles, so initializing them is
+    // needed.
+    stateParams.maxSphFoundInBin = 0;
+    stateParams.maxTriFoundInBin = 0;
 
     // total bytes needed for temp arrays in contact detection
     size_t CD_temp_arr_bytes = 0;

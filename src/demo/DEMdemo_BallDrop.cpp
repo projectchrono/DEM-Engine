@@ -28,7 +28,7 @@ int main() {
     auto mat_type_ball = DEMSim.LoadMaterial({{"E", 1e10}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.3}, {"Crr", 0.01}});
     auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 5e9}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.3}, {"Crr", 0.01}});
 
-    float step_size = 1e-5;
+    float step_size = 2e-5;
     double world_size = 10;
     DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
@@ -75,7 +75,7 @@ int main() {
     create_directory(out_dir);
 
     float sim_time = 6.0;
-    float settle_time = 4.0;
+    float settle_time = 2.0;
     unsigned int fps = 20;
     float frame_time = 1.0 / fps;
 
@@ -100,7 +100,7 @@ int main() {
     }
 
     // Then drop the ball. I also wanted to test if changing step size method works fine here...
-    DEMSim.UpdateStepSize(2 * step_size);
+    DEMSim.UpdateStepSize(0.5 * step_size);
     DEMSim.ChangeFamily(2, 1);
     for (float t = 0; t < sim_time; t += frame_time) {
         std::cout << "Frame: " << currframe << std::endl;

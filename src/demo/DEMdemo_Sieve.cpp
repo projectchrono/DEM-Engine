@@ -19,7 +19,7 @@ using namespace std::filesystem;
 int main() {
     DEMSolver DEMSim;
     // I generally use this demo to inspect if I have "lost contact pairs", so the verbosity is set to STEP_METRIC...
-    DEMSim.SetVerbosity(STEP_METRIC);
+    DEMSim.SetVerbosity(DEBUG);
 
     srand(759);
 
@@ -141,6 +141,7 @@ int main() {
     DEMSim.SetExpandSafetyMultiplier(1.0);
     DEMSim.SetExpandSafetyAdder(1.0);
     DEMSim.SetInitBinSize(0.1);
+    // DEMSim.DisableAdaptiveBinSize();
 
     DEMSim.Initialize();
 
