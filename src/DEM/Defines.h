@@ -71,6 +71,8 @@ const objNormal_t ENTITY_NORMAL_OUTWARD = 1;
 const contact_t NOT_A_CONTACT = 0;
 const contact_t SPHERE_SPHERE_CONTACT = 1;
 const contact_t SPHERE_MESH_CONTACT = 2;
+// Aux contact types (contact with analytical objects) must be larger than SPHERE_ANALYTICAL_CONTACT!
+const contact_t SPHERE_ANALYTICAL_CONTACT = 10;
 const contact_t SPHERE_PLANE_CONTACT = 11;
 const contact_t SPHERE_PLATE_CONTACT = 12;
 const contact_t SPHERE_CYL_CONTACT = 13;

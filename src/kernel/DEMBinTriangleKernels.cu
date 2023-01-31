@@ -3,10 +3,17 @@
 #include <DEMHelperKernels.cu>
 #include <DEMTriangleBoxIntersect.cu>
 
-inline __device__ float3 sandwichVertex(float3 vertex, const float3& centroid, const float3& normal, float beta) {
+inline __device__ float3
+sandwichVertex(float3 vertex, const float3& incenter, const float3& side, const float3& normal, float beta) {
     // The vector along which we enlarge the triangle
-    const float3 expandVec = normalize(vertex - centroid);
-    vertex += expandVec * beta;
+    float3 expandVec = normalize(vertex - incenter);
+
+    // Use a side starting from the vertex and the vector from the vertex to the incenter to figure out the half angle
+    const float cos_halfangle = dot(-expandVec, side) / length(side);
+    // Then the distance to advance the vertex along the expand vector...
+    const float enlarge_dist = beta / sqrt(1. - cos_halfangle * cos_halfangle);
+
+    vertex += expandVec * enlarge_dist;
     vertex += normal * beta;
     return vertex;
 }
@@ -26,18 +33,20 @@ __global__ void makeTriangleSandwich(deme::DEMSimParams* simParams,
         const float3 p2 = granData->relPosNode2[triID];
         const float3 p3 = granData->relPosNode3[triID];
 
-        // Get the controid of this triangle
-        const float3 centroid = triangleCentroid<float3>(p1, p2, p3);
+        // Get the incenter of this triangle.
+        // This is because we use the incenter to enalrge a triangle. See for example, this
+        // https://stackoverflow.com/questions/36554898/algorithm-for-putting-double-border-around-isosceles-triangle.
+        const float3 incenter = triangleIncenter<float3>(p1, p2, p3);
         // Generate normal using RHR from nodes 1, 2, and 3
         float3 triNormal = face_normal<float3>(p1, p2, p3);
 
-        sandwichANode1[triID] = sandwichVertex(p1, centroid, triNormal, simParams->beta);
-        sandwichANode2[triID] = sandwichVertex(p2, centroid, triNormal, simParams->beta);
-        sandwichANode3[triID] = sandwichVertex(p3, centroid, triNormal, simParams->beta);
+        sandwichANode1[triID] = sandwichVertex(p1, incenter, p2 - p1, triNormal, simParams->beta);
+        sandwichANode2[triID] = sandwichVertex(p2, incenter, p3 - p2, triNormal, simParams->beta);
+        sandwichANode3[triID] = sandwichVertex(p3, incenter, p1 - p3, triNormal, simParams->beta);
         // The other sandwich triangle needs to have an opposite normal direction
-        sandwichBNode1[triID] = sandwichVertex(p1, centroid, -triNormal, simParams->beta);
-        sandwichBNode2[triID] = sandwichVertex(p3, centroid, -triNormal, simParams->beta);
-        sandwichBNode3[triID] = sandwichVertex(p2, centroid, -triNormal, simParams->beta);
+        sandwichBNode1[triID] = sandwichVertex(p1, incenter, p2 - p1, -triNormal, simParams->beta);
+        sandwichBNode2[triID] = sandwichVertex(p3, incenter, p1 - p3, -triNormal, simParams->beta);
+        sandwichBNode3[triID] = sandwichVertex(p2, incenter, p3 - p2, -triNormal, simParams->beta);
     }
 }
 

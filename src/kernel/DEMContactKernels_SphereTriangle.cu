@@ -219,29 +219,31 @@ __global__ void getNumberOfSphTriContactsEachBin(deme::DEMSimParams* simParams,
 
                     float3 cntPnt, normal;
                     float depth;
-                    bool in_contact;
+                    bool in_contact_A, in_contact_B;
                     // NOTE: triangle_sphere_CD_directional, instead of triangle_sphere_CD, is in use here. This is
                     // because if the later is in use, then if a sphere is between 2 sandwiching triangles, then its
                     // potential contact with the original triangle will not be registered. At the same time, we don't
                     // want to use triangle_sphere_CD_directional for the real force calculation, and the concern is
                     // mainly "sphere near needle tip" scenario. Think about it.
-                    in_contact = triangle_sphere_CD_directional<float3, float>(
+                    in_contact_A = triangle_sphere_CD_directional<float3, float>(
                         triANode1[ind], triANode2[ind], triANode3[ind], sphXYZ, myRadius, normal, depth, cntPnt);
-                    deme::binID_t contactPntBin = getPointBinID<deme::binID_t>(
-                        cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize, simParams->nbX, simParams->nbY);
-
-                    // If already in contact with A, no need to do B
-                    if (in_contact && (contactPntBin == binID)) {
-                        contact_count++;
-                        continue;
-                    }
                     // And triangle B...
-                    in_contact = triangle_sphere_CD_directional<float3, float>(
+                    in_contact_B = triangle_sphere_CD_directional<float3, float>(
                         triBNode1[ind], triBNode2[ind], triBNode3[ind], sphXYZ, myRadius, normal, depth, cntPnt);
-                    contactPntBin = getPointBinID<deme::binID_t>(cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize,
-                                                                 simParams->nbX, simParams->nbY);
-                    if (in_contact && (contactPntBin == binID)) {
-                        contact_count++;
+
+                    // Note the contact point must be calculated through the original triangle, not the 2 phantom
+                    // triangles; or we will have double count problems.
+                    if (in_contact_A || in_contact_B) {
+                        float3 triNode1 = (triANode1[ind] + triBNode1[ind]) / 2.;
+                        // Don't forget node 2 and 3 are swapped for triB
+                        float3 triNode2 = (triANode2[ind] + triBNode3[ind]) / 2.;
+                        float3 triNode3 = (triANode3[ind] + triBNode2[ind]) / 2.;
+                        snap_to_face(triNode1, triNode2, triNode3, sphXYZ, cntPnt);
+                        deme::binID_t contactPntBin = getPointBinID<deme::binID_t>(
+                            cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize, simParams->nbX, simParams->nbY);
+                        if (contactPntBin == binID) {
+                            contact_count++;
+                        }
                     }
                 }  // End of a 256-sphere sweep
             }
@@ -299,7 +301,6 @@ __global__ void populateTriSphContactsEachBin(deme::DEMSimParams* simParams,
     if (indForAcqSphInfo == deme::NULL_BINID) {
         return;
     }
-    // Get my offset for writing back to the global arrays that contain contact pair info
     const deme::binSphereTouchPairs_t thisSphereTableEntry = sphereIDsLookUpTable[indForAcqSphInfo];
     const deme::spheresBinTouches_t nSphInBin = numSpheresBinTouches[indForAcqSphInfo];
     const deme::binsTriangleTouchPairs_t thisTriTableEntry = triIDsLookUpTable[blockIdx.x];
@@ -358,38 +359,35 @@ __global__ void populateTriSphContactsEachBin(deme::DEMSimParams* simParams,
 
                     float3 cntPnt, normal;
                     float depth;
-                    bool in_contact;
+                    bool in_contact_A, in_contact_B;
                     // NOTE: triangle_sphere_CD_directional, instead of triangle_sphere_CD, is in use here. This is
                     // because if the later is in use, then if a sphere is between 2 sandwiching triangles, then its
                     // potential contact with the original triangle will not be registered. At the same time, we don't
                     // want to use triangle_sphere_CD_directional for the real force calculation, and the concern is
                     // mainly "sphere near needle tip" scenario. Think about it.
-                    in_contact = triangle_sphere_CD_directional<float3, float>(
+                    in_contact_A = triangle_sphere_CD_directional<float3, float>(
                         triANode1[ind], triANode2[ind], triANode3[ind], sphXYZ, myRadius, normal, depth, cntPnt);
-                    deme::binID_t contactPntBin = getPointBinID<deme::binID_t>(
-                        cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize, simParams->nbX, simParams->nbY);
-
-                    // If already in contact with A, no need to do B
-                    if (in_contact && (contactPntBin == binID)) {
-                        deme::contactPairs_t inBlockOffset = myReportOffset + atomicAdd(&blockPairCnt, 1);
-                        if (inBlockOffset < myReportOffset_end) {
-                            idSphA[inBlockOffset] = sphereID;
-                            idTriB[inBlockOffset] = triIDs[ind];
-                            dType[inBlockOffset] = deme::SPHERE_MESH_CONTACT;
-                        }
-                        continue;
-                    }
                     // And triangle B...
-                    in_contact = triangle_sphere_CD_directional<float3, float>(
+                    in_contact_B = triangle_sphere_CD_directional<float3, float>(
                         triBNode1[ind], triBNode2[ind], triBNode3[ind], sphXYZ, myRadius, normal, depth, cntPnt);
-                    contactPntBin = getPointBinID<deme::binID_t>(cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize,
-                                                                 simParams->nbX, simParams->nbY);
-                    if (in_contact && (contactPntBin == binID)) {
-                        deme::contactPairs_t inBlockOffset = myReportOffset + atomicAdd(&blockPairCnt, 1);
-                        if (inBlockOffset < myReportOffset_end) {
-                            idSphA[inBlockOffset] = sphereID;
-                            idTriB[inBlockOffset] = triIDs[ind];
-                            dType[inBlockOffset] = deme::SPHERE_MESH_CONTACT;
+
+                    // Note the contact point must be calculated through the original triangle, not the 2 phantom
+                    // triangles; or we will have double count problems.
+                    if (in_contact_A || in_contact_B) {
+                        float3 triNode1 = (triANode1[ind] + triBNode1[ind]) / 2.;
+                        // Don't forget node 2 and 3 are swapped for triB
+                        float3 triNode2 = (triANode2[ind] + triBNode3[ind]) / 2.;
+                        float3 triNode3 = (triANode3[ind] + triBNode2[ind]) / 2.;
+                        snap_to_face(triNode1, triNode2, triNode3, sphXYZ, cntPnt);
+                        deme::binID_t contactPntBin = getPointBinID<deme::binID_t>(
+                            cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize, simParams->nbX, simParams->nbY);
+                        if (contactPntBin == binID) {
+                            deme::contactPairs_t inBlockOffset = myReportOffset + atomicAdd(&blockPairCnt, 1);
+                            if (inBlockOffset < myReportOffset_end) {
+                                idSphA[inBlockOffset] = sphereID;
+                                idTriB[inBlockOffset] = triIDs[ind];
+                                dType[inBlockOffset] = deme::SPHERE_MESH_CONTACT;
+                            }
                         }
                     }
                 }  // End of a 256-sphere sweep
@@ -397,4 +395,14 @@ __global__ void populateTriSphContactsEachBin(deme::DEMSimParams* simParams,
         }  // End of sweeping through all spheres in bin
         __syncthreads();
     }  // End of batch-wise triangle processing
+    // __syncthreads();
+
+    // In practice, I've never seen non-illed contact slots that need to be resolved this way. It's purely for ultra
+    // safety.
+    if (threadIdx.x == 0) {
+        for (deme::contactPairs_t inBlockOffset = myReportOffset + blockPairCnt; inBlockOffset < myReportOffset_end;
+             inBlockOffset++) {
+            dType[inBlockOffset] = deme::NOT_A_CONTACT;
+        }
+    }
 }

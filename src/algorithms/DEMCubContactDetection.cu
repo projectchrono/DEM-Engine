@@ -496,6 +496,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector(2, id_arr_bytes);
 
             //// TODO: But do I have to SortByKey twice?? Can I zip these value arrays together??
+            // Although it is stupid, do pay attention to that it does leverage the fact that RadixSort is stable.
             cubDEMSortByKeys<bodyID_t, bodyID_t, DEMSolverStateData>(granData->idGeometryA, idA_sorted,
                                                                      granData->idGeometryB, idB_sorted,
                                                                      *scratchPad.pNumContacts, this_stream, scratchPad);

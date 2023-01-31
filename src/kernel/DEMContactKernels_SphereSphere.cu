@@ -399,8 +399,18 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
                     }
                 }
             }
-        }  // End of a lef-over sweep
+        }  // End of a left-over sweep
         __syncthreads();
 
     }  // End of sphere-batch for loop
+    // __syncthreads();
+
+    // In practice, I've never seen non-illed contact slots that need to be resolved this way. It's purely for ultra
+    // safety.
+    if (threadIdx.x == 0) {
+        for (deme::contactPairs_t inBlockOffset = myReportOffset + blockPairCnt; inBlockOffset < myReportOffset_end;
+             inBlockOffset++) {
+            dType[inBlockOffset] = deme::NOT_A_CONTACT;
+        }
+    }
 }

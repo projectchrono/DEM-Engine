@@ -153,7 +153,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             if (!in_contact) {
                 myContactType = deme::NOT_A_CONTACT;
             }
-        } else {
+        } else if (myContactType > deme::SPHERE_ANALYTICAL_CONTACT) {
             // If B is analytical entity, its owner, relative location, material info is jitified
             deme::objID_t bodyB = granData->idGeometryB[myContactID];
             deme::bodyID_t myOwner = objOwner[bodyB];
@@ -182,7 +182,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             myContactType = checkSphereEntityOverlap<double3, float, double>(
                 bodyAPos, ARadius, objType[bodyB], bodyBPos, bodyBRot, objSize1[bodyB], objSize2[bodyB],
                 objSize3[bodyB], objNormal[bodyB], 0.0, contactPnt, B2A, overlapDepth);
-        }
+        }  // else it must be NOT_A_CONTACT
 
         _forceModelContactWildcardAcq_;
         if (myContactType != deme::NOT_A_CONTACT) {
