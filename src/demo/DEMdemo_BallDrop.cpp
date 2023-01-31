@@ -28,7 +28,7 @@ int main() {
     auto mat_type_ball = DEMSim.LoadMaterial({{"E", 1e10}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.3}, {"Crr", 0.01}});
     auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 5e9}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.3}, {"Crr", 0.01}});
 
-    float step_size = 2e-5;
+    float step_size = 1e-5;
     double world_size = 10;
     DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
