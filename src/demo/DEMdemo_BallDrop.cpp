@@ -63,7 +63,6 @@ int main() {
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEMSim.SetCDUpdateFreq(20);
-    // DEMSim.SetExpandFactor(1e-3);
     DEMSim.SetMaxVelocity(15.);
     // The projectile can be fast... and its velocity is not accounted for by the default max vel estimator
     DEMSim.SetExpandSafetyAdder(5.);

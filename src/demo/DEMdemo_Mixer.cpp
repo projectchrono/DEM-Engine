@@ -18,7 +18,7 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity(DEBUG);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
@@ -77,7 +77,7 @@ int main() {
     DEMSim.SetCDUpdateFreq(40);
     // Mixer has a big angular velocity-contributed linear speed at its blades, this is something the solver do not
     // account for, for now. And that means it needs to be added as an estimated value.
-    DEMSim.SetExpandSafetyAdder(5.0);
+    DEMSim.SetExpandSafetyAdder(2.0);
     DEMSim.SetInitBinSize(20 * granular_rad);
     DEMSim.Initialize();
 

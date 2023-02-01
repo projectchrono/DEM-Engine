@@ -561,6 +561,10 @@ class DEMDynamicThread {
     // If kT provides fresh CD results, we unpack and use it
     inline void ifProduceFreshThenUseItAndSendNewOrder();
     inline void ifProduceFreshThenUseIt();
+    inline void unpack_impl();
+
+    // Change sim params based on dT's experience, if needed
+    inline void calibrateParams();
 
     // Determine the max vel for this cycle, kT needs it
     inline float* determineSysMaxVel();

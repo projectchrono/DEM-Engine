@@ -40,14 +40,11 @@ class DEMTracker;
 //            3. Instruct how many dT steps should at LEAST do before receiving kT update
 //            4. Sleepers that don't participate CD or integration
 //            5. Check if entities are initially in box
-//            6. Force model has a/several custom owner arrays to store custom config data
-//            7. This custom array can be defined at clump template/anal obj/mesh obj generation
 //            8. Right now force model position is wrt LBF, not user origin...
 //            9. wT takes care of an extra output when it crashes
 //            10. Recover sph--mesh contact pairs in restarted sim by mesh name
 //            11. A dry-run to map contact pair file with current clump batch based on cnt points location
 //                  (this is done by fake an initialization with this batch)
-//            12. Right now, the force model file is loaded from source, not install dir?
 //////////////////////////////////////////////////////////////
 
 /// Main DEM-Engine solver.
@@ -91,7 +88,10 @@ class DEMSolver {
     /// Set the number of dT steps before it waits for a contact-pair info update from kT.
     void SetCDUpdateFreq(int freq) {
         m_updateFreq = freq;
-        m_dTMaxFutureDrift = 2 * freq;
+        m_suggestedFutureDrift = 2 * freq;
+        if (freq < 0) {
+            DisableAdaptiveUpdateFreq();
+        }
     }
     /// Get the simulation time passed since the start of simulation.
     double GetSimTime() const;
@@ -242,14 +242,18 @@ class DEMSolver {
     /// @param ratio 0: not proavtive; 1: very proactive.
     void SetAdaptiveBinSizeUpperProactivity(float ratio) {
         auto_adjust_upper_proactive_ratio = hostClampBetween(ratio, 0.0, 1.0);
-        ;
     }
     /// @brief Set how proactive the solver is in avoiding the bin being too small (leading to too many bins in domain).
     /// @param ratio 0: not proavtive; 1: very proactive.
     void SetAdaptiveBinSizeLowerProactivity(float ratio) {
         auto_adjust_lower_proactive_ratio = hostClampBetween(ratio, 0.0, 1.0);
-        ;
     }
+    /// @brief Set the upper bound of kT update frequency (when it is adjusted automatically).
+    /// @param max_freq dT will not receive updates less frequently than 1 update per max_freq steps.
+    void SetCDMaxUpdateFreq(unsigned int max_freq) { upper_bound_future_drift = 2 * max_freq; }
+    /// @brief Set the number of steps dT configures its max drift more than average drift steps.
+    /// @param n Number of steps. Suggest using default.
+    void SetCDNumStepsMaxDriftAheadOfAvg(unsigned int n) { max_drift_ahead_of_avg_drift = n; }
 
     /// Set the number of threads per block in force calculation (default 256).
     void SetForceCalcThreadsPerBlock(unsigned int nTh) { dT->DT_FORCE_CALC_NTHREADS_PER_BLOCK = nTh; }
@@ -799,10 +803,10 @@ class DEMSolver {
 
     // The number of dT steps before it waits for a kT update. The default value means every dT step will wait for a
     // newly produced contact-pair info (from kT) before proceeding.
-    int m_dTMaxFutureDrift = 0;
+    int m_suggestedFutureDrift = 40;
 
-    // This is an unused variable which is supposed to be related to m_dTMaxFutureDrift...
-    int m_updateFreq = 0;
+    // This is an unused variable which is supposed to be related to m_suggestedFutureDrift...
+    int m_updateFreq = 20;
 
     // Where the user wants the origin of the coordinate system to be
     std::string m_user_instructed_origin = "center";
@@ -838,6 +842,8 @@ class DEMSolver {
     float auto_adjust_acc = 0.2;
     float auto_adjust_upper_proactive_ratio = 1.0;
     float auto_adjust_lower_proactive_ratio = 0.3;
+    unsigned int upper_bound_future_drift = 5000;
+    unsigned int max_drift_ahead_of_avg_drift = 5;
 
     // See SetNoForceRecord
     bool no_recording_contact_forces = false;

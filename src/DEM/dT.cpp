@@ -96,6 +96,7 @@ void DEMDynamicThread::packDataPointers() {
 
 void DEMDynamicThread::packTransferPointers(DEMKinematicThread*& kT) {
     // These are the pointers for sending data to dT
+    granData->pKTOwnedBuffer_maxDrift = &(kT->granData->maxDrift_buffer);
     granData->pKTOwnedBuffer_maxVel = &(kT->granData->maxVel_buffer);
     granData->pKTOwnedBuffer_ts = &(kT->granData->ts_buffer);
     granData->pKTOwnedBuffer_voxelID = kT->granData->voxelID_buffer;
@@ -1505,6 +1506,9 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
 inline void DEMDynamicThread::unpackMyBuffer() {
     // Make a note on the contact number of the previous time step
     *stateOfSolver_resources.pNumPrevContacts = *stateOfSolver_resources.pNumContacts;
+    // kT's batch of produce is made with this max drift in mind
+    pSchedSupport->dynamicMaxFutureDrift = (pSchedSupport->kinematicMaxFutureDrift).load();
+    // DEME_DEBUG_PRINTF("dynamicMaxFutureDrift is %u", (pSchedSupport->dynamicMaxFutureDrift).load());
 
     DEME_GPU_CALL(cudaMemcpy(stateOfSolver_resources.pNumContacts, &(granData->nContactPairs_buffer), sizeof(size_t),
                              cudaMemcpyDeviceToDevice));
@@ -1550,9 +1554,11 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ3, granData->oriQz, simParams->nOwnerBodies * sizeof(oriQ_t),
                              cudaMemcpyDeviceToDevice));
 
-    // Send max velocity for kT's reference
+    // Send simulation metrics for kT's reference
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxVel, pCycleMaxVel, sizeof(float), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_ts, &(simParams->h), sizeof(float), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxDrift, &(granData->perhapsIdealFutureDrift),
+                             sizeof(unsigned int), cudaMemcpyDeviceToDevice));
 
     // Family number is a typical changable quantity on-the-fly. If this flag is on, dT is responsible for sending this
     // info to kT.
@@ -1561,7 +1567,7 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
                                  simParams->nOwnerBodies * sizeof(family_t), cudaMemcpyDeviceToDevice));
     }
 
-    // This subroutine also includes recording the time stamp of this batch ingredient we sent to kT
+    // This subroutine also includes recording the time stamp of this batch ingredient dT sent to kT
     pSchedSupport->kinematicIngredProdDateStamp = (pSchedSupport->currentStampOfDynamic).load();
 }
 
@@ -1764,53 +1770,63 @@ inline float* DEMDynamicThread::determineSysMaxVel() {
     }
 }
 
+inline void DEMDynamicThread::unpack_impl() {
+    {
+        // Acquire lock and use the content of the dynamic-owned transfer buffer
+        std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
+        unpackMyBuffer();
+        // Leave myself a mental note that I just obtained new produce from kT
+        contactPairArr_isFresh = true;
+        // pSchedSupport->schedulingStats.nDynamicReceives++;
+    }
+    // dT got the produce, now mark its buffer to be no longer fresh
+    pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
+    // dT needs to know how fresh the contact pair info is, and that is determined by when kT received this batch of
+    // ingredients.
+    pSchedSupport->stampLastDynamicUpdateProdDate = (pSchedSupport->kinematicIngredProdDateStamp).load();
+
+    // If this is a history-based run, then when contacts are received, we need to migrate the contact
+    // history info, to match the structure of the new contact array
+    if (!solverFlags.isHistoryless) {
+        migratePersistentContacts();
+    }
+}
+
 inline void DEMDynamicThread::ifProduceFreshThenUseIt() {
     if (pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
-        {
-            // Acquire lock and use the content of the dynamic-owned transfer buffer
-            std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
-            unpackMyBuffer();
-            // Leave myself a mental note that I just obtained new produce from kT
-            contactPairArr_isFresh = true;
-            // pSchedSupport->schedulingStats.nDynamicReceives++;
-        }
-        // dT got the produce, now mark its buffer to be no longer fresh
-        pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
+        unpack_impl();
+    }
+}
 
-        // If this is a history-based run, then when contacts are received, we need to migrate the contact
-        // history info, to match the structure of the new contact array
-        if (!solverFlags.isHistoryless) {
-            migratePersistentContacts();
+inline void DEMDynamicThread::calibrateParams() {
+    // Unpacking is done; now we can use temp arrays again to derive max velocity and send to kT
+    pCycleMaxVel = determineSysMaxVel();
+
+    if (solverFlags.autoUpdateFreq) {
+        // If perhapsIdealFutureDrift needs to increase, then the following value much = perhapsIdealFutureDrift.
+        unsigned int comfortable_drift =
+            ((double)nTotalSteps / (pSchedSupport->schedulingStats.nKinematicUpdates).load()) * 2 +
+            solverFlags.targetDriftMoreThanAvg;
+        if (granData->perhapsIdealFutureDrift > comfortable_drift) {
+            granData->perhapsIdealFutureDrift -= FUTURE_DRIFT_TWEAK_STEP_SIZE;
+        } else if (granData->perhapsIdealFutureDrift < comfortable_drift) {
+            granData->perhapsIdealFutureDrift += FUTURE_DRIFT_TWEAK_STEP_SIZE;
         }
+        granData->perhapsIdealFutureDrift = hostClampBetween<unsigned int, unsigned int>(
+            granData->perhapsIdealFutureDrift, 0, solverFlags.upperBoundFutureDrift);
+
+        DEME_DEBUG_PRINTF("Comfortable future drift is %u", comfortable_drift);
+        DEME_DEBUG_PRINTF("Current future drift is %u", granData->perhapsIdealFutureDrift);
     }
 }
 
 inline void DEMDynamicThread::ifProduceFreshThenUseItAndSendNewOrder() {
     if (pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
         timers.GetTimer("Unpack updates from kT").start();
-        {
-            // Acquire lock and use the content of the dynamic-owned transfer buffer
-            std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
-            unpackMyBuffer();
-            // Leave myself a mental note that I just obtained new produce from kT
-            contactPairArr_isFresh = true;
-            // pSchedSupport->schedulingStats.nDynamicReceives++;
-        }
-        // dT got the produce, now mark its buffer to be no longer fresh
-        pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
-        // dT needs to know how fresh the contact pair info is, and that is determined by when kT received this batch of
-        // ingredients.
-        pSchedSupport->stampLastDynamicUpdateProdDate = (pSchedSupport->kinematicIngredProdDateStamp).load();
-
-        // If this is a history-based run, then when contacts are received, we need to migrate the contact
-        // history info, to match the structure of the new contact array
-        if (!solverFlags.isHistoryless) {
-            migratePersistentContacts();
-        }
+        unpack_impl();
         timers.GetTimer("Unpack updates from kT").stop();
 
-        // Unpacking is done; now we can use temp arrays again to derive max velocity and send to kT
-        pCycleMaxVel = determineSysMaxVel();
+        calibrateParams();
 
         timers.GetTimer("Send to kT buffer").start();
         // Acquire lock and refresh the work order for the kinematic
@@ -1820,6 +1836,7 @@ inline void DEMDynamicThread::ifProduceFreshThenUseItAndSendNewOrder() {
         }
         pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
         pSchedSupport->schedulingStats.nKinematicUpdates++;
+
         timers.GetTimer("Send to kT buffer").stop();
         // Signal the kinematic that it has data for a new work order
         pSchedSupport->cv_KinematicCanProceed.notify_all();
@@ -1905,12 +1922,14 @@ void DEMDynamicThread::workerThread() {
             if (pSchedSupport->dynamicShouldWait()) {
                 timers.GetTimer("Wait for kT update").start();
                 // Wait for a signal from kT to indicate that kT has caught up
-                pSchedSupport->schedulingStats.nTimesDynamicHeldBack++;
                 std::unique_lock<std::mutex> lock(pSchedSupport->dynamicCanProceed);
                 while (!pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
                     // Loop to avoid spurious wakeups
                     pSchedSupport->cv_DynamicCanProceed.wait(lock);
                 }
+                pSchedSupport->schedulingStats.nTimesDynamicHeldBack++;
+                // If dT waits, it is penalized, since waiting means double-wait, very bad.
+                granData->perhapsIdealFutureDrift += FUTURE_DRIFT_TWEAK_STEP_SIZE;
                 timers.GetTimer("Wait for kT update").stop();
             }
             // NOTE: This ShouldWait check should follow the ifProduceFreshThenUseItAndSendNewOrder call. Because we
@@ -1979,11 +1998,13 @@ void DEMDynamicThread::resetUserCallStat() {
     pSchedSupport->currentStampOfDynamic = 0;
     // Reset dT stats variables, making ready for next user call
     pSchedSupport->dynamicDone = false;
+    contactPairArr_isFresh = true;
+
     // Do not let user artificially set dynamicOwned_Prod2ConsBuffer_isFresh false. B/c only dT has the say on that. It
     // could be that kT has a new produce ready, but dT idled for long and do not want to use it and want a new produce.
     // Then dT needs to unpack this one first to get the contact mapping, then issue new work order, and that requires
-    // no manually setting this to false. pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
-    contactPairArr_isFresh = true;
+    // no manually setting this to false.
+    // pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
 }
 
 size_t DEMDynamicThread::estimateMemUsage() const {

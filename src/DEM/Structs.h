@@ -414,7 +414,7 @@ struct SolverFlags {
     unsigned int cntOutFlags;
     // Time step constant-ness and expand factor constant-ness
     bool isStepConst = true;
-    bool isExpandFactorFixed = true;
+    bool isExpandFactorFixed = false;
     // The strategy for selecting the variable time step size
     VAR_TS_STRAT stepSizeStrat = VAR_TS_STRAT::CONST;
     // Whether instructed to use jitification for mass properties and clump components (default to no and it is
@@ -431,8 +431,10 @@ struct SolverFlags {
     bool useForceCollectInPlace = false;
     // How dT should decide the max velocity in the system (true: query an inspector; false: use a constant)
     bool maxVelQuery = true;
-    // Max number of steps dT is allowed to be ahead of kT
-    int maxFutureDrift;
+    // Max number of steps dT is allowed to be ahead of kT, even when auto-adapt is enabled
+    unsigned int upperBoundFutureDrift = 5000;
+    // (targetDriftMoreThanAvg + actual_dT_steps_per_kT_step) is used to calculate contact margin size
+    unsigned int targetDriftMoreThanAvg = 3;
 
     // Whether the solver auto-update those sim params
     bool autoBinSize = true;
