@@ -253,7 +253,22 @@ class DEMSolver {
     void SetCDMaxUpdateFreq(unsigned int max_freq) { upper_bound_future_drift = 2 * max_freq; }
     /// @brief Set the number of steps dT configures its max drift more than average drift steps.
     /// @param n Number of steps. Suggest using default.
-    void SetCDNumStepsMaxDriftAheadOfAvg(unsigned int n) { max_drift_ahead_of_avg_drift = n; }
+    void SetCDNumStepsMaxDriftAheadOfAvg(float n) { max_drift_ahead_of_avg_drift = n; }
+    /// @brief Set the multiplier which dT configures its max drift to be w.r.t. the average drift steps.
+    /// @param m The multiplier. Suggest using default.
+    void SetCDNumStepsMaxDriftMultipleOfAvg(float m) { max_drift_multiple_of_avg_drift = m; }
+    /// @brief Set the number of past kT updates that dT will use to calibrate the max future drift limit.
+    /// @param n Number of kT updates. Suggest using default.
+    void SetCDNumStepsMaxDriftHistorySize(unsigned int n) {
+        if (n > NUM_STEPS_RESERVED_AFTER_RENEWING_FREQ_TUNER) {
+            max_drift_gauge_history_size = n;
+        } else {
+            DEME_WARNING(
+                "SetCDNumStepsMaxDriftHistorySize has no effect, since the argument supplied needs to be larger than "
+                "%u.",
+                NUM_STEPS_RESERVED_AFTER_RENEWING_FREQ_TUNER);
+        }
+    }
 
     /// Set the number of threads per block in force calculation (default 256).
     void SetForceCalcThreadsPerBlock(unsigned int nTh) { dT->DT_FORCE_CALC_NTHREADS_PER_BLOCK = nTh; }
@@ -843,7 +858,9 @@ class DEMSolver {
     float auto_adjust_upper_proactive_ratio = 1.0;
     float auto_adjust_lower_proactive_ratio = 0.3;
     unsigned int upper_bound_future_drift = 5000;
-    unsigned int max_drift_ahead_of_avg_drift = 5;
+    float max_drift_ahead_of_avg_drift = 2.;
+    float max_drift_multiple_of_avg_drift = 1.1;
+    unsigned int max_drift_gauge_history_size = 200;
 
     // See SetNoForceRecord
     bool no_recording_contact_forces = false;

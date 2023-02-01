@@ -433,8 +433,10 @@ struct SolverFlags {
     bool maxVelQuery = true;
     // Max number of steps dT is allowed to be ahead of kT, even when auto-adapt is enabled
     unsigned int upperBoundFutureDrift = 5000;
-    // (targetDriftMoreThanAvg + actual_dT_steps_per_kT_step) is used to calculate contact margin size
-    unsigned int targetDriftMoreThanAvg = 3;
+    // (targetDriftMoreThanAvg + targetDriftMultipleOfAvg * actual_dT_steps_per_kT_step) is used to calculate contact
+    // margin size
+    float targetDriftMoreThanAvg = 2.;
+    float targetDriftMultipleOfAvg = 1.1;
 
     // Whether the solver auto-update those sim params
     bool autoBinSize = true;

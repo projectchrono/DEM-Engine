@@ -1803,20 +1803,22 @@ inline void DEMDynamicThread::calibrateParams() {
     pCycleMaxVel = determineSysMaxVel();
 
     if (solverFlags.autoUpdateFreq) {
-        // If perhapsIdealFutureDrift needs to increase, then the following value much = perhapsIdealFutureDrift.
-        unsigned int comfortable_drift =
-            ((double)nTotalSteps / (pSchedSupport->schedulingStats.nKinematicUpdates).load()) * 2 +
-            solverFlags.targetDriftMoreThanAvg;
-        if (granData->perhapsIdealFutureDrift > comfortable_drift) {
-            granData->perhapsIdealFutureDrift -= FUTURE_DRIFT_TWEAK_STEP_SIZE;
-        } else if (granData->perhapsIdealFutureDrift < comfortable_drift) {
-            granData->perhapsIdealFutureDrift += FUTURE_DRIFT_TWEAK_STEP_SIZE;
-        }
-        granData->perhapsIdealFutureDrift = hostClampBetween<unsigned int, unsigned int>(
-            granData->perhapsIdealFutureDrift, 0, solverFlags.upperBoundFutureDrift);
+        unsigned int comfortable_drift;
+        if (accumStepUpdater.Query(comfortable_drift)) {
+            // If perhapsIdealFutureDrift needs to increase, then the following value much = perhapsIdealFutureDrift.
+            comfortable_drift =
+                (float)comfortable_drift * solverFlags.targetDriftMultipleOfAvg + solverFlags.targetDriftMoreThanAvg;
+            if (granData->perhapsIdealFutureDrift > comfortable_drift) {
+                granData->perhapsIdealFutureDrift -= FUTURE_DRIFT_TWEAK_STEP_SIZE;
+            } else if (granData->perhapsIdealFutureDrift < comfortable_drift) {
+                granData->perhapsIdealFutureDrift += FUTURE_DRIFT_TWEAK_STEP_SIZE;
+            }
+            granData->perhapsIdealFutureDrift = hostClampBetween<unsigned int, unsigned int>(
+                granData->perhapsIdealFutureDrift, 0, solverFlags.upperBoundFutureDrift);
 
-        DEME_DEBUG_PRINTF("Comfortable future drift is %u", comfortable_drift);
-        DEME_DEBUG_PRINTF("Current future drift is %u", granData->perhapsIdealFutureDrift);
+            DEME_DEBUG_PRINTF("Comfortable future drift is %u", comfortable_drift);
+            DEME_DEBUG_PRINTF("Current future drift is %u", granData->perhapsIdealFutureDrift);
+        }
     }
 }
 
@@ -1836,6 +1838,7 @@ inline void DEMDynamicThread::ifProduceFreshThenUseItAndSendNewOrder() {
         }
         pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
         pSchedSupport->schedulingStats.nKinematicUpdates++;
+        accumStepUpdater.AddUpdate();
 
         timers.GetTimer("Send to kT buffer").stop();
         // Signal the kinematic that it has data for a new work order
@@ -1895,6 +1898,7 @@ void DEMDynamicThread::workerThread() {
             pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
             contactPairArr_isFresh = true;
             pSchedSupport->schedulingStats.nKinematicUpdates++;
+            accumStepUpdater.AddUpdate();
             // Signal the kinematic that it has data for a new work order.
             pSchedSupport->cv_KinematicCanProceed.notify_all();
             // Then dT will wait for kT to finish one initial run
@@ -1965,6 +1969,7 @@ void DEMDynamicThread::workerThread() {
             // Dynamic wrapped up one cycle, record this fact into schedule support
             pSchedSupport->currentStampOfDynamic++;
             nTotalSteps++;
+            accumStepUpdater.AddStep();
 
             //// TODO: make changes for variable time step size cases
             simParams->timeElapsed += (double)simParams->h;
@@ -1999,6 +2004,7 @@ void DEMDynamicThread::resetUserCallStat() {
     // Reset dT stats variables, making ready for next user call
     pSchedSupport->dynamicDone = false;
     contactPairArr_isFresh = true;
+    accumStepUpdater.Clear();
 
     // Do not let user artificially set dynamicOwned_Prod2ConsBuffer_isFresh false. B/c only dT has the say on that. It
     // could be that kT has a new produce ready, but dT idled for long and do not want to use it and want a new produce.

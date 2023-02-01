@@ -451,6 +451,8 @@ const float AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE = 10.f;
 const unsigned int NUM_STEPS_RESERVED_AFTER_CHANGING_BIN_SIZE = 5;
 // Drift tweak step size
 const unsigned int FUTURE_DRIFT_TWEAK_STEP_SIZE = 1;
+// After purging update freq history, this many dT steps are not included in the performance gauging.
+const unsigned int NUM_STEPS_RESERVED_AFTER_RENEWING_FREQ_TUNER = 10;
 
 }  // namespace deme
 

@@ -18,7 +18,7 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(DEBUG);
+    DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);

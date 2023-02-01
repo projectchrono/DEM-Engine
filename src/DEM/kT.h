@@ -376,6 +376,7 @@ class DEMKinematicThread {
 
       public:
         AccumTimer() { timer = Timer<double>(); }
+        ~AccumTimer() {}
         void Begin() {
             if (cached_count >= NUM_STEPS_RESERVED_AFTER_CHANGING_BIN_SIZE)
                 timer.start();
