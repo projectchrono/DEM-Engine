@@ -560,6 +560,7 @@ class DEMDynamicThread {
 
     // If kT provides fresh CD results, we unpack and use it
     inline void ifProduceFreshThenUseItAndSendNewOrder();
+    inline void ifProduceFreshThenUseIt();
 
     // Determine the max vel for this cycle, kT needs it
     inline float* determineSysMaxVel();

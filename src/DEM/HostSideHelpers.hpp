@@ -23,6 +23,12 @@
 
 namespace deme {
 
+// Sign function
+template <typename T1>
+inline int sign_func(const T1& val) {
+    return (T1(0) < val) - (val < T1(0));
+}
+
 // In an upper-triangular matrix, given i and j, this function returns the index of the corresponding flatten-ed
 // non-zero entries. This function does not assume i <= j.
 template <typename T1>
@@ -51,6 +57,14 @@ template <typename T1>
 inline T1 vector_sum(const std::vector<T1>& vect) {
     T1 sum_of_elems = std::accumulate(vect.begin(), vect.end(), T1(0));
     return sum_of_elems;
+}
+
+// Make sure a T1 type triplet falls in a range, then output as T2 type
+template <typename T1, typename T2>
+inline T2 hostClampBetween(const T1& data, const T2& low, const T2& high) {
+    T2 res;
+    res = DEME_MIN(DEME_MAX(data, low), high);
+    return res;
 }
 
 template <typename T1>
@@ -124,6 +138,25 @@ inline float4 host_make_float4(float x, float y, float z, float w) {
     f.z = z;
     f.w = w;
     return f;
+}
+
+inline size_t hostCalcBinNum(binID_t& nbX,
+                             binID_t& nbY,
+                             binID_t& nbZ,
+                             double m_voxelSize,
+                             double m_binSize,
+                             unsigned char nvXp2,
+                             unsigned char nvYp2,
+                             unsigned char nvZp2) {
+    nbX = (binID_t)(m_voxelSize * (double)((size_t)1 << nvXp2) / m_binSize) + 1;
+    nbY = (binID_t)(m_voxelSize * (double)((size_t)1 << nvYp2) / m_binSize) + 1;
+    nbZ = (binID_t)(m_voxelSize * (double)((size_t)1 << nvZp2) / m_binSize) + 1;
+    return (size_t)nbX * (size_t)nbY * (size_t)nbZ;
+}
+
+/// @brief  Check if the string has only spaces.
+inline bool is_all_spaces(const std::string& str) {
+    return str.find_first_not_of(' ') == str.npos;
 }
 
 // Check if a word exists in a string (but it does not need to be a whole word)

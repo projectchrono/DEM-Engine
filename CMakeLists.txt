@@ -163,6 +163,16 @@ install(
 		DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
+install(CODE "message(\"Removing build-tree libraries from installation target...\")")
+install(CODE "file(REMOVE \"$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libDEMERuntimeDataHelper.so\")")
+
+install(
+	TARGETS DEMERuntimeDataHelper_install
+	EXPORT DEMETargets
+	LIBRARY
+		DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	)
+
 # Export the generated library target
 export(EXPORT DEMETargets
 	FILE "${CMAKE_CURRENT_BINARY_DIR}/DEME/DEMETargets.cmake"

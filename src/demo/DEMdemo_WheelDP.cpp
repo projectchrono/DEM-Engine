@@ -33,6 +33,7 @@ int main() {
     // Define the wheel geometry
     float wheel_rad = 0.25;
     float wheel_width = 0.25;
+    float g_height = 0.025;
     float wheel_mass = 11.;
     float total_pressure = 750.0;
     // float total_pressure = 480.0;
@@ -40,10 +41,10 @@ int main() {
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
-    float TRs[] = {0.2, 0.1, 0.05, 0};
-    // float TRs[] = {0.7, 0.5, 0.3, 0.2, 0.1, 0.05, 0};
+    // float TRs[] = {0.2, 0.1, 0.05, 0};
+    float TRs[] = {0.7, 0.5, 0.3, 0.2, 0.1, 0.05, 0};
     unsigned int run_mode = 0;
-    unsigned int currframe = 251;
+    unsigned int currframe = 0;
 
     for (float TR : TRs) {
         DEMSolver DEMSim;
@@ -209,7 +210,8 @@ int main() {
 
         // Families' prescribed motions
         float w_r = math_PI / 12.;
-        float v_ref = w_r * wheel_rad;
+        float v_ref = w_r * (wheel_rad-g_height);
+        float over_TR = 1.+(TR-1.)*(wheel_rad-g_height)/wheel_rad;
 
         double sim_end = 8.;
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
@@ -278,6 +280,7 @@ int main() {
 
         // Switch wheel from free fall into DP test
         DEMSim.ChangeFamily(1, 2);
+        DEMSim.UpdateStepSize(step_size);
 
         bool start_measure = false;
         for (double t = 0; t < sim_end; t += step_size, curr_step++) {
@@ -300,6 +303,7 @@ int main() {
                 forces *= wheel_mass;
                 std::cout << "Current run mode: " << run_mode << std::endl;
                 std::cout << "Slip: " << TR << std::endl;
+                std::cout << "Over slip: " << over_TR  << std::endl;
                 std::cout << "Time: " << t << std::endl;
                 std::cout << "Force on wheel: " << forces.x << ", " << forces.y << ", " << forces.z << std::endl;
                 std::cout << "Drawbar pull coeff: " << forces.x / total_pressure << std::endl;

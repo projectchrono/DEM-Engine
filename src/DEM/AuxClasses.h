@@ -53,9 +53,8 @@ class DEMInspector {
 
     DEMInspector(DEMSolver* sim_sys, DEMDynamicThread* dT_sys, const std::string& quantity) : sys(sim_sys), dT(dT_sys) {
         switch_quantity_type(quantity);
-        // In default constructor, all entities are considered `in-region'
+        // In default constructor, all entities are considered `in-region' by default
         in_region_code = " ";
-        all_domain = true;
     }
     DEMInspector(DEMSolver* sim_sys, DEMDynamicThread* dT_sys, const std::string& quantity, const std::string& region)
         : sys(sim_sys), dT(dT_sys) {

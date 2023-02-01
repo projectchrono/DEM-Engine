@@ -1,6 +1,6 @@
 // DEM history mapping related custom kernels
 #include <DEM/Defines.h>
-#include <kernel/DEMHelperKernels.cu>
+#include <DEMHelperKernels.cu>
 
 __global__ void fillRunLengthArray(deme::geoSphereTouches_t* runlength_full,
                                    deme::bodyID_t* unique_ids,

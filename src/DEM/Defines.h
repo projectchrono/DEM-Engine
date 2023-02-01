@@ -22,8 +22,9 @@ namespace deme {
 // =============================================================================
 #define DEME_GET_VAR_NAME(Variable) (#Variable)
 #define DEME_KT_CD_NTHREADS_PER_BLOCK 256
-#define DEME_MAX_SPHERES_PER_BIN 256    ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
-#define DEME_MAX_TRIANGLES_PER_BIN 128  ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
+// It is better to keep DEME_NUM_SPHERES_PER_CD_BATCH == DEME_KT_CD_NTHREADS_PER_BLOCK for better performance
+#define DEME_NUM_SPHERES_PER_CD_BATCH 256    ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
+#define DEME_NUM_TRIANGLES_PER_CD_BATCH 128  ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
 #define DEME_TINY_FLOAT 1e-12
 #define DEME_HUGE_FLOAT 1e15
 #define DEME_BITS_PER_BYTE 8
@@ -70,6 +71,8 @@ const objNormal_t ENTITY_NORMAL_OUTWARD = 1;
 const contact_t NOT_A_CONTACT = 0;
 const contact_t SPHERE_SPHERE_CONTACT = 1;
 const contact_t SPHERE_MESH_CONTACT = 2;
+// Aux contact types (contact with analytical objects) must be larger than SPHERE_ANALYTICAL_CONTACT!
+const contact_t SPHERE_ANALYTICAL_CONTACT = 10;
 const contact_t SPHERE_PLANE_CONTACT = 11;
 const contact_t SPHERE_PLATE_CONTACT = 12;
 const contact_t SPHERE_CYL_CONTACT = 13;
@@ -79,9 +82,9 @@ const notStupidBool_t DONT_PREVENT_CONTACT = 0;
 const notStupidBool_t PREVENT_CONTACT = 1;
 
 // Codes for owner types. We just have a handful of types...
-const ownerType_t OWNER_T_CLUMP = 0;
-const ownerType_t OWNER_T_ANALYTICAL = 1;
-const ownerType_t OWNER_T_MESH = 2;
+const ownerType_t OWNER_T_CLUMP = 1;
+const ownerType_t OWNER_T_ANALYTICAL = 2;
+const ownerType_t OWNER_T_MESH = 4;
 
 // This ID marks that this is a new contact, not present when we did contact detection last time
 // TODO: half max add half max... so stupid... Better way?? numeric_limit won't work...
@@ -129,7 +132,7 @@ enum class TIME_INTEGRATOR { FORWARD_EULER, CENTERED_DIFFERENCE, EXTENDED_TAYLOR
 // Owner types
 enum class OWNER_TYPE { CLUMP, ANALYTICAL, MESH };
 // Types of entities (can be either owner or geometry entity) that can be inspected by inspection methods
-enum class INSPECT_ENTITY_TYPE { SPHERE, CLUMP, MESH, MESH_FACET };
+enum class INSPECT_ENTITY_TYPE { SPHERE, CLUMP, MESH, MESH_FACET, EVERYTHING };
 // Which reduce operation is needed in an inspection
 enum class CUB_REDUCE_FLAVOR { NONE, MAX, MIN, SUM };
 // Format of the output files
@@ -145,14 +148,15 @@ enum OUTPUT_CONTENT {
     ABSV = 2,
     VEL = 4,
     ANG_VEL = 8,
-    ACC = 16,
-    ANG_ACC = 32,
-    FAMILY = 64,
-    MAT = 128,
-    OWNER_WILDCARD = 256,
+    ABS_ACC = 16,
+    ACC = 32,
+    ANG_ACC = 64,
+    FAMILY = 128,
+    MAT = 256,
+    OWNER_WILDCARD = 512,
     // How much this clump expanded in size via ChangeClumpSizes, compared to its `vanilla' template. Can be useful if
     // the user imposed some fine-grain clump size control.
-    EXP_FACTOR = 512
+    EXP_FACTOR = 1024
 };
 // Output particles as individual (component) spheres, or as owner clumps (clump CoMs for location, as an example)?
 enum class SPATIAL_DIR { X, Y, Z, NONE };
@@ -240,6 +244,13 @@ struct DEMSimParams {
     // Number of wildcards (extra property) arrays associated with contacts and owners
     unsigned int nContactWildcards;
     unsigned int nOwnerWildcards;
+
+    // The max vel at which the solver errors out
+    float errOutVel = DEME_HUGE_FLOAT;
+    // The max num of spheres per bin before solver errors out
+    unsigned int errOutBinSphNum = 32768;
+    // The max num of triangles per bin before solver errors out
+    unsigned int errOutBinTriNum = 32768;
 };
 
 // A struct that holds pointers to data arrays that dT uses
@@ -250,6 +261,8 @@ struct DEMDataDT {
     family_t* familyID;
 
     voxelID_t* voxelID;
+
+    ownerType_t* ownerTypes;
 
     subVoxelPos_t* locX;
     subVoxelPos_t* locY;
@@ -428,6 +441,8 @@ struct DEMDataKT {
 // At init, we wish to show the user how thick approximately the CD margin will be added. This number will help deriving
 // that approximation. It can be anything really, 1 or 10, or 8.
 const float AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE = 10.f;
+// After changing bin size, this many kT steps are not included in the performance gauging.
+const unsigned int NUM_STEPS_RESERVED_AFTER_CHANGING_BIN_SIZE = 5;
 
 }  // namespace deme
 

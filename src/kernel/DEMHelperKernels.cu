@@ -8,7 +8,7 @@
 
 // I can only include CUDAMathHelpers.cu here and if I do it in other kernel files such as DEMBinSphereKernels.cu too,
 // there will be double-load problem where operators are re-defined. Not sure how to resolve it.
-#include <kernel/CUDAMathHelpers.cu>
+#include <CUDAMathHelpers.cu>
 
 // inline __device__ voxelID_t position2VoxelID
 
@@ -189,6 +189,19 @@ inline __device__ void normalizeVector3(T1& x, T1& y, T1& z) {
 template <typename T1>
 inline __device__ T1 triangleCentroid(const T1& p1, const T1& p2, const T1& p3) {
     return (p1 + p2 + p3) / 3.;
+}
+
+// Calculate the incenter of a triangle
+template <typename T1>
+inline __device__ T1 triangleIncenter(const T1& p1, const T1& p2, const T1& p3) {
+    float a = length(p2 - p3);
+    float b = length(p1 - p3);
+    float c = length(p1 - p2);
+    T1 res;
+    res.x = (a * p1.x + b * p2.x + c * p3.x) / (a + b + c);
+    res.y = (a * p1.y + b * p2.y + c * p3.y) / (a + b + c);
+    res.z = (a * p1.z + b * p2.z + c * p3.z) / (a + b + c);
+    return res;
 }
 
 // Hamilton product of 2 quaternions

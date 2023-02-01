@@ -77,25 +77,25 @@ class DEMSolver {
         m_bounding_box_material = mat;
     }
 
-    /// Set gravity
+    /// Set gravitational pull.
     void SetGravitationalAcceleration(float3 g) { G = g; }
     /// Set the initial time step size. If using constant step size, then this will be used throughout; otherwise, the
     /// actual step size depends on the variable step strategy.
     void SetInitTimeStep(double ts_size) { m_ts_size = ts_size; }
-    /// Return the number of clumps that are currently in the simulation
+    /// Return the number of clumps that are currently in the simulation.
     size_t GetNumClumps() { return nOwnerClumps; }
-    /// Get the current time step size in simulation
-    double GetTimeStepSize();
-    /// Getthe current expand factor in simulation
-    float GetExpandFactor();
-    /// Set the number of dT steps before it waits for a contact-pair info update from kT
+    /// Get the current time step size in simulation.
+    double GetTimeStepSize() const;
+    /// Getthe current expand factor in simulation.
+    float GetExpandFactor() const;
+    /// Set the number of dT steps before it waits for a contact-pair info update from kT.
     void SetCDUpdateFreq(int freq) {
         m_updateFreq = freq;
         m_dTMaxFutureDrift = 2 * freq;
     }
-    /// Get the simulation time passed since the start of simulation
+    /// Get the simulation time passed since the start of simulation.
     double GetSimTime() const;
-    /// Set the simulation time manually
+    /// Set the simulation time manually.
     void SetSimTime(double time);
     // TODO: Implement an API that allows setting ts size through a list
 
@@ -130,7 +130,7 @@ class DEMSolver {
 
     /// Get the jitification string substitution laundary list. It is needed by some of this simulation system's friend
     /// classes.
-    std::unordered_map<std::string, std::string> GetJitStringSubs() { return m_subs; }
+    std::unordered_map<std::string, std::string> GetJitStringSubs() const { return m_subs; }
 
     /// Explicitly instruct the bin size (for contact detection) that the solver should use.
     void SetInitBinSize(double bin_size) {
@@ -150,9 +150,9 @@ class DEMSolver {
     /// simulation, since if the arrays are not long enough they will always be auto-resized.
     void InstructNumOwners(size_t numOwners) { m_instructed_num_owners = numOwners; }
 
-    /// Instruct the solver to use frictonal (history-based) Hertzian contact force model
+    /// Instruct the solver to use frictonal (history-based) Hertzian contact force model.
     std::shared_ptr<DEMForceModel> UseFrictionalHertzianModel();
-    /// Instruct the solver to use frictonless Hertzian contact force model
+    /// Instruct the solver to use frictonless Hertzian contact force model.
     std::shared_ptr<DEMForceModel> UseFrictionlessHertzianModel();
     /// Define a custom contact force model by a string. Returns a shared_ptr to the force model in use.
     std::shared_ptr<DEMForceModel> DefineContactForceModel(const std::string& model);
@@ -174,11 +174,6 @@ class DEMSolver {
     /// into GPU kernels (if set to true), rather than using flattened mass property arrays whose entries are associated
     /// with individual owners. Note: setting it to true gives no performance benefit known to me.
     void SetJitifyMassProperties(bool use = true) { jitify_mass_moi = use; }
-
-    /// Instruct the contact detection process to use one thread to process a bin (if true), instead of using a block to
-    /// process a bin. This probably also requires you to manually set a smaller DEME_MAX_SPHERES_PER_BIN. This can
-    /// potentially be faster especially in a scenario where the spheres are of similar sizes.
-    void SetOneBinPerThread(bool use = true) { use_one_bin_per_thread = use; }
 
     // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
     void UseCompactForceKernel(bool use_compact);
@@ -208,13 +203,15 @@ class DEMSolver {
     /// significantly in one kT update cycle.
     void SetExpandSafetyAdder(float vel) { m_expand_base_vel = vel; }
 
-    /// @brief Used to force the solver to error out when there are too many spheres in a bin.
+    /// @brief Used to force the solver to error out when there are too many spheres in a bin. A huge number can be used
+    /// to discourage this error type.
     /// @param max_sph Max number of spheres in a bin.
-    /// @param err_out If the solver should error out when max sphere number is exceeded.
-    void SetMaxSphereInBin(unsigned int max_sph, bool err_out = true) {
-        error_out_when_too_many_item_in_bin = err_out;
-        threshold_too_sphere_item_in_bin = max_sph;
-    }
+    void SetMaxSphereInBin(unsigned int max_sph) { threshold_too_many_spheres_in_bin = max_sph; }
+
+    /// @brief Used to force the solver to error out when there are too many spheres in a bin. A huge number can be used
+    /// to discourage this error type.
+    /// @param max_tri Max number of triangles in a bin.
+    void SetMaxTriangleInBin(unsigned int max_tri) { threshold_too_many_tri_in_bin = max_tri; }
 
     /// @brief Set the velocity which when exceeded, the solver errors out. A huge number can be used to discourage this
     /// error type.
@@ -231,8 +228,30 @@ class DEMSolver {
     void UseAdaptiveUpdateFreq(bool use = true) { auto_adjust_update_freq = use; }
     /// @brief Disable the use of adaptive max update step count (always use initial update frequency).
     void DisableAdaptiveUpdateFreq() { auto_adjust_update_freq = false; }
+    /// @brief Adjust how frequent kT updates the bin size.
+    /// @param n Number of contact detections before kT makes one adjustment to bin size.
+    void SetAdaptiveBinSizeDelaySteps(unsigned int n) { auto_adjust_observe_steps = n; }
+    /// @brief Set the max rate that the bin size can change in one adjustment.
+    /// @param rate 0: never changes; 1: can double or halve size in one go; suggest using default.
+    void SetAdaptiveBinSizeMaxRate(float rate) { auto_adjust_max_rate = (rate > 0) ? rate : 0; }
+    /// @brief Set how fast kT changes the direction of bin size adjustmemt when there's a more beneficial direction.
+    /// @param acc 0.01: slowly change direction; 1: quickly change direction
+    void SetAdaptiveBinSizeAcc(float acc) { auto_adjust_acc = hostClampBetween(acc, 0.01, 1.0); }
+    /// @brief Set how proactive the solver is in avoiding the bin being too big (leading to too many geometries in a
+    /// bin).
+    /// @param ratio 0: not proavtive; 1: very proactive.
+    void SetAdaptiveBinSizeUpperProactivity(float ratio) {
+        auto_adjust_upper_proactive_ratio = hostClampBetween(ratio, 0.0, 1.0);
+        ;
+    }
+    /// @brief Set how proactive the solver is in avoiding the bin being too small (leading to too many bins in domain).
+    /// @param ratio 0: not proavtive; 1: very proactive.
+    void SetAdaptiveBinSizeLowerProactivity(float ratio) {
+        auto_adjust_lower_proactive_ratio = hostClampBetween(ratio, 0.0, 1.0);
+        ;
+    }
 
-    /// Set the number of threads per block in force calculation (default 256)
+    /// Set the number of threads per block in force calculation (default 256).
     void SetForceCalcThreadsPerBlock(unsigned int nTh) { dT->DT_FORCE_CALC_NTHREADS_PER_BLOCK = nTh; }
 
     /// Load possible clump types into the API-level cache
@@ -600,12 +619,16 @@ class DEMSolver {
     /// Equivalent to calling DoDynamics with the time step size as the argument
     void DoStepDynamics() { DoDynamics(m_ts_size); }
 
-    /// Copy the cached sim params to the GPU-accessible managed memory, so that they are picked up from the next ts of
-    /// simulation. Usually used when you want to change simulation parameters after the system is already Intialized.
+    /// @brief Transferthe cached sim params to the workers. Used for sim environment modification after system
+    /// initialization.
     void UpdateSimParams();
 
-    /// Transfer newly loaded clumps to the GPU-side in mid-simulation
+    /// @brief TTransfer newly loaded clumps to the GPU-side in mid-simulation.
     void UpdateClumps();
+
+    /// @brief Update the time step size. Used after system initialization.
+    /// @param ts Time step size.
+    void UpdateStepSize(float ts = -1.0);
 
     /// Show the collaboration stats between dT and kT. This is more useful for tweaking the number of time steps that
     /// dT should be allowed to be in advance of kT.
@@ -683,8 +706,6 @@ class DEMSolver {
     bool jitify_clump_templates = false;
     // Should jitify mass/MOI properties into kernels
     bool jitify_mass_moi = false;
-    // CD uses one thread (not one block) to process a bin
-    bool use_one_bin_per_thread = false;
 
     // User explicitly set a bin size to use
     bool use_user_defined_bin_size = false;
@@ -754,7 +775,7 @@ class DEMSolver {
     float m_expand_safety_multi = 1.f;
     // The `base' velocity we always consider entities to have, when determining the thickness of the margin to add for
     // contact detection.
-    float m_expand_base_vel = 0.5f;
+    float m_expand_base_vel = 3.f;
 
     // The method of determining the thickness of the margin added to CD
     // Default is using a max_vel inspector of the clumps to decide it
@@ -783,9 +804,6 @@ class DEMSolver {
     // This is an unused variable which is supposed to be related to m_dTMaxFutureDrift...
     int m_updateFreq = 0;
 
-    // Max number of spheres in a bin before it errors out
-    unsigned int threshold_too_sphere_item_in_bin = 65536;
-
     // Where the user wants the origin of the coordinate system to be
     std::string m_user_instructed_origin = "center";
 
@@ -804,15 +822,22 @@ class DEMSolver {
     // If we should flatten then reduce forces (true), or use atomic operation to reduce forces (false)
     bool use_cub_to_reduce_force = false;
 
-    // If the solver should error out when seeing there are more geometries in a bin than a pre-defined `maximum'
-    bool error_out_when_too_many_item_in_bin = false;
-    // The `maximum' we mentioned in the previous line
-    unsigned int threshold_too_many_item_in_bin = DEME_MAX_SPHERES_PER_BIN * 10;
+    // If the solver sees there are more spheres in a bin than a this `maximum', it errors out
+    unsigned int threshold_too_many_spheres_in_bin = 32768;
+    // If the solver sees there are more triangles in a bin than a this `maximum', it errors out
+    unsigned int threshold_too_many_tri_in_bin = 32768;
     // The max velocity at which the simulation should error out
     float threshold_error_out_vel = 1e9;
     // Whether to auto-adjust the bin size and the max update frequency
     bool auto_adjust_bin_size = true;
     bool auto_adjust_update_freq = true;
+    // Num of steps that kT takes average before making a conclusion on the performance of this bin size
+    unsigned int auto_adjust_observe_steps = 20;
+    // See corresponding method for those...
+    float auto_adjust_max_rate = 0.03;
+    float auto_adjust_acc = 0.2;
+    float auto_adjust_upper_proactive_ratio = 1.0;
+    float auto_adjust_lower_proactive_ratio = 0.3;
 
     // See SetNoForceRecord
     bool no_recording_contact_forces = false;

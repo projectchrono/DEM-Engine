@@ -1,5 +1,5 @@
 // DEM integration related custom kernels
-#include <kernel/DEMHelperKernels.cu>
+#include <DEMHelperKernels.cu>
 #include <DEM/Defines.h>
 
 #include <cub/util_ptx.cuh>

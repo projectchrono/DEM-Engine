@@ -18,7 +18,7 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity(STEP_METRIC);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
@@ -28,7 +28,7 @@ int main() {
     auto mat_type_ball = DEMSim.LoadMaterial({{"E", 1e10}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.3}, {"Crr", 0.01}});
     auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 5e9}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.3}, {"Crr", 0.01}});
 
-    float step_size = 1e-5;
+    float step_size = 2e-5;
     double world_size = 10;
     DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
@@ -38,10 +38,11 @@ int main() {
     std::cout << "Total num of triangles: " << projectile->GetNumTriangles() << std::endl;
 
     projectile->SetInitPos(make_float3(world_size / 2, world_size / 2, world_size / 3 * 2));
-    float ball_mass = 2.6e3 * 4 / 3 * 3.1416;
+    float ball_mass = 7.8e3 * 4 / 3 * 3.1416;
     projectile->SetMass(ball_mass);
     projectile->SetMOI(make_float3(ball_mass * 2 / 5, ball_mass * 2 / 5, ball_mass * 2 / 5));
-    projectile->SetFamily(1);
+    projectile->SetFamily(2);
+    DEMSim.SetFamilyFixed(2);
 
     float terrain_rad = 0.05;
     auto template_terrain = DEMSim.LoadSphereType(terrain_rad * terrain_rad * terrain_rad * 2.6e3 * 4 / 3 * 3.14,
@@ -64,7 +65,8 @@ int main() {
     DEMSim.SetCDUpdateFreq(20);
     // DEMSim.SetExpandFactor(1e-3);
     DEMSim.SetMaxVelocity(15.);
-    DEMSim.SetExpandSafetyMultiplier(1.1);
+    // The projectile can be fast... and its velocity is not accounted for by the default max vel estimator
+    DEMSim.SetExpandSafetyAdder(5.);
     DEMSim.SetInitBinSize(4 * terrain_rad);
     DEMSim.Initialize();
 
@@ -72,17 +74,35 @@ int main() {
     out_dir += "/DemoOutput_BallDrop";
     create_directory(out_dir);
 
-    float sim_end = 10.0;
+    float sim_time = 6.0;
+    float settle_time = 2.0;
     unsigned int fps = 20;
     float frame_time = 1.0 / fps;
 
-    // Testing...
+    // Testing UpdateMesh... not needed
     proj_tracker->UpdateMesh(projectile);
 
     std::cout << "Output at " << fps << " FPS" << std::endl;
     unsigned int currframe = 0;
 
-    for (float t = 0; t < sim_end; t += frame_time) {
+    // We can let it settle first
+    for (float t = 0; t < settle_time; t += frame_time) {
+        std::cout << "Frame: " << currframe << std::endl;
+        char filename[200], meshfilename[200];
+        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
+        sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
+        DEMSim.WriteSphereFile(std::string(filename));
+        DEMSim.WriteMeshFile(std::string(meshfilename));
+        currframe++;
+
+        DEMSim.DoDynamicsThenSync(frame_time);
+        DEMSim.ShowThreadCollaborationStats();
+    }
+
+    // Then drop the ball. I also wanted to test if changing step size method works fine here...
+    DEMSim.UpdateStepSize(0.5 * step_size);
+    DEMSim.ChangeFamily(2, 1);
+    for (float t = 0; t < sim_time; t += frame_time) {
         std::cout << "Frame: " << currframe << std::endl;
         char filename[200], meshfilename[200], cnt_filename[200];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);

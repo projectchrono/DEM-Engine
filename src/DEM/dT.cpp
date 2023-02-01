@@ -26,6 +26,7 @@ void DEMDynamicThread::packDataPointers() {
     granData->inertiaPropOffsets = inertiaPropOffsets.data();
     granData->familyID = familyID.data();
     granData->voxelID = voxelID.data();
+    granData->ownerTypes = ownerTypes.data();
     granData->locX = locX.data();
     granData->locY = locY.data();
     granData->locZ = locZ.data();
@@ -146,7 +147,7 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->Gy = G.y;
     simParams->Gz = G.z;
     simParams->h = ts_size;
-    simParams->beta = expand_factor;
+    simParams->beta = expand_factor;  // If beta is auto-adapting, this assignment has no effect
     simParams->approxMaxVel = approx_max_vel;
     simParams->expSafetyMulti = expand_safety_param;
     simParams->expSafetyAdder = expand_safety_adder;
@@ -967,15 +968,12 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
     if (solverFlags.outputFlags & OUTPUT_CONTENT::VEL) {
         outstrstream << ",v_x,v_y,v_z";
     }
-    // if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_VEL) {
-    //     outstrstream << ",w_x,w_y,w_z";
-    // }
-    // if (solverFlags.outputFlags & OUTPUT_CONTENT::ACC) {
-    //     outstrstream << ",a_x,a_y,a_z";
-    // }
-    // if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_ACC) {
-    //     outstrstream << ",alpha_x,alpha_y,alpha_z";
-    // }
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::ABS_ACC) {
+        outstrstream << ",abs_acc";
+    }
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::ACC) {
+        outstrstream << ",a_x,a_y,a_z";
+    }
     if (solverFlags.outputFlags & OUTPUT_CONTENT::FAMILY) {
         outstrstream << ",family";
     }
@@ -1030,15 +1028,24 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
         outstrstream << "," << radius;
 
         // Only linear velocity
-        float3 vxyz;
+        float3 vxyz, acc;
         vxyz.x = vX.at(this_owner);
         vxyz.y = vY.at(this_owner);
         vxyz.z = vZ.at(this_owner);
+        acc.x = aX.at(this_owner);
+        acc.y = aY.at(this_owner);
+        acc.z = aZ.at(this_owner);
         if (solverFlags.outputFlags & OUTPUT_CONTENT::ABSV) {
             outstrstream << "," << length(vxyz);
         }
         if (solverFlags.outputFlags & OUTPUT_CONTENT::VEL) {
             outstrstream << "," << vxyz.x << "," << vxyz.y << "," << vxyz.z;
+        }
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::ABS_ACC) {
+            outstrstream << "," << length(acc);
+        }
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::ACC) {
+            outstrstream << "," << acc.x << "," << acc.y << "," << acc.z;
         }
 
         // Family number needs to be user number
@@ -1153,15 +1160,18 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
     if (solverFlags.outputFlags & OUTPUT_CONTENT::VEL) {
         outstrstream << ",v_x,v_y,v_z";
     }
-    // if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_VEL) {
-    //     outstrstream << ",w_x,w_y,w_z";
-    // }
-    // if (solverFlags.outputFlags & OUTPUT_CONTENT::ACC) {
-    //     outstrstream << ",a_x,a_y,a_z";
-    // }
-    // if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_ACC) {
-    //     outstrstream << ",alpha_x,alpha_y,alpha_z";
-    // }
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_VEL) {
+        outstrstream << ",w_x,w_y,w_z";
+    }
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::ABS_ACC) {
+        outstrstream << ",abs_acc";
+    }
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::ACC) {
+        outstrstream << ",a_x,a_y,a_z";
+    }
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_ACC) {
+        outstrstream << ",alpha_x,alpha_y,alpha_z";
+    }
     if (solverFlags.outputFlags & OUTPUT_CONTENT::FAMILY) {
         outstrstream << ",family";
     }
@@ -1206,15 +1216,36 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
         outstrstream << "," << templateNumNameMap.at(clump_mark);
 
         // Only linear velocity
-        float3 vxyz;
+        float3 vxyz, ang_v, acc, ang_acc;
         vxyz.x = vX.at(i);
         vxyz.y = vY.at(i);
         vxyz.z = vZ.at(i);
+        acc.x = aX.at(i);
+        acc.y = aY.at(i);
+        acc.z = aZ.at(i);
         if (solverFlags.outputFlags & OUTPUT_CONTENT::ABSV) {
             outstrstream << "," << length(vxyz);
         }
         if (solverFlags.outputFlags & OUTPUT_CONTENT::VEL) {
             outstrstream << "," << vxyz.x << "," << vxyz.y << "," << vxyz.z;
+        }
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_VEL) {
+            ang_v.x = omgBarX.at(i);
+            ang_v.y = omgBarY.at(i);
+            ang_v.z = omgBarZ.at(i);
+            outstrstream << "," << ang_v.x << "," << ang_v.y << "," << ang_v.z;
+        }
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::ABS_ACC) {
+            outstrstream << "," << length(acc);
+        }
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::ACC) {
+            outstrstream << "," << acc.x << "," << acc.y << "," << acc.z;
+        }
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_ACC) {
+            ang_acc.x = alphaX.at(i);
+            ang_acc.y = alphaY.at(i);
+            ang_acc.z = alphaZ.at(i);
+            outstrstream << "," << ang_acc.x << "," << ang_acc.y << "," << ang_acc.z;
         }
 
         // Family number needs to be user number
@@ -1595,20 +1626,22 @@ inline void DEMDynamicThread::migratePersistentContacts() {
                     "%zu contacts were active at time %.9g on dT, but they are not detected on kT, therefore being "
                     "removed unexpectedly!",
                     *lostContact, simParams->timeElapsed);
-                DEME_DEBUG_PRINTF("New number of contacts: %zu", *stateOfSolver_resources.pNumContacts);
-                DEME_DEBUG_PRINTF("Old number of contacts: %zu", *stateOfSolver_resources.pNumPrevContacts);
-                DEME_DEBUG_PRINTF("New contact A:");
-                DEME_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryA, *stateOfSolver_resources.pNumContacts));
-                DEME_DEBUG_PRINTF("New contact B:");
-                DEME_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryB, *stateOfSolver_resources.pNumContacts));
-                DEME_DEBUG_PRINTF("Old version of the last contact wildcard:");
-                DEME_DEBUG_EXEC(displayArray<float>(granData->contactWildcards[simParams->nContactWildcards - 1],
-                                                    *stateOfSolver_resources.pNumPrevContacts));
-                DEME_DEBUG_PRINTF("Old--new mapping:");
-                DEME_DEBUG_EXEC(
+                DEME_STEP_DEBUG_PRINTF("New number of contacts: %zu", *stateOfSolver_resources.pNumContacts);
+                DEME_STEP_DEBUG_PRINTF("Old number of contacts: %zu", *stateOfSolver_resources.pNumPrevContacts);
+                DEME_STEP_DEBUG_PRINTF("New contact A:");
+                DEME_STEP_DEBUG_EXEC(
+                    displayArray<bodyID_t>(granData->idGeometryA, *stateOfSolver_resources.pNumContacts));
+                DEME_STEP_DEBUG_PRINTF("New contact B:");
+                DEME_STEP_DEBUG_EXEC(
+                    displayArray<bodyID_t>(granData->idGeometryB, *stateOfSolver_resources.pNumContacts));
+                DEME_STEP_DEBUG_PRINTF("Old version of the last contact wildcard:");
+                DEME_STEP_DEBUG_EXEC(displayArray<float>(granData->contactWildcards[simParams->nContactWildcards - 1],
+                                                         *stateOfSolver_resources.pNumPrevContacts));
+                DEME_STEP_DEBUG_PRINTF("Old--new mapping:");
+                DEME_STEP_DEBUG_EXEC(
                     displayArray<contactPairs_t>(granData->contactMapping, *stateOfSolver_resources.pNumContacts));
-                DEME_DEBUG_PRINTF("Sentry:");
-                DEME_DEBUG_EXEC(
+                DEME_STEP_DEBUG_PRINTF("Sentry:");
+                DEME_STEP_DEBUG_EXEC(
                     displayArray<notStupidBool_t>(contactSentry, *stateOfSolver_resources.pNumPrevContacts));
             }
         }
@@ -1731,6 +1764,27 @@ inline float* DEMDynamicThread::determineSysMaxVel() {
     }
 }
 
+inline void DEMDynamicThread::ifProduceFreshThenUseIt() {
+    if (pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
+        {
+            // Acquire lock and use the content of the dynamic-owned transfer buffer
+            std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
+            unpackMyBuffer();
+            // Leave myself a mental note that I just obtained new produce from kT
+            contactPairArr_isFresh = true;
+            // pSchedSupport->schedulingStats.nDynamicReceives++;
+        }
+        // dT got the produce, now mark its buffer to be no longer fresh
+        pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
+
+        // If this is a history-based run, then when contacts are received, we need to migrate the contact
+        // history info, to match the structure of the new contact array
+        if (!solverFlags.isHistoryless) {
+            migratePersistentContacts();
+        }
+    }
+}
+
 inline void DEMDynamicThread::ifProduceFreshThenUseItAndSendNewOrder() {
     if (pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh) {
         timers.GetTimer("Unpack updates from kT").start();
@@ -1798,6 +1852,9 @@ void DEMDynamicThread::workerThread() {
         // check. Note: pendingCriticalUpdate is not fail-safe at all right now. The user still needs to sync before
         // making critical changes to the system to ensure safety.
         if (pSchedSupport->stampLastDynamicUpdateProdDate < 0 || pendingCriticalUpdate) {
+            // This is possible: If it is after a user-manual sync
+            ifProduceFreshThenUseIt();
+
             // If the user loaded contact manually, there is an extra thing we need to do: update kT prev_contact
             // arrays. Note the user can add anything only from a sync-ed stance anyway, so this check needs to be done
             // only here.
@@ -1922,7 +1979,10 @@ void DEMDynamicThread::resetUserCallStat() {
     pSchedSupport->currentStampOfDynamic = 0;
     // Reset dT stats variables, making ready for next user call
     pSchedSupport->dynamicDone = false;
-    pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
+    // Do not let user artificially set dynamicOwned_Prod2ConsBuffer_isFresh false. B/c only dT has the say on that. It
+    // could be that kT has a new produce ready, but dT idled for long and do not want to use it and want a new produce.
+    // Then dT needs to unpack this one first to get the contact mapping, then issue new work order, and that requires
+    // no manually setting this to false. pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
     contactPairArr_isFresh = true;
 }
 
@@ -1933,43 +1993,44 @@ size_t DEMDynamicThread::estimateMemUsage() const {
 void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& Subs) {
     // First one is force array preparation kernels
     {
-        prep_force_kernels = std::make_shared<jitify::Program>(
-            std::move(JitHelper::buildProgram("DEMPrepForceKernels", JitHelper::KERNEL_DIR / "DEMPrepForceKernels.cu",
-                                              Subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+        prep_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMPrepForceKernels", JitHelper::KERNEL_DIR / "DEMPrepForceKernels.cu", Subs,
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string()})));
     }
     // Then force calculation kernels
     {
-        cal_force_kernels = std::make_shared<jitify::Program>(
-            std::move(JitHelper::buildProgram("DEMCalcForceKernels", JitHelper::KERNEL_DIR / "DEMCalcForceKernels.cu",
-                                              Subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+        cal_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMCalcForceKernels", JitHelper::KERNEL_DIR / "DEMCalcForceKernels.cu", Subs,
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string()})));
     }
     // Then force accumulation kernels
     if (solverFlags.useCubForceCollect) {
-        collect_force_kernels = std::make_shared<jitify::Program>(std::move(
-            JitHelper::buildProgram("DEMCollectForceKernels", JitHelper::KERNEL_DIR / "DEMCollectForceKernels.cu", Subs,
-                                    {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+        collect_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMCollectForceKernels", JitHelper::KERNEL_DIR / "DEMCollectForceKernels.cu", Subs,
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string()})));
     } else {
         collect_force_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMCollectForceKernels_Compact", JitHelper::KERNEL_DIR / "DEMCollectForceKernels_Compact.cu", Subs,
-            {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string()})));
     }
     // Then integration kernels
     {
         integrator_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu", Subs,
-            {"-I" + (JitHelper::KERNEL_DIR / "..").string(), "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(), "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
+
     }
     // Then kernels that are... wildcards, which make on-the-fly changes to solver data
     if (solverFlags.canFamilyChange) {
-        mod_kernels = std::make_shared<jitify::Program>(
-            std::move(JitHelper::buildProgram("DEMModeratorKernels", JitHelper::KERNEL_DIR / "DEMModeratorKernels.cu",
-                                              Subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+        mod_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMModeratorKernels", JitHelper::KERNEL_DIR / "DEMModeratorKernels.cu", Subs,
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string()})));
     }
     // Then misc kernels
     {
-        misc_kernels = std::make_shared<jitify::Program>(
-            std::move(JitHelper::buildProgram("DEMMiscKernels", JitHelper::KERNEL_DIR / "DEMMiscKernels.cu", Subs,
-                                              {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+        misc_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMMiscKernels", JitHelper::KERNEL_DIR / "DEMMiscKernels.cu", Subs,
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string()})));
     }
 }
 
@@ -1979,12 +2040,18 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
                                      CUB_REDUCE_FLAVOR reduce_flavor,
                                      bool all_domain) {
     size_t n;
+    ownerType_t owner_type = 0;
     switch (thing_to_insp) {
         case (INSPECT_ENTITY_TYPE::SPHERE):
             n = simParams->nSpheresGM;
             break;
         case (INSPECT_ENTITY_TYPE::CLUMP):
-            n = simParams->nOwnerClumps;
+            n = simParams->nOwnerBodies;
+            owner_type = OWNER_T_CLUMP;
+            break;
+        case (INSPECT_ENTITY_TYPE::EVERYTHING):
+            n = simParams->nOwnerBodies;
+            owner_type = OWNER_T_CLUMP | OWNER_T_MESH | OWNER_T_ANALYTICAL;
             break;
     }
     // We can use temp vectors as we please
@@ -2002,7 +2069,7 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     inspection_kernel->kernel(kernel_name)
         .instantiate()
         .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData, simParams, resArr, boolArrExclude, n);
+        .launch(granData, simParams, resArr, boolArrExclude, n, owner_type);
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     if (all_domain) {

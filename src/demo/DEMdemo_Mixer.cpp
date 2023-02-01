@@ -18,7 +18,7 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity(STEP_METRIC);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
@@ -47,7 +47,7 @@ int main() {
     mixer->Scale(make_float3(world_size / 2, world_size / 2, chamber_height));
     mixer->SetFamily(10);
     // Define the prescribed motion of mixer
-    DEMSim.SetFamilyPrescribedAngVel(10, "0", "0", "2 * 3.14159");
+    DEMSim.SetFamilyPrescribedAngVel(10, "0", "0", "3.14159");
 
     float granular_rad = 0.005;
     // auto template_granular = DEMSim.LoadSphereType(granular_rad * granular_rad * granular_rad * 2.8e3 * 4 / 3 * 3.14,
@@ -75,8 +75,10 @@ int main() {
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.SetCDUpdateFreq(20);
-    DEMSim.SetExpandSafetyMultiplier(1.0);
-    DEMSim.SetInitBinSize(4 * granular_rad);
+    // Mixer has a big angular velocity-contributed linear speed at its blades, this is something the solver do not
+    // account for, for now. And that means it needs to be added as an estimated value.
+    DEMSim.SetExpandSafetyAdder(2.0);
+    DEMSim.SetInitBinSize(20 * granular_rad);
     DEMSim.Initialize();
 
     path out_dir = current_path();

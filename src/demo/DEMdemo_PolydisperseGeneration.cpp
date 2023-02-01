@@ -104,8 +104,7 @@ int main() {
     }
 
     step_size = 1e-6;
-    DEMSim.SetInitTimeStep(step_size);
-    DEMSim.UpdateSimParams();
+    DEMSim.UpdateStepSize(step_size);
 
     float sim_end = 10.0;
     unsigned int steps_togo = (unsigned int)(0.1 / step_size);

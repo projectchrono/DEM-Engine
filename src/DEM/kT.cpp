@@ -47,6 +47,61 @@ inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
 }
 
+void DEMKinematicThread::calibrateParams() {
+    double prev_time, curr_time;
+    // If it is true, then it's the AccumTimer telling us it is the right time to decide how to change bin size
+    if (CDAccumTimer.QueryOn(prev_time, curr_time, stateParams.binChangeObserveSteps)) {
+        // Auto-adjust bin size
+        if (solverFlags.autoBinSize) {
+            int speed_dir = sign_func(stateParams.binCurrentChangeRate);
+            // Note the speed can be 0, yet we find performance variance. Then this is purely noise. We still wish the
+            // bin size to change in the next iteration, so we assign a direction randomly.
+            if (speed_dir == 0)
+                speed_dir = 1;
+            float speed_update;
+            if (curr_time < prev_time) {
+                // If there is improvement, then we accelerate the current change direction
+                speed_update = speed_dir * stateParams.binChangeRateAcc * stateParams.binTopChangeRate;
+            } else {
+                // If no improvement, revert the direction
+                speed_update = -speed_dir * stateParams.binChangeRateAcc * stateParams.binTopChangeRate;
+            }
+            // But, if the bin size is going to get too big or too small, a penalty is enforced
+            if (stateParams.maxSphFoundInBin > stateParams.binChangeUpperSafety * simParams->errOutBinSphNum ||
+                stateParams.maxTriFoundInBin > stateParams.binChangeUpperSafety * simParams->errOutBinTriNum) {
+                // Then the size must start to decrease
+                speed_update = -1.0 * stateParams.binChangeRateAcc * stateParams.binTopChangeRate;
+            }
+            if (stateParams.numBins >
+                stateParams.binChangeLowerSafety * (double)(std::numeric_limits<binID_t>::max())) {
+                // Then size must start to increase
+                speed_update = 1.0 * stateParams.binChangeRateAcc * stateParams.binTopChangeRate;
+            }
+
+            // Acc is done. Now apply it to bin size change speed
+            stateParams.binCurrentChangeRate += speed_update;
+            // But, the speed must fall in range
+            stateParams.binCurrentChangeRate = hostClampBetween(
+                stateParams.binCurrentChangeRate, -stateParams.binTopChangeRate, stateParams.binTopChangeRate);
+
+            // Change bin size
+            if (stateParams.binCurrentChangeRate > 0) {
+                simParams->binSize *= (1. + stateParams.binCurrentChangeRate);
+            } else {
+                simParams->binSize /= (1. - stateParams.binCurrentChangeRate);
+            }
+            // Register the new bin size
+            stateParams.numBins =
+                hostCalcBinNum(simParams->nbX, simParams->nbY, simParams->nbZ, simParams->voxelSize, simParams->binSize,
+                               simParams->nvXp2, simParams->nvYp2, simParams->nvZp2);
+
+            DEME_DEBUG_PRINTF("Bin size is now: %.7g", simParams->binSize);
+            DEME_DEBUG_PRINTF("Total num of bins is now: %zu", stateParams.numBins);
+        }
+        DEME_DEBUG_PRINTF("kT runtime per step: %.7gs", CDAccumTimer.GetPrevTime());
+    }
+}
+
 inline void DEMKinematicThread::unpackMyBuffer() {
     DEME_GPU_CALL(cudaMemcpy(granData->voxelID, granData->voxelID_buffer, simParams->nOwnerBodies * sizeof(voxelID_t),
                              cudaMemcpyDeviceToDevice));
@@ -67,6 +122,13 @@ inline void DEMKinematicThread::unpackMyBuffer() {
 
     DEME_GPU_CALL(cudaMemcpy(&(granData->ts), &(granData->ts_buffer), sizeof(float), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(&(granData->maxVel), &(granData->maxVel_buffer), sizeof(float), cudaMemcpyDeviceToDevice));
+    // Check if max velocity is exceeded
+    if (granData->maxVel > simParams->errOutVel) {
+        DEME_ERROR(
+            "System max velocity is %.7g, exceeded max allowance (%.7g).\nIf this velocity is not abnormal and you "
+            "want to increase this allowance, use SetErrorOutVelocity before initializing simulation.",
+            granData->maxVel, simParams->errOutVel);
+    }
     // kT will need to derive the thickness of the CD margin, based on dT's info on system max vel
     // If isExpandFactorFixed, then that expand factor is in beta already, no work needed
     if (!solverFlags.isExpandFactorFixed) {
@@ -83,8 +145,8 @@ inline void DEMKinematicThread::unpackMyBuffer() {
                           (granData->ts_buffer * solverFlags.maxFutureDrift);
     }
 
-    DEME_STEP_DEBUG_PRINTF("kT received a velocity update: %.6g", granData->maxVel);
-    DEME_STEP_DEBUG_PRINTF("A margin of thickness %.6g is added", simParams->beta);
+    DEME_DEBUG_PRINTF("kT received a velocity update: %.6g", granData->maxVel);
+    DEME_DEBUG_PRINTF("A margin of thickness %.6g is added", simParams->beta);
 
     // Family number is a typical changable quantity on-the-fly. If this flag is on, kT received changes from dT.
     if (solverFlags.canFamilyChange) {
@@ -179,11 +241,19 @@ void DEMKinematicThread::workerThread() {
             // figure out the amount of shared mem
             // cudaDeviceGetAttribute.cudaDevAttrMaxSharedMemoryPerBlock
 
-            // kT's main task, contact detection
+            // kT's main task, contact detection.
+            // For auto-adjusting bin size, this part of code is encapsuled in an accumulative timer.
+            CDAccumTimer.Begin();
             contactDetection(bin_sphere_kernels, bin_triangle_kernels, sphere_contact_kernels, sphTri_contact_kernels,
                              history_kernels, granData, simParams, solverFlags, verbosity, idGeometryA, idGeometryB,
                              contactType, previous_idGeometryA, previous_idGeometryB, previous_contactType,
-                             contactMapping, streamInfo.stream, stateOfSolver_resources, timers);
+                             contactMapping, streamInfo.stream, stateOfSolver_resources, timers, stateParams);
+            CDAccumTimer.End();
+
+            // kT will reflect on how good the choice of parameters is
+            timers.GetTimer("Adjust parameters").start();
+            calibrateParams();
+            timers.GetTimer("Adjust parameters").stop();
 
             timers.GetTimer("Send to dT buffer").start();
             {
@@ -287,6 +357,11 @@ void DEMKinematicThread::resetUserCallStat() {
     kTShouldReset = false;
     // My ingredient production date is... unknown now
     pSchedSupport->kinematicIngredProdDateStamp = -1;
+
+    // We also reset the CD timer (for adjusting bin size)
+    CDAccumTimer.Clear();
+    // Reset bin size change speed
+    stateParams.binCurrentChangeRate = 0.;
 }
 
 size_t DEMKinematicThread::estimateMemUsage() const {
@@ -382,7 +457,7 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
     simParams->Gy = G.y;
     simParams->Gz = G.z;
     simParams->h = ts_size;
-    simParams->beta = expand_factor;
+    simParams->beta = expand_factor;  // If beta is auto-adapting, this assignment has no effect
     simParams->approxMaxVel = approx_max_vel;
     simParams->expSafetyMulti = expand_safety_param;
     simParams->expSafetyAdder = expand_safety_adder;
@@ -696,43 +771,41 @@ void DEMKinematicThread::updatePrevContactArrays(DEMDataDT* dT_data, size_t nCon
 void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& Subs) {
     // First one is bin_sphere_kernels kernels, which figure out the bin--sphere touch pairs
     {
-        bin_sphere_kernels = std::make_shared<jitify::Program>(
-            std::move(JitHelper::buildProgram("DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu",
-                                              Subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+        bin_sphere_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMBinSphereKernels", JitHelper::KERNEL_DIR / "DEMBinSphereKernels.cu", Subs,
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string()})));
     }
     // Then CD kernels
-    if (solverFlags.useOneBinPerThread) {
+    {
         sphere_contact_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMContactKernels", JitHelper::KERNEL_DIR / "DEMContactKernels.cu", Subs,
-            {"-I" + (JitHelper::KERNEL_DIR / "..").string(), "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
-    } else {
-        sphere_contact_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
-            "DEMContactKernels_Blockwise", JitHelper::KERNEL_DIR / "DEMContactKernels_Blockwise.cu", Subs,
-            {"-I" + (JitHelper::KERNEL_DIR / "..").string(), "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
+            "DEMContactKernels_SphereSphere", JitHelper::KERNEL_DIR / "DEMContactKernels_SphereSphere.cu", Subs,
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(),
+             "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
     }
     // Then triangle--bin intersection-related kernels
     {
-        bin_triangle_kernels = std::make_shared<jitify::Program>(std::move(
-            JitHelper::buildProgram("DEMBinTriangleKernels", JitHelper::KERNEL_DIR / "DEMBinTriangleKernels.cu", Subs,
-                                    {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+        bin_triangle_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMBinTriangleKernels", JitHelper::KERNEL_DIR / "DEMBinTriangleKernels.cu", Subs,
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string()})));
     }
     // Then sphere--triangle contact detection-related kernels
     {
         sphTri_contact_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMContactKernels_SphereTriangle", JitHelper::KERNEL_DIR / "DEMContactKernels_SphereTriangle.cu", Subs,
-            {"-I" + (JitHelper::KERNEL_DIR / "..").string(), "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(),
+             "-I" + std::string(CUDA_TOOLKIT_HEADERS)})));
     }
     // Then contact history mapping kernels
     {
-        history_kernels = std::make_shared<jitify::Program>(std::move(
-            JitHelper::buildProgram("DEMHistoryMappingKernels", JitHelper::KERNEL_DIR / "DEMHistoryMappingKernels.cu",
-                                    Subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+        history_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMHistoryMappingKernels", JitHelper::KERNEL_DIR / "DEMHistoryMappingKernels.cu", Subs,
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string()})));
     }
     // Then misc kernels
     {
-        misc_kernels = std::make_shared<jitify::Program>(
-            std::move(JitHelper::buildProgram("DEMMiscKernels", JitHelper::KERNEL_DIR / "DEMMiscKernels.cu", Subs,
-                                              {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+        misc_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMMiscKernels", JitHelper::KERNEL_DIR / "DEMMiscKernels.cu", Subs,
+            {"-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string()})));
     }
 }
 

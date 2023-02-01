@@ -29,9 +29,11 @@ typedef unsigned short int binsSphereTouches_t;
 // This type needs to be large enough to hold the result of a prefix scan of the type binsSphereTouches_t (and objID_t);
 // but normally, it should be the same magnitude as bodyID_t.
 typedef unsigned int binSphereTouchPairs_t;
-// How many spheres a bin can touch, tops? We can assume it will not be too large to save GPU memory. Note this type
-// also doubles as the type for the number of contacts in a bin. NOTE!! Seems uint8_t is not supported by CUB???
+// How many spheres a bin can touch, tops? We can assume it will not be too large to save GPU memory.
 typedef unsigned short int spheresBinTouches_t;
+// How many contact pairs can there be in one bin? Sometimes, the geometry overlap is significant and there can be a
+// lot.
+typedef unsigned int binContactPairs_t;
 // Need to be large enough to hold the number of total contact pairs. In general this number should be in the same
 // magnitude as bodyID_t.
 typedef unsigned int contactPairs_t;

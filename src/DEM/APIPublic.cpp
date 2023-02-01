@@ -1138,15 +1138,31 @@ void DEMSolver::resetWorkerThreads() {
 }
 
 /// When simulation parameters are updated by the user, they can call this method to transfer them to the GPU-side in
-/// mid-simulation. This is relatively light-weight, designed only to change solver behavior and no array re-allocation
-/// and re-compilation will happen.
+/// mid-simulation. This is a relatively deep reset. If you just need to update step size, don't use this.
 void DEMSolver::UpdateSimParams() {
+    // Bin size will be re-calculated (in case you wish to switch to manual).
+    decideBinSize();
+    decideCDMarginStrat();
+
     transferSolverParams();
     transferSimParams();
-    //// TODO: inspect what sim params should be transferred and what should not
+
+    // Jitify max vel finder, in case the policy there changed
+    m_approx_max_vel_func->Initialize(m_subs, true);
+    dT->approxMaxVelFunc = m_approx_max_vel_func;
 
     // Updating sim environment is critical
     dT->announceCritical();
+}
+
+void DEMSolver::UpdateStepSize(float ts) {
+    if (ts < 0) {
+        kT->simParams->h = m_ts_size;
+        dT->simParams->h = m_ts_size;
+    } else {
+        kT->simParams->h = ts;
+        dT->simParams->h = ts;
+    }
 }
 
 void DEMSolver::UpdateClumps() {

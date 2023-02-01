@@ -54,7 +54,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>>& contactMapping,
                       cudaStream_t& this_stream,
                       DEMSolverStateData& scratchPad,
-                      SolverTimers& timers) {
+                      SolverTimers& timers,
+                      kTStateParams& stateParams) {
     // A dumb check
     if (simParams->nSpheresGM == 0) {
         *scratchPad.pNumContacts = 0;
@@ -62,6 +63,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         *scratchPad.pNumPrevSpheres = 0;
         return;
     }
+    // These are needed for the solver to keep tab... But you know, we may have no triangles, so initializing them is
+    // needed.
+    stateParams.maxSphFoundInBin = 0;
+    stateParams.maxTriFoundInBin = 0;
 
     // total bytes needed for temp arrays in contact detection
     size_t CD_temp_arr_bytes = 0;
@@ -175,6 +180,12 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // displayArray<spheresBinTouches_t>(numSpheresBinTouches, *pNumActiveBins);
         // std::cout << "binIDsEachSphereTouches_sorted: ";
         // displayArray<binID_t>(binIDsEachSphereTouches_sorted, *pNumBinSphereTouchPairs);
+
+        // We find the max geo num in a bin for the purpose of adjusting bin size.
+        spheresBinTouches_t* pMaxGeoInBin = (spheresBinTouches_t*)scratchPad.pTempSizeVar3;
+        cubDEMMax<spheresBinTouches_t, DEMSolverStateData>(numSpheresBinTouches, pMaxGeoInBin, *pNumActiveBins,
+                                                           this_stream, scratchPad);
+        stateParams.maxSphFoundInBin = (size_t)(*pMaxGeoInBin);
 
         // Then, scan to find the offsets that are used to index into sphereIDsEachBinTouches_sorted to obtain bin-wise
         // spheres. Note binIDsEachSphereTouches_sorted can retire so we allocate on temp vector 3.
@@ -298,6 +309,13 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // std::cout << "NumActiveBinsForTri: " << *pNumActiveBinsForTri << std::endl;
             // std::cout << "NumActiveBins: " << *pNumActiveBins << std::endl;
 
+            // We find the max geo num in a bin for the purpose of adjusting bin size.
+            // TempVar1 fulfilled its purpose at this point, and now it is used as a temp var.
+            trianglesBinTouches_t* pMaxGeoInBin = (trianglesBinTouches_t*)scratchPad.pTempSizeVar3;
+            cubDEMMax<trianglesBinTouches_t, DEMSolverStateData>(numTrianglesBinTouches, pMaxGeoInBin,
+                                                                 *pNumActiveBinsForTri, this_stream, scratchPad);
+            stateParams.maxTriFoundInBin = (size_t)(*pMaxGeoInBin);
+
             // 6th step: map activeBinIDsForTri to activeBinIDs, so that when we are processing the bins in
             // activeBinIDsForTri, we know where to find the corresponding bin that resides in activeBinIDs, to bring
             // spheres into this bin-wise contact detection sweep.
@@ -339,21 +357,18 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // find the actual pair names. A new temp array is needed for this numSphContactsInEachBin. Note we assume the
         // number of contact in each bin is the same level as the number of spheres in each bin (capped by the same data
         // type).
-        CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(spheresBinTouches_t);
-        spheresBinTouches_t* numSphContactsInEachBin =
-            (spheresBinTouches_t*)scratchPad.allocateTempVector(4, CD_temp_arr_bytes);
-        size_t blocks_needed_for_bins_sph =
-            (solverFlags.useOneBinPerThread)
-                ? (*pNumActiveBins + DEME_KT_CD_NTHREADS_PER_BLOCK - 1) / DEME_KT_CD_NTHREADS_PER_BLOCK
-                : *pNumActiveBins;
+        CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(binContactPairs_t);
+        binContactPairs_t* numSphContactsInEachBin =
+            (binContactPairs_t*)scratchPad.allocateTempVector(4, CD_temp_arr_bytes);
+        size_t blocks_needed_for_bins_sph = *pNumActiveBins;
         // Some quantities and arrays for triangles as well, should we need them
         size_t blocks_needed_for_bins_tri = 0;
-        // spheresBinTouches_t also doubles as the type for the number of tri--sph contact pairs
-        spheresBinTouches_t* numTriSphContactsInEachBin;
+        // binContactPairs_t also doubles as the type for the number of tri--sph contact pairs
+        binContactPairs_t* numTriSphContactsInEachBin;
         if (simParams->nTriGM > 0) {
             blocks_needed_for_bins_tri = *pNumActiveBinsForTri;
-            CD_temp_arr_bytes = (*pNumActiveBinsForTri) * sizeof(spheresBinTouches_t);
-            numTriSphContactsInEachBin = (spheresBinTouches_t*)scratchPad.allocateTempVector(13, CD_temp_arr_bytes);
+            CD_temp_arr_bytes = (*pNumActiveBinsForTri) * sizeof(binContactPairs_t);
+            numTriSphContactsInEachBin = (binContactPairs_t*)scratchPad.allocateTempVector(13, CD_temp_arr_bytes);
         }
 
         if (blocks_needed_for_bins_sph > 0) {
@@ -375,7 +390,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                             sandwichBNode3, *pNumActiveBinsForTri);
                 DEME_GPU_CALL_WATCH_BETA(cudaStreamSynchronize(this_stream));
                 // std::cout << "numTriSphContactsInEachBin: " << std::endl;
-                // displayArray<spheresBinTouches_t>(numTriSphContactsInEachBin, *pNumActiveBinsForTri);
+                // displayArray<binContactPairs_t>(numTriSphContactsInEachBin, *pNumActiveBinsForTri);
             }
 
             //// TODO: sphere should have jitified and non-jitified part. Use a component ID > max_comp_id to signal
@@ -388,21 +403,23 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
 
             // Prescan numSphContactsInEachBin to get the final sphSphContactReportOffsets and
             // triSphContactReportOffsets. New vectors are needed.
-            CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(contactPairs_t);
+            // The extra entry is maybe superfluous and is for extra safety, in case the 2 sweeps do not agree with each
+            // other.
+            CD_temp_arr_bytes = (*pNumActiveBins + 1) * sizeof(contactPairs_t);
             contactPairs_t* sphSphContactReportOffsets =
                 (contactPairs_t*)scratchPad.allocateTempVector(5, CD_temp_arr_bytes);
-            cubDEMPrefixScan<spheresBinTouches_t, contactPairs_t, DEMSolverStateData>(
+            cubDEMPrefixScan<binContactPairs_t, contactPairs_t, DEMSolverStateData>(
                 numSphContactsInEachBin, sphSphContactReportOffsets, *pNumActiveBins, this_stream, scratchPad);
             contactPairs_t* triSphContactReportOffsets;
             if (simParams->nTriGM > 0) {
-                CD_temp_arr_bytes = (*pNumActiveBinsForTri) * sizeof(contactPairs_t);
+                CD_temp_arr_bytes = (*pNumActiveBinsForTri + 1) * sizeof(contactPairs_t);
                 triSphContactReportOffsets = (contactPairs_t*)scratchPad.allocateTempVector(14, CD_temp_arr_bytes);
-                cubDEMPrefixScan<spheresBinTouches_t, contactPairs_t, DEMSolverStateData>(
+                cubDEMPrefixScan<binContactPairs_t, contactPairs_t, DEMSolverStateData>(
                     numTriSphContactsInEachBin, triSphContactReportOffsets, *pNumActiveBinsForTri, this_stream,
                     scratchPad);
             }
             // DEME_DEBUG_PRINTF("Num contacts each bin:");
-            // DEME_DEBUG_EXEC(displayArray<spheresBinTouches_t>(numSphContactsInEachBin, *pNumActiveBins));
+            // DEME_DEBUG_EXEC(displayArray<binContactPairs_t>(numSphContactsInEachBin, *pNumActiveBins));
             // DEME_DEBUG_PRINTF("Tri contact report offsets:");
             // DEME_DEBUG_EXEC(displayArray<contactPairs_t>(triSphContactReportOffsets, *pNumActiveBinsForTri));
             // DEME_DEBUG_PRINTF("Family number:");
@@ -412,10 +429,14 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             size_t nSphereGeoContact = *scratchPad.pNumContacts;
             size_t nSphereSphereContact = (size_t)numSphContactsInEachBin[*pNumActiveBins - 1] +
                                           (size_t)sphSphContactReportOffsets[*pNumActiveBins - 1];
-            size_t nTriSphereContact = (simParams->nTriGM > 0)
-                                           ? (size_t)numTriSphContactsInEachBin[*pNumActiveBinsForTri - 1] +
-                                                 (size_t)triSphContactReportOffsets[*pNumActiveBinsForTri - 1]
-                                           : 0;
+            sphSphContactReportOffsets[*pNumActiveBins] = nSphereSphereContact;
+
+            size_t nTriSphereContact = 0;
+            if (simParams->nTriGM > 0) {
+                nTriSphereContact = (size_t)numTriSphContactsInEachBin[*pNumActiveBinsForTri - 1] +
+                                    (size_t)triSphContactReportOffsets[*pNumActiveBinsForTri - 1];
+                triSphContactReportOffsets[*pNumActiveBinsForTri] = nTriSphereContact;
+            }
             // std::cout << "nSphereGeoContact: " << nSphereGeoContact << std::endl;
             // std::cout << "nSphereSphereContact: " << nSphereSphereContact << std::endl;
 
@@ -475,6 +496,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector(2, id_arr_bytes);
 
             //// TODO: But do I have to SortByKey twice?? Can I zip these value arrays together??
+            // Although it is stupid, do pay attention to that it does leverage the fact that RadixSort is stable.
             cubDEMSortByKeys<bodyID_t, bodyID_t, DEMSolverStateData>(granData->idGeometryA, idA_sorted,
                                                                      granData->idGeometryB, idB_sorted,
                                                                      *scratchPad.pNumContacts, this_stream, scratchPad);
