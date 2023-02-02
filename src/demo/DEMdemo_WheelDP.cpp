@@ -20,7 +20,7 @@ const double math_PI = 3.1415927;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_WheelDP_Force_mu0.5_750N";
+    out_dir += "/DEMdemo_WheelDP_Force_mu0.5_480N";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -35,7 +35,7 @@ int main() {
     float wheel_width = 0.25;
     float g_height = 0.025;
     float wheel_mass = 11.;
-    float total_pressure = 750.0;
+    float total_pressure = 480.0;
     // float total_pressure = 480.0;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
