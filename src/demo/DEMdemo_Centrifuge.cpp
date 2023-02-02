@@ -135,7 +135,6 @@ int main() {
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEMSim.SetCDUpdateFreq(25);
-    // DEMSim.SetExpandFactor(1e-3);
     DEMSim.SetMaxVelocity("auto");
     // This might be added for safety: The particles hitting the centrifuge can suddenly change velocity and this change
     // can be somewhat larger than normal cases

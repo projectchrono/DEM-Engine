@@ -18,14 +18,14 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(STEP_METRIC);
+    DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
 
     // E, nu, CoR, mu, Crr...
-    auto mat_type_mixer = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
-    auto mat_type_granular = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
+    auto mat_type_mixer = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.0}});
+    auto mat_type_granular = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.0}});
 
     float step_size = 5e-6;
     const double world_size = 1;
@@ -74,7 +74,7 @@ int main() {
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
-    DEMSim.SetCDUpdateFreq(20);
+    DEMSim.SetCDUpdateFreq(40);
     // Mixer has a big angular velocity-contributed linear speed at its blades, this is something the solver do not
     // account for, for now. And that means it needs to be added as an estimated value.
     DEMSim.SetExpandSafetyAdder(2.0);

@@ -36,11 +36,15 @@ class ManagerStatistics {
 // production-consumption interplay
 class ThreadManager {
   public:
+    // dT's
     std::atomic<int64_t> stampLastDynamicUpdateProdDate;
     std::atomic<int64_t> currentStampOfDynamic;
     std::atomic<int64_t> dynamicMaxFutureDrift;
-    std::atomic<int64_t> kinematicIngredProdDateStamp;
     std::atomic<bool> dynamicDone;
+
+    // kT's
+    std::atomic<int64_t> kinematicIngredProdDateStamp;  // dT tags this when sending it to kT
+    std::atomic<int64_t> kinematicMaxFutureDrift;       // kT tags this to its produce before shipping
 
     std::atomic<bool> dynamicOwned_Prod2ConsBuffer_isFresh;
     std::atomic<bool> kinematicOwned_Cons2ProdBuffer_isFresh;
@@ -78,6 +82,8 @@ class ThreadManager {
 
     ~ThreadManager() {}
 
+    inline int64_t getStepsSinceLastUpdate() const { return currentStampOfDynamic - stampLastDynamicUpdateProdDate; }
+
     inline bool dynamicShouldWait() const {
         // do not hold dynamic back under the following circustances:
         // * the update frequency is negative, dynamic can drift into future
@@ -90,7 +96,8 @@ class ThreadManager {
         // dynamicMaxFutureDrift is the max number of cycles dT can run with no new information form kT,
         // defaulting to -1 (just keep going, no waiting for kT).
         bool shouldWait =
-            (currentStampOfDynamic > stampLastDynamicUpdateProdDate + dynamicMaxFutureDrift ? true : false);
+            (currentStampOfDynamic > stampLastDynamicUpdateProdDate + (dynamicMaxFutureDrift) ? true : false);
+        // Note we do have to double-wait when we do wait.
         return shouldWait;
     }
 };

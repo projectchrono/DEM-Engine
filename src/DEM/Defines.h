@@ -324,6 +324,7 @@ struct DEMDataDT {
     contactPairs_t* contactMapping_buffer;
 
     // pointer to remote buffer where kinematic thread stores work-order data provided by the dynamic thread
+    unsigned int* pKTOwnedBuffer_maxDrift = NULL;
     float* pKTOwnedBuffer_maxVel = NULL;
     float* pKTOwnedBuffer_ts = NULL;
     voxelID_t* pKTOwnedBuffer_voxelID = NULL;
@@ -353,6 +354,9 @@ struct DEMDataDT {
     // registered on granular particles with wildcards.
     float* contactWildcards[DEME_MAX_WILDCARD_NUM];
     float* ownerWildcards[DEME_MAX_WILDCARD_NUM];
+
+    // dT believes this amount of future drift is ideal
+    unsigned int perhapsIdealFutureDrift = 0;
 };
 
 // A struct that holds pointers to data arrays that kT uses
@@ -369,10 +373,12 @@ struct DEMDataKT {
     oriQ_t* oriQz;
 
     // kT-owned buffer pointers, for itself's usage
-    float maxVel_buffer;  // buffer for the current max vel sent by dT
-    float maxVel;         // kT's own storage of max vel
-    float ts_buffer;      // buffer for the current ts size sent by dT
-    float ts;             // kT's own storage of ts size
+    float maxVel_buffer;           // buffer for the current max vel sent by dT
+    float maxVel;                  // kT's own storage of max vel
+    float ts_buffer;               // buffer for the current ts size sent by dT
+    float ts;                      // kT's own storage of ts size
+    unsigned int maxDrift_buffer;  // buffer for max dT future drift steps
+    unsigned int maxDrift;         // kT's own storage for max future drift
     voxelID_t* voxelID_buffer;
     subVoxelPos_t* locX_buffer;
     subVoxelPos_t* locY_buffer;
@@ -443,6 +449,10 @@ struct DEMDataKT {
 const float AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE = 10.f;
 // After changing bin size, this many kT steps are not included in the performance gauging.
 const unsigned int NUM_STEPS_RESERVED_AFTER_CHANGING_BIN_SIZE = 5;
+// Drift tweak step size
+const unsigned int FUTURE_DRIFT_TWEAK_STEP_SIZE = 1;
+// After purging update freq history, this many dT steps are not included in the performance gauging.
+const unsigned int NUM_STEPS_RESERVED_AFTER_RENEWING_FREQ_TUNER = 10;
 
 }  // namespace deme
 

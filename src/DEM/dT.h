@@ -561,6 +561,10 @@ class DEMDynamicThread {
     // If kT provides fresh CD results, we unpack and use it
     inline void ifProduceFreshThenUseItAndSendNewOrder();
     inline void ifProduceFreshThenUseIt();
+    inline void unpack_impl();
+
+    // Change sim params based on dT's experience, if needed
+    inline void calibrateParams();
 
     // Determine the max vel for this cycle, kT needs it
     inline float* determineSysMaxVel();
@@ -584,6 +588,42 @@ class DEMDynamicThread {
     // std::shared_ptr<jitify::Program> quarry_stats_kernels;
     std::shared_ptr<jitify::Program> mod_kernels;
     std::shared_ptr<jitify::Program> misc_kernels;
+
+    // Adjuster for update freq
+    class AccumStepUpdater {
+      private:
+        unsigned int num_steps = 0;
+        unsigned int num_updates = 0;
+        unsigned int cached_size = 200;
+
+      public:
+        AccumStepUpdater() {}
+        ~AccumStepUpdater() {}
+        inline void AddUpdate() { num_updates++; }
+        inline void AddStep() { num_steps++; }
+        inline bool Query(unsigned int& ideal) {
+            if (num_updates > NUM_STEPS_RESERVED_AFTER_RENEWING_FREQ_TUNER) {
+                // * 2 because double update freq is an ideal future drift
+                ideal = (unsigned int)((double)num_steps / num_updates * 2);
+                if (num_updates >= cached_size) {
+                    Clear();
+                }
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        // Return this accumulator to initial state
+        void Clear() {
+            num_steps = 0;
+            num_updates = 0;
+        }
+
+        void SetCacheSize(unsigned int n) { cached_size = n; }
+    };
+    AccumStepUpdater accumStepUpdater = AccumStepUpdater();
+
 };  // dT ends
 
 }  // namespace deme

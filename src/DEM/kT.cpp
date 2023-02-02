@@ -122,6 +122,12 @@ inline void DEMKinematicThread::unpackMyBuffer() {
 
     DEME_GPU_CALL(cudaMemcpy(&(granData->ts), &(granData->ts_buffer), sizeof(float), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(&(granData->maxVel), &(granData->maxVel_buffer), sizeof(float), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(&(granData->maxDrift), &(granData->maxDrift_buffer), sizeof(unsigned int),
+                             cudaMemcpyDeviceToDevice));
+
+    // Whatever drift value dT says, kT listens
+    pSchedSupport->kinematicMaxFutureDrift = granData->maxDrift;
+
     // Check if max velocity is exceeded
     if (granData->maxVel > simParams->errOutVel) {
         DEME_ERROR(
@@ -140,9 +146,11 @@ inline void DEMKinematicThread::unpackMyBuffer() {
             anomalies.over_max_vel = true;
             max_vel = simParams->approxMaxVel;
         }
-        // If dT decides to change ts size, it already informed kT then
+        // If dT decides to change ts size, it already informed kT then. Note the way dT currently does it, it can go 1
+        // or 2 steps more than max drift... I am aware that this will cause beta to change even when it is running in a
+        // sync-ed fashion. But that is not a big deal.
         simParams->beta = (max_vel * simParams->expSafetyMulti + simParams->expSafetyAdder) *
-                          (granData->ts_buffer * solverFlags.maxFutureDrift);
+                          (granData->ts_buffer * (granData->maxDrift + 2));
     }
 
     DEME_DEBUG_PRINTF("kT received a velocity update: %.6g", granData->maxVel);
