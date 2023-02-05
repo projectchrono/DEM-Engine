@@ -435,7 +435,7 @@ struct SolverFlags {
     unsigned int upperBoundFutureDrift = 5000;
     // (targetDriftMoreThanAvg + targetDriftMultipleOfAvg * actual_dT_steps_per_kT_step) is used to calculate contact
     // margin size
-    float targetDriftMoreThanAvg = 3.;
+    float targetDriftMoreThanAvg = 4.;
     float targetDriftMultipleOfAvg = 1.1;
 
     // Whether the solver auto-update those sim params
