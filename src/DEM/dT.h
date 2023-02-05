@@ -343,6 +343,8 @@ class DEMDynamicThread {
     float3 getOwnerAcc(bodyID_t ownerID) const;
     /// Get this owner's angular acceleration
     float3 getOwnerAngAcc(bodyID_t ownerID) const;
+    // Get the current auto-adjusted update freq
+    float getUpdateFreq() const;
 
     /// Set this owner's position in user unit
     void setOwnerPos(bodyID_t ownerID, float3 pos);

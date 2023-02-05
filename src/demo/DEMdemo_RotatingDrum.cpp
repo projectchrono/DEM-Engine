@@ -114,12 +114,15 @@ int main() {
     auto planes_tracker = DEMSim.Track(top_bot_planes);
 
     float step_size = 5e-6;
+    auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
     DEMSim.InstructBoxDomainDimension(5, 5, 5);
     DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
-    // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEMSim.SetCDUpdateFreq(50);
+    // A minor tweak: if this number is large, then the update freq auto-adjust algorithm sets the freq a bit higher,
+    // and it is even less likely that dT waits for an update
+    DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1.1);
+    DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(3);
     DEMSim.SetMaxVelocity(3.);
     DEMSim.SetInitBinSizeAsMultipleOfSmallestSphere(15);
     DEMSim.Initialize();
@@ -138,8 +141,12 @@ int main() {
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (double t = 0; t < (double)time_end; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
+            float max_v = max_v_finder->GetValue();
             std::cout << "Frame: " << currframe << std::endl;
             DEMSim.ShowThreadCollaborationStats();
+            std::cout << "Solver's current update frequency (auto-adapted): " << DEMSim.GetUpdateFreq() << std::endl;
+            std::cout << "Maximum system velocity: " << max_v << std::endl;
+            std::cout << "------------------------------------" << std::endl;
             char filename[100];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
             DEMSim.WriteSphereFile(std::string(filename));

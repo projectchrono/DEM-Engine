@@ -214,6 +214,20 @@ void DEMSolver::SetSimTime(double time) {
     dT->setSimTime(time);
 }
 
+float DEMSolver::GetUpdateFreq() const {
+    return dT->getUpdateFreq();
+}
+
+void DEMSolver::SetCDNumStepsMaxDriftHistorySize(unsigned int n) {
+    if (n > NUM_STEPS_RESERVED_AFTER_RENEWING_FREQ_TUNER) {
+        max_drift_gauge_history_size = n;
+    } else {
+        DEME_WARNING(
+            "SetCDNumStepsMaxDriftHistorySize has no effect, since the argument supplied needs to be larger than %u.",
+            NUM_STEPS_RESERVED_AFTER_RENEWING_FREQ_TUNER);
+    }
+}
+
 void DEMSolver::SetMaxVelocity(float max_vel, bool force) {
     if (force) {
         m_max_v_finder_type = MARGIN_FINDER_TYPE::MANUAL_MAX;

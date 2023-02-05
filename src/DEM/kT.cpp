@@ -150,7 +150,7 @@ inline void DEMKinematicThread::unpackMyBuffer() {
         // or 2 steps more than max drift... I am aware that this will cause beta to change even when it is running in a
         // sync-ed fashion. But that is not a big deal.
         simParams->beta = (max_vel * simParams->expSafetyMulti + simParams->expSafetyAdder) *
-                          (granData->ts_buffer * (granData->maxDrift + 2));
+                          (granData->ts_buffer * (granData->maxDrift));
     }
 
     DEME_DEBUG_PRINTF("kT received a velocity update: %.6g", granData->maxVel);
