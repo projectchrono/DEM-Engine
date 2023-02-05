@@ -20,8 +20,8 @@ const double math_PI = 3.1415927;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled_110kg";
-    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
+    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled_110kg";
+    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled";
     std::filesystem::create_directory(out_dir);
 
@@ -36,16 +36,16 @@ int main() {
     float wheel_rad = 0.25;
     float wheel_width = 0.2;
     float wheel_mass = 11.; // 8.7;
-    float total_pressure = 110. * 9.81; // 22. * 9.81;
+    float total_pressure = 22. * 9.81;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
-    // float Slopes_deg[] = {2, 5, 10, 15, 20, 25};
+    float Slopes_deg[] = {2, 5, 10, 15, 20, 25};
     // float Slopes_deg[] = {0, 2.5, 5, 7.5, 10, 12.5};
-    float Slopes_deg[] = {12.5};
+    // float Slopes_deg[] = {12.5};
     unsigned int run_mode = 0;
-    unsigned int currframe = 410;
+    unsigned int currframe = 0;
 
     for (float Slope_deg : Slopes_deg) {
         DEMSolver DEMSim;
@@ -210,8 +210,8 @@ int main() {
         // auto compressor_tracker = DEMSim.Track(compressor);
 
         // Families' prescribed motions (Earth)
-        float w_r = 0.8 * 2.45;
-        // float w_r = 0.8;
+        // float w_r = 0.8 * 2.45;
+        float w_r = 0.8;
         float v_ref = w_r * wheel_rad;
         double G_ang = Slope_deg * math_PI / 180.;
 
@@ -284,8 +284,8 @@ int main() {
                 std::cout << "Outputting frame: " << currframe << std::endl;
                 sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
                 sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
-                DEMSim.WriteSphereFile(std::string(filename));
-                DEMSim.WriteMeshFile(std::string(meshname));
+                // DEMSim.WriteSphereFile(std::string(filename));
+                // DEMSim.WriteMeshFile(std::string(meshname));
                 DEMSim.ShowThreadCollaborationStats();
                 currframe++;
             }
