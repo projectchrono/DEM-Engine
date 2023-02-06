@@ -2165,6 +2165,10 @@ void DEMDynamicThread::setSimTime(double time) {
     simParams->timeElapsed = time;
 }
 
+float DEMDynamicThread::getUpdateFreq() const {
+    return (float)((pSchedSupport->dynamicMaxFutureDrift).load()) / 2.;
+}
+
 void DEMDynamicThread::setOwnerWildcardValue(unsigned int wc_num, const std::vector<float>& vals) {
     size_t count = 0;
     for (size_t i = 0; i < simParams->nOwnerBodies; i++) {

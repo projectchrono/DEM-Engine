@@ -232,13 +232,9 @@ __global__ void getNumberOfSphTriContactsEachBin(deme::DEMSimParams* simParams,
                         triBNode1[ind], triBNode2[ind], triBNode3[ind], sphXYZ, myRadius, normal, depth, cntPnt);
 
                     // Note the contact point must be calculated through the original triangle, not the 2 phantom
-                    // triangles; or we will have double count problems.
+                    // triangles; or we will have double count problems. Use the first triangle as standard.
                     if (in_contact_A || in_contact_B) {
-                        float3 triNode1 = (triANode1[ind] + triBNode1[ind]) / 2.;
-                        // Don't forget node 2 and 3 are swapped for triB
-                        float3 triNode2 = (triANode2[ind] + triBNode3[ind]) / 2.;
-                        float3 triNode3 = (triANode3[ind] + triBNode2[ind]) / 2.;
-                        snap_to_face(triNode1, triNode2, triNode3, sphXYZ, cntPnt);
+                        snap_to_face(triANode1[ind], triANode2[ind], triANode3[ind], sphXYZ, cntPnt);
                         deme::binID_t contactPntBin = getPointBinID<deme::binID_t>(
                             cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize, simParams->nbX, simParams->nbY);
                         if (contactPntBin == binID) {
@@ -372,13 +368,9 @@ __global__ void populateTriSphContactsEachBin(deme::DEMSimParams* simParams,
                         triBNode1[ind], triBNode2[ind], triBNode3[ind], sphXYZ, myRadius, normal, depth, cntPnt);
 
                     // Note the contact point must be calculated through the original triangle, not the 2 phantom
-                    // triangles; or we will have double count problems.
+                    // triangles; or we will have double count problems. Use the first triangle as standard.
                     if (in_contact_A || in_contact_B) {
-                        float3 triNode1 = (triANode1[ind] + triBNode1[ind]) / 2.;
-                        // Don't forget node 2 and 3 are swapped for triB
-                        float3 triNode2 = (triANode2[ind] + triBNode3[ind]) / 2.;
-                        float3 triNode3 = (triANode3[ind] + triBNode2[ind]) / 2.;
-                        snap_to_face(triNode1, triNode2, triNode3, sphXYZ, cntPnt);
+                        snap_to_face(triANode1[ind], triANode2[ind], triANode3[ind], sphXYZ, cntPnt);
                         deme::binID_t contactPntBin = getPointBinID<deme::binID_t>(
                             cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize, simParams->nbX, simParams->nbY);
                         if (contactPntBin == binID) {
