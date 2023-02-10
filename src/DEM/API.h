@@ -162,9 +162,8 @@ class DEMSolver {
     /// Get the current force model.
     std::shared_ptr<DEMForceModel> GetContactForceModel() { return m_force_model; }
 
-    /// Instruct the solver if contact pair arrays should be sorted (based on the types of contacts) before usage. This
-    /// can potentially make dT run faster. This is currently not implemented due to technical difficulties.
-    void SetSortContactPairs(bool use_sort = true) { should_sort_contacts = use_sort; }
+    /// Instruct the solver if contact pair arrays should be sorted (based on the types of contacts) before usage.
+    void SetSortContactPairs(bool use_sort) { should_sort_contacts = use_sort; }
 
     /// Instruct the solver to rearrange and consolidate clump templates information, then jitify it into GPU kernels
     /// (if set to true), rather than using flattened sphere component configuration arrays whose entries are associated
@@ -711,7 +710,7 @@ class DEMSolver {
     // Verbosity
     VERBOSITY verbosity = INFO;
     // If true, dT should sort contact arrays (based on contact type) before usage (not implemented)
-    bool should_sort_contacts = false;
+    bool should_sort_contacts = true;
     // If true, the solvers may need to do a per-step sweep to apply family number changes
     bool famnum_can_change_conditionally = false;
 
@@ -852,8 +851,8 @@ class DEMSolver {
     float auto_adjust_upper_proactive_ratio = 1.0;
     float auto_adjust_lower_proactive_ratio = 0.3;
     unsigned int upper_bound_future_drift = 5000;
-    float max_drift_ahead_of_avg_drift = 4.;
-    float max_drift_multiple_of_avg_drift = 1.1;
+    float max_drift_ahead_of_avg_drift = 6.;
+    float max_drift_multiple_of_avg_drift = 1.2;
     unsigned int max_drift_gauge_history_size = 200;
 
     // See SetNoForceRecord

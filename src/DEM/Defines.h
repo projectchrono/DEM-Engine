@@ -454,6 +454,10 @@ const unsigned int FUTURE_DRIFT_TWEAK_STEP_SIZE = 1;
 // After purging update freq history, this many dT steps are not included in the performance gauging.
 const unsigned int NUM_STEPS_RESERVED_AFTER_RENEWING_FREQ_TUNER = 10;
 
+// #ifndef CUB_IGNORE_DEPRECATED_API
+// #define CUB_IGNORE_DEPRECATED_API
+// #endif
+
 }  // namespace deme
 
 #endif
