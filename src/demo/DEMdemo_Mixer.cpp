@@ -79,6 +79,9 @@ int main() {
     // account for, for now. And that means it needs to be added as an estimated value.
     DEMSim.SetExpandSafetyAdder(2.0);
     DEMSim.SetInitBinSize(20 * granular_rad);
+    DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1.2);
+    DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(6);
+    DEMSim.SetSortContactPairs(true);
     DEMSim.Initialize();
 
     path out_dir = current_path();
@@ -109,6 +112,7 @@ int main() {
 
         float max_v = max_v_finder->GetValue();
         std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
+        std::cout << "Solver's current update frequency (auto-adapted): " << DEMSim.GetUpdateFreq() << std::endl;
 
         DEMSim.DoDynamics(frame_time);
         DEMSim.ShowThreadCollaborationStats();
@@ -117,6 +121,8 @@ int main() {
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
     std::cout << (time_sec.count()) / sim_end / (1e-5 / step_size)
               << " seconds (wall time) to finish 1e5 steps' simulation" << std::endl;
+
+    DEMSim.ShowTimingStats();
 
     std::cout << "DEMdemo_Mixer exiting..." << std::endl;
     return 0;

@@ -58,3 +58,31 @@ __global__ void buildPersistentMap(deme::geoSphereTouches_t* new_idA_runlength_f
         }
     }
 }
+
+__global__ void lineNumbers(deme::contactPairs_t* arr, size_t n) {
+    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        arr[myID] = myID;
+    }
+}
+
+__global__ void convertToAndFrom(deme::contactPairs_t* old_arr_unsort_to_sort_map,
+                                 deme::contactPairs_t* converted_map,
+                                 size_t n) {
+    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        deme::contactPairs_t map_from = old_arr_unsort_to_sort_map[myID];
+        converted_map[map_from] = myID;
+    }
+}
+
+__global__ void rearrangeMapping(deme::contactPairs_t* map_sorted,
+                                 deme::contactPairs_t* old_arr_unsort_to_sort_map,
+                                 size_t n) {
+    deme::contactPairs_t myID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (myID < n) {
+        deme::contactPairs_t map_to = map_sorted[myID];
+        if (map_to != deme::NULL_MAPPING_PARTNER)
+            map_sorted[myID] = old_arr_unsort_to_sort_map[map_to];
+    }
+}
