@@ -21,6 +21,7 @@ const double math_PI = 3.1415927;
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled_110kg";
+    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_DownScaled";
     out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled";
     std::filesystem::create_directory(out_dir);
@@ -29,7 +30,7 @@ int main() {
     float G_mag = 9.81;
     float step_size = 1e-6;
     double world_size_y = 0.52;
-    double world_size_x = 4.08;
+    double world_size_x = 2.04;
     double world_size_z = 4.0;
 
     // Define the wheel geometry
@@ -41,9 +42,9 @@ int main() {
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
-    float Slopes_deg[] = {2, 5, 10, 15, 20, 25};
+    // float Slopes_deg[] = {2, 5, 10, 15, 20, 25};
     // float Slopes_deg[] = {0, 2.5, 5, 7.5, 10, 12.5};
-    // float Slopes_deg[] = {12.5};
+    float Slopes_deg[] = {25, 20, 15, 10};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
 
@@ -159,7 +160,7 @@ int main() {
             std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
             for (size_t i = 0; i < in_xyz.size(); i++) {
                 if (std::abs(in_xyz.at(i).y) > (world_size_y - 0.05) / 2 ||
-                    std::abs(in_xyz.at(i).x) > (world_size_x) / 2)
+                    std::abs(in_xyz.at(i).x) > (world_size_x - 0.06) / 2)
                     elem_to_remove.at(i) = 1;
             }
             in_xyz.erase(std::remove_if(in_xyz.begin(), in_xyz.end(),
@@ -250,9 +251,10 @@ int main() {
         std::cout << "Output at " << fps << " FPS" << std::endl;
 
         // Put the wheel in place, then let the wheel sink in initially
-        float init_x = -1.0;
-        if (Slope_deg < 14) {
-            init_x = -1.6;
+        float corr = 1.0;
+        float init_x = -1.0 + corr;
+        if (Slope_deg < 18) {
+            init_x = -1.6 + corr;
         }
         // Put the wheel in place, then let the wheel sink in initially
         float max_z = max_z_finder->GetValue();

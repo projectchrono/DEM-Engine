@@ -22,7 +22,7 @@ int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
     // out_dir += "/DEMdemo_Temp";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon_SamePressureAsEarth";
-    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon_110kg";
+    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -44,7 +44,8 @@ int main() {
 
     float moon_added_pressure = (img_mass * 1.62 - wheel_mass * G_mag);
 
-    float Slopes_deg[] = {0, 2, 5, 10, 15, 20, 25};
+    // float Slopes_deg[] = {0, 2, 5, 10, 15, 20, 25};
+    float Slopes_deg[] = {25, 20, 15, 10, 5, 2, 0};
     // float Slopes_deg[] = {0, 2.5, 5, 7.5, 10, 12.5};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
@@ -60,9 +61,9 @@ int main() {
         // E, nu, CoR, mu, Crr...
         auto mat_type_wall = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.9}, {"Crr", 0.00}});
         
-        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.5}, {"Crr", 0.00}});
+        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.2}, {"Crr", 0.00}});
         auto mat_type_terrain =
-            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.5}, {"Crr", 0.00}});
+            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.2}, {"Crr", 0.00}});
 
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_wall);
