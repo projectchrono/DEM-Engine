@@ -442,6 +442,21 @@ inline void hostPositionToVoxelID(T1& ID,
     ID += voxelNumZ << (nvXp2 + nvYp2);
 }
 
+template <typename T1, typename T2>
+inline bool inBoxRegion(const T1& X,
+                        const T1& Y,
+                        const T1& Z,
+                        const std::pair<T2, T2>& Xrange,
+                        const std::pair<T2, T2>& Yrange,
+                        const std::pair<T2, T2>& Zrange) {
+    if ((X >= Xrange.first) && (X <= Xrange.second) && (Y >= Yrange.first) && (Y <= Yrange.second) &&
+        (Z >= Zrange.first) && (Z <= Zrange.second)) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 template <typename T1>
 std::vector<T1> hostUniqueVector(const std::vector<T1>& vec) {
     std::vector<T1> unique_vec(vec);

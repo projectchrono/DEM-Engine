@@ -85,6 +85,7 @@ class DEMTracker {
   private:
     void assertMesh(const std::string& name);
     void assertMeshFaceSize(size_t input_length, const std::string& name);
+    void assertOwnerSize(size_t input_length, const std::string& name);
     // Its parent DEMSolver system
     DEMSolver* sys;
 
@@ -107,6 +108,10 @@ class DEMTracker {
     float3 Vel(size_t offset = 0);
     /// Get the quaternion that represents the orientation of this tracked object's own coordinate system.
     float4 OriQ(size_t offset = 0);
+    /// @brief Get the family number of the tracked object.
+    /// @param offset The offset of the entites to get family number out of.
+    /// @return The family number.
+    unsigned int GetFamily(size_t offset = 0);
 
     /// @brief Get the clumps that are in contact with this tracked owner as a vector.
     /// @param offset Offset to the first item this tracker is tracking. Default is 0.
@@ -133,6 +138,16 @@ class DEMTracker {
     void AddAcc(float3 force, size_t offset = 0);
     /// Change the size of clump entities
     void ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors);
+    /// @brief Change the family numbers of all the entities tracked by this tracker.
+    /// @param fam_num Family number to change to.
+    void SetFamily(unsigned int fam_num);
+    /// @brief Change the family numbers of all the entities tracked by this tracker.
+    /// @param fam_nums The family numbers to change to for each entity.
+    void SetFamily(const std::vector<unsigned int>& fam_nums);
+    /// @brief Change the family number of one entities tracked by this tracker.
+    /// @param fam_num Family number to change to.
+    /// @param offset The offset to this entites. If first entites, input 0.
+    void SetFamily(unsigned int fam_num, size_t offset);
 
     /// Apply the mesh deformation such that the tracked mesh is replaced by the new_mesh. This affects triangle facets'
     /// relative positions wrt the mesh center (CoM) only; mesh's overall position/rotation in simulation is not

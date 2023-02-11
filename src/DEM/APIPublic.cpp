@@ -188,6 +188,9 @@ float3 DEMSolver::GetOwnerAcc(bodyID_t ownerID) const {
 float3 DEMSolver::GetOwnerAngAcc(bodyID_t ownerID) const {
     return dT->getOwnerAngAcc(ownerID);
 }
+unsigned int DEMSolver::GetOwnerFamily(bodyID_t ownerID) const {
+    return (unsigned int)(+(dT->familyID.at(ownerID)));
+}
 
 void DEMSolver::SetOwnerPosition(bodyID_t ownerID, float3 pos) {
     dT->setOwnerPos(ownerID, pos);
@@ -200,6 +203,10 @@ void DEMSolver::SetOwnerVelocity(bodyID_t ownerID, float3 vel) {
 }
 void DEMSolver::SetOwnerOriQ(bodyID_t ownerID, float4 oriQ) {
     dT->setOwnerOriQ(ownerID, oriQ);
+}
+void DEMSolver::SetOwnerFamily(bodyID_t ownerID, family_t fam) {
+    kT->familyID.at(ownerID) = fam;
+    dT->familyID.at(ownerID) = fam;
 }
 void DEMSolver::SetTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite) {
     dT->setTriNodeRelPos(start, triangles, overwrite);
@@ -1016,6 +1023,41 @@ void DEMSolver::WriteMeshFile(const std::string& outfilename) const {
         default:
             DEME_ERROR(
                 "Mesh output file format is unknown or not implemented. Please re-set it via SetMeshOutputFormat.");
+    }
+}
+
+void DEMSolver::ChangeClumpFamily(unsigned int fam_num,
+                                  const std::pair<double, double>& X,
+                                  const std::pair<double, double>& Y,
+                                  const std::pair<double, double>& Z,
+                                  const std::set<unsigned int>& orig_fam) {
+    for (bodyID_t ownerID = 0; ownerID < nOwnerBodies; ownerID++) {
+        const ownerType_t this_type = dT->ownerTypes.at(ownerID);
+        if (this_type != OWNER_T_CLUMP)
+            continue;
+        float3 CoM;
+        voxelID_t voxel = dT->voxelID.at(ownerID);
+        subVoxelPos_t subVoxX = dT->locX.at(ownerID);
+        subVoxelPos_t subVoxY = dT->locY.at(ownerID);
+        subVoxelPos_t subVoxZ = dT->locZ.at(ownerID);
+        hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(CoM.x, CoM.y, CoM.z, voxel, subVoxX, subVoxY, subVoxZ,
+                                                               dT->simParams->nvXp2, dT->simParams->nvYp2,
+                                                               dT->simParams->voxelSize, dT->simParams->l);
+        CoM.x += dT->simParams->LBFX;
+        CoM.y += dT->simParams->LBFY;
+        CoM.z += dT->simParams->LBFZ;
+
+        // In region. This can be generalized in future versions.
+        if (inBoxRegion(CoM.x, CoM.y, CoM.z, X, Y, Z)) {
+            if (orig_fam.size() == 0) {
+                dT->familyID.at(ownerID) = fam_num;
+            } else {
+                unsigned int old_fam = dT->familyID.at(ownerID);
+                if (check_exist(orig_fam, old_fam)) {
+                    dT->familyID.at(ownerID) = fam_num;
+                }
+            }
+        }
     }
 }
 

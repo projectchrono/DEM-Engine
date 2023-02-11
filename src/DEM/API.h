@@ -317,6 +317,10 @@ class DEMSolver {
     float3 GetOwnerAcc(bodyID_t ownerID) const;
     /// Get the angular acceleration of a owner
     float3 GetOwnerAngAcc(bodyID_t ownerID) const;
+    /// @brief Get the family number of a owner.
+    /// @param ownerID The owner's ID.
+    /// @return The family number.
+    unsigned int GetOwnerFamily(bodyID_t ownerID) const;
     /// Set position of a owner
     void SetOwnerPosition(bodyID_t ownerID, float3 pos);
     /// Set angular velocity of a owner
@@ -325,6 +329,10 @@ class DEMSolver {
     void SetOwnerVelocity(bodyID_t ownerID, float3 vel);
     /// Set quaternion of a owner
     void SetOwnerOriQ(bodyID_t ownerID, float4 oriQ);
+    /// @brief Set the family number of a owner.
+    /// @param ownerID The ID (offset) of the owner.
+    /// @param fam Family number.
+    void SetOwnerFamily(bodyID_t ownerID, family_t fam);
     /// Rewrite the relative positions of the flattened triangle soup, starting from `start', using triangle nodal
     /// positions in `triangles'. If `overwrite' is true, then it is overwriting the existing nodal info; otherwise it
     /// just adds to it.
@@ -461,6 +469,20 @@ class DEMSolver {
     /// Change all entities with family number ID_from to have a new number ID_to, immediately. This is callable when kT
     /// and dT are hanging, not when they are actively working, or the behavior is not defined.
     void ChangeFamily(unsigned int ID_from, unsigned int ID_to);
+
+    /// @brief Change the family number for the clumps in a box region to the specified value.
+    /// @param fam_num The family number to change into.
+    /// @param X {L, U} that discribes the lower and upper bound of the X coord of the box region.
+    /// @param Y The lower and upper bound of the Y coord of the box region.
+    /// @param Z The lower and upper bound of the Z coord of the box region.
+    /// @param orig_fam Only clumps that originally have these family numbers will be modified. Leave empty to apply
+    /// changes regardless of original family numbers.
+    void ChangeClumpFamily(
+        unsigned int fam_num,
+        const std::pair<double, double>& X = std::pair<double, double>(-DEME_HUGE_FLOAT, DEME_HUGE_FLOAT),
+        const std::pair<double, double>& Y = std::pair<double, double>(-DEME_HUGE_FLOAT, DEME_HUGE_FLOAT),
+        const std::pair<double, double>& Z = std::pair<double, double>(-DEME_HUGE_FLOAT, DEME_HUGE_FLOAT),
+        const std::set<unsigned int>& orig_fam = std::set<unsigned int>());
 
     /// Change the sizes of the clumps by a factor. This method directly works on the clump components spheres,
     /// therefore requiring sphere components to be store in flattened array (default behavior), not jitified templates.
