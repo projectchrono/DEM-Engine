@@ -22,15 +22,15 @@ int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled_110kg";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_DownScaled";
-    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
-    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled";
+    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
+    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled";
     std::filesystem::create_directory(out_dir);
 
     // `World'
     float G_mag = 9.81;
     float step_size = 1e-6;
     double world_size_y = 0.52;
-    double world_size_x = 2.04;
+    double world_size_x = 4;//2.04;
     double world_size_z = 4.0;
 
     // Define the wheel geometry
@@ -44,7 +44,7 @@ int main() {
 
     // float Slopes_deg[] = {2, 5, 10, 15, 20, 25};
     // float Slopes_deg[] = {0, 2.5, 5, 7.5, 10, 12.5};
-    float Slopes_deg[] = {25, 20, 15, 10};
+    float Slopes_deg[] = {25, 20, 15, 10, 5, 2, 0};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
 
@@ -57,10 +57,10 @@ int main() {
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
         // E, nu, CoR, mu, Crr...
-        auto mat_type_wall = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.9}, {"Crr", 0.00}});
-        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.5}, {"Crr", 0.00}});
+        auto mat_type_wall = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.9}, {"Crr", 0.00}});
+        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.2}, {"Crr", 0.00}});
         auto mat_type_terrain =
-            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.5}, {"Crr", 0.00}});
+            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.2}, {"Crr", 0.00}});
 
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_wall);
@@ -211,8 +211,8 @@ int main() {
         // auto compressor_tracker = DEMSim.Track(compressor);
 
         // Families' prescribed motions (Earth)
-        // float w_r = 0.8 * 2.45;
-        float w_r = 0.8;
+        float w_r = 0.8 * 2.45;
+        // float w_r = 0.8;
         float v_ref = w_r * wheel_rad;
         double G_ang = Slope_deg * math_PI / 180.;
 
@@ -251,7 +251,7 @@ int main() {
         std::cout << "Output at " << fps << " FPS" << std::endl;
 
         // Put the wheel in place, then let the wheel sink in initially
-        float corr = 1.0;
+        float corr = 0;//1.0;
         float init_x = -1.0 + corr;
         if (Slope_deg < 18) {
             init_x = -1.6 + corr;
