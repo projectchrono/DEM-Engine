@@ -81,6 +81,9 @@ class DEMSolver {
     void SetInitTimeStep(double ts_size) { m_ts_size = ts_size; }
     /// Return the number of clumps that are currently in the simulation.
     size_t GetNumClumps() { return nOwnerClumps; }
+    /// @brief Get the number of kT-reported potential contact pairs.
+    /// @return Number of potential contact pairs.
+    size_t GetNumContacts() const { return dT->getNumContacts(); }
     /// Get the current time step size in simulation.
     double GetTimeStepSize() const;
     /// Getthe current expand factor in simulation.
@@ -861,7 +864,7 @@ class DEMSolver {
     // If the solver sees there are more triangles in a bin than a this `maximum', it errors out
     unsigned int threshold_too_many_tri_in_bin = 32768;
     // The max velocity at which the simulation should error out
-    float threshold_error_out_vel = 1e9;
+    float threshold_error_out_vel = 5e4;
     // Whether to auto-adjust the bin size and the max update frequency
     bool auto_adjust_bin_size = true;
     bool auto_adjust_update_freq = true;
