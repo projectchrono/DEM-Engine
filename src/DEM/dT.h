@@ -400,6 +400,7 @@ class DEMDynamicThread {
                           size_t nExistingFacets);
     void populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                               const std::vector<float3>& input_ext_obj_xyz,
+                              const std::vector<float4>& input_ext_obj_rot,
                               const std::vector<unsigned int>& input_ext_obj_family,
                               const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
                               const std::vector<float3>& input_mesh_obj_xyz,
@@ -430,6 +431,7 @@ class DEMDynamicThread {
     /// Initialized managed arrays
     void initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                            const std::vector<float3>& input_ext_obj_xyz,
+                           const std::vector<float4>& input_ext_obj_rot,
                            const std::vector<unsigned int>& input_ext_obj_family,
                            const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
                            const std::vector<float3>& input_mesh_obj_xyz,
@@ -454,6 +456,7 @@ class DEMDynamicThread {
     /// no other changes to the system.
     void updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                const std::vector<float3>& input_ext_obj_xyz,
+                               const std::vector<float4>& input_ext_obj_rot,
                                const std::vector<unsigned int>& input_ext_obj_family,
                                const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
                                const std::vector<float3>& input_mesh_obj_xyz,

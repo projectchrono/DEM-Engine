@@ -439,6 +439,7 @@ void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, s
 
 void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                             const std::vector<float3>& input_ext_obj_xyz,
+                                            const std::vector<float4>& input_ext_obj_rot,
                                             const std::vector<unsigned int>& input_ext_obj_family,
                                             const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
                                             const std::vector<float3>& input_mesh_obj_xyz,
@@ -687,7 +688,13 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
             locY.at(i + owner_offset_for_ext_obj), locZ.at(i + owner_offset_for_ext_obj), (double)this_CoM_coord.x,
             (double)this_CoM_coord.y, (double)this_CoM_coord.z, simParams->nvXp2, simParams->nvYp2,
             simParams->voxelSize, simParams->l);
-        //// TODO: and initial rot?
+        // Set mesh owner's oriQ
+        auto oriQ_of_this = input_ext_obj_rot.at(i);
+        oriQw.at(i + owner_offset_for_ext_obj) = oriQ_of_this.w;
+        oriQx.at(i + owner_offset_for_ext_obj) = oriQ_of_this.x;
+        oriQy.at(i + owner_offset_for_ext_obj) = oriQ_of_this.y;
+        oriQz.at(i + owner_offset_for_ext_obj) = oriQ_of_this.z;
+
         //// TODO: and initial vel?
 
         family_t this_family_num = input_ext_obj_family.at(i);
@@ -809,6 +816,7 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
 
 void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                          const std::vector<float3>& input_ext_obj_xyz,
+                                         const std::vector<float4>& input_ext_obj_rot,
                                          const std::vector<unsigned int>& input_ext_obj_family,
                                          const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
                                          const std::vector<float3>& input_mesh_obj_xyz,
@@ -835,16 +843,17 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
                      mesh_obj_mass_types, mesh_obj_moi_types, loaded_materials, family_mask_matrix, no_output_families);
 
     // For initialization, owner array offset is 0
-    populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_family, input_mesh_objs,
-                         input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family, mesh_facet_owner,
-                         mesh_facet_materials, mesh_facets, clump_templates, ext_obj_mass_types, ext_obj_moi_types,
-                         ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, 0, 0, 0);
+    populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_rot, input_ext_obj_family,
+                         input_mesh_objs, input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family,
+                         mesh_facet_owner, mesh_facet_materials, mesh_facets, clump_templates, ext_obj_mass_types,
+                         ext_obj_moi_types, ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, 0, 0, 0);
 
     buildTrackedObjs(input_clump_batches, input_ext_obj_xyz, input_mesh_objs, tracked_objs, 0, 0);
 }
 
 void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                              const std::vector<float3>& input_ext_obj_xyz,
+                                             const std::vector<float4>& input_ext_obj_rot,
                                              const std::vector<unsigned int>& input_ext_obj_family,
                                              const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
                                              const std::vector<float3>& input_mesh_obj_xyz,
@@ -871,11 +880,11 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
     // No policy changes here
 
     // Analytical objects-related arrays should be empty
-    populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_family, input_mesh_objs,
-                         input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family, mesh_facet_owner,
-                         mesh_facet_materials, mesh_facets, clump_templates, ext_obj_mass_types, ext_obj_moi_types,
-                         ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, nExistingOwners, nExistingSpheres,
-                         nExistingFacets);
+    populateEntityArrays(input_clump_batches, input_ext_obj_xyz, input_ext_obj_rot, input_ext_obj_family,
+                         input_mesh_objs, input_mesh_obj_xyz, input_mesh_obj_rot, input_mesh_obj_family,
+                         mesh_facet_owner, mesh_facet_materials, mesh_facets, clump_templates, ext_obj_mass_types,
+                         ext_obj_moi_types, ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, nExistingOwners,
+                         nExistingSpheres, nExistingFacets);
 
     // Make changes to tracked objects (potentially add more)
     buildTrackedObjs(input_clump_batches, input_ext_obj_xyz, input_mesh_objs, tracked_objs, nExistingOwners,

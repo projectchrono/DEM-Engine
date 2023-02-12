@@ -208,6 +208,31 @@ void DEMSolver::SetOwnerFamily(bodyID_t ownerID, family_t fam) {
     kT->familyID.at(ownerID) = fam;
     dT->familyID.at(ownerID) = fam;
 }
+
+float DEMSolver::GetOwnerMass(bodyID_t ownerID) const {
+    if (jitify_mass_moi) {
+        inertiaOffset_t offset = dT->inertiaPropOffsets.at(ownerID);
+        return dT->massOwnerBody.at(offset);
+    } else {
+        return dT->massOwnerBody.at(ownerID);
+    }
+}
+
+float3 DEMSolver::GetOwnerMOI(bodyID_t ownerID) const {
+    if (jitify_mass_moi) {
+        inertiaOffset_t offset = dT->inertiaPropOffsets.at(ownerID);
+        float m1 = dT->mmiXX.at(offset);
+        float m2 = dT->mmiYY.at(offset);
+        float m3 = dT->mmiZZ.at(offset);
+        return host_make_float3(m1, m2, m3);
+    } else {
+        float m1 = dT->mmiXX.at(ownerID);
+        float m2 = dT->mmiYY.at(ownerID);
+        float m3 = dT->mmiZZ.at(ownerID);
+        return host_make_float3(m1, m2, m3);
+    }
+}
+
 void DEMSolver::SetTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite) {
     dT->setTriNodeRelPos(start, triangles, overwrite);
     kT->setTriNodeRelPos(start, triangles, overwrite);
@@ -772,8 +797,8 @@ std::shared_ptr<DEMExternObj> DEMSolver::AddBCPlane(const float3 pos,
                                                     const float3 normal,
                                                     const std::shared_ptr<DEMMaterial>& material) {
     std::shared_ptr<DEMExternObj> ptr = AddExternalObject();
-    // TODO: make the owner of this BC to have the same CoM as this BC
-    ptr->AddPlane(pos, normal, material);
+    ptr->SetInitPos(pos);
+    ptr->AddPlane(make_float3(0), normal, material);
     return ptr;
 }
 

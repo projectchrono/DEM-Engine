@@ -324,6 +324,14 @@ class DEMSolver {
     /// @param ownerID The owner's ID.
     /// @return The family number.
     unsigned int GetOwnerFamily(bodyID_t ownerID) const;
+    /// @brief Get the mass of a owner.
+    /// @param ownerID The owner's ID.
+    /// @return The mass.
+    float GetOwnerMass(bodyID_t ownerID) const;
+    /// @brief Get the moment of inertia (in principal axis frame) of a owner.
+    /// @param ownerID The owner's ID.
+    /// @return The moment of inertia (in principal axis frame).
+    float3 GetOwnerMOI(bodyID_t ownerID) const;
     /// Set position of a owner
     void SetOwnerPosition(bodyID_t ownerID, float3 pos);
     /// Set angular velocity of a owner

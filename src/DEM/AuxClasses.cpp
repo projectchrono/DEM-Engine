@@ -272,6 +272,12 @@ float4 DEMTracker::OriQ(size_t offset) {
 unsigned int DEMTracker::GetFamily(size_t offset) {
     return sys->GetOwnerFamily(obj->ownerID + offset);
 }
+float DEMTracker::Mass(size_t offset) {
+    return sys->GetOwnerMass(obj->ownerID + offset);
+}
+float3 DEMTracker::MOI(size_t offset) {
+    return sys->GetOwnerMOI(obj->ownerID + offset);
+}
 // float3 DEMTracker::Acc(size_t offset) {
 //     float3 contact_acc = sys->GetOwnerAcc(obj->ownerID + offset);
 //     // Contact acceleration is not total acc, we need to add gravity and manually added forces

@@ -529,16 +529,12 @@ void DEMSolver::preprocessAnalyticalObjs() {
         m_ext_obj_mass.push_back(ext_obj->mass);
         m_ext_obj_moi.push_back(ext_obj->MOI);
 
-        //// TODO: If CoM is not all-0, all components should be offsetted
-        // float3 CoM = ext_obj->CoM;
-        // float4 CoM_oriQ = ext_obj->CoM_oriQ;
-
         // Then load this ext obj's components
         unsigned int this_num_anal_ent = 0;
         auto comp_params = ext_obj->entity_params;
         auto comp_mat = ext_obj->materials;
         m_input_ext_obj_xyz.push_back(ext_obj->init_pos);
-        //// TODO: init_oriQ?????
+        m_input_ext_obj_rot.push_back(ext_obj->init_oriQ);
         m_input_ext_obj_family.push_back(ext_obj->family_code);
         for (unsigned int i = 0; i < ext_obj->types.size(); i++) {
             auto param = comp_params.at(this_num_anal_ent);
@@ -640,9 +636,6 @@ void DEMSolver::preprocessTriangleObjs() {
         }
         m_mesh_obj_mass.push_back(mesh_obj->mass);
         m_mesh_obj_moi.push_back(mesh_obj->MOI);
-        //// TODO: If CoM is not all-0, all components should be offsetted
-        // float3 CoM = ext_obj->CoM;
-        // float4 CoM_oriQ = ext_obj->CoM_oriQ;
 
         m_input_mesh_obj_xyz.push_back(mesh_obj->init_pos);
         m_input_mesh_obj_rot.push_back(mesh_obj->init_oriQ);
@@ -1018,7 +1011,7 @@ void DEMSolver::initializeGPUArrays() {
         // Clump batchs' initial stats
         cached_input_clump_batches,
         // Analytical objects' initial stats
-        m_input_ext_obj_xyz, m_input_ext_obj_family,
+        m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
         // Meshed objects' initial stats
         cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner,
         m_mesh_facet_materials, m_mesh_facets,
@@ -1066,7 +1059,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // Clump batchs' initial stats
         cached_input_clump_batches,
         // Analytical objects' initial stats
-        m_input_ext_obj_xyz, m_input_ext_obj_family,
+        m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
         // Meshed objects' initial stats
         cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner,
         m_mesh_facet_materials, m_mesh_facets,

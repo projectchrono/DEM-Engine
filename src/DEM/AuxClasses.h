@@ -148,6 +148,14 @@ class DEMTracker {
     /// @param fam_num Family number to change to.
     /// @param offset The offset to this entites. If first entites, input 0.
     void SetFamily(unsigned int fam_num, size_t offset);
+    /// @brief Get the mass of the tracked object.
+    /// @param offset The offset to this entites. If first entites, input 0.
+    /// @return Mass.
+    float Mass(size_t offset = 0);
+    /// @brief Get the moment of inertia (in principal axis frame) of the tracked object.
+    /// @param offset The offset to this entites. If first entites, input 0.
+    /// @return The moment of inertia (in principal axis frame).
+    float3 MOI(size_t offset = 0);
 
     /// Apply the mesh deformation such that the tracked mesh is replaced by the new_mesh. This affects triangle facets'
     /// relative positions wrt the mesh center (CoM) only; mesh's overall position/rotation in simulation is not
