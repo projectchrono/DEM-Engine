@@ -293,10 +293,16 @@ void DEMSolver::InstructBoxDomainDimension(float x, float y, float z, const std:
 
     if (str_to_upper(dir_exact) == "X") {
         m_box_dir_length_is_exact = SPATIAL_DIR::X;
+        m_target_box_min.x = m_user_box_min.x;
+        m_target_box_max.x = m_user_box_max.x;
     } else if (str_to_upper(dir_exact) == "Y") {
         m_box_dir_length_is_exact = SPATIAL_DIR::Y;
+        m_target_box_min.y = m_user_box_min.y;
+        m_target_box_max.y = m_user_box_max.y;
     } else if (str_to_upper(dir_exact) == "Z") {
         m_box_dir_length_is_exact = SPATIAL_DIR::Z;
+        m_target_box_min.z = m_user_box_min.z;
+        m_target_box_max.z = m_user_box_max.z;
     } else if (str_to_upper(dir_exact) == "NONE") {
         m_box_dir_length_is_exact = SPATIAL_DIR::NONE;
     } else {
@@ -321,10 +327,16 @@ void DEMSolver::InstructBoxDomainDimension(const std::pair<float, float>& x,
 
     if (str_to_upper(dir_exact) == "X") {
         m_box_dir_length_is_exact = SPATIAL_DIR::X;
+        m_target_box_min.x = m_user_box_min.x;
+        m_target_box_max.x = m_user_box_max.x;
     } else if (str_to_upper(dir_exact) == "Y") {
         m_box_dir_length_is_exact = SPATIAL_DIR::Y;
+        m_target_box_min.y = m_user_box_min.y;
+        m_target_box_max.y = m_user_box_max.y;
     } else if (str_to_upper(dir_exact) == "Z") {
         m_box_dir_length_is_exact = SPATIAL_DIR::Z;
+        m_target_box_min.z = m_user_box_min.z;
+        m_target_box_max.z = m_user_box_max.z;
     } else if (str_to_upper(dir_exact) == "NONE") {
         m_box_dir_length_is_exact = SPATIAL_DIR::NONE;
     } else {
@@ -1072,11 +1084,14 @@ void DEMSolver::WriteMeshFile(const std::string& outfilename) const {
     }
 }
 
-void DEMSolver::ChangeClumpFamily(unsigned int fam_num,
-                                  const std::pair<double, double>& X,
-                                  const std::pair<double, double>& Y,
-                                  const std::pair<double, double>& Z,
-                                  const std::set<unsigned int>& orig_fam) {
+size_t DEMSolver::ChangeClumpFamily(unsigned int fam_num,
+                                    const std::pair<double, double>& X,
+                                    const std::pair<double, double>& Y,
+                                    const std::pair<double, double>& Z,
+                                    const std::set<unsigned int>& orig_fam) {
+    float3 L = host_make_float3(X.first, Y.first, Z.first);
+    float3 U = host_make_float3(X.second, Y.second, Z.second);
+    size_t count = 0;
     for (bodyID_t ownerID = 0; ownerID < nOwnerBodies; ownerID++) {
         const ownerType_t this_type = dT->ownerTypes.at(ownerID);
         if (this_type != OWNER_T_CLUMP)
@@ -1094,17 +1109,22 @@ void DEMSolver::ChangeClumpFamily(unsigned int fam_num,
         CoM.z += dT->simParams->LBFZ;
 
         // In region. This can be generalized in future versions.
-        if (inBoxRegion(CoM.x, CoM.y, CoM.z, X, Y, Z)) {
+        if (isBetween(CoM, L, U)) {
             if (orig_fam.size() == 0) {
                 dT->familyID.at(ownerID) = fam_num;
+                kT->familyID.at(ownerID) = fam_num;  // Must do both for dT and kT
+                count++;
             } else {
                 unsigned int old_fam = dT->familyID.at(ownerID);
                 if (check_exist(orig_fam, old_fam)) {
                     dT->familyID.at(ownerID) = fam_num;
+                    kT->familyID.at(ownerID) = fam_num;
+                    count++;
                 }
             }
         }
     }
+    return count;
 }
 
 // The method should be called after user inputs are in place, and before starting the simulation. It figures out a part

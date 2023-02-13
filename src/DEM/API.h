@@ -470,7 +470,8 @@ class DEMSolver {
     /// @param Z The lower and upper bound of the Z coord of the box region.
     /// @param orig_fam Only clumps that originally have these family numbers will be modified. Leave empty to apply
     /// changes regardless of original family numbers.
-    void ChangeClumpFamily(
+    /// @return The number of owners that get changed by this call.
+    size_t ChangeClumpFamily(
         unsigned int fam_num,
         const std::pair<double, double>& X = std::pair<double, double>(-DEME_HUGE_FLOAT, DEME_HUGE_FLOAT),
         const std::pair<double, double>& Y = std::pair<double, double>(-DEME_HUGE_FLOAT, DEME_HUGE_FLOAT),
