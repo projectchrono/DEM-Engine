@@ -98,7 +98,6 @@ int main() {
 
     // Make ready for simulation
     float step_size = 5e-7;
-    DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety

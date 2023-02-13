@@ -236,7 +236,15 @@ void DEMTracker::assertMeshFaceSize(size_t input_length, const std::string& name
         std::stringstream ss;
         ss << name
            << " is called with an input not the same size (number if triangles) as the original mesh!\nThe input has "
-           << input_length << " triangles with the original mesh has " << obj->nFacets << "." << std::endl;
+           << input_length << " triangles while the original mesh has " << obj->nFacets << "." << std::endl;
+        throw std::runtime_error(ss.str());
+    }
+}
+void DEMTracker::assertOwnerSize(size_t input_length, const std::string& name) {
+    if (input_length != obj->nSpanOwners) {
+        std::stringstream ss;
+        ss << name << " is called with an input not the same size of the number of owners it tracks!\nThe input has "
+           << input_length << " elements while the tracker tracks " << obj->nSpanOwners << " entities." << std::endl;
         throw std::runtime_error(ss.str());
     }
 }
@@ -260,6 +268,15 @@ float3 DEMTracker::Vel(size_t offset) {
 }
 float4 DEMTracker::OriQ(size_t offset) {
     return sys->GetOwnerOriQ(obj->ownerID + offset);
+}
+unsigned int DEMTracker::GetFamily(size_t offset) {
+    return sys->GetOwnerFamily(obj->ownerID + offset);
+}
+float DEMTracker::Mass(size_t offset) {
+    return sys->GetOwnerMass(obj->ownerID + offset);
+}
+float3 DEMTracker::MOI(size_t offset) {
+    return sys->GetOwnerMOI(obj->ownerID + offset);
 }
 // float3 DEMTracker::Acc(size_t offset) {
 //     float3 contact_acc = sys->GetOwnerAcc(obj->ownerID + offset);
@@ -289,6 +306,20 @@ void DEMTracker::SetVel(float3 vel, size_t offset) {
 }
 void DEMTracker::SetOriQ(float4 oriQ, size_t offset) {
     sys->SetOwnerOriQ(obj->ownerID + offset, oriQ);
+}
+void DEMTracker::SetFamily(const std::vector<unsigned int>& fam_nums) {
+    assertOwnerSize(fam_nums.size(), "SetFamily");
+    for (size_t i = 0; i < fam_nums.size(); i++) {
+        sys->SetOwnerFamily(obj->ownerID + i, fam_nums[i]);
+    }
+}
+void DEMTracker::SetFamily(unsigned int fam_num) {
+    for (size_t i = 0; i < obj->nSpanOwners; i++) {
+        sys->SetOwnerFamily(obj->ownerID + i, fam_num);
+    }
+}
+void DEMTracker::SetFamily(unsigned int fam_num, size_t offset) {
+    sys->SetOwnerFamily(obj->ownerID + offset, fam_num);
 }
 void DEMTracker::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {
     std::vector<bodyID_t> offsetted_IDs(IDs);

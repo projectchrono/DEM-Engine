@@ -59,12 +59,17 @@ class DEMSolver {
     /// Instruct the dimension of the `world'. On initialization, this info will be used to figure out how to assign the
     /// num of voxels in each direction. If your `useful' domain is not box-shaped, then define a box that contains your
     /// domian.
-    void InstructBoxDomainDimension(float x, float y, float z, SPATIAL_DIR dir_exact = SPATIAL_DIR::NONE);
-
-    /// Explicitly instruct the number of voxels (as 2^{x,y,z}) along each direction, as well as the smallest unit
-    /// length l. This is usually for test purposes, and will overwrite other size-related definitions of the big
-    /// domain.
-    void InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned char z, float len_unit = 1e-10f);
+    void InstructBoxDomainDimension(float x, float y, float z, const std::string& dir_exact = "none");
+    /// @brief Set the size of the simulation `world'.
+    /// @param x Lower and upper limit for X coordinate.
+    /// @param y Lower and upper limit for Y coordinate.
+    /// @param z Lower and upper limit for Z coordinate.
+    /// @param dir_exact The direction for which the user-instructed size must strictly agree with the actual generated
+    /// size. Pick between "X", "Y", "Z" or "none".
+    void InstructBoxDomainDimension(const std::pair<float, float>& x,
+                                    const std::pair<float, float>& y,
+                                    const std::pair<float, float>& z,
+                                    const std::string& dir_exact = "none");
 
     /// Instruct if and how we should add boundaries to the simulation world upon initialization. Choose between `none',
     /// `all' (add 6 boundary planes) and `top_open' (add 5 boundary planes and leave the z-directon top open). Also
@@ -81,6 +86,9 @@ class DEMSolver {
     void SetInitTimeStep(double ts_size) { m_ts_size = ts_size; }
     /// Return the number of clumps that are currently in the simulation.
     size_t GetNumClumps() { return nOwnerClumps; }
+    /// @brief Get the number of kT-reported potential contact pairs.
+    /// @return Number of potential contact pairs.
+    size_t GetNumContacts() const { return dT->getNumContacts(); }
     /// Get the current time step size in simulation.
     double GetTimeStepSize() const;
     /// Getthe current expand factor in simulation.
@@ -98,29 +106,6 @@ class DEMSolver {
     /// Set the simulation time manually.
     void SetSimTime(double time);
     // TODO: Implement an API that allows setting ts size through a list
-
-    /// Sets the origin of the coordinate system (the coordinate system that all entities in this simulation are using)
-    /// using a string identifier. Choose from "center" (being at the center of the user-specifier BoxDomain), or "0",
-    /// "1", ..., "13", "-1", ..., "-13", which are the balanced ternary-identifier for points in the 8 octants, see
-    /// https://en.wikipedia.org/wiki/Octant_(solid_geometry).
-    void SetCoordSysOrigin(const std::string& where) { m_user_instructed_origin = where; }
-
-    /// Sets the origin of the coordinate system (the coordinate system that all entities in this simulation are using).
-    /// This origin point should be reported as the vector pointing from the left-bottom-front point of your simulation
-    /// `world' (box domain), to the origin of the coordinate system. For example, if the world size is [2,2,2] and the
-    /// origin should be right at its center, then the argument for this call should be make_float3(1,1,1). The other
-    /// alternative to achieve the same, is through calling SetBoxDomainLBFPoint.
-    void SetCoordSysOrigin(float3 O) {
-        m_boxLBF = -O;
-        m_user_instructed_origin = "explicit";
-    }
-
-    /// Set the left-bottom-front point of the box domain (or the user-specified simulation `world'), in the user's
-    /// global coordinate system. The other alternative to achieve the same, is through calling SetCoordSysOrigin.
-    void SetBoxDomainLBFPoint(float3 O) {
-        m_boxLBF = O;
-        m_user_instructed_origin = "explicit";
-    }
 
     /// Set the integrator for this simulator
     void SetIntegrator(TIME_INTEGRATOR intg) { m_integrator = intg; }
@@ -317,6 +302,18 @@ class DEMSolver {
     float3 GetOwnerAcc(bodyID_t ownerID) const;
     /// Get the angular acceleration of a owner
     float3 GetOwnerAngAcc(bodyID_t ownerID) const;
+    /// @brief Get the family number of a owner.
+    /// @param ownerID The owner's ID.
+    /// @return The family number.
+    unsigned int GetOwnerFamily(bodyID_t ownerID) const;
+    /// @brief Get the mass of a owner.
+    /// @param ownerID The owner's ID.
+    /// @return The mass.
+    float GetOwnerMass(bodyID_t ownerID) const;
+    /// @brief Get the moment of inertia (in principal axis frame) of a owner.
+    /// @param ownerID The owner's ID.
+    /// @return The moment of inertia (in principal axis frame).
+    float3 GetOwnerMOI(bodyID_t ownerID) const;
     /// Set position of a owner
     void SetOwnerPosition(bodyID_t ownerID, float3 pos);
     /// Set angular velocity of a owner
@@ -325,6 +322,10 @@ class DEMSolver {
     void SetOwnerVelocity(bodyID_t ownerID, float3 vel);
     /// Set quaternion of a owner
     void SetOwnerOriQ(bodyID_t ownerID, float4 oriQ);
+    /// @brief Set the family number of a owner.
+    /// @param ownerID The ID (offset) of the owner.
+    /// @param fam Family number.
+    void SetOwnerFamily(bodyID_t ownerID, family_t fam);
     /// Rewrite the relative positions of the flattened triangle soup, starting from `start', using triangle nodal
     /// positions in `triangles'. If `overwrite' is true, then it is overwriting the existing nodal info; otherwise it
     /// just adds to it.
@@ -461,6 +462,21 @@ class DEMSolver {
     /// Change all entities with family number ID_from to have a new number ID_to, immediately. This is callable when kT
     /// and dT are hanging, not when they are actively working, or the behavior is not defined.
     void ChangeFamily(unsigned int ID_from, unsigned int ID_to);
+
+    /// @brief Change the family number for the clumps in a box region to the specified value.
+    /// @param fam_num The family number to change into.
+    /// @param X {L, U} that discribes the lower and upper bound of the X coord of the box region.
+    /// @param Y The lower and upper bound of the Y coord of the box region.
+    /// @param Z The lower and upper bound of the Z coord of the box region.
+    /// @param orig_fam Only clumps that originally have these family numbers will be modified. Leave empty to apply
+    /// changes regardless of original family numbers.
+    /// @return The number of owners that get changed by this call.
+    size_t ChangeClumpFamily(
+        unsigned int fam_num,
+        const std::pair<double, double>& X = std::pair<double, double>(-DEME_HUGE_FLOAT, DEME_HUGE_FLOAT),
+        const std::pair<double, double>& Y = std::pair<double, double>(-DEME_HUGE_FLOAT, DEME_HUGE_FLOAT),
+        const std::pair<double, double>& Z = std::pair<double, double>(-DEME_HUGE_FLOAT, DEME_HUGE_FLOAT),
+        const std::set<unsigned int>& orig_fam = std::set<unsigned int>());
 
     /// Change the sizes of the clumps by a factor. This method directly works on the clump components spheres,
     /// therefore requiring sphere components to be store in flattened array (default behavior), not jitified templates.
@@ -740,9 +756,16 @@ class DEMSolver {
     bool m_is_out_owner_wildcards = false;
     bool m_is_out_cnt_wildcards = false;
 
-    // User instructed simulation `world' size. Note it is an approximate of the true size and we will generate a world
-    // not smaller than this.
-    float3 m_user_boxSize = make_float3(-1.f);
+    // User-instructed simulation `world' size. Note it is an approximate of the true size and we will generate a world
+    // not smaller than this. This is useful if the user want to automatically add BCs enclosing this user-defined
+    // domain.
+    float3 m_user_box_min = make_float3(-DEFAULT_BOX_DOMAIN_SIZE / 2.);
+    float3 m_user_box_max = make_float3(DEFAULT_BOX_DOMAIN_SIZE / 2.);
+
+    // The enlarged user-instructed box.. We do this because we don't want the box domain to have boundaries exactly on
+    // the edge of the world.
+    float3 m_target_box_min = make_float3(-DEFAULT_BOX_DOMAIN_SIZE * (1. + DEFAULT_BOX_DOMAIN_ENLARGE_RATIO) / 2.);
+    float3 m_target_box_max = make_float3(DEFAULT_BOX_DOMAIN_SIZE * (1. + DEFAULT_BOX_DOMAIN_ENLARGE_RATIO) / 2.);
 
     // Exact `World' size along X dir (determined at init time)
     float m_boxX = -1.f;
@@ -802,8 +825,6 @@ class DEMSolver {
     // will just be resized at intialization based on the input size.
     size_t m_instructed_num_owners = 0;
 
-    // Whether the number of voxels and length unit l is explicitly given by the user
-    bool explicit_nv_override = false;
     // Whether the GPU-side systems have been initialized
     bool sys_initialized = false;
     // Smallest sphere radius (used to let the user know whether the expand factor is sufficient)
@@ -815,9 +836,6 @@ class DEMSolver {
 
     // This is an unused variable which is supposed to be related to m_suggestedFutureDrift...
     int m_updateFreq = 20;
-
-    // Where the user wants the origin of the coordinate system to be
-    std::string m_user_instructed_origin = "center";
 
     // If and how we should add boundaries to the simulation world upon initialization. Choose between none, all and
     // top_open.
@@ -839,7 +857,7 @@ class DEMSolver {
     // If the solver sees there are more triangles in a bin than a this `maximum', it errors out
     unsigned int threshold_too_many_tri_in_bin = 32768;
     // The max velocity at which the simulation should error out
-    float threshold_error_out_vel = 1e9;
+    float threshold_error_out_vel = 5e4;
     // Whether to auto-adjust the bin size and the max update frequency
     bool auto_adjust_bin_size = true;
     bool auto_adjust_update_freq = true;
@@ -1135,8 +1153,6 @@ class DEMSolver {
     void jitifyKernels();
     /// Figure out the unit length l and numbers of voxels along each direction, based on domain size X, Y, Z
     void figureOutNV();
-    /// Derive the origin of the coordinate system using user inputs
-    void figureOutOrigin();
     /// Set the default bin (for contact detection) size to be the same of the smallest sphere
     void decideBinSize();
     /// The method of deciding the thickness of contact margin (user-specified max vel; or a custom inspector)

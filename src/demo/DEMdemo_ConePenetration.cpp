@@ -40,7 +40,6 @@ int main() {
     DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
     // No need to add simulation `world' boundaries, b/c we'll add a cylinderical container manually
     DEMSim.InstructBoxDomainBoundingBC("none", mat_type_terrain);
-    DEMSim.SetCoordSysOrigin("center");
     // Now add a cylinderical boundary along with a bottom plane
     double bottom = -0.5;
     auto walls = DEMSim.AddExternalObject();

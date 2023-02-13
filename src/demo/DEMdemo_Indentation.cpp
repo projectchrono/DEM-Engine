@@ -79,7 +79,6 @@ int main() {
 
     DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
     DEMSim.InstructBoxDomainBoundingBC("all", mat_type_granular);
-    DEMSim.SetCoordSysOrigin("center");
 
     // Now add a cylinderical boundary
     auto walls = DEMSim.AddExternalObject();

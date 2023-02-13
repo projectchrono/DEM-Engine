@@ -116,7 +116,6 @@ int main() {
     float step_size = 5e-6;
     auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
     DEMSim.InstructBoxDomainDimension(5, 5, 5);
-    DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // A minor tweak: if this number is large, then the update freq auto-adjust algorithm sets the freq a bit higher,

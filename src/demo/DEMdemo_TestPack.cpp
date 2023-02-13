@@ -28,7 +28,6 @@ void SetSolverProp(DEMSolver& DEMSim) {
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
 
     DEMSim.InstructBoxDomainDimension(25, 25, 10);
-    DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEMSim.SetCDUpdateFreq(0);
     // Must disable this if you want to run dT and kT synchronizely, or the solver will automatically find a non-zero

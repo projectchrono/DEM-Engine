@@ -480,6 +480,7 @@ class DEMClumpTemplate {
     std::vector<float3> relPos;
     std::vector<std::shared_ptr<DEMMaterial>> materials;
     unsigned int nComp = 0;  // Number of components
+
     // Position of this clump's CoM, in the frame which is used to report the positions of this clump's component
     // spheres. It is usually all 0, unless the user specifies it, in which case we need to process relPos such that
     // when the system is initialized, everything is still in the clump's CoM frame.
@@ -487,6 +488,7 @@ class DEMClumpTemplate {
     // CoM frame's orientation quaternion in the frame which is used to report the positions of this clump's component
     // spheres. Usually unit quaternion.
     // float4 CoM_oriQ = host_make_float4(0, 0, 0, 1);
+
     // Each clump template will have a unique mark number. When clumps are loaded to the system, this mark will help
     // find their type offset.
     unsigned int mark;

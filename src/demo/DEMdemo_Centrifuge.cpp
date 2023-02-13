@@ -130,7 +130,6 @@ int main() {
     // Make the domain large enough
     DEMSim.InstructBoxDomainDimension(5, 5, 5);
     float step_size = 5e-6;
-    DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
@@ -161,11 +160,19 @@ int main() {
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
             DEMSim.WriteSphereFile(std::string(filename));
             currframe++;
-            // We can query info out of this drum, since it is tracked
-            // float3 drum_pos = Drum_tracker->Pos();
-            // float3 drum_angVel = Drum_tracker->AngVel();
             max_v = max_v_finder->GetValue();
             std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
+
+            // Torque on the side walls are?
+            float3 drum_moi = Drum_tracker->MOI();
+            float3 drum_pos = Drum_tracker->ContactAngAccLocal();
+            float3 drum_torque = drum_pos * drum_moi;
+            std::cout << "Contact torque on the side walls is " << drum_torque.x << ", " << drum_torque.y << ", "
+                      << drum_torque.z << std::endl;
+
+            // The force on the bottom plane?
+            float3 force_on_BC = planes_tracker->ContactAcc() * planes_tracker->Mass();
+            std::cout << "Contact force on bottom plane is " << force_on_BC.z << std::endl;
         }
 
         DEMSim.DoDynamics(step_size);

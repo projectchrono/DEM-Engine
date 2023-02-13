@@ -444,6 +444,8 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
                                       binID_t nbY,
                                       binID_t nbZ,
                                       float3 LBFPoint,
+                                      float3 user_box_min,
+                                      float3 user_box_max,
                                       float3 G,
                                       double ts_size,
                                       float expand_factor,
@@ -472,6 +474,8 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
     simParams->nbX = nbX;
     simParams->nbY = nbY;
     simParams->nbZ = nbZ;
+    simParams->userBoxMin = user_box_min;
+    simParams->userBoxMax = user_box_max;
 
     simParams->nContactWildcards = contact_wildcards.size();
     simParams->nOwnerWildcards = owner_wildcards.size();

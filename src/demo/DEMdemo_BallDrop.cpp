@@ -30,9 +30,8 @@ int main() {
 
     float step_size = 1e-5;
     double world_size = 10;
-    DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
+    DEMSim.InstructBoxDomainDimension({0, world_size}, {0, world_size}, {0, world_size});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
-    DEMSim.SetCoordSysOrigin("-13");
 
     auto projectile = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/sphere.obj").string(), mat_type_ball);
     std::cout << "Total num of triangles: " << projectile->GetNumTriangles() << std::endl;

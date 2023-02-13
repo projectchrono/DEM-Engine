@@ -188,6 +188,9 @@ float3 DEMSolver::GetOwnerAcc(bodyID_t ownerID) const {
 float3 DEMSolver::GetOwnerAngAcc(bodyID_t ownerID) const {
     return dT->getOwnerAngAcc(ownerID);
 }
+unsigned int DEMSolver::GetOwnerFamily(bodyID_t ownerID) const {
+    return (unsigned int)(+(dT->familyID.at(ownerID)));
+}
 
 void DEMSolver::SetOwnerPosition(bodyID_t ownerID, float3 pos) {
     dT->setOwnerPos(ownerID, pos);
@@ -201,6 +204,35 @@ void DEMSolver::SetOwnerVelocity(bodyID_t ownerID, float3 vel) {
 void DEMSolver::SetOwnerOriQ(bodyID_t ownerID, float4 oriQ) {
     dT->setOwnerOriQ(ownerID, oriQ);
 }
+void DEMSolver::SetOwnerFamily(bodyID_t ownerID, family_t fam) {
+    kT->familyID.at(ownerID) = fam;
+    dT->familyID.at(ownerID) = fam;
+}
+
+float DEMSolver::GetOwnerMass(bodyID_t ownerID) const {
+    if (jitify_mass_moi) {
+        inertiaOffset_t offset = dT->inertiaPropOffsets.at(ownerID);
+        return dT->massOwnerBody.at(offset);
+    } else {
+        return dT->massOwnerBody.at(ownerID);
+    }
+}
+
+float3 DEMSolver::GetOwnerMOI(bodyID_t ownerID) const {
+    if (jitify_mass_moi) {
+        inertiaOffset_t offset = dT->inertiaPropOffsets.at(ownerID);
+        float m1 = dT->mmiXX.at(offset);
+        float m2 = dT->mmiYY.at(offset);
+        float m3 = dT->mmiZZ.at(offset);
+        return host_make_float3(m1, m2, m3);
+    } else {
+        float m1 = dT->mmiXX.at(ownerID);
+        float m2 = dT->mmiYY.at(ownerID);
+        float m3 = dT->mmiZZ.at(ownerID);
+        return host_make_float3(m1, m2, m3);
+    }
+}
+
 void DEMSolver::SetTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite) {
     dT->setTriNodeRelPos(start, triangles, overwrite);
     kT->setTriNodeRelPos(start, triangles, overwrite);
@@ -249,34 +281,67 @@ void DEMSolver::SetMaxVelocity(const std::string& insp_type) {
     }
 }
 
-void DEMSolver::InstructBoxDomainDimension(float x, float y, float z, SPATIAL_DIR dir_exact) {
-    m_user_boxSize.x = x;
-    m_user_boxSize.y = y;
-    m_user_boxSize.z = z;
-    m_box_dir_length_is_exact = dir_exact;
-    explicit_nv_override = false;
+void DEMSolver::InstructBoxDomainDimension(float x, float y, float z, const std::string& dir_exact) {
+    m_user_box_min = host_make_float3(-x / 2., -y / 2., -z / 2.);
+    m_user_box_max = host_make_float3(x / 2., y / 2., z / 2.);
+
+    float3 enlarge_amount =
+        host_make_float3(x * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2., y * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2.,
+                         z * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2.);
+    m_target_box_min = m_user_box_min - enlarge_amount;
+    m_target_box_max = m_user_box_max + enlarge_amount;
+
+    if (str_to_upper(dir_exact) == "X") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::X;
+        m_target_box_min.x = m_user_box_min.x;
+        m_target_box_max.x = m_user_box_max.x;
+    } else if (str_to_upper(dir_exact) == "Y") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::Y;
+        m_target_box_min.y = m_user_box_min.y;
+        m_target_box_max.y = m_user_box_max.y;
+    } else if (str_to_upper(dir_exact) == "Z") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::Z;
+        m_target_box_min.z = m_user_box_min.z;
+        m_target_box_max.z = m_user_box_max.z;
+    } else if (str_to_upper(dir_exact) == "NONE") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::NONE;
+    } else {
+        DEME_ERROR("Unknown '%s' parameter in InstructBoxDomainDimension call.", dir_exact.c_str());
+    }
 }
 
-void DEMSolver::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned char z, float len_unit) {
-    if (x + y + z != sizeof(voxelID_t) * DEME_BITS_PER_BYTE) {
-        DEME_ERROR("Please give voxel numbers (as powers of 2) along each direction such that they add up to %zu.",
-                   sizeof(voxelID_t) * DEME_BITS_PER_BYTE);
-    }
-    l = len_unit;
-    nvXp2 = x;
-    nvYp2 = y;
-    nvZp2 = z;
+void DEMSolver::InstructBoxDomainDimension(const std::pair<float, float>& x,
+                                           const std::pair<float, float>& y,
+                                           const std::pair<float, float>& z,
+                                           const std::string& dir_exact) {
+    m_user_box_min =
+        host_make_float3(DEME_MIN(x.first, x.second), DEME_MIN(y.first, y.second), DEME_MIN(z.first, z.second));
+    m_user_box_max =
+        host_make_float3(DEME_MAX(x.second, x.first), DEME_MAX(y.second, y.first), DEME_MAX(z.second, z.first));
 
-    // Calculating `world' size by the input nvXp2 and l
-    m_voxelSize = (double)((size_t)1 << VOXEL_RES_POWER2) * (double)l;
-    m_boxX = m_voxelSize * (double)((size_t)1 << x);
-    m_boxY = m_voxelSize * (double)((size_t)1 << y);
-    m_boxZ = m_voxelSize * (double)((size_t)1 << z);
-    // In this debug case, user domain size is the same as actual domain size
-    m_user_boxSize.x = m_boxX;
-    m_user_boxSize.y = m_boxY;
-    m_user_boxSize.z = m_boxZ;
-    explicit_nv_override = true;
+    float3 enlarge_amount =
+        host_make_float3(std::abs(x.second - x.first), std::abs(y.second - y.first), std::abs(z.second - z.first));
+    enlarge_amount *= DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2.;
+    m_target_box_min = m_user_box_min - enlarge_amount;
+    m_target_box_max = m_user_box_max + enlarge_amount;
+
+    if (str_to_upper(dir_exact) == "X") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::X;
+        m_target_box_min.x = m_user_box_min.x;
+        m_target_box_max.x = m_user_box_max.x;
+    } else if (str_to_upper(dir_exact) == "Y") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::Y;
+        m_target_box_min.y = m_user_box_min.y;
+        m_target_box_max.y = m_user_box_max.y;
+    } else if (str_to_upper(dir_exact) == "Z") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::Z;
+        m_target_box_min.z = m_user_box_min.z;
+        m_target_box_max.z = m_user_box_max.z;
+    } else if (str_to_upper(dir_exact) == "NONE") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::NONE;
+    } else {
+        DEME_ERROR("Unknown '%s' parameter in InstructBoxDomainDimension call.", dir_exact.c_str());
+    }
 }
 
 std::shared_ptr<DEMForceModel> DEMSolver::DefineContactForceModel(const std::string& model) {
@@ -765,8 +830,8 @@ std::shared_ptr<DEMExternObj> DEMSolver::AddBCPlane(const float3 pos,
                                                     const float3 normal,
                                                     const std::shared_ptr<DEMMaterial>& material) {
     std::shared_ptr<DEMExternObj> ptr = AddExternalObject();
-    // TODO: make the owner of this BC to have the same CoM as this BC
-    ptr->AddPlane(pos, normal, material);
+    ptr->SetInitPos(pos);
+    ptr->AddPlane(make_float3(0), normal, material);
     return ptr;
 }
 
@@ -1017,6 +1082,49 @@ void DEMSolver::WriteMeshFile(const std::string& outfilename) const {
             DEME_ERROR(
                 "Mesh output file format is unknown or not implemented. Please re-set it via SetMeshOutputFormat.");
     }
+}
+
+size_t DEMSolver::ChangeClumpFamily(unsigned int fam_num,
+                                    const std::pair<double, double>& X,
+                                    const std::pair<double, double>& Y,
+                                    const std::pair<double, double>& Z,
+                                    const std::set<unsigned int>& orig_fam) {
+    float3 L = host_make_float3(X.first, Y.first, Z.first);
+    float3 U = host_make_float3(X.second, Y.second, Z.second);
+    size_t count = 0;
+    for (bodyID_t ownerID = 0; ownerID < nOwnerBodies; ownerID++) {
+        const ownerType_t this_type = dT->ownerTypes.at(ownerID);
+        if (this_type != OWNER_T_CLUMP)
+            continue;
+        float3 CoM;
+        voxelID_t voxel = dT->voxelID.at(ownerID);
+        subVoxelPos_t subVoxX = dT->locX.at(ownerID);
+        subVoxelPos_t subVoxY = dT->locY.at(ownerID);
+        subVoxelPos_t subVoxZ = dT->locZ.at(ownerID);
+        hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(CoM.x, CoM.y, CoM.z, voxel, subVoxX, subVoxY, subVoxZ,
+                                                               dT->simParams->nvXp2, dT->simParams->nvYp2,
+                                                               dT->simParams->voxelSize, dT->simParams->l);
+        CoM.x += dT->simParams->LBFX;
+        CoM.y += dT->simParams->LBFY;
+        CoM.z += dT->simParams->LBFZ;
+
+        // In region. This can be generalized in future versions.
+        if (isBetween(CoM, L, U)) {
+            if (orig_fam.size() == 0) {
+                dT->familyID.at(ownerID) = fam_num;
+                kT->familyID.at(ownerID) = fam_num;  // Must do both for dT and kT
+                count++;
+            } else {
+                unsigned int old_fam = dT->familyID.at(ownerID);
+                if (check_exist(orig_fam, old_fam)) {
+                    dT->familyID.at(ownerID) = fam_num;
+                    kT->familyID.at(ownerID) = fam_num;
+                    count++;
+                }
+            }
+        }
+    }
+    return count;
 }
 
 // The method should be called after user inputs are in place, and before starting the simulation. It figures out a part

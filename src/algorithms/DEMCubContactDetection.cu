@@ -228,6 +228,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
                 .launch(simParams, granData, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
                         sandwichBNode2, sandwichBNode3);
+            DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 
             // 1st step: register the number of triangle--bin touching pairs for each triangle for further processing.
             // Because we do a `sandwich' contact detection, we are

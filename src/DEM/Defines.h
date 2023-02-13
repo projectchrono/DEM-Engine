@@ -226,6 +226,9 @@ struct DEMSimParams {
     float Gx;
     float Gy;
     float Gz;
+    // User's box size
+    float3 userBoxMin;
+    float3 userBoxMax;
     // Time step size
     float h;
     // Time elappsed since start of simulation
@@ -453,6 +456,10 @@ const unsigned int NUM_STEPS_RESERVED_AFTER_CHANGING_BIN_SIZE = 5;
 const unsigned int FUTURE_DRIFT_TWEAK_STEP_SIZE = 1;
 // After purging update freq history, this many dT steps are not included in the performance gauging.
 const unsigned int NUM_STEPS_RESERVED_AFTER_RENEWING_FREQ_TUNER = 10;
+// Default target simulation `world' size.
+const float DEFAULT_BOX_DOMAIN_SIZE = 20.;
+// The enlargement ratio we apply to the target sim world size when we construct it.
+const float DEFAULT_BOX_DOMAIN_ENLARGE_RATIO = 0.2;
 
 // #ifndef CUB_IGNORE_DEPRECATED_API
 // #define CUB_IGNORE_DEPRECATED_API

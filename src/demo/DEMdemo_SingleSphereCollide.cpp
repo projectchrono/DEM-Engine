@@ -65,8 +65,6 @@ int main() {
     auto KE_finder = DEMSim.CreateInspector("clump_kinetic_energy");
     float KE;
 
-    DEMSim.InstructBoxDomainNumVoxel(22, 21, 21, 3e-11);
-
     // A custom force model can be read in through a file and used by the simulation. Magic, right?
     auto my_force_model = DEMSim.ReadContactForceModel("SampleCustomForceModel.cu");
     // This custom force model still uses contact history arrays, so let's define it
@@ -74,7 +72,6 @@ int main() {
     // Owner wildcards. In this demo, we define a changable friction coefficient mu_custom.
     my_force_model->SetPerOwnerWildcards({"mu_custom"});
 
-    DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(2e-5);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEMSim.SetCDUpdateFreq(10);
@@ -127,11 +124,24 @@ int main() {
         max_z = max_z_finder->GetValue();
         max_v = max_v_finder->GetValue();
         KE = KE_finder->GetValue();
+
+        // Test if family changer works
+        float3 pos1 = tracker1->Pos();
+        float3 pos2 = tracker2->Pos();
+        DEMSim.ChangeClumpFamily(i % 10, std::pair<float, float>(pos1.x - 0.1, pos1.x + 0.1),
+                                 std::pair<float, float>(pos1.y - 0.1, pos1.y + 0.1),
+                                 std::pair<float, float>(pos1.z - 0.1, pos1.z + 0.1));
+        tracker2->SetFamily(i % 10 + 1);
+        unsigned int fam1 = tracker1->GetFamily(0);
+        unsigned int fam2 = tracker2->GetFamily();
+
         std::cout << "Max Z coord is " << max_z << std::endl;
         std::cout << "Max velocity of any point is " << max_v << std::endl;
         std::cout << "Total kinetic energy is " << KE << std::endl;
-        std::cout << "Particle 1 X coord is " << tracker1->Pos().x << std::endl;
-        std::cout << "Particle 2 X coord is " << tracker2->Pos().x << std::endl;
+        std::cout << "Particle 1 X coord is " << pos1.x << std::endl;
+        std::cout << "Particle 2 X coord is " << pos2.x << std::endl;
+        std::cout << "Particle 1 family is " << fam1 << std::endl;
+        std::cout << "Particle 2 family is " << fam2 << std::endl;
     }
 
     DEMSim.ShowThreadCollaborationStats();

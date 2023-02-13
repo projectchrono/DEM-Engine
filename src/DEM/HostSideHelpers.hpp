@@ -59,6 +59,16 @@ inline T1 vector_sum(const std::vector<T1>& vect) {
     return sum_of_elems;
 }
 
+inline bool isBetween(const float3& coord, const float3& L, const float3& U) {
+    if (coord.x < L.x || coord.y < L.y || coord.z < L.z) {
+        return false;
+    }
+    if (coord.x > U.x || coord.y > U.y || coord.z > U.z) {
+        return false;
+    }
+    return true;
+}
+
 // Make sure a T1 type triplet falls in a range, then output as T2 type
 template <typename T1, typename T2>
 inline T2 hostClampBetween(const T1& data, const T2& low, const T2& high) {
@@ -192,6 +202,13 @@ inline bool all_whole_word_match(const std::string& sentence,
         }
     }
     return true;
+}
+
+/// Change all characters in a string to upper case.
+inline std::string str_to_upper(const std::string& input) {
+    std::string output = input;
+    std::transform(input.begin(), input.end(), output.begin(), ::toupper);
+    return output;
 }
 
 /// Replace all instances of a certain pattern from a string then return it
@@ -440,6 +457,21 @@ inline void hostPositionToVoxelID(T1& ID,
     ID = voxelNumX;
     ID += voxelNumY << nvXp2;
     ID += voxelNumZ << (nvXp2 + nvYp2);
+}
+
+template <typename T1, typename T2>
+inline bool inBoxRegion(const T1& X,
+                        const T1& Y,
+                        const T1& Z,
+                        const std::pair<T2, T2>& Xrange,
+                        const std::pair<T2, T2>& Yrange,
+                        const std::pair<T2, T2>& Zrange) {
+    if ((X >= Xrange.first) && (X <= Xrange.second) && (Y >= Yrange.first) && (Y <= Yrange.second) &&
+        (Z >= Zrange.first) && (Z <= Zrange.second)) {
+        return true;
+    } else {
+        return false;
+    }
 }
 
 template <typename T1>
