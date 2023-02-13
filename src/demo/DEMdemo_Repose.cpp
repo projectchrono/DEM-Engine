@@ -124,11 +124,8 @@ int main() {
     // Calling AddClumps a second time will just add more clumps to the system
     auto the_pile = DEMSim.AddClumps(input_pile_template_type, input_pile_xyz);
 
-    // DEMSim.InstructBoxDomainNumVoxel(21, 21, 22, 7.5e-11);
-    DEMSim.InstructBoxDomainDimension(20, 20, 30);
+    DEMSim.InstructBoxDomainDimension({0, 20}, {0, 20}, {funnel_bottom - 10.f, funnel_bottom + 20.f});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
-
-    DEMSim.SetCoordSysOrigin(make_float3(10, 10, -(funnel_bottom - 10.f)));
     DEMSim.SetInitTimeStep(5e-6);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety

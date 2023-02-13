@@ -54,7 +54,6 @@ int main() {
     DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size * 2);
     DEMSim.InstructBoxDomainBoundingBC("all", mat_type_terrain);
     DEMSim.AddBCPlane(make_float3(0, 0, -world_size / 2), make_float3(0, 0, 1), mat_type_terrain);
-    DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8 / shrink_factor));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety

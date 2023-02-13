@@ -60,8 +60,7 @@ int main() {
     out_dir += "/DemoOutput_TestRestart";
     create_directory(out_dir);
 
-    DEMSim.InstructBoxDomainDimension(x_size, y_size, z_size, SPATIAL_DIR::X);
-    DEMSim.SetCoordSysOrigin("center");
+    DEMSim.InstructBoxDomainDimension(x_size, y_size, z_size, "X");
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety

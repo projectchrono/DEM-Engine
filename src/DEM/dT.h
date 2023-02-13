@@ -319,6 +319,8 @@ class DEMDynamicThread {
                       binID_t nbY,
                       binID_t nbZ,
                       float3 LBFPoint,
+                      float3 user_box_min,
+                      float3 user_box_max,
                       float3 G,
                       double ts_size,
                       float expand_factor,

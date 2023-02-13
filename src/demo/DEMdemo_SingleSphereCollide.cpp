@@ -65,8 +65,6 @@ int main() {
     auto KE_finder = DEMSim.CreateInspector("clump_kinetic_energy");
     float KE;
 
-    DEMSim.InstructBoxDomainNumVoxel(22, 21, 21, 3e-11);
-
     // A custom force model can be read in through a file and used by the simulation. Magic, right?
     auto my_force_model = DEMSim.ReadContactForceModel("SampleCustomForceModel.cu");
     // This custom force model still uses contact history arrays, so let's define it
@@ -74,7 +72,6 @@ int main() {
     // Owner wildcards. In this demo, we define a changable friction coefficient mu_custom.
     my_force_model->SetPerOwnerWildcards({"mu_custom"});
 
-    DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(2e-5);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEMSim.SetCDUpdateFreq(10);

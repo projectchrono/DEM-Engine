@@ -134,7 +134,6 @@ int main() {
 
     float step_size = 1e-5;
     DEMSim.InstructBoxDomainDimension(12, 12, 25);
-    DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEMSim.SetCDUpdateFreq(30);

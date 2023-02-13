@@ -127,6 +127,8 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                     binID_t nbY,
                                     binID_t nbZ,
                                     float3 LBFPoint,
+                                    float3 user_box_min,
+                                    float3 user_box_max,
                                     float3 G,
                                     double ts_size,
                                     float expand_factor,
@@ -155,6 +157,8 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
     simParams->nbX = nbX;
     simParams->nbY = nbY;
     simParams->nbZ = nbZ;
+    simParams->userBoxMin = user_box_min;
+    simParams->userBoxMax = user_box_max;
 
     simParams->nContactWildcards = contact_wildcards.size();
     simParams->nOwnerWildcards = owner_wildcards.size();
@@ -494,8 +498,10 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
     {
         // Use i to record the current index of clump being processed
         size_t i = 0;
-        // Pop family number-related warning only once
+        // We give warning only once
         bool pop_family_msg = false;
+        bool in_domain_msg = false;
+        float3 sus_point;
         // Keep tab of the number of sphere components processed in this initialization call, especially if there are
         // multiple batches loaded for this initialization call
         size_t n_processed_sp_comp = 0;
@@ -517,9 +523,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
             // Now a ref to angular velocity
             const std::vector<float3>& input_clump_angVel = a_batch->angVel;
             // For family numbers, we check if the user has explicitly set them. If not, send a warning.
-            if ((!a_batch->family_isSpecified) && (!pop_family_msg)) {
-                DEME_WARNING("Some clumps do not have their family numbers specified, so defaulted to %u",
-                             DEFAULT_CLUMP_FAMILY_NUM);
+            if (!(a_batch->family_isSpecified)) {
                 pop_family_msg = true;
             }
             const std::vector<unsigned int>& input_clump_family = a_batch->families;
@@ -538,7 +542,13 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                     mmiZZ.at(nExistOwners + i) = this_moi.z;
                 }
 
-                auto this_CoM_coord = input_clump_xyz.at(j) - LBF;
+                // For clumps, special courtesy from us to check if it falls in user's box
+                float3 this_clump_xyz = input_clump_xyz.at(j);
+                if (!isBetween(this_clump_xyz, simParams->userBoxMin, simParams->userBoxMax)) {
+                    sus_point = this_clump_xyz;
+                    in_domain_msg = true;
+                }
+                float3 this_CoM_coord = this_clump_xyz - LBF;
 
                 auto this_clump_no_sp_radii = clump_templates.spRadii.at(type_of_this_clump);
                 auto this_clump_no_sp_relPos = clump_templates.spRelPos.at(type_of_this_clump);
@@ -654,6 +664,18 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
             new_contacts_loaded = true;
             DEME_DEBUG_PRINTF("Total number of contact pairs this sim starts with: %zu",
                               *stateOfSolver_resources.pNumContacts);
+        }
+
+        if (pop_family_msg) {
+            DEME_WARNING("Some clumps do not have their family numbers specified, so defaulted to %u",
+                         DEFAULT_CLUMP_FAMILY_NUM);
+        }
+        if (in_domain_msg) {
+            DEME_WARNING(
+                "At least one clump is initialized with a position out of the box domian you specified.\nIt is found "
+                "at %.5g, %.5g, %.5g (this message only shows one such example).\nThis simulation is unlikely to go as "
+                "planned.",
+                sus_point.x, sus_point.y, sus_point.z);
         }
     }
 

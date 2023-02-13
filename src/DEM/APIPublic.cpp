@@ -281,34 +281,55 @@ void DEMSolver::SetMaxVelocity(const std::string& insp_type) {
     }
 }
 
-void DEMSolver::InstructBoxDomainDimension(float x, float y, float z, SPATIAL_DIR dir_exact) {
-    m_user_boxSize.x = x;
-    m_user_boxSize.y = y;
-    m_user_boxSize.z = z;
-    m_box_dir_length_is_exact = dir_exact;
-    explicit_nv_override = false;
+void DEMSolver::InstructBoxDomainDimension(float x, float y, float z, const std::string& dir_exact) {
+    m_user_box_min = host_make_float3(-x / 2., -y / 2., -z / 2.);
+    m_user_box_max = host_make_float3(x / 2., y / 2., z / 2.);
+
+    float3 enlarge_amount =
+        host_make_float3(x * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2., y * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2.,
+                         z * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2.);
+    m_target_box_min = m_user_box_min - enlarge_amount;
+    m_target_box_max = m_user_box_max + enlarge_amount;
+
+    if (str_to_upper(dir_exact) == "X") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::X;
+    } else if (str_to_upper(dir_exact) == "Y") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::Y;
+    } else if (str_to_upper(dir_exact) == "Z") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::Z;
+    } else if (str_to_upper(dir_exact) == "NONE") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::NONE;
+    } else {
+        DEME_ERROR("Unknown '%s' parameter in InstructBoxDomainDimension call.", dir_exact.c_str());
+    }
 }
 
-void DEMSolver::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned char z, float len_unit) {
-    if (x + y + z != sizeof(voxelID_t) * DEME_BITS_PER_BYTE) {
-        DEME_ERROR("Please give voxel numbers (as powers of 2) along each direction such that they add up to %zu.",
-                   sizeof(voxelID_t) * DEME_BITS_PER_BYTE);
-    }
-    l = len_unit;
-    nvXp2 = x;
-    nvYp2 = y;
-    nvZp2 = z;
+void DEMSolver::InstructBoxDomainDimension(const std::pair<float, float>& x,
+                                           const std::pair<float, float>& y,
+                                           const std::pair<float, float>& z,
+                                           const std::string& dir_exact) {
+    m_user_box_min =
+        host_make_float3(DEME_MIN(x.first, x.second), DEME_MIN(y.first, y.second), DEME_MIN(z.first, z.second));
+    m_user_box_max =
+        host_make_float3(DEME_MAX(x.second, x.first), DEME_MAX(y.second, y.first), DEME_MAX(z.second, z.first));
 
-    // Calculating `world' size by the input nvXp2 and l
-    m_voxelSize = (double)((size_t)1 << VOXEL_RES_POWER2) * (double)l;
-    m_boxX = m_voxelSize * (double)((size_t)1 << x);
-    m_boxY = m_voxelSize * (double)((size_t)1 << y);
-    m_boxZ = m_voxelSize * (double)((size_t)1 << z);
-    // In this debug case, user domain size is the same as actual domain size
-    m_user_boxSize.x = m_boxX;
-    m_user_boxSize.y = m_boxY;
-    m_user_boxSize.z = m_boxZ;
-    explicit_nv_override = true;
+    float3 enlarge_amount =
+        host_make_float3(std::abs(x.second - x.first), std::abs(y.second - y.first), std::abs(z.second - z.first));
+    enlarge_amount *= DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2.;
+    m_target_box_min = m_user_box_min - enlarge_amount;
+    m_target_box_max = m_user_box_max + enlarge_amount;
+
+    if (str_to_upper(dir_exact) == "X") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::X;
+    } else if (str_to_upper(dir_exact) == "Y") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::Y;
+    } else if (str_to_upper(dir_exact) == "Z") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::Z;
+    } else if (str_to_upper(dir_exact) == "NONE") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::NONE;
+    } else {
+        DEME_ERROR("Unknown '%s' parameter in InstructBoxDomainDimension call.", dir_exact.c_str());
+    }
 }
 
 std::shared_ptr<DEMForceModel> DEMSolver::DefineContactForceModel(const std::string& model) {

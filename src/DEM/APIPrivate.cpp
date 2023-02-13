@@ -85,11 +85,8 @@ void DEMSolver::generateEntityResources() {
     nDistinctSphereRelativePositions_computed = m_clumps_sp_location_types.size();
     */
 
-    // Figure out the parameters related to the simulation `world', if need to
-    if (!explicit_nv_override) {
-        figureOutNV();
-    }
-    figureOutOrigin();
+    // Figure out the parameters related to the simulation `world'
+    figureOutNV();
     addWorldBoundingBox();
 
     // Flatten cached clump templates (from ClumpTemplate structs to float arrays), make ready for transferring to kTdT
@@ -165,15 +162,6 @@ void DEMSolver::postResourceGenChecksAndTabKeeping() {
                 nDistinctMassProperties, std::numeric_limits<inertiaOffset_t>::max() - 1,
                 std::numeric_limits<inertiaOffset_t>::max());
         }
-    }
-
-    // Do we have more bins that our data type can handle?
-    if (m_num_bins > std::numeric_limits<binID_t>::max()) {
-        DEME_ERROR(
-            "The simulation world has %zu bins (for domain partitioning in contact detection), but the largest bin ID "
-            "that we can have is %zu.\nYou can try to make bins larger via SetInitBinSize, or redefine binID_t and "
-            "recompile.",
-            m_num_bins, std::numeric_limits<binID_t>::max());
     }
 
     // Sanity check for analytical geometries
@@ -286,8 +274,11 @@ void DEMSolver::getContacts_impl(std::vector<bodyID_t>& idA,
 }
 
 void DEMSolver::figureOutNV() {
+    m_boxLBF = m_target_box_min;
+    float3 boxSize = m_target_box_max - m_target_box_min;
+
     // Rank the size of XYZ, ascending
-    float XYZ[3] = {m_user_boxSize.x, m_user_boxSize.y, m_user_boxSize.z};
+    float XYZ[3] = {boxSize.x, boxSize.y, boxSize.z};
     SPATIAL_DIR rankXYZ[3] = {SPATIAL_DIR::X, SPATIAL_DIR::Y, SPATIAL_DIR::Z};
     for (int i = 0; i < 3 - 1; i++)
         for (int j = i + 1; j < 3; j++)
@@ -408,6 +399,7 @@ void DEMSolver::decideBinSize() {
         }
     }
 
+    // use_user_defined_bin_size means the user explicitly gave a number for bin size
     if (m_smallest_radius > DEME_TINY_FLOAT) {
         if (!use_user_defined_bin_size) {
             m_binSize = m_binSize_as_multiple * m_smallest_radius;
@@ -428,6 +420,25 @@ void DEMSolver::decideBinSize() {
     // It's better to compute num of bins this way, rather than...
     // (uint64_t)(m_boxX / m_binSize + 1) * (uint64_t)(m_boxY / m_binSize + 1) * (uint64_t)(m_boxZ / m_binSize + 1);
     // because the space bins and voxels can cover may be larger than the user-defined sim domain
+    // Do we have more bins that our data type can handle?
+    if (m_num_bins > std::numeric_limits<binID_t>::max() - 1) {
+        if (!use_user_defined_bin_size) {
+            DEME_WARNING(
+                "%zu initial bins created with size %.6g. This is more than max allowance %zu. Auto-adjusting...",
+                m_num_bins, m_binSize, std::numeric_limits<binID_t>::max() - 1);
+            while (m_num_bins > std::numeric_limits<binID_t>::max() - 1) {
+                m_binSize *= 1.5;
+                m_num_bins = hostCalcBinNum(nbX, nbY, nbZ, m_voxelSize, m_binSize, nvXp2, nvYp2, nvZp2);
+            }
+            DEME_WARNING("Bin size auto-adjusted to %.6g, now we have %zu initial bins.", m_binSize, m_num_bins);
+        } else {
+            DEME_ERROR(
+                "The simulation world has %zu bins (for domain partitioning in contact detection), but the largest bin "
+                "ID that we can have is %zu.\nYou can try to make bins larger via SetInitBinSize, or redefine binID_t "
+                "and recompile.",
+                m_num_bins, std::numeric_limits<binID_t>::max() - 1);
+        }
+    }
 }
 
 void DEMSolver::decideCDMarginStrat() {
@@ -453,9 +464,9 @@ void DEMSolver::reportInitStats() const {
     DEME_INFO("Simulation world Y range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_boxY);
     DEME_INFO("Simulation world Z range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_boxZ);
     DEME_INFO("User-specified dimensions should NOT be larger than the above simulation world.");
-    DEME_INFO("User-specified X-dimension range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_user_boxSize.x);
-    DEME_INFO("User-specified Y-dimension range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_user_boxSize.y);
-    DEME_INFO("User-specified Z-dimension range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_user_boxSize.z);
+    DEME_INFO("User-specified X-dimension range: [%.7g, %.7g]", m_user_box_min.x, m_user_box_max.x);
+    DEME_INFO("User-specified Y-dimension range: [%.7g, %.7g]", m_user_box_min.y, m_user_box_max.y);
+    DEME_INFO("User-specified Z-dimension range: [%.7g, %.7g]", m_user_box_min.z, m_user_box_max.z);
     DEME_INFO("The length unit in this simulation is: %.17g", l);
     DEME_INFO("The edge length of a voxel: %.17g", m_voxelSize);
 
@@ -797,52 +808,65 @@ void DEMSolver::figureOutFamilyMasks() {
     }
 }
 
-void DEMSolver::figureOutOrigin() {
-    if (m_user_instructed_origin == "explicit") {
-        return;
-    }
-    float3 O;
-    if (m_user_instructed_origin == "center" || m_user_instructed_origin == "0") {
-        O = -(m_user_boxSize) / 2.0;
-        m_boxLBF = O;
-    } else if (m_user_instructed_origin == "-13") {
-        O.x = 0;
-        O.y = 0;
-        O.z = 0;
-        m_boxLBF = O;
-    } else {
-        //// TODO: Implement all of them
-        DEME_ERROR("Unrecognized location of system origin.");
-    }
-}
-
 void DEMSolver::addWorldBoundingBox() {
     // Now, add the bounding box for the simulation `world' if instructed.
     // Note the positions to add these planes are determined by the user-wanted box sizes, not m_boxXYZ which is the max
     // possible box size.
     if (m_user_add_bounding_box == "none")
         return;
+    bool top = false, bottom = false, sides = false;
+    switch (hash_charr(m_user_add_bounding_box.c_str())) {
+        case ("only_bottom"_):
+            bottom = true;
+            break;
+        case ("only_sides"_):
+            sides = true;
+            break;
+        case ("top_open"_):
+            bottom = true;
+            sides = true;
+            break;
+        case ("all"_):
+            bottom = true;
+            sides = true;
+            top = true;
+            break;
+        default:
+            DEME_ERROR("Domain bounding BC instruction %s is unknown.", m_user_add_bounding_box.c_str());
+    }
+
     auto box = this->AddExternalObject();
-    box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y + m_user_boxSize.y / 2., m_boxLBF.z),
-                  host_make_float3(0, 0, 1), m_bounding_box_material);
-    if (m_user_add_bounding_box == "only_bottom")
-        return;
-    box->AddPlane(host_make_float3(m_boxLBF.x, m_boxLBF.y + m_user_boxSize.y / 2., m_boxLBF.z + m_user_boxSize.z / 2.),
-                  host_make_float3(1, 0, 0), m_bounding_box_material);
-    box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x, m_boxLBF.y + m_user_boxSize.y / 2.,
-                                   m_boxLBF.z + m_user_boxSize.z / 2.),
-                  host_make_float3(-1, 0, 0), m_bounding_box_material);
-    box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y, m_boxLBF.z + m_user_boxSize.z / 2.),
-                  host_make_float3(0, 1, 0), m_bounding_box_material);
-    box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y + m_user_boxSize.y,
-                                   m_boxLBF.z + m_user_boxSize.z / 2.),
-                  host_make_float3(0, -1, 0), m_bounding_box_material);
-    if (m_user_add_bounding_box == "top_open")
-        return;
-    // Finally, if == all, add a top boundary
-    box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y + m_user_boxSize.y / 2.,
-                                   m_boxLBF.z + m_user_boxSize.z),
-                  host_make_float3(0, 0, -1), m_bounding_box_material);
+    if (bottom) {
+        float3 bottom_loc = (m_user_box_min + m_user_box_max) / 2.;
+        bottom_loc.z = m_user_box_min.z;
+        box->AddPlane(bottom_loc, host_make_float3(0, 0, 1), m_bounding_box_material);
+    }
+
+    if (sides) {
+        float3 center = (m_user_box_min + m_user_box_max) / 2.;
+
+        float3 left = center;
+        left.x = m_user_box_min.x;
+        box->AddPlane(left, host_make_float3(1, 0, 0), m_bounding_box_material);
+
+        float3 right = center;
+        right.x = m_user_box_max.x;
+        box->AddPlane(right, host_make_float3(-1, 0, 0), m_bounding_box_material);
+
+        float3 front = center;
+        front.y = m_user_box_min.y;
+        box->AddPlane(front, host_make_float3(0, 1, 0), m_bounding_box_material);
+
+        float3 the_back = center;
+        the_back.y = m_user_box_max.y;
+        box->AddPlane(the_back, host_make_float3(0, -1, 0), m_bounding_box_material);
+    }
+
+    if (top) {
+        float3 top_loc = (m_user_box_min + m_user_box_max) / 2.;
+        top_loc.z = m_user_box_max.z;
+        box->AddPlane(top_loc, host_make_float3(0, 0, -1), m_bounding_box_material);
+    }
 }
 
 // This is generally used to pass individual instructions on how the solver should behave
@@ -975,12 +999,12 @@ void DEMSolver::transferSimParams() {
     }
     DEME_DEBUG_PRINTF("%u contact wildcards are in the force model.", nContactWildcards);
 
-    dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
-                     m_expand_factor, m_approx_max_vel, m_expand_safety_multi, m_expand_base_vel,
-                     m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards);
-    kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
-                     m_expand_factor, m_approx_max_vel, m_expand_safety_multi, m_expand_base_vel,
-                     m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards);
+    dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
+                     m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_expand_safety_multi,
+                     m_expand_base_vel, m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards);
+    kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
+                     m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_expand_safety_multi,
+                     m_expand_base_vel, m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards);
 }
 
 void DEMSolver::allocateGPUArrays() {
@@ -1108,10 +1132,11 @@ void DEMSolver::validateUserInputs() {
     //     LoadClumpType.");
     // }
 
-    if (m_user_boxSize.x <= 0.f || m_user_boxSize.y <= 0.f || m_user_boxSize.z <= 0.f) {
+    float3 user_box_size = m_user_box_max - m_user_box_min;
+    if (user_box_size.x <= 0.f || user_box_size.y <= 0.f || user_box_size.z <= 0.f) {
         DEME_ERROR(
             "The size of the simulation world is set to be (or default to be) %f by %f by %f. It is impossibly small.",
-            m_user_boxSize.x, m_user_boxSize.y, m_user_boxSize.z);
+            user_box_size.x, user_box_size.y, user_box_size.z);
     }
 
     if (m_suggestedFutureDrift < 0) {
@@ -1119,13 +1144,6 @@ void DEMSolver::validateUserInputs() {
             "The physics of the DEM system can drift into the future as much as it wants compared to contact "
             "detections, because SetCDUpdateFreq was called with a negative argument. Please make sure this is "
             "intended.");
-    }
-
-    if ((!ts_size_is_const) && (!use_user_defined_expand_factor) && (m_approx_max_vel <= 0.f)) {
-        DEME_ERROR(
-            "When using variable time step size, this solver needs your approximated maximum body/point velocity to "
-            "add margins for a safe contact detection.\nYou should either supply that via SetMaxVelocity, or "
-            "explicitly set a expand factor via SetExpandFactor.");
     }
 
     // Fix the reserved family (reserved family number is in user family, not in impl family)

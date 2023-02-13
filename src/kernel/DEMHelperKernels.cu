@@ -411,13 +411,13 @@ inline void matProxy2ContactParam(T1& E_eff,
                                   const T1& CoR2,
                                   const T1& mu2,
                                   const T1& Crr2) {
-    T1 invE = (1. - nu1 * nu1) / Y1 + (1. - nu2 * nu2) / Y2;
-    E_eff = 1. / invE;
-    T1 invG = 2. * (2. - nu1) * (1. + nu1) / Y1 + 2. * (2. - nu2) * (1. + nu2) / Y2;
-    G_eff = 1. / invG;
+    T1 invE = ((T1)1 - nu1 * nu1) / Y1 + ((T1)1 - nu2 * nu2) / Y2;
+    E_eff = (T1)1 / invE;
+    T1 invG = (T1)2 * ((T1)2 - nu1) * ((T1)1 + nu1) / Y1 + (T1)2 * ((T1)2 - nu2) * ((T1)1 + nu2) / Y2;
+    G_eff = (T1)1 / invG;
     CoR = min(CoR1, CoR2);
-    mu = max(mu1, mu2);
-    Crr = max(Crr1, Crr2);
+    mu = (mu1 + mu2) / (T1)2;
+    Crr = (Crr1 + Crr2) / (T1)2;
 }
 
 /// Calculate the contact params based on the 2 contact material types given (historyless version)
@@ -430,8 +430,8 @@ inline void matProxy2ContactParam(T1& E_eff,
                                   const T1& Y2,
                                   const T1& nu2,
                                   const T1& CoR2) {
-    T1 invE = (1. - nu1 * nu1) / Y1 + (1. - nu2 * nu2) / Y2;
-    E_eff = 1. / invE;
+    T1 invE = ((T1)1 - nu1 * nu1) / Y1 + ((T1)1 - nu2 * nu2) / Y2;
+    E_eff = (T1)1 / invE;
     CoR = min(CoR1, CoR2);
 }
 
