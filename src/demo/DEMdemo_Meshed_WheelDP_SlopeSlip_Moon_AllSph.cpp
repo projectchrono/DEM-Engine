@@ -61,7 +61,7 @@ int main() {
 
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
-        DEMSim.SetCoordSysOrigin("center");
+  
         float bottom = -0.5;
         auto bot_wall = DEMSim.AddBCPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_terrain);
         auto bot_wall_tracker = DEMSim.Track(bot_wall);

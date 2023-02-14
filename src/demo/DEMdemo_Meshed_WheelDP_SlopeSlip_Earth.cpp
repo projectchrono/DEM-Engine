@@ -22,15 +22,15 @@ int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled_110kg";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_DownScaled";
-    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
-    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled";
+    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
+    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled";
     std::filesystem::create_directory(out_dir);
 
     // `World'
     float G_mag = 9.81;
     float step_size = 1e-6;
     double world_size_y = 0.52;
-    double world_size_x = 4;//2.04;
+    double world_size_x = 2.04;
     double world_size_z = 4.0;
 
     // Define the wheel geometry
@@ -57,14 +57,15 @@ int main() {
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
         // E, nu, CoR, mu, Crr...
-        auto mat_type_wall = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.9}, {"Crr", 0.00}});
-        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.2}, {"Crr", 0.00}});
+        float mu = 0.5;
+        auto mat_type_wall = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu + (0.9-mu)+(0.9-mu)}, {"Crr", 0.00}});
+        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.5}, {"Crr", 0.00}});
         auto mat_type_terrain =
-            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.2}, {"Crr", 0.00}});
+            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu}, {"Crr", 0.00}});
 
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_wall);
-        DEMSim.SetCoordSysOrigin("center");
+
         float bottom = -0.5;
         auto bot_wall = DEMSim.AddBCPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_wall);
         auto bot_wall_tracker = DEMSim.Track(bot_wall);
@@ -211,8 +212,8 @@ int main() {
         // auto compressor_tracker = DEMSim.Track(compressor);
 
         // Families' prescribed motions (Earth)
-        float w_r = 0.8 * 2.45;
-        // float w_r = 0.8;
+        // float w_r = 0.8 * 2.45;
+        float w_r = 0.8;
         float v_ref = w_r * wheel_rad;
         double G_ang = Slope_deg * math_PI / 180.;
 
@@ -223,6 +224,7 @@ int main() {
         DEMSim.AddFamilyPrescribedAcc(1, to_string_with_precision(-added_pressure * std::sin(G_ang) / wheel_mass),
                                       "none", to_string_with_precision(-added_pressure * std::cos(G_ang) / wheel_mass));
         DEMSim.SetFamilyFixed(10);
+        DEMSim.DisableContactBetweenFamilies(10, 10);
 
         // Some inspectors
         auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
@@ -251,7 +253,7 @@ int main() {
         std::cout << "Output at " << fps << " FPS" << std::endl;
 
         // Put the wheel in place, then let the wheel sink in initially
-        float corr = 0;//1.0;
+        float corr = 1.0;
         float init_x = -1.0 + corr;
         if (Slope_deg < 18) {
             init_x = -1.6 + corr;
@@ -268,9 +270,7 @@ int main() {
             DEMSim.WriteMeshFile(std::string(meshname));
         }
         // Settling
-        for (double t = 0; t < 0.4; t += 0.05) {
-            DEMSim.DoDynamicsThenSync(0.05);
-        }
+        DEMSim.DoDynamicsThenSync(0.4);
 
         float bulk_den_high = partial_mass_finder->GetValue() / ((-0.41 + 0.5) * world_size_x * world_size_y);
         float bulk_den_low = total_mass_finder->GetValue() / ((max_z + 0.5) * world_size_x * world_size_y);
@@ -290,6 +290,12 @@ int main() {
                 // DEMSim.WriteMeshFile(std::string(meshname));
                 DEMSim.ShowThreadCollaborationStats();
                 currframe++;
+                DEMSim.DoDynamicsThenSync(0.0);
+                if (t >= 1.) {
+                    DEMSim.ChangeClumpFamily(10); // Fixed
+                    float3 pos = wheel_tracker->Pos();
+                    DEMSim.ChangeClumpFamily(0, {pos.x-0.3, pos.x+0.2});
+                }
             }
 
             if (t >= 2. && !start_measure) {
