@@ -59,11 +59,11 @@ int main() {
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
         // E, nu, CoR, mu, Crr...
-        auto mat_type_wall = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.9}, {"Crr", 0.00}});
-        
-        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.2}, {"Crr", 0.00}});
+        float mu = 0.2;
+        auto mat_type_wall = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu + (0.9-mu)+(0.9-mu)}, {"Crr", 0.00}});
+        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.5}, {"Crr", 0.00}});
         auto mat_type_terrain =
-            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.2}, {"Crr", 0.00}});
+            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu}, {"Crr", 0.00}});
 
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_wall);
@@ -229,6 +229,7 @@ int main() {
         DEMSim.AddFamilyPrescribedAcc(2, to_string_with_precision(-added_pressure * std::sin(G_ang) / wheel_mass),
                                       "none", to_string_with_precision(-added_pressure * std::cos(G_ang) / wheel_mass));
         DEMSim.SetFamilyFixed(10);
+        DEMSim.DisableContactBetweenFamilies(10, 10);
 
         // Some inspectors
         auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
@@ -260,7 +261,7 @@ int main() {
 
         // Put the wheel in place, then let the wheel sink in initially
         float init_x = -0.0;
-        if (Slope_deg <= 5) {
+        if (Slope_deg < 18) {
             init_x = -0.6;
         }
 
@@ -324,6 +325,12 @@ int main() {
                 DEMSim.WriteMeshFile(std::string(meshname));
                 DEMSim.ShowThreadCollaborationStats();
                 currframe++;
+                DEMSim.DoDynamicsThenSync(0.0);
+                if (t >= 1.) {
+                    DEMSim.ChangeClumpFamily(10); // Fixed
+                    float3 pos = wheel_tracker->Pos();
+                    DEMSim.ChangeClumpFamily(0, {pos.x-0.3, pos.x+0.2});
+                }
             }
 
             if (t >= 2. && !start_measure) {
