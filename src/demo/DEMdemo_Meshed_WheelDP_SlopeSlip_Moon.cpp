@@ -61,7 +61,7 @@ int main() {
         // E, nu, CoR, mu, Crr...
         float mu = 0.2;
         auto mat_type_wall = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu + (0.9-mu)+(0.9-mu)}, {"Crr", 0.00}});
-        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.5}, {"Crr", 0.00}});
+        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu + (0.5-mu)+(0.5-mu)}, {"Crr", 0.00}});
         auto mat_type_terrain =
             DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu}, {"Crr", 0.00}});
 
@@ -230,6 +230,7 @@ int main() {
                                       "none", to_string_with_precision(-added_pressure * std::cos(G_ang) / wheel_mass));
         DEMSim.SetFamilyFixed(10);
         DEMSim.DisableContactBetweenFamilies(10, 10);
+        DEMSim.DisableContactBetweenFamilies(10, 255);
 
         // Some inspectors
         auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
@@ -329,7 +330,7 @@ int main() {
                 if (t >= 1.) {
                     DEMSim.ChangeClumpFamily(10); // Fixed
                     float3 pos = wheel_tracker->Pos();
-                    DEMSim.ChangeClumpFamily(0, {pos.x-0.3, pos.x+0.2});
+                    DEMSim.ChangeClumpFamily(0, {pos.x-0.5, pos.x+0.4});
                 }
             }
 
