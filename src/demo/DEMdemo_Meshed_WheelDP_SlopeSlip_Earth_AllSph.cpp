@@ -21,7 +21,7 @@ const double math_PI = 3.1415927;
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_AllSph_HalfSize";
-    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_AllSph";
+    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_AllSph_0.003size";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_AllSph_0.0002Size";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled_AllSph";
     std::filesystem::create_directory(out_dir);
@@ -78,7 +78,7 @@ int main() {
         // Track it
         auto wheel_tracker = DEMSim.Track(wheel);
 
-        float granular_rad = 0.006;
+        float granular_rad = 0.003;
         auto sphere_type = DEMSim.LoadSphereType(2.6e3 * 4 / 3 * math_PI * granular_rad * granular_rad * granular_rad,
                                                  granular_rad, mat_type_terrain);
 

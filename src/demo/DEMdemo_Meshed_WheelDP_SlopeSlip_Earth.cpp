@@ -22,8 +22,8 @@ int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled_110kg";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_DownScaled";
-    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
-    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled";
+    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
+    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -58,10 +58,10 @@ int main() {
 
         // E, nu, CoR, mu, Crr...
         float mu = 0.2;
-        auto mat_type_wall = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu + (0.9-mu)+(0.9-mu)}, {"Crr", 0.00}});
-        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu + (0.5-mu)+(0.5-mu)}, {"Crr", 0.00}});
+        auto mat_type_wall = DEMSim.LoadMaterial({{"E", 100e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu + (0.9-mu)+(0.9-mu)}, {"Crr", 0.00}});
+        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 200e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu + (0.5-mu)+(0.5-mu)}, {"Crr", 0.00}});
         auto mat_type_terrain =
-            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu}, {"Crr", 0.00}});
+            DEMSim.LoadMaterial({{"E", 100e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu}, {"Crr", 0.00}});
 
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_wall);
@@ -161,7 +161,7 @@ int main() {
             std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
             for (size_t i = 0; i < in_xyz.size(); i++) {
                 if (std::abs(in_xyz.at(i).y) > (world_size_y - 0.05) / 2 ||
-                    std::abs(in_xyz.at(i).x) > (world_size_x - 0.06) / 2)
+                    std::abs(in_xyz.at(i).x) > (world_size_x) / 2)
                     elem_to_remove.at(i) = 1;
             }
             in_xyz.erase(std::remove_if(in_xyz.begin(), in_xyz.end(),
@@ -212,8 +212,8 @@ int main() {
         // auto compressor_tracker = DEMSim.Track(compressor);
 
         // Families' prescribed motions (Earth)
-        float w_r = 0.8 * 2.45;
-        // float w_r = 0.8;
+        // float w_r = 0.8 * 2.45;
+        float w_r = 0.8;
         float v_ref = w_r * wheel_rad;
         double G_ang = Slope_deg * math_PI / 180.;
 
