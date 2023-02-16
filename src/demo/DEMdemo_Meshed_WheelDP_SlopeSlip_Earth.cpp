@@ -42,7 +42,7 @@ int main() {
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
-    // float Slopes_deg[] = {2, 5, 10, 15, 20, 25};
+    // float Slopes_deg[] = {0, 2, 5, 10, 15, 20, 25};
     // float Slopes_deg[] = {0, 2.5, 5, 7.5, 10, 12.5};
     float Slopes_deg[] = {25, 20, 15, 10, 5, 2, 0};
     unsigned int run_mode = 0;
@@ -57,11 +57,11 @@ int main() {
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
         // E, nu, CoR, mu, Crr...
-        float mu = 0.2;
-        auto mat_type_wall = DEMSim.LoadMaterial({{"E", 100e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu + (0.9-mu)+(0.9-mu)}, {"Crr", 0.00}});
-        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 200e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu + (0.5-mu)+(0.5-mu)}, {"Crr", 0.00}});
+        float mu = 0.5;
+        auto mat_type_wall = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu + (0.9-mu)+(0.9-mu)}, {"Crr", 0.00}});
+        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu + (0.1-mu)+(0.1-mu)}, {"Crr", 0.00}});
         auto mat_type_terrain =
-            DEMSim.LoadMaterial({{"E", 100e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu}, {"Crr", 0.00}});
+            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu}, {"Crr", 0.00}});
 
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_wall);
