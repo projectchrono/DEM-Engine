@@ -57,9 +57,9 @@ int main() {
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
         // E, nu, CoR, mu, Crr...
-        float mu = 0.5;
+        float mu = 0.3;
         auto mat_type_wall = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu + (0.9-mu)+(0.9-mu)}, {"Crr", 0.00}});
-        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu + (0.1-mu)+(0.1-mu)}, {"Crr", 0.00}});
+        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu + (0.7-mu)+(0.7-mu)}, {"Crr", 0.00}});
         auto mat_type_terrain =
             DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu}, {"Crr", 0.00}});
 
