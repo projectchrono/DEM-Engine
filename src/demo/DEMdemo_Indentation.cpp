@@ -66,6 +66,8 @@ int main() {
     // E, nu, CoR, mu, Crr...
     auto mat_type_cube = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}});
     auto mat_type_granular = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}});
+    // CoR is a pair-wise property, so it should be mentioned here
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_cube, mat_type_granular, 0.8);
 
     float granular_rad = 0.001;  // 0.002;
     auto template_granular = DEMSim.LoadSphereType(granular_rad * granular_rad * granular_rad * 2.6e3 * 4 / 3 * 3.14,

@@ -41,6 +41,9 @@ int main() {
 
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 1}});
     auto mat_type_particles = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.7}, {"mu", 1}});
+    // If you don't have this line, then CoR between wall material and granular material will be 0.5 (average of the
+    // two).
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.3);
 
     /*
     // First create clump type 0 for representing the ground

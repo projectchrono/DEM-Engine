@@ -172,6 +172,9 @@ class DEMForceModel {
     // Those material property names that the user must set. This is non-empty usually when the user uses our on-shelf
     // force models. If they use their custom models, then this will be empty.
     std::set<std::string> m_must_have_mat_props;
+    // These material properties are `pair-wise', meaning they should also be defined as the interaction between 2
+    // materials. An example is friction coeff. Young's modulus on the other hand, is not pair-wise.
+    std::set<std::string> m_pairwise_mat_props;
     // Custom or on-shelf
     FORCE_MODEL type;
     // The model
@@ -196,6 +199,15 @@ class DEMForceModel {
     /// Read user-custom force model from a file (which by default should reside in kernel/DEMUserScripts), which
     /// contains your force calculation code. Returns 0 if read successfully, otherwise 1.
     int ReadCustomModelFile(const std::filesystem::path& sourcefile);
+
+    /// @brief Specifiy the material properties that this force model will use.
+    /// @param props Material property names.
+    void SetMustHaveMatProp(const std::set<std::string>& props) { m_must_have_mat_props = props; }
+    /// @brief Specifiy the material properties that are pair-wise (instead of being associated with each individual
+    /// material).
+    /// @param props Material property names.
+    void SetMustPairwiseMatProp(const std::set<std::string>& props) { m_pairwise_mat_props = props; }
+
     /// Set the names for the extra quantities that will be associated with each contact pair. For example,
     /// history-based models should have 3 float arrays to store contact history. Only float is supported. Note the
     /// initial value of all contact wildcard arrays is automatically 0.

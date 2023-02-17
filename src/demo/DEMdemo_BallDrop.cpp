@@ -25,8 +25,12 @@ int main() {
     DEMSim.EnsureKernelErrMsgLineNum();
 
     // E, nu, CoR, mu, Crr...
-    auto mat_type_ball = DEMSim.LoadMaterial({{"E", 1e10}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.3}, {"Crr", 0.01}});
-    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 5e9}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.3}, {"Crr", 0.01}});
+    auto mat_type_ball = DEMSim.LoadMaterial({{"E", 1e10}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.3}, {"Crr", 0.01}});
+    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 5e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.3}, {"Crr", 0.01}});
+    // If you don't have this line, then CoR between mixer material and granular material will be 0.7 (average of the
+    // two).
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_ball, mat_type_terrain, 0.6);
+    // Should do the same for mu and Crr, but since they are the same across 2 materials, it won't have an effect...
 
     float step_size = 1e-5;
     double world_size = 10;

@@ -33,8 +33,11 @@ int main() {
     // We can scale this general template to make it smaller, like a DEM particle that you would actually use
     float scaling = 0.01;
 
-    auto mat_type_sand = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}, {"Crr", 0.01}});
-    auto mat_type_drum = DEMSim.LoadMaterial({{"E", 2e9}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", 0.5}, {"Crr", 0.01}});
+    auto mat_type_sand = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.4}, {"Crr", 0.01}});
+    auto mat_type_drum = DEMSim.LoadMaterial({{"E", 2e9}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.8}, {"Crr", 0.01}});
+    // If you don't have this line, then mu between drum material and granular material will be 0.6 (average of the
+    // two).
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_sand, mat_type_drum, 0.7);
 
     // Bin size needs to make sure no too-many-sphere-per-bin situation happens
     // DEMSim.SetInitBinSize(scaling);

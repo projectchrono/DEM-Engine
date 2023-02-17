@@ -3,15 +3,13 @@
 
 float E_cnt, G_cnt, CoR_cnt;
 {
-    float mu_cnt, Crr_cnt;  // Dummies, we don't use'em in force calculation
     float E_A = E[bodyAMatType];
     float nu_A = nu[bodyAMatType];
-    float CoR_A = CoR[bodyAMatType];
     float E_B = E[bodyBMatType];
     float nu_B = nu[bodyBMatType];
-    float CoR_B = CoR[bodyBMatType];
-    matProxy2ContactParam<float>(E_cnt, G_cnt, CoR_cnt, mu_cnt, Crr_cnt, E_A, nu_A, CoR_A, 0, 0, E_B, nu_B, CoR_B, 0,
-                                 0);
+    matProxy2ContactParam<float>(E_cnt, G_cnt, E_A, nu_A, E_B, nu_B);
+    // CoR is pair-wise, so obtain it this way
+    CoR_cnt = CoR[bodyAMatType][bodyBMatType];
 }
 
 float3 rotVelCPA, rotVelCPB;

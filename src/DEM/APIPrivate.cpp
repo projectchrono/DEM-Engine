@@ -681,7 +681,7 @@ void DEMSolver::preprocessTriangleObjs() {
 }
 
 void DEMSolver::figureOutMaterialProxies() {
-    // It now got completely integrated to the jitification part
+    // It now got completely integrated to the equipMaterials part
 }
 
 void DEMSolver::figureOutFamilyMasks() {
@@ -1557,42 +1557,141 @@ inline void DEMSolver::equipMassMoiVolume(std::unordered_map<std::string, std::s
 }
 
 inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::string>& strMap) {
+    // Force model gives us info on what mat props should be pairwise
+    const std::set<std::string> mat_prop_that_are_pairwise = m_force_model->m_pairwise_mat_props;
+    m_pairwise_material_prop_names.insert(mat_prop_that_are_pairwise.begin(), mat_prop_that_are_pairwise.end());
+
     // Depending on the force model, there could be a few material properties that should be specified by the user
     const std::set<std::string> mat_prop_that_must_exist = m_force_model->m_must_have_mat_props;
-    // Those must-haves will be added to the pool
+    // Those must-haves will be added to the pool (whcih is a set of material prop names that we know)
     m_material_prop_names.insert(mat_prop_that_must_exist.begin(), mat_prop_that_must_exist.end());
+    m_material_prop_names.insert(m_pairwise_material_prop_names.begin(), m_pairwise_material_prop_names.end());
+
+    // Init
     std::string materialDefs = " ";
 
     if (m_material_prop_names.size() == 0)
         return;
+    unsigned int num_mats = m_loaded_materials.size();
+    // A matrix used to see if all mat props are defined by the user
+    const std::vector<std::vector<notStupidBool_t>> flag_mat =
+        std::vector<std::vector<notStupidBool_t>>(num_mats, std::vector<notStupidBool_t>(num_mats, 0));
 
     // Construct material arrays line by line
     const std::string line_header = "__constant__ __device__ float ";
+    // Looping through all material prop names that need a definition...
     for (const auto& prop_name : m_material_prop_names) {
-        materialDefs += line_header + prop_name + "[] = {";
+        std::vector<std::vector<notStupidBool_t>> flags = flag_mat;
+        // Create a matrix that registers the interaction between materials
+        std::vector<std::vector<float>> pair_mat =
+            std::vector<std::vector<float>>(num_mats, std::vector<float>(num_mats, 0.0));
         // See what each material says...
         for (const auto& a_mat : m_loaded_materials) {
+            // load_order is the offset identifier for initialization too...
+            unsigned int i = a_mat->load_order;
             const auto& name_val_pairs = a_mat->mat_prop;
             float val = 0.0;
             if (check_exist(name_val_pairs, prop_name)) {
                 val = name_val_pairs.at(prop_name);
-            } else {  // If no such key exists, val defaults to 0
+                flags[i][i] = 1;
                 // If prop_name does not exist for this material, then if prop_name is one of the
                 // mat_prop_that_must_exist, the user should know there is trouble...
-                if (check_exist(mat_prop_that_must_exist, prop_name))
-                    DEME_WARNING(
-                        "A material does not have %s property specified. However, the force model you are using "
-                        "requires that information, so we are using default 0.\nPlease be sure this is intentional.",
-                        prop_name.c_str());
             }
-            materialDefs += to_string_with_precision(val) + ",";
+            // Write down the value at diagnoal
+            pair_mat[i][i] = val;
         }
-        // If the user makes trouble and loaded 0 material, then we add some junk in it as placeholder
-        if (m_loaded_materials.size() == 0) {
-            materialDefs += "0";
+        {
+            // Check if all materials have prop_name defined
+            notStupidBool_t flag = 1;
+            for (unsigned int i = 0; i < num_mats; i++) {
+                flag = flag && flags[i][i];
+            }
+            if (!flag) {
+                DEME_WARNING(
+                    "Material property %s is needed by the force model or is referred to by the user. However, at "
+                    "least one material does not have it defined, so it is defaulted to 0 for that material.\nPlease "
+                    "be sure this is intentional.",
+                    prop_name.c_str());
+            }
         }
-        // End the line
-        materialDefs += "};\n";
+
+        // If pairwise property, extra treatments....
+        if (check_exist(m_pairwise_material_prop_names, prop_name)) {
+            // In m_pairwise_material_prop_names does not mean it's also in m_pairwise_matprop. But in any case it has a
+            // default.
+            for (unsigned int i = 0; i < num_mats; i++) {
+                for (unsigned int j = 0; j < num_mats; j++) {
+                    if (i != j) {
+                        // Default to average of the 2 materials
+                        pair_mat[i][j] = (pair_mat[i][i] + pair_mat[j][j]) / 2.;
+                        // If they are the same, we don't have to remind the user that it is not set, in the case that
+                        // the user does not set it, since well, the average does not change anything.
+                        if (pair_mat[i][i] == pair_mat[j][j]) {
+                            flags[i][j] = 1;
+                        }
+                    }
+                }
+            }
+            // Now if user specified them, add to the matrix
+            if (check_exist(m_pairwise_matprop, prop_name)) {
+                const auto& pair_props = m_pairwise_matprop.at(prop_name);
+                // Loop through every pair that is associated with this property name
+                for (const auto& pair_prop : pair_props) {
+                    const std::pair<unsigned int, unsigned int>& order_pair = pair_prop.first;
+                    float val = pair_prop.second;
+                    pair_mat[order_pair.first][order_pair.second] = val;
+                    pair_mat[order_pair.second][order_pair.first] = val;
+                    flags[order_pair.first][order_pair.second] = 1;
+                    flags[order_pair.second][order_pair.first] = 1;
+                }
+            }
+            {
+                // Check if all pair-wise mat props are defined
+                notStupidBool_t flag = 1;
+                for (unsigned int i = 0; i < num_mats; i++) {
+                    for (unsigned int j = 0; j < num_mats; j++) {
+                        if (i != j) {
+                            flag = flag && flags[i][j];
+                        }
+                    }
+                }
+                if (!flag) {
+                    DEME_WARNING(
+                        "Material property %s should involve two materials. However, at least a pair of materials does "
+                        "not have it defined, so it is defaulted to the average value between the two "
+                        "materials.\nPlease be sure this is intentional.",
+                        prop_name.c_str());
+                }
+            }
+        }
+
+        // Now jitify
+        if (!check_exist(m_pairwise_material_prop_names, prop_name)) {  // Not a pair-wise prop...
+            materialDefs += line_header + prop_name + "[] = {";
+            for (unsigned int i = 0; i < num_mats; i++) {
+                materialDefs += to_string_with_precision(pair_mat[i][i]) + ",";
+            }
+            // If the user makes trouble and loaded 0 material, then we add some junk in it as placeholder
+            if (num_mats == 0) {
+                materialDefs += "0";
+            }
+            // End the line
+            materialDefs += "};\n";
+        } else {  // Is a pair-wise prop...
+            materialDefs += line_header + prop_name + "[][" + std::to_string(num_mats) + "] = {";
+            for (unsigned int i = 0; i < num_mats; i++) {
+                materialDefs += "{";
+                for (unsigned int j = 0; j < num_mats; j++) {
+                    materialDefs += to_string_with_precision(pair_mat[i][j]) + ",";
+                }
+                materialDefs += "},";
+            }
+            // If the user makes trouble and loaded 0 material, then we add some junk in it as placeholder
+            if (num_mats == 0) {
+                materialDefs += "{0}";
+            }
+            materialDefs += "};\n";
+        }
     }
     DEME_DEBUG_PRINTF("Material properties in kernel:");
     DEME_DEBUG_PRINTF("%s", materialDefs.c_str());

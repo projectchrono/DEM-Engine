@@ -286,6 +286,18 @@ class DEMSolver {
     /// the API-level cache. Return the ptr of the material type just loaded.
     std::shared_ptr<DEMMaterial> LoadMaterial(const std::unordered_map<std::string, float>& mat_prop);
 
+    /// @brief Set the value for a material property that by nature involves a pair of a materials (e.g. friction
+    /// coefficient).
+    /// @param name The name of this property (which should have already been referred to in a previous LoadMaterial
+    /// call).
+    /// @param mat1 Material 1 that is involved in this pair.
+    /// @param mat2 Material 2 that is involved in this pair.
+    /// @param val The value.
+    void SetMaterialPropertyPair(const std::string& name,
+                                 const std::shared_ptr<DEMMaterial>& mat1,
+                                 const std::shared_ptr<DEMMaterial>& mat2,
+                                 float val);
+
     /// @brief Get the clumps that are in contact with this owner as a vector.
     /// @param ownerID The ID of the owner that is being queried.
     /// @return Clump owner IDs in contact with this owner.
@@ -895,6 +907,9 @@ class DEMSolver {
     // All material properties names
     std::set<std::string> m_material_prop_names;
 
+    // The material properties that are pair-wise (example: friction coeff)
+    std::set<std::string> m_pairwise_material_prop_names;
+
     // Cached tracked objects that can be leveraged by the user to assume explicit control over some simulation objects
     std::vector<std::shared_ptr<DEMTrackedObj>> m_tracked_objs;
     // std::vector<std::shared_ptr<DEMTracker>> m_trackers;
@@ -993,6 +1008,10 @@ class DEMSolver {
     // This is the cached material information.
     // It will be massaged into the managed memory upon Initialize().
     std::vector<std::shared_ptr<DEMMaterial>> m_loaded_materials;
+
+    // Pair-wise material properties
+    std::unordered_map<std::string, std::vector<std::pair<std::pair<unsigned int, unsigned int>, float>>>
+        m_pairwise_matprop;
 
     // This is the cached clump structure information. Note although not stated explicitly, those are only `clump'
     // templates, not including triangles, analytical geometries etc.

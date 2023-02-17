@@ -29,6 +29,9 @@ int main() {
     srand(4150);
 
     auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}});
+    auto mat_type_2 = DEMSim.LoadMaterial({{"E", 2e9}, {"nu", 0.4}, {"CoR", 0.6}});
+    // If you don't have this line, then CoR between thw 2 materials will take average when they are in contact
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_1, mat_type_2, 0.6);
 
     auto sph_type_1 = DEMSim.LoadSphereType(11728., 1., mat_type_1);
 
@@ -54,7 +57,7 @@ int main() {
 
     // DEMSim.DisableContactBetweenFamilies(0, 1);
 
-    auto bot_plane = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/plane_20by20.obj").string(), mat_type_1);
+    auto bot_plane = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/plane_20by20.obj").string(), mat_type_2);
     bot_plane->SetInitPos(make_float3(0, 0, -1.25));
 
     // Create a inspector to find out stuff
