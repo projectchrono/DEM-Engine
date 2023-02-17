@@ -721,6 +721,24 @@ std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterial(const std::unordered_map<st
     return m_loaded_materials.back();
 }
 
+void DEMSolver::SetMaterialPropertyPair(const std::string& name,
+                                        const std::shared_ptr<DEMMaterial>& mat1,
+                                        const std::shared_ptr<DEMMaterial>& mat2,
+                                        float val) {
+    m_pairwise_material_prop_names.insert(name);
+    if (!check_exist(m_material_prop_names, name)) {
+        DEME_WARNING(
+            "Material property %s in SetMaterialPropertyPair call never appeared in previous LoadMaterial calls.\nIf "
+            "two objects having the same material collide, this property is likely to be considered 0.",
+            name.c_str());
+    }
+    std::pair<unsigned int, unsigned int> mat_load_ids =
+        std::pair<unsigned int, unsigned int>(mat1->load_order, mat2->load_order);
+    std::pair<std::pair<unsigned int, unsigned int>, float> pair_val =
+        std::pair<std::pair<unsigned int, unsigned int>, float>(mat_load_ids, val);
+    m_pairwise_matprop[name].push_back(pair_val);
+}
+
 std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clump) {
     if (clump.nComp != clump.radii.size() || clump.nComp != clump.relPos.size() ||
         clump.nComp != clump.materials.size()) {

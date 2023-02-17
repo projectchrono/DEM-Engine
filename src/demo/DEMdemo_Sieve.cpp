@@ -35,8 +35,7 @@ int main() {
     float min_relpos = -0.015;
     float max_relpos = 0.015;
 
-    auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}});
-    auto mat_type_2 = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
+    auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.5}});
 
     // First create clump type 0 for representing the sieve
     float sieve_sp_r = 0.05;
@@ -118,12 +117,12 @@ int main() {
 
     std::shared_ptr<DEMExternObj> BCs = DEMSim.AddExternalObject();
     BCs->SetFamily(2);
-    BCs->AddPlane(make_float3(0, 4.8, 0), make_float3(0, -1, 0), mat_type_2);
-    BCs->AddPlane(make_float3(0, -4.8, 0), make_float3(0, 1, 0), mat_type_2);
-    BCs->AddPlane(make_float3(4.8, 0, 0), make_float3(-1, 0, 0), mat_type_2);
-    BCs->AddPlane(make_float3(-4.8, 0, 0), make_float3(1, 0, 0), mat_type_2);
-    BCs->AddPlane(make_float3(0, 0, -10.0), make_float3(0, 0, 1), mat_type_2);
-    BCs->AddPlane(make_float3(0, 0, 10.0), make_float3(0, 0, -1), mat_type_2);
+    BCs->AddPlane(make_float3(0, 4.8, 0), make_float3(0, -1, 0), mat_type_1);
+    BCs->AddPlane(make_float3(0, -4.8, 0), make_float3(0, 1, 0), mat_type_1);
+    BCs->AddPlane(make_float3(4.8, 0, 0), make_float3(-1, 0, 0), mat_type_1);
+    BCs->AddPlane(make_float3(-4.8, 0, 0), make_float3(1, 0, 0), mat_type_1);
+    BCs->AddPlane(make_float3(0, 0, -10.0), make_float3(0, 0, 1), mat_type_1);
+    BCs->AddPlane(make_float3(0, 0, 10.0), make_float3(0, 0, -1), mat_type_1);
     DEMSim.SetFamilyFixed(2);  // BCs are fixed!
     // BC family does not interact with the sieve
     DEMSim.DisableContactBetweenFamilies(1, 2);

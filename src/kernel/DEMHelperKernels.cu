@@ -396,43 +396,18 @@ inline __device__ float3 findLocalCoord(const T1& X,
 
 /// Calculate the contact params based on the 2 contact material types given
 template <typename T1>
-inline void matProxy2ContactParam(T1& E_eff,
-                                  T1& G_eff,
-                                  T1& CoR,
-                                  T1& mu,
-                                  T1& Crr,
-                                  const T1& Y1,
-                                  const T1& nu1,
-                                  const T1& CoR1,
-                                  const T1& mu1,
-                                  const T1& Crr1,
-                                  const T1& Y2,
-                                  const T1& nu2,
-                                  const T1& CoR2,
-                                  const T1& mu2,
-                                  const T1& Crr2) {
+inline void matProxy2ContactParam(T1& E_eff, T1& G_eff, const T1& Y1, const T1& nu1, const T1& Y2, const T1& nu2) {
     T1 invE = ((T1)1 - nu1 * nu1) / Y1 + ((T1)1 - nu2 * nu2) / Y2;
     E_eff = (T1)1 / invE;
     T1 invG = (T1)2 * ((T1)2 - nu1) * ((T1)1 + nu1) / Y1 + (T1)2 * ((T1)2 - nu2) * ((T1)1 + nu2) / Y2;
     G_eff = (T1)1 / invG;
-    CoR = min(CoR1, CoR2);
-    mu = (mu1 + mu2) / (T1)2;
-    Crr = (Crr1 + Crr2) / (T1)2;
 }
 
-/// Calculate the contact params based on the 2 contact material types given (historyless version)
+/// Calculate the contact params based on the 2 contact material types given (no-tangent version)
 template <typename T1>
-inline void matProxy2ContactParam(T1& E_eff,
-                                  T1& CoR,
-                                  const T1& Y1,
-                                  const T1& nu1,
-                                  const T1& CoR1,
-                                  const T1& Y2,
-                                  const T1& nu2,
-                                  const T1& CoR2) {
+inline void matProxy2ContactParam(T1& E_eff, const T1& Y1, const T1& nu1, const T1& Y2, const T1& nu2) {
     T1 invE = ((T1)1 - nu1 * nu1) / Y1 + ((T1)1 - nu2 * nu2) / Y2;
     E_eff = (T1)1 / invE;
-    CoR = min(CoR1, CoR2);
 }
 
 template <typename T1, typename T2>
