@@ -37,11 +37,7 @@ int main() {
     auto mat_type_drum = DEMSim.LoadMaterial({{"E", 2e9}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.8}, {"Crr", 0.01}});
     // If you don't have this line, then mu between drum material and granular material will be 0.6 (average of the
     // two).
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_sand, mat_type_drum, 0.7);
-
-    // Bin size needs to make sure no too-many-sphere-per-bin situation happens
-    // DEMSim.SetInitBinSize(scaling);
-    DEMSim.SetInitBinSize(4 * scaling);
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_sand, mat_type_drum, 0.8);
 
     // Create some random clump templates for the filling materials
     // An array to store these generated clump templates
@@ -121,10 +117,13 @@ int main() {
     DEMSim.InstructBoxDomainDimension(5, 5, 5);
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
-    // A minor tweak: if this number is large, then the update freq auto-adjust algorithm sets the freq a bit higher,
-    // and it is even less likely that dT waits for an update
+    // For SetCDNumStepsMaxDrift methods, you can just use defaults, and they mean this: the solver will record the
+    // average num of steps that dT is ahead of kT, say n steps, then the solver sets the max number of steps allowed
+    // for dT to be aahead of kT to be a * n + b, based on the inputs you give using the 2 methods.
     DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1.1);
     DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(3);
+    // User-given max vel and bin size with the current version of solver, are only for its reference, since they
+    // auto-adapt.
     DEMSim.SetMaxVelocity(3.);
     DEMSim.SetInitBinSizeAsMultipleOfSmallestSphere(15);
     DEMSim.Initialize();
@@ -153,12 +152,6 @@ int main() {
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
             DEMSim.WriteSphereFile(std::string(filename));
             currframe++;
-            // float3 plane_vel = planes_tracker->Vel();
-            // float4 plane_quat = planes_tracker->OriQ();
-            // std::cout << "Vel of the planes: " << plane_vel.x << ", " << plane_vel.y << ", " << plane_vel.z
-            //           << std::endl;
-            // std::cout << "Quaternion of the planes: " << plane_quat.w << ", " << plane_quat.x << ", " << plane_quat.y
-            //           << ", " << plane_quat.z << std::endl;
         }
 
         DEMSim.DoDynamics(step_size);
