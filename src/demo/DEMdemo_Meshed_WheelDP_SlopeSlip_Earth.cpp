@@ -58,10 +58,13 @@ int main() {
 
         // E, nu, CoR, mu, Crr...
         float mu = 0.3;
-        auto mat_type_wall = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu + (0.9-mu)+(0.9-mu)}, {"Crr", 0.00}});
-        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu + (0.7-mu)+(0.7-mu)}, {"Crr", 0.00}});
+        float mu_wheel = 0.7;
+        auto mat_type_wall = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.9}, {"Crr", 0.00}});
+        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu_wheel}, {"Crr", 0.00}});
         auto mat_type_terrain =
             DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu}, {"Crr", 0.00}});
+        DEMSim.SetMaterialPropertyPair("mu", mat_type_wheel, mat_type_terrain, mu_wheel);
+        DEMSim.SetMaterialPropertyPair("mu", mat_type_wall, mat_type_terrain, 0.9);
 
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_wall);
@@ -127,8 +130,8 @@ int main() {
         // Now we load clump locations from a checkpointed file
         {
             std::cout << "Making terrain..." << std::endl;
-            auto clump_xyz = DEMSim.ReadClumpXyzFromCsv("./GRC_20e6.csv");
-            auto clump_quaternion = DEMSim.ReadClumpQuatFromCsv("./GRC_20e6.csv");
+            auto clump_xyz = DEMSim.ReadClumpXyzFromCsv("./old_iter1_GRC2/GRC_20e6.csv");
+            auto clump_quaternion = DEMSim.ReadClumpQuatFromCsv("./old_iter1_GRC2/GRC_20e6.csv");
             std::vector<float3> in_xyz;
             std::vector<float4> in_quat;
             std::vector<std::shared_ptr<DEMClumpTemplate>> in_types;
