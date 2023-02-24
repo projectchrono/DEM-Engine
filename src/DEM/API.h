@@ -882,7 +882,7 @@ class DEMSolver {
     float auto_adjust_lower_proactive_ratio = 0.3;
     unsigned int upper_bound_future_drift = 5000;
     float max_drift_ahead_of_avg_drift = 6.;
-    float max_drift_multiple_of_avg_drift = 1.2;
+    float max_drift_multiple_of_avg_drift = 1.1;
     unsigned int max_drift_gauge_history_size = 200;
 
     // See SetNoForceRecord
