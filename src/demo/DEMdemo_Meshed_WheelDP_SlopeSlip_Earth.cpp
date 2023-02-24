@@ -36,7 +36,7 @@ int main() {
     // Define the wheel geometry
     float wheel_rad = 0.25;
     float wheel_width = 0.2;
-    float wheel_mass = 11.; // 8.7;
+    float wheel_mass = 5.; // 8.7;
     float total_pressure = 22. * 9.81;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
@@ -57,14 +57,14 @@ int main() {
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
         // E, nu, CoR, mu, Crr...
-        float mu = 0.2;
+        float mu = 0.3;
         float mu_wheel = 0.8;
         auto mat_type_wall = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.9}, {"Crr", 0.00}});
         auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu_wheel}, {"Crr", 0.00}});
         auto mat_type_terrain =
             DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu}, {"Crr", 0.00}});
         DEMSim.SetMaterialPropertyPair("mu", mat_type_wheel, mat_type_terrain, mu_wheel);
-        DEMSim.SetMaterialPropertyPair("mu", mat_type_wall, mat_type_terrain, 0.9);
+        DEMSim.SetMaterialPropertyPair("mu", mat_type_wall, mat_type_terrain, 0.3);
 
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_wall);
@@ -193,7 +193,7 @@ int main() {
             /*
             std::vector<float> x_shift_dist = {0};
             std::vector<float> y_shift_dist = {0};
-            std::vector<float> z_shift_dist = {0.11};
+            std::vector<float> z_shift_dist = {0.15};
             // Add some patches of such graular bed
             for (float x_shift : x_shift_dist) {
                 for (float y_shift : y_shift_dist) {
@@ -294,9 +294,7 @@ int main() {
         if (Slope_deg < 18) {
             init_x = -1.6 + corr;
         }
-        // Put the wheel in place, then let the wheel sink in initially
-        float max_z = max_z_finder->GetValue();
-        wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.03 + wheel_rad));
+        
 
         {
             char filename[200], meshname[200];
@@ -307,6 +305,9 @@ int main() {
         }
         // Settling
         DEMSim.DoDynamicsThenSync(0.4);
+        // Put the wheel in place, then let the wheel sink in initially
+        float max_z = max_z_finder->GetValue();
+        wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.03 + wheel_rad));
 
         float bulk_den_high = partial_mass_finder->GetValue() / ((-0.41 + 0.5) * world_size_x * world_size_y);
         float bulk_den_low = total_mass_finder->GetValue() / ((max_z + 0.5) * world_size_x * world_size_y);
