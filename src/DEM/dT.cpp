@@ -1532,6 +1532,9 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     granData->contactTorque_convToForce = contactTorque_convToForce.data();
     granData->contactPointGeometryA = contactPointGeometryA.data();
     granData->contactPointGeometryB = contactPointGeometryB.data();
+
+    // Maybe this is better? (don't know if managedAllocated arrays benefit from this)
+    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
 inline void DEMDynamicThread::unpackMyBuffer() {
