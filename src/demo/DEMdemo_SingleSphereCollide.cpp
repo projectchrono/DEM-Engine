@@ -30,6 +30,7 @@ int main() {
 
     auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}});
     auto mat_type_2 = DEMSim.LoadMaterial({{"E", 2e9}, {"nu", 0.4}, {"CoR", 0.6}});
+    auto mat_type_3 = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.2}, {"CoR", 0.8}});
     // If you don't have this line, then CoR between thw 2 materials will take average when they are in contact
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_1, mat_type_2, 0.6);
 
@@ -145,6 +146,9 @@ int main() {
         std::cout << "Particle 2 X coord is " << pos2.x << std::endl;
         std::cout << "Particle 1 family is " << fam1 << std::endl;
         std::cout << "Particle 2 family is " << fam2 << std::endl;
+
+        // Test changing material type on-the-fly...
+        DEMSim.SetFamilyClumpMaterial(1, mat_type_3);
     }
 
     DEMSim.ShowThreadCollaborationStats();

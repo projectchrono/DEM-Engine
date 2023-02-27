@@ -640,6 +640,16 @@ void DEMSolver::SetOwnerWildcardValue(const std::string& name, const std::vector
     }
     dT->setOwnerWildcardValue(m_owner_wc_num.at(name), vals);
 }
+
+void DEMSolver::SetFamilyClumpMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat) {
+    assertSysInit("SetFamilyClumpMaterial");
+    dT->setFamilyClumpMaterial(N, mat->load_order);
+}
+void DEMSolver::SetFamilyMeshMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat) {
+    assertSysInit("SetFamilyMeshMaterial");
+    dT->setFamilyMeshMaterial(N, mat->load_order);
+}
+
 void DEMSolver::SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, const std::vector<float>& vals) {
     assertSysInit("SetFamilyOwnerWildcardValue");
     if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {

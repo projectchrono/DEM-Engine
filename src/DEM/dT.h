@@ -363,10 +363,15 @@ class DEMDynamicThread {
     /// just adds to it.
     void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite = true);
 
-    /// Globally modify a owner wildcard's value
+    /// @brief Globally modify a owner wildcard's value.
     void setOwnerWildcardValue(unsigned int wc_num, const std::vector<float>& vals);
-    /// Modify the owner wildcard values of all entities in family family_num
+    /// @brief Modify the owner wildcard values of all entities in family family_num.
     void setFamilyOwnerWildcardValue(unsigned int family_num, unsigned int wc_num, const std::vector<float>& vals);
+
+    /// @brief Set all clumps in this family to have this material.
+    void setFamilyClumpMaterial(unsigned int N, unsigned int mat_id);
+    /// @brief Set all meshes in this family to have this material.
+    void setFamilyMeshMaterial(unsigned int N, unsigned int mat_id);
 
     /// @brief  Fill res with the wc_num wildcard value.
     void getOwnerWildcardValue(std::vector<float>& res, unsigned int wc_num);

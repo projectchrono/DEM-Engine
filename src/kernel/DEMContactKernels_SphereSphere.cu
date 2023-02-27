@@ -92,7 +92,6 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
     __shared__ double bodyZ[DEME_NUM_SPHERES_PER_CD_BATCH];
     __shared__ deme::family_t ownerFamilies[DEME_NUM_SPHERES_PER_CD_BATCH];
     __shared__ deme::binContactPairs_t blockPairCnt;
-    ;
 
     // typedef cub::BlockReduce<deme::binContactPairs_t, DEME_KT_CD_NTHREADS_PER_BLOCK> BlockReduceT;
     // __shared__ typename BlockReduceT::TempStorage temp_storage;

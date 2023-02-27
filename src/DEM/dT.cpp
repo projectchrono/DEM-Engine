@@ -1538,8 +1538,7 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     granData->contactPointGeometryA = contactPointGeometryA.data();
     granData->contactPointGeometryB = contactPointGeometryB.data();
 
-    // Maybe this is better? (don't know if managedAllocated arrays benefit from this)
-    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    // DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
 inline void DEMDynamicThread::unpackMyBuffer() {
@@ -2214,6 +2213,23 @@ void DEMDynamicThread::setSimTime(double time) {
 
 float DEMDynamicThread::getUpdateFreq() const {
     return (float)((pSchedSupport->dynamicMaxFutureDrift).load()) / 2.;
+}
+
+void DEMDynamicThread::setFamilyClumpMaterial(unsigned int N, unsigned int mat_id) {
+    for (size_t i = 0; i < simParams->nSpheresGM; i++) {
+        bodyID_t owner_id = ownerClumpBody[i];
+        if (+(familyID[owner_id]) == N) {
+            sphereMaterialOffset[i] = (family_t)mat_id;
+        }
+    }
+}
+void DEMDynamicThread::setFamilyMeshMaterial(unsigned int N, unsigned int mat_id) {
+    for (size_t i = 0; i < simParams->nTriGM; i++) {
+        bodyID_t owner_id = ownerMesh[i];
+        if (+(familyID[owner_id]) == N) {
+            triMaterialOffset[i] = (family_t)mat_id;
+        }
+    }
 }
 
 void DEMDynamicThread::setOwnerWildcardValue(unsigned int wc_num, const std::vector<float>& vals) {

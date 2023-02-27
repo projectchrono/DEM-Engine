@@ -460,6 +460,14 @@ class DEMSolver {
     void SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, float val) {
         SetFamilyOwnerWildcardValue(N, name, std::vector<float>(1, val));
     }
+    /// @brief Set all clumps in this family to have this material.
+    /// @param N Family number.
+    /// @param mat Material type.
+    void SetFamilyClumpMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat);
+    /// @brief Set all meshes in this family to have this material.
+    /// @param N Family number.
+    /// @param mat Material type.
+    void SetFamilyMeshMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat);
 
     /// @brief Get the owner wildcard's values of all entities.
     std::vector<float> GetOwnerWildcardValue(const std::string& name, float val);
