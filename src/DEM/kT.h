@@ -220,6 +220,8 @@ class DEMKinematicThread {
 
         cudaStreamDestroy(streamInfo.stream);
 
+        deallocateEverything();
+
         DEME_GPU_CALL(cudaFree(simParams));
         DEME_GPU_CALL(cudaFree(granData));
     }
@@ -359,6 +361,9 @@ class DEMKinematicThread {
     inline void transferArraysResize(size_t nContactPairs);
     // Automatic adjustments to sim params
     void calibrateParams();
+
+    // Deallocate everything
+    void deallocateEverything();
 
     // Just-in-time compiled kernels
     // jitify::Program bin_sphere_kernels = JitHelper::buildProgram("bin_sphere_kernels", " ");

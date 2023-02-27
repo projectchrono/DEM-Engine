@@ -821,6 +821,8 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
     }
 }
 
+void DEMKinematicThread::deallocateEverything() {}
+
 void DEMKinematicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite) {
     if (overwrite) {
         for (size_t i = 0; i < triangles.size(); i++) {

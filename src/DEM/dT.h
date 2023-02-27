@@ -59,7 +59,7 @@ class DEMDynamicThread {
 
     // Number of items in the buffer array (which is not a managed vector, due to our need to explicitly control where
     // it is allocated)
-    size_t buffer_size;
+    size_t buffer_size = 0;
 
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
@@ -298,6 +298,8 @@ class DEMDynamicThread {
         startThread();
         th.join();
         cudaStreamDestroy(streamInfo.stream);
+
+        deallocateEverything();
 
         DEME_GPU_CALL(cudaFree(simParams));
         DEME_GPU_CALL(cudaFree(granData));
@@ -586,6 +588,9 @@ class DEMDynamicThread {
     void sendToTheirBuffer();
     // Resize some work arrays based on the number of contact pairs provided by kT
     void contactEventArraysResize(size_t nContactPairs);
+
+    // Deallocate everything
+    void deallocateEverything();
 
     // Just-in-time compiled kernels
     std::shared_ptr<jitify::Program> prep_force_kernels;

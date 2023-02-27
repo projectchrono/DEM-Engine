@@ -348,10 +348,14 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
         }
     }
 
+    // You know what, let's not init dT buffers, since kT will change it when needed anyway. Besides, changing it here
+    // will cause problems in the case of a re-init-ed simulation with more clumps added to system, since we may
+    // accidentally clamp those arrays.
+    /*
     // Transfer buffer arrays
     // The following several arrays will have variable sizes, so here we only used an estimate.
     // It is cudaMalloc-ed memory, not managed, because we want explicit locality control of buffers
-    buffer_size = nSpheresGM * DEME_INIT_CNT_MULTIPLIER;
+    buffer_size = DEME_MAX(buffer_size, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
     DEME_DEVICE_PTR_ALLOC(granData->idGeometryA_buffer, buffer_size);
     DEME_DEVICE_PTR_ALLOC(granData->idGeometryB_buffer, buffer_size);
     DEME_DEVICE_PTR_ALLOC(granData->contactType_buffer, buffer_size);
@@ -368,6 +372,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
         // DEME_ADVISE_DEVICE(contactMapping_buffer, streamInfo.device);
         DEME_DEVICE_PTR_ALLOC(granData->contactMapping_buffer, buffer_size);
     }
+    */
 }
 
 void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, std::string>& template_number_name_map,
@@ -2184,6 +2189,15 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     }
 
     return res;
+}
+
+void DEMDynamicThread::deallocateEverything() {
+    for (unsigned int i = 0; i < contactWildcards.size(); i++) {
+        contactWildcards.clear();
+    }
+    for (unsigned int i = 0; i < ownerWildcards.size(); i++) {
+        ownerWildcards.clear();
+    }
 }
 
 size_t DEMDynamicThread::getNumContacts() const {

@@ -5,8 +5,9 @@
 
 // #include <cub/block/block_load.cuh>
 // #include <cub/block/block_store.cuh>
-#include <cub/block/block_reduce.cuh>
-#include <cub/block/block_scan.cuh>
+// #include <cub/block/block_reduce.cuh>
+// #include <cub/block/block_scan.cuh>
+// #include <cub/util_ptx.cuh>
 
 // If clump templates are jitified, they will be below
 _clumpTemplateDefs_;
@@ -142,9 +143,10 @@ __global__ void getNumberOfSphTriContactsEachBin(deme::DEMSimParams* simParams,
     __shared__ float3 triBNode2[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ float3 triBNode3[DEME_NUM_TRIANGLES_PER_CD_BATCH];
     __shared__ deme::family_t triOwnerFamilies[DEME_NUM_TRIANGLES_PER_CD_BATCH];
+    __shared__ deme::binContactPairs_t blockPairCnt;
 
-    typedef cub::BlockReduce<deme::binContactPairs_t, DEME_KT_CD_NTHREADS_PER_BLOCK> BlockReduceT;
-    __shared__ typename BlockReduceT::TempStorage temp_storage;
+    // typedef cub::BlockReduce<deme::binContactPairs_t, DEME_KT_CD_NTHREADS_PER_BLOCK> BlockReduceT;
+    // __shared__ typename BlockReduceT::TempStorage temp_storage;
 
     const deme::trianglesBinTouches_t nTriInBin = numTrianglesBinTouches[blockIdx.x];
     if (threadIdx.x == 0 && nTriInBin > simParams->errOutBinTriNum) {
@@ -167,9 +169,11 @@ __global__ void getNumberOfSphTriContactsEachBin(deme::DEMSimParams* simParams,
     // Have to allocate my sphere info first (each thread handles a sphere)
     const deme::binSphereTouchPairs_t thisSphereTableEntry = sphereIDsLookUpTable[indForAcqSphInfo];
     const deme::binsTriangleTouchPairs_t thisTriTableEntry = triIDsLookUpTable[blockIdx.x];
-    deme::binContactPairs_t contact_count = 0;
     // No need to check if there are too many spheres, since we did in another kernel
     const deme::spheresBinTouches_t nSphInBin = numSpheresBinTouches[indForAcqSphInfo];
+    if (myThreadID == 0)
+        blockPairCnt = 0;
+    __syncthreads();
 
     // This bin may have more than 128 (default) triangles, so we process it by 128-triangle batch
     for (deme::trianglesBinTouches_t processed_count = 0; processed_count < nTriInBin;
@@ -238,7 +242,7 @@ __global__ void getNumberOfSphTriContactsEachBin(deme::DEMSimParams* simParams,
                         deme::binID_t contactPntBin = getPointBinID<deme::binID_t>(
                             cntPnt.x, cntPnt.y, cntPnt.z, simParams->binSize, simParams->nbX, simParams->nbY);
                         if (contactPntBin == binID) {
-                            contact_count++;
+                            atomicAdd(&blockPairCnt, 1);
                         }
                     }
                 }  // End of a 256-sphere sweep
@@ -248,9 +252,9 @@ __global__ void getNumberOfSphTriContactsEachBin(deme::DEMSimParams* simParams,
         __syncthreads();
     }  // End of batch-wise triangle processing
 
-    deme::binContactPairs_t total_count = BlockReduceT(temp_storage).Sum(contact_count);
+    // deme::binContactPairs_t total_count = BlockReduceT(temp_storage).Sum(contact_count);
     if (myThreadID == 0) {
-        numTriSphContactsInEachBin[blockIdx.x] = total_count;
+        numTriSphContactsInEachBin[blockIdx.x] = blockPairCnt;
     }
 }
 
