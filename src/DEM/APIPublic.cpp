@@ -108,6 +108,22 @@ std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
     return clumps_in_cnt;
 }
 
+std::shared_ptr<DEMMaterial> DEMSolver::Duplicate(const std::shared_ptr<DEMMaterial>& ptr) {
+    // Make a copy
+    DEMMaterial obj = *ptr;
+    return this->LoadMaterial(obj);
+}
+std::shared_ptr<DEMClumpTemplate> DEMSolver::Duplicate(const std::shared_ptr<DEMClumpTemplate>& ptr) {
+    // Make a copy
+    DEMClumpTemplate obj = *ptr;
+    return this->LoadClumpType(obj);
+}
+std::shared_ptr<DEMClumpBatch> DEMSolver::Duplicate(const std::shared_ptr<DEMClumpBatch>& ptr) {
+    // Make a copy
+    DEMClumpBatch obj = *ptr;
+    return this->AddClumps(obj);
+}
+
 std::vector<std::pair<bodyID_t, bodyID_t>> DEMSolver::GetClumpContacts() const {
     std::vector<bodyID_t> idA_tmp, idB_tmp;
     std::vector<family_t> famA_tmp, famB_tmp;
@@ -640,6 +656,16 @@ void DEMSolver::SetOwnerWildcardValue(const std::string& name, const std::vector
     }
     dT->setOwnerWildcardValue(m_owner_wc_num.at(name), vals);
 }
+
+void DEMSolver::SetFamilyClumpMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat) {
+    assertSysInit("SetFamilyClumpMaterial");
+    dT->setFamilyClumpMaterial(N, mat->load_order);
+}
+void DEMSolver::SetFamilyMeshMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat) {
+    assertSysInit("SetFamilyMeshMaterial");
+    dT->setFamilyMeshMaterial(N, mat->load_order);
+}
+
 void DEMSolver::SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, const std::vector<float>& vals) {
     assertSysInit("SetFamilyOwnerWildcardValue");
     if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
@@ -694,6 +720,14 @@ void DEMSolver::DisableFamilyOutput(unsigned int ID) {
     m_no_output_families.insert(ID);
 }
 
+std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterial(DEMMaterial& a_material) {
+    std::shared_ptr<DEMMaterial> ptr = std::make_shared<DEMMaterial>(std::move(a_material));
+    ptr->load_order = m_loaded_materials.size();
+    m_loaded_materials.push_back(ptr);
+    nMaterialsLoad++;
+    return m_loaded_materials.back();
+}
+
 std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterial(const std::unordered_map<std::string, float>& mat_prop) {
     // Register material property names that appeared in this call
     for (const auto& a_pair : mat_prop) {
@@ -714,11 +748,7 @@ std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterial(const std::unordered_map<st
         }
     }
     DEMMaterial a_material(mat_prop);
-    std::shared_ptr<DEMMaterial> ptr = std::make_shared<DEMMaterial>(std::move(a_material));
-    ptr->load_order = m_loaded_materials.size();
-    m_loaded_materials.push_back(ptr);
-    nMaterialsLoad++;
-    return m_loaded_materials.back();
+    return LoadMaterial(a_material);
 }
 
 void DEMSolver::SetMaterialPropertyPair(const std::string& name,

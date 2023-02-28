@@ -348,10 +348,14 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
         }
     }
 
+    // You know what, let's not init dT buffers, since kT will change it when needed anyway. Besides, changing it here
+    // will cause problems in the case of a re-init-ed simulation with more clumps added to system, since we may
+    // accidentally clamp those arrays.
+    /*
     // Transfer buffer arrays
     // The following several arrays will have variable sizes, so here we only used an estimate.
     // It is cudaMalloc-ed memory, not managed, because we want explicit locality control of buffers
-    buffer_size = nSpheresGM * DEME_INIT_CNT_MULTIPLIER;
+    buffer_size = DEME_MAX(buffer_size, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
     DEME_DEVICE_PTR_ALLOC(granData->idGeometryA_buffer, buffer_size);
     DEME_DEVICE_PTR_ALLOC(granData->idGeometryB_buffer, buffer_size);
     DEME_DEVICE_PTR_ALLOC(granData->contactType_buffer, buffer_size);
@@ -368,6 +372,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
         // DEME_ADVISE_DEVICE(contactMapping_buffer, streamInfo.device);
         DEME_DEVICE_PTR_ALLOC(granData->contactMapping_buffer, buffer_size);
     }
+    */
 }
 
 void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, std::string>& template_number_name_map,
@@ -1532,6 +1537,8 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     granData->contactTorque_convToForce = contactTorque_convToForce.data();
     granData->contactPointGeometryA = contactPointGeometryA.data();
     granData->contactPointGeometryB = contactPointGeometryB.data();
+
+    // DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
 inline void DEMDynamicThread::unpackMyBuffer() {
@@ -2184,6 +2191,15 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     return res;
 }
 
+void DEMDynamicThread::deallocateEverything() {
+    for (unsigned int i = 0; i < contactWildcards.size(); i++) {
+        contactWildcards.clear();
+    }
+    for (unsigned int i = 0; i < ownerWildcards.size(); i++) {
+        ownerWildcards.clear();
+    }
+}
+
 size_t DEMDynamicThread::getNumContacts() const {
     return *(stateOfSolver_resources.pNumContacts);
 }
@@ -2198,6 +2214,23 @@ void DEMDynamicThread::setSimTime(double time) {
 
 float DEMDynamicThread::getUpdateFreq() const {
     return (float)((pSchedSupport->dynamicMaxFutureDrift).load()) / 2.;
+}
+
+void DEMDynamicThread::setFamilyClumpMaterial(unsigned int N, unsigned int mat_id) {
+    for (size_t i = 0; i < simParams->nSpheresGM; i++) {
+        bodyID_t owner_id = ownerClumpBody[i];
+        if (+(familyID[owner_id]) == N) {
+            sphereMaterialOffset[i] = (family_t)mat_id;
+        }
+    }
+}
+void DEMDynamicThread::setFamilyMeshMaterial(unsigned int N, unsigned int mat_id) {
+    for (size_t i = 0; i < simParams->nTriGM; i++) {
+        bodyID_t owner_id = ownerMesh[i];
+        if (+(familyID[owner_id]) == N) {
+            triMaterialOffset[i] = (family_t)mat_id;
+        }
+    }
 }
 
 void DEMDynamicThread::setOwnerWildcardValue(unsigned int wc_num, const std::vector<float>& vals) {

@@ -282,9 +282,27 @@ class DEMSolver {
                                                      float radius,
                                                      const std::shared_ptr<DEMMaterial>& material);
 
-    /// Load materials properties (Young's modulus, Poisson's ratio, Coeff of Restitution...) into
-    /// the API-level cache. Return the ptr of the material type just loaded.
+    /// @brief Load materials properties (Young's modulus, Poisson's ratio...) into the system.
+    /// @param mat_prop Property name--value pairs, as an unordered_map.
+    /// @return A shared pointer for this material.
     std::shared_ptr<DEMMaterial> LoadMaterial(const std::unordered_map<std::string, float>& mat_prop);
+    /// @brief Load materials properties into the system.
+    /// @param a_material A DEMMaterial object.
+    /// @return A shared pointer for this material.
+    std::shared_ptr<DEMMaterial> LoadMaterial(DEMMaterial& a_material);
+
+    /// @brief Duplicate a material that is loaded into the system.
+    /// @param ptr Shared pointer for the object to duplicate.
+    /// @return A duplicate of the object (with effectively a deep copy).
+    std::shared_ptr<DEMMaterial> Duplicate(const std::shared_ptr<DEMMaterial>& ptr);
+    /// @brief Duplicate a clump template that is loaded into the system.
+    /// @param ptr Shared pointer for the object to duplicate.
+    /// @return A duplicate of the object (with effectively a deep copy).
+    std::shared_ptr<DEMClumpTemplate> Duplicate(const std::shared_ptr<DEMClumpTemplate>& ptr);
+    /// @brief Duplicate a batch of clumps that is loaded into the system.
+    /// @param ptr Shared pointer for the object to duplicate.
+    /// @return A duplicate of the object (with effectively a deep copy).
+    std::shared_ptr<DEMClumpBatch> Duplicate(const std::shared_ptr<DEMClumpBatch>& ptr);
 
     /// @brief Set the value for a material property that by nature involves a pair of a materials (e.g. friction
     /// coefficient).
@@ -460,6 +478,14 @@ class DEMSolver {
     void SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, float val) {
         SetFamilyOwnerWildcardValue(N, name, std::vector<float>(1, val));
     }
+    /// @brief Set all clumps in this family to have this material.
+    /// @param N Family number.
+    /// @param mat Material type.
+    void SetFamilyClumpMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat);
+    /// @brief Set all meshes in this family to have this material.
+    /// @param N Family number.
+    /// @param mat Material type.
+    void SetFamilyMeshMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat);
 
     /// @brief Get the owner wildcard's values of all entities.
     std::vector<float> GetOwnerWildcardValue(const std::string& name, float val);

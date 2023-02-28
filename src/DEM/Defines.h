@@ -355,8 +355,8 @@ struct DEMDataDT {
     // Wildcards. These are some quantities that you can associate with contact pairs and/or owner objects. Very
     // typically, contact history info in Hertzian model in this DEM tool is a wildcard, and electric charges can be
     // registered on granular particles with wildcards.
-    float* contactWildcards[DEME_MAX_WILDCARD_NUM];
-    float* ownerWildcards[DEME_MAX_WILDCARD_NUM];
+    float* contactWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
+    float* ownerWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
 
     // dT believes this amount of future drift is ideal
     unsigned int perhapsIdealFutureDrift = 0;

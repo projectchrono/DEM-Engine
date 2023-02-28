@@ -4,8 +4,9 @@
 
 // #include <cub/block/block_load.cuh>
 // #include <cub/block/block_store.cuh>
-#include <cub/block/block_reduce.cuh>
-#include <cub/block/block_scan.cuh>
+// #include <cub/block/block_reduce.cuh>
+// #include <cub/block/block_scan.cuh>
+// #include <cub/util_ptx.cuh>
 
 // If clump templates are jitified, they will be below
 _clumpTemplateDefs_;
@@ -90,9 +91,10 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
     __shared__ double bodyY[DEME_NUM_SPHERES_PER_CD_BATCH];
     __shared__ double bodyZ[DEME_NUM_SPHERES_PER_CD_BATCH];
     __shared__ deme::family_t ownerFamilies[DEME_NUM_SPHERES_PER_CD_BATCH];
+    __shared__ deme::binContactPairs_t blockPairCnt;
 
-    typedef cub::BlockReduce<deme::binContactPairs_t, DEME_KT_CD_NTHREADS_PER_BLOCK> BlockReduceT;
-    __shared__ typename BlockReduceT::TempStorage temp_storage;
+    // typedef cub::BlockReduce<deme::binContactPairs_t, DEME_KT_CD_NTHREADS_PER_BLOCK> BlockReduceT;
+    // __shared__ typename BlockReduceT::TempStorage temp_storage;
 
     const deme::spheresBinTouches_t nBodiesInBin = numSpheresBinTouches[blockIdx.x];
     if (nBodiesInBin <= 1) {
@@ -111,7 +113,9 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
     const deme::binID_t binID = activeBinIDs[blockIdx.x];
     const deme::spheresBinTouches_t myThreadID = threadIdx.x;
     const deme::binSphereTouchPairs_t thisBodiesTableEntry = sphereIDsLookUpTable[blockIdx.x];
-    deme::binContactPairs_t contact_count = 0;
+    if (myThreadID == 0)
+        blockPairCnt = 0;
+    __syncthreads();
 
     // This bin may have more than 256 (default) spheres, so we process it by 256-sphere batch
     for (deme::spheresBinTouches_t processed_count = 0; processed_count < nBodiesInBin;
@@ -192,7 +196,7 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
                 */
 
                 if (in_contact && (contactPntBin == binID)) {
-                    contact_count++;
+                    atomicAdd(&blockPairCnt, 1);
                 }
             }
         }
@@ -234,15 +238,15 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
                                      radii[myThreadID], cur_bodyX, cur_bodyY, cur_bodyZ, cur_radii, contactPntBin);
 
                 if (in_contact && (contactPntBin == binID)) {
-                    contact_count++;
+                    atomicAdd(&blockPairCnt, 1);
                 }
             }
         }
         __syncthreads();
     }  // End of sphere-batch for loop
-    deme::binContactPairs_t total_count = BlockReduceT(temp_storage).Sum(contact_count);
+    // deme::binContactPairs_t total_count = BlockReduceT(temp_storage).Sum(contact_count);
     if (myThreadID == 0) {
-        numContactsInEachBin[blockIdx.x] = total_count;
+        numContactsInEachBin[blockIdx.x] = blockPairCnt;
     }
 }
 

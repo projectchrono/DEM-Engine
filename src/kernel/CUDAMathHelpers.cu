@@ -354,7 +354,7 @@ inline __device__ T2 to_real3(const T1& a) {
     {                          \
         printf(__VA_ARGS__);   \
         __threadfence();       \
-        cub::ThreadTrap();     \
+        asm volatile("trap;"); \
     }
 
 #endif

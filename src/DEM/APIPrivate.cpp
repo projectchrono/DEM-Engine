@@ -459,19 +459,20 @@ void DEMSolver::reportInitStats() const {
     DEME_INFO("\n");
     DEME_INFO("Number of total active devices: %d", dTkT_GpuManager->getNumDevices());
 
+    DEME_INFO("User-specified X-dimension range: [%.7g, %.7g]", m_user_box_min.x, m_user_box_max.x);
+    DEME_INFO("User-specified Y-dimension range: [%.7g, %.7g]", m_user_box_min.y, m_user_box_max.y);
+    DEME_INFO("User-specified Z-dimension range: [%.7g, %.7g]", m_user_box_min.z, m_user_box_max.z);
+    DEME_INFO("User-specified dimensions should NOT be larger than the following simulation world.");
     DEME_INFO("The dimension of the simulation world: %.17g, %.17g, %.17g", m_boxX, m_boxY, m_boxZ);
     DEME_INFO("Simulation world X range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_boxX);
     DEME_INFO("Simulation world Y range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_boxY);
     DEME_INFO("Simulation world Z range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_boxZ);
-    DEME_INFO("User-specified dimensions should NOT be larger than the above simulation world.");
-    DEME_INFO("User-specified X-dimension range: [%.7g, %.7g]", m_user_box_min.x, m_user_box_max.x);
-    DEME_INFO("User-specified Y-dimension range: [%.7g, %.7g]", m_user_box_min.y, m_user_box_max.y);
-    DEME_INFO("User-specified Z-dimension range: [%.7g, %.7g]", m_user_box_min.z, m_user_box_max.z);
+
     DEME_INFO("The length unit in this simulation is: %.17g", l);
     DEME_INFO("The edge length of a voxel: %.17g", m_voxelSize);
 
-    DEME_INFO("The edge length of a bin: %.17g", m_binSize);
-    DEME_INFO("The total number of bins: %zu", m_num_bins);
+    DEME_INFO("The initial edge length of a bin: %.17g", m_binSize);
+    DEME_INFO("The initial number of bins: %zu", m_num_bins);
 
     DEME_INFO("The total number of clumps: %zu", nOwnerClumps);
     DEME_INFO("The combined number of component spheres: %zu", nSpheresGM);
@@ -482,18 +483,40 @@ void DEMSolver::reportInitStats() const {
     DEME_INFO("The number of material types: %u", nMatTuples);
     switch (m_force_model->type) {
         case (FORCE_MODEL::HERTZIAN):
-            DEME_INFO("History-based Hertzian contact model is in use");
+            DEME_INFO("History-based Hertzian contact model is in use.");
             break;
         case (FORCE_MODEL::HERTZIAN_FRICTIONLESS):
-            DEME_INFO("Frictionless Hertzian contact model is in use");
+            DEME_INFO("Frictionless Hertzian contact model is in use.");
             break;
         case (FORCE_MODEL::CUSTOM):
-            DEME_INFO("A user-custom force model is in use");
+            DEME_INFO("A user-custom force model is in use.");
             break;
         default:
             DEME_INFO("An unknown force model is in use, this is probably not going well...");
     }
 
+    if (use_user_defined_expand_factor) {
+        DEME_INFO(
+            "All geometries are enlarged/thickened by %.6g (estimated with the initial step size and update frequency) "
+            "for contact detection purpose.",
+            m_expand_factor);
+        DEME_INFO("This in the case of the smallest sphere, means enlarging radius by %.6g%%.",
+                  (m_expand_factor / m_smallest_radius) * 100.0);
+    } else {
+        if (m_max_v_finder_type == MARGIN_FINDER_TYPE::MANUAL_MAX) {
+            float expand_factor =
+                (m_expand_safety_multi * m_approx_max_vel + m_expand_base_vel) * m_suggestedFutureDrift * m_ts_size;
+            DEME_INFO(
+                "All geometries should be enlarged/thickened by %.6g (estimated with the initial step size, update "
+                "frequency and max velocity) for contact detection purpose.",
+                expand_factor);
+            DEME_INFO("This in the case of the smallest sphere, means enlarging radius by %.6g%%.",
+                      (expand_factor / m_smallest_radius) * 100.0);
+        } else {
+            DEME_INFO("The solver to set to adaptively change the contact margin size.");
+        }
+    }
+    /*
     if (use_user_defined_expand_factor) {
         DEME_INFO(
             "All geometries are enlarged/thickened by %.6g (estimated with the initial step size and update frequency) "
@@ -523,6 +546,8 @@ void DEMSolver::reportInitStats() const {
         DEME_INFO("This in the case of the smallest sphere, means enlarging radius by %.6g%%",
                   (expand_factor / m_smallest_radius) * 100.0);
     }
+    */
+
     DEME_INFO("\n");
 
     // Debug outputs
