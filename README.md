@@ -16,7 +16,7 @@ DEM-Engine, nicknamed _DEME_, does Discrete Element Method simulations:
   <img width="380" src="https://i.imgur.com/PRbd0nJ.jpg">
 </p>
 
-Currently _DEME_ is a C++ package. We are buiilding a Python wrapper for it.
+Currently _DEME_ is a C++ package. We are building a Python wrapper for it.
 
 ### Licensing
 
@@ -34,7 +34,7 @@ New authors should add their name to the file `CONTRIBUTORS.md` rather than to i
 
 On a Linux machine, install CUDA if you do not already have it. Useful installation instructions may be found [here](https://developer.nvidia.com/cuda-downloads) and for WSL users, [here](https://docs.nvidia.com/cuda/wsl-user-guide/index.html). Make sure `nvidia-smi` and `nvcc --version` give correct returns. Sometimes after installation, `nvcc` and CUDA necessary libraries are not in `$PATH`, and you may have to manually include them. Depending on the version of CUDA you are using, an example:
 ```
-export PATH=$PATH:/usr/local/cuda-12.1/:/usr/local/cuda-12.1/lib64/cmake
+export PATH=$PATH:/usr/local/cuda-12.1/bin:/usr/local/cuda-12.1/lib64/:/usr/local/cuda-12.1/lib64/cmake/
 ```
 
 Once CUDA is ready, clone this project and then:

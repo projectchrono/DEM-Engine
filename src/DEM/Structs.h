@@ -164,13 +164,11 @@ inline std::string pretty_format_bytes(size_t bytes) {
 #define DEME_ERROR(...)                      \
     {                                        \
         char error_message[1024];            \
-        char func_name[1024];                \
         sprintf(error_message, __VA_ARGS__); \
-        sprintf(func_name, __func__);        \
         std::string out = error_message;     \
         out += "\n";                         \
         out += "This happened in ";          \
-        out += func_name;                    \
+        out += __func__;                     \
         out += ".\n";                        \
         throw std::runtime_error(out);       \
     }

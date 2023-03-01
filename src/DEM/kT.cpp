@@ -777,7 +777,7 @@ void DEMKinematicThread::updatePrevContactArrays(DEMDataDT* dT_data, size_t nCon
     overwritePrevContactArrays(granData, dT_data, previous_idGeometryA, previous_idGeometryB, previous_contactType,
                                simParams, stateOfSolver_resources, streamInfo.stream, nContacts);
     DEME_DEBUG_PRINTF("Number of contacts after a user-manual contact load: %zu", nContacts);
-    DEME_DEBUG_PRINTF("Number of spheres after a user-manual contact load: %zu", simParams->nSpheresGM);
+    DEME_DEBUG_PRINTF("Number of spheres after a user-manual contact load: %zu", (size_t)simParams->nSpheresGM);
 }
 
 void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& Subs) {

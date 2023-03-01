@@ -425,7 +425,7 @@ void DEMSolver::decideBinSize() {
         if (!use_user_defined_bin_size) {
             DEME_WARNING(
                 "%zu initial bins created with size %.6g. This is more than max allowance %zu. Auto-adjusting...",
-                m_num_bins, m_binSize, std::numeric_limits<binID_t>::max() - 1);
+                m_num_bins, m_binSize, (size_t)(std::numeric_limits<binID_t>::max() - 1));
             while (m_num_bins > std::numeric_limits<binID_t>::max() - 1) {
                 m_binSize *= 1.5;
                 m_num_bins = hostCalcBinNum(nbX, nbY, nbZ, m_voxelSize, m_binSize, nvXp2, nvYp2, nvZp2);
@@ -436,7 +436,7 @@ void DEMSolver::decideBinSize() {
                 "The simulation world has %zu bins (for domain partitioning in contact detection), but the largest bin "
                 "ID that we can have is %zu.\nYou can try to make bins larger via SetInitBinSize, or redefine binID_t "
                 "and recompile.",
-                m_num_bins, std::numeric_limits<binID_t>::max() - 1);
+                m_num_bins, (size_t)(std::numeric_limits<binID_t>::max() - 1));
         }
     }
 }
@@ -477,7 +477,7 @@ void DEMSolver::reportInitStats() const {
     DEME_INFO("The total number of clumps: %zu", nOwnerClumps);
     DEME_INFO("The combined number of component spheres: %zu", nSpheresGM);
     DEME_INFO("The total number of analytical objects: %u", nExtObj);
-    DEME_INFO("The total number of meshes: %u", nTriMeshes);
+    DEME_INFO("The total number of meshes: %zu", nTriMeshes);
     DEME_INFO("Grand total number of owners: %zu", nOwnerBodies);
 
     DEME_INFO("The number of material types: %u", nMatTuples);
@@ -553,7 +553,7 @@ void DEMSolver::reportInitStats() const {
     // Debug outputs
     DEME_DEBUG_EXEC(printf("These owners are tracked: ");
                     for (const auto& tracked
-                         : m_tracked_objs) { printf("%zu, ", tracked->ownerID); } printf("\n"););
+                         : m_tracked_objs) { printf("%zu, ", (size_t)tracked->ownerID); } printf("\n"););
 }
 
 void DEMSolver::preprocessAnalyticalObjs() {
@@ -640,7 +640,7 @@ void DEMSolver::preprocessClumpTemplates() {
             this_clump_sp_mat_ids.push_back(this_material->load_order);
         }
         m_template_sp_mat_ids.push_back(this_clump_sp_mat_ids);
-        DEME_DEBUG_EXEC(printf("Input clump No.%d has material types: ", m_template_clump_mass.size() - 1);
+        DEME_DEBUG_EXEC(printf("Input clump No.%zu has material types: ", m_template_clump_mass.size() - 1);
                         for (unsigned int i = 0; i < this_clump_sp_mat_ids.size();
                              i++) { printf("%d, ", this_clump_sp_mat_ids.at(i)); } printf("\n"););
     }
