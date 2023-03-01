@@ -12,8 +12,8 @@ DEM-Engine, nicknamed _DEME_, does Discrete Element Method simulations:
 - with support for co-simulation with other C/C++ packages, such as [Chrono](https://github.com/projectchrono/chrono).
 
 <p>
-  <img width="380" src="https://imgur.com/mLMjuTc">
-  <img width="380" src="https://imgur.com/PRbd0nJ">
+  <img width="380" src="https://i.imgur.com/mLMjuTc.jpg">
+  <img width="380" src="https://i.imgur.com/PRbd0nJ.jpg">
 </p>
 
 Currently _DEME_ is a C++ package. We are buiilding a Python wrapper for it.
