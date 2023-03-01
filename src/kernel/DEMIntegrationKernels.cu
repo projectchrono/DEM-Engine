@@ -2,8 +2,6 @@
 #include <DEMHelperKernels.cu>
 #include <DEM/Defines.h>
 
-#include <cub/util_ptx.cuh>
-
 // Apply presecibed velocity and report whether the `true' physics should be skipped, rather than added on top of that
 template <typename T1, typename T2>
 inline __device__ void applyPrescribedVel(bool& LinXPrescribed,

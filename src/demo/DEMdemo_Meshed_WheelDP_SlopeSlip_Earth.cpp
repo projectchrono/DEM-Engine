@@ -58,7 +58,7 @@ int main() {
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
         // E, nu, CoR, mu, Crr...
-        float mu = 0.3;
+        float mu = 0.4;
         float mu_wheel = 0.8;
         auto mat_type_wall = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.9}, {"Crr", 0.00}});
         auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu_wheel}, {"Crr", 0.00}});
@@ -85,13 +85,6 @@ int main() {
         // Track it
         auto wheel_tracker = DEMSim.Track(wheel);
 
-        // Then the ground particle template
-        DEMClumpTemplate shape_template1, shape_template2;
-        shape_template1.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
-        shape_template2.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat_6comp.csv").string());
-        std::vector<DEMClumpTemplate> shape_template = {shape_template2, shape_template2, shape_template1,
-                                                        shape_template1, shape_template1, shape_template1,
-                                                        shape_template1};
         // Calculate its mass and MOI
         float mass1 = 2.6e3 * 5.5886717 * kg_g_conv;  // in kg or g
         float3 MOI1 = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3 * kg_g_conv;
@@ -337,7 +330,7 @@ int main() {
                 DEMSim.ShowThreadCollaborationStats();
                 currframe++;
                 DEMSim.DoDynamicsThenSync(0.0);
-                if (t >= 1.) {
+                if (t >= 1. && Slope_deg < 14.) {
                     DEMSim.ChangeClumpFamily(10); // Fixed
                     float3 pos = wheel_tracker->Pos();
                     DEMSim.ChangeClumpFamily(0, {pos.x-0.5, pos.x+0.4});

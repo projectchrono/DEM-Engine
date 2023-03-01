@@ -17,6 +17,7 @@
 using namespace deme;
 
 const double math_PI = 3.14159;
+const float kg_g_conv = 1.;
 
 int main() {
     DEMSolver DEMSim;
@@ -48,8 +49,6 @@ int main() {
     double soil_bin_diameter = 0.584;
     double cone_surf_area = 323e-6;
     double cone_diameter = std::sqrt(cone_surf_area / math_PI) * 2;
-    // double starting_height = -0.25;
-    double starting_height = -0.235;
     DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
     // No need to add simulation `world' boundaries, b/c we'll add a cylinderical container manually
     DEMSim.InstructBoxDomainBoundingBC("none", mat_type_terrain);
@@ -200,11 +199,7 @@ int main() {
     // Note the scale method will scale mass and MOI automatically. But this only goes for the case you scale xyz all
     // together; otherwise, the MOI scaling will not be accurate and you should manually reset them.
     cone_tip->Scale(cone_diameter / 2);
-    // Note that position of objects is always the location of their centroid
-    cone_tip->SetInitPos(make_float3(0, 0, starting_height));
     cone_tip->SetFamily(2);
-    // The tip location, used to measure penetration length
-    double tip_z = -cone_diameter / 2 * 3 / 4 * tip_height + starting_height;
 
     // The define the body that is connected to the tip
     float body_mass = 7.8e3 * math_PI;
@@ -213,12 +208,11 @@ int main() {
     // This cyl mesh (h = 2m, r = 1m) has its center at the origin. So the following call actually has no effect...
     cone_body->InformCentroidPrincipal(make_float3(0, 0, 0), make_float4(0, 0, 0, 1));
     cone_body->Scale(make_float3(cone_diameter / 2, cone_diameter / 2, 0.5));
-    // Its initial position should be right above the cone tip...
-    cone_body->SetInitPos(make_float3(0, 0, 0.5 + (cone_diameter / 2 / 4 * tip_height) + starting_height));
     cone_body->SetFamily(2);
 
     // Track the cone_tip
     auto tip_tracker = DEMSim.Track(cone_tip);
+    auto body_tracker = DEMSim.Track(cone_body);
 
     // In fact, because the cone's motion is completely pre-determined, we can just prescribe family 1
     DEMSim.SetFamilyPrescribedLinVel(1, "0", "0", "-" + to_string_with_precision(cone_speed));
@@ -248,10 +242,10 @@ int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
     // out_dir += "/Cone_Penetration_HighDensity_CoR0.8";
     // out_dir += "/Cone_Penetration_LowDensity_CoR0.8";
-    out_dir += "/Cone_Penetration_1950Density";
+    out_dir += "/Cone_Penetration_1650Density";
     std::filesystem::create_directory(out_dir);
     float settle_mu = 0.3;
-    float sim_mu = 0.3;
+    float sim_mu = 0.4;
     float target_density = 1650.;
 
     // Settle
@@ -291,7 +285,15 @@ int main() {
         terrain_max_z = max_z_finder->GetValue();
         std::cout << "Max Z after settling: " << terrain_max_z << std::endl;
         init_max_z = terrain_max_z;
-        float bulk_density = -10000.;
+        float bulk_density;
+        {
+            float matter_mass = total_mass_finder->GetValue();
+            float total_volume =
+                math_PI * (soil_bin_diameter * soil_bin_diameter / 4) * (max_z_finder->GetValue() - bottom);
+            bulk_density = matter_mass / total_volume;
+            std::cout << "Compression bulk density: " << bulk_density << std::endl;
+        }
+        
         while (bulk_density < target_density) {
             if (curr_step % out_steps == 0) {
                 char filename[200], meshname[200];
@@ -339,7 +341,16 @@ int main() {
     DEMSim.SetFamilyOwnerWildcardValue(2, "mu_custom", 0.8); // For cone
     terrain_max_z = max_z_finder->GetValue();
 
-    float sim_end = 12.;
+    double starting_height = terrain_max_z + 0.015;
+    // Its initial position should be right above the cone tip...
+    body_tracker->SetPos(make_float3(0, 0, 0.5 + (cone_diameter / 2 / 4 * tip_height) + starting_height));
+    // Note that position of objects is always the location of their centroid
+    tip_tracker->SetPos(make_float3(0, 0, starting_height));
+    // The tip location, used to measure penetration length
+    double tip_z = -cone_diameter / 2 * 3 / 4 * tip_height + starting_height;
+
+
+    float sim_end = 8.;
     fps = 2500;
     float frame_time = 1.0 / fps;
     // Re-enable cone

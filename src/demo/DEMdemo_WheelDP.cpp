@@ -17,6 +17,7 @@
 using namespace deme;
 
 const double math_PI = 3.1415927;
+const float kg_g_conv = 1.;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();

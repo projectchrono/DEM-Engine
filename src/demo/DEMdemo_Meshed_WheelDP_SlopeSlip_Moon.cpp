@@ -328,7 +328,7 @@ int main() {
                 DEMSim.ShowThreadCollaborationStats();
                 currframe++;
                 DEMSim.DoDynamicsThenSync(0.0);
-                if (t >= 1.) {
+                if (t >= 1. && Slope_deg < 14.) {
                     DEMSim.ChangeClumpFamily(10); // Fixed
                     float3 pos = wheel_tracker->Pos();
                     DEMSim.ChangeClumpFamily(0, {pos.x-0.5, pos.x+0.4});
