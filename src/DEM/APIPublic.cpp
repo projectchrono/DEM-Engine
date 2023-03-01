@@ -734,11 +734,11 @@ std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterial(const std::unordered_map<st
         m_material_prop_names.insert(a_pair.first);
         if (a_pair.first == "CoR") {
             if (a_pair.second < DEME_TINY_FLOAT)
-                DEME_WARNING("Material type %u is set to have 0 restitution. Please make sure this is intentional.",
+                DEME_WARNING("Material type %zu is set to have 0 restitution. Please make sure this is intentional.",
                              m_loaded_materials.size());
             if (a_pair.second > 1.f)
                 DEME_WARNING(
-                    "Material type %u is set to have a restitution coefficient larger than 1. This is typically not "
+                    "Material type %zu is set to have a restitution coefficient larger than 1. This is typically not "
                     "physical and should destabilize the simulation.",
                     m_loaded_materials.size());
         }
@@ -774,7 +774,7 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clu
         clump.nComp != clump.materials.size()) {
         DEME_ERROR(
             "Radii, relative positions and material arrays defining a clump topology, must all have the same length "
-            "(%zu, as indicated by nComp).\nHowever it seems that their lengths are %zu, %zu, %zu, respectively.\nIf "
+            "(%u, as indicated by nComp).\nHowever it seems that their lengths are %zu, %zu, %zu, respectively.\nIf "
             "you constructed a DEMClumpTemplate struct yourself, you may need to carefully check if their lengths "
             "agree with nComp.",
             clump.nComp, clump.radii.size(), clump.relPos.size(), clump.materials.size());
@@ -792,7 +792,7 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clu
     // Give it a default name
     if (clump.m_name == "NULL") {
         char my_name[200];
-        sprintf(my_name, "%04d", nClumpTemplateLoad);
+        sprintf(my_name, "%04d", (int)nClumpTemplateLoad);
         clump.AssignName(std::string(my_name));
     }
 
@@ -1350,7 +1350,7 @@ void DEMSolver::UpdateClumps() {
     if (nLastTimeClumpTemplateLoad != nClumpTemplateLoad) {
         DEME_ERROR(
             "UpdateClumps cannot be used after loading new clump templates. Consider re-initializing at this "
-            "point.\nNumber of clump templates at last initialization: %u\nNumber of clump templates now: %u",
+            "point.\nNumber of clump templates at last initialization: %zu\nNumber of clump templates now: %zu",
             nLastTimeClumpTemplateLoad, nClumpTemplateLoad);
     }
     DEME_WARNING(
@@ -1383,8 +1383,8 @@ void DEMSolver::UpdateClumps() {
     if (nLastTimeMatNum != m_loaded_materials.size() || nLastTimeFamilyPreNum != m_input_family_prescription.size()) {
         DEME_ERROR(
             "UpdateClumps should not be used if you introduce new material types or family prescription (which will "
-            "need re-jitification).\nWe used to have %u materials, now we have %u.\nWe used to have %u family "
-            "prescription, now we have %u.",
+            "need re-jitification).\nWe used to have %u materials, now we have %zu.\nWe used to have %u family "
+            "prescription, now we have %zu.",
             nLastTimeMatNum, m_loaded_materials.size(), nLastTimeFamilyPreNum, m_input_family_prescription.size());
     }
 }

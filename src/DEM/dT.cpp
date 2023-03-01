@@ -660,7 +660,8 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
 
         DEME_DEBUG_PRINTF("Total number of transferred clumps this time: %zu", i);
         DEME_DEBUG_PRINTF("Total number of existing owners in simulation: %zu", nExistOwners);
-        DEME_DEBUG_PRINTF("Total number of owners in simulation after this init call: %zu", simParams->nOwnerBodies);
+        DEME_DEBUG_PRINTF("Total number of owners in simulation after this init call: %zu",
+                          (size_t)simParams->nOwnerBodies);
         nTotalClumpsThisCall = i;
 
         // If user loaded contact pairs, we need to inform kT on the first time step...
@@ -784,7 +785,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         familyID.at(i + owner_offset_for_mesh_obj) = this_family_num;
 
         DEME_DEBUG_PRINTF("dT just loaded a mesh in family %u", +(this_family_num));
-        DEME_DEBUG_PRINTF("This mesh is owner %u", (i + owner_offset_for_mesh_obj));
+        DEME_DEBUG_PRINTF("This mesh is owner %zu", (i + owner_offset_for_mesh_obj));
         DEME_DEBUG_PRINTF("Number of triangle facets loaded thus far: %zu", k);
     }
 }
