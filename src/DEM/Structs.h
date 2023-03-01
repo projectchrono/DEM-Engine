@@ -173,13 +173,16 @@ inline std::string pretty_format_bytes(size_t bytes) {
         throw std::runtime_error(out);       \
     }
 
-#define DEME_WARNING(...)                      \
-    {                                          \
-        if (verbosity >= VERBOSITY::WARNING) { \
-            printf("\nWARNING! ");             \
-            printf(__VA_ARGS__);               \
-            printf("\n\n");                    \
-        }                                      \
+#define DEME_WARNING(...)                       \
+    {                                           \
+        if (verbosity >= VERBOSITY::WARNING) {  \
+            char warn_message[1024];            \
+            sprintf(warn_message, __VA_ARGS__); \
+            std::string out = "\nWARNING! ";    \
+            out += warn_message;                \
+            out += "\n\n";                      \
+            std::cerr << out;                   \
+        }                                       \
     }
 
 #define DEME_INFO(...)                      \
@@ -190,13 +193,16 @@ inline std::string pretty_format_bytes(size_t bytes) {
         }                                   \
     }
 
-#define DEME_STEP_ANOMALY(...)                              \
-    {                                                       \
-        if (verbosity >= VERBOSITY::STEP_ANOMALY) {         \
-            printf("\n-------- SIM ANOMALY!!! --------\n"); \
-            printf(__VA_ARGS__);                            \
-            printf("\n\n");                                 \
-        }                                                   \
+#define DEME_STEP_ANOMALY(...)                                        \
+    {                                                                 \
+        if (verbosity >= VERBOSITY::STEP_ANOMALY) {                   \
+            char warn_message[1024];                                  \
+            sprintf(warn_message, __VA_ARGS__);                       \
+            std::string out = "\n-------- SIM ANOMALY!!! --------\n"; \
+            out += warn_message;                                      \
+            out += "\n\n";                                            \
+            std::cerr << out;                                         \
+        }                                                             \
     }
 
 #define DEME_STEP_METRIC(...)                      \
