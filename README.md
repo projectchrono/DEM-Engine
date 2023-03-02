@@ -32,10 +32,11 @@ New authors should add their name to the file `CONTRIBUTORS.md` rather than to i
 
 ### Installation
 
-On a Linux machine, install CUDA if you do not already have it. Useful installation instructions may be found [here](https://developer.nvidia.com/cuda-downloads) and for WSL users, [here](https://docs.nvidia.com/cuda/wsl-user-guide/index.html). Make sure `nvidia-smi` and `nvcc --version` give correct returns. Sometimes after installation, `nvcc` and CUDA necessary libraries are not in `$PATH`, and you may have to manually include them. Depending on the version of CUDA you are using, an example:
-```
-export PATH=$PATH:/usr/local/cuda-12.0/bin:/usr/local/cuda-12.0/lib64/:/usr/local/cuda-12.0/lib64/cmake/
-```
+On a Linux machine, install CUDA if you do not already have it. Useful installation instructions may be found [here](https://developer.nvidia.com/cuda-downloads). 
+
+Some additional troubleshooting tips for getting CUDA ready:
+
+- On WSL this code may be buildable (and [this](https://docs.nvidia.com/cuda/wsl-user-guide/index.html) is the guide for installing CUDA on WSL), but may not run. This is due the [many limitations on unified memory and pinned memory support](https://docs.nvidia.com/cuda/wsl-user-guide/index.html#known-limitations-for-linux-cuda-applications) on WSL. A native Linux machine or cluster is recommended.
 
 Once CUDA is ready, clone this project and then:
 
@@ -65,6 +66,17 @@ ccmake -G Ninja ..
 ```
 
 You generally do not have to change the build options in the GUI, but preferably you can change `CMAKE_BUILD_TYPE` to `Release`, and if you need to install this package as a library you can specify a `CMAKE_INSTALL_PREFIX`. 
+
+Some additional troubleshooting tips for generating the project:
+
+- If some dependencies such as CUB are not found, then you probably need to manually set `$PATH` and `$LD_LIBRARY_PATH`. An example is given below for a specific version of CUDA, note it may be different on your machine or cluster. You should also inspect if `nvidia-smi` and `nvcc --version` give correct returns.
+```
+export CPATH=/usr/local/cuda-12.1/targets/x86_64-linux/include${CPATH:+:${CPATH}}
+export PATH=/usr/local/cuda-12.1/bin${PATH:+:${PATH}}
+export PATH=/usr/local/cuda-12.1/lib64/cmake${PATH:+:${PATH}}
+export LD_LIBRARY_PATH=/usr/local/cuda-12.1/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export CUDA_HOME=/usr/local/cuda-12.1
+```
 
 Finally, build the project.
 

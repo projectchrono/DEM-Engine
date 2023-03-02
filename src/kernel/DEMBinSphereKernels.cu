@@ -130,7 +130,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
         double3 myPosXYZ;
         double myRadius;
         unsigned int sphFamilyNum;
-        deme::binSphereTouchPairs_t mySphereGeoReportOffset = numAnalGeoSphereTouchesScan[sphereID];
+
         {
             // My sphere voxel ID and my relPos
             deme::bodyID_t myOwnerID = granData->ownerClumpBody[sphereID];
@@ -196,6 +196,8 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
             }
         }
 
+        deme::binSphereTouchPairs_t mySphereGeoReportOffset = numAnalGeoSphereTouchesScan[sphereID];
+        deme::binSphereTouchPairs_t mySphereGeoReportOffset_end = numAnalGeoSphereTouchesScan[sphereID + 1];
         // Each sphere entity should also check if it overlaps with an analytical boundary-type geometry
         for (deme::objID_t objB = 0; objB < simParams->nAnalGM; objB++) {
             deme::contact_t contact_type;
@@ -235,7 +237,15 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                 idGeoB[mySphereGeoReportOffset] = (deme::bodyID_t)objB;
                 contactType[mySphereGeoReportOffset] = contact_type;
                 mySphereGeoReportOffset++;
+                if (mySphereGeoReportOffset >= mySphereGeoReportOffset_end) {
+                    return;  // Don't step on the next sphere's domain
+                }
             }
+        }
+        // In practice, I've never seen non-illed contact slots that need to be resolved this way. It's purely for ultra
+        // safety.
+        for (; mySphereGeoReportOffset < mySphereGeoReportOffset_end; mySphereGeoReportOffset++) {
+            contactType[mySphereGeoReportOffset] = deme::NOT_A_CONTACT;
         }
     }
 }

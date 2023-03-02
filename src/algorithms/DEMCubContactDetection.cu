@@ -107,13 +107,15 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                                    (size_t)numBinsSphereTouches[simParams->nSpheresGM - 1];
         numBinsSphereTouchesScan[simParams->nSpheresGM] = *pNumBinSphereTouchPairs;
         // The same process is done for sphere--analytical geometry pairs as well. Use vector 3 for this.
-        CD_temp_arr_bytes = simParams->nSpheresGM * sizeof(binSphereTouchPairs_t);
+        // One extra elem is used for storing the final elem in scan result.
+        CD_temp_arr_bytes = (simParams->nSpheresGM + 1) * sizeof(binSphereTouchPairs_t);
         binSphereTouchPairs_t* numAnalGeoSphereTouchesScan =
             (binSphereTouchPairs_t*)scratchPad.allocateTempVector(3, CD_temp_arr_bytes);
         cubDEMPrefixScan<objID_t, binSphereTouchPairs_t, DEMSolverStateData>(
             numAnalGeoSphereTouches, numAnalGeoSphereTouchesScan, simParams->nSpheresGM, this_stream, scratchPad);
         *(scratchPad.pNumContacts) = (size_t)numAnalGeoSphereTouches[simParams->nSpheresGM - 1] +
                                      (size_t)numAnalGeoSphereTouchesScan[simParams->nSpheresGM - 1];
+        numAnalGeoSphereTouchesScan[simParams->nSpheresGM] = *(scratchPad.pNumContacts);
         if (*scratchPad.pNumContacts > idGeometryA.size()) {
             contactEventArraysResize(*scratchPad.pNumContacts, idGeometryA, idGeometryB, contactType, granData);
         }
