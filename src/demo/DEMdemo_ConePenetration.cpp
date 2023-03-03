@@ -242,11 +242,11 @@ int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
     // out_dir += "/Cone_Penetration_HighDensity_CoR0.8";
     // out_dir += "/Cone_Penetration_LowDensity_CoR0.8";
-    out_dir += "/Cone_Penetration_1650Density";
+    out_dir += "/Cone_Penetration_1850Density";
     std::filesystem::create_directory(out_dir);
-    float settle_mu = 0.3;
-    float sim_mu = 0.4;
-    float target_density = 1650.;
+    float settle_mu = 0.02;
+    float sim_mu = 0.7;
+    float target_density = 1850.;
 
     // Settle
     unsigned int currframe = 0;
@@ -265,7 +265,7 @@ int main() {
         DEMSim.DoDynamicsThenSync(1.2);
     }
 
-    unsigned int fps = 20;
+    unsigned int fps = 60;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
     double compressor_vel = 0.2;
     float terrain_max_z = max_z_finder->GetValue();
@@ -339,9 +339,10 @@ int main() {
     DEMSim.DisableContactBetweenFamilies(0, 10);
     DEMSim.SetFamilyOwnerWildcardValue(0, "mu_custom", sim_mu);
     DEMSim.SetFamilyOwnerWildcardValue(2, "mu_custom", 0.8); // For cone
+    DEMSim.DoDynamicsThenSync(0.5);
     terrain_max_z = max_z_finder->GetValue();
 
-    double starting_height = terrain_max_z + 0.015;
+    double starting_height = terrain_max_z + 0.02;
     // Its initial position should be right above the cone tip...
     body_tracker->SetPos(make_float3(0, 0, 0.5 + (cone_diameter / 2 / 4 * tip_height) + starting_height));
     // Note that position of objects is always the location of their centroid

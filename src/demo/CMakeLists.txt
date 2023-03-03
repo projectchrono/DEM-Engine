@@ -22,9 +22,6 @@ SET(DEMOS
 		DEMdemo_GameOfLife
 		DEMdemo_BallDrop
 		DEMdemo_Mixer
-		DEMdemo_GRCPrep_Part1
-		DEMdemo_GRCPrep_Part2
-		DEMdemo_GRCPrep_Part3
 		DEMdemo_ConePenetration
 		DEMdemo_Shake
 		DEMdemo_WheelDP
@@ -40,6 +37,7 @@ SET(DEMOS
 		DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_AllSph
 		DEMdemo_Meshed_WheelDP_SlopeSlip_Moon_AllSph
 		DEMdemo_Indentation
+		DEMdemo_Repose_GRC
 )
 
 # ------------------------------------------------------------------------------
