@@ -243,6 +243,14 @@ inline std::string pretty_format_bytes(size_t bytes) {
         }                                         \
     }
 
+// Jitify options include suppressing variable-not-used warnings, but since we don't use CUB block primitives, we don't
+// need std::string(CUDA_TOOLKIT_HEADERS).
+#define DEME_JITIFY_OPTIONS                                                                       \
+    {                                                                                             \
+        "-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(), \
+            "-diag-suppress=550", "-diag-suppress=177"                                            \
+    }
+
 // I wasn't able to resolve a decltype problem with vector of vectors, so I have to create another macro for this kind
 // of tracked resize... not ideal.
 #define DEME_TRACKED_RESIZE_FLOAT(vec, newsize, val)               \

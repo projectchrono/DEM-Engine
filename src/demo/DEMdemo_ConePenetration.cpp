@@ -44,7 +44,7 @@ int main() {
     float shake_amp = 0.1;
     float shake_speed = 2;  // Num of periods per second
     float cone_speed = 0.03;
-    float step_size = 1e-6;
+    float step_size = 2e-6;
     double world_size = 2;
     double soil_bin_diameter = 0.584;
     double cone_surf_area = 323e-6;
@@ -64,51 +64,51 @@ int main() {
                                      to_string_with_precision(shake_amp) + " * sin(" +
                                          to_string_with_precision(shake_speed) + " * 2 * deme::PI * t)");
 
+    // Then the ground particle template
+    DEMClumpTemplate shape_template1, shape_template2, shape_template3;
+    shape_template1.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
+    shape_template2.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat_6comp.csv").string());
+    shape_template3.ReadComponentFromFile((GET_DATA_PATH() / "clumps/bulk_ellipsoid.csv").string());
+    std::vector<DEMClumpTemplate> shape_template = {shape_template2, shape_template2, shape_template1, shape_template1,
+                                                    shape_template3, shape_template3, shape_template3};
     // Calculate its mass and MOI
     float mass1 = 2.6e3 * 5.5886717 * kg_g_conv;  // in kg or g
-    float3 MOI1 = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3 * kg_g_conv;
+    float3 MOI1 = make_float3(2.928, 2.6029, 3.9908) * 2.6e3 * kg_g_conv;
     float mass2 = 2.6e3 * 2.7564385 * kg_g_conv;  // in kg or g
     float3 MOI2 = make_float3(1.0352626, 0.9616627, 1.6978352) * 2.6e3 * kg_g_conv;
-    float mass3 = 2.6e3 * 8.1812 * kg_g_conv;  // in kg or g
-    float3 MOI3 = make_float3(5.11336, 5.1133, 5.1133) * 2.6e3 * kg_g_conv;
+    float mass3 = 2.6e3 * 5.7260836 * kg_g_conv;  // in kg or g
+    float3 MOI3 = make_float3(2.4284603, 3.1316202, 3.1316202) * 2.6e3 * kg_g_conv;
     std::vector<float> mass = {mass2, mass2, mass1, mass1, mass3, mass3, mass3};
     std::vector<float3> MOI = {MOI2, MOI2, MOI1, MOI1, MOI3, MOI3, MOI3};
-    // Then the ground particle template
-    auto shape_template1 =
-        DEMSim.LoadClumpType(mass1, MOI1, (GET_DATA_PATH() / "clumps/triangular_flat.csv").string(), mat_type_terrain);
-    auto shape_template2 = DEMSim.LoadClumpType(
-        mass2, MOI2, (GET_DATA_PATH() / "clumps/triangular_flat_6comp.csv").string(), mat_type_terrain);
-    auto shape_template3 = DEMSim.LoadSphereType(mass3, 1.25, mat_type_terrain);
-    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates = {
-        shape_template2, DEMSim.Duplicate(shape_template2), shape_template1, DEMSim.Duplicate(shape_template1),
-        shape_template3, DEMSim.Duplicate(shape_template3), DEMSim.Duplicate(shape_template3)};
     // Scale the template we just created
-    std::vector<double> volume = {2.7564385, 2.7564385, 5.5886717, 5.5886717, 8.1812, 8.1812, 8.1812};
+    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
+    std::vector<double> volume = {2.7564385, 2.7564385, 5.5886717, 5.5886717, 5.7260836, 5.7260836, 5.7260836};
     std::vector<double> scales = {0.0014, 0.00075833, 0.00044, 0.0003, 0.00016667, 0.00014667, 0.00012};
     std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 10.; });
     unsigned int t_num = 0;
     for (double scaling : scales) {
-        auto& this_template = ground_particle_templates[t_num];
-        // this_template->mass = (double)mass[t_num] * scaling * scaling * scaling;
-        // this_template->MOI.x = (double)MOI[t_num].x * (double)(scaling * scaling * scaling * scaling * scaling);
-        // this_template->MOI.y = (double)MOI[t_num].y * (double)(scaling * scaling * scaling * scaling * scaling);
-        // this_template->MOI.z = (double)MOI[t_num].z * (double)(scaling * scaling * scaling * scaling * scaling);
-        // std::for_each(this_template->radii.begin(), this_template->radii.end(), [scaling](float& r) { r *= scaling;
-        // }); std::for_each(this_template->relPos.begin(), this_template->relPos.end(), [scaling](float3& r) { r *=
-        // scaling; });
-        this_template->Scale(scaling);
-        std::cout << "Mass: " << this_template->mass << std::endl;
-        std::cout << "MOIX: " << this_template->MOI.x << std::endl;
-        std::cout << "MOIY: " << this_template->MOI.y << std::endl;
-        std::cout << "MOIZ: " << this_template->MOI.z << std::endl;
+        auto this_template = shape_template[t_num];
+        this_template.mass = (double)mass[t_num] * scaling * scaling * scaling;
+        this_template.MOI.x = (double)MOI[t_num].x * (double)(scaling * scaling * scaling * scaling * scaling);
+        this_template.MOI.y = (double)MOI[t_num].y * (double)(scaling * scaling * scaling * scaling * scaling);
+        this_template.MOI.z = (double)MOI[t_num].z * (double)(scaling * scaling * scaling * scaling * scaling);
+        std::cout << "Mass: " << this_template.mass << std::endl;
+        std::cout << "MOIX: " << this_template.MOI.x << std::endl;
+        std::cout << "MOIY: " << this_template.MOI.y << std::endl;
+        std::cout << "MOIZ: " << this_template.MOI.z << std::endl;
         std::cout << "=====================" << std::endl;
+        std::for_each(this_template.radii.begin(), this_template.radii.end(), [scaling](float& r) { r *= scaling; });
+        std::for_each(this_template.relPos.begin(), this_template.relPos.end(), [scaling](float3& r) { r *= scaling; });
+        this_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(this_template.nComp, mat_type_terrain);
 
         // Give these templates names, 0000, 0001 etc.
         char t_name[20];
         sprintf(t_name, "%04d", t_num);
-        this_template->AssignName(std::string(t_name));
+        this_template.AssignName(std::string(t_name));
+        ground_particle_templates.push_back(DEMSim.LoadClumpType(this_template));
         t_num++;
     }
+
     // Now we load clump locations from a checkpointed file
     {
         std::cout << "Making terrain..." << std::endl;
@@ -242,11 +242,11 @@ int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
     // out_dir += "/Cone_Penetration_HighDensity_CoR0.8";
     // out_dir += "/Cone_Penetration_LowDensity_CoR0.8";
-    out_dir += "/Cone_Penetration_1850Density";
+    out_dir += "/Cone_Penetration_1650Density";
     std::filesystem::create_directory(out_dir);
-    float settle_mu = 0.02;
-    float sim_mu = 0.7;
-    float target_density = 1850.;
+    float settle_mu = 0.5;
+    float sim_mu = 0.5;
+    float target_density = 1650.;
 
     // Settle
     unsigned int currframe = 0;
