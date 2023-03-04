@@ -32,10 +32,11 @@ New authors should add their name to the file `CONTRIBUTORS.md` rather than to i
 
 ### Installation
 
-On a Linux machine, install CUDA if you do not already have it. Useful installation instructions may be found [here](https://developer.nvidia.com/cuda-downloads) and for WSL users, [here](https://docs.nvidia.com/cuda/wsl-user-guide/index.html). Make sure `nvidia-smi` and `nvcc --version` give correct returns. Sometimes after installation, `nvcc` and CUDA necessary libraries are not in `$PATH`, and you may have to manually include them. Depending on the version of CUDA you are using, an example:
-```
-export PATH=$PATH:/usr/local/cuda-12.0/bin:/usr/local/cuda-12.0/lib64/:/usr/local/cuda-12.0/lib64/cmake/
-```
+On a Linux machine, install CUDA if you do not already have it. Useful installation instructions may be found [here](https://developer.nvidia.com/cuda-downloads). 
+
+Some additional troubleshooting tips for getting CUDA ready:
+
+- On WSL this code may be buildable (and [this](https://docs.nvidia.com/cuda/wsl-user-guide/index.html) is the guide for installing CUDA on WSL), but may not run. This is due to the [many limitations on unified memory and pinned memory support](https://docs.nvidia.com/cuda/wsl-user-guide/index.html#known-limitations-for-linux-cuda-applications) on WSL. A native Linux machine or cluster is recommended.
 
 Once CUDA is ready, clone this project and then:
 
@@ -66,6 +67,17 @@ ccmake -G Ninja ..
 
 You generally do not have to change the build options in the GUI, but preferably you can change `CMAKE_BUILD_TYPE` to `Release`, and if you need to install this package as a library you can specify a `CMAKE_INSTALL_PREFIX`. 
 
+Some additional troubleshooting tips for generating the project:
+
+- If some dependencies such as CUB are not found, then you probably need to manually set `$PATH` and `$LD_LIBRARY_PATH`. An example is given below for a specific version of CUDA, note it may be different on your machine or cluster. You should also inspect if `nvidia-smi` and `nvcc --version` give correct returns.
+```
+export CPATH=/usr/local/cuda-12.1/targets/x86_64-linux/include${CPATH:+:${CPATH}}
+export PATH=/usr/local/cuda-12.1/bin${PATH:+:${PATH}}
+export PATH=/usr/local/cuda-12.1/lib64/cmake${PATH:+:${PATH}}
+export LD_LIBRARY_PATH=/usr/local/cuda-12.1/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export CUDA_HOME=/usr/local/cuda-12.1
+```
+
 Finally, build the project.
 
 ```
@@ -83,9 +95,12 @@ After the build process is done, you can start trying out the demos.
 - A place to learn how prescribed motions work in this package, using either analytical boundaries or particle-represented boundaries: `./src/demo/DEMdemo_Centrifuge` and `./src/demo/DEMdemo_Sieve`
 - More advanced examples showing the usage of the custom additional properties (called _wildcards_) that you can associate with the simulation entities, and use them in the force model and/or change them in simulation then deposit them into the output files: `./src/demo/DEMdemo_Indentation` 
 
-More documentations on this package's usage are being added.
+The documentation website for _DEME_ is being constructed.
 
-_DEME_ is able to handle mesh-represented bodies with relatively simple physics and their interaction with granular materials, for example a plow with a prescribed velocity, or some projectiles that are launched and then hit the ground. However, if the bodies' physics are complex, say it is a vehicle that has joint-connected parts and a motor with certain driving policies, or the meshed bodies have collisions among themselves that needs to be simulated, then _DEME_ alone is perhaps not enough to manage them. But you can export _DEME_ as a library and use it along with other simulation tools, where _DEME_ is exclusively tasked with handling the granular material (with high efficiency, of course). See the following section.
+_DEME_ is designed to simulate the interaction among clump-represented particles, the interaction between particles and mesh-represented bodies, as well as the interaction between particles and analytical boundaries.
+
+- It is able to handle mesh-represented bodies with relatively simple physics, for example a meshed plow moving through granular materials with a prescribed velocity, or several meshed projectiles flying and hitting the granular ground. 
+- However, if the bodies' physics are complex multibody problems, say it is a vehicle that has joint-connected parts and a motor with certain driving policies, or the meshed bodies have collisions among themselves that needs to be simulated, then _DEME_ alone does not have the infrastructure to handle them. But you can install _DEME_ as a library and do coupled simulations with other tools such as [Chrono](https://github.com/projectchrono/chrono), where _DEME_ is exclusively tasked with handling the granular materials and the influence they exert on the outside world (with high efficiency, of course). See the following section.
 
 ### Install as C++ library
 
@@ -97,7 +112,15 @@ ninja install
 
 We provide examples of linking against both [Chrono](https://github.com/projectchrono/chrono) and _DEME_ for co-simulations in [chrono-projects](https://github.com/projectchrono/chrono-projects/tree/feature/DEME).
 
-More documentations on using this package for  are being added.
+Assuming you know how to build `chrono-projects` linking against a Chrono installation, then the extra things that you should do to link against _DEME_ are
+
+- Set `ENABLE_DEME_TESTS` to `ON`;
+- Set `ChPF_DIR` when prompted. It should be in `<your_install_dir>/lib64/cmake/ChPF`;
+- Set `DEME_DIR` when prompted. It should be in `<your_install_dir>lib64/cmake/DEME`.
+
+Then build the project and you should be able to run the demo scripts that demonstrate the co-simulation between _DEME_ and Chrono.
+
+More documentations on using this package for co-simulations are being added.
 
 #### Notes on code included from Project Chrono
 
