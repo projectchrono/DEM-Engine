@@ -131,14 +131,6 @@ enum VERBOSITY {
 enum class TIME_INTEGRATOR { FORWARD_EULER, CENTERED_DIFFERENCE, EXTENDED_TAYLOR, CHUNG };
 // Owner types
 enum class OWNER_TYPE { CLUMP, ANALYTICAL, MESH };
-// Types of entities (can be either owner or geometry entity) that can be inspected by inspection methods
-enum class INSPECT_ENTITY_TYPE { SPHERE, CLUMP, MESH, MESH_FACET, EVERYTHING };
-// Which reduce operation is needed in an inspection
-enum class CUB_REDUCE_FLAVOR { NONE, MAX, MIN, SUM };
-// Format of the output files
-enum class OUTPUT_FORMAT { CSV, BINARY, CHPF };
-// Mesh output format
-enum class MESH_FORMAT { VTK, OBJ };
 // Force mode type
 enum class FORCE_MODEL { HERTZIAN, HERTZIAN_FRICTIONLESS, CUSTOM };
 // The info that should be present in the output files

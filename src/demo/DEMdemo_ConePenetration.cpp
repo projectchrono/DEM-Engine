@@ -56,7 +56,7 @@ int main() {
     float terrain_density = 2.6e3;
     double clump_vol = 5.5886717;
     float mass = terrain_density * clump_vol;  // in kg or g
-    float3 MOI = make_float3(1.8327927, 2.1580013, 0.77010059) * (double)2.6e3;
+    float3 MOI = make_float3(2.928, 2.6029, 3.9908) * terrain_density;
     // Scale the template we just created
     std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
     std::vector<double> scales = {0.00063, 0.00033, 0.00022, 0.00015, 0.00009};

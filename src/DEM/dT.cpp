@@ -1818,8 +1818,11 @@ inline void DEMDynamicThread::unpack_impl() {
         contactPairArr_isFresh = true;
         // pSchedSupport->schedulingStats.nDynamicReceives++;
     }
-    // dT got the produce, now mark its buffer to be no longer fresh
+    // dT got the produce, now mark its buffer to be no longer fresh.
     pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
+    // Used for inspecting on average how stale kT's produce is.
+    pSchedSupport->schedulingStats.accumKinematicLagSteps +=
+        (pSchedSupport->currentStampOfDynamic).load() - (pSchedSupport->stampLastDynamicUpdateProdDate).load();
     // dT needs to know how fresh the contact pair info is, and that is determined by when kT received this batch of
     // ingredients.
     pSchedSupport->stampLastDynamicUpdateProdDate = (pSchedSupport->kinematicIngredProdDateStamp).load();

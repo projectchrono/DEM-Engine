@@ -151,6 +151,21 @@ inline std::string pretty_format_bytes(size_t bytes) {
 }
 
 // =============================================================================
+// SOME HOST-SIDE ENUMS
+// =============================================================================
+
+// Types of entities (can be either owner or geometry entity) that can be inspected by inspection methods
+enum class INSPECT_ENTITY_TYPE { SPHERE, CLUMP, MESH, MESH_FACET, EVERYTHING };
+// Which reduce operation is needed in an inspection
+enum class CUB_REDUCE_FLAVOR { NONE, MAX, MIN, SUM };
+// Format of the output files
+enum class OUTPUT_FORMAT { CSV, BINARY, CHPF };
+// Mesh output format
+enum class MESH_FORMAT { VTK, OBJ };
+// Adaptive time step size methods
+enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
+
+// =============================================================================
 // NOW DEFINING MACRO COMMANDS USED BY THE DEM MODULE
 // =============================================================================
 

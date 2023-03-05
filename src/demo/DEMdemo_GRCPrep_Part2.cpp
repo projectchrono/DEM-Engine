@@ -45,7 +45,7 @@ int main() {
     shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
     // Calculate its mass and MOI
     float mass = 2.6e3 * 5.5886717;
-    float3 MOI = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3;
+    float3 MOI = make_float3(2.928, 2.6029, 3.9908) * 2.6e3;
     float clump_vol = 5.5886717;
     // Scale the template we just created
     std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
@@ -162,7 +162,7 @@ int main() {
     auto compressor_tracker = DEMSim.Track(compressor);
 
     // Make ready for simulation
-    float step_size = 5e-7;
+    float step_size = 2e-6;
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety

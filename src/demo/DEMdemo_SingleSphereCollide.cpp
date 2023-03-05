@@ -83,7 +83,7 @@ int main() {
     DEMSim.SetCDUpdateFreq(10);
     // DEMSim.SetMaxVelocity(3.);
     DEMSim.SetExpandSafetyMultiplier(1.2);
-    DEMSim.SetIntegrator(TIME_INTEGRATOR::CENTERED_DIFFERENCE);
+    DEMSim.SetIntegrator("extended_taylor");
 
     DEMSim.Initialize();
 

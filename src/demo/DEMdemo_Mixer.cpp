@@ -58,7 +58,7 @@ int main() {
     shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
     // Calculate its mass and MOI
     shape_template.mass = 2.6e3 * 5.5886717;  // in kg or g
-    shape_template.MOI = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3;
+    shape_template.MOI = make_float3(2.928, 2.6029, 3.9908) * 2.6e3;
     shape_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(shape_template.nComp, mat_type_granular);
     shape_template.Scale(granular_rad);
     auto template_granular = DEMSim.LoadClumpType(shape_template);

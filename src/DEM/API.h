@@ -105,9 +105,14 @@ class DEMSolver {
     double GetSimTime() const;
     /// Set the simulation time manually.
     void SetSimTime(double time);
-    // TODO: Implement an API that allows setting ts size through a list
+    /// @brief Set the strategy for auto-adapting time step size (NOT implemented, no effect yet).
+    /// @param type "none" or "max_vel" or "int_diff".
+    void SetAdaptiveTimeStepType(const std::string& type);
 
-    /// Set the integrator for this simulator
+    /// @brief Set the time integrator for this simulator.
+    /// @param intg "forward_euler" or "extended_taylor" or "centered_difference".
+    void SetIntegrator(const std::string& intg);
+    /// @brief Set the time integrator for this simulator.
     void SetIntegrator(TIME_INTEGRATOR intg) { m_integrator = intg; }
 
     /// Return whether this simulation system is initialized
@@ -922,6 +927,9 @@ class DEMSolver {
     // The force model which will be used
     std::shared_ptr<DEMForceModel> m_force_model =
         std::make_shared<DEMForceModel>(std::move(DEMForceModel(FORCE_MODEL::HERTZIAN)));
+
+    // Strategy for auto-adapting time steps size
+    ADAPT_TS_TYPE adapt_ts_type = ADAPT_TS_TYPE::NONE;
 
     ////////////////////////////////////////////////////////////////////////////////
     // No user method is provided to modify the following key quantities, even if

@@ -50,7 +50,7 @@ int main() {
     shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
     // Calculate its mass and MOI
     float mass = 2.6e3 * 5.5886717;
-    float3 MOI = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3;
+    float3 MOI = make_float3(2.928, 2.6029, 3.9908) * 2.6e3;
     float clump_vol = 5.5886717;
     // Scale the template we just created
     std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
@@ -172,7 +172,7 @@ int main() {
     float total_volume = 0.96 * 0.96 * 0.06;
 
     // Make ready for simulation
-    double step_size = 1e-6;
+    double step_size = 2e-6;
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
@@ -193,12 +193,10 @@ int main() {
 
     // Settle a bit
     DEMSim.DoDynamicsThenSync(0.3);
-    DEMSim.SetInitTimeStep(5e-7);
-    DEMSim.UpdateStepSize();
 
     // Now compress it
     DEMSim.EnableContactBetweenFamilies(0, 1);
-    double compress_time = 0.3;
+    double compress_time = 0.2;
 
     float matter_mass = total_mass_finder->GetValue();
     std::cout << "Initial bulk density " << matter_mass / total_volume << std::endl;

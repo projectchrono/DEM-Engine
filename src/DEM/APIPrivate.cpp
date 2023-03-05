@@ -1806,8 +1806,6 @@ inline void DEMSolver::equipIntegrationScheme(std::unordered_map<std::string, st
         case (TIME_INTEGRATOR::EXTENDED_TAYLOR):
             strat = VEL_TO_PASS_ON_EXTENDED_TAYLOR();
             break;
-        default:
-            DEME_ERROR("The integration type is unknown or not implemented. Please select another via SetIntegrator.");
     }
     strMap["_integrationVelocityPassOnStrategy_"] = strat;
 }

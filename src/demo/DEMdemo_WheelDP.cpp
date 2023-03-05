@@ -76,7 +76,7 @@ int main() {
                                                         shape_template1};
         // Calculate its mass and MOI
         float mass1 = 2.6e3 * 5.5886717;  // in kg or g
-        float3 MOI1 = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3;
+        float3 MOI1 = make_float3(2.928, 2.6029, 3.9908) * 2.6e3;
         float mass2 = 2.6e3 * 2.7564385;  // in kg or g
         float3 MOI2 = make_float3(1.0352626, 0.9616627, 1.6978352) * 2.6e3;
         std::vector<float> mass = {mass2, mass2, mass1, mass1, mass1, mass1, mass1};
