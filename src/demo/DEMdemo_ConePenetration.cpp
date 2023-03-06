@@ -34,6 +34,16 @@ int main() {
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_cone, mat_type_terrain, 0.8);
     // DEMSim.SetMaterialPropertyPair("mu", mat_type_cone, mat_type_terrain, 0.7);
 
+    std::filesystem::path out_dir = std::filesystem::current_path();
+    // out_dir += "/Cone_Penetration_HighDensity_CoR0.8";
+    // out_dir += "/Cone_Penetration_LowDensity_CoR0.8";
+    out_dir += "/Cone_Penetration_1650Density";
+    std::filesystem::create_directory(out_dir);
+    float settle_mu = 0.5;
+    float sim_mu = 0.5;
+    float cone_mu = 0.5;
+    float target_density = 1650.;
+
     // A custom force model can be read in through a file and used by the simulation. Magic, right?
     auto my_force_model = DEMSim.ReadContactForceModel("SampleCustomForceModel.cu");
     // This custom force model still uses contact history arrays, so let's define it
@@ -57,7 +67,7 @@ int main() {
     auto walls = DEMSim.AddExternalObject();
     walls->AddCylinder(make_float3(0), make_float3(0, 0, 1), soil_bin_diameter / 2., mat_type_terrain, 0);
     walls->AddPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_terrain);
-    walls->SetFamily(5); // Fixed wall bc
+    walls->SetFamily(5);  // Fixed wall bc
     // Family 6 shakes, family 5 is fixed
     DEMSim.SetFamilyFixed(5);
     DEMSim.SetFamilyPrescribedLinVel(6, "0", "0",
@@ -239,15 +249,6 @@ int main() {
     DEMSim.SetInitBinSize(2 * scales.at(2));
     DEMSim.Initialize();
 
-    std::filesystem::path out_dir = std::filesystem::current_path();
-    // out_dir += "/Cone_Penetration_HighDensity_CoR0.8";
-    // out_dir += "/Cone_Penetration_LowDensity_CoR0.8";
-    out_dir += "/Cone_Penetration_1650Density";
-    std::filesystem::create_directory(out_dir);
-    float settle_mu = 0.5;
-    float sim_mu = 0.5;
-    float target_density = 1650.;
-
     // Settle
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
@@ -293,7 +294,7 @@ int main() {
             bulk_density = matter_mass / total_volume;
             std::cout << "Compression bulk density: " << bulk_density << std::endl;
         }
-        
+
         while (bulk_density < target_density) {
             if (curr_step % out_steps == 0) {
                 char filename[200], meshname[200];
@@ -338,7 +339,7 @@ int main() {
     DEMSim.DoDynamicsThenSync(0);
     DEMSim.DisableContactBetweenFamilies(0, 10);
     DEMSim.SetFamilyOwnerWildcardValue(0, "mu_custom", sim_mu);
-    DEMSim.SetFamilyOwnerWildcardValue(2, "mu_custom", 0.8); // For cone
+    DEMSim.SetFamilyOwnerWildcardValue(2, "mu_custom", cone_mu);  // For cone
     DEMSim.DoDynamicsThenSync(0.5);
     terrain_max_z = max_z_finder->GetValue();
 
@@ -349,7 +350,6 @@ int main() {
     tip_tracker->SetPos(make_float3(0, 0, starting_height));
     // The tip location, used to measure penetration length
     double tip_z = -cone_diameter / 2 * 3 / 4 * tip_height + starting_height;
-
 
     float sim_end = 8.;
     fps = 2500;

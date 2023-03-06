@@ -29,25 +29,25 @@ int main() {
 
     // `World'
     float G_mag = 9.81;
-    float step_size = 1e-6;
+    float step_size = 2e-6;
     double world_size_y = 0.52;
-    double world_size_x = 4;//2.04;
+    double world_size_x = 4;  // 2.04;
     double world_size_z = 4.0;
 
     // Define the wheel geometry
     float wheel_rad = 0.25;
     float wheel_width = 0.2;
-    float wheel_mass = 5.; // 8.7;
+    float wheel_mass = 5.;  // 8.7;
     float total_pressure = 22. * 9.81;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
-    float Slopes_deg[] = {0, 2, 5, 10, 15, 20, 25};
+    float Slopes_deg[] = {10, 5, 2, 0};
     // float Slopes_deg[] = {0, 2.5, 5, 7.5, 10, 12.5};
     // float Slopes_deg[] = {25, 20, 15, 10, 5, 2, 0};
     unsigned int run_mode = 0;
-    unsigned int currframe = 0;
+    unsigned int currframe = 300;
 
     for (float Slope_deg : Slopes_deg) {
         DEMSolver DEMSim;
@@ -58,14 +58,16 @@ int main() {
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
         // E, nu, CoR, mu, Crr...
-        float mu = 0.7;
-        float mu_wheel = 0.7;
-        auto mat_type_wall = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu}, {"Crr", 0.00}});
-        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu_wheel}, {"Crr", 0.00}});
-        auto mat_type_terrain =
-            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", mu}, {"Crr", 0.00}});
+        float mu = 0.5;
+        float mu_wheel = 0.5;
+        float mu_wall = 1.;
+        auto mat_type_wall =
+            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu_wall}, {"Crr", 0.00}});
+        auto mat_type_wheel =
+            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu_wheel}, {"Crr", 0.00}});
+        auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu}, {"Crr", 0.00}});
         DEMSim.SetMaterialPropertyPair("mu", mat_type_wheel, mat_type_terrain, mu_wheel);
-        DEMSim.SetMaterialPropertyPair("mu", mat_type_wall, mat_type_terrain, mu);
+        DEMSim.SetMaterialPropertyPair("mu", mat_type_wall, mat_type_terrain, mu_wall);
 
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_wall);
@@ -85,50 +87,53 @@ int main() {
         // Track it
         auto wheel_tracker = DEMSim.Track(wheel);
 
-    // Then the ground particle template
-    DEMClumpTemplate shape_template1, shape_template2, shape_template3;
-    shape_template1.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
-    shape_template2.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat_6comp.csv").string());
-    shape_template3.ReadComponentFromFile((GET_DATA_PATH() / "clumps/bulk_ellipsoid.csv").string());
-    std::vector<DEMClumpTemplate> shape_template = {shape_template2, shape_template2, shape_template1, shape_template1,
-                                                    shape_template3, shape_template3, shape_template3};
-    // Calculate its mass and MOI
-    float mass1 = 2.6e3 * 5.5886717 * kg_g_conv;  // in kg or g
-    float3 MOI1 = make_float3(2.928, 2.6029, 3.9908) * 2.6e3 * kg_g_conv;
-    float mass2 = 2.6e3 * 2.7564385 * kg_g_conv;  // in kg or g
-    float3 MOI2 = make_float3(1.0352626, 0.9616627, 1.6978352) * 2.6e3 * kg_g_conv;
-    float mass3 = 2.6e3 * 5.7260836 * kg_g_conv;  // in kg or g
-    float3 MOI3 = make_float3(2.4284603, 3.1316202, 3.1316202) * 2.6e3 * kg_g_conv;
-    std::vector<float> mass = {mass2, mass2, mass1, mass1, mass3, mass3, mass3};
-    std::vector<float3> MOI = {MOI2, MOI2, MOI1, MOI1, MOI3, MOI3, MOI3};
-    // Scale the template we just created
-    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
-    std::vector<double> volume = {2.7564385, 2.7564385, 5.5886717, 5.5886717, 5.7260836, 5.7260836, 5.7260836};
-    std::vector<double> scales = {0.0014, 0.00075833, 0.00044, 0.0003, 0.00016667, 0.00014667, 0.00012};
-    std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 10.; });
-    unsigned int t_num = 0;
-    for (double scaling : scales) {
-        auto this_template = shape_template[t_num];
-        this_template.mass = (double)mass[t_num] * scaling * scaling * scaling;
-        this_template.MOI.x = (double)MOI[t_num].x * (double)(scaling * scaling * scaling * scaling * scaling);
-        this_template.MOI.y = (double)MOI[t_num].y * (double)(scaling * scaling * scaling * scaling * scaling);
-        this_template.MOI.z = (double)MOI[t_num].z * (double)(scaling * scaling * scaling * scaling * scaling);
-        std::cout << "Mass: " << this_template.mass << std::endl;
-        std::cout << "MOIX: " << this_template.MOI.x << std::endl;
-        std::cout << "MOIY: " << this_template.MOI.y << std::endl;
-        std::cout << "MOIZ: " << this_template.MOI.z << std::endl;
-        std::cout << "=====================" << std::endl;
-        std::for_each(this_template.radii.begin(), this_template.radii.end(), [scaling](float& r) { r *= scaling; });
-        std::for_each(this_template.relPos.begin(), this_template.relPos.end(), [scaling](float3& r) { r *= scaling; });
-        this_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(this_template.nComp, mat_type_terrain);
+        // Then the ground particle template
+        DEMClumpTemplate shape_template1, shape_template2, shape_template3;
+        shape_template1.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
+        shape_template2.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat_6comp.csv").string());
+        shape_template3.ReadComponentFromFile((GET_DATA_PATH() / "clumps/bulk_ellipsoid.csv").string());
+        std::vector<DEMClumpTemplate> shape_template = {shape_template2, shape_template2, shape_template1,
+                                                        shape_template1, shape_template3, shape_template3,
+                                                        shape_template3};
+        // Calculate its mass and MOI
+        float mass1 = 2.6e3 * 5.5886717 * kg_g_conv;  // in kg or g
+        float3 MOI1 = make_float3(2.928, 2.6029, 3.9908) * 2.6e3 * kg_g_conv;
+        float mass2 = 2.6e3 * 2.7564385 * kg_g_conv;  // in kg or g
+        float3 MOI2 = make_float3(1.0352626, 0.9616627, 1.6978352) * 2.6e3 * kg_g_conv;
+        float mass3 = 2.6e3 * 5.7260836 * kg_g_conv;  // in kg or g
+        float3 MOI3 = make_float3(2.4284603, 3.1316202, 3.1316202) * 2.6e3 * kg_g_conv;
+        std::vector<float> mass = {mass2, mass2, mass1, mass1, mass3, mass3, mass3};
+        std::vector<float3> MOI = {MOI2, MOI2, MOI1, MOI1, MOI3, MOI3, MOI3};
+        // Scale the template we just created
+        std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
+        std::vector<double> volume = {2.7564385, 2.7564385, 5.5886717, 5.5886717, 5.7260836, 5.7260836, 5.7260836};
+        std::vector<double> scales = {0.0014, 0.00075833, 0.00044, 0.0003, 0.00016667, 0.00014667, 0.00012};
+        std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 10.; });
+        unsigned int t_num = 0;
+        for (double scaling : scales) {
+            auto this_template = shape_template[t_num];
+            this_template.mass = (double)mass[t_num] * scaling * scaling * scaling;
+            this_template.MOI.x = (double)MOI[t_num].x * (double)(scaling * scaling * scaling * scaling * scaling);
+            this_template.MOI.y = (double)MOI[t_num].y * (double)(scaling * scaling * scaling * scaling * scaling);
+            this_template.MOI.z = (double)MOI[t_num].z * (double)(scaling * scaling * scaling * scaling * scaling);
+            std::cout << "Mass: " << this_template.mass << std::endl;
+            std::cout << "MOIX: " << this_template.MOI.x << std::endl;
+            std::cout << "MOIY: " << this_template.MOI.y << std::endl;
+            std::cout << "MOIZ: " << this_template.MOI.z << std::endl;
+            std::cout << "=====================" << std::endl;
+            std::for_each(this_template.radii.begin(), this_template.radii.end(),
+                          [scaling](float& r) { r *= scaling; });
+            std::for_each(this_template.relPos.begin(), this_template.relPos.end(),
+                          [scaling](float3& r) { r *= scaling; });
+            this_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(this_template.nComp, mat_type_terrain);
 
-        // Give these templates names, 0000, 0001 etc.
-        char t_name[20];
-        sprintf(t_name, "%04d", t_num);
-        this_template.AssignName(std::string(t_name));
-        ground_particle_templates.push_back(DEMSim.LoadClumpType(this_template));
-        t_num++;
-    }
+            // Give these templates names, 0000, 0001 etc.
+            char t_name[20];
+            sprintf(t_name, "%04d", t_num);
+            this_template.AssignName(std::string(t_name));
+            ground_particle_templates.push_back(DEMSim.LoadClumpType(this_template));
+            t_num++;
+        }
 
         // Now we load clump locations from a checkpointed file
         {
@@ -232,13 +237,11 @@ int main() {
                         another_batch.SetPos(my_xyz);
                         another_batch.SetOriQ(my_quat);
                         DEMSim.AddClumps(another_batch);
-                        
+
                     }
                 }
             }
             */
-
-            
         }
 
         // Now add a plane to compress the sample
@@ -274,9 +277,11 @@ int main() {
         DEMSim.SetGravitationalAcceleration(this_G);
 
         DEMSim.SetInitTimeStep(step_size);
-        DEMSim.SetCDUpdateFreq(20);
-        DEMSim.SetExpandSafetyAdder(0.5);
-        DEMSim.SetMaxVelocity(40);
+        DEMSim.SetCDUpdateFreq(10);
+        DEMSim.SetExpandSafetyAdder(0.2);
+        DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1);
+        DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(5);
+        DEMSim.SetErrorOutVelocity(30.);
         DEMSim.SetInitBinSize(2 * scales.at(2));
         DEMSim.Initialize();
 
@@ -290,22 +295,24 @@ int main() {
         std::cout << "Output at " << fps << " FPS" << std::endl;
 
         // Put the wheel in place, then let the wheel sink in initially
-        float corr = 0;//1.0;
+        float corr = 0;  // 1.0;
         float init_x = -1.0 + corr;
         if (Slope_deg < 18) {
             init_x = -1.6 + corr;
         }
-        
 
-        {
+        float settle_frame_time = 0.1;
+        for (double t = 0; t < 0.4; t += settle_frame_time) {
             char filename[200], meshname[200];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
             sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
             DEMSim.WriteSphereFile(std::string(filename));
             DEMSim.WriteMeshFile(std::string(meshname));
+            std::cout << "Max system velocity: " << max_v_finder->GetValue() << std::endl;
+            // Settling
+            DEMSim.DoDynamicsThenSync(settle_frame_time);
         }
-        // Settling
-        DEMSim.DoDynamicsThenSync(0.4);
+
         // Put the wheel in place, then let the wheel sink in initially
         float max_z = max_z_finder->GetValue();
         wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.03 + wheel_rad));
@@ -317,6 +324,12 @@ int main() {
 
         DEMSim.ChangeFamily(11, 1);
 
+        if (Slope_deg < 14.) {
+            DEMSim.DoDynamicsThenSync(0.0);
+            DEMSim.SetInitTimeStep(step_size * 2);
+            DEMSim.UpdateSimParams();
+        }
+
         bool start_measure = false;
         for (double t = 0; t < sim_end; t += step_size, curr_step++) {
             if (curr_step % out_steps == 0) {
@@ -327,12 +340,13 @@ int main() {
                 DEMSim.WriteSphereFile(std::string(filename));
                 DEMSim.WriteMeshFile(std::string(meshname));
                 DEMSim.ShowThreadCollaborationStats();
+                std::cout << "Max system velocity: " << max_v_finder->GetValue() << std::endl;
                 currframe++;
                 DEMSim.DoDynamicsThenSync(0.0);
                 if (t >= 1. && Slope_deg < 14.) {
-                    DEMSim.ChangeClumpFamily(10); // Fixed
+                    DEMSim.ChangeClumpFamily(10);  // Fixed
                     float3 pos = wheel_tracker->Pos();
-                    DEMSim.ChangeClumpFamily(0, {pos.x-0.5, pos.x+0.4});
+                    DEMSim.ChangeClumpFamily(0, {pos.x - 0.5, pos.x + 0.4});
                 }
             }
 
@@ -350,7 +364,6 @@ int main() {
                 std::cout << "X: " << wheel_tracker->Pos().x << std::endl;
                 std::cout << "V: " << V.x << std::endl;
                 std::cout << "Slip: " << slip << std::endl;
-                std::cout << "Max system velocity: " << max_v_finder->GetValue() << std::endl;
             }
 
             DEMSim.DoDynamics(step_size);

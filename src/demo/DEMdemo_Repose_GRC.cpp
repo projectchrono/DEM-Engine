@@ -90,8 +90,8 @@ int main() {
     // Now we load clump locations from a checkpointed file
     {
         std::cout << "Making terrain..." << std::endl;
-        auto clump_xyz = DEMSim.ReadClumpXyzFromCsv("./GRC_20e6.csv");
-        auto clump_quaternion = DEMSim.ReadClumpQuatFromCsv("./GRC_20e6.csv");
+        auto clump_xyz = DEMSim.ReadClumpXyzFromCsv("./GRC_3e6.csv");
+        auto clump_quaternion = DEMSim.ReadClumpQuatFromCsv("./GRC_3e6.csv");
         std::vector<float3> in_xyz;
         std::vector<float4> in_quat;
         std::vector<std::shared_ptr<DEMClumpTemplate>> in_types;
@@ -163,7 +163,8 @@ int main() {
         }
     }
 
-    DEMSim.InstructBoxDomainDimension({-0.1 * scaling, 0.1 * scaling}, {-0.1 * scaling, 0.1 * scaling}, {funnel_bottom - 0.05f * scaling, funnel_bottom + 0.2f * scaling});
+    DEMSim.InstructBoxDomainDimension({-0.1 * scaling, 0.1 * scaling}, {-0.1 * scaling, 0.1 * scaling},
+                                      {funnel_bottom - 0.05f * scaling, funnel_bottom + 0.2f * scaling});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
 
     DEMSim.SetInitTimeStep(1e-6);
