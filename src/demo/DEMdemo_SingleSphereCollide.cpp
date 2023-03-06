@@ -148,6 +148,7 @@ int main() {
         std::cout << "Particle 2 X coord is " << pos2.x << std::endl;
         std::cout << "Particle 1 family is " << fam1 << std::endl;
         std::cout << "Particle 2 family is " << fam2 << std::endl;
+        std::cout << "Average contacts each sphere has: " << DEMSim.GetAvgSphContacts() << std::endl;
 
         // Test changing material type on-the-fly...
         DEMSim.SetFamilyClumpMaterial(1, mat_type_3);

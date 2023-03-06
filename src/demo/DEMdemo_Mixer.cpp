@@ -84,6 +84,7 @@ int main() {
     DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1.2);
     DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(6);
     DEMSim.SetSortContactPairs(true);
+    DEMSim.SetErrorOutAvgContacts(50);
     DEMSim.Initialize();
 
     path out_dir = current_path();
@@ -115,6 +116,7 @@ int main() {
         float max_v = max_v_finder->GetValue();
         std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
         std::cout << "Solver's current update frequency (auto-adapted): " << DEMSim.GetUpdateFreq() << std::endl;
+        std::cout << "Average contacts each sphere has: " << DEMSim.GetAvgSphContacts() << std::endl;
 
         DEMSim.DoDynamics(frame_time);
         DEMSim.ShowThreadCollaborationStats();

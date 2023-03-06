@@ -63,10 +63,11 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         *scratchPad.pNumPrevSpheres = 0;
         return;
     }
-    // These are needed for the solver to keep tab... But you know, we may have no triangles, so initializing them is
-    // needed.
+    // These are needed for the solver to keep tab... But you know, we may have no triangles or no contacts, so
+    // initializing them is needed.
     stateParams.maxSphFoundInBin = 0;
     stateParams.maxTriFoundInBin = 0;
+    stateParams.avgCntsPerSphere = 0;
 
     // total bytes needed for temp arrays in contact detection
     size_t CD_temp_arr_bytes = 0;
@@ -490,59 +491,74 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     timers.GetTimer("Build history map").start();
     // Now, sort idGeometryAB by their owners. Needed for identifying persistent contacts in history-based models.
     if (*scratchPad.pNumContacts > 0) {
+        // All temp vectors are free now, and all of them are fairly long...
+        size_t type_arr_bytes = (*scratchPad.pNumContacts) * sizeof(contact_t);
+        contact_t* contactType_sorted = (contact_t*)scratchPad.allocateTempVector(0, type_arr_bytes);
+        size_t id_arr_bytes = (*scratchPad.pNumContacts) * sizeof(bodyID_t);
+        bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector(1, id_arr_bytes);
+        bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector(2, id_arr_bytes);
+
+        //// TODO: But do I have to SortByKey twice?? Can I zip these value arrays together??
+        // Although it is stupid, do pay attention to that it does leverage the fact that RadixSort is stable.
+        cubDEMSortByKeys<bodyID_t, bodyID_t, DEMSolverStateData>(granData->idGeometryA, idA_sorted,
+                                                                 granData->idGeometryB, idB_sorted,
+                                                                 *scratchPad.pNumContacts, this_stream, scratchPad);
+        cubDEMSortByKeys<bodyID_t, contact_t, DEMSolverStateData>(granData->idGeometryA, idA_sorted,
+                                                                  granData->contactType, contactType_sorted,
+                                                                  *scratchPad.pNumContacts, this_stream, scratchPad);
+
+        // Copy back to idGeometry arrays
+        DEME_GPU_CALL(cudaMemcpy(granData->idGeometryA, idA_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
+        DEME_GPU_CALL(cudaMemcpy(granData->idGeometryB, idB_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
+        DEME_GPU_CALL(cudaMemcpy(granData->contactType, contactType_sorted, type_arr_bytes, cudaMemcpyDeviceToDevice));
+        // DEME_DEBUG_PRINTF("New contact IDs (A):");
+        // DEME_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryA, *scratchPad.pNumContacts));
+        // DEME_DEBUG_PRINTF("New contact IDs (B):");
+        // DEME_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryB, *scratchPad.pNumContacts));
+        // DEME_DEBUG_PRINTF("New contact types:");
+        // DEME_DEBUG_EXEC(displayArray<contact_t>(granData->contactType, *scratchPad.pNumContacts));
+        // DEME_DEBUG_PRINTF("Old contact IDs (A):");
+        // DEME_DEBUG_EXEC(displayArray<bodyID_t>(granData->previous_idGeometryA, *scratchPad.pNumPrevContacts));
+        // DEME_DEBUG_PRINTF("Old contact IDs (B):");
+        // DEME_DEBUG_EXEC(displayArray<bodyID_t>(granData->previous_idGeometryB, *scratchPad.pNumPrevContacts));
+        // DEME_DEBUG_PRINTF("Old contact types:");
+        // DEME_DEBUG_EXEC(displayArray<contact_t>(granData->previous_contactType, *scratchPad.pNumPrevContacts));
+
+        // For history-based models, construct the persistent contact map. We dwell on the fact that idA is always
+        // for a sphere.
+        // This CD run and previous CD run could have different number of spheres in them. We pick the larger
+        // number to refer in building the persistent contact map to avoid potential problems.
+        size_t nSpheresSafe =
+            (simParams->nSpheresGM > *scratchPad.pNumPrevSpheres) ? simParams->nSpheresGM : *scratchPad.pNumPrevSpheres;
+
+        // First, identify the new and old idA run-length
+        size_t run_length_bytes = nSpheresSafe * sizeof(geoSphereTouches_t);
+        geoSphereTouches_t* new_idA_runlength = (geoSphereTouches_t*)scratchPad.allocateTempVector(0, run_length_bytes);
+        size_t unique_id_bytes = nSpheresSafe * sizeof(bodyID_t);
+        bodyID_t* unique_new_idA = (bodyID_t*)scratchPad.allocateTempVector(1, unique_id_bytes);
+        size_t* pNumUniqueNewA = scratchPad.pTempSizeVar1;
+        cubDEMRunLengthEncode<bodyID_t, geoSphereTouches_t, DEMSolverStateData>(
+            granData->idGeometryA, unique_new_idA, new_idA_runlength, pNumUniqueNewA, *scratchPad.pNumContacts,
+            this_stream, scratchPad);
+        // Now, we do a tab-keeping job: how many contacts on average a sphere has?
+        {
+            // Figure out how many contacts an item in idA array typically has. Luckily, right now idA is sorted
+            // based
+            stateParams.avgCntsPerSphere =
+                (*pNumUniqueNewA > 0) ? (float)(*scratchPad.pNumContacts) / (float)(*pNumUniqueNewA) : 0.0;
+
+            DEME_STEP_DEBUG_PRINTF("Average number of contacts for each geometry: %.7g", stateParams.avgCntsPerSphere);
+            if (stateParams.avgCntsPerSphere > solverFlags.errOutAvgSphCnts) {
+                DEME_ERROR(
+                    "On average a sphere has %.7g contacts, more than the max allowance (%.7g).\nIf you believe "
+                    "this is not abnormal, set the allowance high using SetErrorOutAvgContacts before "
+                    "initialization.",
+                    stateParams.avgCntsPerSphere, solverFlags.errOutAvgSphCnts);
+            }
+        }
+
+        // Only need to proceed if history-based
         if (!solverFlags.isHistoryless) {
-            // All temp vectors are free now, and all of them are fairly long...
-            size_t type_arr_bytes = (*scratchPad.pNumContacts) * sizeof(contact_t);
-            contact_t* contactType_sorted = (contact_t*)scratchPad.allocateTempVector(0, type_arr_bytes);
-            size_t id_arr_bytes = (*scratchPad.pNumContacts) * sizeof(bodyID_t);
-            bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector(1, id_arr_bytes);
-            bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector(2, id_arr_bytes);
-
-            //// TODO: But do I have to SortByKey twice?? Can I zip these value arrays together??
-            // Although it is stupid, do pay attention to that it does leverage the fact that RadixSort is stable.
-            cubDEMSortByKeys<bodyID_t, bodyID_t, DEMSolverStateData>(granData->idGeometryA, idA_sorted,
-                                                                     granData->idGeometryB, idB_sorted,
-                                                                     *scratchPad.pNumContacts, this_stream, scratchPad);
-            cubDEMSortByKeys<bodyID_t, contact_t, DEMSolverStateData>(
-                granData->idGeometryA, idA_sorted, granData->contactType, contactType_sorted, *scratchPad.pNumContacts,
-                this_stream, scratchPad);
-
-            // Copy back to idGeometry arrays
-            DEME_GPU_CALL(cudaMemcpy(granData->idGeometryA, idA_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(granData->idGeometryB, idB_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(
-                cudaMemcpy(granData->contactType, contactType_sorted, type_arr_bytes, cudaMemcpyDeviceToDevice));
-            // DEME_DEBUG_PRINTF("New contact IDs (A):");
-            // DEME_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryA, *scratchPad.pNumContacts));
-            // DEME_DEBUG_PRINTF("New contact IDs (B):");
-            // DEME_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryB, *scratchPad.pNumContacts));
-            // DEME_DEBUG_PRINTF("New contact types:");
-            // DEME_DEBUG_EXEC(displayArray<contact_t>(granData->contactType, *scratchPad.pNumContacts));
-            // DEME_DEBUG_PRINTF("Old contact IDs (A):");
-            // DEME_DEBUG_EXEC(displayArray<bodyID_t>(granData->previous_idGeometryA, *scratchPad.pNumPrevContacts));
-            // DEME_DEBUG_PRINTF("Old contact IDs (B):");
-            // DEME_DEBUG_EXEC(displayArray<bodyID_t>(granData->previous_idGeometryB, *scratchPad.pNumPrevContacts));
-            // DEME_DEBUG_PRINTF("Old contact types:");
-            // DEME_DEBUG_EXEC(displayArray<contact_t>(granData->previous_contactType, *scratchPad.pNumPrevContacts));
-
-            // For history-based models, construct the persistent contact map. We dwell on the fact that idA is always
-            // for a sphere.
-            // This CD run and previous CD run could have different number of spheres in them. We pick the larger
-            // number to refer in building the persistent contact map to avoid potential problems.
-            size_t nSpheresSafe = (simParams->nSpheresGM > *scratchPad.pNumPrevSpheres) ? simParams->nSpheresGM
-                                                                                        : *scratchPad.pNumPrevSpheres;
-
-            // First, identify the new and old idA run-length
-            size_t run_length_bytes = nSpheresSafe * sizeof(geoSphereTouches_t);
-            geoSphereTouches_t* new_idA_runlength =
-                (geoSphereTouches_t*)scratchPad.allocateTempVector(0, run_length_bytes);
-            size_t unique_id_bytes = nSpheresSafe * sizeof(bodyID_t);
-            bodyID_t* unique_new_idA = (bodyID_t*)scratchPad.allocateTempVector(1, unique_id_bytes);
-            size_t* pNumUniqueNewA = scratchPad.pTempSizeVar1;
-            cubDEMRunLengthEncode<bodyID_t, geoSphereTouches_t, DEMSolverStateData>(
-                granData->idGeometryA, unique_new_idA, new_idA_runlength, pNumUniqueNewA, *scratchPad.pNumContacts,
-                this_stream, scratchPad);
-
             geoSphereTouches_t* old_idA_runlength =
                 (geoSphereTouches_t*)scratchPad.allocateTempVector(2, run_length_bytes);
             bodyID_t* unique_old_idA = (bodyID_t*)scratchPad.allocateTempVector(3, unique_id_bytes);
@@ -641,7 +657,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                         .launch(old_arr_unsort_to_sort_map, one_to_n, *scratchPad.pNumPrevContacts);
                     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                 }
-                // one_to_n used for temp storage; now give it back to the true mapping we wanted.
+                // one_to_n used for temp storage; now give it back to the true mapping we wanted. And now, vector 0 is
+                // in use.
                 old_arr_unsort_to_sort_map = one_to_n;
             }
 
@@ -755,20 +772,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     //                         cudaMemcpyDeviceToDevice));
     //     timers.GetTimer("Find contact pairs").stop();
     // }
-
-    // Now, how many contacts on average a sphere has?
-    if (verbosity >= VERBOSITY::STEP_DEBUG && (!solverFlags.isHistoryless)) {
-        // Figure out how many contacts an item in idA array typically has
-        size_t unique_arr_bytes = (size_t)simParams->nSpheresGM * sizeof(bodyID_t);
-        bodyID_t* unique_arr = (bodyID_t*)scratchPad.allocateTempVector(0, unique_arr_bytes);
-        size_t* num_unique_idA = (size_t*)scratchPad.allocateTempVector(1, sizeof(size_t));
-        cubDEMUnique<bodyID_t, DEMSolverStateData>(granData->idGeometryA, unique_arr, num_unique_idA,
-                                                   *scratchPad.pNumContacts, this_stream, scratchPad);
-        double avg_cnts_per_geo =
-            (*num_unique_idA > 0) ? (double)(*scratchPad.pNumContacts) / (double)(*num_unique_idA) : 0.0;
-
-        DEME_STEP_DEBUG_PRINTF("Average number of contacts for each geometry: %.9g", avg_cnts_per_geo);
-    }
 
     // Finally, don't forget to store the number of contacts for the next iteration, even if there is 0 contacts (in
     // that case, mapping will not be constructed, but we don't have to worry b/c in the next iteration, simply no work

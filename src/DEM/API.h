@@ -203,9 +203,18 @@ class DEMSolver {
     void SetMaxTriangleInBin(unsigned int max_tri) { threshold_too_many_tri_in_bin = max_tri; }
 
     /// @brief Set the velocity which when exceeded, the solver errors out. A huge number can be used to discourage this
-    /// error type.
+    /// error type. Defaulted to 5e4.
     /// @param vel Error-out velocity.
     void SetErrorOutVelocity(float vel) { threshold_error_out_vel = vel; }
+
+    /// @brief Set the average number of contacts a sphere has, before the solver errors out. A huge number can be used
+    /// to discourage this error type. Defaulted to 100.
+    /// @param num_cnts Error-out contact number.
+    void SetErrorOutAvgContacts(float num_cnts) { threshold_error_out_num_cnts = num_cnts; }
+
+    /// @brief Get the current number of contacts each sphere has.
+    /// @return Number of contacts.
+    float GetAvgSphContacts() { return kT->stateParams.avgCntsPerSphere; }
 
     /// @brief Enable or disable the use of adaptive bin size (by default it is on).
     /// @param use Enable or disable.
@@ -920,6 +929,9 @@ class DEMSolver {
     bool no_recording_contact_forces = false;
     // See SetCollectAccRightAfterForceCalc
     bool collect_force_in_force_kernel = false;
+
+    // Error-out avg num contacts
+    float threshold_error_out_num_cnts = 100.;
 
     // Integrator type
     TIME_INTEGRATOR m_integrator = TIME_INTEGRATOR::EXTENDED_TAYLOR;

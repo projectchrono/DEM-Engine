@@ -127,6 +127,9 @@ struct kTStateParams {
 
     // Num of bins, currently
     size_t numBins = 0;
+
+    // Current average num of contacts per sphere has.
+    float avgCntsPerSphere = 0.;
 };
 
 inline std::string pretty_format_bytes(size_t bytes) {
@@ -468,6 +471,11 @@ struct SolverFlags {
     // Whether the solver auto-update those sim params
     bool autoBinSize = true;
     bool autoUpdateFreq = true;
+
+    // The max number of average contacts per sphere has before the solver errors out. The reason why I didn't use the
+    // number of contacts for the sphere that has the most is that, well, we can have a huge sphere and it just will
+    // have more contacts. But if avg cnt is high, that means probably the contact margin is out of control now.
+    float errOutAvgSphCnts = 100.;
 };
 
 class DEMMaterial {

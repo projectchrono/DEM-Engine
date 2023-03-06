@@ -969,6 +969,8 @@ void DEMSolver::transferSolverParams() {
     dT->simParams->errOutBinTriNum = threshold_too_many_tri_in_bin;
     kT->simParams->errOutVel = threshold_error_out_vel;
     dT->simParams->errOutVel = threshold_error_out_vel;
+    kT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
+    dT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
 
     // Whether the solver should auto-update bin sizes
     kT->solverFlags.autoBinSize = auto_adjust_bin_size;
