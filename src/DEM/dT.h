@@ -588,7 +588,7 @@ class DEMDynamicThread {
     inline void routineChecks();
 
     // Bring dT buffer array data to its working arrays
-    void unpackMyBuffer();
+    inline void unpackMyBuffer();
     // Send produced data to kT-owned biffers
     void sendToTheirBuffer();
     // Resize some work arrays based on the number of contact pairs provided by kT

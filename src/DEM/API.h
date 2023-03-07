@@ -91,7 +91,7 @@ class DEMSolver {
     size_t GetNumContacts() const { return dT->getNumContacts(); }
     /// Get the current time step size in simulation.
     double GetTimeStepSize() const;
-    /// Getthe current expand factor in simulation.
+    /// Get the current expand factor in simulation.
     float GetExpandFactor() const;
     /// Set the number of dT steps before it waits for a contact-pair info update from kT.
     void SetCDUpdateFreq(int freq) {

@@ -147,18 +147,19 @@ inline void DEMKinematicThread::unpackMyBuffer() {
     // kT will need to derive the thickness of the CD margin, based on dT's info on system vel.
     if (!solverFlags.isExpandFactorFixed) {
         // This kernel will turn absv to marginSize, and if a vel is over max, it will clamp it.
+        // Converting to size_t is SUPER important... CUDA kernel call basically does not have type conversion.
         size_t blocks_needed = (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
         misc_kernels->kernel("computeMarginFromAbsv")
             .instantiate()
             .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(simParams, granData, simParams->nOwnerBodies);
+            .launch(simParams, granData, (size_t)simParams->nOwnerBodies);
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     } else {  // If isExpandFactorFixed, then just fill in that constant array.
         size_t blocks_needed = (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
         misc_kernels->kernel("fillValues")
             .instantiate()
             .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(granData->marginSize, simParams->beta, simParams->nOwnerBodies);
+            .launch(granData->marginSize, simParams->beta, (size_t)simParams->nOwnerBodies);
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 
@@ -332,7 +333,7 @@ void DEMKinematicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, cons
     misc_kernels->kernel("markOwnerToChange")
         .instantiate()
         .configure(dim3(blocks_needed_for_marking), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(idBool, ownerFactors, dIDs, dFactors, IDs.size());
+        .launch(idBool, ownerFactors, dIDs, dFactors, (size_t)IDs.size());
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     // Change the size of the sphere components in question
@@ -341,7 +342,7 @@ void DEMKinematicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, cons
     misc_kernels->kernel("kTModifyComponents")
         .instantiate()
         .configure(dim3(blocks_needed_for_changing), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData, idBool, ownerFactors, simParams->nSpheresGM);
+        .launch(granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM);
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     // cudaStreamDestroy(new_stream);

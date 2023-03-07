@@ -356,7 +356,7 @@ class DEMKinematicThread {
     const std::string Name = "kT";
 
     // Bring kT buffer array data to its working arrays
-    void unpackMyBuffer();
+    inline void unpackMyBuffer();
     // Send produced data to dT-owned biffers
     void sendToTheirBuffer();
     // Resize dT's buffer arrays based on the number of contact pairs
