@@ -43,11 +43,11 @@ int main() {
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
-    float Slopes_deg[] = {10, 5, 2, 0};
+    float Slopes_deg[] = {25, 20, 15};
     // float Slopes_deg[] = {0, 2.5, 5, 7.5, 10, 12.5};
     // float Slopes_deg[] = {25, 20, 15, 10, 5, 2, 0};
     unsigned int run_mode = 0;
-    unsigned int currframe = 300;
+    unsigned int currframe = 0;
 
     for (float Slope_deg : Slopes_deg) {
         DEMSolver DEMSim;
@@ -58,8 +58,8 @@ int main() {
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
         // E, nu, CoR, mu, Crr...
-        float mu = 0.5;
-        float mu_wheel = 0.5;
+        float mu = 0.3;
+        float mu_wheel = 0.6;
         float mu_wall = 1.;
         auto mat_type_wall =
             DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu_wall}, {"Crr", 0.00}});
@@ -278,7 +278,7 @@ int main() {
         DEMSim.SetExpandSafetyAdder(0.2);
         DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1);
         DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(5);
-        DEMSim.SetErrorOutVelocity(30.);
+        DEMSim.SetErrorOutVelocity(50.);
         DEMSim.SetInitBinSize(2 * scales.at(2));
         DEMSim.Initialize();
 
@@ -321,7 +321,8 @@ int main() {
 
         DEMSim.ChangeFamily(11, 1);
 
-        if (Slope_deg < 14.) {
+        // if (Slope_deg < 14.) {
+        {
             DEMSim.DoDynamicsThenSync(0.0);
             DEMSim.SetInitTimeStep(step_size * 2);
             DEMSim.UpdateSimParams();
