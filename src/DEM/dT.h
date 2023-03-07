@@ -581,7 +581,7 @@ class DEMDynamicThread {
     inline void calibrateParams();
 
     // Determine the max vel for this cycle, kT needs it
-    inline float* determineSysMaxVel();
+    inline float* determineSysVel();
 
     // Some per-step checks/modification, done before integration, but after force calculation (thus sort of in the
     // mid-step stage)

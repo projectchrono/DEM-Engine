@@ -744,35 +744,6 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     }  // End of contact sorting--mapping subroutine
     timers.GetTimer("Build history map").stop();
 
-    // We may want to sort based on contact types (cannot do this: it will break the order in mapping; I have to think
-    // on how to deal with this) if (solverFlags.should_sort_pairs) {
-    //     timers.GetTimer("Find contact pairs").start();
-    //     contact_t* contactType_sorted =
-    //         (contact_t*)scratchPad.allocateTempVector(0, (*scratchPad.pNumContacts) * sizeof(contact_t));
-    //     bodyID_t* idA_sorted =
-    //         (bodyID_t*)scratchPad.allocateTempVector(1, (*scratchPad.pNumContacts) * sizeof(bodyID_t));
-    //     bodyID_t* idB_sorted =
-    //         (bodyID_t*)scratchPad.allocateTempVector(2, (*scratchPad.pNumContacts) * sizeof(bodyID_t));
-
-    //     //// TODO: But do I have to SortByKey twice?? Can I zip these value arrays together??
-    //     cubDEMSortByKeys<contact_t, bodyID_t, DEMSolverStateData>(granData->contactType, contactType_sorted,
-    //                                                               granData->idGeometryA, idA_sorted,
-    //                                                               *scratchPad.pNumContacts, this_stream, scratchPad);
-    //     cubDEMSortByKeys<contact_t, bodyID_t, DEMSolverStateData>(granData->contactType, contactType_sorted,
-    //                                                               granData->idGeometryB, idB_sorted,
-    //                                                               *scratchPad.pNumContacts, this_stream, scratchPad);
-
-    //     // Copy back to idGeometry arrays
-    //     DEME_GPU_CALL(cudaMemcpy(granData->idGeometryA, idA_sorted, (*scratchPad.pNumContacts) * sizeof(bodyID_t),
-    //                         cudaMemcpyDeviceToDevice));
-    //     DEME_GPU_CALL(cudaMemcpy(granData->idGeometryB, idB_sorted, (*scratchPad.pNumContacts) * sizeof(bodyID_t),
-    //                         cudaMemcpyDeviceToDevice));
-    //     DEME_GPU_CALL(cudaMemcpy(granData->contactType, contactType_sorted, (*scratchPad.pNumContacts) *
-    //     sizeof(contact_t),
-    //                         cudaMemcpyDeviceToDevice));
-    //     timers.GetTimer("Find contact pairs").stop();
-    // }
-
     // Finally, don't forget to store the number of contacts for the next iteration, even if there is 0 contacts (in
     // that case, mapping will not be constructed, but we don't have to worry b/c in the next iteration, simply no work
     // will be done for the old array and every contact will be new)

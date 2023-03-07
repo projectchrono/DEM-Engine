@@ -443,13 +443,11 @@ void DEMSolver::decideBinSize() {
 
 void DEMSolver::decideCDMarginStrat() {
     switch (m_max_v_finder_type) {
-        case (MARGIN_FINDER_TYPE::MANUAL_MAX):
-            break;
         case (MARGIN_FINDER_TYPE::DEM_INSPECTOR):
             break;
         case (MARGIN_FINDER_TYPE::DEFAULT):
             // Default strategy is to use an inspector
-            m_approx_max_vel_func = this->CreateInspector("max_absv");
+            m_approx_max_vel_func = this->CreateInspector("absv");
             m_max_v_finder_type = MARGIN_FINDER_TYPE::DEM_INSPECTOR;
             break;
     }
@@ -503,50 +501,16 @@ void DEMSolver::reportInitStats() const {
         DEME_INFO("This in the case of the smallest sphere, means enlarging radius by %.6g%%.",
                   (m_expand_factor / m_smallest_radius) * 100.0);
     } else {
-        if (m_max_v_finder_type == MARGIN_FINDER_TYPE::MANUAL_MAX) {
-            float expand_factor =
-                (m_expand_safety_multi * m_approx_max_vel + m_expand_base_vel) * m_suggestedFutureDrift * m_ts_size;
-            DEME_INFO(
-                "All geometries should be enlarged/thickened by %.6g (estimated with the initial step size, update "
-                "frequency and max velocity) for contact detection purpose.",
-                expand_factor);
-            DEME_INFO("This in the case of the smallest sphere, means enlarging radius by %.6g%%.",
-                      (expand_factor / m_smallest_radius) * 100.0);
-        } else {
-            DEME_INFO("The solver to set to adaptively change the contact margin size.");
-        }
+        DEME_INFO("The solver to set to adaptively change the contact margin size.");
+        float expand_factor = (m_expand_safety_multi * AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE + m_expand_base_vel) *
+                              m_suggestedFutureDrift * m_ts_size;
+        DEME_STEP_METRIC(
+            "To give an example, all geometries may be enlarged/thickened by around %.6g (estimated with the initial "
+            "step size, initial update frequency and velocity %.4g) for contact detection purpose.",
+            expand_factor, AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE);
+        DEME_STEP_METRIC("This in the case of the smallest sphere, means enlarging radius by %.6g%%.",
+                         (expand_factor / m_smallest_radius) * 100.0);
     }
-    /*
-    if (use_user_defined_expand_factor) {
-        DEME_INFO(
-            "All geometries are enlarged/thickened by %.6g (estimated with the initial step size and update frequency) "
-            "for contact detection purpose",
-            m_expand_factor);
-        DEME_INFO("This in the case of the smallest sphere, means enlarging radius by %.6g%%",
-                  (m_expand_factor / m_smallest_radius) * 100.0);
-    } else {
-        float expand_factor;
-        if (m_max_v_finder_type == MARGIN_FINDER_TYPE::MANUAL_MAX) {
-            expand_factor =
-                (m_expand_safety_multi * m_approx_max_vel + m_expand_base_vel) * m_suggestedFutureDrift * m_ts_size;
-            DEME_INFO(
-                "All geometries should be enlarged/thickened by %.6g (estimated with the initial step size, update "
-                "frequency and max velocity) for contact detection purpose",
-                expand_factor);
-        } else {
-            expand_factor = (m_expand_safety_multi * AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE + m_expand_base_vel) *
-                            m_suggestedFutureDrift * m_ts_size;
-            DEME_INFO("Suppose the maximum velocity encountered in the simulation is %.6g for example, then...",
-                      AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE);
-            DEME_INFO(
-                "All geometries should be enlarged/thickened by %.6g (estimated with the initial step size and update "
-                "frequency) for contact detection purpose",
-                expand_factor);
-        }
-        DEME_INFO("This in the case of the smallest sphere, means enlarging radius by %.6g%%",
-                  (expand_factor / m_smallest_radius) * 100.0);
-    }
-    */
 
     DEME_INFO("\n");
 
@@ -929,7 +893,9 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.useMassJitify = jitify_mass_moi;
     kT->solverFlags.useClumpJitify = jitify_clump_templates;
 
-    // Tell kT and dT if and how this run is async
+    // Tell kT and dT if and how this run is async.
+    // Note this code doesn't really have async play, since dT is ahead of kT for at least one ts, unless all the user
+    // uses is DoDynamicsThenSync.
     kT->solverFlags.isAsync = !((m_suggestedFutureDrift == 0) && !auto_adjust_update_freq);
     dT->solverFlags.isAsync = !((m_suggestedFutureDrift == 0) && !auto_adjust_update_freq);
     // Ideal max drift in solverFlags may not be up-to-date, and only represents what the solver thinks it ought to be.
@@ -953,10 +919,6 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.useCubForceCollect = use_cub_to_reduce_force;
     dT->solverFlags.useNoContactRecord = no_recording_contact_forces;
     dT->solverFlags.useForceCollectInPlace = collect_force_in_force_kernel;
-
-    // Max velocity decision strategy
-    kT->solverFlags.maxVelQuery = (m_max_v_finder_type != MARGIN_FINDER_TYPE::MANUAL_MAX);
-    dT->solverFlags.maxVelQuery = (m_max_v_finder_type != MARGIN_FINDER_TYPE::MANUAL_MAX);
 
     // Whether sorts contact before using them (not implemented)
     kT->solverFlags.should_sort_pairs = should_sort_contacts;
@@ -994,19 +956,15 @@ void DEMSolver::transferSolverParams() {
 }
 
 void DEMSolver::transferSimParams() {
-    if ((!use_user_defined_expand_factor) &&
-        ((m_approx_max_vel < 1e-4f || m_approx_max_vel > 1e4) &&
-         m_max_v_finder_type == MARGIN_FINDER_TYPE::MANUAL_MAX) &&
-        m_suggestedFutureDrift > 0) {
+    if ((!use_user_defined_expand_factor) && m_approx_max_vel < 1e-4f && m_suggestedFutureDrift > 0) {
         DEME_WARNING(
             "You instructed that the physics can stretch %u time steps into the future, and explicitly specified the "
-            "maximum velocity stays at %.6g.\nThis appears to be an unusual velocity, and the contact detection "
-            "procedure will likely fail to detect some contact events before it is too late,\nor create contact "
-            "margins that are too thick resulting in a \"too many spheres in bin\" failure.",
+            "maximum velocity is %.6g.\nThe velocity appears to be small, and the contact detection "
+            "procedure will likely fail to detect some contact events before it is too late.",
             m_suggestedFutureDrift, m_approx_max_vel);
     }
     if ((!use_user_defined_expand_factor) && (m_expand_base_vel < 1e-4f || m_expand_safety_multi < 1.f) &&
-        m_max_v_finder_type != MARGIN_FINDER_TYPE::MANUAL_MAX && m_suggestedFutureDrift > 0) {
+        m_suggestedFutureDrift > 0) {
         DEME_WARNING(
             "You instructed that the physics can stretch %u time steps into the future, and specified that\nthe "
             "multiplier for the maximum velocity is %.6g and adder %.6g.\nThey will make the solver estimate the "

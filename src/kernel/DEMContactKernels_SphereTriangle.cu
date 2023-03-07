@@ -97,7 +97,7 @@ inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
     // Use an input named exactly `sphereID' which is the id of this sphere component
     {
         _componentAcqStrat_;
-        myRadius += simParams->beta;
+        myRadius += granData->marginSize[ownerID];
     }
 
     voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(

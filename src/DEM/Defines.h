@@ -320,7 +320,7 @@ struct DEMDataDT {
 
     // pointer to remote buffer where kinematic thread stores work-order data provided by the dynamic thread
     unsigned int* pKTOwnedBuffer_maxDrift = NULL;
-    float* pKTOwnedBuffer_maxVel = NULL;
+    float* pKTOwnedBuffer_absVel = NULL;
     float* pKTOwnedBuffer_ts = NULL;
     voxelID_t* pKTOwnedBuffer_voxelID = NULL;
     subVoxelPos_t* pKTOwnedBuffer_locX = NULL;
@@ -366,10 +366,12 @@ struct DEMDataKT {
     oriQ_t* oriQx;
     oriQ_t* oriQy;
     oriQ_t* oriQz;
+    // Derived from absv which is for determining contact margin size.
+    float* marginSize;
 
     // kT-owned buffer pointers, for itself's usage
-    float maxVel_buffer;           // buffer for the current max vel sent by dT
-    float maxVel;                  // kT's own storage of max vel
+    // float maxVel_buffer; // buffer for the current max vel sent by dT
+    float maxVel = 0;              // kT's own storage of max vel
     float ts_buffer;               // buffer for the current ts size sent by dT
     float ts;                      // kT's own storage of ts size
     unsigned int maxDrift_buffer;  // buffer for max dT future drift steps
@@ -382,6 +384,7 @@ struct DEMDataKT {
     oriQ_t* oriQ1_buffer;
     oriQ_t* oriQ2_buffer;
     oriQ_t* oriQ3_buffer;
+    float* absVel_buffer;
     family_t* familyID_buffer;
 
     // Family mask
@@ -441,7 +444,7 @@ struct DEMDataKT {
 
 // At init, we wish to show the user how thick approximately the CD margin will be added. This number will help deriving
 // that approximation. It can be anything really, 1 or 10, or 8.
-const float AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE = 10.f;
+const float AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE = 1.f;
 // After changing bin size, this many kT steps are not included in the performance gauging.
 const unsigned int NUM_STEPS_RESERVED_AFTER_CHANGING_BIN_SIZE = 5;
 // Drift tweak step size

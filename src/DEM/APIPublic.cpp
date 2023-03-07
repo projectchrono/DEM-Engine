@@ -311,24 +311,16 @@ void DEMSolver::SetCDNumStepsMaxDriftHistorySize(unsigned int n) {
     }
 }
 
-void DEMSolver::SetMaxVelocity(float max_vel, bool force) {
-    if (force) {
-        m_max_v_finder_type = MARGIN_FINDER_TYPE::MANUAL_MAX;
-        DEME_WARNING(
-            "Setting maximum velocity with the `force' argument being true will disable automatic maximum velocity "
-            "derivation, and use this user-supplied number to determine CD margin thickness always.\nUnusually large "
-            "velocities will not be detected automatically.");
-    }
+void DEMSolver::SetMaxVelocity(float max_vel) {
     m_approx_max_vel = max_vel;
 }
 
-void DEMSolver::SetMaxVelocity(const std::string& insp_type) {
+void DEMSolver::SetExpandSafetyType(const std::string& insp_type) {
     if (insp_type == "auto") {
         m_max_v_finder_type = MARGIN_FINDER_TYPE::DEFAULT;
+        use_user_defined_expand_factor = false;
     } else {
-        DEME_ERROR(
-            "If a string is provided as the argument for SetMaxVelocity, it must be \"auto\" to instruct auto "
-            "selection of contact margin.");
+        DEME_ERROR("Unknown string input \"%s\" for SetExpandSafetyType.", insp_type.c_str());
     }
 }
 
@@ -1541,6 +1533,15 @@ float DEMSolver::dTInspectReduce(const std::shared_ptr<jitify::Program>& inspect
                                  bool all_domain) {
     float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
     return (float)(*pRes);
+}
+
+float* DEMSolver::dTInspectNoReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
+                                    const std::string& kernel_name,
+                                    INSPECT_ENTITY_TYPE thing_to_insp,
+                                    CUB_REDUCE_FLAVOR reduce_flavor,
+                                    bool all_domain) {
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+    return pRes;
 }
 
 }  // namespace deme

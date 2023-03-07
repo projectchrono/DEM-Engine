@@ -459,8 +459,6 @@ struct SolverFlags {
     bool useNoContactRecord = false;
     // Collect force (reduce to acc) right in the force calculation kernel
     bool useForceCollectInPlace = false;
-    // How dT should decide the max velocity in the system (true: query an inspector; false: use a constant)
-    bool maxVelQuery = true;
     // Max number of steps dT is allowed to be ahead of kT, even when auto-adapt is enabled
     unsigned int upperBoundFutureDrift = 5000;
     // (targetDriftMoreThanAvg + targetDriftMultipleOfAvg * actual_dT_steps_per_kT_step) is used to calculate contact

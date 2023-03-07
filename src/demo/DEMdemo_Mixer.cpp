@@ -84,6 +84,7 @@ int main() {
     DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1.2);
     DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(6);
     DEMSim.SetSortContactPairs(true);
+    DEMSim.SetErrorOutVelocity(20.);
     DEMSim.SetErrorOutAvgContacts(50);
     DEMSim.Initialize();
 

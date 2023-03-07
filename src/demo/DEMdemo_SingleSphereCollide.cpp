@@ -81,9 +81,10 @@ int main() {
     DEMSim.SetInitTimeStep(2e-5);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEMSim.SetCDUpdateFreq(10);
-    // DEMSim.SetMaxVelocity(3.);
+    DEMSim.SetMaxVelocity(6.);
+    DEMSim.SetExpandSafetyType("auto");
     DEMSim.SetExpandSafetyMultiplier(1.2);
-    DEMSim.SetIntegrator("extended_taylor");
+    DEMSim.SetIntegrator("centered_difference");
 
     DEMSim.Initialize();
 
