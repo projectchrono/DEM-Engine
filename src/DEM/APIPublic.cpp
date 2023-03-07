@@ -266,6 +266,41 @@ float DEMSolver::GetUpdateFreq() const {
     return dT->getUpdateFreq();
 }
 
+void DEMSolver::SetIntegrator(const std::string& intg) {
+    switch (hash_charr(intg.c_str())) {
+        case ("forward_euler"_):
+            m_integrator = TIME_INTEGRATOR::FORWARD_EULER;
+            break;
+        case ("centered_difference"_):
+            m_integrator = TIME_INTEGRATOR::CENTERED_DIFFERENCE;
+            break;
+        case ("extended_taylor"_):
+            m_integrator = TIME_INTEGRATOR::EXTENDED_TAYLOR;
+            break;
+        default:
+            DEME_ERROR("Integration type %s is unknown. Please select another via SetIntegrator.", intg.c_str());
+    }
+}
+
+void DEMSolver::SetAdaptiveTimeStepType(const std::string& type) {
+    DEME_WARNING(
+        "SetAdaptiveTimeStepType is currently not implemented and has no effect, time step size is still fixed.");
+    switch (hash_charr(type.c_str())) {
+        case ("none"_):
+            adapt_ts_type = ADAPT_TS_TYPE::NONE;
+            break;
+        case ("max_vel"_):
+            adapt_ts_type = ADAPT_TS_TYPE::MAX_VEL;
+            break;
+        case ("int_diff"_):
+            adapt_ts_type = ADAPT_TS_TYPE::INT_DIFF;
+            break;
+        default:
+            DEME_ERROR("Adaptive time step type %s is unknown. Please select another via SetAdaptiveTimeStepType.",
+                       type.c_str());
+    }
+}
+
 void DEMSolver::SetCDNumStepsMaxDriftHistorySize(unsigned int n) {
     if (n > NUM_STEPS_RESERVED_AFTER_RENEWING_FREQ_TUNER) {
         max_drift_gauge_history_size = n;
@@ -276,24 +311,16 @@ void DEMSolver::SetCDNumStepsMaxDriftHistorySize(unsigned int n) {
     }
 }
 
-void DEMSolver::SetMaxVelocity(float max_vel, bool force) {
-    if (force) {
-        m_max_v_finder_type = MARGIN_FINDER_TYPE::MANUAL_MAX;
-        DEME_WARNING(
-            "Setting maximum velocity with the `force' argument being true will disable automatic maximum velocity "
-            "derivation, and use this user-supplied number to determine CD margin thickness always.\nUnusually large "
-            "velocities will not be detected automatically.");
-    }
+void DEMSolver::SetMaxVelocity(float max_vel) {
     m_approx_max_vel = max_vel;
 }
 
-void DEMSolver::SetMaxVelocity(const std::string& insp_type) {
+void DEMSolver::SetExpandSafetyType(const std::string& insp_type) {
     if (insp_type == "auto") {
         m_max_v_finder_type = MARGIN_FINDER_TYPE::DEFAULT;
+        use_user_defined_expand_factor = false;
     } else {
-        DEME_ERROR(
-            "If a string is provided as the argument for SetMaxVelocity, it must be \"auto\" to instruct auto "
-            "selection of contact margin.");
+        DEME_ERROR("Unknown string input \"%s\" for SetExpandSafetyType.", insp_type.c_str());
     }
 }
 
@@ -1458,17 +1485,22 @@ void DEMSolver::ShowThreadCollaborationStats() {
                 (dTkT_InteractionManager->schedulingStats.nDynamicUpdates).load());
     DEME_PRINTF("Number of updates kinematic gets: %zu\n",
                 (dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load());
-    if ((dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load() > 0)
+    if ((dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load() > 0) {
+        // The numerator is not currentStampOfDynamic since it got cleared when the user syncs.
         DEME_PRINTF("Average steps per dynamic update: %.7g\n",
                     (double)(dT->nTotalSteps) / (dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load());
+        DEME_PRINTF("Average steps contact detection lags behind: %.7g\n",
+                    (double)(dTkT_InteractionManager->schedulingStats.accumKinematicLagSteps).load() /
+                        (dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load());
+    }
     // DEME_PRINTF("Number of times dynamic loads buffer: %zu\n",
     //                 (dTkT_InteractionManager->schedulingStats.nDynamicReceives).load());
     // DEME_PRINTF("Number of times kinematic loads buffer: %zu\n",
     //                 (dTkT_InteractionManager->schedulingStats.nKinematicReceives).load());
     DEME_PRINTF("Number of times dynamic held back: %zu\n",
                 (dTkT_InteractionManager->schedulingStats.nTimesDynamicHeldBack).load());
-    DEME_PRINTF("Number of times kinematic held back: %zu\n",
-                (dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack).load());
+    // DEME_PRINTF("Number of times kinematic held back: %zu\n",
+    //             (dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack).load());
     DEME_PRINTF("-----------------------------\n");
 }
 
@@ -1490,6 +1522,7 @@ void DEMSolver::ClearThreadCollaborationStats() {
     // dTkT_InteractionManager->schedulingStats.nKinematicReceives = 0;
     dTkT_InteractionManager->schedulingStats.nTimesDynamicHeldBack = 0;
     dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack = 0;
+    dTkT_InteractionManager->schedulingStats.accumKinematicLagSteps = 0;
     dT->nTotalSteps = 0;
 }
 
@@ -1500,6 +1533,15 @@ float DEMSolver::dTInspectReduce(const std::shared_ptr<jitify::Program>& inspect
                                  bool all_domain) {
     float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
     return (float)(*pRes);
+}
+
+float* DEMSolver::dTInspectNoReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
+                                    const std::string& kernel_name,
+                                    INSPECT_ENTITY_TYPE thing_to_insp,
+                                    CUB_REDUCE_FLAVOR reduce_flavor,
+                                    bool all_domain) {
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+    return pRes;
 }
 
 }  // namespace deme

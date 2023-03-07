@@ -97,7 +97,7 @@ void DEMDynamicThread::packDataPointers() {
 void DEMDynamicThread::packTransferPointers(DEMKinematicThread*& kT) {
     // These are the pointers for sending data to dT
     granData->pKTOwnedBuffer_maxDrift = &(kT->granData->maxDrift_buffer);
-    granData->pKTOwnedBuffer_maxVel = &(kT->granData->maxVel_buffer);
+    granData->pKTOwnedBuffer_absVel = kT->granData->absVel_buffer;
     granData->pKTOwnedBuffer_ts = &(kT->granData->ts_buffer);
     granData->pKTOwnedBuffer_voxelID = kT->granData->voxelID_buffer;
     granData->pKTOwnedBuffer_locX = kT->granData->locX_buffer;
@@ -193,7 +193,7 @@ void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const 
     misc_kernels->kernel("markOwnerToChange")
         .instantiate()
         .configure(dim3(blocks_needed_for_marking), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(idBool, ownerFactors, dIDs, dFactors, IDs.size());
+        .launch(idBool, ownerFactors, dIDs, dFactors, (size_t)IDs.size());
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     // Change the size of the sphere components in question
@@ -202,7 +202,7 @@ void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const 
     misc_kernels->kernel("dTModifyComponents")
         .instantiate()
         .configure(dim3(blocks_needed_for_changing), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData, idBool, ownerFactors, simParams->nSpheresGM);
+        .launch(granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM);
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     // cudaStreamDestroy(new_stream);
@@ -1592,9 +1592,10 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
                              cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_oriQ3, granData->oriQz, simParams->nOwnerBodies * sizeof(oriQ_t),
                              cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_absVel, pCycleMaxVel, simParams->nOwnerBodies * sizeof(float),
+                             cudaMemcpyDeviceToDevice));
 
     // Send simulation metrics for kT's reference
-    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxVel, pCycleMaxVel, sizeof(float), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_ts, &(simParams->h), sizeof(float), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxDrift, &(granData->perhapsIdealFutureDrift),
                              sizeof(unsigned int), cudaMemcpyDeviceToDevice));
@@ -1801,12 +1802,8 @@ inline void DEMDynamicThread::routineChecks() {
     }
 }
 
-inline float* DEMDynamicThread::determineSysMaxVel() {
-    if (solverFlags.maxVelQuery) {
-        return approxMaxVelFunc->dT_GetValue();
-    } else {
-        return &(simParams->approxMaxVel);
-    }
+inline float* DEMDynamicThread::determineSysVel() {
+    return approxMaxVelFunc->dT_GetValue();
 }
 
 inline void DEMDynamicThread::unpack_impl() {
@@ -1818,8 +1815,11 @@ inline void DEMDynamicThread::unpack_impl() {
         contactPairArr_isFresh = true;
         // pSchedSupport->schedulingStats.nDynamicReceives++;
     }
-    // dT got the produce, now mark its buffer to be no longer fresh
+    // dT got the produce, now mark its buffer to be no longer fresh.
     pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
+    // Used for inspecting on average how stale kT's produce is.
+    pSchedSupport->schedulingStats.accumKinematicLagSteps +=
+        (pSchedSupport->currentStampOfDynamic).load() - (pSchedSupport->stampLastDynamicUpdateProdDate).load();
     // dT needs to know how fresh the contact pair info is, and that is determined by when kT received this batch of
     // ingredients.
     pSchedSupport->stampLastDynamicUpdateProdDate = (pSchedSupport->kinematicIngredProdDateStamp).load();
@@ -1839,7 +1839,7 @@ inline void DEMDynamicThread::ifProduceFreshThenUseIt() {
 
 inline void DEMDynamicThread::calibrateParams() {
     // Unpacking is done; now we can use temp arrays again to derive max velocity and send to kT
-    pCycleMaxVel = determineSysMaxVel();
+    pCycleMaxVel = determineSysVel();
 
     if (solverFlags.autoUpdateFreq) {
         unsigned int comfortable_drift;
@@ -1867,11 +1867,10 @@ inline void DEMDynamicThread::ifProduceFreshThenUseItAndSendNewOrder() {
         unpack_impl();
         timers.GetTimer("Unpack updates from kT").stop();
 
-        calibrateParams();
-
         timers.GetTimer("Send to kT buffer").start();
         // Acquire lock and refresh the work order for the kinematic
         {
+            calibrateParams();
             std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
             sendToTheirBuffer();
         }
@@ -1927,10 +1926,10 @@ void DEMDynamicThread::workerThread() {
                 new_contacts_loaded = false;
             }
 
-            pCycleMaxVel = determineSysMaxVel();
             // In this `new-boot' case, we send kT a work order, b/c dT needs results from CD to proceed. After this one
             // instance, kT and dT may work in an async fashion.
             {
+                pCycleMaxVel = determineSysVel();
                 std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
                 sendToTheirBuffer();
             }
@@ -2143,7 +2142,6 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
                 floatSumReduce(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
                 break;
             case (CUB_REDUCE_FLAVOR::NONE):
-                //// TODO: Query a full array w/o reducing doesn't seem like something useful...
                 return resArr;
         }
         // If this inspection is comfined in a region, then boolArrExclude and resArr need to be sorted and reduce by
@@ -2177,7 +2175,6 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
                                     streamInfo.stream, stateOfSolver_resources);
                 break;
             case (CUB_REDUCE_FLAVOR::NONE):
-                //// TODO: Query a full array w/o reducing doesn't seem like something useful...
                 return resArr;
         }
     }

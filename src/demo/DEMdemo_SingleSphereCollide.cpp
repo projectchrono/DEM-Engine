@@ -81,9 +81,10 @@ int main() {
     DEMSim.SetInitTimeStep(2e-5);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEMSim.SetCDUpdateFreq(10);
-    // DEMSim.SetMaxVelocity(3.);
+    DEMSim.SetMaxVelocity(6.);
+    DEMSim.SetExpandSafetyType("auto");
     DEMSim.SetExpandSafetyMultiplier(1.2);
-    DEMSim.SetIntegrator(TIME_INTEGRATOR::CENTERED_DIFFERENCE);
+    DEMSim.SetIntegrator("centered_difference");
 
     DEMSim.Initialize();
 
@@ -148,6 +149,7 @@ int main() {
         std::cout << "Particle 2 X coord is " << pos2.x << std::endl;
         std::cout << "Particle 1 family is " << fam1 << std::endl;
         std::cout << "Particle 2 family is " << fam2 << std::endl;
+        std::cout << "Average contacts each sphere has: " << DEMSim.GetAvgSphContacts() << std::endl;
 
         // Test changing material type on-the-fly...
         DEMSim.SetFamilyClumpMaterial(1, mat_type_3);

@@ -17,6 +17,7 @@ class ManagerStatistics {
     std::atomic<uint64_t> nTimesKinematicHeldBack;
     std::atomic<uint64_t> nDynamicUpdates;
     std::atomic<uint64_t> nKinematicUpdates;
+    std::atomic<uint64_t> accumKinematicLagSteps;
     // std::atomic<uint64_t> nDynamicReceives;
     // std::atomic<uint64_t> nKinematicReceives;
 
@@ -25,6 +26,7 @@ class ManagerStatistics {
         nTimesKinematicHeldBack = 0;
         nDynamicUpdates = 0;
         nKinematicUpdates = 0;
+        accumKinematicLagSteps = 0;
         // nDynamicReceives = 0;
         // nKinematicReceives = 0;
     }

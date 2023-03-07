@@ -119,42 +119,52 @@ inline void DEMKinematicThread::unpackMyBuffer() {
                              cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->oriQz, granData->oriQ3_buffer, simParams->nOwnerBodies * sizeof(oriQ_t),
                              cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->marginSize, granData->absVel_buffer, simParams->nOwnerBodies * sizeof(float),
+                             cudaMemcpyDeviceToDevice));
 
     DEME_GPU_CALL(cudaMemcpy(&(granData->ts), &(granData->ts_buffer), sizeof(float), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(&(granData->maxVel), &(granData->maxVel_buffer), sizeof(float), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(&(granData->maxDrift), &(granData->maxDrift_buffer), sizeof(unsigned int),
                              cudaMemcpyDeviceToDevice));
 
     // Whatever drift value dT says, kT listens
     pSchedSupport->kinematicMaxFutureDrift = granData->maxDrift;
 
-    // Check if max velocity is exceeded
+    // Need to reduce to check if max velocity is exceeded (right now, array marginSize is still storing absv...)
+    floatMaxReduce(granData->marginSize, &(granData->maxVel), simParams->nOwnerBodies, streamInfo.stream,
+                   stateOfSolver_resources);
     if (granData->maxVel > simParams->errOutVel) {
         DEME_ERROR(
             "System max velocity is %.7g, exceeded max allowance (%.7g).\nIf this velocity is not abnormal and you "
             "want to increase this allowance, use SetErrorOutVelocity before initializing simulation.",
             granData->maxVel, simParams->errOutVel);
+    } else if (granData->maxVel >
+               simParams->approxMaxVel) {  // If maxVel is larger than the user estimation, that is an anomaly
+        DEME_STEP_ANOMALY("Simulation entity velocity reached %.6g, over the user-estimated %.6g", granData->maxVel,
+                          simParams->approxMaxVel);
+        anomalies.over_max_vel = true;
     }
-    // kT will need to derive the thickness of the CD margin, based on dT's info on system max vel
-    // If isExpandFactorFixed, then that expand factor is in beta already, no work needed
+
+    // kT will need to derive the thickness of the CD margin, based on dT's info on system vel.
     if (!solverFlags.isExpandFactorFixed) {
-        // If maxVel is larger than the user estimation, that is an anomaly
-        float max_vel = granData->maxVel;
-        if (max_vel > simParams->approxMaxVel) {
-            DEME_STEP_ANOMALY("Simulation entity velocity reached %.6g, over the user-estimated %.6g", max_vel,
-                              simParams->approxMaxVel);
-            anomalies.over_max_vel = true;
-            max_vel = simParams->approxMaxVel;
-        }
-        // If dT decides to change ts size, it already informed kT then. Note the way dT currently does it, it can go 1
-        // or 2 steps more than max drift... I am aware that this will cause beta to change even when it is running in a
-        // sync-ed fashion. But that is not a big deal.
-        simParams->beta = (max_vel * simParams->expSafetyMulti + simParams->expSafetyAdder) *
-                          (granData->ts_buffer * (granData->maxDrift));
+        // This kernel will turn absv to marginSize, and if a vel is over max, it will clamp it.
+        // Converting to size_t is SUPER important... CUDA kernel call basically does not have type conversion.
+        size_t blocks_needed = (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+        misc_kernels->kernel("computeMarginFromAbsv")
+            .instantiate()
+            .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+            .launch(simParams, granData, (size_t)simParams->nOwnerBodies);
+        DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    } else {  // If isExpandFactorFixed, then just fill in that constant array.
+        size_t blocks_needed = (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+        misc_kernels->kernel("fillValues")
+            .instantiate()
+            .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
+            .launch(granData->marginSize, simParams->beta, (size_t)simParams->nOwnerBodies);
+        DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 
     DEME_DEBUG_PRINTF("kT received a velocity update: %.6g", granData->maxVel);
-    DEME_DEBUG_PRINTF("A margin of thickness %.6g is added", simParams->beta);
+    // DEME_DEBUG_PRINTF("A margin of thickness %.6g is added", simParams->beta);
 
     // Family number is a typical changable quantity on-the-fly. If this flag is on, kT received changes from dT.
     if (solverFlags.canFamilyChange) {
@@ -258,13 +268,10 @@ void DEMKinematicThread::workerThread() {
                              contactMapping, streamInfo.stream, stateOfSolver_resources, timers, stateParams);
             CDAccumTimer.End();
 
-            // kT will reflect on how good the choice of parameters is
-            timers.GetTimer("Adjust parameters").start();
-            calibrateParams();
-            timers.GetTimer("Adjust parameters").stop();
-
             timers.GetTimer("Send to dT buffer").start();
             {
+                // kT will reflect on how good the choice of parameters is
+                calibrateParams();
                 // Acquire lock and supply the dynamic with fresh produce
                 std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
                 sendToTheirBuffer();
@@ -326,7 +333,7 @@ void DEMKinematicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, cons
     misc_kernels->kernel("markOwnerToChange")
         .instantiate()
         .configure(dim3(blocks_needed_for_marking), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(idBool, ownerFactors, dIDs, dFactors, IDs.size());
+        .launch(idBool, ownerFactors, dIDs, dFactors, (size_t)IDs.size());
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     // Change the size of the sphere components in question
@@ -335,7 +342,7 @@ void DEMKinematicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, cons
     misc_kernels->kernel("kTModifyComponents")
         .instantiate()
         .configure(dim3(blocks_needed_for_changing), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData, idBool, ownerFactors, simParams->nSpheresGM);
+        .launch(granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM);
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     // cudaStreamDestroy(new_stream);
@@ -387,6 +394,7 @@ void DEMKinematicThread::packDataPointers() {
     granData->oriQx = oriQx.data();
     granData->oriQy = oriQy.data();
     granData->oriQz = oriQz.data();
+    granData->marginSize = marginSize.data();
     granData->idGeometryA = idGeometryA.data();
     granData->idGeometryB = idGeometryB.data();
     granData->contactType = contactType.data();
@@ -524,6 +532,7 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     DEME_TRACKED_RESIZE_DEBUGPRINT(oriQx, nOwnerBodies, "oriQx", 0);
     DEME_TRACKED_RESIZE_DEBUGPRINT(oriQy, nOwnerBodies, "oriQy", 0);
     DEME_TRACKED_RESIZE_DEBUGPRINT(oriQz, nOwnerBodies, "oriQz", 0);
+    DEME_TRACKED_RESIZE_DEBUGPRINT(marginSize, nOwnerBodies, "marginSize", 0);
 
     // Transfer buffer arrays
     // It is cudaMalloc-ed memory, not managed, because we want explicit locality control of buffers
@@ -538,6 +547,7 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
         DEME_DEVICE_PTR_ALLOC(granData->oriQ1_buffer, nOwnerBodies);
         DEME_DEVICE_PTR_ALLOC(granData->oriQ2_buffer, nOwnerBodies);
         DEME_DEVICE_PTR_ALLOC(granData->oriQ3_buffer, nOwnerBodies);
+        DEME_DEVICE_PTR_ALLOC(granData->absVel_buffer, nOwnerBodies);
 
         // DEME_TRACKED_RESIZE_DEBUGPRINT(voxelID_buffer, nOwnerBodies, "voxelID_buffer", 0);
         // DEME_TRACKED_RESIZE_DEBUGPRINT(locX_buffer, nOwnerBodies, "locX_buffer", 0);

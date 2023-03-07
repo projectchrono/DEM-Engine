@@ -70,8 +70,11 @@ class DEMInspector {
     // Initialize with the DEM simulation system (user should not call this)
     void Initialize(const std::unordered_map<std::string, std::string>& Subs, bool force = false);
 
-    /// Get the reduce value of the quantity that you wish to inspect
+    /// Get the reduce value of the quantity that you wish to inspect.
     float GetValue();
+
+    /// Get the values of the quantity that you wish to inspect (for non-reduced inspections).
+    float* GetValues();
 
     /// Get the value (as a vector) of the quantity that you wish to inspect
     // std::vector<float> GetVector();

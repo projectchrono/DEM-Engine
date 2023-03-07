@@ -33,7 +33,7 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
             // Use an input named exactly `sphereID' which is the id of this sphere component
             {
                 _componentAcqStrat_;
-                myRadius += simParams->beta;
+                myRadius += granData->marginSize[myOwnerID];
             }
 
             {
@@ -106,7 +106,7 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
             double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
             contact_type = checkSphereEntityOverlap<double3, float>(
                 myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], simParams->beta);
+                objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner]);
 
             if (contact_type) {
                 contact_count++;
@@ -143,7 +143,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
             // Use an input named exactly `sphereID' which is the id of this sphere component
             {
                 _componentAcqStrat_;
-                myRadius += simParams->beta;
+                myRadius += granData->marginSize[myOwnerID];
             }
 
             // Get the offset of my spot where I should start writing back to the global bin--sphere pair registration
@@ -230,7 +230,7 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
             double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
             contact_type = checkSphereEntityOverlap<double3, float>(
                 myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], simParams->beta);
+                objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner]);
 
             if (contact_type) {
                 idGeoA[mySphereGeoReportOffset] = sphereID;

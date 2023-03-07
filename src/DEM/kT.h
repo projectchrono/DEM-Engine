@@ -147,6 +147,9 @@ class DEMKinematicThread {
     std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQy;
     std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQz;
 
+    // dT-supplied system velocity
+    std::vector<float, ManagedAllocator<float>> marginSize;
+
     // Clump's family identification code. Used in determining whether they can be contacts between two families, and
     // whether a family has prescribed motions.
     std::vector<family_t, ManagedAllocator<family_t>> familyID;
@@ -181,8 +184,7 @@ class DEMKinematicThread {
 
     // kT's timers
     std::vector<std::string> timer_names = {"Discretize domain",      "Find contact pairs", "Build history map",
-                                            "Unpack updates from dT", "Send to dT buffer",  "Wait for dT update",
-                                            "Adjust parameters"};
+                                            "Unpack updates from dT", "Send to dT buffer",  "Wait for dT update"};
     SolverTimers timers = SolverTimers(timer_names);
 
     kTStateParams stateParams;
@@ -354,7 +356,7 @@ class DEMKinematicThread {
     const std::string Name = "kT";
 
     // Bring kT buffer array data to its working arrays
-    void unpackMyBuffer();
+    inline void unpackMyBuffer();
     // Send produced data to dT-owned biffers
     void sendToTheirBuffer();
     // Resize dT's buffer arrays based on the number of contact pairs

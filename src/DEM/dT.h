@@ -581,14 +581,14 @@ class DEMDynamicThread {
     inline void calibrateParams();
 
     // Determine the max vel for this cycle, kT needs it
-    inline float* determineSysMaxVel();
+    inline float* determineSysVel();
 
     // Some per-step checks/modification, done before integration, but after force calculation (thus sort of in the
     // mid-step stage)
     inline void routineChecks();
 
     // Bring dT buffer array data to its working arrays
-    void unpackMyBuffer();
+    inline void unpackMyBuffer();
     // Send produced data to kT-owned biffers
     void sendToTheirBuffer();
     // Resize some work arrays based on the number of contact pairs provided by kT

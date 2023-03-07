@@ -64,10 +64,11 @@ int main() {
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
-    // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEMSim.SetCDUpdateFreq(20);
     DEMSim.SetMaxVelocity(15.);
-    // The projectile can be fast... and its velocity is not accounted for by the default max vel estimator
+    // In general you don't have to worry about SetExpandSafetyAdder, unless if an entity has the property that a point
+    // on it can move much faster than its CoM. In this demo, you are dealing with a meshed ball and you in fact don't
+    // have this problem. In the Centrifuge demo though, this can be a problem since the centrifuge's CoM is not moving,
+    // but its pointwise velocity can be high, so it needs to be accounted for using this method.
     DEMSim.SetExpandSafetyAdder(5.);
     DEMSim.SetInitBinSize(4 * terrain_rad);
     DEMSim.Initialize();

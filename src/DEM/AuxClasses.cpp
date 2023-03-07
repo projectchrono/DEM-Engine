@@ -139,6 +139,13 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
             thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
             index_name = "myOwner";
             break;
+        case ("absv"_):
+            inspection_code = INSP_CODE_EVERYTHING_ABSV;
+            reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
+            index_name = "myOwner";
+            break;
         case ("clump_kinetic_energy"_):
             inspection_code = INSP_CODE_CLUMP_KE;
             reduce_flavor = CUB_REDUCE_FLAVOR::SUM;
@@ -158,6 +165,13 @@ float DEMInspector::GetValue() {
     assertInit();
     float reduce_result =
         sys->dTInspectReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+    return reduce_result;
+}
+
+float* DEMInspector::GetValues() {
+    assertInit();
+    float* reduce_result =
+        sys->dTInspectNoReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
     return reduce_result;
 }
 

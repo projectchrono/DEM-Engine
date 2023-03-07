@@ -125,7 +125,7 @@ int main() {
     float step_size = 5e-6;
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
-    DEMSim.SetMaxVelocity("auto");
+    DEMSim.SetExpandSafetyType("auto");
     // If there is a velocity that an analytical object (i.e. the drum) has that you'd like the solver to take into
     // account in consideration of adding contact margins, you have to specify it here, since the solver's automatic max
     // velocity derivation algorithm currently cannot take analytical object's angular velocity-induced velocity into
