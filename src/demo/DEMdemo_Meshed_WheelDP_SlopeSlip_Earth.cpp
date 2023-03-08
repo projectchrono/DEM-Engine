@@ -58,8 +58,8 @@ int main() {
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
         // E, nu, CoR, mu, Crr...
-        float mu = 0.3;
-        float mu_wheel = 0.6;
+        float mu = 0.4;
+        float mu_wheel = 0.8;
         float mu_wall = 1.;
         auto mat_type_wall =
             DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu_wall}, {"Crr", 0.00}});
@@ -193,10 +193,10 @@ int main() {
             base_batch.SetOriQ(in_quat);
             DEMSim.AddClumps(base_batch);
 
-            /*
+            
             std::vector<float> x_shift_dist = {0};
             std::vector<float> y_shift_dist = {0};
-            std::vector<float> z_shift_dist = {0.15};
+            std::vector<float> z_shift_dist = {0.1};
             // Add some patches of such graular bed
             for (float x_shift : x_shift_dist) {
                 for (float y_shift : y_shift_dist) {
@@ -205,10 +205,10 @@ int main() {
                         std::vector<float4> my_quat = in_quat;
                         std::vector<std::shared_ptr<DEMClumpTemplate>> my_types = in_types;
                         std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
-                        // for (size_t i = 0; i < in_xyz.size(); i++) {
-                        //     if (in_xyz.at(i).z < -0.41)
-                        //         elem_to_remove.at(i) = 1;
-                        // }
+                        for (size_t i = 0; i < in_xyz.size(); i++) {
+                            if (in_xyz.at(i).z < -0.43)
+                                elem_to_remove.at(i) = 1;
+                        }
                         my_xyz.erase(std::remove_if(my_xyz.begin(), my_xyz.end(),
                                                     [&elem_to_remove, &my_xyz](const float3& i) {
                                                         return elem_to_remove.at(&i - my_xyz.data());
@@ -238,7 +238,7 @@ int main() {
                     }
                 }
             }
-            */
+            
         }
 
         // Now add a plane to compress the sample
