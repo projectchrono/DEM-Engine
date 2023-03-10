@@ -3,6 +3,13 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// This demo features an analytical boundary-represented fast rotating container
+// with particles of various shapes pulled into it. Different types of particles
+// are marked with different family numbers (identification numbers) for easier
+// visualizations.
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>

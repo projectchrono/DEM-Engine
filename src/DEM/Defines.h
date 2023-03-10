@@ -21,10 +21,10 @@ namespace deme {
 // NOW DEFINING CONSTANTS USED BY THE DEM MODULE
 // =============================================================================
 #define DEME_GET_VAR_NAME(Variable) (#Variable)
-#define DEME_KT_CD_NTHREADS_PER_BLOCK 256
+#define DEME_KT_CD_NTHREADS_PER_BLOCK 512
 // It is better to keep DEME_NUM_SPHERES_PER_CD_BATCH == DEME_KT_CD_NTHREADS_PER_BLOCK for better performance
-#define DEME_NUM_SPHERES_PER_CD_BATCH 256    ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
-#define DEME_NUM_TRIANGLES_PER_CD_BATCH 128  ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
+#define DEME_NUM_SPHERES_PER_CD_BATCH 512    ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
+#define DEME_NUM_TRIANGLES_PER_CD_BATCH 256  ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
 #define DEME_TINY_FLOAT 1e-12
 #define DEME_HUGE_FLOAT 1e15
 #define DEME_BITS_PER_BYTE 8
@@ -46,7 +46,7 @@ constexpr uint8_t VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * DEME_BITS_PER_BYTE;
 constexpr uint8_t VOXEL_COUNT_POWER2 = sizeof(voxelID_t) * DEME_BITS_PER_BYTE;
 constexpr int64_t MAX_SUBVOXEL = (int64_t)1 << VOXEL_RES_POWER2;
 
-#define DEME_NUM_BODIES_PER_BLOCK 512
+#define DEME_NUM_BODIES_PER_BLOCK 1024
 #define DEME_NUM_TRIANGLE_PER_BLOCK 512
 #define DEME_MAX_THREADS_PER_BLOCK 1024
 #define DEME_INIT_CNT_MULTIPLIER 2

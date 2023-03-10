@@ -3,6 +3,11 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// This demo features a mesh-represented bladed mixer interacting with clump-represented
+// DEM particles.
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
@@ -80,12 +85,16 @@ int main() {
     // Mixer has a big angular velocity-contributed linear speed at its blades, this is something the solver do not
     // account for, for now. And that means it needs to be added as an estimated value.
     DEMSim.SetExpandSafetyAdder(2.0);
-    DEMSim.SetInitBinSize(20 * granular_rad);
+    DEMSim.SetInitBinSize(25 * granular_rad);
     DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1.2);
     DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(6);
     DEMSim.SetSortContactPairs(true);
+    // DEMSim.DisableAdaptiveBinSize();
     DEMSim.SetErrorOutVelocity(20.);
+    // Force the solver to error out if something went crazy. A good practice to add them, but not necessary.
     DEMSim.SetErrorOutAvgContacts(50);
+    DEMSim.SetForceCalcThreadsPerBlock(512);
+    // DEMSim.UseCubForceCollection();
     DEMSim.Initialize();
 
     path out_dir = current_path();

@@ -3,6 +3,11 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// A repose angle test. Particles flow through a mesh-represented funnel and form
+// a pile that has an apparent angle.
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
@@ -124,13 +129,16 @@ int main() {
         input_pile_xyz.insert(input_pile_xyz.end(), layer_xyz.begin(), layer_xyz.end());
         layer_z += spacing;
     }
-    // Calling AddClumps a second time will just add more clumps to the system
+    // Note: AddClumps can be called multiple times before initialization to add more clumps to the system
     auto the_pile = DEMSim.AddClumps(input_pile_template_type, input_pile_xyz);
 
     DEMSim.InstructBoxDomainDimension({-10, 10}, {-10, 10}, {funnel_bottom - 10.f, funnel_bottom + 20.f});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(5e-6);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
+    // Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
+    // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
+    // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(25.);
     DEMSim.SetInitBinSize(min_rad * 6);
     DEMSim.Initialize();

@@ -16,6 +16,14 @@
 #include <random>
 #include <cmath>
 
+// =============================================================================
+// In GRCPrep demo series, we try to prepare a sample of the GRC simulant, which
+// are supposed to be used for extraterrestrial rover mobility simulations. It is
+// made of particles of various sizes and shapes following a certain distribution.
+// In Part1, it creates several batches of clumps and let them settle at the bottom
+// of the domain.
+// =============================================================================
+
 using namespace deme;
 using namespace std::filesystem;
 
@@ -40,41 +48,38 @@ int main() {
     float bottom = -0.5;
     DEMSim.AddBCPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_terrain);
 
-    // Then the ground particle template
-    DEMClumpTemplate shape_template;
-    shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
+    // Define the terrain particle templates
     // Calculate its mass and MOI
-    float mass = 2.6e3 * 5.5886717;
-    float3 MOI = make_float3(2.928, 2.6029, 3.9908) * 2.6e3;
-    // Scale the template we just created
-    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
-    // std::vector<double> scales = {0.0014, 0.00063, 0.00033, 0.00022, 0.00015, 0.00009};
+    float terrain_density = 2.6e3;
+    double clump_vol = 5.5886717;
+    float mass = terrain_density * clump_vol;
+    float3 MOI = make_float3(2.928, 2.6029, 3.9908) * terrain_density;
+    // Then load it to system
+    std::shared_ptr<DEMClumpTemplate> my_template =
+        DEMSim.LoadClumpType(mass, MOI, GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain);
+    my_template->SetVolume(clump_vol);
+    // Make 5 copies. Note we must use DEME's duplicate method to do this, because we will make changes to the templates
+    // later, using the shared_ptrs as handles. If no duplications are made, then all the changes are going to be
+    // enforced on the same template, and in the end we'd not be able to get 5 distinct templates.
+    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates = {
+        my_template, DEMSim.Duplicate(my_template), DEMSim.Duplicate(my_template), DEMSim.Duplicate(my_template),
+        DEMSim.Duplicate(my_template)};
+    // Decide the scalings of the templates we just created (so that they are... like particles, not rocks)
     std::vector<double> scales = {0.00063, 0.00033, 0.00022, 0.00015, 0.00009};
     std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 20.; });
-    unsigned int t_num = 0;
-    for (double scaling : scales) {
-        auto this_template = shape_template;
-        this_template.mass = (double)mass * scaling * scaling * scaling;
-        this_template.MOI.x = (double)MOI.x * (double)(scaling * scaling * scaling * scaling * scaling);
-        this_template.MOI.y = (double)MOI.y * (double)(scaling * scaling * scaling * scaling * scaling);
-        this_template.MOI.z = (double)MOI.z * (double)(scaling * scaling * scaling * scaling * scaling);
-        std::cout << "Mass: " << this_template.mass << std::endl;
-        std::cout << "MOIX: " << this_template.MOI.x << std::endl;
-        std::cout << "MOIY: " << this_template.MOI.y << std::endl;
-        std::cout << "MOIZ: " << this_template.MOI.z << std::endl;
-        std::cout << "=====================" << std::endl;
-        std::for_each(this_template.radii.begin(), this_template.radii.end(), [scaling](float& r) { r *= scaling; });
-        std::for_each(this_template.relPos.begin(), this_template.relPos.end(), [scaling](float3& r) { r *= scaling; });
-        this_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(this_template.nComp, mat_type_terrain);
-
+    // Now scale those templates
+    for (int i = 0; i < scales.size(); i++) {
+        std::shared_ptr<DEMClumpTemplate>& my_template = ground_particle_templates.at(i);
+        // Note the mass and MOI are also scaled in the process, automatically. But if you are not happy with this, you
+        // can always manually change mass and MOI afterwards.
+        my_template->Scale(scales.at(i));
         // Give these templates names, 0000, 0001 etc.
         char t_name[20];
-        sprintf(t_name, "%04d", t_num);
-        this_template.AssignName(std::string(t_name));
-        ground_particle_templates.push_back(DEMSim.LoadClumpType(this_template));
-        t_num++;
+        sprintf(t_name, "%04d", i);
+        my_template->AssignName(std::string(t_name));
     }
 
+    // Instatiate particles with a probability that is in line with their weight distribution.
     // std::vector<double> weight_perc = {0.18, 0.20, 0.14, 0.16, 0.17, 0.15};
     std::vector<double> weight_perc = {0.2439, 0.1707, 0.1951, 0.2073, 0.1829};
     std::vector<double> grain_perc;
@@ -98,6 +103,9 @@ int main() {
     float step_size = 1e-6;
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    // Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
+    // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
+    // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(15.);
     DEMSim.SetExpandSafetyMultiplier(1.2);
     DEMSim.SetInitBinSize(scales.at(2));

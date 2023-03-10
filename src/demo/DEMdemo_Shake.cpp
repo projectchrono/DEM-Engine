@@ -3,6 +3,10 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// Put particles in a jar, the shake the jar in the hope to change the bulk density.
+// =============================================================================
+
 #include <DEM/API.h>
 #include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
@@ -32,8 +36,8 @@ int main() {
 
     float shake_amp = 0.1;
     float shake_speed = 2;  // Num of periods per second
-    float step_size = 1e-6;
-    double world_size = 2;
+    float step_size = 5e-6;
+    double world_size = 2.;
     double soil_bin_diameter = 0.584;
     double cone_surf_area = 323e-6;
     double cone_diameter = std::sqrt(cone_surf_area / math_PI) * 2;
@@ -47,107 +51,40 @@ int main() {
     walls->AddPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_terrain);
     walls->SetFamily(1);
 
-    // Define the GRC terrain particle templates
-    DEMClumpTemplate shape_template;
-    shape_template.ReadComponentFromFile(GetDEMEDataFile("clumps/triangular_flat.csv"));
-    // Calculate its mass and MOI
+    // Define the terrain particle templates. Two types of clumps.
     float terrain_density = 2.6e3;
-    double clump_vol = 5.5886717;
-    float mass = terrain_density * clump_vol;  // in kg or g
-    float3 MOI = make_float3(2.928, 2.6029, 3.9908) * terrain_density;
-    // Scale the template we just created
-    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
-    std::vector<double> scales = {0.00063, 0.00033, 0.00022, 0.00015, 0.00009};
-    std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 20.; });
-    for (double scaling : scales) {
-        auto this_template = shape_template;
-        this_template.mass = (double)mass * scaling * scaling * scaling;
-        this_template.MOI.x = (double)MOI.x * (double)(scaling * scaling * scaling * scaling * scaling);
-        this_template.MOI.y = (double)MOI.y * (double)(scaling * scaling * scaling * scaling * scaling);
-        this_template.MOI.z = (double)MOI.z * (double)(scaling * scaling * scaling * scaling * scaling);
-        std::cout << "Mass: " << this_template.mass << std::endl;
-        std::cout << "MOIX: " << this_template.MOI.x << std::endl;
-        std::cout << "MOIY: " << this_template.MOI.y << std::endl;
-        std::cout << "MOIZ: " << this_template.MOI.z << std::endl;
-        std::cout << "=====================" << std::endl;
-        std::for_each(this_template.radii.begin(), this_template.radii.end(), [scaling](float& r) { r *= scaling; });
-        std::for_each(this_template.relPos.begin(), this_template.relPos.end(), [scaling](float3& r) { r *= scaling; });
-        this_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(this_template.nComp, mat_type_terrain);
-        this_template.SetVolume(clump_vol * scaling * scaling * scaling);
-        ground_particle_templates.push_back(DEMSim.LoadClumpType(this_template));
-    }
+    double clump_vol1 = 5.5886717;
+    float mass1 = terrain_density * clump_vol1;
+    float3 MOI1 = make_float3(2.928, 2.6029, 3.9908) * terrain_density;
+    double clump_vol2 = 2.1670011;
+    float mass2 = terrain_density * clump_vol2;
+    float3 MOI2 = make_float3(0.57402126, 0.60616378, 0.92890173) * terrain_density;
+    // Then load them to system
+    std::shared_ptr<DEMClumpTemplate> template_1 =
+        DEMSim.LoadClumpType(mass1, MOI1, GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain);
+    std::shared_ptr<DEMClumpTemplate> template_2 =
+        DEMSim.LoadClumpType(mass2, MOI2, GetDEMEDataFile("clumps/triangular_flat_6comp.csv"), mat_type_terrain);
+    // Decide the scalings of the templates we just created (so that they are... like particles, not rocks)
+    double scale1 = 0.01;
+    double scale2 = 0.004;
+    template_1->Scale(scale1);
+    template_2->Scale(scale2);
 
-    // Now we load clump locations from a checkpointed file
-    {
-        std::cout << "Making terrain..." << std::endl;
-        auto clump_xyz = DEMSim.ReadClumpXyzFromCsv("./GRC_3e6.csv");
-        auto clump_quaternion = DEMSim.ReadClumpQuatFromCsv("./GRC_3e6.csv");
-        std::vector<float3> in_xyz;
-        std::vector<float4> in_quat;
-        std::vector<std::shared_ptr<DEMClumpTemplate>> in_types;
-        unsigned int t_num = 0;
-        for (int i = 0; i < scales.size(); i++) {
-            char t_name[20];
-            sprintf(t_name, "%04d", t_num);
+    // Sampler to sample
+    HCPSampler sampler1(scale1 * 3.);
+    float fill_height = 0.5;
+    float3 fill_center = make_float3(0, 0, bottom + fill_height / 2);
+    float fill_radius = soil_bin_diameter / 2. - scale1 * 2.;
+    auto input_xyz = sampler1.SampleCylinderZ(fill_center, fill_radius, fill_height / 2 - scale1 * 2.);
+    DEMSim.AddClumps(template_1, input_xyz);
+    // Another batch...
+    HCPSampler sampler2(scale2 * 3.);
+    fill_center += make_float3(0, 0, fill_height);
+    fill_radius = soil_bin_diameter / 2. - scale2 * 2.;
+    input_xyz = sampler2.SampleCylinderZ(fill_center, fill_radius, fill_height / 2 - scale2 * 2.);
+    DEMSim.AddClumps(template_2, input_xyz);
 
-            auto this_type_xyz = clump_xyz[std::string(t_name)];
-            auto this_type_quat = clump_quaternion[std::string(t_name)];
-
-            size_t n_clump_this_type = this_type_xyz.size();
-            std::cout << "Loading clump " << std::string(t_name) << " which has particle num: " << n_clump_this_type
-                      << std::endl;
-            // Prepare clump type identification vector for loading into the system (don't forget type 0 in
-            // ground_particle_templates is the template for rover wheel)
-            std::vector<std::shared_ptr<DEMClumpTemplate>> this_type(n_clump_this_type,
-                                                                     ground_particle_templates.at(t_num));
-
-            // Add them to the big long vector
-            in_xyz.insert(in_xyz.end(), this_type_xyz.begin(), this_type_xyz.end());
-            in_quat.insert(in_quat.end(), this_type_quat.begin(), this_type_quat.end());
-            in_types.insert(in_types.end(), this_type.begin(), this_type.end());
-            std::cout << "Added clump type " << t_num << std::endl;
-            // Our template names are 0000, 0001 etc.
-            t_num++;
-        }
-        // Now, we don't need all particles loaded... we just need a cylinderical portion out of it, to fill the soil
-        // bin Remove the particles that are outside a cylinderical region
-        std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
-        for (size_t i = 0; i < in_xyz.size(); i++) {
-            if (std::pow(in_xyz.at(i).x, 2) + std::pow(in_xyz.at(i).y, 2) >= std::pow(soil_bin_diameter / 2. - 0.02, 2))
-                elem_to_remove.at(i) = 1;
-        }
-        in_xyz.erase(std::remove_if(
-                         in_xyz.begin(), in_xyz.end(),
-                         [&elem_to_remove, &in_xyz](const float3& i) { return elem_to_remove.at(&i - in_xyz.data()); }),
-                     in_xyz.end());
-        in_quat.erase(std::remove_if(in_quat.begin(), in_quat.end(),
-                                     [&elem_to_remove, &in_quat](const float4& i) {
-                                         return elem_to_remove.at(&i - in_quat.data());
-                                     }),
-                      in_quat.end());
-        in_types.erase(std::remove_if(in_types.begin(), in_types.end(),
-                                      [&elem_to_remove, &in_types](const auto& i) {
-                                          return elem_to_remove.at(&i - in_types.data());
-                                      }),
-                       in_types.end());
-        DEMClumpBatch base_batch(in_xyz.size());
-        base_batch.SetTypes(in_types);
-        base_batch.SetPos(in_xyz);
-        base_batch.SetOriQ(in_quat);
-
-        DEMSim.AddClumps(base_batch);
-
-        // This batch is about 10cm thick... let's add another 2 batches, so we have something like 30cm
-        float shift_dist = 0.13;
-        for (int i = 0; i < 2; i++) {
-            std::for_each(in_xyz.begin(), in_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
-            DEMClumpBatch another_batch = base_batch;
-            another_batch.SetPos(in_xyz);
-            DEMSim.AddClumps(another_batch);
-        }
-    }
-
-    // Now add a plane to compress the sample
+    // Now add a `cap' to the container when we shake it
     auto compressor = DEMSim.AddExternalObject();
     compressor->AddPlane(make_float3(0, 0, 0), make_float3(0, 0, -1), mat_type_terrain);
     compressor->SetFamily(1);
@@ -167,21 +104,26 @@ int main() {
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
-    DEMSim.SetCDUpdateFreq(20);
-    DEMSim.SetMaxVelocity(10.);
-    DEMSim.SetExpandSafetyMultiplier(1.1);
-    DEMSim.SetInitBinSize(2 * scales.at(2));
     DEMSim.Initialize();
 
     std::filesystem::path out_dir = std::filesystem::current_path();
     out_dir += "/Shake";
     std::filesystem::create_directory(out_dir);
 
-    // Compress until dense enough
+    // Settle phase
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
     unsigned int fps = 5;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
+    compressor_tracker->SetPos(make_float3(0, 0, max_z_finder->GetValue()));
+    {
+        char filename[200];
+        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
+        DEMSim.WriteSphereFile(std::string(filename));
+    }
+    DEMSim.DoDynamicsThenSync(0.5);
+
+    // Compress until dense enough
     double stop_time = 2.0;  // Time before stopping shaking and measure bulk density
     unsigned int stop_steps = (unsigned int)(stop_time * (1.0 / step_size));
     float sim_end = 16.0;
@@ -218,8 +160,10 @@ int main() {
         DEMSim.DoDynamics(step_size);
     }
 
+    // Output the final configuration of the clumps as a file. This is just a demonstration. This particular
+    // configuration is not that useful as no other demos actually use it, unlike the GRC-1 soil.
     char cp_filename[200];
-    sprintf(cp_filename, "%s/GRC_rho%6.f.csv", out_dir.c_str(), bulk_density);
+    sprintf(cp_filename, "%s/GRC_rho%4.f.csv", out_dir.c_str(), bulk_density);
     DEMSim.WriteClumpFile(std::string(cp_filename));
 
     std::cout << "Shake demo exiting..." << std::endl;
