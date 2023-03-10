@@ -24,11 +24,11 @@ int main() {
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
 
-    float mu = 0.5;
+    float mu = 0.4;
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu}});
     auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu}});
-    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_terrain, 0.2);
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_type_terrain, 2.);
+    // DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_terrain, 0.2);
+    // DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_type_terrain, 2.);
 
     float scaling = 10.;
     // Loaded meshes are by-default fixed
@@ -167,7 +167,7 @@ int main() {
                                       {funnel_bottom - 0.05f * scaling, funnel_bottom + 0.2f * scaling});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
 
-    DEMSim.SetInitTimeStep(1e-6);
+    DEMSim.SetInitTimeStep(2e-6);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
     DEMSim.SetCDUpdateFreq(100);
