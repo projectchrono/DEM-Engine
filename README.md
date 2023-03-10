@@ -5,11 +5,11 @@ _A Duo-GPU DEM solver with complex grain geometry support_
 
 DEM-Engine, nicknamed _DEME_, does Discrete Element Method simulations:
 
-- using up to two GPUs at the same time (works great on consumer _and_ data center GPUs);
-- with the particles having complex shapes represented by clumped spheres;
-- with support for customizable contact force models (want to add a non-standard cohesive force, or an electrostatic repulsive force? You got this);
-- with emphasis on computational efficiency;
-- with support for co-simulation with other C/C++ packages, such as [Chrono](https://github.com/projectchrono/chrono).
+- Using up to two GPUs at the same time (works great on consumer _and_ data center GPUs).
+- With the particles having complex shapes represented by clumped spheres.
+- With support for customizable contact force models (want to add a non-standard cohesive force, or an electrostatic repulsive force? You got this).
+- With emphasis on computational efficiency.
+- With support for co-simulation with other C/C++ packages, such as [Chrono](https://github.com/projectchrono/chrono).
 
 <p>
   <img width="380" src="https://i.imgur.com/mLMjuTc.jpg">
@@ -88,6 +88,8 @@ Some additional troubleshooting tips for building the project:
 
 - If you see some grammatical errors during compilation, such as `filesystem` not being a member of `std` or arguments not expanded with `...`, then manually setting the flag `TargetCXXStandard` to `STD_CXX17` might help.
 
+### Examples
+
 After the build process is done, you can start trying out the demos.
 
 - An all-rounder beginner example featuring a bladed mixer interacting with complex shaped particles: `./src/demo/DEMdemo_Mixer`.
@@ -99,6 +101,8 @@ After the build process is done, you can start trying out the demos.
 - It is a good idea to read the comment lines at the top of the demo files to understand what they each does.
 
 The documentation website for _DEME_ is being constructed.
+
+### Limitations
 
 _DEME_ is designed to simulate the interaction among clump-represented particles, the interaction between particles and mesh-represented bodies, as well as the interaction between particles and analytical boundaries.
 
