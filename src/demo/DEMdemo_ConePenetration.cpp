@@ -28,8 +28,8 @@ int main() {
     DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
     // E, nu, CoR, mu, Crr...
-    auto mat_type_cone = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}});
-    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}});
+    auto mat_type_cone = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}});
+    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}});
     // If you don't have this line, then values will take average between 2 materials, when they are in contact
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_cone, mat_type_terrain, 0.8);
     // DEMSim.SetMaterialPropertyPair("mu", mat_type_cone, mat_type_terrain, 0.7);
@@ -54,7 +54,7 @@ int main() {
     float shake_amp = 0.1;
     float shake_speed = 2;  // Num of periods per second
     float cone_speed = 0.03;
-    float step_size = 2e-6;
+    float step_size = 1.5e-6;
     double world_size = 2;
     double soil_bin_diameter = 0.584;
     double cone_surf_area = 323e-6;
