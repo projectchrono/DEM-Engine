@@ -3,7 +3,7 @@
 // Material properties
 float E_cnt, CoR_cnt;
 {
-    mat2ProxyContactParam<float>(E_cnt, E[bodyAMatType], nu[bodyAMatType], E[bodyBMatType], nu[bodyBMatType]);
+    matProxy2ContactParam<float>(E_cnt, E[bodyAMatType], nu[bodyAMatType], E[bodyBMatType], nu[bodyBMatType]);
     // CoR is pair-wise, so obtain it this way
     CoR_cnt = CoR[bodyAMatType][bodyBMatType];
 }

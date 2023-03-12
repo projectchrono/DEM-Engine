@@ -143,7 +143,7 @@ int main() {
     DEMSim.Initialize();
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/Cone_Penetration";
+    out_dir += "/DemoOutput_ConePenetration";
     std::filesystem::create_directory(out_dir);
 
     // Settle
