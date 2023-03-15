@@ -23,13 +23,13 @@ int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled_110kg";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_DownScaled";
-    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled_mu0.2";
-    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled_ThickBed";
+    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled_mu0.2";
+    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled_mu0.4";
     std::filesystem::create_directory(out_dir);
 
     // `World'
     float G_mag = 9.81;
-    float step_size = 2e-6;
+    float step_size = 1.5e-6;
     double world_size_y = 0.52;
     double world_size_x = 4;  // 2.04;
     double world_size_z = 4.0;
@@ -45,9 +45,9 @@ int main() {
 
     // float Slopes_deg[] = {25, 20, 15};
     // float Slopes_deg[] = {0, 2.5, 5, 7.5, 10, 12.5};
-    float Slopes_deg[] = {25, 20, 15, 10, 5, 2, 0};
+    float Slopes_deg[] = {15, 10, 5, 2, 0};
     unsigned int run_mode = 0;
-    unsigned int currframe = 0;
+    unsigned int currframe = 170;
 
     for (float Slope_deg : Slopes_deg) {
         DEMSolver DEMSim;
@@ -58,7 +58,7 @@ int main() {
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
         // E, nu, CoR, mu, Crr...
-        float mu = 0.2;
+        float mu = 0.4;
         float mu_wheel = 0.8;
         float mu_wall = 1.;
         auto mat_type_wall =
@@ -193,6 +193,8 @@ int main() {
             base_batch.SetOriQ(in_quat);
             DEMSim.AddClumps(base_batch);
 
+
+            // Maybe we need to make it thicker...
             
             std::vector<float> x_shift_dist = {0};
             std::vector<float> y_shift_dist = {0};
@@ -248,8 +250,8 @@ int main() {
         // auto compressor_tracker = DEMSim.Track(compressor);
 
         // Families' prescribed motions (Earth)
-        // float w_r = 0.8 * 2.45;
-        float w_r = 0.8;
+        float w_r = 0.8 * 2.45;
+        // float w_r = 0.8;
         float v_ref = w_r * wheel_rad;
         double G_ang = Slope_deg * math_PI / 180.;
 
@@ -294,7 +296,7 @@ int main() {
         // Put the wheel in place, then let the wheel sink in initially
         float corr = 0;  // 1.0;
         float init_x = -1.0 + corr;
-        if (Slope_deg < 18) {
+        if (Slope_deg < 21) {
             init_x = -1.6 + corr;
         }
 
@@ -323,8 +325,9 @@ int main() {
 
         // if (Slope_deg < 14.) {
         {
+            step_size *= 2.;
             DEMSim.DoDynamicsThenSync(0.0);
-            DEMSim.SetInitTimeStep(step_size * 2);
+            DEMSim.SetInitTimeStep(step_size);
             DEMSim.UpdateSimParams();
         }
 

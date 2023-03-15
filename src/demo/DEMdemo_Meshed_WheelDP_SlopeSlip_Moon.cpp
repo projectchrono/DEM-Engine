@@ -28,7 +28,7 @@ int main() {
 
     // `World'
     float G_mag = 1.62;
-    float step_size = 1e-6;
+    float step_size = 1.5e-6;
     double world_size_y = 0.52;
     double world_size_x = 2.04;
     double world_size_z = 4.0;
@@ -36,7 +36,7 @@ int main() {
     // Define the wheel geometry
     float wheel_rad = 0.25;
     float wheel_width = 0.2;
-    float wheel_mass = 11.;
+    float wheel_mass = 5.;
     float img_mass = 22.;
     float total_pressure = img_mass * 9.81;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
@@ -46,10 +46,10 @@ int main() {
     float moon_added_pressure = (img_mass * 1.62 - wheel_mass * G_mag);
 
     // float Slopes_deg[] = {0, 2, 5, 10, 15, 20, 25};
-    float Slopes_deg[] = {25, 20, 15, 10, 5, 2, 0};
+    float Slopes_deg[] = {15, 10, 5, 2, 0};
     // float Slopes_deg[] = {0, 2.5, 5, 7.5, 10, 12.5};
     unsigned int run_mode = 0;
-    unsigned int currframe = 0;
+    unsigned int currframe = 164;
 
     for (float Slope_deg : Slopes_deg) {
         DEMSolver DEMSim;
@@ -60,12 +60,16 @@ int main() {
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
         // E, nu, CoR, mu, Crr...
-        float mu = 0.2;
-        auto mat_type_wall = DEMSim.LoadMaterial(
-            {{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu + (0.9 - mu) + (0.9 - mu)}, {"Crr", 0.00}});
-        auto mat_type_wheel = DEMSim.LoadMaterial(
-            {{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu + (0.5 - mu) + (0.5 - mu)}, {"Crr", 0.00}});
+        float mu = 0.4;
+        float mu_wheel = 0.8;
+        float mu_wall = 1.;
+        auto mat_type_wall =
+            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu_wall}, {"Crr", 0.00}});
+        auto mat_type_wheel =
+            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu_wheel}, {"Crr", 0.00}});
         auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu}, {"Crr", 0.00}});
+        DEMSim.SetMaterialPropertyPair("mu", mat_type_wheel, mat_type_terrain, mu_wheel);
+        DEMSim.SetMaterialPropertyPair("mu", mat_type_wall, mat_type_terrain, mu_wall);
 
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_wall);
@@ -187,23 +191,53 @@ int main() {
             base_batch.SetPos(in_xyz);
             base_batch.SetOriQ(in_quat);
 
-            /*
-            std::vector<float> x_shift_dist = {-0.5, 0.5};
+            
+            // Maybe we need to make it thicker...
+            
+            std::vector<float> x_shift_dist = {0};
             std::vector<float> y_shift_dist = {0};
+            std::vector<float> z_shift_dist = {0.1};
             // Add some patches of such graular bed
             for (float x_shift : x_shift_dist) {
                 for (float y_shift : y_shift_dist) {
-                    DEMClumpBatch another_batch = base_batch;
-                    std::vector<float3> my_xyz = in_xyz;
-                    std::for_each(my_xyz.begin(), my_xyz.end(), [x_shift, y_shift](float3& xyz) {
-                        xyz.x += x_shift;
-                        xyz.y += y_shift;
-                    });
-                    another_batch.SetPos(my_xyz);
-                    DEMSim.AddClumps(another_batch);
+                    for (float z_shift : z_shift_dist) {
+                        std::vector<float3> my_xyz = in_xyz;
+                        std::vector<float4> my_quat = in_quat;
+                        std::vector<std::shared_ptr<DEMClumpTemplate>> my_types = in_types;
+                        std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
+                        for (size_t i = 0; i < in_xyz.size(); i++) {
+                            if (in_xyz.at(i).z < -0.43)
+                                elem_to_remove.at(i) = 1;
+                        }
+                        my_xyz.erase(std::remove_if(my_xyz.begin(), my_xyz.end(),
+                                                    [&elem_to_remove, &my_xyz](const float3& i) {
+                                                        return elem_to_remove.at(&i - my_xyz.data());
+                                                    }),
+                                    my_xyz.end());
+                        my_quat.erase(std::remove_if(my_quat.begin(), my_quat.end(),
+                                                    [&elem_to_remove, &my_quat](const float4& i) {
+                                                        return elem_to_remove.at(&i - my_quat.data());
+                                                    }),
+                                    my_quat.end());
+                        my_types.erase(std::remove_if(my_types.begin(), my_types.end(),
+                                                    [&elem_to_remove, &my_types](const auto& i) {
+                                                        return elem_to_remove.at(&i - my_types.data());
+                                                    }),
+                                    my_types.end());
+                        DEMClumpBatch another_batch(my_xyz.size());
+                        std::for_each(my_xyz.begin(), my_xyz.end(), [x_shift, y_shift, z_shift](float3& xyz) {
+                            xyz.x += x_shift;
+                            xyz.y += y_shift;
+                            xyz.z += z_shift;
+                        });
+                        another_batch.SetTypes(my_types);
+                        another_batch.SetPos(my_xyz);
+                        another_batch.SetOriQ(my_quat);
+                        DEMSim.AddClumps(another_batch);
+
+                    }
                 }
             }
-            */
 
             DEMSim.AddClumps(base_batch);
         }
@@ -265,7 +299,7 @@ int main() {
 
         // Put the wheel in place, then let the wheel sink in initially
         float init_x = -0.0;
-        if (Slope_deg < 18) {
+        if (Slope_deg < 23) {
             init_x = -0.6;
         }
 
@@ -318,6 +352,14 @@ int main() {
 
         // Change pressure amount
         // DEMSim.ChangeFamily(1, 2);
+
+        {
+            step_size *= 2.;
+            DEMSim.DoDynamicsThenSync(0.0);
+            DEMSim.SetInitTimeStep(step_size);
+            DEMSim.UpdateSimParams();
+        }
+
         bool start_measure = false;
         for (double t = 0; t < sim_end; t += step_size, curr_step++) {
             if (curr_step % out_steps == 0) {

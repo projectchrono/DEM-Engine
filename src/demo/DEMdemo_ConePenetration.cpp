@@ -37,12 +37,12 @@ int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
     // out_dir += "/Cone_Penetration_HighDensity_CoR0.8";
     // out_dir += "/Cone_Penetration_LowDensity_CoR0.8";
-    out_dir += "/Cone_Penetration_1900Density";
+    out_dir += "/Cone_Penetration_1850Density";
     std::filesystem::create_directory(out_dir);
-    float settle_mu = 0.;
+    float settle_mu = 0.05;
     float sim_mu = 0.4;
     float cone_mu = 0.8;
-    float target_density = 1900.;
+    float target_density = 1850.;
 
     // A custom force model can be read in through a file and used by the simulation. Magic, right?
     auto my_force_model = DEMSim.ReadContactForceModel("SampleCustomForceModel.cu");
