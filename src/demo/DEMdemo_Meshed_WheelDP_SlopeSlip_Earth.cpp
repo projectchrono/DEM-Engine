@@ -21,7 +21,7 @@ const float kg_g_conv = 1.;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled_110kg";
+    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled_111kg";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_DownScaled";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled_mu0.2";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled_mu0.4";
@@ -45,9 +45,10 @@ int main() {
 
     // float Slopes_deg[] = {25, 20, 15};
     float Slopes_deg[] = {0, 2.5, 5, 7.5, 10, 12.5};
-    // float Slopes_deg[] = {25, 20, 15, 10, 5, 2, 0};
+    // float Slopes_deg[] = {10, 5, 2, 0};
     unsigned int run_mode = 0;
-    unsigned int currframe = 0;
+    unsigned int currframe = 0;  // 215;
+    int ken_scaled = 1;
 
     for (float Slope_deg : Slopes_deg) {
         DEMSolver DEMSim;
@@ -194,10 +195,13 @@ int main() {
             DEMSim.AddClumps(base_batch);
 
             // Maybe we need to make it thicker...
+            float up_dist, remove_pos;
+            up_dist = (ken_scaled) ? 0.16 : 0.1;
+            remove_pos = (ken_scaled) ? 0.5 : 0.43;
 
             std::vector<float> x_shift_dist = {0};
             std::vector<float> y_shift_dist = {0};
-            std::vector<float> z_shift_dist = {0.1};
+            std::vector<float> z_shift_dist = {up_dist};
             // Add some patches of such graular bed
             for (float x_shift : x_shift_dist) {
                 for (float y_shift : y_shift_dist) {
@@ -207,7 +211,7 @@ int main() {
                         std::vector<std::shared_ptr<DEMClumpTemplate>> my_types = in_types;
                         std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
                         for (size_t i = 0; i < in_xyz.size(); i++) {
-                            if (in_xyz.at(i).z < -0.43)
+                            if (in_xyz.at(i).z < -remove_pos)
                                 elem_to_remove.at(i) = 1;
                         }
                         my_xyz.erase(std::remove_if(my_xyz.begin(), my_xyz.end(),
@@ -321,7 +325,7 @@ int main() {
         DEMSim.ChangeFamily(11, 1);
 
         // if (Slope_deg < 14.) {
-        {
+        if (!ken_scaled) {
             step_size *= 2.;
             DEMSim.DoDynamicsThenSync(0.0);
             DEMSim.SetInitTimeStep(step_size);
@@ -348,7 +352,7 @@ int main() {
                 if (t >= 1. && Slope_deg < 14.) {
                     DEMSim.ChangeClumpFamily(10);  // Fixed
                     float3 pos = wheel_tracker->Pos();
-                    DEMSim.ChangeClumpFamily(0, {pos.x - 0.5, pos.x + 0.4});
+                    DEMSim.ChangeClumpFamily(0, {pos.x - 0.5, pos.x + 0.5});
                 }
             }
 

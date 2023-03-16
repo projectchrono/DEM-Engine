@@ -46,10 +46,11 @@ int main() {
     float moon_added_pressure = (img_mass * 1.62 - wheel_mass * G_mag);
 
     // float Slopes_deg[] = {0, 2, 5, 10, 15, 20, 25};
-    float Slopes_deg[] = {5, 2, 0};
+    float Slopes_deg[] = {15, 10};
     // float Slopes_deg[] = {0, 2.5, 5, 7.5, 10, 12.5};
     unsigned int run_mode = 0;
-    unsigned int currframe = 248;
+    unsigned int currframe = 164;
+    int thicker = 0;
 
     for (float Slope_deg : Slopes_deg) {
         DEMSolver DEMSim;
@@ -192,10 +193,13 @@ int main() {
             base_batch.SetOriQ(in_quat);
 
             // Maybe we need to make it thicker...
+            float up_dist, remove_pos;
+            up_dist = (thicker) ? 0.16 : 0.1;
+            remove_pos = (thicker) ? 0.5 : 0.43;
 
             std::vector<float> x_shift_dist = {0};
             std::vector<float> y_shift_dist = {0};
-            std::vector<float> z_shift_dist = {0.1};
+            std::vector<float> z_shift_dist = {up_dist};
             // Add some patches of such graular bed
             for (float x_shift : x_shift_dist) {
                 for (float y_shift : y_shift_dist) {
@@ -205,7 +209,7 @@ int main() {
                         std::vector<std::shared_ptr<DEMClumpTemplate>> my_types = in_types;
                         std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
                         for (size_t i = 0; i < in_xyz.size(); i++) {
-                            if (in_xyz.at(i).z < -0.43)
+                            if (in_xyz.at(i).z < -remove_pos)
                                 elem_to_remove.at(i) = 1;
                         }
                         my_xyz.erase(std::remove_if(my_xyz.begin(), my_xyz.end(),
@@ -352,7 +356,7 @@ int main() {
         // DEMSim.ChangeFamily(1, 2);
 
         {
-            step_size *= 2.;
+            step_size *= 1.5;
             DEMSim.DoDynamicsThenSync(0.0);
             DEMSim.SetInitTimeStep(step_size);
             DEMSim.UpdateSimParams();
