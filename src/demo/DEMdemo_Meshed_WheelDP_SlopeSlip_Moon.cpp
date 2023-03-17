@@ -23,7 +23,8 @@ int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
     // out_dir += "/DEMdemo_Temp";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon_SamePressureAsEarth";
-    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon";
+    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon";
+    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon_111kg";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -37,7 +38,7 @@ int main() {
     float wheel_rad = 0.25;
     float wheel_width = 0.2;
     float wheel_mass = 5.;
-    float img_mass = 22.;
+    float img_mass = 111.;
     float total_pressure = img_mass * 9.81;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
@@ -46,11 +47,11 @@ int main() {
     float moon_added_pressure = (img_mass * 1.62 - wheel_mass * G_mag);
 
     // float Slopes_deg[] = {0, 2, 5, 10, 15, 20, 25};
-    float Slopes_deg[] = {15, 10};
-    // float Slopes_deg[] = {0, 2.5, 5, 7.5, 10, 12.5};
+    // float Slopes_deg[] = {15, 10};
+    float Slopes_deg[] = {0, 2.5, 5, 7.5, 10, 12.5};
     unsigned int run_mode = 0;
-    unsigned int currframe = 164;
-    int thicker = 0;
+    unsigned int currframe = 0;
+    int thicker = 1;
 
     for (float Slope_deg : Slopes_deg) {
         DEMSolver DEMSim;
@@ -59,6 +60,7 @@ int main() {
         DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
         DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
+        DEMSim.SetCollectAccRightAfterForceCalc(true);
 
         // E, nu, CoR, mu, Crr...
         float mu = 0.4;
