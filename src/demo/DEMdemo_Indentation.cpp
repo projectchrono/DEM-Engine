@@ -3,6 +3,11 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// This demo tries to show the strain distribution in the granular material when
+// affected by a compressor.
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
@@ -117,7 +122,7 @@ int main() {
     // float3 fill_center = make_float3(0, 0, fill_bottom + fill_height / 2);
     // auto input_xyz = sampler.SampleCylinderZ(fill_center, fill_radius, fill_height / 2);
 
-    // Calling AddClumps a second time will just add more clumps to the system
+    // Note: AddClumps can be called multiple times before initialization to add more clumps to the system
     auto particles = DEMSim.AddClumps(template_granular, input_xyz);
     particles->SetFamily(1);
     // Initially, no contact between the brick and the granular material

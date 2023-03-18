@@ -5,18 +5,18 @@ _A Duo-GPU DEM solver with complex grain geometry support_
 
 DEM-Engine, nicknamed _DEME_, does Discrete Element Method simulations:
 
-- using up to two GPUs at the same time (works great on consumer _and_ data center GPUs);
-- with the particles having complex shapes represented by clumped spheres;
-- with support for customizable contact force models (want to add a non-standard cohesive force, or an electrostatic repulsive force? You got this);
-- with emphasis on computational efficiency;
-- with support for co-simulation with other C/C++ packages, such as [Chrono](https://github.com/projectchrono/chrono).
+- Using up to two GPUs at the same time (works great on consumer _and_ data center GPUs).
+- With the particles having complex shapes represented by clumped spheres.
+- With support for customizable contact force models (want to add a non-standard cohesive force, or an electrostatic repulsive force? You got this).
+- With an emphasis on computational efficiency.
+- With support for co-simulation with other C/C++ packages, such as [Chrono](https://github.com/projectchrono/chrono).
 
 <p>
   <img width="380" src="https://i.imgur.com/mLMjuTc.jpg">
   <img width="380" src="https://i.imgur.com/PRbd0nJ.jpg">
 </p>
 
-Currently _DEME_ is a C++ package. We are building a Python wrapper for it.
+Currently _DEME_ is a C++ package with an API design similar to Chrono's, and should be easy to learn for existing Chrono users. We are building a Python wrapper for _DEME_.
 
 ### Licensing
 
@@ -88,14 +88,21 @@ Some additional troubleshooting tips for building the project:
 
 - If you see some grammatical errors during compilation, such as `filesystem` not being a member of `std` or arguments not expanded with `...`, then manually setting the flag `TargetCXXStandard` to `STD_CXX17` might help.
 
+### Examples
+
 After the build process is done, you can start trying out the demos.
 
-- An all-rounder beginner example featuring a bladed mixer interacting with complex shaped particles: `./src/demo/DEMdemo_Mixer`
-- A fun game-of-life simulator built with the package, showing the flexibility in terms of how you can use this tool: `./src/demo/DEMdemo_GameOfLife`
-- A place to learn how prescribed motions work in this package, using either analytical boundaries or particle-represented boundaries: `./src/demo/DEMdemo_Centrifuge` and `./src/demo/DEMdemo_Sieve`
-- More advanced examples showing the usage of the custom additional properties (called _wildcards_) that you can associate with the simulation entities, and use them in the force model and/or change them in simulation then deposit them into the output files: `./src/demo/DEMdemo_Indentation` 
+- An all-rounder beginner example featuring a bladed mixer interacting with complex shaped particles: `./src/demo/DEMdemo_Mixer`.
+- A place to learn how prescribed motions work in this package, using either analytical boundaries or particle-represented boundaries: `./src/demo/DEMdemo_Centrifuge` and `./src/demo/DEMdemo_Sieve`.
+- A fun game-of-life simulator built with the package, showing the flexibility in terms of how you can use this tool: `./src/demo/DEMdemo_GameOfLife`.
+- A few representative engineering experiments reproduced in DEM simulations, which potentially serve as starting points for your own DEM scripts: `/src/demo/DEMdemo_BallDrop`, `./src/demo/DEMdemo_ConePenetration`, `/src/demo/DEMdemo_Sieve`, `./src/demo/DEMdemo_Repose`.
+- `./src/demo/DEMdemo_WheelDP` shows how to load a checkpointed configuration file to instantly generate a settled granular terrain, then run a drawbar-pull test on it. This demo therefore requires you to first finish the three GRCPrep demos to obtain the terrain checkpoint file. The granular terrain in these demos features DEM particles with a variety of sizes and shapes.
+- More advanced examples showing the usage of the custom additional properties (called _wildcards_) that you can associate with the simulation entities, and use them in the force model and/or change them in simulation then deposit them into the output files: `./src/demo/DEMdemo_Indentation`.
+- It is a good idea to read the comment lines at the top of the demo files to understand what they each does.
 
 The documentation website for _DEME_ is being constructed.
+
+### Limitations
 
 _DEME_ is designed to simulate the interaction among clump-represented particles, the interaction between particles and mesh-represented bodies, as well as the interaction between particles and analytical boundaries.
 

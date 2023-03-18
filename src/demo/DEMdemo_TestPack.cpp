@@ -3,6 +3,10 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// A collection of DEME validation tests...
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
@@ -116,7 +120,7 @@ void SphereRollUpIncline() {
         sphere->SetVel(tang_dir * 0.5);
         auto sphere_tracker = DEMSim.Track(sphere);
 
-        float step_time = 1e-5;
+        float step_time = 1e-4;
         DEMSim.SetInitTimeStep(step_time);
         DEMSim.Initialize();
 
@@ -166,7 +170,7 @@ void SphereRollUpIncline() {
             sphere->SetVel(tang_dir * 0.5);
             auto sphere_tracker = DEMSim.Track(sphere);
 
-            float step_time = 1e-5;
+            float step_time = 1e-4;
             DEMSim.SetInitTimeStep(step_time);
             DEMSim.SetCDUpdateFreq(50);
             DEMSim.SetMaxVelocity(2.0);

@@ -4,7 +4,8 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 // =============================================================================
-// This demo reproduces the Game of Life in DEME simulator, to showcase the flexibility of its APIs.
+// This demo reproduces the Game of Life in DEME simulator, to showcase the
+// flexibility of its APIs.
 // =============================================================================
 
 #include <core/ApiVersion.h>

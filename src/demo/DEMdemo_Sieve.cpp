@@ -3,6 +3,11 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// A clump-represented sieve with a presecibed back-and-forth motion is in this
+// demo. It lets particles that are small enough fall through it.
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>

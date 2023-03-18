@@ -236,7 +236,7 @@ class DEMDynamicThread {
     bool pendingCriticalUpdate = true;
 
     // Number of threads per block for dT force calculation kernels
-    unsigned int DT_FORCE_CALC_NTHREADS_PER_BLOCK = 256;
+    unsigned int DT_FORCE_CALC_NTHREADS_PER_BLOCK = 512;
 
     // Template-related arrays in managed memory
     // Belonged-body ID

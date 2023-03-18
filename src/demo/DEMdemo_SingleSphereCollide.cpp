@@ -3,6 +3,10 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// A demo that is basically the hello-world script for DEME.
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>

@@ -3,6 +3,13 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// This demo presents a cone penetrameter test with a soil sample made of clumped
+// particles of various sizes. Before the test starts, when compress the terrain
+// first, and note that the compressor used in this process has its position
+// explicitly controlled step-by-step.
+// =============================================================================
+
 #include <DEM/API.h>
 #include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
@@ -221,8 +228,9 @@ int main() {
     auto tip_tracker = DEMSim.Track(cone_tip);
     auto body_tracker = DEMSim.Track(cone_body);
 
-    // In fact, because the cone's motion is completely pre-determined, we can just prescribe family 1
+    // Because the cone's motion is completely pre-determined, we can just prescribe family 1
     DEMSim.SetFamilyPrescribedLinVel(1, "0", "0", "-" + to_string_with_precision(cone_speed));
+    // Cone is initially in family 2, sleeping...
     DEMSim.SetFamilyFixed(2);
     DEMSim.DisableContactBetweenFamilies(0, 2);
 
@@ -266,6 +274,7 @@ int main() {
     unsigned int fps = 60;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
     double compressor_vel = 0.2;
+    float bulk_density;
     float terrain_max_z = max_z_finder->GetValue();
     std::cout << "Max Z after settling: " << terrain_max_z << std::endl;
     double init_max_z = terrain_max_z;
@@ -283,13 +292,14 @@ int main() {
         terrain_max_z = max_z_finder->GetValue();
         std::cout << "Max Z after settling: " << terrain_max_z << std::endl;
         init_max_z = terrain_max_z;
-        float bulk_density;
+
         {
             float matter_mass = total_mass_finder->GetValue();
             float total_volume =
                 math_PI * (soil_bin_diameter * soil_bin_diameter / 4) * (max_z_finder->GetValue() - bottom);
             bulk_density = matter_mass / total_volume;
             std::cout << "Compression bulk density: " << bulk_density << std::endl;
+            currframe++;
         }
 
         while (bulk_density < target_density) {
@@ -354,26 +364,30 @@ int main() {
     // Re-enable cone
     DEMSim.ChangeFamily(2, 1);
 
-    int step_size_marker = 0;
+    // Enable cone
+    DEMSim.ChangeFamily(2, 1);
+    float matter_mass = total_mass_finder->GetValue();
+    float total_volume = math_PI * (soil_bin_diameter * soil_bin_diameter / 4) * (terrain_max_z - bottom);
+    bulk_density = matter_mass / total_volume;
+    std::cout << "Bulk density: " << bulk_density << std::endl;
+
     double tip_z_when_first_hit;
     bool hit_terrain = false;
     unsigned int frame_count = 0;
     for (float t = 0; t < sim_end; t += frame_time) {
-        float matter_mass = total_mass_finder->GetValue();
-        float total_volume = math_PI * (soil_bin_diameter * soil_bin_diameter / 4) * (terrain_max_z - bottom);
-        float bulk_density = matter_mass / total_volume;
         // float terrain_max_z = max_z_finder->GetValue();
         float3 forces = tip_tracker->ContactAcc();
-        // Note cone_mass is not the true mass, b/c we scaled the the cone tip!
+        // Note cone_mass is not the true mass, b/c we scaled the the cone tip! So we use true mass by using
+        // cone_tip->mass.
         forces *= cone_tip->mass;
         float pressure = std::abs(forces.z) / cone_surf_area;
-        if (pressure > 1e-8 && !hit_terrain) {
+        if (pressure > 1e-4 && !hit_terrain) {
             hit_terrain = true;
             tip_z_when_first_hit = tip_z;
         }
         float penetration = (hit_terrain) ? tip_z_when_first_hit - tip_z : 0;
         std::cout << "Time: " << t << std::endl;
-        std::cout << "Bulk density: " << bulk_density << std::endl;
+        std::cout << "Z coord of tip: " << tip_z << std::endl;
         std::cout << "Penetration: " << penetration << std::endl;
         std::cout << "Force on cone: " << forces.x << ", " << forces.y << ", " << forces.z << std::endl;
         std::cout << "Pressure: " << pressure << std::endl;

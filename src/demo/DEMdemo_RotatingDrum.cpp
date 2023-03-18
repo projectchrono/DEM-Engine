@@ -3,6 +3,12 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// This demo features a clump-represented drum rotating with a fixed angular
+// velocity with ellipsoidal particles inside. The slope of the granular surface is
+// of interest.
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>

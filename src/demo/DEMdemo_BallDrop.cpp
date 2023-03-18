@@ -3,6 +3,10 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// A meshed ball hitting a granular bed under gravity.
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
@@ -64,6 +68,9 @@ int main() {
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
+    // Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
+    // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
+    // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(15.);
     // In general you don't have to worry about SetExpandSafetyAdder, unless if an entity has the property that a point
     // on it can move much faster than its CoM. In this demo, you are dealing with a meshed ball and you in fact don't

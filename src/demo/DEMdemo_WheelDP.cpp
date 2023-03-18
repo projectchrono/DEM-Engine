@@ -3,6 +3,12 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// NOTE!!! You have to first finish ALL 3 GRCPrep demos to obtain the GRC_20e6.csv
+// file, put it in the current directory, then run this demo.
+// A wheel drawbar-pull test, featuring Curiosity wheel geometry and GRC-1 simulant.
+// =============================================================================
+
 #include <DEM/API.h>
 #include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
@@ -21,21 +27,21 @@ const float kg_g_conv = 1.;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_WheelDP_Force_mu0.5_480N";
+    out_dir += "/DEMdemo_WheelDP_Force_mu0.4_480N";
     std::filesystem::create_directory(out_dir);
 
     // `World'
     float G_mag = 9.81;
-    float step_size = 1e-6;
+    float step_size = 3e-6;
     double world_size_y = 0.52;
     double world_size_x = 1.53;
-    double world_size_z = 4.0;
+    double world_size_z = 2.0;
 
     // Define the wheel geometry
     float wheel_rad = 0.25;
     float wheel_width = 0.25;
     float g_height = 0.025;
-    float wheel_mass = 11.;
+    float wheel_mass = 10.;
     float total_pressure = 480.0;
     // float total_pressure = 480.0;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
@@ -46,6 +52,7 @@ int main() {
     float TRs[] = {0.7, 0.5, 0.3, 0.2, 0.1, 0.05, 0};
     unsigned int run_mode = 0;
     unsigned int currframe = 0;
+    int ken_scaled = 0;
 
     for (float TR : TRs) {
         DEMSolver DEMSim;
@@ -56,10 +63,16 @@ int main() {
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
         // E, nu, CoR, mu, Crr...
-        auto mat_type_wall = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.9}, {"Crr", 0.00}});
-        auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.5}, {"Crr", 0.00}});
-        auto mat_type_terrain =
-            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.5}, {"Crr", 0.00}});
+        float mu = 0.4;
+        float mu_wheel = 0.8;
+        float mu_wall = 1.;
+        auto mat_type_wall =
+            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu_wall}, {"Crr", 0.00}});
+        auto mat_type_wheel =
+            DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu_wheel}, {"Crr", 0.00}});
+        auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", mu}, {"Crr", 0.00}});
+        DEMSim.SetMaterialPropertyPair("mu", mat_type_wheel, mat_type_terrain, mu_wheel);
+        DEMSim.SetMaterialPropertyPair("mu", mat_type_wall, mat_type_terrain, mu_wall);
 
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
@@ -77,26 +90,23 @@ int main() {
         auto wheel_tracker = DEMSim.Track(wheel);
 
         // Then the ground particle template
-        DEMClumpTemplate shape_template1, shape_template2, shape_template3;
+        DEMClumpTemplate shape_template1, shape_template2;
         shape_template1.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
         shape_template2.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat_6comp.csv").string());
-        shape_template3.ReadComponentFromFile((GET_DATA_PATH() / "clumps/bulk_ellipsoid.csv").string());
         std::vector<DEMClumpTemplate> shape_template = {shape_template2, shape_template2, shape_template1,
-                                                        shape_template1, shape_template3, shape_template3,
-                                                        shape_template3};
+                                                        shape_template1, shape_template1, shape_template1,
+                                                        shape_template1};
         // Calculate its mass and MOI
-        float mass1 = 2.6e3 * 5.5886717 * kg_g_conv;  // in kg or g
-        float3 MOI1 = make_float3(2.928, 2.6029, 3.9908) * 2.6e3 * kg_g_conv;
-        float mass2 = 2.6e3 * 2.7564385 * kg_g_conv;  // in kg or g
-        float3 MOI2 = make_float3(1.0352626, 0.9616627, 1.6978352) * 2.6e3 * kg_g_conv;
-        float mass3 = 2.6e3 * 5.7260836 * kg_g_conv;  // in kg or g
-        float3 MOI3 = make_float3(2.4284603, 3.1316202, 3.1316202) * 2.6e3 * kg_g_conv;
-        std::vector<float> mass = {mass2, mass2, mass1, mass1, mass3, mass3, mass3};
-        std::vector<float3> MOI = {MOI2, MOI2, MOI1, MOI1, MOI3, MOI3, MOI3};
+        float mass1 = 2.6e3 * 4.2520508;
+        float3 MOI1 = make_float3(1.6850426, 1.6375114, 2.1187753) * 2.6e3;
+        float mass2 = 2.6e3 * 2.1670011;
+        float3 MOI2 = make_float3(0.57402126, 0.60616378, 0.92890173) * 2.6e3;
+        std::vector<float> mass = {mass2, mass2, mass1, mass1, mass1, mass1, mass1};
+        std::vector<float3> MOI = {MOI2, MOI2, MOI1, MOI1, MOI1, MOI1, MOI1};
         // Scale the template we just created
         std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
-        std::vector<double> volume = {2.7564385, 2.7564385, 5.5886717, 5.5886717, 5.7260836, 5.7260836, 5.7260836};
-        std::vector<double> scales = {0.0014, 0.00075833, 0.00044, 0.0003, 0.00016667, 0.00014667, 0.00012};
+        std::vector<double> volume = {2.1670011, 2.1670011, 4.2520508, 4.2520508, 4.2520508, 4.2520508, 4.2520508};
+        std::vector<double> scales = {0.0014, 0.00075833, 0.00044, 0.0003, 0.0002, 0.00018333, 0.00017};
         std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 10.; });
         unsigned int t_num = 0;
         for (double scaling : scales) {
@@ -160,8 +170,8 @@ int main() {
             // Now, we don't need all particles loaded...
             std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
             for (size_t i = 0; i < in_xyz.size(); i++) {
-                if (std::abs(in_xyz.at(i).y) > (world_size_y - 0.05) / 2 ||
-                    std::abs(in_xyz.at(i).x) > (world_size_x - 0.04) / 2)
+                if (std::abs(in_xyz.at(i).y) > (world_size_y - 0.04) / 2 ||
+                    std::abs(in_xyz.at(i).x) > (world_size_x - 0.05) / 2)
                     elem_to_remove.at(i) = 1;
             }
             in_xyz.erase(std::remove_if(in_xyz.begin(), in_xyz.end(),
@@ -183,26 +193,56 @@ int main() {
             base_batch.SetTypes(in_types);
             base_batch.SetPos(in_xyz);
             base_batch.SetOriQ(in_quat);
+            DEMSim.AddClumps(base_batch);
 
-            /*
-            std::vector<float> x_shift_dist = {-0.5, 0.5};
+            // Maybe we need to make it thicker...
+            float up_dist, remove_pos;
+            up_dist = (ken_scaled) ? 0.16 : 0.1;
+            remove_pos = (ken_scaled) ? 0.5 : 0.43;
+
+            std::vector<float> x_shift_dist = {0};
             std::vector<float> y_shift_dist = {0};
+            std::vector<float> z_shift_dist = {up_dist};
             // Add some patches of such graular bed
             for (float x_shift : x_shift_dist) {
                 for (float y_shift : y_shift_dist) {
-                    DEMClumpBatch another_batch = base_batch;
-                    std::vector<float3> my_xyz = in_xyz;
-                    std::for_each(my_xyz.begin(), my_xyz.end(), [x_shift, y_shift](float3& xyz) {
-                        xyz.x += x_shift;
-                        xyz.y += y_shift;
-                    });
-                    another_batch.SetPos(my_xyz);
-                    DEMSim.AddClumps(another_batch);
+                    for (float z_shift : z_shift_dist) {
+                        std::vector<float3> my_xyz = in_xyz;
+                        std::vector<float4> my_quat = in_quat;
+                        std::vector<std::shared_ptr<DEMClumpTemplate>> my_types = in_types;
+                        std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
+                        for (size_t i = 0; i < in_xyz.size(); i++) {
+                            if (in_xyz.at(i).z < -remove_pos)
+                                elem_to_remove.at(i) = 1;
+                        }
+                        my_xyz.erase(std::remove_if(my_xyz.begin(), my_xyz.end(),
+                                                    [&elem_to_remove, &my_xyz](const float3& i) {
+                                                        return elem_to_remove.at(&i - my_xyz.data());
+                                                    }),
+                                     my_xyz.end());
+                        my_quat.erase(std::remove_if(my_quat.begin(), my_quat.end(),
+                                                     [&elem_to_remove, &my_quat](const float4& i) {
+                                                         return elem_to_remove.at(&i - my_quat.data());
+                                                     }),
+                                      my_quat.end());
+                        my_types.erase(std::remove_if(my_types.begin(), my_types.end(),
+                                                      [&elem_to_remove, &my_types](const auto& i) {
+                                                          return elem_to_remove.at(&i - my_types.data());
+                                                      }),
+                                       my_types.end());
+                        DEMClumpBatch another_batch(my_xyz.size());
+                        std::for_each(my_xyz.begin(), my_xyz.end(), [x_shift, y_shift, z_shift](float3& xyz) {
+                            xyz.x += x_shift;
+                            xyz.y += y_shift;
+                            xyz.z += z_shift;
+                        });
+                        another_batch.SetTypes(my_types);
+                        another_batch.SetPos(my_xyz);
+                        another_batch.SetOriQ(my_quat);
+                        DEMSim.AddClumps(another_batch);
+                    }
                 }
             }
-            */
-
-            DEMSim.AddClumps(base_batch);
         }
 
         // Now add a plane to compress the sample
@@ -266,7 +306,7 @@ int main() {
         std::cout << "Bulk density high: " << bulk_den_high << std::endl;
         std::cout << "Bulk density low: " << bulk_den_low << std::endl;
 
-        for (double t = 0; t < 0.6; t += frame_time) {
+        for (double t = 0; t < 0.4; t += frame_time) {
             char filename[200], meshname[200];
             std::cout << "Outputting frame: " << currframe << std::endl;
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
@@ -297,7 +337,7 @@ int main() {
                 DEMSim.ShowThreadCollaborationStats();
             }
 
-            if (t >= 3. && !start_measure) {
+            if (t >= 2. && !start_measure) {
                 start_measure = true;
             }
 
