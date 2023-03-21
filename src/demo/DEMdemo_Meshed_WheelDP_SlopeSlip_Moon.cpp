@@ -48,9 +48,9 @@ int main() {
 
     // float Slopes_deg[] = {0, 2, 5, 10, 15, 20, 25};
     // float Slopes_deg[] = {15, 10};
-    float Slopes_deg[] = {0, 2.5, 5, 7.5, 10, 12.5};
+    float Slopes_deg[] = {5, 7.5, 10, 12.5};
     unsigned int run_mode = 0;
-    unsigned int currframe = 0;
+    unsigned int currframe = 164;
     int thicker = 1;
 
     for (float Slope_deg : Slopes_deg) {
@@ -287,6 +287,7 @@ int main() {
         DEMSim.SetInitTimeStep(step_size);
         DEMSim.SetCDUpdateFreq(20);
         DEMSim.SetExpandSafetyAdder(0.2);
+        DEMSim.SetErrorOutVelocity(50.);
         DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1);
         DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(3);
         DEMSim.SetInitBinSize(2 * scales.at(2));
