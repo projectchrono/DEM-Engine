@@ -48,9 +48,9 @@ int main() {
 
     // float Slopes_deg[] = {0, 2, 5, 10, 15, 20, 25};
     // float Slopes_deg[] = {15, 10};
-    float Slopes_deg[] = {5, 7.5, 10, 12.5};
+    float Slopes_deg[] = {12.5};
     unsigned int run_mode = 0;
-    unsigned int currframe = 164;
+    unsigned int currframe = 410;
     int thicker = 1;
 
     for (float Slope_deg : Slopes_deg) {
@@ -358,16 +358,16 @@ int main() {
         // Change pressure amount
         // DEMSim.ChangeFamily(1, 2);
 
-        {
-            step_size *= 1.5;
-            DEMSim.DoDynamicsThenSync(0.0);
-            DEMSim.SetInitTimeStep(step_size);
-            DEMSim.UpdateSimParams();
-            out_steps = (unsigned int)(1.0 / (fps * step_size));
-            frame_time = 1.0 / fps;
-            report_ps = 1000;
-            report_steps = (unsigned int)(1.0 / (report_ps * step_size));
-        }
+        // {
+        //     step_size *= 1.5;
+        //     DEMSim.DoDynamicsThenSync(0.0);
+        //     DEMSim.SetInitTimeStep(step_size);
+        //     DEMSim.UpdateSimParams();
+        //     out_steps = (unsigned int)(1.0 / (fps * step_size));
+        //     frame_time = 1.0 / fps;
+        //     report_ps = 1000;
+        //     report_steps = (unsigned int)(1.0 / (report_ps * step_size));
+        // }
 
         bool start_measure = false;
         for (double t = 0; t < sim_end; t += step_size, curr_step++) {
