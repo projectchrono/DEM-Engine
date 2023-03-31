@@ -3,6 +3,11 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// This demo features a mesh-represented bladed mixer interacting with clump-represented
+// DEM particles.
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
@@ -18,7 +23,7 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity(STEP_METRIC);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
@@ -58,7 +63,7 @@ int main() {
     shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
     // Calculate its mass and MOI
     shape_template.mass = 2.6e3 * 5.5886717;  // in kg or g
-    shape_template.MOI = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3;
+    shape_template.MOI = make_float3(2.928, 2.6029, 3.9908) * 2.6e3;
     shape_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(shape_template.nComp, mat_type_granular);
     shape_template.Scale(granular_rad);
     auto template_granular = DEMSim.LoadClumpType(shape_template);
@@ -80,10 +85,16 @@ int main() {
     // Mixer has a big angular velocity-contributed linear speed at its blades, this is something the solver do not
     // account for, for now. And that means it needs to be added as an estimated value.
     DEMSim.SetExpandSafetyAdder(2.0);
-    DEMSim.SetInitBinSize(20 * granular_rad);
+    DEMSim.SetInitBinSize(25 * granular_rad);
     DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1.2);
     DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(6);
     DEMSim.SetSortContactPairs(true);
+    // DEMSim.DisableAdaptiveBinSize();
+    DEMSim.SetErrorOutVelocity(20.);
+    // Force the solver to error out if something went crazy. A good practice to add them, but not necessary.
+    DEMSim.SetErrorOutAvgContacts(50);
+    DEMSim.SetForceCalcThreadsPerBlock(512);
+    // DEMSim.UseCubForceCollection();
     DEMSim.Initialize();
 
     path out_dir = current_path();
@@ -115,6 +126,7 @@ int main() {
         float max_v = max_v_finder->GetValue();
         std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
         std::cout << "Solver's current update frequency (auto-adapted): " << DEMSim.GetUpdateFreq() << std::endl;
+        std::cout << "Average contacts each sphere has: " << DEMSim.GetAvgSphContacts() << std::endl;
 
         DEMSim.DoDynamics(frame_time);
         DEMSim.ShowThreadCollaborationStats();

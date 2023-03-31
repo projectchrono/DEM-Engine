@@ -425,7 +425,7 @@ void DEMSolver::decideBinSize() {
         if (!use_user_defined_bin_size) {
             DEME_WARNING(
                 "%zu initial bins created with size %.6g. This is more than max allowance %zu. Auto-adjusting...",
-                m_num_bins, m_binSize, std::numeric_limits<binID_t>::max() - 1);
+                m_num_bins, m_binSize, (size_t)(std::numeric_limits<binID_t>::max() - 1));
             while (m_num_bins > std::numeric_limits<binID_t>::max() - 1) {
                 m_binSize *= 1.5;
                 m_num_bins = hostCalcBinNum(nbX, nbY, nbZ, m_voxelSize, m_binSize, nvXp2, nvYp2, nvZp2);
@@ -436,20 +436,18 @@ void DEMSolver::decideBinSize() {
                 "The simulation world has %zu bins (for domain partitioning in contact detection), but the largest bin "
                 "ID that we can have is %zu.\nYou can try to make bins larger via SetInitBinSize, or redefine binID_t "
                 "and recompile.",
-                m_num_bins, std::numeric_limits<binID_t>::max() - 1);
+                m_num_bins, (size_t)(std::numeric_limits<binID_t>::max() - 1));
         }
     }
 }
 
 void DEMSolver::decideCDMarginStrat() {
     switch (m_max_v_finder_type) {
-        case (MARGIN_FINDER_TYPE::MANUAL_MAX):
-            break;
         case (MARGIN_FINDER_TYPE::DEM_INSPECTOR):
             break;
         case (MARGIN_FINDER_TYPE::DEFAULT):
             // Default strategy is to use an inspector
-            m_approx_max_vel_func = this->CreateInspector("max_absv");
+            m_approx_max_vel_func = this->CreateInspector("absv");
             m_max_v_finder_type = MARGIN_FINDER_TYPE::DEM_INSPECTOR;
             break;
     }
@@ -459,36 +457,37 @@ void DEMSolver::reportInitStats() const {
     DEME_INFO("\n");
     DEME_INFO("Number of total active devices: %d", dTkT_GpuManager->getNumDevices());
 
+    DEME_INFO("User-specified X-dimension range: [%.7g, %.7g]", m_user_box_min.x, m_user_box_max.x);
+    DEME_INFO("User-specified Y-dimension range: [%.7g, %.7g]", m_user_box_min.y, m_user_box_max.y);
+    DEME_INFO("User-specified Z-dimension range: [%.7g, %.7g]", m_user_box_min.z, m_user_box_max.z);
+    DEME_INFO("User-specified dimensions should NOT be larger than the following simulation world.");
     DEME_INFO("The dimension of the simulation world: %.17g, %.17g, %.17g", m_boxX, m_boxY, m_boxZ);
     DEME_INFO("Simulation world X range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_boxX);
     DEME_INFO("Simulation world Y range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_boxY);
     DEME_INFO("Simulation world Z range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_boxZ);
-    DEME_INFO("User-specified dimensions should NOT be larger than the above simulation world.");
-    DEME_INFO("User-specified X-dimension range: [%.7g, %.7g]", m_user_box_min.x, m_user_box_max.x);
-    DEME_INFO("User-specified Y-dimension range: [%.7g, %.7g]", m_user_box_min.y, m_user_box_max.y);
-    DEME_INFO("User-specified Z-dimension range: [%.7g, %.7g]", m_user_box_min.z, m_user_box_max.z);
+
     DEME_INFO("The length unit in this simulation is: %.17g", l);
     DEME_INFO("The edge length of a voxel: %.17g", m_voxelSize);
 
-    DEME_INFO("The edge length of a bin: %.17g", m_binSize);
-    DEME_INFO("The total number of bins: %zu", m_num_bins);
+    DEME_INFO("The initial edge length of a bin: %.17g", m_binSize);
+    DEME_INFO("The initial number of bins: %zu", m_num_bins);
 
     DEME_INFO("The total number of clumps: %zu", nOwnerClumps);
     DEME_INFO("The combined number of component spheres: %zu", nSpheresGM);
     DEME_INFO("The total number of analytical objects: %u", nExtObj);
-    DEME_INFO("The total number of meshes: %u", nTriMeshes);
+    DEME_INFO("The total number of meshes: %zu", nTriMeshes);
     DEME_INFO("Grand total number of owners: %zu", nOwnerBodies);
 
     DEME_INFO("The number of material types: %u", nMatTuples);
     switch (m_force_model->type) {
         case (FORCE_MODEL::HERTZIAN):
-            DEME_INFO("History-based Hertzian contact model is in use");
+            DEME_INFO("History-based Hertzian contact model is in use.");
             break;
         case (FORCE_MODEL::HERTZIAN_FRICTIONLESS):
-            DEME_INFO("Frictionless Hertzian contact model is in use");
+            DEME_INFO("Frictionless Hertzian contact model is in use.");
             break;
         case (FORCE_MODEL::CUSTOM):
-            DEME_INFO("A user-custom force model is in use");
+            DEME_INFO("A user-custom force model is in use.");
             break;
         default:
             DEME_INFO("An unknown force model is in use, this is probably not going well...");
@@ -497,38 +496,28 @@ void DEMSolver::reportInitStats() const {
     if (use_user_defined_expand_factor) {
         DEME_INFO(
             "All geometries are enlarged/thickened by %.6g (estimated with the initial step size and update frequency) "
-            "for contact detection purpose",
+            "for contact detection purpose.",
             m_expand_factor);
-        DEME_INFO("This in the case of the smallest sphere, means enlarging radius by %.6g%%",
+        DEME_INFO("This in the case of the smallest sphere, means enlarging radius by %.6g%%.",
                   (m_expand_factor / m_smallest_radius) * 100.0);
     } else {
-        float expand_factor;
-        if (m_max_v_finder_type == MARGIN_FINDER_TYPE::MANUAL_MAX) {
-            expand_factor =
-                (m_expand_safety_multi * m_approx_max_vel + m_expand_base_vel) * m_suggestedFutureDrift * m_ts_size;
-            DEME_INFO(
-                "All geometries should be enlarged/thickened by %.6g (estimated with the initial step size, update "
-                "frequency and max velocity) for contact detection purpose",
-                expand_factor);
-        } else {
-            expand_factor = (m_expand_safety_multi * AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE + m_expand_base_vel) *
-                            m_suggestedFutureDrift * m_ts_size;
-            DEME_INFO("Suppose the maximum velocity encountered in the simulation is %.6g for example, then...",
-                      AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE);
-            DEME_INFO(
-                "All geometries should be enlarged/thickened by %.6g (estimated with the initial step size and update "
-                "frequency) for contact detection purpose",
-                expand_factor);
-        }
-        DEME_INFO("This in the case of the smallest sphere, means enlarging radius by %.6g%%",
-                  (expand_factor / m_smallest_radius) * 100.0);
+        DEME_INFO("The solver to set to adaptively change the contact margin size.");
+        float expand_factor = (m_expand_safety_multi * AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE + m_expand_base_vel) *
+                              m_suggestedFutureDrift * m_ts_size;
+        DEME_STEP_METRIC(
+            "To give an example, all geometries may be enlarged/thickened by around %.6g (estimated with the initial "
+            "step size, initial update frequency and velocity %.4g) for contact detection purpose.",
+            expand_factor, AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE);
+        DEME_STEP_METRIC("This in the case of the smallest sphere, means enlarging radius by %.6g%%.",
+                         (expand_factor / m_smallest_radius) * 100.0);
     }
+
     DEME_INFO("\n");
 
     // Debug outputs
     DEME_DEBUG_EXEC(printf("These owners are tracked: ");
                     for (const auto& tracked
-                         : m_tracked_objs) { printf("%zu, ", tracked->ownerID); } printf("\n"););
+                         : m_tracked_objs) { printf("%zu, ", (size_t)tracked->ownerID); } printf("\n"););
 }
 
 void DEMSolver::preprocessAnalyticalObjs() {
@@ -615,7 +604,7 @@ void DEMSolver::preprocessClumpTemplates() {
             this_clump_sp_mat_ids.push_back(this_material->load_order);
         }
         m_template_sp_mat_ids.push_back(this_clump_sp_mat_ids);
-        DEME_DEBUG_EXEC(printf("Input clump No.%d has material types: ", m_template_clump_mass.size() - 1);
+        DEME_DEBUG_EXEC(printf("Input clump No.%zu has material types: ", m_template_clump_mass.size() - 1);
                         for (unsigned int i = 0; i < this_clump_sp_mat_ids.size();
                              i++) { printf("%d, ", this_clump_sp_mat_ids.at(i)); } printf("\n"););
     }
@@ -904,7 +893,9 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.useMassJitify = jitify_mass_moi;
     kT->solverFlags.useClumpJitify = jitify_clump_templates;
 
-    // Tell kT and dT if and how this run is async
+    // Tell kT and dT if and how this run is async.
+    // Note this code doesn't really have async play, since dT is ahead of kT for at least one ts, unless all the user
+    // uses is DoDynamicsThenSync.
     kT->solverFlags.isAsync = !((m_suggestedFutureDrift == 0) && !auto_adjust_update_freq);
     dT->solverFlags.isAsync = !((m_suggestedFutureDrift == 0) && !auto_adjust_update_freq);
     // Ideal max drift in solverFlags may not be up-to-date, and only represents what the solver thinks it ought to be.
@@ -929,10 +920,6 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.useNoContactRecord = no_recording_contact_forces;
     dT->solverFlags.useForceCollectInPlace = collect_force_in_force_kernel;
 
-    // Max velocity decision strategy
-    kT->solverFlags.maxVelQuery = (m_max_v_finder_type != MARGIN_FINDER_TYPE::MANUAL_MAX);
-    dT->solverFlags.maxVelQuery = (m_max_v_finder_type != MARGIN_FINDER_TYPE::MANUAL_MAX);
-
     // Whether sorts contact before using them (not implemented)
     kT->solverFlags.should_sort_pairs = should_sort_contacts;
     dT->solverFlags.should_sort_pairs = should_sort_contacts;
@@ -944,6 +931,8 @@ void DEMSolver::transferSolverParams() {
     dT->simParams->errOutBinTriNum = threshold_too_many_tri_in_bin;
     kT->simParams->errOutVel = threshold_error_out_vel;
     dT->simParams->errOutVel = threshold_error_out_vel;
+    kT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
+    dT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
 
     // Whether the solver should auto-update bin sizes
     kT->solverFlags.autoBinSize = auto_adjust_bin_size;
@@ -967,19 +956,15 @@ void DEMSolver::transferSolverParams() {
 }
 
 void DEMSolver::transferSimParams() {
-    if ((!use_user_defined_expand_factor) &&
-        ((m_approx_max_vel < 1e-4f || m_approx_max_vel > 1e4) &&
-         m_max_v_finder_type == MARGIN_FINDER_TYPE::MANUAL_MAX) &&
-        m_suggestedFutureDrift > 0) {
+    if ((!use_user_defined_expand_factor) && m_approx_max_vel < 1e-4f && m_suggestedFutureDrift > 0) {
         DEME_WARNING(
             "You instructed that the physics can stretch %u time steps into the future, and explicitly specified the "
-            "maximum velocity stays at %.6g.\nThis appears to be an unusual velocity, and the contact detection "
-            "procedure will likely fail to detect some contact events before it is too late,\nor create contact "
-            "margins that are too thick resulting in a \"too many spheres in bin\" failure.",
+            "maximum velocity is %.6g.\nThe velocity appears to be small, and the contact detection "
+            "procedure will likely fail to detect some contact events before it is too late.",
             m_suggestedFutureDrift, m_approx_max_vel);
     }
     if ((!use_user_defined_expand_factor) && (m_expand_base_vel < 1e-4f || m_expand_safety_multi < 1.f) &&
-        m_max_v_finder_type != MARGIN_FINDER_TYPE::MANUAL_MAX && m_suggestedFutureDrift > 0) {
+        m_suggestedFutureDrift > 0) {
         DEME_WARNING(
             "You instructed that the physics can stretch %u time steps into the future, and specified that\nthe "
             "multiplier for the maximum velocity is %.6g and adder %.6g.\nThey will make the solver estimate the "
@@ -1781,8 +1766,6 @@ inline void DEMSolver::equipIntegrationScheme(std::unordered_map<std::string, st
         case (TIME_INTEGRATOR::EXTENDED_TAYLOR):
             strat = VEL_TO_PASS_ON_EXTENDED_TAYLOR();
             break;
-        default:
-            DEME_ERROR("The integration type is unknown or not implemented. Please select another via SetIntegrator.");
     }
     strMap["_integrationVelocityPassOnStrategy_"] = strat;
 }

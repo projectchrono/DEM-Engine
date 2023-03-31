@@ -3,6 +3,13 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// NOTE!!! You have to first finish ALL GRCPrep demos to obtain the GRC_3e6.csv
+// file, put it in the current directory, then run this demo.
+// A wheel drawbar-pull test, featuring Curiosity wheel geometry and GRC-1 simulant.
+// WARNING: This is a huge simulation with millions of particles.
+// =============================================================================
+
 #include <DEM/API.h>
 #include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
@@ -39,13 +46,16 @@ int main() {
         auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}, {"Crr", 0.00}});
         auto mat_type_terrain =
             DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}, {"Crr", 0.00}});
+        // If you don't have this line, then mu between drum material and granular material will be the average of the
+        // two.
+        DEMSim.SetMaterialPropertyPair("mu", mat_type_wheel, mat_type_terrain, 0.8);
 
         // `World'
         float G_mag = 9.81;
         float step_size = 1e-6;
-        double world_size_y = 0.52;
-        double world_size_x = 1.53;
-        double world_size_z = 4.0;
+        double world_size_y = 0.7;
+        double world_size_x = 2.04;
+        double world_size_z = 2.0;
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
         DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
         float bottom = -0.5;
@@ -67,56 +77,55 @@ int main() {
         // Track it
         auto wheel_tracker = DEMSim.Track(wheel);
 
-        // Then the ground particle template
-        DEMClumpTemplate shape_template1, shape_template2;
-        shape_template1.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
-        shape_template2.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat_6comp.csv").string());
-        std::vector<DEMClumpTemplate> shape_template = {shape_template2, shape_template2, shape_template1,
-                                                        shape_template1, shape_template1, shape_template1,
-                                                        shape_template1};
+        // Define the terrain particle templates
         // Calculate its mass and MOI
-        float mass1 = 2.6e3 * 5.5886717;  // in kg or g
-        float3 MOI1 = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3;
-        float mass2 = 2.6e3 * 2.7564385;  // in kg or g
-        float3 MOI2 = make_float3(1.0352626, 0.9616627, 1.6978352) * 2.6e3;
-        std::vector<float> mass = {mass2, mass2, mass1, mass1, mass1, mass1, mass1};
-        std::vector<float3> MOI = {MOI2, MOI2, MOI1, MOI1, MOI1, MOI1, MOI1};
+        float terrain_density = 2.6e3;
+        float volume1 = 4.2520508;
+        float mass1 = terrain_density * volume1;
+        float3 MOI1 = make_float3(1.6850426, 1.6375114, 2.1187753) * terrain_density;
+        float volume2 = 2.1670011;
+        float mass2 = terrain_density * volume2;
+        float3 MOI2 = make_float3(0.57402126, 0.60616378, 0.92890173) * terrain_density;
         // Scale the template we just created
-        std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
-        std::vector<double> volume = {2.7564385, 2.7564385, 5.5886717, 5.5886717, 5.5886717, 5.5886717, 5.5886717};
-        std::vector<double> scales = {0.0014, 0.00075833, 0.00044, 0.0003, 0.0002, 0.00018333, 0.00017};
-        std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 10.; });
-        unsigned int t_num = 0;
-        for (double scaling : scales) {
-            auto this_template = shape_template[t_num];
-            this_template.mass = (double)mass[t_num] * scaling * scaling * scaling;
-            this_template.MOI.x = (double)MOI[t_num].x * (double)(scaling * scaling * scaling * scaling * scaling);
-            this_template.MOI.y = (double)MOI[t_num].y * (double)(scaling * scaling * scaling * scaling * scaling);
-            this_template.MOI.z = (double)MOI[t_num].z * (double)(scaling * scaling * scaling * scaling * scaling);
-            std::cout << "Mass: " << this_template.mass << std::endl;
-            std::cout << "MOIX: " << this_template.MOI.x << std::endl;
-            std::cout << "MOIY: " << this_template.MOI.y << std::endl;
-            std::cout << "MOIZ: " << this_template.MOI.z << std::endl;
-            std::cout << "=====================" << std::endl;
-            std::for_each(this_template.radii.begin(), this_template.radii.end(),
-                          [scaling](float& r) { r *= scaling; });
-            std::for_each(this_template.relPos.begin(), this_template.relPos.end(),
-                          [scaling](float3& r) { r *= scaling; });
-            this_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(this_template.nComp, mat_type_terrain);
-
+        std::vector<double> scales = {0.014, 0.0075833, 0.0044, 0.003, 0.002, 0.0018333, 0.0017};
+        // Then load it to system
+        std::shared_ptr<DEMClumpTemplate> my_template2 =
+            DEMSim.LoadClumpType(mass2, MOI2, GetDEMEDataFile("clumps/triangular_flat_6comp.csv"), mat_type_terrain);
+        std::shared_ptr<DEMClumpTemplate> my_template1 =
+            DEMSim.LoadClumpType(mass1, MOI1, GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain);
+        std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates = {my_template2,
+                                                                                    DEMSim.Duplicate(my_template2),
+                                                                                    my_template1,
+                                                                                    DEMSim.Duplicate(my_template1),
+                                                                                    DEMSim.Duplicate(my_template1),
+                                                                                    DEMSim.Duplicate(my_template1),
+                                                                                    DEMSim.Duplicate(my_template1)};
+        // Now scale those templates
+        for (int i = 0; i < scales.size(); i++) {
+            std::shared_ptr<DEMClumpTemplate>& my_template = ground_particle_templates.at(i);
+            // Note the mass and MOI are also scaled in the process, automatically. But if you are not happy with this,
+            // you can always manually change mass and MOI afterwards.
+            my_template->Scale(scales.at(i));
             // Give these templates names, 0000, 0001 etc.
             char t_name[20];
-            sprintf(t_name, "%04d", t_num);
-            this_template.AssignName(std::string(t_name));
-            ground_particle_templates.push_back(DEMSim.LoadClumpType(this_template));
-            t_num++;
+            sprintf(t_name, "%04d", i);
+            my_template->AssignName(std::string(t_name));
         }
 
         // Now we load clump locations from a checkpointed file
         {
             std::cout << "Making terrain..." << std::endl;
-            auto clump_xyz = DEMSim.ReadClumpXyzFromCsv("./GRC_20e6.csv");
-            auto clump_quaternion = DEMSim.ReadClumpQuatFromCsv("./GRC_20e6.csv");
+            std::unordered_map<std::string, std::vector<float3>> clump_xyz;
+            std::unordered_map<std::string, std::vector<float4>> clump_quaternion;
+            try {
+                clump_xyz = DEMSim.ReadClumpXyzFromCsv("./GRC_3e6.csv");
+                clump_quaternion = DEMSim.ReadClumpQuatFromCsv("./GRC_3e6.csv");
+            } catch (...) {
+                std::cout << "You will need to finish the GRCPrep demos first to obtain the checkpoint file "
+                             "GRC_3e6.csv, in order to run this demo. This file is needed to generate the terrain bed."
+                          << std::endl;
+                return 1;
+            }
             std::vector<float3> in_xyz;
             std::vector<float4> in_quat;
             std::vector<std::shared_ptr<DEMClumpTemplate>> in_types;
@@ -148,8 +157,7 @@ int main() {
             // Now, we don't need all particles loaded...
             std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
             for (size_t i = 0; i < in_xyz.size(); i++) {
-                if (std::abs(in_xyz.at(i).y) > (world_size_y - 0.04) / 2 ||
-                    std::abs(in_xyz.at(i).x) > (world_size_x - 0.08) / 2)
+                if (std::abs(in_xyz.at(i).y) > (world_size_y - 0.05) / 2)
                     elem_to_remove.at(i) = 1;
             }
             in_xyz.erase(std::remove_if(in_xyz.begin(), in_xyz.end(),
@@ -172,32 +180,23 @@ int main() {
             base_batch.SetPos(in_xyz);
             base_batch.SetOriQ(in_quat);
 
-            /*
+            // Make 2 copies of the batch of particles, then feed into simulation.
             std::vector<float> x_shift_dist = {-0.5, 0.5};
             std::vector<float> y_shift_dist = {0};
             // Add some patches of such graular bed
             for (float x_shift : x_shift_dist) {
                 for (float y_shift : y_shift_dist) {
-                    DEMClumpBatch another_batch = base_batch;
+                    DEMClumpBatch batch_to_add = base_batch;
                     std::vector<float3> my_xyz = in_xyz;
                     std::for_each(my_xyz.begin(), my_xyz.end(), [x_shift, y_shift](float3& xyz) {
                         xyz.x += x_shift;
                         xyz.y += y_shift;
                     });
-                    another_batch.SetPos(my_xyz);
-                    DEMSim.AddClumps(another_batch);
+                    batch_to_add.SetPos(my_xyz);
+                    DEMSim.AddClumps(batch_to_add);
                 }
             }
-            */
-
-            DEMSim.AddClumps(base_batch);
         }
-
-        // Now add a plane to compress the sample
-        // auto compressor = DEMSim.AddExternalObject();
-        // compressor->AddPlane(make_float3(0, 0, 0), make_float3(0, 0, -1), mat_type_terrain);
-        // compressor->SetFamily(2);
-        // auto compressor_tracker = DEMSim.Track(compressor);
 
         // Families' prescribed motions
         float w_r = math_PI / 12;
@@ -223,7 +222,12 @@ int main() {
         DEMSim.SetInitTimeStep(step_size);
         DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -G_mag));
         DEMSim.SetCDUpdateFreq(30);
+        // Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
+        // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
+        // happen anyway and if it does, something already went wrong.
         DEMSim.SetMaxVelocity(50.);
+        // Error out vel is used to force the simulation to abort when something goes wrong and sim diverges.
+        DEMSim.SetErrorOutVelocity(60.);
         DEMSim.SetExpandSafetyMultiplier(1.1);
         DEMSim.SetInitBinSize(2 * scales.at(2));
         DEMSim.Initialize();
@@ -239,7 +243,7 @@ int main() {
 
         // Put the wheel in place, then let the wheel sink in initially
         float max_z = max_z_finder->GetValue();
-        wheel_tracker->SetPos(make_float3(-0.45, 0, max_z + 0.02 + wheel_rad));
+        wheel_tracker->SetPos(make_float3(-0.45, 0, max_z + 0.03 + wheel_rad));
         for (double t = 0; t < 0.5; t += frame_time) {
             char filename[200], meshname[200];
             std::cout << "Outputting frame: " << currframe << std::endl;
@@ -257,7 +261,8 @@ int main() {
 
         // Switch wheel from free fall into DP test
         DEMSim.ChangeFamily(1, 2);
-        DEMSim.UpdateStepSize(step_size * 2);
+        step_size *= 2.;
+        DEMSim.UpdateStepSize(step_size);
 
         for (double t = 0; t < sim_end; t += step_size, curr_step++) {
             if (curr_step % out_steps == 0) {
@@ -285,6 +290,7 @@ int main() {
 
         run_mode++;
         DEMSim.ShowTimingStats();
+        DEMSim.ShowAnomalies();
     }
 
     std::cout << "WheelDP demo exiting..." << std::endl;

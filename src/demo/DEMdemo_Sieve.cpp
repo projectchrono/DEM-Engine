@@ -3,6 +3,11 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// A clump-represented sieve with a presecibed back-and-forth motion is in this
+// demo. It lets particles that are small enough fall through it.
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
@@ -19,7 +24,7 @@ using namespace std::filesystem;
 int main() {
     DEMSolver DEMSim;
     // I generally use this demo to inspect if I have "lost contact pairs", so the verbosity is set to STEP_METRIC...
-    DEMSim.SetVerbosity(DEBUG);
+    DEMSim.SetVerbosity(STEP_METRIC);
 
     srand(759);
 

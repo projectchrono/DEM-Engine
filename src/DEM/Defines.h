@@ -21,10 +21,10 @@ namespace deme {
 // NOW DEFINING CONSTANTS USED BY THE DEM MODULE
 // =============================================================================
 #define DEME_GET_VAR_NAME(Variable) (#Variable)
-#define DEME_KT_CD_NTHREADS_PER_BLOCK 256
+#define DEME_KT_CD_NTHREADS_PER_BLOCK 512
 // It is better to keep DEME_NUM_SPHERES_PER_CD_BATCH == DEME_KT_CD_NTHREADS_PER_BLOCK for better performance
-#define DEME_NUM_SPHERES_PER_CD_BATCH 256    ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
-#define DEME_NUM_TRIANGLES_PER_CD_BATCH 128  ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
+#define DEME_NUM_SPHERES_PER_CD_BATCH 512    ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
+#define DEME_NUM_TRIANGLES_PER_CD_BATCH 256  ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
 #define DEME_TINY_FLOAT 1e-12
 #define DEME_HUGE_FLOAT 1e15
 #define DEME_BITS_PER_BYTE 8
@@ -46,7 +46,7 @@ constexpr uint8_t VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * DEME_BITS_PER_BYTE;
 constexpr uint8_t VOXEL_COUNT_POWER2 = sizeof(voxelID_t) * DEME_BITS_PER_BYTE;
 constexpr int64_t MAX_SUBVOXEL = (int64_t)1 << VOXEL_RES_POWER2;
 
-#define DEME_NUM_BODIES_PER_BLOCK 512
+#define DEME_NUM_BODIES_PER_BLOCK 1024
 #define DEME_NUM_TRIANGLE_PER_BLOCK 512
 #define DEME_MAX_THREADS_PER_BLOCK 1024
 #define DEME_INIT_CNT_MULTIPLIER 2
@@ -131,14 +131,6 @@ enum VERBOSITY {
 enum class TIME_INTEGRATOR { FORWARD_EULER, CENTERED_DIFFERENCE, EXTENDED_TAYLOR, CHUNG };
 // Owner types
 enum class OWNER_TYPE { CLUMP, ANALYTICAL, MESH };
-// Types of entities (can be either owner or geometry entity) that can be inspected by inspection methods
-enum class INSPECT_ENTITY_TYPE { SPHERE, CLUMP, MESH, MESH_FACET, EVERYTHING };
-// Which reduce operation is needed in an inspection
-enum class CUB_REDUCE_FLAVOR { NONE, MAX, MIN, SUM };
-// Format of the output files
-enum class OUTPUT_FORMAT { CSV, BINARY, CHPF };
-// Mesh output format
-enum class MESH_FORMAT { VTK, OBJ };
 // Force mode type
 enum class FORCE_MODEL { HERTZIAN, HERTZIAN_FRICTIONLESS, CUSTOM };
 // The info that should be present in the output files
@@ -328,7 +320,7 @@ struct DEMDataDT {
 
     // pointer to remote buffer where kinematic thread stores work-order data provided by the dynamic thread
     unsigned int* pKTOwnedBuffer_maxDrift = NULL;
-    float* pKTOwnedBuffer_maxVel = NULL;
+    float* pKTOwnedBuffer_absVel = NULL;
     float* pKTOwnedBuffer_ts = NULL;
     voxelID_t* pKTOwnedBuffer_voxelID = NULL;
     subVoxelPos_t* pKTOwnedBuffer_locX = NULL;
@@ -355,8 +347,8 @@ struct DEMDataDT {
     // Wildcards. These are some quantities that you can associate with contact pairs and/or owner objects. Very
     // typically, contact history info in Hertzian model in this DEM tool is a wildcard, and electric charges can be
     // registered on granular particles with wildcards.
-    float* contactWildcards[DEME_MAX_WILDCARD_NUM];
-    float* ownerWildcards[DEME_MAX_WILDCARD_NUM];
+    float* contactWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
+    float* ownerWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
 
     // dT believes this amount of future drift is ideal
     unsigned int perhapsIdealFutureDrift = 0;
@@ -374,10 +366,12 @@ struct DEMDataKT {
     oriQ_t* oriQx;
     oriQ_t* oriQy;
     oriQ_t* oriQz;
+    // Derived from absv which is for determining contact margin size.
+    float* marginSize;
 
     // kT-owned buffer pointers, for itself's usage
-    float maxVel_buffer;           // buffer for the current max vel sent by dT
-    float maxVel;                  // kT's own storage of max vel
+    // float maxVel_buffer; // buffer for the current max vel sent by dT
+    float maxVel = 0;              // kT's own storage of max vel
     float ts_buffer;               // buffer for the current ts size sent by dT
     float ts;                      // kT's own storage of ts size
     unsigned int maxDrift_buffer;  // buffer for max dT future drift steps
@@ -390,6 +384,7 @@ struct DEMDataKT {
     oriQ_t* oriQ1_buffer;
     oriQ_t* oriQ2_buffer;
     oriQ_t* oriQ3_buffer;
+    float* absVel_buffer;
     family_t* familyID_buffer;
 
     // Family mask
@@ -449,7 +444,7 @@ struct DEMDataKT {
 
 // At init, we wish to show the user how thick approximately the CD margin will be added. This number will help deriving
 // that approximation. It can be anything really, 1 or 10, or 8.
-const float AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE = 10.f;
+const float AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE = 1.f;
 // After changing bin size, this many kT steps are not included in the performance gauging.
 const unsigned int NUM_STEPS_RESERVED_AFTER_CHANGING_BIN_SIZE = 5;
 // Drift tweak step size

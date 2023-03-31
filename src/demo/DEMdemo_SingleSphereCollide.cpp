@@ -3,6 +3,10 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// A demo that is basically the hello-world script for DEME.
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
@@ -30,15 +34,18 @@ int main() {
 
     auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}});
     auto mat_type_2 = DEMSim.LoadMaterial({{"E", 2e9}, {"nu", 0.4}, {"CoR", 0.6}});
+    std::shared_ptr<DEMMaterial> mat_type_3 = DEMSim.Duplicate(mat_type_2);
     // If you don't have this line, then CoR between thw 2 materials will take average when they are in contact
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_1, mat_type_2, 0.6);
 
     auto sph_type_1 = DEMSim.LoadSphereType(11728., 1., mat_type_1);
+    // Test clump template duplication...
+    auto sph_type_2 = DEMSim.Duplicate(sph_type_1);
 
     std::vector<float3> input_xyz1, input_xyz2;
     std::vector<float3> input_vel1, input_vel2;
-    std::vector<std::shared_ptr<DEMClumpTemplate>> input_clump_type(1, sph_type_1);
-    // std::vector<unsigned int> input_clump_type(1, sph_type_1);
+    std::vector<std::shared_ptr<DEMClumpTemplate>> input_clump_type1(1, sph_type_1);
+    std::vector<std::shared_ptr<DEMClumpTemplate>> input_clump_type2(1, sph_type_2);
 
     // Inputs are just 2 spheres
     float sphPos = 1.2f;
@@ -47,7 +54,7 @@ int main() {
     input_vel1.push_back(make_float3(1.f, 0, 0));
     input_vel2.push_back(make_float3(-1.f, 0, 0));
 
-    auto particles1 = DEMSim.AddClumps(input_clump_type, input_xyz1);
+    auto particles1 = DEMSim.AddClumps(input_clump_type1, input_xyz1);
     particles1->SetVel(input_vel1);
     particles1->SetFamily(0);
     particles1->AddOwnerWildcard("mu_custom", 0.5);
@@ -78,9 +85,10 @@ int main() {
     DEMSim.SetInitTimeStep(2e-5);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEMSim.SetCDUpdateFreq(10);
-    // DEMSim.SetMaxVelocity(3.);
+    DEMSim.SetMaxVelocity(6.);
+    DEMSim.SetExpandSafetyType("auto");
     DEMSim.SetExpandSafetyMultiplier(1.2);
-    DEMSim.SetIntegrator(TIME_INTEGRATOR::CENTERED_DIFFERENCE);
+    DEMSim.SetIntegrator("centered_difference");
 
     DEMSim.Initialize();
 
@@ -88,7 +96,7 @@ int main() {
 
     // You can add more clumps to simulation after initialization, like this...
     DEMSim.ClearCache();
-    auto particles2 = DEMSim.AddClumps(input_clump_type, input_xyz2);
+    auto particles2 = DEMSim.AddClumps(input_clump_type2, input_xyz2);
     particles2->SetVel(input_vel2);
     particles2->SetFamily(1);
     auto tracker2 = DEMSim.Track(particles2);
@@ -145,6 +153,10 @@ int main() {
         std::cout << "Particle 2 X coord is " << pos2.x << std::endl;
         std::cout << "Particle 1 family is " << fam1 << std::endl;
         std::cout << "Particle 2 family is " << fam2 << std::endl;
+        std::cout << "Average contacts each sphere has: " << DEMSim.GetAvgSphContacts() << std::endl;
+
+        // Test changing material type on-the-fly...
+        DEMSim.SetFamilyClumpMaterial(1, mat_type_3);
     }
 
     DEMSim.ShowThreadCollaborationStats();

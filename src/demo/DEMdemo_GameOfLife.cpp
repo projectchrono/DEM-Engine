@@ -4,7 +4,8 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 // =============================================================================
-// This demo reproduces the Game of Life in DEME simulator, to showcase the flexibility of its APIs.
+// This demo reproduces the Game of Life in DEME simulator, to showcase the
+// flexibility of its APIs.
 // =============================================================================
 
 #include <core/ApiVersion.h>
@@ -133,6 +134,7 @@ int main() {
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
         DEMSim.WriteSphereFile(std::string(filename));
         std::cout << "Frame: " << i << std::endl;
+        std::cout << "Average contacts each sphere has: " << DEMSim.GetAvgSphContacts() << std::endl;
 
         DEMSim.DoDynamicsThenSync(1.);
     }

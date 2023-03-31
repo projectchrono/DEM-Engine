@@ -85,13 +85,13 @@ class DEMSolver {
     /// actual step size depends on the variable step strategy.
     void SetInitTimeStep(double ts_size) { m_ts_size = ts_size; }
     /// Return the number of clumps that are currently in the simulation.
-    size_t GetNumClumps() { return nOwnerClumps; }
+    size_t GetNumClumps() const { return nOwnerClumps; }
     /// @brief Get the number of kT-reported potential contact pairs.
     /// @return Number of potential contact pairs.
     size_t GetNumContacts() const { return dT->getNumContacts(); }
     /// Get the current time step size in simulation.
     double GetTimeStepSize() const;
-    /// Getthe current expand factor in simulation.
+    /// Get the current expand factor in simulation.
     float GetExpandFactor() const;
     /// Set the number of dT steps before it waits for a contact-pair info update from kT.
     void SetCDUpdateFreq(int freq) {
@@ -105,13 +105,18 @@ class DEMSolver {
     double GetSimTime() const;
     /// Set the simulation time manually.
     void SetSimTime(double time);
-    // TODO: Implement an API that allows setting ts size through a list
+    /// @brief Set the strategy for auto-adapting time step size (NOT implemented, no effect yet).
+    /// @param type "none" or "max_vel" or "int_diff".
+    void SetAdaptiveTimeStepType(const std::string& type);
 
-    /// Set the integrator for this simulator
+    /// @brief Set the time integrator for this simulator.
+    /// @param intg "forward_euler" or "extended_taylor" or "centered_difference".
+    void SetIntegrator(const std::string& intg);
+    /// @brief Set the time integrator for this simulator.
     void SetIntegrator(TIME_INTEGRATOR intg) { m_integrator = intg; }
 
     /// Return whether this simulation system is initialized
-    bool GetInitStatus() { return sys_initialized; }
+    bool GetInitStatus() const { return sys_initialized; }
 
     /// Get the jitification string substitution laundary list. It is needed by some of this simulation system's friend
     /// classes.
@@ -132,7 +137,8 @@ class DEMSolver {
     /// Explicitly instruct the sizes for the arrays at initialization time. This is useful when the number of owners
     /// tends to change (especially gradually increase) frequently in the simulation, by reducing the need for
     /// reallocation. Note however, whatever instruction the user gives here it won't affect the correctness of the
-    /// simulation, since if the arrays are not long enough they will always be auto-resized.
+    /// simulation, since if the arrays are not long enough they will always be auto-resized. This is not implemented
+    /// yet :/
     void InstructNumOwners(size_t numOwners) { m_instructed_num_owners = numOwners; }
 
     /// Instruct the solver to use frictonal (history-based) Hertzian contact force model.
@@ -172,12 +178,20 @@ class DEMSolver {
     /// Input the maximum expected particle velocity. If `force' is set to false, the solver will not use a velocity
     /// larger than max_vel for determining the margin thickness; if `force' is set to true, the solver will not
     /// calculate maximum system velocity and will always use max_vel to calculate the margin thickness.
-    void SetMaxVelocity(float max_vel, bool force = false);
-    void SetMaxVelocity(const std::shared_ptr<DEMInspector>& insp) {
-        m_max_v_finder_type = MARGIN_FINDER_TYPE::DEM_INSPECTOR;
-        m_approx_max_vel_func = insp;
-    }
-    void SetMaxVelocity(const std::string& insp_type);
+
+    /// @brief Set the maximum expected particle velocity. The solver will not use a velocity larger than this for
+    /// determining the margin thickness, and velocity larger than this will be considered a system anomaly.
+    /// @param max_vel Expected max velocity.
+    void SetMaxVelocity(float max_vel);
+    /// @brief Set the method this solver uses to derive current system velocity (for safety purposes in contact
+    /// detection).
+    /// @param insp_type A string. If "auto": the solver automatically derives.
+    void SetExpandSafetyType(const std::string& insp_type);
+    // void SetExpandSafetyType(const std::shared_ptr<DEMInspector>& insp) {
+    //     m_max_v_finder_type = MARGIN_FINDER_TYPE::DEM_INSPECTOR;
+    //     m_approx_max_vel_func = insp;
+    // }
+
     /// Assign a multiplier to our estimated maximum system velocity, when deriving the thinckness of the contact
     /// `safety' margin. This can be greater than one if the simulation velocity can increase significantly in one kT
     /// update cycle, but this is not common and should be close to 1 in general.
@@ -198,9 +212,18 @@ class DEMSolver {
     void SetMaxTriangleInBin(unsigned int max_tri) { threshold_too_many_tri_in_bin = max_tri; }
 
     /// @brief Set the velocity which when exceeded, the solver errors out. A huge number can be used to discourage this
-    /// error type.
+    /// error type. Defaulted to 5e4.
     /// @param vel Error-out velocity.
     void SetErrorOutVelocity(float vel) { threshold_error_out_vel = vel; }
+
+    /// @brief Set the average number of contacts a sphere has, before the solver errors out. A huge number can be used
+    /// to discourage this error type. Defaulted to 100.
+    /// @param num_cnts Error-out contact number.
+    void SetErrorOutAvgContacts(float num_cnts) { threshold_error_out_num_cnts = num_cnts; }
+
+    /// @brief Get the current number of contacts each sphere has.
+    /// @return Number of contacts.
+    float GetAvgSphContacts() const { return kT->stateParams.avgCntsPerSphere; }
 
     /// @brief Enable or disable the use of adaptive bin size (by default it is on).
     /// @param use Enable or disable.
@@ -248,7 +271,7 @@ class DEMSolver {
     /// @return The current update frequency.
     float GetUpdateFreq() const;
 
-    /// Set the number of threads per block in force calculation (default 256).
+    /// Set the number of threads per block in force calculation (default 512).
     void SetForceCalcThreadsPerBlock(unsigned int nTh) { dT->DT_FORCE_CALC_NTHREADS_PER_BLOCK = nTh; }
 
     /// Load possible clump types into the API-level cache
@@ -282,9 +305,27 @@ class DEMSolver {
                                                      float radius,
                                                      const std::shared_ptr<DEMMaterial>& material);
 
-    /// Load materials properties (Young's modulus, Poisson's ratio, Coeff of Restitution...) into
-    /// the API-level cache. Return the ptr of the material type just loaded.
+    /// @brief Load materials properties (Young's modulus, Poisson's ratio...) into the system.
+    /// @param mat_prop Property name--value pairs, as an unordered_map.
+    /// @return A shared pointer for this material.
     std::shared_ptr<DEMMaterial> LoadMaterial(const std::unordered_map<std::string, float>& mat_prop);
+    /// @brief Load materials properties into the system.
+    /// @param a_material A DEMMaterial object.
+    /// @return A shared pointer for this material.
+    std::shared_ptr<DEMMaterial> LoadMaterial(DEMMaterial& a_material);
+
+    /// @brief Duplicate a material that is loaded into the system.
+    /// @param ptr Shared pointer for the object to duplicate.
+    /// @return A duplicate of the object (with effectively a deep copy).
+    std::shared_ptr<DEMMaterial> Duplicate(const std::shared_ptr<DEMMaterial>& ptr);
+    /// @brief Duplicate a clump template that is loaded into the system.
+    /// @param ptr Shared pointer for the object to duplicate.
+    /// @return A duplicate of the object (with effectively a deep copy).
+    std::shared_ptr<DEMClumpTemplate> Duplicate(const std::shared_ptr<DEMClumpTemplate>& ptr);
+    /// @brief Duplicate a batch of clumps that is loaded into the system.
+    /// @param ptr Shared pointer for the object to duplicate.
+    /// @return A duplicate of the object (with effectively a deep copy).
+    std::shared_ptr<DEMClumpBatch> Duplicate(const std::shared_ptr<DEMClumpBatch>& ptr);
 
     /// @brief Set the value for a material property that by nature involves a pair of a materials (e.g. friction
     /// coefficient).
@@ -460,6 +501,14 @@ class DEMSolver {
     void SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, float val) {
         SetFamilyOwnerWildcardValue(N, name, std::vector<float>(1, val));
     }
+    /// @brief Set all clumps in this family to have this material.
+    /// @param N Family number.
+    /// @param mat Material type.
+    void SetFamilyClumpMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat);
+    /// @brief Set all meshes in this family to have this material.
+    /// @param N Family number.
+    /// @param mat Material type.
+    void SetFamilyMeshMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat);
 
     /// @brief Get the owner wildcard's values of all entities.
     std::vector<float> GetOwnerWildcardValue(const std::string& name, float val);
@@ -729,6 +778,11 @@ class DEMSolver {
                           INSPECT_ENTITY_TYPE thing_to_insp,
                           CUB_REDUCE_FLAVOR reduce_flavor,
                           bool all_domain);
+    float* dTInspectNoReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
+                             const std::string& kernel_name,
+                             INSPECT_ENTITY_TYPE thing_to_insp,
+                             CUB_REDUCE_FLAVOR reduce_flavor,
+                             bool all_domain);
 
   private:
     ////////////////////////////////////////////////////////////////////////////////
@@ -826,7 +880,7 @@ class DEMSolver {
 
     // The method of determining the thickness of the margin added to CD
     // Default is using a max_vel inspector of the clumps to decide it
-    enum class MARGIN_FINDER_TYPE { MANUAL_MAX, DEM_INSPECTOR, DEFAULT };
+    enum class MARGIN_FINDER_TYPE { DEM_INSPECTOR, DEFAULT };
     MARGIN_FINDER_TYPE m_max_v_finder_type = MARGIN_FINDER_TYPE::DEFAULT;
     // User-instructed approximate maximum velocity (of any point on a body in the simulation)
     float m_approx_max_vel = DEME_HUGE_FLOAT;
@@ -869,7 +923,7 @@ class DEMSolver {
     // If the solver sees there are more triangles in a bin than a this `maximum', it errors out
     unsigned int threshold_too_many_tri_in_bin = 32768;
     // The max velocity at which the simulation should error out
-    float threshold_error_out_vel = 5e4;
+    float threshold_error_out_vel = 1e3;
     // Whether to auto-adjust the bin size and the max update frequency
     bool auto_adjust_bin_size = true;
     bool auto_adjust_update_freq = true;
@@ -882,7 +936,7 @@ class DEMSolver {
     float auto_adjust_lower_proactive_ratio = 0.3;
     unsigned int upper_bound_future_drift = 5000;
     float max_drift_ahead_of_avg_drift = 6.;
-    float max_drift_multiple_of_avg_drift = 1.2;
+    float max_drift_multiple_of_avg_drift = 1.1;
     unsigned int max_drift_gauge_history_size = 200;
 
     // See SetNoForceRecord
@@ -890,12 +944,18 @@ class DEMSolver {
     // See SetCollectAccRightAfterForceCalc
     bool collect_force_in_force_kernel = false;
 
+    // Error-out avg num contacts
+    float threshold_error_out_num_cnts = 30.;
+
     // Integrator type
     TIME_INTEGRATOR m_integrator = TIME_INTEGRATOR::EXTENDED_TAYLOR;
 
     // The force model which will be used
     std::shared_ptr<DEMForceModel> m_force_model =
         std::make_shared<DEMForceModel>(std::move(DEMForceModel(FORCE_MODEL::HERTZIAN)));
+
+    // Strategy for auto-adapting time steps size
+    ADAPT_TS_TYPE adapt_ts_type = ADAPT_TS_TYPE::NONE;
 
     ////////////////////////////////////////////////////////////////////////////////
     // No user method is provided to modify the following key quantities, even if

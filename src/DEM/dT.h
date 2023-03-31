@@ -59,7 +59,7 @@ class DEMDynamicThread {
 
     // Number of items in the buffer array (which is not a managed vector, due to our need to explicitly control where
     // it is allocated)
-    size_t buffer_size;
+    size_t buffer_size = 0;
 
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
@@ -236,7 +236,7 @@ class DEMDynamicThread {
     bool pendingCriticalUpdate = true;
 
     // Number of threads per block for dT force calculation kernels
-    unsigned int DT_FORCE_CALC_NTHREADS_PER_BLOCK = 256;
+    unsigned int DT_FORCE_CALC_NTHREADS_PER_BLOCK = 512;
 
     // Template-related arrays in managed memory
     // Belonged-body ID
@@ -298,6 +298,8 @@ class DEMDynamicThread {
         startThread();
         th.join();
         cudaStreamDestroy(streamInfo.stream);
+
+        deallocateEverything();
 
         DEME_GPU_CALL(cudaFree(simParams));
         DEME_GPU_CALL(cudaFree(granData));
@@ -361,10 +363,15 @@ class DEMDynamicThread {
     /// just adds to it.
     void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite = true);
 
-    /// Globally modify a owner wildcard's value
+    /// @brief Globally modify a owner wildcard's value.
     void setOwnerWildcardValue(unsigned int wc_num, const std::vector<float>& vals);
-    /// Modify the owner wildcard values of all entities in family family_num
+    /// @brief Modify the owner wildcard values of all entities in family family_num.
     void setFamilyOwnerWildcardValue(unsigned int family_num, unsigned int wc_num, const std::vector<float>& vals);
+
+    /// @brief Set all clumps in this family to have this material.
+    void setFamilyClumpMaterial(unsigned int N, unsigned int mat_id);
+    /// @brief Set all meshes in this family to have this material.
+    void setFamilyMeshMaterial(unsigned int N, unsigned int mat_id);
 
     /// @brief  Fill res with the wc_num wildcard value.
     void getOwnerWildcardValue(std::vector<float>& res, unsigned int wc_num);
@@ -574,18 +581,21 @@ class DEMDynamicThread {
     inline void calibrateParams();
 
     // Determine the max vel for this cycle, kT needs it
-    inline float* determineSysMaxVel();
+    inline float* determineSysVel();
 
     // Some per-step checks/modification, done before integration, but after force calculation (thus sort of in the
     // mid-step stage)
     inline void routineChecks();
 
     // Bring dT buffer array data to its working arrays
-    void unpackMyBuffer();
+    inline void unpackMyBuffer();
     // Send produced data to kT-owned biffers
     void sendToTheirBuffer();
     // Resize some work arrays based on the number of contact pairs provided by kT
     void contactEventArraysResize(size_t nContactPairs);
+
+    // Deallocate everything
+    void deallocateEverything();
 
     // Just-in-time compiled kernels
     std::shared_ptr<jitify::Program> prep_force_kernels;

@@ -95,7 +95,7 @@ elseif(TargetCXXStandard STREQUAL STD_CXX17)
 elseif(TargetCXXStandard STREQUAL STD_CXX20)
 	set(CXXSTD_MAX 20)
 else()
-	set(CXXSTD_MAX 20)
+	set(CXXSTD_MAX 17)
 endif()
 cxx_std_autodetect()
 

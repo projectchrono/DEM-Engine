@@ -127,6 +127,9 @@ struct kTStateParams {
 
     // Num of bins, currently
     size_t numBins = 0;
+
+    // Current average num of contacts per sphere has.
+    float avgCntsPerSphere = 0.;
 };
 
 inline std::string pretty_format_bytes(size_t bytes) {
@@ -151,6 +154,21 @@ inline std::string pretty_format_bytes(size_t bytes) {
 }
 
 // =============================================================================
+// SOME HOST-SIDE ENUMS
+// =============================================================================
+
+// Types of entities (can be either owner or geometry entity) that can be inspected by inspection methods
+enum class INSPECT_ENTITY_TYPE { SPHERE, CLUMP, MESH, MESH_FACET, EVERYTHING };
+// Which reduce operation is needed in an inspection
+enum class CUB_REDUCE_FLAVOR { NONE, MAX, MIN, SUM };
+// Format of the output files
+enum class OUTPUT_FORMAT { CSV, BINARY, CHPF };
+// Mesh output format
+enum class MESH_FORMAT { VTK, OBJ };
+// Adaptive time step size methods
+enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
+
+// =============================================================================
 // NOW DEFINING MACRO COMMANDS USED BY THE DEM MODULE
 // =============================================================================
 
@@ -164,24 +182,25 @@ inline std::string pretty_format_bytes(size_t bytes) {
 #define DEME_ERROR(...)                      \
     {                                        \
         char error_message[1024];            \
-        char func_name[1024];                \
         sprintf(error_message, __VA_ARGS__); \
-        sprintf(func_name, __func__);        \
         std::string out = error_message;     \
         out += "\n";                         \
         out += "This happened in ";          \
-        out += func_name;                    \
+        out += __func__;                     \
         out += ".\n";                        \
         throw std::runtime_error(out);       \
     }
 
-#define DEME_WARNING(...)                      \
-    {                                          \
-        if (verbosity >= VERBOSITY::WARNING) { \
-            printf("\nWARNING! ");             \
-            printf(__VA_ARGS__);               \
-            printf("\n\n");                    \
-        }                                      \
+#define DEME_WARNING(...)                       \
+    {                                           \
+        if (verbosity >= VERBOSITY::WARNING) {  \
+            char warn_message[1024];            \
+            sprintf(warn_message, __VA_ARGS__); \
+            std::string out = "\nWARNING! ";    \
+            out += warn_message;                \
+            out += "\n\n";                      \
+            std::cerr << out;                   \
+        }                                       \
     }
 
 #define DEME_INFO(...)                      \
@@ -192,13 +211,16 @@ inline std::string pretty_format_bytes(size_t bytes) {
         }                                   \
     }
 
-#define DEME_STEP_ANOMALY(...)                              \
-    {                                                       \
-        if (verbosity >= VERBOSITY::STEP_ANOMALY) {         \
-            printf("\n-------- SIM ANOMALY!!! --------\n"); \
-            printf(__VA_ARGS__);                            \
-            printf("\n\n");                                 \
-        }                                                   \
+#define DEME_STEP_ANOMALY(...)                                        \
+    {                                                                 \
+        if (verbosity >= VERBOSITY::STEP_ANOMALY) {                   \
+            char warn_message[1024];                                  \
+            sprintf(warn_message, __VA_ARGS__);                       \
+            std::string out = "\n-------- SIM ANOMALY!!! --------\n"; \
+            out += warn_message;                                      \
+            out += "\n\n";                                            \
+            std::cerr << out;                                         \
+        }                                                             \
     }
 
 #define DEME_STEP_METRIC(...)                      \
@@ -237,6 +259,14 @@ inline std::string pretty_format_bytes(size_t bytes) {
         if (verbosity >= VERBOSITY::STEP_DEBUG) { \
             __VA_ARGS__;                          \
         }                                         \
+    }
+
+// Jitify options include suppressing variable-not-used warnings, but since we don't use CUB block primitives, we don't
+// need std::string(CUDA_TOOLKIT_HEADERS).
+#define DEME_JITIFY_OPTIONS                                                                       \
+    {                                                                                             \
+        "-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(), \
+            "-diag-suppress=550", "-diag-suppress=177"                                            \
     }
 
 // I wasn't able to resolve a decltype problem with vector of vectors, so I have to create another macro for this kind
@@ -429,8 +459,6 @@ struct SolverFlags {
     bool useNoContactRecord = false;
     // Collect force (reduce to acc) right in the force calculation kernel
     bool useForceCollectInPlace = false;
-    // How dT should decide the max velocity in the system (true: query an inspector; false: use a constant)
-    bool maxVelQuery = true;
     // Max number of steps dT is allowed to be ahead of kT, even when auto-adapt is enabled
     unsigned int upperBoundFutureDrift = 5000;
     // (targetDriftMoreThanAvg + targetDriftMultipleOfAvg * actual_dT_steps_per_kT_step) is used to calculate contact
@@ -441,6 +469,11 @@ struct SolverFlags {
     // Whether the solver auto-update those sim params
     bool autoBinSize = true;
     bool autoUpdateFreq = true;
+
+    // The max number of average contacts per sphere has before the solver errors out. The reason why I didn't use the
+    // number of contacts for the sphere that has the most is that, well, we can have a huge sphere and it just will
+    // have more contacts. But if avg cnt is high, that means probably the contact margin is out of control now.
+    float errOutAvgSphCnts = 100.;
 };
 
 class DEMMaterial {
@@ -557,6 +590,7 @@ class DEMClumpTemplate {
         }
         mass *= (double)s * (double)s * (double)s;
         MOI *= (double)s * (double)s * (double)s * (double)s * (double)s;
+        volume *= (double)s * (double)s * (double)s;
     }
 
     void AssignName(const std::string& some_name) { m_name = some_name; }

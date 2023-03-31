@@ -32,6 +32,7 @@ __global__ void makeTriangleSandwich(deme::DEMSimParams* simParams,
         const float3 p1 = granData->relPosNode1[triID];
         const float3 p2 = granData->relPosNode2[triID];
         const float3 p3 = granData->relPosNode3[triID];
+        const deme::bodyID_t myOwnerID = granData->ownerMesh[triID];
 
         // Get the incenter of this triangle.
         // This is because we use the incenter to enalrge a triangle. See for example, this
@@ -40,13 +41,13 @@ __global__ void makeTriangleSandwich(deme::DEMSimParams* simParams,
         // Generate normal using RHR from nodes 1, 2, and 3
         float3 triNormal = face_normal<float3>(p1, p2, p3);
 
-        sandwichANode1[triID] = sandwichVertex(p1, incenter, p2 - p1, triNormal, simParams->beta);
-        sandwichANode2[triID] = sandwichVertex(p2, incenter, p3 - p2, triNormal, simParams->beta);
-        sandwichANode3[triID] = sandwichVertex(p3, incenter, p1 - p3, triNormal, simParams->beta);
+        sandwichANode1[triID] = sandwichVertex(p1, incenter, p2 - p1, triNormal, granData->marginSize[myOwnerID]);
+        sandwichANode2[triID] = sandwichVertex(p2, incenter, p3 - p2, triNormal, granData->marginSize[myOwnerID]);
+        sandwichANode3[triID] = sandwichVertex(p3, incenter, p1 - p3, triNormal, granData->marginSize[myOwnerID]);
         // The other sandwich triangle needs to have an opposite normal direction
-        sandwichBNode1[triID] = sandwichVertex(p1, incenter, p2 - p1, -triNormal, simParams->beta);
-        sandwichBNode2[triID] = sandwichVertex(p3, incenter, p1 - p3, -triNormal, simParams->beta);
-        sandwichBNode3[triID] = sandwichVertex(p2, incenter, p3 - p2, -triNormal, simParams->beta);
+        sandwichBNode1[triID] = sandwichVertex(p1, incenter, p2 - p1, -triNormal, granData->marginSize[myOwnerID]);
+        sandwichBNode2[triID] = sandwichVertex(p3, incenter, p1 - p3, -triNormal, granData->marginSize[myOwnerID]);
+        sandwichBNode3[triID] = sandwichVertex(p2, incenter, p3 - p2, -triNormal, granData->marginSize[myOwnerID]);
     }
 }
 

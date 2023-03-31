@@ -3,6 +3,10 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// A meshed ball hitting a granular bed under gravity.
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
@@ -64,10 +68,14 @@ int main() {
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
-    // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEMSim.SetCDUpdateFreq(20);
+    // Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
+    // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
+    // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(15.);
-    // The projectile can be fast... and its velocity is not accounted for by the default max vel estimator
+    // In general you don't have to worry about SetExpandSafetyAdder, unless if an entity has the property that a point
+    // on it can move much faster than its CoM. In this demo, you are dealing with a meshed ball and you in fact don't
+    // have this problem. In the Centrifuge demo though, this can be a problem since the centrifuge's CoM is not moving,
+    // but its pointwise velocity can be high, so it needs to be accounted for using this method.
     DEMSim.SetExpandSafetyAdder(5.);
     DEMSim.SetInitBinSize(4 * terrain_rad);
     DEMSim.Initialize();
@@ -102,7 +110,8 @@ int main() {
     }
 
     // Then drop the ball. I also wanted to test if changing step size method works fine here...
-    DEMSim.UpdateStepSize(0.5 * step_size);
+    step_size *= 0.5;
+    DEMSim.UpdateStepSize(step_size);
     DEMSim.ChangeFamily(2, 1);
     for (float t = 0; t < sim_time; t += frame_time) {
         std::cout << "Frame: " << currframe << std::endl;
@@ -119,6 +128,7 @@ int main() {
         DEMSim.ShowThreadCollaborationStats();
     }
 
+    DEMSim.ShowAnomalies();
     std::cout << "DEMdemo_BallDrop exiting..." << std::endl;
     return 0;
 }
