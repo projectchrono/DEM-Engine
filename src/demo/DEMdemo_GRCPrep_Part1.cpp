@@ -51,22 +51,26 @@ int main() {
     // Define the terrain particle templates
     // Calculate its mass and MOI
     float terrain_density = 2.6e3;
-    double clump_vol = 5.5886717;
-    float mass = terrain_density * clump_vol;
-    float3 MOI = make_float3(2.928, 2.6029, 3.9908) * terrain_density;
+    float volume1 = 4.2520508;
+    float mass1 = terrain_density * volume1;
+    float3 MOI1 = make_float3(1.6850426, 1.6375114, 2.1187753) * terrain_density;
+    float volume2 = 2.1670011;
+    float mass2 = terrain_density * volume2;
+    float3 MOI2 = make_float3(0.57402126, 0.60616378, 0.92890173) * terrain_density;
+    // Scale the template we just created
+    std::vector<double> scales = {0.014, 0.0075833, 0.0044, 0.003, 0.002, 0.0018333, 0.0017};
     // Then load it to system
-    std::shared_ptr<DEMClumpTemplate> my_template =
-        DEMSim.LoadClumpType(mass, MOI, GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain);
-    my_template->SetVolume(clump_vol);
-    // Make 5 copies. Note we must use DEME's duplicate method to do this, because we will make changes to the templates
-    // later, using the shared_ptrs as handles. If no duplications are made, then all the changes are going to be
-    // enforced on the same template, and in the end we'd not be able to get 5 distinct templates.
-    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates = {
-        my_template, DEMSim.Duplicate(my_template), DEMSim.Duplicate(my_template), DEMSim.Duplicate(my_template),
-        DEMSim.Duplicate(my_template)};
-    // Decide the scalings of the templates we just created (so that they are... like particles, not rocks)
-    std::vector<double> scales = {0.00063, 0.00033, 0.00022, 0.00015, 0.00009};
-    std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 20.; });
+    std::shared_ptr<DEMClumpTemplate> my_template2 =
+        DEMSim.LoadClumpType(mass2, MOI2, GetDEMEDataFile("clumps/triangular_flat_6comp.csv"), mat_type_terrain);
+    std::shared_ptr<DEMClumpTemplate> my_template1 =
+        DEMSim.LoadClumpType(mass1, MOI1, GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain);
+    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates = {my_template2,
+                                                                                DEMSim.Duplicate(my_template2),
+                                                                                my_template1,
+                                                                                DEMSim.Duplicate(my_template1),
+                                                                                DEMSim.Duplicate(my_template1),
+                                                                                DEMSim.Duplicate(my_template1),
+                                                                                DEMSim.Duplicate(my_template1)};
     // Now scale those templates
     for (int i = 0; i < scales.size(); i++) {
         std::shared_ptr<DEMClumpTemplate>& my_template = ground_particle_templates.at(i);
@@ -80,8 +84,7 @@ int main() {
     }
 
     // Instatiate particles with a probability that is in line with their weight distribution.
-    // std::vector<double> weight_perc = {0.18, 0.20, 0.14, 0.16, 0.17, 0.15};
-    std::vector<double> weight_perc = {0.2439, 0.1707, 0.1951, 0.2073, 0.1829};
+    std::vector<double> weight_perc = {0.1700, 0.2100, 0.1400, 0.1900, 0.1600, 0.0500, 0.0800};
     std::vector<double> grain_perc;
     for (int i = 0; i < scales.size(); i++) {
         grain_perc.push_back(weight_perc.at(i) / std::pow(scales.at(i), 3));
@@ -102,11 +105,13 @@ int main() {
     // Make ready for simulation
     float step_size = 1e-6;
     DEMSim.SetInitTimeStep(step_size);
-    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     // Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(15.);
+    // Error out vel is used to force the simulation to abort when something goes wrong.
+    DEMSim.SetErrorOutVelocity(15.);
     DEMSim.SetExpandSafetyMultiplier(1.2);
     DEMSim.SetInitBinSize(scales.at(2));
     DEMSim.Initialize();

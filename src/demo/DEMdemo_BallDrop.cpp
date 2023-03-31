@@ -110,7 +110,8 @@ int main() {
     }
 
     // Then drop the ball. I also wanted to test if changing step size method works fine here...
-    DEMSim.UpdateStepSize(0.5 * step_size);
+    step_size *= 0.5;
+    DEMSim.UpdateStepSize(step_size);
     DEMSim.ChangeFamily(2, 1);
     for (float t = 0; t < sim_time; t += frame_time) {
         std::cout << "Frame: " << currframe << std::endl;
@@ -127,6 +128,7 @@ int main() {
         DEMSim.ShowThreadCollaborationStats();
     }
 
+    DEMSim.ShowAnomalies();
     std::cout << "DEMdemo_BallDrop exiting..." << std::endl;
     return 0;
 }

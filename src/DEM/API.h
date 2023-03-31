@@ -271,7 +271,7 @@ class DEMSolver {
     /// @return The current update frequency.
     float GetUpdateFreq() const;
 
-    /// Set the number of threads per block in force calculation (default 256).
+    /// Set the number of threads per block in force calculation (default 512).
     void SetForceCalcThreadsPerBlock(unsigned int nTh) { dT->DT_FORCE_CALC_NTHREADS_PER_BLOCK = nTh; }
 
     /// Load possible clump types into the API-level cache
@@ -923,7 +923,7 @@ class DEMSolver {
     // If the solver sees there are more triangles in a bin than a this `maximum', it errors out
     unsigned int threshold_too_many_tri_in_bin = 32768;
     // The max velocity at which the simulation should error out
-    float threshold_error_out_vel = 5e4;
+    float threshold_error_out_vel = 1e3;
     // Whether to auto-adjust the bin size and the max update frequency
     bool auto_adjust_bin_size = true;
     bool auto_adjust_update_freq = true;
@@ -945,7 +945,7 @@ class DEMSolver {
     bool collect_force_in_force_kernel = false;
 
     // Error-out avg num contacts
-    float threshold_error_out_num_cnts = 100.;
+    float threshold_error_out_num_cnts = 30.;
 
     // Integrator type
     TIME_INTEGRATOR m_integrator = TIME_INTEGRATOR::EXTENDED_TAYLOR;

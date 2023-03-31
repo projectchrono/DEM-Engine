@@ -75,7 +75,6 @@ int main() {
                      50. * std::pow(scaling, 5);
         std::vector<float> radii;
         std::vector<float3> relPos;
-        std::vector<std::shared_ptr<DEMMaterial>> mat;
 
         // randomly generate clump template configurations
         // the relPos of a sphere is always seeded from one of the already-generated sphere
@@ -94,7 +93,6 @@ int main() {
             }
             tmp += seed_pos;
             relPos.push_back(tmp);
-            mat.push_back(mat_type_walls);
 
             // seed relPos from one of the previously generated spheres
             int choose_from = rand() % (j + 1);

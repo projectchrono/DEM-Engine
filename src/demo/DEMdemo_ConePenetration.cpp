@@ -63,7 +63,7 @@ int main() {
     float3 MOI = make_float3(2.928, 2.6029, 3.9908) * terrain_density;
     // Then load it to system
     std::shared_ptr<DEMClumpTemplate> my_template =
-        DEMSim.LoadClumpType(mass, MOI, GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain);
+        DEMSim.LoadClumpType(mass, MOI, GetDEMEDataFile("clumps/3_clump.csv"), mat_type_terrain);
     my_template->SetVolume(clump_vol);
     // Decide the scalings of the templates we just created (so that they are... like particles, not rocks)
     double scale = 0.0044;

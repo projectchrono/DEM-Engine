@@ -8,6 +8,7 @@
 // are supposed to be used for extraterrestrial rover mobility simulations. You
 // have to finish Part1 first, then run this one. In Part2, we copy-paste particles
 // generated and settled in Part1 and form a thicker bed.
+// WARNING: This is a huge simulation with millions of particles.
 // =============================================================================
 
 #include <core/ApiVersion.h>
@@ -50,22 +51,26 @@ int main() {
     // Define the terrain particle templates
     // Calculate its mass and MOI
     float terrain_density = 2.6e3;
-    double clump_vol = 5.5886717;
-    float mass = terrain_density * clump_vol;
-    float3 MOI = make_float3(2.928, 2.6029, 3.9908) * terrain_density;
+    float volume1 = 4.2520508;
+    float mass1 = terrain_density * volume1;
+    float3 MOI1 = make_float3(1.6850426, 1.6375114, 2.1187753) * terrain_density;
+    float volume2 = 2.1670011;
+    float mass2 = terrain_density * volume2;
+    float3 MOI2 = make_float3(0.57402126, 0.60616378, 0.92890173) * terrain_density;
+    // Scale the template we just created
+    std::vector<double> scales = {0.014, 0.0075833, 0.0044, 0.003, 0.002, 0.0018333, 0.0017};
     // Then load it to system
-    std::shared_ptr<DEMClumpTemplate> my_template =
-        DEMSim.LoadClumpType(mass, MOI, GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain);
-    my_template->SetVolume(clump_vol);
-    // Make 5 copies. Note we must use DEME's duplicate method to do this, because we will make changes to the templates
-    // later, using the shared_ptrs as handles. If no duplications are made, then all the changes are going to be
-    // enforced on the same template, and in the end we'd not be able to get 5 distinct templates.
-    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates = {
-        my_template, DEMSim.Duplicate(my_template), DEMSim.Duplicate(my_template), DEMSim.Duplicate(my_template),
-        DEMSim.Duplicate(my_template)};
-    // Decide the scalings of the templates we just created (so that they are... like particles, not rocks)
-    std::vector<double> scales = {0.00063, 0.00033, 0.00022, 0.00015, 0.00009};
-    std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 20.; });
+    std::shared_ptr<DEMClumpTemplate> my_template2 =
+        DEMSim.LoadClumpType(mass2, MOI2, GetDEMEDataFile("clumps/triangular_flat_6comp.csv"), mat_type_terrain);
+    std::shared_ptr<DEMClumpTemplate> my_template1 =
+        DEMSim.LoadClumpType(mass1, MOI1, GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain);
+    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates = {my_template2,
+                                                                                DEMSim.Duplicate(my_template2),
+                                                                                my_template1,
+                                                                                DEMSim.Duplicate(my_template1),
+                                                                                DEMSim.Duplicate(my_template1),
+                                                                                DEMSim.Duplicate(my_template1),
+                                                                                DEMSim.Duplicate(my_template1)};
     // Now scale those templates
     for (int i = 0; i < scales.size(); i++) {
         std::shared_ptr<DEMClumpTemplate>& my_template = ground_particle_templates.at(i);
@@ -139,7 +144,7 @@ int main() {
     std::for_each(inv_xyz.begin(), inv_xyz.end(), [](float3& xyz) { xyz.z += 0.2; });
     inv_batch.SetPos(inv_xyz);
     DEMSim.AddClumps(inv_batch);
-    // Add another 0 layers of such graular bed
+    // Add more layers of such graular bed
     for (int i = 0; i < 1; i++) {
         DEMClumpBatch another_batch = base_batch;
         std::for_each(in_xyz.begin(), in_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
@@ -169,10 +174,11 @@ int main() {
     auto compressor_tracker = DEMSim.Track(compressor);
 
     // Make ready for simulation
-    float step_size = 2e-6;
+    float step_size = 1e-6;
     DEMSim.SetInitTimeStep(step_size);
-    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
-    DEMSim.SetMaxVelocity(35.);
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
+    // Error out vel is used to force the simulation to abort when something goes wrong.
+    DEMSim.SetErrorOutVelocity(15.);
     DEMSim.SetExpandSafetyMultiplier(1.2);
     DEMSim.SetInitBinSize(scales.at(2));
     DEMSim.Initialize();
@@ -209,7 +215,7 @@ int main() {
     double compress_time = 0.3;
     double now_z = max_z_finder->GetValue();
     compressor_tracker->SetPos(make_float3(0, 0, now_z));
-    double compressor_final_dist = (now_z > -0.4) ? now_z - (-0.4) : 0.0;
+    double compressor_final_dist = (now_z > -0.37) ? now_z - (-0.37) : 0.0;
     double compressor_v = compressor_final_dist / compress_time;
     for (double t = 0; t < compress_time; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {

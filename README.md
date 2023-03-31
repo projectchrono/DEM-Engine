@@ -71,11 +71,11 @@ Some additional troubleshooting tips for generating the project:
 
 - If some dependencies such as CUB are not found, then you probably need to manually set `$PATH` and `$LD_LIBRARY_PATH`. An example is given below for a specific version of CUDA, note it may be different on your machine or cluster. You should also inspect if `nvidia-smi` and `nvcc --version` give correct returns.
 ```
-export CPATH=/usr/local/cuda-12.1/targets/x86_64-linux/include${CPATH:+:${CPATH}}
-export PATH=/usr/local/cuda-12.1/bin${PATH:+:${PATH}}
-export PATH=/usr/local/cuda-12.1/lib64/cmake${PATH:+:${PATH}}
-export LD_LIBRARY_PATH=/usr/local/cuda-12.1/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-export CUDA_HOME=/usr/local/cuda-12.1
+export CPATH=/usr/local/cuda-12.0/targets/x86_64-linux/include${CPATH:+:${CPATH}}
+export PATH=/usr/local/cuda-12.0/bin${PATH:+:${PATH}}
+export PATH=/usr/local/cuda-12.0/lib64/cmake${PATH:+:${PATH}}
+export LD_LIBRARY_PATH=/usr/local/cuda-12.0/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export CUDA_HOME=/usr/local/cuda-12.0
 ```
 
 Finally, build the project.
@@ -96,11 +96,15 @@ After the build process is done, you can start trying out the demos.
 - A place to learn how prescribed motions work in this package, using either analytical boundaries or particle-represented boundaries: `./src/demo/DEMdemo_Centrifuge` and `./src/demo/DEMdemo_Sieve`.
 - A fun game-of-life simulator built with the package, showing the flexibility in terms of how you can use this tool: `./src/demo/DEMdemo_GameOfLife`.
 - A few representative engineering experiments reproduced in DEM simulations, which potentially serve as starting points for your own DEM scripts: `/src/demo/DEMdemo_BallDrop`, `./src/demo/DEMdemo_ConePenetration`, `/src/demo/DEMdemo_Sieve`, `./src/demo/DEMdemo_Repose`.
-- `./src/demo/DEMdemo_WheelDP` shows how to load a checkpointed configuration file to instantly generate a settled granular terrain, then run a drawbar-pull test on it. This demo therefore requires you to first finish the three GRCPrep demos to obtain the terrain checkpoint file. The granular terrain in these demos features DEM particles with a variety of sizes and shapes.
+- `./src/demo/DEMdemo_WheelDP` shows how to load a checkpointed configuration file to instantly generate a settled granular terrain, then run a drawbar-pull test on it. This demo therefore requires you to first finish the two GRCPrep demos to obtain the terrain checkpoint file. The granular terrain in these demos features DEM particles with a variety of sizes and shapes.
 - More advanced examples showing the usage of the custom additional properties (called _wildcards_) that you can associate with the simulation entities, and use them in the force model and/or change them in simulation then deposit them into the output files: `./src/demo/DEMdemo_Indentation`.
 - It is a good idea to read the comment lines at the top of the demo files to understand what they each does.
 
-The documentation website for _DEME_ is being constructed.
+[The documentations for _DEME_](https://api.projectchrono.org/) are hosted on Chrono website (work in progress).
+
+Some additional troubleshooting tips for running the demos:
+
+- If errors similar to `CUDA_ERROR_UNSUPPORTED_PTX_VERSION` are encountered while you run the demos, or (rarely) the simulations proceed without detecting any contacts, then please make sure the CUDA installation is the same version as when the code is compiled.
 
 ### Limitations
 
@@ -123,7 +127,7 @@ Assuming you know how to build `chrono-projects` linking against a Chrono instal
 
 - Set `ENABLE_DEME_TESTS` to `ON`;
 - Set `ChPF_DIR` when prompted. It should be in `<your_install_dir>/lib64/cmake/ChPF`;
-- Set `DEME_DIR` when prompted. It should be in `<your_install_dir>lib64/cmake/DEME`.
+- Set `DEME_DIR` when prompted. It should be in `<your_install_dir>/lib64/cmake/DEME`.
 
 Then build the project and you should be able to run the demo scripts that demonstrate the co-simulation between _DEME_ and Chrono.
 

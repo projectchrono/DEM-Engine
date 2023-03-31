@@ -185,6 +185,7 @@ int main() {
     DEMSim.ClearThreadCollaborationStats();
 
     DEMSim.ShowTimingStats();
+    DEMSim.ShowAnomalies();
 
     std::cout << "DEMdemo_Centrifuge exiting..." << std::endl;
     return 0;
