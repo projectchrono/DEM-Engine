@@ -110,7 +110,7 @@ int main() {
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
 
-    float sample_halfheight = 0.15;
+    float sample_halfheight = 0.18;
     float sample_halfwidth_x = (world_y_size * 0.96) / 2;
     float sample_halfwidth_y = (world_y_size * 0.96) / 2;
     float offset_z = bottom + sample_halfheight + 0.15;
