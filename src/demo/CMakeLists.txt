@@ -29,7 +29,7 @@ SET(DEMOS
 		DEMdemo_WheelDP
 		DEMdemo_WheelSlopeSlip
 		DEMdemo_Indentation
-		DEMdemo_Repose_Granular
+		DEMdemo_Granular_Repose
 )
 
 # ------------------------------------------------------------------------------
