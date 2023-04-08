@@ -149,6 +149,7 @@ __global__ void getNumberOfSphTriContactsEachBin(deme::DEMSimParams* simParams,
     // __shared__ typename BlockReduceT::TempStorage temp_storage;
 
     const deme::trianglesBinTouches_t nTriInBin = numTrianglesBinTouches[blockIdx.x];
+    const deme::binID_t binID = activeBinIDsForTri[blockIdx.x];
     if (threadIdx.x == 0 && nTriInBin > simParams->errOutBinTriNum) {
         DEME_ABORT_KERNEL(
             "Bin %u contains %u triangular mesh facets, exceeding maximum allowance (%u).\nIf you want the solver to "
@@ -156,7 +157,6 @@ __global__ void getNumberOfSphTriContactsEachBin(deme::DEMSimParams* simParams,
             blockIdx.x, nTriInBin, simParams->errOutBinTriNum);
     }
     const deme::spheresBinTouches_t myThreadID = threadIdx.x;
-    const deme::binID_t binID = activeBinIDsForTri[blockIdx.x];
     // But what is the index of the same binID in array activeBinIDs? Well, mapTriActBinToSphActBin comes to rescure.
     const deme::binID_t indForAcqSphInfo = mapTriActBinToSphActBin[blockIdx.x];
     // If it is not an active bin from the perspective of the spheres, then we can move on

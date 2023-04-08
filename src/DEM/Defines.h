@@ -291,6 +291,8 @@ struct DEMDataDT {
 
     // Family mask
     notStupidBool_t* familyMasks;
+    // Extra margin size
+    float* familyExtraMarginSize;
 
     // Some dT's own work array pointers
     float3* contactForces;
@@ -389,6 +391,8 @@ struct DEMDataKT {
 
     // Family mask
     notStupidBool_t* familyMasks;
+    // Extra margin size
+    float* familyExtraMarginSize;
 
     // The offset info that indexes into the template arrays
     bodyID_t* ownerClumpBody;
