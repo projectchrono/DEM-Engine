@@ -27,6 +27,78 @@
 #include <cassert>
 
 namespace deme {
+
+// =============================================================================
+// SOME HOST-SIDE CONSTANTS
+// =============================================================================
+
+const std::string DEME_NUM_CLUMP_NAME = std::string("NULL");
+const std::string OUTPUT_FILE_X_COL_NAME = std::string("X");
+const std::string OUTPUT_FILE_Y_COL_NAME = std::string("Y");
+const std::string OUTPUT_FILE_Z_COL_NAME = std::string("Z");
+const std::string OUTPUT_FILE_R_COL_NAME = std::string("r");
+const std::string OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
+const std::filesystem::path USER_SCRIPT_PATH = RuntimeDataHelper::data_path / "kernel" / "DEMUserScripts";
+// Column names for contact pair output file
+const std::string OUTPUT_FILE_OWNER_1_NAME = std::string("A");
+const std::string OUTPUT_FILE_OWNER_2_NAME = std::string("B");
+const std::string OUTPUT_FILE_COMP_1_NAME = std::string("compA");
+const std::string OUTPUT_FILE_COMP_2_NAME = std::string("compB");
+const std::string OUTPUT_FILE_GEO_ID_1_NAME = std::string("geoA");
+const std::string OUTPUT_FILE_GEO_ID_2_NAME = std::string("geoB");
+const std::string OUTPUT_FILE_OWNER_NICKNAME_1_NAME = std::string("nameA");
+const std::string OUTPUT_FILE_OWNER_NICKNAME_2_NAME = std::string("nameB");
+const std::string OUTPUT_FILE_CNT_TYPE_NAME = std::string("contact_type");
+const std::string OUTPUT_FILE_FORCE_X_NAME = std::string("f_x");
+const std::string OUTPUT_FILE_FORCE_Y_NAME = std::string("f_y");
+const std::string OUTPUT_FILE_FORCE_Z_NAME = std::string("f_z");
+const std::string OUTPUT_FILE_TOF_X_NAME = std::string("tof_x");  // TOF means torque_only_force
+const std::string OUTPUT_FILE_TOF_Y_NAME = std::string("tof_y");
+const std::string OUTPUT_FILE_TOF_Z_NAME = std::string("tof_z");
+const std::string OUTPUT_FILE_NORMAL_X_NAME = std::string("n_x");
+const std::string OUTPUT_FILE_NORMAL_Y_NAME = std::string("n_y");
+const std::string OUTPUT_FILE_NORMAL_Z_NAME = std::string("n_z");
+const std::string OUTPUT_FILE_SPH_SPH_CONTACT_NAME = std::string("SS");
+const std::string OUTPUT_FILE_SPH_ANAL_CONTACT_NAME = std::string("SA");
+const std::string OUTPUT_FILE_SPH_MESH_CONTACT_NAME = std::string("SM");
+const std::set<std::string> CNT_FILE_KNOWN_COL_NAMES = {OUTPUT_FILE_OWNER_1_NAME,
+                                                        OUTPUT_FILE_OWNER_2_NAME,
+                                                        OUTPUT_FILE_COMP_1_NAME,
+                                                        OUTPUT_FILE_COMP_2_NAME,
+                                                        OUTPUT_FILE_GEO_ID_1_NAME,
+                                                        OUTPUT_FILE_GEO_ID_2_NAME,
+                                                        OUTPUT_FILE_OWNER_NICKNAME_1_NAME,
+                                                        OUTPUT_FILE_OWNER_NICKNAME_2_NAME,
+                                                        OUTPUT_FILE_CNT_TYPE_NAME,
+                                                        OUTPUT_FILE_FORCE_X_NAME,
+                                                        OUTPUT_FILE_FORCE_Y_NAME,
+                                                        OUTPUT_FILE_FORCE_Z_NAME,
+                                                        OUTPUT_FILE_TOF_X_NAME,
+                                                        OUTPUT_FILE_TOF_Y_NAME,
+                                                        OUTPUT_FILE_TOF_Z_NAME,
+                                                        OUTPUT_FILE_NORMAL_X_NAME,
+                                                        OUTPUT_FILE_NORMAL_Y_NAME,
+                                                        OUTPUT_FILE_NORMAL_Z_NAME,
+                                                        OUTPUT_FILE_SPH_SPH_CONTACT_NAME,
+                                                        OUTPUT_FILE_SPH_ANAL_CONTACT_NAME,
+                                                        OUTPUT_FILE_SPH_MESH_CONTACT_NAME};
+
+// Map contact type identifier to their names
+const std::unordered_map<contact_t, std::string> contact_type_out_name_map = {
+    {NOT_A_CONTACT, "fake"},
+    {SPHERE_SPHERE_CONTACT, OUTPUT_FILE_SPH_SPH_CONTACT_NAME},
+    {SPHERE_MESH_CONTACT, OUTPUT_FILE_SPH_MESH_CONTACT_NAME},
+    {SPHERE_PLANE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
+    {SPHERE_PLATE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
+    {SPHERE_CYL_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
+    {SPHERE_CONE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME}};
+
+// Possible force model ingredients. This map is used to ensure we don't double-add them.
+const std::unordered_map<std::string, bool> force_kernel_ingredient_stats = {
+    {"ts", false},      {"time", false},    {"AOwnerFamily", true}, {"BOwnerFamily", true},
+    {"ALinVel", false}, {"BLinVel", false}, {"ARotVel", false},     {"BRotVel", false},
+    {"AOwner", false},  {"BOwner", false},  {"AOwnerMOI", false},   {"BOwnerMOI", false}};
+
 // Structs defined here will be used by some host classes in DEM.
 // NOTE: Data structs here need to be those complex ones (such as needing to include ManagedAllocator.hpp), which may
 // not be jitifiable.
@@ -528,7 +600,7 @@ class DEMClumpTemplate {
     // Whether this is a big clump (not used; jitifiability is determined automatically)
     bool isBigClump = false;
     // A name given by the user. It will be outputted to file to indicate the type of a clump.
-    std::string m_name = "NULL";
+    std::string m_name = DEME_NUM_CLUMP_NAME;
     // The volume of this type of clump.
     //// TODO: Add a method to automatically compute its volume
     float volume = 0.0;
@@ -757,76 +829,6 @@ struct DEMTrackedObj {
     // If it is a tracked mesh, then this is the number of triangle facets that it has
     size_t nFacets;
 };
-
-// =============================================================================
-// SOME HOST-SIDE CONSTANTS
-// =============================================================================
-
-const std::string OUTPUT_FILE_X_COL_NAME = std::string("X");
-const std::string OUTPUT_FILE_Y_COL_NAME = std::string("Y");
-const std::string OUTPUT_FILE_Z_COL_NAME = std::string("Z");
-const std::string OUTPUT_FILE_R_COL_NAME = std::string("r");
-const std::string OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
-const std::filesystem::path USER_SCRIPT_PATH = RuntimeDataHelper::data_path / "kernel" / "DEMUserScripts";
-// Column names for contact pair output file
-const std::string OUTPUT_FILE_OWNER_1_NAME = std::string("A");
-const std::string OUTPUT_FILE_OWNER_2_NAME = std::string("B");
-const std::string OUTPUT_FILE_COMP_1_NAME = std::string("compA");
-const std::string OUTPUT_FILE_COMP_2_NAME = std::string("compB");
-const std::string OUTPUT_FILE_GEO_ID_1_NAME = std::string("geoA");
-const std::string OUTPUT_FILE_GEO_ID_2_NAME = std::string("geoB");
-const std::string OUTPUT_FILE_OWNER_NICKNAME_1_NAME = std::string("nameA");
-const std::string OUTPUT_FILE_OWNER_NICKNAME_2_NAME = std::string("nameB");
-const std::string OUTPUT_FILE_CNT_TYPE_NAME = std::string("contact_type");
-const std::string OUTPUT_FILE_FORCE_X_NAME = std::string("f_x");
-const std::string OUTPUT_FILE_FORCE_Y_NAME = std::string("f_y");
-const std::string OUTPUT_FILE_FORCE_Z_NAME = std::string("f_z");
-const std::string OUTPUT_FILE_TOF_X_NAME = std::string("tof_x");  // TOF means torque_only_force
-const std::string OUTPUT_FILE_TOF_Y_NAME = std::string("tof_y");
-const std::string OUTPUT_FILE_TOF_Z_NAME = std::string("tof_z");
-const std::string OUTPUT_FILE_NORMAL_X_NAME = std::string("n_x");
-const std::string OUTPUT_FILE_NORMAL_Y_NAME = std::string("n_y");
-const std::string OUTPUT_FILE_NORMAL_Z_NAME = std::string("n_z");
-const std::string OUTPUT_FILE_SPH_SPH_CONTACT_NAME = std::string("SS");
-const std::string OUTPUT_FILE_SPH_ANAL_CONTACT_NAME = std::string("SA");
-const std::string OUTPUT_FILE_SPH_MESH_CONTACT_NAME = std::string("SM");
-const std::set<std::string> CNT_FILE_KNOWN_COL_NAMES = {OUTPUT_FILE_OWNER_1_NAME,
-                                                        OUTPUT_FILE_OWNER_2_NAME,
-                                                        OUTPUT_FILE_COMP_1_NAME,
-                                                        OUTPUT_FILE_COMP_2_NAME,
-                                                        OUTPUT_FILE_GEO_ID_1_NAME,
-                                                        OUTPUT_FILE_GEO_ID_2_NAME,
-                                                        OUTPUT_FILE_OWNER_NICKNAME_1_NAME,
-                                                        OUTPUT_FILE_OWNER_NICKNAME_2_NAME,
-                                                        OUTPUT_FILE_CNT_TYPE_NAME,
-                                                        OUTPUT_FILE_FORCE_X_NAME,
-                                                        OUTPUT_FILE_FORCE_Y_NAME,
-                                                        OUTPUT_FILE_FORCE_Z_NAME,
-                                                        OUTPUT_FILE_TOF_X_NAME,
-                                                        OUTPUT_FILE_TOF_Y_NAME,
-                                                        OUTPUT_FILE_TOF_Z_NAME,
-                                                        OUTPUT_FILE_NORMAL_X_NAME,
-                                                        OUTPUT_FILE_NORMAL_Y_NAME,
-                                                        OUTPUT_FILE_NORMAL_Z_NAME,
-                                                        OUTPUT_FILE_SPH_SPH_CONTACT_NAME,
-                                                        OUTPUT_FILE_SPH_ANAL_CONTACT_NAME,
-                                                        OUTPUT_FILE_SPH_MESH_CONTACT_NAME};
-
-// Map contact type identifier to their names
-const std::unordered_map<contact_t, std::string> contact_type_out_name_map = {
-    {NOT_A_CONTACT, "fake"},
-    {SPHERE_SPHERE_CONTACT, OUTPUT_FILE_SPH_SPH_CONTACT_NAME},
-    {SPHERE_MESH_CONTACT, OUTPUT_FILE_SPH_MESH_CONTACT_NAME},
-    {SPHERE_PLANE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
-    {SPHERE_PLATE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
-    {SPHERE_CYL_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
-    {SPHERE_CONE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME}};
-
-// Possible force model ingredients. This map is used to ensure we don't double-add them.
-const std::unordered_map<std::string, bool> force_kernel_ingredient_stats = {
-    {"ts", false},      {"time", false},    {"AOwnerFamily", false}, {"BOwnerFamily", false},
-    {"ALinVel", false}, {"BLinVel", false}, {"ARotVel", false},      {"BRotVel", false},
-    {"AOwner", false},  {"BOwner", false},  {"AOwnerMOI", false},    {"BOwnerMOI", false}};
 
 }  // namespace deme
 

@@ -97,7 +97,8 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
     // __shared__ typename BlockReduceT::TempStorage temp_storage;
 
     const deme::spheresBinTouches_t nBodiesInBin = numSpheresBinTouches[blockIdx.x];
-    if (nBodiesInBin <= 1) {
+    const deme::binID_t binID = activeBinIDs[blockIdx.x];
+    if (nBodiesInBin <= 1 || binID == deme::NULL_BINID) {
         // Important: mark 0 contacts before exiting
         if (threadIdx.x == 0) {
             numContactsInEachBin[blockIdx.x] = 0;
@@ -110,7 +111,6 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
             "despite this, set allowance higher via SetMaxSphereInBin before simulation starts.",
             blockIdx.x, nBodiesInBin, simParams->errOutBinSphNum);
     }
-    const deme::binID_t binID = activeBinIDs[blockIdx.x];
     const deme::spheresBinTouches_t myThreadID = threadIdx.x;
     const deme::binSphereTouchPairs_t thisBodiesTableEntry = sphereIDsLookUpTable[blockIdx.x];
     if (myThreadID == 0)
@@ -272,12 +272,12 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
     __shared__ deme::binContactPairs_t blockPairCnt;
 
     const deme::spheresBinTouches_t nBodiesInBin = numSpheresBinTouches[blockIdx.x];
-    if (nBodiesInBin <= 1) {
+    const deme::binID_t binID = activeBinIDs[blockIdx.x];
+    if (nBodiesInBin <= 1 || binID == deme::NULL_BINID) {
         return;
     }
     // No need to check max spheres one more time
 
-    const deme::binID_t binID = activeBinIDs[blockIdx.x];
     const deme::spheresBinTouches_t myThreadID = threadIdx.x;
     const deme::binSphereTouchPairs_t thisBodiesTableEntry = sphereIDsLookUpTable[blockIdx.x];
     if (myThreadID == 0)

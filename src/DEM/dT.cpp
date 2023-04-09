@@ -50,6 +50,7 @@ void DEMDynamicThread::packDataPointers() {
     granData->idGeometryB = idGeometryB.data();
     granData->contactType = contactType.data();
     granData->familyMasks = familyMaskMatrix.data();
+    granData->familyExtraMarginSize = familyExtraMarginSize.data();
 
     // granData->idGeometryA_buffer = idGeometryA_buffer.data();
     // granData->idGeometryB_buffer = idGeometryB_buffer.data();
@@ -2180,6 +2181,10 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     }
 
     return res;
+}
+
+void DEMDynamicThread::initAllocation() {
+    DEME_TRACKED_RESIZE_DEBUGPRINT(familyExtraMarginSize, NUM_AVAL_FAMILIES, "familyExtraMarginSize", 0);
 }
 
 void DEMDynamicThread::deallocateEverything() {

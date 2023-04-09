@@ -244,8 +244,11 @@ inline __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
                                                       T1& CPY,
                                                       T1& CPZ) {
     T1 centerDist2 = distSquared<T1>(XA, YA, ZA, XB, YB, ZB);
+    deme::contact_t contactType;
     if (centerDist2 > (radA + radB) * (radA + radB)) {
-        return deme::NOT_A_CONTACT;
+        contactType = deme::NOT_A_CONTACT;
+    } else {
+        contactType = deme::SPHERE_SPHERE_CONTACT;
     }
     // If getting this far, then 2 spheres have an intersection, let's calculate the intersection point
     float B2AVecX = XA - XB;
@@ -257,7 +260,7 @@ inline __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
     CPX = XB + (radB - halfOverlapDepth) * B2AVecX;
     CPY = YB + (radB - halfOverlapDepth) * B2AVecY;
     CPZ = ZB + (radB - halfOverlapDepth) * B2AVecZ;
-    return deme::SPHERE_SPHERE_CONTACT;
+    return contactType;
 }
 
 /**
@@ -286,8 +289,11 @@ inline __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
                                                       T2& normalZ,
                                                       T1& overlapDepth) {
     T1 centerDist2 = distSquared<T1>(XA, YA, ZA, XB, YB, ZB);
+    deme::contact_t contactType;
     if (centerDist2 > (radA + radB) * (radA + radB)) {
-        return deme::NOT_A_CONTACT;
+        contactType = deme::NOT_A_CONTACT;
+    } else {
+        contactType = deme::SPHERE_SPHERE_CONTACT;
     }
     // If getting this far, then 2 spheres have an intersection, let's calculate the intersection point
     normalX = XA - XB;
@@ -299,7 +305,7 @@ inline __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
     CPX = XB + (radB - overlapDepth / (T1)2) * normalX;
     CPY = YB + (radB - overlapDepth / (T1)2) * normalY;
     CPZ = ZB + (radB - overlapDepth / (T1)2) * normalZ;
-    return deme::SPHERE_SPHERE_CONTACT;
+    return contactType;
 }
 
 // Compute the binID for a point in space
@@ -314,8 +320,13 @@ getPointBinID(const double& X, const double& Y, const double& Z, const double& b
 
 // Compute the binID using its indices in X, Y and Z directions
 template <typename T1>
-inline __device__ T1 binIDFrom3Indices(const T1& X, const T1& Y, const T1& Z, const T1& nbX, const T1& nbY) {
-    return X + Y * nbX + Z * nbX * nbY;
+inline __device__ T1
+binIDFrom3Indices(const T1& X, const T1& Y, const T1& Z, const T1& nbX, const T1& nbY, const T1& nbZ) {
+    if ((X < nbX) && (Y < nbY) && (Z < nbZ)) {
+        return X + Y * nbX + Z * nbX * nbY;
+    } else {
+        return deme::NULL_BINID;
+    }
 }
 
 // This utility function returns the normal to the triangular face defined by
@@ -421,6 +432,7 @@ inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
                                                            const float& size3B,
                                                            const float& normal_sign,
                                                            const float& beta4Entity) {
+    deme::contact_t contactType;
     switch (typeB) {
         case (deme::ANAL_OBJ_TYPE_PLANE): {
             const T1 plane2sph = A - B;
@@ -428,9 +440,11 @@ inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             const double dist = dot(plane2sph, dirB);
             const double overlapDepth = (radA + beta4Entity - dist);
             if (overlapDepth < 0.0) {
-                return deme::NOT_A_CONTACT;
+                contactType = deme::NOT_A_CONTACT;
+            } else {
+                contactType = deme::SPHERE_PLANE_CONTACT;
             }
-            return deme::SPHERE_PLANE_CONTACT;
+            return contactType;
         }
         case (deme::ANAL_OBJ_TYPE_PLATE): {
             return deme::NOT_A_CONTACT;
@@ -444,9 +458,11 @@ inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             const double dist_delta_r = length(sph2cyl);
             const double overlapDepth = radA - abs(size1B - dist_delta_r - beta4Entity);
             if (overlapDepth <= DEME_TINY_FLOAT) {
-                return deme::NOT_A_CONTACT;
+                contactType = deme::NOT_A_CONTACT;
+            } else {
+                contactType = deme::SPHERE_CYL_CONTACT;
             }
-            return deme::SPHERE_CYL_CONTACT;
+            return contactType;
         }
         default:
             return deme::NOT_A_CONTACT;
@@ -468,6 +484,7 @@ inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
                                                            T1& CP,
                                                            float3& cntNormal,
                                                            T3& overlapDepth) {
+    deme::contact_t contactType;
     switch (typeB) {
         case (deme::ANAL_OBJ_TYPE_PLANE): {
             const T1 plane2sph = A - B;
@@ -475,13 +492,15 @@ inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             const T3 dist = dot(plane2sph, dirB);
             overlapDepth = (radA + beta4Entity - dist);
             if (overlapDepth < 0.0) {
-                return deme::NOT_A_CONTACT;
+                contactType = deme::NOT_A_CONTACT;
+            } else {
+                contactType = deme::SPHERE_PLANE_CONTACT;
             }
             // From sphere center, go along negative plane normal for (dist + overlapDepth / 2)
             CP = A - to_real3<float3, T1>(dirB * (dist + overlapDepth / 2.0));
             // Contact normal (B to A) is the same as plane normal
             cntNormal = dirB;
-            return deme::SPHERE_PLANE_CONTACT;
+            return contactType;
         }
         case (deme::ANAL_OBJ_TYPE_PLATE): {
             return deme::NOT_A_CONTACT;
@@ -495,12 +514,14 @@ inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             const T3 dist_delta_r = length(sph2cyl);
             overlapDepth = radA - abs(size1B - dist_delta_r - beta4Entity);
             if (overlapDepth <= DEME_TINY_FLOAT) {
-                return deme::NOT_A_CONTACT;
+                contactType = deme::NOT_A_CONTACT;
+            } else {
+                contactType = deme::SPHERE_CYL_CONTACT;
             }
             // dist_delta_r is 0 only when cylinder is thinner than sphere rad...
             cntNormal = to_real3<T1, float3>(normal_sign / dist_delta_r * sph2cyl);
             CP = A - to_real3<float3, T1>(cntNormal * (radA - overlapDepth / 2.0));
-            return deme::SPHERE_CYL_CONTACT;
+            return contactType;
         }
         default:
             return deme::NOT_A_CONTACT;
