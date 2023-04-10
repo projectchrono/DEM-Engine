@@ -182,7 +182,7 @@ __global__ void populateBinTriangleTouchingPairs(deme::DEMSimParams* simParams,
                     if (check_TriangleBoxOverlap(BinCenter, BinHalfSizes, vA1, vB1, vC1) ||
                         check_TriangleBoxOverlap(BinCenter, BinHalfSizes, vA2, vB2, vC2)) {
                         binIDsEachTriTouches[myReportOffset] =
-                            binIDFrom3Indices<deme::binID_t>(i, j, k, simParams->nbX, simParams->nbY);
+                            binIDFrom3Indices<deme::binID_t>(i, j, k, simParams->nbX, simParams->nbY, simParams->nbZ);
                         triIDsEachBinTouches[myReportOffset] = triID;
                         myReportOffset++;
                         if (myReportOffset >= myReportOffset_end) {

@@ -263,6 +263,10 @@ class DEMDynamicThread {
     // A long array (usually 32640 elements) registering whether between 2 families there should be contacts
     std::vector<notStupidBool_t, ManagedAllocator<notStupidBool_t>> familyMaskMatrix;
 
+    // The amount of contact margin that each family should add to its associated contact geometries. Default is 0, and
+    // that means geometries should be considered in contact when they are physically in contact.
+    std::vector<float, ManagedAllocator<float>> familyExtraMarginSize;
+
     // dT's copy of "clump template and their names" map
     std::unordered_map<unsigned int, std::string> templateNumNameMap;
 
@@ -291,6 +295,9 @@ class DEMDynamicThread {
 
         // Launch a worker thread bound to this instance
         th = std::move(std::thread([this]() { this->workerThread(); }));
+
+        // Allocate arrays whose length does not depend on user inputs
+        initAllocation();
     }
     ~DEMDynamicThread() {
         // std::cout << "Dynamic thread closing..." << std::endl;
@@ -596,6 +603,8 @@ class DEMDynamicThread {
 
     // Deallocate everything
     void deallocateEverything();
+    // The dT-side allocations that can be done at initialization time
+    void initAllocation();
 
     // Just-in-time compiled kernels
     std::shared_ptr<jitify::Program> prep_force_kernels;

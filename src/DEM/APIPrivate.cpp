@@ -469,6 +469,7 @@ void DEMSolver::reportInitStats() const {
     DEME_INFO("The length unit in this simulation is: %.17g", l);
     DEME_INFO("The edge length of a voxel: %.17g", m_voxelSize);
 
+    DEME_INFO("The initial time step size: %.7g", m_ts_size);
     DEME_INFO("The initial edge length of a bin: %.17g", m_binSize);
     DEME_INFO("The initial number of bins: %zu", m_num_bins);
 
@@ -1178,6 +1179,10 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
                 ingredient_acquisition_B = " ", owner_wildcard_write_back = " ", cnt_wildcard_write_back = " ",
                 cnt_wildcard_destroy_record = " ";
     scan_force_model_ingr(added_ingredients, model);
+    // As our numerical method stands now, AOwnerFamily and BOwnerFamily are always needed.
+    add_force_model_ingr(added_ingredients, "AOwnerFamily");
+    add_force_model_ingr(added_ingredients, "BOwnerFamily");
+    // If we collect force in force-calc kernel, these are needed...
     if (collect_force_in_force_kernel) {
         add_force_model_ingr(added_ingredients, "AOwner");
         add_force_model_ingr(added_ingredients, "BOwner");

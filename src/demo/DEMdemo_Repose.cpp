@@ -145,7 +145,7 @@ int main() {
     out_dir += "/DemoOutput_Repose";
     create_directory(out_dir);
 
-    for (int i = 0; i < 300; i++) {
+    for (int i = 0; i < 140; i++) {
         char filename[200], meshfile[200];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
         sprintf(meshfile, "%s/DEMdemo_funnel_%04d.vtk", out_dir.c_str(), i);

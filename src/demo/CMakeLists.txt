@@ -30,6 +30,7 @@ SET(DEMOS
 		DEMdemo_WheelSlopeSlip
 		DEMdemo_Indentation
 		DEMdemo_Granular_Repose
+		DEMdemo_SolarSystem
 )
 
 # ------------------------------------------------------------------------------

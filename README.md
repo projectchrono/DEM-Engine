@@ -98,6 +98,7 @@ After the build process is done, you can start trying out the demos.
 - A few representative engineering experiments reproduced in DEM simulations, which potentially serve as starting points for your own DEM scripts: `/src/demo/DEMdemo_BallDrop`, `./src/demo/DEMdemo_ConePenetration`, `/src/demo/DEMdemo_Sieve`, `./src/demo/DEMdemo_Repose`.
 - `./src/demo/DEMdemo_WheelDP` shows how to load a checkpointed configuration file to instantly generate a settled granular terrain, then run a drawbar-pull test on it. This demo therefore requires you to first finish the two GRCPrep demos to obtain the terrain checkpoint file. The granular terrain in these demos features DEM particles with a variety of sizes and shapes.
 - More advanced examples showing the usage of the custom additional properties (called _wildcards_) that you can associate with the simulation entities, and use them in the force model and/or change them in simulation then deposit them into the output files: `./src/demo/DEMdemo_Indentation`.
+- `DEMdemo_SolarSystem` simulates our solar system. Its purpose is to show how to define a non-local force (gravitational force) which takes effect even when the bodies are not in contact, using a custom force model file.
 - It is a good idea to read the comment lines at the top of the demo files to understand what they each does.
 
 [The documentations for _DEME_](https://api.projectchrono.org/) are hosted on Chrono website (work in progress).
