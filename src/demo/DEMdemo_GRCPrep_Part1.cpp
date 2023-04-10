@@ -55,7 +55,7 @@ int main() {
     float mass1 = terrain_density * volume1;
     float3 MOI1 = make_float3(1.6850426, 1.6375114, 2.1187753) * terrain_density;
     // Scale the template we just created
-    std::vector<double> scales = {0.0044};
+    std::vector<double> scales = {0.007};
     // Then load it to system
     std::shared_ptr<DEMClumpTemplate> my_template1 =
         DEMSim.LoadClumpType(mass1, MOI1, GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain);
@@ -116,7 +116,7 @@ int main() {
     float offset_z = bottom + sample_halfheight + 0.15;
     float settle_frame_time = 0.2;
     float settle_batch_time = 2.0;
-    while (DEMSim.GetNumClumps() < 0.25e6) {
+    {
         DEMSim.ClearCache();
         float3 sample_center = make_float3(0, 0, offset_z);
         std::vector<std::shared_ptr<DEMClumpTemplate>> heap_template_in_use;

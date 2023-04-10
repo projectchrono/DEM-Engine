@@ -198,6 +198,28 @@ inline __device__ void integratePos(deme::bodyID_t thisClump,
         granData->oriQx[thisClump] = oriQ.x;
         granData->oriQy[thisClump] = oriQ.y;
         granData->oriQz[thisClump] = oriQ.z;
+
+        // double4 oriQ = make_double4(omgBar.x, omgBar.y, omgBar.z, 1.0);  // xyzw
+        // double len = length(omgBar);
+        // double theta = 0.5 * h * len;  // 0.5*dt*len, delta rotation
+        // if (len > 0) {
+        //     oriQ.w = cos(theta);
+        //     double s = sin(theta) / len;
+        //     oriQ.x *= s;
+        //     oriQ.y *= s;
+        //     oriQ.z *= s;
+        // }
+        // // Note: Yes it is Quat * deltaRot, not the other way around. Then store result in oriQ.
+        // HamiltonProduct(oriQ.w, oriQ.x, oriQ.y, oriQ.z, granData->oriQw[thisClump], granData->oriQx[thisClump],
+        //                 granData->oriQy[thisClump], granData->oriQz[thisClump], oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+
+        // // Normalizing it is essential. Note even if you use an exp map to update quaternion, you still need to
+        // // normalize.
+        // // oriQ /= length(oriQ);
+        // granData->oriQw[thisClump] = oriQ.w;
+        // granData->oriQx[thisClump] = oriQ.x;
+        // granData->oriQy[thisClump] = oriQ.y;
+        // granData->oriQz[thisClump] = oriQ.z;
     }
 }
 

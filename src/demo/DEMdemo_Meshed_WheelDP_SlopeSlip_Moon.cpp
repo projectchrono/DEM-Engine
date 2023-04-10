@@ -3,13 +3,6 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
-// =============================================================================
-// NOTE!!! You have to first finish ALL GRCPrep demos to obtain the GRC_3e6.csv
-// file, put it in the current directory, then run this demo.
-// A wheel drawbar-pull test, featuring Curiosity wheel geometry and GRC-1 simulant.
-// WARNING: This is a huge simulation with millions of particles.
-// =============================================================================
-
 #include <DEM/API.h>
 #include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
@@ -28,40 +21,46 @@ const float kg_g_conv = 1.;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_WheelDP_Force_mu0.4_750N";
+    // out_dir += "/DEMdemo_Temp";
+    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon_SamePressureAsEarth";
+    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon";
+    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Moon_111kg";
     std::filesystem::create_directory(out_dir);
 
     // `World'
-    float G_mag = 9.81;
-    float step_size = 3e-6;
+    float G_mag = 1.62;
+    float step_size = 1.e-6;
     double world_size_y = 0.52;
-    double world_size_x = 1.53;
-    double world_size_z = 2.0;
+    double world_size_x = 2.04;
+    double world_size_z = 4.0;
 
     // Define the wheel geometry
     float wheel_rad = 0.25;
-    float wheel_width = 0.25;
-    float g_height = 0.025;
-    float wheel_mass = 10.;
-    // float total_pressure = 480.0;
-    float total_pressure = 750.0;
+    float wheel_width = 0.2;
+    float wheel_mass = 5.;
+    float img_mass = 111.;
+    float total_pressure = img_mass * 9.81;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
 
-    // float TRs[] = {0.2, 0.1, 0.05, 0};
-    float TRs[] = {0.7, 0.5, 0.3, 0.2, 0.1, 0.05, 0};
-    unsigned int run_mode = 0;
-    unsigned int currframe = 0;
-    int ken_scaled = 0;
+    float moon_added_pressure = (img_mass * 1.62 - wheel_mass * G_mag);
 
-    for (float TR : TRs) {
+    // float Slopes_deg[] = {0, 2, 5, 10, 15, 20, 25};
+    // float Slopes_deg[] = {15, 10};
+    float Slopes_deg[] = {12.5};
+    unsigned int run_mode = 0;
+    unsigned int currframe = 410;
+    int thicker = 1;
+
+    for (float Slope_deg : Slopes_deg) {
         DEMSolver DEMSim;
         DEMSim.SetVerbosity(INFO);
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
         DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
         DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
         DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
+        DEMSim.SetCollectAccRightAfterForceCalc(true);
 
         // E, nu, CoR, mu, Crr...
         float mu = 0.4;
@@ -76,17 +75,18 @@ int main() {
         DEMSim.SetMaterialPropertyPair("mu", mat_type_wall, mat_type_terrain, mu_wall);
 
         DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z);
-        DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
+        DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_wall);
+
         float bottom = -0.5;
         auto bot_wall = DEMSim.AddBCPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_wall);
         auto bot_wall_tracker = DEMSim.Track(bot_wall);
 
-        auto wheel = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/rover_wheels/curiosity_wheel_surface.obj"),
-                                                   mat_type_wheel);
+        auto wheel =
+            DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/rover_wheels/Moon_rover_wheel.obj"), mat_type_wheel);
         wheel->SetMass(wheel_mass);
         wheel->SetMOI(make_float3(wheel_IXX, wheel_IYY, wheel_IXX));
         // Give the wheel a family number so we can potentially add prescription
-        wheel->SetFamily(1);
+        wheel->SetFamily(10);
         // Track it
         auto wheel_tracker = DEMSim.Track(wheel);
 
@@ -134,7 +134,6 @@ int main() {
             ground_particle_templates.push_back(DEMSim.LoadClumpType(this_template));
             t_num++;
         }
-
         // Now we load clump locations from a checkpointed file
         {
             std::cout << "Making terrain..." << std::endl;
@@ -171,8 +170,8 @@ int main() {
             // Now, we don't need all particles loaded...
             std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
             for (size_t i = 0; i < in_xyz.size(); i++) {
-                if (std::abs(in_xyz.at(i).y) > (world_size_y - 0.04) / 2 ||
-                    std::abs(in_xyz.at(i).x) > (world_size_x - 0.05) / 2)
+                if (std::abs(in_xyz.at(i).y) > (world_size_y - 0.05) / 2 ||
+                    std::abs(in_xyz.at(i).x) > (world_size_x - 0.06) / 2)
                     elem_to_remove.at(i) = 1;
             }
             in_xyz.erase(std::remove_if(in_xyz.begin(), in_xyz.end(),
@@ -194,12 +193,11 @@ int main() {
             base_batch.SetTypes(in_types);
             base_batch.SetPos(in_xyz);
             base_batch.SetOriQ(in_quat);
-            DEMSim.AddClumps(base_batch);
 
             // Maybe we need to make it thicker...
             float up_dist, remove_pos;
-            up_dist = (ken_scaled) ? 0.16 : 0.1;
-            remove_pos = (ken_scaled) ? 0.5 : 0.43;
+            up_dist = (thicker) ? 0.16 : 0.1;
+            remove_pos = (thicker) ? 0.5 : 0.43;
 
             std::vector<float> x_shift_dist = {0};
             std::vector<float> y_shift_dist = {0};
@@ -244,39 +242,55 @@ int main() {
                     }
                 }
             }
+
+            DEMSim.AddClumps(base_batch);
         }
 
+        // Now add a plane to compress the sample
+        // auto compressor = DEMSim.AddExternalObject();
+        // compressor->AddPlane(make_float3(0, 0, 0), make_float3(0, 0, -1), mat_type_terrain);
+        // compressor->SetFamily(2);
+        // auto compressor_tracker = DEMSim.Track(compressor);
+
         // Families' prescribed motions
-        float w_r = math_PI / 12.;
-        float v_ref = w_r * (wheel_rad - g_height);
-        float over_TR = 1. + (TR - 1.) * (wheel_rad - g_height) / wheel_rad;
+        float w_r = 0.8;
+        float v_ref = w_r * wheel_rad;
+        double G_ang = Slope_deg * math_PI / 180.;
 
         double sim_end = 8.;
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
         // (move freely linearly)
         DEMSim.SetFamilyPrescribedAngVel(1, "0", to_string_with_precision(w_r), "0", false);
-        DEMSim.AddFamilyPrescribedAcc(1, "none", "none", to_string_with_precision(-added_pressure / wheel_mass));
-
-        // `Real sim' family number
+        DEMSim.AddFamilyPrescribedAcc(1, to_string_with_precision(-moon_added_pressure * std::sin(G_ang) / wheel_mass),
+                                      "none",
+                                      to_string_with_precision(-moon_added_pressure * std::cos(G_ang) / wheel_mass));
         DEMSim.SetFamilyPrescribedAngVel(2, "0", to_string_with_precision(w_r), "0", false);
-        // Note: this wheel is not `dictated' by our prescrption of motion (hence the false argument), because it
-        // can sink into the ground (move on Z dir); but its X and Y motions are explicitly controlled.
-        DEMSim.SetFamilyPrescribedLinVel(2, to_string_with_precision(v_ref * (1. - TR)), "0", "none", false);
-        DEMSim.AddFamilyPrescribedAcc(2, "none", "none", to_string_with_precision(-added_pressure / wheel_mass));
+        DEMSim.AddFamilyPrescribedAcc(2, to_string_with_precision(-added_pressure * std::sin(G_ang) / wheel_mass),
+                                      "none", to_string_with_precision(-added_pressure * std::cos(G_ang) / wheel_mass));
+        DEMSim.SetFamilyFixed(10);
+        DEMSim.DisableContactBetweenFamilies(10, 10);
+        DEMSim.DisableContactBetweenFamilies(10, 255);
 
         // Some inspectors
         auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
         auto min_z_finder = DEMSim.CreateInspector("clump_min_z");
-        auto total_mass_finder = DEMSim.CreateInspector("clump_mass", "return Z <= -0.41;");
-        auto total_mass_finder_all = DEMSim.CreateInspector("clump_mass");
+        auto total_mass_finder = DEMSim.CreateInspector("clump_mass");
+        auto partial_mass_finder = DEMSim.CreateInspector("clump_mass", "return (Z <= -0.41);");
         auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
 
+        float G_mag_earth = 9.81;
+        float3 this_G = make_float3(-G_mag_earth * std::sin(G_ang), 0, -G_mag_earth * std::cos(G_ang));
+        DEMSim.SetGravitationalAcceleration(this_G);
+        float ramp_time = 1.;
+        float G_mag_ramp = G_mag_earth;
+
         DEMSim.SetInitTimeStep(step_size);
-        DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -G_mag));
-        DEMSim.SetCDUpdateFreq(30);
-        DEMSim.SetExpandSafetyAdder(0.5);
-        DEMSim.SetMaxVelocity(40);
-        DEMSim.SetInitBinSizeAsMultipleOfSmallestSphere(2);
+        DEMSim.SetCDUpdateFreq(20);
+        DEMSim.SetExpandSafetyAdder(0.2);
+        DEMSim.SetErrorOutVelocity(50.);
+        DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1);
+        DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(3);
+        DEMSim.SetInitBinSize(2 * scales.at(2));
         DEMSim.Initialize();
 
         // Compress until dense enough
@@ -289,36 +303,71 @@ int main() {
         std::cout << "Output at " << fps << " FPS" << std::endl;
 
         // Put the wheel in place, then let the wheel sink in initially
-        float max_z = max_z_finder->GetValue();
-        float init_x = -0.4;
-        if (TR > 0.6) {
-            init_x = 0.;
+        float init_x = -0.0;
+        if (Slope_deg < 23) {
+            init_x = -0.6;
         }
+
+        // Put the wheel in place, then let the wheel sink in initially
+        float max_z = max_z_finder->GetValue();
         wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.03 + wheel_rad));
 
-        float bulk_den_high = total_mass_finder->GetValue() / ((-0.41 + 0.5) * world_size_x * world_size_y);
-        float bulk_den_low = total_mass_finder_all->GetValue() / ((max_z + 0.5) * world_size_x * world_size_y);
-        std::cout << "Bulk density high: " << bulk_den_high << std::endl;
-        std::cout << "Bulk density low: " << bulk_den_low << std::endl;
-
-        for (double t = 0; t < 0.4; t += frame_time) {
+        {
             char filename[200], meshname[200];
-            std::cout << "Outputting frame: " << currframe << std::endl;
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
             sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
             DEMSim.WriteSphereFile(std::string(filename));
             DEMSim.WriteMeshFile(std::string(meshname));
+        }
+        // Settling (G change)
+        for (double t = 0; t < ramp_time + 0.1; t += 0.05) {
+            if (t < ramp_time) {
+                G_mag_ramp = (ramp_time - t) / ramp_time * (G_mag_earth - G_mag) + G_mag;
+            } else {
+                G_mag_ramp = G_mag;
+            }
 
-            // float3 pos = bot_wall_tracker->Pos();
-            // float3 force = bot_wall_tracker->ContactAcc();
-            // std::cout << "Bottom wall pos: " << pos.x << ", " << pos.y << ", " << pos.z << std::endl;
-            // std::cout << "Bottom wall force: " << force.x << ", " << force.y << ", " << force.z << std::endl;
-            DEMSim.DoDynamicsThenSync(frame_time);
+            float3 this_G = make_float3(-G_mag_ramp * std::sin(G_ang), 0, -G_mag_ramp * std::cos(G_ang));
+            DEMSim.SetGravitationalAcceleration(this_G);
+            DEMSim.UpdateSimParams();
+
+            DEMSim.DoDynamicsThenSync(0.05);
         }
 
-        // Switch wheel from free fall into DP test
-        DEMSim.ChangeFamily(1, 2);
-        DEMSim.UpdateStepSize(step_size);
+        float bulk_den_high = partial_mass_finder->GetValue() / ((-0.41 + 0.5) * world_size_x * world_size_y);
+        float bulk_den_low = total_mass_finder->GetValue() / ((max_z + 0.5) * world_size_x * world_size_y);
+        std::cout << "Bulk density high: " << bulk_den_high << std::endl;
+        std::cout << "Bulk density low: " << bulk_den_low << std::endl;
+
+        DEMSim.ChangeFamily(10, 1);
+        // for (double t = 0; t < 0.5; t += frame_time) {
+        //     if (curr_step % out_steps == 0) {
+        //         char filename[200], meshname[200];
+        //         std::cout << "Outputting frame: " << currframe << std::endl;
+        //         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
+        //         sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
+        //         DEMSim.WriteSphereFile(std::string(filename));
+        //         DEMSim.WriteMeshFile(std::string(meshname));
+        //         DEMSim.ShowThreadCollaborationStats();
+        //         currframe++;
+        //     }
+
+        //     DEMSim.DoDynamicsThenSync(frame_time);
+        // }
+
+        // Change pressure amount
+        // DEMSim.ChangeFamily(1, 2);
+
+        // {
+        //     step_size *= 1.5;
+        //     DEMSim.DoDynamicsThenSync(0.0);
+        //     DEMSim.SetInitTimeStep(step_size);
+        //     DEMSim.UpdateSimParams();
+        //     out_steps = (unsigned int)(1.0 / (fps * step_size));
+        //     frame_time = 1.0 / fps;
+        //     report_ps = 1000;
+        //     report_steps = (unsigned int)(1.0 / (report_ps * step_size));
+        // }
 
         bool start_measure = false;
         for (double t = 0; t < sim_end; t += step_size, curr_step++) {
@@ -326,10 +375,17 @@ int main() {
                 char filename[200], meshname[200];
                 std::cout << "Outputting frame: " << currframe << std::endl;
                 sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-                sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
+                sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
                 DEMSim.WriteSphereFile(std::string(filename));
                 DEMSim.WriteMeshFile(std::string(meshname));
                 DEMSim.ShowThreadCollaborationStats();
+                currframe++;
+                DEMSim.DoDynamicsThenSync(0.0);
+                if (t >= 1. && Slope_deg < 14.) {
+                    DEMSim.ChangeClumpFamily(10);  // Fixed
+                    float3 pos = wheel_tracker->Pos();
+                    DEMSim.ChangeClumpFamily(0, {pos.x - 0.5, pos.x + 0.4});
+                }
             }
 
             if (t >= 2. && !start_measure) {
@@ -337,14 +393,15 @@ int main() {
             }
 
             if (curr_step % report_steps == 0 && start_measure) {
-                float3 forces = wheel_tracker->ContactAcc();
-                forces *= wheel_mass;
-                std::cout << "Current run mode: " << run_mode << std::endl;
-                std::cout << "Slip: " << TR << std::endl;
-                std::cout << "Over slip: " << over_TR << std::endl;
+                float3 V = wheel_tracker->Vel();
+                // float Vup = V.x * std::cos(G_ang) + V.z * std::sin(G_ang);
+                float slip = 1.0 - V.x / (w_r * wheel_rad);
+                std::cout << "Current slope: " << Slope_deg << std::endl;
                 std::cout << "Time: " << t << std::endl;
-                std::cout << "Force on wheel: " << forces.x << ", " << forces.y << ", " << forces.z << std::endl;
-                std::cout << "Drawbar pull coeff: " << forces.x / total_pressure << std::endl;
+                // std::cout << "Distance: " << dist_moved << std::endl;
+                std::cout << "X: " << wheel_tracker->Pos().x << std::endl;
+                std::cout << "V: " << V.x << std::endl;
+                std::cout << "Slip: " << slip << std::endl;
                 std::cout << "Max system velocity: " << max_v_finder->GetValue() << std::endl;
             }
 
@@ -353,9 +410,8 @@ int main() {
 
         run_mode++;
         DEMSim.ShowTimingStats();
-        DEMSim.ShowAnomalies();
     }
 
-    std::cout << "WheelDP demo exiting..." << std::endl;
+    std::cout << "DEMdemo_WheelDP_SlopeSlip_Moon demo exiting..." << std::endl;
     return 0;
 }

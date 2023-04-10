@@ -24,11 +24,21 @@ SET(DEMOS
 		DEMdemo_Mixer
 		DEMdemo_GRCPrep_Part1
 		DEMdemo_GRCPrep_Part2
-		DEMdemo_ConePenetration
 		DEMdemo_Shake
 		DEMdemo_WheelDP
+		DEMdemo_WheelDP_alt
+		DEMdemo_WheelDP_ind
+		DEMdemo_WheelDP_Slip
+		DEMdemo_WheelDP_Slip_ind
+		DEMdemo_WheelDP_SlopeSlip_Moon
+		DEMdemo_WheelDP_SlopeSlip_Earth
 		DEMdemo_WheelSlopeSlip
+		DEMdemo_Meshed_WheelDP_SlopeSlip_Moon
+		DEMdemo_Meshed_WheelDP_SlopeSlip_Earth
+		DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_AllSph
+		DEMdemo_Meshed_WheelDP_SlopeSlip_Moon_AllSph
 		DEMdemo_Indentation
+		DEMdemo_Repose_GRC
 )
 
 # ------------------------------------------------------------------------------
