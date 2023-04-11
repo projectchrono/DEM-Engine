@@ -38,7 +38,7 @@ int main() {
     float wheel_rad = 0.25;
     float wheel_width = 0.2;
     float wheel_mass = 5.;
-    float img_mass = 111.;
+    float img_mass = 22.;
     float total_pressure = img_mass * 9.81;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
