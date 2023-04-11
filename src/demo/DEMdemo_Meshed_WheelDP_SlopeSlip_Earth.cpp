@@ -23,8 +23,8 @@ int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled_111kg";
     // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_DownScaled";
-    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
-    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled";
+    // out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_NotScaled";
+    out_dir += "/DEMdemo_Meshed_WheelDP_SlopeSlip_Earth_KenScaled";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -33,8 +33,8 @@ int main() {
     double world_size_y = 0.52;
     double world_size_x = 4;  // 2.04;
     double world_size_z = 4.0;
-    // float w_r = 0.8 * 2.45;
-    float w_r = 0.8;
+    float w_r = 0.8 * 2.45;
+    // float w_r = 0.8;
 
     // Define the wheel geometry
     float wheel_rad = 0.25;
@@ -98,11 +98,11 @@ int main() {
     float mass1 = terrain_density * volume1;
     float3 MOI1 = make_float3(1.6850426, 1.6375114, 2.1187753) * terrain_density;
     // Scale the template we just created
-    std::vector<double> scales = {0.007};
+    std::vector<double> scales = {0.007, 0.0035};
     // Then load it to system
     std::shared_ptr<DEMClumpTemplate> my_template1 =
         DEMSim.LoadClumpType(mass1, MOI1, GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain);
-    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates = {my_template1};
+    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates = {my_template1, DEMSim.Duplicate(my_template1)};
     // Now scale those templates
     for (int i = 0; i < scales.size(); i++) {
         std::shared_ptr<DEMClumpTemplate>& my_template = ground_particle_templates.at(i);

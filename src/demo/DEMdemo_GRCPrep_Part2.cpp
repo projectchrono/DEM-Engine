@@ -61,11 +61,11 @@ int main() {
     float mass1 = terrain_density * volume1;
     float3 MOI1 = make_float3(1.6850426, 1.6375114, 2.1187753) * terrain_density;
     // Scale the template we just created
-    std::vector<double> scales = {0.007};
+    std::vector<double> scales = {0.007, 0.0035};
     // Then load it to system
     std::shared_ptr<DEMClumpTemplate> my_template1 =
         DEMSim.LoadClumpType(mass1, MOI1, GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain);
-    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates = {my_template1};
+    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates = {my_template1, DEMSim.Duplicate(my_template1)};
     // Now scale those templates
     for (int i = 0; i < scales.size(); i++) {
         std::shared_ptr<DEMClumpTemplate>& my_template = ground_particle_templates.at(i);
