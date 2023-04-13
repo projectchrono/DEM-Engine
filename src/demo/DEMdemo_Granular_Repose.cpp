@@ -30,7 +30,7 @@ int main() {
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.EnsureKernelErrMsgLineNum();
 
-        srand(7001);
+    srand(7001);
     DEMSim.SetCollectAccRightAfterForceCalc(true);
     //DEMSim.SetExpandSafetyAdder(0.1);
     // Scale factor
@@ -38,12 +38,11 @@ int main() {
 
     // total number of random clump templates to generate
 
-    double radius = 0.003300 * scaling;
-    double density = 1410;
+    double radius = 0.003300 * scaling / 2.0;
+    double density = 1410.0;
+  
 
-    int nSphere = 10000;
-
-    int num_template = 10000;
+    int num_template = 100000;
 
     float plane_bottom = -0.30f * scaling;
     float funnel_bottom =0.050 * scaling;
@@ -52,21 +51,19 @@ int main() {
 
     double tilt = 3.141592 / 6.0;
 
-    double gateOpen = 0.120;
-    double gateSpeed = 2.0;
+    auto mat_type_funnel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.60}});
 
-    auto mat_type_bottom = DEMSim.LoadMaterial({{"E", 50e9}, {"nu", 0.3}, {"CoR", 0.60}});
-
-    auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.90}, {"mu", 0.04}, {"Crr", 0.04}});
+    auto mat_type_walls = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.90}, {"mu", 0.04}, {"Crr", 0.04}});
     auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 2.7e9}, {"nu", 0.35}, {"CoR", 0.83}, {"mu", 0.40}, {"Crr", 0.010}});
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.5);
-    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.02);
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_bottom, mat_type_particles, 0.10);
+        DEMSim.LoadMaterial({{"E", 2.7e9}, {"nu", 0.35}, {"CoR", 0.83}, {"mu", 0.50}, {"Crr", 0.050}});
 
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_bottom, mat_type_particles, 0.7);    // it is supposed to be
-    DEMSim.SetMaterialPropertyPair("Crr", mat_type_bottom, mat_type_particles, 0.01);  // bakelite
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_bottom, mat_type_particles, 0.50);
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.50);
+    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.20);
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_type_particles, 0.10);
+
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_funnel, mat_type_particles, 0.7);    // it is supposed to be
+    DEMSim.SetMaterialPropertyPair("Crr", mat_type_funnel, mat_type_particles, 0.01);  // bakelite
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_funnel, mat_type_particles, 0.01);
     
 
     /*
@@ -75,9 +72,9 @@ int main() {
     auto template_ground = DEMSim.LoadSphereType(0.5, ground_sp_r, mat_type_walls);
     */
     // Make ready for simulation
-    float step_size = 2e-6;
+    float step_size = 1e-6;
     
-    DEMSim.InstructBoxDomainDimension({-0.4, 0.40}, {-0.4, 0.4}, {plane_bottom, 1.55});
+    DEMSim.InstructBoxDomainDimension({-0.35, 0.35}, {-0.35, 0.35}, {plane_bottom, 1.00});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
@@ -88,7 +85,7 @@ int main() {
     DEMSim.SetInitBinSize(0.9*radius* 6);
 
     // Loaded meshes are by-default fixed
-    auto funnel = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/funnel.obj"), mat_type_bottom);
+    auto funnel = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/funnel.obj"), mat_type_funnel);
     funnel->Scale(0.005 * scaling);
 
 
@@ -102,24 +99,18 @@ int main() {
 // Make an array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
     std::default_random_engine generator;
-    std::normal_distribution<double> distribution(radius, radius * 0.05);
-    double maxRadius = 0;
+    std::normal_distribution<double> distribution(radius, radius * 0.050);
+    float maxRadius = 0.0;
 
     for (int i = 0; i < num_template; i++) {
 
-        // then allocate the clump template definition arrays (all in SI)
-        // float mass = 4.0 / 3.0 * 3.141592 * std::pow(temp_radius, 3) * density;
-        // float3 MOI = make_float3(2.f / 5.f * mass * std::pow(temp_radius, 2));
         std::vector<float> radii;
         std::vector<float3> relPos;
         std::vector<std::shared_ptr<DEMMaterial>> mat;
 
-        // randomly generate clump template configurations
-        // the relPos of a sphere is always seeded from one of the already-generated sphere
+
         double radiusMax = distribution(generator);
-        /*         double radiusMin= 7.0/8.0 * radiusMax;
-                double eccentricity= 1.0/8.0 * radiusMax;
-         */
+
         double radiusMin = 3.0 / 4.0 * radiusMax;
         double eccentricity = 1.0 / 4.0 * radiusMax;
 
@@ -131,9 +122,9 @@ int main() {
         relPos.push_back(tmp);
         mat.push_back(mat_type_particles);
 
-        double x = eccentricity;
-        double y = 0;
-        double z = 0;
+        double x = 1.0 * eccentricity;
+        double y = 0.0;
+        double z = 0.0;
         tmp.x = x;
         tmp.y = y;
         tmp.z = z;
@@ -144,16 +135,17 @@ int main() {
 
         double c = radiusMin;  // smaller dim of the ellipse
         double b = radiusMin;
-        double a = radiusMax;
+        double a = radiusMin + 0.50*eccentricity;
 
         float mass = 4.0 / 3.0 * 3.141592 * a * b * c * density;
-        float3 MOI = make_float3(1.f / 5.f * mass * (b * b + c * c), 1.f / 5.f * mass * (a * a + c * c),
-                                 1.f / 5.f * mass * (b * b + a * a));
+        float3 MOI = make_float3(   1.f / 5.f * mass * (b * b + c * c),
+                                    1.f / 5.f * mass * (a * a + c * c),
+                                    1.f / 5.f * mass * (b * b + a * a)
+                                );
         std::cout << x << " chosen moi ..." << a / radius << std::endl;
-        // LoadClumpType returns a shared_ptr that points to this template so you may modify it. Also, material can be
-        // vector or a material shared ptr, and in the latter case it will just be applied to all component spheres this
-        // clump has.
+
         maxRadius = (radiusMax > maxRadius) ? radiusMax : maxRadius;
+        
         auto clump_ptr = DEMSim.LoadClumpType(mass, MOI, radii, relPos, mat_type_particles);
         // clump_ptr->AssignName("fsfs");
         clump_types.push_back(clump_ptr);
@@ -161,7 +153,7 @@ int main() {
 
    unsigned int currframe = 0;
     unsigned int curr_step = 0;
-    float settle_frame_time = 0.2;
+    float settle_frame_time = 0.20;
     // Track the projectile
 
     float shift_xyz = 0.98 * maxRadius * 2;
@@ -190,7 +182,7 @@ int main() {
         z += shift_xyz;
     }
 
-    for (unsigned int i = 0; i < 40; i++) {
+    for (unsigned int i = 0; i < 70; i++) {
         float3 center_xyz = make_float3(x, y, z);
 
         std::cout << "level of particles position ... " << center_xyz.z << std::endl;
@@ -216,7 +208,9 @@ int main() {
     DEMSim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Repose";
+    out_dir += "/DemoOutput_Granular_Repose";
+
+    remove_all(out_dir);
     create_directory(out_dir);
 
     double timeStep = 5e-5;
