@@ -4,7 +4,8 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 // =============================================================================
-// This demo reproduces the Game of Life in DEME simulator, to showcase the flexibility of its APIs.
+// This demo reproduces the Game of Life in DEME simulator, to showcase the
+// flexibility of its APIs.
 // =============================================================================
 
 #include <core/ApiVersion.h>
@@ -28,15 +29,10 @@ int main() {
     DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ);
     DEMSim.EnsureKernelErrMsgLineNum();
 
-    srand(777);
-
     float grid_size = 1.0;
     float r = (1.45 * grid_size) / 2.0;
     float world_size = 2500.0;
     unsigned int n_init = 10000;
-
-    // Bin size can be somewhat large
-    DEMSim.SetInitBinSize(grid_size * 3.0);
 
     // Material is formaility... you can opt not to set it at all, it works the same
     auto mat_type_1 = DEMSim.LoadMaterial({{"junk", 1.0}});
@@ -116,11 +112,15 @@ int main() {
 
     auto particles = DEMSim.AddClumps(input_template_num, input_xyz);
     particles->SetFamilies(family_code);
-    DEMSim.InstructBoxDomainNumVoxel(22, 22, 20, (world_size + grid_size) / std::pow(2, 16) / std::pow(2, 22));
+    // The game board is somewhat large so we have to define it, because the solver defaults the world size to be 1000.
+    DEMSim.InstructBoxDomainDimension(world_size * 1.1, world_size * 1.1, world_size * 1.1);
+    DEMSim.SetInitBinSize(world_size / 100.);
 
-    DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(1.);
     DEMSim.SetCDUpdateFreq(0);
+    // Must disable this if you want to run dT and kT synchronizely, or the solver will automatically find a non-zero
+    // update frequency that it sees fit to run it in an async fashion.
+    DEMSim.DisableAdaptiveUpdateFreq();
 
     DEMSim.Initialize();
 
@@ -134,6 +134,7 @@ int main() {
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
         DEMSim.WriteSphereFile(std::string(filename));
         std::cout << "Frame: " << i << std::endl;
+        std::cout << "Average contacts each sphere has: " << DEMSim.GetAvgSphContacts() << std::endl;
 
         DEMSim.DoDynamicsThenSync(1.);
     }

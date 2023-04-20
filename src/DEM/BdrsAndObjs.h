@@ -95,21 +95,24 @@ struct DEMExternObj {
     std::vector<std::shared_ptr<DEMMaterial>> materials;
     // Family code (used in prescribing its motions etc.)
     unsigned int family_code = RESERVED_FAMILY_NUM;  ///< Means it is default to the `fixed' family
-    // The coordinate of the CoM of this external object, in the frame where all its components' properties are
-    // reported. This is usually all-0 (meaning you should define the object's components in its CoM frame to begin
-    // with), but it can be user-specified.
-    float3 CoM = make_float3(0);
-    // CoM frame's orientation quaternion in the frame which is used to report all its components' properties. Usually
-    // unit quaternion.
-    float4 CoM_oriQ = host_make_float4(0, 0, 0, 1);
+
+    // // The coordinate of the CoM of this external object, in the frame where all its components' properties are
+    // // reported. This is usually all-0 (meaning you should define the object's components in its CoM frame to begin
+    // // with), but it can be user-specified.
+    // float3 CoM = make_float3(0);
+    // // CoM frame's orientation quaternion in the frame which is used to report all its components' properties.
+    // Usually
+    // // unit quaternion.
+    // float4 CoM_oriQ = host_make_float4(0, 0, 0, 1);
+
     // Obj's CoM initial position
     float3 init_pos = make_float3(0);
     // Obj's initial orientation quaternion
     float4 init_oriQ = host_make_float4(0, 0, 0, 1);
     // Obj's mass (huge by default)
-    float mass = DEME_HUGE_FLOAT;
+    float mass = 1e6;
     // Obj's MOI (huge by default)
-    float3 MOI = make_float3(DEME_HUGE_FLOAT);
+    float3 MOI = make_float3(1e6);
     // Its offset when this obj got loaded into the API-level user raw-input array
     unsigned int load_order;
 
@@ -135,6 +138,13 @@ struct DEMExternObj {
     void SetMass(float mass) { this->mass = mass; }
     /// Set MOI (in principal frame)
     void SetMOI(float3 MOI) { this->MOI = MOI; }
+
+    /// @brief Set the initial quaternion for this object (before simulation initializes).
+    /// @param rotQ Initial quaternion.
+    void SetInitQuat(const float4 rotQ) { init_oriQ = rotQ; }
+    /// @brief Set the initial position for this object (before simulation initializes).
+    /// @param displ Initial position.
+    void SetInitPos(const float3 displ) { init_pos = displ; }
 
     /// Add a plane with infinite size
     void AddPlane(const float3 pos, const float3 normal, const std::shared_ptr<DEMMaterial>& material) {
@@ -248,20 +258,22 @@ class DEMMeshConnected {
     bool isMaterialSet = false;
     // Family code (used in prescribing its motions etc.)
     unsigned int family_code = RESERVED_FAMILY_NUM;  ///< Means it is default to the `fixed' family
-    // The coordinate of the CoM of this meshed object, in the frame where all the mesh's node coordinates are
-    // reported. This is usually all-0 (meaning you should define the object's components in its CoM frame to begin
-    // with), but it can be user-specified.
-    float3 CoM = make_float3(0);
-    // CoM frame's orientation quaternion in the frame which is used to report all the mesh's node coordinates.
-    // It is usually unit quaternion.
-    float4 CoM_oriQ = host_make_float4(0, 0, 0, 1);
-    // Obj's CoM initial position
+
+    // // The coordinate of the CoM of this meshed object, in the frame where all the mesh's node coordinates are
+    // // reported. This is usually all-0 (meaning you should define the object's components in its CoM frame to begin
+    // // with), but it can be user-specified.
+    // float3 CoM = make_float3(0);
+    // // CoM frame's orientation quaternion in the frame which is used to report all the mesh's node coordinates.
+    // // It is usually unit quaternion.
+    // float4 CoM_oriQ = host_make_float4(0, 0, 0, 1);
+
+    // Mesh's CoM initial position
     float3 init_pos = make_float3(0);
-    // Obj's initial orientation quaternion
+    // Mesh's initial orientation quaternion
     float4 init_oriQ = host_make_float4(0, 0, 0, 1);
-    // Obj's mass (huge by default)
+    // Mesh's mass
     float mass = 1.f;
-    // Obj's MOI (huge by default)
+    // Mesh's MOI
     float3 MOI = make_float3(1.f);
     // Its offset when this obj got loaded into the API-level user raw-input array
     unsigned int load_order;
@@ -359,6 +371,18 @@ class DEMMeshConnected {
     void Move(float3 vec, float4 rot_Q) {
         for (auto& node : m_vertices) {
             hostApplyFrameTransform(node, vec, rot_Q);
+        }
+    }
+    /// Mirror all points in the mesh about a plane. If this changes the mass properties of this mesh, it is the user's
+    /// responsibility to reset them.
+    void Mirror(float3 plane_point, float3 plane_normal) {
+        plane_normal = normalize(plane_normal);
+        for (auto& node : m_vertices) {
+            float3 node2plane = plane_point - node;
+            float proj = dot(node2plane, plane_normal);
+            // If proj is negative, we need to go along the neg dir of plane normal anyway; if proj is positive, we need
+            // to go along the positive dir of the plane anyway
+            node += 2 * proj * plane_normal;
         }
     }
     /// Scale all geometry component of this mesh

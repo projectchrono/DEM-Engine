@@ -18,6 +18,18 @@
 
 namespace deme {
 
+void DEMSolver::assertSysInit(const std::string& method_name) {
+    if (!sys_initialized) {
+        DEME_ERROR("DEMSolver's method %s can only be called after calling Initialize()", method_name.c_str());
+    }
+}
+
+void DEMSolver::assertSysNotInit(const std::string& method_name) {
+    if (sys_initialized) {
+        DEME_ERROR("DEMSolver's method %s can only be called before calling Initialize()", method_name.c_str());
+    }
+}
+
 void DEMSolver::generatePolicyResources() {
     // Process the loaded materials. The pre-process of external objects and clumps could add more materials, so this
     // call need to go after those pre-process ones.
@@ -28,6 +40,9 @@ void DEMSolver::generatePolicyResources() {
 
     // Decide bin size (for contact detection)
     decideBinSize();
+
+    // The method of deciding the thickness of contact margin
+    decideCDMarginStrat();
 }
 
 void DEMSolver::generateEntityResources() {
@@ -70,11 +85,8 @@ void DEMSolver::generateEntityResources() {
     nDistinctSphereRelativePositions_computed = m_clumps_sp_location_types.size();
     */
 
-    // Figure out the parameters related to the simulation `world', if need to
-    if (!explicit_nv_override) {
-        figureOutNV();
-    }
-    figureOutOrigin();
+    // Figure out the parameters related to the simulation `world'
+    figureOutNV();
     addWorldBoundingBox();
 
     // Flatten cached clump templates (from ClumpTemplate structs to float arrays), make ready for transferring to kTdT
@@ -152,15 +164,6 @@ void DEMSolver::postResourceGenChecksAndTabKeeping() {
         }
     }
 
-    // Do we have more bins that our data type can handle?
-    if (m_num_bins > std::numeric_limits<binID_t>::max()) {
-        DEME_ERROR(
-            "The simulation world has %zu bins (for domain partitioning in contact detection), but the largest bin ID "
-            "that we can have is %zu.\nYou can try to make bins larger via SetInitBinSize, or redefine binID_t and "
-            "recompile.",
-            m_num_bins, std::numeric_limits<binID_t>::max());
-    }
-
     // Sanity check for analytical geometries
     if (nAnalGM > DEME_THRESHOLD_TOO_MANY_ANAL_GEO) {
         DEME_WARNING(
@@ -216,13 +219,66 @@ void DEMSolver::jitifyKernels() {
 
     // Now, inspectors need to be jitified too... but the current design jitify inspector kernels at the first time they
     // are used. for (auto& insp : m_inspectors) {
-    //     insp->Initialize(Subs);
+    //     insp->Initialize(m_subs);
     // }
+
+    // Solver system's own max vel inspector should be init-ed. Don't bother init-ing it while using, because it is
+    // called at high frequency, let's save an if check. Forced initialization (since doing it before system completes
+    // init).
+    m_approx_max_vel_func->Initialize(m_subs, true);
+    dT->approxMaxVelFunc = m_approx_max_vel_func;
+}
+
+bodyID_t DEMSolver::getGeoOwnerID(const bodyID_t& geoID, const contact_t& cnt_type) const {
+    switch (cnt_type) {
+        case NOT_A_CONTACT:
+            return NULL_BODYID;
+        case SPHERE_SPHERE_CONTACT:
+            return dT->ownerClumpBody.at(geoID);
+        case SPHERE_MESH_CONTACT:
+            return dT->ownerMesh.at(geoID);
+        default:
+            return dT->ownerAnalBody.at(geoID);
+    }
+}
+
+void DEMSolver::getContacts_impl(std::vector<bodyID_t>& idA,
+                                 std::vector<bodyID_t>& idB,
+                                 std::vector<contact_t>& cnt_type,
+                                 std::vector<family_t>& famA,
+                                 std::vector<family_t>& famB,
+                                 std::function<bool(contact_t)> type_func) const {
+    size_t num_contacts = dT->getNumContacts();
+    idA.resize(num_contacts);
+    idB.resize(num_contacts);
+    cnt_type.resize(num_contacts);
+    famA.resize(num_contacts);
+    famB.resize(num_contacts);
+    size_t useful_contacts = 0;
+    for (size_t i = 0; i < num_contacts; i++) {
+        contact_t this_type = dT->contactType.at(i);
+        if (type_func(this_type)) {
+            idA[useful_contacts] = getGeoOwnerID(dT->idGeometryA.at(i), this_type);
+            idB[useful_contacts] = getGeoOwnerID(dT->idGeometryB.at(i), this_type);
+            cnt_type[useful_contacts] = this_type;
+            famA[useful_contacts] = dT->familyID.at(idA[useful_contacts]);
+            famB[useful_contacts] = dT->familyID.at(idB[useful_contacts]);
+            useful_contacts++;
+        }
+    }
+    idA.resize(useful_contacts);
+    idB.resize(useful_contacts);
+    cnt_type.resize(useful_contacts);
+    famA.resize(useful_contacts);
+    famB.resize(useful_contacts);
 }
 
 void DEMSolver::figureOutNV() {
+    m_boxLBF = m_target_box_min;
+    float3 boxSize = m_target_box_max - m_target_box_min;
+
     // Rank the size of XYZ, ascending
-    float XYZ[3] = {m_user_boxSize.x, m_user_boxSize.y, m_user_boxSize.z};
+    float XYZ[3] = {boxSize.x, boxSize.y, boxSize.z};
     SPATIAL_DIR rankXYZ[3] = {SPATIAL_DIR::X, SPATIAL_DIR::Y, SPATIAL_DIR::Z};
     for (int i = 0; i < 3 - 1; i++)
         for (int j = i + 1; j < 3; j++)
@@ -256,8 +312,8 @@ void DEMSolver::figureOutNV() {
                       n_more_bits_for_me[0], n_more_bits_for_me[1]);
 
     // Then we know how many bits each one would have
-    int base_bits = ((int)VOXEL_COUNT_POWER2 - n_more_bits_for_me[0] - n_more_bits_for_me[1]) / 3;
-    int left_over = ((int)VOXEL_COUNT_POWER2 - n_more_bits_for_me[0] - n_more_bits_for_me[1]) % 3;
+    int base_bits = ((int)VOXEL_COUNT_POWER2 - 2 * n_more_bits_for_me[0] - n_more_bits_for_me[1]) / 3;
+    int left_over = ((int)VOXEL_COUNT_POWER2 - 2 * n_more_bits_for_me[0] - n_more_bits_for_me[1]) % 3;
     int bits_3rd = base_bits;
     int bits_2nd = bits_3rd + n_more_bits_for_me[0];
     int bits_1st = bits_2nd + n_more_bits_for_me[1];
@@ -343,10 +399,10 @@ void DEMSolver::decideBinSize() {
         }
     }
 
-    // TODO: What should be a default bin size?
+    // use_user_defined_bin_size means the user explicitly gave a number for bin size
     if (m_smallest_radius > DEME_TINY_FLOAT) {
         if (!use_user_defined_bin_size) {
-            m_binSize = 2.0 * m_smallest_radius;
+            m_binSize = m_binSize_as_multiple * m_smallest_radius;
         }
     } else {
         if (!use_user_defined_bin_size) {
@@ -360,63 +416,109 @@ void DEMSolver::decideBinSize() {
         }
     }
 
-    nbX = (binID_t)(m_voxelSize * (double)((size_t)1 << nvXp2) / m_binSize) + 1;
-    nbY = (binID_t)(m_voxelSize * (double)((size_t)1 << nvYp2) / m_binSize) + 1;
-    nbZ = (binID_t)(m_voxelSize * (double)((size_t)1 << nvZp2) / m_binSize) + 1;
-    m_num_bins = (uint64_t)nbX * (uint64_t)nbY * (uint64_t)nbZ;
+    m_num_bins = hostCalcBinNum(nbX, nbY, nbZ, m_voxelSize, m_binSize, nvXp2, nvYp2, nvZp2);
     // It's better to compute num of bins this way, rather than...
     // (uint64_t)(m_boxX / m_binSize + 1) * (uint64_t)(m_boxY / m_binSize + 1) * (uint64_t)(m_boxZ / m_binSize + 1);
     // because the space bins and voxels can cover may be larger than the user-defined sim domain
+    // Do we have more bins that our data type can handle?
+    if (m_num_bins > std::numeric_limits<binID_t>::max() - 1) {
+        if (!use_user_defined_bin_size) {
+            DEME_WARNING(
+                "%zu initial bins created with size %.6g. This is more than max allowance %zu. Auto-adjusting...",
+                m_num_bins, m_binSize, (size_t)(std::numeric_limits<binID_t>::max() - 1));
+            while (m_num_bins > std::numeric_limits<binID_t>::max() - 1) {
+                m_binSize *= 1.5;
+                m_num_bins = hostCalcBinNum(nbX, nbY, nbZ, m_voxelSize, m_binSize, nvXp2, nvYp2, nvZp2);
+            }
+            DEME_WARNING("Bin size auto-adjusted to %.6g, now we have %zu initial bins.", m_binSize, m_num_bins);
+        } else {
+            DEME_ERROR(
+                "The simulation world has %zu bins (for domain partitioning in contact detection), but the largest bin "
+                "ID that we can have is %zu.\nYou can try to make bins larger via SetInitBinSize, or redefine binID_t "
+                "and recompile.",
+                m_num_bins, (size_t)(std::numeric_limits<binID_t>::max() - 1));
+        }
+    }
+}
+
+void DEMSolver::decideCDMarginStrat() {
+    switch (m_max_v_finder_type) {
+        case (MARGIN_FINDER_TYPE::DEM_INSPECTOR):
+            break;
+        case (MARGIN_FINDER_TYPE::DEFAULT):
+            // Default strategy is to use an inspector
+            m_approx_max_vel_func = this->CreateInspector("absv");
+            m_max_v_finder_type = MARGIN_FINDER_TYPE::DEM_INSPECTOR;
+            break;
+    }
 }
 
 void DEMSolver::reportInitStats() const {
+    DEME_INFO("\n");
     DEME_INFO("Number of total active devices: %d", dTkT_GpuManager->getNumDevices());
 
+    DEME_INFO("User-specified X-dimension range: [%.7g, %.7g]", m_user_box_min.x, m_user_box_max.x);
+    DEME_INFO("User-specified Y-dimension range: [%.7g, %.7g]", m_user_box_min.y, m_user_box_max.y);
+    DEME_INFO("User-specified Z-dimension range: [%.7g, %.7g]", m_user_box_min.z, m_user_box_max.z);
+    DEME_INFO("User-specified dimensions should NOT be larger than the following simulation world.");
     DEME_INFO("The dimension of the simulation world: %.17g, %.17g, %.17g", m_boxX, m_boxY, m_boxZ);
     DEME_INFO("Simulation world X range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_boxX);
     DEME_INFO("Simulation world Y range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_boxY);
     DEME_INFO("Simulation world Z range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_boxZ);
-    DEME_INFO("User-specified dimensions should NOT be larger than the above simulation world.");
-    DEME_INFO("User-specified X-dimension range: [%.7g, %.7g]", m_boxLBF.x, m_boxLBF.x + m_user_boxSize.x);
-    DEME_INFO("User-specified Y-dimension range: [%.7g, %.7g]", m_boxLBF.y, m_boxLBF.y + m_user_boxSize.y);
-    DEME_INFO("User-specified Z-dimension range: [%.7g, %.7g]", m_boxLBF.z, m_boxLBF.z + m_user_boxSize.z);
+
     DEME_INFO("The length unit in this simulation is: %.17g", l);
     DEME_INFO("The edge length of a voxel: %.17g", m_voxelSize);
 
-    DEME_INFO("The edge length of a bin: %.17g", m_binSize);
-    DEME_INFO("The total number of bins: %zu", m_num_bins);
+    DEME_INFO("The initial time step size: %.7g", m_ts_size);
+    DEME_INFO("The initial edge length of a bin: %.17g", m_binSize);
+    DEME_INFO("The initial number of bins: %zu", m_num_bins);
 
     DEME_INFO("The total number of clumps: %zu", nOwnerClumps);
     DEME_INFO("The combined number of component spheres: %zu", nSpheresGM);
     DEME_INFO("The total number of analytical objects: %u", nExtObj);
-    DEME_INFO("The total number of meshes: %u", nTriMeshes);
+    DEME_INFO("The total number of meshes: %zu", nTriMeshes);
     DEME_INFO("Grand total number of owners: %zu", nOwnerBodies);
-
-    if (m_expand_factor > 0.0) {
-        DEME_INFO("All geometries are enlarged/thickened by %.9g for contact detection purpose", m_expand_factor);
-        DEME_INFO("This in the case of the smallest sphere, means enlarging radius by %.9g%%",
-                  (m_expand_factor / m_smallest_radius) * 100.0);
-    }
 
     DEME_INFO("The number of material types: %u", nMatTuples);
     switch (m_force_model->type) {
         case (FORCE_MODEL::HERTZIAN):
-            DEME_INFO("History-based Hertzian contact model is in use");
+            DEME_INFO("History-based Hertzian contact model is in use.");
             break;
         case (FORCE_MODEL::HERTZIAN_FRICTIONLESS):
-            DEME_INFO("Frictionless Hertzian contact model is in use");
+            DEME_INFO("Frictionless Hertzian contact model is in use.");
             break;
         case (FORCE_MODEL::CUSTOM):
-            DEME_INFO("A user-custom force model is in use");
+            DEME_INFO("A user-custom force model is in use.");
             break;
         default:
             DEME_INFO("An unknown force model is in use, this is probably not going well...");
     }
 
+    if (use_user_defined_expand_factor) {
+        DEME_INFO(
+            "All geometries are enlarged/thickened by %.6g (estimated with the initial step size and update frequency) "
+            "for contact detection purpose.",
+            m_expand_factor);
+        DEME_INFO("This in the case of the smallest sphere, means enlarging radius by %.6g%%.",
+                  (m_expand_factor / m_smallest_radius) * 100.0);
+    } else {
+        DEME_INFO("The solver to set to adaptively change the contact margin size.");
+        float expand_factor = (m_expand_safety_multi * AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE + m_expand_base_vel) *
+                              m_suggestedFutureDrift * m_ts_size;
+        DEME_STEP_METRIC(
+            "To give an example, all geometries may be enlarged/thickened by around %.6g (estimated with the initial "
+            "step size, initial update frequency and velocity %.4g) for contact detection purpose.",
+            expand_factor, AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE);
+        DEME_STEP_METRIC("This in the case of the smallest sphere, means enlarging radius by %.6g%%.",
+                         (expand_factor / m_smallest_radius) * 100.0);
+    }
+
+    DEME_INFO("\n");
+
     // Debug outputs
     DEME_DEBUG_EXEC(printf("These owners are tracked: ");
                     for (const auto& tracked
-                         : m_tracked_objs) { printf("%zu, ", tracked->ownerID); } printf("\n"););
+                         : m_tracked_objs) { printf("%zu, ", (size_t)tracked->ownerID); } printf("\n"););
 }
 
 void DEMSolver::preprocessAnalyticalObjs() {
@@ -428,16 +530,12 @@ void DEMSolver::preprocessAnalyticalObjs() {
         m_ext_obj_mass.push_back(ext_obj->mass);
         m_ext_obj_moi.push_back(ext_obj->MOI);
 
-        //// TODO: If CoM is not all-0, all components should be offsetted
-        // float3 CoM = ext_obj->CoM;
-        // float4 CoM_oriQ = ext_obj->CoM_oriQ;
-
         // Then load this ext obj's components
         unsigned int this_num_anal_ent = 0;
         auto comp_params = ext_obj->entity_params;
         auto comp_mat = ext_obj->materials;
         m_input_ext_obj_xyz.push_back(ext_obj->init_pos);
-        //// TODO: init_oriQ?????
+        m_input_ext_obj_rot.push_back(ext_obj->init_oriQ);
         m_input_ext_obj_family.push_back(ext_obj->family_code);
         for (unsigned int i = 0; i < ext_obj->types.size(); i++) {
             auto param = comp_params.at(this_num_anal_ent);
@@ -507,7 +605,7 @@ void DEMSolver::preprocessClumpTemplates() {
             this_clump_sp_mat_ids.push_back(this_material->load_order);
         }
         m_template_sp_mat_ids.push_back(this_clump_sp_mat_ids);
-        DEME_DEBUG_EXEC(printf("Input clump No.%d has material types: ", m_template_clump_mass.size() - 1);
+        DEME_DEBUG_EXEC(printf("Input clump No.%zu has material types: ", m_template_clump_mass.size() - 1);
                         for (unsigned int i = 0; i < this_clump_sp_mat_ids.size();
                              i++) { printf("%d, ", this_clump_sp_mat_ids.at(i)); } printf("\n"););
     }
@@ -539,9 +637,6 @@ void DEMSolver::preprocessTriangleObjs() {
         }
         m_mesh_obj_mass.push_back(mesh_obj->mass);
         m_mesh_obj_moi.push_back(mesh_obj->MOI);
-        //// TODO: If CoM is not all-0, all components should be offsetted
-        // float3 CoM = ext_obj->CoM;
-        // float4 CoM_oriQ = ext_obj->CoM_oriQ;
 
         m_input_mesh_obj_xyz.push_back(mesh_obj->init_pos);
         m_input_mesh_obj_rot.push_back(mesh_obj->init_oriQ);
@@ -576,7 +671,7 @@ void DEMSolver::preprocessTriangleObjs() {
 }
 
 void DEMSolver::figureOutMaterialProxies() {
-    // It now got completely integrated to the jitification part
+    // It now got completely integrated to the equipMaterials part
 }
 
 void DEMSolver::figureOutFamilyMasks() {
@@ -593,7 +688,7 @@ void DEMSolver::figureOutFamilyMasks() {
 
     // We always know the size of the mask matrix, and we init it as all-allow
     m_family_mask_matrix.clear();
-    m_family_mask_matrix.resize((NUM_AVAL_FAMILIES - 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
+    m_family_mask_matrix.resize((NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
 
     // Then we figure out the masks
     for (const auto& a_pair : m_input_no_contact_pairs) {
@@ -615,33 +710,84 @@ void DEMSolver::figureOutFamilyMasks() {
 
         this_family_info.used = true;
         this_family_info.family = user_family;
-        if (preInfo.linPosX != "none")
+
+        // If one positional coord is fixed then all of this object is fixed... this is just my design choice. If the
+        // user want to prescribe X but not Y, why don't they just prescribe velocity instead?
+        if (preInfo.linPosX != "none") {
             this_family_info.linPosX = preInfo.linPosX;
-        if (preInfo.linPosY != "none")
+            this_family_info.linPosPrescribed = true;
+        }
+        if (preInfo.linPosY != "none") {
             this_family_info.linPosY = preInfo.linPosY;
-        if (preInfo.linPosZ != "none")
+            this_family_info.linPosPrescribed = true;
+        }
+        if (preInfo.linPosZ != "none") {
             this_family_info.linPosZ = preInfo.linPosZ;
-        if (preInfo.oriQ != "none")
+            this_family_info.linPosPrescribed = true;
+        }
+        if (preInfo.oriQ != "none") {
             this_family_info.oriQ = preInfo.oriQ;
-        if (preInfo.linVelX != "none")
+            this_family_info.rotPosPrescribed = true;
+        }
+
+        // If it is not none, then it is automatically dictated by prescribed motion and will not accept influence by
+        // other sim entities
+        if (preInfo.linVelX != "none") {
             this_family_info.linVelX = preInfo.linVelX;
-        if (preInfo.linVelY != "none")
+            this_family_info.linVelXPrescribed = true;
+        }
+        if (preInfo.linVelY != "none") {
             this_family_info.linVelY = preInfo.linVelY;
-        if (preInfo.linVelZ != "none")
+            this_family_info.linVelYPrescribed = true;
+        }
+        if (preInfo.linVelZ != "none") {
             this_family_info.linVelZ = preInfo.linVelZ;
-        if (preInfo.rotVelX != "none")
+            this_family_info.linVelZPrescribed = true;
+        }
+        if (preInfo.rotVelX != "none") {
             this_family_info.rotVelX = preInfo.rotVelX;
-        if (preInfo.rotVelY != "none")
+            this_family_info.rotVelXPrescribed = true;
+        }
+        if (preInfo.rotVelY != "none") {
             this_family_info.rotVelY = preInfo.rotVelY;
-        if (preInfo.rotVelZ != "none")
+            this_family_info.rotVelYPrescribed = true;
+        }
+        if (preInfo.rotVelZ != "none") {
             this_family_info.rotVelZ = preInfo.rotVelZ;
-        this_family_info.linVelPrescribed = this_family_info.linVelPrescribed || preInfo.linVelPrescribed;
-        this_family_info.rotVelPrescribed = this_family_info.rotVelPrescribed || preInfo.rotVelPrescribed;
+            this_family_info.rotVelZPrescribed = true;
+        }
+
+        // Possibly the user explicitly ordered this family to not accept influence from other sim entities; if it is
+        // the case, we enforce that here.
+        this_family_info.linVelXPrescribed = this_family_info.linVelXPrescribed || preInfo.linVelXPrescribed;
+        this_family_info.linVelYPrescribed = this_family_info.linVelYPrescribed || preInfo.linVelYPrescribed;
+        this_family_info.linVelZPrescribed = this_family_info.linVelZPrescribed || preInfo.linVelZPrescribed;
+        this_family_info.rotVelXPrescribed = this_family_info.rotVelXPrescribed || preInfo.rotVelXPrescribed;
+        this_family_info.rotVelYPrescribed = this_family_info.rotVelYPrescribed || preInfo.rotVelYPrescribed;
+        this_family_info.rotVelZPrescribed = this_family_info.rotVelZPrescribed || preInfo.rotVelZPrescribed;
+
         this_family_info.rotPosPrescribed = this_family_info.rotPosPrescribed || preInfo.rotPosPrescribed;
         this_family_info.linPosPrescribed = this_family_info.linPosPrescribed || preInfo.linPosPrescribed;
 
-        this_family_info.externPos = this_family_info.externPos || preInfo.externPos;
-        this_family_info.externVel = this_family_info.externVel || preInfo.externVel;
+        // Then register the accelerations that are added on top of `normal physics'
+        if (preInfo.accX != "none") {
+            this_family_info.accX = preInfo.accX;
+        }
+        if (preInfo.accY != "none") {
+            this_family_info.accY = preInfo.accY;
+        }
+        if (preInfo.accZ != "none") {
+            this_family_info.accZ = preInfo.accZ;
+        }
+        if (preInfo.angAccX != "none") {
+            this_family_info.angAccX = preInfo.angAccX;
+        }
+        if (preInfo.angAccY != "none") {
+            this_family_info.angAccY = preInfo.angAccY;
+        }
+        if (preInfo.angAccZ != "none") {
+            this_family_info.angAccZ = preInfo.angAccZ;
+        }
 
         DEME_DEBUG_PRINTF("User family %u has prescribed lin vel: %s, %s, %s", user_family,
                           this_family_info.linVelX.c_str(), this_family_info.linVelY.c_str(),
@@ -652,52 +798,65 @@ void DEMSolver::figureOutFamilyMasks() {
     }
 }
 
-void DEMSolver::figureOutOrigin() {
-    if (m_user_instructed_origin == "explicit") {
-        return;
-    }
-    float3 O;
-    if (m_user_instructed_origin == "center" || m_user_instructed_origin == "0") {
-        O = -(m_user_boxSize) / 2.0;
-        m_boxLBF = O;
-    } else if (m_user_instructed_origin == "-13") {
-        O.x = 0;
-        O.y = 0;
-        O.z = 0;
-        m_boxLBF = O;
-    } else {
-        //// TODO: Implement all of them
-        DEME_ERROR("Unrecognized location of system origin.");
-    }
-}
-
 void DEMSolver::addWorldBoundingBox() {
     // Now, add the bounding box for the simulation `world' if instructed.
     // Note the positions to add these planes are determined by the user-wanted box sizes, not m_boxXYZ which is the max
     // possible box size.
     if (m_user_add_bounding_box == "none")
         return;
+    bool top = false, bottom = false, sides = false;
+    switch (hash_charr(m_user_add_bounding_box.c_str())) {
+        case ("only_bottom"_):
+            bottom = true;
+            break;
+        case ("only_sides"_):
+            sides = true;
+            break;
+        case ("top_open"_):
+            bottom = true;
+            sides = true;
+            break;
+        case ("all"_):
+            bottom = true;
+            sides = true;
+            top = true;
+            break;
+        default:
+            DEME_ERROR("Domain bounding BC instruction %s is unknown.", m_user_add_bounding_box.c_str());
+    }
+
     auto box = this->AddExternalObject();
-    box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y + m_user_boxSize.y / 2., m_boxLBF.z),
-                  host_make_float3(0, 0, 1), m_bounding_box_material);
-    if (m_user_add_bounding_box == "only_bottom")
-        return;
-    box->AddPlane(host_make_float3(m_boxLBF.x, m_boxLBF.y + m_user_boxSize.y / 2., m_boxLBF.z + m_user_boxSize.z / 2.),
-                  host_make_float3(1, 0, 0), m_bounding_box_material);
-    box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x, m_boxLBF.y + m_user_boxSize.y / 2.,
-                                   m_boxLBF.z + m_user_boxSize.z / 2.),
-                  host_make_float3(-1, 0, 0), m_bounding_box_material);
-    box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y, m_boxLBF.z + m_user_boxSize.z / 2.),
-                  host_make_float3(0, 1, 0), m_bounding_box_material);
-    box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y + m_user_boxSize.y,
-                                   m_boxLBF.z + m_user_boxSize.z / 2.),
-                  host_make_float3(0, -1, 0), m_bounding_box_material);
-    if (m_user_add_bounding_box == "top_open")
-        return;
-    // Finally, if == all, add a top boundary
-    box->AddPlane(host_make_float3(m_boxLBF.x + m_user_boxSize.x / 2., m_boxLBF.y + m_user_boxSize.y / 2.,
-                                   m_boxLBF.z + m_user_boxSize.z),
-                  host_make_float3(0, 0, -1), m_bounding_box_material);
+    if (bottom) {
+        float3 bottom_loc = (m_user_box_min + m_user_box_max) / 2.;
+        bottom_loc.z = m_user_box_min.z;
+        box->AddPlane(bottom_loc, host_make_float3(0, 0, 1), m_bounding_box_material);
+    }
+
+    if (sides) {
+        float3 center = (m_user_box_min + m_user_box_max) / 2.;
+
+        float3 left = center;
+        left.x = m_user_box_min.x;
+        box->AddPlane(left, host_make_float3(1, 0, 0), m_bounding_box_material);
+
+        float3 right = center;
+        right.x = m_user_box_max.x;
+        box->AddPlane(right, host_make_float3(-1, 0, 0), m_bounding_box_material);
+
+        float3 front = center;
+        front.y = m_user_box_min.y;
+        box->AddPlane(front, host_make_float3(0, 1, 0), m_bounding_box_material);
+
+        float3 the_back = center;
+        the_back.y = m_user_box_max.y;
+        box->AddPlane(the_back, host_make_float3(0, -1, 0), m_bounding_box_material);
+    }
+
+    if (top) {
+        float3 top_loc = (m_user_box_min + m_user_box_max) / 2.;
+        top_loc.z = m_user_box_max.z;
+        box->AddPlane(top_loc, host_make_float3(0, 0, -1), m_bounding_box_material);
+    }
 }
 
 // This is generally used to pass individual instructions on how the solver should behave
@@ -711,8 +870,16 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.hasMeshes = (nTriObjLoad > 0);
 
     // I/O policies (only output content, not file format, matters for worker threads)
-    dT->solverFlags.outputFlags = m_out_content;
-    dT->solverFlags.cntOutFlags = m_cnt_out_content;
+    auto output_level = m_out_content;
+    if (m_is_out_owner_wildcards) {
+        output_level = output_level | OUTPUT_CONTENT::OWNER_WILDCARD;
+    }
+    dT->solverFlags.outputFlags = output_level;
+    output_level = m_cnt_out_content;
+    if (m_is_out_cnt_wildcards) {
+        output_level = output_level | CNT_OUTPUT_CONTENT::CNT_WILDCARD;
+    }
+    dT->solverFlags.cntOutFlags = output_level;
 
     // Transfer historyless-ness
     kT->solverFlags.isHistoryless = (m_force_model->m_contact_wildcards.size() == 0);
@@ -727,14 +894,22 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.useMassJitify = jitify_mass_moi;
     kT->solverFlags.useClumpJitify = jitify_clump_templates;
 
-    // CD strategy
-    kT->solverFlags.useOneBinPerThread = use_one_bin_per_thread;
-
-    // Tell kT and dT if this run is async
-    kT->solverFlags.isAsync = !(m_updateFreq == 0);
-    dT->solverFlags.isAsync = !(m_updateFreq == 0);
-    // Make sure dT kT understand the lock--waiting policy of this run
-    dTkT_InteractionManager->dynamicRequestedUpdateFrequency = m_updateFreq;
+    // Tell kT and dT if and how this run is async.
+    // Note this code doesn't really have async play, since dT is ahead of kT for at least one ts, unless all the user
+    // uses is DoDynamicsThenSync.
+    kT->solverFlags.isAsync = !((m_suggestedFutureDrift == 0) && !auto_adjust_update_freq);
+    dT->solverFlags.isAsync = !((m_suggestedFutureDrift == 0) && !auto_adjust_update_freq);
+    // Ideal max drift in solverFlags may not be up-to-date, and only represents what the solver thinks it ought to be.
+    // Interaction manager's copy prevails.
+    dT->granData->perhapsIdealFutureDrift = m_suggestedFutureDrift;
+    // The reason why we use dTMaxFutureDrift rather than m_updateFreq is the following...
+    // dT's contact pair info is actually in a `double stale' situation. kT-supplied contact pairs are based on some old
+    // position info already (because kT needs time to run after a dT's order is placed), and dT needs to use this
+    // contact info for some extra steps. That's why 2 * m_updateFreq (m_updateFreq can be used-estimated and derived
+    // from kT--dT collab stats, so the solver has no control over how it is inputted; it just has to use it wisely) is
+    // actually a better guess for the max dT-into-future steps.
+    dTkT_InteractionManager->dynamicMaxFutureDrift = m_suggestedFutureDrift;
+    dTkT_InteractionManager->kinematicMaxFutureDrift = m_suggestedFutureDrift;
 
     // Tell kT and dT whether the user enforeced potential on-the-fly family number changes
     kT->solverFlags.canFamilyChange = famnum_can_change_conditionally;
@@ -749,20 +924,55 @@ void DEMSolver::transferSolverParams() {
     // Whether sorts contact before using them (not implemented)
     kT->solverFlags.should_sort_pairs = should_sort_contacts;
     dT->solverFlags.should_sort_pairs = should_sort_contacts;
+
+    // Error out policies
+    kT->simParams->errOutBinSphNum = threshold_too_many_spheres_in_bin;
+    dT->simParams->errOutBinSphNum = threshold_too_many_spheres_in_bin;
+    kT->simParams->errOutBinTriNum = threshold_too_many_tri_in_bin;
+    dT->simParams->errOutBinTriNum = threshold_too_many_tri_in_bin;
+    kT->simParams->errOutVel = threshold_error_out_vel;
+    dT->simParams->errOutVel = threshold_error_out_vel;
+    kT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
+    dT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
+
+    // Whether the solver should auto-update bin sizes
+    kT->solverFlags.autoBinSize = auto_adjust_bin_size;
+    {
+        kT->stateParams.binChangeObserveSteps = auto_adjust_observe_steps;
+        kT->stateParams.binTopChangeRate = auto_adjust_max_rate;
+        kT->stateParams.binChangeRateAcc = auto_adjust_acc;
+        // Suppose for avoiding bins too big, the most proactive thing you can do is starting to shrink it when half max
+        // geo count is reached...
+        kT->stateParams.binChangeUpperSafety = 0.5 + (1. - auto_adjust_upper_proactive_ratio) * 0.5;
+        kT->stateParams.binChangeLowerSafety = 0.5 + (1. - auto_adjust_lower_proactive_ratio) * 0.5;
+    }
+
+    // CDFreq auto-adapt related
+    kT->solverFlags.autoUpdateFreq = auto_adjust_update_freq;
+    dT->solverFlags.autoUpdateFreq = auto_adjust_update_freq;
+    dT->solverFlags.upperBoundFutureDrift = upper_bound_future_drift;
+    dT->solverFlags.targetDriftMoreThanAvg = max_drift_ahead_of_avg_drift;
+    dT->solverFlags.targetDriftMultipleOfAvg = max_drift_multiple_of_avg_drift;
+    dT->accumStepUpdater.SetCacheSize(max_drift_gauge_history_size);
 }
 
 void DEMSolver::transferSimParams() {
-    // Figure out ts size and the envelope to add to geometries (for CD safety)
-    if ((!use_user_defined_expand_factor) && ts_size_is_const) {
-        m_expand_factor = m_approx_max_vel * m_ts_size * m_updateFreq * m_expand_safety_param;
-    }
-    if (m_expand_factor * m_expand_safety_param <= 0.0 && m_updateFreq > 0 && ts_size_is_const) {
+    if ((!use_user_defined_expand_factor) && m_approx_max_vel < 1e-4f && m_suggestedFutureDrift > 0) {
         DEME_WARNING(
-            "You instructed that the physics can stretch %u time steps into the future, but did not instruct the "
-            "geometries to expand via SetExpandFactor or SetMaxVelocity. The contact detection procedure will likely "
-            "fail to detect some contact events before it is too late, hindering the simulation accuracy and "
-            "stability.",
-            m_updateFreq);
+            "You instructed that the physics can stretch %u time steps into the future, and explicitly specified the "
+            "maximum velocity is %.6g.\nThe velocity appears to be small, and the contact detection "
+            "procedure will likely fail to detect some contact events before it is too late.",
+            m_suggestedFutureDrift, m_approx_max_vel);
+    }
+    if ((!use_user_defined_expand_factor) && (m_expand_base_vel < 1e-4f || m_expand_safety_multi < 1.f) &&
+        m_suggestedFutureDrift > 0) {
+        DEME_WARNING(
+            "You instructed that the physics can stretch %u time steps into the future, and specified that\nthe "
+            "multiplier for the maximum velocity is %.6g and adder %.6g.\nThey will make the solver estimate the "
+            "evolution of the maximum velocity to less similar to or less than historical values.\nThe contact "
+            "detection procedure will likely fail to detect some contact events before it is too late, hindering the "
+            "simulation accuracy and stability.",
+            m_suggestedFutureDrift, m_expand_safety_multi, m_expand_base_vel);
     }
     // Compute the number of wildcards in our force model
     unsigned int nContactWildcards = m_force_model->m_contact_wildcards.size();
@@ -775,12 +985,12 @@ void DEMSolver::transferSimParams() {
     }
     DEME_DEBUG_PRINTF("%u contact wildcards are in the force model.", nContactWildcards);
 
-    dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
-                     m_expand_factor, m_approx_max_vel, m_expand_safety_param, m_force_model->m_contact_wildcards,
-                     m_force_model->m_owner_wildcards);
-    kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, G, m_ts_size,
-                     m_expand_factor, m_approx_max_vel, m_expand_safety_param, m_force_model->m_contact_wildcards,
-                     m_force_model->m_owner_wildcards);
+    dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
+                     m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_expand_safety_multi,
+                     m_expand_base_vel, m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards);
+    kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
+                     m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_expand_safety_multi,
+                     m_expand_base_vel, m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards);
 }
 
 void DEMSolver::allocateGPUArrays() {
@@ -811,7 +1021,7 @@ void DEMSolver::initializeGPUArrays() {
         // Clump batchs' initial stats
         cached_input_clump_batches,
         // Analytical objects' initial stats
-        m_input_ext_obj_xyz, m_input_ext_obj_family,
+        m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
         // Meshed objects' initial stats
         cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner,
         m_mesh_facet_materials, m_mesh_facets,
@@ -859,7 +1069,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // Clump batchs' initial stats
         cached_input_clump_batches,
         // Analytical objects' initial stats
-        m_input_ext_obj_xyz, m_input_ext_obj_family,
+        m_input_ext_obj_xyz, m_input_ext_obj_rot, m_input_ext_obj_family,
         // Meshed objects' initial stats
         cached_mesh_objs, m_input_mesh_obj_xyz, m_input_mesh_obj_rot, m_input_mesh_obj_family, m_mesh_facet_owner,
         m_mesh_facet_materials, m_mesh_facets,
@@ -908,28 +1118,33 @@ void DEMSolver::validateUserInputs() {
     //     LoadClumpType.");
     // }
 
-    if (m_user_boxSize.x <= 0.f || m_user_boxSize.y <= 0.f || m_user_boxSize.z <= 0.f) {
+    float3 user_box_size = m_user_box_max - m_user_box_min;
+    if (user_box_size.x <= 0.f || user_box_size.y <= 0.f || user_box_size.z <= 0.f) {
         DEME_ERROR(
             "The size of the simulation world is set to be (or default to be) %f by %f by %f. It is impossibly small.",
-            m_user_boxSize.x, m_user_boxSize.y, m_user_boxSize.z);
+            user_box_size.x, user_box_size.y, user_box_size.z);
     }
 
-    if (m_updateFreq < 0) {
+    if (m_suggestedFutureDrift < 0) {
         DEME_WARNING(
             "The physics of the DEM system can drift into the future as much as it wants compared to contact "
             "detections, because SetCDUpdateFreq was called with a negative argument. Please make sure this is "
             "intended.");
     }
 
-    if ((!ts_size_is_const) && (!use_user_defined_expand_factor) && (m_approx_max_vel <= 0.f)) {
-        DEME_ERROR(
-            "When using variable time step size, this solver needs your approximated maximum body/point velocity to "
-            "add margins for a safe contact detection.\nYou should either supply that via SetMaxVelocity, or "
-            "explicitly set a expand factor via SetExpandFactor.");
-    }
-
     // Fix the reserved family (reserved family number is in user family, not in impl family)
     SetFamilyFixed(RESERVED_FAMILY_NUM);
+}
+
+bool DEMSolver::goThroughWorkerAnomalies() {
+    bool there_is = false;
+    if (kT->anomalies.over_max_vel || dT->anomalies.over_max_vel) {
+        DEME_PRINTF(
+            "Workers reported there are simulation entities reached user-specified maximum velocity.\nDetails can be "
+            "shown by re-running with \"STEP_ANOMALY\" verbosity level.\n");
+        there_is = true;
+    }
+    return there_is;
 }
 
 // inline unsigned int stash_material_in_templates(std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
@@ -951,26 +1166,57 @@ void DEMSolver::validateUserInputs() {
 inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::string>& strMap) {
     // Empty ingr list
     auto added_ingredients = force_kernel_ingredient_stats;
+    std::set<std::string> added_owner_wildcards;
     // Analyze this model... what does it require?
     std::string model = m_force_model->m_force_model;
     // It should have those following names in it
     const std::set<std::string> contact_wildcard_names = m_force_model->m_contact_wildcards;
     const std::set<std::string> owner_wildcard_names = m_force_model->m_owner_wildcards;
+    m_owner_wc_num.clear();
     // If we spot that the force model requires an ingredient, we make sure that order goes to the ingredient
     // acquisition module
-    std::string ingredient_definition = " ", wildcard_acquisition = " ", ingredient_acquisition_A = " ",
-                ingredient_acquisition_B = " ", wildcard_write_back = " ", wildcard_destroy_record = " ";
+    std::string ingredient_definition = " ", cnt_wildcard_acquisition = " ", ingredient_acquisition_A = " ",
+                ingredient_acquisition_B = " ", owner_wildcard_write_back = " ", cnt_wildcard_write_back = " ",
+                cnt_wildcard_destroy_record = " ";
     scan_force_model_ingr(added_ingredients, model);
+    // As our numerical method stands now, AOwnerFamily and BOwnerFamily are always needed.
+    add_force_model_ingr(added_ingredients, "AOwnerFamily");
+    add_force_model_ingr(added_ingredients, "BOwnerFamily");
+    // If we collect force in force-calc kernel, these are needed...
     if (collect_force_in_force_kernel) {
         add_force_model_ingr(added_ingredients, "AOwner");
         add_force_model_ingr(added_ingredients, "BOwner");
         add_force_model_ingr(added_ingredients, "AOwnerMOI");
         add_force_model_ingr(added_ingredients, "BOwnerMOI");
     }
+    // Then, owner wildcards should be added to the ingredient list too. But first we check whether a owner wildcard
+    // shares name with existing ingredients. If not, we add them to the list.
+    unsigned int owner_wc_num = 0;
+    for (const auto& owner_wildcard_name : owner_wildcard_names) {
+        if (added_ingredients.find(owner_wildcard_name) != added_ingredients.end()) {
+            DEME_ERROR(
+                "Owner wildcard %s shares its name with a reserved contact force model ingredient.\nPlease select a "
+                "different name for this wildcard and try again.",
+                owner_wildcard_name.c_str());
+        }
+        added_owner_wildcards.insert(owner_wildcard_name);
+        // Finally, owner wildcards are subject to user modification, so it is better to keep tab of their numbering for
+        // later use.
+        m_owner_wc_num[owner_wildcard_name] = owner_wc_num;
+        owner_wc_num++;
+    }
+    // Owner write-back needs ABOwner number
+    if (owner_wildcard_names.size() > 0) {
+        add_force_model_ingr(added_ingredients, "AOwner");
+        add_force_model_ingr(added_ingredients, "BOwner");
+    }
 
     // Equip those acquisition strategies that need to be there
     equip_force_model_ingr_acq(ingredient_definition, ingredient_acquisition_A, ingredient_acquisition_B,
                                added_ingredients);
+    // Then equip acquisition strategies for owner wildcards
+    equip_owner_wildcards(ingredient_definition, ingredient_acquisition_A, ingredient_acquisition_B,
+                          owner_wildcard_write_back, added_owner_wildcards);
 
     // Acq strategies may have moi acq strategy in them that needs to be replaced first...
     ingredient_acquisition_A = replace_patterns(ingredient_acquisition_A, strMap);
@@ -997,7 +1243,8 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
 
     // For contact wildcards, it needs to be brought from the global memory, and we expect the user's force model to use
     // and modify them, and in the end we will write them back to global mem.
-    equip_contact_wildcards(wildcard_acquisition, wildcard_write_back, wildcard_destroy_record, contact_wildcard_names);
+    equip_contact_wildcards(cnt_wildcard_acquisition, cnt_wildcard_write_back, cnt_wildcard_destroy_record,
+                            contact_wildcard_names);
 
     // If the user wants to reduce force in the calculation kernel...
     std::string whether_reduce_in_kernel = " ";
@@ -1024,17 +1271,20 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     strMap["_forceModelIngredientAcqForA_"] = ingredient_acquisition_A;
     strMap["_forceModelIngredientAcqForB_"] = ingredient_acquisition_B;
 
-    strMap["_forceModelContactWildcardAcq_"] = wildcard_acquisition;
-    strMap["_forceModelContactWildcardWrite_"] = wildcard_write_back;
-    strMap["_forceModelContactWildcardDestroy_"] = wildcard_destroy_record;
+    strMap["_forceModelOwnerWildcardWrite_"] = owner_wildcard_write_back;
+
+    strMap["_forceModelContactWildcardAcq_"] = cnt_wildcard_acquisition;
+    strMap["_forceModelContactWildcardWrite_"] = cnt_wildcard_write_back;
+    strMap["_forceModelContactWildcardDestroy_"] = cnt_wildcard_destroy_record;
 
     strMap["_forceCollectInPlaceStrat_"] = whether_reduce_in_kernel;
     strMap["_contactInfoWrite_"] = contact_info_write_strat;
 
-    DEME_DEBUG_PRINTF("Wildcard acquisition:\n%s", wildcard_acquisition.c_str());
-    DEME_DEBUG_PRINTF("Wildcard write-back:\n%s", wildcard_write_back.c_str());
-    DEME_DEBUG_PRINTF("Wildcard destroy inactive contacts:\n%s", wildcard_destroy_record.c_str());
+    DEME_DEBUG_PRINTF("Model ingredient definition:\n%s", ingredient_definition.c_str());
 
+    // DEME_DEBUG_PRINTF("Wildcard acquisition:\n%s", cnt_wildcard_acquisition.c_str());
+    // DEME_DEBUG_PRINTF("Wildcard write-back:\n%s", cnt_wildcard_write_back.c_str());
+    // DEME_DEBUG_PRINTF("Wildcard destroy inactive contacts:\n%s", cnt_wildcard_destroy_record.c_str());
     // DEME_DEBUG_PRINTF("Contact info writing strategy:\n%s", contact_info_write_strat.c_str());
 }
 
@@ -1064,14 +1314,15 @@ inline void DEMSolver::equipFamilyOnFlyChanges(std::unordered_map<std::string, s
 }
 
 inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::string, std::string>& strMap) {
-    std::string velStr = " ", posStr = " ";
+    std::string velStr = " ", posStr = " ", accStr = " ";
     for (const auto& preInfo : m_unique_family_prescription) {
         if (!preInfo.used) {
             continue;
         }
         velStr += "case " + std::to_string(preInfo.family) + ": {";
         posStr += "case " + std::to_string(preInfo.family) + ": {";
-        if (!preInfo.externVel) {
+        accStr += "case " + std::to_string(preInfo.family) + ": {";
+        {
             if (preInfo.linVelX != "none")
                 velStr += "vX = " + preInfo.linVelX + ";";
             if (preInfo.linVelY != "none")
@@ -1084,11 +1335,15 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
                 velStr += "omgBarY = " + preInfo.rotVelY + ";";
             if (preInfo.rotVelZ != "none")
                 velStr += "omgBarZ = " + preInfo.rotVelZ + ";";
-            velStr += "LinPrescribed = " + std::to_string(preInfo.linVelPrescribed) + ";";
-            velStr += "RotPrescribed = " + std::to_string(preInfo.rotVelPrescribed) + ";";
-        }  // TODO: add externVel==True case, loading from external vectors
+            velStr += "LinXPrescribed = " + std::to_string(preInfo.linVelXPrescribed) + ";";
+            velStr += "LinYPrescribed = " + std::to_string(preInfo.linVelYPrescribed) + ";";
+            velStr += "LinZPrescribed = " + std::to_string(preInfo.linVelZPrescribed) + ";";
+            velStr += "RotXPrescribed = " + std::to_string(preInfo.rotVelXPrescribed) + ";";
+            velStr += "RotYPrescribed = " + std::to_string(preInfo.rotVelYPrescribed) + ";";
+            velStr += "RotZPrescribed = " + std::to_string(preInfo.rotVelZPrescribed) + ";";
+        }
         velStr += "break; }";
-        if (!preInfo.externPos) {
+        {
             if (preInfo.linPosX != "none")
                 posStr += "X = " + preInfo.linPosX + ";";
             if (preInfo.linPosY != "none")
@@ -1101,11 +1356,27 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
             }
             posStr += "LinPrescribed = " + std::to_string(preInfo.linPosPrescribed) + ";";
             posStr += "RotPrescribed = " + std::to_string(preInfo.rotPosPrescribed) + ";";
-        }  // TODO: add externPos==True case, loading from external vectors
+        }
         posStr += "break; }";
+        {
+            if (preInfo.accX != "none")
+                accStr += "accX = " + preInfo.accX + ";";
+            if (preInfo.accY != "none")
+                accStr += "accY = " + preInfo.accY + ";";
+            if (preInfo.accZ != "none")
+                accStr += "accZ = " + preInfo.accZ + ";";
+            if (preInfo.angAccX != "none")
+                accStr += "angAccX = " + preInfo.angAccX + ";";
+            if (preInfo.angAccY != "none")
+                accStr += "angAccY = " + preInfo.angAccY + ";";
+            if (preInfo.angAccZ != "none")
+                accStr += "angAccZ = " + preInfo.angAccZ + ";";
+        }
+        accStr += "break; }";
     }
     strMap["_velPrescriptionStrategy_"] = velStr;
     strMap["_posPrescriptionStrategy_"] = posStr;
+    strMap["_accPrescriptionStrategy_"] = accStr;
 }
 
 // Family mask is no longer jitified... but stored in global array
@@ -1276,42 +1547,141 @@ inline void DEMSolver::equipMassMoiVolume(std::unordered_map<std::string, std::s
 }
 
 inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::string>& strMap) {
+    // Force model gives us info on what mat props should be pairwise
+    const std::set<std::string> mat_prop_that_are_pairwise = m_force_model->m_pairwise_mat_props;
+    m_pairwise_material_prop_names.insert(mat_prop_that_are_pairwise.begin(), mat_prop_that_are_pairwise.end());
+
     // Depending on the force model, there could be a few material properties that should be specified by the user
     const std::set<std::string> mat_prop_that_must_exist = m_force_model->m_must_have_mat_props;
-    // Those must-haves will be added to the pool
+    // Those must-haves will be added to the pool (whcih is a set of material prop names that we know)
     m_material_prop_names.insert(mat_prop_that_must_exist.begin(), mat_prop_that_must_exist.end());
+    m_material_prop_names.insert(m_pairwise_material_prop_names.begin(), m_pairwise_material_prop_names.end());
+
+    // Init
     std::string materialDefs = " ";
 
     if (m_material_prop_names.size() == 0)
         return;
+    unsigned int num_mats = m_loaded_materials.size();
+    // A matrix used to see if all mat props are defined by the user
+    const std::vector<std::vector<notStupidBool_t>> flag_mat =
+        std::vector<std::vector<notStupidBool_t>>(num_mats, std::vector<notStupidBool_t>(num_mats, 0));
 
     // Construct material arrays line by line
     const std::string line_header = "__constant__ __device__ float ";
+    // Looping through all material prop names that need a definition...
     for (const auto& prop_name : m_material_prop_names) {
-        materialDefs += line_header + prop_name + "[] = {";
+        std::vector<std::vector<notStupidBool_t>> flags = flag_mat;
+        // Create a matrix that registers the interaction between materials
+        std::vector<std::vector<float>> pair_mat =
+            std::vector<std::vector<float>>(num_mats, std::vector<float>(num_mats, 0.0));
         // See what each material says...
         for (const auto& a_mat : m_loaded_materials) {
+            // load_order is the offset identifier for initialization too...
+            unsigned int i = a_mat->load_order;
             const auto& name_val_pairs = a_mat->mat_prop;
             float val = 0.0;
             if (check_exist(name_val_pairs, prop_name)) {
                 val = name_val_pairs.at(prop_name);
-            } else {  // If no such key exists, val defaults to 0
+                flags[i][i] = 1;
                 // If prop_name does not exist for this material, then if prop_name is one of the
                 // mat_prop_that_must_exist, the user should know there is trouble...
-                if (check_exist(mat_prop_that_must_exist, prop_name))
-                    DEME_WARNING(
-                        "A material does not have %s property specified. However, the force model you are using "
-                        "requires that information, so we are using default 0.\nPlease be sure this is intentional.",
-                        prop_name.c_str());
             }
-            materialDefs += to_string_with_precision(val) + ",";
+            // Write down the value at diagnoal
+            pair_mat[i][i] = val;
         }
-        // If the user makes trouble and loaded 0 material, then we add some junk in it as placeholder
-        if (m_loaded_materials.size() == 0) {
-            materialDefs += "0";
+        {
+            // Check if all materials have prop_name defined
+            notStupidBool_t flag = 1;
+            for (unsigned int i = 0; i < num_mats; i++) {
+                flag = flag && flags[i][i];
+            }
+            if (!flag) {
+                DEME_WARNING(
+                    "Material property %s is needed by the force model or is referred to by the user. However, at "
+                    "least one material does not have it defined, so it is defaulted to 0 for that material.\nPlease "
+                    "be sure this is intentional.",
+                    prop_name.c_str());
+            }
         }
-        // End the line
-        materialDefs += "};\n";
+
+        // If pairwise property, extra treatments....
+        if (check_exist(m_pairwise_material_prop_names, prop_name)) {
+            // In m_pairwise_material_prop_names does not mean it's also in m_pairwise_matprop. But in any case it has a
+            // default.
+            for (unsigned int i = 0; i < num_mats; i++) {
+                for (unsigned int j = 0; j < num_mats; j++) {
+                    if (i != j) {
+                        // Default to average of the 2 materials
+                        pair_mat[i][j] = (pair_mat[i][i] + pair_mat[j][j]) / 2.;
+                        // If they are the same, we don't have to remind the user that it is not set, in the case that
+                        // the user does not set it, since well, the average does not change anything.
+                        if (pair_mat[i][i] == pair_mat[j][j]) {
+                            flags[i][j] = 1;
+                        }
+                    }
+                }
+            }
+            // Now if user specified them, add to the matrix
+            if (check_exist(m_pairwise_matprop, prop_name)) {
+                const auto& pair_props = m_pairwise_matprop.at(prop_name);
+                // Loop through every pair that is associated with this property name
+                for (const auto& pair_prop : pair_props) {
+                    const std::pair<unsigned int, unsigned int>& order_pair = pair_prop.first;
+                    float val = pair_prop.second;
+                    pair_mat[order_pair.first][order_pair.second] = val;
+                    pair_mat[order_pair.second][order_pair.first] = val;
+                    flags[order_pair.first][order_pair.second] = 1;
+                    flags[order_pair.second][order_pair.first] = 1;
+                }
+            }
+            {
+                // Check if all pair-wise mat props are defined
+                notStupidBool_t flag = 1;
+                for (unsigned int i = 0; i < num_mats; i++) {
+                    for (unsigned int j = 0; j < num_mats; j++) {
+                        if (i != j) {
+                            flag = flag && flags[i][j];
+                        }
+                    }
+                }
+                if (!flag) {
+                    DEME_WARNING(
+                        "Material property %s should involve two materials. However, at least a pair of materials does "
+                        "not have it defined, so it is defaulted to the average value between the two "
+                        "materials.\nPlease be sure this is intentional.",
+                        prop_name.c_str());
+                }
+            }
+        }
+
+        // Now jitify
+        if (!check_exist(m_pairwise_material_prop_names, prop_name)) {  // Not a pair-wise prop...
+            materialDefs += line_header + prop_name + "[] = {";
+            for (unsigned int i = 0; i < num_mats; i++) {
+                materialDefs += to_string_with_precision(pair_mat[i][i]) + ",";
+            }
+            // If the user makes trouble and loaded 0 material, then we add some junk in it as placeholder
+            if (num_mats == 0) {
+                materialDefs += "0";
+            }
+            // End the line
+            materialDefs += "};\n";
+        } else {  // Is a pair-wise prop...
+            materialDefs += line_header + prop_name + "[][" + std::to_string(num_mats) + "] = {";
+            for (unsigned int i = 0; i < num_mats; i++) {
+                materialDefs += "{";
+                for (unsigned int j = 0; j < num_mats; j++) {
+                    materialDefs += to_string_with_precision(pair_mat[i][j]) + ",";
+                }
+                materialDefs += "},";
+            }
+            // If the user makes trouble and loaded 0 material, then we add some junk in it as placeholder
+            if (num_mats == 0) {
+                materialDefs += "{0}";
+            }
+            materialDefs += "};\n";
+        }
     }
     DEME_DEBUG_PRINTF("Material properties in kernel:");
     DEME_DEBUG_PRINTF("%s", materialDefs.c_str());
@@ -1341,7 +1711,7 @@ inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::
             for (unsigned int i = 0; i < nJitifiableClumpTopo; i++) {
                 for (unsigned int j = 0; j < m_template_sp_radii.at(i).size(); j++) {
                     Radii += to_string_with_precision(m_template_sp_radii.at(i).at(j)) + ",";
-                    CDRadii += to_string_with_precision(m_template_sp_radii.at(i).at(j) + m_expand_factor) + ",";
+                    CDRadii += to_string_with_precision(m_template_sp_radii.at(i).at(j)) + ",";
                     CDRelPosX += to_string_with_precision(m_template_sp_relPos.at(i).at(j).x) + ",";
                     CDRelPosY += to_string_with_precision(m_template_sp_relPos.at(i).at(j).y) + ",";
                     CDRelPosZ += to_string_with_precision(m_template_sp_relPos.at(i).at(j).z) + ",";
@@ -1401,8 +1771,6 @@ inline void DEMSolver::equipIntegrationScheme(std::unordered_map<std::string, st
         case (TIME_INTEGRATOR::EXTENDED_TAYLOR):
             strat = VEL_TO_PASS_ON_EXTENDED_TAYLOR();
             break;
-        default:
-            DEME_ERROR("The integration type is unknown or not implemented. Please select another via SetIntegrator.");
     }
     strMap["_integrationVelocityPassOnStrategy_"] = strat;
 }
@@ -1411,10 +1779,6 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_nvXp2_"] = std::to_string(nvXp2);
     strMap["_nvYp2_"] = std::to_string(nvYp2);
     strMap["_nvZp2_"] = std::to_string(nvZp2);
-
-    // strMap["_nbX_"] = std::to_string(nbX);
-    // strMap["_nbY_"] = std::to_string(nbY);
-    // strMap["_nbZ_"] = std::to_string(nbZ);
 
     strMap["_l_"] = to_string_with_precision(l);
     strMap["_voxelSize_"] = to_string_with_precision(m_voxelSize);
@@ -1426,10 +1790,6 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_LBFX_"] = to_string_with_precision(m_boxLBF.x);
     strMap["_LBFY_"] = to_string_with_precision(m_boxLBF.y);
     strMap["_LBFZ_"] = to_string_with_precision(m_boxLBF.z);
-    // strMap["_Gx_"] = to_string_with_precision(G.x);
-    // strMap["_Gy_"] = to_string_with_precision(G.y);
-    // strMap["_Gz_"] = to_string_with_precision(G.z);
-    // strMap["_beta_"] = to_string_with_precision(m_expand_factor);
 
     // Some constants that we should consider using or not using
     // strMap["_nAnalGM_"] = std::to_string(nAnalGM);

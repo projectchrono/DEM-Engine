@@ -3,18 +3,16 @@
 // Material properties
 float E_cnt, G_cnt, CoR_cnt, mu_cnt, Crr_cnt;
 {
+    // E and nu are associated with each material, so obtain them this way
     float E_A = E[bodyAMatType];
     float nu_A = nu[bodyAMatType];
-    float CoR_A = CoR[bodyAMatType];
-    float mu_A = mu[bodyAMatType];
-    float Crr_A = Crr[bodyAMatType];
     float E_B = E[bodyBMatType];
     float nu_B = nu[bodyBMatType];
-    float CoR_B = CoR[bodyBMatType];
-    float mu_B = mu[bodyBMatType];
-    float Crr_B = Crr[bodyBMatType];
-    matProxy2ContactParam<float>(E_cnt, G_cnt, CoR_cnt, mu_cnt, Crr_cnt, E_A, nu_A, CoR_A, mu_A, Crr_A, E_B, nu_B,
-                                 CoR_B, mu_B, Crr_B);
+    matProxy2ContactParam<float>(E_cnt, G_cnt, E_A, nu_A, E_B, nu_B);
+    // CoR, mu and Crr are pair-wise, so obtain them this way
+    CoR_cnt = CoR[bodyAMatType][bodyBMatType];
+    mu_cnt = mu[bodyAMatType][bodyBMatType];
+    Crr_cnt = Crr[bodyAMatType][bodyBMatType];
 }
 
 float3 rotVelCPA, rotVelCPB;

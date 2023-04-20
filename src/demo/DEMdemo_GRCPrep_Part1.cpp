@@ -16,6 +16,14 @@
 #include <random>
 #include <cmath>
 
+// =============================================================================
+// In GRCPrep demo series, we try to prepare a sample of the GRC simulant, which
+// are supposed to be used for extraterrestrial rover mobility simulations. It is
+// made of particles of various sizes and shapes following a certain distribution.
+// In Part1, it creates several batches of clumps and let them settle at the bottom
+// of the domain.
+// =============================================================================
+
 using namespace deme;
 using namespace std::filesystem;
 
@@ -28,11 +36,9 @@ int main() {
 
     srand(759);
 
-    //
-    float kg_g_conv = 1;
     // Define materials
-    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
-    auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
+    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
+    auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
 
     // Define the simulation world
     double world_y_size = 0.99;
@@ -42,43 +48,43 @@ int main() {
     float bottom = -0.5;
     DEMSim.AddBCPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_terrain);
 
-    // Then the ground particle template
-    DEMClumpTemplate shape_template;
-    shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
+    // Define the terrain particle templates
     // Calculate its mass and MOI
-    float mass = 2.6e3 * 5.5886717 * kg_g_conv;  // in kg or g
-    float3 MOI = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3 * kg_g_conv;
+    float terrain_density = 2.6e3;
+    float volume1 = 4.2520508;
+    float mass1 = terrain_density * volume1;
+    float3 MOI1 = make_float3(1.6850426, 1.6375114, 2.1187753) * terrain_density;
+    float volume2 = 2.1670011;
+    float mass2 = terrain_density * volume2;
+    float3 MOI2 = make_float3(0.57402126, 0.60616378, 0.92890173) * terrain_density;
     // Scale the template we just created
-    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
-    // std::vector<double> scales = {0.0014, 0.00063, 0.00033, 0.00022, 0.00015, 0.00009};
-    std::vector<double> scales = {0.00063, 0.00033, 0.00022, 0.00015, 0.00009};
-    std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 20.; });
-    unsigned int t_num = 0;
-    for (double scaling : scales) {
-        auto this_template = shape_template;
-        this_template.mass = (double)mass * scaling * scaling * scaling;
-        this_template.MOI.x = (double)MOI.x * (double)(scaling * scaling * scaling * scaling * scaling);
-        this_template.MOI.y = (double)MOI.y * (double)(scaling * scaling * scaling * scaling * scaling);
-        this_template.MOI.z = (double)MOI.z * (double)(scaling * scaling * scaling * scaling * scaling);
-        std::cout << "Mass: " << this_template.mass << std::endl;
-        std::cout << "MOIX: " << this_template.MOI.x << std::endl;
-        std::cout << "MOIY: " << this_template.MOI.y << std::endl;
-        std::cout << "MOIZ: " << this_template.MOI.z << std::endl;
-        std::cout << "=====================" << std::endl;
-        std::for_each(this_template.radii.begin(), this_template.radii.end(), [scaling](float& r) { r *= scaling; });
-        std::for_each(this_template.relPos.begin(), this_template.relPos.end(), [scaling](float3& r) { r *= scaling; });
-        this_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(this_template.nComp, mat_type_terrain);
-
+    std::vector<double> scales = {0.014, 0.0075833, 0.0044, 0.003, 0.002, 0.0018333, 0.0017};
+    // Then load it to system
+    std::shared_ptr<DEMClumpTemplate> my_template2 =
+        DEMSim.LoadClumpType(mass2, MOI2, GetDEMEDataFile("clumps/triangular_flat_6comp.csv"), mat_type_terrain);
+    std::shared_ptr<DEMClumpTemplate> my_template1 =
+        DEMSim.LoadClumpType(mass1, MOI1, GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain);
+    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates = {my_template2,
+                                                                                DEMSim.Duplicate(my_template2),
+                                                                                my_template1,
+                                                                                DEMSim.Duplicate(my_template1),
+                                                                                DEMSim.Duplicate(my_template1),
+                                                                                DEMSim.Duplicate(my_template1),
+                                                                                DEMSim.Duplicate(my_template1)};
+    // Now scale those templates
+    for (int i = 0; i < scales.size(); i++) {
+        std::shared_ptr<DEMClumpTemplate>& my_template = ground_particle_templates.at(i);
+        // Note the mass and MOI are also scaled in the process, automatically. But if you are not happy with this, you
+        // can always manually change mass and MOI afterwards.
+        my_template->Scale(scales.at(i));
         // Give these templates names, 0000, 0001 etc.
         char t_name[20];
-        sprintf(t_name, "%04d", t_num);
-        this_template.AssignName(std::string(t_name));
-        ground_particle_templates.push_back(DEMSim.LoadClumpType(this_template));
-        t_num++;
+        sprintf(t_name, "%04d", i);
+        my_template->AssignName(std::string(t_name));
     }
 
-    // std::vector<double> weight_perc = {0.18, 0.20, 0.14, 0.16, 0.17, 0.15};
-    std::vector<double> weight_perc = {0.2439, 0.1707, 0.1951, 0.2073, 0.1829};
+    // Instatiate particles with a probability that is in line with their weight distribution.
+    std::vector<double> weight_perc = {0.1700, 0.2100, 0.1400, 0.1900, 0.1600, 0.0500, 0.0800};
     std::vector<double> grain_perc;
     for (int i = 0; i < scales.size(); i++) {
         grain_perc.push_back(weight_perc.at(i) / std::pow(scales.at(i), 3));
@@ -97,15 +103,16 @@ int main() {
     HCPSampler sampler(scales.at(0) * 2.2);
 
     // Make ready for simulation
-    float step_size = 5e-7;
-    DEMSim.SetCoordSysOrigin("center");
+    float step_size = 1e-6;
     DEMSim.SetInitTimeStep(step_size);
-    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
-    // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEMSim.SetCDUpdateFreq(30);
-    // DEMSim.SetExpandFactor(1e-3);
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
+    // Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
+    // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
+    // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(15.);
-    DEMSim.SetExpandSafetyParam(1.2);
+    // Error out vel is used to force the simulation to abort when something goes wrong.
+    DEMSim.SetErrorOutVelocity(15.);
+    DEMSim.SetExpandSafetyMultiplier(1.2);
     DEMSim.SetInitBinSize(scales.at(2));
     DEMSim.Initialize();
 

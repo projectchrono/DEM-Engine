@@ -3,6 +3,13 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// This demo features an analytical boundary-represented fast rotating container
+// with particles of various shapes pulled into it. Different types of particles
+// are marked with different family numbers (identification numbers) for easier
+// visualizations.
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
@@ -40,14 +47,14 @@ int main() {
     std::for_each(ellipsoid.radii.begin(), ellipsoid.radii.end(), [scaling](float& r) { r *= scaling; });
     std::for_each(ellipsoid.relPos.begin(), ellipsoid.relPos.end(), [scaling](float3& r) { r *= scaling; });
 
-    auto mat_type_sand = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}, {"Crr", 0.01}});
-    auto mat_type_drum = DEMSim.LoadMaterial({{"E", 2e9}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", 0.5}, {"Crr", 0.01}});
+    auto mat_type_sand = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.01}});
+    auto mat_type_drum = DEMSim.LoadMaterial({{"E", 2e9}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.01}});
+    // Since two types of materials have the same mu, this following call does not change the default mu for their
+    // interaction, it's still 0.5.
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_sand, mat_type_drum, 0.5);
 
     // Define material type for the particles (on a per-sphere-component basis)
     ellipsoid.materials = std::vector<std::shared_ptr<DEMMaterial>>(ellipsoid.nComp, mat_type_sand);
-
-    // Bin size needs to make sure no too-many-sphere-per-bin situation happens
-    DEMSim.SetInitBinSize(2 * scaling);
 
     // Create some random clump templates for the filling materials
     // An array to store these generated clump templates
@@ -65,33 +72,41 @@ int main() {
         // Load a (ellipsoid-shaped) clump and a sphere
         clump_types.push_back(DEMSim.LoadClumpType(ellipsoid_template));
         clump_types.push_back(DEMSim.LoadSphereType(ellipsoid_template.mass, std::cbrt(2.0) * scaling, mat_type_sand));
-
-        // std::cout << "Adding a clump with mass: " << ellipsoid_template.mass << std::endl;
-        // std::cout << "This clump's MOI: " << ellipsoid_template.MOI.x << ", " << ellipsoid_template.MOI.y << ", "
-        //           << ellipsoid_template.MOI.z << std::endl;
     }
 
-    // Drum is a `big clump', we now generate its template
+    // Add the centrifuge
     float3 CylCenter = make_float3(0, 0, 0);
     float3 CylAxis = make_float3(0, 0, 1);
     float CylRad = 2.0;
     float CylHeight = 1.0;
     float CylMass = 1.0;
-    float CylParticleRad = 0.05;
+    float safe_delta = 0.03;
     float IZZ = CylMass * CylRad * CylRad / 2;
     float IYY = (CylMass / 12) * (3 * CylRad * CylRad + CylHeight * CylHeight);
-    auto Drum_particles = DEMCylSurfSampler(CylCenter, CylAxis, CylRad, CylHeight, CylParticleRad);
-    auto Drum_template =
-        DEMSim.LoadClumpType(CylMass, make_float3(IYY, IYY, IZZ),
-                             std::vector<float>(Drum_particles.size(), CylParticleRad), Drum_particles, mat_type_drum);
-    std::cout << Drum_particles.size() << " spheres make up the cylindrical wall" << std::endl;
+    auto Drum = DEMSim.AddExternalObject();
+    Drum->AddCylinder(CylCenter, CylAxis, CylRad, mat_type_drum, 0);
+    Drum->SetMass(CylMass);
+    Drum->SetMOI(make_float3(IYY, IYY, IZZ));
+    auto Drum_tracker = DEMSim.Track(Drum);
+    // Drum is family 100
+    unsigned int drum_family = 100;
+    Drum->SetFamily(drum_family);
+    // The drum rotates (facing Z direction)
+    DEMSim.SetFamilyPrescribedAngVel(drum_family, "0", "0", "6.0");
+    // Then add planes to `close up' the drum. We add it as another object b/c we want to track the force on it
+    // separately.
+    auto top_bot_planes = DEMSim.AddExternalObject();
+    top_bot_planes->AddPlane(make_float3(0, 0, CylHeight / 2. - safe_delta), make_float3(0, 0, -1), mat_type_drum);
+    top_bot_planes->AddPlane(make_float3(0, 0, -CylHeight / 2. + safe_delta), make_float3(0, 0, 1), mat_type_drum);
+    // Planes should rotate together with the drum wall.
+    top_bot_planes->SetFamily(drum_family);
+    auto planes_tracker = DEMSim.Track(top_bot_planes);
 
     // Then sample some particles inside the drum
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_template_type;
     std::vector<float3> input_xyz;
     std::vector<unsigned int> family_code;
     float3 sample_center = make_float3(0, 0, 0);
-    float safe_delta = 0.03;
     float sample_halfheight = CylHeight / 2.0 - 3.0 * safe_delta;
     float sample_halfwidth = CylRad / 1.5;
     auto input_material_xyz =
@@ -108,24 +123,6 @@ int main() {
     auto particles = DEMSim.AddClumps(input_template_type, input_xyz);
     particles->SetFamilies(family_code);
 
-    // Finally, don't forget to actually add the drum to system
-    auto Drum = DEMSim.AddClumps(Drum_template, make_float3(0));
-    // Drum is family 10
-    unsigned int drum_family = 100;
-    Drum->SetFamilies(drum_family);
-    // The drum rotates (facing Z direction)
-    DEMSim.SetFamilyPrescribedAngVel(drum_family, "0", "0", "6.0");
-    // Disable contacts within drum components
-    DEMSim.DisableContactBetweenFamilies(drum_family, drum_family);
-    // Then add top and bottom planes to `close up' the drum
-    auto top_bot_planes = DEMSim.AddExternalObject();
-    top_bot_planes->AddPlane(make_float3(0, 0, CylHeight / 2. - safe_delta), make_float3(0, 0, -1), mat_type_drum);
-    top_bot_planes->AddPlane(make_float3(0, 0, -CylHeight / 2. + safe_delta), make_float3(0, 0, 1), mat_type_drum);
-    top_bot_planes->SetFamily(drum_family);
-    auto planes_tracker = DEMSim.Track(top_bot_planes);
-    // Set drum to be tracked
-    auto Drum_tracker = DEMSim.Track(Drum);
-
     // Keep tab of the max velocity in simulation
     auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
     float max_v;
@@ -133,14 +130,14 @@ int main() {
     // Make the domain large enough
     DEMSim.InstructBoxDomainDimension(5, 5, 5);
     float step_size = 5e-6;
-    DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(step_size);
-    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
-    // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEMSim.SetCDUpdateFreq(25);
-    // DEMSim.SetExpandFactor(1e-3);
-    DEMSim.SetMaxVelocity(25.);
-    DEMSim.SetExpandSafetyParam(1.0);
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
+    DEMSim.SetExpandSafetyType("auto");
+    // If there is a velocity that an analytical object (i.e. the drum) has that you'd like the solver to take into
+    // account in consideration of adding contact margins, you have to specify it here, since the solver's automatic max
+    // velocity derivation algorithm currently cannot take analytical object's angular velocity-induced velocity into
+    // account.
+    DEMSim.SetExpandSafetyAdder(6.0);
     DEMSim.Initialize();
 
     path out_dir = current_path();
@@ -163,11 +160,19 @@ int main() {
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
             DEMSim.WriteSphereFile(std::string(filename));
             currframe++;
-            // We can query info out of this drum, since it is tracked
-            // float3 drum_pos = Drum_tracker->Pos();
-            // float3 drum_angVel = Drum_tracker->AngVel();
             max_v = max_v_finder->GetValue();
             std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
+
+            // Torque on the side walls are?
+            float3 drum_moi = Drum_tracker->MOI();
+            float3 drum_pos = Drum_tracker->ContactAngAccLocal();
+            float3 drum_torque = drum_pos * drum_moi;
+            std::cout << "Contact torque on the side walls is " << drum_torque.x << ", " << drum_torque.y << ", "
+                      << drum_torque.z << std::endl;
+
+            // The force on the bottom plane?
+            float3 force_on_BC = planes_tracker->ContactAcc() * planes_tracker->Mass();
+            std::cout << "Contact force on bottom plane is " << force_on_BC.z << std::endl;
         }
 
         DEMSim.DoDynamics(step_size);
@@ -180,6 +185,7 @@ int main() {
     DEMSim.ClearThreadCollaborationStats();
 
     DEMSim.ShowTimingStats();
+    DEMSim.ShowAnomalies();
 
     std::cout << "DEMdemo_Centrifuge exiting..." << std::endl;
     return 0;

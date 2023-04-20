@@ -1,7 +1,7 @@
 // DEM force computation related custom kernels
 #include <DEM/Defines.h>
-#include <kernel/DEMHelperKernels.cu>
-#include <kernel/DEMCollisionKernels.cu>
+#include <DEMHelperKernels.cu>
+#include <DEMCollisionKernels.cu>
 
 // If clump templates are jitified, they will be below
 _clumpTemplateDefs_;
@@ -45,6 +45,8 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
         float AOwnerMass, ARadius, BOwnerMass, BRadius;
         float4 AOriQ, BOriQ;
         deme::materialsOffset_t bodyAMatType, bodyBMatType;
+        // The user-specified extra margin size (how much we should be lenient in determining `in-contact')
+        float extraMarginSize = 0.;
         // Then allocate the optional quantities that will be needed in the force model (note: this one can't be in a
         // curly bracket, obviously...)
         _forceModelIngredientDefinition_;
@@ -70,13 +72,14 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                 AOwnerMass = myMass;
             }
 
+            // Optional force model ingredients are loaded here...
+            _forceModelIngredientAcqForA_;
+
             equipOwnerPosRot(granData, myOwner, myRelPos, AOwnerPos, bodyAPos, AOriQ);
 
             ARadius = myRadius;
             bodyAMatType = granData->sphereMaterialOffset[sphereID];
-
-            // Optional force model ingredients are loaded here...
-            _forceModelIngredientAcqForA_;
+            extraMarginSize += granData->familyExtraMarginSize[AOwnerFamily];
         }
 
         // Then bodyB, location and velocity
@@ -99,17 +102,23 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                 _massAcqStrat_;
                 BOwnerMass = myMass;
             }
+            _forceModelIngredientAcqForB_;
 
             equipOwnerPosRot(granData, myOwner, myRelPos, BOwnerPos, bodyBPos, BOriQ);
 
             BRadius = myRadius;
             bodyBMatType = granData->sphereMaterialOffset[sphereID];
+            extraMarginSize += granData->familyExtraMarginSize[BOwnerFamily];
 
-            _forceModelIngredientAcqForB_;
+            checkSpheresOverlap<double, float>(bodyAPos.x, bodyAPos.y, bodyAPos.z, ARadius, bodyBPos.x, bodyBPos.y,
+                                               bodyBPos.z, BRadius, contactPnt.x, contactPnt.y, contactPnt.z, B2A.x,
+                                               B2A.y, B2A.z, overlapDepth);
+            // If overlapDepth is negative then it might still be considered in contact, if the extra margins of A and B
+            // combined is larger than abs(overlapDepth)
+            if (overlapDepth < -extraMarginSize) {
+                myContactType = deme::NOT_A_CONTACT;
+            }
 
-            myContactType = checkSpheresOverlap<double, float>(
-                bodyAPos.x, bodyAPos.y, bodyAPos.z, ARadius, bodyBPos.x, bodyBPos.y, bodyBPos.z, BRadius, contactPnt.x,
-                contactPnt.y, contactPnt.z, B2A.x, B2A.y, B2A.z, overlapDepth);
         } else if (myContactType == deme::SPHERE_MESH_CONTACT) {
             deme::bodyID_t triB = granData->idGeometryB[myContactID];
             deme::bodyID_t myOwner = granData->ownerMesh[triB];
@@ -117,6 +126,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             //// TODO: Is this OK?
             BRadius = DEME_HUGE_FLOAT;
             bodyBMatType = granData->triMaterialOffset[triB];
+            extraMarginSize += granData->familyExtraMarginSize[BOwnerFamily];
 
             double3 triNode1 = to_double3(granData->relPosNode1[triB]);
             double3 triNode2 = to_double3(granData->relPosNode2[triB]);
@@ -130,6 +140,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                 _massAcqStrat_;
                 BOwnerMass = myMass;
             }
+            _forceModelIngredientAcqForB_;
 
             // bodyBPos is for a place holder for the outcome triNode1 position
             equipOwnerPosRot(granData, myOwner, triNode1, BOwnerPos, bodyBPos, BOriQ);
@@ -142,19 +153,20 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             // Assign the correct bodyBPos
             bodyBPos = triangleCentroid<double3>(triNode1, triNode2, triNode3);
 
-            _forceModelIngredientAcqForB_;
-
             double3 contact_normal;
             bool in_contact = triangle_sphere_CD<double3, double>(triNode1, triNode2, triNode3, bodyAPos, ARadius,
                                                                   contact_normal, overlapDepth, contactPnt);
             B2A = to_float3(contact_normal);
-            overlapDepth = -overlapDepth;  // triangle_sphere_CD gives neg. number for overlapping cases
 
-            // If not in contact, correct myContactType
-            if (!in_contact) {
+            // Sphere--triangle is a bit tricky. Extra margin should only take effect when it comes from the positive
+            // direction of the mesh facet. If not, sphere-setting-on-needle case will give huge penetration since in
+            // that case, overlapDepth is very negative and this will be considered in-contact. So the cases we exclude
+            // are: too far away while at the positive direction; not in contact while at the negative side.
+            if ((overlapDepth > extraMarginSize) || (!in_contact && overlapDepth < 0.)) {
                 myContactType = deme::NOT_A_CONTACT;
             }
-        } else {
+            overlapDepth = -overlapDepth;  // triangle_sphere_CD gives neg. number for overlapping cases
+        } else if (myContactType > deme::SPHERE_ANALYTICAL_CONTACT) {
             // If B is analytical entity, its owner, relative location, material info is jitified
             deme::objID_t bodyB = granData->idGeometryB[myContactID];
             deme::bodyID_t myOwner = objOwner[bodyB];
@@ -175,8 +187,10 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             myRelPos.x = objRelPosX[bodyB];
             myRelPos.y = objRelPosY[bodyB];
             myRelPos.z = objRelPosZ[bodyB];
+            _forceModelIngredientAcqForB_;
 
             equipOwnerPosRot(granData, myOwner, myRelPos, BOwnerPos, bodyBPos, BOriQ);
+            extraMarginSize += granData->familyExtraMarginSize[BOwnerFamily];
 
             // B's orientation (such as plane normal) is rotated with its owner too
             bodyBRot.x = objRotX[bodyB];
@@ -185,13 +199,15 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             applyOriQToVector3<float, deme::oriQ_t>(bodyBRot.x, bodyBRot.y, bodyBRot.z, BOriQ.w, BOriQ.x, BOriQ.y,
                                                     BOriQ.z);
 
-            _forceModelIngredientAcqForB_;
-
             // Note for this test on dT side we don't enlarge entities
-            myContactType = checkSphereEntityOverlap<double3, float, double>(
-                bodyAPos, ARadius, objType[bodyB], bodyBPos, bodyBRot, objSize1[bodyB], objSize2[bodyB],
-                objSize3[bodyB], objNormal[bodyB], 0.0, contactPnt, B2A, overlapDepth);
-        }
+            checkSphereEntityOverlap<double3, float, double>(bodyAPos, ARadius, objType[bodyB], bodyBPos, bodyBRot,
+                                                             objSize1[bodyB], objSize2[bodyB], objSize3[bodyB],
+                                                             objNormal[bodyB], 0.0, contactPnt, B2A, overlapDepth);
+            // Fix myContactType if needed
+            if (overlapDepth < -extraMarginSize) {
+                myContactType = deme::NOT_A_CONTACT;
+            }
+        }  // else it must be NOT_A_CONTACT
 
         _forceModelContactWildcardAcq_;
         if (myContactType != deme::NOT_A_CONTACT) {
@@ -206,20 +222,24 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             applyOriQToVector3<float, deme::oriQ_t>(locCPB.x, locCPB.y, locCPB.z, BOriQ.w, -BOriQ.x, -BOriQ.y,
                                                     -BOriQ.z);
             // The following part, the force model, is user-specifiable
-            // NOTE!! "force" and "delta_tan" and "delta_time" must be properly set by this piece of code
+            // NOTE!! "force" and all wildcards must be properly set by this piece of code
             { _DEMForceModel_; }
 
             // Write contact location values back to global memory
             _contactInfoWrite_;
 
-            // Optionally, the forces can be reduced to acc right here (may be faster for polydisperse spheres)
+            // If force model modifies owner wildcards, write them back here
+            _forceModelOwnerWildcardWrite_;
+
+            // Optionally, the forces can be reduced to acc right here (may be faster)
             _forceCollectInPlaceStrat_;
         } else {
             // The contact is no longer active, so we need to destroy its contact history recording
             _forceModelContactWildcardDestroy_;
         }
 
-        // Updated contact wildcards need to be write back to global mem
+        // Updated contact wildcards need to be write back to global mem. It is here because contact wildcard may need
+        // to be destroyed for non-contact, so it has to go last.
         _forceModelContactWildcardWrite_;
     }
 }

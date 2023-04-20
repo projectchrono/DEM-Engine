@@ -3,6 +3,10 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// A collection of DEME validation tests...
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
@@ -28,9 +32,11 @@ void SetSolverProp(DEMSolver& DEMSim) {
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
 
     DEMSim.InstructBoxDomainDimension(25, 25, 10);
-    DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
     DEMSim.SetCDUpdateFreq(0);
+    // Must disable this if you want to run dT and kT synchronizely, or the solver will automatically find a non-zero
+    // update frequency that it sees fit to run it in an async fashion.
+    DEMSim.UseAdaptiveUpdateFreq(false);
 }
 
 void EllpsiodFallingOver() {
@@ -59,7 +65,8 @@ void EllpsiodFallingOver() {
     ellipsoid->SetVel(tang_dir * 0.3);
     auto ellipsoid_tracker = DEMSim.Track(ellipsoid);
 
-    DEMSim.SetInitTimeStep(1e-3);
+    DEMSim.SetInitTimeStep(1e-4);
+    // DEMSim.SetIntegrator(TIME_INTEGRATOR::FORWARD_EULER);
     DEMSim.Initialize();
 
     float frame_time = 1e-1;
@@ -84,6 +91,11 @@ void EllpsiodFallingOver() {
 }
 
 void SphereRollUpIncline() {
+    std::cout << "\nPlease Note!! You probably should allocate more host-side memory for this demo (around 8GiB?).\nIt "
+                 "is because Jitify seems to use increasingly more memory if we continuously construct and destruct "
+                 "DEMSolver.\nIt is not clear to me how this should be fixed, yet you probably should not construct "
+                 "and destruct DEMSolver too often in a program anyway.\n"
+              << std::endl;
     // First, test the case when alpha = 35
     float sphere_rad = 0.2;
     float mass = 5.0;
@@ -108,7 +120,7 @@ void SphereRollUpIncline() {
         sphere->SetVel(tang_dir * 0.5);
         auto sphere_tracker = DEMSim.Track(sphere);
 
-        float step_time = 1e-5;
+        float step_time = 1e-4;
         DEMSim.SetInitTimeStep(step_time);
         DEMSim.Initialize();
 
@@ -158,10 +170,10 @@ void SphereRollUpIncline() {
             sphere->SetVel(tang_dir * 0.5);
             auto sphere_tracker = DEMSim.Track(sphere);
 
-            float step_time = 1e-5;
+            float step_time = 1e-4;
             DEMSim.SetInitTimeStep(step_time);
-            DEMSim.SetCDUpdateFreq(-1);
-            DEMSim.SetMaxVelocity(1.0);
+            DEMSim.SetCDUpdateFreq(50);
+            DEMSim.SetMaxVelocity(2.0);
             DEMSim.Initialize();
 
             DEMSim.DoDynamicsThenSync(run_time);

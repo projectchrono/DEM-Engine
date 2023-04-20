@@ -123,7 +123,7 @@
 /********************************************************/
 /* AABB-triangle overlap test code                      */
 /* originally by Tomas Akenine-Möller                   */
-/* modified by Conlain Kelly for ProjectChrono          */
+/* modified by Ruochun Zhang for DEM-Engine             */
 /* Function: int triBoxOverlap(float boxcenter[3],      */
 /*          float boxhalfsize[3],float triverts[3][3]); */
 /* History:                                             */

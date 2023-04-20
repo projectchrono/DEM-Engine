@@ -23,13 +23,16 @@ int main() {
     double CDFreq = 30.1;
     double world_size = 1;
     double pi = 3.14159;
+    float step_size = 1e-5;
+    size_t n_steps = 5e5;
 
-    while (num_particles < 30e6) {
+    while (num_particles < 80e6) {
         DEMSolver DEMSim;
         DEMSim.SetVerbosity(ERROR);
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
         DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
         DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
+        DEMSim.SetCollectAccRightAfterForceCalc(true);
         DEMSim.SetNoForceRecord();
 
         // E, nu, CoR, mu, Crr...
@@ -37,7 +40,6 @@ int main() {
         auto mat_type_granular =
             DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
 
-        float step_size = 5e-6;
         const float chamber_height = world_size / 3.;
         const float fill_height = chamber_height;
         const float chamber_bottom = -world_size / 2.;
@@ -45,11 +47,6 @@ int main() {
 
         DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
         DEMSim.InstructBoxDomainBoundingBC("all", mat_type_granular);
-        DEMSim.SetCoordSysOrigin("center");
-        // A custom force model can be read in through a file and used by the simulation. Magic, right?
-        auto my_force_model = DEMSim.ReadContactForceModel("SampleCustomForceModel.cu");
-        // This custom force model still uses contact history arrays, so let's define it
-        my_force_model->SetPerContactWildcards({"delta_tan_x", "delta_tan_y", "delta_tan_z"});
 
         // Now add a cylinderical boundary
         auto walls = DEMSim.AddExternalObject();
@@ -60,11 +57,11 @@ int main() {
         std::cout << "Total num of triangles: " << mixer->GetNumTriangles() << std::endl;
         mixer->Scale(make_float3(world_size / 2, world_size / 2, chamber_height));
         mixer->SetFamily(10);
-        // Define the prescribed motion of mixer
-        DEMSim.SetFamilyPrescribedAngVel(10, "0", "0", "2 * " + to_string_with_precision(pi / world_size));
+        // Define the prescribed motion of mixer (max velocity 0.5 * pi = 1.5)
+        DEMSim.SetFamilyPrescribedAngVel(10, "0", "0", "1 * " + to_string_with_precision(pi / world_size));
 
         auto template_granular = DEMSim.LoadSphereType(
-            granular_rad * granular_rad * granular_rad * 2.8e3 * 4 / 3 * 3.14, granular_rad, mat_type_granular);
+            granular_rad * granular_rad * granular_rad * 2.6e3 * 4 / 3 * 3.14, granular_rad, mat_type_granular);
 
         // Track the mixer
         auto mixer_tracker = DEMSim.Track(mixer);
@@ -77,6 +74,7 @@ int main() {
         DEMSim.AddClumps(template_granular, input_xyz);
         num_particles = input_xyz.size();
         std::cout << "Particle size: " << granular_rad << std::endl;
+        std::cout << "Time step size: " << step_size << std::endl;
         std::cout << "Total num of particles: " << num_particles << std::endl;
         std::cout << "World size: " << world_size << std::endl;
 
@@ -84,21 +82,21 @@ int main() {
         DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
         // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
         DEMSim.SetCDUpdateFreq((unsigned int)CDFreq);
-        DEMSim.SetMaxVelocity(6.);
-        // DEMSim.SetMaxVelocity(3. + 3.14 * world_size);
-        DEMSim.SetExpandSafetyParam(1.0);
         DEMSim.SetInitBinSize(4 * granular_rad);
+        DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1.1);
+        DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(4);
+        DEMSim.SetErrorOutVelocity(15.);
         DEMSim.Initialize();
 
         path out_dir = current_path();
         out_dir += "/DemoOutput_Mixer";
         create_directory(out_dir);
 
-        float sim_end = 0.5;
+        float sim_end = step_size * n_steps;
         unsigned int fps = 20;
 
         mixer_tracker->SetPos(make_float3(0, 0, chamber_bottom + chamber_height / 2.0));
-        DEMSim.DoDynamicsThenSync(0.5);
+        DEMSim.DoDynamicsThenSync(1.);
         DEMSim.ClearThreadCollaborationStats();
         DEMSim.ClearTimingStats();
         std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
@@ -111,11 +109,12 @@ int main() {
         DEMSim.ShowTimingStats();
 
         std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
-        std::cout << (time_sec.count()) / sim_end / (1e-5 / 5e-6)
+        std::cout << (time_sec.count()) / sim_end / (1e-5 / step_size)
                   << " seconds (wall time) to finish 1 second's simulation" << std::endl;
 
-        // granular_rad *= std::pow(0.5, 1. / 3.);
-        world_size *= std::pow(2., 1. / 3.);
+        granular_rad *= std::pow(0.75, 1. / 3.);
+        step_size *= std::pow(0.75, 1. / 3.);
+        // world_size *= std::pow(2., 1. / 3.);
         // CDFreq *= std::pow(0.95, 1. / 3.);
     }
 

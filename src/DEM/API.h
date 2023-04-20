@@ -9,6 +9,7 @@
 #include <vector>
 #include <set>
 #include <cfloat>
+#include <functional>
 
 #include <core/ApiVersion.h>
 #include <DEM/kT.h>
@@ -16,6 +17,7 @@
 #include <core/utils/ManagedAllocator.hpp>
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
+#include <core/utils/DEMEPaths.h>
 #include <nvmath/helper_math.cuh>
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
@@ -23,6 +25,7 @@
 #include <DEM/Models.h>
 #include <DEM/AuxClasses.h>
 
+/// Main namespace for the DEM-Engine package.
 namespace deme {
 
 // class DEMKinematicThread;
@@ -37,15 +40,14 @@ class DEMTracker;
 //            3. Instruct how many dT steps should at LEAST do before receiving kT update
 //            4. Sleepers that don't participate CD or integration
 //            5. Check if entities are initially in box
-//            6. Force model has a/several custom owner arrays to store custom config data
-//            7. This custom array can be defined at clump template/anal obj/mesh obj generation
 //            8. Right now force model position is wrt LBF, not user origin...
-//            9. wT takes care of an extra output when it crushes
+//            9. wT takes care of an extra output when it crashes
 //            10. Recover sph--mesh contact pairs in restarted sim by mesh name
 //            11. A dry-run to map contact pair file with current clump batch based on cnt points location
 //                  (this is done by fake an initialization with this batch)
 //////////////////////////////////////////////////////////////
 
+/// Main DEM-Engine solver.
 class DEMSolver {
   public:
     DEMSolver(unsigned int nGPUs = 2);
@@ -57,12 +59,17 @@ class DEMSolver {
     /// Instruct the dimension of the `world'. On initialization, this info will be used to figure out how to assign the
     /// num of voxels in each direction. If your `useful' domain is not box-shaped, then define a box that contains your
     /// domian.
-    void InstructBoxDomainDimension(float x, float y, float z, SPATIAL_DIR dir_exact = SPATIAL_DIR::NONE);
-
-    /// Explicitly instruct the number of voxels (as 2^{x,y,z}) along each direction, as well as the smallest unit
-    /// length l. This is usually for test purposes, and will overwrite other size-related definitions of the big
-    /// domain.
-    void InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned char z, float len_unit = 1e-10f);
+    void InstructBoxDomainDimension(float x, float y, float z, const std::string& dir_exact = "none");
+    /// @brief Set the size of the simulation `world'.
+    /// @param x Lower and upper limit for X coordinate.
+    /// @param y Lower and upper limit for Y coordinate.
+    /// @param z Lower and upper limit for Z coordinate.
+    /// @param dir_exact The direction for which the user-instructed size must strictly agree with the actual generated
+    /// size. Pick between "X", "Y", "Z" or "none".
+    void InstructBoxDomainDimension(const std::pair<float, float>& x,
+                                    const std::pair<float, float>& y,
+                                    const std::pair<float, float>& z,
+                                    const std::string& dir_exact = "none");
 
     /// Instruct if and how we should add boundaries to the simulation world upon initialization. Choose between `none',
     /// `all' (add 6 boundary planes) and `top_open' (add 5 boundary planes and leave the z-directon top open). Also
@@ -72,79 +79,82 @@ class DEMSolver {
         m_bounding_box_material = mat;
     }
 
-    /// Set gravity
+    /// Set gravitational pull.
     void SetGravitationalAcceleration(float3 g) { G = g; }
     /// Set the initial time step size. If using constant step size, then this will be used throughout; otherwise, the
     /// actual step size depends on the variable step strategy.
     void SetInitTimeStep(double ts_size) { m_ts_size = ts_size; }
-    /// Return the number of clumps that are currently in the simulation
-    size_t GetNumClumps() { return nOwnerClumps; }
-    /// Get the current time step size in simulation
-    double GetTimeStepSize();
-    /// Getthe current expand factor in simulation
-    float GetExpandFactor();
-    /// Set the number of dT steps before it waits for a contact-pair info update from kT
-    void SetCDUpdateFreq(int freq) { m_updateFreq = freq; }
-    // TODO: Implement an API that allows setting ts size through a list
-
-    /// Sets the origin of the coordinate system (the coordinate system that all entities in this simulation are using)
-    /// using a string identifier. Choose from "center" (being at the center of the user-specifier BoxDomain), or "0",
-    /// "1", ..., "13", "-1", ..., "-13", which are the balanced ternary-identifier for points in the 8 octants, see
-    /// https://en.wikipedia.org/wiki/Octant_(solid_geometry).
-    void SetCoordSysOrigin(const std::string& where) { m_user_instructed_origin = where; }
-
-    /// Sets the origin of the coordinate system (the coordinate system that all entities in this simulation are using).
-    /// This origin point should be reported as the vector pointing from the left-bottom-front point of your simulation
-    /// `world' (box domain), to the origin of the coordinate system. For example, if the world size is [2,2,2] and the
-    /// origin should be right at its center, then the argument for this call should be make_float3(1,1,1). The other
-    /// alternative to achieve the same, is through calling SetBoxDomainLBFPoint.
-    void SetCoordSysOrigin(float3 O) {
-        m_boxLBF = -O;
-        m_user_instructed_origin = "explicit";
+    /// Return the number of clumps that are currently in the simulation.
+    size_t GetNumClumps() const { return nOwnerClumps; }
+    /// @brief Get the number of kT-reported potential contact pairs.
+    /// @return Number of potential contact pairs.
+    size_t GetNumContacts() const { return dT->getNumContacts(); }
+    /// Get the current time step size in simulation.
+    double GetTimeStepSize() const;
+    /// Get the current expand factor in simulation.
+    float GetExpandFactor() const;
+    /// Set the number of dT steps before it waits for a contact-pair info update from kT.
+    void SetCDUpdateFreq(int freq) {
+        m_updateFreq = freq;
+        m_suggestedFutureDrift = 2 * freq;
+        if (freq < 0) {
+            DisableAdaptiveUpdateFreq();
+        }
     }
+    /// Get the simulation time passed since the start of simulation.
+    double GetSimTime() const;
+    /// Set the simulation time manually.
+    void SetSimTime(double time);
+    /// @brief Set the strategy for auto-adapting time step size (NOT implemented, no effect yet).
+    /// @param type "none" or "max_vel" or "int_diff".
+    void SetAdaptiveTimeStepType(const std::string& type);
 
-    /// Set the left-bottom-front point of the box domain (or the user-specified simulation `world'), in the user's
-    /// global coordinate system. The other alternative to achieve the same, is through calling SetCoordSysOrigin.
-    void SetBoxDomainLBFPoint(float3 O) {
-        m_boxLBF = O;
-        m_user_instructed_origin = "explicit";
-    }
-
-    /// Set the integrator for this simulator
+    /// @brief Set the time integrator for this simulator.
+    /// @param intg "forward_euler" or "extended_taylor" or "centered_difference".
+    void SetIntegrator(const std::string& intg);
+    /// @brief Set the time integrator for this simulator.
     void SetIntegrator(TIME_INTEGRATOR intg) { m_integrator = intg; }
 
     /// Return whether this simulation system is initialized
-    bool GetInitStatus() { return sys_initialized; }
+    bool GetInitStatus() const { return sys_initialized; }
 
     /// Get the jitification string substitution laundary list. It is needed by some of this simulation system's friend
     /// classes.
-    std::unordered_map<std::string, std::string> GetJitStringSubs() { return m_subs; }
+    std::unordered_map<std::string, std::string> GetJitStringSubs() const { return m_subs; }
 
-    /// Explicitly instruct the bin size (for contact detection) that the solver should use
+    /// Explicitly instruct the bin size (for contact detection) that the solver should use.
     void SetInitBinSize(double bin_size) {
         use_user_defined_bin_size = true;
         m_binSize = bin_size;
+    }
+    /// Explicitly instruct the bin size (for contact detection) that the solver should use, as a multiple of the radius
+    /// of the smallest sphere in simulation.
+    void SetInitBinSizeAsMultipleOfSmallestSphere(float bin_size) {
+        use_user_defined_bin_size = false;
+        m_binSize_as_multiple = bin_size;
     }
 
     /// Explicitly instruct the sizes for the arrays at initialization time. This is useful when the number of owners
     /// tends to change (especially gradually increase) frequently in the simulation, by reducing the need for
     /// reallocation. Note however, whatever instruction the user gives here it won't affect the correctness of the
-    /// simulation, since if the arrays are not long enough they will always be auto-resized.
+    /// simulation, since if the arrays are not long enough they will always be auto-resized. This is not implemented
+    /// yet :/
     void InstructNumOwners(size_t numOwners) { m_instructed_num_owners = numOwners; }
 
-    /// Instruct the solver to use frictonal (history-based) Hertzian contact force model
+    /// Instruct the solver to use frictonal (history-based) Hertzian contact force model.
     std::shared_ptr<DEMForceModel> UseFrictionalHertzianModel();
-    /// Instruct the solver to use frictonless Hertzian contact force model
+    /// Instruct the solver to use frictonless Hertzian contact force model.
     std::shared_ptr<DEMForceModel> UseFrictionlessHertzianModel();
     /// Define a custom contact force model by a string. Returns a shared_ptr to the force model in use.
     std::shared_ptr<DEMForceModel> DefineContactForceModel(const std::string& model);
     /// Read user custom contact force model from a file (which by default should reside in kernel/DEMUserScripts).
     /// Returns a shared_ptr to the force model in use.
     std::shared_ptr<DEMForceModel> ReadContactForceModel(const std::string& filename);
+    /// Get the current force model.
+    std::shared_ptr<DEMForceModel> GetContactForceModel() { return m_force_model; }
 
-    /// Instruct the solver if contact pair arrays should be sorted (based on the types of contacts) before usage. This
-    /// can potentially make dT run faster. This is currently not implemented due to technical difficulties.
-    void SetSortContactPairs(bool use_sort = true) { should_sort_contacts = use_sort; }
+    /// Instruct the solver if contact pair arrays should be sorted (based on the types of contacts) before usage.
+    void SetSortContactPairs(bool use_sort) { should_sort_contacts = use_sort; }
 
     /// Instruct the solver to rearrange and consolidate clump templates information, then jitify it into GPU kernels
     /// (if set to true), rather than using flattened sphere component configuration arrays whose entries are associated
@@ -154,11 +164,6 @@ class DEMSolver {
     /// into GPU kernels (if set to true), rather than using flattened mass property arrays whose entries are associated
     /// with individual owners. Note: setting it to true gives no performance benefit known to me.
     void SetJitifyMassProperties(bool use = true) { jitify_mass_moi = use; }
-
-    /// Instruct the contact detection process to use one thread to process a bin (if true), instead of using a block to
-    /// process a bin. This probably also requires you to manually set a smaller DEME_MAX_SPHERES_PER_BIN. This can
-    /// potentially be faster especially in a scenario where the spheres are of similar sizes.
-    void SetOneBinPerThread(bool use = true) { use_one_bin_per_thread = use; }
 
     // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
     void UseCompactForceKernel(bool use_compact);
@@ -170,15 +175,103 @@ class DEMSolver {
         m_expand_factor = beta;
         use_user_defined_expand_factor = fix;
     }
-    /// Input the maximum expected particle velocity. This is mainly to help the solver automatically select a expand
-    /// factor and do sanity checks during the simulation.
-    void SetMaxVelocity(float max_vel) { m_approx_max_vel = max_vel; }
-    /// Further enlarge the safety perimeter needed by the input amount. Large number means even safer contact detection
-    /// (missing no contacts), but creates more false positives, and risks leading to more bodies in a bin than a block
-    /// can handle.
-    void SetExpandSafetyParam(float param) { m_expand_safety_param = param; }
+    /// Input the maximum expected particle velocity. If `force' is set to false, the solver will not use a velocity
+    /// larger than max_vel for determining the margin thickness; if `force' is set to true, the solver will not
+    /// calculate maximum system velocity and will always use max_vel to calculate the margin thickness.
 
-    /// Set the number of threads per block in force calculation (default 256)
+    /// @brief Set the maximum expected particle velocity. The solver will not use a velocity larger than this for
+    /// determining the margin thickness, and velocity larger than this will be considered a system anomaly.
+    /// @param max_vel Expected max velocity.
+    void SetMaxVelocity(float max_vel);
+    /// @brief Set the method this solver uses to derive current system velocity (for safety purposes in contact
+    /// detection).
+    /// @param insp_type A string. If "auto": the solver automatically derives.
+    void SetExpandSafetyType(const std::string& insp_type);
+    // void SetExpandSafetyType(const std::shared_ptr<DEMInspector>& insp) {
+    //     m_max_v_finder_type = MARGIN_FINDER_TYPE::DEM_INSPECTOR;
+    //     m_approx_max_vel_func = insp;
+    // }
+
+    /// Assign a multiplier to our estimated maximum system velocity, when deriving the thinckness of the contact
+    /// `safety' margin. This can be greater than one if the simulation velocity can increase significantly in one kT
+    /// update cycle, but this is not common and should be close to 1 in general.
+    void SetExpandSafetyMultiplier(float param) { m_expand_safety_multi = param; }
+    /// Set a `base' velocity, which we will always add to our estimated maximum system velocity, when deriving the
+    /// thinckness of the contact `safety' margin. This need not to be large unless the simulation velocity can increase
+    /// significantly in one kT update cycle.
+    void SetExpandSafetyAdder(float vel) { m_expand_base_vel = vel; }
+
+    /// @brief Used to force the solver to error out when there are too many spheres in a bin. A huge number can be used
+    /// to discourage this error type.
+    /// @param max_sph Max number of spheres in a bin.
+    void SetMaxSphereInBin(unsigned int max_sph) { threshold_too_many_spheres_in_bin = max_sph; }
+
+    /// @brief Used to force the solver to error out when there are too many spheres in a bin. A huge number can be used
+    /// to discourage this error type.
+    /// @param max_tri Max number of triangles in a bin.
+    void SetMaxTriangleInBin(unsigned int max_tri) { threshold_too_many_tri_in_bin = max_tri; }
+
+    /// @brief Set the velocity which when exceeded, the solver errors out. A huge number can be used to discourage this
+    /// error type. Defaulted to 5e4.
+    /// @param vel Error-out velocity.
+    void SetErrorOutVelocity(float vel) { threshold_error_out_vel = vel; }
+
+    /// @brief Set the average number of contacts a sphere has, before the solver errors out. A huge number can be used
+    /// to discourage this error type. Defaulted to 100.
+    /// @param num_cnts Error-out contact number.
+    void SetErrorOutAvgContacts(float num_cnts) { threshold_error_out_num_cnts = num_cnts; }
+
+    /// @brief Get the current number of contacts each sphere has.
+    /// @return Number of contacts.
+    float GetAvgSphContacts() const { return kT->stateParams.avgCntsPerSphere; }
+
+    /// @brief Enable or disable the use of adaptive bin size (by default it is on).
+    /// @param use Enable or disable.
+    void UseAdaptiveBinSize(bool use = true) { auto_adjust_bin_size = use; }
+    /// @brief Disable the use of adaptive bin size (always use initial size).
+    void DisableAdaptiveBinSize() { auto_adjust_bin_size = false; }
+    /// @brief Enable or disable the use of adaptive max update step count (by default it is on).
+    /// @param use Enable or disable.
+    void UseAdaptiveUpdateFreq(bool use = true) { auto_adjust_update_freq = use; }
+    /// @brief Disable the use of adaptive max update step count (always use initial update frequency).
+    void DisableAdaptiveUpdateFreq() { auto_adjust_update_freq = false; }
+    /// @brief Adjust how frequent kT updates the bin size.
+    /// @param n Number of contact detections before kT makes one adjustment to bin size.
+    void SetAdaptiveBinSizeDelaySteps(unsigned int n) { auto_adjust_observe_steps = n; }
+    /// @brief Set the max rate that the bin size can change in one adjustment.
+    /// @param rate 0: never changes; 1: can double or halve size in one go; suggest using default.
+    void SetAdaptiveBinSizeMaxRate(float rate) { auto_adjust_max_rate = (rate > 0) ? rate : 0; }
+    /// @brief Set how fast kT changes the direction of bin size adjustmemt when there's a more beneficial direction.
+    /// @param acc 0.01: slowly change direction; 1: quickly change direction
+    void SetAdaptiveBinSizeAcc(float acc) { auto_adjust_acc = hostClampBetween(acc, 0.01, 1.0); }
+    /// @brief Set how proactive the solver is in avoiding the bin being too big (leading to too many geometries in a
+    /// bin).
+    /// @param ratio 0: not proavtive; 1: very proactive.
+    void SetAdaptiveBinSizeUpperProactivity(float ratio) {
+        auto_adjust_upper_proactive_ratio = hostClampBetween(ratio, 0.0, 1.0);
+    }
+    /// @brief Set how proactive the solver is in avoiding the bin being too small (leading to too many bins in domain).
+    /// @param ratio 0: not proavtive; 1: very proactive.
+    void SetAdaptiveBinSizeLowerProactivity(float ratio) {
+        auto_adjust_lower_proactive_ratio = hostClampBetween(ratio, 0.0, 1.0);
+    }
+    /// @brief Set the upper bound of kT update frequency (when it is adjusted automatically).
+    /// @param max_freq dT will not receive updates less frequently than 1 update per max_freq steps.
+    void SetCDMaxUpdateFreq(unsigned int max_freq) { upper_bound_future_drift = 2 * max_freq; }
+    /// @brief Set the number of steps dT configures its max drift more than average drift steps.
+    /// @param n Number of steps. Suggest using default.
+    void SetCDNumStepsMaxDriftAheadOfAvg(float n) { max_drift_ahead_of_avg_drift = n; }
+    /// @brief Set the multiplier which dT configures its max drift to be w.r.t. the average drift steps.
+    /// @param m The multiplier. Suggest using default.
+    void SetCDNumStepsMaxDriftMultipleOfAvg(float m) { max_drift_multiple_of_avg_drift = m; }
+    /// @brief Set the number of past kT updates that dT will use to calibrate the max future drift limit.
+    /// @param n Number of kT updates. Suggest using default.
+    void SetCDNumStepsMaxDriftHistorySize(unsigned int n);
+    /// @brief Get the current update frequency used by the solver.
+    /// @return The current update frequency.
+    float GetUpdateFreq() const;
+
+    /// Set the number of threads per block in force calculation (default 512).
     void SetForceCalcThreadsPerBlock(unsigned int nTh) { dT->DT_FORCE_CALC_NTHREADS_PER_BLOCK = nTh; }
 
     /// Load possible clump types into the API-level cache
@@ -212,10 +305,44 @@ class DEMSolver {
                                                      float radius,
                                                      const std::shared_ptr<DEMMaterial>& material);
 
-    /// Load materials properties (Young's modulus, Poisson's ratio, Coeff of Restitution...) into
-    /// the API-level cache. Return the ptr of the material type just loaded.
+    /// @brief Load materials properties (Young's modulus, Poisson's ratio...) into the system.
+    /// @param mat_prop Property name--value pairs, as an unordered_map.
+    /// @return A shared pointer for this material.
     std::shared_ptr<DEMMaterial> LoadMaterial(const std::unordered_map<std::string, float>& mat_prop);
+    /// @brief Load materials properties into the system.
+    /// @param a_material A DEMMaterial object.
+    /// @return A shared pointer for this material.
+    std::shared_ptr<DEMMaterial> LoadMaterial(DEMMaterial& a_material);
 
+    /// @brief Duplicate a material that is loaded into the system.
+    /// @param ptr Shared pointer for the object to duplicate.
+    /// @return A duplicate of the object (with effectively a deep copy).
+    std::shared_ptr<DEMMaterial> Duplicate(const std::shared_ptr<DEMMaterial>& ptr);
+    /// @brief Duplicate a clump template that is loaded into the system.
+    /// @param ptr Shared pointer for the object to duplicate.
+    /// @return A duplicate of the object (with effectively a deep copy).
+    std::shared_ptr<DEMClumpTemplate> Duplicate(const std::shared_ptr<DEMClumpTemplate>& ptr);
+    /// @brief Duplicate a batch of clumps that is loaded into the system.
+    /// @param ptr Shared pointer for the object to duplicate.
+    /// @return A duplicate of the object (with effectively a deep copy).
+    std::shared_ptr<DEMClumpBatch> Duplicate(const std::shared_ptr<DEMClumpBatch>& ptr);
+
+    /// @brief Set the value for a material property that by nature involves a pair of a materials (e.g. friction
+    /// coefficient).
+    /// @param name The name of this property (which should have already been referred to in a previous LoadMaterial
+    /// call).
+    /// @param mat1 Material 1 that is involved in this pair.
+    /// @param mat2 Material 2 that is involved in this pair.
+    /// @param val The value.
+    void SetMaterialPropertyPair(const std::string& name,
+                                 const std::shared_ptr<DEMMaterial>& mat1,
+                                 const std::shared_ptr<DEMMaterial>& mat2,
+                                 float val);
+
+    /// @brief Get the clumps that are in contact with this owner as a vector.
+    /// @param ownerID The ID of the owner that is being queried.
+    /// @return Clump owner IDs in contact with this owner.
+    std::vector<bodyID_t> GetOwnerContactClumps(bodyID_t ownerID) const;
     /// Get position of a owner
     float3 GetOwnerPosition(bodyID_t ownerID) const;
     /// Get angular velocity of a owner
@@ -228,7 +355,19 @@ class DEMSolver {
     float3 GetOwnerAcc(bodyID_t ownerID) const;
     /// Get the angular acceleration of a owner
     float3 GetOwnerAngAcc(bodyID_t ownerID) const;
-    /// Set position of a owner in user unit
+    /// @brief Get the family number of a owner.
+    /// @param ownerID The owner's ID.
+    /// @return The family number.
+    unsigned int GetOwnerFamily(bodyID_t ownerID) const;
+    /// @brief Get the mass of a owner.
+    /// @param ownerID The owner's ID.
+    /// @return The mass.
+    float GetOwnerMass(bodyID_t ownerID) const;
+    /// @brief Get the moment of inertia (in principal axis frame) of a owner.
+    /// @param ownerID The owner's ID.
+    /// @return The moment of inertia (in principal axis frame).
+    float3 GetOwnerMOI(bodyID_t ownerID) const;
+    /// Set position of a owner
     void SetOwnerPosition(bodyID_t ownerID, float3 pos);
     /// Set angular velocity of a owner
     void SetOwnerAngVel(bodyID_t ownerID, float3 angVel);
@@ -236,10 +375,33 @@ class DEMSolver {
     void SetOwnerVelocity(bodyID_t ownerID, float3 vel);
     /// Set quaternion of a owner
     void SetOwnerOriQ(bodyID_t ownerID, float4 oriQ);
+    /// @brief Set the family number of a owner.
+    /// @param ownerID The ID (offset) of the owner.
+    /// @param fam Family number.
+    void SetOwnerFamily(bodyID_t ownerID, family_t fam);
     /// Rewrite the relative positions of the flattened triangle soup, starting from `start', using triangle nodal
     /// positions in `triangles'. If `overwrite' is true, then it is overwriting the existing nodal info; otherwise it
     /// just adds to it.
     void SetTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite = true);
+
+    /// @brief Get all clump--clump contacts in the simulation system.
+    /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
+    /// body A, and Second is that of contact body B.
+    std::vector<std::pair<bodyID_t, bodyID_t>> GetClumpContacts() const;
+
+    /// @brief Get all clump--clump contacts in the simulation system.
+    /// @param family_to_include Contacts that involve a body in a family not listed in this argument are ignored.
+    /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
+    /// body A, and Second is that of contact body B.
+    std::vector<std::pair<bodyID_t, bodyID_t>> GetClumpContacts(const std::set<family_t>& family_to_include) const;
+
+    /// @brief Get all clump--clump contacts in the simulation system.
+    /// @param family_pair Functions returns a vector of contact body family number pairs. First is the family number of
+    /// contact body A, and Second is that of contact body B.
+    /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
+    /// body A, and Second is that of contact body B.
+    std::vector<std::pair<bodyID_t, bodyID_t>> GetClumpContacts(
+        std::vector<std::pair<family_t, family_t>>& family_pair) const;
 
     /// Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial location
     /// means the location of the clumps' CoM coordinates in the global frame.
@@ -291,24 +453,24 @@ class DEMSolver {
 
     /// Mark all entities in this family to be fixed
     void SetFamilyFixed(unsigned int ID);
-    /// Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this
-    /// prescription completely dictates this family's motions.
+    /// Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this family will
+    /// not be influenced by the force exerted from other simulation entites (both linear and rotational motions).
     void SetFamilyPrescribedLinVel(unsigned int ID,
                                    const std::string& velX,
                                    const std::string& velY,
                                    const std::string& velZ,
                                    bool dictate = true);
-    /// Let the linear velocities of all entites in this family always keep `as is', and not fluenced by the force
+    /// Let the linear velocities of all entites in this family always keep `as is', and not influenced by the force
     /// exerted from other simulation entites.
     void SetFamilyPrescribedLinVel(unsigned int ID);
-    /// Set the prescribed angular velocity to all entities in a family. If dictate is set to true, then this
-    /// prescription completely dictates this family's motions.
+    /// Set the prescribed angular velocity to all entities in a family. If dictate is set to true, then this family
+    /// will not be fluenced by the force exerted from other simulation entites (both linear and rotational motions).
     void SetFamilyPrescribedAngVel(unsigned int ID,
                                    const std::string& velX,
                                    const std::string& velY,
                                    const std::string& velZ,
                                    bool dictate = true);
-    /// Let the linear velocities of all entites in this family always keep `as is', and not fluenced by the force
+    /// Let the linear velocities of all entites in this family always keep `as is', and not influenced by the force
     /// exerted from other simulation entites.
     void SetFamilyPrescribedAngVel(unsigned int ID);
 
@@ -319,6 +481,50 @@ class DEMSolver {
     /// Keep the orientation quaternions of all entites in this family to remain exactly the user-specified values
     void SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula);
 
+    /// The entities in this family will always experienced an extra acceleration defined using this method
+    void AddFamilyPrescribedAcc(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
+    /// The entities in this family will always experienced an extra angular acceleration defined using this method
+    void AddFamilyPrescribedAngAcc(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
+
+    /// @brief Set the names for the extra quantities that will be associated with each contact pair.
+    void SetContactWildcards(const std::set<std::string>& wildcards);
+    /// @brief Set the names for the extra quantities that will be associated with each owner.
+    void SetOwnerWildcards(const std::set<std::string>& wildcards);
+
+    /// Globally modify a owner wildcard's values
+    void SetOwnerWildcardValue(const std::string& name, const std::vector<float>& vals);
+    void SetOwnerWildcardValue(const std::string& name, float val) {
+        SetOwnerWildcardValue(name, std::vector<float>(1, val));
+    }
+    /// Modify the owner wildcard's values of all entities in family N
+    void SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, const std::vector<float>& vals);
+    void SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, float val) {
+        SetFamilyOwnerWildcardValue(N, name, std::vector<float>(1, val));
+    }
+    /// @brief Set all clumps in this family to have this material.
+    /// @param N Family number.
+    /// @param mat Material type.
+    void SetFamilyClumpMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat);
+    /// @brief Set all meshes in this family to have this material.
+    /// @param N Family number.
+    /// @param mat Material type.
+    void SetFamilyMeshMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat);
+
+    /// @brief Add an extra contact margin to entities in a family so they are registered as potential contact pairs
+    /// earlier.
+    /// @details You typically need this method when the custom force model contains non-contact forces. The solver
+    /// needs this extra margin to preemptively registered contact pairs. If the extra margin is not added, then the
+    /// contact pair will not be computed until entities are in physical contact. Note this margin should be as small as
+    /// needed, since it potentially increases the total number of contact pairs greatly.
+    /// @param N Family number.
+    /// @param extra_size The thickness of the extra contact margin.
+    void SetFamilyExtraMargin(unsigned int N, float extra_size);
+
+    /// @brief Get the owner wildcard's values of all entities.
+    std::vector<float> GetOwnerWildcardValue(const std::string& name, float val);
+    /// @brief Get the owner wildcard's values of all entities in family N.
+    std::vector<float> GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, float val);
+
     /// Change all entities with family number ID_from to have a new number ID_to, when the condition defined by the
     /// string is satisfied by the entities in question. This should be called before initialization, and will be baked
     /// into the solver, so the conditions will be checked and changes applied every time step.
@@ -327,6 +533,21 @@ class DEMSolver {
     /// Change all entities with family number ID_from to have a new number ID_to, immediately. This is callable when kT
     /// and dT are hanging, not when they are actively working, or the behavior is not defined.
     void ChangeFamily(unsigned int ID_from, unsigned int ID_to);
+
+    /// @brief Change the family number for the clumps in a box region to the specified value.
+    /// @param fam_num The family number to change into.
+    /// @param X {L, U} that discribes the lower and upper bound of the X coord of the box region.
+    /// @param Y The lower and upper bound of the Y coord of the box region.
+    /// @param Z The lower and upper bound of the Z coord of the box region.
+    /// @param orig_fam Only clumps that originally have these family numbers will be modified. Leave empty to apply
+    /// changes regardless of original family numbers.
+    /// @return The number of owners that get changed by this call.
+    size_t ChangeClumpFamily(
+        unsigned int fam_num,
+        const std::pair<double, double>& X = std::pair<double, double>(-DEME_HUGE_FLOAT, DEME_HUGE_FLOAT),
+        const std::pair<double, double>& Y = std::pair<double, double>(-DEME_HUGE_FLOAT, DEME_HUGE_FLOAT),
+        const std::pair<double, double>& Z = std::pair<double, double>(-DEME_HUGE_FLOAT, DEME_HUGE_FLOAT),
+        const std::set<unsigned int>& orig_fam = std::set<unsigned int>());
 
     /// Change the sizes of the clumps by a factor. This method directly works on the clump components spheres,
     /// therefore requiring sphere components to be store in flattened array (default behavior), not jitified templates.
@@ -364,13 +585,6 @@ class DEMSolver {
 
     /// Remove host-side cached vectors (so you can re-define them, and then re-initialize system)
     void ClearCache();
-
-    /// Return total kinetic energy of all entities
-    float GetTotalKineticEnergy() const;
-    /// Return the kinetic energy of all clumps in a set of families
-    //// TODO: Implement it
-    float GetClumpKineticEnergy() const;
-    //// TODO: float GetTotalKineticEnergy(std::vector<unsigned int> families) const;
 
     /// Write the current status of clumps to a file
     void WriteClumpFile(const std::string& outfilename, unsigned int accuracy = 10) const;
@@ -504,12 +718,16 @@ class DEMSolver {
     /// Equivalent to calling DoDynamics with the time step size as the argument
     void DoStepDynamics() { DoDynamics(m_ts_size); }
 
-    /// Copy the cached sim params to the GPU-accessible managed memory, so that they are picked up from the next ts of
-    /// simulation. Usually used when you want to change simulation parameters after the system is already Intialized.
+    /// @brief Transferthe cached sim params to the workers. Used for sim environment modification after system
+    /// initialization.
     void UpdateSimParams();
 
-    /// Transfer newly loaded clumps to the GPU-side in mid-simulation
+    /// @brief TTransfer newly loaded clumps to the GPU-side in mid-simulation.
     void UpdateClumps();
+
+    /// @brief Update the time step size. Used after system initialization.
+    /// @param ts Time step size.
+    void UpdateStepSize(float ts = -1.0);
 
     /// Show the collaboration stats between dT and kT. This is more useful for tweaking the number of time steps that
     /// dT should be allowed to be in advance of kT.
@@ -517,6 +735,9 @@ class DEMSolver {
 
     /// Show the wall time and percentages of wall time spend on various solver tasks
     void ShowTimingStats();
+
+    /// Show potential anomalies that may have been there in the simulation, then clear the anomaly log.
+    void ShowAnomalies();
 
     /// Reset the collaboration stats between dT and kT back to the initial value (0). You should call this if you want
     /// to start over and re-inspect the stats of the new run; otherwise, it is generally not needed, you can go ahead
@@ -556,6 +777,10 @@ class DEMSolver {
     void SetContactOutputContent(unsigned int content) { m_cnt_out_content = content; }
     /// Specify the file format of meshes
     void SetMeshOutputFormat(MESH_FORMAT format) { m_mesh_out_format = format; }
+    /// Enable/disable outputting owner wildcard values to file.
+    void EnableOwnerWildcardOutput(bool enable = true) { m_is_out_owner_wildcards = enable; }
+    /// Enable/disable outputting contact wildcard values to the contact file.
+    void EnableContactWildcardOutput(bool enable = true) { m_is_out_cnt_wildcards = enable; }
 
     /// Let dT do this call and return the reduce value of the inspected quantity
     float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
@@ -563,6 +788,11 @@ class DEMSolver {
                           INSPECT_ENTITY_TYPE thing_to_insp,
                           CUB_REDUCE_FLAVOR reduce_flavor,
                           bool all_domain);
+    float* dTInspectNoReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
+                             const std::string& kernel_name,
+                             INSPECT_ENTITY_TYPE thing_to_insp,
+                             CUB_REDUCE_FLAVOR reduce_flavor,
+                             bool all_domain);
 
   private:
     ////////////////////////////////////////////////////////////////////////////////
@@ -572,7 +802,7 @@ class DEMSolver {
     // Verbosity
     VERBOSITY verbosity = INFO;
     // If true, dT should sort contact arrays (based on contact type) before usage (not implemented)
-    bool should_sort_contacts = false;
+    bool should_sort_contacts = true;
     // If true, the solvers may need to do a per-step sweep to apply family number changes
     bool famnum_can_change_conditionally = false;
 
@@ -580,8 +810,6 @@ class DEMSolver {
     bool jitify_clump_templates = false;
     // Should jitify mass/MOI properties into kernels
     bool jitify_mass_moi = false;
-    // CD uses one thread (not one block) to process a bin
-    bool use_one_bin_per_thread = false;
 
     // User explicitly set a bin size to use
     bool use_user_defined_bin_size = false;
@@ -597,13 +825,23 @@ class DEMSolver {
     OUTPUT_FORMAT m_cnt_out_format = OUTPUT_FORMAT::CSV;
     // The output file content for contact pairs
     unsigned int m_cnt_out_content = CNT_OUTPUT_CONTENT::GEO_ID | CNT_OUTPUT_CONTENT::FORCE |
-                                     CNT_OUTPUT_CONTENT::POINT | CNT_OUTPUT_CONTENT::WILDCARD;
+                                     CNT_OUTPUT_CONTENT::POINT | CNT_OUTPUT_CONTENT::CNT_WILDCARD;
     // The output file format for meshes
     MESH_FORMAT m_mesh_out_format = MESH_FORMAT::VTK;
+    // If the solver should output wildcards to file
+    bool m_is_out_owner_wildcards = false;
+    bool m_is_out_cnt_wildcards = false;
 
-    // User instructed simulation `world' size. Note it is an approximate of the true size and we will generate a world
-    // not smaller than this.
-    float3 m_user_boxSize = make_float3(-1.f);
+    // User-instructed simulation `world' size. Note it is an approximate of the true size and we will generate a world
+    // not smaller than this. This is useful if the user want to automatically add BCs enclosing this user-defined
+    // domain.
+    float3 m_user_box_min = make_float3(-DEFAULT_BOX_DOMAIN_SIZE / 2.);
+    float3 m_user_box_max = make_float3(DEFAULT_BOX_DOMAIN_SIZE / 2.);
+
+    // The enlarged user-instructed box.. We do this because we don't want the box domain to have boundaries exactly on
+    // the edge of the world.
+    float3 m_target_box_min = make_float3(-DEFAULT_BOX_DOMAIN_SIZE * (1. + DEFAULT_BOX_DOMAIN_ENLARGE_RATIO) / 2.);
+    float3 m_target_box_max = make_float3(DEFAULT_BOX_DOMAIN_SIZE * (1. + DEFAULT_BOX_DOMAIN_ENLARGE_RATIO) / 2.);
 
     // Exact `World' size along X dir (determined at init time)
     float m_boxX = -1.f;
@@ -631,6 +869,8 @@ class DEMSolver {
     float l = FLT_MAX;
     // The edge length of a bin (for contact detection)
     double m_binSize;
+    // User-instructed initial bin size as a multiple of smallest sphere radius
+    float m_binSize_as_multiple = 2.0;
     // Total number of bins
     size_t m_num_bins;
     // Number of bins on each direction
@@ -643,27 +883,35 @@ class DEMSolver {
     // multiplied by this expand_safety_param, so the geometries over-expand for CD purposes. This creates more false
     // positives, and risks leading to more bodies in a bin than a block can handle, but helps prevent contacts being
     // left undiscovered by CD.
-    float m_expand_safety_param = 1.f;
+    float m_expand_safety_multi = 1.f;
+    // The `base' velocity we always consider entities to have, when determining the thickness of the margin to add for
+    // contact detection.
+    float m_expand_base_vel = 3.f;
+
+    // The method of determining the thickness of the margin added to CD
+    // Default is using a max_vel inspector of the clumps to decide it
+    enum class MARGIN_FINDER_TYPE { DEM_INSPECTOR, DEFAULT };
+    MARGIN_FINDER_TYPE m_max_v_finder_type = MARGIN_FINDER_TYPE::DEFAULT;
     // User-instructed approximate maximum velocity (of any point on a body in the simulation)
-    float m_approx_max_vel = -1.f;
+    float m_approx_max_vel = DEME_HUGE_FLOAT;
+    // The inspector that will be used for querying system max velocity
+    std::shared_ptr<DEMInspector> m_approx_max_vel_func;
 
     // The number of user-estimated (max) number of owners that will be present in the simulation. If 0, then the arrays
     // will just be resized at intialization based on the input size.
     size_t m_instructed_num_owners = 0;
 
-    // Whether the number of voxels and length unit l is explicitly given by the user
-    bool explicit_nv_override = false;
     // Whether the GPU-side systems have been initialized
     bool sys_initialized = false;
     // Smallest sphere radius (used to let the user know whether the expand factor is sufficient)
     float m_smallest_radius = FLT_MAX;
 
-    // The number of dT steps before it waits for a kT update. The default value 0 means every dT step will wait for a
+    // The number of dT steps before it waits for a kT update. The default value means every dT step will wait for a
     // newly produced contact-pair info (from kT) before proceeding.
-    int m_updateFreq = 0;
+    int m_suggestedFutureDrift = 40;
 
-    // Where the user wants the origin of the coordinate system to be
-    std::string m_user_instructed_origin = "center";
+    // This is an unused variable which is supposed to be related to m_suggestedFutureDrift...
+    int m_updateFreq = 20;
 
     // If and how we should add boundaries to the simulation world upon initialization. Choose between none, all and
     // top_open.
@@ -680,10 +928,34 @@ class DEMSolver {
     // If we should flatten then reduce forces (true), or use atomic operation to reduce forces (false)
     bool use_cub_to_reduce_force = false;
 
+    // If the solver sees there are more spheres in a bin than a this `maximum', it errors out
+    unsigned int threshold_too_many_spheres_in_bin = 32768;
+    // If the solver sees there are more triangles in a bin than a this `maximum', it errors out
+    unsigned int threshold_too_many_tri_in_bin = 32768;
+    // The max velocity at which the simulation should error out
+    float threshold_error_out_vel = 1e3;
+    // Whether to auto-adjust the bin size and the max update frequency
+    bool auto_adjust_bin_size = true;
+    bool auto_adjust_update_freq = true;
+    // Num of steps that kT takes average before making a conclusion on the performance of this bin size
+    unsigned int auto_adjust_observe_steps = 20;
+    // See corresponding method for those...
+    float auto_adjust_max_rate = 0.03;
+    float auto_adjust_acc = 0.2;
+    float auto_adjust_upper_proactive_ratio = 1.0;
+    float auto_adjust_lower_proactive_ratio = 0.3;
+    unsigned int upper_bound_future_drift = 5000;
+    float max_drift_ahead_of_avg_drift = 6.;
+    float max_drift_multiple_of_avg_drift = 1.1;
+    unsigned int max_drift_gauge_history_size = 200;
+
     // See SetNoForceRecord
     bool no_recording_contact_forces = false;
     // See SetCollectAccRightAfterForceCalc
     bool collect_force_in_force_kernel = false;
+
+    // Error-out avg num contacts
+    float threshold_error_out_num_cnts = 30.;
 
     // Integrator type
     TIME_INTEGRATOR m_integrator = TIME_INTEGRATOR::EXTENDED_TAYLOR;
@@ -691,6 +963,9 @@ class DEMSolver {
     // The force model which will be used
     std::shared_ptr<DEMForceModel> m_force_model =
         std::make_shared<DEMForceModel>(std::move(DEMForceModel(FORCE_MODEL::HERTZIAN)));
+
+    // Strategy for auto-adapting time steps size
+    ADAPT_TS_TYPE adapt_ts_type = ADAPT_TS_TYPE::NONE;
 
     ////////////////////////////////////////////////////////////////////////////////
     // No user method is provided to modify the following key quantities, even if
@@ -701,6 +976,9 @@ class DEMSolver {
 
     // All material properties names
     std::set<std::string> m_material_prop_names;
+
+    // The material properties that are pair-wise (example: friction coeff)
+    std::set<std::string> m_pairwise_material_prop_names;
 
     // Cached tracked objects that can be leveraged by the user to assume explicit control over some simulation objects
     std::vector<std::shared_ptr<DEMTrackedObj>> m_tracked_objs;
@@ -781,6 +1059,9 @@ class DEMSolver {
     // A big fat tab for all string replacement that the JIT compiler needs to consider
     std::unordered_map<std::string, std::string> m_subs;
 
+    // A map that records the numbering for user-defined owner wildcards
+    std::unordered_map<std::string, unsigned int> m_owner_wc_num;
+
     ////////////////////////////////////////////////////////////////////////////////
     // Cached user's direct (raw) inputs concerning the actual physics objects
     // presented in the simulation, which need to be processed before shipment,
@@ -797,6 +1078,10 @@ class DEMSolver {
     // This is the cached material information.
     // It will be massaged into the managed memory upon Initialize().
     std::vector<std::shared_ptr<DEMMaterial>> m_loaded_materials;
+
+    // Pair-wise material properties
+    std::unordered_map<std::string, std::vector<std::pair<std::pair<unsigned int, unsigned int>, float>>>
+        m_pairwise_matprop;
 
     // This is the cached clump structure information. Note although not stated explicitly, those are only `clump'
     // templates, not including triangles, analytical geometries etc.
@@ -957,10 +1242,10 @@ class DEMSolver {
     void jitifyKernels();
     /// Figure out the unit length l and numbers of voxels along each direction, based on domain size X, Y, Z
     void figureOutNV();
-    /// Derive the origin of the coordinate system using user inputs
-    void figureOutOrigin();
     /// Set the default bin (for contact detection) size to be the same of the smallest sphere
     void decideBinSize();
+    /// The method of deciding the thickness of contact margin (user-specified max vel; or a custom inspector)
+    void decideCDMarginStrat();
     /// Add boundaries to the simulation `world' based on user instructions
     void addWorldBoundingBox();
     /// Transfer cached solver preferences/instructions to dT and kT.
@@ -1008,6 +1293,23 @@ class DEMSolver {
                              const float d2 = 0.f,
                              const float d3 = 0.f,
                              const objNormal_t normal = ENTITY_NORMAL_INWARD);
+    /// Assert that the DEM simulation system is initialized
+    void assertSysInit(const std::string& method_name);
+    /// Assert that the DEM simulation system is not initialized
+    void assertSysNotInit(const std::string& method_name);
+    /// Print due information on worker threads reported anomalies
+    bool goThroughWorkerAnomalies();
+    /// @brief Get the owner ID of this geometry, depending on the contact type.
+    /// @return Owner ID of this geometry.
+    bodyID_t getGeoOwnerID(const bodyID_t& geoID, const contact_t& cnt_type) const;
+    /// @brief Implementation of getting (unsorted) contact pairs from dT.
+    /// @param type_func Exclude certain contact types from being outputted if this evaluates to false.
+    void getContacts_impl(std::vector<bodyID_t>& idA,
+                          std::vector<bodyID_t>& idB,
+                          std::vector<contact_t>& cnt_type,
+                          std::vector<family_t>& famA,
+                          std::vector<family_t>& famB,
+                          std::function<bool(contact_t)> type_func) const;
 
     // Some JIT packaging helpers
     inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap);

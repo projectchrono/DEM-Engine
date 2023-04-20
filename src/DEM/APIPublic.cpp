@@ -44,6 +44,148 @@ DEMSolver::~DEMSolver() {
     delete dTkT_GpuManager;
 }
 
+std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
+    // Is this owner a clump?
+    ownerType_t this_type = dT->ownerTypes.at(ownerID);
+    std::vector<bodyID_t> geo_to_watch;  // geo IDs that need to scan
+    switch (this_type) {
+        case OWNER_T_CLUMP:
+            for (bodyID_t i = 0; i < nSpheresGM; i++) {
+                if (ownerID == dT->ownerClumpBody.at(i))
+                    geo_to_watch.push_back(i);
+            }
+            break;
+        case OWNER_T_ANALYTICAL:
+            for (bodyID_t i = 0; i < nAnalGM; i++) {
+                if (ownerID == dT->ownerAnalBody.at(i))
+                    geo_to_watch.push_back(i);
+            }
+            break;
+        case OWNER_T_MESH:
+            for (bodyID_t i = 0; i < nTriGM; i++) {
+                if (ownerID == dT->ownerMesh.at(i))
+                    geo_to_watch.push_back(i);
+            }
+            break;
+    }
+
+    std::vector<bodyID_t> clumps_in_cnt;
+    // If this is not clump, then checking idB for it is enough
+    if (this_type != OWNER_T_CLUMP) {
+        for (size_t i = 0; i < dT->getNumContacts(); i++) {
+            auto idA = dT->idGeometryA.at(i);
+            auto idB = dT->idGeometryB.at(i);
+            if (!check_exist(geo_to_watch, idB))
+                continue;
+            auto cnt_type = dT->contactType.at(i);
+            // If it is a mesh facet, then contact type needs to match
+            if (this_type == OWNER_T_MESH) {
+                if (cnt_type == SPHERE_MESH_CONTACT) {
+                    clumps_in_cnt.push_back(dT->ownerClumpBody.at(idA));
+                }
+            } else {  // If analytical, then contact type larger than PLANE is fine
+                if (cnt_type >= SPHERE_PLANE_CONTACT) {
+                    clumps_in_cnt.push_back(dT->ownerClumpBody.at(idA));
+                }
+            }
+        }
+    } else {  // If a clump, then both idA and idB need to be checked
+        for (size_t i = 0; i < dT->getNumContacts(); i++) {
+            auto idA = dT->idGeometryA.at(i);
+            auto idB = dT->idGeometryB.at(i);
+            auto cnt_type = dT->contactType.at(i);
+            if (check_exist(geo_to_watch, idA)) {
+                if (cnt_type == SPHERE_SPHERE_CONTACT) {
+                    clumps_in_cnt.push_back(dT->ownerClumpBody.at(idB));
+                }
+            } else if (check_exist(geo_to_watch, idB)) {
+                if (cnt_type == SPHERE_SPHERE_CONTACT) {
+                    clumps_in_cnt.push_back(dT->ownerClumpBody.at(idA));
+                }
+            }
+        }
+    }
+    return clumps_in_cnt;
+}
+
+std::shared_ptr<DEMMaterial> DEMSolver::Duplicate(const std::shared_ptr<DEMMaterial>& ptr) {
+    // Make a copy
+    DEMMaterial obj = *ptr;
+    return this->LoadMaterial(obj);
+}
+std::shared_ptr<DEMClumpTemplate> DEMSolver::Duplicate(const std::shared_ptr<DEMClumpTemplate>& ptr) {
+    // Make a copy
+    DEMClumpTemplate obj = *ptr;
+    return this->LoadClumpType(obj);
+}
+std::shared_ptr<DEMClumpBatch> DEMSolver::Duplicate(const std::shared_ptr<DEMClumpBatch>& ptr) {
+    // Make a copy
+    DEMClumpBatch obj = *ptr;
+    return this->AddClumps(obj);
+}
+
+std::vector<std::pair<bodyID_t, bodyID_t>> DEMSolver::GetClumpContacts() const {
+    std::vector<bodyID_t> idA_tmp, idB_tmp;
+    std::vector<family_t> famA_tmp, famB_tmp;
+    std::vector<contact_t> cnt_type_tmp;
+    // Getting sphere contacts is enough
+    getContacts_impl(idA_tmp, idB_tmp, cnt_type_tmp, famA_tmp, famB_tmp,
+                     [](contact_t type) { return type == SPHERE_SPHERE_CONTACT; });
+    auto idx = hostSortIndices(idA_tmp);
+    std::vector<std::pair<bodyID_t, bodyID_t>> out_pair(idx.size());
+    for (size_t i = 0; i < idx.size(); i++) {
+        out_pair[i] = std::pair<bodyID_t, bodyID_t>(idA_tmp[idx[i]], idB_tmp[idx[i]]);
+    }
+    return out_pair;
+}
+
+std::vector<std::pair<bodyID_t, bodyID_t>> DEMSolver::GetClumpContacts(
+    const std::set<family_t>& family_to_include) const {
+    std::vector<bodyID_t> idA_tmp, idB_tmp;
+    std::vector<family_t> famA_tmp, famB_tmp;
+    std::vector<contact_t> cnt_type_tmp;
+    // Getting sphere contacts is enough
+    getContacts_impl(idA_tmp, idB_tmp, cnt_type_tmp, famA_tmp, famB_tmp,
+                     [](contact_t type) { return type == SPHERE_SPHERE_CONTACT; });
+    // Exclude the families that are not in the set
+    std::vector<bool> elem_to_remove(idA_tmp.size(), false);
+    for (size_t i = 0; i < idA_tmp.size(); i++) {
+        if (!check_exist(family_to_include, famA_tmp.at(i)) || !check_exist(family_to_include, famB_tmp.at(i))) {
+            elem_to_remove[i] = true;
+        }
+    }
+    idA_tmp = hostRemoveElem(idA_tmp, elem_to_remove);
+    idB_tmp = hostRemoveElem(idB_tmp, elem_to_remove);
+    famA_tmp = hostRemoveElem(famA_tmp, elem_to_remove);
+    famB_tmp = hostRemoveElem(famB_tmp, elem_to_remove);
+    cnt_type_tmp = hostRemoveElem(cnt_type_tmp, elem_to_remove);
+
+    auto idx = hostSortIndices(idA_tmp);
+    std::vector<std::pair<bodyID_t, bodyID_t>> out_pair(idx.size());
+    for (size_t i = 0; i < idx.size(); i++) {
+        out_pair[i] = std::pair<bodyID_t, bodyID_t>(idA_tmp[idx[i]], idB_tmp[idx[i]]);
+    }
+    return out_pair;
+}
+
+std::vector<std::pair<bodyID_t, bodyID_t>> DEMSolver::GetClumpContacts(
+    std::vector<std::pair<family_t, family_t>>& family_pair) const {
+    std::vector<bodyID_t> idA_tmp, idB_tmp;
+    std::vector<family_t> famA_tmp, famB_tmp;
+    std::vector<contact_t> cnt_type_tmp;
+    // Getting sphere contacts is enough
+    getContacts_impl(idA_tmp, idB_tmp, cnt_type_tmp, famA_tmp, famB_tmp,
+                     [](contact_t type) { return type == SPHERE_SPHERE_CONTACT; });
+    auto idx = hostSortIndices(idA_tmp);
+    std::vector<std::pair<bodyID_t, bodyID_t>> out_pair(idx.size());
+    family_pair.resize(idx.size());
+    for (size_t i = 0; i < idx.size(); i++) {
+        out_pair[i] = std::pair<bodyID_t, bodyID_t>(idA_tmp[idx[i]], idB_tmp[idx[i]]);
+        family_pair[i] = std::pair<family_t, family_t>(famA_tmp[idx[i]], famB_tmp[idx[i]]);
+    }
+    return out_pair;
+}
+
 float3 DEMSolver::GetOwnerPosition(bodyID_t ownerID) const {
     return dT->getOwnerPos(ownerID);
 }
@@ -62,6 +204,9 @@ float3 DEMSolver::GetOwnerAcc(bodyID_t ownerID) const {
 float3 DEMSolver::GetOwnerAngAcc(bodyID_t ownerID) const {
     return dT->getOwnerAngAcc(ownerID);
 }
+unsigned int DEMSolver::GetOwnerFamily(bodyID_t ownerID) const {
+    return (unsigned int)(+(dT->familyID.at(ownerID)));
+}
 
 void DEMSolver::SetOwnerPosition(bodyID_t ownerID, float3 pos) {
     dT->setOwnerPos(ownerID, pos);
@@ -75,39 +220,171 @@ void DEMSolver::SetOwnerVelocity(bodyID_t ownerID, float3 vel) {
 void DEMSolver::SetOwnerOriQ(bodyID_t ownerID, float4 oriQ) {
     dT->setOwnerOriQ(ownerID, oriQ);
 }
+void DEMSolver::SetOwnerFamily(bodyID_t ownerID, family_t fam) {
+    kT->familyID.at(ownerID) = fam;
+    dT->familyID.at(ownerID) = fam;
+}
+
+float DEMSolver::GetOwnerMass(bodyID_t ownerID) const {
+    if (jitify_mass_moi) {
+        inertiaOffset_t offset = dT->inertiaPropOffsets.at(ownerID);
+        return dT->massOwnerBody.at(offset);
+    } else {
+        return dT->massOwnerBody.at(ownerID);
+    }
+}
+
+float3 DEMSolver::GetOwnerMOI(bodyID_t ownerID) const {
+    if (jitify_mass_moi) {
+        inertiaOffset_t offset = dT->inertiaPropOffsets.at(ownerID);
+        float m1 = dT->mmiXX.at(offset);
+        float m2 = dT->mmiYY.at(offset);
+        float m3 = dT->mmiZZ.at(offset);
+        return host_make_float3(m1, m2, m3);
+    } else {
+        float m1 = dT->mmiXX.at(ownerID);
+        float m2 = dT->mmiYY.at(ownerID);
+        float m3 = dT->mmiZZ.at(ownerID);
+        return host_make_float3(m1, m2, m3);
+    }
+}
+
 void DEMSolver::SetTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite) {
     dT->setTriNodeRelPos(start, triangles, overwrite);
     kT->setTriNodeRelPos(start, triangles, overwrite);
 }
 
-void DEMSolver::InstructBoxDomainDimension(float x, float y, float z, SPATIAL_DIR dir_exact) {
-    m_user_boxSize.x = x;
-    m_user_boxSize.y = y;
-    m_user_boxSize.z = z;
-    m_box_dir_length_is_exact = dir_exact;
-    explicit_nv_override = false;
+double DEMSolver::GetSimTime() const {
+    return dT->getSimTime();
 }
 
-void DEMSolver::InstructBoxDomainNumVoxel(unsigned char x, unsigned char y, unsigned char z, float len_unit) {
-    if (x + y + z != sizeof(voxelID_t) * DEME_BITS_PER_BYTE) {
-        DEME_ERROR("Please give voxel numbers (as powers of 2) along each direction such that they add up to %zu.",
-                   sizeof(voxelID_t) * DEME_BITS_PER_BYTE);
-    }
-    l = len_unit;
-    nvXp2 = x;
-    nvYp2 = y;
-    nvZp2 = z;
+void DEMSolver::SetSimTime(double time) {
+    dT->setSimTime(time);
+}
 
-    // Calculating `world' size by the input nvXp2 and l
-    m_voxelSize = (double)((size_t)1 << VOXEL_RES_POWER2) * (double)l;
-    m_boxX = m_voxelSize * (double)((size_t)1 << x);
-    m_boxY = m_voxelSize * (double)((size_t)1 << y);
-    m_boxZ = m_voxelSize * (double)((size_t)1 << z);
-    // In this debug case, user domain size is the same as actual domain size
-    m_user_boxSize.x = m_boxX;
-    m_user_boxSize.y = m_boxY;
-    m_user_boxSize.z = m_boxZ;
-    explicit_nv_override = true;
+float DEMSolver::GetUpdateFreq() const {
+    return dT->getUpdateFreq();
+}
+
+void DEMSolver::SetIntegrator(const std::string& intg) {
+    switch (hash_charr(intg.c_str())) {
+        case ("forward_euler"_):
+            m_integrator = TIME_INTEGRATOR::FORWARD_EULER;
+            break;
+        case ("centered_difference"_):
+            m_integrator = TIME_INTEGRATOR::CENTERED_DIFFERENCE;
+            break;
+        case ("extended_taylor"_):
+            m_integrator = TIME_INTEGRATOR::EXTENDED_TAYLOR;
+            break;
+        default:
+            DEME_ERROR("Integration type %s is unknown. Please select another via SetIntegrator.", intg.c_str());
+    }
+}
+
+void DEMSolver::SetAdaptiveTimeStepType(const std::string& type) {
+    DEME_WARNING(
+        "SetAdaptiveTimeStepType is currently not implemented and has no effect, time step size is still fixed.");
+    switch (hash_charr(type.c_str())) {
+        case ("none"_):
+            adapt_ts_type = ADAPT_TS_TYPE::NONE;
+            break;
+        case ("max_vel"_):
+            adapt_ts_type = ADAPT_TS_TYPE::MAX_VEL;
+            break;
+        case ("int_diff"_):
+            adapt_ts_type = ADAPT_TS_TYPE::INT_DIFF;
+            break;
+        default:
+            DEME_ERROR("Adaptive time step type %s is unknown. Please select another via SetAdaptiveTimeStepType.",
+                       type.c_str());
+    }
+}
+
+void DEMSolver::SetCDNumStepsMaxDriftHistorySize(unsigned int n) {
+    if (n > NUM_STEPS_RESERVED_AFTER_RENEWING_FREQ_TUNER) {
+        max_drift_gauge_history_size = n;
+    } else {
+        DEME_WARNING(
+            "SetCDNumStepsMaxDriftHistorySize has no effect, since the argument supplied needs to be larger than %u.",
+            NUM_STEPS_RESERVED_AFTER_RENEWING_FREQ_TUNER);
+    }
+}
+
+void DEMSolver::SetMaxVelocity(float max_vel) {
+    m_approx_max_vel = max_vel;
+}
+
+void DEMSolver::SetExpandSafetyType(const std::string& insp_type) {
+    if (insp_type == "auto") {
+        m_max_v_finder_type = MARGIN_FINDER_TYPE::DEFAULT;
+        use_user_defined_expand_factor = false;
+    } else {
+        DEME_ERROR("Unknown string input \"%s\" for SetExpandSafetyType.", insp_type.c_str());
+    }
+}
+
+void DEMSolver::InstructBoxDomainDimension(float x, float y, float z, const std::string& dir_exact) {
+    m_user_box_min = host_make_float3(-x / 2., -y / 2., -z / 2.);
+    m_user_box_max = host_make_float3(x / 2., y / 2., z / 2.);
+
+    float3 enlarge_amount =
+        host_make_float3(x * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2., y * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2.,
+                         z * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2.);
+    m_target_box_min = m_user_box_min - enlarge_amount;
+    m_target_box_max = m_user_box_max + enlarge_amount;
+
+    if (str_to_upper(dir_exact) == "X") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::X;
+        m_target_box_min.x = m_user_box_min.x;
+        m_target_box_max.x = m_user_box_max.x;
+    } else if (str_to_upper(dir_exact) == "Y") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::Y;
+        m_target_box_min.y = m_user_box_min.y;
+        m_target_box_max.y = m_user_box_max.y;
+    } else if (str_to_upper(dir_exact) == "Z") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::Z;
+        m_target_box_min.z = m_user_box_min.z;
+        m_target_box_max.z = m_user_box_max.z;
+    } else if (str_to_upper(dir_exact) == "NONE") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::NONE;
+    } else {
+        DEME_ERROR("Unknown '%s' parameter in InstructBoxDomainDimension call.", dir_exact.c_str());
+    }
+}
+
+void DEMSolver::InstructBoxDomainDimension(const std::pair<float, float>& x,
+                                           const std::pair<float, float>& y,
+                                           const std::pair<float, float>& z,
+                                           const std::string& dir_exact) {
+    m_user_box_min =
+        host_make_float3(DEME_MIN(x.first, x.second), DEME_MIN(y.first, y.second), DEME_MIN(z.first, z.second));
+    m_user_box_max =
+        host_make_float3(DEME_MAX(x.second, x.first), DEME_MAX(y.second, y.first), DEME_MAX(z.second, z.first));
+
+    float3 enlarge_amount =
+        host_make_float3(std::abs(x.second - x.first), std::abs(y.second - y.first), std::abs(z.second - z.first));
+    enlarge_amount *= DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2.;
+    m_target_box_min = m_user_box_min - enlarge_amount;
+    m_target_box_max = m_user_box_max + enlarge_amount;
+
+    if (str_to_upper(dir_exact) == "X") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::X;
+        m_target_box_min.x = m_user_box_min.x;
+        m_target_box_max.x = m_user_box_max.x;
+    } else if (str_to_upper(dir_exact) == "Y") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::Y;
+        m_target_box_min.y = m_user_box_min.y;
+        m_target_box_max.y = m_user_box_max.y;
+    } else if (str_to_upper(dir_exact) == "Z") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::Z;
+        m_target_box_min.z = m_user_box_min.z;
+        m_target_box_max.z = m_user_box_max.z;
+    } else if (str_to_upper(dir_exact) == "NONE") {
+        m_box_dir_length_is_exact = SPATIAL_DIR::NONE;
+    } else {
+        DEME_ERROR("Unknown '%s' parameter in InstructBoxDomainDimension call.", dir_exact.c_str());
+    }
 }
 
 std::shared_ptr<DEMForceModel> DEMSolver::DefineContactForceModel(const std::string& model) {
@@ -139,29 +416,8 @@ std::shared_ptr<DEMForceModel> DEMSolver::UseFrictionlessHertzianModel() {
     return m_force_model;
 }
 
-void DEMSolver::SetFamilyFixed(unsigned int ID) {
-    if (ID > std::numeric_limits<family_t>::max()) {
-        DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
-                   std::numeric_limits<family_t>::max());
-    }
-    familyPrescription_t preInfo;
-    preInfo.family = ID;
-    preInfo.linVelX = "0";
-    preInfo.linVelY = "0";
-    preInfo.linVelZ = "0";
-    preInfo.rotVelX = "0";
-    preInfo.rotVelY = "0";
-    preInfo.rotVelZ = "0";
-    preInfo.linVelPrescribed = true;
-    preInfo.rotVelPrescribed = true;
-    preInfo.rotPosPrescribed = true;
-    preInfo.linPosPrescribed = true;
-    preInfo.used = true;
-
-    m_input_family_prescription.push_back(preInfo);
-}
-
 void DEMSolver::ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const std::string& condition) {
+    assertSysNotInit("ChangeFamilyWhen");
     if (ID_from > std::numeric_limits<family_t>::max() || ID_to > std::numeric_limits<family_t>::max()) {
         DEME_ERROR(
             "You instructed family number %u should change to %u, but family number should not be larger than %u.",
@@ -179,6 +435,7 @@ void DEMSolver::ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const
 }
 
 void DEMSolver::ChangeFamily(unsigned int ID_from, unsigned int ID_to) {
+    assertSysInit("ChangeFamily");
     // if (!check_exist(unique_user_families, ID_from)) {
     //     DEME_WARNING(
     //         "Family %u (from-family) has no prior reference before a ChangeFamily call, therefore no work is done.",
@@ -204,29 +461,68 @@ void DEMSolver::ChangeFamily(unsigned int ID_from, unsigned int ID_to) {
     kT->changeFamily(ID_from, ID_to);
 }
 
-void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
-                                          const std::string& velX,
-                                          const std::string& velY,
-                                          const std::string& velZ,
-                                          bool dictate) {
+void DEMSolver::SetFamilyFixed(unsigned int ID) {
+    assertSysNotInit("SetFamilyFixed");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());
     }
     familyPrescription_t preInfo;
     preInfo.family = ID;
+
+    preInfo.linVelXPrescribed = true;
+    preInfo.linVelYPrescribed = true;
+    preInfo.linVelZPrescribed = true;
+    preInfo.rotVelXPrescribed = true;
+    preInfo.rotVelYPrescribed = true;
+    preInfo.rotVelZPrescribed = true;
+
+    preInfo.rotPosPrescribed = true;
+    preInfo.linPosPrescribed = true;
+
+    preInfo.linVelX = "0";
+    preInfo.linVelY = "0";
+    preInfo.linVelZ = "0";
+    preInfo.rotVelX = "0";
+    preInfo.rotVelY = "0";
+    preInfo.rotVelZ = "0";
+
+    preInfo.used = true;
+
+    m_input_family_prescription.push_back(preInfo);
+}
+
+void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
+                                          const std::string& velX,
+                                          const std::string& velY,
+                                          const std::string& velZ,
+                                          bool dictate) {
+    assertSysNotInit("SetFamilyPrescribedLinVel");
+    if (ID > std::numeric_limits<family_t>::max()) {
+        DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
+                   std::numeric_limits<family_t>::max());
+    }
+    familyPrescription_t preInfo;
+    preInfo.family = ID;
+
+    preInfo.linVelXPrescribed = dictate;
+    preInfo.linVelYPrescribed = dictate;
+    preInfo.linVelZPrescribed = dictate;
+    preInfo.rotVelXPrescribed = dictate;
+    preInfo.rotVelYPrescribed = dictate;
+    preInfo.rotVelZPrescribed = dictate;
+
     preInfo.linVelX = velX;
     preInfo.linVelY = velY;
     preInfo.linVelZ = velZ;
 
-    preInfo.linVelPrescribed = dictate;
-    preInfo.rotVelPrescribed = dictate;
     preInfo.used = true;
 
     m_input_family_prescription.push_back(preInfo);
 }
 
 void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID) {
+    assertSysNotInit("SetFamilyPrescribedLinVel");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());
@@ -234,8 +530,9 @@ void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID) {
     familyPrescription_t preInfo;
     preInfo.family = ID;
 
-    preInfo.linVelPrescribed = true;
-    preInfo.rotVelPrescribed = true;
+    preInfo.linVelXPrescribed = true;
+    preInfo.linVelYPrescribed = true;
+    preInfo.linVelZPrescribed = true;
     preInfo.used = true;
 
     m_input_family_prescription.push_back(preInfo);
@@ -246,24 +543,32 @@ void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID,
                                           const std::string& velY,
                                           const std::string& velZ,
                                           bool dictate) {
+    assertSysNotInit("SetFamilyPrescribedAngVel");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());
     }
     familyPrescription_t preInfo;
     preInfo.family = ID;
+
+    preInfo.linVelXPrescribed = dictate;
+    preInfo.linVelYPrescribed = dictate;
+    preInfo.linVelZPrescribed = dictate;
+    preInfo.rotVelXPrescribed = dictate;
+    preInfo.rotVelYPrescribed = dictate;
+    preInfo.rotVelZPrescribed = dictate;
+
     preInfo.rotVelX = velX;
     preInfo.rotVelY = velY;
     preInfo.rotVelZ = velZ;
 
-    preInfo.linVelPrescribed = dictate;
-    preInfo.rotVelPrescribed = dictate;
     preInfo.used = true;
 
     m_input_family_prescription.push_back(preInfo);
 }
 
 void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID) {
+    assertSysNotInit("SetFamilyPrescribedAngVel");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());
@@ -271,8 +576,9 @@ void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID) {
     familyPrescription_t preInfo;
     preInfo.family = ID;
 
-    preInfo.linVelPrescribed = true;
-    preInfo.rotVelPrescribed = true;
+    preInfo.rotVelXPrescribed = true;
+    preInfo.rotVelYPrescribed = true;
+    preInfo.rotVelZPrescribed = true;
     preInfo.used = true;
 
     m_input_family_prescription.push_back(preInfo);
@@ -282,51 +588,171 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
                                             const std::string& X,
                                             const std::string& Y,
                                             const std::string& Z) {
+    assertSysNotInit("SetFamilyPrescribedPosition");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());
     }
     familyPrescription_t preInfo;
     preInfo.family = ID;
-    preInfo.linPosX = X;
-    preInfo.linPosY = Y;
-    preInfo.linPosZ = Z;
+
     // Both rot and lin pos are fixed. Use other methods if this is not intended.
     preInfo.rotPosPrescribed = true;
     preInfo.linPosPrescribed = true;
+
+    preInfo.linPosX = X;
+    preInfo.linPosY = Y;
+    preInfo.linPosZ = Z;
+
     preInfo.used = true;
 
     m_input_family_prescription.push_back(preInfo);
 }
 
 void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID) {
+    assertSysNotInit("SetFamilyPrescribedPosition");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());
     }
     familyPrescription_t preInfo;
     preInfo.family = ID;
-    // Both rot and lin pos are fixed.
-    preInfo.rotPosPrescribed = true;
+
     preInfo.linPosPrescribed = true;
     preInfo.used = true;
 
     m_input_family_prescription.push_back(preInfo);
 }
 
+//// TODO: Implement it
 void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula) {
+    assertSysNotInit("SetFamilyPrescribedQuaternion");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());
     }
 }
 
+void DEMSolver::AddFamilyPrescribedAcc(unsigned int ID,
+                                       const std::string& X,
+                                       const std::string& Y,
+                                       const std::string& Z) {
+    assertSysNotInit("AddFamilyPrescribedAcc");
+    if (ID > std::numeric_limits<family_t>::max()) {
+        DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
+                   std::numeric_limits<family_t>::max());
+    }
+    familyPrescription_t preInfo;
+    preInfo.family = ID;
+
+    preInfo.accX = X;
+    preInfo.accY = Y;
+    preInfo.accZ = Z;
+
+    preInfo.used = true;
+    m_input_family_prescription.push_back(preInfo);
+}
+
+void DEMSolver::AddFamilyPrescribedAngAcc(unsigned int ID,
+                                          const std::string& X,
+                                          const std::string& Y,
+                                          const std::string& Z) {
+    assertSysNotInit("AddFamilyPrescribedAngAcc");
+    if (ID > std::numeric_limits<family_t>::max()) {
+        DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
+                   std::numeric_limits<family_t>::max());
+    }
+    familyPrescription_t preInfo;
+    preInfo.family = ID;
+
+    preInfo.angAccX = X;
+    preInfo.angAccY = Y;
+    preInfo.angAccZ = Z;
+
+    preInfo.used = true;
+    m_input_family_prescription.push_back(preInfo);
+}
+
+void DEMSolver::SetOwnerWildcardValue(const std::string& name, const std::vector<float>& vals) {
+    assertSysInit("SetOwnerWildcardValue");
+    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
+        DEME_ERROR(
+            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerOwnerWildcards first.",
+            name.c_str());
+    }
+    dT->setOwnerWildcardValue(m_owner_wc_num.at(name), vals);
+}
+
+void DEMSolver::SetFamilyClumpMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat) {
+    assertSysInit("SetFamilyClumpMaterial");
+    dT->setFamilyClumpMaterial(N, mat->load_order);
+}
+void DEMSolver::SetFamilyMeshMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat) {
+    assertSysInit("SetFamilyMeshMaterial");
+    dT->setFamilyMeshMaterial(N, mat->load_order);
+}
+
+void DEMSolver::SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, const std::vector<float>& vals) {
+    assertSysInit("SetFamilyOwnerWildcardValue");
+    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
+        DEME_ERROR(
+            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerOwnerWildcards first.",
+            name.c_str());
+    }
+    dT->setFamilyOwnerWildcardValue(N, m_owner_wc_num.at(name), vals);
+}
+
+std::vector<float> DEMSolver::GetOwnerWildcardValue(const std::string& name, float val) {
+    assertSysInit("GetOwnerWildcardValue");
+    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
+        DEME_ERROR(
+            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerOwnerWildcards first.",
+            name.c_str());
+    }
+    std::vector<float> res;
+    dT->getOwnerWildcardValue(res, m_owner_wc_num.at(name));
+    return res;
+}
+
+std::vector<float> DEMSolver::GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, float val) {
+    assertSysInit("GetFamilyOwnerWildcardValue");
+    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
+        DEME_ERROR(
+            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerOwnerWildcards first.",
+            name.c_str());
+    }
+    std::vector<float> res;
+    dT->getFamilyOwnerWildcardValue(res, N, m_owner_wc_num.at(name));
+    return res;
+}
+
+void DEMSolver::SetContactWildcards(const std::set<std::string>& wildcards) {
+    m_force_model->SetPerContactWildcards(wildcards);
+}
+
+void DEMSolver::SetOwnerWildcards(const std::set<std::string>& wildcards) {
+    m_force_model->SetPerOwnerWildcards(wildcards);
+}
+
 void DEMSolver::DisableFamilyOutput(unsigned int ID) {
+    assertSysNotInit("DisableFamilyOutput");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You tried to disable output for family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());
     }
     m_no_output_families.insert(ID);
+}
+
+std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterial(DEMMaterial& a_material) {
+    std::shared_ptr<DEMMaterial> ptr = std::make_shared<DEMMaterial>(std::move(a_material));
+    ptr->load_order = m_loaded_materials.size();
+    m_loaded_materials.push_back(ptr);
+    nMaterialsLoad++;
+    return m_loaded_materials.back();
 }
 
 std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterial(const std::unordered_map<std::string, float>& mat_prop) {
@@ -335,11 +761,11 @@ std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterial(const std::unordered_map<st
         m_material_prop_names.insert(a_pair.first);
         if (a_pair.first == "CoR") {
             if (a_pair.second < DEME_TINY_FLOAT)
-                DEME_WARNING("Material type %u is set to have 0 restitution. Please make sure this is intentional.",
+                DEME_WARNING("Material type %zu is set to have 0 restitution. Please make sure this is intentional.",
                              m_loaded_materials.size());
             if (a_pair.second > 1.f)
                 DEME_WARNING(
-                    "Material type %u is set to have a restitution coefficient larger than 1. This is typically not "
+                    "Material type %zu is set to have a restitution coefficient larger than 1. This is typically not "
                     "physical and should destabilize the simulation.",
                     m_loaded_materials.size());
         }
@@ -349,11 +775,25 @@ std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterial(const std::unordered_map<st
         }
     }
     DEMMaterial a_material(mat_prop);
-    std::shared_ptr<DEMMaterial> ptr = std::make_shared<DEMMaterial>(std::move(a_material));
-    ptr->load_order = m_loaded_materials.size();
-    m_loaded_materials.push_back(ptr);
-    nMaterialsLoad++;
-    return m_loaded_materials.back();
+    return LoadMaterial(a_material);
+}
+
+void DEMSolver::SetMaterialPropertyPair(const std::string& name,
+                                        const std::shared_ptr<DEMMaterial>& mat1,
+                                        const std::shared_ptr<DEMMaterial>& mat2,
+                                        float val) {
+    m_pairwise_material_prop_names.insert(name);
+    if (!check_exist(m_material_prop_names, name)) {
+        DEME_WARNING(
+            "Material property %s in SetMaterialPropertyPair call never appeared in previous LoadMaterial calls.\nIf "
+            "two objects having the same material collide, this property is likely to be considered 0.",
+            name.c_str());
+    }
+    std::pair<unsigned int, unsigned int> mat_load_ids =
+        std::pair<unsigned int, unsigned int>(mat1->load_order, mat2->load_order);
+    std::pair<std::pair<unsigned int, unsigned int>, float> pair_val =
+        std::pair<std::pair<unsigned int, unsigned int>, float>(mat_load_ids, val);
+    m_pairwise_matprop[name].push_back(pair_val);
 }
 
 std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clump) {
@@ -361,7 +801,7 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clu
         clump.nComp != clump.materials.size()) {
         DEME_ERROR(
             "Radii, relative positions and material arrays defining a clump topology, must all have the same length "
-            "(%zu, as indicated by nComp).\nHowever it seems that their lengths are %zu, %zu, %zu, respectively.\nIf "
+            "(%u, as indicated by nComp).\nHowever it seems that their lengths are %zu, %zu, %zu, respectively.\nIf "
             "you constructed a DEMClumpTemplate struct yourself, you may need to carefully check if their lengths "
             "agree with nComp.",
             clump.nComp, clump.radii.size(), clump.relPos.size(), clump.materials.size());
@@ -377,9 +817,9 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clu
     clump.mark = offset;
 
     // Give it a default name
-    if (clump.m_name == "NULL") {
+    if (clump.m_name == DEME_NUM_CLUMP_NAME) {
         char my_name[200];
-        sprintf(my_name, "%04d", nClumpTemplateLoad);
+        sprintf(my_name, "%04d", (int)nClumpTemplateLoad);
         clump.AssignName(std::string(my_name));
     }
 
@@ -465,8 +905,8 @@ std::shared_ptr<DEMExternObj> DEMSolver::AddBCPlane(const float3 pos,
                                                     const float3 normal,
                                                     const std::shared_ptr<DEMMaterial>& material) {
     std::shared_ptr<DEMExternObj> ptr = AddExternalObject();
-    // TODO: make the owner of this BC to have the same CoM as this BC
-    ptr->AddPlane(pos, normal, material);
+    ptr->SetInitPos(pos);
+    ptr->AddPlane(make_float3(0), normal, material);
     return ptr;
 }
 
@@ -509,6 +949,19 @@ void DEMSolver::EnableContactBetweenFamilies(unsigned int ID1, unsigned int ID2)
     }
 }
 
+void DEMSolver::SetFamilyExtraMargin(unsigned int N, float extra_size) {
+    if (N > std::numeric_limits<family_t>::max()) {
+        DEME_ERROR("You are adding an extra margin to family %u, but family number should not be larger than %u.", N,
+                   std::numeric_limits<family_t>::max());
+    }
+    if (extra_size < 0.) {
+        DEME_ERROR("You are adding an extra margin of size %.7g, but the size should not be smaller than 0.",
+                   extra_size);
+    }
+    kT->familyExtraMarginSize.at(N) = extra_size;
+    dT->familyExtraMarginSize.at(N) = extra_size;
+}
+
 void DEMSolver::ClearCache() {
     deallocate_array(cached_input_clump_batches);
     deallocate_array(cached_extern_objs);
@@ -528,13 +981,6 @@ void DEMSolver::ClearCache() {
     // m_no_output_families;
     // m_family_change_pairs;
     // m_family_change_conditions;
-}
-
-float DEMSolver::GetTotalKineticEnergy() const {
-    if (nOwnerBodies == 0) {
-        return 0.0;
-    }
-    return dT->getKineticEnergy();
 }
 
 std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(DEMClumpBatch& input_batch) {
@@ -639,13 +1085,13 @@ std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMClumpBatch>& obj
 }
 
 std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity) {
-    DEMInspector insp(this, quantity);
+    DEMInspector insp(this, this->dT, quantity);
     m_inspectors.push_back(std::make_shared<DEMInspector>(std::move(insp)));
     return m_inspectors.back();
 }
 
 std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity, const std::string& region) {
-    DEMInspector insp(this, quantity, region);
+    DEMInspector insp(this, this->dT, quantity, region);
     m_inspectors.push_back(std::make_shared<DEMInspector>(std::move(insp)));
     return m_inspectors.back();
 }
@@ -724,6 +1170,49 @@ void DEMSolver::WriteMeshFile(const std::string& outfilename) const {
             DEME_ERROR(
                 "Mesh output file format is unknown or not implemented. Please re-set it via SetMeshOutputFormat.");
     }
+}
+
+size_t DEMSolver::ChangeClumpFamily(unsigned int fam_num,
+                                    const std::pair<double, double>& X,
+                                    const std::pair<double, double>& Y,
+                                    const std::pair<double, double>& Z,
+                                    const std::set<unsigned int>& orig_fam) {
+    float3 L = host_make_float3(X.first, Y.first, Z.first);
+    float3 U = host_make_float3(X.second, Y.second, Z.second);
+    size_t count = 0;
+    for (bodyID_t ownerID = 0; ownerID < nOwnerBodies; ownerID++) {
+        const ownerType_t this_type = dT->ownerTypes.at(ownerID);
+        if (this_type != OWNER_T_CLUMP)
+            continue;
+        float3 CoM;
+        voxelID_t voxel = dT->voxelID.at(ownerID);
+        subVoxelPos_t subVoxX = dT->locX.at(ownerID);
+        subVoxelPos_t subVoxY = dT->locY.at(ownerID);
+        subVoxelPos_t subVoxZ = dT->locZ.at(ownerID);
+        hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(CoM.x, CoM.y, CoM.z, voxel, subVoxX, subVoxY, subVoxZ,
+                                                               dT->simParams->nvXp2, dT->simParams->nvYp2,
+                                                               dT->simParams->voxelSize, dT->simParams->l);
+        CoM.x += dT->simParams->LBFX;
+        CoM.y += dT->simParams->LBFY;
+        CoM.z += dT->simParams->LBFZ;
+
+        // In region. This can be generalized in future versions.
+        if (isBetween(CoM, L, U)) {
+            if (orig_fam.size() == 0) {
+                dT->familyID.at(ownerID) = fam_num;
+                kT->familyID.at(ownerID) = fam_num;  // Must do both for dT and kT
+                count++;
+            } else {
+                unsigned int old_fam = dT->familyID.at(ownerID);
+                if (check_exist(orig_fam, old_fam)) {
+                    dT->familyID.at(ownerID) = fam_num;
+                    kT->familyID.at(ownerID) = fam_num;
+                    count++;
+                }
+            }
+        }
+    }
+    return count;
 }
 
 // The method should be called after user inputs are in place, and before starting the simulation. It figures out a part
@@ -859,15 +1348,31 @@ void DEMSolver::resetWorkerThreads() {
 }
 
 /// When simulation parameters are updated by the user, they can call this method to transfer them to the GPU-side in
-/// mid-simulation. This is relatively light-weight, designed only to change solver behavior and no array re-allocation
-/// and re-compilation will happen.
+/// mid-simulation. This is a relatively deep reset. If you just need to update step size, don't use this.
 void DEMSolver::UpdateSimParams() {
+    // Bin size will be re-calculated (in case you wish to switch to manual).
+    decideBinSize();
+    decideCDMarginStrat();
+
     transferSolverParams();
     transferSimParams();
-    //// TODO: inspect what sim params should be transferred and what should not
+
+    // Jitify max vel finder, in case the policy there changed
+    m_approx_max_vel_func->Initialize(m_subs, true);
+    dT->approxMaxVelFunc = m_approx_max_vel_func;
 
     // Updating sim environment is critical
     dT->announceCritical();
+}
+
+void DEMSolver::UpdateStepSize(float ts) {
+    if (ts < 0) {
+        kT->simParams->h = m_ts_size;
+        dT->simParams->h = m_ts_size;
+    } else {
+        kT->simParams->h = ts;
+        dT->simParams->h = ts;
+    }
 }
 
 void DEMSolver::UpdateClumps() {
@@ -885,7 +1390,7 @@ void DEMSolver::UpdateClumps() {
     if (nLastTimeClumpTemplateLoad != nClumpTemplateLoad) {
         DEME_ERROR(
             "UpdateClumps cannot be used after loading new clump templates. Consider re-initializing at this "
-            "point.\nNumber of clump templates at last initialization: %u\nNumber of clump templates now: %u",
+            "point.\nNumber of clump templates at last initialization: %zu\nNumber of clump templates now: %zu",
             nLastTimeClumpTemplateLoad, nClumpTemplateLoad);
     }
     DEME_WARNING(
@@ -918,8 +1423,8 @@ void DEMSolver::UpdateClumps() {
     if (nLastTimeMatNum != m_loaded_materials.size() || nLastTimeFamilyPreNum != m_input_family_prescription.size()) {
         DEME_ERROR(
             "UpdateClumps should not be used if you introduce new material types or family prescription (which will "
-            "need re-jitification).\nWe used to have %u materials, now we have %u.\nWe used to have %u family "
-            "prescription, now we have %u.",
+            "need re-jitification).\nWe used to have %u materials, now we have %zu.\nWe used to have %u family "
+            "prescription, now we have %zu.",
             nLastTimeMatNum, m_loaded_materials.size(), nLastTimeFamilyPreNum, m_input_family_prescription.size());
     }
 }
@@ -993,18 +1498,34 @@ void DEMSolver::ShowThreadCollaborationStats() {
                 (dTkT_InteractionManager->schedulingStats.nDynamicUpdates).load());
     DEME_PRINTF("Number of updates kinematic gets: %zu\n",
                 (dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load());
-    if ((dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load() > 0)
+    if ((dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load() > 0) {
+        // The numerator is not currentStampOfDynamic since it got cleared when the user syncs.
         DEME_PRINTF("Average steps per dynamic update: %.7g\n",
                     (double)(dT->nTotalSteps) / (dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load());
+        DEME_PRINTF("Average steps contact detection lags behind: %.7g\n",
+                    (double)(dTkT_InteractionManager->schedulingStats.accumKinematicLagSteps).load() /
+                        (dTkT_InteractionManager->schedulingStats.nKinematicUpdates).load());
+    }
     // DEME_PRINTF("Number of times dynamic loads buffer: %zu\n",
     //                 (dTkT_InteractionManager->schedulingStats.nDynamicReceives).load());
     // DEME_PRINTF("Number of times kinematic loads buffer: %zu\n",
     //                 (dTkT_InteractionManager->schedulingStats.nKinematicReceives).load());
     DEME_PRINTF("Number of times dynamic held back: %zu\n",
                 (dTkT_InteractionManager->schedulingStats.nTimesDynamicHeldBack).load());
-    DEME_PRINTF("Number of times kinematic held back: %zu\n",
-                (dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack).load());
+    // DEME_PRINTF("Number of times kinematic held back: %zu\n",
+    //             (dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack).load());
     DEME_PRINTF("-----------------------------\n");
+}
+
+void DEMSolver::ShowAnomalies() {
+    DEME_PRINTF("\n~~ Simulation anomaly report ~~\n");
+    bool there_is_anomaly = goThroughWorkerAnomalies();
+    if (!there_is_anomaly) {
+        DEME_PRINTF("There is no simulation anomalies on record.\n");
+    }
+    DEME_PRINTF("-----------------------------\n");
+    kT->anomalies.Clear();
+    dT->anomalies.Clear();
 }
 
 void DEMSolver::ClearThreadCollaborationStats() {
@@ -1014,6 +1535,7 @@ void DEMSolver::ClearThreadCollaborationStats() {
     // dTkT_InteractionManager->schedulingStats.nKinematicReceives = 0;
     dTkT_InteractionManager->schedulingStats.nTimesDynamicHeldBack = 0;
     dTkT_InteractionManager->schedulingStats.nTimesKinematicHeldBack = 0;
+    dTkT_InteractionManager->schedulingStats.accumKinematicLagSteps = 0;
     dT->nTotalSteps = 0;
 }
 
@@ -1022,17 +1544,17 @@ float DEMSolver::dTInspectReduce(const std::shared_ptr<jitify::Program>& inspect
                                  INSPECT_ENTITY_TYPE thing_to_insp,
                                  CUB_REDUCE_FLAVOR reduce_flavor,
                                  bool all_domain) {
-    size_t n;
-    switch (thing_to_insp) {
-        case (INSPECT_ENTITY_TYPE::SPHERE):
-            n = nSpheresGM;
-            break;
-        case (INSPECT_ENTITY_TYPE::CLUMP):
-            n = nOwnerClumps;
-            break;
-    }
-    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, n, reduce_flavor, all_domain);
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
     return (float)(*pRes);
+}
+
+float* DEMSolver::dTInspectNoReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
+                                    const std::string& kernel_name,
+                                    INSPECT_ENTITY_TYPE thing_to_insp,
+                                    CUB_REDUCE_FLAVOR reduce_flavor,
+                                    bool all_domain) {
+    float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+    return pRes;
 }
 
 }  // namespace deme

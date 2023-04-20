@@ -2,17 +2,13 @@
 
 float E_cnt, G_cnt, CoR_cnt, mu_cnt;
 {
-    float Crr_cnt;  // Dummies, we don't use'em in force calculation
     float E_A = E[bodyAMatType];
     float nu_A = nu[bodyAMatType];
-    float CoR_A = CoR[bodyAMatType];
     float E_B = E[bodyBMatType];
     float nu_B = nu[bodyBMatType];
-    float CoR_B = CoR[bodyBMatType];
-    float mu_A = mu[bodyAMatType];
-    float mu_B = mu[bodyBMatType];
-    matProxy2ContactParam<float>(E_cnt, G_cnt, CoR_cnt, mu_cnt, Crr_cnt, E_A, nu_A, CoR_A, mu_A, mu_B, E_B, nu_B, CoR_B,
-                                 0, 0);
+    matProxy2ContactParam<float>(E_cnt, G_cnt, E_A, nu_A, E_B, nu_B);
+    // CoR is pair-wise, so obtain it this way
+    CoR_cnt = CoR[bodyAMatType][bodyBMatType];
 }
 
 float3 rotVelCPA, rotVelCPB;
@@ -57,18 +53,20 @@ float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
     const float gamma_n = deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
 
     force += (k_n * overlapDepth + gamma_n * projection) * B2A;
-    // printf("normal force: %f, %f, %f\n", force.x, force.y, force.z);
 }
 
 // Tangential force part
 {
+    // mu is obtained from a `owner wildcard', which is a custom array where the user can associated any quantity with
+    // each owner. In this case, it is mu_custom.
+    float mu = DEME_MAX(mu_custom[AOwner], mu_custom[BOwner]);
     const float kt = 8. * G_cnt * sqrt_Rd;
     const float gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
     float3 tangent_force = -kt * delta_tan - gt * vrel_tan;
     const float ft = length(tangent_force);
     if (ft > DEME_TINY_FLOAT) {
         // Reverse-engineer to get tangential displacement
-        const float ft_max = length(force) * mu_cnt;
+        const float ft_max = length(force) * mu;
         if (ft > ft_max) {
             tangent_force = (ft_max / ft) * tangent_force;
             delta_tan = (tangent_force + gt * vrel_tan) / (-kt);

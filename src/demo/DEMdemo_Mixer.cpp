@@ -3,6 +3,11 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// This demo features a mesh-represented bladed mixer interacting with clump-represented
+// DEM particles.
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
@@ -18,14 +23,17 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
+    DEMSim.SetVerbosity(STEP_METRIC);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
 
     // E, nu, CoR, mu, Crr...
-    auto mat_type_mixer = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
-    auto mat_type_granular = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
+    auto mat_type_mixer = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.0}});
+    auto mat_type_granular = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.2}, {"Crr", 0.0}});
+    // If you don't have this line, then mu between mixer material and granular material will be 0.35 (average of the
+    // two).
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_mixer, mat_type_granular, 0.5);
 
     float step_size = 5e-6;
     const double world_size = 1;
@@ -36,7 +44,6 @@ int main() {
 
     DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
     DEMSim.InstructBoxDomainBoundingBC("all", mat_type_granular);
-    DEMSim.SetCoordSysOrigin("center");
 
     // Now add a cylinderical boundary
     auto walls = DEMSim.AddExternalObject();
@@ -47,14 +54,14 @@ int main() {
     mixer->Scale(make_float3(world_size / 2, world_size / 2, chamber_height));
     mixer->SetFamily(10);
     // Define the prescribed motion of mixer
-    DEMSim.SetFamilyPrescribedAngVel(10, "0", "0", "2 * 3.14159");
+    DEMSim.SetFamilyPrescribedAngVel(10, "0", "0", "3.14159");
 
     float granular_rad = 0.003;
     DEMClumpTemplate shape_template;
-    shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
+    shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/3_clump.csv").string());
     // Calculate its mass and MOI
     shape_template.mass = 2.6e3 * 5.5886717;  // in kg or g
-    shape_template.MOI = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3;
+    shape_template.MOI = make_float3(2.928, 2.6029, 3.9908) * 2.6e3;
     shape_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(shape_template.nComp, mat_type_granular);
     shape_template.Scale(granular_rad);
     auto template_granular = DEMSim.LoadClumpType(shape_template);
@@ -72,12 +79,20 @@ int main() {
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
-    // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEMSim.SetCDUpdateFreq(20);
-    // DEMSim.SetExpandFactor(1e-3);
-    DEMSim.SetMaxVelocity(20.);
-    DEMSim.SetExpandSafetyParam(1.0);
-    DEMSim.SetInitBinSize(4 * granular_rad);
+    DEMSim.SetCDUpdateFreq(40);
+    // Mixer has a big angular velocity-contributed linear speed at its blades, this is something the solver do not
+    // account for, for now. And that means it needs to be added as an estimated value.
+    DEMSim.SetExpandSafetyAdder(2.0);
+    DEMSim.SetInitBinSize(25 * granular_rad);
+    DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1.2);
+    DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(6);
+    DEMSim.SetSortContactPairs(true);
+    // DEMSim.DisableAdaptiveBinSize();
+    DEMSim.SetErrorOutVelocity(20.);
+    // Force the solver to error out if something went crazy. A good practice to add them, but not necessary.
+    DEMSim.SetErrorOutAvgContacts(50);
+    DEMSim.SetForceCalcThreadsPerBlock(512);
+    // DEMSim.UseCubForceCollection();
     DEMSim.Initialize();
 
     path out_dir = current_path();
@@ -106,6 +121,8 @@ int main() {
 
         float max_v = max_v_finder->GetValue();
         std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
+        std::cout << "Solver's current update frequency (auto-adapted): " << DEMSim.GetUpdateFreq() << std::endl;
+        std::cout << "Average contacts each sphere has: " << DEMSim.GetAvgSphContacts() << std::endl;
 
         DEMSim.DoDynamics(frame_time);
         DEMSim.ShowThreadCollaborationStats();
@@ -114,6 +131,8 @@ int main() {
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
     std::cout << (time_sec.count()) / sim_end / (1e-5 / step_size)
               << " seconds (wall time) to finish 1e5 steps' simulation" << std::endl;
+
+    DEMSim.ShowTimingStats();
 
     std::cout << "DEMdemo_Mixer exiting..." << std::endl;
     return 0;

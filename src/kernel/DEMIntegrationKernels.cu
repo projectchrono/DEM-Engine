@@ -1,11 +1,15 @@
 // DEM integration related custom kernels
-#include <kernel/DEMHelperKernels.cu>
+#include <DEMHelperKernels.cu>
 #include <DEM/Defines.h>
 
 // Apply presecibed velocity and report whether the `true' physics should be skipped, rather than added on top of that
 template <typename T1, typename T2>
-inline __device__ void applyPrescribedVel(bool& LinPrescribed,
-                                          bool& RotPrescribed,
+inline __device__ void applyPrescribedVel(bool& LinXPrescribed,
+                                          bool& LinYPrescribed,
+                                          bool& LinZPrescribed,
+                                          bool& RotXPrescribed,
+                                          bool& RotYPrescribed,
+                                          bool& RotZPrescribed,
                                           T1& vX,
                                           T1& vY,
                                           T1& vZ,
@@ -17,8 +21,10 @@ inline __device__ void applyPrescribedVel(bool& LinPrescribed,
     switch (family) {
         _velPrescriptionStrategy_;
         default:
-            LinPrescribed = false;
-            RotPrescribed = false;
+            // Default can just do nothing
+            // LinPrescribed = false;
+            // RotPrescribed = false;
+            return;
     }
 }
 
@@ -38,8 +44,27 @@ inline __device__ void applyPrescribedPos(bool& LinPrescribed,
     switch (family) {
         _posPrescriptionStrategy_;
         default:
-            LinPrescribed = false;
-            RotPrescribed = false;
+            // Default can just do nothing
+            // LinPrescribed = false;
+            // RotPrescribed = false;
+            return;
+    }
+}
+
+// Apply extra accelerations for family numbers
+template <typename T1, typename T2>
+inline __device__ void applyAddedAcceleration(T1& accX,
+                                              T1& accY,
+                                              T1& accZ,
+                                              T2& angAccX,
+                                              T2& angAccY,
+                                              T2& angAccZ,
+                                              const deme::family_t& family,
+                                              const float& t) {
+    switch (family) {
+        _accPrescriptionStrategy_;
+        default:
+            return;
     }
 }
 
@@ -51,35 +76,50 @@ inline __device__ void integrateVel(deme::bodyID_t thisClump,
                                     float h,
                                     float t) {
     deme::family_t family_code = granData->familyID[thisClump];
-    bool LinPrescribed = false, RotPrescribed = false;
+    bool LinXPrescribed = false, LinYPrescribed = false, LinZPrescribed = false, RotXPrescribed = false,
+         RotYPrescribed = false, RotZPrescribed = false;
 
     // Keep tab of the old... we'll need that
     float3 old_v = make_float3(granData->vX[thisClump], granData->vY[thisClump], granData->vZ[thisClump]);
     float3 old_omgBar =
         make_float3(granData->omgBarX[thisClump], granData->omgBarY[thisClump], granData->omgBarZ[thisClump]);
 
-    // The user may directly change and omgBar info in global memory in applyPrescribedVel
-    applyPrescribedVel<float, float>(LinPrescribed, RotPrescribed, granData->vX[thisClump], granData->vY[thisClump],
+    // The user may directly change v and omgBar info in global memory in applyPrescribedVel
+    applyPrescribedVel<float, float>(LinXPrescribed, LinYPrescribed, LinZPrescribed, RotXPrescribed, RotYPrescribed,
+                                     RotZPrescribed, granData->vX[thisClump], granData->vY[thisClump],
                                      granData->vZ[thisClump], granData->omgBarX[thisClump],
                                      granData->omgBarY[thisClump], granData->omgBarZ[thisClump], family_code, (float)t);
 
     float3 v_update = make_float3(0, 0, 0), omgBar_update = make_float3(0, 0, 0);
+    float3 extra_acc = make_float3(0, 0, 0), extra_angAcc = make_float3(0, 0, 0);
+    // User's addition of accelerations won't affect acc arrays in global memory; that is, if the user query the contact
+    // acceleration, still they don't get the part they applied in this acc prescription
+    applyAddedAcceleration<float, float>(extra_acc.x, extra_acc.y, extra_acc.z, extra_angAcc.x, extra_angAcc.y,
+                                         extra_angAcc.z, family_code, (float)t);
 
-    if (!LinPrescribed) {
-        v_update.x = (granData->aX[thisClump] + simParams->Gx) * h;
-        v_update.y = (granData->aY[thisClump] + simParams->Gy) * h;
-        v_update.z = (granData->aZ[thisClump] + simParams->Gz) * h;
+    if (!LinXPrescribed) {
+        v_update.x = (granData->aX[thisClump] + extra_acc.x + simParams->Gx) * h;
         granData->vX[thisClump] += v_update.x;
+    }
+    if (!LinYPrescribed) {
+        v_update.y = (granData->aY[thisClump] + extra_acc.y + simParams->Gy) * h;
         granData->vY[thisClump] += v_update.y;
+    }
+    if (!LinZPrescribed) {
+        v_update.z = (granData->aZ[thisClump] + extra_acc.z + simParams->Gz) * h;
         granData->vZ[thisClump] += v_update.z;
     }
 
-    if (!RotPrescribed) {
-        omgBar_update.x = granData->alphaX[thisClump] * h;
-        omgBar_update.y = granData->alphaY[thisClump] * h;
-        omgBar_update.z = granData->alphaZ[thisClump] * h;
+    if (!RotXPrescribed) {
+        omgBar_update.x = (granData->alphaX[thisClump] + extra_angAcc.x) * h;
         granData->omgBarX[thisClump] += omgBar_update.x;
+    }
+    if (!RotYPrescribed) {
+        omgBar_update.y = (granData->alphaY[thisClump] + extra_angAcc.y) * h;
         granData->omgBarY[thisClump] += omgBar_update.y;
+    }
+    if (!RotZPrescribed) {
+        omgBar_update.z = (granData->alphaZ[thisClump] + extra_angAcc.z) * h;
         granData->omgBarZ[thisClump] += omgBar_update.z;
     }
 
@@ -144,26 +184,20 @@ inline __device__ void integratePos(deme::bodyID_t thisClump,
 
     if (!RotPrescribed) {
         // Then integrate the quaternion
-        // Exp map-based rotation angle calculation
-        double deltaQ0 = 1;
-        double deltaQ1 = omgBar.x;
-        double deltaQ2 = omgBar.y;
-        double deltaQ3 = omgBar.z;
-        double len = sqrt(deltaQ1 * deltaQ1 + deltaQ2 * deltaQ2 + deltaQ3 * deltaQ3);
-        double theta = 0.5 * h * len;  // 0.5*dt*len, delta rotation
-        if (len > 0) {
-            deltaQ0 = cos(theta);
-            double s = sin(theta) / len;
-            deltaQ1 *= s;
-            deltaQ2 *= s;
-            deltaQ3 *= s;
-        }
-        // Note: Yes it is Quat * deltaRot, not the other way around. Also, Hamilton product should automatically
-        // maintain the unit-ness of quaternions.
-        HamiltonProduct<float>(granData->oriQw[thisClump], granData->oriQx[thisClump], granData->oriQy[thisClump],
-                               granData->oriQz[thisClump], granData->oriQw[thisClump], granData->oriQx[thisClump],
-                               granData->oriQy[thisClump], granData->oriQz[thisClump], deltaQ0, deltaQ1, deltaQ2,
-                               deltaQ3);
+        // 1st Taylor series multiplier. First use it to record delta rotation...
+        // Refer to https://stackoverflow.com/questions/24197182/efficient-quaternion-angular-velocity/24201879#24201879
+        const float3 ha = 0.5 * h * omgBar;
+        float4 oriQ = make_float4(ha.x, ha.y, ha.z, 1.0);  // xyzw
+        // Note: Yes it is Quat * deltaRot, not the other way around. Then store result in oriQ.
+        HamiltonProduct(oriQ.w, oriQ.x, oriQ.y, oriQ.z, granData->oriQw[thisClump], granData->oriQx[thisClump],
+                        granData->oriQy[thisClump], granData->oriQz[thisClump], oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+        // Normalizing it is essential. Note even if you use an exp map to update quaternion, you still need to
+        // normalize.
+        oriQ /= length(oriQ);
+        granData->oriQw[thisClump] = oriQ.w;
+        granData->oriQx[thisClump] = oriQ.x;
+        granData->oriQy[thisClump] = oriQ.y;
+        granData->oriQz[thisClump] = oriQ.z;
     }
 }
 

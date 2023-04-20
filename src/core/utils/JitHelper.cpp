@@ -11,11 +11,13 @@
 #include <jitify/jitify.hpp>
 
 #include <core/ApiVersion.h>
+#include <core/utils/RuntimeData.h>
 #include <core/utils/JitHelper.h>
 
 jitify::JitCache JitHelper::kcache;
 
-const std::filesystem::path JitHelper::KERNEL_DIR = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel";
+const std::filesystem::path JitHelper::KERNEL_DIR = RuntimeDataHelper::data_path / "kernel";
+const std::filesystem::path JitHelper::KERNEL_INCLUDE_DIR = RuntimeDataHelper::include_path;
 
 JitHelper::Header::Header(const std::filesystem::path& sourcefile) {
     this->_source = JitHelper::loadSourceFile(sourcefile);

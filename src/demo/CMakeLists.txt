@@ -13,11 +13,10 @@ SET(LIBRARIES
 # ------------------------------------------------------------------------------
 
 SET(DEMOS
-		DEMdemo_Pile
+		DEMdemo_Repose
 		DEMdemo_Sieve
 		DEMdemo_SingleSphereCollide
 		DEMdemo_TestPack
-		DEMdemo_TestRestart
 		DEMdemo_RotatingDrum
 		DEMdemo_Centrifuge
 		DEMdemo_GameOfLife
@@ -26,11 +25,14 @@ SET(DEMOS
 		DEMdemo_MixerTiming
 		DEMdemo_MixerTiming_Clumps
 		DEMdemo_MixerTiming_Clumps_5
-		DEMdemo_PolydisperseGeneration
-		DEMdemo_RoverWheel
 		DEMdemo_GRCPrep_Part1
 		DEMdemo_GRCPrep_Part2
-		DEMdemo_GRCPrep_Part3
+		DEMdemo_ConePenetration
+		DEMdemo_Shake
+		DEMdemo_WheelDP
+		DEMdemo_WheelSlopeSlip
+		DEMdemo_Indentation
+		DEMdemo_SolarSystem
 )
 
 # ------------------------------------------------------------------------------

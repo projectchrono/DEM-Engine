@@ -12,6 +12,7 @@
 #include <core/utils/csv.hpp>
 #include <core/utils/GpuError.h>
 #include <core/utils/Timer.hpp>
+#include <core/utils/RuntimeData.h>
 
 #include <sstream>
 #include <exception>
@@ -26,6 +27,78 @@
 #include <cassert>
 
 namespace deme {
+
+// =============================================================================
+// SOME HOST-SIDE CONSTANTS
+// =============================================================================
+
+const std::string DEME_NUM_CLUMP_NAME = std::string("NULL");
+const std::string OUTPUT_FILE_X_COL_NAME = std::string("X");
+const std::string OUTPUT_FILE_Y_COL_NAME = std::string("Y");
+const std::string OUTPUT_FILE_Z_COL_NAME = std::string("Z");
+const std::string OUTPUT_FILE_R_COL_NAME = std::string("r");
+const std::string OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
+const std::filesystem::path USER_SCRIPT_PATH = RuntimeDataHelper::data_path / "kernel" / "DEMUserScripts";
+// Column names for contact pair output file
+const std::string OUTPUT_FILE_OWNER_1_NAME = std::string("A");
+const std::string OUTPUT_FILE_OWNER_2_NAME = std::string("B");
+const std::string OUTPUT_FILE_COMP_1_NAME = std::string("compA");
+const std::string OUTPUT_FILE_COMP_2_NAME = std::string("compB");
+const std::string OUTPUT_FILE_GEO_ID_1_NAME = std::string("geoA");
+const std::string OUTPUT_FILE_GEO_ID_2_NAME = std::string("geoB");
+const std::string OUTPUT_FILE_OWNER_NICKNAME_1_NAME = std::string("nameA");
+const std::string OUTPUT_FILE_OWNER_NICKNAME_2_NAME = std::string("nameB");
+const std::string OUTPUT_FILE_CNT_TYPE_NAME = std::string("contact_type");
+const std::string OUTPUT_FILE_FORCE_X_NAME = std::string("f_x");
+const std::string OUTPUT_FILE_FORCE_Y_NAME = std::string("f_y");
+const std::string OUTPUT_FILE_FORCE_Z_NAME = std::string("f_z");
+const std::string OUTPUT_FILE_TOF_X_NAME = std::string("tof_x");  // TOF means torque_only_force
+const std::string OUTPUT_FILE_TOF_Y_NAME = std::string("tof_y");
+const std::string OUTPUT_FILE_TOF_Z_NAME = std::string("tof_z");
+const std::string OUTPUT_FILE_NORMAL_X_NAME = std::string("n_x");
+const std::string OUTPUT_FILE_NORMAL_Y_NAME = std::string("n_y");
+const std::string OUTPUT_FILE_NORMAL_Z_NAME = std::string("n_z");
+const std::string OUTPUT_FILE_SPH_SPH_CONTACT_NAME = std::string("SS");
+const std::string OUTPUT_FILE_SPH_ANAL_CONTACT_NAME = std::string("SA");
+const std::string OUTPUT_FILE_SPH_MESH_CONTACT_NAME = std::string("SM");
+const std::set<std::string> CNT_FILE_KNOWN_COL_NAMES = {OUTPUT_FILE_OWNER_1_NAME,
+                                                        OUTPUT_FILE_OWNER_2_NAME,
+                                                        OUTPUT_FILE_COMP_1_NAME,
+                                                        OUTPUT_FILE_COMP_2_NAME,
+                                                        OUTPUT_FILE_GEO_ID_1_NAME,
+                                                        OUTPUT_FILE_GEO_ID_2_NAME,
+                                                        OUTPUT_FILE_OWNER_NICKNAME_1_NAME,
+                                                        OUTPUT_FILE_OWNER_NICKNAME_2_NAME,
+                                                        OUTPUT_FILE_CNT_TYPE_NAME,
+                                                        OUTPUT_FILE_FORCE_X_NAME,
+                                                        OUTPUT_FILE_FORCE_Y_NAME,
+                                                        OUTPUT_FILE_FORCE_Z_NAME,
+                                                        OUTPUT_FILE_TOF_X_NAME,
+                                                        OUTPUT_FILE_TOF_Y_NAME,
+                                                        OUTPUT_FILE_TOF_Z_NAME,
+                                                        OUTPUT_FILE_NORMAL_X_NAME,
+                                                        OUTPUT_FILE_NORMAL_Y_NAME,
+                                                        OUTPUT_FILE_NORMAL_Z_NAME,
+                                                        OUTPUT_FILE_SPH_SPH_CONTACT_NAME,
+                                                        OUTPUT_FILE_SPH_ANAL_CONTACT_NAME,
+                                                        OUTPUT_FILE_SPH_MESH_CONTACT_NAME};
+
+// Map contact type identifier to their names
+const std::unordered_map<contact_t, std::string> contact_type_out_name_map = {
+    {NOT_A_CONTACT, "fake"},
+    {SPHERE_SPHERE_CONTACT, OUTPUT_FILE_SPH_SPH_CONTACT_NAME},
+    {SPHERE_MESH_CONTACT, OUTPUT_FILE_SPH_MESH_CONTACT_NAME},
+    {SPHERE_PLANE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
+    {SPHERE_PLATE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
+    {SPHERE_CYL_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
+    {SPHERE_CONE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME}};
+
+// Possible force model ingredients. This map is used to ensure we don't double-add them.
+const std::unordered_map<std::string, bool> force_kernel_ingredient_stats = {
+    {"ts", false},      {"time", false},    {"AOwnerFamily", true}, {"BOwnerFamily", true},
+    {"ALinVel", false}, {"BLinVel", false}, {"ARotVel", false},     {"BRotVel", false},
+    {"AOwner", false},  {"BOwner", false},  {"AOwnerMOI", false},   {"BOwnerMOI", false}};
+
 // Structs defined here will be used by some host classes in DEM.
 // NOTE: Data structs here need to be those complex ones (such as needing to include ManagedAllocator.hpp), which may
 // not be jitifiable.
@@ -52,6 +125,7 @@ class DEMSolverStateData {
     // Temp size_t variables that can be reused
     size_t* pTempSizeVar1;
     size_t* pTempSizeVar2;
+    size_t* pTempSizeVar3;
 
     // Number of contacts in this CD step
     size_t* pNumContacts;
@@ -61,22 +135,30 @@ class DEMSolverStateData {
     size_t* pNumPrevSpheres;
 
     DEMSolverStateData(unsigned int nArrays) : numTempArrays(nArrays) {
-        GPU_CALL(cudaMallocManaged(&pNumContacts, sizeof(size_t)));
-        GPU_CALL(cudaMallocManaged(&pTempSizeVar1, sizeof(size_t)));
-        GPU_CALL(cudaMallocManaged(&pTempSizeVar2, sizeof(size_t)));
-        GPU_CALL(cudaMallocManaged(&pNumPrevContacts, sizeof(size_t)));
-        GPU_CALL(cudaMallocManaged(&pNumPrevSpheres, sizeof(size_t)));
+        DEME_GPU_CALL(cudaMallocManaged(&pNumContacts, sizeof(size_t)));
+        DEME_GPU_CALL(cudaMallocManaged(&pTempSizeVar1, sizeof(size_t)));
+        DEME_GPU_CALL(cudaMallocManaged(&pTempSizeVar2, sizeof(size_t)));
+        DEME_GPU_CALL(cudaMallocManaged(&pTempSizeVar3, sizeof(size_t)));
+        DEME_GPU_CALL(cudaMallocManaged(&pNumPrevContacts, sizeof(size_t)));
+        DEME_GPU_CALL(cudaMallocManaged(&pNumPrevSpheres, sizeof(size_t)));
         *pNumContacts = 0;
         *pNumPrevContacts = 0;
         *pNumPrevSpheres = 0;
         threadTempVectors.resize(numTempArrays);
     }
     ~DEMSolverStateData() {
-        GPU_CALL(cudaFree(pNumContacts));
-        GPU_CALL(cudaFree(pTempSizeVar1));
-        GPU_CALL(cudaFree(pTempSizeVar2));
-        GPU_CALL(cudaFree(pNumPrevContacts));
-        GPU_CALL(cudaFree(pNumPrevSpheres));
+        DEME_GPU_CALL(cudaFree(pNumContacts));
+        DEME_GPU_CALL(cudaFree(pTempSizeVar1));
+        DEME_GPU_CALL(cudaFree(pTempSizeVar2));
+        DEME_GPU_CALL(cudaFree(pTempSizeVar3));
+        DEME_GPU_CALL(cudaFree(pNumPrevContacts));
+        DEME_GPU_CALL(cudaFree(pNumPrevSpheres));
+
+        cubScratchSpace.clear();
+        for (unsigned int i = 0; i < numTempArrays; i++) {
+            threadTempVectors.at(i).clear();
+        }
+        threadTempVectors.clear();
     }
 
     // Return raw pointer to swath of device memory that is at least "sizeNeeded" large
@@ -93,6 +175,33 @@ class DEMSolverStateData {
         }
         return threadTempVectors.at(i).data();
     }
+};
+
+struct kTStateParams {
+    // The `top speed' of the change of bin size
+    float binTopChangeRate = 0.05;
+    // The `current speed' fo the change of bin size
+    float binCurrentChangeRate = 0.0;
+    // The `acceleration' of bin size change rate, (0, 1]: 1 means each time a change is applied, it's at top speed
+    float binChangeRateAcc = 0.1;
+    // Number of CD steps before the solver makes a decision on how to change the bin size
+    unsigned int binChangeObserveSteps = 5;
+    // Past the point that (this number * error out bin geometry count)-many geometries found in a bin, the solver will
+    // force the bin to shrink
+    float binChangeUpperSafety = 0.5;
+    // Past the point that (this number * max num of bin)-many bins in the domain, the solver will force the bin to
+    // expand
+    float binChangeLowerSafety = 0.85;
+
+    // The max num of geometries in a bin that appeared in the CD process
+    size_t maxSphFoundInBin;
+    size_t maxTriFoundInBin;
+
+    // Num of bins, currently
+    size_t numBins = 0;
+
+    // Current average num of contacts per sphere has.
+    float avgCntsPerSphere = 0.;
 };
 
 inline std::string pretty_format_bytes(size_t bytes) {
@@ -117,6 +226,21 @@ inline std::string pretty_format_bytes(size_t bytes) {
 }
 
 // =============================================================================
+// SOME HOST-SIDE ENUMS
+// =============================================================================
+
+// Types of entities (can be either owner or geometry entity) that can be inspected by inspection methods
+enum class INSPECT_ENTITY_TYPE { SPHERE, CLUMP, MESH, MESH_FACET, EVERYTHING };
+// Which reduce operation is needed in an inspection
+enum class CUB_REDUCE_FLAVOR { NONE, MAX, MIN, SUM };
+// Format of the output files
+enum class OUTPUT_FORMAT { CSV, BINARY, CHPF };
+// Mesh output format
+enum class MESH_FORMAT { VTK, OBJ };
+// Adaptive time step size methods
+enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
+
+// =============================================================================
 // NOW DEFINING MACRO COMMANDS USED BY THE DEM MODULE
 // =============================================================================
 
@@ -130,24 +254,25 @@ inline std::string pretty_format_bytes(size_t bytes) {
 #define DEME_ERROR(...)                      \
     {                                        \
         char error_message[1024];            \
-        char func_name[1024];                \
         sprintf(error_message, __VA_ARGS__); \
-        sprintf(func_name, __func__);        \
         std::string out = error_message;     \
         out += "\n";                         \
         out += "This happened in ";          \
-        out += func_name;                    \
+        out += __func__;                     \
         out += ".\n";                        \
         throw std::runtime_error(out);       \
     }
 
-#define DEME_WARNING(...)                      \
-    {                                          \
-        if (verbosity >= VERBOSITY::WARNING) { \
-            printf("\nWARNING! ");             \
-            printf(__VA_ARGS__);               \
-            printf("\n\n");                    \
-        }                                      \
+#define DEME_WARNING(...)                       \
+    {                                           \
+        if (verbosity >= VERBOSITY::WARNING) {  \
+            char warn_message[1024];            \
+            sprintf(warn_message, __VA_ARGS__); \
+            std::string out = "\nWARNING! ";    \
+            out += warn_message;                \
+            out += "\n\n";                      \
+            std::cerr << out;                   \
+        }                                       \
     }
 
 #define DEME_INFO(...)                      \
@@ -158,12 +283,16 @@ inline std::string pretty_format_bytes(size_t bytes) {
         }                                   \
     }
 
-#define DEME_STEP_STATS(...)                      \
-    {                                             \
-        if (verbosity >= VERBOSITY::STEP_STATS) { \
-            printf(__VA_ARGS__);                  \
-            printf("\n");                         \
-        }                                         \
+#define DEME_STEP_ANOMALY(...)                                        \
+    {                                                                 \
+        if (verbosity >= VERBOSITY::STEP_ANOMALY) {                   \
+            char warn_message[1024];                                  \
+            sprintf(warn_message, __VA_ARGS__);                       \
+            std::string out = "\n-------- SIM ANOMALY!!! --------\n"; \
+            out += warn_message;                                      \
+            out += "\n\n";                                            \
+            std::cerr << out;                                         \
+        }                                                             \
     }
 
 #define DEME_STEP_METRIC(...)                      \
@@ -197,6 +326,21 @@ inline std::string pretty_format_bytes(size_t bytes) {
         }                                         \
     }
 
+#define DEME_STEP_DEBUG_EXEC(...)                 \
+    {                                             \
+        if (verbosity >= VERBOSITY::STEP_DEBUG) { \
+            __VA_ARGS__;                          \
+        }                                         \
+    }
+
+// Jitify options include suppressing variable-not-used warnings, but since we don't use CUB block primitives, we don't
+// need std::string(CUDA_TOOLKIT_HEADERS).
+#define DEME_JITIFY_OPTIONS                                                                       \
+    {                                                                                             \
+        "-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(), \
+            "-diag-suppress=550", "-diag-suppress=177"                                            \
+    }
+
 // I wasn't able to resolve a decltype problem with vector of vectors, so I have to create another macro for this kind
 // of tracked resize... not ideal.
 #define DEME_TRACKED_RESIZE_FLOAT(vec, newsize, val)               \
@@ -208,7 +352,7 @@ inline std::string pretty_format_bytes(size_t bytes) {
         m_approx_bytes_used += byte_delta;                         \
     }
 
-#define DEME_TRACKED_RESIZE_NOPRINT(vec, newsize, val)         \
+#define DEME_TRACKED_RESIZE(vec, newsize, val)                 \
     {                                                          \
         size_t item_size = sizeof(decltype(vec)::value_type);  \
         size_t old_size = vec.size();                          \
@@ -218,16 +362,16 @@ inline std::string pretty_format_bytes(size_t bytes) {
         m_approx_bytes_used += byte_delta;                     \
     }
 
-#define DEME_TRACKED_RESIZE(vec, newsize, name, val)                                                               \
-    {                                                                                                              \
-        size_t item_size = sizeof(decltype(vec)::value_type);                                                      \
-        size_t old_size = vec.size();                                                                              \
-        vec.resize(newsize, val);                                                                                  \
-        size_t new_size = vec.size();                                                                              \
-        size_t byte_delta = item_size * (new_size - old_size);                                                     \
-        m_approx_bytes_used += byte_delta;                                                                         \
-        DEME_STEP_STATS("Resizing vector %s, old size %zu, new size %zu, byte delta %s", name, old_size, new_size, \
-                        pretty_format_bytes(byte_delta).c_str());                                                  \
+#define DEME_TRACKED_RESIZE_DEBUGPRINT(vec, newsize, name, val)                                                      \
+    {                                                                                                                \
+        size_t item_size = sizeof(decltype(vec)::value_type);                                                        \
+        size_t old_size = vec.size();                                                                                \
+        vec.resize(newsize, val);                                                                                    \
+        size_t new_size = vec.size();                                                                                \
+        size_t byte_delta = item_size * (new_size - old_size);                                                       \
+        m_approx_bytes_used += byte_delta;                                                                           \
+        DEME_DEBUG_PRINTF("Resizing vector %s, old size %zu, new size %zu, byte delta %s", name, old_size, new_size, \
+                          pretty_format_bytes(byte_delta).c_str());                                                  \
     }
 
 //// TODO: this is currently not tracked...
@@ -235,11 +379,11 @@ inline std::string pretty_format_bytes(size_t bytes) {
 template <typename T>
 inline void DEME_DEVICE_PTR_ALLOC(T*& ptr, size_t size) {
     cudaPointerAttributes attrib;
-    GPU_CALL(cudaPointerGetAttributes(&attrib, ptr));
+    DEME_GPU_CALL(cudaPointerGetAttributes(&attrib, ptr));
 
     if (attrib.type != cudaMemoryType::cudaMemoryTypeUnregistered)
-        GPU_CALL(cudaFree(ptr));
-    GPU_CALL(cudaMalloc((void**)&ptr, size * sizeof(T)));
+        DEME_GPU_CALL(cudaFree(ptr));
+    DEME_GPU_CALL(cudaMalloc((void**)&ptr, size * sizeof(T)));
 }
 
 // Managed advise doesn't seem to do anything...
@@ -257,6 +401,16 @@ inline void DEME_DEVICE_PTR_ALLOC(T*& ptr, size_t size) {
 // =============================================================================
 // NOW SOME HOST-SIDE SIMPLE STRUCTS USED BY THE DEM MODULE
 // =============================================================================
+
+// Anomalies log
+class WorkerAnomalies {
+  public:
+    WorkerAnomalies() {}
+
+    bool over_max_vel = false;
+
+    void Clear() { over_max_vel = false; }
+};
 
 // Timers used by kT and dT
 class SolverTimers {
@@ -296,15 +450,23 @@ struct familyPrescription_t {
     std::string rotVelX = "none";
     std::string rotVelY = "none";
     std::string rotVelZ = "none";
-    // Is this prescribed motion dictating the motion of the entities (true), or just added on top of the true
-    // physics (false)
-    bool linVelPrescribed = false;
-    bool rotVelPrescribed = false;
+    // Is this prescribed motion dictating the motion of the entities (true), or should still accept the influence from
+    // other contact forces (false)
+    bool linVelXPrescribed = false;
+    bool linVelYPrescribed = false;
+    bool linVelZPrescribed = false;
+    bool rotVelXPrescribed = false;
+    bool rotVelYPrescribed = false;
+    bool rotVelZPrescribed = false;
     bool rotPosPrescribed = false;
     bool linPosPrescribed = false;
-    // This family will receive external updates of velocity and position (overwrites analytical prescription)
-    bool externVel = false;
-    bool externPos = false;
+    // Prescribed acc and ang acc; they are added to entities, sort of like gravity
+    std::string accX = "none";
+    std::string accY = "none";
+    std::string accZ = "none";
+    std::string angAccX = "none";
+    std::string angAccY = "none";
+    std::string angAccZ = "none";
     // A switch to mark if there is any prescription going on for this family at all
     bool used = false;
 };
@@ -342,7 +504,7 @@ class ClumpTemplateFlatten {
 
 struct SolverFlags {
     // Sort contact pair arrays (based on contact type) before sending to dT
-    bool should_sort_pairs = false;
+    bool should_sort_pairs = true;
     // This run is historyless
     bool isHistoryless = false;
     // This run uses contact detection in an async fashion (kT and dT working at different points in simulation time)
@@ -354,15 +516,13 @@ struct SolverFlags {
     unsigned int cntOutFlags;
     // Time step constant-ness and expand factor constant-ness
     bool isStepConst = true;
-    bool isExpandFactorFixed = true;
+    bool isExpandFactorFixed = false;
     // The strategy for selecting the variable time step size
     VAR_TS_STRAT stepSizeStrat = VAR_TS_STRAT::CONST;
     // Whether instructed to use jitification for mass properties and clump components (default to no and it is
     // recommended)
     bool useClumpJitify = false;
     bool useMassJitify = false;
-    // Contact detection uses a thread for a bin, not a block for a bin
-    bool useOneBinPerThread = false;
     // Whether the simulation involves meshes
     bool hasMeshes = false;
     // Whether the force collection (acceleration calc and reduction) process should be using CUB
@@ -371,6 +531,21 @@ struct SolverFlags {
     bool useNoContactRecord = false;
     // Collect force (reduce to acc) right in the force calculation kernel
     bool useForceCollectInPlace = false;
+    // Max number of steps dT is allowed to be ahead of kT, even when auto-adapt is enabled
+    unsigned int upperBoundFutureDrift = 5000;
+    // (targetDriftMoreThanAvg + targetDriftMultipleOfAvg * actual_dT_steps_per_kT_step) is used to calculate contact
+    // margin size
+    float targetDriftMoreThanAvg = 4.;
+    float targetDriftMultipleOfAvg = 1.1;
+
+    // Whether the solver auto-update those sim params
+    bool autoBinSize = true;
+    bool autoUpdateFreq = true;
+
+    // The max number of average contacts per sphere has before the solver errors out. The reason why I didn't use the
+    // number of contacts for the sphere that has the most is that, well, we can have a huge sphere and it just will
+    // have more contacts. But if avg cnt is high, that means probably the contact margin is out of control now.
+    float errOutAvgSphCnts = 100.;
 };
 
 class DEMMaterial {
@@ -410,6 +585,7 @@ class DEMClumpTemplate {
     std::vector<float3> relPos;
     std::vector<std::shared_ptr<DEMMaterial>> materials;
     unsigned int nComp = 0;  // Number of components
+
     // Position of this clump's CoM, in the frame which is used to report the positions of this clump's component
     // spheres. It is usually all 0, unless the user specifies it, in which case we need to process relPos such that
     // when the system is initialized, everything is still in the clump's CoM frame.
@@ -417,13 +593,14 @@ class DEMClumpTemplate {
     // CoM frame's orientation quaternion in the frame which is used to report the positions of this clump's component
     // spheres. Usually unit quaternion.
     // float4 CoM_oriQ = host_make_float4(0, 0, 0, 1);
+
     // Each clump template will have a unique mark number. When clumps are loaded to the system, this mark will help
     // find their type offset.
     unsigned int mark;
     // Whether this is a big clump (not used; jitifiability is determined automatically)
     bool isBigClump = false;
     // A name given by the user. It will be outputted to file to indicate the type of a clump.
-    std::string m_name = "NULL";
+    std::string m_name = DEME_NUM_CLUMP_NAME;
     // The volume of this type of clump.
     //// TODO: Add a method to automatically compute its volume
     float volume = 0.0;
@@ -485,6 +662,7 @@ class DEMClumpTemplate {
         }
         mass *= (double)s * (double)s * (double)s;
         MOI *= (double)s * (double)s * (double)s * (double)s * (double)s;
+        volume *= (double)s * (double)s * (double)s;
     }
 
     void AssignName(const std::string& some_name) { m_name = some_name; }
@@ -517,6 +695,8 @@ class DEMClumpBatch {
     // pair IDs are relative to this batch (starting from 0, up to num of this batch - 1, that is).
     std::vector<std::pair<bodyID_t, bodyID_t>> contact_pairs;
     std::unordered_map<std::string, std::vector<float>> contact_wildcards;
+    // Initial owner wildcard that this batch of clumps should have
+    std::unordered_map<std::string, std::vector<float>> owner_wildcards;
     // Its offset when this obj got loaded into the API-level user raw-input array
     size_t load_order;
     DEMClumpBatch(size_t num) : nClumps(num) {
@@ -584,13 +764,49 @@ class DEMClumpBatch {
         if (wildcards.begin()->second.size() != nExistContacts) {
             std::stringstream ss;
             ss << "SetExistingContactWildcards needs to be called after SetExistingContacts, with each wildcard array "
-                  "having the same length as the number of contact pairs.\n This way, each wildcard will have an "
+                  "having the same length as the number of contact pairs.\nThis way, each wildcard will have an "
                   "associated contact pair."
                << std::endl;
             throw std::runtime_error(ss.str());
         }
         contact_wildcards = wildcards;
     }
+    void AddExistingContactWildcard(const std::string& name, const std::vector<float>& vals) {
+        if (vals.size() != nClumps) {
+            std::stringstream ss;
+            ss << "AddExistingContactWildcard needs to be called after SetExistingContacts, with the input wildcard "
+                  "array having the same length as the number of contact pairs.\nThis way, each wildcard will have an "
+                  "associated contact pair."
+               << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        contact_wildcards[name] = vals;
+    }
+
+    void SetOwnerWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
+        if (wildcards.begin()->second.size() != nClumps) {
+            std::stringstream ss;
+            ss << "Input owner wildcard arrays in a SetOwnerWildcards call must all have the same size as the number "
+                  "of clumps in this batch.\nHere, the input array has length "
+               << wildcards.begin()->second.size() << " but this batch has " << nClumps << " clumps." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        owner_wildcards = wildcards;
+    }
+    void AddOwnerWildcard(const std::string& name, const std::vector<float>& vals) {
+        if (vals.size() != nClumps) {
+            std::stringstream ss;
+            ss << "Input owner wildcard array in a AddOwnerWildcard call must have the same size as the number of "
+                  "clumps in this batch.\nHere, the input array has length "
+               << vals.size() << " but this batch has " << nClumps << " clumps." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        owner_wildcards[name] = vals;
+    }
+    void AddOwnerWildcard(const std::string& name, float val) {
+        AddOwnerWildcard(name, std::vector<float>(nClumps, val));
+    }
+
     size_t GetNumContacts() const { return nExistContacts; }
 };
 
@@ -613,78 +829,6 @@ struct DEMTrackedObj {
     // If it is a tracked mesh, then this is the number of triangle facets that it has
     size_t nFacets;
 };
-
-// =============================================================================
-// SOME HOST-SIDE CONSTANTS
-// =============================================================================
-
-const std::string OUTPUT_FILE_X_COL_NAME = std::string("X");
-const std::string OUTPUT_FILE_Y_COL_NAME = std::string("Y");
-const std::string OUTPUT_FILE_Z_COL_NAME = std::string("Z");
-const std::string OUTPUT_FILE_R_COL_NAME = std::string("r");
-const std::string OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
-const std::filesystem::path USER_SCRIPT_PATH =
-    std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "src" / "kernel" / "DEMUserScripts";
-const std::filesystem::path SOURCE_DATA_PATH = std::filesystem::path(PROJECT_SOURCE_DIRECTORY) / "data";
-// Column names for contact pair output file
-const std::string OUTPUT_FILE_OWNER_1_NAME = std::string("A");
-const std::string OUTPUT_FILE_OWNER_2_NAME = std::string("B");
-const std::string OUTPUT_FILE_COMP_1_NAME = std::string("compA");
-const std::string OUTPUT_FILE_COMP_2_NAME = std::string("compB");
-const std::string OUTPUT_FILE_GEO_ID_1_NAME = std::string("geoA");
-const std::string OUTPUT_FILE_GEO_ID_2_NAME = std::string("geoB");
-const std::string OUTPUT_FILE_OWNER_NICKNAME_1_NAME = std::string("nameA");
-const std::string OUTPUT_FILE_OWNER_NICKNAME_2_NAME = std::string("nameB");
-const std::string OUTPUT_FILE_CNT_TYPE_NAME = std::string("contact_type");
-const std::string OUTPUT_FILE_FORCE_X_NAME = std::string("f_x");
-const std::string OUTPUT_FILE_FORCE_Y_NAME = std::string("f_y");
-const std::string OUTPUT_FILE_FORCE_Z_NAME = std::string("f_z");
-const std::string OUTPUT_FILE_TOF_X_NAME = std::string("tof_x");  // TOF means torque_only_force
-const std::string OUTPUT_FILE_TOF_Y_NAME = std::string("tof_y");
-const std::string OUTPUT_FILE_TOF_Z_NAME = std::string("tof_z");
-const std::string OUTPUT_FILE_NORMAL_X_NAME = std::string("n_x");
-const std::string OUTPUT_FILE_NORMAL_Y_NAME = std::string("n_y");
-const std::string OUTPUT_FILE_NORMAL_Z_NAME = std::string("n_z");
-const std::string OUTPUT_FILE_SPH_SPH_CONTACT_NAME = std::string("SS");
-const std::string OUTPUT_FILE_SPH_ANAL_CONTACT_NAME = std::string("SA");
-const std::string OUTPUT_FILE_SPH_MESH_CONTACT_NAME = std::string("SM");
-const std::set<std::string> CNT_FILE_KNOWN_COL_NAMES = {OUTPUT_FILE_OWNER_1_NAME,
-                                                        OUTPUT_FILE_OWNER_2_NAME,
-                                                        OUTPUT_FILE_COMP_1_NAME,
-                                                        OUTPUT_FILE_COMP_2_NAME,
-                                                        OUTPUT_FILE_GEO_ID_1_NAME,
-                                                        OUTPUT_FILE_GEO_ID_2_NAME,
-                                                        OUTPUT_FILE_OWNER_NICKNAME_1_NAME,
-                                                        OUTPUT_FILE_OWNER_NICKNAME_2_NAME,
-                                                        OUTPUT_FILE_CNT_TYPE_NAME,
-                                                        OUTPUT_FILE_FORCE_X_NAME,
-                                                        OUTPUT_FILE_FORCE_Y_NAME,
-                                                        OUTPUT_FILE_FORCE_Z_NAME,
-                                                        OUTPUT_FILE_TOF_X_NAME,
-                                                        OUTPUT_FILE_TOF_Y_NAME,
-                                                        OUTPUT_FILE_TOF_Z_NAME,
-                                                        OUTPUT_FILE_NORMAL_X_NAME,
-                                                        OUTPUT_FILE_NORMAL_Y_NAME,
-                                                        OUTPUT_FILE_NORMAL_Z_NAME,
-                                                        OUTPUT_FILE_SPH_SPH_CONTACT_NAME,
-                                                        OUTPUT_FILE_SPH_ANAL_CONTACT_NAME,
-                                                        OUTPUT_FILE_SPH_MESH_CONTACT_NAME};
-
-// Map contact type identifier to their names
-const std::unordered_map<contact_t, std::string> contact_type_out_name_map = {
-    {NOT_A_CONTACT, "fake"},
-    {SPHERE_SPHERE_CONTACT, OUTPUT_FILE_SPH_SPH_CONTACT_NAME},
-    {SPHERE_MESH_CONTACT, OUTPUT_FILE_SPH_MESH_CONTACT_NAME},
-    {SPHERE_PLANE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
-    {SPHERE_PLATE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
-    {SPHERE_CYL_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME},
-    {SPHERE_CONE_CONTACT, OUTPUT_FILE_SPH_ANAL_CONTACT_NAME}};
-
-// Possible force model ingredients. This map is used to ensure we don't double-add them.
-const std::unordered_map<std::string, bool> force_kernel_ingredient_stats = {
-    {"ts", false},      {"time", false},    {"AOwnerFamily", false}, {"BOwnerFamily", false},
-    {"ALinVel", false}, {"BLinVel", false}, {"ARotVel", false},      {"BRotVel", false},
-    {"AOwner", false},  {"BOwner", false},  {"AOwnerMOI", false},    {"BOwnerMOI", false}};
 
 }  // namespace deme
 

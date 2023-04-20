@@ -21,9 +21,10 @@ namespace deme {
 // NOW DEFINING CONSTANTS USED BY THE DEM MODULE
 // =============================================================================
 #define DEME_GET_VAR_NAME(Variable) (#Variable)
-#define DEME_KT_CD_NTHREADS_PER_BLOCK 256
-#define DEME_MAX_SPHERES_PER_BIN 256    ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
-#define DEME_MAX_TRIANGLES_PER_BIN 256  ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
+#define DEME_KT_CD_NTHREADS_PER_BLOCK 512
+// It is better to keep DEME_NUM_SPHERES_PER_CD_BATCH == DEME_KT_CD_NTHREADS_PER_BLOCK for better performance
+#define DEME_NUM_SPHERES_PER_CD_BATCH 512    ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
+#define DEME_NUM_TRIANGLES_PER_CD_BATCH 256  ///< Can't be larger than DEME_KT_CD_NTHREADS_PER_BLOCK
 #define DEME_TINY_FLOAT 1e-12
 #define DEME_HUGE_FLOAT 1e15
 #define DEME_BITS_PER_BYTE 8
@@ -45,7 +46,7 @@ constexpr uint8_t VOXEL_RES_POWER2 = sizeof(subVoxelPos_t) * DEME_BITS_PER_BYTE;
 constexpr uint8_t VOXEL_COUNT_POWER2 = sizeof(voxelID_t) * DEME_BITS_PER_BYTE;
 constexpr int64_t MAX_SUBVOXEL = (int64_t)1 << VOXEL_RES_POWER2;
 
-#define DEME_NUM_BODIES_PER_BLOCK 512
+#define DEME_NUM_BODIES_PER_BLOCK 1024
 #define DEME_NUM_TRIANGLE_PER_BLOCK 512
 #define DEME_MAX_THREADS_PER_BLOCK 1024
 #define DEME_INIT_CNT_MULTIPLIER 2
@@ -70,18 +71,20 @@ const objNormal_t ENTITY_NORMAL_OUTWARD = 1;
 const contact_t NOT_A_CONTACT = 0;
 const contact_t SPHERE_SPHERE_CONTACT = 1;
 const contact_t SPHERE_MESH_CONTACT = 2;
-const contact_t SPHERE_PLANE_CONTACT = 3;
-const contact_t SPHERE_PLATE_CONTACT = 4;
-const contact_t SPHERE_CYL_CONTACT = 5;
-const contact_t SPHERE_CONE_CONTACT = 6;
+// Aux contact types (contact with analytical objects) must be larger than SPHERE_ANALYTICAL_CONTACT!
+const contact_t SPHERE_ANALYTICAL_CONTACT = 10;
+const contact_t SPHERE_PLANE_CONTACT = 11;
+const contact_t SPHERE_PLATE_CONTACT = 12;
+const contact_t SPHERE_CYL_CONTACT = 13;
+const contact_t SPHERE_CONE_CONTACT = 14;
 
 const notStupidBool_t DONT_PREVENT_CONTACT = 0;
 const notStupidBool_t PREVENT_CONTACT = 1;
 
 // Codes for owner types. We just have a handful of types...
-const ownerType_t OWNER_T_CLUMP = 0;
-const ownerType_t OWNER_T_ANALYTICAL = 1;
-const ownerType_t OWNER_T_MESH = 2;
+const ownerType_t OWNER_T_CLUMP = 1;
+const ownerType_t OWNER_T_ANALYTICAL = 2;
+const ownerType_t OWNER_T_MESH = 4;
 
 // This ID marks that this is a new contact, not present when we did contact detection last time
 // TODO: half max add half max... so stupid... Better way?? numeric_limit won't work...
@@ -109,6 +112,8 @@ constexpr clumpComponentOffset_t RESERVED_CLUMP_COMPONENT_OFFSET =
 // Used to be compared against, so we know if some of the sphere components need to stay in global memory
 constexpr unsigned int THRESHOLD_CANT_JITIFY_ALL_COMP =
     DEME_MIN(DEME_MIN(RESERVED_CLUMP_COMPONENT_OFFSET, DEME_THRESHOLD_BIG_CLUMP), DEME_THRESHOLD_TOO_MANY_SPHERE_COMP);
+// Max size change the bin auto-adjust algorithm can apply to the bin size per step
+constexpr float BIN_SIZE_MAX_CHANGE_RATE = 0.2;
 
 // Some enums...
 // Verbosity
@@ -117,7 +122,7 @@ enum VERBOSITY {
     ERROR = 10,
     WARNING = 20,
     INFO = 30,
-    STEP_STATS = 32,
+    STEP_ANOMALY = 32,
     STEP_METRIC = 35,
     DEBUG = 40,
     STEP_DEBUG = 50
@@ -126,14 +131,6 @@ enum VERBOSITY {
 enum class TIME_INTEGRATOR { FORWARD_EULER, CENTERED_DIFFERENCE, EXTENDED_TAYLOR, CHUNG };
 // Owner types
 enum class OWNER_TYPE { CLUMP, ANALYTICAL, MESH };
-// Types of entities (can be either owner or geometry entity) that can be inspected by inspection methods
-enum class INSPECT_ENTITY_TYPE { SPHERE, CLUMP, MESH, MESH_FACET };
-// Which reduce operation is needed in an inspection
-enum class CUB_REDUCE_FLAVOR { NONE, MAX, MIN, SUM };
-// Format of the output files
-enum class OUTPUT_FORMAT { CSV, BINARY, CHPF };
-// Mesh output format
-enum class MESH_FORMAT { VTK, OBJ };
 // Force mode type
 enum class FORCE_MODEL { HERTZIAN, HERTZIAN_FRICTIONLESS, CUSTOM };
 // The info that should be present in the output files
@@ -143,13 +140,15 @@ enum OUTPUT_CONTENT {
     ABSV = 2,
     VEL = 4,
     ANG_VEL = 8,
-    ACC = 16,
-    ANG_ACC = 32,
-    FAMILY = 64,
-    MAT = 128,
+    ABS_ACC = 16,
+    ACC = 32,
+    ANG_ACC = 64,
+    FAMILY = 128,
+    MAT = 256,
+    OWNER_WILDCARD = 512,
     // How much this clump expanded in size via ChangeClumpSizes, compared to its `vanilla' template. Can be useful if
     // the user imposed some fine-grain clump size control.
-    EXP_FACTOR = 256
+    EXP_FACTOR = 1024
 };
 // Output particles as individual (component) spheres, or as owner clumps (clump CoMs for location, as an example)?
 enum class SPATIAL_DIR { X, Y, Z, NONE };
@@ -162,7 +161,7 @@ enum CNT_OUTPUT_CONTENT {
     NORMAL = 8,     // Contact normal direction in global frame
     TORQUE_ONLY_FORCE =
         16,  // This is a standalone force and produces torque only (typical example: rolling resistance force)
-    WILDCARD = 32,
+    CNT_WILDCARD = 32,
     OWNER = 64,
     GEO_ID = 128,
     NICKNAME = 256
@@ -205,9 +204,6 @@ struct DEMSimParams {
     objID_t nExtObj;
     bodyID_t nTriMeshes;
 
-    // bodyID_t nSpheresJitified;
-    // bodyID_t nTriJitified;
-
     // Number of the templates (or say the ``types'') of clumps and spheres
     unsigned int nDistinctClumpBodyTopologies;
     unsigned int nDistinctMassProperties;     ///< All mass property items, not just clumps'
@@ -222,6 +218,9 @@ struct DEMSimParams {
     float Gx;
     float Gy;
     float Gz;
+    // User's box size
+    float3 userBoxMin;
+    float3 userBoxMax;
     // Time step size
     float h;
     // Time elappsed since start of simulation
@@ -230,14 +229,23 @@ struct DEMSimParams {
     float beta;
     // Max velocity, user approximated, we verify during simulation
     float approxMaxVel;
-    // Expand safety parameter (multiplier for the CD envelope)
-    float expSafetyParam;
+    // Expand safety parameter (multiplier for the max vel)
+    float expSafetyMulti;
+    // Expand safety parameter (adder for the max vel)
+    float expSafetyAdder;
     // Stepping method
     TIME_INTEGRATOR stepping = TIME_INTEGRATOR::FORWARD_EULER;
 
     // Number of wildcards (extra property) arrays associated with contacts and owners
     unsigned int nContactWildcards;
     unsigned int nOwnerWildcards;
+
+    // The max vel at which the solver errors out
+    float errOutVel = DEME_HUGE_FLOAT;
+    // The max num of spheres per bin before solver errors out
+    unsigned int errOutBinSphNum = 32768;
+    // The max num of triangles per bin before solver errors out
+    unsigned int errOutBinTriNum = 32768;
 };
 
 // A struct that holds pointers to data arrays that dT uses
@@ -248,6 +256,8 @@ struct DEMDataDT {
     family_t* familyID;
 
     voxelID_t* voxelID;
+
+    ownerType_t* ownerTypes;
 
     subVoxelPos_t* locX;
     subVoxelPos_t* locY;
@@ -281,6 +291,8 @@ struct DEMDataDT {
 
     // Family mask
     notStupidBool_t* familyMasks;
+    // Extra margin size
+    float* familyExtraMarginSize;
 
     // Some dT's own work array pointers
     float3* contactForces;
@@ -309,6 +321,9 @@ struct DEMDataDT {
     contactPairs_t* contactMapping_buffer;
 
     // pointer to remote buffer where kinematic thread stores work-order data provided by the dynamic thread
+    unsigned int* pKTOwnedBuffer_maxDrift = NULL;
+    float* pKTOwnedBuffer_absVel = NULL;
+    float* pKTOwnedBuffer_ts = NULL;
     voxelID_t* pKTOwnedBuffer_voxelID = NULL;
     subVoxelPos_t* pKTOwnedBuffer_locX = NULL;
     subVoxelPos_t* pKTOwnedBuffer_locY = NULL;
@@ -334,8 +349,11 @@ struct DEMDataDT {
     // Wildcards. These are some quantities that you can associate with contact pairs and/or owner objects. Very
     // typically, contact history info in Hertzian model in this DEM tool is a wildcard, and electric charges can be
     // registered on granular particles with wildcards.
-    float* contactWildcards[DEME_MAX_WILDCARD_NUM];
-    float* ownerWildcards[DEME_MAX_WILDCARD_NUM];
+    float* contactWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
+    float* ownerWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
+
+    // dT believes this amount of future drift is ideal
+    unsigned int perhapsIdealFutureDrift = 0;
 };
 
 // A struct that holds pointers to data arrays that kT uses
@@ -350,8 +368,16 @@ struct DEMDataKT {
     oriQ_t* oriQx;
     oriQ_t* oriQy;
     oriQ_t* oriQz;
+    // Derived from absv which is for determining contact margin size.
+    float* marginSize;
 
     // kT-owned buffer pointers, for itself's usage
+    // float maxVel_buffer; // buffer for the current max vel sent by dT
+    float maxVel = 0;              // kT's own storage of max vel
+    float ts_buffer;               // buffer for the current ts size sent by dT
+    float ts;                      // kT's own storage of ts size
+    unsigned int maxDrift_buffer;  // buffer for max dT future drift steps
+    unsigned int maxDrift;         // kT's own storage for max future drift
     voxelID_t* voxelID_buffer;
     subVoxelPos_t* locX_buffer;
     subVoxelPos_t* locY_buffer;
@@ -360,10 +386,13 @@ struct DEMDataKT {
     oriQ_t* oriQ1_buffer;
     oriQ_t* oriQ2_buffer;
     oriQ_t* oriQ3_buffer;
+    float* absVel_buffer;
     family_t* familyID_buffer;
 
     // Family mask
     notStupidBool_t* familyMasks;
+    // Extra margin size
+    float* familyExtraMarginSize;
 
     // The offset info that indexes into the template arrays
     bodyID_t* ownerClumpBody;
@@ -412,6 +441,28 @@ struct DEMDataKT {
 
 // typedef DEMDataDT* DEMDataDTPtr;
 // typedef DEMSimParams* DEMSimParamsPtr;
+
+// =============================================================================
+// MISC AND LESS IMPORTANT ONES...
+// =============================================================================
+
+// At init, we wish to show the user how thick approximately the CD margin will be added. This number will help deriving
+// that approximation. It can be anything really, 1 or 10, or 8.
+const float AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE = 1.f;
+// After changing bin size, this many kT steps are not included in the performance gauging.
+const unsigned int NUM_STEPS_RESERVED_AFTER_CHANGING_BIN_SIZE = 5;
+// Drift tweak step size
+const unsigned int FUTURE_DRIFT_TWEAK_STEP_SIZE = 1;
+// After purging update freq history, this many dT steps are not included in the performance gauging.
+const unsigned int NUM_STEPS_RESERVED_AFTER_RENEWING_FREQ_TUNER = 10;
+// Default target simulation `world' size.
+const float DEFAULT_BOX_DOMAIN_SIZE = 20.;
+// The enlargement ratio we apply to the target sim world size when we construct it.
+const float DEFAULT_BOX_DOMAIN_ENLARGE_RATIO = 0.2;
+
+// #ifndef CUB_IGNORE_DEPRECATED_API
+// #define CUB_IGNORE_DEPRECATED_API
+// #endif
 
 }  // namespace deme
 

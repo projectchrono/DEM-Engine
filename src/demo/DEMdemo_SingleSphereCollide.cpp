@@ -3,6 +3,10 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// A demo that is basically the hello-world script for DEME.
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
@@ -19,7 +23,7 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(DEBUG);
+    DEMSim.SetVerbosity(STEP_DEBUG);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetContactOutputContent(OWNER | FORCE | POINT | COMPONENT | NORMAL | TORQUE_ONLY_FORCE);
     DEMSim.EnsureKernelErrMsgLineNum();
@@ -29,13 +33,19 @@ int main() {
     srand(4150);
 
     auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}});
+    auto mat_type_2 = DEMSim.LoadMaterial({{"E", 2e9}, {"nu", 0.4}, {"CoR", 0.6}});
+    std::shared_ptr<DEMMaterial> mat_type_3 = DEMSim.Duplicate(mat_type_2);
+    // If you don't have this line, then CoR between thw 2 materials will take average when they are in contact
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_1, mat_type_2, 0.6);
 
     auto sph_type_1 = DEMSim.LoadSphereType(11728., 1., mat_type_1);
+    // Test clump template duplication...
+    auto sph_type_2 = DEMSim.Duplicate(sph_type_1);
 
     std::vector<float3> input_xyz1, input_xyz2;
     std::vector<float3> input_vel1, input_vel2;
-    std::vector<std::shared_ptr<DEMClumpTemplate>> input_clump_type(1, sph_type_1);
-    // std::vector<unsigned int> input_clump_type(1, sph_type_1);
+    std::vector<std::shared_ptr<DEMClumpTemplate>> input_clump_type1(1, sph_type_1);
+    std::vector<std::shared_ptr<DEMClumpTemplate>> input_clump_type2(1, sph_type_2);
 
     // Inputs are just 2 spheres
     float sphPos = 1.2f;
@@ -44,14 +54,17 @@ int main() {
     input_vel1.push_back(make_float3(1.f, 0, 0));
     input_vel2.push_back(make_float3(-1.f, 0, 0));
 
-    auto particles1 = DEMSim.AddClumps(input_clump_type, input_xyz1);
+    auto particles1 = DEMSim.AddClumps(input_clump_type1, input_xyz1);
     particles1->SetVel(input_vel1);
     particles1->SetFamily(0);
+    particles1->AddOwnerWildcard("mu_custom", 0.5);
+    // This one is never used in force model, yet it should not create an error
+    particles1->AddOwnerWildcard("some_property", 1.0);
     auto tracker1 = DEMSim.Track(particles1);
 
     // DEMSim.DisableContactBetweenFamilies(0, 1);
 
-    auto bot_plane = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/plane_20by20.obj").string(), mat_type_1);
+    auto bot_plane = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/plane_20by20.obj").string(), mat_type_2);
     bot_plane->SetInitPos(make_float3(0, 0, -1.25));
 
     // Create a inspector to find out stuff
@@ -59,28 +72,31 @@ int main() {
     float max_z;
     auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
     float max_v;
-
-    DEMSim.InstructBoxDomainNumVoxel(22, 21, 21, 3e-11);
+    auto KE_finder = DEMSim.CreateInspector("clump_kinetic_energy");
+    float KE;
 
     // A custom force model can be read in through a file and used by the simulation. Magic, right?
     auto my_force_model = DEMSim.ReadContactForceModel("SampleCustomForceModel.cu");
     // This custom force model still uses contact history arrays, so let's define it
     my_force_model->SetPerContactWildcards({"delta_tan_x", "delta_tan_y", "delta_tan_z"});
+    // Owner wildcards. In this demo, we define a changable friction coefficient mu_custom.
+    my_force_model->SetPerOwnerWildcards({"mu_custom"});
 
-    DEMSim.SetCoordSysOrigin("center");
     DEMSim.SetInitTimeStep(2e-5);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
-    // Velocity not to exceed 3.0
     DEMSim.SetCDUpdateFreq(10);
-    DEMSim.SetMaxVelocity(3.);
-    DEMSim.SetExpandSafetyParam(2.);
-    DEMSim.SetIntegrator(TIME_INTEGRATOR::CENTERED_DIFFERENCE);
+    DEMSim.SetMaxVelocity(6.);
+    DEMSim.SetExpandSafetyType("auto");
+    DEMSim.SetExpandSafetyMultiplier(1.2);
+    DEMSim.SetIntegrator("centered_difference");
 
     DEMSim.Initialize();
 
+    DEMSim.UpdateSimParams();  // Not needed; just testing if this function works...
+
     // You can add more clumps to simulation after initialization, like this...
     DEMSim.ClearCache();
-    auto particles2 = DEMSim.AddClumps(input_clump_type, input_xyz2);
+    auto particles2 = DEMSim.AddClumps(input_clump_type2, input_xyz2);
     particles2->SetVel(input_vel2);
     particles2->SetFamily(1);
     auto tracker2 = DEMSim.Track(particles2);
@@ -91,6 +107,9 @@ int main() {
     out_dir += "/DemoOutput_SingleSphereCollide";
     create_directory(out_dir);
     // bool changed_family = false;
+
+    // We can give particle 2 this mu_custom property too
+    DEMSim.SetFamilyOwnerWildcardValue(1, "mu_custom", 0.5);
     for (int i = 0; i < 100; i++) {
         std::cout << "Frame: " << i << std::endl;
 
@@ -100,25 +119,44 @@ int main() {
         //     changed_family = true;
         // }
 
-        char filename[100];
+        char filename[200];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
         DEMSim.WriteSphereFile(std::string(filename));
 
-        char cnt_filename[100];
+        char cnt_filename[200];
         sprintf(cnt_filename, "%s/Contact_pairs_%04d.csv", out_dir.c_str(), i);
         // DEMSim.WriteContactFile(std::string(cnt_filename));
 
-        char meshfilename[100];
+        char meshfilename[200];
         sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), i);
         DEMSim.WriteMeshFile(std::string(meshfilename));
 
         DEMSim.DoDynamicsThenSync(1e-2);
         max_z = max_z_finder->GetValue();
         max_v = max_v_finder->GetValue();
+        KE = KE_finder->GetValue();
+
+        // Test if family changer works
+        float3 pos1 = tracker1->Pos();
+        float3 pos2 = tracker2->Pos();
+        DEMSim.ChangeClumpFamily(i % 10, std::pair<float, float>(pos1.x - 0.1, pos1.x + 0.1),
+                                 std::pair<float, float>(pos1.y - 0.1, pos1.y + 0.1),
+                                 std::pair<float, float>(pos1.z - 0.1, pos1.z + 0.1));
+        tracker2->SetFamily(i % 10 + 1);
+        unsigned int fam1 = tracker1->GetFamily(0);
+        unsigned int fam2 = tracker2->GetFamily();
+
         std::cout << "Max Z coord is " << max_z << std::endl;
         std::cout << "Max velocity of any point is " << max_v << std::endl;
-        std::cout << "Particle 1 X coord is " << tracker1->Pos().x << std::endl;
-        std::cout << "Particle 2 X coord is " << tracker2->Pos().x << std::endl;
+        std::cout << "Total kinetic energy is " << KE << std::endl;
+        std::cout << "Particle 1 X coord is " << pos1.x << std::endl;
+        std::cout << "Particle 2 X coord is " << pos2.x << std::endl;
+        std::cout << "Particle 1 family is " << fam1 << std::endl;
+        std::cout << "Particle 2 family is " << fam2 << std::endl;
+        std::cout << "Average contacts each sphere has: " << DEMSim.GetAvgSphContacts() << std::endl;
+
+        // Test changing material type on-the-fly...
+        DEMSim.SetFamilyClumpMaterial(1, mat_type_3);
     }
 
     DEMSim.ShowThreadCollaborationStats();

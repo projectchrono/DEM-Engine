@@ -3,12 +3,12 @@
 #ifndef DEME_HELPER_KERNELS_CU
 #define DEME_HELPER_KERNELS_CU
 
-//#include <thirdparty/nvidia_helper_math/helper_math.cuh>
+// #include <thirdparty/nvidia_helper_math/helper_math.cuh>
 #include <DEM/Defines.h>
 
 // I can only include CUDAMathHelpers.cu here and if I do it in other kernel files such as DEMBinSphereKernels.cu too,
 // there will be double-load problem where operators are re-defined. Not sure how to resolve it.
-#include <kernel/CUDAMathHelpers.cu>
+#include <CUDAMathHelpers.cu>
 
 // inline __device__ voxelID_t position2VoxelID
 
@@ -191,20 +191,33 @@ inline __device__ T1 triangleCentroid(const T1& p1, const T1& p2, const T1& p3) 
     return (p1 + p2 + p3) / 3.;
 }
 
-// Hamilton product of 2 quaternions
+// Calculate the incenter of a triangle
 template <typename T1>
+inline __device__ T1 triangleIncenter(const T1& p1, const T1& p2, const T1& p3) {
+    float a = length(p2 - p3);
+    float b = length(p1 - p3);
+    float c = length(p1 - p2);
+    T1 res;
+    res.x = (a * p1.x + b * p2.x + c * p3.x) / (a + b + c);
+    res.y = (a * p1.y + b * p2.y + c * p3.y) / (a + b + c);
+    res.z = (a * p1.z + b * p2.z + c * p3.z) / (a + b + c);
+    return res;
+}
+
+// Hamilton product of 2 quaternions
+template <typename T1, typename T2, typename T3>
 inline __device__ void HamiltonProduct(T1& A,
                                        T1& B,
                                        T1& C,
                                        T1& D,
-                                       const T1 a1,
-                                       const T1 b1,
-                                       const T1 c1,
-                                       const T1 d1,
-                                       const T1 a2,
-                                       const T1 b2,
-                                       const T1 c2,
-                                       const T1 d2) {
+                                       const T2 a1,
+                                       const T2 b1,
+                                       const T2 c1,
+                                       const T2 d1,
+                                       const T3 a2,
+                                       const T3 b2,
+                                       const T3 c2,
+                                       const T3 d2) {
     A = a1 * a2 - b1 * b2 - c1 * c2 - d1 * d2;
     B = a1 * b2 + b1 * a2 + c1 * d2 - d1 * c2;
     C = a1 * c2 - b1 * d2 + c1 * a2 + d1 * b2;
@@ -231,8 +244,11 @@ inline __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
                                                       T1& CPY,
                                                       T1& CPZ) {
     T1 centerDist2 = distSquared<T1>(XA, YA, ZA, XB, YB, ZB);
+    deme::contact_t contactType;
     if (centerDist2 > (radA + radB) * (radA + radB)) {
-        return deme::NOT_A_CONTACT;
+        contactType = deme::NOT_A_CONTACT;
+    } else {
+        contactType = deme::SPHERE_SPHERE_CONTACT;
     }
     // If getting this far, then 2 spheres have an intersection, let's calculate the intersection point
     float B2AVecX = XA - XB;
@@ -244,7 +260,7 @@ inline __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
     CPX = XB + (radB - halfOverlapDepth) * B2AVecX;
     CPY = YB + (radB - halfOverlapDepth) * B2AVecY;
     CPZ = ZB + (radB - halfOverlapDepth) * B2AVecZ;
-    return deme::SPHERE_SPHERE_CONTACT;
+    return contactType;
 }
 
 /**
@@ -273,8 +289,11 @@ inline __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
                                                       T2& normalZ,
                                                       T1& overlapDepth) {
     T1 centerDist2 = distSquared<T1>(XA, YA, ZA, XB, YB, ZB);
+    deme::contact_t contactType;
     if (centerDist2 > (radA + radB) * (radA + radB)) {
-        return deme::NOT_A_CONTACT;
+        contactType = deme::NOT_A_CONTACT;
+    } else {
+        contactType = deme::SPHERE_SPHERE_CONTACT;
     }
     // If getting this far, then 2 spheres have an intersection, let's calculate the intersection point
     normalX = XA - XB;
@@ -286,7 +305,7 @@ inline __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
     CPX = XB + (radB - overlapDepth / (T1)2) * normalX;
     CPY = YB + (radB - overlapDepth / (T1)2) * normalY;
     CPZ = ZB + (radB - overlapDepth / (T1)2) * normalZ;
-    return deme::SPHERE_SPHERE_CONTACT;
+    return contactType;
 }
 
 // Compute the binID for a point in space
@@ -301,8 +320,13 @@ getPointBinID(const double& X, const double& Y, const double& Z, const double& b
 
 // Compute the binID using its indices in X, Y and Z directions
 template <typename T1>
-inline __device__ T1 binIDFrom3Indices(const T1& X, const T1& Y, const T1& Z, const T1& nbX, const T1& nbY) {
-    return X + Y * nbX + Z * nbX * nbY;
+inline __device__ T1
+binIDFrom3Indices(const T1& X, const T1& Y, const T1& Z, const T1& nbX, const T1& nbY, const T1& nbZ) {
+    if ((X < nbX) && (Y < nbY) && (Z < nbZ)) {
+        return X + Y * nbX + Z * nbX * nbY;
+    } else {
+        return deme::NULL_BINID;
+    }
 }
 
 // This utility function returns the normal to the triangular face defined by
@@ -383,43 +407,18 @@ inline __device__ float3 findLocalCoord(const T1& X,
 
 /// Calculate the contact params based on the 2 contact material types given
 template <typename T1>
-inline void matProxy2ContactParam(T1& E_eff,
-                                  T1& G_eff,
-                                  T1& CoR,
-                                  T1& mu,
-                                  T1& Crr,
-                                  const T1& Y1,
-                                  const T1& nu1,
-                                  const T1& CoR1,
-                                  const T1& mu1,
-                                  const T1& Crr1,
-                                  const T1& Y2,
-                                  const T1& nu2,
-                                  const T1& CoR2,
-                                  const T1& mu2,
-                                  const T1& Crr2) {
-    T1 invE = (1. - nu1 * nu1) / Y1 + (1. - nu2 * nu2) / Y2;
-    E_eff = 1. / invE;
-    T1 invG = 2. * (2. - nu1) * (1. + nu1) / Y1 + 2. * (2. - nu2) * (1. + nu2) / Y2;
-    G_eff = 1. / invG;
-    CoR = min(CoR1, CoR2);
-    mu = max(mu1, mu2);
-    Crr = max(Crr1, Crr2);
+inline void matProxy2ContactParam(T1& E_eff, T1& G_eff, const T1& Y1, const T1& nu1, const T1& Y2, const T1& nu2) {
+    T1 invE = ((T1)1 - nu1 * nu1) / Y1 + ((T1)1 - nu2 * nu2) / Y2;
+    E_eff = (T1)1 / invE;
+    T1 invG = (T1)2 * ((T1)2 - nu1) * ((T1)1 + nu1) / Y1 + (T1)2 * ((T1)2 - nu2) * ((T1)1 + nu2) / Y2;
+    G_eff = (T1)1 / invG;
 }
 
-/// Calculate the contact params based on the 2 contact material types given (historyless version)
+/// Calculate the contact params based on the 2 contact material types given (no-tangent version)
 template <typename T1>
-inline void matProxy2ContactParam(T1& E_eff,
-                                  T1& CoR,
-                                  const T1& Y1,
-                                  const T1& nu1,
-                                  const T1& CoR1,
-                                  const T1& Y2,
-                                  const T1& nu2,
-                                  const T1& CoR2) {
-    T1 invE = (1. - nu1 * nu1) / Y1 + (1. - nu2 * nu2) / Y2;
-    E_eff = 1. / invE;
-    CoR = min(CoR1, CoR2);
+inline void matProxy2ContactParam(T1& E_eff, const T1& Y1, const T1& nu1, const T1& Y2, const T1& nu2) {
+    T1 invE = ((T1)1 - nu1 * nu1) / Y1 + ((T1)1 - nu2 * nu2) / Y2;
+    E_eff = (T1)1 / invE;
 }
 
 template <typename T1, typename T2>
@@ -433,6 +432,7 @@ inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
                                                            const float& size3B,
                                                            const float& normal_sign,
                                                            const float& beta4Entity) {
+    deme::contact_t contactType;
     switch (typeB) {
         case (deme::ANAL_OBJ_TYPE_PLANE): {
             const T1 plane2sph = A - B;
@@ -440,9 +440,11 @@ inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             const double dist = dot(plane2sph, dirB);
             const double overlapDepth = (radA + beta4Entity - dist);
             if (overlapDepth < 0.0) {
-                return deme::NOT_A_CONTACT;
+                contactType = deme::NOT_A_CONTACT;
+            } else {
+                contactType = deme::SPHERE_PLANE_CONTACT;
             }
-            return deme::SPHERE_PLANE_CONTACT;
+            return contactType;
         }
         case (deme::ANAL_OBJ_TYPE_PLATE): {
             return deme::NOT_A_CONTACT;
@@ -456,9 +458,11 @@ inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             const double dist_delta_r = length(sph2cyl);
             const double overlapDepth = radA - abs(size1B - dist_delta_r - beta4Entity);
             if (overlapDepth <= DEME_TINY_FLOAT) {
-                return deme::NOT_A_CONTACT;
+                contactType = deme::NOT_A_CONTACT;
+            } else {
+                contactType = deme::SPHERE_CYL_CONTACT;
             }
-            return deme::SPHERE_CYL_CONTACT;
+            return contactType;
         }
         default:
             return deme::NOT_A_CONTACT;
@@ -480,6 +484,7 @@ inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
                                                            T1& CP,
                                                            float3& cntNormal,
                                                            T3& overlapDepth) {
+    deme::contact_t contactType;
     switch (typeB) {
         case (deme::ANAL_OBJ_TYPE_PLANE): {
             const T1 plane2sph = A - B;
@@ -487,13 +492,15 @@ inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             const T3 dist = dot(plane2sph, dirB);
             overlapDepth = (radA + beta4Entity - dist);
             if (overlapDepth < 0.0) {
-                return deme::NOT_A_CONTACT;
+                contactType = deme::NOT_A_CONTACT;
+            } else {
+                contactType = deme::SPHERE_PLANE_CONTACT;
             }
             // From sphere center, go along negative plane normal for (dist + overlapDepth / 2)
             CP = A - to_real3<float3, T1>(dirB * (dist + overlapDepth / 2.0));
             // Contact normal (B to A) is the same as plane normal
             cntNormal = dirB;
-            return deme::SPHERE_PLANE_CONTACT;
+            return contactType;
         }
         case (deme::ANAL_OBJ_TYPE_PLATE): {
             return deme::NOT_A_CONTACT;
@@ -507,12 +514,14 @@ inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             const T3 dist_delta_r = length(sph2cyl);
             overlapDepth = radA - abs(size1B - dist_delta_r - beta4Entity);
             if (overlapDepth <= DEME_TINY_FLOAT) {
-                return deme::NOT_A_CONTACT;
+                contactType = deme::NOT_A_CONTACT;
+            } else {
+                contactType = deme::SPHERE_CYL_CONTACT;
             }
             // dist_delta_r is 0 only when cylinder is thinner than sphere rad...
             cntNormal = to_real3<T1, float3>(normal_sign / dist_delta_r * sph2cyl);
             CP = A - to_real3<float3, T1>(cntNormal * (radA - overlapDepth / 2.0));
-            return deme::SPHERE_CYL_CONTACT;
+            return contactType;
         }
         default:
             return deme::NOT_A_CONTACT;
@@ -541,7 +550,7 @@ __inline__ __device__ void boundingBoxIntersectBin(deme::binID_t* L,
     // with spheres, and spheres are all in the simulation world, so we just clamp out the bins that are outside the
     // simulation world.
     int3 min_bin = clampBetween<float3, int3>(min_pt / simParams->binSize, make_int3(0, 0, 0),
-                                              make_int3(simParams->nbX, simParams->nbY, simParams->nbZ));
+                                              make_int3(simParams->nbX - 1, simParams->nbY - 1, simParams->nbZ - 1));
 
     float3 max_pt;
     max_pt.x = DEME_MAX(vA.x, DEME_MAX(vB.x, vC.x));
@@ -550,7 +559,7 @@ __inline__ __device__ void boundingBoxIntersectBin(deme::binID_t* L,
 
     max_pt += DEME_BIN_ENLARGE_RATIO_FOR_FACETS * simParams->binSize;
     int3 max_bin = clampBetween<float3, int3>(max_pt / simParams->binSize, make_int3(0, 0, 0),
-                                              make_int3(simParams->nbX, simParams->nbY, simParams->nbZ));
+                                              make_int3(simParams->nbX - 1, simParams->nbY - 1, simParams->nbZ - 1));
 
     L[0] = min_bin.x;
     L[1] = min_bin.y;

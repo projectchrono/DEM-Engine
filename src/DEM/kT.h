@@ -18,6 +18,7 @@
 #include <core/utils/GpuManager.h>
 #include <nvmath/helper_math.cuh>
 #include <core/utils/GpuError.h>
+#include <core/utils/Timer.hpp>
 
 #include <DEM/BdrsAndObjs.h>
 #include <DEM/Defines.h>
@@ -71,6 +72,9 @@ class DEMKinematicThread {
 
     // Pointers to those data arrays defined below, stored in a struct
     DEMDataKT* granData;
+
+    // Log for anomalies in the simulation
+    WorkerAnomalies anomalies = WorkerAnomalies();
 
     // Buffer arrays for storing info from the dT side.
     // dT modifies these arrays; kT uses them only.
@@ -143,12 +147,19 @@ class DEMKinematicThread {
     std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQy;
     std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQz;
 
+    // dT-supplied system velocity
+    std::vector<float, ManagedAllocator<float>> marginSize;
+
     // Clump's family identification code. Used in determining whether they can be contacts between two families, and
     // whether a family has prescribed motions.
     std::vector<family_t, ManagedAllocator<family_t>> familyID;
 
     // A long array (usually 32640 elements) registering whether between 2 families there should be contacts
     std::vector<notStupidBool_t, ManagedAllocator<notStupidBool_t>> familyMaskMatrix;
+
+    // The amount of contact margin that each family should add to its associated contact geometries. Default is 0, and
+    // that means geometries should be considered in contact when they are physically in contact.
+    std::vector<float, ManagedAllocator<float>> familyExtraMarginSize;
 
     // kT computed contact pair info
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA;
@@ -180,14 +191,16 @@ class DEMKinematicThread {
                                             "Unpack updates from dT", "Send to dT buffer",  "Wait for dT update"};
     SolverTimers timers = SolverTimers(timer_names);
 
+    kTStateParams stateParams;
+
   public:
     friend class DEMSolver;
     friend class DEMDynamicThread;
 
     DEMKinematicThread(WorkerReportChannel* pPager, ThreadManager* pSchedSup, GpuManager* pGpuDist)
         : pPagerToMain(pPager), pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
-        GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
-        GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataKT), cudaMemAttachGlobal));
+        DEME_GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
+        DEME_GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataKT), cudaMemAttachGlobal));
 
         // Get a device/stream ID to use from the GPU Manager
         streamInfo = pGpuDistributor->getAvailableStream();
@@ -198,6 +211,9 @@ class DEMKinematicThread {
 
         // Launch a worker thread bound to this instance
         th = std::move(std::thread([this]() { this->workerThread(); }));
+
+        // Allocate arrays whose length does not depend on user inputs
+        initAllocation();
     }
     ~DEMKinematicThread() {
         // std::cout << "Kinematic thread closing..." << std::endl;
@@ -212,6 +228,11 @@ class DEMKinematicThread {
         th.join();
 
         cudaStreamDestroy(streamInfo.stream);
+
+        deallocateEverything();
+
+        DEME_GPU_CALL(cudaFree(simParams));
+        DEME_GPU_CALL(cudaFree(granData));
     }
 
     // buffer exchange methods
@@ -296,11 +317,14 @@ class DEMKinematicThread {
                       binID_t nbY,
                       binID_t nbZ,
                       float3 LBFPoint,
+                      float3 user_box_min,
+                      float3 user_box_max,
                       float3 G,
                       double ts_size,
                       float expand_factor,
                       float approx_max_vel,
                       float expand_safety_param,
+                      float expand_safety_adder,
                       const std::set<std::string>& contact_wildcards,
                       const std::set<std::string>& owner_wildcards);
 
@@ -339,11 +363,17 @@ class DEMKinematicThread {
     const std::string Name = "kT";
 
     // Bring kT buffer array data to its working arrays
-    void unpackMyBuffer();
+    inline void unpackMyBuffer();
     // Send produced data to dT-owned biffers
     void sendToTheirBuffer();
     // Resize dT's buffer arrays based on the number of contact pairs
     inline void transferArraysResize(size_t nContactPairs);
+    // Automatic adjustments to sim params
+    void calibrateParams();
+    // The kT-side allocations that can be done at initialization time
+    void initAllocation();
+    // Deallocate everything
+    void deallocateEverything();
 
     // Just-in-time compiled kernels
     // jitify::Program bin_sphere_kernels = JitHelper::buildProgram("bin_sphere_kernels", " ");
@@ -353,6 +383,57 @@ class DEMKinematicThread {
     std::shared_ptr<jitify::Program> sphere_contact_kernels;
     std::shared_ptr<jitify::Program> history_kernels;
     std::shared_ptr<jitify::Program> misc_kernels;
+
+    // Adjuster for bin size
+    class AccumTimer {
+      private:
+        double prev_time = DEME_HUGE_FLOAT;
+        unsigned int cached_count = 0;
+        Timer<double> timer;
+
+      public:
+        AccumTimer() { timer = Timer<double>(); }
+        ~AccumTimer() {}
+        void Begin() {
+            if (cached_count >= NUM_STEPS_RESERVED_AFTER_CHANGING_BIN_SIZE)
+                timer.start();
+        }
+        void End() {
+            if (cached_count >= NUM_STEPS_RESERVED_AFTER_CHANGING_BIN_SIZE)
+                timer.stop();
+            cached_count++;
+        }
+
+        double GetPrevTime() { return prev_time; }
+
+        void Query(double& prev, double& curr) {
+            double avg_time = timer.GetTimeSeconds() / (cached_count - NUM_STEPS_RESERVED_AFTER_CHANGING_BIN_SIZE);
+            prev = prev_time;
+            curr = avg_time;
+            // Record the time for this run
+            prev_time = avg_time;
+            timer.reset();
+            cached_count = 0;
+        }
+
+        bool QueryOn(double& prev, double& curr, unsigned int n) {
+            if (cached_count >= n + NUM_STEPS_RESERVED_AFTER_CHANGING_BIN_SIZE) {
+                Query(prev, curr);
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        // Return this accumulator to initial state
+        void Clear() {
+            prev_time = -1.0;
+            cached_count = 0;
+            timer.reset();
+        }
+    };
+
+    AccumTimer CDAccumTimer = AccumTimer();
 
 };  // kT ends
 

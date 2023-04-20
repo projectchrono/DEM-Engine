@@ -3,6 +3,14 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// In GRCPrep demo series, we try to prepare a sample of the GRC simulant, which
+// are supposed to be used for extraterrestrial rover mobility simulations. You
+// have to finish Part1 first, then run this one. In Part2, we copy-paste particles
+// generated and settled in Part1 and form a thicker bed.
+// WARNING: This is a huge simulation with millions of particles.
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
@@ -28,11 +36,9 @@ int main() {
 
     srand(759);
 
-    //
-    float kg_g_conv = 1;
     // Define materials
-    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
-    auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
+    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
+    auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
 
     // Define the simulation world
     double world_y_size = 0.99;
@@ -42,42 +48,46 @@ int main() {
     float bottom = -0.5;
     DEMSim.AddBCPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_terrain);
 
-    // Then the ground particle template
-    DEMClumpTemplate shape_template;
-    shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
+    // Define the terrain particle templates
     // Calculate its mass and MOI
-    float mass = 2.6e3 * 5.5886717 * kg_g_conv;  // in kg or g
-    float3 MOI = make_float3(1.8327927, 2.1580013, 0.77010059) * 2.6e3 * kg_g_conv;
-    float clump_vol = 5.5886717;
+    float terrain_density = 2.6e3;
+    float volume1 = 4.2520508;
+    float mass1 = terrain_density * volume1;
+    float3 MOI1 = make_float3(1.6850426, 1.6375114, 2.1187753) * terrain_density;
+    float volume2 = 2.1670011;
+    float mass2 = terrain_density * volume2;
+    float3 MOI2 = make_float3(0.57402126, 0.60616378, 0.92890173) * terrain_density;
     // Scale the template we just created
-    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
-    // std::vector<double> scales = {0.0014, 0.00063, 0.00033, 0.00022, 0.00015, 0.00009};
-    std::vector<double> scales = {0.00063, 0.00033, 0.00022, 0.00015, 0.00009};
-    std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 20.; });
-    for (double scaling : scales) {
-        auto this_template = shape_template;
-        this_template.mass = (double)mass * scaling * scaling * scaling;
-        this_template.MOI.x = (double)MOI.x * (double)(scaling * scaling * scaling * scaling * scaling);
-        this_template.MOI.y = (double)MOI.y * (double)(scaling * scaling * scaling * scaling * scaling);
-        this_template.MOI.z = (double)MOI.z * (double)(scaling * scaling * scaling * scaling * scaling);
-        std::cout << "Mass: " << this_template.mass << std::endl;
-        std::cout << "MOIX: " << this_template.MOI.x << std::endl;
-        std::cout << "MOIY: " << this_template.MOI.y << std::endl;
-        std::cout << "MOIZ: " << this_template.MOI.z << std::endl;
-        std::cout << "=====================" << std::endl;
-        std::for_each(this_template.radii.begin(), this_template.radii.end(), [scaling](float& r) { r *= scaling; });
-        std::for_each(this_template.relPos.begin(), this_template.relPos.end(), [scaling](float3& r) { r *= scaling; });
-        this_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(this_template.nComp, mat_type_terrain);
-        // Set the volume of this template
-        this_template.SetVolume((double)clump_vol * scaling * scaling * scaling);
-        ground_particle_templates.push_back(DEMSim.LoadClumpType(this_template));
+    std::vector<double> scales = {0.014, 0.0075833, 0.0044, 0.003, 0.002, 0.0018333, 0.0017};
+    // Then load it to system
+    std::shared_ptr<DEMClumpTemplate> my_template2 =
+        DEMSim.LoadClumpType(mass2, MOI2, GetDEMEDataFile("clumps/triangular_flat_6comp.csv"), mat_type_terrain);
+    std::shared_ptr<DEMClumpTemplate> my_template1 =
+        DEMSim.LoadClumpType(mass1, MOI1, GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain);
+    std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates = {my_template2,
+                                                                                DEMSim.Duplicate(my_template2),
+                                                                                my_template1,
+                                                                                DEMSim.Duplicate(my_template1),
+                                                                                DEMSim.Duplicate(my_template1),
+                                                                                DEMSim.Duplicate(my_template1),
+                                                                                DEMSim.Duplicate(my_template1)};
+    // Now scale those templates
+    for (int i = 0; i < scales.size(); i++) {
+        std::shared_ptr<DEMClumpTemplate>& my_template = ground_particle_templates.at(i);
+        // Note the mass and MOI are also scaled in the process, automatically. But if you are not happy with this, you
+        // can always manually change mass and MOI afterwards.
+        my_template->Scale(scales.at(i));
+        // Give these templates names, 0000, 0001 etc.
+        char t_name[20];
+        sprintf(t_name, "%04d", i);
+        my_template->AssignName(std::string(t_name));
     }
 
     // Now we load part1 clump locations from a part1 output file
-    auto part1_clump_xyz = DEMSim.ReadClumpXyzFromCsv("GRC_3e5.csv");
-    auto part1_clump_quaternion = DEMSim.ReadClumpQuatFromCsv("GRC_3e5.csv");
-    auto part1_pairs = DEMSim.ReadContactPairsFromCsv("Contact_pairs_3e5.csv");
-    auto part1_wcs = DEMSim.ReadContactWildcardsFromCsv("Contact_pairs_3e5.csv");
+    auto part1_clump_xyz = DEMSim.ReadClumpXyzFromCsv("./DemoOutput_GRCPrep_Part1/GRC_3e5.csv");
+    auto part1_clump_quaternion = DEMSim.ReadClumpQuatFromCsv("./DemoOutput_GRCPrep_Part1/GRC_3e5.csv");
+    auto part1_pairs = DEMSim.ReadContactPairsFromCsv("./DemoOutput_GRCPrep_Part1/Contact_pairs_3e5.csv");
+    auto part1_wcs = DEMSim.ReadContactWildcardsFromCsv("./DemoOutput_GRCPrep_Part1/Contact_pairs_3e5.csv");
 
     std::vector<float3> in_xyz;
     std::vector<float4> in_quat;
@@ -131,24 +141,26 @@ int main() {
     // existing batch, then shift up for a small distance.
     float shift_dist = 0.2;
     // First put the inv batch above the base batch
-    std::for_each(inv_xyz.begin(), inv_xyz.end(), [shift_dist](float3& xyz) { xyz.z += 0.2; });
+    std::for_each(inv_xyz.begin(), inv_xyz.end(), [](float3& xyz) { xyz.z += 0.2; });
     inv_batch.SetPos(inv_xyz);
     DEMSim.AddClumps(inv_batch);
-    // Add another 0 layers of such graular bed
-    // for (int i = 0; i < 1; i++) {
-    //     // DEMClumpBatch another_batch = base_batch;
-    //     // std::for_each(in_xyz.begin(), in_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
-    //     // another_batch.SetPos(in_xyz);
-    //     // DEMSim.AddClumps(another_batch);
-    //     DEMClumpBatch another_inv_batch = inv_batch;
-    //     std::for_each(inv_xyz.begin(), inv_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
-    //     another_inv_batch.SetPos(inv_xyz);
-    //     DEMSim.AddClumps(another_inv_batch);
-    // }
+    // Add more layers of such graular bed
+    for (int i = 0; i < 1; i++) {
+        DEMClumpBatch another_batch = base_batch;
+        std::for_each(in_xyz.begin(), in_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
+        another_batch.SetPos(in_xyz);
+        DEMSim.AddClumps(another_batch);
+        DEMClumpBatch another_inv_batch = inv_batch;
+        std::for_each(inv_xyz.begin(), inv_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
+        another_inv_batch.SetPos(inv_xyz);
+        DEMSim.AddClumps(another_inv_batch);
+    }
 
     // Some inspectors and compressors
-    auto void_ratio_finder =
-        DEMSim.CreateInspector("clump_volume", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) && (Z <= -0.44);");
+    // auto total_volume_finder = DEMSim.CreateInspector("clump_volume", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) &&
+    // (Z <= -0.44);");
+    auto total_mass_finder =
+        DEMSim.CreateInspector("clump_mass", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) && (Z <= -0.44);");
     float total_volume = 0.96 * 0.96 * 0.06;
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
     auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
@@ -162,15 +174,12 @@ int main() {
     auto compressor_tracker = DEMSim.Track(compressor);
 
     // Make ready for simulation
-    float step_size = 5e-7;
-    DEMSim.SetCoordSysOrigin("center");
+    float step_size = 1e-6;
     DEMSim.SetInitTimeStep(step_size);
-    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
-    // If you want to use a large UpdateFreq then you have to expand spheres to ensure safety
-    DEMSim.SetCDUpdateFreq(20);
-    // DEMSim.SetExpandFactor(1e-3);
-    DEMSim.SetMaxVelocity(35.);
-    DEMSim.SetExpandSafetyParam(1.2);
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
+    // Error out vel is used to force the simulation to abort when something goes wrong.
+    DEMSim.SetErrorOutVelocity(15.);
+    DEMSim.SetExpandSafetyMultiplier(1.2);
     DEMSim.SetInitBinSize(scales.at(2));
     DEMSim.Initialize();
 
@@ -186,8 +195,8 @@ int main() {
     float settle_frame_time = 0.05;
     float settle_batch_time = 1.0;
 
-    float matter_volume = void_ratio_finder->GetValue();
-    std::cout << "Initial void ratio " << (total_volume - matter_volume) / matter_volume << std::endl;
+    float matter_mass = total_mass_finder->GetValue();
+    std::cout << "Initial bulk density " << matter_mass / total_volume << std::endl;
 
     for (float t = 0; t < settle_batch_time; t += settle_frame_time) {
         std::cout << "Frame: " << currframe << std::endl;
@@ -198,22 +207,22 @@ int main() {
         DEMSim.ShowThreadCollaborationStats();
     }
 
-    matter_volume = void_ratio_finder->GetValue();
-    std::cout << "Void ratio after settling " << (total_volume - matter_volume) / matter_volume << std::endl;
+    matter_mass = total_mass_finder->GetValue();
+    std::cout << "Bulk density after settling " << matter_mass / total_volume << std::endl;
 
     // Now compress it
     DEMSim.EnableContactBetweenFamilies(0, 1);
     double compress_time = 0.3;
     double now_z = max_z_finder->GetValue();
     compressor_tracker->SetPos(make_float3(0, 0, now_z));
-    double compressor_final_dist = (now_z > -0.41) ? now_z - (-0.41) : 0.0;
+    double compressor_final_dist = (now_z > -0.37) ? now_z - (-0.37) : 0.0;
     double compressor_v = compressor_final_dist / compress_time;
     for (double t = 0; t < compress_time; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
             std::cout << "Frame: " << currframe << std::endl;
             std::cout << "Highest point is at " << now_z << std::endl;
-            matter_volume = void_ratio_finder->GetValue();
-            std::cout << "Void ratio in compression " << (total_volume - matter_volume) / matter_volume << std::endl;
+            matter_mass = total_mass_finder->GetValue();
+            std::cout << "Bulk density in compression " << matter_mass / total_volume << std::endl;
             DEMSim.ShowThreadCollaborationStats();
             char filename[200];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
@@ -228,8 +237,8 @@ int main() {
         if (curr_step % out_steps == 0) {
             std::cout << "Frame: " << currframe << std::endl;
             std::cout << "Highest point is at " << now_z << std::endl;
-            matter_volume = void_ratio_finder->GetValue();
-            std::cout << "Void ratio in compression " << (total_volume - matter_volume) / matter_volume << std::endl;
+            matter_mass = total_mass_finder->GetValue();
+            std::cout << "Bulk density in compression " << matter_mass / total_volume << std::endl;
             DEMSim.ShowThreadCollaborationStats();
             char filename[200];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
@@ -243,8 +252,8 @@ int main() {
     DEMSim.DoDynamicsThenSync(0);
     DEMSim.DisableContactBetweenFamilies(0, 1);
     DEMSim.DoDynamicsThenSync(0.3);
-    matter_volume = void_ratio_finder->GetValue();
-    std::cout << "Void ratio after settling " << (total_volume - matter_volume) / matter_volume << std::endl;
+    matter_mass = total_mass_finder->GetValue();
+    std::cout << "Bulk density after settling " << matter_mass / total_volume << std::endl;
 
     // Final write
     char cp2_filename[200];

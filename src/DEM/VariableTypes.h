@@ -15,12 +15,12 @@ typedef float oriQ_t;
 typedef unsigned int bodyID_t;
 typedef unsigned int binID_t;
 typedef uint8_t objID_t;
-typedef uint8_t materialsOffset_t;
-typedef uint8_t inertiaOffset_t;
+typedef uint16_t materialsOffset_t;
+typedef uint16_t inertiaOffset_t;
 typedef uint8_t clumpComponentOffset_t;
-typedef unsigned short int clumpComponentOffsetExt_t;  ///< Extended component offset type for non-jitified part
+typedef uint16_t clumpComponentOffsetExt_t;  ///< Extended component offset type for non-jitified part
 typedef double realFine_t;
-typedef char scratch_t;  ///< Data type for DEM scratch-pad array (this should NOT be changed)
+typedef char scratch_t;  ///< Data type for DEM scratch-pad array (this should NOT be changed, must be 1-byte)
 // typedef unsigned int distinctSphereRelativePositions_default_t;
 // typedef unsigned int distinctSphereRadiiOffset_default_t;
 
@@ -29,9 +29,11 @@ typedef unsigned short int binsSphereTouches_t;
 // This type needs to be large enough to hold the result of a prefix scan of the type binsSphereTouches_t (and objID_t);
 // but normally, it should be the same magnitude as bodyID_t.
 typedef unsigned int binSphereTouchPairs_t;
-// How many spheres a bin can touch, tops? We can assume it will not be too large to save GPU memory. Note this type
-// also doubles as the type for the number of contacts in a bin. NOTE!! Seems uint8_t is not supported by CUB???
+// How many spheres a bin can touch, tops? We can assume it will not be too large to save GPU memory.
 typedef unsigned short int spheresBinTouches_t;
+// How many contact pairs can there be in one bin? Sometimes, the geometry overlap is significant and there can be a
+// lot.
+typedef unsigned int binContactPairs_t;
 // Need to be large enough to hold the number of total contact pairs. In general this number should be in the same
 // magnitude as bodyID_t.
 typedef unsigned int contactPairs_t;

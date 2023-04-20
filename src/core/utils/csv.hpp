@@ -386,9 +386,7 @@ class LineReader {
         init(std::unique_ptr<ByteSourceBase>(new detail::NonOwningIStreamByteSource(in)));
     }
 
-    void set_file_name(const std::string& file_name) {
-        set_file_name(file_name.c_str());
-    }
+    void set_file_name(const std::string& file_name) { set_file_name(file_name.c_str()); }
 
     void set_file_name(const char* file_name) {
         if (file_name != nullptr) {
@@ -399,17 +397,11 @@ class LineReader {
         }
     }
 
-    const char* get_truncated_file_name() const {
-        return file_name;
-    }
+    const char* get_truncated_file_name() const { return file_name; }
 
-    void set_file_line(unsigned file_line) {
-        this->file_line = file_line;
-    }
+    void set_file_line(unsigned file_line) { this->file_line = file_line; }
 
-    unsigned get_file_line() const {
-        return file_line;
-    }
+    unsigned get_file_line() const { return file_line; }
 
     char* next_line() {
         if (data_begin == data_end)

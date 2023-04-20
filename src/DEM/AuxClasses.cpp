@@ -33,7 +33,7 @@ const std::string INSP_CODE_SPHERE_HIGH_ABSV = R"V0G0N(
     rotVel.x = granData->omgBarX[myOwner];
     rotVel.y = granData->omgBarY[myOwner];
     rotVel.z = granData->omgBarZ[myOwner];
-    // 2 potential points on sphere that are the fastest
+
     float vel;
     {
         // It is indeed an estimation, since it accounts for center of sphere
@@ -49,10 +49,38 @@ const std::string INSP_CODE_SPHERE_HIGH_ABSV = R"V0G0N(
     quantity[sphereID] = vel;
 )V0G0N";
 
-const std::string INSP_CODE_CLUMP_APPROX_VOID = R"V0G0N(
+const std::string INSP_CODE_EVERYTHING_ABSV = R"V0G0N(
+    double myVX = granData->vX[myOwner];
+    double myVY = granData->vY[myOwner];
+    double myVZ = granData->vZ[myOwner];
+    double myABSV = sqrt(myVX * myVX + myVY * myVY + myVZ * myVZ);
+
+    quantity[myOwner] = myABSV;
+)V0G0N";
+
+const std::string INSP_CODE_CLUMP_KE = R"V0G0N(
+    // First lin energy
+    double myVX = granData->vX[myOwner];
+    double myVY = granData->vY[myOwner];
+    double myVZ = granData->vZ[myOwner];
+    double myKE = 0.5 * myMass * (myVX * myVX + myVY * myVY + myVZ * myVZ);
+    // Then rot energy
+    myVX = granData->omgBarX[myOwner];
+    myVY = granData->omgBarY[myOwner];
+    myVZ = granData->omgBarZ[myOwner];
+    myKE += 0.5 * ((double)myMOI.x * myVX * myVX + (double)myMOI.y * myVY * myVY + (double)myMOI.z * myVZ * myVZ);
+
+    quantity[myOwner] = myKE;
+)V0G0N";
+
+const std::string INSP_CODE_CLUMP_APPROX_VOL = R"V0G0N(
     size_t myVolOffset = granData->inertiaPropOffsets[myOwner];
     float myVol = volumeProperties[myVolOffset];
     quantity[myOwner] = myVol;
+)V0G0N";
+
+const std::string INSP_CODE_CLUMP_APPROX_MASS = R"V0G0N(
+    quantity[myOwner] = myMass;
 )V0G0N";
 
 void DEMInspector::switch_quantity_type(const std::string& quantity) {
@@ -71,6 +99,13 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
             thing_to_insp = INSPECT_ENTITY_TYPE::SPHERE;
             index_name = "sphereID";
             break;
+        case ("clump_max_absv"_):
+            inspection_code = INSP_CODE_SPHERE_HIGH_ABSV;
+            reduce_flavor = CUB_REDUCE_FLAVOR::MAX;
+            kernel_name = "inspectSphereProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::SPHERE;
+            index_name = "sphereID";
+            break;
         // case ("mesh_max_z"_):
         //     reduce_flavor = CUB_REDUCE_FLAVOR::MAX;
         //     break;
@@ -82,22 +117,43 @@ void DEMInspector::switch_quantity_type(const std::string& quantity) {
         //// TODO: Void ration here is a very rough approximation and should only work when domain is large and
         /// particles are small
         case ("clump_volume"_):
-            inspection_code = INSP_CODE_CLUMP_APPROX_VOID;
+            inspection_code = INSP_CODE_CLUMP_APPROX_VOL;
             reduce_flavor = CUB_REDUCE_FLAVOR::SUM;
             kernel_name = "inspectOwnerProperty";
             thing_to_insp = INSPECT_ENTITY_TYPE::CLUMP;
             index_name = "myOwner";
+            all_domain = false;  // Only clumps, so not all domain owners
             break;
-        case ("clump_max_absv"_):
-            inspection_code = INSP_CODE_SPHERE_HIGH_ABSV;
+        case ("clump_mass"_):
+            inspection_code = INSP_CODE_CLUMP_APPROX_MASS;
+            reduce_flavor = CUB_REDUCE_FLAVOR::SUM;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::CLUMP;
+            index_name = "myOwner";
+            all_domain = false;  // Only clumps, so not all domain owners
+            break;
+        case ("max_absv"_):
+            inspection_code = INSP_CODE_EVERYTHING_ABSV;
             reduce_flavor = CUB_REDUCE_FLAVOR::MAX;
-            kernel_name = "inspectSphereProperty";
-            thing_to_insp = INSPECT_ENTITY_TYPE::SPHERE;
-            index_name = "sphereID";
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
+            index_name = "myOwner";
             break;
-        // case ("clump_absv"_):
-        //     reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
-        //     break;
+        case ("absv"_):
+            inspection_code = INSP_CODE_EVERYTHING_ABSV;
+            reduce_flavor = CUB_REDUCE_FLAVOR::NONE;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::EVERYTHING;
+            index_name = "myOwner";
+            break;
+        case ("clump_kinetic_energy"_):
+            inspection_code = INSP_CODE_CLUMP_KE;
+            reduce_flavor = CUB_REDUCE_FLAVOR::SUM;
+            kernel_name = "inspectOwnerProperty";
+            thing_to_insp = INSPECT_ENTITY_TYPE::CLUMP;
+            index_name = "myOwner";
+            all_domain = false;  // Only clumps, so not all domain owners
+            break;
         default:
             std::stringstream ss;
             ss << quantity << " is not a known query type." << std::endl;
@@ -112,14 +168,26 @@ float DEMInspector::GetValue() {
     return reduce_result;
 }
 
+float* DEMInspector::GetValues() {
+    assertInit();
+    float* reduce_result =
+        sys->dTInspectNoReduce(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+    return reduce_result;
+}
+
+float* DEMInspector::dT_GetValue() {
+    // assertInit(); // This one the user should not use
+    return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
+}
+
 void DEMInspector::assertInit() {
     if (!initialized) {
         Initialize(sys->GetJitStringSubs());
     }
 }
 
-void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>& Subs) {
-    if (!(sys->GetInitStatus())) {
+void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>& Subs, bool force) {
+    if (!(sys->GetInitStatus()) && !force) {
         std::stringstream ss;
         ss << "Inspector should only be initialized or used after the simulation system is initialized (because it "
               "uses device-side data)!"
@@ -128,13 +196,14 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
     }
     // We want to make sure if the in_region_code is legit, if it is not an all_domain query
     std::string in_region_specifier = in_region_code, placeholder;
-    if (!all_domain) {
+    // But if the in_region_code is all spaces, it's fine, probably they don't care
+    if ((!all_domain) && (!is_all_spaces(in_region_code))) {
         if (!any_whole_word_match(in_region_code, {"X", "Y", "Z"}) ||
             !all_whole_word_match(in_region_code, {"return"}, placeholder)) {
             std::stringstream ss;
             ss << "One of your insepctors is set to query a specific region, but the domian is not properly "
                   "defined.\nIt needs to return a bool variable that is a result of logical operations involving X, Y "
-                  "and Z."
+                  "and Z.\nYou can remove the region argument if all simulation entities should be considered."
                << std::endl;
             throw std::runtime_error(ss.str());
         }
@@ -150,11 +219,16 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
     if (thing_to_insp == INSPECT_ENTITY_TYPE::SPHERE) {
         inspection_kernel = std::make_shared<jitify::Program>(std::move(
             JitHelper::buildProgram("DEMSphereQueryKernels", JitHelper::KERNEL_DIR / "DEMSphereQueryKernels.cu",
-                                    my_subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
-    } else if (thing_to_insp == INSPECT_ENTITY_TYPE::CLUMP) {
-        inspection_kernel = std::make_shared<jitify::Program>(
-            std::move(JitHelper::buildProgram("DEMOwnerQueryKernels", JitHelper::KERNEL_DIR / "DEMOwnerQueryKernels.cu",
-                                              my_subs, {"-I" + (JitHelper::KERNEL_DIR / "..").string()})));
+                                    my_subs, DEME_JITIFY_OPTIONS)));
+    } else if (thing_to_insp == INSPECT_ENTITY_TYPE::CLUMP || thing_to_insp == INSPECT_ENTITY_TYPE::EVERYTHING) {
+        inspection_kernel = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
+            "DEMOwnerQueryKernels", JitHelper::KERNEL_DIR / "DEMOwnerQueryKernels.cu", my_subs, DEME_JITIFY_OPTIONS)));
+    } else {
+        std::stringstream ss;
+        ss << "Sorry, an inspector object you are using is not implemented yet.\nConsider letting the developers know "
+              "this and they may help you."
+           << std::endl;
+        throw std::runtime_error(ss.str());
     }
     initialized = true;
 }
@@ -170,15 +244,30 @@ void DEMTracker::assertMesh(const std::string& name) {
         throw std::runtime_error(ss.str());
     }
 }
-
-void DEMTracker::assertMeshSize(size_t input_length, const std::string& name) {
+void DEMTracker::assertMeshFaceSize(size_t input_length, const std::string& name) {
     if (input_length != obj->nFacets) {
         std::stringstream ss;
         ss << name
            << " is called with an input not the same size (number if triangles) as the original mesh!\nThe input has "
-           << input_length << " triangles with the original mesh has " << obj->nFacets << "." << std::endl;
+           << input_length << " triangles while the original mesh has " << obj->nFacets << "." << std::endl;
         throw std::runtime_error(ss.str());
     }
+}
+void DEMTracker::assertOwnerSize(size_t input_length, const std::string& name) {
+    if (input_length != obj->nSpanOwners) {
+        std::stringstream ss;
+        ss << name << " is called with an input not the same size of the number of owners it tracks!\nThe input has "
+           << input_length << " elements while the tracker tracks " << obj->nSpanOwners << " entities." << std::endl;
+        throw std::runtime_error(ss.str());
+    }
+}
+
+std::vector<bodyID_t> DEMTracker::GetContactClumps(size_t offset) {
+    return sys->GetOwnerContactClumps(obj->ownerID + offset);
+}
+
+bodyID_t DEMTracker::GetOwnerID(size_t offset) {
+    return obj->ownerID + offset;
 }
 
 float3 DEMTracker::Pos(size_t offset) {
@@ -192,6 +281,15 @@ float3 DEMTracker::Vel(size_t offset) {
 }
 float4 DEMTracker::OriQ(size_t offset) {
     return sys->GetOwnerOriQ(obj->ownerID + offset);
+}
+unsigned int DEMTracker::GetFamily(size_t offset) {
+    return sys->GetOwnerFamily(obj->ownerID + offset);
+}
+float DEMTracker::Mass(size_t offset) {
+    return sys->GetOwnerMass(obj->ownerID + offset);
+}
+float3 DEMTracker::MOI(size_t offset) {
+    return sys->GetOwnerMOI(obj->ownerID + offset);
 }
 // float3 DEMTracker::Acc(size_t offset) {
 //     float3 contact_acc = sys->GetOwnerAcc(obj->ownerID + offset);
@@ -222,6 +320,20 @@ void DEMTracker::SetVel(float3 vel, size_t offset) {
 void DEMTracker::SetOriQ(float4 oriQ, size_t offset) {
     sys->SetOwnerOriQ(obj->ownerID + offset, oriQ);
 }
+void DEMTracker::SetFamily(const std::vector<unsigned int>& fam_nums) {
+    assertOwnerSize(fam_nums.size(), "SetFamily");
+    for (size_t i = 0; i < fam_nums.size(); i++) {
+        sys->SetOwnerFamily(obj->ownerID + i, fam_nums[i]);
+    }
+}
+void DEMTracker::SetFamily(unsigned int fam_num) {
+    for (size_t i = 0; i < obj->nSpanOwners; i++) {
+        sys->SetOwnerFamily(obj->ownerID + i, fam_num);
+    }
+}
+void DEMTracker::SetFamily(unsigned int fam_num, size_t offset) {
+    sys->SetOwnerFamily(obj->ownerID + offset, fam_num);
+}
 void DEMTracker::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {
     std::vector<bodyID_t> offsetted_IDs(IDs);
     size_t offset = obj->ownerID;
@@ -231,12 +343,18 @@ void DEMTracker::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::v
 
 void DEMTracker::UpdateMesh(std::shared_ptr<DEMMeshConnected>& new_mesh) {
     assertMesh("UpdateMesh");
-    assertMeshSize(new_mesh->GetNumTriangles(), "UpdateMesh");
+    assertMeshFaceSize(new_mesh->GetNumTriangles(), "UpdateMesh");
     std::vector<DEMTriangle> new_triangles(new_mesh->GetNumTriangles());
     for (size_t i = 0; i < new_mesh->GetNumTriangles(); i++) {
         new_triangles[i] = new_mesh->GetTriangle(i);
     }
     sys->SetTriNodeRelPos(obj->facetID, new_triangles, true);
+}
+//// TODO: Implement it
+void DEMTracker::UpdateMeshByIncrement(const std::vector<float3>& deformation) {
+    assertMesh("UpdateMeshByIncrement");
+    // This method should interface sys then dT directly passing deformation to dT, and let dT interpret this
+    // information based on its cached m_meshes
 }
 
 // =============================================================================
@@ -248,18 +366,21 @@ void DEMForceModel::SetForceModelType(FORCE_MODEL model_type) {
     switch (model_type) {
         case (FORCE_MODEL::HERTZIAN):
             m_must_have_mat_props = {"E", "nu", "CoR", "mu", "Crr"};
+            m_pairwise_mat_props = {"CoR", "mu", "Crr"};
             m_force_model = HERTZIAN_FORCE_MODEL();
             // History-based model uses these history-related arrays
             m_contact_wildcards = {"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"};
             break;
         case (FORCE_MODEL::HERTZIAN_FRICTIONLESS):
             m_must_have_mat_props = {"E", "nu", "CoR"};
+            m_pairwise_mat_props = {"CoR"};
             m_force_model = HERTZIAN_FORCE_MODEL_FRICTIONLESS();
             // No contact history needed for frictionless
             m_contact_wildcards.clear();
             break;
         case (FORCE_MODEL::CUSTOM):
             m_must_have_mat_props.clear();
+            m_pairwise_mat_props.clear();
     }
 }
 

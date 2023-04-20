@@ -10,24 +10,17 @@
 
 namespace deme {
 
+////////////////////////////////////////////////////////////////////////////////
+// Cub utilities that may be needed by some user actions
+////////////////////////////////////////////////////////////////////////////////
+
 void doubleSumReduce(double* d_in, double* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
 void floatSumReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
-
 void boolSumReduce(notStupidBool_t* d_in,
                    size_t* d_out,
                    size_t n,
                    cudaStream_t& this_stream,
                    DEMSolverStateData& scratchPad);
-
-void boolMaxReduce(notStupidBool_t* d_in,
-                   notStupidBool_t* d_out,
-                   size_t n,
-                   cudaStream_t& this_stream,
-                   DEMSolverStateData& scratchPad);
-
-void floatMaxReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
-void doubleMaxReduce(double* d_in, double* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
-
 void floatSumReduceByKey(notStupidBool_t* d_keys_in,
                          notStupidBool_t* d_unique_out,
                          float* d_vals_in,
@@ -37,6 +30,50 @@ void floatSumReduceByKey(notStupidBool_t* d_keys_in,
                          cudaStream_t& this_stream,
                          DEMSolverStateData& scratchPad);
 void doubleSumReduceByKey(notStupidBool_t* d_keys_in,
+                          notStupidBool_t* d_unique_out,
+                          double* d_vals_in,
+                          double* d_aggregates_out,
+                          size_t* d_num_out,
+                          size_t n,
+                          cudaStream_t& this_stream,
+                          DEMSolverStateData& scratchPad);
+
+void boolMaxReduce(notStupidBool_t* d_in,
+                   notStupidBool_t* d_out,
+                   size_t n,
+                   cudaStream_t& this_stream,
+                   DEMSolverStateData& scratchPad);
+
+void floatMaxReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
+void doubleMaxReduce(double* d_in, double* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
+void floatMaxReduceByKey(notStupidBool_t* d_keys_in,
+                         notStupidBool_t* d_unique_out,
+                         float* d_vals_in,
+                         float* d_aggregates_out,
+                         size_t* d_num_out,
+                         size_t n,
+                         cudaStream_t& this_stream,
+                         DEMSolverStateData& scratchPad);
+void doubleMaxReduceByKey(notStupidBool_t* d_keys_in,
+                          notStupidBool_t* d_unique_out,
+                          double* d_vals_in,
+                          double* d_aggregates_out,
+                          size_t* d_num_out,
+                          size_t n,
+                          cudaStream_t& this_stream,
+                          DEMSolverStateData& scratchPad);
+
+void floatMinReduce(float* d_in, float* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
+void doubleMinReduce(double* d_in, double* d_out, size_t n, cudaStream_t& this_stream, DEMSolverStateData& scratchPad);
+void floatMinReduceByKey(notStupidBool_t* d_keys_in,
+                         notStupidBool_t* d_unique_out,
+                         float* d_vals_in,
+                         float* d_aggregates_out,
+                         size_t* d_num_out,
+                         size_t n,
+                         cudaStream_t& this_stream,
+                         DEMSolverStateData& scratchPad);
+void doubleMinReduceByKey(notStupidBool_t* d_keys_in,
                           notStupidBool_t* d_unique_out,
                           double* d_vals_in,
                           double* d_aggregates_out,
@@ -60,6 +97,10 @@ void doubleSortByKey(notStupidBool_t* d_keys_in,
                      cudaStream_t& this_stream,
                      DEMSolverStateData& scratchPad);
 
+////////////////////////////////////////////////////////////////////////////////
+// For kT and dT's private usage
+////////////////////////////////////////////////////////////////////////////////
+
 void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       std::shared_ptr<jitify::Program>& bin_triangle_kernels,
                       std::shared_ptr<jitify::Program>& sphere_contact_kernels,
@@ -79,7 +120,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>>& contactMapping,
                       cudaStream_t& this_stream,
                       DEMSolverStateData& scratchPad,
-                      SolverTimers& timers);
+                      SolverTimers& timers,
+                      kTStateParams& stateParams);
 
 void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force_kernels,
                                  DEMDataDT* granData,

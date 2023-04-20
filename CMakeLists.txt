@@ -37,7 +37,7 @@ find_package(CUDAToolkit REQUIRED)
 # Find CUB library (this might need to be done in source-level config)
 find_package(
 	CUB REQUIRED
-	#PATHS ${CMAKE_CURRENT_LIST_DIR}/thirdparty/cub/cub
+	HINTS ${CUDAToolkit_ROOT}/lib64/cmake/cub
 )
 
 # Find NVIDIA's Jitify library 
@@ -95,7 +95,7 @@ elseif(TargetCXXStandard STREQUAL STD_CXX17)
 elseif(TargetCXXStandard STREQUAL STD_CXX20)
 	set(CXXSTD_MAX 20)
 else()
-	set(CXXSTD_MAX 20)
+	set(CXXSTD_MAX 17)
 endif()
 cxx_std_autodetect()
 
@@ -140,6 +140,7 @@ target_link_libraries(simulator_multi_gpu
 	PUBLIC CUDA::cudart
 	PUBLIC CUDA::nvrtc
 	PUBLIC ${ChPF_IMPORTED_NAME}
+	PUBLIC DEMERuntimeDataHelper
 )
 
 # Attach include directories to the top-level library target
@@ -156,10 +157,21 @@ set(config_directory ${CMAKE_INSTALL_LIBDIR}/cmake/DEME)
 
 # Install the library, creating an export target for it as well 
 install(
-	TARGETS simulator_multi_gpu EXPORT DEMETargets
+	TARGETS simulator_multi_gpu DEMERuntimeDataHelper
+	EXPORT DEMETargets
 	LIBRARY
 		DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
+
+install(CODE "message(\"Removing build-tree libraries from installation target...\")")
+install(CODE "file(REMOVE \"$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libDEMERuntimeDataHelper.so\")")
+
+install(
+	TARGETS DEMERuntimeDataHelper_install
+	EXPORT DEMETargets
+	LIBRARY
+		DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	)
 
 # Export the generated library target
 export(EXPORT DEMETargets
@@ -191,7 +203,7 @@ configure_file(cmake/DEMEConfig.cmake.in
 # Generate the _Install Tree_ version of DEMEConfig.cmake from the base file
 file(RELATIVE_PATH REL_INCLUDE_DIR ${CMAKE_INSTALL_PREFIX}/${config_directory} ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR})
 set(CONF_INCLUDE_DIRS "\${DEMECMakeDir}/${REL_INCLUDE_DIR}")
-set(CONF_SHARE_DATA_DIRS "\${DEMECMakeDir}/${REL_INCLUDE_DIR}/../share/data")
+set(CONF_SHARE_DATA_DIRS "\${DEMECMakeDir}/${REL_INCLUDE_DIR}/../share/DEME/data")
 
 # NOTE: This is placed in CMAKE_FILES_DIRECTORY to keep it out of the build tree
 configure_file(cmake/DEMEConfig.cmake.in
@@ -220,9 +232,16 @@ install(
 # ---------------------------------------------------------------------------- #
 # Copy data directory over
 # ---------------------------------------------------------------------------- #
-# set(DataDir "data")
 file(COPY ${CMAKE_CURRENT_LIST_DIR}/data/ DESTINATION ${CMAKE_BINARY_DIR}/data/)
-install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/data/ DESTINATION ${CMAKE_INSTALL_DATADIR}/data/)
+install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/data/ DESTINATION ${CMAKE_INSTALL_DATADIR}/DEME/data/)
+
+# ---------------------------------------------------------------------------- #
+# Copy kernels over
+# ---------------------------------------------------------------------------- #
+file(COPY ${CMAKE_CURRENT_LIST_DIR}/src/kernel/ DESTINATION ${CMAKE_BINARY_DIR}/kernel/)
+file(COPY ${CMAKE_CURRENT_LIST_DIR}/src/DEM/Defines.h DESTINATION ${CMAKE_BINARY_DIR}/DEM)
+file(COPY ${CMAKE_CURRENT_LIST_DIR}/src/DEM/VariableTypes.h DESTINATION ${CMAKE_BINARY_DIR}/DEM)
+install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/src/kernel/ DESTINATION ${CMAKE_INSTALL_DATADIR}/DEME/kernel/)
 
 # ---------------------------------------------------------------------------- #
 # Build embedded demos

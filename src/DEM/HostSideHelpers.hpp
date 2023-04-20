@@ -23,6 +23,12 @@
 
 namespace deme {
 
+// Sign function
+template <typename T1>
+inline int sign_func(const T1& val) {
+    return (T1(0) < val) - (val < T1(0));
+}
+
 // In an upper-triangular matrix, given i and j, this function returns the index of the corresponding flatten-ed
 // non-zero entries. This function does not assume i <= j.
 template <typename T1>
@@ -51,6 +57,24 @@ template <typename T1>
 inline T1 vector_sum(const std::vector<T1>& vect) {
     T1 sum_of_elems = std::accumulate(vect.begin(), vect.end(), T1(0));
     return sum_of_elems;
+}
+
+inline bool isBetween(const float3& coord, const float3& L, const float3& U) {
+    if (coord.x < L.x || coord.y < L.y || coord.z < L.z) {
+        return false;
+    }
+    if (coord.x > U.x || coord.y > U.y || coord.z > U.z) {
+        return false;
+    }
+    return true;
+}
+
+// Make sure a T1 type triplet falls in a range, then output as T2 type
+template <typename T1, typename T2>
+inline T2 hostClampBetween(const T1& data, const T2& low, const T2& high) {
+    T2 res;
+    res = DEME_MIN(DEME_MAX(data, low), high);
+    return res;
 }
 
 template <typename T1>
@@ -126,6 +150,25 @@ inline float4 host_make_float4(float x, float y, float z, float w) {
     return f;
 }
 
+inline size_t hostCalcBinNum(binID_t& nbX,
+                             binID_t& nbY,
+                             binID_t& nbZ,
+                             double m_voxelSize,
+                             double m_binSize,
+                             unsigned char nvXp2,
+                             unsigned char nvYp2,
+                             unsigned char nvZp2) {
+    nbX = (binID_t)(m_voxelSize * (double)((size_t)1 << nvXp2) / m_binSize) + 1;
+    nbY = (binID_t)(m_voxelSize * (double)((size_t)1 << nvYp2) / m_binSize) + 1;
+    nbZ = (binID_t)(m_voxelSize * (double)((size_t)1 << nvZp2) / m_binSize) + 1;
+    return (size_t)nbX * (size_t)nbY * (size_t)nbZ;
+}
+
+/// @brief  Check if the string has only spaces.
+inline bool is_all_spaces(const std::string& str) {
+    return str.find_first_not_of(' ') == str.npos;
+}
+
 // Check if a word exists in a string (but it does not need to be a whole word)
 inline bool match_pattern(const std::string& sentence, const std::string& word) {
     std::smatch m;
@@ -159,6 +202,13 @@ inline bool all_whole_word_match(const std::string& sentence,
         }
     }
     return true;
+}
+
+/// Change all characters in a string to upper case.
+inline std::string str_to_upper(const std::string& input) {
+    std::string output = input;
+    std::transform(input.begin(), input.end(), output.begin(), ::toupper);
+    return output;
 }
 
 /// Replace all instances of a certain pattern from a string then return it
@@ -256,6 +306,30 @@ inline float3 Rodrigues(const float3& vec, const float3& axis, const float& thet
     float3 res;
     res = vec * cos(theta) + cross(axis, vec) * sin(theta) + axis * dot(axis, vec) * (1. - cos(theta));
     return res;
+}
+
+// Remove elements of a vector based on bool array
+template <typename T1>
+inline std::vector<T1> hostRemoveElem(const std::vector<T1>& vec, const std::vector<bool>& flags) {
+    auto v = vec;
+    v.erase(std::remove_if(v.begin(), v.end(), [&flags, &v](const T1& i) { return flags.at(&i - v.data()); }), v.end());
+    return v;
+}
+
+// Contribution from https://stackoverflow.com/questions/1577475/c-sorting-and-keeping-track-of-indexes
+template <typename T1>
+inline std::vector<size_t> hostSortIndices(const std::vector<T1>& v) {
+    // initialize original index locations
+    std::vector<size_t> idx(v.size());
+    std::iota(idx.begin(), idx.end(), 0);
+
+    // sort indexes based on comparing values in v
+    // using std::stable_sort instead of std::sort
+    // to avoid unnecessary index re-orderings
+    // when v contains elements of equal values
+    std::stable_sort(idx.begin(), idx.end(), [&v](size_t i1, size_t i2) { return v[i1] < v[i2]; });
+
+    return idx;
 }
 
 template <typename T1, typename T2>
@@ -383,6 +457,21 @@ inline void hostPositionToVoxelID(T1& ID,
     ID = voxelNumX;
     ID += voxelNumY << nvXp2;
     ID += voxelNumZ << (nvXp2 + nvYp2);
+}
+
+template <typename T1, typename T2>
+inline bool inBoxRegion(const T1& X,
+                        const T1& Y,
+                        const T1& Z,
+                        const std::pair<T2, T2>& Xrange,
+                        const std::pair<T2, T2>& Yrange,
+                        const std::pair<T2, T2>& Zrange) {
+    if ((X >= Xrange.first) && (X <= Xrange.second) && (Y >= Yrange.first) && (Y <= Yrange.second) &&
+        (Z >= Zrange.first) && (Z <= Zrange.second)) {
+        return true;
+    } else {
+        return false;
+    }
 }
 
 template <typename T1>

@@ -22,6 +22,7 @@
 #include <DEM/BdrsAndObjs.h>
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
+#include <DEM/AuxClasses.h>
 
 // #include <core/utils/JitHelper.h>
 
@@ -58,7 +59,7 @@ class DEMDynamicThread {
 
     // Number of items in the buffer array (which is not a managed vector, due to our need to explicitly control where
     // it is allocated)
-    size_t buffer_size;
+    size_t buffer_size = 0;
 
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
@@ -83,6 +84,9 @@ class DEMDynamicThread {
 
     // Pointers to those data arrays defined below, stored in a struct
     DEMDataDT* granData;
+
+    // Log for anomalies in the simulation
+    WorkerAnomalies anomalies = WorkerAnomalies();
 
     // Body-related arrays in managed memory, for dT's personal use (not transfer buffer)
 
@@ -207,7 +211,8 @@ class DEMDynamicThread {
     // An example of such wildcard arrays is contact history: how much did the contact point move on the geometry
     // surface compared to when the contact first emerged?
 
-    // Storage for the names of the contact wildcards
+    // Storage for the names of the contact wildcards (whose order agrees with the impl-level wildcard numbering, from 1
+    // to n)
     std::set<std::string> m_contact_wildcard_names;
     std::set<std::string> m_owner_wildcard_names;
 
@@ -231,13 +236,13 @@ class DEMDynamicThread {
     bool pendingCriticalUpdate = true;
 
     // Number of threads per block for dT force calculation kernels
-    unsigned int DT_FORCE_CALC_NTHREADS_PER_BLOCK = 256;
+    unsigned int DT_FORCE_CALC_NTHREADS_PER_BLOCK = 512;
 
     // Template-related arrays in managed memory
     // Belonged-body ID
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerClumpBody;
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerMesh;
-    std::vector<bodyID_t> ownerAnalBody;
+    std::vector<bodyID_t> ownerAnalBody;  // Not managed since all analytical bodies are jitified
 
     // The ID that maps this sphere component's geometry-defining parameters, when this component is jitified
     std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> clumpComponentOffset;
@@ -257,6 +262,10 @@ class DEMDynamicThread {
 
     // A long array (usually 32640 elements) registering whether between 2 families there should be contacts
     std::vector<notStupidBool_t, ManagedAllocator<notStupidBool_t>> familyMaskMatrix;
+
+    // The amount of contact margin that each family should add to its associated contact geometries. Default is 0, and
+    // that means geometries should be considered in contact when they are physically in contact.
+    std::vector<float, ManagedAllocator<float>> familyExtraMarginSize;
 
     // dT's copy of "clump template and their names" map
     std::unordered_map<unsigned int, std::string> templateNumNameMap;
@@ -281,8 +290,8 @@ class DEMDynamicThread {
 
     DEMDynamicThread(WorkerReportChannel* pPager, ThreadManager* pSchedSup, GpuManager* pGpuDist)
         : pPagerToMain(pPager), pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
-        GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
-        GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataDT), cudaMemAttachGlobal));
+        DEME_GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
+        DEME_GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataDT), cudaMemAttachGlobal));
 
         cycleDuration = 0;
 
@@ -295,6 +304,9 @@ class DEMDynamicThread {
 
         // Launch a worker thread bound to this instance
         th = std::move(std::thread([this]() { this->workerThread(); }));
+
+        // Allocate arrays whose length does not depend on user inputs
+        initAllocation();
     }
     ~DEMDynamicThread() {
         // std::cout << "Dynamic thread closing..." << std::endl;
@@ -302,6 +314,11 @@ class DEMDynamicThread {
         startThread();
         th.join();
         cudaStreamDestroy(streamInfo.stream);
+
+        deallocateEverything();
+
+        DEME_GPU_CALL(cudaFree(simParams));
+        DEME_GPU_CALL(cudaFree(granData));
     }
 
     void setCycleDuration(double val) { cycleDuration = val; }
@@ -320,17 +337,20 @@ class DEMDynamicThread {
                       binID_t nbY,
                       binID_t nbZ,
                       float3 LBFPoint,
+                      float3 user_box_min,
+                      float3 user_box_max,
                       float3 G,
                       double ts_size,
                       float expand_factor,
                       float approx_max_vel,
                       float expand_safety_param,
+                      float expand_safety_adder,
                       const std::set<std::string>& contact_wildcards,
                       const std::set<std::string>& owner_wildcards);
 
-    /// Compute total KE of all entities
-    float getKineticEnergy();
-
+    /// @brief Get total number of contacts.
+    /// @return Number of contacts.
+    size_t getNumContacts() const;
     /// Get this owner's position in user unit
     float3 getOwnerPos(bodyID_t ownerID) const;
     /// Get this owner's angular velocity
@@ -343,6 +363,8 @@ class DEMDynamicThread {
     float3 getOwnerAcc(bodyID_t ownerID) const;
     /// Get this owner's angular acceleration
     float3 getOwnerAngAcc(bodyID_t ownerID) const;
+    // Get the current auto-adjusted update freq
+    float getUpdateFreq() const;
 
     /// Set this owner's position in user unit
     void setOwnerPos(bodyID_t ownerID, float3 pos);
@@ -357,11 +379,26 @@ class DEMDynamicThread {
     /// just adds to it.
     void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite = true);
 
+    /// @brief Globally modify a owner wildcard's value.
+    void setOwnerWildcardValue(unsigned int wc_num, const std::vector<float>& vals);
+    /// @brief Modify the owner wildcard values of all entities in family family_num.
+    void setFamilyOwnerWildcardValue(unsigned int family_num, unsigned int wc_num, const std::vector<float>& vals);
+
+    /// @brief Set all clumps in this family to have this material.
+    void setFamilyClumpMaterial(unsigned int N, unsigned int mat_id);
+    /// @brief Set all meshes in this family to have this material.
+    void setFamilyMeshMaterial(unsigned int N, unsigned int mat_id);
+
+    /// @brief  Fill res with the wc_num wildcard value.
+    void getOwnerWildcardValue(std::vector<float>& res, unsigned int wc_num);
+    /// @brief  Fill res with the wc_num wildcard value for entities with family number family_num.
+    void getFamilyOwnerWildcardValue(std::vector<float>& res, unsigned int family_num, unsigned int wc_num);
+
     /// Let dT know that it needs a kT update, as something important may have changed, and old contact pair info is no
     /// longer valid.
     void announceCritical() { pendingCriticalUpdate = true; }
 
-    /// Change all entities with (user-level) family number ID_from to have a new number ID_to
+    /// @brief Change all entities with (user-level) family number ID_from to have a new number ID_to.
     void changeFamily(unsigned int ID_from, unsigned int ID_to);
 
     /// Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
@@ -388,6 +425,7 @@ class DEMDynamicThread {
                           size_t nExistingFacets);
     void populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                               const std::vector<float3>& input_ext_obj_xyz,
+                              const std::vector<float4>& input_ext_obj_rot,
                               const std::vector<unsigned int>& input_ext_obj_family,
                               const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
                               const std::vector<float3>& input_mesh_obj_xyz,
@@ -418,6 +456,7 @@ class DEMDynamicThread {
     /// Initialized managed arrays
     void initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                            const std::vector<float3>& input_ext_obj_xyz,
+                           const std::vector<float4>& input_ext_obj_rot,
                            const std::vector<unsigned int>& input_ext_obj_family,
                            const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
                            const std::vector<float3>& input_mesh_obj_xyz,
@@ -442,6 +481,7 @@ class DEMDynamicThread {
     /// no other changes to the system.
     void updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                                const std::vector<float3>& input_ext_obj_xyz,
+                               const std::vector<float4>& input_ext_obj_rot,
                                const std::vector<unsigned int>& input_ext_obj_family,
                                const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
                                const std::vector<float3>& input_mesh_obj_xyz,
@@ -502,13 +542,18 @@ class DEMDynamicThread {
         }
     }
 
+    /// Get the simulation time passed since the start of simulation
+    double getSimTime() const;
+    /// Set the simulation time manually
+    void setSimTime(double time);
+
     // Jitify dT kernels (at initialization) based on existing knowledge of this run
     void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs);
 
     // Execute this kernel, then return the reduced value
     float* inspectCall(const std::shared_ptr<jitify::Program>& inspection_kernel,
                        const std::string& kernel_name,
-                       size_t n,
+                       INSPECT_ENTITY_TYPE thing_to_insp,
                        CUB_REDUCE_FLAVOR reduce_flavor,
                        bool all_domain);
 
@@ -528,6 +573,12 @@ class DEMDynamicThread {
     // know I have to process the new-comers)
     unsigned int nTrackersProcessed = 0;
 
+    // A pointer that points to the location that holds the current max_vel info, which will soon be transferred to kT
+    float* pCycleMaxVel;
+
+    // The inspector for calculating max vel for this cycle
+    std::shared_ptr<DEMInspector> approxMaxVelFunc;
+
     // Migrate contact history to fit the structure of the newly received contact array
     inline void migratePersistentContacts();
 
@@ -539,17 +590,30 @@ class DEMDynamicThread {
 
     // If kT provides fresh CD results, we unpack and use it
     inline void ifProduceFreshThenUseItAndSendNewOrder();
+    inline void ifProduceFreshThenUseIt();
+    inline void unpack_impl();
+
+    // Change sim params based on dT's experience, if needed
+    inline void calibrateParams();
+
+    // Determine the max vel for this cycle, kT needs it
+    inline float* determineSysVel();
 
     // Some per-step checks/modification, done before integration, but after force calculation (thus sort of in the
     // mid-step stage)
     inline void routineChecks();
 
     // Bring dT buffer array data to its working arrays
-    void unpackMyBuffer();
+    inline void unpackMyBuffer();
     // Send produced data to kT-owned biffers
     void sendToTheirBuffer();
     // Resize some work arrays based on the number of contact pairs provided by kT
     void contactEventArraysResize(size_t nContactPairs);
+
+    // Deallocate everything
+    void deallocateEverything();
+    // The dT-side allocations that can be done at initialization time
+    void initAllocation();
 
     // Just-in-time compiled kernels
     std::shared_ptr<jitify::Program> prep_force_kernels;
@@ -559,6 +623,42 @@ class DEMDynamicThread {
     // std::shared_ptr<jitify::Program> quarry_stats_kernels;
     std::shared_ptr<jitify::Program> mod_kernels;
     std::shared_ptr<jitify::Program> misc_kernels;
+
+    // Adjuster for update freq
+    class AccumStepUpdater {
+      private:
+        unsigned int num_steps = 0;
+        unsigned int num_updates = 0;
+        unsigned int cached_size = 200;
+
+      public:
+        AccumStepUpdater() {}
+        ~AccumStepUpdater() {}
+        inline void AddUpdate() { num_updates++; }
+        inline void AddStep() { num_steps++; }
+        inline bool Query(unsigned int& ideal) {
+            if (num_updates > NUM_STEPS_RESERVED_AFTER_RENEWING_FREQ_TUNER) {
+                // * 2 because double update freq is an ideal future drift
+                ideal = (unsigned int)((double)num_steps / num_updates * 2);
+                if (num_updates >= cached_size) {
+                    Clear();
+                }
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        // Return this accumulator to initial state
+        void Clear() {
+            num_steps = 0;
+            num_updates = 0;
+        }
+
+        void SetCacheSize(unsigned int n) { cached_size = n; }
+    };
+    AccumStepUpdater accumStepUpdater = AccumStepUpdater();
+
 };  // dT ends
 
 }  // namespace deme
