@@ -32,6 +32,7 @@ SET(DEMOS
 		DEMdemo_Granular_Repose
 		DEMdemo_Granular_Flow
 		DEMdemo_SolarSystem
+		DEMdemo_Repose_Cylinder
 )
 
 # ------------------------------------------------------------------------------
