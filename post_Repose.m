@@ -1,31 +1,42 @@
-clear all;close;clc
+clear;close all;clc
 
-folder='build/DemoOutput_Repose/';
+folder='build/DemoOutput_Granular_Repose/';
 files=dir(folder);
 
 file=files(end).name;
+disp(file)
 
 data=readtable([folder file]);
 
 x=data.X;
 y=data.Y;
-data.Z=data.Z-min(data.Z);
-data.Z=data.Z+data.r;
 
-dx=0.0033*2;
-path=(-0.40:dx:0.40)';
+data.Z=data.Z-min(data.Z);
+z=data.Z+data.r;
+meanValue=mean(z);
+dev=std(z);
+index=find(z<meanValue+3*dev);
+
+x=x(index);
+y=y(index);
+z=z(index);
+
+
+
+dx=0.0033*1;
+path=(-0.20:dx:0.20)';
 
 [X,Y] = meshgrid(path,path);
 Z=X*0;
-range=dx*2;
+range=dx*3;
 for i=1:numel(path)      
     for j=1:numel(path) 
     xLocal=X(i,j);    
     ylocal=Y(i,j);
     index=find(abs(x-xLocal)<range & abs(y-ylocal)<range);
     if ~isempty(index)
-        temp=max(data.Z(index));
-    Z(i,j)=temp;
+        temp=abs(max(z(index)));
+        Z(i,j)=temp;
     end
     end
 end
@@ -53,8 +64,8 @@ dx = mean(diff(curve1_x));
 dy1 = rad2deg(gradient(curve1_z,dx));                                
 dy2 = rad2deg(gradient(curve2_z,dx));                                
 
-plot(abs(dy1))
-plot(abs(dy2))
+plot(curve1_x, abs(dy1))
+plot(curve1_x, abs(dy2))
 
 
 

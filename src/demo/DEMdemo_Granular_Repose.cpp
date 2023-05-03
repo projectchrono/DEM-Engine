@@ -42,11 +42,11 @@ int main() {
     double density = 1410.0;
   
 
-    int num_template = 100000;
+    int num_template = 10000;
 
-    float plane_bottom = -0.30f * scaling;
+    float plane_bottom = -0.20f * scaling;
     float funnel_bottom =0.050 * scaling;
-    float funnel_outlet = 0.030f * scaling;
+    float funnel_outlet = 0.020f * scaling;
     float funnel_slope = 1.0 / 4.0 * 3.14;
 
     double tilt = 3.141592 / 6.0;
@@ -55,11 +55,11 @@ int main() {
 
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.90}, {"mu", 0.04}, {"Crr", 0.04}});
     auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 2.7e9}, {"nu", 0.35}, {"CoR", 0.83}, {"mu", 0.50}, {"Crr", 0.050}});
+        DEMSim.LoadMaterial({{"E", 2.7e9}, {"nu", 0.35}, {"CoR", 0.83}, {"mu", 0.50}, {"Crr", 0.08}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.50);
-    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.20);
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_type_particles, 0.10);
+    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.50);
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_type_particles, 0.80);
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_funnel, mat_type_particles, 0.7);    // it is supposed to be
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_funnel, mat_type_particles, 0.01);  // bakelite
@@ -86,7 +86,7 @@ int main() {
 
     // Loaded meshes are by-default fixed
     auto funnel = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/funnel.obj"), mat_type_funnel);
-    funnel->Scale(0.005 * scaling);
+    funnel->Scale(0.003 * scaling);
 
 
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
@@ -156,7 +156,7 @@ int main() {
     float settle_frame_time = 0.20;
     // Track the projectile
 
-    float shift_xyz = 0.98 * maxRadius * 2;
+    float shift_xyz = 1.00 * maxRadius * 2;
     float x = 0;
     float y = 0;
     float z = plane_bottom + shift_xyz;  // by default we create beads at 0
@@ -182,7 +182,7 @@ int main() {
         z += shift_xyz;
     }
 
-    for (unsigned int i = 0; i < 70; i++) {
+    for (unsigned int i = 0; i < 45; i++) {
         float3 center_xyz = make_float3(x, y, z);
 
         std::cout << "level of particles position ... " << center_xyz.z << std::endl;

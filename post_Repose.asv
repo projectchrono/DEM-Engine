@@ -1,6 +1,6 @@
-clear all;close;clc
+clear;close all;clc
 
-folder='build/DemoOutput_Repose/';
+folder='build/DemoOutput_Granular_Repose/';
 files=dir(folder);
 
 file=files(end).name;
@@ -12,8 +12,8 @@ y=data.Y;
 data.Z=data.Z-min(data.Z);
 data.Z=data.Z+data.r;
 
-dx=0.0033*3;
-path=(-0.40:dx:0.40)';
+dx=0.0033*2;
+path=(-0.30:dx:0.30)';
 
 [X,Y] = meshgrid(path,path);
 Z=X*0;
@@ -30,6 +30,7 @@ for i=1:numel(path)
     end
 end
 
+figure(1)
 surf(X,Y,Z)
 
 
@@ -47,6 +48,13 @@ plot(curve1_x,curve2_z)
 grid
 
 figure(3); hold on
+
+dx = mean(diff(curve1_x));                                 
+dy1 = rad2deg(gradient(curve1_z,dx));                                
+dy2 = rad2deg(gradient(curve2_z,dx));                                
+
+plot(abs(dy1))
+plot(abs(dy2))
 
 
 
