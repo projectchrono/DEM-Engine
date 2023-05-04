@@ -510,6 +510,16 @@ class DEMSolver {
     /// @param mat Material type.
     void SetFamilyMeshMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat);
 
+    /// @brief Add an extra contact margin to entities in a family so they are registered as potential contact pairs
+    /// earlier.
+    /// @details You typically need this method when the custom force model contains non-contact forces. The solver
+    /// needs this extra margin to preemptively registered contact pairs. If the extra margin is not added, then the
+    /// contact pair will not be computed until entities are in physical contact. Note this margin should be as small as
+    /// needed, since it potentially increases the total number of contact pairs greatly.
+    /// @param N Family number.
+    /// @param extra_size The thickness of the extra contact margin.
+    void SetFamilyExtraMargin(unsigned int N, float extra_size);
+
     /// @brief Get the owner wildcard's values of all entities.
     std::vector<float> GetOwnerWildcardValue(const std::string& name, float val);
     /// @brief Get the owner wildcard's values of all entities in family N.
@@ -945,7 +955,7 @@ class DEMSolver {
     bool collect_force_in_force_kernel = false;
 
     // Error-out avg num contacts
-    float threshold_error_out_num_cnts = 30.;
+    float threshold_error_out_num_cnts = 100.;
 
     // Integrator type
     TIME_INTEGRATOR m_integrator = TIME_INTEGRATOR::EXTENDED_TAYLOR;

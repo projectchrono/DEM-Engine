@@ -97,8 +97,12 @@ After the build process is done, you can start trying out the demos.
 - A fun game-of-life simulator built with the package, showing the flexibility in terms of how you can use this tool: `./src/demo/DEMdemo_GameOfLife`.
 - A few representative engineering experiments reproduced in DEM simulations, which potentially serve as starting points for your own DEM scripts: `/src/demo/DEMdemo_BallDrop`, `./src/demo/DEMdemo_ConePenetration`, `/src/demo/DEMdemo_Sieve`, `./src/demo/DEMdemo_Repose`.
 - `./src/demo/DEMdemo_WheelDP` shows how to load a checkpointed configuration file to instantly generate a settled granular terrain, then run a drawbar-pull test on it. This demo therefore requires you to first finish the two GRCPrep demos to obtain the terrain checkpoint file. The granular terrain in these demos features DEM particles with a variety of sizes and shapes.
+- `./src/demo/DEMdemo_WheelDPSimplified` is a simplified version of the previous drawbar-pull test which has no prerequisite. The terrain is simpilified to be made of only one type of irregular-shaped particles. It serves as a quick starting point for people who want to create similar experiments.
 - More advanced examples showing the usage of the custom additional properties (called _wildcards_) that you can associate with the simulation entities, and use them in the force model and/or change them in simulation then deposit them into the output files: `./src/demo/DEMdemo_Indentation`.
+- `./src/demo/DEMdemo_SolarSystem` simulates our solar system. Its purpose is to show how to define a non-local force (gravitational force) which takes effect even when the bodies are not in contact, using a custom force model file.
 - It is a good idea to read the comment lines at the top of the demo files to understand what they each does.
+
+You can find the movies of some of these demos [here](https://uwmadison.app.box.com/s/u4m9tee3k1vizf097zkq3rgv54orphyv).
 
 [The documentations for _DEME_](https://api.projectchrono.org/) are hosted on Chrono website (work in progress).
 
@@ -108,7 +112,7 @@ Some additional troubleshooting tips for running the demos:
 
 ### Limitations
 
-_DEME_ is designed to simulate the interaction among clump-represented particles, the interaction between particles and mesh-represented bodies, as well as the interaction between particles and analytical boundaries.
+_DEME_ is designed to simulate the interaction among clump-represented particles, the interaction between particles and mesh-represented bodies, as well as the interaction between particles and analytical boundaries. _DEME_ does not resolve mesh&ndash;mesh or mesh&ndash;analyutical contacts.
 
 - It is able to handle mesh-represented bodies with relatively simple physics, for example a meshed plow moving through granular materials with a prescribed velocity, or several meshed projectiles flying and hitting the granular ground. 
 - However, if the bodies' physics are complex multibody problems, say it is a vehicle that has joint-connected parts and a motor with certain driving policies, or the meshed bodies have collisions among themselves that needs to be simulated, then _DEME_ alone does not have the infrastructure to handle them. But you can install _DEME_ as a library and do coupled simulations with other tools such as [Chrono](https://github.com/projectchrono/chrono), where _DEME_ is exclusively tasked with handling the granular materials and the influence they exert on the outside world (with high efficiency, of course). See the following section.

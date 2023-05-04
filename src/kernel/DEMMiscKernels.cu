@@ -54,17 +54,21 @@ __global__ void computeMarginFromAbsv(deme::DEMSimParams* simParams, deme::DEMDa
     size_t ownerID = blockIdx.x * blockDim.x + threadIdx.x;
     if (ownerID < n) {
         float absv = granData->marginSize[ownerID];
+        unsigned int my_family = granData->familyID[ownerID];
         if (absv > simParams->approxMaxVel) {
             absv = simParams->approxMaxVel;
         }
-        granData->marginSize[ownerID] =
-            (absv * simParams->expSafetyMulti + simParams->expSafetyAdder) * (granData->ts_buffer * granData->maxDrift);
+        // User-specified extra margin also needs to be added here.
+        granData->marginSize[ownerID] = (absv * simParams->expSafetyMulti + simParams->expSafetyAdder) *
+                                            (granData->ts_buffer * granData->maxDrift) +
+                                        granData->familyExtraMarginSize[my_family];
     }
 }
 
-__global__ void fillValues(float* arr, float val, size_t n) {
-    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < n) {
-        arr[i] = val;
+__global__ void fillMarginValues(deme::DEMSimParams* simParams, deme::DEMDataKT* granData, size_t n) {
+    size_t ownerID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (ownerID < n) {
+        unsigned int my_family = granData->familyID[ownerID];
+        granData->marginSize[ownerID] = simParams->beta + granData->familyExtraMarginSize[my_family];
     }
 }

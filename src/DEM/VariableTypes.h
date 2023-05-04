@@ -15,10 +15,10 @@ typedef float oriQ_t;
 typedef unsigned int bodyID_t;
 typedef unsigned int binID_t;
 typedef uint8_t objID_t;
-typedef uint8_t materialsOffset_t;
-typedef uint8_t inertiaOffset_t;
+typedef uint16_t materialsOffset_t;
+typedef uint16_t inertiaOffset_t;
 typedef uint8_t clumpComponentOffset_t;
-typedef unsigned short int clumpComponentOffsetExt_t;  ///< Extended component offset type for non-jitified part
+typedef uint16_t clumpComponentOffsetExt_t;  ///< Extended component offset type for non-jitified part
 typedef double realFine_t;
 typedef char scratch_t;  ///< Data type for DEM scratch-pad array (this should NOT be changed, must be 1-byte)
 // typedef unsigned int distinctSphereRelativePositions_default_t;

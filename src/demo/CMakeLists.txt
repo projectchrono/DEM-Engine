@@ -31,8 +31,10 @@ SET(DEMOS
 		DEMdemo_ConePenetration
 		DEMdemo_Shake
 		DEMdemo_WheelDP
+		DEMdemo_WheelDPSimplified
 		DEMdemo_WheelSlopeSlip
 		DEMdemo_Indentation
+		DEMdemo_SolarSystem
 )
 
 # ------------------------------------------------------------------------------

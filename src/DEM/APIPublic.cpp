@@ -817,7 +817,7 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clu
     clump.mark = offset;
 
     // Give it a default name
-    if (clump.m_name == "NULL") {
+    if (clump.m_name == DEME_NUM_CLUMP_NAME) {
         char my_name[200];
         sprintf(my_name, "%04d", (int)nClumpTemplateLoad);
         clump.AssignName(std::string(my_name));
@@ -947,6 +947,19 @@ void DEMSolver::EnableContactBetweenFamilies(unsigned int ID1, unsigned int ID2)
         kT->familyMaskMatrix.at(posInMat) = DONT_PREVENT_CONTACT;
         dT->familyMaskMatrix.at(posInMat) = DONT_PREVENT_CONTACT;
     }
+}
+
+void DEMSolver::SetFamilyExtraMargin(unsigned int N, float extra_size) {
+    if (N > std::numeric_limits<family_t>::max()) {
+        DEME_ERROR("You are adding an extra margin to family %u, but family number should not be larger than %u.", N,
+                   std::numeric_limits<family_t>::max());
+    }
+    if (extra_size < 0.) {
+        DEME_ERROR("You are adding an extra margin of size %.7g, but the size should not be smaller than 0.",
+                   extra_size);
+    }
+    kT->familyExtraMarginSize.at(N) = extra_size;
+    dT->familyExtraMarginSize.at(N) = extra_size;
 }
 
 void DEMSolver::ClearCache() {
