@@ -127,7 +127,7 @@ int main() {
         // (move freely linearly)
         DEMSim.SetFamilyPrescribedAngVel(1, "0", to_string_with_precision(w_r), "0", false);
         // An extra force (acceleration) is addedd to simulate the load that the wheel carries
-        DEMSim.AddFamilyPrescribedAcc(1, "none", "none", to_string_with_precision(-added_pressure));
+        DEMSim.AddFamilyPrescribedAcc(1, "none", "none", to_string_with_precision(-added_pressure / wheel_mass));
         // `Real sim' family number
         DEMSim.SetFamilyPrescribedAngVel(2, "0", to_string_with_precision(w_r), "0", false);
         // Note: this wheel is not `dictated' by our prescrption of motion (hence the false argument), because it
@@ -135,7 +135,7 @@ int main() {
         // This one says when the experiment is going, the slip ratio is 0.5 (by our prescribing linear and angular vel)
         DEMSim.SetFamilyPrescribedLinVel(2, to_string_with_precision(v_ref * 0.5), "0", "none", false);
         // An extra force (acceleration) is addedd to simulate the load that the wheel carries
-        DEMSim.AddFamilyPrescribedAcc(2, "none", "none", to_string_with_precision(-added_pressure));
+        DEMSim.AddFamilyPrescribedAcc(2, "none", "none", to_string_with_precision(-added_pressure / wheel_mass));
 
         // Some inspectors
         auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
@@ -176,10 +176,11 @@ int main() {
             DEMSim.WriteSphereFile(std::string(filename));
             DEMSim.WriteMeshFile(std::string(meshname));
 
-            DEMSim.DoDynamicsThenSync(frame_time);
+            DEMSim.DoDynamics(frame_time);
         }
 
         // Switch wheel from free fall into DP test
+        DEMSim.DoDynamicsThenSync(0);
         DEMSim.ChangeFamily(1, 2);
         step_size *= 2.;
         DEMSim.UpdateStepSize(step_size);
@@ -211,6 +212,6 @@ int main() {
         DEMSim.ShowAnomalies();
     }
 
-    std::cout << "WheelDP demo exiting..." << std::endl;
+    std::cout << "WheelDPSimpilified demo exiting..." << std::endl;
     return 0;
 }
