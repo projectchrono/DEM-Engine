@@ -71,7 +71,7 @@ int main() {
     DEMSim.InstructBoxDomainDimension({-0.50, 0.50}, {-0.50, 0.50}, {-0.0, 2.0});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
-    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81 * std::cos(tilt)));
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     // Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     // happen anyway and if it does, something already went wrong.
@@ -80,12 +80,12 @@ int main() {
 
     // Loaded meshes are by-default fixed
    auto cylinder = DEMSim.AddWavefrontMeshObject("../data/ballast/hollowCylinder.obj", mat_type_cylinder);    
-   cylinder->Scale(0.15);
+   cylinder->Scale(1.0);
 
     cylinder->SetFamily(10);
 
-    std::string shake_pattern_xz = " 0.06 * sin( 300 * 2 * deme::PI * t)";
-    std::string shake_pattern_y = " 0.06 * sin( 30 * 2 * deme::PI * t)";
+    std::string shake_pattern_xz = " 0.02 * sin( 300 * 2 * deme::PI * t)";
+    std::string shake_pattern_y = " 0.02 * sin( 30 * 2 * deme::PI * t)";
 
     DEMSim.SetFamilyFixed(1);
     DEMSim.SetFamilyFixed(3);
@@ -110,7 +110,7 @@ int main() {
         std::vector<std::shared_ptr<DEMMaterial>> mat;
 
         double radiusMax = distribution(generator);
-        double radiusMin = 8.0 / 8.0 * radiusMax;
+        double radiusMin = 7.0 / 8.0 * radiusMax;
         double eccentricity = 1.0 / 8.0 * radiusMax;
 
         radii.push_back(radiusMin);
@@ -165,7 +165,7 @@ int main() {
     float x = 0;
     float y = 0;
 
-    float z = shift_xyz/2;  // by default we create beads at 0
+    
     double emitterZ= 0.80;
 
     unsigned int actualTotalSpheres =0;
@@ -191,7 +191,7 @@ int main() {
         float sizeZ = 1.00;
         float sizeX = 0.30 / 2.;        
         float z= shift_xyz+sizeZ/2.0;
-        yW=funnel_outlet; 
+         
 
         float3 center_xyz = make_float3(0, 0, z);
 
@@ -231,10 +231,11 @@ int main() {
         if (!initialization){
             
             for(int i = 0; i < (int)(0.4/settle_frame_time); i++){
-                DEMSim.DoDynamicsThenSync(settle_frame_time);
+                
                 sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), i);
                 DEMSim.WriteSphereFile(std::string(filename));
                 std::cout << "consolidating for "<<  i*settle_frame_time  <<  "s " << std::endl;
+                DEMSim.DoDynamicsThenSync(settle_frame_time);
             }
         }
 
