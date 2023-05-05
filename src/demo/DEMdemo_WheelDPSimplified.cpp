@@ -153,7 +153,6 @@ int main() {
         // Error out vel is used to force the simulation to abort when something goes wrong.
         DEMSim.SetErrorOutVelocity(35.);
         DEMSim.SetExpandSafetyMultiplier(1.);
-        DEMSim.SetErrorOutAvgContacts(50.);
         DEMSim.Initialize();
 
         unsigned int fps = 10;
@@ -182,8 +181,6 @@ int main() {
         // Switch wheel from free fall into DP test
         DEMSim.DoDynamicsThenSync(0);
         DEMSim.ChangeFamily(1, 2);
-        step_size *= 2.;
-        DEMSim.UpdateStepSize(step_size);
 
         for (double t = 0; t < sim_end; t += step_size, curr_step++) {
             if (curr_step % out_steps == 0) {
