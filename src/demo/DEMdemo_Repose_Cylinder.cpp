@@ -80,6 +80,7 @@ int main() {
     DEMSim.SetInitBinSize(radius * 5);
 
     // Loaded meshes are by-default fixed
+
    auto cylinder = DEMSim.AddWavefrontMeshObject("../data/ballast/hollowCylinder.obj", mat_type_cylinder);  
    cylinder->Scale(1.1);
 
@@ -166,9 +167,11 @@ int main() {
     float x = 0;
     float y = 0;
 
+
     float z = shift_xyz/2;  // by default we create beads at 0
     double emitterZMax= 1.00;
     double layerZ = emitterZMax/8;
+
 
     unsigned int actualTotalSpheres =0;
     
@@ -198,7 +201,6 @@ int main() {
         if (generate){             
 
         float z= plane_emitter+layerZ+shift_xyz;
-        
 
         float3 center_xyz = make_float3(0, 0, z);        
 
@@ -250,10 +252,12 @@ int main() {
         if (!initialization){
             
             for(int i = 0; i < (int)(0.4/settle_frame_time); i++){
+
                 DEMSim.DoDynamicsThenSync(settle_frame_time*2);
                 sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), i);
                 DEMSim.WriteSphereFile(std::string(filename));
                 std::cout << "consolidating for "<<  i*settle_frame_time*2  <<  "s " << std::endl;
+
             }
         }
 
