@@ -43,7 +43,7 @@ int main() {
     double radius = 0.003300 * scaling /2.0 ;
     double density = 1410;
 
-    int totalSpheres = 800000;
+    int totalSpheres = 200000;
 
     int num_template = 10000;
 
@@ -54,7 +54,7 @@ int main() {
 
     double tilt = 3.141592 / 6.0; 
 
-    double gateOpen = 0.120;
+    double gateOpen = 0.080;
     double gateSpeed = 2.0;
 
     auto mat_type_bottom = DEMSim.LoadMaterial({{"E", 50e9}, {"nu", 0.3}, {"CoR", 0.60}});
@@ -129,27 +129,27 @@ int main() {
         std::vector<std::shared_ptr<DEMMaterial>> mat;
 
         double radiusMax = distribution(generator);
-        double radiusMin = 8.0 / 8.0 * radiusMax;
-        double eccentricity = 1.0 / 8.0 * radiusMax;
+        double radiusMin = 5.0 / 6.0 * radiusMax;
+        double eccentricity = 1.0 / 6.0 * radiusMax;
 
         radii.push_back(radiusMin);
         float3 tmp;
-        tmp.x = 0;
+        tmp.x = -eccentricity/2;
         tmp.y = 0;
         tmp.z = 0;
         relPos.push_back(tmp);
         mat.push_back(mat_type_particles);
 
-        double x = eccentricity;
+        double x = eccentricity/2;
         double y = 0;
         double z = 0;
-/*         tmp.x = x;
+        tmp.x = x;
         tmp.y = y;
         tmp.z = z;
         relPos.push_back(tmp);
         mat.push_back(mat_type_particles);
 
-        radii.push_back(radiusMin); */
+        radii.push_back(radiusMin); 
 
         double c = radiusMin;  // smaller dim of the ellipse
         double b = radiusMin;
@@ -263,7 +263,7 @@ int main() {
     DEMSim.DoDynamicsThenSync(settle_frame_time);
 
     plane_bottom=max_z_finder->GetValue();
-
+    /// here the settling phase starts
         if (!initialization){
             
             for(int i = 0; i < (int)(0.4/settle_frame_time); i++){

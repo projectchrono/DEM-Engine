@@ -1,5 +1,9 @@
 clear;close all;clc
 
+%%% Experimental data from Sarno et al. 2018
+exp=readtable("data/granularFlow/heightSarno2018.dat");
+
+
 folder='build/DemoOutput_Granular_Flow_1/';
 files=dir(folder);
 
@@ -48,7 +52,7 @@ for i=50:330
             end
         end
     end
-    figure(1)
+    
 % surf(X,Y,Z)
  curve1_z=sgolayfilt(Z(:,Y_idx),3,15);
 % plot(curve1_z)
@@ -57,8 +61,9 @@ level_z(i)=mean(curve1_z);
 end
 
 
-figure(1)
+figure(1); hold on
 
-plot(time,level_z)
+plot(time,level_z,'DisplayName','DEME')
+plot(exp.Var1,exp.Var2,'DisplayName','Exp.')
 
-
+axis([0 14 0 0.06])
