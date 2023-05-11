@@ -1,5 +1,5 @@
 # SBEL GPU DEM-Engine
-_A Duo-GPU DEM solver with complex grain geometry support_
+_A Dual-GPU DEM solver with complex grain geometry support_
 
 ### Description
 
