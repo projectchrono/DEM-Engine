@@ -18,12 +18,12 @@ using namespace deme;
 using namespace std::filesystem;
 
 int main() {
-    float granular_rad = 0.005;
+    float granular_rad = 0.00107803 * std::pow(0.5, 1. / 3.);
     unsigned int num_particles = 0;
     double CDFreq = 30.1;
     double world_size = 1;
     double pi = 3.14159;
-    float step_size = 1e-5;
+    float step_size = 2e-6;
     size_t n_steps = 5e5;
 
     while (num_particles < 80e6) {

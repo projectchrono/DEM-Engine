@@ -18,16 +18,16 @@ using namespace deme;
 using namespace std::filesystem;
 
 int main() {
-    float granular_rad = 0.005;
+    float granular_rad = 0.00118652 * std::pow(0.4, 1. / 3.);
     unsigned int num_particles = 0;
     double world_size = 1;
     double CDFreq = 25.1;
     double pi = 3.14159;
-    float step_size = 7.5e-6;
+    float step_size = 0.6e-6;
     size_t n_steps = 5e5;
-    int test_num = 0;
+    int test_num = 10;
 
-    while (num_particles < 2e8) {
+    {
         DEMSolver DEMSim;
         DEMSim.SetVerbosity(ERROR);
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
@@ -105,7 +105,10 @@ int main() {
         unsigned int fps = 20;
 
         mixer_tracker->SetPos(make_float3(0, 0, chamber_bottom + chamber_height / 2.0));
-        DEMSim.DoDynamicsThenSync(1.);
+        for (double t = 0; t < .75; t += 0.05) {
+            std::cout << "At time " << t << std::endl;
+            DEMSim.DoDynamicsThenSync(0.05);
+        }
         DEMSim.ClearThreadCollaborationStats();
         DEMSim.ClearTimingStats();
         char filename[200], meshfilename[200];
