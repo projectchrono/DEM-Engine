@@ -157,6 +157,10 @@ class DEMKinematicThread {
     // A long array (usually 32640 elements) registering whether between 2 families there should be contacts
     std::vector<notStupidBool_t, ManagedAllocator<notStupidBool_t>> familyMaskMatrix;
 
+    // The amount of contact margin that each family should add to its associated contact geometries. Default is 0, and
+    // that means geometries should be considered in contact when they are physically in contact.
+    std::vector<float, ManagedAllocator<float>> familyExtraMarginSize;
+
     // kT computed contact pair info
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA;
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB;
@@ -207,6 +211,9 @@ class DEMKinematicThread {
 
         // Launch a worker thread bound to this instance
         th = std::move(std::thread([this]() { this->workerThread(); }));
+
+        // Allocate arrays whose length does not depend on user inputs
+        initAllocation();
     }
     ~DEMKinematicThread() {
         // std::cout << "Kinematic thread closing..." << std::endl;
@@ -363,7 +370,8 @@ class DEMKinematicThread {
     inline void transferArraysResize(size_t nContactPairs);
     // Automatic adjustments to sim params
     void calibrateParams();
-
+    // The kT-side allocations that can be done at initialization time
+    void initAllocation();
     // Deallocate everything
     void deallocateEverything();
 

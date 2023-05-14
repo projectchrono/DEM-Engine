@@ -111,14 +111,14 @@ __device__ bool triangle_sphere_CD(const T1& A,           ///< First vertex of t
     // Calculate signed height of sphere center above face plane
     T2 h = dot(sphere_pos - A, face_n);
 
-    if (h >= radius || h <= -radius) {
-        return false;
-    }
-
     // Find the closest point on the face to the sphere center and determine
     // whether or not this location is inside the face or on an edge.
     T1 faceLoc;
 
+    // Triangle in contact with sphere or not
+    bool in_contact;
+
+    // Still do the following since we need depth
     if (!snap_to_face<T1, T2>(A, B, C, sphere_pos, faceLoc)) {
         // Nearest point on the triangle is on its face
         // printf("FACE CONTACT\n");
@@ -127,7 +127,11 @@ __device__ bool triangle_sphere_CD(const T1& A,           ///< First vertex of t
         normal.y = face_n.y;
         normal.z = face_n.z;
         pt1 = faceLoc;
-        return true;  // We are guarenteed contact by an earlier check of h
+        if (h >= radius || h <= -radius) {
+            in_contact = false;
+        } else {
+            in_contact = true;
+        }
     } else {
         // printf("EDGE CONTACT\n");
         // Nearest point on the triangle is on an edge
@@ -139,13 +143,16 @@ __device__ bool triangle_sphere_CD(const T1& A,           ///< First vertex of t
         }
         T2 dist = length(normal);
         depth = dist - radius;
-        if (depth >= 0) {
-            return false;
-        }
+
         normal = (1.0 / dist) * normal;
         pt1 = faceLoc;
-        return true;
+        if (depth >= 0. || h >= radius || h <= -radius) {
+            in_contact = false;
+        } else {
+            in_contact = true;
+        }
     }
+    return in_contact;
 }
 
 /**
@@ -182,18 +189,14 @@ __device__ bool triangle_sphere_CD_directional(const T1& A,           ///< First
     // Calculate signed height of sphere center above face plane
     T2 h = dot(sphere_pos - A, face_n);
 
-    if (h >= radius) {
-        return false;
-    }
-    // else {
-    //     snap_to_face<T1, T2>(A, B, C, sphere_pos, pt1);
-    //     return true;
-    // }
-
     // Find the closest point on the face to the sphere center and determine
     // whether or not this location is inside the face or on an edge.
     T1 faceLoc;
 
+    // Triangle in contact with sphere or not
+    bool in_contact;
+
+    // Still do the following since we need depth
     if (!snap_to_face<T1, T2>(A, B, C, sphere_pos, faceLoc)) {
         // Nearest point on the triangle is on its face
         // printf("FACE CONTACT\n");
@@ -202,7 +205,11 @@ __device__ bool triangle_sphere_CD_directional(const T1& A,           ///< First
         normal.y = face_n.y;
         normal.z = face_n.z;
         pt1 = faceLoc;
-        return true;  // We are guarenteed contact by an earlier check of h
+        if (depth >= 0.) {
+            in_contact = false;
+        } else {
+            in_contact = true;
+        }
     } else {
         // printf("EDGE CONTACT\n");
         // Nearest point on the triangle is on an edge
@@ -214,13 +221,16 @@ __device__ bool triangle_sphere_CD_directional(const T1& A,           ///< First
         }
         T2 dist = length(normal);
         depth = dist - radius;
-        if (depth >= 0) {
-            return false;
-        }
+
         normal = (1.0 / dist) * normal;
         pt1 = faceLoc;
-        return true;
+        if (depth >= 0. || h >= radius) {
+            in_contact = false;
+        } else {
+            in_contact = true;
+        }
     }
+    return in_contact;
 }
 
 #endif

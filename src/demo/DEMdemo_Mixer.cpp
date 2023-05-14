@@ -60,7 +60,7 @@ int main() {
     // auto template_granular = DEMSim.LoadSphereType(granular_rad * granular_rad * granular_rad * 2.8e3 * 4 / 3 * 3.14,
     //                                                granular_rad, mat_type_granular);
     DEMClumpTemplate shape_template;
-    shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
+    shape_template.ReadComponentFromFile((GET_DATA_PATH() / "clumps/3_clump.csv").string());
     // Calculate its mass and MOI
     shape_template.mass = 2.6e3 * 5.5886717;  // in kg or g
     shape_template.MOI = make_float3(2.928, 2.6029, 3.9908) * 2.6e3;

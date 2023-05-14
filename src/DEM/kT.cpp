@@ -156,10 +156,10 @@ inline void DEMKinematicThread::unpackMyBuffer() {
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     } else {  // If isExpandFactorFixed, then just fill in that constant array.
         size_t blocks_needed = (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-        misc_kernels->kernel("fillValues")
+        misc_kernels->kernel("fillMarginValues")
             .instantiate()
             .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(granData->marginSize, simParams->beta, (size_t)simParams->nOwnerBodies);
+            .launch(simParams, granData, (size_t)simParams->nOwnerBodies);
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 
@@ -403,6 +403,7 @@ void DEMKinematicThread::packDataPointers() {
     granData->previous_contactType = previous_contactType.data();
     granData->contactMapping = contactMapping.data();
     granData->familyMasks = familyMaskMatrix.data();
+    granData->familyExtraMarginSize = familyExtraMarginSize.data();
 
     // for kT, those state vectors are fed by dT, so each has a buffer
     // granData->voxelID_buffer = voxelID_buffer.data();
@@ -824,6 +825,10 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
         misc_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMMiscKernels", JitHelper::KERNEL_DIR / "DEMMiscKernels.cu", Subs, DEME_JITIFY_OPTIONS)));
     }
+}
+
+void DEMKinematicThread::initAllocation() {
+    DEME_TRACKED_RESIZE_DEBUGPRINT(familyExtraMarginSize, NUM_AVAL_FAMILIES, "familyExtraMarginSize", 0);
 }
 
 void DEMKinematicThread::deallocateEverything() {}

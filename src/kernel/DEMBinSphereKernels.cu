@@ -46,12 +46,12 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                 const float myOriQz = granData->oriQz[myOwnerID];
                 applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, myOriQw, myOriQx, myOriQy,
                                                         myOriQz);
-                // The bin number that I live in (with fractions)?
                 myPosXYZ = ownerXYZ + to_double3(myRelPos);
             }
 
             deme::binsSphereTouches_t numX, numY, numZ;
             {
+                // The bin number that I live in (with fractions)?
                 double myBinX = myPosXYZ.x / simParams->binSize;
                 double myBinY = myPosXYZ.y / simParams->binSize;
                 double myBinZ = myPosXYZ.z / simParams->binSize;
@@ -59,11 +59,14 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                 double myRadiusSpan = myRadius / simParams->binSize;
                 // printf("myRadius: %f\n", myRadiusSpan);
                 // Now, figure out how many bins I touch in each direction
-                numX = (unsigned int)(myBinX + myRadiusSpan) -
+                numX = ((myBinX + myRadiusSpan < (double)simParams->nbX) ? (unsigned int)(myBinX + myRadiusSpan)
+                                                                         : (unsigned int)simParams->nbX - 1) -
                        (unsigned int)((myBinX - myRadiusSpan > 0.0) ? myBinX - myRadiusSpan : 0.0) + 1;
-                numY = (unsigned int)(myBinY + myRadiusSpan) -
+                numY = ((myBinY + myRadiusSpan < (double)simParams->nbY) ? (unsigned int)(myBinY + myRadiusSpan)
+                                                                         : (unsigned int)simParams->nbY - 1) -
                        (unsigned int)((myBinY - myRadiusSpan > 0.0) ? myBinY - myRadiusSpan : 0.0) + 1;
-                numZ = (unsigned int)(myBinZ + myRadiusSpan) -
+                numZ = ((myBinZ + myRadiusSpan < (double)simParams->nbZ) ? (unsigned int)(myBinZ + myRadiusSpan)
+                                                                         : (unsigned int)simParams->nbZ - 1) -
                        (unsigned int)((myBinZ - myRadiusSpan > 0.0) ? myBinZ - myRadiusSpan : 0.0) + 1;
                 //// TODO: Add an error message if numX * numY * numZ > MAX(binsSphereTouches_t)
             }
@@ -161,10 +164,10 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
                 const float myOriQz = granData->oriQz[myOwnerID];
                 applyOriQToVector3<float, deme::oriQ_t>(myRelPos.x, myRelPos.y, myRelPos.z, myOriQw, myOriQx, myOriQy,
                                                         myOriQz);
-                // The bin number that I live in (with fractions)?
                 myPosXYZ = ownerXYZ + to_double3(myRelPos);
             }
 
+            // The bin number that I live in (with fractions)?
             double myBinX = myPosXYZ.x / simParams->binSize;
             double myBinY = myPosXYZ.y / simParams->binSize;
             double myBinZ = myPosXYZ.z / simParams->binSize;
@@ -173,15 +176,16 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
             // Now, write the IDs of those bins that I touch, back to the global memory
             deme::binID_t thisBinID;
             for (deme::binID_t k = (deme::binID_t)((myBinZ - myRadiusSpan > 0.0) ? myBinZ - myRadiusSpan : 0.0);
-                 k <= (deme::binID_t)(myBinZ + myRadiusSpan); k++) {
+                 (k <= (deme::binID_t)(myBinZ + myRadiusSpan)) && (k < simParams->nbZ); k++) {
                 for (deme::binID_t j = (deme::binID_t)((myBinY - myRadiusSpan > 0.0) ? myBinY - myRadiusSpan : 0.0);
-                     j <= (deme::binID_t)(myBinY + myRadiusSpan); j++) {
+                     (j <= (deme::binID_t)(myBinY + myRadiusSpan)) && (j < simParams->nbY); j++) {
                     for (deme::binID_t i = (deme::binID_t)((myBinX - myRadiusSpan > 0.0) ? myBinX - myRadiusSpan : 0.0);
-                         i <= (deme::binID_t)(myBinX + myRadiusSpan); i++) {
+                         (i <= (deme::binID_t)(myBinX + myRadiusSpan)) && (i < simParams->nbX); i++) {
                         if (myReportOffset >= myReportOffset_end) {
                             continue;  // No stepping on the next one's domain
                         }
-                        thisBinID = binIDFrom3Indices<deme::binID_t>(i, j, k, simParams->nbX, simParams->nbY);
+                        thisBinID =
+                            binIDFrom3Indices<deme::binID_t>(i, j, k, simParams->nbX, simParams->nbY, simParams->nbZ);
                         binIDsEachSphereTouches[myReportOffset] = thisBinID;
                         sphereIDsEachBinTouches[myReportOffset] = sphereID;
                         myReportOffset++;

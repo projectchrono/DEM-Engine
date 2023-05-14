@@ -32,6 +32,7 @@ SET(DEMOS
 		DEMdemo_WheelDP_Slip_ind
 		DEMdemo_WheelDP_SlopeSlip_Moon
 		DEMdemo_WheelDP_SlopeSlip_Earth
+		DEMdemo_WheelDPSimplified
 		DEMdemo_WheelSlopeSlip
 		DEMdemo_Meshed_WheelDP_SlopeSlip_Moon
 		DEMdemo_Meshed_WheelDP_SlopeSlip_Earth
@@ -39,6 +40,7 @@ SET(DEMOS
 		DEMdemo_Meshed_WheelDP_SlopeSlip_Moon_AllSph
 		DEMdemo_Indentation
 		DEMdemo_Repose_GRC
+		DEMdemo_SolarSystem
 )
 
 # ------------------------------------------------------------------------------
