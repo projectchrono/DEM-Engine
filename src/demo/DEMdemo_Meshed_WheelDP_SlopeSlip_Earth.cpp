@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
 
     // `World'
     float G_mag = 9.81;
-    float step_size = 2.5e-6;
+    float step_size = 5e-6;
     double world_size_y = 0.52;
     double world_size_x = 4;  // 2.04;
     double world_size_z = 4.0;
@@ -200,7 +200,7 @@ int main(int argc, char* argv[]) {
         DEMSim.SetExpandSafetyAdder(.5);
         DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1);
         DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(5);
-        DEMSim.SetErrorOutVelocity(50.);
+        DEMSim.SetErrorOutVelocity(100.);
         DEMSim.Initialize();
 
         // Put the wheel in place, then let the wheel sink in initially
@@ -231,7 +231,6 @@ int main(int argc, char* argv[]) {
                 sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), cur_test);
                 DEMSim.WriteSphereFile(std::string(filename));
                 DEMSim.WriteMeshFile(std::string(meshname));
-                std::cout << "=================================" << std::endl;
             }
 
             std::cout << "Test num: " << cur_test << std::endl;
