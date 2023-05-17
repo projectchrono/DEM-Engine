@@ -95,9 +95,9 @@ const std::unordered_map<contact_t, std::string> contact_type_out_name_map = {
 
 // Possible force model ingredients. This map is used to ensure we don't double-add them.
 const std::unordered_map<std::string, bool> force_kernel_ingredient_stats = {
-    {"ts", false},      {"time", false},    {"AOwnerFamily", true}, {"BOwnerFamily", true},
-    {"ALinVel", false}, {"BLinVel", false}, {"ARotVel", false},     {"BRotVel", false},
-    {"AOwner", false},  {"BOwner", false},  {"AOwnerMOI", false},   {"BOwnerMOI", false}};
+    {"ts", false},        {"time", false},      {"AOwnerFamily", true}, {"BOwnerFamily", true}, {"ALinVel", false},
+    {"BLinVel", false},   {"ARotVel", false},   {"BRotVel", false},     {"AOwner", false},      {"BOwner", false},
+    {"AOwnerMOI", false}, {"BOwnerMOI", false}, {"AGeo", false},        {"BGeo", false}};
 
 // Structs defined here will be used by some host classes in DEM.
 // NOTE: Data structs here need to be those complex ones (such as needing to include ManagedAllocator.hpp), which may
@@ -697,6 +697,8 @@ class DEMClumpBatch {
     std::unordered_map<std::string, std::vector<float>> contact_wildcards;
     // Initial owner wildcard that this batch of clumps should have
     std::unordered_map<std::string, std::vector<float>> owner_wildcards;
+    // Initial geometry wildcard that this batch of clumps should have
+    std::unordered_map<std::string, std::vector<float>> geometry_wildcards;
     // Its offset when this obj got loaded into the API-level user raw-input array
     size_t load_order;
     DEMClumpBatch(size_t num) : nClumps(num) {
@@ -805,6 +807,30 @@ class DEMClumpBatch {
     }
     void AddOwnerWildcard(const std::string& name, float val) {
         AddOwnerWildcard(name, std::vector<float>(nClumps, val));
+    }
+
+    void SetGeometryWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
+        if (wildcards.begin()->second.size() != nClumps) {
+            std::stringstream ss;
+            ss << "Input owner wildcard arrays in a SetGeometryWildcards call must all have the same size as the "
+                  "number of clumps in this batch.\nHere, the input array has length "
+               << wildcards.begin()->second.size() << " but this batch has " << nClumps << " clumps." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        geometry_wildcards = wildcards;
+    }
+    void AddGeometryWildcard(const std::string& name, const std::vector<float>& vals) {
+        if (vals.size() != nClumps) {
+            std::stringstream ss;
+            ss << "Input owner wildcard array in a AddGeometryWildcard call must have the same size as the number of "
+                  "clumps in this batch.\nHere, the input array has length "
+               << vals.size() << " but this batch has " << nClumps << " clumps." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        geometry_wildcards[name] = vals;
+    }
+    void AddGeometryWildcard(const std::string& name, float val) {
+        AddGeometryWildcard(name, std::vector<float>(nClumps, val));
     }
 
     size_t GetNumContacts() const { return nExistContacts; }

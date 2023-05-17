@@ -146,9 +146,10 @@ enum OUTPUT_CONTENT {
     FAMILY = 128,
     MAT = 256,
     OWNER_WILDCARD = 512,
+    GEO_WILDCARD = 1024,
     // How much this clump expanded in size via ChangeClumpSizes, compared to its `vanilla' template. Can be useful if
     // the user imposed some fine-grain clump size control.
-    EXP_FACTOR = 1024
+    EXP_FACTOR = 2048
 };
 // Output particles as individual (component) spheres, or as owner clumps (clump CoMs for location, as an example)?
 enum class SPATIAL_DIR { X, Y, Z, NONE };

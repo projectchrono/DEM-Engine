@@ -188,6 +188,9 @@ class DEMForceModel {
     // Quatity names that we want to associate each owner with. An array will be allocated for storing this, and it
     // lives and die with its associated owner.
     std::set<std::string> m_owner_wildcards;
+    // Quatity names that we want to associate each owner with. An array will be allocated for storing this, and it
+    // lives and die with its associated geometry representation (most typically a sphere).
+    std::set<std::string> m_geo_wildcards;
 
   public:
     friend class DEMSolver;
@@ -217,8 +220,10 @@ class DEMForceModel {
     //// TODO: Maybe allow non-0 initialization?
     void SetPerContactWildcards(const std::set<std::string>& wildcards);
     /// Set the names for the extra quantities that will be associated with each owner. For example, you can use this to
-    /// associate electric charge to each particle. Only float is supported.
+    /// associate a cohesion parameter to each particle. Only float is supported.
     void SetPerOwnerWildcards(const std::set<std::string>& wildcards);
+    /// Set the names for the extra quantities that will be associated with each geometry. For example, you can use this to associate certain electric charges to each particle's each component which represents a distribution of the charges. Only float is supported.
+    void SetPerGeometryWildcards(const std::set<std::string>& wildcards);
 };
 
 }  // END namespace deme

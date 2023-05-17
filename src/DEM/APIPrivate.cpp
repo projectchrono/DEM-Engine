@@ -874,6 +874,9 @@ void DEMSolver::transferSolverParams() {
     if (m_is_out_owner_wildcards) {
         output_level = output_level | OUTPUT_CONTENT::OWNER_WILDCARD;
     }
+    if (m_is_out_geo_wildcards) {
+        output_level = output_level | OUTPUT_CONTENT::GEO_WILDCARD;
+    }
     dT->solverFlags.outputFlags = output_level;
     output_level = m_cnt_out_content;
     if (m_is_out_cnt_wildcards) {
@@ -977,20 +980,25 @@ void DEMSolver::transferSimParams() {
     // Compute the number of wildcards in our force model
     unsigned int nContactWildcards = m_force_model->m_contact_wildcards.size();
     unsigned int nOwnerWildcards = m_force_model->m_owner_wildcards.size();
-    if (nContactWildcards > DEME_MAX_WILDCARD_NUM || nOwnerWildcards > DEME_MAX_WILDCARD_NUM) {
+    unsigned int nGeoWildcards = m_force_model->m_geo_wildcards.size();
+    if (nContactWildcards > DEME_MAX_WILDCARD_NUM || nOwnerWildcards > DEME_MAX_WILDCARD_NUM ||
+        nGeoWildcards > DEME_MAX_WILDCARD_NUM) {
         DEME_ERROR(
-            "You defined too many contact or owner wildcards! Currently the max amount is %u.\nYou can change constant "
-            "DEME_MAX_WILDCARD_NUM and re-compile, if you indeed would like more wildcards.",
+            "You defined too many contact/owner/geometry wildcards! Currently the max amount is %u for each of "
+            "them.\nYou can change constant DEME_MAX_WILDCARD_NUM and re-compile, if you indeed would like more "
+            "wildcards.",
             DEME_MAX_WILDCARD_NUM);
     }
     DEME_DEBUG_PRINTF("%u contact wildcards are in the force model.", nContactWildcards);
 
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
                      m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_expand_safety_multi,
-                     m_expand_base_vel, m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards);
+                     m_expand_base_vel, m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards,
+                     m_force_model->m_geo_wildcards);
     kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
                      m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_expand_safety_multi,
-                     m_expand_base_vel, m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards);
+                     m_expand_base_vel, m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards,
+                     m_force_model->m_geo_wildcards);
 }
 
 void DEMSolver::allocateGPUArrays() {
@@ -1166,18 +1174,19 @@ bool DEMSolver::goThroughWorkerAnomalies() {
 inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::string>& strMap) {
     // Empty ingr list
     auto added_ingredients = force_kernel_ingredient_stats;
-    std::set<std::string> added_owner_wildcards;
+    std::set<std::string> added_owner_wildcards, added_geo_wildcards;
     // Analyze this model... what does it require?
     std::string model = m_force_model->m_force_model;
     // It should have those following names in it
     const std::set<std::string> contact_wildcard_names = m_force_model->m_contact_wildcards;
     const std::set<std::string> owner_wildcard_names = m_force_model->m_owner_wildcards;
+    const std::set<std::string> geo_wildcard_names = m_force_model->m_geo_wildcards;
     m_owner_wc_num.clear();
+    m_geo_wc_num.clear();
     // If we spot that the force model requires an ingredient, we make sure that order goes to the ingredient
     // acquisition module
     std::string ingredient_definition = " ", cnt_wildcard_acquisition = " ", ingredient_acquisition_A = " ",
-                ingredient_acquisition_B = " ", owner_wildcard_write_back = " ", cnt_wildcard_write_back = " ",
-                cnt_wildcard_destroy_record = " ";
+                ingredient_acquisition_B = " ", owner_wildcard_write_back = " ", geo_wildcard_write_back = " ", cnt_wildcard_write_back = " ", cnt_wildcard_destroy_record = " ";
     scan_force_model_ingr(added_ingredients, model);
     // As our numerical method stands now, AOwnerFamily and BOwnerFamily are always needed.
     add_force_model_ingr(added_ingredients, "AOwnerFamily");
@@ -1189,9 +1198,8 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         add_force_model_ingr(added_ingredients, "AOwnerMOI");
         add_force_model_ingr(added_ingredients, "BOwnerMOI");
     }
-    // Then, owner wildcards should be added to the ingredient list too. But first we check whether a owner wildcard
-    // shares name with existing ingredients. If not, we add them to the list.
-    unsigned int owner_wc_num = 0;
+    // Then, owner/geo wildcards should be added to the ingredient list too. But first we check whether a wildcard shares name with existing ingredients. If not, we add them to the list.
+    unsigned int owner_wc_num = 0, geo_wc_num=0;
     for (const auto& owner_wildcard_name : owner_wildcard_names) {
         if (added_ingredients.find(owner_wildcard_name) != added_ingredients.end()) {
             DEME_ERROR(
@@ -1205,10 +1213,28 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         m_owner_wc_num[owner_wildcard_name] = owner_wc_num;
         owner_wc_num++;
     }
+    for (const auto& geo_wildcard_name : geo_wildcard_names) {
+        if (added_ingredients.find(geo_wildcard_name) != added_ingredients.end()) {
+            DEME_ERROR(
+                "Geometry wildcard %s shares its name with a reserved contact force model ingredient.\nPlease select a different name for this wildcard and try again.",
+                geo_wildcard_name.c_str());
+        }
+        added_geo_wildcards.insert(geo_wildcard_name);
+        // Finally, owner wildcards are subject to user modification, so it is better to keep tab of their numbering for
+        // later use.
+        m_geo_wc_num[geo_wildcard_name] = geo_wc_num;
+        geo_wc_num++;
+    }
+
     // Owner write-back needs ABOwner number
     if (owner_wildcard_names.size() > 0) {
         add_force_model_ingr(added_ingredients, "AOwner");
         add_force_model_ingr(added_ingredients, "BOwner");
+    }
+    // Geo wildcard write-back needs ABGeo number
+    if (geo_wildcard_names.size() > 0) {
+        add_force_model_ingr(added_ingredients, "AGeo");
+        add_force_model_ingr(added_ingredients, "BGeo");
     }
 
     // Equip those acquisition strategies that need to be there

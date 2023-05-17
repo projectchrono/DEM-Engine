@@ -137,7 +137,8 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                     float expand_safety_param,
                                     float expand_safety_adder,
                                     const std::set<std::string>& contact_wildcards,
-                                    const std::set<std::string>& owner_wildcards) {
+                                    const std::set<std::string>& owner_wildcards,
+                                    const std::set<std::string>& geo_wildcards) {
     simParams->nvXp2 = nvXp2;
     simParams->nvYp2 = nvYp2;
     simParams->nvZp2 = nvZp2;
@@ -1708,7 +1709,7 @@ inline void DEMDynamicThread::migratePersistentContacts() {
 }
 
 inline void DEMDynamicThread::calculateForces() {
-    // reset force (acceleration) arrays for this time step and apply gravity
+    // Reset force (acceleration) arrays for this time step 
     size_t nContactPairs = *stateOfSolver_resources.pNumContacts;
     size_t threads_needed_for_prep =
         (simParams->nOwnerBodies > nContactPairs) ? simParams->nOwnerBodies : nContactPairs;
@@ -1725,7 +1726,7 @@ inline void DEMDynamicThread::calculateForces() {
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 
-    // TODO: is there a better way??? Like memset?
+    //// TODO: is there a better way??? Like memset?
     // DEME_GPU_CALL(cudaMemset(granData->contactForces, zeros, nContactPairs * sizeof(float3)));
     // DEME_GPU_CALL(cudaMemset(granData->alphaX, 0, simParams->nOwnerBodies * sizeof(float)));
     // DEME_GPU_CALL(cudaMemset(granData->alphaY, 0, simParams->nOwnerBodies * sizeof(float)));

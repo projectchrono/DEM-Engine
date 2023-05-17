@@ -462,7 +462,8 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
                                       float expand_safety_param,
                                       float expand_safety_adder,
                                       const std::set<std::string>& contact_wildcards,
-                                      const std::set<std::string>& owner_wildcards) {
+                                      const std::set<std::string>& owner_wildcards,
+                                      const std::set<std::string>& geo_wildcards) {
     simParams->nvXp2 = nvXp2;
     simParams->nvYp2 = nvYp2;
     simParams->nvZp2 = nvZp2;

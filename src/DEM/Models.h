@@ -328,6 +328,19 @@ inline void equip_owner_wildcards(std::string& definition,
     }
 }
 
+// Sweep through all ingredients...
+inline void equip_geo_wildcards(std::string& definition,
+                                std::string& acquisition_A,
+                                std::string& acquisition_B,
+                                std::string& writeback,
+                                const std::set<std::string>& added_ingredients) {
+    unsigned int i = 0;
+    for (const auto& name : added_ingredients) {
+        definition += "float* " + name + " = granData->geoWildcards[" + std::to_string(i) + "];\n";
+        i++;
+    }
+}
+
 // Massage contact wildcards (by that I mean those contact history arrays)
 inline void equip_contact_wildcards(std::string& acquisition,
                                     std::string& write_back,

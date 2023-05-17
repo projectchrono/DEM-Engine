@@ -425,4 +425,15 @@ void DEMForceModel::SetPerOwnerWildcards(const std::set<std::string>& wildcards)
     m_owner_wildcards = wildcards;
 }
 
+void DEMForceModel::SetPerGeometryWildcards(const std::set<std::string>& wildcards) {
+    for (const auto& a_str : wildcards) {
+        if (match_pattern(a_str, " ")) {
+            std::stringstream ss;
+            ss << "Geometry wildcard " << a_str << " is not valid: no spaces allowed in its name." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+    }
+    m_geo_wildcards = wildcards;
+}
+
 }  // END namespace deme

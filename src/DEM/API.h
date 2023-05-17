@@ -781,6 +781,8 @@ class DEMSolver {
     void EnableOwnerWildcardOutput(bool enable = true) { m_is_out_owner_wildcards = enable; }
     /// Enable/disable outputting contact wildcard values to the contact file.
     void EnableContactWildcardOutput(bool enable = true) { m_is_out_cnt_wildcards = enable; }
+    /// Enable/disable outputting geometry wildcard values to the contact file.
+    void EnableGeometryWildcardOutput(bool enable = true) { m_is_out_geo_wildcards = enable; }
 
     /// Let dT do this call and return the reduce value of the inspected quantity
     float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
@@ -831,6 +833,7 @@ class DEMSolver {
     // If the solver should output wildcards to file
     bool m_is_out_owner_wildcards = false;
     bool m_is_out_cnt_wildcards = false;
+    bool m_is_out_geo_wildcards = false;
 
     // User-instructed simulation `world' size. Note it is an approximate of the true size and we will generate a world
     // not smaller than this. This is useful if the user want to automatically add BCs enclosing this user-defined
@@ -1061,6 +1064,8 @@ class DEMSolver {
 
     // A map that records the numbering for user-defined owner wildcards
     std::unordered_map<std::string, unsigned int> m_owner_wc_num;
+    // A map that records the numbering for user-defined geometry wildcards
+    std::unordered_map<std::string, unsigned int> m_geo_wc_num;
 
     ////////////////////////////////////////////////////////////////////////////////
     // Cached user's direct (raw) inputs concerning the actual physics objects
