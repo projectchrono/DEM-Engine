@@ -16,6 +16,14 @@
 #include <random>
 #include <cmath>
 
+// =============================================================================
+// In GRCPrep demo series, we try to prepare a sample of the GRC simulant, which
+// are supposed to be used for extraterrestrial rover mobility simulations. It is
+// made of particles of various sizes and shapes following a certain distribution.
+// In Part1, it creates several batches of clumps and let them settle at the bottom
+// of the domain.
+// =============================================================================
+
 using namespace deme;
 using namespace std::filesystem;
 
@@ -60,7 +68,7 @@ int main() {
     std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
     std::vector<double> volume = {2.1670011, 2.1670011, 4.2520508, 4.2520508, 4.2520508, 4.2520508, 4.2520508};
     std::vector<double> scales = {0.0014, 0.00075833, 0.00044, 0.0003, 0.0002, 0.00018333, 0.00017};
-    std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 10.; });
+    std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 20.; });
     unsigned int t_num = 0;
     for (double scaling : scales) {
         auto this_template = shape_template[t_num];
@@ -103,12 +111,15 @@ int main() {
     std::discrete_distribution<int> discrete_dist(grain_perc.begin(), grain_perc.end());
 
     // Sampler to use
-    HCPSampler sampler(scales.at(0) * 2.3);
+    HCPSampler sampler(scales.at(0) * 2.2);
 
     // Make ready for simulation
-    float step_size = 1e-6;
+    float step_size = 2e-6;
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
+    // Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
+    // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
+    // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(15.);
     DEMSim.SetInitBinSize(scales.at(2));
     DEMSim.Initialize();
@@ -129,7 +140,7 @@ int main() {
     float offset_z = bottom + sample_halfheight + 0.15;
     float settle_frame_time = 0.2;
     float settle_batch_time = 1.8;
-    while (DEMSim.GetNumClumps() < 0.25e6) {
+    while (DEMSim.GetNumClumps() < 0.5e5) {
         DEMSim.ClearCache();
         float3 sample_center = make_float3(0, 0, offset_z);
         std::vector<std::shared_ptr<DEMClumpTemplate>> heap_template_in_use;

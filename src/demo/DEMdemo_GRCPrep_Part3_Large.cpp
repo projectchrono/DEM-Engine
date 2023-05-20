@@ -3,6 +3,13 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// In GRCPrep demo series, we try to prepare a sample of the GRC simulant, which
+// are supposed to be used for extraterrestrial rover mobility simulations. You
+// have to finish Part2 first, then run this one. In Part3, we concatenate several
+// patches of particles together to form a 4m * 2m granular bed.
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
@@ -35,12 +42,17 @@ int main() {
     auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9 * kg_g_conv}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.5}});
 
     // Define the simulation world
-    double world_y_size = 0.99;
-    DEMSim.InstructBoxDomainDimension(world_y_size, world_y_size, world_y_size * 2);
-    // Add 5 bounding planes around the simulation world, and leave the top open
-    DEMSim.InstructBoxDomainBoundingBC("all", mat_type_terrain);
+    double world_y_size = 2.0;
+    double world_x_size = 4.0;
+    DEMSim.InstructBoxDomainDimension(world_x_size, world_y_size, world_y_size);
     float bottom = -0.5;
     DEMSim.AddBCPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_terrain);
+    // Side bounding planes
+    DEMSim.AddBCPlane(make_float3(0, world_y_size / 2, 0), make_float3(0, -1, 0), mat_type_terrain);
+    DEMSim.AddBCPlane(make_float3(0, -world_y_size / 2, 0), make_float3(0, 1, 0), mat_type_terrain);
+    // X-dir bounding planes
+    DEMSim.AddBCPlane(make_float3(-world_x_size / 2, 0, 0), make_float3(1, 0, 0), mat_type_terrain);
+    DEMSim.AddBCPlane(make_float3(world_x_size / 2, 0, 0), make_float3(-1, 0, 0), mat_type_terrain);
 
     // Then the ground particle template
     DEMClumpTemplate shape_template1, shape_template2;
@@ -60,7 +72,7 @@ int main() {
     std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
     std::vector<double> volume = {2.1670011, 2.1670011, 4.2520508, 4.2520508, 4.2520508, 4.2520508, 4.2520508};
     std::vector<double> scales = {0.0014, 0.00075833, 0.00044, 0.0003, 0.0002, 0.00018333, 0.00017};
-    std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 10.; });
+    std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 20.; });
     unsigned int t_num = 0;
     for (double scaling : scales) {
         auto this_template = shape_template[t_num];
@@ -87,12 +99,11 @@ int main() {
         t_num++;
     }
 
-    // Now we load part1 clump locations from a part1 output file
-    auto part1_clump_xyz = DEMSim.ReadClumpXyzFromCsv("GRC_3e5.csv");
-    auto part1_clump_quaternion = DEMSim.ReadClumpQuatFromCsv("GRC_3e5.csv");
-    // auto part1_pairs = DEMSim.ReadContactPairsFromCsv("Contact_pairs_3e5.csv");
-    // auto part1_wcs = DEMSim.ReadContactWildcardsFromCsv("Contact_pairs_3e5.csv");
-
+    // Now we load part2 clump locations from a part1 output file
+    auto part2_clump_xyz = DEMSim.ReadClumpXyzFromCsv("GRC_3e6.csv");
+    auto part2_clump_quaternion = DEMSim.ReadClumpQuatFromCsv("GRC_3e6.csv");
+    // auto part2_pairs = DEMSim.ReadContactPairsFromCsv("Contact_pairs_3e6.csv");
+    // auto part2_wcs = DEMSim.ReadContactWildcardsFromCsv("Contact_pairs_3e6.csv");
     std::vector<float3> in_xyz;
     std::vector<float4> in_quat;
     std::vector<std::shared_ptr<DEMClumpTemplate>> in_types;
@@ -101,11 +112,12 @@ int main() {
         char t_name[20];
         sprintf(t_name, "%04d", t_num);
 
-        auto this_type_xyz = part1_clump_xyz[std::string(t_name)];
-        auto this_type_quat = part1_clump_quaternion[std::string(t_name)];
+        auto this_type_xyz = part2_clump_xyz[std::string(t_name)];
+        auto this_type_quat = part2_clump_quaternion[std::string(t_name)];
 
         size_t n_clump_this_type = this_type_xyz.size();
-        // Prepare clump type identification vector for loading into the system
+        // Prepare clump type identification vector for loading into the system (don't forget type 0 in
+        // ground_particle_templates is the template for rover wheel)
         std::vector<std::shared_ptr<DEMClumpTemplate>> this_type(n_clump_this_type,
                                                                  ground_particle_templates.at(t_num));
 
@@ -117,67 +129,52 @@ int main() {
         // Our template names are 0000, 0001 etc.
         t_num++;
     }
-    // Finally, load them into the system
+    // Remove some elements maybe? I feel this making the surface flatter
+    // std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
+    // for (size_t i = 0; i < in_xyz.size(); i++) {
+    //     if (in_xyz.at(i).z > -0.44)
+    //         elem_to_remove.at(i) = 1;
+    // }
+    // in_xyz.erase(
+    //     std::remove_if(in_xyz.begin(), in_xyz.end(),
+    //                    [&elem_to_remove, &in_xyz](const float3& i) { return elem_to_remove.at(&i - in_xyz.data());
+    //                    }),
+    //     in_xyz.end());
+    // in_quat.erase(
+    //     std::remove_if(in_quat.begin(), in_quat.end(),
+    //                    [&elem_to_remove, &in_quat](const float4& i) { return elem_to_remove.at(&i - in_quat.data());
+    //                    }),
+    //     in_quat.end());
+    // in_types.erase(
+    //     std::remove_if(in_types.begin(), in_types.end(),
+    //                    [&elem_to_remove, &in_types](const auto& i) { return elem_to_remove.at(&i - in_types.data());
+    //                    }),
+    //     in_types.end());
+
+    // Finally, load the info into this batch
     DEMClumpBatch base_batch(in_xyz.size());
     base_batch.SetTypes(in_types);
     base_batch.SetPos(in_xyz);
     base_batch.SetOriQ(in_quat);
-    // base_batch.SetExistingContacts(part1_pairs);
-    // base_batch.SetExistingContactWildcards(part1_wcs);
-    base_batch.SetFamily(0);
-    DEMSim.AddClumps(base_batch);
+    // base_batch.SetExistingContacts(part2_pairs);
+    // base_batch.SetExistingContactWildcards(part2_wcs);
 
-    // I also would like an `inverse batch', which is a batch of clumps that is the base batch flipped around
-    DEMClumpBatch inv_batch = base_batch;
-    std::vector<float3> inv_xyz = in_xyz;
-    std::vector<float4> inv_quat = in_quat;
-    float3 flip_center = make_float3(0, 0, bottom);
-    float3 flip_axis = make_float3(1, 0, 0);
-    std::for_each(inv_xyz.begin(), inv_xyz.end(), [flip_center, flip_axis](float3& xyz) {
-        xyz = flip_center + Rodrigues(xyz - flip_center, flip_axis, 3.14159);
-    });
-    std::for_each(inv_quat.begin(), inv_quat.end(), [flip_axis](float4& Q) { Q = RotateQuat(Q, flip_axis, 3.14159); });
-    // inv_batch.SetPos(inv_xyz);
-    inv_batch.SetOriQ(inv_quat);
-
-    // Based on the `base_batch', we can create more batches. For example, another batch that is like copy-paste the
-    // existing batch, then shift up for a small distance.
-    float shift_dist = 0.12;
-    // First put the inv batch above the base batch
-    std::for_each(inv_xyz.begin(), inv_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
-    inv_batch.SetPos(inv_xyz);
-    DEMSim.AddClumps(inv_batch);
-
-    {
-        shift_dist = 0.12;
-        DEMClumpBatch another_batch = base_batch;
-        std::for_each(in_xyz.begin(), in_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
-        another_batch.SetPos(in_xyz);
-        DEMSim.AddClumps(another_batch);
-        DEMClumpBatch another_inv_batch = inv_batch;
-        std::for_each(inv_xyz.begin(), inv_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
-        another_inv_batch.SetPos(inv_xyz);
-        DEMSim.AddClumps(another_inv_batch);
+    // Based on the `base_batch', we can create more batches
+    std::vector<float> x_shift_dist = {-1.5, -0.5, 0.5, 1.5};
+    std::vector<float> y_shift_dist = {-0.5, 0.5};
+    // Add some patches of such graular bed
+    for (float x_shift : x_shift_dist) {
+        for (float y_shift : y_shift_dist) {
+            DEMClumpBatch another_batch = base_batch;
+            std::vector<float3> my_xyz = in_xyz;
+            std::for_each(my_xyz.begin(), my_xyz.end(), [x_shift, y_shift](float3& xyz) {
+                xyz.x += x_shift;
+                xyz.y += y_shift;
+            });
+            another_batch.SetPos(my_xyz);
+            DEMSim.AddClumps(another_batch);
+        }
     }
-    // {
-    //     DEMClumpBatch another_batch = base_batch;
-    //     std::for_each(in_xyz.begin(), in_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
-    //     another_batch.SetPos(in_xyz);
-    //     DEMSim.AddClumps(another_batch);
-    //     DEMClumpBatch another_inv_batch = inv_batch;
-    //     std::for_each(inv_xyz.begin(), inv_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
-    //     another_inv_batch.SetPos(inv_xyz);
-    //     DEMSim.AddClumps(another_inv_batch);
-    // }
-
-    // Some inspectors and compressors
-    // auto total_volume_finder = DEMSim.CreateInspector("clump_volume", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) &&
-    // (Z <= -0.44);");
-    auto total_mass_finder =
-        DEMSim.CreateInspector("clump_mass", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) && (Z <= -0.44);");
-    float total_volume = 0.96 * 0.96 * 0.06;
-    auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
-    auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
 
     // Now add a plane to compress the `road'
     auto compressor = DEMSim.AddExternalObject();
@@ -187,48 +184,50 @@ int main() {
     DEMSim.SetFamilyFixed(1);
     auto compressor_tracker = DEMSim.Track(compressor);
 
+    // And a z position inspector
+    auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
+    // Keep tab of the max velocity in simulation
+    auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
+    // Final mass inspection tool
+    // auto total_volume_finder = DEMSim.CreateInspector("clump_volume", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) &&
+    // (Z <= -0.44);");
+    auto total_mass_finder =
+        DEMSim.CreateInspector("clump_mass", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) && (Z <= -0.44);");
+    float total_volume = 0.96 * 0.96 * 0.06;
+
     // Make ready for simulation
-    float step_size = 2e-6;
+    double step_size =  4e-6;
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
-    DEMSim.SetMaxVelocity(35.);
-    DEMSim.SetInitBinSize(scales.at(2));
+    DEMSim.SetMaxVelocity(15.);
+    DEMSim.SetExpandSafetyMultiplier(1.1);
+    DEMSim.SetInitBinSize(scales.at(1));
     DEMSim.Initialize();
 
     unsigned int fps = 20;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_GRCIter2_Prep_Part2";
+    out_dir += "/DemoOutput_GRCIter2_Prep_Part3";
     create_directory(out_dir);
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
 
-    float settle_frame_time = 0.05;
-    float settle_batch_time = 1.0;
+    // Settle a bit
+    DEMSim.DoDynamicsThenSync(0.3);
+    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.UpdateStepSize();
+
+    // Now compress it
+    DEMSim.EnableContactBetweenFamilies(0, 1);
+    double compress_time = 0.2;
 
     float matter_mass = total_mass_finder->GetValue();
     std::cout << "Initial bulk density " << matter_mass / total_volume << std::endl;
 
-    for (float t = 0; t < settle_batch_time; t += settle_frame_time) {
-        std::cout << "Frame: " << currframe << std::endl;
-        char filename[200];
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-        DEMSim.WriteSphereFile(std::string(filename));
-        DEMSim.DoDynamicsThenSync(settle_frame_time);
-        DEMSim.ShowThreadCollaborationStats();
-    }
-
-    matter_mass = total_mass_finder->GetValue();
-    std::cout << "Bulk density after settling " << matter_mass / total_volume << std::endl;
-
-    // Now compress it
-    DEMSim.EnableContactBetweenFamilies(0, 1);
-    double compress_time = 0.3;
     double now_z = max_z_finder->GetValue();
-    std::cout << "Max Z before compression " << now_z << std::endl;
     compressor_tracker->SetPos(make_float3(0, 0, now_z));
-    double compressor_final_dist = (now_z > -0.37) ? now_z - (-0.37) : 0.0;
+    double compressor_final_dist = (now_z > -0.33) ? now_z - (-0.33) : 0.0;
     double compressor_v = compressor_final_dist / compress_time;
     for (double t = 0; t < compress_time; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
@@ -236,6 +235,8 @@ int main() {
             std::cout << "Highest point is at " << now_z << std::endl;
             matter_mass = total_mass_finder->GetValue();
             std::cout << "Bulk density in compression " << matter_mass / total_volume << std::endl;
+            float max_v = max_v_finder->GetValue();
+            std::cout << "Highest velocity is " << max_v << std::endl;
             DEMSim.ShowThreadCollaborationStats();
             char filename[200];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
@@ -252,6 +253,8 @@ int main() {
             std::cout << "Highest point is at " << now_z << std::endl;
             matter_mass = total_mass_finder->GetValue();
             std::cout << "Bulk density in compression " << matter_mass / total_volume << std::endl;
+            float max_v = max_v_finder->GetValue();
+            std::cout << "Highest velocity is " << max_v << std::endl;
             DEMSim.ShowThreadCollaborationStats();
             char filename[200];
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
@@ -264,21 +267,20 @@ int main() {
 
     DEMSim.DoDynamicsThenSync(0);
     DEMSim.DisableContactBetweenFamilies(0, 1);
-    DEMSim.DoDynamicsThenSync(0.3);
+    DEMSim.DoDynamicsThenSync(0.2);
     matter_mass = total_mass_finder->GetValue();
     std::cout << "Bulk density after settling " << matter_mass / total_volume << std::endl;
 
-    // Final write
-    char cp2_filename[200];
-    sprintf(cp2_filename, "%s/GRC_3e6.csv", out_dir.c_str());
-    DEMSim.WriteClumpFile(std::string(cp2_filename));
+    char cp_filename[200];
+    sprintf(cp_filename, "%s/GRC_20e6.csv", out_dir.c_str());
+    DEMSim.WriteClumpFile(std::string(cp_filename));
 
     DEMSim.ClearThreadCollaborationStats();
 
     char cnt_filename[200];
-    sprintf(cnt_filename, "%s/Contact_pairs_3e6.csv", out_dir.c_str());
+    sprintf(cnt_filename, "%s/Contact_pairs.csv", out_dir.c_str());
     DEMSim.WriteContactFile(std::string(cnt_filename));
 
-    std::cout << "DEMdemo_GRCPrep_Part2 exiting..." << std::endl;
+    std::cout << "DEMdemo_GRCPrep_Part3 exiting..." << std::endl;
     return 0;
 }

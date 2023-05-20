@@ -3,6 +3,13 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+// =============================================================================
+// In GRCPrep demo series, we try to prepare a sample of the GRC simulant, which
+// are supposed to be used for extraterrestrial rover mobility simulations. You
+// have to finish Part1 first, then run this one. In Part2, we copy-paste particles
+// generated and settled in Part1 and form a thicker bed.
+// =============================================================================
+
 #include <core/ApiVersion.h>
 #include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
@@ -60,7 +67,7 @@ int main() {
     std::vector<std::shared_ptr<DEMClumpTemplate>> ground_particle_templates;
     std::vector<double> volume = {2.1670011, 2.1670011, 4.2520508, 4.2520508, 4.2520508, 4.2520508, 4.2520508};
     std::vector<double> scales = {0.0014, 0.00075833, 0.00044, 0.0003, 0.0002, 0.00018333, 0.00017};
-    std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 10.; });
+    std::for_each(scales.begin(), scales.end(), [](double& r) { r *= 20.; });
     unsigned int t_num = 0;
     for (double scaling : scales) {
         auto this_template = shape_template[t_num];
@@ -142,7 +149,7 @@ int main() {
 
     // Based on the `base_batch', we can create more batches. For example, another batch that is like copy-paste the
     // existing batch, then shift up for a small distance.
-    float shift_dist = 0.12;
+    float shift_dist = 0.2;
     // First put the inv batch above the base batch
     std::for_each(inv_xyz.begin(), inv_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
     inv_batch.SetPos(inv_xyz);
@@ -150,25 +157,15 @@ int main() {
 
     {
         shift_dist = 0.12;
-        DEMClumpBatch another_batch = base_batch;
-        std::for_each(in_xyz.begin(), in_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
-        another_batch.SetPos(in_xyz);
-        DEMSim.AddClumps(another_batch);
+        // DEMClumpBatch another_batch = base_batch;
+        // std::for_each(in_xyz.begin(), in_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
+        // another_batch.SetPos(in_xyz);
+        // DEMSim.AddClumps(another_batch);
         DEMClumpBatch another_inv_batch = inv_batch;
         std::for_each(inv_xyz.begin(), inv_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
         another_inv_batch.SetPos(inv_xyz);
         DEMSim.AddClumps(another_inv_batch);
     }
-    // {
-    //     DEMClumpBatch another_batch = base_batch;
-    //     std::for_each(in_xyz.begin(), in_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
-    //     another_batch.SetPos(in_xyz);
-    //     DEMSim.AddClumps(another_batch);
-    //     DEMClumpBatch another_inv_batch = inv_batch;
-    //     std::for_each(inv_xyz.begin(), inv_xyz.end(), [shift_dist](float3& xyz) { xyz.z += shift_dist; });
-    //     another_inv_batch.SetPos(inv_xyz);
-    //     DEMSim.AddClumps(another_inv_batch);
-    // }
 
     // Some inspectors and compressors
     // auto total_volume_finder = DEMSim.CreateInspector("clump_volume", "return (abs(X) <= 0.48) && (abs(Y) <= 0.48) &&
@@ -188,7 +185,7 @@ int main() {
     auto compressor_tracker = DEMSim.Track(compressor);
 
     // Make ready for simulation
-    float step_size = 2e-6;
+    float step_size = 4e-6;
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.SetMaxVelocity(35.);

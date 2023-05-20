@@ -70,7 +70,7 @@ int main() {
         auto bot_wall_tracker = DEMSim.Track(bot_wall);
 
         auto wheel =
-            DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/rover_wheels/Moon_rover_wheel.obj"), mat_type_wheel);
+            DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/rover_wheels/viper_wheel_right.obj"), mat_type_wheel);
         wheel->SetMass(wheel_mass);
         wheel->SetMOI(make_float3(wheel_IXX, wheel_IYY, wheel_IXX));
         // Give the wheel a family number so we can potentially add prescription
