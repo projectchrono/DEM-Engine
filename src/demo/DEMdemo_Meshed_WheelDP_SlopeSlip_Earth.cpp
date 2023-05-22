@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
 
     // `World'
     float G_mag = 9.81;
-    float step_size = 5e-6;
+    float step_size = 2.5e-6;
     double world_size_y = 0.52;
     double world_size_x = 4;  // 2.04;
     double world_size_z = 4.0;
@@ -204,7 +204,7 @@ int main(int argc, char* argv[]) {
         DEMSim.Initialize();
 
         // Put the wheel in place, then let the wheel sink in initially
-        float corr = 0;  // 1.0;
+        float corr = 1.0; //0
         float init_x = -1.0 + corr;
         if (Slope_deg < 21) {
             init_x = -1.6 + corr;
