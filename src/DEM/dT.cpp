@@ -658,14 +658,14 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
 
             // Make ready for the next batch, update contact history offset
             n_processed_sp_comp = k;
+            nTotalClumpsThisCall = i;
         }
 
         DEME_DEBUG_PRINTF("Total number of transferred clumps this time: %zu", i);
         DEME_DEBUG_PRINTF("Total number of existing owners in simulation: %zu", nExistOwners);
         DEME_DEBUG_PRINTF("Total number of owners in simulation after this init call: %zu",
                           (size_t)simParams->nOwnerBodies);
-        nTotalClumpsThisCall = i;
-
+        
         // If user loaded contact pairs, we need to inform kT on the first time step...
         if (cnt_arr_offset > *stateOfSolver_resources.pNumContacts) {
             *stateOfSolver_resources.pNumContacts = cnt_arr_offset;

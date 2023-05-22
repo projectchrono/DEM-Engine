@@ -1186,7 +1186,8 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     // If we spot that the force model requires an ingredient, we make sure that order goes to the ingredient
     // acquisition module
     std::string ingredient_definition = " ", cnt_wildcard_acquisition = " ", ingredient_acquisition_A = " ",
-                ingredient_acquisition_B = " ", owner_wildcard_write_back = " ", geo_wildcard_write_back = " ", cnt_wildcard_write_back = " ", cnt_wildcard_destroy_record = " ";
+                ingredient_acquisition_B = " ", owner_geo_wildcard_write_back = " ", cnt_wildcard_write_back = " ", cnt_wildcard_destroy_record = " ",
+                geo_wc_acquisition_B_sph = " ", geo_wc_acquisition_B_tri = " ", geo_wc_acquisition_B_anal = " ";
     scan_force_model_ingr(added_ingredients, model);
     // As our numerical method stands now, AOwnerFamily and BOwnerFamily are always needed.
     add_force_model_ingr(added_ingredients, "AOwnerFamily");
@@ -1242,7 +1243,12 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
                                added_ingredients);
     // Then equip acquisition strategies for owner wildcards
     equip_owner_wildcards(ingredient_definition, ingredient_acquisition_A, ingredient_acquisition_B,
-                          owner_wildcard_write_back, added_owner_wildcards);
+                          owner_geo_wildcard_write_back, added_owner_wildcards);
+    // Then equip acquisition strategies for geo wildcards.
+    // geo_wc_acquisition_B_sph, geo_wc_acquisition_B_tri, geo_wc_acquisition_B_anal cannot be incorporated into ingredient_acquisition_B, since they are different for the 3 cases...
+    equip_geo_wildcards(ingredient_definition, geo_wc_acquisition_B_sph, geo_wc_acquisition_B_tri,
+                          geo_wc_acquisition_B_anal, added_geo_wildcards);
+    // Currently, owner_wildcard_write_back and geo_wildcard_write_back might be blank, since give the write-back control to the user, and they may need to use atomic operations (atomicExch or atomicAdd) to update the wildcards.
 
     // Acq strategies may have moi acq strategy in them that needs to be replaced first...
     ingredient_acquisition_A = replace_patterns(ingredient_acquisition_A, strMap);
@@ -1259,6 +1265,10 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         DEME_WARNING(
             "Owner wildcard %s is not used/set in your custom force model. Your force model will probably not produce "
             "what you expect.",
+            non_match.c_str());
+    if (!all_whole_word_match(model, geo_wildcard_names, non_match))
+        DEME_WARNING(
+            "Geometry wildcard %s is not used/set in your custom force model. Your force model will probably not produce what you expect.",
             non_match.c_str());
     if (!all_whole_word_match(model, {"force"}, non_match)) {
         DEME_WARNING(
@@ -1296,8 +1306,13 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     strMap["_forceModelIngredientDefinition_"] = ingredient_definition;
     strMap["_forceModelIngredientAcqForA_"] = ingredient_acquisition_A;
     strMap["_forceModelIngredientAcqForB_"] = ingredient_acquisition_B;
+    // Geo wildcard acquisition is contact ype-dependent.
+    strMap["_forceModelGeoWildcardAcqForSph_"] = geo_wc_acquisition_B_sph;
+    strMap["_forceModelGeoWildcardAcqForTri_"] = geo_wc_acquisition_B_tri;
+    strMap["_forceModelGeoWildcardAcqForAnal_"] = geo_wc_acquisition_B_anal;
 
-    strMap["_forceModelOwnerWildcardWrite_"] = owner_wildcard_write_back;
+    // This should be empty as of now...
+    strMap["_forceModelOwnerWildcardWrite_"] = owner_geo_wildcard_write_back;
 
     strMap["_forceModelContactWildcardAcq_"] = cnt_wildcard_acquisition;
     strMap["_forceModelContactWildcardWrite_"] = cnt_wildcard_write_back;

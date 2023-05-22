@@ -51,7 +51,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
         // curly bracket, obviously...)
         _forceModelIngredientDefinition_;
         // Take care of 2 bodies in order, bodyA first, grab location and velocity to local cache
-        // We know in this kernel, bodyA will be a sphere; bodyB can be something else
+        // We know in this kernel, bodyA will be a sphere; B can be something else
         {
             deme::bodyID_t sphereID = granData->idGeometryA[myContactID];
             deme::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
@@ -82,7 +82,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             extraMarginSize += granData->familyExtraMarginSize[AOwnerFamily];
         }
 
-        // Then bodyB, location and velocity
+        // Then B, location and velocity
         if (myContactType == deme::SPHERE_SPHERE_CONTACT) {
             deme::bodyID_t sphereID = granData->idGeometryB[myContactID];
             deme::bodyID_t myOwner = granData->ownerClumpBody[sphereID];
@@ -103,6 +103,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                 BOwnerMass = myMass;
             }
             _forceModelIngredientAcqForB_;
+            _forceModelGeoWildcardAcqForSph_;
 
             equipOwnerPosRot(granData, myOwner, myRelPos, BOwnerPos, bodyBPos, BOriQ);
 
@@ -120,16 +121,17 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             }
 
         } else if (myContactType == deme::SPHERE_MESH_CONTACT) {
-            deme::bodyID_t triB = granData->idGeometryB[myContactID];
-            deme::bodyID_t myOwner = granData->ownerMesh[triB];
+            // Geometry ID here is called sphereID, although it is not a sphere, it's more like triID. But naming it sphereID makes the acquisition process cleaner.
+            deme::bodyID_t sphereID = granData->idGeometryB[myContactID];
+            deme::bodyID_t myOwner = granData->ownerMesh[sphereID];
             //// TODO: Is this OK?
             BRadius = DEME_HUGE_FLOAT;
-            bodyBMatType = granData->triMaterialOffset[triB];
+            bodyBMatType = granData->triMaterialOffset[sphereID];
             extraMarginSize += granData->familyExtraMarginSize[BOwnerFamily];
 
-            double3 triNode1 = to_double3(granData->relPosNode1[triB]);
-            double3 triNode2 = to_double3(granData->relPosNode2[triB]);
-            double3 triNode3 = to_double3(granData->relPosNode3[triB]);
+            double3 triNode1 = to_double3(granData->relPosNode1[sphereID]);
+            double3 triNode2 = to_double3(granData->relPosNode2[sphereID]);
+            double3 triNode3 = to_double3(granData->relPosNode3[sphereID]);
 
             // Get my mass info from either jitified arrays or global memory
             // Outputs myMass
@@ -140,6 +142,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
                 BOwnerMass = myMass;
             }
             _forceModelIngredientAcqForB_;
+            _forceModelGeoWildcardAcqForTri_;
 
             // bodyBPos is for a place holder for the outcome triNode1 position
             equipOwnerPosRot(granData, myOwner, triNode1, BOwnerPos, bodyBPos, BOriQ);
@@ -166,34 +169,36 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             }
             overlapDepth = -overlapDepth;  // triangle_sphere_CD gives neg. number for overlapping cases
         } else if (myContactType > deme::SPHERE_ANALYTICAL_CONTACT) {
-            // If B is analytical entity, its owner, relative location, material info is jitified
-            deme::objID_t bodyB = granData->idGeometryB[myContactID];
-            deme::bodyID_t myOwner = objOwner[bodyB];
-            bodyBMatType = objMaterial[bodyB];
-            BOwnerMass = objMass[bodyB];
+            // Geometry ID here is called sphereID, although it is not a sphere, it's more like analyticalID. But naming it sphereID makes the acquisition process cleaner.
+            deme::objID_t sphereID = granData->idGeometryB[myContactID];
+            deme::bodyID_t myOwner = objOwner[sphereID];
+            // If B is analytical entity, its owner, relative location, material info is jitified.
+            bodyBMatType = objMaterial[sphereID];
+            BOwnerMass = objMass[sphereID];
             //// TODO: Is this OK?
             BRadius = DEME_HUGE_FLOAT;
             float3 myRelPos;
             float3 bodyBRot;
-            myRelPos.x = objRelPosX[bodyB];
-            myRelPos.y = objRelPosY[bodyB];
-            myRelPos.z = objRelPosZ[bodyB];
+            myRelPos.x = objRelPosX[sphereID];
+            myRelPos.y = objRelPosY[sphereID];
+            myRelPos.z = objRelPosZ[sphereID];
             _forceModelIngredientAcqForB_;
+            _forceModelGeoWildcardAcqForAnal_;
 
             equipOwnerPosRot(granData, myOwner, myRelPos, BOwnerPos, bodyBPos, BOriQ);
             extraMarginSize += granData->familyExtraMarginSize[BOwnerFamily];
 
             // B's orientation (such as plane normal) is rotated with its owner too
-            bodyBRot.x = objRotX[bodyB];
-            bodyBRot.y = objRotY[bodyB];
-            bodyBRot.z = objRotZ[bodyB];
+            bodyBRot.x = objRotX[sphereID];
+            bodyBRot.y = objRotY[sphereID];
+            bodyBRot.z = objRotZ[sphereID];
             applyOriQToVector3<float, deme::oriQ_t>(bodyBRot.x, bodyBRot.y, bodyBRot.z, BOriQ.w, BOriQ.x, BOriQ.y,
                                                     BOriQ.z);
 
             // Note for this test on dT side we don't enlarge entities
-            checkSphereEntityOverlap<double3, float, double>(bodyAPos, ARadius, objType[bodyB], bodyBPos, bodyBRot,
-                                                             objSize1[bodyB], objSize2[bodyB], objSize3[bodyB],
-                                                             objNormal[bodyB], 0.0, contactPnt, B2A, overlapDepth);
+            checkSphereEntityOverlap<double3, float, double>(bodyAPos, ARadius, objType[sphereID], bodyBPos, bodyBRot,
+                                                             objSize1[sphereID], objSize2[sphereID], objSize3[sphereID],
+                                                             objNormal[sphereID], 0.0, contactPnt, B2A, overlapDepth);
             // Fix myContactType if needed
             if (overlapDepth < -extraMarginSize) {
                 myContactType = deme::NOT_A_CONTACT;
