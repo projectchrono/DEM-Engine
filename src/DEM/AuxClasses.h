@@ -168,6 +168,16 @@ class DEMTracker {
     /// UpdateMesh, it adds to the existing node coordinate XYZs. The length of the argument vector must agree with the
     /// number of nodes in the tracked mesh.
     void UpdateMeshByIncrement(const std::vector<float3>& deformation);
+
+    /// @brief Set a wildcard value of the owner this tracker is tracking.
+    /// @param name Name of the wildcard.
+    /// @param wc Wildcard value.
+    /// @param offset The offset to this entites. If first entites, input 0.
+    void SetOwnerWildcardValue(const std::string& name, float wc, size_t offset = 0);
+    /// @brief Set a wildcard value of the owner this tracker is tracking.
+    /// @param name Name of the wildcard.
+    /// @param wc Wildcard values as a vector (must have same length as the number of tracked owners).
+    void SetOwnerWildcardValue(const std::string& name, const std::vector<float>& wc, size_t offset = 0);
 };
 
 class DEMForceModel {
@@ -222,7 +232,9 @@ class DEMForceModel {
     /// Set the names for the extra quantities that will be associated with each owner. For example, you can use this to
     /// associate a cohesion parameter to each particle. Only float is supported.
     void SetPerOwnerWildcards(const std::set<std::string>& wildcards);
-    /// Set the names for the extra quantities that will be associated with each geometry. For example, you can use this to associate certain electric charges to each particle's each component which represents a distribution of the charges. Only float is supported.
+    /// Set the names for the extra quantities that will be associated with each geometry. For example, you can use this
+    /// to associate certain electric charges to each particle's each component which represents a distribution of the
+    /// charges. Only float is supported.
     void SetPerGeometryWildcards(const std::set<std::string>& wildcards);
 };
 

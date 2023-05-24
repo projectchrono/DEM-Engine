@@ -613,12 +613,14 @@ void DEMSolver::preprocessClumpTemplates() {
 
 void DEMSolver::preprocessClumps() {
     nExtraContacts = 0;
-    for (const auto& a_batch : cached_input_clump_batches) {
+    for (auto& a_batch : cached_input_clump_batches) {
         nOwnerClumps += a_batch->GetNumClumps();
         nExtraContacts += a_batch->GetNumContacts();
         for (size_t i = 0; i < a_batch->GetNumClumps(); i++) {
             unsigned int nComp = a_batch->types.at(i)->nComp;
             nSpheresGM += nComp;
+            // Also keep tab for itself
+            a_batch->nSpheres += nComp;
         }
         // Family number is flattened here, only because figureOutFamilyMasks() needs it
         m_input_clump_family.insert(m_input_clump_family.end(), a_batch->families.begin(), a_batch->families.end());
@@ -1068,7 +1070,9 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
                                       size_t nClumps,
                                       size_t nSpheres,
                                       size_t nTriMesh,
-                                      size_t nFacets) {
+                                      size_t nFacets,
+                                      unsigned int nExtObj,
+                                      unsigned int nAnalGM) {
     // Pack clump templates together... that's easier to pass to dT kT
     ClumpTemplateFlatten flattened_clump_templates(m_template_clump_mass, m_template_clump_moi, m_template_sp_mat_ids,
                                                    m_template_sp_radii, m_template_sp_relPos, m_template_clump_volume);
@@ -1094,7 +1098,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // I/O and misc.
         m_no_output_families, m_tracked_objs,
         // Number of entities, old
-        nOwners, nClumps, nSpheres, nTriMesh, nFacets);
+        nOwners, nClumps, nSpheres, nTriMesh, nFacets, nExtObj, nAnalGM);
     kT->updateClumpMeshArrays(
         // Clump batchs' initial stats
         cached_input_clump_batches,
@@ -1107,7 +1111,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // Templates and misc.
         flattened_clump_templates,
         // Number of entities, old
-        nOwners, nClumps, nSpheres, nTriMesh, nFacets);
+        nOwners, nClumps, nSpheres, nTriMesh, nFacets, nExtObj, nAnalGM);
 }
 
 void DEMSolver::packDataPointers() {

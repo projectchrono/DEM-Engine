@@ -489,6 +489,7 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
 
     simParams->nContactWildcards = contact_wildcards.size();
     simParams->nOwnerWildcards = owner_wildcards.size();
+    simParams->nGeoWildcards = geo_wildcards.size();
 }
 
 void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
@@ -779,7 +780,9 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
                                                size_t nExistingClumps,
                                                size_t nExistingSpheres,
                                                size_t nExistingTriMesh,
-                                               size_t nExistingFacets) {
+                                               size_t nExistingFacets,
+                                               unsigned int nExistingObj,
+                                               unsigned int nExistingAnalGM) {
     populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, input_mesh_facet_owner,
                          input_mesh_facets, clump_templates, nExistingOwners, nExistingSpheres, nExistingFacets);
 }

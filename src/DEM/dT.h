@@ -210,11 +210,22 @@ class DEMDynamicThread {
     // std::vector<float, ManagedAllocator<float>> ownerWildcards[DEME_MAX_WILDCARD_NUM];
     // An example of such wildcard arrays is contact history: how much did the contact point move on the geometry
     // surface compared to when the contact first emerged?
+    // Geometric entities' wildcards
+    std::vector<std::vector<float, ManagedAllocator<float>>,
+                ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
+        sphereWildcards;
+    std::vector<std::vector<float, ManagedAllocator<float>>,
+                ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
+        analWildcards;
+    std::vector<std::vector<float, ManagedAllocator<float>>,
+                ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
+        triWildcards;
 
     // Storage for the names of the contact wildcards (whose order agrees with the impl-level wildcard numbering, from 1
     // to n)
     std::set<std::string> m_contact_wildcard_names;
     std::set<std::string> m_owner_wildcard_names;
+    std::set<std::string> m_geo_wildcard_names;
 
     // std::vector<float3, ManagedAllocator<float3>> contactHistory;
     // // Durations in time of persistent contact pairs
@@ -372,7 +383,7 @@ class DEMDynamicThread {
     void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite = true);
 
     /// @brief Globally modify a owner wildcard's value.
-    void setOwnerWildcardValue(unsigned int wc_num, const std::vector<float>& vals);
+    void setOwnerWildcardValue(bodyID_t ownerID, unsigned int wc_num, const std::vector<float>& vals);
     /// @brief Modify the owner wildcard values of all entities in family family_num.
     void setFamilyOwnerWildcardValue(unsigned int family_num, unsigned int wc_num, const std::vector<float>& vals);
 
@@ -410,11 +421,13 @@ class DEMDynamicThread {
 
     // Components of initManagedArrays
     void buildTrackedObjs(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
-                          const std::vector<float3>& input_ext_obj_xyz,
+                          const std::vector<unsigned int>& ext_obj_comp_num,
                           const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
                           std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs,
                           size_t nExistOwners,
-                          size_t nExistingFacets);
+                          size_t nExistSpheres,
+                          size_t nExistingFacets,
+                          unsigned int nExistingAnalGM);
     void populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                               const std::vector<float3>& input_ext_obj_xyz,
                               const std::vector<float4>& input_ext_obj_rot,
@@ -496,7 +509,9 @@ class DEMDynamicThread {
                                size_t nExistingClumps,
                                size_t nExistingSpheres,
                                size_t nExistingTriMesh,
-                               size_t nExistingFacets);
+                               size_t nExistingFacets,
+                               unsigned int nExistingObj,
+                               unsigned int nExistingAnalGM);
 
     /// Change radii and relPos info of these owners (if these owners are clumps)
     void changeOwnerSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors);

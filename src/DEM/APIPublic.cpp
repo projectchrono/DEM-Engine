@@ -673,7 +673,7 @@ void DEMSolver::AddFamilyPrescribedAngAcc(unsigned int ID,
     m_input_family_prescription.push_back(preInfo);
 }
 
-void DEMSolver::SetOwnerWildcardValue(const std::string& name, const std::vector<float>& vals) {
+void DEMSolver::SetOwnerWildcardValue(bodyID_t ownerID, const std::string& name, const std::vector<float>& vals) {
     assertSysInit("SetOwnerWildcardValue");
     if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
         DEME_ERROR(
@@ -681,7 +681,7 @@ void DEMSolver::SetOwnerWildcardValue(const std::string& name, const std::vector
             "SetPerOwnerWildcards first.",
             name.c_str());
     }
-    dT->setOwnerWildcardValue(m_owner_wc_num.at(name), vals);
+    dT->setOwnerWildcardValue(ownerID, m_owner_wc_num.at(name), vals);
 }
 
 void DEMSolver::SetFamilyClumpMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat) {
@@ -984,7 +984,7 @@ void DEMSolver::ClearCache() {
 }
 
 std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(DEMClumpBatch& input_batch) {
-    // load_order should beits position in the cache array, not nBatchClumpsLoad
+    // load_order should be its position in the cache array, not nBatchClumpsLoad
     input_batch.load_order = cached_input_clump_batches.size();
     // But we still need to record a batch loaded
     nBatchClumpsLoad++;
@@ -1406,6 +1406,8 @@ void DEMSolver::UpdateClumps() {
     size_t nSpheres_old = nSpheresGM;
     size_t nTriMesh_old = nTriMeshes;
     size_t nFacets_old = nTriGM;
+    unsigned int nAnalGM_old = nAnalGM;
+    unsigned int nExtObj_old = nExtObj;
 
     preprocessClumps();
     preprocessClumpTemplates();
@@ -1413,7 +1415,7 @@ void DEMSolver::UpdateClumps() {
     updateTotalEntityNum();
     allocateGPUArrays();
     // `Update' method needs to know the number of existing clumps and spheres (before this addition)
-    updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old);
+    updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old, nExtObj_old, nAnalGM_old);
     packDataPointers();
     ReleaseFlattenedArrays();
     // Updating clumps is very critical

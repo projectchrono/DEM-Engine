@@ -237,9 +237,10 @@ struct DEMSimParams {
     // Stepping method
     TIME_INTEGRATOR stepping = TIME_INTEGRATOR::FORWARD_EULER;
 
-    // Number of wildcards (extra property) arrays associated with contacts and owners
+    // Number of wildcards (extra property) arrays associated with contacts and owners and geometries
     unsigned int nContactWildcards;
     unsigned int nOwnerWildcards;
+    unsigned int nGeoWildcards;
 
     // The max vel at which the solver errors out
     float errOutVel = DEME_HUGE_FLOAT;

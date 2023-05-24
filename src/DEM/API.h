@@ -491,10 +491,19 @@ class DEMSolver {
     /// @brief Set the names for the extra quantities that will be associated with each owner.
     void SetOwnerWildcards(const std::set<std::string>& wildcards);
 
-    /// Globally modify a owner wildcard's values
-    void SetOwnerWildcardValue(const std::string& name, const std::vector<float>& vals);
-    void SetOwnerWildcardValue(const std::string& name, float val) {
-        SetOwnerWildcardValue(name, std::vector<float>(1, val));
+    /// @brief Set the wildcard values of some owners.
+    /// @param ownerID The ID of the starting (first) owner that needs to be modified.
+    /// @param name The name of the wildcard.
+    /// @param vals A vector of values that will be assigned to the owners starting from ownerID.
+    void SetOwnerWildcardValue(bodyID_t ownerID, const std::string& name, const std::vector<float>& vals);
+
+    /// @brief Set the wildcard values of some owners.
+    /// @param ownerID The ID of the starting (first) owner that needs to be modified.
+    /// @param name The name of the wildcard.
+    /// @param val The value to set.
+    /// @param n The number of owners starting from the first that will be modified by this call. Default is 1.
+    void SetOwnerWildcardValue(bodyID_t ownerID, const std::string& name, float val, size_t n = 1) {
+        SetOwnerWildcardValue(ownerID, name, std::vector<float>(n, val));
     }
     /// Modify the owner wildcard's values of all entities in family N
     void SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, const std::vector<float>& vals);
@@ -1284,7 +1293,13 @@ class DEMSolver {
     void resetWorkerThreads();
     /// Transfer newly loaded clumps/meshed objects to the GPU-side in mid-simulation and allocate GPU memory space for
     /// them
-    void updateClumpMeshArrays(size_t nOwners, size_t nClumps, size_t nSpheres, size_t nTriMesh, size_t nFacets);
+    void updateClumpMeshArrays(size_t nOwners,
+                               size_t nClumps,
+                               size_t nSpheres,
+                               size_t nTriMesh,
+                               size_t nFacets,
+                               unsigned int nExtObj_old,
+                               unsigned int nAnalGM_old);
     /// Add content to the flattened analytical component array.
     /// Note that analytical component is big different in that they each has a position in the jitified analytical
     /// templates, insteads of like a clump, has an extra ComponentOffset array points it to the right jitified template

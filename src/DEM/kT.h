@@ -304,7 +304,9 @@ class DEMKinematicThread {
                                size_t nExistingClumps,
                                size_t nExistingSpheres,
                                size_t nExistingTriMesh,
-                               size_t nExistingFacets);
+                               size_t nExistingFacets,
+                               unsigned int nExistingObj,
+                               unsigned int nExistingAnalGM);
 
     /// Set SimParams items
     void setSimParams(unsigned char nvXp2,

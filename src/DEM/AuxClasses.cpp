@@ -245,11 +245,11 @@ void DEMTracker::assertMesh(const std::string& name) {
     }
 }
 void DEMTracker::assertMeshFaceSize(size_t input_length, const std::string& name) {
-    if (input_length != obj->nFacets) {
+    if (input_length != obj->nGeos) {
         std::stringstream ss;
         ss << name
            << " is called with an input not the same size (number if triangles) as the original mesh!\nThe input has "
-           << input_length << " triangles while the original mesh has " << obj->nFacets << "." << std::endl;
+           << input_length << " triangles while the original mesh has " << obj->nGeos << "." << std::endl;
         throw std::runtime_error(ss.str());
     }
 }
@@ -348,13 +348,22 @@ void DEMTracker::UpdateMesh(std::shared_ptr<DEMMeshConnected>& new_mesh) {
     for (size_t i = 0; i < new_mesh->GetNumTriangles(); i++) {
         new_triangles[i] = new_mesh->GetTriangle(i);
     }
-    sys->SetTriNodeRelPos(obj->facetID, new_triangles, true);
+    sys->SetTriNodeRelPos(obj->geoID, new_triangles, true);
 }
 //// TODO: Implement it
 void DEMTracker::UpdateMeshByIncrement(const std::vector<float3>& deformation) {
     assertMesh("UpdateMeshByIncrement");
     // This method should interface sys then dT directly passing deformation to dT, and let dT interpret this
     // information based on its cached m_meshes
+}
+
+void DEMTracker::SetOwnerWildcardValue(const std::string& name, float wc, size_t offset) {
+    sys->SetOwnerWildcardValue(obj->ownerID + offset, name, wc, 1);
+}
+
+void DEMTracker::SetOwnerWildcardValue(const std::string& name, const std::vector<float>& wc, size_t offset) {
+    assertOwnerSize(wc.size(), "SetOwnerWildcardValue");
+    sys->SetOwnerWildcardValue(obj->ownerID + offset, name, wc);
 }
 
 // =============================================================================
