@@ -1181,7 +1181,6 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     std::set<std::string> added_owner_wildcards, added_geo_wildcards;
     // Analyze this model... what does it require?
     std::string model = m_force_model->m_force_model;
-    // It should have those following names in it
     const std::set<std::string> contact_wildcard_names = m_force_model->m_contact_wildcards;
     const std::set<std::string> owner_wildcard_names = m_force_model->m_owner_wildcards;
     const std::set<std::string> geo_wildcard_names = m_force_model->m_geo_wildcards;

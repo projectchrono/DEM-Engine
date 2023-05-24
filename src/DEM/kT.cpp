@@ -837,19 +837,19 @@ void DEMKinematicThread::initAllocation() {
 
 void DEMKinematicThread::deallocateEverything() {}
 
-void DEMKinematicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite) {
-    if (overwrite) {
-        for (size_t i = 0; i < triangles.size(); i++) {
-            relPosNode1[start + i] = triangles[i].p1;
-            relPosNode2[start + i] = triangles[i].p2;
-            relPosNode3[start + i] = triangles[i].p3;
-        }
-    } else {
-        for (size_t i = 0; i < triangles.size(); i++) {
-            relPosNode1[start + i] += triangles[i].p1;
-            relPosNode2[start + i] += triangles[i].p2;
-            relPosNode3[start + i] += triangles[i].p3;
-        }
+void DEMKinematicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles) {
+    for (size_t i = 0; i < triangles.size(); i++) {
+        relPosNode1[start + i] = triangles[i].p1;
+        relPosNode2[start + i] = triangles[i].p2;
+        relPosNode3[start + i] = triangles[i].p3;
+    }
+}
+
+void DEMKinematicThread::updateTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& updates) {
+    for (size_t i = 0; i < updates.size(); i++) {
+        relPosNode1[start + i] += updates[i].p1;
+        relPosNode2[start + i] += updates[i].p2;
+        relPosNode3[start + i] += updates[i].p3;
     }
 }
 

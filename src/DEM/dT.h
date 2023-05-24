@@ -378,9 +378,11 @@ class DEMDynamicThread {
     /// Set this owner's velocity
     void setOwnerVel(bodyID_t ownerID, float3 vel);
     /// Rewrite the relative positions of the flattened triangle soup, starting from `start', using triangle nodal
-    /// positions in `triangles'. If `overwrite' is true, then it is overwriting the existing nodal info; otherwise it
-    /// just adds to it.
-    void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite = true);
+    /// positions in `triangles'.
+    void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles);
+    /// Rewrite the relative positions of the flattened triangle soup, starting from `start' by the amount stipulated in
+    /// updates.
+    void updateTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& updates);
 
     /// @brief Globally modify a owner wildcard's value.
     void setOwnerWildcardValue(bodyID_t ownerID, unsigned int wc_num, const std::vector<float>& vals);
@@ -392,10 +394,26 @@ class DEMDynamicThread {
     /// @brief Set all meshes in this family to have this material.
     void setFamilyMeshMaterial(unsigned int N, unsigned int mat_id);
 
+    /// @brief Set the geometry wildcards of triangles, sarting from geoID, for the length of vals.
+    void setTriWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
+    /// @brief Set the geometry wildcards of spheres, sarting from geoID, for the length of vals.
+    void setSphWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
+    /// @brief Set the geometry wildcards of analytical components, sarting from geoID, for the length of vals.
+    void setAnalWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
+
+    /// @brief Returns the wildacard value of this owner.
+    float getOwnerWildcardValue(bodyID_t ID, unsigned int wc_num);
     /// @brief  Fill res with the wc_num wildcard value.
-    void getOwnerWildcardValue(std::vector<float>& res, unsigned int wc_num);
+    void getAllOwnerWildcardValue(std::vector<float>& res, unsigned int wc_num);
     /// @brief  Fill res with the wc_num wildcard value for entities with family number family_num.
     void getFamilyOwnerWildcardValue(std::vector<float>& res, unsigned int family_num, unsigned int wc_num);
+
+    /// @brief Fill res with the `wc_num' wildcard values, for n spheres starting from ID.
+    void getSphereWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
+    /// @brief Fill res with the `wc_num' wildcard values, for n triangles starting from ID.
+    void getTriWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
+    /// @brief Fill res with the `wc_num' wildcard values, for n analytical entities starting from ID.
+    void getAnalWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
 
     /// Let dT know that it needs a kT update, as something important may have changed, and old contact pair info is no
     /// longer valid.

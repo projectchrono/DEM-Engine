@@ -69,6 +69,11 @@ void DEMDynamicThread::packDataPointers() {
     for (unsigned int i = 0; i < simParams->nOwnerWildcards; i++) {
         granData->ownerWildcards[i] = ownerWildcards[i].data();
     }
+    for (unsigned int i = 0; i < simParams->nGeoWildcards; i++) {
+        granData->sphereWildcards[i] = sphereWildcards[i].data();
+        granData->analWildcards[i] = analWildcards[i].data();
+        granData->triWildcards[i] = triWildcards[i].data();
+    }
 
     // The offset info that indexes into the template arrays
     granData->ownerClumpBody = ownerClumpBody.data();
@@ -770,6 +775,26 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         // If got here, it is a mesh
         ownerTypes.at(i + owner_offset_for_mesh_obj) = OWNER_T_MESH;
 
+        // Store inherent geo wildcards
+        {
+            unsigned int w_num = 0;
+            for (const auto& w_name : m_geo_wildcard_names) {
+                if (input_mesh_objs.at(i)->geo_wildcards.find(w_name) == input_mesh_objs.at(i)->geo_wildcards.end()) {
+                    // No such wildcard loaded
+                    DEME_WARNING(
+                        "Geometry wildcard %s is needed by force model, yet not specified for a mesh.\nTheir "
+                        "initial values are defauled to 0.",
+                        w_name.c_str());
+                } else {
+                    for (size_t jj = 0; jj < input_mesh_objs.at(i)->GetNumTriangles(); jj++) {
+                        triWildcards[w_num].at(nExistingFacets + k + jj) =
+                            input_mesh_objs.at(i)->geo_wildcards[w_name].at(jj);
+                    }
+                }
+                w_num++;
+            }
+        }
+
         // Store this mesh in dT's cache
         input_mesh_objs.at(i)->owner = i + owner_offset_for_mesh_obj;
         m_meshes.push_back(input_mesh_objs.at(i));
@@ -799,6 +824,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         //// TODO: and initial vel?
 
         // Per-facet info
+        //// TODO: This flatten-then-init approach is historical and too ugly.
         size_t this_facet_owner = mesh_facet_owner.at(k);
         for (; k < mesh_facet_owner.size(); k++) {
             // mesh_facet_owner run length is the num of facets in this mesh entity
@@ -814,6 +840,9 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
 
         family_t this_family_num = input_mesh_obj_family.at(i);
         familyID.at(i + owner_offset_for_mesh_obj) = this_family_num;
+
+        // To save some mem
+        m_meshes.back()->ClearWildcards();
 
         DEME_DEBUG_PRINTF("dT just loaded a mesh in family %u", +(this_family_num));
         DEME_DEBUG_PRINTF("This mesh is owner %zu", (i + owner_offset_for_mesh_obj));
@@ -1072,6 +1101,12 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
             outstrstream << "," + name;
         }
     }
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::GEO_WILDCARD) {
+        for (const auto& name : m_geo_wildcard_names) {
+            outstrstream << "," + name;
+        }
+    }
+
     outstrstream << "\n";
 
     for (size_t i = 0; i < simParams->nSpheresGM; i++) {
@@ -1146,6 +1181,11 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
             // Model.h
             for (unsigned int j = 0; j < m_owner_wildcard_names.size(); j++) {
                 outstrstream << "," << ownerWildcards[j][i];
+            }
+        }
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::GEO_WILDCARD) {
+            for (unsigned int j = 0; j < m_geo_wildcard_names.size(); j++) {
+                outstrstream << "," << sphereWildcards[j][i];
             }
         }
 
@@ -2283,6 +2323,24 @@ void DEMDynamicThread::setOwnerWildcardValue(bodyID_t ownerID, unsigned int wc_n
     }
 }
 
+void DEMDynamicThread::setTriWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals) {
+    for (size_t i = 0; i < vals.size(); i++) {
+        triWildcards[wc_num].at(geoID + i) = vals.at(i);
+    }
+}
+
+void DEMDynamicThread::setSphWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals) {
+    for (size_t i = 0; i < vals.size(); i++) {
+        sphereWildcards[wc_num].at(geoID + i) = vals.at(i);
+    }
+}
+
+void DEMDynamicThread::setAnalWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals) {
+    for (size_t i = 0; i < vals.size(); i++) {
+        analWildcards[wc_num].at(geoID + i) = vals.at(i);
+    }
+}
+
 void DEMDynamicThread::setFamilyOwnerWildcardValue(unsigned int family_num,
                                                    unsigned int wc_num,
                                                    const std::vector<float>& vals) {
@@ -2297,7 +2355,32 @@ void DEMDynamicThread::setFamilyOwnerWildcardValue(unsigned int family_num,
     }
 }
 
-void DEMDynamicThread::getOwnerWildcardValue(std::vector<float>& res, unsigned int wc_num) {
+void DEMDynamicThread::getSphereWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n) {
+    res.resize(n);
+    for (size_t i = 0; i < n; i++) {
+        res[i] = sphereWildcards[wc_num].at(ID + i);
+    }
+}
+
+void DEMDynamicThread::getTriWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n) {
+    res.resize(n);
+    for (size_t i = 0; i < n; i++) {
+        res[i] = triWildcards[wc_num].at(ID + i);
+    }
+}
+
+void DEMDynamicThread::getAnalWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n) {
+    res.resize(n);
+    for (size_t i = 0; i < n; i++) {
+        res[i] = analWildcards[wc_num].at(ID + i);
+    }
+}
+
+float DEMDynamicThread::getOwnerWildcardValue(bodyID_t ID, unsigned int wc_num) {
+    return ownerWildcards[wc_num].at(ID);
+}
+
+void DEMDynamicThread::getAllOwnerWildcardValue(std::vector<float>& res, unsigned int wc_num) {
     res.resize(simParams->nOwnerBodies);
     for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
         res.at(i) = ownerWildcards[wc_num].at(i);
@@ -2404,19 +2487,19 @@ void DEMDynamicThread::setOwnerVel(bodyID_t ownerID, float3 vel) {
     vZ.at(ownerID) = vel.z;
 }
 
-void DEMDynamicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite) {
-    if (overwrite) {
-        for (size_t i = 0; i < triangles.size(); i++) {
-            relPosNode1[start + i] = triangles[i].p1;
-            relPosNode2[start + i] = triangles[i].p2;
-            relPosNode3[start + i] = triangles[i].p3;
-        }
-    } else {
-        for (size_t i = 0; i < triangles.size(); i++) {
-            relPosNode1[start + i] += triangles[i].p1;
-            relPosNode2[start + i] += triangles[i].p2;
-            relPosNode3[start + i] += triangles[i].p3;
-        }
+void DEMDynamicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles) {
+    for (size_t i = 0; i < triangles.size(); i++) {
+        relPosNode1[start + i] = triangles[i].p1;
+        relPosNode2[start + i] = triangles[i].p2;
+        relPosNode3[start + i] = triangles[i].p3;
+    }
+}
+
+void DEMDynamicThread::updateTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& updates) {
+    for (size_t i = 0; i < updates.size(); i++) {
+        relPosNode1[start + i] += updates[i].p1;
+        relPosNode2[start + i] += updates[i].p2;
+        relPosNode3[start + i] += updates[i].p3;
     }
 }
 

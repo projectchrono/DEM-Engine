@@ -347,7 +347,7 @@ inline void equip_geo_wildcards(std::string& definition,
     unsigned int i = 0;
     for (const auto& name : added_ingredients) {
         definition += "float* " + name + ";\n";
-        acquisition_B_sph += name + " = granData->sphWildcards[" + std::to_string(i) + "];\n";
+        acquisition_B_sph += name + " = granData->sphereWildcards[" + std::to_string(i) + "];\n";
         acquisition_B_tri += name + " = granData->triWildcards[" + std::to_string(i) + "];\n";
         acquisition_B_anal += name + " = granData->analWildcards[" + std::to_string(i) + "];\n";
         i++;

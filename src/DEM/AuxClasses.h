@@ -87,7 +87,7 @@ class DEMInspector {
 class DEMTracker {
   private:
     void assertMesh(const std::string& name);
-    void assertMeshFaceSize(size_t input_length, const std::string& name);
+    void assertGeoSize(size_t input_length, const std::string& func_name, const std::string& geo_type);
     void assertOwnerSize(size_t input_length, const std::string& name);
     // Its parent DEMSolver system
     DEMSolver* sys;
@@ -128,6 +128,19 @@ class DEMTracker {
     /// Get the a portion of the angular acceleration of this tracked object, that is the result of its contact with
     /// other simulation entities. The acceleration is in this object's local frame.
     float3 ContactAngAccLocal(size_t offset = 0);
+
+    /// Get the owner's wildcard value.
+    float GetOwnerWildcardValue(const std::string& name, size_t offset = 0);
+    /// @brief Get the geometry wildcard values for all the geometry entities tracked by this tracker.
+    /// @param name Name of the wildcard.
+    /// @return All the values.
+    std::vector<float> GetGeometryWildcardValue(const std::string& name);
+    /// @brief Get the geometry wildcard values for a geometry entity tracked by this tracker.
+    /// @param name Name of the wildcard.
+    /// @param offset The offset to this entity (where to start the modification). If first entity, input 0.
+    /// @return The value.
+    float GetGeometryWildcardValue(const std::string& name, size_t offset);
+
     /// Set the position of this tracked object.
     void SetPos(float3 pos, size_t offset = 0);
     /// Set the angular velocity of this tracked object in its own local coordinate system.
@@ -172,12 +185,22 @@ class DEMTracker {
     /// @brief Set a wildcard value of the owner this tracker is tracking.
     /// @param name Name of the wildcard.
     /// @param wc Wildcard value.
-    /// @param offset The offset to this entites. If first entites, input 0.
+    /// @param offset The offset to this owner (where to start the modification). If first owner, input 0.
     void SetOwnerWildcardValue(const std::string& name, float wc, size_t offset = 0);
     /// @brief Set a wildcard value of the owner this tracker is tracking.
     /// @param name Name of the wildcard.
     /// @param wc Wildcard values as a vector (must have same length as the number of tracked owners).
-    void SetOwnerWildcardValue(const std::string& name, const std::vector<float>& wc, size_t offset = 0);
+    void SetOwnerWildcardValue(const std::string& name, const std::vector<float>& wc);
+
+    /// @brief Set a wildcard value of the geometry entity this tracker is tracking.
+    /// @param name Name of the wildcard.
+    /// @param wc Wildcard value.
+    /// @param offset The offset to this entity (where to start the modification). If first entity, input 0.
+    void SetGeometryWildcardValue(const std::string& name, float wc, size_t offset = 0);
+    /// @brief Set a wildcard value of the geometry entities this tracker is tracking.
+    /// @param name Name of the wildcard.
+    /// @param wc Wildcard values as a vector (must have same length as the number of tracked geometry entities).
+    void SetGeometryWildcardValue(const std::string& name, const std::vector<float>& wc);
 };
 
 class DEMForceModel {
