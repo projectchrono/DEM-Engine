@@ -812,27 +812,27 @@ class DEMClumpBatch {
     }
 
     void SetGeometryWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
-        if (wildcards.begin()->second.size() != nClumps) {
+        if (wildcards.begin()->second.size() != nSpheres) {
             std::stringstream ss;
             ss << "Input gemometry wildcard arrays in a SetGeometryWildcards call must all have the same size as the "
                   "number of spheres in this batch.\nHere, the input array has length "
-               << wildcards.begin()->second.size() << " but this batch has " << nClumps << " spheres." << std::endl;
+               << wildcards.begin()->second.size() << " but this batch has " << nSpheres << " spheres." << std::endl;
             throw std::runtime_error(ss.str());
         }
         geo_wildcards = wildcards;
     }
     void AddGeometryWildcard(const std::string& name, const std::vector<float>& vals) {
-        if (vals.size() != nClumps) {
+        if (vals.size() != nSpheres) {
             std::stringstream ss;
             ss << "Input gemometry wildcard array in a AddGeometryWildcard call must have the same size as the number "
                   "of spheres in this batch.\nHere, the input array has length "
-               << vals.size() << " but this batch has " << nClumps << " spheres." << std::endl;
+               << vals.size() << " but this batch has " << nSpheres << " spheres." << std::endl;
             throw std::runtime_error(ss.str());
         }
         geo_wildcards[name] = vals;
     }
     void AddGeometryWildcard(const std::string& name, float val) {
-        AddGeometryWildcard(name, std::vector<float>(nClumps, val));
+        AddGeometryWildcard(name, std::vector<float>(nSpheres, val));
     }
 
     size_t GetNumContacts() const { return nExistContacts; }

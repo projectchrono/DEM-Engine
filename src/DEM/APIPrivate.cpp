@@ -616,12 +616,7 @@ void DEMSolver::preprocessClumps() {
     for (auto& a_batch : cached_input_clump_batches) {
         nOwnerClumps += a_batch->GetNumClumps();
         nExtraContacts += a_batch->GetNumContacts();
-        for (size_t i = 0; i < a_batch->GetNumClumps(); i++) {
-            unsigned int nComp = a_batch->types.at(i)->nComp;
-            nSpheresGM += nComp;
-            // Also keep tab for itself
-            a_batch->nSpheres += nComp;
-        }
+        nSpheresGM += a_batch->GetNumSpheres();
         // Family number is flattened here, only because figureOutFamilyMasks() needs it
         m_input_clump_family.insert(m_input_clump_family.end(), a_batch->families.begin(), a_batch->families.end());
     }

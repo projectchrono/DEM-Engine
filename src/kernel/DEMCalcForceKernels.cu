@@ -13,7 +13,8 @@ _materialDefs_;
 _massDefs_;
 
 template <typename T1>
-inline __device__ void equipOwnerPosRot(deme::DEMDataDT* granData,
+inline __device__ void equipOwnerPosRot(deme::DEMSimParams* simParams,
+                                        deme::DEMDataDT* granData,
                                         const deme::bodyID_t& myOwner,
                                         T1& relPos,
                                         double3& ownerPos,
@@ -22,6 +23,10 @@ inline __device__ void equipOwnerPosRot(deme::DEMDataDT* granData,
     voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
         ownerPos.x, ownerPos.y, ownerPos.z, granData->voxelID[myOwner], granData->locX[myOwner],
         granData->locY[myOwner], granData->locZ[myOwner], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
+    // Do this and we get the `true' pos...
+    ownerPos.x += simParams->LBFX;
+    ownerPos.y += simParams->LBFY;
+    ownerPos.z += simParams->LBFZ;
     oriQ.w = granData->oriQw[myOwner];
     oriQ.x = granData->oriQx[myOwner];
     oriQ.y = granData->oriQy[myOwner];
@@ -75,7 +80,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             // Optional force model ingredients are loaded here...
             _forceModelIngredientAcqForA_;
 
-            equipOwnerPosRot(granData, myOwner, myRelPos, AOwnerPos, bodyAPos, AOriQ);
+            equipOwnerPosRot(simParams, granData, myOwner, myRelPos, AOwnerPos, bodyAPos, AOriQ);
 
             ARadius = myRadius;
             bodyAMatType = granData->sphereMaterialOffset[sphereID];
@@ -105,7 +110,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             _forceModelIngredientAcqForB_;
             _forceModelGeoWildcardAcqForSph_;
 
-            equipOwnerPosRot(granData, myOwner, myRelPos, BOwnerPos, bodyBPos, BOriQ);
+            equipOwnerPosRot(simParams, granData, myOwner, myRelPos, BOwnerPos, bodyBPos, BOriQ);
 
             BRadius = myRadius;
             bodyBMatType = granData->sphereMaterialOffset[sphereID];
@@ -121,7 +126,8 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             }
 
         } else if (myContactType == deme::SPHERE_MESH_CONTACT) {
-            // Geometry ID here is called sphereID, although it is not a sphere, it's more like triID. But naming it sphereID makes the acquisition process cleaner.
+            // Geometry ID here is called sphereID, although it is not a sphere, it's more like triID. But naming it
+            // sphereID makes the acquisition process cleaner.
             deme::bodyID_t sphereID = granData->idGeometryB[myContactID];
             deme::bodyID_t myOwner = granData->ownerMesh[sphereID];
             //// TODO: Is this OK?
@@ -145,7 +151,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             _forceModelGeoWildcardAcqForTri_;
 
             // bodyBPos is for a place holder for the outcome triNode1 position
-            equipOwnerPosRot(granData, myOwner, triNode1, BOwnerPos, bodyBPos, BOriQ);
+            equipOwnerPosRot(simParams, granData, myOwner, triNode1, BOwnerPos, bodyBPos, BOriQ);
             triNode1 = bodyBPos;
             // Do this to node 2 and 3 as well
             applyOriQToVector3(triNode2.x, triNode2.y, triNode2.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
@@ -169,7 +175,8 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             }
             overlapDepth = -overlapDepth;  // triangle_sphere_CD gives neg. number for overlapping cases
         } else if (myContactType > deme::SPHERE_ANALYTICAL_CONTACT) {
-            // Geometry ID here is called sphereID, although it is not a sphere, it's more like analyticalID. But naming it sphereID makes the acquisition process cleaner.
+            // Geometry ID here is called sphereID, although it is not a sphere, it's more like analyticalID. But naming
+            // it sphereID makes the acquisition process cleaner.
             deme::objID_t sphereID = granData->idGeometryB[myContactID];
             deme::bodyID_t myOwner = objOwner[sphereID];
             // If B is analytical entity, its owner, relative location, material info is jitified.
@@ -185,7 +192,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             _forceModelIngredientAcqForB_;
             _forceModelGeoWildcardAcqForAnal_;
 
-            equipOwnerPosRot(granData, myOwner, myRelPos, BOwnerPos, bodyBPos, BOriQ);
+            equipOwnerPosRot(simParams, granData, myOwner, myRelPos, BOwnerPos, bodyBPos, BOriQ);
             extraMarginSize += granData->familyExtraMarginSize[BOwnerFamily];
 
             // B's orientation (such as plane normal) is rotated with its owner too

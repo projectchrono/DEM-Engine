@@ -94,12 +94,13 @@ After the build process is done, you can start trying out the demos.
 
 - An all-rounder beginner example featuring a bladed mixer interacting with complex shaped particles: `./src/demo/DEMdemo_Mixer`.
 - A place to learn how prescribed motions work in this package, using either analytical boundaries or particle-represented boundaries: `./src/demo/DEMdemo_Centrifuge` and `./src/demo/DEMdemo_Sieve`.
-- A fun game-of-life simulator built with the package, showing the flexibility in terms of how you can use this tool: `./src/demo/DEMdemo_GameOfLife`.
 - A few representative engineering experiments reproduced in DEM simulations, which potentially serve as starting points for your own DEM scripts: `/src/demo/DEMdemo_BallDrop`, `./src/demo/DEMdemo_ConePenetration`, `/src/demo/DEMdemo_Sieve`, `./src/demo/DEMdemo_Repose`.
 - `./src/demo/DEMdemo_WheelDP` shows how to load a checkpointed configuration file to instantly generate a settled granular terrain, then run a drawbar-pull test on it. This demo therefore requires you to first finish the two GRCPrep demos to obtain the terrain checkpoint file. The granular terrain in these demos features DEM particles with a variety of sizes and shapes.
 - `./src/demo/DEMdemo_WheelDPSimplified` is a simplified version of the previous drawbar-pull test which has no prerequisite. The terrain is simpilified to be made of only one type of irregular-shaped particles. It serves as a quick starting point for people who want to create similar experiments.
 - More advanced examples showing the usage of the custom additional properties (called _wildcards_) that you can associate with the simulation entities, and use them in the force model and/or change them in simulation then deposit them into the output files: `./src/demo/DEMdemo_Indentation`.
-- `./src/demo/DEMdemo_SolarSystem` simulates our solar system. Its purpose is to show how to define a non-local force (gravitational force) which takes effect even when the bodies are not in contact, using a custom force model file.
+- `./src/demo/DEMdemo_Electrostatic` simulates a pile of complex-shaped and charged granular particles interacting with a mesh that is also charged. Its purpose is to show how to define a non-local force (electrostatic force) which takes effect even when the bodies are not in contact, using a custom force model file. This idea can be extended to modeling a custom cohesion force etc.
+- A fun game-of-life simulator built with the package, showing the flexibility in terms of how you can use this tool: `./src/demo/DEMdemo_GameOfLife`.
+- `./src/demo/DEMdemo_SolarSystem` simulates our solar system. It is yet another fun simulation that is not strictly DEM per se, but shows how to define a mid-to-long-ranged force (gravitational force) using a custom force model file.
 - It is a good idea to read the comment lines at the top of the demo files to understand what they each does.
 
 You can find the movies of some of these demos [here](https://uwmadison.app.box.com/s/u4m9tee3k1vizf097zkq3rgv54orphyv).
@@ -109,6 +110,7 @@ You can find the movies of some of these demos [here](https://uwmadison.app.box.
 Some additional troubleshooting tips for running the demos:
 
 - If errors similar to `CUDA_ERROR_UNSUPPORTED_PTX_VERSION` are encountered while you run the demos, or (rarely) the simulations proceed without detecting any contacts, then please make sure the CUDA installation is the same version as when the code is compiled.
+- Used your own force model but got runtime compilation error like `expression must have pointer-to-object type but it has type "float"`, or `unknown variable "delta_time"`? Check out demo `DEMdemo_Electrostatic`. You may need to manually specify what material properties are pairwise and what contact wildcards you have using `SetMustPairwiseMatProp` and `SetPerContactWildcards`.
 
 ### Limitations
 

@@ -48,18 +48,18 @@ int main() {
     // Material for the planets, but they ultimately do not matter at all.
     auto mat_type = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.8}});
     // A custom force model that has GMm/R^2 force in it.
-    auto my_force_model = DEMSim.ReadContactForceModel("ForceModelWithNonlocalForce.cu");
+    auto my_force_model = DEMSim.ReadContactForceModel("ForceModelWithGravity.cu");
     // Those 2 following lines are needed.
     my_force_model->SetMustHaveMatProp({"E", "nu", "CoR"});
     my_force_model->SetMustPairwiseMatProp({"CoR"});
     // Gravitational pull will be calcuated using this extra quatity that we associate with each sphere.
     // Now, why don't we use the mass property in the clump templates? Since that is at clump level, and if
     // what you have here are, say 3-sphere clumps, rather than single sphere clumps, then the gravitational
-    // pull may be double- or triple-counted.
+    // pull may be double- or triple-counted. In the case of using 3-sphere clumps, maybe you should assign
+    // each sphere say 1/3 of the total clump mass, then use this geometry wildcard to calculate the gravity.
     my_force_model->SetPerGeometryWildcards({"my_mass"});
 
     // For all the celestial bodies, define as templates. Their radii is just for visialization.
-    // And their mass does not matter, since we manage mass by a geometry wildcard.
     float vis_size_scaler = 3;
     auto Sun_template = DEMSim.LoadSphereType(1.989e30, 0.1 * vis_size_scaler, mat_type);
     auto Mercury_template = DEMSim.LoadSphereType(3.3011e23, 0.02 * vis_size_scaler, mat_type);

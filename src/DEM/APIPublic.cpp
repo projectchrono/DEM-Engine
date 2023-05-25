@@ -754,7 +754,7 @@ std::vector<float> DEMSolver::GetTriWildcardValue(bodyID_t geoID, const std::str
     dT->getTriWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
     return res;
 }
- 
+
 std::vector<float> DEMSolver::GetSphereWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
     assertSysInit("GetSphereWildcardValue");
     if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
@@ -1081,6 +1081,12 @@ std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(DEMClumpBatch& input_batch) 
     // But we still need to record a batch loaded
     nBatchClumpsLoad++;
     cached_input_clump_batches.push_back(std::make_shared<DEMClumpBatch>(std::move(input_batch)));
+
+    for (size_t i = 0; i < cached_input_clump_batches.back()->GetNumClumps(); i++) {
+        unsigned int nComp = cached_input_clump_batches.back()->types.at(i)->nComp;
+        // Keep tab for itself
+        cached_input_clump_batches.back()->nSpheres += nComp;
+    }
     return cached_input_clump_batches.back();
 }
 
