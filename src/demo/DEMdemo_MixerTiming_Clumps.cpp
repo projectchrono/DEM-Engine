@@ -23,11 +23,11 @@ int main() {
     double world_size = 1.;
     double CDFreq = 25.1;
     double pi = 3.14159;
-    float step_size = 6e-6;
+    float step_size = 5e-7;
     size_t n_steps = 5e5;
     int test_num = 0;
 
-    while (num_particles < 2e8) {
+    while (num_particles < 2e7) {
         DEMSolver DEMSim;
         DEMSim.SetVerbosity(ERROR);
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
@@ -105,7 +105,7 @@ int main() {
         unsigned int fps = 20;
 
         mixer_tracker->SetPos(make_float3(0, 0, chamber_bottom + chamber_height / 2.0));
-        DEMSim.DoDynamicsThenSync(1.);
+        DEMSim.DoDynamicsThenSync(.75);
         DEMSim.ClearThreadCollaborationStats();
         DEMSim.ClearTimingStats();
         char filename[200], meshfilename[200];
@@ -129,7 +129,7 @@ int main() {
         // Compensate for smaller ts
 
         granular_rad *= std::pow(0.75, 1. / 3.);
-        step_size *= std::pow(0.75, 1. / 3.);
+        // step_size *= std::pow(0.75, 1. / 3.);
         // world_size *= std::pow(2., 1. / 3.);
         // CDFreq *= std::pow(0.95, 1. / 3.);
 

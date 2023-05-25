@@ -23,10 +23,10 @@ int main() {
     double CDFreq = 30.1;
     double world_size = 1;
     double pi = 3.14159;
-    float step_size = 1e-5;
+    float step_size = 5e-7;
     size_t n_steps = 5e5;
 
-    while (num_particles < 80e6) {
+    while (num_particles < 50e6) {
         DEMSolver DEMSim;
         DEMSim.SetVerbosity(ERROR);
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
@@ -113,7 +113,7 @@ int main() {
                   << " seconds (wall time) to finish 1 second's simulation" << std::endl;
 
         granular_rad *= std::pow(0.75, 1. / 3.);
-        step_size *= std::pow(0.75, 1. / 3.);
+        // step_size *= std::pow(0.75, 1. / 3.);
         // world_size *= std::pow(2., 1. / 3.);
         // CDFreq *= std::pow(0.95, 1. / 3.);
     }
