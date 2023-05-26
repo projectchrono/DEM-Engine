@@ -40,47 +40,42 @@ int main() {
 
     // total number of random clump templates to generate
 
-    double radius = 0.003300 * scaling /2.0 ;
-    double density = 1410;
+    double radius = 0.006 * scaling /2.0 ;
+    double density = 1592;
 
-    int totalSpheres = 500000;
+    int totalSpheres = 20000;
 
-    int num_template = 10000;
+    int num_template = 1000;
 
-    float plane_bottom = 0.01f * scaling;
+    float plane_bottom = 0.02f * scaling;
     float funnel_bottom = 0.02f * scaling;
-    float funnel_outlet = 0.080f * scaling;
-    float funnel_slope = 1.0 / 8.0 * 3.14;
 
-    double tilt = 3.141592 / 6.0; 
 
-    double gateOpen = 0.120;
-    double gateSpeed = 3.5; //good discarge -- too fast the flow
+    double gateOpen = 0.30;
+    double gateSpeed = -3.5; //good discarge -- too fast the flow
 
-    auto mat_type_bottom = DEMSim.LoadMaterial({{"E", 50e9}, {"nu", 0.3}, {"CoR", 0.60}});
-    auto mat_type_flume = DEMSim.LoadMaterial({{"E", 50e9}, {"nu", 0.3}, {"CoR", 0.60}});
-    auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.90}, {"mu", 0.04}, {"Crr", 0.04}});
+    auto mat_type_bottom = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
+    auto mat_type_flume = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
+    auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}, {"mu", 0.04}, {"Crr", 0.04}});
     
     auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 2.7e9}, {"nu", 0.35}, {"CoR", 0.83}, {"mu", 0.50}, {"Crr", 0.10}});
+        DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.30}, {"Crr", 0.00}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.5);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.02);
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_flume, mat_type_particles, 0.7);    //it is supposed to be
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_flume, mat_type_particles, 0.05);   // plexiglass
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_flume, mat_type_particles, 0.45);
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_flume, mat_type_particles, 0.10);
 
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_bottom, mat_type_particles, 0.7);    //it is supposed to be
-    DEMSim.SetMaterialPropertyPair("Crr", mat_type_bottom, mat_type_particles, 0.05);   // bakelite
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_bottom, mat_type_particles, 0.35);
+ 
     
     // Make ready for simulation
-    float step_size =2.0e-6;
-    DEMSim.InstructBoxDomainDimension({-0.01, 3.00}, {-0.05, 0.05}, {-0.50, 1.0});
+    float step_size =5.0e-6;
+    DEMSim.InstructBoxDomainDimension({-0.10, 0.10}, {-0.02, 0.02}, {-0.50, 1.0});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
-    DEMSim.SetGravitationalAcceleration(make_float3(9.81 * std::sin(tilt), 0, -9.81 * std::cos(tilt)));
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81 ));
     // Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     // happen anyway and if it does, something already went wrong.
@@ -88,19 +83,11 @@ int main() {
     DEMSim.SetInitBinSize(radius * 5);
 
     // Loaded meshes are by-default fixed
-   auto flume = DEMSim.AddWavefrontMeshObject("../data/granularFlow/flume.obj", mat_type_flume);    
-   auto gateFixed = DEMSim.AddWavefrontMeshObject("../data/granularFlow/gateFixed.obj", mat_type_flume); 
-   auto hopper = DEMSim.AddWavefrontMeshObject("../data/granularFlow/hopper.obj", mat_type_flume);  
-   auto bottom = DEMSim.AddWavefrontMeshObject("../data/granularFlow/bottom.obj", mat_type_bottom);
-    
+   auto fixed = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_box.obj", mat_type_flume);     
+  
+    auto gate = DEMSim.AddWavefrontMeshObject("../data/granularFlow/gate_bottom.obj", mat_type_flume);
 
-
-    auto gate = DEMSim.AddWavefrontMeshObject("../data/granularFlow/gate.obj", mat_type_flume);
-
-    flume->SetFamily(10);
-    gateFixed->SetFamily(10);
-    hopper->SetFamily(10);
-    bottom->SetFamily(10);
+    fixed->SetFamily(10);
     gate->SetFamily(3);
 
     std::string shake_pattern_xz = " 0.0 * sin( 300 * 2 * deme::PI * t)";
@@ -140,7 +127,7 @@ int main() {
         relPos.push_back(tmp);
         mat.push_back(mat_type_particles);
 
-        double x = 1.20*eccentricity/2.0;
+        double x = 1.2*eccentricity/2.0;
         double y = 0;
         double z = 0;
         tmp.x = x;
@@ -173,7 +160,7 @@ int main() {
     float settle_frame_time = 0.01;
    
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Granular_Flow_1";
+    out_dir += "/DemoOutput_Granular_NonSherical_1";
 
     remove_all(out_dir);    
     create_directory(out_dir);
@@ -183,9 +170,9 @@ int main() {
     float shift_xyz = 1.0* (maxRadius) * 2.0;
     float x = 0;
     float y = 0;
-    float yW = funnel_outlet;
+    
     float z = shift_xyz/2;  // by default we create beads at 0
-    double emitterZ= 0.80;
+    double emitterZ= 0.60;
     unsigned int actualTotalSpheres =0;
     
     DEMSim.Initialize();
@@ -202,6 +189,7 @@ int main() {
 
     while (initialization) {
         DEMSim.ClearCache();
+        
         std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
         std::vector<float3> input_pile_xyz;
         PDSampler sampler(shift_xyz);
@@ -212,12 +200,12 @@ int main() {
                  
         
         float sizeZ=(frame==0)? 0.70 : 0.10;
-        float sizeX=(frame==0)? 0.49 : 0.40;        
+        float sizeX=0.20;        
         float z= plane_bottom+shift_xyz+sizeZ/2.0;
-        yW=funnel_outlet; 
+        
 
-        float3 center_xyz = make_float3(0.01+sizeX/2, 0, z);
-        float3 size_xyz = make_float3((sizeX - shift_xyz) / 2.0, (yW - shift_xyz) / 2.0, sizeZ/2.0);
+        float3 center_xyz = make_float3(0, 0, z);
+        float3 size_xyz = make_float3((sizeX - shift_xyz) / 2.0, (0.04 - shift_xyz) / 2.0, sizeZ/2.0);
 
         std::cout << "level of particles position ... " << center_xyz.z << std::endl;
         
@@ -234,7 +222,7 @@ int main() {
    
     
     auto the_pile = DEMSim.AddClumps(input_pile_template_type, input_pile_xyz);
-    the_pile->SetVel(make_float3(-0.30, 0, -0.80));
+    the_pile->SetVel(make_float3(-0.00, 0.0, -0.80));
     the_pile->SetFamily(100);
     
     DEMSim.UpdateClumps();
@@ -257,7 +245,7 @@ int main() {
         sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), frame);
         DEMSim.WriteSphereFile(std::string(filename));
         //DEMSim.ShowThreadCollaborationStats();
-        frame--;
+        frame++;
         }
 
     DEMSim.DoDynamicsThenSync(settle_frame_time);

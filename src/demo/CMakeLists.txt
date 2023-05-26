@@ -32,6 +32,8 @@ SET(DEMOS
 		DEMdemo_Indentation
 		DEMdemo_Granular_Repose
 		DEMdemo_Granular_Flow
+		DEMdemo_Granular_NonSpherical
+		DEMdemo_Granular_WoodenSpheres
 		DEMdemo_SolarSystem
 		DEMdemo_Repose_Cylinder
 )
