@@ -241,6 +241,10 @@ inline void scan_force_model_ingr(std::unordered_map<std::string, bool>& added_i
         added_ingredients["AOwner"] = true;
         added_ingredients["BOwner"] = true;
     }
+    if (any_whole_word_match(model, {"AGeo", "BGeo"})) {
+        added_ingredients["AGeo"] = true;
+        added_ingredients["BGeo"] = true;
+    }
     if (any_whole_word_match(model, {"AOwnerMOI", "BOwnerMOI"})) {
         added_ingredients["AOwnerMOI"] = true;
         added_ingredients["BOwnerMOI"] = true;
@@ -292,6 +296,12 @@ inline void equip_force_model_ingr_acq(std::string& definition,
         acquisition_A += "AOwner = myOwner;";
         acquisition_B += "BOwner = myOwner;";
     }
+    if (added_ingredients["AGeo"] || added_ingredients["BGeo"]) {
+        definition += "deme::bodyID_t AGeo, BGeo;\n";
+        acquisition_A += "AGeo = sphereID;";
+        // BGeo can be sphere, tri or analytical, but they are all named sphereID in the force kernel.
+        acquisition_B += "BGeo = sphereID;";
+    }
     if (added_ingredients["AOwnerMOI"] || added_ingredients["BOwnerMOI"]) {
         definition += "float3 AOwnerMOI, BOwnerMOI;\n";
         acquisition_A += R"V0G0N(float3 myMOI;
@@ -317,6 +327,9 @@ inline void equip_owner_wildcards(std::string& definition,
         // ambiguity in which contact pair should update a owner property. So, this management is completely given to
         // the user, and they may choose to atomically update them if needed.
         definition += "float* " + name + " = granData->ownerWildcards[" + std::to_string(i) + "];\n";
+        // Those _A and _B variances are alias only. Since for owner wildcards, A and B geometries can share.
+        definition += "float* " + name + "_A = granData->ownerWildcards[" + std::to_string(i) + "];\n";
+        definition += "float* " + name + "_B = granData->ownerWildcards[" + std::to_string(i) + "];\n";
         // Because of using alias, no acquisition or write-back needed
         /*
         acquisition_A += name + "_A = granData->ownerWildcards[" + std::to_string(i) + "][myOwner];\n";
@@ -324,6 +337,24 @@ inline void equip_owner_wildcards(std::string& definition,
         writeback += "granData->ownerWildcards[" + std::to_string(i) + "][AOwner] = " + name + "_A;\n" +
                      "granData->ownerWildcards[" + std::to_string(i) + "][BOwner] = " + name + "_B;\n";
         */
+        i++;
+    }
+}
+
+// Sweep through all ingredients...
+inline void equip_geo_wildcards(std::string& definition,
+                                std::string& acquisition_A,
+                                std::string& acquisition_B_sph,
+                                std::string& acquisition_B_tri,
+                                std::string& acquisition_B_anal,
+                                const std::set<std::string>& added_ingredients) {
+    unsigned int i = 0;
+    for (const auto& name : added_ingredients) {
+        definition += "float* " + name + "_A, *" + name + "_B;\n";
+        acquisition_A += name + "_A = granData->sphereWildcards[" + std::to_string(i) + "];\n";
+        acquisition_B_sph += name + "_B = granData->sphereWildcards[" + std::to_string(i) + "];\n";
+        acquisition_B_tri += name + "_B = granData->triWildcards[" + std::to_string(i) + "];\n";
+        acquisition_B_anal += name + "_B = granData->analWildcards[" + std::to_string(i) + "];\n";
         i++;
     }
 }

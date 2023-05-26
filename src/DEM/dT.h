@@ -210,11 +210,22 @@ class DEMDynamicThread {
     // std::vector<float, ManagedAllocator<float>> ownerWildcards[DEME_MAX_WILDCARD_NUM];
     // An example of such wildcard arrays is contact history: how much did the contact point move on the geometry
     // surface compared to when the contact first emerged?
+    // Geometric entities' wildcards
+    std::vector<std::vector<float, ManagedAllocator<float>>,
+                ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
+        sphereWildcards;
+    std::vector<std::vector<float, ManagedAllocator<float>>,
+                ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
+        analWildcards;
+    std::vector<std::vector<float, ManagedAllocator<float>>,
+                ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
+        triWildcards;
 
     // Storage for the names of the contact wildcards (whose order agrees with the impl-level wildcard numbering, from 1
     // to n)
     std::set<std::string> m_contact_wildcard_names;
     std::set<std::string> m_owner_wildcard_names;
+    std::set<std::string> m_geo_wildcard_names;
 
     // std::vector<float3, ManagedAllocator<float3>> contactHistory;
     // // Durations in time of persistent contact pairs
@@ -337,7 +348,8 @@ class DEMDynamicThread {
                       float expand_safety_param,
                       float expand_safety_adder,
                       const std::set<std::string>& contact_wildcards,
-                      const std::set<std::string>& owner_wildcards);
+                      const std::set<std::string>& owner_wildcards,
+                      const std::set<std::string>& geo_wildcards);
 
     /// @brief Get total number of contacts.
     /// @return Number of contacts.
@@ -366,12 +378,14 @@ class DEMDynamicThread {
     /// Set this owner's velocity
     void setOwnerVel(bodyID_t ownerID, float3 vel);
     /// Rewrite the relative positions of the flattened triangle soup, starting from `start', using triangle nodal
-    /// positions in `triangles'. If `overwrite' is true, then it is overwriting the existing nodal info; otherwise it
-    /// just adds to it.
-    void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite = true);
+    /// positions in `triangles'.
+    void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles);
+    /// Rewrite the relative positions of the flattened triangle soup, starting from `start' by the amount stipulated in
+    /// updates.
+    void updateTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& updates);
 
     /// @brief Globally modify a owner wildcard's value.
-    void setOwnerWildcardValue(unsigned int wc_num, const std::vector<float>& vals);
+    void setOwnerWildcardValue(bodyID_t ownerID, unsigned int wc_num, const std::vector<float>& vals);
     /// @brief Modify the owner wildcard values of all entities in family family_num.
     void setFamilyOwnerWildcardValue(unsigned int family_num, unsigned int wc_num, const std::vector<float>& vals);
 
@@ -380,10 +394,26 @@ class DEMDynamicThread {
     /// @brief Set all meshes in this family to have this material.
     void setFamilyMeshMaterial(unsigned int N, unsigned int mat_id);
 
+    /// @brief Set the geometry wildcards of triangles, sarting from geoID, for the length of vals.
+    void setTriWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
+    /// @brief Set the geometry wildcards of spheres, sarting from geoID, for the length of vals.
+    void setSphWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
+    /// @brief Set the geometry wildcards of analytical components, sarting from geoID, for the length of vals.
+    void setAnalWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
+
+    /// @brief Returns the wildacard value of this owner.
+    float getOwnerWildcardValue(bodyID_t ID, unsigned int wc_num);
     /// @brief  Fill res with the wc_num wildcard value.
-    void getOwnerWildcardValue(std::vector<float>& res, unsigned int wc_num);
+    void getAllOwnerWildcardValue(std::vector<float>& res, unsigned int wc_num);
     /// @brief  Fill res with the wc_num wildcard value for entities with family number family_num.
     void getFamilyOwnerWildcardValue(std::vector<float>& res, unsigned int family_num, unsigned int wc_num);
+
+    /// @brief Fill res with the `wc_num' wildcard values, for n spheres starting from ID.
+    void getSphereWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
+    /// @brief Fill res with the `wc_num' wildcard values, for n triangles starting from ID.
+    void getTriWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
+    /// @brief Fill res with the `wc_num' wildcard values, for n analytical entities starting from ID.
+    void getAnalWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
 
     /// Let dT know that it needs a kT update, as something important may have changed, and old contact pair info is no
     /// longer valid.
@@ -409,11 +439,13 @@ class DEMDynamicThread {
 
     // Components of initManagedArrays
     void buildTrackedObjs(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
-                          const std::vector<float3>& input_ext_obj_xyz,
+                          const std::vector<unsigned int>& ext_obj_comp_num,
                           const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
                           std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs,
                           size_t nExistOwners,
-                          size_t nExistingFacets);
+                          size_t nExistSpheres,
+                          size_t nExistingFacets,
+                          unsigned int nExistingAnalGM);
     void populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                               const std::vector<float3>& input_ext_obj_xyz,
                               const std::vector<float4>& input_ext_obj_rot,
@@ -495,7 +527,9 @@ class DEMDynamicThread {
                                size_t nExistingClumps,
                                size_t nExistingSpheres,
                                size_t nExistingTriMesh,
-                               size_t nExistingFacets);
+                               size_t nExistingFacets,
+                               unsigned int nExistingObj,
+                               unsigned int nExistingAnalGM);
 
     /// Change radii and relPos info of these owners (if these owners are clumps)
     void changeOwnerSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors);

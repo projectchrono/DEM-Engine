@@ -95,9 +95,9 @@ const std::unordered_map<contact_t, std::string> contact_type_out_name_map = {
 
 // Possible force model ingredients. This map is used to ensure we don't double-add them.
 const std::unordered_map<std::string, bool> force_kernel_ingredient_stats = {
-    {"ts", false},      {"time", false},    {"AOwnerFamily", true}, {"BOwnerFamily", true},
-    {"ALinVel", false}, {"BLinVel", false}, {"ARotVel", false},     {"BRotVel", false},
-    {"AOwner", false},  {"BOwner", false},  {"AOwnerMOI", false},   {"BOwnerMOI", false}};
+    {"ts", false},        {"time", false},      {"AOwnerFamily", true}, {"BOwnerFamily", true}, {"ALinVel", false},
+    {"BLinVel", false},   {"ARotVel", false},   {"BRotVel", false},     {"AOwner", false},      {"BOwner", false},
+    {"AOwnerMOI", false}, {"BOwnerMOI", false}, {"AGeo", false},        {"BGeo", false}};
 
 // Structs defined here will be used by some host classes in DEM.
 // NOTE: Data structs here need to be those complex ones (such as needing to include ManagedAllocator.hpp), which may
@@ -671,7 +671,6 @@ class DEMClumpTemplate {
 /// API-(Host-)side struct that holds cached user-input batches of clumps
 class DEMClumpBatch {
   private:
-    const size_t nClumps;
     size_t nExistContacts = 0;
     void assertLength(size_t len, const std::string name) {
         if (len != nClumps) {
@@ -683,6 +682,8 @@ class DEMClumpBatch {
     }
 
   public:
+    size_t nClumps = 0;
+    size_t nSpheres = 0;
     bool family_isSpecified = false;
     std::vector<std::shared_ptr<DEMClumpTemplate>> types;
     std::vector<unsigned int> families;
@@ -697,6 +698,8 @@ class DEMClumpBatch {
     std::unordered_map<std::string, std::vector<float>> contact_wildcards;
     // Initial owner wildcard that this batch of clumps should have
     std::unordered_map<std::string, std::vector<float>> owner_wildcards;
+    // Initial geometry wildcard that this batch of clumps should have
+    std::unordered_map<std::string, std::vector<float>> geo_wildcards;
     // Its offset when this obj got loaded into the API-level user raw-input array
     size_t load_order;
     DEMClumpBatch(size_t num) : nClumps(num) {
@@ -709,6 +712,7 @@ class DEMClumpBatch {
     }
     ~DEMClumpBatch() {}
     size_t GetNumClumps() const { return nClumps; }
+    size_t GetNumSpheres() const { return nSpheres; }
     void SetTypes(const std::vector<std::shared_ptr<DEMClumpTemplate>>& input) {
         assertLength(input.size(), "SetTypes");
         types = input;
@@ -807,6 +811,30 @@ class DEMClumpBatch {
         AddOwnerWildcard(name, std::vector<float>(nClumps, val));
     }
 
+    void SetGeometryWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
+        if (wildcards.begin()->second.size() != nSpheres) {
+            std::stringstream ss;
+            ss << "Input gemometry wildcard arrays in a SetGeometryWildcards call must all have the same size as the "
+                  "number of spheres in this batch.\nHere, the input array has length "
+               << wildcards.begin()->second.size() << " but this batch has " << nSpheres << " spheres." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        geo_wildcards = wildcards;
+    }
+    void AddGeometryWildcard(const std::string& name, const std::vector<float>& vals) {
+        if (vals.size() != nSpheres) {
+            std::stringstream ss;
+            ss << "Input gemometry wildcard array in a AddGeometryWildcard call must have the same size as the number "
+                  "of spheres in this batch.\nHere, the input array has length "
+               << vals.size() << " but this batch has " << nSpheres << " spheres." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        geo_wildcards[name] = vals;
+    }
+    void AddGeometryWildcard(const std::string& name, float val) {
+        AddGeometryWildcard(name, std::vector<float>(nSpheres, val));
+    }
+
     size_t GetNumContacts() const { return nExistContacts; }
 };
 
@@ -824,10 +852,12 @@ struct DEMTrackedObj {
     size_t nSpanOwners = 1;
     // If this tracked object is broken b/c the owner it points to has been removed from the simulation system
     bool isBroken = false;
-    // If it is a tracked mesh, then this is the offset for its first facet in the triangle geometry arrays
-    size_t facetID;
-    // If it is a tracked mesh, then this is the number of triangle facets that it has
-    size_t nFacets;
+    // The offset for its first geometric compoent in the tracked objects. For example, if it is mesh, then this is the
+    // first triangle ID.
+    size_t geoID;
+    // The number of geometric entities (sphere components, triangles or analytical components) the tracked objects
+    // have.
+    size_t nGeos;
 };
 
 }  // namespace deme
