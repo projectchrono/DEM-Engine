@@ -1248,8 +1248,8 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     // Then equip acquisition strategies for geo wildcards.
     // geo_wc_acquisition_B_sph, geo_wc_acquisition_B_tri, geo_wc_acquisition_B_anal cannot be incorporated into
     // ingredient_acquisition_B, since they are different for the 3 cases...
-    equip_geo_wildcards(ingredient_definition, geo_wc_acquisition_B_sph, geo_wc_acquisition_B_tri,
-                        geo_wc_acquisition_B_anal, added_geo_wildcards);
+    equip_geo_wildcards(ingredient_definition, ingredient_acquisition_A, geo_wc_acquisition_B_sph,
+                        geo_wc_acquisition_B_tri, geo_wc_acquisition_B_anal, added_geo_wildcards);
     // Currently, owner_wildcard_write_back and geo_wildcard_write_back might be blank, since give the write-back
     // control to the user, and they may need to use atomic operations (atomicExch or atomicAdd) to update the
     // wildcards.
@@ -1599,7 +1599,7 @@ inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::strin
 
     // Depending on the force model, there could be a few material properties that should be specified by the user
     const std::set<std::string> mat_prop_that_must_exist = m_force_model->m_must_have_mat_props;
-    // Those must-haves will be added to the pool (whcih is a set of material prop names that we know)
+    // Those must-haves will be added to the pool (which is a set of material prop names that we know)
     m_material_prop_names.insert(mat_prop_that_must_exist.begin(), mat_prop_that_must_exist.end());
     m_material_prop_names.insert(m_pairwise_material_prop_names.begin(), m_pairwise_material_prop_names.end());
 

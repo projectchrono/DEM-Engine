@@ -57,5 +57,5 @@ if (overlapDepth > 0) {
     const double Gconst = 6.674e-11 * 86400 * 86400 / 1.496e+11 / 1.496e+11 / 1.496e+11;
     const double ABdist2 = dot(bodyAPos - bodyBPos, bodyAPos - bodyBPos);
     // To A, gravity pulls it towards B, so -B2A direction
-    force += Gconst * my_mass[AGeo] * my_mass[BGeo] / ABdist2 * (-B2A);
+    force += Gconst * my_mass_A[AGeo] * my_mass_B[BGeo] / ABdist2 * (-B2A);
 }

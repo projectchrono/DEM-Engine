@@ -10,6 +10,11 @@
 // `Geometry Wildcard', where the amount of charges is associated with each
 // sphere component (of clumps) and triangles (of meshes). Then a custom force
 // model is used to derive the electrostatic force in addition to contact forces.
+//
+// NOTE: If you want to create your own force model, it's probably a good idea
+// to understand the default model in the file FullHertzianForceModel.cu
+// (Hertzian--Mindlin), how the normal and tangential forces are calculated,
+// then use it as a starting point to add your own force, like in this demo.
 // =============================================================================
 
 #include <DEM/API.h>
@@ -31,7 +36,7 @@ std::string force_model();
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(DEBUG);
+    DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
@@ -56,9 +61,11 @@ int main() {
     my_force_model->SetMustPairwiseMatProp({"CoR", "mu", "Crr"});
     my_force_model->SetPerContactWildcards({"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"});
     // Use variable name `Q' for the amount of electrc charge.
+    // NOTE! If you call it Q here, then you can refer to this wildcard array using variable names Q_A amd Q_B in
+    // your custom force model.
     my_force_model->SetPerGeometryWildcards({"Q"});
 
-    float init_charge = 0;
+    float init_charge = 2e-8;  // Coulomb as the unit...
     float cone_speed = 0.1;
     float step_size = 5e-6;
     double world_size = 2;
@@ -74,6 +81,7 @@ int main() {
     auto walls = DEMSim.AddExternalObject();
     walls->AddCylinder(make_float3(0), make_float3(0, 0, 1), soil_bin_diameter / 2., mat_type_terrain, 0);
     walls->AddPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_terrain);
+    walls->AddPlane(make_float3(0, 0, world_size / 2. - world_size / 20.), make_float3(0, 0, -1), mat_type_terrain);
 
     // Define the terrain particle templates
     // Calculate its mass and MOI
@@ -128,12 +136,12 @@ int main() {
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
 
     // This ensures that the force model is in effect even for some `contacts' that are not physical contacts, since the
-    // electrostatic force should work in a distance. We assume that this effect won't be longer than 5cm.
-    DEMSim.SetFamilyExtraMargin(0, 0.02);
-    DEMSim.SetFamilyExtraMargin(1, 0.02);
+    // electrostatic force should work in a distance. We assume that this effect won't be longer than 5mm.
+    DEMSim.SetFamilyExtraMargin(0, 0.005);
+    DEMSim.SetFamilyExtraMargin(1, 0.005);
     // If you know your extra margin policy gonna make the average number of contacts per sphere huge, then set this so
     // that the solver does not error out when checking it.
-    DEMSim.SetErrorOutAvgContacts(500);
+    DEMSim.SetErrorOutAvgContacts(200);
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
@@ -143,15 +151,27 @@ int main() {
     out_dir += "/DemoOutput_Electrostatic";
     std::filesystem::create_directory(out_dir);
 
-    // Settle
-    DEMSim.DisableContactBetweenFamilies(0, 1);
-    DEMSim.DoDynamicsThenSync(1.);
-
     float sim_end = 9.0;
     unsigned int fps = 20;
     float frame_time = 1.0 / fps;
     std::cout << "Output at " << fps << " FPS" << std::endl;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
+    unsigned int frame_count = 0;
+    unsigned int step_count = 0;
+
+    // Settle
+    DEMSim.DisableContactBetweenFamilies(0, 1);
+    for (float t = 0; t < 1.; t += frame_time) {
+        char filename[200], meshname[200];
+        std::cout << "Outputting frame: " << frame_count << std::endl;
+        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame_count);
+        sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame_count++);
+        DEMSim.WriteSphereFile(std::string(filename));
+        DEMSim.WriteMeshFile(std::string(meshname));
+        DEMSim.ShowThreadCollaborationStats();
+
+        DEMSim.DoDynamics(frame_time);
+    }
 
     // Put the cone in place
     float terrain_max_z = max_z_finder->GetValue();
@@ -160,13 +180,11 @@ int main() {
     // system center of the rod is in its middle)
     rod_tracker->SetPos(make_float3(0, 0, rod_length / 2. + current_height));
 
-    unsigned int frame_count = 0;
-    unsigned int step_count = 0;
     DEMSim.EnableContactBetweenFamilies(0, 1);
 
     // We demonstrate using trackers to set a geometry wildcard. Q is now set for each triangle facet, and it's
     // the opposite charge to the particles. So the rod should attract the particles.
-    rod_tracker->SetGeometryWildcardValue("Q", std::vector<float>(num_tri, -init_charge));
+    rod_tracker->SetGeometryWildcardValue("Q", std::vector<float>(num_tri, -10. * init_charge));
 
     for (float t = 0; t < sim_end; t += step_size, step_count++) {
         if (step_count % out_steps == 0) {
@@ -296,7 +314,6 @@ std::string force_model() {
                         // Its direction is that it `resists' rotation, see picture in
                         // https://en.wikipedia.org/wiki/Rolling_resistance.
                         torque_only_force = (v_rot / v_rot_mag) * (Crr_cnt * length(force));
-                        // printf("torque force: %f, %f, %f\n", torque_only_force.x, torque_only_force.y, torque_only_force.z);
                     }
                 }
             }
@@ -339,18 +356,26 @@ std::string force_model() {
         // Now we add an extra electrostatic force
         ////////////////////////////////////////////////
         {
-            const double k = 8.99e9;
+            const float k = 8.99e9;
             const double ABdist2 = dot(bodyAPos - bodyBPos, bodyAPos - bodyBPos);
-            // If Q1 and Q2 are the same sign, then the force pushes A away from B, so B2A is the direction.
-            force += k * Q[AGeo] * Q[BGeo] / ABdist2 * (B2A);
+            // If Q_A and Q_B are the same sign, then the force pushes A away from B, so B2A is the direction.
+            force += k * Q_A[AGeo] * Q_B[BGeo] / ABdist2 * (B2A);
             // Fun part: we can modify the electric charge on the fly. But we have to use atomic, since multiple contacts
             // can modify the same Q.
-            if (overlapDepth > 0) {  // Exchange the charge only in physical contact
-                double avg_Q = (Q[AGeo] + Q[BGeo]) / 2.;
-                double A_change_dir = (abs(avg_Q - Q[AGeo]) > 1e-11) ? (avg_Q - Q[AGeo]) / abs(avg_Q - Q[AGeo]) : 0.;
-                // Modify the charge they carry... the rate is 1e-6 per second
-                atomicAdd(Q + AGeo, A_change_dir * 1e-6 * ts);
-                atomicAdd(Q + BGeo, -A_change_dir * 1e-6 * ts);
+            // But this is not recommend unless you understand what you are doing, and there are a lot of details related to it.
+            // For example, although the charges transfer between geometries, the geometries within one clump cannot
+            // re-distribute elec charges among them, since no contact among geometries in one clump. Still, you could write
+            // your own subroutine to further modify those geometry and/or own wildcards in your script, or within the force
+            // model. 
+            // On the other hand, if you do not need to modify the wildcards, you just need to use them for calculating
+            // the force, then that is probably easier and with less strings attached to it. I can see this being more
+            // useful.
+            if (overlapDepth > 0) {  // Exchange the elec charge only in physical contact
+                float avg_Q = (Q_A[AGeo] + Q_B[BGeo]) / 2.;
+                float A_change_dir = (abs(avg_Q - Q_A[AGeo]) > 1e-11) ? (avg_Q - Q_A[AGeo]) / abs(avg_Q - Q_A[AGeo]) : 0.;
+                // Modify the charge they carry... the rate is 1e-8 per second
+                atomicAdd(Q_A + AGeo, A_change_dir * 1e-8 * ts);
+                atomicAdd(Q_B + BGeo, -A_change_dir * 1e-8 * ts);
             }
         }
     )V0G0N";

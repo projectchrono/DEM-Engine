@@ -57,6 +57,8 @@ int main() {
     // what you have here are, say 3-sphere clumps, rather than single sphere clumps, then the gravitational
     // pull may be double- or triple-counted. In the case of using 3-sphere clumps, maybe you should assign
     // each sphere say 1/3 of the total clump mass, then use this geometry wildcard to calculate the gravity.
+    // In the force model script ForceModelWithGravity.cu, you can now use my_mass_A and my_mass_B to refer
+    // to this wildcard and use it in force calculations.
     my_force_model->SetPerGeometryWildcards({"my_mass"});
 
     // For all the celestial bodies, define as templates. Their radii is just for visialization.

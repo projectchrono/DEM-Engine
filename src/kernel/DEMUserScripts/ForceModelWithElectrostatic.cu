@@ -99,7 +99,6 @@ if (overlapDepth > 0) {
                 // Its direction is that it `resists' rotation, see picture in
                 // https://en.wikipedia.org/wiki/Rolling_resistance.
                 torque_only_force = (v_rot / v_rot_mag) * (Crr_cnt * length(force));
-                // printf("torque force: %f, %f, %f\n", torque_only_force.x, torque_only_force.y, torque_only_force.z);
             }
         }
     }
@@ -129,7 +128,7 @@ if (overlapDepth > 0) {
     delta_tan_x = delta_tan.x;
     delta_tan_y = delta_tan.y;
     delta_tan_z = delta_tan.z;
-} else { 
+} else {
     // This is to be more rigorous. If in fact no physical contact, then contact wildcards (such as contact history)
     // should be cleared (they will also be automatically cleared if the contact is no longer detected).
     delta_time = 0;
@@ -142,17 +141,25 @@ if (overlapDepth > 0) {
 // Now we add an extra electrostatic force
 ////////////////////////////////////////////////
 {
-    const double k = 8.99e9;
+    const float k = 8.99e9;
     const double ABdist2 = dot(bodyAPos - bodyBPos, bodyAPos - bodyBPos);
-    // If Q1 and Q2 are the same sign, then the force pushes A away from B, so B2A is the direction.
-    force += k * Q[AGeo] * Q[BGeo] / ABdist2 * (B2A);
+    // If Q_A and Q_B are the same sign, then the force pushes A away from B, so B2A is the direction.
+    force += k * Q_A[AGeo] * Q_B[BGeo] / ABdist2 * (B2A);
     // Fun part: we can modify the electric charge on the fly. But we have to use atomic, since multiple contacts
     // can modify the same Q.
-    if (overlapDepth > 0) {  // Exchange the charge only in physical contact
-        double avg_Q = (Q[AGeo] + Q[BGeo]) / 2.;
-        double A_change_dir = (abs(avg_Q - Q[AGeo]) > 1e-11) ? (avg_Q - Q[AGeo]) / abs(avg_Q - Q[AGeo]) : 0.;
-        // Modify the charge they carry... the rate is 1e-6 per second
-        atomicAdd(Q + AGeo, A_change_dir * 1e-6 * ts);
-        atomicAdd(Q + BGeo, -A_change_dir * 1e-6 * ts);
+    // But this is not recommend unless you understand what you are doing, and there are a lot of details related to it.
+    // For example, although the charges transfer between geometries, the geometries within one clump cannot
+    // re-distribute elec charges among them, since no contact among geometries in one clump. Still, you could write
+    // your own subroutine to further modify those geometry and/or own wildcards in your script, or within the force
+    // model. 
+    // On the other hand, if you do not need to modify the wildcards, you just need to use them for calculating
+    // the force, then that is probably easier and with less strings attached to it. I can see this being more
+    // useful.
+    if (overlapDepth > 0) {  // Exchange the elec charge only in physical contact
+        float avg_Q = (Q_A[AGeo] + Q_B[BGeo]) / 2.;
+        float A_change_dir = (abs(avg_Q - Q_A[AGeo]) > 1e-11) ? (avg_Q - Q_A[AGeo]) / abs(avg_Q - Q_A[AGeo]) : 0.;
+        // Modify the charge they carry... the rate is 1e-8 per second
+        atomicAdd(Q_A + AGeo, A_change_dir * 1e-8 * ts);
+        atomicAdd(Q_B + BGeo, -A_change_dir * 1e-8 * ts);
     }
 }
