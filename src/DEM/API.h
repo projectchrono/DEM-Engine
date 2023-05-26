@@ -380,9 +380,11 @@ class DEMSolver {
     /// @param fam Family number.
     void SetOwnerFamily(bodyID_t ownerID, family_t fam);
     /// Rewrite the relative positions of the flattened triangle soup, starting from `start', using triangle nodal
-    /// positions in `triangles'. If `overwrite' is true, then it is overwriting the existing nodal info; otherwise it
-    /// just adds to it.
-    void SetTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite = true);
+    /// positions in `triangles'.
+    void SetTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles);
+    /// Rewrite the relative positions of the flattened triangle soup, starting from `start' by the amount stipulated in
+    /// updates.
+    void UpdateTriNodeRelPos(size_t start, const std::vector<float3>& updates);
 
     /// @brief Get all clump--clump contacts in the simulation system.
     /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
@@ -490,12 +492,40 @@ class DEMSolver {
     void SetContactWildcards(const std::set<std::string>& wildcards);
     /// @brief Set the names for the extra quantities that will be associated with each owner.
     void SetOwnerWildcards(const std::set<std::string>& wildcards);
+    /// @brief Set the names for the extra quantities that will be associated with each geometry entity (such as sphere,
+    /// triangle).
+    void SetGeometryWildcards(const std::set<std::string>& wildcards);
 
-    /// Globally modify a owner wildcard's values
-    void SetOwnerWildcardValue(const std::string& name, const std::vector<float>& vals);
-    void SetOwnerWildcardValue(const std::string& name, float val) {
-        SetOwnerWildcardValue(name, std::vector<float>(1, val));
+    /// @brief Set the wildcard values of some triangles.
+    /// @param geoID The ID of the starting (first) triangle that needs to be modified.
+    /// @param name The name of the wildcard.
+    /// @param vals A vector of values that will be assigned to the triangles starting from geoID.
+    void SetTriWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals);
+    /// @brief Set the wildcard values of some spheres.
+    /// @param geoID The ID of the starting (first) sphere that needs to be modified.
+    /// @param name The name of the wildcard.
+    /// @param vals A vector of values that will be assigned to the spheres starting from geoID.
+    void SetSphereWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals);
+    /// @brief Set the wildcard values of some analytical components.
+    /// @param geoID The ID of the starting (first) analytical component that needs to be modified.
+    /// @param name The name of the wildcard.
+    /// @param vals A vector of values that will be assigned to the analytical components starting from geoID.
+    void SetAnalWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals);
+
+    /// @brief Set the wildcard values of some owners.
+    /// @param ownerID The ID of the starting (first) owner that needs to be modified.
+    /// @param name The name of the wildcard.
+    /// @param vals A vector of values that will be assigned to the owners starting from ownerID.
+    void SetOwnerWildcardValue(bodyID_t ownerID, const std::string& name, const std::vector<float>& vals);
+    /// @brief Set the wildcard values of some owners.
+    /// @param ownerID The ID of the starting (first) owner that needs to be modified.
+    /// @param name The name of the wildcard.
+    /// @param val The value to set.
+    /// @param n The number of owners starting from the first that will be modified by this call. Default is 1.
+    void SetOwnerWildcardValue(bodyID_t ownerID, const std::string& name, float val, size_t n = 1) {
+        SetOwnerWildcardValue(ownerID, name, std::vector<float>(n, val));
     }
+
     /// Modify the owner wildcard's values of all entities in family N
     void SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, const std::vector<float>& vals);
     void SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, float val) {
@@ -520,10 +550,34 @@ class DEMSolver {
     /// @param extra_size The thickness of the extra contact margin.
     void SetFamilyExtraMargin(unsigned int N, float extra_size);
 
+    /// @brief Get the owner wildcard's values of a owner.
+    /// @param ownerID Owner's ID.
+    /// @param name Wildcard's name.
+    /// @return Value of this wildcard.
+    float GetOwnerWildcardValue(bodyID_t ownerID, const std::string& name);
     /// @brief Get the owner wildcard's values of all entities.
-    std::vector<float> GetOwnerWildcardValue(const std::string& name, float val);
+    std::vector<float> GetAllOwnerWildcardValue(const std::string& name);
     /// @brief Get the owner wildcard's values of all entities in family N.
-    std::vector<float> GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, float val);
+    std::vector<float> GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name);
+
+    /// @brief Get the geometry wildcard's values of a series of triangles.
+    /// @param geoID The ID of the first triangle.
+    /// @param name Wildcard's name.
+    /// @param n The number of triangles to query following the ID of the first one.
+    /// @return Vector of values of the wildcards.
+    std::vector<float> GetTriWildcardValue(bodyID_t geoID, const std::string& name, size_t n);
+    /// @brief Get the geometry wildcard's values of a series of spheres.
+    /// @param geoID The ID of the first sphere.
+    /// @param name Wildcard's name.
+    /// @param n The number of spheres to query following the ID of the first one.
+    /// @return Vector of values of the wildcards.
+    std::vector<float> GetSphereWildcardValue(bodyID_t geoID, const std::string& name, size_t n);
+    /// @brief Get the geometry wildcard's values of a series of analytical entities.
+    /// @param geoID The ID of the first analytical entity.
+    /// @param name Wildcard's name.
+    /// @param n The number of analytical entities to query following the ID of the first one.
+    /// @return Vector of values of the wildcards.
+    std::vector<float> GetAnalWildcardValue(bodyID_t geoID, const std::string& name, size_t n);
 
     /// Change all entities with family number ID_from to have a new number ID_to, when the condition defined by the
     /// string is satisfied by the entities in question. This should be called before initialization, and will be baked
@@ -781,6 +835,8 @@ class DEMSolver {
     void EnableOwnerWildcardOutput(bool enable = true) { m_is_out_owner_wildcards = enable; }
     /// Enable/disable outputting contact wildcard values to the contact file.
     void EnableContactWildcardOutput(bool enable = true) { m_is_out_cnt_wildcards = enable; }
+    /// Enable/disable outputting geometry wildcard values to the contact file.
+    void EnableGeometryWildcardOutput(bool enable = true) { m_is_out_geo_wildcards = enable; }
 
     /// Let dT do this call and return the reduce value of the inspected quantity
     float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
@@ -831,6 +887,7 @@ class DEMSolver {
     // If the solver should output wildcards to file
     bool m_is_out_owner_wildcards = false;
     bool m_is_out_cnt_wildcards = false;
+    bool m_is_out_geo_wildcards = false;
 
     // User-instructed simulation `world' size. Note it is an approximate of the true size and we will generate a world
     // not smaller than this. This is useful if the user want to automatically add BCs enclosing this user-defined
@@ -1061,6 +1118,8 @@ class DEMSolver {
 
     // A map that records the numbering for user-defined owner wildcards
     std::unordered_map<std::string, unsigned int> m_owner_wc_num;
+    // A map that records the numbering for user-defined geometry wildcards
+    std::unordered_map<std::string, unsigned int> m_geo_wc_num;
 
     ////////////////////////////////////////////////////////////////////////////////
     // Cached user's direct (raw) inputs concerning the actual physics objects
@@ -1279,7 +1338,13 @@ class DEMSolver {
     void resetWorkerThreads();
     /// Transfer newly loaded clumps/meshed objects to the GPU-side in mid-simulation and allocate GPU memory space for
     /// them
-    void updateClumpMeshArrays(size_t nOwners, size_t nClumps, size_t nSpheres, size_t nTriMesh, size_t nFacets);
+    void updateClumpMeshArrays(size_t nOwners,
+                               size_t nClumps,
+                               size_t nSpheres,
+                               size_t nTriMesh,
+                               size_t nFacets,
+                               unsigned int nExtObj_old,
+                               unsigned int nAnalGM_old);
     /// Add content to the flattened analytical component array.
     /// Note that analytical component is big different in that they each has a position in the jitified analytical
     /// templates, insteads of like a clump, has an extra ComponentOffset array points it to the right jitified template

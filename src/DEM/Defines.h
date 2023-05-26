@@ -146,9 +146,10 @@ enum OUTPUT_CONTENT {
     FAMILY = 128,
     MAT = 256,
     OWNER_WILDCARD = 512,
+    GEO_WILDCARD = 1024,
     // How much this clump expanded in size via ChangeClumpSizes, compared to its `vanilla' template. Can be useful if
     // the user imposed some fine-grain clump size control.
-    EXP_FACTOR = 1024
+    EXP_FACTOR = 2048
 };
 // Output particles as individual (component) spheres, or as owner clumps (clump CoMs for location, as an example)?
 enum class SPATIAL_DIR { X, Y, Z, NONE };
@@ -236,9 +237,10 @@ struct DEMSimParams {
     // Stepping method
     TIME_INTEGRATOR stepping = TIME_INTEGRATOR::FORWARD_EULER;
 
-    // Number of wildcards (extra property) arrays associated with contacts and owners
+    // Number of wildcards (extra property) arrays associated with contacts and owners and geometries
     unsigned int nContactWildcards;
     unsigned int nOwnerWildcards;
+    unsigned int nGeoWildcards;
 
     // The max vel at which the solver errors out
     float errOutVel = DEME_HUGE_FLOAT;
@@ -346,11 +348,14 @@ struct DEMDataDT {
     float* mmiZZ;
     float* volumeOwnerBody;
 
-    // Wildcards. These are some quantities that you can associate with contact pairs and/or owner objects. Very
+    // Wildcards. These are some quantities that you can associate with contact pairs and objects. Very
     // typically, contact history info in Hertzian model in this DEM tool is a wildcard, and electric charges can be
-    // registered on granular particles with wildcards.
+    // registered on spheres (clump components) with wildcards.
     float* contactWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
     float* ownerWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
+    float* sphereWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
+    float* analWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
+    float* triWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
 
     // dT believes this amount of future drift is ideal
     unsigned int perhapsIdealFutureDrift = 0;

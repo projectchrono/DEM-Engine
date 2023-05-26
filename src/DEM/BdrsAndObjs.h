@@ -410,6 +410,37 @@ class DEMMeshConnected {
     /// (the free sides have triangle id = -1).
     /// Return false if some edge has more than 2 neighboring triangles
     bool ComputeNeighbouringTriangleMap(std::vector<std::array<int, 4>>& tri_map) const;
+
+    ////////////////////////////////////////////////////////
+    // Some geo wildcard-related stuff 
+    ////////////////////////////////////////////////////////
+    // Initial geometry wildcard that all triangles should have
+    std::unordered_map<std::string, std::vector<float>> geo_wildcards;
+    // Can be used to save mem after initialization
+    void ClearWildcards() { deallocate_array(geo_wildcards); }
+    void SetGeometryWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
+        if (wildcards.begin()->second.size() != nTri) {
+            std::stringstream ss;
+            ss << "Input gemometry wildcard arrays in a SetGeometryWildcards call must all have the same size as the "
+                  "number of triangles in this mesh.\nHere, the input array has length "
+               << wildcards.begin()->second.size() << " but this mesh has " << nTri << " triangles." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        geo_wildcards = wildcards;
+    }
+    void AddGeometryWildcard(const std::string& name, const std::vector<float>& vals) {
+        if (vals.size() != nTri) {
+            std::stringstream ss;
+            ss << "Input gemometry wildcard array in a AddGeometryWildcard call must have the same size as the number "
+                  "of triangles in this mesh.\nHere, the input array has length "
+               << vals.size() << " but this mesh has " << nTri << " triangles." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        geo_wildcards[name] = vals;
+    }
+    void AddGeometryWildcard(const std::string& name, float val) {
+        AddGeometryWildcard(name, std::vector<float>(nTri, val));
+    }
 };
 
 }  // namespace deme

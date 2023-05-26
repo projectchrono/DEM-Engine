@@ -36,6 +36,7 @@ SET(DEMOS
 		DEMdemo_Granular_WoodenSpheres
 		DEMdemo_SolarSystem
 		DEMdemo_Repose_Cylinder
+		DEMdemo_Electrostatic
 )
 
 # ------------------------------------------------------------------------------

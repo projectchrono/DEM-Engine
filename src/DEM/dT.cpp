@@ -69,6 +69,11 @@ void DEMDynamicThread::packDataPointers() {
     for (unsigned int i = 0; i < simParams->nOwnerWildcards; i++) {
         granData->ownerWildcards[i] = ownerWildcards[i].data();
     }
+    for (unsigned int i = 0; i < simParams->nGeoWildcards; i++) {
+        granData->sphereWildcards[i] = sphereWildcards[i].data();
+        granData->analWildcards[i] = analWildcards[i].data();
+        granData->triWildcards[i] = triWildcards[i].data();
+    }
 
     // The offset info that indexes into the template arrays
     granData->ownerClumpBody = ownerClumpBody.data();
@@ -137,7 +142,8 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
                                     float expand_safety_param,
                                     float expand_safety_adder,
                                     const std::set<std::string>& contact_wildcards,
-                                    const std::set<std::string>& owner_wildcards) {
+                                    const std::set<std::string>& owner_wildcards,
+                                    const std::set<std::string>& geo_wildcards) {
     simParams->nvXp2 = nvXp2;
     simParams->nvYp2 = nvYp2;
     simParams->nvZp2 = nvZp2;
@@ -163,9 +169,11 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
 
     simParams->nContactWildcards = contact_wildcards.size();
     simParams->nOwnerWildcards = owner_wildcards.size();
+    simParams->nGeoWildcards = geo_wildcards.size();
 
     m_contact_wildcard_names = contact_wildcards;
     m_owner_wildcard_names = owner_wildcards;
+    m_geo_wildcard_names = geo_wildcards;
 }
 
 void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {
@@ -341,11 +349,19 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
         // Allocate memory for each wildcard array
         contactWildcards.resize(simParams->nContactWildcards);
         ownerWildcards.resize(simParams->nOwnerWildcards);
+        sphereWildcards.resize(simParams->nGeoWildcards);
+        analWildcards.resize(simParams->nGeoWildcards);
+        triWildcards.resize(simParams->nGeoWildcards);
         for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
             DEME_TRACKED_RESIZE_FLOAT(contactWildcards[i], cnt_arr_size, 0);
         }
         for (unsigned int i = 0; i < simParams->nOwnerWildcards; i++) {
             DEME_TRACKED_RESIZE_FLOAT(ownerWildcards[i], nOwnerBodies, 0);
+        }
+        for (unsigned int i = 0; i < simParams->nGeoWildcards; i++) {
+            DEME_TRACKED_RESIZE_FLOAT(sphereWildcards[i], nSpheresGM, 0);
+            DEME_TRACKED_RESIZE_FLOAT(analWildcards[i], nAnalGM, 0);
+            DEME_TRACKED_RESIZE_FLOAT(triWildcards[i], nTriGM, 0);
         }
     }
 
@@ -617,9 +633,10 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
 
                 i++;
             }
-            // If this batch as owner wildcards, we load it in
+            // If this batch has wildcards, we load it in
             {
                 unsigned int w_num = 0;
+                // Owner wildcard first
                 for (const auto& w_name : m_owner_wildcard_names) {
                     if (a_batch->owner_wildcards.find(w_name) == a_batch->owner_wildcards.end()) {
                         // No such wildcard loaded
@@ -635,9 +652,27 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                     }
                     w_num++;
                 }
+                // Then geo wildcards
+                w_num = 0;
+                for (const auto& w_name : m_geo_wildcard_names) {
+                    if (a_batch->geo_wildcards.find(w_name) == a_batch->geo_wildcards.end()) {
+                        // No such wildcard loaded
+                        DEME_WARNING(
+                            "Geometry wildcard %s is needed by force model, yet not specified for a batch of "
+                            "clumps.\nTheir initial values are defauled to 0.",
+                            w_name.c_str());
+                    } else {
+                        for (size_t jj = 0; jj < a_batch->GetNumSpheres(); jj++) {
+                            sphereWildcards[w_num].at(nExistSpheres + n_processed_sp_comp + jj) =
+                                a_batch->geo_wildcards[w_name].at(jj);
+                        }
+                    }
+                    w_num++;
+                }
             }
 
             DEME_DEBUG_PRINTF("Loaded a batch of %zu clumps.", a_batch->GetNumClumps());
+            DEME_DEBUG_PRINTF("This batch has %zu spheres.", a_batch->GetNumSpheres());
 
             // Write the extra contact pairs to memory
             for (size_t jj = 0; jj < a_batch->GetNumContacts(); jj++) {
@@ -655,16 +690,16 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                 cnt_arr_offset++;
             }
 
-            // Make ready for the next batch, update contact history offset
+            // Make ready for the next batch...
             n_processed_sp_comp = k;
+            nTotalClumpsThisCall = i;
         }
 
         DEME_DEBUG_PRINTF("Total number of transferred clumps this time: %zu", i);
         DEME_DEBUG_PRINTF("Total number of existing owners in simulation: %zu", nExistOwners);
         DEME_DEBUG_PRINTF("Total number of owners in simulation after this init call: %zu",
                           (size_t)simParams->nOwnerBodies);
-        nTotalClumpsThisCall = i;
-
+        
         // If user loaded contact pairs, we need to inform kT on the first time step...
         if (cnt_arr_offset > *stateOfSolver_resources.pNumContacts) {
             *stateOfSolver_resources.pNumContacts = cnt_arr_offset;
@@ -740,6 +775,26 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         // If got here, it is a mesh
         ownerTypes.at(i + owner_offset_for_mesh_obj) = OWNER_T_MESH;
 
+        // Store inherent geo wildcards
+        {
+            unsigned int w_num = 0;
+            for (const auto& w_name : m_geo_wildcard_names) {
+                if (input_mesh_objs.at(i)->geo_wildcards.find(w_name) == input_mesh_objs.at(i)->geo_wildcards.end()) {
+                    // No such wildcard loaded
+                    DEME_WARNING(
+                        "Geometry wildcard %s is needed by force model, yet not specified for a mesh.\nTheir "
+                        "initial values are defauled to 0.",
+                        w_name.c_str());
+                } else {
+                    for (size_t jj = 0; jj < input_mesh_objs.at(i)->GetNumTriangles(); jj++) {
+                        triWildcards[w_num].at(nExistingFacets + k + jj) =
+                            input_mesh_objs.at(i)->geo_wildcards[w_name].at(jj);
+                    }
+                }
+                w_num++;
+            }
+        }
+
         // Store this mesh in dT's cache
         input_mesh_objs.at(i)->owner = i + owner_offset_for_mesh_obj;
         m_meshes.push_back(input_mesh_objs.at(i));
@@ -769,6 +824,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         //// TODO: and initial vel?
 
         // Per-facet info
+        //// TODO: This flatten-then-init approach is historical and too ugly.
         size_t this_facet_owner = mesh_facet_owner.at(k);
         for (; k < mesh_facet_owner.size(); k++) {
             // mesh_facet_owner run length is the num of facets in this mesh entity
@@ -785,6 +841,9 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         family_t this_family_num = input_mesh_obj_family.at(i);
         familyID.at(i + owner_offset_for_mesh_obj) = this_family_num;
 
+        // To save some mem
+        m_meshes.back()->ClearWildcards();
+
         DEME_DEBUG_PRINTF("dT just loaded a mesh in family %u", +(this_family_num));
         DEME_DEBUG_PRINTF("This mesh is owner %zu", (i + owner_offset_for_mesh_obj));
         DEME_DEBUG_PRINTF("Number of triangle facets loaded thus far: %zu", k);
@@ -792,18 +851,28 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
 }
 
 void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
-                                        const std::vector<float3>& input_ext_obj_xyz,
+                                        const std::vector<unsigned int>& ext_obj_comp_num,
                                         const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
                                         std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs,
                                         size_t nExistOwners,
-                                        size_t nExistingFacets) {
+                                        size_t nExistSpheres,
+                                        size_t nExistingFacets,
+                                        unsigned int nExistingAnalGM) {
     // We take notes on how many clumps each batch has, it will be useful when we assemble the tracker information
-    std::vector<size_t> prescans_batch_size;
+    std::vector<size_t> prescans_batch_size, prescans_batch_sphere_size;
     prescans_batch_size.push_back(0);
+    prescans_batch_sphere_size.push_back(0);
     for (const auto& a_batch : input_clump_batches) {
         prescans_batch_size.push_back(prescans_batch_size.back() + a_batch->GetNumClumps());
+        prescans_batch_sphere_size.push_back(prescans_batch_sphere_size.back() + a_batch->GetNumSpheres());
     }
-    // Also take notes on num of facets of each mesh obj
+    // Also take notes of num of analytical geometries of each analytical body
+    std::vector<size_t> prescans_ext_obj_size;
+    prescans_ext_obj_size.push_back(0);
+    for (const auto& geo_num : ext_obj_comp_num) {
+        prescans_ext_obj_size.push_back(prescans_ext_obj_size.back() + geo_num);
+    }
+    // Also take notes of num of facets of each mesh obj
     std::vector<size_t> prescans_mesh_size;
     prescans_mesh_size.push_back(0);
     for (const auto& a_mesh : input_mesh_objs) {
@@ -821,18 +890,24 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
                 tracked_obj->ownerID = nExistOwners + prescans_batch_size.at(tracked_obj->load_order);
                 tracked_obj->nSpanOwners = prescans_batch_size.at(tracked_obj->load_order + 1) -
                                            prescans_batch_size.at(tracked_obj->load_order);
+                tracked_obj->geoID = nExistSpheres + prescans_batch_sphere_size.at(tracked_obj->load_order);
+                tracked_obj->nGeos = prescans_batch_sphere_size.at(tracked_obj->load_order + 1) -
+                                     prescans_batch_sphere_size.at(tracked_obj->load_order);
                 break;
             case (OWNER_TYPE::ANALYTICAL):
                 // prescans_batch_size.back() is the total num of loaded clumps this time
                 tracked_obj->ownerID = nExistOwners + tracked_obj->load_order + prescans_batch_size.back();
                 tracked_obj->nSpanOwners = 1;
+                tracked_obj->geoID = nExistingAnalGM + prescans_ext_obj_size.at(tracked_obj->load_order);
+                tracked_obj->nGeos = prescans_ext_obj_size.at(tracked_obj->load_order + 1) -
+                                     prescans_ext_obj_size.at(tracked_obj->load_order);
                 break;
             case (OWNER_TYPE::MESH):
                 tracked_obj->ownerID =
-                    nExistOwners + input_ext_obj_xyz.size() + prescans_batch_size.back() + tracked_obj->load_order;
+                    nExistOwners + ext_obj_comp_num.size() + prescans_batch_size.back() + tracked_obj->load_order;
                 tracked_obj->nSpanOwners = 1;
-                tracked_obj->facetID = nExistingFacets + prescans_mesh_size.at(tracked_obj->load_order);
-                tracked_obj->nFacets =
+                tracked_obj->geoID = nExistingFacets + prescans_mesh_size.at(tracked_obj->load_order);
+                tracked_obj->nGeos =
                     prescans_mesh_size.at(tracked_obj->load_order + 1) - prescans_mesh_size.at(tracked_obj->load_order);
                 break;
             default:
@@ -877,7 +952,7 @@ void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMCl
                          mesh_facet_owner, mesh_facet_materials, mesh_facets, clump_templates, ext_obj_mass_types,
                          ext_obj_moi_types, ext_obj_comp_num, mesh_obj_mass_types, mesh_obj_moi_types, 0, 0, 0);
 
-    buildTrackedObjs(input_clump_batches, input_ext_obj_xyz, input_mesh_objs, tracked_objs, 0, 0);
+    buildTrackedObjs(input_clump_batches, ext_obj_comp_num, input_mesh_objs, tracked_objs, 0, 0, 0, 0);
 }
 
 void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
@@ -905,7 +980,9 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                                              size_t nExistingClumps,
                                              size_t nExistingSpheres,
                                              size_t nExistingTriMesh,
-                                             size_t nExistingFacets) {
+                                             size_t nExistingFacets,
+                                             unsigned int nExistingObj,
+                                             unsigned int nExistingAnalGM) {
     // No policy changes here
 
     // Analytical objects-related arrays should be empty
@@ -916,8 +993,8 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                          nExistingSpheres, nExistingFacets);
 
     // Make changes to tracked objects (potentially add more)
-    buildTrackedObjs(input_clump_batches, input_ext_obj_xyz, input_mesh_objs, tracked_objs, nExistingOwners,
-                     nExistingFacets);
+    buildTrackedObjs(input_clump_batches, ext_obj_comp_num, input_mesh_objs, tracked_objs, nExistingOwners,
+                     nExistingSpheres, nExistingFacets, nExistingAnalGM);
 }
 
 void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
@@ -1024,6 +1101,12 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
             outstrstream << "," + name;
         }
     }
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::GEO_WILDCARD) {
+        for (const auto& name : m_geo_wildcard_names) {
+            outstrstream << "," + name;
+        }
+    }
+
     outstrstream << "\n";
 
     for (size_t i = 0; i < simParams->nSpheresGM; i++) {
@@ -1098,6 +1181,11 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
             // Model.h
             for (unsigned int j = 0; j < m_owner_wildcard_names.size(); j++) {
                 outstrstream << "," << ownerWildcards[j][i];
+            }
+        }
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::GEO_WILDCARD) {
+            for (unsigned int j = 0; j < m_geo_wildcard_names.size(); j++) {
+                outstrstream << "," << sphereWildcards[j][i];
             }
         }
 
@@ -1708,7 +1796,7 @@ inline void DEMDynamicThread::migratePersistentContacts() {
 }
 
 inline void DEMDynamicThread::calculateForces() {
-    // reset force (acceleration) arrays for this time step and apply gravity
+    // Reset force (acceleration) arrays for this time step
     size_t nContactPairs = *stateOfSolver_resources.pNumContacts;
     size_t threads_needed_for_prep =
         (simParams->nOwnerBodies > nContactPairs) ? simParams->nOwnerBodies : nContactPairs;
@@ -1725,7 +1813,7 @@ inline void DEMDynamicThread::calculateForces() {
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 
-    // TODO: is there a better way??? Like memset?
+    //// TODO: is there a better way??? Like memset?
     // DEME_GPU_CALL(cudaMemset(granData->contactForces, zeros, nContactPairs * sizeof(float3)));
     // DEME_GPU_CALL(cudaMemset(granData->alphaX, 0, simParams->nOwnerBodies * sizeof(float)));
     // DEME_GPU_CALL(cudaMemset(granData->alphaY, 0, simParams->nOwnerBodies * sizeof(float)));
@@ -2229,13 +2317,27 @@ void DEMDynamicThread::setFamilyMeshMaterial(unsigned int N, unsigned int mat_id
     }
 }
 
-void DEMDynamicThread::setOwnerWildcardValue(unsigned int wc_num, const std::vector<float>& vals) {
-    size_t count = 0;
-    for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
-        ownerWildcards[wc_num].at(i) = vals.at(count);
-        if (count + 1 < vals.size()) {
-            count++;
-        }
+void DEMDynamicThread::setOwnerWildcardValue(bodyID_t ownerID, unsigned int wc_num, const std::vector<float>& vals) {
+    for (size_t i = 0; i < vals.size(); i++) {
+        ownerWildcards[wc_num].at(ownerID + i) = vals.at(i);
+    }
+}
+
+void DEMDynamicThread::setTriWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals) {
+    for (size_t i = 0; i < vals.size(); i++) {
+        triWildcards[wc_num].at(geoID + i) = vals.at(i);
+    }
+}
+
+void DEMDynamicThread::setSphWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals) {
+    for (size_t i = 0; i < vals.size(); i++) {
+        sphereWildcards[wc_num].at(geoID + i) = vals.at(i);
+    }
+}
+
+void DEMDynamicThread::setAnalWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals) {
+    for (size_t i = 0; i < vals.size(); i++) {
+        analWildcards[wc_num].at(geoID + i) = vals.at(i);
     }
 }
 
@@ -2253,7 +2355,32 @@ void DEMDynamicThread::setFamilyOwnerWildcardValue(unsigned int family_num,
     }
 }
 
-void DEMDynamicThread::getOwnerWildcardValue(std::vector<float>& res, unsigned int wc_num) {
+void DEMDynamicThread::getSphereWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n) {
+    res.resize(n);
+    for (size_t i = 0; i < n; i++) {
+        res[i] = sphereWildcards[wc_num].at(ID + i);
+    }
+}
+
+void DEMDynamicThread::getTriWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n) {
+    res.resize(n);
+    for (size_t i = 0; i < n; i++) {
+        res[i] = triWildcards[wc_num].at(ID + i);
+    }
+}
+
+void DEMDynamicThread::getAnalWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n) {
+    res.resize(n);
+    for (size_t i = 0; i < n; i++) {
+        res[i] = analWildcards[wc_num].at(ID + i);
+    }
+}
+
+float DEMDynamicThread::getOwnerWildcardValue(bodyID_t ID, unsigned int wc_num) {
+    return ownerWildcards[wc_num].at(ID);
+}
+
+void DEMDynamicThread::getAllOwnerWildcardValue(std::vector<float>& res, unsigned int wc_num) {
     res.resize(simParams->nOwnerBodies);
     for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
         res.at(i) = ownerWildcards[wc_num].at(i);
@@ -2360,19 +2487,19 @@ void DEMDynamicThread::setOwnerVel(bodyID_t ownerID, float3 vel) {
     vZ.at(ownerID) = vel.z;
 }
 
-void DEMDynamicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite) {
-    if (overwrite) {
-        for (size_t i = 0; i < triangles.size(); i++) {
-            relPosNode1[start + i] = triangles[i].p1;
-            relPosNode2[start + i] = triangles[i].p2;
-            relPosNode3[start + i] = triangles[i].p3;
-        }
-    } else {
-        for (size_t i = 0; i < triangles.size(); i++) {
-            relPosNode1[start + i] += triangles[i].p1;
-            relPosNode2[start + i] += triangles[i].p2;
-            relPosNode3[start + i] += triangles[i].p3;
-        }
+void DEMDynamicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles) {
+    for (size_t i = 0; i < triangles.size(); i++) {
+        relPosNode1[start + i] = triangles[i].p1;
+        relPosNode2[start + i] = triangles[i].p2;
+        relPosNode3[start + i] = triangles[i].p3;
+    }
+}
+
+void DEMDynamicThread::updateTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& updates) {
+    for (size_t i = 0; i < updates.size(); i++) {
+        relPosNode1[start + i] += updates[i].p1;
+        relPosNode2[start + i] += updates[i].p2;
+        relPosNode3[start + i] += updates[i].p3;
     }
 }
 

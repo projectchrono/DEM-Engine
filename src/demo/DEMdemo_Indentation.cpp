@@ -69,14 +69,16 @@ int main() {
     create_directory(out_dir);
 
     // E, nu, CoR, mu, Crr...
-    auto mat_type_cube = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}});
-    auto mat_type_granular = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}});
+    auto mat_type_cube = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.4}, {"Crr", 0.0}});
+    auto mat_type_granular_1 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.3}, {"Crr", 0.0}});
+    auto mat_type_granular_2 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.4}, {"Crr", 0.0}});
     // CoR is a pair-wise property, so it should be mentioned here
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_cube, mat_type_granular, 0.8);
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_cube, mat_type_granular_1, 0.8);
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_cube, mat_type_granular_2, 0.8);
 
     float granular_rad = 0.001;  // 0.002;
     auto template_granular = DEMSim.LoadSphereType(granular_rad * granular_rad * granular_rad * 2.6e3 * 4 / 3 * 3.14,
-                                                   granular_rad, mat_type_granular);
+                                                   granular_rad, mat_type_granular_1);
 
     float step_size = 1e-6;
     const double world_size = 0.6;
@@ -85,7 +87,7 @@ int main() {
     const float fill_bottom = chamber_bottom + granular_rad;
 
     DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
-    DEMSim.InstructBoxDomainBoundingBC("all", mat_type_granular);
+    DEMSim.InstructBoxDomainBoundingBC("all", mat_type_granular_2);
 
     // Now add a cylinderical boundary
     auto walls = DEMSim.AddExternalObject();
@@ -129,15 +131,10 @@ int main() {
     DEMSim.DisableContactBetweenFamilies(1, 10);
 
     // Use a owner wildcard to record tangential displacement compared to initial pos
-    DEMSim.ReadContactForceModel("SampleCustomForceModel.cu");
     auto force_model = DEMSim.GetContactForceModel();
-    force_model->SetPerOwnerWildcards({"gran_strain", "mu_custom"});
-    force_model->SetPerContactWildcards({"delta_tan_x", "delta_tan_y", "delta_tan_z"});
+    force_model->SetPerOwnerWildcards({"gran_strain"});
     particles->AddOwnerWildcard("gran_strain", 0.0);
     // Or simply DEMSim.SetOwnerWildcards({"gran_strain"}); it does the job too
-
-    // Low mu at start. This will make the terrain settle into a more densely-packed configuration.
-    particles->AddOwnerWildcard("mu_custom", 0.4);
 
     unsigned int num_particles = input_xyz.size();
     std::cout << "Total num of particles: " << num_particles << std::endl;
@@ -187,8 +184,12 @@ int main() {
     std::cout << "Simulation starts..." << std::endl;
     // Let the brick sink with a downward velocity.
     DEMSim.ChangeFamily(10, 11);
-    // Add some friction which is physical... perhaps 0 friction works too,
-    DEMSim.SetFamilyOwnerWildcardValue(1, "mu_custom", 0.4);
+
+    // This is meant to show that you can change the material type of the clumps in mid-simulation.
+    // Doing this, we change the mu between particles from 0.3 (lower, for getting something denser
+    // after settling) to 0.4 (the value we use for the main simulation).
+    DEMSim.SetFamilyClumpMaterial(1, mat_type_granular_2);
+    
     double cube_zpos = max_z_finder->GetValue() + cube_height / 2;
     cube_tracker->SetPos(make_float3(0, 0, cube_zpos));
     std::cout << "Initially the cube is at Z = " << cube_zpos << std::endl;
