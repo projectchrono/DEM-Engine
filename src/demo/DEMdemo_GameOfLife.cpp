@@ -27,6 +27,7 @@ int main() {
     // Output as CSV so no post-processing is needed
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ);
+    DEMSim.SetOutputContent(OUTPUT_CONTENT::VEL);
     DEMSim.EnsureKernelErrMsgLineNum();
 
     float grid_size = 1.0;
