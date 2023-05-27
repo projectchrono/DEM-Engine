@@ -89,6 +89,7 @@ class DEMTracker {
     void assertMesh(const std::string& name);
     void assertGeoSize(size_t input_length, const std::string& func_name, const std::string& geo_type);
     void assertOwnerSize(size_t input_length, const std::string& name);
+    void assertThereIsForcePairs(const std::string& name);
     // Its parent DEMSolver system
     DEMSolver* sys;
 
@@ -201,6 +202,12 @@ class DEMTracker {
     /// @param name Name of the wildcard.
     /// @param wc Wildcard values as a vector (must have same length as the number of tracked geometry entities).
     void SetGeometryWildcardValue(const std::string& name, const std::vector<float>& wc);
+
+    /// @brief Get all contact forces that concern this track object, as a vector.
+    /// @param offset The offset to this owner (where to start querying). If first entity, input 0.
+    /// @return A std::pair of std::vectors. First is the force in XYZ as float3 vector. Second is the contact point XYZ
+    /// as float3 vector.
+    std::pair<std::vector<float3>, std::vector<float3>> GetContactForces(size_t offset = 0);
 };
 
 class DEMForceModel {

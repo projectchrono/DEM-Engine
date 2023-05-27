@@ -1173,6 +1173,7 @@ bool DEMSolver::goThroughWorkerAnomalies() {
 inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::string>& strMap) {
     // Empty ingr list
     auto added_ingredients = force_kernel_ingredient_stats;
+    //// TODO: Reassemble geo and owner wildcards here again in a set is not needed... Since set is ordered.
     std::set<std::string> added_owner_wildcards, added_geo_wildcards;
     // Analyze this model... what does it require?
     std::string model = m_force_model->m_force_model;
@@ -1181,6 +1182,7 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     const std::set<std::string> geo_wildcard_names = m_force_model->m_geo_wildcards;
     m_owner_wc_num.clear();
     m_geo_wc_num.clear();
+    m_cnt_wc_num.clear();
     // If we spot that the force model requires an ingredient, we make sure that order goes to the ingredient
     // acquisition module
     std::string ingredient_definition = " ", cnt_wildcard_acquisition = " ", ingredient_acquisition_A = " ",
@@ -1200,7 +1202,7 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     }
     // Then, owner/geo wildcards should be added to the ingredient list too. But first we check whether a wildcard
     // shares name with existing ingredients. If not, we add them to the list.
-    unsigned int owner_wc_num = 0, geo_wc_num = 0;
+    unsigned int owner_wc_num = 0, geo_wc_num = 0, cnt_wc_num = 0;
     for (const auto& owner_wildcard_name : owner_wildcard_names) {
         if (added_ingredients.find(owner_wildcard_name) != added_ingredients.end()) {
             DEME_ERROR(
@@ -1226,6 +1228,16 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         // later use.
         m_geo_wc_num[geo_wildcard_name] = geo_wc_num;
         geo_wc_num++;
+    }
+    for (const auto& contact_wildcard_name : contact_wildcard_names) {
+        if (added_ingredients.find(contact_wildcard_name) != added_ingredients.end()) {
+            DEME_ERROR(
+                "Contact wildcard %s shares its name with a reserved contact force model ingredient.\nPlease select a "
+                "different name for this wildcard and try again.",
+                contact_wildcard_name.c_str());
+        }
+        m_cnt_wc_num[contact_wildcard_name] = cnt_wc_num;
+        cnt_wc_num++;
     }
 
     // Owner write-back needs ABOwner number

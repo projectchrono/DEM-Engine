@@ -722,6 +722,37 @@ void DEMSolver::SetOwnerWildcardValue(bodyID_t ownerID, const std::string& name,
     dT->setOwnerWildcardValue(ownerID, m_owner_wc_num.at(name), vals);
 }
 
+void DEMSolver::SetFamilyContactWildcardValueAny(unsigned int N, const std::string& name, float val) {
+    assertSysInit("SetFamilyContactWildcardValueAny");
+    if (m_cnt_wc_num.find(name) == m_cnt_wc_num.end()) {
+        DEME_ERROR(
+            "No contact wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerContactWildcards in the force model first.",
+            name.c_str());
+    }
+    dT->setFamilyContactWildcardValueAny(N, m_cnt_wc_num.at(name), val);
+}
+void DEMSolver::SetFamilyContactWildcardValueAll(unsigned int N, const std::string& name, float val) {
+    assertSysInit("SetFamilyContactWildcardValueAll");
+    if (m_cnt_wc_num.find(name) == m_cnt_wc_num.end()) {
+        DEME_ERROR(
+            "No contact wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerContactWildcards in the force model first.",
+            name.c_str());
+    }
+    dT->setFamilyContactWildcardValueAll(N, m_cnt_wc_num.at(name), val);
+}
+void DEMSolver::SetContactWildcardValue(const std::string& name, float val) {
+    assertSysInit("SetContactWildcardValue");
+    if (m_cnt_wc_num.find(name) == m_cnt_wc_num.end()) {
+        DEME_ERROR(
+            "No contact wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerContactWildcards in the force model first.",
+            name.c_str());
+    }
+    dT->setContactWildcardValue(m_cnt_wc_num.at(name), val);
+}
+
 void DEMSolver::SetFamilyClumpMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat) {
     assertSysInit("SetFamilyClumpMaterial");
     dT->setFamilyClumpMaterial(N, mat->load_order);
@@ -804,6 +835,10 @@ std::vector<float> DEMSolver::GetAllOwnerWildcardValue(const std::string& name) 
     dT->getAllOwnerWildcardValue(res, m_owner_wc_num.at(name));
     return res;
 }
+void DEMSolver::GetOwnerContactForces(bodyID_t ownerID,
+                                      std::vector<float3>& forces,
+                                      std::vector<float3>& points,
+                                      bool excludeZeros) {}
 
 std::vector<float> DEMSolver::GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name) {
     assertSysInit("GetFamilyOwnerWildcardValue");

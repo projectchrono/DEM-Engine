@@ -699,7 +699,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         DEME_DEBUG_PRINTF("Total number of existing owners in simulation: %zu", nExistOwners);
         DEME_DEBUG_PRINTF("Total number of owners in simulation after this init call: %zu",
                           (size_t)simParams->nOwnerBodies);
-        
+
         // If user loaded contact pairs, we need to inform kT on the first time step...
         if (cnt_arr_offset > *stateOfSolver_resources.pNumContacts) {
             *stateOfSolver_resources.pNumContacts = cnt_arr_offset;
@@ -1395,6 +1395,17 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
     ptFile << outstrstream.str();
 }
 
+inline bodyID_t DEMDynamicThread::getOwnerForContactB(const bodyID_t& geoB, const contact_t& type) const {
+    switch (type) {
+        case (SPHERE_SPHERE_CONTACT):
+            return ownerClumpBody.at(geoB);
+        case (SPHERE_MESH_CONTACT):
+            return ownerMesh.at(geoB);
+        default:  // Default is sphere--analytical
+            return ownerAnalBody.at(geoB);
+    }
+}
+
 void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thres) const {
     std::ostringstream outstrstream;
 
@@ -1453,16 +1464,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
         auto ownerA = ownerClumpBody.at(geoA);
         bodyID_t ownerB;
         // geoB's owner depends...
-        switch (type) {
-            case (SPHERE_SPHERE_CONTACT):
-                ownerB = ownerClumpBody.at(geoB);
-                break;
-            case (SPHERE_MESH_CONTACT):
-                ownerB = ownerMesh.at(geoB);
-                break;
-            default:  // Default is sphere--analytical
-                ownerB = ownerAnalBody.at(geoB);
-        }
+        ownerB = getOwnerForContactB(geoB, type);
 
         // Type is mapped to SS, SM and such....
         outstrstream << contact_type_out_name_map.at(type);
@@ -2314,6 +2316,68 @@ void DEMDynamicThread::setFamilyMeshMaterial(unsigned int N, unsigned int mat_id
         if (+(familyID[owner_id]) == N) {
             triMaterialOffset[i] = (family_t)mat_id;
         }
+    }
+}
+
+void DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
+                               std::vector<float3>& forces,
+                               std::vector<float3>& points,
+                               bool excludeZeros) {
+    size_t numCnt = *stateOfSolver_resources.pNumContacts;
+    for (size_t i = 0; i < numCnt; i++) {
+        bodyID_t geoA = idGeometryA.at(i);
+        bodyID_t ownerA = ownerClumpBody.at(geoA);
+        bodyID_t geoB = idGeometryB.at(i);
+        contact_t typeB = contactType.at(i);
+        bodyID_t ownerB = getOwnerForContactB(geoB, typeB);
+
+        if (ownerID == ownerA || ownerID == ownerB) {
+            // float3 force = 
+            // if (length())
+        }
+    }
+}
+
+void DEMDynamicThread::setFamilyContactWildcardValueAny(unsigned int N, unsigned int wc_num, float val) {
+    size_t numCnt = *stateOfSolver_resources.pNumContacts;
+    for (size_t i = 0; i < numCnt; i++) {
+        bodyID_t geoA = idGeometryA.at(i);
+        bodyID_t ownerA = ownerClumpBody.at(geoA);
+        bodyID_t geoB = idGeometryB.at(i);
+        contact_t typeB = contactType.at(i);
+        bodyID_t ownerB = getOwnerForContactB(geoB, typeB);
+
+        unsigned int famA = +(familyID.at(ownerA));
+        unsigned int famB = +(familyID.at(ownerB));
+
+        if (N == famA || N == famB) {
+            contactWildcards[wc_num].at(i) = val;
+        }
+    }
+}
+
+void DEMDynamicThread::setFamilyContactWildcardValueAll(unsigned int N, unsigned int wc_num, float val) {
+    size_t numCnt = *stateOfSolver_resources.pNumContacts;
+    for (size_t i = 0; i < numCnt; i++) {
+        bodyID_t geoA = idGeometryA.at(i);
+        bodyID_t ownerA = ownerClumpBody.at(geoA);
+        bodyID_t geoB = idGeometryB.at(i);
+        contact_t typeB = contactType.at(i);
+        bodyID_t ownerB = getOwnerForContactB(geoB, typeB);
+
+        unsigned int famA = +(familyID.at(ownerA));
+        unsigned int famB = +(familyID.at(ownerB));
+
+        if (N == famA && N == famB) {
+            contactWildcards[wc_num].at(i) = val;
+        }
+    }
+}
+
+void DEMDynamicThread::setContactWildcardValue(unsigned int wc_num, float val) {
+    size_t numCnt = *stateOfSolver_resources.pNumContacts;
+    for (size_t i = 0; i < numCnt; i++) {
+        contactWildcards[wc_num].at(i) = val;
     }
 }
 

@@ -415,6 +415,20 @@ class DEMDynamicThread {
     /// @brief Fill res with the `wc_num' wildcard values, for n analytical entities starting from ID.
     void getAnalWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
 
+    /// @brief Change the value of contact wildcards no.wc_num to val if either of the contact geometries is in family
+    /// N.
+    void setFamilyContactWildcardValueAny(unsigned int N, unsigned int wc_num, float val);
+    /// @brief Change the value of contact wildcards no.wc_num to val if both of the contact geometries are in family N.
+    void setFamilyContactWildcardValueAll(unsigned int N, unsigned int wc_num, float val);
+    /// @brief Change the value of contact wildcards no.wc_num to val.
+    void setContactWildcardValue(unsigned int wc_num, float val);
+
+    /// @brief Get all forces concerning this owner.
+    void getOwnerContactForces(bodyID_t ownerID,
+                               std::vector<float3>& forces,
+                               std::vector<float3>& points,
+                               bool excludeZeros = true);
+
     /// Let dT know that it needs a kT update, as something important may have changed, and old contact pair info is no
     /// longer valid.
     void announceCritical() { pendingCriticalUpdate = true; }
@@ -639,6 +653,9 @@ class DEMDynamicThread {
     void deallocateEverything();
     // The dT-side allocations that can be done at initialization time
     void initAllocation();
+
+    // Get owner of contact geo B.
+    inline bodyID_t getOwnerForContactB(const bodyID_t& geoB, const contact_t& type) const;
 
     // Just-in-time compiled kernels
     std::shared_ptr<jitify::Program> prep_force_kernels;

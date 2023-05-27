@@ -496,6 +496,31 @@ class DEMSolver {
     /// triangle).
     void SetGeometryWildcards(const std::set<std::string>& wildcards);
 
+    /// @brief Change the value of contact wildcards to val if either of the contact geometries is in family N.
+    /// @param N Family number. If one contact geometry is in N, this contact wildcard is modified.
+    /// @param name Name of the contact wildcard to modify.
+    /// @param val The value to change to.
+    void SetFamilyContactWildcardValueAny(unsigned int N, const std::string& name, float val);
+    /// @brief Change the value of contact wildcards to val if both of the contact geometries are in family N.
+    /// @param N Family number. Only if both contact geometries are in N, this contact wildcard is modified.
+    /// @param name Name of the contact wildcard to modify.
+    /// @param val The value to change to.
+    void SetFamilyContactWildcardValueAll(unsigned int N, const std::string& name, float val);
+    /// @brief Change the value of contact wildcards to val. Apply to all simulation bodies that are present.
+    /// @param name Name of the contact wildcard to modify.
+    /// @param val The value to change to.
+    void SetContactWildcardValue(const std::string& name, float val);
+
+    /// @brief Get all contact forces that concern a owner.
+    /// @param ownerID The ID of the owner.
+    /// @param forces Fill this vector of float3 with the XYZ components of the forces.
+    /// @param points Fill this vector of float3 with the XYZ components of the contact points.
+    /// @param excludeZeros If true, will not include the forces that have zero magnitude.
+    void GetOwnerContactForces(bodyID_t ownerID,
+                               std::vector<float3>& forces,
+                               std::vector<float3>& points,
+                               bool excludeZeros = true);
+
     /// @brief Set the wildcard values of some triangles.
     /// @param geoID The ID of the starting (first) triangle that needs to be modified.
     /// @param name The name of the wildcard.
@@ -807,6 +832,9 @@ class DEMSolver {
     /// Release the memory for the flattened arrays (which are used for initialization pre-processing and transferring
     /// info the worker threads)
     void ReleaseFlattenedArrays();
+
+    /// @brief Return whether the solver is currently reducing force in the force calculation kernel.
+    bool GetWhetherForceCollectInKernel() { return collect_force_in_force_kernel; }
 
     /*
       protected:
@@ -1120,6 +1148,8 @@ class DEMSolver {
     std::unordered_map<std::string, unsigned int> m_owner_wc_num;
     // A map that records the numbering for user-defined geometry wildcards
     std::unordered_map<std::string, unsigned int> m_geo_wc_num;
+    // A map that records the numbering for user-defined per-contact wildcards
+    std::unordered_map<std::string, unsigned int> m_cnt_wc_num;
 
     ////////////////////////////////////////////////////////////////////////////////
     // Cached user's direct (raw) inputs concerning the actual physics objects

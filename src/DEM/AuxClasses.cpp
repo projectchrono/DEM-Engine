@@ -237,6 +237,17 @@ void DEMInspector::Initialize(const std::unordered_map<std::string, std::string>
 // DEMTracker class
 // =============================================================================
 
+void DEMTracker::assertThereIsForcePairs(const std::string& name) {
+    if (sys->GetWhetherForceCollectInKernel()) {
+        std::stringstream ss;
+        ss << "The solver is currently set to not record force pair info, so you cannot query force pairs using "
+           << name
+           << ".\nYou can call SetCollectAccRightAfterForceCalc(false) before system initialization and try "
+              "again."
+           << std::endl;
+        throw std::runtime_error(ss.str());
+    }
+}
 void DEMTracker::assertMesh(const std::string& name) {
     if (obj->type != OWNER_TYPE::MESH) {
         std::stringstream ss;
@@ -339,6 +350,9 @@ std::vector<float> DEMTracker::GetGeometryWildcardValue(const std::string& name)
             break;
     }
     return res;
+}
+std::pair<std::vector<float3>, std::vector<float3>> DEMTracker::GetContactForces(size_t offset) {
+    assertThereIsForcePairs("GetContactForces");
 }
 
 void DEMTracker::SetPos(float3 pos, size_t offset) {
