@@ -519,6 +519,9 @@ void DEMSolver::reportInitStats() const {
     DEME_DEBUG_EXEC(printf("These owners are tracked: ");
                     for (const auto& tracked
                          : m_tracked_objs) { printf("%zu, ", (size_t)tracked->ownerID); } printf("\n"););
+    DEME_DEBUG_EXEC(printf("Meshes' owner--offset pairs: ");
+                    for (const auto& mesh
+                         : m_meshes) { printf("{%zu, %u}, ", (size_t)mesh->owner, mesh->cache_offset); } printf("\n"););
 }
 
 void DEMSolver::preprocessAnalyticalObjs() {
@@ -632,6 +635,11 @@ void DEMSolver::preprocessTriangleObjs() {
                 "A meshed object is loaded but does not have associated material.\nPlease assign material to meshes "
                 "via SetMaterial.");
         }
+        // Put the mesh into the host-side cache
+        m_meshes.push_back(mesh_obj);
+        // Note that cache_offset needs to be modified by dT in init. This info is important if we need to modify the
+        // mesh later on.
+
         m_mesh_obj_mass.push_back(mesh_obj->mass);
         m_mesh_obj_moi.push_back(mesh_obj->MOI);
 

@@ -39,8 +39,6 @@ class DEMTracker;
 //            2. Allow ext obj init CoM setting
 //            3. Instruct how many dT steps should at LEAST do before receiving kT update
 //            4. Sleepers that don't participate CD or integration
-//            5. Check if entities are initially in box
-//            8. Right now force model position is wrt LBF, not user origin...
 //            9. wT takes care of an extra output when it crashes
 //            10. Recover sph--mesh contact pairs in restarted sim by mesh name
 //            11. A dry-run to map contact pair file with current clump batch based on cnt points location
@@ -1151,16 +1149,16 @@ class DEMSolver {
     // A map that records the numbering for user-defined per-contact wildcards
     std::unordered_map<std::string, unsigned int> m_cnt_wc_num;
 
+    // Meshes cached on dT side that has corresponding owner number associated. Useful for modifying meshes.
+    std::vector<std::shared_ptr<DEMMeshConnected>> m_meshes;
+    // A map between the owner of mesh, and the offset this mesh lives in m_meshes array.
+    // std::unordered_map<bodyID_t, unsigned int> m_owner_mesh_map;
+
     ////////////////////////////////////////////////////////////////////////////////
     // Cached user's direct (raw) inputs concerning the actual physics objects
     // presented in the simulation, which need to be processed before shipment,
-    // at initialization time. These items can be cleared before users add entites
-    // from the simulation on-the-fly, and be loaded with new entities; but this
-    // is the responsibility of the user. If the user does not clear these cached
-    // data and then re-initialize using the `Overwrite' style, then it is like
-    // starting the original simulation over. If the user clear these, then add
-    // some new data, and then re-initialize using the `Add' style, it is like adding
-    // more entities to the existing simulation system.
+    // at initialization time. These items will be cleared after initialization,
+    // and before users add entites from the simulation on-the-fly.
     ////////////////////////////////////////////////////////////////////////////////
     //// TODO: These re-initialization flavors haven't been added
 

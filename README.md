@@ -8,7 +8,7 @@ DEM-Engine, nicknamed _DEME_, does Discrete Element Method simulations:
 - Using up to two GPUs at the same time (works great on consumer _and_ data center GPUs).
 - With the particles having complex shapes represented by clumped spheres.
 - With support for customizable contact force models (want to add a non-standard cohesive force, or an electrostatic repulsive force? You got this).
-- With an emphasis on computational efficiency.
+- With an emphasis on computational efficiency. As a rule of thumb, using 3-sphere clump elements, simulating 1 million elements for 1 million time steps takes around 1 hour on two RTX 3080s.
 - With support for co-simulation with other C/C++ packages, such as [Chrono](https://github.com/projectchrono/chrono).
 
 <p>
@@ -17,6 +17,10 @@ DEM-Engine, nicknamed _DEME_, does Discrete Element Method simulations:
 </p>
 
 Currently _DEME_ is a C++ package with an API design similar to Chrono's, and should be easy to learn for existing Chrono users. We are building a Python wrapper for _DEME_.
+
+You can find the movies of some of _DEME_'s demos [here](https://uwmadison.app.box.com/s/u4m9tee3k1vizf097zkq3rgv54orphyv).
+
+You are welcome to discuss _DEME_ on [Project Chrono's forum](https://groups.google.com/g/projectchrono). 
 
 ### Licensing
 
@@ -103,14 +107,13 @@ After the build process is done, you can start trying out the demos.
 - `./src/demo/DEMdemo_SolarSystem` simulates our solar system. It is yet another fun simulation that is not strictly DEM per se, but shows how to define a mid-to-long-ranged force (gravitational force) using a custom force model file.
 - It is a good idea to read the comment lines at the top of the demo files to understand what they each does.
 
-You can find the movies of some of these demos [here](https://uwmadison.app.box.com/s/u4m9tee3k1vizf097zkq3rgv54orphyv).
-
 [The documentations for _DEME_](https://api.projectchrono.org/) are hosted on Chrono website (work in progress).
 
 Some additional troubleshooting tips for running the demos:
 
 - If errors similar to `CUDA_ERROR_UNSUPPORTED_PTX_VERSION` are encountered while you run the demos, or (rarely) the simulations proceed without detecting any contacts, then please make sure the CUDA installation is the same version as when the code is compiled.
 - Used your own force model but got runtime compilation error like `expression must have pointer-to-object type but it has type "float"`, or `unknown variable "delta_time"`? Check out what we did in demo `DEMdemo_Electrostatic`. You may need to manually specify what material properties are pairwise and what contact wildcards you have using `SetMustPairwiseMatProp` and `SetPerContactWildcards`.
+- Just running provided demos, but the jitification of the force model failed? Then did you pull a new version and just re-built in-place? A new update may modify the force model, and the force model in _DEME_ are given as text files so might not be automatically copied over when the project is re-built. I am sorry for the trouble it might cause, but you can do a clean re-build from an empty directory and it should fix the problem. Do not forget to first commit your own branches' changes and relocate the data you generated in the build directory.
 
 ### Limitations
 
@@ -141,7 +144,7 @@ More documentations on using this package for co-simulations are being added.
 
 #### Notes on code included from Project Chrono
 
-This project exists independently of Chrono so developers should be sure to include the appropriate BSD license header on any code which is sourced from Chrono::FSI, Chrono::GPU(DEM), or other parts of Chrono.
+This project exists independently of Chrono so developers should be sure to include the appropriate BSD license header on any code which is sourced from Chrono::GPU(DEM) or other parts of Chrono.
 
 > #### SAMPLE header for files sourced from Chrono
 

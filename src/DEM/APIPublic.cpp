@@ -1388,6 +1388,9 @@ void DEMSolver::Initialize() {
 
     // Initialization is critical
     dT->announceCritical();
+
+    // Always clear cache after init
+    ClearCache();
 }
 
 void DEMSolver::ShowTimingStats() {
@@ -1526,9 +1529,10 @@ void DEMSolver::UpdateClumps() {
             "point.\nNumber of clump templates at last initialization: %zu\nNumber of clump templates now: %zu",
             nLastTimeClumpTemplateLoad, nClumpTemplateLoad);
     }
-    DEME_WARNING(
-        "UpdateClumps will add all currently cached clumps to the simulation.\nYou may want to ClearCache first, then "
-        "AddClumps, then call this method, so the clumps cached earlier are forgotten before this method takes place.");
+    // DEME_WARNING(
+    //     "UpdateClumps will add all currently cached clumps to the simulation.\nYou may want to ClearCache first,"
+    //     "then AddClumps, then call this method, so the clumps cached earlier are forgotten before this method takes"
+    //     "place.");
 
     // This method requires kT and dT are sync-ed
     // resetWorkerThreads();

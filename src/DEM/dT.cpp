@@ -797,6 +797,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
 
         // Store this mesh in dT's cache
         input_mesh_objs.at(i)->owner = i + owner_offset_for_mesh_obj;
+        input_mesh_objs.at(i)->cache_offset = m_meshes.size();
         m_meshes.push_back(input_mesh_objs.at(i));
 
         inertiaPropOffsets.at(i + owner_offset_for_mesh_obj) = i + offset_for_mesh_obj_mass_template;
@@ -1551,6 +1552,19 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     std::vector<size_t> vertexOffset(m_meshes.size() + 1, 0);
     size_t total_f = 0;
     size_t total_v = 0;
+    unsigned int mesh_num = 0;
+
+    // May want to jump the families that the user disabled output for
+    std::vector<notStupidBool_t> thisMeshSkip(m_meshes.size(), 0);
+    for (const auto& mmesh : m_meshes) {
+        bodyID_t mowner = mmesh->getOwner();
+        family_t this_family = familyID.at(mowner);
+        // If this (impl-level) family is in the no-output list, skip it
+        if (std::binary_search(familiesNoOutput.begin(), familiesNoOutput.end(), this_family)) {
+            thisMeshSkip[mesh_num] = 1;
+        }
+        mesh_num++;
+    }
 
     ostream << "# vtk DataFile Version 2.0\n";
     ostream << "VTK from DEM simulation\n";
@@ -1560,11 +1574,13 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     ostream << "DATASET UNSTRUCTURED_GRID\n";
 
     // Prescan the V and F: to write all meshes to one file, we need vertex number offset info
-    unsigned int mesh_num = 0;
+    mesh_num = 0;
     for (const auto& mmesh : m_meshes) {
-        vertexOffset[mesh_num + 1] = mmesh->getCoordsVertices().size();
-        total_v += mmesh->getCoordsVertices().size();
-        total_f += mmesh->getIndicesVertexes().size();
+        if (!thisMeshSkip[mesh_num]) {
+            vertexOffset[mesh_num + 1] = mmesh->getCoordsVertices().size();
+            total_v += mmesh->getCoordsVertices().size();
+            total_f += mmesh->getIndicesVertexes().size();
+        }
         mesh_num++;
     }
     for (unsigned int i = 1; i < m_meshes.size(); i++)
@@ -1574,13 +1590,15 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     ostream << "POINTS " << total_v << " float" << std::endl;
     mesh_num = 0;
     for (const auto& mmesh : m_meshes) {
-        bodyID_t mowner = mmesh->getOwner();
-        float3 ownerPos = this->getOwnerPos(mowner);
-        float4 ownerOriQ = this->getOwnerOriQ(mowner);
-        for (const auto& v : mmesh->getCoordsVertices()) {
-            float3 point = v;
-            hostApplyFrameTransform(point, ownerPos, ownerOriQ);
-            ostream << point.x << " " << point.y << " " << point.z << std::endl;
+        if (!thisMeshSkip[mesh_num]) {
+            bodyID_t mowner = mmesh->getOwner();
+            float3 ownerPos = this->getOwnerPos(mowner);
+            float4 ownerOriQ = this->getOwnerOriQ(mowner);
+            for (const auto& v : mmesh->getCoordsVertices()) {
+                float3 point = v;
+                hostApplyFrameTransform(point, ownerPos, ownerOriQ);
+                ostream << point.x << " " << point.y << " " << point.z << std::endl;
+            }
         }
         mesh_num++;
     }
@@ -1590,9 +1608,11 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     ostream << "CELLS " << total_f << " " << 4 * total_f << std::endl;
     mesh_num = 0;
     for (const auto& mmesh : m_meshes) {
-        for (const auto& f : mmesh->getIndicesVertexes()) {
-            ostream << "3 " << (size_t)f.x + vertexOffset[mesh_num] << " " << (size_t)f.y + vertexOffset[mesh_num]
-                    << " " << (size_t)f.z + vertexOffset[mesh_num] << std::endl;
+        if (!thisMeshSkip[mesh_num]) {
+            for (const auto& f : mmesh->getIndicesVertexes()) {
+                ostream << "3 " << (size_t)f.x + vertexOffset[mesh_num] << " " << (size_t)f.y + vertexOffset[mesh_num]
+                        << " " << (size_t)f.z + vertexOffset[mesh_num] << std::endl;
+            }
         }
         mesh_num++;
     }
@@ -1600,10 +1620,14 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     // Writing face types. Type 5 is generally triangles
     ostream << "\n\n";
     ostream << "CELL_TYPES " << total_f << std::endl;
+    mesh_num = 0;
     for (const auto& mmesh : m_meshes) {
-        auto nfaces = mmesh->getIndicesVertexes().size();
-        for (size_t j = 0; j < nfaces; j++)
-            ostream << "5 " << std::endl;
+        if (!thisMeshSkip[mesh_num]) {
+            auto nfaces = mmesh->getIndicesVertexes().size();
+            for (size_t j = 0; j < nfaces; j++)
+                ostream << "5 " << std::endl;
+        }
+        mesh_num++;
     }
 
     ptFile << ostream.str();
@@ -2320,9 +2344,9 @@ void DEMDynamicThread::setFamilyMeshMaterial(unsigned int N, unsigned int mat_id
 }
 
 void DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
-                               std::vector<float3>& forces,
-                               std::vector<float3>& points,
-                               bool excludeZeros) {
+                                             std::vector<float3>& forces,
+                                             std::vector<float3>& points,
+                                             bool excludeZeros) {
     size_t numCnt = *stateOfSolver_resources.pNumContacts;
     for (size_t i = 0; i < numCnt; i++) {
         bodyID_t geoA = idGeometryA.at(i);
@@ -2332,7 +2356,7 @@ void DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
         bodyID_t ownerB = getOwnerForContactB(geoB, typeB);
 
         if (ownerID == ownerA || ownerID == ownerB) {
-            // float3 force = 
+            // float3 force =
             // if (length())
         }
     }

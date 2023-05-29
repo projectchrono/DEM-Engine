@@ -32,11 +32,19 @@ int main() {
     // srand(time(NULL));
     srand(4150);
 
-    auto mat_type_1 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}});
-    auto mat_type_2 = DEMSim.LoadMaterial({{"E", 2e9}, {"nu", 0.4}, {"CoR", 0.6}});
+    // Special material: has a cohesion param
+    auto mat_type_1 =
+        DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.3}, {"Crr", 0.01}, {"Cohesion", 50}});
+    auto mat_type_2 =
+        DEMSim.LoadMaterial({{"E", 2e9}, {"nu", 0.4}, {"CoR", 0.6}, {"mu", 0.3}, {"Crr", 0.01}, {"Cohesion", 50}});
     std::shared_ptr<DEMMaterial> mat_type_3 = DEMSim.Duplicate(mat_type_2);
     // If you don't have this line, then CoR between thw 2 materials will take average when they are in contact
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_1, mat_type_2, 0.6);
+    // Even though set elsewhere to be 50, this pairwise value takes precedence when two different materials are in
+    // contact.
+    DEMSim.SetMaterialPropertyPair("Cohesion", mat_type_1, mat_type_2, 100.);
+    DEMSim.SetMaterialPropertyPair("Cohesion", mat_type_1, mat_type_3, 100.);
+    DEMSim.SetMaterialPropertyPair("Cohesion", mat_type_2, mat_type_3, 100.);
 
     auto sph_type_1 = DEMSim.LoadSphereType(11728., 1., mat_type_1);
     // Test clump template duplication...
@@ -64,8 +72,17 @@ int main() {
 
     // DEMSim.DisableContactBetweenFamilies(0, 1);
 
+    // Add bottom plane mesh
     auto bot_plane = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/plane_20by20.obj").string(), mat_type_2);
     bot_plane->SetInitPos(make_float3(0, 0, -1.25));
+    bot_plane->SetMass(10000.);
+    // Just testing adding another mesh...
+    auto another_plane =
+        DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/plane_20by20.obj").string(), mat_type_2);
+    another_plane->SetInitPos(make_float3(0, 0, -1.5));
+    another_plane->SetFamily(100);
+    DEMSim.DisableFamilyOutput(100);
+    DEMSim.SetFamilyFixed(100);
 
     // Create a inspector to find out stuff
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
@@ -76,11 +93,10 @@ int main() {
     float KE;
 
     // A custom force model can be read in through a file and used by the simulation. Magic, right?
-    auto my_force_model = DEMSim.ReadContactForceModel("SampleCustomForceModel.cu");
+    auto my_force_model = DEMSim.ReadContactForceModel("ForceModelWithCohesion.cu");
     // This custom force model still uses contact history arrays, so let's define it
-    my_force_model->SetPerContactWildcards({"delta_tan_x", "delta_tan_y", "delta_tan_z"});
-    // Owner wildcards. In this demo, we define a changable friction coefficient mu_custom.
-    my_force_model->SetPerOwnerWildcards({"mu_custom"});
+    my_force_model->SetPerContactWildcards({"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"});
+    my_force_model->SetMustPairwiseMatProp({"CoR", "mu", "Crr", "Cohesion"});
 
     DEMSim.SetInitTimeStep(2e-5);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.8));
@@ -95,7 +111,7 @@ int main() {
     DEMSim.UpdateSimParams();  // Not needed; just testing if this function works...
 
     // You can add more clumps to simulation after initialization, like this...
-    DEMSim.ClearCache();
+    // DEMSim.ClearCache();  // Clearing cache is no longer needed
     auto particles2 = DEMSim.AddClumps(input_clump_type2, input_xyz2);
     particles2->SetVel(input_vel2);
     particles2->SetFamily(1);
@@ -108,8 +124,6 @@ int main() {
     create_directory(out_dir);
     // bool changed_family = false;
 
-    // We can give particle 2 this mu_custom property too
-    DEMSim.SetFamilyOwnerWildcardValue(1, "mu_custom", 0.5);
     for (int i = 0; i < 100; i++) {
         std::cout << "Frame: " << i << std::endl;
 

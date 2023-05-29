@@ -231,6 +231,9 @@ class DEMMeshConnected {
     // Owner number in DEM simulation
     bodyID_t owner = NULL_BODYID;
 
+    // Position in the m_meshes array
+    unsigned int cache_offset = 0;
+
     std::vector<float3> m_vertices;
     std::vector<float3> m_normals;
     std::vector<float3> m_UV;
