@@ -33,8 +33,12 @@ SET(DEMOS
 		DEMdemo_Granular_Repose
 		DEMdemo_Granular_Flow
 		DEMdemo_Granular_NonSpherical
-		DEMdemo_Granular_WoodenSpheres
+		DEMdemo_Granular_WoodenSpheresHopper
+		DEMdemo_Granular_PlasticSpheresDrum_sensDistr
+		DEMdemo_Granular_PlasticSpheresDrum_sensInertia
+		# DEMdemo_Granular_WoodenSpheres
 		DEMdemo_Granular_WoodenSpheresDrum
+		DEMdemo_Granular_WoodenSpheresDrum_sensDistr
 		DEMdemo_Granular_WoodenCylinderDrum
 		DEMdemo_SolarSystem
 		DEMdemo_Repose_Cylinder

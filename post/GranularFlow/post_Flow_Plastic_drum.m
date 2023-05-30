@@ -28,10 +28,11 @@ counterTotal=0;
 
 
 
-for q=0:6:41
+for q=0:1:32
 
-folder=['../../' 'build/DemoOutput_Granular_WoodenSpheresDrum_sensDistr_' num2str(q)  '/'];
-% folder=['../../' 'build/DemoOutput_Granular_WoodenSpheresDrum_' num2str(q)  '/'];
+folder=['../../' 'build/DemoOutput_Granular_PlasticSpheresDrum_sensDistr_' num2str(q)  '/'];
+folder=['../../' 'build/DemoOutput_Granular_PlasticSpheresDrum_sensInertia_' num2str(q)  '/'];
+ folder=['../../' 'build/DemoOutput_Granular/WoodenSpheresDrum/sensFriction/F' num2str(q)  '/'];
 files=dir(folder);
 
 
@@ -92,7 +93,7 @@ for p=1:1
 
         % figure(3); hold on
         angle=abs(atand(P(1)));
-        measureAngle(counter,counterTotal)=atan(angle);
+        measureAngle(counter,counterTotal)=angle;
 
 
 
@@ -103,5 +104,10 @@ for p=1:1
 
 end
 end
+
+
     figure(3); hold on
-    boxplot((measureAngle),'PlotStyle','compact')
+    h1=boxplot(measureAngle(:,1:2:end),'PlotStyle','compact',Colors='b');
+    
+    h2=boxplot(measureAngle(:,2:2:end),'PlotStyle','compact',Colors='r');
+    legend([h1(1) h2(1)],{'0.00','0.01'})

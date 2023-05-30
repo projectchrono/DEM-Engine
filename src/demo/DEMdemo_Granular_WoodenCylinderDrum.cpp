@@ -26,7 +26,7 @@ void runDEME (int caseID, float friction);
 
 int main(){
 
-    std::vector<float> friction = {0.10, 0.20, 0.30, 0.50, 0.60, 0.70};
+    std::vector<float> friction = {0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70};
     int nsim=int(friction.size());
     
     int counter=0;
@@ -79,7 +79,7 @@ void runDEME(int caseDef, float frictionMaterial) {
     std::vector<double> angular ={3.60, 10.80, 17.9}; // value given in rpm
  
    
-    auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}, {"mu", 0.04}, {"Crr", 0.04}});
+    auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}, {"mu", 0.04}, {"Crr", 0.00}});
     
     auto mat_type_particles =
         DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", frictionMaterial}, {"Crr", 0.00}});

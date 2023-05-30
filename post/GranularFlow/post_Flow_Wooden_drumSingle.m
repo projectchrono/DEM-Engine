@@ -4,9 +4,8 @@ clear;close all;clc
 %exp=readtable("../../data/granularFlow/heightSarno2018.dat");
 
 
-folder=['../../' ...
-    'build/DemoOutput_Granular_WoodenCylindersDrum_1/'];
-files=dir(folder);
+% folder=['../../' 'build/DemoOutput_Granular_WoodenCylindersDrum_0/'];
+
 
 
 dx=0.0029*1;
@@ -24,10 +23,23 @@ time=(0:0.01:3)';
 level_z=zeros(numel(time),1);
 
 points=(-0.04:0.01:0.05);
+measureAngle=zeros(numel(50:99),3*6);
+counterTotal=0;
+
+
+
+for q=0:1:1
+
+folder=['../../' 'build/DemoOutput_Granular_WoodenSpheres'  '/'];
+% folder=['../../' 'build/DemoOutput_Granular_WoodenSpheresDrum_' num2str(q)  '/'];
+files=dir(folder);
+
 
 for p=1:3
     range=(p-1)*100+(50:99);
-    measureAngle=zeros(numel(range),1);
+    counterTotal=counterTotal+1;
+
+
     counter=0;
 
     for k=range
@@ -70,23 +82,26 @@ for p=1:3
         results=interp1(curve1_x,curve1_z,points);
 
         figure(2); hold on
-        plot(curve1_x,curve1_z)
-        plot(points,results,'.')
+        % plot(curve1_x,curve1_z)
+         plot(points,results,'.')
 
         P = polyfit(points,results,1);
         yfit = polyval(P,points);
 
-        plot(points,yfit,'r-.');
+        % plot(points,yfit,'r-.');
+
         % figure(3); hold on
         angle=abs(atand(P(1)));
-        measureAngle(counter)=angle;
+        measureAngle(counter,counterTotal)=atan(angle);
 
 
 
         % plot(curve1_x, abs(dy1))
 
     end
-    figure(3); hold on
-    boxplot(measureAngle,)
+
 
 end
+end
+    figure(3); hold on
+    boxplot((measureAngle),'PlotStyle','compact')
