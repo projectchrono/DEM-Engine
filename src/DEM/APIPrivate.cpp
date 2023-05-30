@@ -1124,6 +1124,10 @@ void DEMSolver::packDataPointers() {
     // are called, so each thread has its own pointers packed.
     dT->packTransferPointers(kT);
     kT->packTransferPointers(dT);
+    // Finally, the API needs to map all mesh to their owners
+    for (const auto& mmesh : m_meshes) {
+        m_owner_mesh_map[mmesh->owner] = mmesh->cache_offset;
+    }
 }
 
 void DEMSolver::validateUserInputs() {

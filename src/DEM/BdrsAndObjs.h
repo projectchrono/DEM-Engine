@@ -244,17 +244,15 @@ class DEMMeshConnected {
     std::vector<int3> m_face_uv_indices;
     std::vector<int3> m_face_col_indices;
 
-    bodyID_t getOwner() { return owner; }
+    std::vector<float3>& GetCoordsVertices() { return m_vertices; }
+    std::vector<float3>& GetCoordsNormals() { return m_normals; }
+    std::vector<float3>& GetCoordsUV() { return m_UV; }
+    std::vector<float3>& GetCoordsColors() { return m_colors; }
 
-    std::vector<float3>& getCoordsVertices() { return m_vertices; }
-    std::vector<float3>& getCoordsNormals() { return m_normals; }
-    std::vector<float3>& getCoordsUV() { return m_UV; }
-    std::vector<float3>& getCoordsColors() { return m_colors; }
-
-    std::vector<int3>& getIndicesVertexes() { return m_face_v_indices; }
-    std::vector<int3>& getIndicesNormals() { return m_face_n_indices; }
-    std::vector<int3>& getIndicesUV() { return m_face_uv_indices; }
-    std::vector<int3>& getIndicesColors() { return m_face_col_indices; }
+    std::vector<int3>& GetIndicesVertexes() { return m_face_v_indices; }
+    std::vector<int3>& GetIndicesNormals() { return m_face_n_indices; }
+    std::vector<int3>& GetIndicesUV() { return m_face_uv_indices; }
+    std::vector<int3>& GetIndicesColors() { return m_face_col_indices; }
 
     // Material types for each mesh facet
     std::vector<std::shared_ptr<DEMMaterial>> materials;
@@ -306,6 +304,9 @@ class DEMMeshConnected {
 
     /// Get the number of triangles already added to this mesh
     size_t GetNumTriangles() const { return nTri; }
+
+    /// Get the number of nodes in the mesh
+    size_t GetNumNodes() const { return m_vertices.size(); }
 
     /// Instruct that when the mesh is initialized into the system, it will re-order the nodes of each triangle so that
     /// the normals derived from right-hand-rule are the same as the normals in the mesh file
@@ -415,7 +416,7 @@ class DEMMeshConnected {
     bool ComputeNeighbouringTriangleMap(std::vector<std::array<int, 4>>& tri_map) const;
 
     ////////////////////////////////////////////////////////
-    // Some geo wildcard-related stuff 
+    // Some geo wildcard-related stuff
     ////////////////////////////////////////////////////////
     // Initial geometry wildcard that all triangles should have
     std::unordered_map<std::string, std::vector<float>> geo_wildcards;

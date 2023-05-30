@@ -249,14 +249,48 @@ float3 DEMSolver::GetOwnerMOI(bodyID_t ownerID) const {
     }
 }
 
-void DEMSolver::SetTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles) {
-    dT->setTriNodeRelPos(start, triangles);
-    kT->setTriNodeRelPos(start, triangles);
+void DEMSolver::SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& new_nodes) {
+    auto& mesh = m_meshes.at(m_owner_mesh_map.at(owner));
+    if (mesh->GetNumNodes() != new_nodes.size()) {
+        DEME_ERROR(
+            "To deform a mesh, provided vector must have the same length as the number of nodes in mesh.\nThe mesh has "
+            "%zu nodes, yet the provided vector has length %zu.",
+            mesh->GetNumNodes(), new_nodes.size());
+    }
+    // We actually modify the cached mesh... since it has implications in output
+    for (size_t i = 0; i < mesh->GetNumNodes(); i++) {
+        mesh->m_vertices[i] = new_nodes[i];
+    }
+    std::vector<DEMTriangle> new_triangles(mesh->GetNumTriangles());
+    for (size_t i = 0; i < mesh->GetNumTriangles(); i++) {
+        new_triangles[i] = mesh->GetTriangle(i);
+    }
+
+    dT->setTriNodeRelPos(triID, new_triangles);
+    kT->setTriNodeRelPos(triID, new_triangles);
 }
-//// TODO: Implement it
-void DEMSolver::UpdateTriNodeRelPos(size_t start, const std::vector<float3>& updates) {
-    // dT->updateTriNodeRelPos(start, updates);
-    // kT->updateTriNodeRelPos(start, updates);
+void DEMSolver::UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& updates) {
+    auto& mesh = m_meshes.at(m_owner_mesh_map.at(owner));
+    if (mesh->GetNumNodes() != updates.size()) {
+        DEME_ERROR(
+            "To deform a mesh, provided vector must have the same length as the number of nodes in mesh.\nThe mesh has "
+            "%zu nodes, yet the provided vector has length %zu.",
+            mesh->GetNumNodes(), updates.size());
+    }
+    // We actually modify the cached mesh... since it has implications in output
+    for (size_t i = 0; i < mesh->GetNumNodes(); i++) {
+        mesh->m_vertices[i] += updates[i];
+    }
+    // No need to worry about RHR: that's taken care of at init
+    std::vector<DEMTriangle> new_triangles(mesh->GetNumTriangles());
+    for (size_t i = 0; i < mesh->GetNumTriangles(); i++) {
+        new_triangles[i] = mesh->GetTriangle(i);
+    }
+    dT->setTriNodeRelPos(triID, new_triangles);
+    kT->setTriNodeRelPos(triID, new_triangles);
+}
+std::shared_ptr<DEMMeshConnected>& DEMSolver::GetCachedMesh(bodyID_t ownerID) {
+    return m_meshes.at(m_owner_mesh_map.at(ownerID));
 }
 
 double DEMSolver::GetSimTime() const {
@@ -1566,6 +1600,9 @@ void DEMSolver::UpdateClumps() {
             "prescription, now we have %zu.",
             nLastTimeMatNum, m_loaded_materials.size(), nLastTimeFamilyPreNum, m_input_family_prescription.size());
     }
+
+    // After Initialize or UpdateClumps, we should clear host-side initialization object cache
+    ClearCache();
 }
 
 void DEMSolver::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {

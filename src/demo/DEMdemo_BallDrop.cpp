@@ -89,9 +89,6 @@ int main() {
     unsigned int fps = 20;
     float frame_time = 1.0 / fps;
 
-    // Testing UpdateMesh... not needed
-    proj_tracker->UpdateMesh(projectile);
-
     std::cout << "Output at " << fps << " FPS" << std::endl;
     unsigned int currframe = 0;
 

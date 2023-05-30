@@ -174,14 +174,27 @@ class DEMTracker {
     /// @return The moment of inertia (in principal axis frame).
     float3 MOI(size_t offset = 0);
 
-    /// Apply the mesh deformation such that the tracked mesh is replaced by the new_mesh. This affects triangle facets'
-    /// relative positions wrt the mesh center (CoM) only; mesh's overall position/rotation in simulation is not
-    /// affected.
-    void UpdateMesh(std::shared_ptr<DEMMeshConnected>& new_mesh);
-    /// Change the coordinates of each mesh node by the given amount. This is also for mesh deformation, but unlike
-    /// UpdateMesh, it adds to the existing node coordinate XYZs. The length of the argument vector must agree with the
-    /// number of nodes in the tracked mesh.
+    /// @brief Apply the new mesh node positions such that the tracked mesh is replaced by the new_nodes.
+    /// @details This affects triangle facets' relative positions wrt the mesh center (CoM) only; mesh's overall
+    /// position/rotation in simulation is not affected. So if provided input is the new mesh location with
+    /// consideration of its CoM's motion, then you should not use tracker to further modify the mesh's CoM; if the
+    /// provided input is the new mesh location without considering the displacement of mesh's CoM (aka only the mesh
+    /// deformation), then you should then use tracker to further update the mesh's CoM.
+    /// @param new_nodes New locations of mesh nodes. The length of the argument vector must agree with the number of
+    /// nodes in the tracked mesh.
+    void UpdateMesh(const std::vector<float3>& new_nodes);
+    /// @brief Change the coordinates of each mesh node by the given amount.
+    /// @details This affects triangle facets' relative positions wrt the mesh center (CoM) only; mesh's overall
+    /// position/rotation in simulation is not affected. So if provided input is the mesh deformation with
+    /// consideration of its CoM's motion, then you should not use tracker to further modify the mesh's CoM; if the
+    /// provided input is the mesh deformation without considering the displacement of mesh's CoM, then you should then
+    /// use tracker to further update the mesh's CoM.
+    /// @param new_nodes Deformation of mesh nodes. The length of the argument vector must agree with the number of
+    /// nodes in the tracked mesh.
     void UpdateMeshByIncrement(const std::vector<float3>& deformation);
+    /// @brief Get a handle for the mesh this tracker is tracking.
+    /// @return Pointer to the mesh.
+    std::shared_ptr<DEMMeshConnected>& GetMesh();
 
     /// @brief Set a wildcard value of the owner this tracker is tracking.
     /// @param name Name of the wildcard.
@@ -204,10 +217,22 @@ class DEMTracker {
     void SetGeometryWildcardValue(const std::string& name, const std::vector<float>& wc);
 
     /// @brief Get all contact forces that concern this track object, as a vector.
+    /// @param points The contact point XYZ as float3 vector.
+    /// @param forces The force in XYZ as float3 vector.
     /// @param offset The offset to this owner (where to start querying). If first entity, input 0.
-    /// @return A std::pair of std::vectors. First is the force in XYZ as float3 vector. Second is the contact point XYZ
-    /// as float3 vector.
-    std::pair<std::vector<float3>, std::vector<float3>> GetContactForces(size_t offset = 0);
+    /// @return Number of force pairs.
+    size_t GetContactForces(std::vector<float3>& points, std::vector<float3>& forces, size_t offset = 0);
+
+    /// @brief Get all contact forces that concern this track object, as a vector.
+    /// @param points The contact point XYZ as float3 vector.
+    /// @param forces The force in XYZ as float3 vector.
+    /// @param torque The contact torque. The torque is
+    /// @param offset The offset to this owner (where to start querying). If first entity, input 0.
+    /// @return Number of force pairs.
+    size_t GetContactForces(std::vector<float3>& points,
+                            std::vector<float3>& forces,
+                            std::vector<float3>& torque,
+                            size_t offset = 0);
 };
 
 class DEMForceModel {

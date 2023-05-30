@@ -1557,7 +1557,7 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     // May want to jump the families that the user disabled output for
     std::vector<notStupidBool_t> thisMeshSkip(m_meshes.size(), 0);
     for (const auto& mmesh : m_meshes) {
-        bodyID_t mowner = mmesh->getOwner();
+        bodyID_t mowner = mmesh->owner;
         family_t this_family = familyID.at(mowner);
         // If this (impl-level) family is in the no-output list, skip it
         if (std::binary_search(familiesNoOutput.begin(), familiesNoOutput.end(), this_family)) {
@@ -1577,9 +1577,9 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     mesh_num = 0;
     for (const auto& mmesh : m_meshes) {
         if (!thisMeshSkip[mesh_num]) {
-            vertexOffset[mesh_num + 1] = mmesh->getCoordsVertices().size();
-            total_v += mmesh->getCoordsVertices().size();
-            total_f += mmesh->getIndicesVertexes().size();
+            vertexOffset[mesh_num + 1] = mmesh->GetCoordsVertices().size();
+            total_v += mmesh->GetCoordsVertices().size();
+            total_f += mmesh->GetIndicesVertexes().size();
         }
         mesh_num++;
     }
@@ -1591,10 +1591,10 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     mesh_num = 0;
     for (const auto& mmesh : m_meshes) {
         if (!thisMeshSkip[mesh_num]) {
-            bodyID_t mowner = mmesh->getOwner();
+            bodyID_t mowner = mmesh->owner;
             float3 ownerPos = this->getOwnerPos(mowner);
             float4 ownerOriQ = this->getOwnerOriQ(mowner);
-            for (const auto& v : mmesh->getCoordsVertices()) {
+            for (const auto& v : mmesh->GetCoordsVertices()) {
                 float3 point = v;
                 hostApplyFrameTransform(point, ownerPos, ownerOriQ);
                 ostream << point.x << " " << point.y << " " << point.z << std::endl;
@@ -1609,7 +1609,7 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     mesh_num = 0;
     for (const auto& mmesh : m_meshes) {
         if (!thisMeshSkip[mesh_num]) {
-            for (const auto& f : mmesh->getIndicesVertexes()) {
+            for (const auto& f : mmesh->GetIndicesVertexes()) {
                 ostream << "3 " << (size_t)f.x + vertexOffset[mesh_num] << " " << (size_t)f.y + vertexOffset[mesh_num]
                         << " " << (size_t)f.z + vertexOffset[mesh_num] << std::endl;
             }
@@ -1623,7 +1623,7 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     mesh_num = 0;
     for (const auto& mmesh : m_meshes) {
         if (!thisMeshSkip[mesh_num]) {
-            auto nfaces = mmesh->getIndicesVertexes().size();
+            auto nfaces = mmesh->GetIndicesVertexes().size();
             for (size_t j = 0; j < nfaces; j++)
                 ostream << "5 " << std::endl;
         }

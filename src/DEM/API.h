@@ -377,12 +377,13 @@ class DEMSolver {
     /// @param ownerID The ID (offset) of the owner.
     /// @param fam Family number.
     void SetOwnerFamily(bodyID_t ownerID, family_t fam);
-    /// Rewrite the relative positions of the flattened triangle soup, starting from `start', using triangle nodal
-    /// positions in `triangles'.
-    void SetTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles);
-    /// Rewrite the relative positions of the flattened triangle soup, starting from `start' by the amount stipulated in
-    /// updates.
-    void UpdateTriNodeRelPos(size_t start, const std::vector<float3>& updates);
+    /// @brief Rewrite the relative positions of the flattened triangle soup.
+    void SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& new_nodes);
+    /// @brief Update the relative positions of the flattened triangle soup.
+    void UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& updates);
+    /// @brief Get a handle for the mesh this tracker is tracking.
+    /// @return Pointer to the mesh.
+    std::shared_ptr<DEMMeshConnected>& GetCachedMesh(bodyID_t ownerID);
 
     /// @brief Get all clump--clump contacts in the simulation system.
     /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
@@ -1152,7 +1153,7 @@ class DEMSolver {
     // Meshes cached on dT side that has corresponding owner number associated. Useful for modifying meshes.
     std::vector<std::shared_ptr<DEMMeshConnected>> m_meshes;
     // A map between the owner of mesh, and the offset this mesh lives in m_meshes array.
-    // std::unordered_map<bodyID_t, unsigned int> m_owner_mesh_map;
+    std::unordered_map<bodyID_t, unsigned int> m_owner_mesh_map;
 
     ////////////////////////////////////////////////////////////////////////////////
     // Cached user's direct (raw) inputs concerning the actual physics objects

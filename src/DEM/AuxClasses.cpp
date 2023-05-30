@@ -351,7 +351,7 @@ std::vector<float> DEMTracker::GetGeometryWildcardValue(const std::string& name)
     }
     return res;
 }
-std::pair<std::vector<float3>, std::vector<float3>> DEMTracker::GetContactForces(size_t offset) {
+size_t DEMTracker::GetContactForces(std::vector<float3>& points, std::vector<float3>& forces, size_t offset) {
     assertThereIsForcePairs("GetContactForces");
 }
 
@@ -388,20 +388,21 @@ void DEMTracker::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::v
     sys->ChangeClumpSizes(offsetted_IDs, factors);
 }
 
-void DEMTracker::UpdateMesh(std::shared_ptr<DEMMeshConnected>& new_mesh) {
+void DEMTracker::UpdateMesh(const std::vector<float3>& new_nodes) {
     assertMesh("UpdateMesh");
-    assertGeoSize(new_mesh->GetNumTriangles(), "UpdateMesh", "triangles");
-    std::vector<DEMTriangle> new_triangles(new_mesh->GetNumTriangles());
-    for (size_t i = 0; i < new_mesh->GetNumTriangles(); i++) {
-        new_triangles[i] = new_mesh->GetTriangle(i);
-    }
-    sys->SetTriNodeRelPos(obj->geoID, new_triangles);
+    // assertGeoSize(new_mesh->GetNumTriangles(), "UpdateMesh", "triangles");
+    // Outsource to API system to handle...
+    sys->SetTriNodeRelPos(obj->ownerID, obj->geoID, new_nodes);
 }
-//// TODO: Implement it. deformation is per-node, yet UpdateTriNodeRelPos need per-triangle info.
+// Deformation is per-node, yet UpdateTriNodeRelPos need per-triangle info.
 void DEMTracker::UpdateMeshByIncrement(const std::vector<float3>& deformation) {
     assertMesh("UpdateMeshByIncrement");
-    // assertGeoSize(deformation.size(), "UpdateMeshByIncrement", "triangles");
-    // sys->UpdateTriNodeRelPos(obj->geoID, deformation);
+    // Outsource to API system to handle...
+    sys->UpdateTriNodeRelPos(obj->ownerID, obj->geoID, deformation);
+}
+std::shared_ptr<DEMMeshConnected>& DEMTracker::GetMesh() {
+    assertMesh("GetMesh");
+    return sys->GetCachedMesh(obj->ownerID);
 }
 
 void DEMTracker::SetOwnerWildcardValue(const std::string& name, float wc, size_t offset) {
