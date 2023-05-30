@@ -699,7 +699,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         DEME_DEBUG_PRINTF("Total number of existing owners in simulation: %zu", nExistOwners);
         DEME_DEBUG_PRINTF("Total number of owners in simulation after this init call: %zu",
                           (size_t)simParams->nOwnerBodies);
-        
+
         // If user loaded contact pairs, we need to inform kT on the first time step...
         if (cnt_arr_offset > *stateOfSolver_resources.pNumContacts) {
             *stateOfSolver_resources.pNumContacts = cnt_arr_offset;
@@ -1084,11 +1084,17 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
     if (solverFlags.outputFlags & OUTPUT_CONTENT::VEL) {
         outstrstream << ",v_x,v_y,v_z";
     }
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_VEL) {
+        outstrstream << ",w_x,w_y,w_z";
+    }
     if (solverFlags.outputFlags & OUTPUT_CONTENT::ABS_ACC) {
         outstrstream << ",abs_acc";
     }
     if (solverFlags.outputFlags & OUTPUT_CONTENT::ACC) {
         outstrstream << ",a_x,a_y,a_z";
+    }
+    if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_ACC) {
+        outstrstream << ",alpha_x,alpha_y,alpha_z";
     }
     if (solverFlags.outputFlags & OUTPUT_CONTENT::FAMILY) {
         outstrstream << ",family";
@@ -1163,11 +1169,26 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
         if (solverFlags.outputFlags & OUTPUT_CONTENT::VEL) {
             outstrstream << "," << vxyz.x << "," << vxyz.y << "," << vxyz.z;
         }
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_VEL) {
+            float3 ang_v;
+            ang_v.x = omgBarX.at(this_owner);
+            ang_v.y = omgBarY.at(this_owner);
+            ang_v.z = omgBarZ.at(this_owner);
+            outstrstream << "," << ang_v.x << "," << ang_v.y << "," << ang_v.z;
+        }
+
         if (solverFlags.outputFlags & OUTPUT_CONTENT::ABS_ACC) {
             outstrstream << "," << length(acc);
         }
         if (solverFlags.outputFlags & OUTPUT_CONTENT::ACC) {
             outstrstream << "," << acc.x << "," << acc.y << "," << acc.z;
+        }
+        if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_ACC) {
+            float3 ang_acc;
+            ang_acc.x = alphaX.at(this_owner);
+            ang_acc.y = alphaY.at(this_owner);
+            ang_acc.z = alphaZ.at(this_owner);
+            outstrstream << "," << ang_acc.x << "," << ang_acc.y << "," << ang_acc.z;
         }
 
         // Family number needs to be user number
