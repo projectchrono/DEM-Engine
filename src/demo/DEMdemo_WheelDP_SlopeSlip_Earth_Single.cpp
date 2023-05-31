@@ -23,23 +23,23 @@ int main(int argc, char* argv[]) {
     int cur_test = atoi(argv[1]);
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_Wheel_Tests_3";
+    out_dir += "/DEMdemo_Wheel_Tests";
     std::filesystem::create_directory(out_dir);
 
     // `World'
     float G_mag = 9.81;
-    float step_size = 5e-6;
+    float step_size = 2.5e-6;
     double world_size_y = 0.52;
-    double world_size_x = 4;
+    double world_size_x = 4;  // 2.04;
     double world_size_z = 4.0;
     float w_r = 0.8;
-    double sim_end = 8.;
+    double sim_end = 4.;
 
     // Define the wheel geometry
     float wheel_rad = 0.25;
     float wheel_width = 0.2;
     float wheel_mass = 5.;  // 8.7;
-    float total_pressure = 110. * 9.81; // 22.
+    float total_pressure = 22. * 9.81;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
@@ -197,17 +197,17 @@ int main(int argc, char* argv[]) {
 
         DEMSim.SetInitTimeStep(step_size);
         DEMSim.SetCDUpdateFreq(10);
-        DEMSim.SetExpandSafetyAdder(.1);
+        DEMSim.SetExpandSafetyAdder(.5);
         DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1);
         DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(5);
-        DEMSim.SetErrorOutVelocity(50.);
+        DEMSim.SetErrorOutVelocity(500.);
         DEMSim.Initialize();
 
         // Put the wheel in place, then let the wheel sink in initially
-        float corr = 1.0;  // 0
-        float init_x = -1.5 + corr;
+        float corr = 1.0; //0
+        float init_x = -1.0 + corr;
         if (Slope_deg < 21) {
-            init_x = -2.1 + corr;
+            init_x = -1.6 + corr;
         }
 
         float settle_time = 0.4;
@@ -215,7 +215,7 @@ int main(int argc, char* argv[]) {
 
         // Put the wheel in place, then let the wheel sink in initially
         float max_z = max_z_finder->GetValue();
-        wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.1 + wheel_rad));
+        wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.08 + wheel_rad));
 
         // float bulk_den_high = partial_mass_finder->GetValue() / ((-0.41 + 0.5) * world_size_x * world_size_y);
         // float bulk_den_low = total_mass_finder->GetValue() / ((max_z + 0.5) * world_size_x * world_size_y);
@@ -225,16 +225,17 @@ int main(int argc, char* argv[]) {
         DEMSim.ChangeFamily(11, 1);
 
         {
-            {
+            float ts = 0.005;
+            for (float t=0;t<2.;t+=ts) {
                 char filename[200], meshname[200];
                 sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), cur_test);
-                sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), cur_test);
+                sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), cur_test++);
                 DEMSim.WriteSphereFile(std::string(filename));
                 DEMSim.WriteMeshFile(std::string(meshname));
+                DEMSim.DoDynamics(ts);
             }
 
             std::cout << "Test num: " << cur_test << std::endl;
-            DEMSim.DoDynamicsThenSync(1.);
 
             float3 V = wheel_tracker->Vel();
             float x1 = wheel_tracker->Pos().x;
@@ -250,7 +251,7 @@ int main(int argc, char* argv[]) {
                 // Overwrite previous...
                 char filename[200], meshname[200];
                 sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), cur_test);
-                sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), cur_test);
+                sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), cur_test++);
                 DEMSim.WriteSphereFile(std::string(filename));
                 DEMSim.WriteMeshFile(std::string(meshname));
                 std::cout << "=================================" << std::endl;
