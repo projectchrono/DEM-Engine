@@ -125,6 +125,7 @@ int main() {
         DEMSim.ShowThreadCollaborationStats();
     }
 
+    DEMSim.ShowTimingStats();
     DEMSim.ShowAnomalies();
     std::cout << "DEMdemo_BallDrop exiting..." << std::endl;
     return 0;

@@ -32,6 +32,7 @@ SET(DEMOS
 		DEMdemo_Indentation
 		DEMdemo_SolarSystem
 		DEMdemo_Electrostatic
+		DEMdemo_FlexibleMesh
 )
 
 # ------------------------------------------------------------------------------

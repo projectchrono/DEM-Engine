@@ -160,7 +160,7 @@ enum CNT_OUTPUT_CONTENT {
     POINT = 2,      // Contact point in global frame
     COMPONENT = 4,  // The component numbers (such as triangle number for a mesh) that involved in this contact
     NORMAL = 8,     // Contact normal direction in global frame
-    TORQUE_ONLY_FORCE =
+    TORQUE =
         16,  // This is a standalone force and produces torque only (typical example: rolling resistance force)
     CNT_WILDCARD = 32,
     OWNER = 64,

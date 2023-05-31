@@ -368,6 +368,7 @@ size_t DEMTracker::GetContactForces(std::vector<float3>& points, std::vector<flo
     assertThereIsForcePairs("GetContactForces");
     points.clear();
     forces.clear();
+    return sys->GetOwnerContactForces(obj->ownerID + offset, points, forces);
 }
 size_t DEMTracker::GetContactForcesAndLocalTorque(std::vector<float3>& points,
                                                   std::vector<float3>& forces,
@@ -376,6 +377,8 @@ size_t DEMTracker::GetContactForcesAndLocalTorque(std::vector<float3>& points,
     assertThereIsForcePairs("GetContactForces");
     points.clear();
     forces.clear();
+    torques.clear();
+    return sys->GetOwnerContactForces(obj->ownerID + offset, points, forces, torques, true);
 }
 size_t DEMTracker::GetContactForcesAndGlobalTorque(std::vector<float3>& points,
                                                    std::vector<float3>& forces,
@@ -384,6 +387,8 @@ size_t DEMTracker::GetContactForcesAndGlobalTorque(std::vector<float3>& points,
     assertThereIsForcePairs("GetContactForces");
     points.clear();
     forces.clear();
+    torques.clear();
+    return sys->GetOwnerContactForces(obj->ownerID + offset, points, forces, torques, false);
 }
 
 void DEMTracker::SetPos(float3 pos, size_t offset) {
@@ -434,6 +439,10 @@ void DEMTracker::UpdateMeshByIncrement(const std::vector<float3>& deformation) {
 std::shared_ptr<DEMMeshConnected>& DEMTracker::GetMesh() {
     assertMesh("GetMesh");
     return sys->GetCachedMesh(obj->ownerID);
+}
+std::vector<float3> DEMTracker::GetMeshNodesGlobal() {
+    assertMesh("GetMeshNodesGlobal");
+    return sys->GetMeshNodesGlobal(obj->ownerID);
 }
 
 void DEMTracker::SetOwnerWildcardValue(const std::string& name, float wc, size_t offset) {

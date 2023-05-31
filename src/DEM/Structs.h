@@ -622,13 +622,9 @@ class DEMClumpTemplate {
     /// adjusted by this call.
     void InformCentroidPrincipal(float3 center, float4 prin_Q) {
         // Getting to Centroid and Principal is a translation then a rotation (local), so the undo order to undo
-        // rotation then translation
-        float4 g_to_loc_prin_Q = prin_Q;
-        g_to_loc_prin_Q.x = -g_to_loc_prin_Q.x;
-        g_to_loc_prin_Q.y = -g_to_loc_prin_Q.y;
-        g_to_loc_prin_Q.z = -g_to_loc_prin_Q.z;
+        // transltion then rotation
         for (auto& pos : relPos) {
-            hostApplyFrameTransform(pos, -center, g_to_loc_prin_Q);
+            applyFrameTransformGlobalToLocal(pos, center, prin_Q);
         }
     }
     /// The opposite of InformCentroidPrincipal, and it is another way to align this clump's coordinate system with its
@@ -636,7 +632,7 @@ class DEMClumpTemplate {
     /// `origin' point should hit the CoM of this clump.
     void Move(float3 vec, float4 rot_Q) {
         for (auto& pos : relPos) {
-            hostApplyFrameTransform(pos, vec, rot_Q);
+            applyFrameTransformLocalToGlobal(pos, vec, rot_Q);
         }
     }
     /// Scale all geometry component of this clump

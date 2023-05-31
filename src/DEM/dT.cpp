@@ -1434,7 +1434,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
         outstrstream << "," + OUTPUT_FILE_NORMAL_X_NAME + "," + OUTPUT_FILE_NORMAL_Y_NAME + "," +
                             OUTPUT_FILE_NORMAL_Z_NAME;
     }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE_ONLY_FORCE) {
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE) {
         outstrstream << "," + OUTPUT_FILE_TORQUE_X_NAME + "," + OUTPUT_FILE_TORQUE_Y_NAME + "," +
                             OUTPUT_FILE_TORQUE_Z_NAME;
     }
@@ -1529,7 +1529,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
         }
 
         // Torque is in global already...
-        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE_ONLY_FORCE) {
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE) {
             // Must derive torque in local...
             {
                 hostApplyOriQToVector3(torque.x, torque.y, torque.z, oriQA.w, -oriQA.x, -oriQA.y, -oriQA.z);
@@ -1606,7 +1606,7 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
             float4 ownerOriQ = this->getOwnerOriQ(mowner);
             for (const auto& v : mmesh->GetCoordsVertices()) {
                 float3 point = v;
-                hostApplyFrameTransform(point, ownerPos, ownerOriQ);
+                applyFrameTransformLocalToGlobal(point, ownerPos, ownerOriQ);
                 ostream << point.x << " " << point.y << " " << point.z << std::endl;
             }
         }
@@ -2399,7 +2399,7 @@ size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
         CoM.x += simParams->LBFX;
         CoM.y += simParams->LBFY;
         CoM.z += simParams->LBFZ;
-        hostApplyFrameTransform<float3, float3, float4>(cntPnt, CoM, oriQ);
+        applyFrameTransformLocalToGlobal<float3, float3, float4>(cntPnt, CoM, oriQ);
         points.push_back(cntPnt);
         forces.push_back(force);
     }
@@ -2466,7 +2466,7 @@ size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
         CoM.x += simParams->LBFX;
         CoM.y += simParams->LBFY;
         CoM.z += simParams->LBFZ;
-        hostApplyFrameTransform<float3, float3, float4>(cntPnt, CoM, oriQ);
+        applyFrameTransformLocalToGlobal<float3, float3, float4>(cntPnt, CoM, oriQ);
         points.push_back(cntPnt);
         forces.push_back(force);
         torques.push_back(torque);

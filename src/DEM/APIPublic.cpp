@@ -290,7 +290,22 @@ void DEMSolver::UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vecto
     kT->setTriNodeRelPos(triID, new_triangles);
 }
 std::shared_ptr<DEMMeshConnected>& DEMSolver::GetCachedMesh(bodyID_t ownerID) {
+    if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
+        DEME_ERROR("Owner %zu is not a mesh, you therefore cannot retrive a handle to mesh using it.", (size_t)ownerID);
+    }
     return m_meshes.at(m_owner_mesh_map.at(ownerID));
+}
+std::vector<float3> DEMSolver::GetMeshNodesGlobal(bodyID_t ownerID) {
+    if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
+        DEME_ERROR("Owner %zu is not a mesh, you therefore cannot get its nodes' coordinates.", (size_t)ownerID);
+    }
+    float3 mesh_pos = dT->getOwnerPos(ownerID);
+    float4 mesh_oriQ = dT->getOwnerOriQ(ownerID);
+    std::vector<float3> nodes(m_meshes.at(m_owner_mesh_map.at(ownerID))->GetCoordsVertices());
+    for (auto& pnt : nodes) {
+        applyFrameTransformLocalToGlobal<float3, float3, float4>(pnt, mesh_pos, mesh_oriQ);
+    }
+    return nodes;
 }
 
 double DEMSolver::GetSimTime() const {
@@ -626,7 +641,8 @@ void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID) {
 void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
                                             const std::string& X,
                                             const std::string& Y,
-                                            const std::string& Z) {
+                                            const std::string& Z,
+                                            bool dictate) {
     assertSysNotInit("SetFamilyPrescribedPosition");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
@@ -635,9 +651,8 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
     familyPrescription_t preInfo;
     preInfo.family = ID;
 
-    // Both rot and lin pos are fixed. Use other methods if this is not intended.
-    preInfo.rotPosPrescribed = true;
-    preInfo.linPosPrescribed = true;
+    preInfo.rotPosPrescribed = dictate;
+    preInfo.linPosPrescribed = dictate;
 
     preInfo.linPosX = X;
     preInfo.linPosY = Y;
@@ -663,13 +678,37 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID) {
     m_input_family_prescription.push_back(preInfo);
 }
 
-//// TODO: Implement it
-void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula) {
+void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula, bool dictate) {
     assertSysNotInit("SetFamilyPrescribedQuaternion");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());
     }
+    familyPrescription_t preInfo;
+    preInfo.family = ID;
+
+    preInfo.rotPosPrescribed = dictate;
+    preInfo.linPosPrescribed = dictate;
+
+    preInfo.oriQ = q_formula;
+
+    preInfo.used = true;
+
+    m_input_family_prescription.push_back(preInfo);
+}
+void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID) {
+    assertSysNotInit("SetFamilyPrescribedQuaternion");
+    if (ID > std::numeric_limits<family_t>::max()) {
+        DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
+                   std::numeric_limits<family_t>::max());
+    }
+    familyPrescription_t preInfo;
+    preInfo.family = ID;
+
+    preInfo.rotPosPrescribed = true;
+    preInfo.used = true;
+
+    m_input_family_prescription.push_back(preInfo);
 }
 
 void DEMSolver::AddFamilyPrescribedAcc(unsigned int ID,
@@ -870,7 +909,14 @@ std::vector<float> DEMSolver::GetAllOwnerWildcardValue(const std::string& name) 
     return res;
 }
 size_t DEMSolver::GetOwnerContactForces(bodyID_t ownerID, std::vector<float3>& points, std::vector<float3>& forces) {
-    
+    return dT->getOwnerContactForces(ownerID, points, forces);
+}
+size_t DEMSolver::GetOwnerContactForces(bodyID_t ownerID,
+                                        std::vector<float3>& points,
+                                        std::vector<float3>& forces,
+                                        std::vector<float3>& torques,
+                                        bool torque_in_local) {
+    return dT->getOwnerContactForces(ownerID, points, forces, torques, torque_in_local);
 }
 
 std::vector<float> DEMSolver::GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name) {

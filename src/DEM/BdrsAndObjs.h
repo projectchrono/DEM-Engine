@@ -360,13 +360,9 @@ class DEMMeshConnected {
     /// adjusted by this call.
     void InformCentroidPrincipal(float3 center, float4 prin_Q) {
         // Getting to Centroid and Principal is a translation then a rotation (local), so the undo order to undo
-        // rotation then translation
-        float4 g_to_loc_prin_Q = prin_Q;
-        g_to_loc_prin_Q.x = -g_to_loc_prin_Q.x;
-        g_to_loc_prin_Q.y = -g_to_loc_prin_Q.y;
-        g_to_loc_prin_Q.z = -g_to_loc_prin_Q.z;
+        // translation then rotation
         for (auto& node : m_vertices) {
-            hostApplyFrameTransform(node, -center, g_to_loc_prin_Q);
+            applyFrameTransformGlobalToLocal(node, center, prin_Q);
         }
     }
     /// The opposite of InformCentroidPrincipal, and it is another way to align this mesh's coordinate system with its
@@ -374,7 +370,7 @@ class DEMMeshConnected {
     /// `origin' point should hit the CoM of this mesh.
     void Move(float3 vec, float4 rot_Q) {
         for (auto& node : m_vertices) {
-            hostApplyFrameTransform(node, vec, rot_Q);
+            applyFrameTransformLocalToGlobal(node, vec, rot_Q);
         }
     }
     /// Mirror all points in the mesh about a plane. If this changes the mass properties of this mesh, it is the user's

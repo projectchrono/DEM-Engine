@@ -384,6 +384,10 @@ class DEMSolver {
     /// @brief Get a handle for the mesh this tracker is tracking.
     /// @return Pointer to the mesh.
     std::shared_ptr<DEMMeshConnected>& GetCachedMesh(bodyID_t ownerID);
+    /// @brief Get the current locations of all the nodes in the mesh being tracked.
+    /// @param ownerID The ownerID of the mesh.
+    /// @return A vector of float3 representing the global coordinates of the mesh nodes.
+    std::vector<float3> GetMeshNodesGlobal(bodyID_t ownerID);
 
     /// @brief Get all clump--clump contacts in the simulation system.
     /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
@@ -475,12 +479,31 @@ class DEMSolver {
     /// exerted from other simulation entites.
     void SetFamilyPrescribedAngVel(unsigned int ID);
 
-    /// Keep the positions of all entites in this family to remain exactly the user-specified values
-    void SetFamilyPrescribedPosition(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
-    /// Let the positions of all entites in this family always keep `as is'
+    /// @brief
+
+    /// @brief Keep the positions of all entites in this family to remain exactly the user-specified values.
+    /// @param ID Family number.
+    /// @param X X coordinate (can be an expression).
+    /// @param Y Y coordinate (can be an expression).
+    /// @param Z Z coordinate (can be an expression).
+    /// @param dictate If true, prevent entities in this family to have (both linear and rotational) positional updates
+    /// resulted from `simulation physics' unless the prescription is specified as none.
+    void SetFamilyPrescribedPosition(unsigned int ID,
+                                     const std::string& X,
+                                     const std::string& Y,
+                                     const std::string& Z,
+                                     bool dictate = true);
+    /// @brief Let the linear positions of all entites in this family always keep `as is'
     void SetFamilyPrescribedPosition(unsigned int ID);
-    /// Keep the orientation quaternions of all entites in this family to remain exactly the user-specified values
-    void SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula);
+    /// @brief Keep the orientation quaternions of all entites in this family to remain exactly the user-specified
+    /// values
+    /// @param ID Family number.
+    /// @param q_formula A formula from which the quaternion should be calculated.
+    /// @param dictate If true, prevent entities in this family to have (both linear and rotational) positional updates
+    /// resulted from `simulation physics' unless the prescription is specified as none.
+    void SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula, bool dictate = true);
+    /// @brief Let the orientation quaternions of all entites in this family always keep `as is'
+    void SetFamilyPrescribedQuaternion(unsigned int ID);
 
     /// The entities in this family will always experienced an extra acceleration defined using this method
     void AddFamilyPrescribedAcc(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
