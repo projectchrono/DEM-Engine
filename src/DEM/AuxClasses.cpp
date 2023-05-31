@@ -287,6 +287,12 @@ float3 DEMTracker::Pos(size_t offset) {
 float3 DEMTracker::AngVelLocal(size_t offset) {
     return sys->GetOwnerAngVel(obj->ownerID + offset);
 }
+float3 DEMTracker::AngVelGlobal(size_t offset) {
+    float3 ang_v = sys->GetOwnerAngVel(obj->ownerID + offset);
+    float4 oriQ = sys->GetOwnerOriQ(obj->ownerID + offset);
+    hostApplyOriQToVector3(ang_v.x, ang_v.y, ang_v.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+    return ang_v;
+}
 float3 DEMTracker::Vel(size_t offset) {
     return sys->GetOwnerVelocity(obj->ownerID + offset);
 }
@@ -318,6 +324,13 @@ float3 DEMTracker::ContactAcc(size_t offset) {
 float3 DEMTracker::ContactAngAccLocal(size_t offset) {
     return sys->GetOwnerAngAcc(obj->ownerID + offset);
 }
+float3 DEMTracker::ContactAngAccGlobal(size_t offset) {
+    float3 ang_acc = sys->GetOwnerAngAcc(obj->ownerID + offset);
+    float4 oriQ = sys->GetOwnerOriQ(obj->ownerID + offset);
+    hostApplyOriQToVector3(ang_acc.x, ang_acc.y, ang_acc.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+    return ang_acc;
+}
+
 float DEMTracker::GetOwnerWildcardValue(const std::string& name, size_t offset) {
     return sys->GetOwnerWildcardValue(obj->ownerID + offset, name);
 }
@@ -353,6 +366,24 @@ std::vector<float> DEMTracker::GetGeometryWildcardValue(const std::string& name)
 }
 size_t DEMTracker::GetContactForces(std::vector<float3>& points, std::vector<float3>& forces, size_t offset) {
     assertThereIsForcePairs("GetContactForces");
+    points.clear();
+    forces.clear();
+}
+size_t DEMTracker::GetContactForcesAndLocalTorque(std::vector<float3>& points,
+                                                  std::vector<float3>& forces,
+                                                  std::vector<float3>& torques,
+                                                  size_t offset) {
+    assertThereIsForcePairs("GetContactForces");
+    points.clear();
+    forces.clear();
+}
+size_t DEMTracker::GetContactForcesAndGlobalTorque(std::vector<float3>& points,
+                                                   std::vector<float3>& forces,
+                                                   std::vector<float3>& torques,
+                                                   size_t offset) {
+    assertThereIsForcePairs("GetContactForces");
+    points.clear();
+    forces.clear();
 }
 
 void DEMTracker::SetPos(float3 pos, size_t offset) {

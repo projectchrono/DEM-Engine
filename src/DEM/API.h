@@ -512,13 +512,23 @@ class DEMSolver {
 
     /// @brief Get all contact forces that concern a owner.
     /// @param ownerID The ID of the owner.
-    /// @param forces Fill this vector of float3 with the XYZ components of the forces.
     /// @param points Fill this vector of float3 with the XYZ components of the contact points.
-    /// @param excludeZeros If true, will not include the forces that have zero magnitude.
-    void GetOwnerContactForces(bodyID_t ownerID,
-                               std::vector<float3>& forces,
-                               std::vector<float3>& points,
-                               bool excludeZeros = true);
+    /// @param forces Fill this vector of float3 with the XYZ components of the forces.
+    /// @return Number of force pairs.
+    size_t GetOwnerContactForces(bodyID_t ownerID, std::vector<float3>& points, std::vector<float3>& forces);
+
+    /// @brief Get all contact forces that concern a owner.
+    /// @param ownerID The ID of the owner.
+    /// @param points Fill this vector of float3 with the XYZ components of the contact points.
+    /// @param forces Fill this vector of float3 with the XYZ components of the forces.
+    /// @param torques Fill this vector of float3 with the XYZ components of the torques (in local frame).
+    /// @param torque_in_local If true, output torque in this body's local ref frame.
+    /// @return Number of force pairs.
+    size_t GetOwnerContactForces(bodyID_t ownerID,
+                                 std::vector<float3>& points,
+                                 std::vector<float3>& forces,
+                                 std::vector<float3>& torques,
+                                 bool torque_in_local = false);
 
     /// @brief Set the wildcard values of some triangles.
     /// @param geoID The ID of the starting (first) triangle that needs to be modified.
@@ -669,7 +679,10 @@ class DEMSolver {
     /// Write the current status of `clumps' to a file, but not as clumps, instead, as each individual sphere. This may
     /// make small-scale rendering easier.
     void WriteSphereFile(const std::string& outfilename) const;
-    /// Write all contact pairs to a file
+    /// @brief Write all contact pairs to a file.
+    /// @details The outputted torque using this method is in global, rather than each object's local coordinate system.
+    /// @param outfilename Output filename.
+    /// @param force_thres Forces with magnitude smaller than this amount will not be outputted.
     void WriteContactFile(const std::string& outfilename, float force_thres = DEME_TINY_FLOAT) const;
     /// Write the current status of all meshes to a file
     void WriteMeshFile(const std::string& outfilename) const;

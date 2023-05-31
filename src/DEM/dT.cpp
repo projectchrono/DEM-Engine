@@ -1435,7 +1435,8 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
                             OUTPUT_FILE_NORMAL_Z_NAME;
     }
     if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE_ONLY_FORCE) {
-        outstrstream << "," + OUTPUT_FILE_TOF_X_NAME + "," + OUTPUT_FILE_TOF_Y_NAME + "," + OUTPUT_FILE_TOF_Z_NAME;
+        outstrstream << "," + OUTPUT_FILE_TORQUE_X_NAME + "," + OUTPUT_FILE_TORQUE_Y_NAME + "," +
+                            OUTPUT_FILE_TORQUE_Z_NAME;
     }
     if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_WILDCARD) {
         // Write all wildcard names as header
@@ -1486,7 +1487,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
         // Contact point is in local frame. To make it global, first map that vector to axis-aligned global frame, then
         // add the location of body A CoM
         float4 oriQA;
-        float3 CoM, cntPntA;  // A's CoM
+        float3 CoM, cntPntA, cntPntALocal;
         {
             oriQA.w = oriQw.at(ownerA);
             oriQA.x = oriQx.at(ownerA);
@@ -1503,6 +1504,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
             CoM.y += simParams->LBFY;
             CoM.z += simParams->LBFZ;
             cntPntA = contactPointGeometryA.at(i);
+            cntPntALocal = cntPntA;
             hostApplyOriQToVector3(cntPntA.x, cntPntA.y, cntPntA.z, oriQA.w, oriQA.x, oriQA.y, oriQA.z);
             cntPntA += CoM;
         }
@@ -1528,6 +1530,14 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
 
         // Torque is in global already...
         if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE_ONLY_FORCE) {
+            // Must derive torque in local...
+            {
+                hostApplyOriQToVector3(torque.x, torque.y, torque.z, oriQA.w, -oriQA.x, -oriQA.y, -oriQA.z);
+                // Force times point...
+                torque = cross(cntPntALocal, torque);
+                // back to global
+                hostApplyOriQToVector3(torque.x, torque.y, torque.z, oriQA.w, oriQA.x, oriQA.y, oriQA.z);
+            }
             outstrstream << "," << torque.x << "," << torque.y << "," << torque.z;
         }
 
@@ -2343,11 +2353,11 @@ void DEMDynamicThread::setFamilyMeshMaterial(unsigned int N, unsigned int mat_id
     }
 }
 
-void DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
-                                             std::vector<float3>& forces,
-                                             std::vector<float3>& points,
-                                             bool excludeZeros) {
+size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
+                                               std::vector<float3>& points,
+                                               std::vector<float3>& forces) {
     size_t numCnt = *stateOfSolver_resources.pNumContacts;
+    size_t numUsefulCnt = 0;
     for (size_t i = 0; i < numCnt; i++) {
         bodyID_t geoA = idGeometryA.at(i);
         bodyID_t ownerA = ownerClumpBody.at(geoA);
@@ -2355,11 +2365,113 @@ void DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
         contact_t typeB = contactType.at(i);
         bodyID_t ownerB = getOwnerForContactB(geoB, typeB);
 
-        if (ownerID == ownerA || ownerID == ownerB) {
-            // float3 force =
-            // if (length())
+        if ((ownerID != ownerA) && (ownerID != ownerB)) {
+            continue;
         }
+        float3 force = contactForces[i];
+        if (length(force) < DEME_TINY_FLOAT) {
+            continue;
+        }
+
+        numUsefulCnt++;
+        float3 cntPnt;
+        float3 CoM;
+        float4 oriQ;
+        if (ownerID == ownerA) {
+            cntPnt = contactPointGeometryA[i];
+        } else {
+            cntPnt = contactPointGeometryB[i];
+            // Force dir flipped
+            force = -force;
+        }
+
+        oriQ.w = oriQw.at(ownerID);
+        oriQ.x = oriQx.at(ownerID);
+        oriQ.y = oriQy.at(ownerID);
+        oriQ.z = oriQz.at(ownerID);
+        voxelID_t voxel = voxelID.at(ownerID);
+        subVoxelPos_t subVoxX = locX.at(ownerID);
+        subVoxelPos_t subVoxY = locY.at(ownerID);
+        subVoxelPos_t subVoxZ = locZ.at(ownerID);
+        hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(CoM.x, CoM.y, CoM.z, voxel, subVoxX, subVoxY, subVoxZ,
+                                                               simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
+                                                               simParams->l);
+        CoM.x += simParams->LBFX;
+        CoM.y += simParams->LBFY;
+        CoM.z += simParams->LBFZ;
+        hostApplyFrameTransform<float3, float3, float4>(cntPnt, CoM, oriQ);
+        points.push_back(cntPnt);
+        forces.push_back(force);
     }
+    return numUsefulCnt;
+}
+size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
+                                               std::vector<float3>& points,
+                                               std::vector<float3>& forces,
+                                               std::vector<float3>& torques,
+                                               bool torque_in_local) {
+    size_t numCnt = *stateOfSolver_resources.pNumContacts;
+    size_t numUsefulCnt = 0;
+    for (size_t i = 0; i < numCnt; i++) {
+        bodyID_t geoA = idGeometryA.at(i);
+        bodyID_t ownerA = ownerClumpBody.at(geoA);
+        bodyID_t geoB = idGeometryB.at(i);
+        contact_t typeB = contactType.at(i);
+        bodyID_t ownerB = getOwnerForContactB(geoB, typeB);
+
+        if ((ownerID != ownerA) && (ownerID != ownerB)) {
+            continue;
+        }
+        float3 force = contactForces[i];
+        // Note torque, like force, is in global
+        float3 torque = contactTorque_convToForce[i];
+        if (length(force) + length(torque) < DEME_TINY_FLOAT) {
+            continue;
+        }
+
+        numUsefulCnt++;
+        float3 cntPnt;
+        float3 CoM;
+        float4 oriQ;
+        if (ownerID == ownerA) {
+            cntPnt = contactPointGeometryA[i];
+        } else {
+            cntPnt = contactPointGeometryB[i];
+            // Force dir flipped
+            force = -force;
+            torque = -torque;
+        }
+
+        oriQ.w = oriQw.at(ownerID);
+        oriQ.x = oriQx.at(ownerID);
+        oriQ.y = oriQy.at(ownerID);
+        oriQ.z = oriQz.at(ownerID);
+        // Must derive torque in local...
+        {
+            hostApplyOriQToVector3(torque.x, torque.y, torque.z, oriQ.w, -oriQ.x, -oriQ.y, -oriQ.z);
+            // Force times point...
+            torque = cross(cntPnt, torque);
+            if (!torque_in_local) {  // back to global if needed
+                hostApplyOriQToVector3(torque.x, torque.y, torque.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+            }
+        }
+
+        voxelID_t voxel = voxelID.at(ownerID);
+        subVoxelPos_t subVoxX = locX.at(ownerID);
+        subVoxelPos_t subVoxY = locY.at(ownerID);
+        subVoxelPos_t subVoxZ = locZ.at(ownerID);
+        hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(CoM.x, CoM.y, CoM.z, voxel, subVoxX, subVoxY, subVoxZ,
+                                                               simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
+                                                               simParams->l);
+        CoM.x += simParams->LBFX;
+        CoM.y += simParams->LBFY;
+        CoM.z += simParams->LBFZ;
+        hostApplyFrameTransform<float3, float3, float4>(cntPnt, CoM, oriQ);
+        points.push_back(cntPnt);
+        forces.push_back(force);
+        torques.push_back(torque);
+    }
+    return numUsefulCnt;
 }
 
 void DEMDynamicThread::setFamilyContactWildcardValueAny(unsigned int N, unsigned int wc_num, float val) {

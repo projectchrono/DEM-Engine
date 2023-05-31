@@ -869,10 +869,9 @@ std::vector<float> DEMSolver::GetAllOwnerWildcardValue(const std::string& name) 
     dT->getAllOwnerWildcardValue(res, m_owner_wc_num.at(name));
     return res;
 }
-void DEMSolver::GetOwnerContactForces(bodyID_t ownerID,
-                                      std::vector<float3>& forces,
-                                      std::vector<float3>& points,
-                                      bool excludeZeros) {}
+size_t DEMSolver::GetOwnerContactForces(bodyID_t ownerID, std::vector<float3>& points, std::vector<float3>& forces) {
+    
+}
 
 std::vector<float> DEMSolver::GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name) {
     assertSysInit("GetFamilyOwnerWildcardValue");
