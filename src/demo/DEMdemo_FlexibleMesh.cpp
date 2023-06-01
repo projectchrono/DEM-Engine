@@ -116,10 +116,14 @@ int main() {
     // If you call SetFamilyPrescribedPosition and SetFamilyPrescribedQuaternion without specifying what position it
     // actually take, then its position is kept `as is' during simulation, without being affected by physics. It's
     // similar to fixing it but allows you manually impose velocities (which may have implications on your force model),
-    // even though the velocity won't change its location. But this difference is minor.
-    // DEMSim.SetFamilyPrescribedPosition(1);
-    // DEMSim.SetFamilyPrescribedQuaternion(1);
-    DEMSim.SetFamilyFixed(1);
+    // even though the velocity won't change its location. If you prescribe position by do not prescribe velocities, it
+    // may make the object accumulate `phantom' velocity and de-stabilize the simulation. Fixing both position and
+    // velocity is equivalent to fixing the family.
+    DEMSim.SetFamilyPrescribedPosition(1);
+    DEMSim.SetFamilyPrescribedQuaternion(1);
+    DEMSim.SetFamilyPrescribedLinVel(1);
+    DEMSim.SetFamilyPrescribedAngVel(1);
+    // DEMSim.SetFamilyFixed(1);
 
     // Track the mesh
     auto flex_mesh_tracker = DEMSim.Track(flex_mesh);
@@ -127,12 +131,13 @@ int main() {
     // Some inspectors
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
 
-    float step_size = 1e-6;
+    float step_size = 5e-6;
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     // Mesh has user-enforced deformation that the solver won't expect, so it can be better to allow larger safety
     // adder.
-    DEMSim.SetExpandSafetyAdder(5.0);
+    DEMSim.SetExpandSafetyAdder(1.0);
+    DEMSim.SetErrorOutAvgContacts(50);
     DEMSim.Initialize();
 
     // After system initialization, you can still get an handle of the mesh components using trackers (GetMesh method).
@@ -176,7 +181,7 @@ int main() {
     // It's possible that you don't have to update the mesh every time step so you can set this number larger than 1.
     // However, you have to then ensure the simulation does not de-stabilize because the mesh--particles contacts are
     // running in a delayed fashion and large penetrations can occur. If the mesh is super soft, then it's probably OK.
-    int ts_per_mesh_update = 1;
+    int ts_per_mesh_update = 5;
     // Some constants that are used to define the artificial mesh motion. You'll see in the main simulation loop.
     float max_wave_magnitude = 0.3;
     float wave_period = 3.0;
