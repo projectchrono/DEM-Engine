@@ -231,6 +231,9 @@ class DEMMeshConnected {
     // Owner number in DEM simulation
     bodyID_t owner = NULL_BODYID;
 
+    // Position in the m_meshes array
+    unsigned int cache_offset = 0;
+
     std::vector<float3> m_vertices;
     std::vector<float3> m_normals;
     std::vector<float3> m_UV;
@@ -241,17 +244,15 @@ class DEMMeshConnected {
     std::vector<int3> m_face_uv_indices;
     std::vector<int3> m_face_col_indices;
 
-    bodyID_t getOwner() { return owner; }
+    std::vector<float3>& GetCoordsVertices() { return m_vertices; }
+    std::vector<float3>& GetCoordsNormals() { return m_normals; }
+    std::vector<float3>& GetCoordsUV() { return m_UV; }
+    std::vector<float3>& GetCoordsColors() { return m_colors; }
 
-    std::vector<float3>& getCoordsVertices() { return m_vertices; }
-    std::vector<float3>& getCoordsNormals() { return m_normals; }
-    std::vector<float3>& getCoordsUV() { return m_UV; }
-    std::vector<float3>& getCoordsColors() { return m_colors; }
-
-    std::vector<int3>& getIndicesVertexes() { return m_face_v_indices; }
-    std::vector<int3>& getIndicesNormals() { return m_face_n_indices; }
-    std::vector<int3>& getIndicesUV() { return m_face_uv_indices; }
-    std::vector<int3>& getIndicesColors() { return m_face_col_indices; }
+    std::vector<int3>& GetIndicesVertexes() { return m_face_v_indices; }
+    std::vector<int3>& GetIndicesNormals() { return m_face_n_indices; }
+    std::vector<int3>& GetIndicesUV() { return m_face_uv_indices; }
+    std::vector<int3>& GetIndicesColors() { return m_face_col_indices; }
 
     // Material types for each mesh facet
     std::vector<std::shared_ptr<DEMMaterial>> materials;
@@ -303,6 +304,9 @@ class DEMMeshConnected {
 
     /// Get the number of triangles already added to this mesh
     size_t GetNumTriangles() const { return nTri; }
+
+    /// Get the number of nodes in the mesh
+    size_t GetNumNodes() const { return m_vertices.size(); }
 
     /// Instruct that when the mesh is initialized into the system, it will re-order the nodes of each triangle so that
     /// the normals derived from right-hand-rule are the same as the normals in the mesh file
@@ -356,13 +360,9 @@ class DEMMeshConnected {
     /// adjusted by this call.
     void InformCentroidPrincipal(float3 center, float4 prin_Q) {
         // Getting to Centroid and Principal is a translation then a rotation (local), so the undo order to undo
-        // rotation then translation
-        float4 g_to_loc_prin_Q = prin_Q;
-        g_to_loc_prin_Q.x = -g_to_loc_prin_Q.x;
-        g_to_loc_prin_Q.y = -g_to_loc_prin_Q.y;
-        g_to_loc_prin_Q.z = -g_to_loc_prin_Q.z;
+        // translation then rotation
         for (auto& node : m_vertices) {
-            hostApplyFrameTransform(node, -center, g_to_loc_prin_Q);
+            applyFrameTransformGlobalToLocal(node, center, prin_Q);
         }
     }
     /// The opposite of InformCentroidPrincipal, and it is another way to align this mesh's coordinate system with its
@@ -370,7 +370,7 @@ class DEMMeshConnected {
     /// `origin' point should hit the CoM of this mesh.
     void Move(float3 vec, float4 rot_Q) {
         for (auto& node : m_vertices) {
-            hostApplyFrameTransform(node, vec, rot_Q);
+            applyFrameTransformLocalToGlobal(node, vec, rot_Q);
         }
     }
     /// Mirror all points in the mesh about a plane. If this changes the mass properties of this mesh, it is the user's
@@ -412,7 +412,7 @@ class DEMMeshConnected {
     bool ComputeNeighbouringTriangleMap(std::vector<std::array<int, 4>>& tri_map) const;
 
     ////////////////////////////////////////////////////////
-    // Some geo wildcard-related stuff 
+    // Some geo wildcard-related stuff
     ////////////////////////////////////////////////////////
     // Initial geometry wildcard that all triangles should have
     std::unordered_map<std::string, std::vector<float>> geo_wildcards;

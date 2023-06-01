@@ -114,6 +114,9 @@ void DEMDynamicThread::packTransferPointers(DEMKinematicThread*& kT) {
     granData->pKTOwnedBuffer_oriQ2 = kT->granData->oriQ2_buffer;
     granData->pKTOwnedBuffer_oriQ3 = kT->granData->oriQ3_buffer;
     granData->pKTOwnedBuffer_familyID = kT->granData->familyID_buffer;
+    granData->pKTOwnedBuffer_relPosNode1 = kT->granData->relPosNode1_buffer;
+    granData->pKTOwnedBuffer_relPosNode2 = kT->granData->relPosNode2_buffer;
+    granData->pKTOwnedBuffer_relPosNode3 = kT->granData->relPosNode3_buffer;
 }
 
 void DEMDynamicThread::changeFamily(unsigned int ID_from, unsigned int ID_to) {
@@ -797,6 +800,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
 
         // Store this mesh in dT's cache
         input_mesh_objs.at(i)->owner = i + owner_offset_for_mesh_obj;
+        input_mesh_objs.at(i)->cache_offset = m_meshes.size();
         m_meshes.push_back(input_mesh_objs.at(i));
 
         inertiaPropOffsets.at(i + owner_offset_for_mesh_obj) = i + offset_for_mesh_obj_mass_template;
@@ -1416,6 +1420,17 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
     ptFile << outstrstream.str();
 }
 
+inline bodyID_t DEMDynamicThread::getOwnerForContactB(const bodyID_t& geoB, const contact_t& type) const {
+    switch (type) {
+        case (SPHERE_SPHERE_CONTACT):
+            return ownerClumpBody.at(geoB);
+        case (SPHERE_MESH_CONTACT):
+            return ownerMesh.at(geoB);
+        default:  // Default is sphere--analytical
+            return ownerAnalBody.at(geoB);
+    }
+}
+
 void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thres) const {
     std::ostringstream outstrstream;
 
@@ -1443,8 +1458,9 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
         outstrstream << "," + OUTPUT_FILE_NORMAL_X_NAME + "," + OUTPUT_FILE_NORMAL_Y_NAME + "," +
                             OUTPUT_FILE_NORMAL_Z_NAME;
     }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE_ONLY_FORCE) {
-        outstrstream << "," + OUTPUT_FILE_TOF_X_NAME + "," + OUTPUT_FILE_TOF_Y_NAME + "," + OUTPUT_FILE_TOF_Z_NAME;
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE) {
+        outstrstream << "," + OUTPUT_FILE_TORQUE_X_NAME + "," + OUTPUT_FILE_TORQUE_Y_NAME + "," +
+                            OUTPUT_FILE_TORQUE_Z_NAME;
     }
     if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::CNT_WILDCARD) {
         // Write all wildcard names as header
@@ -1474,16 +1490,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
         auto ownerA = ownerClumpBody.at(geoA);
         bodyID_t ownerB;
         // geoB's owner depends...
-        switch (type) {
-            case (SPHERE_SPHERE_CONTACT):
-                ownerB = ownerClumpBody.at(geoB);
-                break;
-            case (SPHERE_MESH_CONTACT):
-                ownerB = ownerMesh.at(geoB);
-                break;
-            default:  // Default is sphere--analytical
-                ownerB = ownerAnalBody.at(geoB);
-        }
+        ownerB = getOwnerForContactB(geoB, type);
 
         // Type is mapped to SS, SM and such....
         outstrstream << contact_type_out_name_map.at(type);
@@ -1504,7 +1511,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
         // Contact point is in local frame. To make it global, first map that vector to axis-aligned global frame, then
         // add the location of body A CoM
         float4 oriQA;
-        float3 CoM, cntPntA;  // A's CoM
+        float3 CoM, cntPntA, cntPntALocal;
         {
             oriQA.w = oriQw.at(ownerA);
             oriQA.x = oriQx.at(ownerA);
@@ -1521,6 +1528,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
             CoM.y += simParams->LBFY;
             CoM.z += simParams->LBFZ;
             cntPntA = contactPointGeometryA.at(i);
+            cntPntALocal = cntPntA;
             hostApplyOriQToVector3(cntPntA.x, cntPntA.y, cntPntA.z, oriQA.w, oriQA.x, oriQA.y, oriQA.z);
             cntPntA += CoM;
         }
@@ -1545,7 +1553,15 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
         }
 
         // Torque is in global already...
-        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE_ONLY_FORCE) {
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::TORQUE) {
+            // Must derive torque in local...
+            {
+                hostApplyOriQToVector3(torque.x, torque.y, torque.z, oriQA.w, -oriQA.x, -oriQA.y, -oriQA.z);
+                // Force times point...
+                torque = cross(cntPntALocal, torque);
+                // back to global
+                hostApplyOriQToVector3(torque.x, torque.y, torque.z, oriQA.w, oriQA.x, oriQA.y, oriQA.z);
+            }
             outstrstream << "," << torque.x << "," << torque.y << "," << torque.z;
         }
 
@@ -1570,6 +1586,19 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     std::vector<size_t> vertexOffset(m_meshes.size() + 1, 0);
     size_t total_f = 0;
     size_t total_v = 0;
+    unsigned int mesh_num = 0;
+
+    // May want to jump the families that the user disabled output for
+    std::vector<notStupidBool_t> thisMeshSkip(m_meshes.size(), 0);
+    for (const auto& mmesh : m_meshes) {
+        bodyID_t mowner = mmesh->owner;
+        family_t this_family = familyID.at(mowner);
+        // If this (impl-level) family is in the no-output list, skip it
+        if (std::binary_search(familiesNoOutput.begin(), familiesNoOutput.end(), this_family)) {
+            thisMeshSkip[mesh_num] = 1;
+        }
+        mesh_num++;
+    }
 
     ostream << "# vtk DataFile Version 2.0\n";
     ostream << "VTK from DEM simulation\n";
@@ -1579,11 +1608,13 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     ostream << "DATASET UNSTRUCTURED_GRID\n";
 
     // Prescan the V and F: to write all meshes to one file, we need vertex number offset info
-    unsigned int mesh_num = 0;
+    mesh_num = 0;
     for (const auto& mmesh : m_meshes) {
-        vertexOffset[mesh_num + 1] = mmesh->getCoordsVertices().size();
-        total_v += mmesh->getCoordsVertices().size();
-        total_f += mmesh->getIndicesVertexes().size();
+        if (!thisMeshSkip[mesh_num]) {
+            vertexOffset[mesh_num + 1] = mmesh->GetCoordsVertices().size();
+            total_v += mmesh->GetCoordsVertices().size();
+            total_f += mmesh->GetIndicesVertexes().size();
+        }
         mesh_num++;
     }
     for (unsigned int i = 1; i < m_meshes.size(); i++)
@@ -1593,13 +1624,15 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     ostream << "POINTS " << total_v << " float" << std::endl;
     mesh_num = 0;
     for (const auto& mmesh : m_meshes) {
-        bodyID_t mowner = mmesh->getOwner();
-        float3 ownerPos = this->getOwnerPos(mowner);
-        float4 ownerOriQ = this->getOwnerOriQ(mowner);
-        for (const auto& v : mmesh->getCoordsVertices()) {
-            float3 point = v;
-            hostApplyFrameTransform(point, ownerPos, ownerOriQ);
-            ostream << point.x << " " << point.y << " " << point.z << std::endl;
+        if (!thisMeshSkip[mesh_num]) {
+            bodyID_t mowner = mmesh->owner;
+            float3 ownerPos = this->getOwnerPos(mowner);
+            float4 ownerOriQ = this->getOwnerOriQ(mowner);
+            for (const auto& v : mmesh->GetCoordsVertices()) {
+                float3 point = v;
+                applyFrameTransformLocalToGlobal(point, ownerPos, ownerOriQ);
+                ostream << point.x << " " << point.y << " " << point.z << std::endl;
+            }
         }
         mesh_num++;
     }
@@ -1609,9 +1642,11 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     ostream << "CELLS " << total_f << " " << 4 * total_f << std::endl;
     mesh_num = 0;
     for (const auto& mmesh : m_meshes) {
-        for (const auto& f : mmesh->getIndicesVertexes()) {
-            ostream << "3 " << (size_t)f.x + vertexOffset[mesh_num] << " " << (size_t)f.y + vertexOffset[mesh_num]
-                    << " " << (size_t)f.z + vertexOffset[mesh_num] << std::endl;
+        if (!thisMeshSkip[mesh_num]) {
+            for (const auto& f : mmesh->GetIndicesVertexes()) {
+                ostream << "3 " << (size_t)f.x + vertexOffset[mesh_num] << " " << (size_t)f.y + vertexOffset[mesh_num]
+                        << " " << (size_t)f.z + vertexOffset[mesh_num] << std::endl;
+            }
         }
         mesh_num++;
     }
@@ -1619,10 +1654,14 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     // Writing face types. Type 5 is generally triangles
     ostream << "\n\n";
     ostream << "CELL_TYPES " << total_f << std::endl;
+    mesh_num = 0;
     for (const auto& mmesh : m_meshes) {
-        auto nfaces = mmesh->getIndicesVertexes().size();
-        for (size_t j = 0; j < nfaces; j++)
-            ostream << "5 " << std::endl;
+        if (!thisMeshSkip[mesh_num]) {
+            auto nfaces = mmesh->GetIndicesVertexes().size();
+            for (size_t j = 0; j < nfaces; j++)
+                ostream << "5 " << std::endl;
+        }
+        mesh_num++;
     }
 
     ptFile << ostream.str();
@@ -1715,6 +1754,19 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
     if (solverFlags.canFamilyChange) {
         DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_familyID, granData->familyID,
                                  simParams->nOwnerBodies * sizeof(family_t), cudaMemcpyDeviceToDevice));
+    }
+
+    // May need to send updated mesh
+    if (solverFlags.willMeshDeform) {
+        DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_relPosNode1, granData->relPosNode1,
+                                 simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
+        DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_relPosNode2, granData->relPosNode2,
+                                 simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
+        DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_relPosNode3, granData->relPosNode3,
+                                 simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
+        solverFlags.willMeshDeform = false;
+        // kT can't be loading buffer when dT is sending, so it is safe
+        kT->solverFlags.willMeshDeform = true;
     }
 
     // This subroutine also includes recording the time stamp of this batch ingredient dT sent to kT
@@ -2335,6 +2387,170 @@ void DEMDynamicThread::setFamilyMeshMaterial(unsigned int N, unsigned int mat_id
         if (+(familyID[owner_id]) == N) {
             triMaterialOffset[i] = (family_t)mat_id;
         }
+    }
+}
+
+size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
+                                               std::vector<float3>& points,
+                                               std::vector<float3>& forces) {
+    size_t numCnt = *stateOfSolver_resources.pNumContacts;
+    size_t numUsefulCnt = 0;
+    for (size_t i = 0; i < numCnt; i++) {
+        bodyID_t geoA = idGeometryA.at(i);
+        bodyID_t ownerA = ownerClumpBody.at(geoA);
+        bodyID_t geoB = idGeometryB.at(i);
+        contact_t typeB = contactType.at(i);
+        bodyID_t ownerB = getOwnerForContactB(geoB, typeB);
+
+        if ((ownerID != ownerA) && (ownerID != ownerB)) {
+            continue;
+        }
+        float3 force = contactForces[i];
+        if (length(force) < DEME_TINY_FLOAT) {
+            continue;
+        }
+
+        numUsefulCnt++;
+        float3 cntPnt;
+        float3 CoM;
+        float4 oriQ;
+        if (ownerID == ownerA) {
+            cntPnt = contactPointGeometryA[i];
+        } else {
+            cntPnt = contactPointGeometryB[i];
+            // Force dir flipped
+            force = -force;
+        }
+
+        oriQ.w = oriQw.at(ownerID);
+        oriQ.x = oriQx.at(ownerID);
+        oriQ.y = oriQy.at(ownerID);
+        oriQ.z = oriQz.at(ownerID);
+        voxelID_t voxel = voxelID.at(ownerID);
+        subVoxelPos_t subVoxX = locX.at(ownerID);
+        subVoxelPos_t subVoxY = locY.at(ownerID);
+        subVoxelPos_t subVoxZ = locZ.at(ownerID);
+        hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(CoM.x, CoM.y, CoM.z, voxel, subVoxX, subVoxY, subVoxZ,
+                                                               simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
+                                                               simParams->l);
+        CoM.x += simParams->LBFX;
+        CoM.y += simParams->LBFY;
+        CoM.z += simParams->LBFZ;
+        applyFrameTransformLocalToGlobal<float3, float3, float4>(cntPnt, CoM, oriQ);
+        points.push_back(cntPnt);
+        forces.push_back(force);
+    }
+    return numUsefulCnt;
+}
+size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
+                                               std::vector<float3>& points,
+                                               std::vector<float3>& forces,
+                                               std::vector<float3>& torques,
+                                               bool torque_in_local) {
+    size_t numCnt = *stateOfSolver_resources.pNumContacts;
+    size_t numUsefulCnt = 0;
+    for (size_t i = 0; i < numCnt; i++) {
+        bodyID_t geoA = idGeometryA.at(i);
+        bodyID_t ownerA = ownerClumpBody.at(geoA);
+        bodyID_t geoB = idGeometryB.at(i);
+        contact_t typeB = contactType.at(i);
+        bodyID_t ownerB = getOwnerForContactB(geoB, typeB);
+
+        if ((ownerID != ownerA) && (ownerID != ownerB)) {
+            continue;
+        }
+        float3 force = contactForces[i];
+        // Note torque, like force, is in global
+        float3 torque = contactTorque_convToForce[i];
+        if (length(force) + length(torque) < DEME_TINY_FLOAT) {
+            continue;
+        }
+
+        numUsefulCnt++;
+        float3 cntPnt;
+        float3 CoM;
+        float4 oriQ;
+        if (ownerID == ownerA) {
+            cntPnt = contactPointGeometryA[i];
+        } else {
+            cntPnt = contactPointGeometryB[i];
+            // Force dir flipped
+            force = -force;
+            torque = -torque;
+        }
+
+        oriQ.w = oriQw.at(ownerID);
+        oriQ.x = oriQx.at(ownerID);
+        oriQ.y = oriQy.at(ownerID);
+        oriQ.z = oriQz.at(ownerID);
+        // Must derive torque in local...
+        {
+            hostApplyOriQToVector3(torque.x, torque.y, torque.z, oriQ.w, -oriQ.x, -oriQ.y, -oriQ.z);
+            // Force times point...
+            torque = cross(cntPnt, torque);
+            if (!torque_in_local) {  // back to global if needed
+                hostApplyOriQToVector3(torque.x, torque.y, torque.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+            }
+        }
+
+        voxelID_t voxel = voxelID.at(ownerID);
+        subVoxelPos_t subVoxX = locX.at(ownerID);
+        subVoxelPos_t subVoxY = locY.at(ownerID);
+        subVoxelPos_t subVoxZ = locZ.at(ownerID);
+        hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(CoM.x, CoM.y, CoM.z, voxel, subVoxX, subVoxY, subVoxZ,
+                                                               simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
+                                                               simParams->l);
+        CoM.x += simParams->LBFX;
+        CoM.y += simParams->LBFY;
+        CoM.z += simParams->LBFZ;
+        applyFrameTransformLocalToGlobal<float3, float3, float4>(cntPnt, CoM, oriQ);
+        points.push_back(cntPnt);
+        forces.push_back(force);
+        torques.push_back(torque);
+    }
+    return numUsefulCnt;
+}
+
+void DEMDynamicThread::setFamilyContactWildcardValueAny(unsigned int N, unsigned int wc_num, float val) {
+    size_t numCnt = *stateOfSolver_resources.pNumContacts;
+    for (size_t i = 0; i < numCnt; i++) {
+        bodyID_t geoA = idGeometryA.at(i);
+        bodyID_t ownerA = ownerClumpBody.at(geoA);
+        bodyID_t geoB = idGeometryB.at(i);
+        contact_t typeB = contactType.at(i);
+        bodyID_t ownerB = getOwnerForContactB(geoB, typeB);
+
+        unsigned int famA = +(familyID.at(ownerA));
+        unsigned int famB = +(familyID.at(ownerB));
+
+        if (N == famA || N == famB) {
+            contactWildcards[wc_num].at(i) = val;
+        }
+    }
+}
+
+void DEMDynamicThread::setFamilyContactWildcardValueAll(unsigned int N, unsigned int wc_num, float val) {
+    size_t numCnt = *stateOfSolver_resources.pNumContacts;
+    for (size_t i = 0; i < numCnt; i++) {
+        bodyID_t geoA = idGeometryA.at(i);
+        bodyID_t ownerA = ownerClumpBody.at(geoA);
+        bodyID_t geoB = idGeometryB.at(i);
+        contact_t typeB = contactType.at(i);
+        bodyID_t ownerB = getOwnerForContactB(geoB, typeB);
+
+        unsigned int famA = +(familyID.at(ownerA));
+        unsigned int famB = +(familyID.at(ownerB));
+
+        if (N == famA && N == famB) {
+            contactWildcards[wc_num].at(i) = val;
+        }
+    }
+}
+
+void DEMDynamicThread::setContactWildcardValue(unsigned int wc_num, float val) {
+    size_t numCnt = *stateOfSolver_resources.pNumContacts;
+    for (size_t i = 0; i < numCnt; i++) {
+        contactWildcards[wc_num].at(i) = val;
     }
 }
 

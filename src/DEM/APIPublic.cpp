@@ -249,14 +249,68 @@ float3 DEMSolver::GetOwnerMOI(bodyID_t ownerID) const {
     }
 }
 
-void DEMSolver::SetTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles) {
-    dT->setTriNodeRelPos(start, triangles);
-    kT->setTriNodeRelPos(start, triangles);
+void DEMSolver::SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& new_nodes) {
+    auto& mesh = m_meshes.at(m_owner_mesh_map.at(owner));
+    if (mesh->GetNumNodes() != new_nodes.size()) {
+        DEME_ERROR(
+            "To deform a mesh, provided vector must have the same length as the number of nodes in mesh.\nThe mesh has "
+            "%zu nodes, yet the provided vector has length %zu.",
+            mesh->GetNumNodes(), new_nodes.size());
+    }
+    // We actually modify the cached mesh... since it has implications in output
+    for (size_t i = 0; i < mesh->GetNumNodes(); i++) {
+        mesh->m_vertices[i] = new_nodes[i];
+    }
+    std::vector<DEMTriangle> new_triangles(mesh->GetNumTriangles());
+    for (size_t i = 0; i < mesh->GetNumTriangles(); i++) {
+        new_triangles[i] = mesh->GetTriangle(i);
+    }
+    dT->setTriNodeRelPos(triID, new_triangles);
+    dT->solverFlags.willMeshDeform = true;
+    
+    // kT just received update from dT, to avoid mem hazards
+    // kT->setTriNodeRelPos(triID, new_triangles);
 }
-//// TODO: Implement it
-void DEMSolver::UpdateTriNodeRelPos(size_t start, const std::vector<float3>& updates) {
-    // dT->updateTriNodeRelPos(start, updates);
-    // kT->updateTriNodeRelPos(start, updates);
+void DEMSolver::UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& updates) {
+    auto& mesh = m_meshes.at(m_owner_mesh_map.at(owner));
+    if (mesh->GetNumNodes() != updates.size()) {
+        DEME_ERROR(
+            "To deform a mesh, provided vector must have the same length as the number of nodes in mesh.\nThe mesh has "
+            "%zu nodes, yet the provided vector has length %zu.",
+            mesh->GetNumNodes(), updates.size());
+    }
+    // We actually modify the cached mesh... since it has implications in output
+    for (size_t i = 0; i < mesh->GetNumNodes(); i++) {
+        mesh->m_vertices[i] += updates[i];
+    }
+    // No need to worry about RHR: that's taken care of at init
+    std::vector<DEMTriangle> new_triangles(mesh->GetNumTriangles());
+    for (size_t i = 0; i < mesh->GetNumTriangles(); i++) {
+        new_triangles[i] = mesh->GetTriangle(i);
+    }
+    dT->setTriNodeRelPos(triID, new_triangles);
+    dT->solverFlags.willMeshDeform = true;
+    
+    // kT just received update from dT, to avoid mem hazards
+    // kT->setTriNodeRelPos(triID, new_triangles);
+}
+std::shared_ptr<DEMMeshConnected>& DEMSolver::GetCachedMesh(bodyID_t ownerID) {
+    if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
+        DEME_ERROR("Owner %zu is not a mesh, you therefore cannot retrive a handle to mesh using it.", (size_t)ownerID);
+    }
+    return m_meshes.at(m_owner_mesh_map.at(ownerID));
+}
+std::vector<float3> DEMSolver::GetMeshNodesGlobal(bodyID_t ownerID) {
+    if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
+        DEME_ERROR("Owner %zu is not a mesh, you therefore cannot get its nodes' coordinates.", (size_t)ownerID);
+    }
+    float3 mesh_pos = dT->getOwnerPos(ownerID);
+    float4 mesh_oriQ = dT->getOwnerOriQ(ownerID);
+    std::vector<float3> nodes(m_meshes.at(m_owner_mesh_map.at(ownerID))->GetCoordsVertices());
+    for (auto& pnt : nodes) {
+        applyFrameTransformLocalToGlobal<float3, float3, float4>(pnt, mesh_pos, mesh_oriQ);
+    }
+    return nodes;
 }
 
 double DEMSolver::GetSimTime() const {
@@ -592,7 +646,8 @@ void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID) {
 void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
                                             const std::string& X,
                                             const std::string& Y,
-                                            const std::string& Z) {
+                                            const std::string& Z,
+                                            bool dictate) {
     assertSysNotInit("SetFamilyPrescribedPosition");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
@@ -601,9 +656,8 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
     familyPrescription_t preInfo;
     preInfo.family = ID;
 
-    // Both rot and lin pos are fixed. Use other methods if this is not intended.
-    preInfo.rotPosPrescribed = true;
-    preInfo.linPosPrescribed = true;
+    preInfo.rotPosPrescribed = dictate;
+    preInfo.linPosPrescribed = dictate;
 
     preInfo.linPosX = X;
     preInfo.linPosY = Y;
@@ -629,13 +683,37 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID) {
     m_input_family_prescription.push_back(preInfo);
 }
 
-//// TODO: Implement it
-void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula) {
+void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula, bool dictate) {
     assertSysNotInit("SetFamilyPrescribedQuaternion");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());
     }
+    familyPrescription_t preInfo;
+    preInfo.family = ID;
+
+    preInfo.rotPosPrescribed = dictate;
+    preInfo.linPosPrescribed = dictate;
+
+    preInfo.oriQ = q_formula;
+
+    preInfo.used = true;
+
+    m_input_family_prescription.push_back(preInfo);
+}
+void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID) {
+    assertSysNotInit("SetFamilyPrescribedQuaternion");
+    if (ID > std::numeric_limits<family_t>::max()) {
+        DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
+                   std::numeric_limits<family_t>::max());
+    }
+    familyPrescription_t preInfo;
+    preInfo.family = ID;
+
+    preInfo.rotPosPrescribed = true;
+    preInfo.used = true;
+
+    m_input_family_prescription.push_back(preInfo);
 }
 
 void DEMSolver::AddFamilyPrescribedAcc(unsigned int ID,
@@ -722,6 +800,37 @@ void DEMSolver::SetOwnerWildcardValue(bodyID_t ownerID, const std::string& name,
     dT->setOwnerWildcardValue(ownerID, m_owner_wc_num.at(name), vals);
 }
 
+void DEMSolver::SetFamilyContactWildcardValueAny(unsigned int N, const std::string& name, float val) {
+    assertSysInit("SetFamilyContactWildcardValueAny");
+    if (m_cnt_wc_num.find(name) == m_cnt_wc_num.end()) {
+        DEME_ERROR(
+            "No contact wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerContactWildcards in the force model first.",
+            name.c_str());
+    }
+    dT->setFamilyContactWildcardValueAny(N, m_cnt_wc_num.at(name), val);
+}
+void DEMSolver::SetFamilyContactWildcardValueAll(unsigned int N, const std::string& name, float val) {
+    assertSysInit("SetFamilyContactWildcardValueAll");
+    if (m_cnt_wc_num.find(name) == m_cnt_wc_num.end()) {
+        DEME_ERROR(
+            "No contact wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerContactWildcards in the force model first.",
+            name.c_str());
+    }
+    dT->setFamilyContactWildcardValueAll(N, m_cnt_wc_num.at(name), val);
+}
+void DEMSolver::SetContactWildcardValue(const std::string& name, float val) {
+    assertSysInit("SetContactWildcardValue");
+    if (m_cnt_wc_num.find(name) == m_cnt_wc_num.end()) {
+        DEME_ERROR(
+            "No contact wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerContactWildcards in the force model first.",
+            name.c_str());
+    }
+    dT->setContactWildcardValue(m_cnt_wc_num.at(name), val);
+}
+
 void DEMSolver::SetFamilyClumpMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat) {
     assertSysInit("SetFamilyClumpMaterial");
     dT->setFamilyClumpMaterial(N, mat->load_order);
@@ -803,6 +912,16 @@ std::vector<float> DEMSolver::GetAllOwnerWildcardValue(const std::string& name) 
     std::vector<float> res;
     dT->getAllOwnerWildcardValue(res, m_owner_wc_num.at(name));
     return res;
+}
+size_t DEMSolver::GetOwnerContactForces(bodyID_t ownerID, std::vector<float3>& points, std::vector<float3>& forces) {
+    return dT->getOwnerContactForces(ownerID, points, forces);
+}
+size_t DEMSolver::GetOwnerContactForces(bodyID_t ownerID,
+                                        std::vector<float3>& points,
+                                        std::vector<float3>& forces,
+                                        std::vector<float3>& torques,
+                                        bool torque_in_local) {
+    return dT->getOwnerContactForces(ownerID, points, forces, torques, torque_in_local);
 }
 
 std::vector<float> DEMSolver::GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name) {
@@ -1353,6 +1472,9 @@ void DEMSolver::Initialize() {
 
     // Initialization is critical
     dT->announceCritical();
+
+    // Always clear cache after init
+    ClearCache();
 }
 
 void DEMSolver::ShowTimingStats() {
@@ -1491,9 +1613,10 @@ void DEMSolver::UpdateClumps() {
             "point.\nNumber of clump templates at last initialization: %zu\nNumber of clump templates now: %zu",
             nLastTimeClumpTemplateLoad, nClumpTemplateLoad);
     }
-    DEME_WARNING(
-        "UpdateClumps will add all currently cached clumps to the simulation.\nYou may want to ClearCache first, then "
-        "AddClumps, then call this method, so the clumps cached earlier are forgotten before this method takes place.");
+    // DEME_WARNING(
+    //     "UpdateClumps will add all currently cached clumps to the simulation.\nYou may want to ClearCache first,"
+    //     "then AddClumps, then call this method, so the clumps cached earlier are forgotten before this method takes"
+    //     "place.");
 
     // This method requires kT and dT are sync-ed
     // resetWorkerThreads();
@@ -1527,6 +1650,9 @@ void DEMSolver::UpdateClumps() {
             "prescription, now we have %zu.",
             nLastTimeMatNum, m_loaded_materials.size(), nLastTimeFamilyPreNum, m_input_family_prescription.size());
     }
+
+    // After Initialize or UpdateClumps, we should clear host-side initialization object cache
+    ClearCache();
 }
 
 void DEMSolver::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {

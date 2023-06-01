@@ -89,6 +89,7 @@ class DEMTracker {
     void assertMesh(const std::string& name);
     void assertGeoSize(size_t input_length, const std::string& func_name, const std::string& geo_type);
     void assertOwnerSize(size_t input_length, const std::string& name);
+    void assertThereIsForcePairs(const std::string& name);
     // Its parent DEMSolver system
     DEMSolver* sys;
 
@@ -107,6 +108,8 @@ class DEMTracker {
     /// Get the angular velocity of this tracked object in its own local coordinate system. Applying OriQ to it would
     /// give you the ang vel in global frame.
     float3 AngVelLocal(size_t offset = 0);
+    /// Get the angular velocity of this tracked object in global coordinate system.
+    float3 AngVelGlobal(size_t offset = 0);
     /// Get the velocity of this tracked object in global frame.
     float3 Vel(size_t offset = 0);
     /// Get the quaternion that represents the orientation of this tracked object's own coordinate system.
@@ -128,6 +131,9 @@ class DEMTracker {
     /// Get the a portion of the angular acceleration of this tracked object, that is the result of its contact with
     /// other simulation entities. The acceleration is in this object's local frame.
     float3 ContactAngAccLocal(size_t offset = 0);
+    /// Get the a portion of the angular acceleration of this tracked object, that is the result of its contact with
+    /// other simulation entities. The acceleration is in this object's global frame.
+    float3 ContactAngAccGlobal(size_t offset = 0);
 
     /// Get the owner's wildcard value.
     float GetOwnerWildcardValue(const std::string& name, size_t offset = 0);
@@ -141,13 +147,13 @@ class DEMTracker {
     /// @return The value.
     float GetGeometryWildcardValue(const std::string& name, size_t offset);
 
-    /// Set the position of this tracked object.
+    /// @brief Set the position of this tracked object.
     void SetPos(float3 pos, size_t offset = 0);
-    /// Set the angular velocity of this tracked object in its own local coordinate system.
+    /// @brief Set the angular velocity of this tracked object in its own local coordinate system.
     void SetAngVel(float3 angVel, size_t offset = 0);
-    /// Set the velocity of this tracked object in global frame.
+    /// @brief Set the velocity of this tracked object in global frame.
     void SetVel(float3 vel, size_t offset = 0);
-    /// Set the quaternion which represents the orientation of this tracked object's coordinate system.
+    /// @brief Set the quaternion which represents the orientation of this tracked object's coordinate system.
     void SetOriQ(float4 oriQ, size_t offset = 0);
     /// Add an extra acc to the tracked body, for the next time step. Note if the user intends to add a persistent
     /// external force, then using family prescription is the better method.
@@ -173,14 +179,30 @@ class DEMTracker {
     /// @return The moment of inertia (in principal axis frame).
     float3 MOI(size_t offset = 0);
 
-    /// Apply the mesh deformation such that the tracked mesh is replaced by the new_mesh. This affects triangle facets'
-    /// relative positions wrt the mesh center (CoM) only; mesh's overall position/rotation in simulation is not
-    /// affected.
-    void UpdateMesh(std::shared_ptr<DEMMeshConnected>& new_mesh);
-    /// Change the coordinates of each mesh node by the given amount. This is also for mesh deformation, but unlike
-    /// UpdateMesh, it adds to the existing node coordinate XYZs. The length of the argument vector must agree with the
-    /// number of nodes in the tracked mesh.
+    /// @brief Apply the new mesh node positions such that the tracked mesh is replaced by the new_nodes.
+    /// @details This affects triangle facets' relative positions wrt the mesh center (CoM) only; mesh's overall
+    /// position/rotation in simulation is not affected. So if provided input is the new mesh location with
+    /// consideration of its CoM's motion, then you should not use tracker to further modify the mesh's CoM; if the
+    /// provided input is the new mesh location without considering the displacement of mesh's CoM (aka only the mesh
+    /// deformation), then you should then use tracker to further update the mesh's CoM.
+    /// @param new_nodes New locations of mesh nodes. The length of the argument vector must agree with the number of
+    /// nodes in the tracked mesh.
+    void UpdateMesh(const std::vector<float3>& new_nodes);
+    /// @brief Change the coordinates of each mesh node by the given amount.
+    /// @details This affects triangle facets' relative positions wrt the mesh center (CoM) only; mesh's overall
+    /// position/rotation in simulation is not affected. So if provided input is the mesh deformation with
+    /// consideration of its CoM's motion, then you should not use tracker to further modify the mesh's CoM; if the
+    /// provided input is the mesh deformation without considering the displacement of mesh's CoM, then you should then
+    /// use tracker to further update the mesh's CoM.
+    /// @param deformation Deformation of mesh nodes. The length of the argument vector must agree with the number of
+    /// nodes in the tracked mesh.
     void UpdateMeshByIncrement(const std::vector<float3>& deformation);
+    /// @brief Get a handle for the mesh this tracker is tracking.
+    /// @return Pointer to the mesh.
+    std::shared_ptr<DEMMeshConnected>& GetMesh();
+    /// @brief Get the current locations of all the nodes in the mesh being tracked.
+    /// @return A vector of float3 representing the global coordinates of the mesh nodes.
+    std::vector<float3> GetMeshNodesGlobal();
 
     /// @brief Set a wildcard value of the owner this tracker is tracking.
     /// @param name Name of the wildcard.
@@ -201,6 +223,49 @@ class DEMTracker {
     /// @param name Name of the wildcard.
     /// @param wc Wildcard values as a vector (must have same length as the number of tracked geometry entities).
     void SetGeometryWildcardValue(const std::string& name, const std::vector<float>& wc);
+
+    /// @brief Get all contact forces that concern this track object, as a vector.
+    /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
+    /// experiences.
+    /// @param points The contact point XYZ as float3 vector.
+    /// @param forces The force in XYZ as float3 vector. The force in global frame.
+    /// @param offset The offset to this owner (where to start querying). If first entity, input 0.
+    /// @return Number of force pairs.
+    size_t GetContactForces(std::vector<float3>& points, std::vector<float3>& forces, size_t offset = 0);
+
+    /// @brief Get all contact forces and global torques that concern this track object, as a vector.
+    /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
+    /// experiences. Since we are getting all force pairs, the torque should be considered as `extra torque', since you
+    /// should be able to derive the normal and tangential force-induced torques based on all the force pairs. The extra
+    /// torques emerge depending on your force model. For example, in the default force model, rolling friction could
+    /// contribute to the torque. But if you do not have rolling friction, then you do not have torque here. The torques
+    /// are given in the global frame of this object that is being tracked.
+    /// @param points The contact point XYZ as float3 vector.
+    /// @param forces The force in XYZ as float3 vector. The force in global frame.
+    /// @param torques The contact torque. The torque is in global frame.
+    /// @param offset The offset to this owner (where to start querying). If first entity, input 0.
+    /// @return Number of force pairs.
+    size_t GetContactForcesAndGlobalTorque(std::vector<float3>& points,
+                                           std::vector<float3>& forces,
+                                           std::vector<float3>& torques,
+                                           size_t offset = 0);
+
+    /// @brief Get all contact forces and local torques that concern this track object, as a vector.
+    /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
+    /// experiences. Since we are getting all force pairs, the torque should be considered as `extra torque', since you
+    /// should be able to derive the normal and tangential force-induced torques based on all the force pairs. The extra
+    /// torques emerge depending on your force model. For example, in the default force model, rolling friction could
+    /// contribute to the torque. But if you do not have rolling friction, then you do not have torque here. The torques
+    /// are given in the local frame of this object that is being tracked.
+    /// @param points The contact point XYZ as float3 vector.
+    /// @param forces The force in XYZ as float3 vector. The force in global frame.
+    /// @param torques The contact torque. The torque is in local frame.
+    /// @param offset The offset to this owner (where to start querying). If first entity, input 0.
+    /// @return Number of force pairs.
+    size_t GetContactForcesAndLocalTorque(std::vector<float3>& points,
+                                          std::vector<float3>& forces,
+                                          std::vector<float3>& torques,
+                                          size_t offset = 0);
 };
 
 class DEMForceModel {

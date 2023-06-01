@@ -209,6 +209,7 @@ int main() {
         rod_tracker->SetPos(make_float3(0, 0, rod_length / 2. + current_height));
     }
 
+    DEMSim.ShowTimingStats();
     std::cout << "Electrostatic demo exiting..." << std::endl;
     return 0;
 }

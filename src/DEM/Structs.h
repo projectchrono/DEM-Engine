@@ -52,36 +52,23 @@ const std::string OUTPUT_FILE_CNT_TYPE_NAME = std::string("contact_type");
 const std::string OUTPUT_FILE_FORCE_X_NAME = std::string("f_x");
 const std::string OUTPUT_FILE_FORCE_Y_NAME = std::string("f_y");
 const std::string OUTPUT_FILE_FORCE_Z_NAME = std::string("f_z");
-const std::string OUTPUT_FILE_TOF_X_NAME = std::string("tof_x");  // TOF means torque_only_force
-const std::string OUTPUT_FILE_TOF_Y_NAME = std::string("tof_y");
-const std::string OUTPUT_FILE_TOF_Z_NAME = std::string("tof_z");
+const std::string OUTPUT_FILE_TORQUE_X_NAME = std::string("torque_x");
+const std::string OUTPUT_FILE_TORQUE_Y_NAME = std::string("torque_y");
+const std::string OUTPUT_FILE_TORQUE_Z_NAME = std::string("torque_z");
 const std::string OUTPUT_FILE_NORMAL_X_NAME = std::string("n_x");
 const std::string OUTPUT_FILE_NORMAL_Y_NAME = std::string("n_y");
 const std::string OUTPUT_FILE_NORMAL_Z_NAME = std::string("n_z");
 const std::string OUTPUT_FILE_SPH_SPH_CONTACT_NAME = std::string("SS");
 const std::string OUTPUT_FILE_SPH_ANAL_CONTACT_NAME = std::string("SA");
 const std::string OUTPUT_FILE_SPH_MESH_CONTACT_NAME = std::string("SM");
-const std::set<std::string> CNT_FILE_KNOWN_COL_NAMES = {OUTPUT_FILE_OWNER_1_NAME,
-                                                        OUTPUT_FILE_OWNER_2_NAME,
-                                                        OUTPUT_FILE_COMP_1_NAME,
-                                                        OUTPUT_FILE_COMP_2_NAME,
-                                                        OUTPUT_FILE_GEO_ID_1_NAME,
-                                                        OUTPUT_FILE_GEO_ID_2_NAME,
-                                                        OUTPUT_FILE_OWNER_NICKNAME_1_NAME,
-                                                        OUTPUT_FILE_OWNER_NICKNAME_2_NAME,
-                                                        OUTPUT_FILE_CNT_TYPE_NAME,
-                                                        OUTPUT_FILE_FORCE_X_NAME,
-                                                        OUTPUT_FILE_FORCE_Y_NAME,
-                                                        OUTPUT_FILE_FORCE_Z_NAME,
-                                                        OUTPUT_FILE_TOF_X_NAME,
-                                                        OUTPUT_FILE_TOF_Y_NAME,
-                                                        OUTPUT_FILE_TOF_Z_NAME,
-                                                        OUTPUT_FILE_NORMAL_X_NAME,
-                                                        OUTPUT_FILE_NORMAL_Y_NAME,
-                                                        OUTPUT_FILE_NORMAL_Z_NAME,
-                                                        OUTPUT_FILE_SPH_SPH_CONTACT_NAME,
-                                                        OUTPUT_FILE_SPH_ANAL_CONTACT_NAME,
-                                                        OUTPUT_FILE_SPH_MESH_CONTACT_NAME};
+const std::set<std::string> CNT_FILE_KNOWN_COL_NAMES = {
+    OUTPUT_FILE_OWNER_1_NAME,          OUTPUT_FILE_OWNER_2_NAME,          OUTPUT_FILE_COMP_1_NAME,
+    OUTPUT_FILE_COMP_2_NAME,           OUTPUT_FILE_GEO_ID_1_NAME,         OUTPUT_FILE_GEO_ID_2_NAME,
+    OUTPUT_FILE_OWNER_NICKNAME_1_NAME, OUTPUT_FILE_OWNER_NICKNAME_2_NAME, OUTPUT_FILE_CNT_TYPE_NAME,
+    OUTPUT_FILE_FORCE_X_NAME,          OUTPUT_FILE_FORCE_Y_NAME,          OUTPUT_FILE_FORCE_Z_NAME,
+    OUTPUT_FILE_TORQUE_X_NAME,         OUTPUT_FILE_TORQUE_Y_NAME,         OUTPUT_FILE_TORQUE_Z_NAME,
+    OUTPUT_FILE_NORMAL_X_NAME,         OUTPUT_FILE_NORMAL_Y_NAME,         OUTPUT_FILE_NORMAL_Z_NAME,
+    OUTPUT_FILE_SPH_SPH_CONTACT_NAME,  OUTPUT_FILE_SPH_ANAL_CONTACT_NAME, OUTPUT_FILE_SPH_MESH_CONTACT_NAME};
 
 // Map contact type identifier to their names
 const std::unordered_map<contact_t, std::string> contact_type_out_name_map = {
@@ -511,6 +498,8 @@ struct SolverFlags {
     bool isAsync = true;
     // If family number can potentially change (at each time step) during the simulation, because of user intervention
     bool canFamilyChange = false;
+    // If mesh will deform in the next kT-update cycle
+    std::atomic<bool> willMeshDeform = false;
     // Some output-related flags
     unsigned int outputFlags = OUTPUT_CONTENT::QUAT | OUTPUT_CONTENT::ABSV;
     unsigned int cntOutFlags;
@@ -635,13 +624,9 @@ class DEMClumpTemplate {
     /// adjusted by this call.
     void InformCentroidPrincipal(float3 center, float4 prin_Q) {
         // Getting to Centroid and Principal is a translation then a rotation (local), so the undo order to undo
-        // rotation then translation
-        float4 g_to_loc_prin_Q = prin_Q;
-        g_to_loc_prin_Q.x = -g_to_loc_prin_Q.x;
-        g_to_loc_prin_Q.y = -g_to_loc_prin_Q.y;
-        g_to_loc_prin_Q.z = -g_to_loc_prin_Q.z;
+        // transltion then rotation
         for (auto& pos : relPos) {
-            hostApplyFrameTransform(pos, -center, g_to_loc_prin_Q);
+            applyFrameTransformGlobalToLocal(pos, center, prin_Q);
         }
     }
     /// The opposite of InformCentroidPrincipal, and it is another way to align this clump's coordinate system with its
@@ -649,7 +634,7 @@ class DEMClumpTemplate {
     /// `origin' point should hit the CoM of this clump.
     void Move(float3 vec, float4 rot_Q) {
         for (auto& pos : relPos) {
-            hostApplyFrameTransform(pos, vec, rot_Q);
+            applyFrameTransformLocalToGlobal(pos, vec, rot_Q);
         }
     }
     /// Scale all geometry component of this clump
