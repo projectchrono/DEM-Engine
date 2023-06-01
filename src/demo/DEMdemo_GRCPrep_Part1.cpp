@@ -117,8 +117,6 @@ int main() {
     DEMSim.Initialize();
 
     float time_end = 10.0;
-    unsigned int fps = 20;
-    unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
     path out_dir = current_path();
     out_dir += "/DemoOutput_GRCPrep_Part1";

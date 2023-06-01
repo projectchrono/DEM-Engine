@@ -9,11 +9,17 @@ DEM-Engine, nicknamed _DEME_, does Discrete Element Method simulations:
 - With the particles having complex shapes represented by clumped spheres.
 - With support for customizable contact force models (want to add a non-standard cohesive force, or an electrostatic repulsive force? You got this).
 - With an emphasis on computational efficiency. As a rule of thumb, using 3-sphere clump elements, simulating 1 million elements for 1 million time steps takes around 1 hour on two RTX 3080s.
+- Supporting a wide range of problems with flexible API designs. Deformable meshes and grain breakage can be simulated by leveraging the explicit controls given to the user.
 - With support for co-simulation with other C/C++ packages, such as [Chrono](https://github.com/projectchrono/chrono).
 
 <p>
-  <img width="380" src="https://i.imgur.com/mLMjuTc.jpg">
-  <img width="380" src="https://i.imgur.com/PRbd0nJ.jpg">
+  <img width="380" src="https://i.imgur.com/DKGlM14.jpg">
+  <img width="380" src="https://i.imgur.com/c9DWwqk.gif">
+</p>
+
+<p>
+  <img width="380" src="https://i.imgur.com/YOEbAd8.gif">
+  <img width="380" src="https://i.imgur.com/4R25TPX.gif">
 </p>
 
 Currently _DEME_ is a C++ package with an API design similar to Chrono's, and should be easy to learn for existing Chrono users. We are building a Python wrapper for _DEME_.

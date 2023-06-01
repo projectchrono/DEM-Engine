@@ -229,11 +229,11 @@ int main() {
 
             // 1. We should respect the actual CoM location of the mesh. We get the global coords of mesh nodes using
             // GetMeshNodesGlobal, but UpdateMesh works with mesh's local or say relative coordinates, and that is why
-            // we do applyFrameTransformLocalToGlobal first. And depending on your setup, the CoM and coord frame of
+            // we do applyFrameTransformGlobalToLocal first. And depending on your setup, the CoM and coord frame of
             // your mesh might be moving, and if it moves and rotates then you probably need to move and rotate the
             // points you got to offset the influence of CoM and local frame first. That said, if you use
             // mesh_handle->GetCoordsVertices() as I mentioned above to get the relative node positions of the mesh,
-            // then no need to applyFrameTransformLocalToGlobal the CoM and rotate the frame.
+            // then no need to applyFrameTransformGlobalToLocal the CoM and rotate the frame.
 
             // 2. UpdateMesh will update the relative locations of mesh nodes to your specified locations. But if you
             // just have the information on the amount of mesh deformation, then you can use UpdateMeshByIncrement
