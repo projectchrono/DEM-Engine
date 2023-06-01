@@ -42,8 +42,8 @@ int main() {
     DEMSim.SetContactOutputContent(OWNER | FORCE | POINT | TORQUE);
 
     // E, nu, CoR, mu, Crr...
-    auto mat_type_mesh = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.75}, {"mu", 0.7}, {"Crr", 0.00}});
-    auto mat_type_particle = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.75}, {"mu", 0.4}, {"Crr", 0.00}});
+    auto mat_type_mesh = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.7}, {"Crr", 0.00}});
+    auto mat_type_particle = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.4}, {"Crr", 0.00}});
     // If you don't have this line, then values will take average between 2 materials, when they are in contact
     DEMSim.SetMaterialPropertyPair("mu", mat_type_mesh, mat_type_particle, 0.5);
 
@@ -117,8 +117,9 @@ int main() {
     // actually take, then its position is kept `as is' during simulation, without being affected by physics. It's
     // similar to fixing it but allows you manually impose velocities (which may have implications on your force model),
     // even though the velocity won't change its location. But this difference is minor.
-    DEMSim.SetFamilyPrescribedPosition(1);
-    DEMSim.SetFamilyPrescribedQuaternion(1);
+    // DEMSim.SetFamilyPrescribedPosition(1);
+    // DEMSim.SetFamilyPrescribedQuaternion(1);
+    DEMSim.SetFamilyFixed(1);
 
     // Track the mesh
     auto flex_mesh_tracker = DEMSim.Track(flex_mesh);
@@ -126,9 +127,12 @@ int main() {
     // Some inspectors
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
 
-    float step_size = 1e-5;
+    float step_size = 1e-6;
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
+    // Mesh has user-enforced deformation that the solver won't expect, so it can be better to allow larger safety
+    // adder.
+    DEMSim.SetExpandSafetyAdder(5.0);
     DEMSim.Initialize();
 
     // After system initialization, you can still get an handle of the mesh components using trackers (GetMesh method).
@@ -151,32 +155,33 @@ int main() {
     unsigned int frame_count = 0;
     unsigned int step_count = 0;
 
-    // Settle
-    DEMSim.DisableContactBetweenFamilies(0, 1);
-    for (float t = 0; t < 0.5; t += frame_time) {
-        char filename[200], meshname[200];
-        std::cout << "Outputting frame: " << frame_count << std::endl;
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame_count);
-        sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame_count++);
-        DEMSim.WriteSphereFile(std::string(filename));
-        DEMSim.WriteMeshFile(std::string(meshname));
-        DEMSim.ShowThreadCollaborationStats();
-
-        DEMSim.DoDynamics(frame_time);
-    }
-
-    // Start the real simulation
-    DEMSim.EnableContactBetweenFamilies(0, 1);
-
-    // We probably don't have to update the mesh every time step: depends on your need
-    int ts_per_mesh_update = 5;
-    // Some constants that are used to define the artificial mesh motion. You'll see in the main simulation loop.
-    float max_wave_magnitude = 0.3;
-    float wave_period = 3.0;
     // Used to store forces and points of contact
     std::vector<float3> forces, points;
     size_t num_force_pairs = 0;
 
+    // Settle
+    for (float t = 0; t < 0.5; t += frame_time) {
+        char filename[200], meshname[200], force_filename[200];
+        std::cout << "Outputting frame: " << frame_count << std::endl;
+        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame_count);
+        sprintf(force_filename, "%s/DEMdemo_forces_%04d.csv", out_dir.c_str(), frame_count);
+        sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame_count++);
+        DEMSim.WriteSphereFile(std::string(filename));
+        DEMSim.WriteMeshFile(std::string(meshname));
+        writeFloat3VectorsToCSV(force_csv_header, {points, forces}, force_filename, num_force_pairs);
+        DEMSim.ShowThreadCollaborationStats();
+        DEMSim.DoDynamics(frame_time);
+    }
+
+    // It's possible that you don't have to update the mesh every time step so you can set this number larger than 1.
+    // However, you have to then ensure the simulation does not de-stabilize because the mesh--particles contacts are
+    // running in a delayed fashion and large penetrations can occur. If the mesh is super soft, then it's probably OK.
+    int ts_per_mesh_update = 1;
+    // Some constants that are used to define the artificial mesh motion. You'll see in the main simulation loop.
+    float max_wave_magnitude = 0.3;
+    float wave_period = 3.0;
+
+    // Main simulation loop starts...
     for (float t = 0; t < sim_end; t += step_size, step_count++) {
         if (step_count % out_steps == 0) {
             char filename[200], meshname[200], force_filename[200];
@@ -187,6 +192,7 @@ int main() {
             DEMSim.WriteSphereFile(std::string(filename));
             DEMSim.WriteMeshFile(std::string(meshname));
             // We write force pairs that are related to the mesh to a file
+            num_force_pairs = flex_mesh_tracker->GetContactForces(points, forces);
             writeFloat3VectorsToCSV(force_csv_header, {points, forces}, force_filename, num_force_pairs);
             DEMSim.ShowThreadCollaborationStats();
         }
@@ -203,12 +209,12 @@ int main() {
             // you can get it like the following:
             // std::vector<float3> node_current_location(mesh_handle->GetCoordsVertices());
 
-            // Now calculate how much each node should `wave' and update the node location array. Remember z = 0.5 is
+            // Now calculate how much each node should `wave' and update the node location array. Remember z = 1 is
             // where the highest (relative) mesh node is. Again, this is artificial and only for showcasing this
             // utility.
             for (unsigned int i = 0; i < node_current_location.size(); i++) {
                 // Use resting locations to calculate the magnitude of waving for nodes...
-                float my_wave_distance = std::pow(0.5 - node_resting_location[i].z, 2) * max_wave_magnitude *
+                float my_wave_distance = std::pow((1. - node_resting_location[i].z) / 2., 2) * max_wave_magnitude *
                                          std::sin(t / wave_period * 2 * math_PI);
                 // Then update the current location array...
                 node_current_location[i].x = node_resting_location[i].x + my_wave_distance;

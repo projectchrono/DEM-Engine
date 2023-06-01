@@ -265,9 +265,11 @@ void DEMSolver::SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<f
     for (size_t i = 0; i < mesh->GetNumTriangles(); i++) {
         new_triangles[i] = mesh->GetTriangle(i);
     }
-
     dT->setTriNodeRelPos(triID, new_triangles);
-    kT->setTriNodeRelPos(triID, new_triangles);
+    dT->solverFlags.willMeshDeform = true;
+    
+    // kT just received update from dT, to avoid mem hazards
+    // kT->setTriNodeRelPos(triID, new_triangles);
 }
 void DEMSolver::UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& updates) {
     auto& mesh = m_meshes.at(m_owner_mesh_map.at(owner));
@@ -287,7 +289,10 @@ void DEMSolver::UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vecto
         new_triangles[i] = mesh->GetTriangle(i);
     }
     dT->setTriNodeRelPos(triID, new_triangles);
-    kT->setTriNodeRelPos(triID, new_triangles);
+    dT->solverFlags.willMeshDeform = true;
+    
+    // kT just received update from dT, to avoid mem hazards
+    // kT->setTriNodeRelPos(triID, new_triangles);
 }
 std::shared_ptr<DEMMeshConnected>& DEMSolver::GetCachedMesh(bodyID_t ownerID) {
     if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {

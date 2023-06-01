@@ -171,6 +171,18 @@ inline void DEMKinematicThread::unpackMyBuffer() {
         DEME_GPU_CALL(cudaMemcpy(granData->familyID, granData->familyID_buffer,
                                  simParams->nOwnerBodies * sizeof(family_t), cudaMemcpyDeviceToDevice));
     }
+
+    // If dT received a mesh deformation request from user, then it is now passed to kT
+    if (solverFlags.willMeshDeform) {
+        DEME_GPU_CALL(cudaMemcpy(granData->relPosNode1, granData->relPosNode1_buffer,
+                                 simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
+        DEME_GPU_CALL(cudaMemcpy(granData->relPosNode2, granData->relPosNode2_buffer,
+                                 simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
+        DEME_GPU_CALL(cudaMemcpy(granData->relPosNode3, granData->relPosNode3_buffer,
+                                 simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
+        // dT won't be sending if kT is loading, so it is safe
+        solverFlags.willMeshDeform = false;
+    }
 }
 
 inline void DEMKinematicThread::sendToTheirBuffer() {
@@ -573,6 +585,11 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
             // DEME_ADVISE_DEVICE(familyID_buffer, dT->streamInfo.device);
             DEME_DEVICE_PTR_ALLOC(granData->familyID_buffer, nOwnerBodies);
         }
+
+        DEME_DEVICE_PTR_ALLOC(granData->relPosNode1_buffer, nTriGM);
+        DEME_DEVICE_PTR_ALLOC(granData->relPosNode2_buffer, nTriGM);
+        DEME_DEVICE_PTR_ALLOC(granData->relPosNode3_buffer, nTriGM);
+
         // Unset the device change we just did
         DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
     }

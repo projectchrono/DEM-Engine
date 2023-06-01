@@ -160,8 +160,7 @@ enum CNT_OUTPUT_CONTENT {
     POINT = 2,      // Contact point in global frame
     COMPONENT = 4,  // The component numbers (such as triangle number for a mesh) that involved in this contact
     NORMAL = 8,     // Contact normal direction in global frame
-    TORQUE =
-        16,  // This is a standalone force and produces torque only (typical example: rolling resistance force)
+    TORQUE = 16,    // This is a standalone force and produces torque only (typical example: rolling resistance force)
     CNT_WILDCARD = 32,
     OWNER = 64,
     GEO_ID = 128,
@@ -335,6 +334,9 @@ struct DEMDataDT {
     oriQ_t* pKTOwnedBuffer_oriQ2 = NULL;
     oriQ_t* pKTOwnedBuffer_oriQ3 = NULL;
     family_t* pKTOwnedBuffer_familyID = NULL;
+    float3* pKTOwnedBuffer_relPosNode1 = NULL;
+    float3* pKTOwnedBuffer_relPosNode2 = NULL;
+    float3* pKTOwnedBuffer_relPosNode3 = NULL;
 
     // The collection of pointers to DEM template arrays such as radiiSphere, still useful when there are template info
     // not directly jitified into the kernels
@@ -407,6 +409,10 @@ struct DEMDataKT {
     float3* relPosNode1;
     float3* relPosNode2;
     float3* relPosNode3;
+    // For mesh deformation
+    float3* relPosNode1_buffer;
+    float3* relPosNode2_buffer;
+    float3* relPosNode3_buffer;
 
     // kT's own work arrays. Now these array pointers get assigned in contactDetection() which point to shared scratch
     // spaces. No need to do forward declaration anymore. They are left here for reference, should contactDetection()

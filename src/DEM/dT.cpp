@@ -114,6 +114,9 @@ void DEMDynamicThread::packTransferPointers(DEMKinematicThread*& kT) {
     granData->pKTOwnedBuffer_oriQ2 = kT->granData->oriQ2_buffer;
     granData->pKTOwnedBuffer_oriQ3 = kT->granData->oriQ3_buffer;
     granData->pKTOwnedBuffer_familyID = kT->granData->familyID_buffer;
+    granData->pKTOwnedBuffer_relPosNode1 = kT->granData->relPosNode1_buffer;
+    granData->pKTOwnedBuffer_relPosNode2 = kT->granData->relPosNode2_buffer;
+    granData->pKTOwnedBuffer_relPosNode3 = kT->granData->relPosNode3_buffer;
 }
 
 void DEMDynamicThread::changeFamily(unsigned int ID_from, unsigned int ID_to) {
@@ -1730,6 +1733,19 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
     if (solverFlags.canFamilyChange) {
         DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_familyID, granData->familyID,
                                  simParams->nOwnerBodies * sizeof(family_t), cudaMemcpyDeviceToDevice));
+    }
+
+    // May need to send updated mesh
+    if (solverFlags.willMeshDeform) {
+        DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_relPosNode1, granData->relPosNode1,
+                                 simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
+        DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_relPosNode2, granData->relPosNode2,
+                                 simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
+        DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_relPosNode3, granData->relPosNode3,
+                                 simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
+        solverFlags.willMeshDeform = false;
+        // kT can't be loading buffer when dT is sending, so it is safe
+        kT->solverFlags.willMeshDeform = true;
     }
 
     // This subroutine also includes recording the time stamp of this batch ingredient dT sent to kT

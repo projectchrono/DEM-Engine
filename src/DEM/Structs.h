@@ -498,6 +498,8 @@ struct SolverFlags {
     bool isAsync = true;
     // If family number can potentially change (at each time step) during the simulation, because of user intervention
     bool canFamilyChange = false;
+    // If mesh will deform in the next kT-update cycle
+    std::atomic<bool> willMeshDeform = false;
     // Some output-related flags
     unsigned int outputFlags = OUTPUT_CONTENT::QUAT | OUTPUT_CONTENT::ABSV;
     unsigned int cntOutFlags;
