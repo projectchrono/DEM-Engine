@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
 
     // `World'
     float G_mag = 9.81;
-    float step_size = 5e-6;
+    float step_size = 2.5e-6;
     double world_size_y = 0.52;
     double world_size_x = 4;
     double world_size_z = 4.0;
@@ -39,7 +39,7 @@ int main(int argc, char* argv[]) {
     float wheel_rad = 0.25;
     float wheel_width = 0.2;
     float wheel_mass = 5.;  // 8.7;
-    float total_pressure = 110. * 9.81; // 22.
+    float total_pressure = 88. * 9.81; // 22.
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
