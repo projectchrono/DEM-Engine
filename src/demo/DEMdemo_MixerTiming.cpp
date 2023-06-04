@@ -26,7 +26,7 @@ int main() {
     float step_size = 5e-7;
     size_t n_steps = 5e5;
 
-    while (num_particles < 50e6) {
+    while (num_particles < 80e6) {
         DEMSolver DEMSim;
         DEMSim.SetVerbosity(ERROR);
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
@@ -96,7 +96,7 @@ int main() {
         unsigned int fps = 20;
 
         mixer_tracker->SetPos(make_float3(0, 0, chamber_bottom + chamber_height / 2.0));
-        DEMSim.DoDynamicsThenSync(1.);
+        DEMSim.DoDynamicsThenSync(.75);
         DEMSim.ClearThreadCollaborationStats();
         DEMSim.ClearTimingStats();
         std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
@@ -112,7 +112,7 @@ int main() {
         std::cout << (time_sec.count()) / sim_end / (1e-5 / step_size)
                   << " seconds (wall time) to finish 1 second's simulation" << std::endl;
 
-        granular_rad *= std::pow(0.75, 1. / 3.);
+        granular_rad *= std::pow(0.6, 1. / 3.);
         // step_size *= std::pow(0.75, 1. / 3.);
         // world_size *= std::pow(2., 1. / 3.);
         // CDFreq *= std::pow(0.95, 1. / 3.);
