@@ -31,9 +31,14 @@ int main() {
 
     srand(7001);
     DEMSim.SetCollectAccRightAfterForceCalc(true);
-    DEMSim.SetErrorOutAvgContacts(50);
+    DEMSim.SetErrorOutAvgContacts(100);
 
     //DEMSim.SetExpandSafetyAdder(0.5);
+
+    path out_dir = current_path();
+    out_dir += "/DemoOutput_Granular/";
+    out_dir += "Hopper_shute/";
+    out_dir += std::to_string(1);
 
     // Scale factor
     float scaling = 1.f;
@@ -43,16 +48,16 @@ int main() {
     double radius = 0.003300 * scaling /2.0 ;
     double density = 1410;
 
-    int totalSpheres = 500000;
+    int totalSpheres = 400000;
 
     int num_template = 10000;
 
     float plane_bottom = 0.01f * scaling;
     float funnel_bottom = 0.02f * scaling;
     float funnel_outlet = 0.080f * scaling;
-    float funnel_slope = 1.0 / 8.0 * 3.14;
+    float funnel_slope = 1.0 / 8.0 * PI;
 
-    double tilt = 3.141592 / 6.0; 
+    double tilt = PI / 6.0; 
 
     double gateOpen = 0.120;
     double gateSpeed = 3.5; //good discarge -- too fast the flow
@@ -62,18 +67,18 @@ int main() {
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.90}, {"mu", 0.04}, {"Crr", 0.04}});
     
     auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 2.7e9}, {"nu", 0.35}, {"CoR", 0.83}, {"mu", 0.50}, {"Crr", 0.10}});
+        DEMSim.LoadMaterial({{"E", 2.7e9}, {"nu", 0.35}, {"CoR", 0.83}, {"mu", 0.50}, {"Crr", 0.020}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.5);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.02);
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_flume, mat_type_particles, 0.7);    //it is supposed to be
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_flume, mat_type_particles, 0.05);   // plexiglass
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_flume, mat_type_particles, 0.45);
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_flume, mat_type_particles, 0.35);
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_bottom, mat_type_particles, 0.7);    //it is supposed to be
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_bottom, mat_type_particles, 0.05);   // bakelite
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_bottom, mat_type_particles, 0.35);
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_bottom, mat_type_particles, 0.15);
     
     // Make ready for simulation
     float step_size =2.0e-6;
@@ -129,27 +134,18 @@ int main() {
         std::vector<std::shared_ptr<DEMMaterial>> mat;
 
         double radiusMax = distribution(generator);
-        double radiusMin = 7.0 / 8.0 * radiusMax;
-        double eccentricity = 1.0 / 8.0 *radiusMax;
+        double radiusMin = 8.0 / 8.0 * radiusMax;
+        double eccentricity = 0.0 / 8.0 *radiusMax;
 
-        radii.push_back(radiusMin);
+        
         float3 tmp;
-        tmp.x = -0.8*eccentricity/2.0;
+        tmp.x = -1*eccentricity/2.0;
         tmp.y = 0;
         tmp.z = 0;
         relPos.push_back(tmp);
         mat.push_back(mat_type_particles);
+        radii.push_back(radiusMin);
 
-        double x = 1.20*eccentricity/2.0;
-        double y = 0;
-        double z = 0;
-        tmp.x = x;
-        tmp.y = y;
-        tmp.z = z;
-        relPos.push_back(tmp);
-        mat.push_back(mat_type_particles);
-
-        radii.push_back(radiusMin); 
 
         double c = radiusMin;  // smaller dim of the ellipse
         double b = radiusMin;
@@ -172,11 +168,8 @@ int main() {
     unsigned int curr_step = 0;
     float settle_frame_time = 0.01;
    
-    path out_dir = current_path();
-    out_dir += "/DemoOutput_Granular_Flow_1";
-
     remove_all(out_dir);    
-    create_directory(out_dir);
+    create_directories(out_dir);
 
     char filename[200], meshfile[200];
 
@@ -206,12 +199,12 @@ int main() {
         std::vector<float3> input_pile_xyz;
         PDSampler sampler(shift_xyz);
            
-        bool generate =(plane_bottom+0.20/2>emitterZ)? false:true;
+        bool generate =(plane_bottom+shift_xyz>emitterZ)? false:true;
 
         if (generate){   
                  
         
-        float sizeZ=(frame==0)? 0.70 : 0.10;
+        float sizeZ=(frame==0)? 0.70 : 0.0;
         float sizeX=(frame==0)? 0.49 : 0.40;        
         float z= plane_bottom+shift_xyz+sizeZ/2.0;
         yW=funnel_outlet; 
@@ -225,7 +218,7 @@ int main() {
         unsigned int num_clumps = heap_particles_xyz.size();
         std::cout << "number of particles at this level ... " << num_clumps << std::endl;
 
-        for (unsigned int i = 0; i < num_clumps; i++) {
+        for (unsigned int i = actualTotalSpheres; i < actualTotalSpheres + num_clumps; i++) {
             input_pile_template_type.push_back(clump_types.at(i % num_template));
         }
 
@@ -251,13 +244,12 @@ int main() {
     initialization= (actualTotalSpheres < totalSpheres)? true : false;
 
 
-    if (generate) {
-        
+    if (generate) {        
         std::cout << "frame : " << frame << std::endl;
         sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), frame);
         DEMSim.WriteSphereFile(std::string(filename));
         //DEMSim.ShowThreadCollaborationStats();
-        frame--;
+        frame++;
         }
 
     DEMSim.DoDynamicsThenSync(settle_frame_time);
@@ -281,13 +273,13 @@ int main() {
 
 
     double k = 4.0 / 3.0 * 10e9 * std::pow(radius / 2.0, 0.5f);
-    double m = 4.0 / 3.0 * 3.141592 * std::pow(radius, 3);
+    double m = 4.0 / 3.0 * PI * std::pow(radius, 3);
     double dt_crit = 0.64 * std::pow(m / k, 0.5f);
 
     std::cout << "dt critical is: " << dt_crit << std::endl;
 
-    float timeStep = 1e-5;
-    int numStep = 7.0 / timeStep;
+    float timeStep = 1e-3;
+    int numStep = 7.00 / timeStep;
     int timeOut = 0.01 / timeStep;
     int gateMotion = (gateOpen / gateSpeed) / timeStep;
     std::cout << "Frame: " << timeOut << std::endl;

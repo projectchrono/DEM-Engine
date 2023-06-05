@@ -27,7 +27,7 @@ int main() {
     DEMSim.UseFrictionalHertzianModel();
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ | OUTPUT_CONTENT::ANG_VEL);
+    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ | OUTPUT_CONTENT::VEL |OUTPUT_CONTENT::ANG_VEL);
     DEMSim.EnsureKernelErrMsgLineNum();
 
     srand(7001);
@@ -41,10 +41,13 @@ int main() {
 
     // total number of random clump templates to generate
 
-    double radius = 0.0060 * scaling / 2.0;
-    double density = 1592;
+    double radius = 0.0040 / 2.0;
+    double length = 0.00850;
+    int n_sphere = 5;
 
-    int totalSpheres = 14000;
+    double density = 476;
+
+    int totalSpheres = 20000;
 
     int num_template = 5000;
 
@@ -55,7 +58,7 @@ int main() {
     double gateSpeed = -3.5;  // good discarge -- too fast the flow
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Granular_PlasticSpheres/";
+    out_dir += "/DemoOutput_Granular_WoodenCylinders/";
     out_dir += "Hopper/";
 
     auto mat_type_bottom = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
@@ -63,7 +66,7 @@ int main() {
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
 
     auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", 0.45}, {"Crr", 0.03}});
+        DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", 0.45}, {"Crr", 0.01}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.5);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.02);
@@ -116,40 +119,32 @@ int main() {
         std::vector<float3> relPos;
         std::vector<std::shared_ptr<DEMMaterial>> mat;
 
-        //double radiusMax = distribution(generator);
-        double radiusMax = radius;
-        double radiusMin = 8.0 / 8.0 * radiusMax;
-        double eccentricity = 1.0 / 16.0 * radiusMax;
+        double radiusMed = distribution(generator);
+        radiusMed=radius;
+        double eccentricity = 0.0 / 8.0 * radiusMed;
 
-        radii.push_back(radiusMin);
+        float init = -length / 2.0 + radiusMed;
+        float trail = length / 2.0 - radiusMed;
+        float incrR = (trail - init) / (n_sphere - 1);
         float3 tmp;
-        tmp.x = -1.0 * eccentricity / 2.0;
-        tmp.y = 0;
-        tmp.z = 0;
-        relPos.push_back(tmp);
-        mat.push_back(mat_type_particles);
 
-        double x = 1.0 * eccentricity / 2.0;
-        double y = 0;
-        double z = 0;
-        tmp.x = x;
-        tmp.y = y;
-        tmp.z = z;
-        relPos.push_back(tmp);
-        mat.push_back(mat_type_particles);
+        for (int j = 0; j < n_sphere; j++) {
+            radii.push_back(radiusMed);
 
-        radii.push_back(radiusMin);
+            tmp.x = init + (j * incrR) + eccentricity;
+            tmp.y = 0;
+            tmp.z = 0;
+            relPos.push_back(tmp);
+            mat.push_back(mat_type_particles);
+        }
 
-        double c = radiusMin;  // smaller dim of the ellipse
-        double b = radiusMin;
-        double a = radiusMin + 0.50 * eccentricity;
+        float mass = PI * radiusMed * radiusMed * length * density;
+        float Ixx = 1.f / 2.f * mass * radiusMed * radiusMed;
+        float Iyy = Ixx / 2.0 + 1.0 / 12.0 * mass * length * length;
+        float3 MOI = make_float3(Ixx, Iyy, Iyy);
+        std::cout << mass << " chosen moi ..." << radiusMed / radius << std::endl;
 
-        float mass = 4.0 / 3.0 * PI * a * b * c * density;
-        float3 MOI = make_float3(1.f / 5.f * mass * (b * b + c * c), 1.f / 5.f * mass * (a * a + c * c),
-                                 1.f / 5.f * mass * (b * b + a * a));
-        std::cout << a << " chosen moi ..." << a / radius << std::endl;
-
-        maxRadius = (radiusMax > maxRadius) ? radiusMax : maxRadius;
+        maxRadius = (radiusMed > maxRadius) ? radiusMed : maxRadius;
         auto clump_ptr = DEMSim.LoadClumpType(mass, MOI, radii, relPos, mat_type_particles);
         // clump_ptr->AssignName("fsfs");
         clump_types.push_back(clump_ptr);
@@ -164,7 +159,7 @@ int main() {
 
     char filename[200], meshfile[200];
 
-    float shift_xyz = 1.0 * (maxRadius)*2.0;
+    float shift_xyz = 1.0 * (length)*1.1;
     float x = 0;
     float y = 0;
 
@@ -190,10 +185,10 @@ int main() {
         std::vector<float3> input_pile_xyz;
         PDSampler sampler(shift_xyz);
 
-        bool generate = (plane_bottom + shift_xyz > emitterZ) ? false : true;
+        bool generate = (plane_bottom + shift_xyz/2 > emitterZ) ? false : true;
 
         if (generate) {
-            float sizeZ = (frame == 0) ? 0.70 : 0;
+            float sizeZ = (frame == 0) ? 0.95 : 0;
             float sizeX = 0.20;
             float z = plane_bottom + shift_xyz + sizeZ / 2.0;
 
@@ -244,7 +239,7 @@ int main() {
             for (int i = 0; i < (int)(0.4 / settle_frame_time); i++) {
                 DEMSim.DoDynamics(settle_frame_time);
                 sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), i);
-                // DEMSim.WriteSphereFile(std::string(filename));
+                 DEMSim.WriteSphereFile(std::string(filename));
                 std::cout << "consolidating for " << i * settle_frame_time << "s " << std::endl;
             }
         }
@@ -258,7 +253,7 @@ int main() {
 
     std::cout << "dt critical is: " << dt_crit << std::endl;
 
-    float timeStep = step_size * 100.0;
+    float timeStep = step_size * 500.0;
     int numStep = 7.0 / timeStep;
     int timeOut = 0.01 / timeStep;
     int gateMotion = (gateOpen / gateSpeed) / timeStep;

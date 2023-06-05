@@ -5,7 +5,7 @@ exp=readtable("../../data/granularFlow/heightSarno2018.dat");
 
 
 folder=['../' ...
-    '../build/DemoOutput_Granular_Flow_1/'];
+    '../build/DemoOutput_Granular/Hopper_shute/1/'];
 files=dir(folder);
 
 

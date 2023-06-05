@@ -55,7 +55,7 @@ int main() {
     double gateSpeed = -3.5;  // good discarge -- too fast the flow
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Granular_PlasticSpheres/";
+    out_dir += "/DemoOutput_Granular_CylindersSpheres/";
     out_dir += "Hopper/";
 
     auto mat_type_bottom = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
@@ -258,7 +258,7 @@ int main() {
 
     std::cout << "dt critical is: " << dt_crit << std::endl;
 
-    float timeStep = step_size * 100.0;
+    float timeStep = step_size * 400.0;
     int numStep = 7.0 / timeStep;
     int timeOut = 0.01 / timeStep;
     int gateMotion = (gateOpen / gateSpeed) / timeStep;

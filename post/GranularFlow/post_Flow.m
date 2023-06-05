@@ -5,7 +5,7 @@ exp=readtable("../../data/granularFlow/heightSarno2018.dat");
 
 
 folder=['../' ...
-    '../build/DemoOutput_Granular_Flow_1/'];
+    '../build/DemoOutput_Granular/Hopper_shute/1/'];
 files=dir(folder);
 
 
@@ -23,7 +23,7 @@ curve1_y=Y(Y_idx,:);
 time=(0:0.01:7)';
 level_z=zeros(numel(time),1);
 
-for i=200:300
+for i=50:300
     file=['DEMdemo_output_' num2str(i,'%04i.csv')];
     disp(file)
     data=readtable([folder file]);

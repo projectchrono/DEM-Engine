@@ -28,14 +28,14 @@ counterTotal=0;
 
 
 
-for q=0:1:9
+for q=0:1:1
 
-folder=['../../' 'build/DemoOutput_Granular/FlowSpheresDrum/sensRolling'  '/F_' num2str(q) '/'];
+folder=['../../' 'build/DemoOutput_Granular/FlowSpheresDrum/sensRolling'  '/'];
 % folder=['../../' 'build/DemoOutput_Granular_WoodenSpheresDrum_' num2str(q)  '/'];
 files=dir(folder);
 
 
-for p=3:3
+for p=1:3
     range=(p-1)*100+(50:99);
     counterTotal=counterTotal+1;
 
@@ -45,7 +45,7 @@ for p=3:3
     for k=range
         counter=counter+1;
 
-        file=['DEMdemo_output_' num2str(k,'%04i.csv')];
+        file=['F_' num2str(k,'%04i.csv')];
         disp(file)
         data=readtable([folder file]);
 
@@ -82,11 +82,11 @@ for p=3:3
         results=interp1(curve1_x,curve1_z,points);
 
         figure(2); hold on
-         plot(curve1_x,curve1_z)
+        % plot(curve1_x,curve1_z)
          plot(points,results,'.')
 
         P = polyfit(points,results,1);
-        % yfit = polyval(P,points);
+        yfit = polyval(P,points);
 
         % plot(points,yfit,'r-.');
 
