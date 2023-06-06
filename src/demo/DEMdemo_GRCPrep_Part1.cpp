@@ -117,8 +117,6 @@ int main() {
     DEMSim.Initialize();
 
     float time_end = 10.0;
-    unsigned int fps = 20;
-    unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
     path out_dir = current_path();
     out_dir += "/DemoOutput_GRCPrep_Part1";
@@ -133,7 +131,7 @@ int main() {
     float settle_frame_time = 0.2;
     float settle_batch_time = 2.0;
     while (DEMSim.GetNumClumps() < 0.25e6) {
-        DEMSim.ClearCache();
+        // DEMSim.ClearCache(); // Clearing cache is no longer needed
         float3 sample_center = make_float3(0, 0, offset_z);
         std::vector<std::shared_ptr<DEMClumpTemplate>> heap_template_in_use;
         std::vector<unsigned int> heap_family;

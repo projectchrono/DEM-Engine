@@ -530,13 +530,23 @@ inline void hostApplyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Qw, const T2& 
         ((T2)2.0 * (Qw * Qw + Qz * Qz) - (T2)1.0) * oldZ;
 }
 
-/// Host version of applying a local rotation then a translation
+/// Host version of applying a local rotation then a translation.
 template <typename T1, typename T2, typename T3>
-inline void hostApplyFrameTransform(T1& pos, const T2& vec, const T3& rot_Q) {
+inline void applyFrameTransformLocalToGlobal(T1& pos, const T2& vec, const T3& rot_Q) {
     hostApplyOriQToVector3(pos.x, pos.y, pos.z, rot_Q.w, rot_Q.x, rot_Q.y, rot_Q.z);
     pos.x += vec.x;
     pos.y += vec.y;
     pos.z += vec.z;
+}
+
+/// Host version of translating the inverse of the provided vec then applying a local inverse rotation of the provided
+/// rot_Q.
+template <typename T1, typename T2, typename T3>
+inline void applyFrameTransformGlobalToLocal(T1& pos, const T2& vec, const T3& rot_Q) {
+    pos.x -= vec.x;
+    pos.y -= vec.y;
+    pos.z -= vec.z;
+    hostApplyOriQToVector3(pos.x, pos.y, pos.z, rot_Q.w, -rot_Q.x, -rot_Q.y, -rot_Q.z);
 }
 
 // Default accuracy is 17. This accuracy is especially needed for MOIs and length-unit (l).

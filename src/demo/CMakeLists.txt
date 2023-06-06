@@ -46,6 +46,7 @@ SET(DEMOS
 		DEMdemo_SolarSystem
 		DEMdemo_Repose_Cylinder
 		DEMdemo_Electrostatic
+		DEMdemo_FlexibleMesh
 )
 
 # ------------------------------------------------------------------------------

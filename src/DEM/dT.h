@@ -189,12 +189,12 @@ class DEMDynamicThread {
     // std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>> contactMapping;
 
     // Some of dT's own work arrays
-    // Force of each contact event. It is the force that bodyA feels.
+    // Force of each contact event. It is the force that bodyA feels. They are in global.
     std::vector<float3, ManagedAllocator<float3>> contactForces;
     // An imaginary `force' in each contact event that produces torque only, and does not affect the linear motion. It
     // will rise in our default rolling resistance model, which is just a torque model; yet, our contact registration is
     // contact pair-based, meaning we do not know the specs of each contact body, so we can register force only, not
-    // torque. Therefore, this vector arises.
+    // torque. Therefore, this vector arises. This force-like torque is in global.
     std::vector<float3, ManagedAllocator<float3>> contactTorque_convToForce;
     // Local position of contact point of contact w.r.t. the reference frame of body A and B
     std::vector<float3, ManagedAllocator<float3>> contactPointGeometryA;
@@ -414,6 +414,23 @@ class DEMDynamicThread {
     void getTriWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
     /// @brief Fill res with the `wc_num' wildcard values, for n analytical entities starting from ID.
     void getAnalWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n);
+
+    /// @brief Change the value of contact wildcards no.wc_num to val if either of the contact geometries is in family
+    /// N.
+    void setFamilyContactWildcardValueAny(unsigned int N, unsigned int wc_num, float val);
+    /// @brief Change the value of contact wildcards no.wc_num to val if both of the contact geometries are in family N.
+    void setFamilyContactWildcardValueAll(unsigned int N, unsigned int wc_num, float val);
+    /// @brief Change the value of contact wildcards no.wc_num to val.
+    void setContactWildcardValue(unsigned int wc_num, float val);
+
+    /// @brief Get all forces concerning this owner.
+    size_t getOwnerContactForces(bodyID_t ownerID, std::vector<float3>& points, std::vector<float3>& forces);
+    /// @brief Get all forces concerning this owner.
+    size_t getOwnerContactForces(bodyID_t ownerID,
+                                 std::vector<float3>& points,
+                                 std::vector<float3>& forces,
+                                 std::vector<float3>& torques,
+                                 bool torque_in_local = false);
 
     /// Let dT know that it needs a kT update, as something important may have changed, and old contact pair info is no
     /// longer valid.
@@ -639,6 +656,9 @@ class DEMDynamicThread {
     void deallocateEverything();
     // The dT-side allocations that can be done at initialization time
     void initAllocation();
+
+    // Get owner of contact geo B.
+    inline bodyID_t getOwnerForContactB(const bodyID_t& geoB, const contact_t& type) const;
 
     // Just-in-time compiled kernels
     std::shared_ptr<jitify::Program> prep_force_kernels;

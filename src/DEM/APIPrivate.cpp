@@ -519,6 +519,9 @@ void DEMSolver::reportInitStats() const {
     DEME_DEBUG_EXEC(printf("These owners are tracked: ");
                     for (const auto& tracked
                          : m_tracked_objs) { printf("%zu, ", (size_t)tracked->ownerID); } printf("\n"););
+    DEME_DEBUG_EXEC(printf("Meshes' owner--offset pairs: ");
+                    for (const auto& mesh
+                         : m_meshes) { printf("{%zu, %u}, ", (size_t)mesh->owner, mesh->cache_offset); } printf("\n"););
 }
 
 void DEMSolver::preprocessAnalyticalObjs() {
@@ -632,6 +635,11 @@ void DEMSolver::preprocessTriangleObjs() {
                 "A meshed object is loaded but does not have associated material.\nPlease assign material to meshes "
                 "via SetMaterial.");
         }
+        // Put the mesh into the host-side cache
+        m_meshes.push_back(mesh_obj);
+        // Note that cache_offset needs to be modified by dT in init. This info is important if we need to modify the
+        // mesh later on.
+
         m_mesh_obj_mass.push_back(mesh_obj->mass);
         m_mesh_obj_moi.push_back(mesh_obj->MOI);
 
@@ -1116,6 +1124,10 @@ void DEMSolver::packDataPointers() {
     // are called, so each thread has its own pointers packed.
     dT->packTransferPointers(kT);
     kT->packTransferPointers(dT);
+    // Finally, the API needs to map all mesh to their owners
+    for (const auto& mmesh : m_meshes) {
+        m_owner_mesh_map[mmesh->owner] = mmesh->cache_offset;
+    }
 }
 
 void DEMSolver::validateUserInputs() {
@@ -1173,6 +1185,7 @@ bool DEMSolver::goThroughWorkerAnomalies() {
 inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::string>& strMap) {
     // Empty ingr list
     auto added_ingredients = force_kernel_ingredient_stats;
+    //// TODO: Reassemble geo and owner wildcards here again in a set is not needed... Since set is ordered.
     std::set<std::string> added_owner_wildcards, added_geo_wildcards;
     // Analyze this model... what does it require?
     std::string model = m_force_model->m_force_model;
@@ -1181,6 +1194,7 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     const std::set<std::string> geo_wildcard_names = m_force_model->m_geo_wildcards;
     m_owner_wc_num.clear();
     m_geo_wc_num.clear();
+    m_cnt_wc_num.clear();
     // If we spot that the force model requires an ingredient, we make sure that order goes to the ingredient
     // acquisition module
     std::string ingredient_definition = " ", cnt_wildcard_acquisition = " ", ingredient_acquisition_A = " ",
@@ -1200,7 +1214,7 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     }
     // Then, owner/geo wildcards should be added to the ingredient list too. But first we check whether a wildcard
     // shares name with existing ingredients. If not, we add them to the list.
-    unsigned int owner_wc_num = 0, geo_wc_num = 0;
+    unsigned int owner_wc_num = 0, geo_wc_num = 0, cnt_wc_num = 0;
     for (const auto& owner_wildcard_name : owner_wildcard_names) {
         if (added_ingredients.find(owner_wildcard_name) != added_ingredients.end()) {
             DEME_ERROR(
@@ -1226,6 +1240,16 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         // later use.
         m_geo_wc_num[geo_wildcard_name] = geo_wc_num;
         geo_wc_num++;
+    }
+    for (const auto& contact_wildcard_name : contact_wildcard_names) {
+        if (added_ingredients.find(contact_wildcard_name) != added_ingredients.end()) {
+            DEME_ERROR(
+                "Contact wildcard %s shares its name with a reserved contact force model ingredient.\nPlease select a "
+                "different name for this wildcard and try again.",
+                contact_wildcard_name.c_str());
+        }
+        m_cnt_wc_num[contact_wildcard_name] = cnt_wc_num;
+        cnt_wc_num++;
     }
 
     // Owner write-back needs ABOwner number
