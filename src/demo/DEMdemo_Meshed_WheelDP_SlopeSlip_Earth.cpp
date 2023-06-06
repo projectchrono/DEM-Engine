@@ -28,9 +28,9 @@ int main(int argc, char* argv[]) {
 
     // `World'
     float G_mag = 9.81;
-    float step_size = 2.5e-6;
+    float step_size = 5e-6;
     double world_size_y = 0.52;
-    double world_size_x = 4;
+    double world_size_x = 3.;
     double world_size_z = 4.0;
     float w_r = 0.8;
     double sim_end = 8.;
@@ -141,7 +141,7 @@ int main(int argc, char* argv[]) {
             std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
             for (size_t i = 0; i < in_xyz.size(); i++) {
                 if (std::abs(in_xyz.at(i).y) > (world_size_y - 0.05) / 2 ||
-                    std::abs(in_xyz.at(i).x) > (world_size_x) / 2)
+                    std::abs(in_xyz.at(i).x) > (world_size_x - 0.05) / 2)
                     elem_to_remove.at(i) = 1;
             }
             in_xyz.erase(std::remove_if(in_xyz.begin(), in_xyz.end(),
@@ -200,14 +200,14 @@ int main(int argc, char* argv[]) {
         DEMSim.SetExpandSafetyAdder(.1);
         DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1);
         DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(5);
-        DEMSim.SetErrorOutVelocity(50.);
+        DEMSim.SetErrorOutVelocity(150.);
         DEMSim.Initialize();
 
         // Put the wheel in place, then let the wheel sink in initially
         float corr = 1.0;  // 0
-        float init_x = -1.5 + corr;
+        float init_x = -1.2 + corr;
         if (Slope_deg < 21) {
-            init_x = -2.1 + corr;
+            init_x = -1.8 + corr;
         }
 
         float settle_time = 0.4;

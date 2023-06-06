@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
 
     // `World'
     float G_mag = 9.81;
-    float step_size = 2.5e-6;
+    float step_size = 5e-6;
     double world_size_y = 0.52;
     double world_size_x = 4;  // 2.04;
     double world_size_z = 4.0;
@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
         auto bot_wall = DEMSim.AddBCPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_wall);
         auto bot_wall_tracker = DEMSim.Track(bot_wall);
 
-        auto wheel = DEMSim.AddWavefrontMeshObject("./wheel.obj", mat_type_wheel);
+        auto wheel = DEMSim.AddWavefrontMeshObject("./wheel_diff.obj", mat_type_wheel);
         wheel->SetMass(wheel_mass);
         wheel->SetMOI(make_float3(wheel_IXX, wheel_IYY, wheel_IXX));
         // Give the wheel a family number so we can potentially add prescription
