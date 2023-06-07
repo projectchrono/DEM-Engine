@@ -24,7 +24,7 @@ dt=0.01;
 time=(0:dt:5)';
 level_z=zeros(numel(time),1);
 
-for i=200
+for i=70
     file=['DEMdemo_output_' num2str(i,'%04i.csv')];
     disp(file)
     data=readtable([folder file]);

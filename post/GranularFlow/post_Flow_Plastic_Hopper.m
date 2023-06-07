@@ -49,8 +49,8 @@ expCylWood=[0.02, 0.74
 6.10, 88.58
 7.01, 88.49];
 
-folder=['../'  '../build/DemoOutput_Granular_PlasticSpheres/Hopper/'];
-folder=['../'  '../build/DemoOutput_Granular_WoodenCylinders/Hopper/'];
+folder=['../'  '../build/DemoOutput_Granular_PlasticCylinders/Hopper/'];
+ folder=['../'  '../build/DemoOutput_Granular_PlasticSpheres/Hopper/'];
 files=dir(folder);
 
 d=0.0060;
@@ -73,7 +73,7 @@ level_z=zeros(numel(time),1);
 discharge=zeros(numel(time),1);
 
 
-for i=1:1:400
+for i=0:1:699
     file=['DEMdemo_output_' num2str(i,'%04i.csv')];
     disp(file)
     data=readtable([folder file]);
@@ -101,12 +101,27 @@ end
 
 
 
-figure(2); hold on
+figure(2); hold on; box on;grid on
 
 % plot(time,discharge,'DisplayName','DEME')
- plot(time*2,level_z,'DisplayName','DEME')
- plot(expBall(:,1),expBall(:,2)/100,'sk','DisplayName','Exp.')
- plot(expCyl(:,1),expCyl(:,2)/100,'sr','DisplayName','Exp.')
- plot(expCylWood(:,1),expCylWood(:,2)/100,'gd','DisplayName','Exp.')
+ plot(time,level_z,'--' ,'DisplayName','DEME','Color',[1 0 0])
+ plot(expBall(:,1),expBall(:,2)/100,'-sk','DisplayName','Exp.')
+% plot(expCyl(:,1),expCyl(:,2)/100,'sr','DisplayName','Exp.')
+ % plot(expCylWood(:,1),expCylWood(:,2)/100,'gd','DisplayName','Exp.')
 
 axis([0 8 0 1.00])
+xlabel('Time (s)','Interpreter','latex',FontSize=8)
+ylabel('m/M [%]','Interpreter','latex',FontSize=8)
+leg=legend('Interpreter','latex','Location','best');
+ytickformat('%.1f')
+
+set(gcf,'units','centimeters' ,'position',[1,1,8,5])
+    
+    leg.FontSize=8;
+    leg.NumColumns=1;
+
+    set(gca,'fontsize',8);
+
+f = gcf;
+exportgraphics(f,['P4'  '.png'],'Resolution',600)
+

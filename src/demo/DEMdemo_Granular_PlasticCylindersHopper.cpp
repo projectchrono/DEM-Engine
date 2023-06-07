@@ -27,7 +27,7 @@ int main() {
     DEMSim.UseFrictionalHertzianModel();
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ | OUTPUT_CONTENT::VEL |OUTPUT_CONTENT::ANG_VEL);
+    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ | OUTPUT_CONTENT::VEL | OUTPUT_CONTENT::ANG_VEL);
     DEMSim.EnsureKernelErrMsgLineNum();
 
     srand(7001);
@@ -47,7 +47,7 @@ int main() {
 
     double density = 1128;
 
-    int totalSpheres = 23000;
+    int totalSpheres = 22000;  // 23000;
 
     int num_template = 5000;
 
@@ -56,6 +56,7 @@ int main() {
 
     double gateOpen = 0.30;
     double gateSpeed = -3.5;  // good discarge -- too fast the flow
+    double hopperW = 0.04;
 
     path out_dir = current_path();
     out_dir += "/DemoOutput_Granular_PlasticCylinders/";
@@ -88,11 +89,21 @@ int main() {
     DEMSim.SetInitBinSize(radius * 5);
 
     // Loaded meshes are by-default fixed
-    auto fixed = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_box.obj", mat_type_flume);
+    double gateWidth = 0.1295;
+    auto fixed_left = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
+    float3 move = make_float3(-hopperW / 2.0, 0, 0);
+    float4 rot = make_float4(0.7071, 0, 0,0.7071);
+    fixed_left->Move(move, rot);
 
-    auto gate = DEMSim.AddWavefrontMeshObject("../data/granularFlow/gate_bottom.obj", mat_type_flume);
+    auto fixed_right = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
+    move = make_float3(gateWidth + hopperW / 2.0, 0, 0);
+    fixed_right->Move(move, rot);
 
-    fixed->SetFamily(10);
+    auto gate = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
+    gate->Move(make_float3(gateWidth / 2, 0, -0.001), rot);
+
+    fixed_left->SetFamily(10);
+    fixed_right->SetFamily(10);
     gate->SetFamily(3);
 
     std::string shake_pattern_xz = " 0.0 * sin( 300 * 2 * deme::PI * t)";
@@ -120,7 +131,7 @@ int main() {
         std::vector<std::shared_ptr<DEMMaterial>> mat;
 
         double radiusMed = distribution(generator);
-        radiusMed=radius;
+        radiusMed = radius;
         double eccentricity = 0.0 / 8.0 * radiusMed;
 
         float init = -length / 2.0 + radiusMed;
@@ -185,7 +196,7 @@ int main() {
         std::vector<float3> input_pile_xyz;
         PDSampler sampler(shift_xyz);
 
-        bool generate = (plane_bottom + shift_xyz/2 > emitterZ) ? false : true;
+        bool generate = (plane_bottom + shift_xyz / 2 > emitterZ) ? false : true;
 
         if (generate) {
             float sizeZ = (frame == 0) ? 0.95 : 0;
@@ -239,7 +250,7 @@ int main() {
             for (int i = 0; i < (int)(0.4 / settle_frame_time); i++) {
                 DEMSim.DoDynamics(settle_frame_time);
                 sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), i);
-                 DEMSim.WriteSphereFile(std::string(filename));
+                DEMSim.WriteSphereFile(std::string(filename));
                 std::cout << "consolidating for " << i * settle_frame_time << "s " << std::endl;
             }
         }

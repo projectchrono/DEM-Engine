@@ -53,9 +53,10 @@ int main() {
 
     double gateOpen = 0.30;
     double gateSpeed = -3.5;  // good discarge -- too fast the flow
+    double hopperW = 0.04;
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Granular_CylindersSpheres/";
+    out_dir += "/DemoOutput_Granular_PlasticSpheres/";
     out_dir += "Hopper/";
 
     auto mat_type_bottom = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
@@ -85,11 +86,21 @@ int main() {
     DEMSim.SetInitBinSize(radius * 5);
 
     // Loaded meshes are by-default fixed
-    auto fixed = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_box.obj", mat_type_flume);
+    double gateWidth = 0.1295;
+    auto fixed_left = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
+    float3 move = make_float3(-hopperW / 2.0, 0, 0);
+    float4 rot = make_float4(0.7071, 0, 0,0.7071);
+    fixed_left->Move(move, rot);
 
-    auto gate = DEMSim.AddWavefrontMeshObject("../data/granularFlow/gate_bottom.obj", mat_type_flume);
+    auto fixed_right = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
+    move = make_float3(gateWidth + hopperW / 2.0, 0, 0);
+    fixed_right->Move(move, rot);
 
-    fixed->SetFamily(10);
+    auto gate = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
+    gate->Move(make_float3(gateWidth / 2, 0, -0.001), rot);
+
+    fixed_left->SetFamily(10);
+    fixed_right->SetFamily(10);
     gate->SetFamily(3);
 
     std::string shake_pattern_xz = " 0.0 * sin( 300 * 2 * deme::PI * t)";

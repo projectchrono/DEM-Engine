@@ -31,7 +31,7 @@ int main() {
 
     srand(7001);
     DEMSim.SetCollectAccRightAfterForceCalc(true);
-    DEMSim.SetErrorOutAvgContacts(100);
+    DEMSim.SetErrorOutAvgContacts(60);
 
     //DEMSim.SetExpandSafetyAdder(0.5);
 
@@ -81,7 +81,7 @@ int main() {
     DEMSim.SetMaterialPropertyPair("mu", mat_type_bottom, mat_type_particles, 0.15);
     
     // Make ready for simulation
-    float step_size =2.0e-6;
+    float step_size =1.0e-6;
     DEMSim.InstructBoxDomainDimension({-0.01, 3.00}, {-0.05, 0.05}, {-0.50, 1.0});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
