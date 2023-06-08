@@ -4,6 +4,6 @@ Version: 0.0.0
 Summary: PyBind Wrapper Library for DEM-Engine
 Author: Rouchun Zhang
 Author-email: N.A.
-Requires-Python: >=3.8
+Requires-Python: >=3.11
 Provides-Extra: test
 License-File: LICENSE.md

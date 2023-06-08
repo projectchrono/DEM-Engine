@@ -88,7 +88,6 @@ target_include_directories(
 	PUBLIC ${ProjectIncludeSource}
 	PUBLIC ${ProjectIncludeGenerated}
 	PUBLIC ${NVIDIAMathDir}
-	PUBLIC ${PYTHON_INCLUDE_DIRS}
 	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
 )
 
@@ -107,6 +106,5 @@ set_target_properties(
 	CXX_STANDARD ${CXXSTD_SUPPORTED}
 	PUBLIC_HEADER "${DEM_headers}"
 )
-
 
 message(STATUS "==== Completed Build for Tester Object for DEMExternObj Component ====")
