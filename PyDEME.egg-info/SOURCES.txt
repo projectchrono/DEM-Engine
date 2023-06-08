@@ -1,0 +1,9 @@
+LICENSE.md
+README.md
+setup.py
+PyDEME.egg-info/PKG-INFO
+PyDEME.egg-info/SOURCES.txt
+PyDEME.egg-info/dependency_links.txt
+PyDEME.egg-info/not-zip-safe
+PyDEME.egg-info/requires.txt
+PyDEME.egg-info/top_level.txt

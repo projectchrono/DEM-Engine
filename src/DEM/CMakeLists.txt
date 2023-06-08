@@ -12,12 +12,15 @@ target_include_directories(
 	PUBLIC ${ProjectIncludeSource}
 	PUBLIC ${ProjectIncludeGenerated}
 	PUBLIC ${NVIDIAMathDir}
+	PUBLIC ${PYTHON_INCLUDE_DIRS}
 )
 
 target_link_libraries(
 	DEM
 	PUBLIC CUB::CUB
 	PUBLIC ${ChPF_IMPORTED_NAME}
+	PUBLIC ${PYTHON_LIBRARIES}
+	pybind11::headers
 )
 
 
@@ -75,3 +78,35 @@ install(
 		PATTERN "utils/*.hpp"
 )
 
+message(STATUS "==== Building Tester Object for DEMExternObj Component ====")
+
+pybind11_add_module(BdrsAndObjs ${DEM_headers} ${DEM_sources} ${CMAKE_CURRENT_SOURCE_DIR}/BdrsAndObjs.cpp)
+set_target_properties(BdrsAndObjs PROPERTIES LINKER_LANGUAGE CXX)
+
+target_include_directories(
+	BdrsAndObjs
+	PUBLIC ${ProjectIncludeSource}
+	PUBLIC ${ProjectIncludeGenerated}
+	PUBLIC ${NVIDIAMathDir}
+	PUBLIC ${PYTHON_INCLUDE_DIRS}
+	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
+)
+
+target_link_libraries(
+	BdrsAndObjs
+	PUBLIC CUB::CUB
+	PUBLIC ${ChPF_IMPORTED_NAME}
+	PUBLIC ${PYTHON_LIBRARIES}
+	PUBLIC pybind11::headers
+	PUBLIC DEMERuntimeDataHelper
+)
+
+set_target_properties(
+	BdrsAndObjs PROPERTIES
+	POSITION_INDEPENDENT_CODE True
+	CXX_STANDARD ${CXXSTD_SUPPORTED}
+	PUBLIC_HEADER "${DEM_headers}"
+)
+
+
+message(STATUS "==== Completed Build for Tester Object for DEMExternObj Component ====")

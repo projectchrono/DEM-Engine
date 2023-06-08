@@ -1,0 +1,9 @@
+Metadata-Version: 2.1
+Name: PyDEME
+Version: 0.0.0
+Summary: PyBind Wrapper Library for DEM-Engine
+Author: Rouchun Zhang
+Author-email: N.A.
+Requires-Python: >=3.8
+Provides-Extra: test
+License-File: LICENSE.md

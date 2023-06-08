@@ -20,6 +20,8 @@ project(
 	LANGUAGES CXX CUDA
 )
 
+set (CMAKE_CXX_STANDARD 14)
+
 # ---------------------------------------------------------------------------- #
 # Additional Packages
 # ---------------------------------------------------------------------------- #
@@ -33,6 +35,8 @@ fix_ninja_colors()
 
 
 find_package(CUDAToolkit REQUIRED)
+find_package(PythonLibs 3.11 REQUIRED)
+find_package(pybind11 CONFIG)
 
 # Find CUB library (this might need to be done in source-level config)
 find_package(
@@ -46,6 +50,9 @@ find_path(
 	NAMES jitify.hpp
 	PATHS "${CMAKE_CURRENT_LIST_DIR}/thirdparty/jitify"
 )
+
+# Include pyBind11 library
+include_directories(${PYTHON_INCLUDE_DIRS})
 
 # nvidia_helper_math doesn't require any extra configuration, so just set the path 
 set(NVIDIAMathDir ${CMAKE_CURRENT_LIST_DIR}/thirdparty/nvidia_helper_math)
@@ -141,6 +148,8 @@ target_link_libraries(simulator_multi_gpu
 	PUBLIC CUDA::nvrtc
 	PUBLIC ${ChPF_IMPORTED_NAME}
 	PUBLIC DEMERuntimeDataHelper
+	PUBLIC pybind11::headers
+	PUBLIC ${PYTHON_LIBRARIES}	
 )
 
 # Attach include directories to the top-level library target
