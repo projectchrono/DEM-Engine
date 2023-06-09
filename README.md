@@ -79,6 +79,7 @@ You generally do not have to change the build options in the GUI, but preferably
 
 Some additional troubleshooting tips for generating the project:
 
+- For now, I suggest using CUDA version 12.0 or below. CUDA 12.1 does not seem to work well with the jitified kernels in _DEME_.
 - If some dependencies such as CUB are not found, then you probably need to manually set `$PATH` and `$LD_LIBRARY_PATH`. An example is given below for a specific version of CUDA, note it may be different on your machine or cluster. You should also inspect if `nvidia-smi` and `nvcc --version` give correct returns.
 ```
 export CPATH=/usr/local/cuda-12.0/targets/x86_64-linux/include${CPATH:+:${CPATH}}
