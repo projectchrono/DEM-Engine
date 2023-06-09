@@ -30,10 +30,10 @@ int main(int argc, char* argv[]) {
     float G_mag = 9.81;
     float step_size = 5e-6;
     double world_size_y = 2.;
-    double world_size_x = 3.;
+    double world_size_x = 2.;
     double world_size_z = 4.0;
     float w_r = 0.8;
-    double sim_end = 8.;
+    double sim_end = 4.;
     float torque = 1e2;
 
     // Define the wheel geometry
@@ -182,7 +182,8 @@ int main(int argc, char* argv[]) {
         DEMSim.SetFamilyPrescribedAngVel(1, "0", to_string_with_precision(w_r), "0", false);
         DEMSim.AddFamilyPrescribedAcc(1, to_string_with_precision(-added_pressure * std::sin(G_ang) / wheel_mass),
                                       "none", to_string_with_precision(-added_pressure * std::cos(G_ang) / wheel_mass));
-        DEMSim.SetFamilyPrescribedAngVel(2, "0", to_string_with_precision(w_r), "0", false);
+        // Must not prescribe Z ang vel
+        DEMSim.SetFamilyPrescribedAngVel(2, "0", to_string_with_precision(w_r), "none", false);
         DEMSim.AddFamilyPrescribedAcc(2, to_string_with_precision(-added_pressure * std::sin(G_ang) / wheel_mass),
                                       "none", to_string_with_precision(-added_pressure * std::cos(G_ang) / wheel_mass));
         DEMSim.AddFamilyPrescribedAngAcc(2, "none", "none", to_string_with_precision(torque / wheel_IXX));
@@ -210,9 +211,9 @@ int main(int argc, char* argv[]) {
 
         // Put the wheel in place, then let the wheel sink in initially
         float corr = 1.0;  // 0
-        float init_x = -1.2 + corr;
+        float init_x = -1. + corr;
         if (Slope_deg < 21) {
-            init_x = -1.8 + corr;
+            init_x = -1.6 + corr;
         }
 
         float settle_time = 0.4;
