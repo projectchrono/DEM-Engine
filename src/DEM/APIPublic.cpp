@@ -208,6 +208,18 @@ unsigned int DEMSolver::GetOwnerFamily(bodyID_t ownerID) const {
     return (unsigned int)(+(dT->familyID.at(ownerID)));
 }
 
+void DEMSolver::AddOwnerNextStepAcc(bodyID_t ownerID, float3 acc) {
+    dT->accSpecified[ownerID] = 1;
+    dT->aX[ownerID] = acc.x;
+    dT->aY[ownerID] = acc.y;
+    dT->aZ[ownerID] = acc.z;
+}
+void DEMSolver::AddOwnerNextStepAngAcc(bodyID_t ownerID, float3 angAcc) {
+    dT->angAccSpecified[ownerID] = 1;
+    dT->alphaX[ownerID] = angAcc.x;
+    dT->alphaY[ownerID] = angAcc.y;
+    dT->alphaZ[ownerID] = angAcc.z;
+}
 void DEMSolver::SetOwnerPosition(bodyID_t ownerID, float3 pos) {
     dT->setOwnerPos(ownerID, pos);
 }

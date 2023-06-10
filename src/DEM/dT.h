@@ -182,6 +182,11 @@ class DEMDynamicThread {
     std::vector<float, ManagedAllocator<float>> alphaY;
     std::vector<float, ManagedAllocator<float>> alphaZ;
 
+    // If true, the acceleration is specified for this owner and the prep force kernel should not clear its value in the
+    // next time step.
+    std::vector<notStupidBool_t, ManagedAllocator<notStupidBool_t>> accSpecified;
+    std::vector<notStupidBool_t, ManagedAllocator<notStupidBool_t>> angAccSpecified;
+
     // Contact pair/location, for dT's personal use!!
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA;
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB;

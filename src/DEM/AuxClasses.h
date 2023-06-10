@@ -157,7 +157,10 @@ class DEMTracker {
     void SetOriQ(float4 oriQ, size_t offset = 0);
     /// Add an extra acc to the tracked body, for the next time step. Note if the user intends to add a persistent
     /// external force, then using family prescription is the better method.
-    void AddAcc(float3 force, size_t offset = 0);
+    void AddAcc(float3 acc, size_t offset = 0);
+    /// Add an extra angular acceleration to the tracked body, for the next time step. Note if the user intends to add a
+    /// persistent external torque, then using family prescription is the better method.
+    void AddAngAcc(float3 angAcc, size_t offset = 0);
     /// Change the size of clump entities
     void ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors);
     /// @brief Change the family numbers of all the entities tracked by this tracker.

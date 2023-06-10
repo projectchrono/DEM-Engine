@@ -445,6 +445,15 @@ class DEMSolver {
     std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity = "clump_max_z");
     std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity, const std::string& region);
 
+    /// @brief Add an extra acceleration to a owner for the next time step.
+    /// @param ownerID The number of that owner.
+    /// @param acc The extra acceleration to add.
+    void AddOwnerNextStepAcc(bodyID_t ownerID, float3 acc);
+    /// @brief Add an extra angular acceleration to a owner for the next time step.
+    /// @param ownerID The number of that owner.
+    /// @param acc The extra angular acceleration to add.
+    void AddOwnerNextStepAngAcc(bodyID_t ownerID, float3 angAcc);
+
     /// Instruct the solver that the 2 input families should not have contacts (a.k.a. ignored, if such a pair is
     /// encountered in contact detection). These 2 families can be the same (which means no contact within members of
     /// that family).
