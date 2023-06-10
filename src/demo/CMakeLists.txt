@@ -41,6 +41,7 @@ SET(DEMOS
 		DEMdemo_Repose_GRC
 		DEMdemo_SolarSystem
 		DEMdemo_Meshed_Steering_Earth
+		DEMdemo_Meshed_Steering_Earth_Single
 )
 
 # ------------------------------------------------------------------------------

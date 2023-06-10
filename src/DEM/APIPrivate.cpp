@@ -1315,7 +1315,7 @@ inline void DEMSolver::equipFamilyOnFlyChanges(std::unordered_map<std::string, s
 
 inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::string, std::string>& strMap) {
     std::string velStr = " ", posStr = " ", accStr = " ";
-    for (auto& preInfo : m_unique_family_prescription) {
+    for (const auto& preInfo : m_unique_family_prescription) {
         if (!preInfo.used) {
             continue;
         }
@@ -1325,27 +1325,21 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
         {
             if (preInfo.linVelX != "none") {
                 velStr += "vX = " + preInfo.linVelX + ";";
-                preInfo.linVelXPrescribed = true;
             }
             if (preInfo.linVelY != "none") {
                 velStr += "vY = " + preInfo.linVelY + ";";
-                preInfo.linVelYPrescribed = true;
             }
             if (preInfo.linVelZ != "none") {
                 velStr += "vZ = " + preInfo.linVelZ + ";";
-                preInfo.linVelZPrescribed = true;
             }
             if (preInfo.rotVelX != "none") {
                 velStr += "omgBarX = " + preInfo.rotVelX + ";";
-                preInfo.rotVelXPrescribed = true;
             }
             if (preInfo.rotVelY != "none") {
                 velStr += "omgBarY = " + preInfo.rotVelY + ";";
-                preInfo.rotVelYPrescribed = true;
             }
             if (preInfo.rotVelZ != "none") {
                 velStr += "omgBarZ = " + preInfo.rotVelZ + ";";
-                preInfo.rotVelZPrescribed = true;
             }
             velStr += "LinXPrescribed = " + std::to_string(preInfo.linVelXPrescribed) + ";";
             velStr += "LinYPrescribed = " + std::to_string(preInfo.linVelYPrescribed) + ";";
