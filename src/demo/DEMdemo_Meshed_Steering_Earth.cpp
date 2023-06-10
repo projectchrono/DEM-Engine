@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
     double world_size_z = 4.0;
     float w_r = 0.8;
     double sim_end = 4.;
-    float torque = 1e2;
+    float torque = 10.;
 
     // Define the wheel geometry
     float wheel_rad = 0.25;
