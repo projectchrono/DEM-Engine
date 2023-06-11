@@ -18,12 +18,12 @@ using namespace deme;
 using namespace std::filesystem;
 
 int main() {
-    float granular_rad = 0.00118652 * std::pow(0.4, 1. / 3.);
+    float granular_rad = 0.0008;
     unsigned int num_particles = 0;
     double world_size = 1;
     double CDFreq = 25.1;
     double pi = 3.14159;
-    float step_size = 0.6e-6;
+    float step_size = 0.5e-6;
     size_t n_steps = 5e5;
     int test_num = 10;
 
@@ -114,8 +114,8 @@ int main() {
         char filename[200], meshfilename[200];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), test_num);
         sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), test_num);
-        DEMSim.WriteSphereFile(std::string(filename));
-        DEMSim.WriteMeshFile(std::string(meshfilename));
+        // DEMSim.WriteSphereFile(std::string(filename));
+        // DEMSim.WriteMeshFile(std::string(meshfilename));
 
         std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
 
