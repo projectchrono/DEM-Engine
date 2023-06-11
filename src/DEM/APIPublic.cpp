@@ -208,6 +208,18 @@ unsigned int DEMSolver::GetOwnerFamily(bodyID_t ownerID) const {
     return (unsigned int)(+(dT->familyID.at(ownerID)));
 }
 
+void DEMSolver::AddOwnerNextStepAcc(bodyID_t ownerID, float3 acc) {
+    dT->accSpecified[ownerID] = 1;
+    dT->aX[ownerID] = acc.x;
+    dT->aY[ownerID] = acc.y;
+    dT->aZ[ownerID] = acc.z;
+}
+void DEMSolver::AddOwnerNextStepAngAcc(bodyID_t ownerID, float3 angAcc) {
+    dT->angAccSpecified[ownerID] = 1;
+    dT->alphaX[ownerID] = angAcc.x;
+    dT->alphaY[ownerID] = angAcc.y;
+    dT->alphaZ[ownerID] = angAcc.z;
+}
 void DEMSolver::SetOwnerPosition(bodyID_t ownerID, float3 pos) {
     dT->setOwnerPos(ownerID, pos);
 }
@@ -249,9 +261,68 @@ float3 DEMSolver::GetOwnerMOI(bodyID_t ownerID) const {
     }
 }
 
-void DEMSolver::SetTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite) {
-    dT->setTriNodeRelPos(start, triangles, overwrite);
-    kT->setTriNodeRelPos(start, triangles, overwrite);
+void DEMSolver::SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& new_nodes) {
+    auto& mesh = m_meshes.at(m_owner_mesh_map.at(owner));
+    if (mesh->GetNumNodes() != new_nodes.size()) {
+        DEME_ERROR(
+            "To deform a mesh, provided vector must have the same length as the number of nodes in mesh.\nThe mesh has "
+            "%zu nodes, yet the provided vector has length %zu.",
+            mesh->GetNumNodes(), new_nodes.size());
+    }
+    // We actually modify the cached mesh... since it has implications in output
+    for (size_t i = 0; i < mesh->GetNumNodes(); i++) {
+        mesh->m_vertices[i] = new_nodes[i];
+    }
+    std::vector<DEMTriangle> new_triangles(mesh->GetNumTriangles());
+    for (size_t i = 0; i < mesh->GetNumTriangles(); i++) {
+        new_triangles[i] = mesh->GetTriangle(i);
+    }
+    dT->setTriNodeRelPos(triID, new_triangles);
+    dT->solverFlags.willMeshDeform = true;
+    
+    // kT just received update from dT, to avoid mem hazards
+    // kT->setTriNodeRelPos(triID, new_triangles);
+}
+void DEMSolver::UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& updates) {
+    auto& mesh = m_meshes.at(m_owner_mesh_map.at(owner));
+    if (mesh->GetNumNodes() != updates.size()) {
+        DEME_ERROR(
+            "To deform a mesh, provided vector must have the same length as the number of nodes in mesh.\nThe mesh has "
+            "%zu nodes, yet the provided vector has length %zu.",
+            mesh->GetNumNodes(), updates.size());
+    }
+    // We actually modify the cached mesh... since it has implications in output
+    for (size_t i = 0; i < mesh->GetNumNodes(); i++) {
+        mesh->m_vertices[i] += updates[i];
+    }
+    // No need to worry about RHR: that's taken care of at init
+    std::vector<DEMTriangle> new_triangles(mesh->GetNumTriangles());
+    for (size_t i = 0; i < mesh->GetNumTriangles(); i++) {
+        new_triangles[i] = mesh->GetTriangle(i);
+    }
+    dT->setTriNodeRelPos(triID, new_triangles);
+    dT->solverFlags.willMeshDeform = true;
+    
+    // kT just received update from dT, to avoid mem hazards
+    // kT->setTriNodeRelPos(triID, new_triangles);
+}
+std::shared_ptr<DEMMeshConnected>& DEMSolver::GetCachedMesh(bodyID_t ownerID) {
+    if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
+        DEME_ERROR("Owner %zu is not a mesh, you therefore cannot retrive a handle to mesh using it.", (size_t)ownerID);
+    }
+    return m_meshes.at(m_owner_mesh_map.at(ownerID));
+}
+std::vector<float3> DEMSolver::GetMeshNodesGlobal(bodyID_t ownerID) {
+    if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
+        DEME_ERROR("Owner %zu is not a mesh, you therefore cannot get its nodes' coordinates.", (size_t)ownerID);
+    }
+    float3 mesh_pos = dT->getOwnerPos(ownerID);
+    float4 mesh_oriQ = dT->getOwnerOriQ(ownerID);
+    std::vector<float3> nodes(m_meshes.at(m_owner_mesh_map.at(ownerID))->GetCoordsVertices());
+    for (auto& pnt : nodes) {
+        applyFrameTransformLocalToGlobal<float3, float3, float4>(pnt, mesh_pos, mesh_oriQ);
+    }
+    return nodes;
 }
 
 double DEMSolver::GetSimTime() const {
@@ -587,7 +658,8 @@ void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID) {
 void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
                                             const std::string& X,
                                             const std::string& Y,
-                                            const std::string& Z) {
+                                            const std::string& Z,
+                                            bool dictate) {
     assertSysNotInit("SetFamilyPrescribedPosition");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
@@ -596,9 +668,8 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
     familyPrescription_t preInfo;
     preInfo.family = ID;
 
-    // Both rot and lin pos are fixed. Use other methods if this is not intended.
-    preInfo.rotPosPrescribed = true;
-    preInfo.linPosPrescribed = true;
+    preInfo.rotPosPrescribed = dictate;
+    preInfo.linPosPrescribed = dictate;
 
     preInfo.linPosX = X;
     preInfo.linPosY = Y;
@@ -624,13 +695,37 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID) {
     m_input_family_prescription.push_back(preInfo);
 }
 
-//// TODO: Implement it
-void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula) {
+void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula, bool dictate) {
     assertSysNotInit("SetFamilyPrescribedQuaternion");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
                    std::numeric_limits<family_t>::max());
     }
+    familyPrescription_t preInfo;
+    preInfo.family = ID;
+
+    preInfo.rotPosPrescribed = dictate;
+    preInfo.linPosPrescribed = dictate;
+
+    preInfo.oriQ = q_formula;
+
+    preInfo.used = true;
+
+    m_input_family_prescription.push_back(preInfo);
+}
+void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID) {
+    assertSysNotInit("SetFamilyPrescribedQuaternion");
+    if (ID > std::numeric_limits<family_t>::max()) {
+        DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
+                   std::numeric_limits<family_t>::max());
+    }
+    familyPrescription_t preInfo;
+    preInfo.family = ID;
+
+    preInfo.rotPosPrescribed = true;
+    preInfo.used = true;
+
+    m_input_family_prescription.push_back(preInfo);
 }
 
 void DEMSolver::AddFamilyPrescribedAcc(unsigned int ID,
@@ -673,15 +768,79 @@ void DEMSolver::AddFamilyPrescribedAngAcc(unsigned int ID,
     m_input_family_prescription.push_back(preInfo);
 }
 
-void DEMSolver::SetOwnerWildcardValue(const std::string& name, const std::vector<float>& vals) {
+void DEMSolver::SetTriWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals) {
+    assertSysInit("SetTriWildcardValue");
+    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
+        DEME_ERROR(
+            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerGeometryWildcards in the force model first.",
+            name.c_str());
+    }
+    dT->setTriWildcardValue(geoID, m_geo_wc_num.at(name), vals);
+}
+
+void DEMSolver::SetSphereWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals) {
+    assertSysInit("SetSphereWildcardValue");
+    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
+        DEME_ERROR(
+            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerGeometryWildcards in the force model first.",
+            name.c_str());
+    }
+    dT->setSphWildcardValue(geoID, m_geo_wc_num.at(name), vals);
+}
+
+void DEMSolver::SetAnalWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals) {
+    assertSysInit("SetAnalWildcardValue");
+    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
+        DEME_ERROR(
+            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerGeometryWildcards in the force model first.",
+            name.c_str());
+    }
+    dT->setAnalWildcardValue(geoID, m_geo_wc_num.at(name), vals);
+}
+
+void DEMSolver::SetOwnerWildcardValue(bodyID_t ownerID, const std::string& name, const std::vector<float>& vals) {
     assertSysInit("SetOwnerWildcardValue");
     if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
         DEME_ERROR(
             "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerOwnerWildcards first.",
+            "SetPerOwnerWildcards in the force model first.",
             name.c_str());
     }
-    dT->setOwnerWildcardValue(m_owner_wc_num.at(name), vals);
+    dT->setOwnerWildcardValue(ownerID, m_owner_wc_num.at(name), vals);
+}
+
+void DEMSolver::SetFamilyContactWildcardValueAny(unsigned int N, const std::string& name, float val) {
+    assertSysInit("SetFamilyContactWildcardValueAny");
+    if (m_cnt_wc_num.find(name) == m_cnt_wc_num.end()) {
+        DEME_ERROR(
+            "No contact wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerContactWildcards in the force model first.",
+            name.c_str());
+    }
+    dT->setFamilyContactWildcardValueAny(N, m_cnt_wc_num.at(name), val);
+}
+void DEMSolver::SetFamilyContactWildcardValueAll(unsigned int N, const std::string& name, float val) {
+    assertSysInit("SetFamilyContactWildcardValueAll");
+    if (m_cnt_wc_num.find(name) == m_cnt_wc_num.end()) {
+        DEME_ERROR(
+            "No contact wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerContactWildcards in the force model first.",
+            name.c_str());
+    }
+    dT->setFamilyContactWildcardValueAll(N, m_cnt_wc_num.at(name), val);
+}
+void DEMSolver::SetContactWildcardValue(const std::string& name, float val) {
+    assertSysInit("SetContactWildcardValue");
+    if (m_cnt_wc_num.find(name) == m_cnt_wc_num.end()) {
+        DEME_ERROR(
+            "No contact wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerContactWildcards in the force model first.",
+            name.c_str());
+    }
+    dT->setContactWildcardValue(m_cnt_wc_num.at(name), val);
 }
 
 void DEMSolver::SetFamilyClumpMaterial(unsigned int N, const std::shared_ptr<DEMMaterial>& mat) {
@@ -704,7 +863,46 @@ void DEMSolver::SetFamilyOwnerWildcardValue(unsigned int N, const std::string& n
     dT->setFamilyOwnerWildcardValue(N, m_owner_wc_num.at(name), vals);
 }
 
-std::vector<float> DEMSolver::GetOwnerWildcardValue(const std::string& name, float val) {
+std::vector<float> DEMSolver::GetTriWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
+    assertSysInit("GetTriWildcardValue");
+    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
+        DEME_ERROR(
+            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerGeometryWildcards in the force model first.",
+            name.c_str());
+    }
+    std::vector<float> res;
+    dT->getTriWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
+    return res;
+}
+
+std::vector<float> DEMSolver::GetSphereWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
+    assertSysInit("GetSphereWildcardValue");
+    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
+        DEME_ERROR(
+            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerGeometryWildcards in the force model first.",
+            name.c_str());
+    }
+    std::vector<float> res;
+    dT->getSphereWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
+    return res;
+}
+
+std::vector<float> DEMSolver::GetAnalWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
+    assertSysInit("GetAnalWildcardValue");
+    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
+        DEME_ERROR(
+            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerGeometryWildcards in the force model first.",
+            name.c_str());
+    }
+    std::vector<float> res;
+    dT->getAnalWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
+    return res;
+}
+
+float DEMSolver::GetOwnerWildcardValue(bodyID_t ownerID, const std::string& name) {
     assertSysInit("GetOwnerWildcardValue");
     if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
         DEME_ERROR(
@@ -712,12 +910,33 @@ std::vector<float> DEMSolver::GetOwnerWildcardValue(const std::string& name, flo
             "SetPerOwnerWildcards first.",
             name.c_str());
     }
-    std::vector<float> res;
-    dT->getOwnerWildcardValue(res, m_owner_wc_num.at(name));
-    return res;
+    return dT->getOwnerWildcardValue(ownerID, m_owner_wc_num.at(name));
 }
 
-std::vector<float> DEMSolver::GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, float val) {
+std::vector<float> DEMSolver::GetAllOwnerWildcardValue(const std::string& name) {
+    assertSysInit("GetAllOwnerWildcardValue");
+    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
+        DEME_ERROR(
+            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerOwnerWildcards first.",
+            name.c_str());
+    }
+    std::vector<float> res;
+    dT->getAllOwnerWildcardValue(res, m_owner_wc_num.at(name));
+    return res;
+}
+size_t DEMSolver::GetOwnerContactForces(bodyID_t ownerID, std::vector<float3>& points, std::vector<float3>& forces) {
+    return dT->getOwnerContactForces(ownerID, points, forces);
+}
+size_t DEMSolver::GetOwnerContactForces(bodyID_t ownerID,
+                                        std::vector<float3>& points,
+                                        std::vector<float3>& forces,
+                                        std::vector<float3>& torques,
+                                        bool torque_in_local) {
+    return dT->getOwnerContactForces(ownerID, points, forces, torques, torque_in_local);
+}
+
+std::vector<float> DEMSolver::GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name) {
     assertSysInit("GetFamilyOwnerWildcardValue");
     if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
         DEME_ERROR(
@@ -736,6 +955,10 @@ void DEMSolver::SetContactWildcards(const std::set<std::string>& wildcards) {
 
 void DEMSolver::SetOwnerWildcards(const std::set<std::string>& wildcards) {
     m_force_model->SetPerOwnerWildcards(wildcards);
+}
+
+void DEMSolver::SetGeometryWildcards(const std::set<std::string>& wildcards) {
+    m_force_model->SetPerGeometryWildcards(wildcards);
 }
 
 void DEMSolver::DisableFamilyOutput(unsigned int ID) {
@@ -984,11 +1207,17 @@ void DEMSolver::ClearCache() {
 }
 
 std::shared_ptr<DEMClumpBatch> DEMSolver::AddClumps(DEMClumpBatch& input_batch) {
-    // load_order should beits position in the cache array, not nBatchClumpsLoad
+    // load_order should be its position in the cache array, not nBatchClumpsLoad
     input_batch.load_order = cached_input_clump_batches.size();
     // But we still need to record a batch loaded
     nBatchClumpsLoad++;
     cached_input_clump_batches.push_back(std::make_shared<DEMClumpBatch>(std::move(input_batch)));
+
+    for (size_t i = 0; i < cached_input_clump_batches.back()->GetNumClumps(); i++) {
+        unsigned int nComp = cached_input_clump_batches.back()->types.at(i)->nComp;
+        // Keep tab for itself
+        cached_input_clump_batches.back()->nSpheres += nComp;
+    }
     return cached_input_clump_batches.back();
 }
 
@@ -1255,6 +1484,9 @@ void DEMSolver::Initialize() {
 
     // Initialization is critical
     dT->announceCritical();
+
+    // Always clear cache after init
+    ClearCache();
 }
 
 void DEMSolver::ShowTimingStats() {
@@ -1393,9 +1625,10 @@ void DEMSolver::UpdateClumps() {
             "point.\nNumber of clump templates at last initialization: %zu\nNumber of clump templates now: %zu",
             nLastTimeClumpTemplateLoad, nClumpTemplateLoad);
     }
-    DEME_WARNING(
-        "UpdateClumps will add all currently cached clumps to the simulation.\nYou may want to ClearCache first, then "
-        "AddClumps, then call this method, so the clumps cached earlier are forgotten before this method takes place.");
+    // DEME_WARNING(
+    //     "UpdateClumps will add all currently cached clumps to the simulation.\nYou may want to ClearCache first,"
+    //     "then AddClumps, then call this method, so the clumps cached earlier are forgotten before this method takes"
+    //     "place.");
 
     // This method requires kT and dT are sync-ed
     // resetWorkerThreads();
@@ -1406,6 +1639,8 @@ void DEMSolver::UpdateClumps() {
     size_t nSpheres_old = nSpheresGM;
     size_t nTriMesh_old = nTriMeshes;
     size_t nFacets_old = nTriGM;
+    unsigned int nAnalGM_old = nAnalGM;
+    unsigned int nExtObj_old = nExtObj;
 
     preprocessClumps();
     preprocessClumpTemplates();
@@ -1413,7 +1648,7 @@ void DEMSolver::UpdateClumps() {
     updateTotalEntityNum();
     allocateGPUArrays();
     // `Update' method needs to know the number of existing clumps and spheres (before this addition)
-    updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old);
+    updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old, nExtObj_old, nAnalGM_old);
     packDataPointers();
     ReleaseFlattenedArrays();
     // Updating clumps is very critical
@@ -1427,6 +1662,9 @@ void DEMSolver::UpdateClumps() {
             "prescription, now we have %zu.",
             nLastTimeMatNum, m_loaded_materials.size(), nLastTimeFamilyPreNum, m_input_family_prescription.size());
     }
+
+    // After Initialize or UpdateClumps, we should clear host-side initialization object cache
+    ClearCache();
 }
 
 void DEMSolver::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {

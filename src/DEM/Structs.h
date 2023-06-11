@@ -52,36 +52,23 @@ const std::string OUTPUT_FILE_CNT_TYPE_NAME = std::string("contact_type");
 const std::string OUTPUT_FILE_FORCE_X_NAME = std::string("f_x");
 const std::string OUTPUT_FILE_FORCE_Y_NAME = std::string("f_y");
 const std::string OUTPUT_FILE_FORCE_Z_NAME = std::string("f_z");
-const std::string OUTPUT_FILE_TOF_X_NAME = std::string("tof_x");  // TOF means torque_only_force
-const std::string OUTPUT_FILE_TOF_Y_NAME = std::string("tof_y");
-const std::string OUTPUT_FILE_TOF_Z_NAME = std::string("tof_z");
+const std::string OUTPUT_FILE_TORQUE_X_NAME = std::string("torque_x");
+const std::string OUTPUT_FILE_TORQUE_Y_NAME = std::string("torque_y");
+const std::string OUTPUT_FILE_TORQUE_Z_NAME = std::string("torque_z");
 const std::string OUTPUT_FILE_NORMAL_X_NAME = std::string("n_x");
 const std::string OUTPUT_FILE_NORMAL_Y_NAME = std::string("n_y");
 const std::string OUTPUT_FILE_NORMAL_Z_NAME = std::string("n_z");
 const std::string OUTPUT_FILE_SPH_SPH_CONTACT_NAME = std::string("SS");
 const std::string OUTPUT_FILE_SPH_ANAL_CONTACT_NAME = std::string("SA");
 const std::string OUTPUT_FILE_SPH_MESH_CONTACT_NAME = std::string("SM");
-const std::set<std::string> CNT_FILE_KNOWN_COL_NAMES = {OUTPUT_FILE_OWNER_1_NAME,
-                                                        OUTPUT_FILE_OWNER_2_NAME,
-                                                        OUTPUT_FILE_COMP_1_NAME,
-                                                        OUTPUT_FILE_COMP_2_NAME,
-                                                        OUTPUT_FILE_GEO_ID_1_NAME,
-                                                        OUTPUT_FILE_GEO_ID_2_NAME,
-                                                        OUTPUT_FILE_OWNER_NICKNAME_1_NAME,
-                                                        OUTPUT_FILE_OWNER_NICKNAME_2_NAME,
-                                                        OUTPUT_FILE_CNT_TYPE_NAME,
-                                                        OUTPUT_FILE_FORCE_X_NAME,
-                                                        OUTPUT_FILE_FORCE_Y_NAME,
-                                                        OUTPUT_FILE_FORCE_Z_NAME,
-                                                        OUTPUT_FILE_TOF_X_NAME,
-                                                        OUTPUT_FILE_TOF_Y_NAME,
-                                                        OUTPUT_FILE_TOF_Z_NAME,
-                                                        OUTPUT_FILE_NORMAL_X_NAME,
-                                                        OUTPUT_FILE_NORMAL_Y_NAME,
-                                                        OUTPUT_FILE_NORMAL_Z_NAME,
-                                                        OUTPUT_FILE_SPH_SPH_CONTACT_NAME,
-                                                        OUTPUT_FILE_SPH_ANAL_CONTACT_NAME,
-                                                        OUTPUT_FILE_SPH_MESH_CONTACT_NAME};
+const std::set<std::string> CNT_FILE_KNOWN_COL_NAMES = {
+    OUTPUT_FILE_OWNER_1_NAME,          OUTPUT_FILE_OWNER_2_NAME,          OUTPUT_FILE_COMP_1_NAME,
+    OUTPUT_FILE_COMP_2_NAME,           OUTPUT_FILE_GEO_ID_1_NAME,         OUTPUT_FILE_GEO_ID_2_NAME,
+    OUTPUT_FILE_OWNER_NICKNAME_1_NAME, OUTPUT_FILE_OWNER_NICKNAME_2_NAME, OUTPUT_FILE_CNT_TYPE_NAME,
+    OUTPUT_FILE_FORCE_X_NAME,          OUTPUT_FILE_FORCE_Y_NAME,          OUTPUT_FILE_FORCE_Z_NAME,
+    OUTPUT_FILE_TORQUE_X_NAME,         OUTPUT_FILE_TORQUE_Y_NAME,         OUTPUT_FILE_TORQUE_Z_NAME,
+    OUTPUT_FILE_NORMAL_X_NAME,         OUTPUT_FILE_NORMAL_Y_NAME,         OUTPUT_FILE_NORMAL_Z_NAME,
+    OUTPUT_FILE_SPH_SPH_CONTACT_NAME,  OUTPUT_FILE_SPH_ANAL_CONTACT_NAME, OUTPUT_FILE_SPH_MESH_CONTACT_NAME};
 
 // Map contact type identifier to their names
 const std::unordered_map<contact_t, std::string> contact_type_out_name_map = {
@@ -95,9 +82,9 @@ const std::unordered_map<contact_t, std::string> contact_type_out_name_map = {
 
 // Possible force model ingredients. This map is used to ensure we don't double-add them.
 const std::unordered_map<std::string, bool> force_kernel_ingredient_stats = {
-    {"ts", false},      {"time", false},    {"AOwnerFamily", true}, {"BOwnerFamily", true},
-    {"ALinVel", false}, {"BLinVel", false}, {"ARotVel", false},     {"BRotVel", false},
-    {"AOwner", false},  {"BOwner", false},  {"AOwnerMOI", false},   {"BOwnerMOI", false}};
+    {"ts", false},        {"time", false},      {"AOwnerFamily", true}, {"BOwnerFamily", true}, {"ALinVel", false},
+    {"BLinVel", false},   {"ARotVel", false},   {"BRotVel", false},     {"AOwner", false},      {"BOwner", false},
+    {"AOwnerMOI", false}, {"BOwnerMOI", false}, {"AGeo", false},        {"BGeo", false}};
 
 // Structs defined here will be used by some host classes in DEM.
 // NOTE: Data structs here need to be those complex ones (such as needing to include ManagedAllocator.hpp), which may
@@ -511,6 +498,8 @@ struct SolverFlags {
     bool isAsync = true;
     // If family number can potentially change (at each time step) during the simulation, because of user intervention
     bool canFamilyChange = false;
+    // If mesh will deform in the next kT-update cycle
+    std::atomic<bool> willMeshDeform = false;
     // Some output-related flags
     unsigned int outputFlags = OUTPUT_CONTENT::QUAT | OUTPUT_CONTENT::ABSV;
     unsigned int cntOutFlags;
@@ -635,13 +624,9 @@ class DEMClumpTemplate {
     /// adjusted by this call.
     void InformCentroidPrincipal(float3 center, float4 prin_Q) {
         // Getting to Centroid and Principal is a translation then a rotation (local), so the undo order to undo
-        // rotation then translation
-        float4 g_to_loc_prin_Q = prin_Q;
-        g_to_loc_prin_Q.x = -g_to_loc_prin_Q.x;
-        g_to_loc_prin_Q.y = -g_to_loc_prin_Q.y;
-        g_to_loc_prin_Q.z = -g_to_loc_prin_Q.z;
+        // transltion then rotation
         for (auto& pos : relPos) {
-            hostApplyFrameTransform(pos, -center, g_to_loc_prin_Q);
+            applyFrameTransformGlobalToLocal(pos, center, prin_Q);
         }
     }
     /// The opposite of InformCentroidPrincipal, and it is another way to align this clump's coordinate system with its
@@ -649,7 +634,7 @@ class DEMClumpTemplate {
     /// `origin' point should hit the CoM of this clump.
     void Move(float3 vec, float4 rot_Q) {
         for (auto& pos : relPos) {
-            hostApplyFrameTransform(pos, vec, rot_Q);
+            applyFrameTransformLocalToGlobal(pos, vec, rot_Q);
         }
     }
     /// Scale all geometry component of this clump
@@ -671,7 +656,6 @@ class DEMClumpTemplate {
 /// API-(Host-)side struct that holds cached user-input batches of clumps
 class DEMClumpBatch {
   private:
-    const size_t nClumps;
     size_t nExistContacts = 0;
     void assertLength(size_t len, const std::string name) {
         if (len != nClumps) {
@@ -683,6 +667,8 @@ class DEMClumpBatch {
     }
 
   public:
+    size_t nClumps = 0;
+    size_t nSpheres = 0;
     bool family_isSpecified = false;
     std::vector<std::shared_ptr<DEMClumpTemplate>> types;
     std::vector<unsigned int> families;
@@ -697,6 +683,8 @@ class DEMClumpBatch {
     std::unordered_map<std::string, std::vector<float>> contact_wildcards;
     // Initial owner wildcard that this batch of clumps should have
     std::unordered_map<std::string, std::vector<float>> owner_wildcards;
+    // Initial geometry wildcard that this batch of clumps should have
+    std::unordered_map<std::string, std::vector<float>> geo_wildcards;
     // Its offset when this obj got loaded into the API-level user raw-input array
     size_t load_order;
     DEMClumpBatch(size_t num) : nClumps(num) {
@@ -709,6 +697,7 @@ class DEMClumpBatch {
     }
     ~DEMClumpBatch() {}
     size_t GetNumClumps() const { return nClumps; }
+    size_t GetNumSpheres() const { return nSpheres; }
     void SetTypes(const std::vector<std::shared_ptr<DEMClumpTemplate>>& input) {
         assertLength(input.size(), "SetTypes");
         types = input;
@@ -807,6 +796,30 @@ class DEMClumpBatch {
         AddOwnerWildcard(name, std::vector<float>(nClumps, val));
     }
 
+    void SetGeometryWildcards(const std::unordered_map<std::string, std::vector<float>>& wildcards) {
+        if (wildcards.begin()->second.size() != nSpheres) {
+            std::stringstream ss;
+            ss << "Input gemometry wildcard arrays in a SetGeometryWildcards call must all have the same size as the "
+                  "number of spheres in this batch.\nHere, the input array has length "
+               << wildcards.begin()->second.size() << " but this batch has " << nSpheres << " spheres." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        geo_wildcards = wildcards;
+    }
+    void AddGeometryWildcard(const std::string& name, const std::vector<float>& vals) {
+        if (vals.size() != nSpheres) {
+            std::stringstream ss;
+            ss << "Input gemometry wildcard array in a AddGeometryWildcard call must have the same size as the number "
+                  "of spheres in this batch.\nHere, the input array has length "
+               << vals.size() << " but this batch has " << nSpheres << " spheres." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+        geo_wildcards[name] = vals;
+    }
+    void AddGeometryWildcard(const std::string& name, float val) {
+        AddGeometryWildcard(name, std::vector<float>(nSpheres, val));
+    }
+
     size_t GetNumContacts() const { return nExistContacts; }
 };
 
@@ -824,10 +837,12 @@ struct DEMTrackedObj {
     size_t nSpanOwners = 1;
     // If this tracked object is broken b/c the owner it points to has been removed from the simulation system
     bool isBroken = false;
-    // If it is a tracked mesh, then this is the offset for its first facet in the triangle geometry arrays
-    size_t facetID;
-    // If it is a tracked mesh, then this is the number of triangle facets that it has
-    size_t nFacets;
+    // The offset for its first geometric compoent in the tracked objects. For example, if it is mesh, then this is the
+    // first triangle ID.
+    size_t geoID;
+    // The number of geometric entities (sphere components, triangles or analytical components) the tracked objects
+    // have.
+    size_t nGeos;
 };
 
 }  // namespace deme

@@ -42,6 +42,8 @@ SET(DEMOS
 		DEMdemo_SolarSystem
 		DEMdemo_Meshed_Steering_Earth
 		DEMdemo_Meshed_Steering_Earth_Single
+		DEMdemo_Electrostatic
+		DEMdemo_FlexibleMesh
 )
 
 # ------------------------------------------------------------------------------

@@ -39,8 +39,6 @@ class DEMTracker;
 //            2. Allow ext obj init CoM setting
 //            3. Instruct how many dT steps should at LEAST do before receiving kT update
 //            4. Sleepers that don't participate CD or integration
-//            5. Check if entities are initially in box
-//            8. Right now force model position is wrt LBF, not user origin...
 //            9. wT takes care of an extra output when it crashes
 //            10. Recover sph--mesh contact pairs in restarted sim by mesh name
 //            11. A dry-run to map contact pair file with current clump batch based on cnt points location
@@ -379,10 +377,17 @@ class DEMSolver {
     /// @param ownerID The ID (offset) of the owner.
     /// @param fam Family number.
     void SetOwnerFamily(bodyID_t ownerID, family_t fam);
-    /// Rewrite the relative positions of the flattened triangle soup, starting from `start', using triangle nodal
-    /// positions in `triangles'. If `overwrite' is true, then it is overwriting the existing nodal info; otherwise it
-    /// just adds to it.
-    void SetTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite = true);
+    /// @brief Rewrite the relative positions of the flattened triangle soup.
+    void SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& new_nodes);
+    /// @brief Update the relative positions of the flattened triangle soup.
+    void UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& updates);
+    /// @brief Get a handle for the mesh this tracker is tracking.
+    /// @return Pointer to the mesh.
+    std::shared_ptr<DEMMeshConnected>& GetCachedMesh(bodyID_t ownerID);
+    /// @brief Get the current locations of all the nodes in the mesh being tracked.
+    /// @param ownerID The ownerID of the mesh.
+    /// @return A vector of float3 representing the global coordinates of the mesh nodes.
+    std::vector<float3> GetMeshNodesGlobal(bodyID_t ownerID);
 
     /// @brief Get all clump--clump contacts in the simulation system.
     /// @return A sorted (based on contact body A's owner ID) vector of contact pairs. First is the owner ID of contact
@@ -440,6 +445,15 @@ class DEMSolver {
     std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity = "clump_max_z");
     std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity, const std::string& region);
 
+    /// @brief Add an extra acceleration to a owner for the next time step.
+    /// @param ownerID The number of that owner.
+    /// @param acc The extra acceleration to add.
+    void AddOwnerNextStepAcc(bodyID_t ownerID, float3 acc);
+    /// @brief Add an extra angular acceleration to a owner for the next time step.
+    /// @param ownerID The number of that owner.
+    /// @param acc The extra angular acceleration to add.
+    void AddOwnerNextStepAngAcc(bodyID_t ownerID, float3 angAcc);
+
     /// Instruct the solver that the 2 input families should not have contacts (a.k.a. ignored, if such a pair is
     /// encountered in contact detection). These 2 families can be the same (which means no contact within members of
     /// that family).
@@ -474,12 +488,31 @@ class DEMSolver {
     /// exerted from other simulation entites.
     void SetFamilyPrescribedAngVel(unsigned int ID);
 
-    /// Keep the positions of all entites in this family to remain exactly the user-specified values
-    void SetFamilyPrescribedPosition(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
-    /// Let the positions of all entites in this family always keep `as is'
+    /// @brief
+
+    /// @brief Keep the positions of all entites in this family to remain exactly the user-specified values.
+    /// @param ID Family number.
+    /// @param X X coordinate (can be an expression).
+    /// @param Y Y coordinate (can be an expression).
+    /// @param Z Z coordinate (can be an expression).
+    /// @param dictate If true, prevent entities in this family to have (both linear and rotational) positional updates
+    /// resulted from `simulation physics' unless the prescription is specified as none.
+    void SetFamilyPrescribedPosition(unsigned int ID,
+                                     const std::string& X,
+                                     const std::string& Y,
+                                     const std::string& Z,
+                                     bool dictate = true);
+    /// @brief Let the linear positions of all entites in this family always keep `as is'
     void SetFamilyPrescribedPosition(unsigned int ID);
-    /// Keep the orientation quaternions of all entites in this family to remain exactly the user-specified values
-    void SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula);
+    /// @brief Keep the orientation quaternions of all entites in this family to remain exactly the user-specified
+    /// values
+    /// @param ID Family number.
+    /// @param q_formula A formula from which the quaternion should be calculated.
+    /// @param dictate If true, prevent entities in this family to have (both linear and rotational) positional updates
+    /// resulted from `simulation physics' unless the prescription is specified as none.
+    void SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula, bool dictate = true);
+    /// @brief Let the orientation quaternions of all entites in this family always keep `as is'
+    void SetFamilyPrescribedQuaternion(unsigned int ID);
 
     /// The entities in this family will always experienced an extra acceleration defined using this method
     void AddFamilyPrescribedAcc(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
@@ -490,12 +523,75 @@ class DEMSolver {
     void SetContactWildcards(const std::set<std::string>& wildcards);
     /// @brief Set the names for the extra quantities that will be associated with each owner.
     void SetOwnerWildcards(const std::set<std::string>& wildcards);
+    /// @brief Set the names for the extra quantities that will be associated with each geometry entity (such as sphere,
+    /// triangle).
+    void SetGeometryWildcards(const std::set<std::string>& wildcards);
 
-    /// Globally modify a owner wildcard's values
-    void SetOwnerWildcardValue(const std::string& name, const std::vector<float>& vals);
-    void SetOwnerWildcardValue(const std::string& name, float val) {
-        SetOwnerWildcardValue(name, std::vector<float>(1, val));
+    /// @brief Change the value of contact wildcards to val if either of the contact geometries is in family N.
+    /// @param N Family number. If one contact geometry is in N, this contact wildcard is modified.
+    /// @param name Name of the contact wildcard to modify.
+    /// @param val The value to change to.
+    void SetFamilyContactWildcardValueAny(unsigned int N, const std::string& name, float val);
+    /// @brief Change the value of contact wildcards to val if both of the contact geometries are in family N.
+    /// @param N Family number. Only if both contact geometries are in N, this contact wildcard is modified.
+    /// @param name Name of the contact wildcard to modify.
+    /// @param val The value to change to.
+    void SetFamilyContactWildcardValueAll(unsigned int N, const std::string& name, float val);
+    /// @brief Change the value of contact wildcards to val. Apply to all simulation bodies that are present.
+    /// @param name Name of the contact wildcard to modify.
+    /// @param val The value to change to.
+    void SetContactWildcardValue(const std::string& name, float val);
+
+    /// @brief Get all contact forces that concern a owner.
+    /// @param ownerID The ID of the owner.
+    /// @param points Fill this vector of float3 with the XYZ components of the contact points.
+    /// @param forces Fill this vector of float3 with the XYZ components of the forces.
+    /// @return Number of force pairs.
+    size_t GetOwnerContactForces(bodyID_t ownerID, std::vector<float3>& points, std::vector<float3>& forces);
+
+    /// @brief Get all contact forces that concern a owner.
+    /// @param ownerID The ID of the owner.
+    /// @param points Fill this vector of float3 with the XYZ components of the contact points.
+    /// @param forces Fill this vector of float3 with the XYZ components of the forces.
+    /// @param torques Fill this vector of float3 with the XYZ components of the torques (in local frame).
+    /// @param torque_in_local If true, output torque in this body's local ref frame.
+    /// @return Number of force pairs.
+    size_t GetOwnerContactForces(bodyID_t ownerID,
+                                 std::vector<float3>& points,
+                                 std::vector<float3>& forces,
+                                 std::vector<float3>& torques,
+                                 bool torque_in_local = false);
+
+    /// @brief Set the wildcard values of some triangles.
+    /// @param geoID The ID of the starting (first) triangle that needs to be modified.
+    /// @param name The name of the wildcard.
+    /// @param vals A vector of values that will be assigned to the triangles starting from geoID.
+    void SetTriWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals);
+    /// @brief Set the wildcard values of some spheres.
+    /// @param geoID The ID of the starting (first) sphere that needs to be modified.
+    /// @param name The name of the wildcard.
+    /// @param vals A vector of values that will be assigned to the spheres starting from geoID.
+    void SetSphereWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals);
+    /// @brief Set the wildcard values of some analytical components.
+    /// @param geoID The ID of the starting (first) analytical component that needs to be modified.
+    /// @param name The name of the wildcard.
+    /// @param vals A vector of values that will be assigned to the analytical components starting from geoID.
+    void SetAnalWildcardValue(bodyID_t geoID, const std::string& name, const std::vector<float>& vals);
+
+    /// @brief Set the wildcard values of some owners.
+    /// @param ownerID The ID of the starting (first) owner that needs to be modified.
+    /// @param name The name of the wildcard.
+    /// @param vals A vector of values that will be assigned to the owners starting from ownerID.
+    void SetOwnerWildcardValue(bodyID_t ownerID, const std::string& name, const std::vector<float>& vals);
+    /// @brief Set the wildcard values of some owners.
+    /// @param ownerID The ID of the starting (first) owner that needs to be modified.
+    /// @param name The name of the wildcard.
+    /// @param val The value to set.
+    /// @param n The number of owners starting from the first that will be modified by this call. Default is 1.
+    void SetOwnerWildcardValue(bodyID_t ownerID, const std::string& name, float val, size_t n = 1) {
+        SetOwnerWildcardValue(ownerID, name, std::vector<float>(n, val));
     }
+
     /// Modify the owner wildcard's values of all entities in family N
     void SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, const std::vector<float>& vals);
     void SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, float val) {
@@ -520,10 +616,34 @@ class DEMSolver {
     /// @param extra_size The thickness of the extra contact margin.
     void SetFamilyExtraMargin(unsigned int N, float extra_size);
 
+    /// @brief Get the owner wildcard's values of a owner.
+    /// @param ownerID Owner's ID.
+    /// @param name Wildcard's name.
+    /// @return Value of this wildcard.
+    float GetOwnerWildcardValue(bodyID_t ownerID, const std::string& name);
     /// @brief Get the owner wildcard's values of all entities.
-    std::vector<float> GetOwnerWildcardValue(const std::string& name, float val);
+    std::vector<float> GetAllOwnerWildcardValue(const std::string& name);
     /// @brief Get the owner wildcard's values of all entities in family N.
-    std::vector<float> GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, float val);
+    std::vector<float> GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name);
+
+    /// @brief Get the geometry wildcard's values of a series of triangles.
+    /// @param geoID The ID of the first triangle.
+    /// @param name Wildcard's name.
+    /// @param n The number of triangles to query following the ID of the first one.
+    /// @return Vector of values of the wildcards.
+    std::vector<float> GetTriWildcardValue(bodyID_t geoID, const std::string& name, size_t n);
+    /// @brief Get the geometry wildcard's values of a series of spheres.
+    /// @param geoID The ID of the first sphere.
+    /// @param name Wildcard's name.
+    /// @param n The number of spheres to query following the ID of the first one.
+    /// @return Vector of values of the wildcards.
+    std::vector<float> GetSphereWildcardValue(bodyID_t geoID, const std::string& name, size_t n);
+    /// @brief Get the geometry wildcard's values of a series of analytical entities.
+    /// @param geoID The ID of the first analytical entity.
+    /// @param name Wildcard's name.
+    /// @param n The number of analytical entities to query following the ID of the first one.
+    /// @return Vector of values of the wildcards.
+    std::vector<float> GetAnalWildcardValue(bodyID_t geoID, const std::string& name, size_t n);
 
     /// Change all entities with family number ID_from to have a new number ID_to, when the condition defined by the
     /// string is satisfied by the entities in question. This should be called before initialization, and will be baked
@@ -591,7 +711,10 @@ class DEMSolver {
     /// Write the current status of `clumps' to a file, but not as clumps, instead, as each individual sphere. This may
     /// make small-scale rendering easier.
     void WriteSphereFile(const std::string& outfilename) const;
-    /// Write all contact pairs to a file
+    /// @brief Write all contact pairs to a file.
+    /// @details The outputted torque using this method is in global, rather than each object's local coordinate system.
+    /// @param outfilename Output filename.
+    /// @param force_thres Forces with magnitude smaller than this amount will not be outputted.
     void WriteContactFile(const std::string& outfilename, float force_thres = DEME_TINY_FLOAT) const;
     /// Write the current status of all meshes to a file
     void WriteMeshFile(const std::string& outfilename) const;
@@ -754,6 +877,9 @@ class DEMSolver {
     /// info the worker threads)
     void ReleaseFlattenedArrays();
 
+    /// @brief Return whether the solver is currently reducing force in the force calculation kernel.
+    bool GetWhetherForceCollectInKernel() { return collect_force_in_force_kernel; }
+
     /*
       protected:
         DEMSolver() : m_sys(nullptr) {}
@@ -781,6 +907,8 @@ class DEMSolver {
     void EnableOwnerWildcardOutput(bool enable = true) { m_is_out_owner_wildcards = enable; }
     /// Enable/disable outputting contact wildcard values to the contact file.
     void EnableContactWildcardOutput(bool enable = true) { m_is_out_cnt_wildcards = enable; }
+    /// Enable/disable outputting geometry wildcard values to the contact file.
+    void EnableGeometryWildcardOutput(bool enable = true) { m_is_out_geo_wildcards = enable; }
 
     /// Let dT do this call and return the reduce value of the inspected quantity
     float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
@@ -831,6 +959,7 @@ class DEMSolver {
     // If the solver should output wildcards to file
     bool m_is_out_owner_wildcards = false;
     bool m_is_out_cnt_wildcards = false;
+    bool m_is_out_geo_wildcards = false;
 
     // User-instructed simulation `world' size. Note it is an approximate of the true size and we will generate a world
     // not smaller than this. This is useful if the user want to automatically add BCs enclosing this user-defined
@@ -1061,17 +1190,21 @@ class DEMSolver {
 
     // A map that records the numbering for user-defined owner wildcards
     std::unordered_map<std::string, unsigned int> m_owner_wc_num;
+    // A map that records the numbering for user-defined geometry wildcards
+    std::unordered_map<std::string, unsigned int> m_geo_wc_num;
+    // A map that records the numbering for user-defined per-contact wildcards
+    std::unordered_map<std::string, unsigned int> m_cnt_wc_num;
+
+    // Meshes cached on dT side that has corresponding owner number associated. Useful for modifying meshes.
+    std::vector<std::shared_ptr<DEMMeshConnected>> m_meshes;
+    // A map between the owner of mesh, and the offset this mesh lives in m_meshes array.
+    std::unordered_map<bodyID_t, unsigned int> m_owner_mesh_map;
 
     ////////////////////////////////////////////////////////////////////////////////
     // Cached user's direct (raw) inputs concerning the actual physics objects
     // presented in the simulation, which need to be processed before shipment,
-    // at initialization time. These items can be cleared before users add entites
-    // from the simulation on-the-fly, and be loaded with new entities; but this
-    // is the responsibility of the user. If the user does not clear these cached
-    // data and then re-initialize using the `Overwrite' style, then it is like
-    // starting the original simulation over. If the user clear these, then add
-    // some new data, and then re-initialize using the `Add' style, it is like adding
-    // more entities to the existing simulation system.
+    // at initialization time. These items will be cleared after initialization,
+    // and before users add entites from the simulation on-the-fly.
     ////////////////////////////////////////////////////////////////////////////////
     //// TODO: These re-initialization flavors haven't been added
 
@@ -1279,7 +1412,13 @@ class DEMSolver {
     void resetWorkerThreads();
     /// Transfer newly loaded clumps/meshed objects to the GPU-side in mid-simulation and allocate GPU memory space for
     /// them
-    void updateClumpMeshArrays(size_t nOwners, size_t nClumps, size_t nSpheres, size_t nTriMesh, size_t nFacets);
+    void updateClumpMeshArrays(size_t nOwners,
+                               size_t nClumps,
+                               size_t nSpheres,
+                               size_t nTriMesh,
+                               size_t nFacets,
+                               unsigned int nExtObj_old,
+                               unsigned int nAnalGM_old);
     /// Add content to the flattened analytical component array.
     /// Note that analytical component is big different in that they each has a position in the jitified analytical
     /// templates, insteads of like a clump, has an extra ComponentOffset array points it to the right jitified template

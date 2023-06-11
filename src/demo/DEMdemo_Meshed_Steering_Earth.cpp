@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
     double world_size_z = 4.0;
     float w_r = 0.8;
     double sim_end = 4.;
-    float torque = 10.;
+    float torque = 1.;
 
     // Define the wheel geometry
     float wheel_rad = 0.25;
@@ -186,7 +186,8 @@ int main(int argc, char* argv[]) {
         DEMSim.SetFamilyPrescribedAngVel(2, "0", to_string_with_precision(w_r), "none", false);
         DEMSim.AddFamilyPrescribedAcc(2, to_string_with_precision(-added_pressure * std::sin(G_ang) / wheel_mass),
                                       "none", to_string_with_precision(-added_pressure * std::cos(G_ang) / wheel_mass));
-        DEMSim.AddFamilyPrescribedAngAcc(2, "none", "none", to_string_with_precision(torque / wheel_IXX));
+        // DEMSim.AddFamilyPrescribedAngAcc(2, "none", "none", to_string_with_precision(torque / wheel_IXX));
+        float3 addded_angAcc = make_float3(0, 0, torque / wheel_IXX);
         DEMSim.SetFamilyFixed(10);
         DEMSim.DisableContactBetweenFamilies(10, 10);
         DEMSim.DisableContactBetweenFamilies(10, 255);
@@ -243,9 +244,31 @@ int main(int argc, char* argv[]) {
             DEMSim.DoDynamicsThenSync(1.);
             DEMSim.ChangeFamily(1, 2);
 
-            float3 V1 = wheel_tracker->Vel();
+            // float3 V1 = wheel_tracker->Vel();
 
-            DEMSim.DoDynamicsThenSync(sim_end);
+            for (float t = 0; t < sim_end; t += step_size) {
+                float4 oriQ = wheel_tracker->OriQ();
+                float3 acc_to_add = addded_angAcc;
+                applyFrameTransformGlobalToLocal(acc_to_add, make_float3(0), oriQ);
+                wheel_tracker->AddAngAcc(acc_to_add);
+
+                // Remove the component in the angular velocity that will cause the wheel to fall over
+                float3 angV = wheel_tracker->AngVelGlobal();
+                float4 oriQ_onlyZ = oriQ;
+                oriQ_onlyZ.x = 0;
+                oriQ_onlyZ.y = 0;
+                oriQ_onlyZ /= length(oriQ_onlyZ);
+                // Move ang vel to forward-aligned frame first...
+                applyFrameTransformGlobalToLocal(angV, make_float3(0), oriQ_onlyZ);
+                // Remove x component
+                angV.x = 0.;
+                // Move back to global
+                applyFrameTransformLocalToGlobal(angV, make_float3(0), oriQ_onlyZ);
+                // Move to wheel's own frame
+                applyFrameTransformGlobalToLocal(angV, make_float3(0), oriQ);
+                wheel_tracker->SetAngVel(angV);
+                DEMSim.DoDynamics(step_size);
+            }
 
             float3 V2 = wheel_tracker->Vel();
             float V2_mag = length(V2);

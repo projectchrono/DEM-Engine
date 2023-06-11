@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
     double world_size_z = 4.0;
     float w_r = 0.8;
     double sim_end = 4.;
-    float torque = 10.;
+    float torque = 1.;
 
     // Define the wheel geometry
     float wheel_rad = 0.25;
@@ -182,11 +182,13 @@ int main(int argc, char* argv[]) {
         DEMSim.SetFamilyPrescribedAngVel(1, "0", to_string_with_precision(w_r), "0", false);
         DEMSim.AddFamilyPrescribedAcc(1, to_string_with_precision(-added_pressure * std::sin(G_ang) / wheel_mass),
                                       "none", to_string_with_precision(-added_pressure * std::cos(G_ang) / wheel_mass));
-        // Must not prescribe Z ang vel
-        DEMSim.SetFamilyPrescribedAngVel(2, "0", to_string_with_precision(w_r), "none", false);
+        // Must not prescribe Z and X ang vel
+        DEMSim.SetFamilyPrescribedAngVel(2, "none", to_string_with_precision(w_r), "none", false);
         DEMSim.AddFamilyPrescribedAcc(2, to_string_with_precision(-added_pressure * std::sin(G_ang) / wheel_mass),
                                       "none", to_string_with_precision(-added_pressure * std::cos(G_ang) / wheel_mass));
-        DEMSim.AddFamilyPrescribedAngAcc(2, "none", "none", to_string_with_precision(torque / wheel_IXX));
+        // DEMSim.AddFamilyPrescribedAngAcc(2, "none", "none", to_string_with_precision(torque / wheel_IXX));
+        // float3 addded_angAcc = make_float3(torque / wheel_IXX, 0, 0);
+        float3 addded_angAcc = make_float3(0, 0, torque / wheel_IXX);
         DEMSim.SetFamilyFixed(10);
         DEMSim.DisableContactBetweenFamilies(10, 10);
         DEMSim.DisableContactBetweenFamilies(10, 255);
@@ -234,30 +236,54 @@ int main(int argc, char* argv[]) {
 
         float4 oriQ = wheel_tracker->OriQ();
         std::cout << "Starting oriQ: " << oriQ.w << ", " << oriQ.x << ", " << oriQ.y << ", " << oriQ.z << std::endl;
-        oriQ.x = 0;
-        oriQ.z = 0;
-        oriQ /= length(oriQ);
-        wheel_tracker->SetOriQ(oriQ);
-        std::cout << "Adjusted oriQ: " << oriQ.w << ", " << oriQ.x << ", " << oriQ.y << ", " << oriQ.z << std::endl;
 
-        float frame_time = 0.1;
+        unsigned int currframe = 0;
+        unsigned int curr_step = 0;
+        unsigned int fps = 10;
+        unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
+        double frame_time = 1.0 / fps;
+        float3 acc_to_add;
 
-        for (float t = 0; t < sim_end; t += frame_time) {
-            {
+        for (float t = 0; t < sim_end; t += step_size, curr_step++) {
+            if (curr_step % out_steps == 0) {
                 char filename[200], meshname[200];
-                sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), cur_test);
-                sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), cur_test++);
+                sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
+                sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
                 DEMSim.WriteSphereFile(std::string(filename));
                 DEMSim.WriteMeshFile(std::string(meshname));
+                float3 V1 = wheel_tracker->AngVelLocal();
+                float4 oriQ = wheel_tracker->OriQ();
+                std::cout << "OriQ: " << oriQ.w << ", " << oriQ.x << ", " << oriQ.y << ", " << oriQ.z << std::endl;
+                std::cout << "AngVel: " << V1.x << ", " << V1.y << ", " << V1.z << std::endl;
+                std::cout << "AngAcc just got added: " << acc_to_add.x << ", " << acc_to_add.y << ", " << acc_to_add.z
+                          << std::endl;
+                std::cout << "=================================" << std::endl;
             }
 
-            float3 V1 = wheel_tracker->AngVelLocal();
             float4 oriQ = wheel_tracker->OriQ();
-            std::cout << "OriQ: " << oriQ.w << ", " << oriQ.x << ", " << oriQ.y << ", " << oriQ.z << std::endl;
-            std::cout << "AngVel: " << V1.x << ", " << V1.y << ", " << V1.z << std::endl;
-            std::cout << "=================================" << std::endl;
+            acc_to_add = addded_angAcc;
+            applyFrameTransformGlobalToLocal(acc_to_add, make_float3(0), oriQ);
+            wheel_tracker->AddAngAcc(acc_to_add);
 
-            DEMSim.DoDynamics(frame_time);
+            // Remove the component in the angular velocity that will cause the wheel to fall over
+            {
+                float3 angV = wheel_tracker->AngVelGlobal();
+                float4 oriQ = wheel_tracker->OriQ();
+                float4 oriQ_onlyZ = oriQ;
+                oriQ_onlyZ.x = 0;
+                oriQ_onlyZ.y = 0;
+                oriQ_onlyZ /= length(oriQ_onlyZ);
+                // Move ang vel to forward-aligned frame first...
+                applyFrameTransformGlobalToLocal(angV, make_float3(0), oriQ_onlyZ);
+                // Remove x component
+                angV.x = 0.;
+                // Move back to global
+                applyFrameTransformLocalToGlobal(angV, make_float3(0), oriQ_onlyZ);
+                // Move to wheel's own frame
+                applyFrameTransformGlobalToLocal(angV, make_float3(0), oriQ);
+                wheel_tracker->SetAngVel(angV);
+            }
+            DEMSim.DoDynamics(step_size);
         }
 
         // DEMSim.ShowTimingStats();

@@ -519,6 +519,9 @@ void DEMSolver::reportInitStats() const {
     DEME_DEBUG_EXEC(printf("These owners are tracked: ");
                     for (const auto& tracked
                          : m_tracked_objs) { printf("%zu, ", (size_t)tracked->ownerID); } printf("\n"););
+    DEME_DEBUG_EXEC(printf("Meshes' owner--offset pairs: ");
+                    for (const auto& mesh
+                         : m_meshes) { printf("{%zu, %u}, ", (size_t)mesh->owner, mesh->cache_offset); } printf("\n"););
 }
 
 void DEMSolver::preprocessAnalyticalObjs() {
@@ -613,13 +616,10 @@ void DEMSolver::preprocessClumpTemplates() {
 
 void DEMSolver::preprocessClumps() {
     nExtraContacts = 0;
-    for (const auto& a_batch : cached_input_clump_batches) {
+    for (auto& a_batch : cached_input_clump_batches) {
         nOwnerClumps += a_batch->GetNumClumps();
         nExtraContacts += a_batch->GetNumContacts();
-        for (size_t i = 0; i < a_batch->GetNumClumps(); i++) {
-            unsigned int nComp = a_batch->types.at(i)->nComp;
-            nSpheresGM += nComp;
-        }
+        nSpheresGM += a_batch->GetNumSpheres();
         // Family number is flattened here, only because figureOutFamilyMasks() needs it
         m_input_clump_family.insert(m_input_clump_family.end(), a_batch->families.begin(), a_batch->families.end());
     }
@@ -635,6 +635,11 @@ void DEMSolver::preprocessTriangleObjs() {
                 "A meshed object is loaded but does not have associated material.\nPlease assign material to meshes "
                 "via SetMaterial.");
         }
+        // Put the mesh into the host-side cache
+        m_meshes.push_back(mesh_obj);
+        // Note that cache_offset needs to be modified by dT in init. This info is important if we need to modify the
+        // mesh later on.
+
         m_mesh_obj_mass.push_back(mesh_obj->mass);
         m_mesh_obj_moi.push_back(mesh_obj->MOI);
 
@@ -874,6 +879,9 @@ void DEMSolver::transferSolverParams() {
     if (m_is_out_owner_wildcards) {
         output_level = output_level | OUTPUT_CONTENT::OWNER_WILDCARD;
     }
+    if (m_is_out_geo_wildcards) {
+        output_level = output_level | OUTPUT_CONTENT::GEO_WILDCARD;
+    }
     dT->solverFlags.outputFlags = output_level;
     output_level = m_cnt_out_content;
     if (m_is_out_cnt_wildcards) {
@@ -977,20 +985,25 @@ void DEMSolver::transferSimParams() {
     // Compute the number of wildcards in our force model
     unsigned int nContactWildcards = m_force_model->m_contact_wildcards.size();
     unsigned int nOwnerWildcards = m_force_model->m_owner_wildcards.size();
-    if (nContactWildcards > DEME_MAX_WILDCARD_NUM || nOwnerWildcards > DEME_MAX_WILDCARD_NUM) {
+    unsigned int nGeoWildcards = m_force_model->m_geo_wildcards.size();
+    if (nContactWildcards > DEME_MAX_WILDCARD_NUM || nOwnerWildcards > DEME_MAX_WILDCARD_NUM ||
+        nGeoWildcards > DEME_MAX_WILDCARD_NUM) {
         DEME_ERROR(
-            "You defined too many contact or owner wildcards! Currently the max amount is %u.\nYou can change constant "
-            "DEME_MAX_WILDCARD_NUM and re-compile, if you indeed would like more wildcards.",
+            "You defined too many contact/owner/geometry wildcards! Currently the max amount is %u for each of "
+            "them.\nYou can change constant DEME_MAX_WILDCARD_NUM and re-compile, if you indeed would like more "
+            "wildcards.",
             DEME_MAX_WILDCARD_NUM);
     }
     DEME_DEBUG_PRINTF("%u contact wildcards are in the force model.", nContactWildcards);
 
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
                      m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_expand_safety_multi,
-                     m_expand_base_vel, m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards);
+                     m_expand_base_vel, m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards,
+                     m_force_model->m_geo_wildcards);
     kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
                      m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_expand_safety_multi,
-                     m_expand_base_vel, m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards);
+                     m_expand_base_vel, m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards,
+                     m_force_model->m_geo_wildcards);
 }
 
 void DEMSolver::allocateGPUArrays() {
@@ -1060,7 +1073,9 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
                                       size_t nClumps,
                                       size_t nSpheres,
                                       size_t nTriMesh,
-                                      size_t nFacets) {
+                                      size_t nFacets,
+                                      unsigned int nExtObj,
+                                      unsigned int nAnalGM) {
     // Pack clump templates together... that's easier to pass to dT kT
     ClumpTemplateFlatten flattened_clump_templates(m_template_clump_mass, m_template_clump_moi, m_template_sp_mat_ids,
                                                    m_template_sp_radii, m_template_sp_relPos, m_template_clump_volume);
@@ -1086,7 +1101,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // I/O and misc.
         m_no_output_families, m_tracked_objs,
         // Number of entities, old
-        nOwners, nClumps, nSpheres, nTriMesh, nFacets);
+        nOwners, nClumps, nSpheres, nTriMesh, nFacets, nExtObj, nAnalGM);
     kT->updateClumpMeshArrays(
         // Clump batchs' initial stats
         cached_input_clump_batches,
@@ -1099,7 +1114,7 @@ void DEMSolver::updateClumpMeshArrays(size_t nOwners,
         // Templates and misc.
         flattened_clump_templates,
         // Number of entities, old
-        nOwners, nClumps, nSpheres, nTriMesh, nFacets);
+        nOwners, nClumps, nSpheres, nTriMesh, nFacets, nExtObj, nAnalGM);
 }
 
 void DEMSolver::packDataPointers() {
@@ -1109,6 +1124,10 @@ void DEMSolver::packDataPointers() {
     // are called, so each thread has its own pointers packed.
     dT->packTransferPointers(kT);
     kT->packTransferPointers(dT);
+    // Finally, the API needs to map all mesh to their owners
+    for (const auto& mmesh : m_meshes) {
+        m_owner_mesh_map[mmesh->owner] = mmesh->cache_offset;
+    }
 }
 
 void DEMSolver::validateUserInputs() {
@@ -1166,18 +1185,22 @@ bool DEMSolver::goThroughWorkerAnomalies() {
 inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::string>& strMap) {
     // Empty ingr list
     auto added_ingredients = force_kernel_ingredient_stats;
-    std::set<std::string> added_owner_wildcards;
+    //// TODO: Reassemble geo and owner wildcards here again in a set is not needed... Since set is ordered.
+    std::set<std::string> added_owner_wildcards, added_geo_wildcards;
     // Analyze this model... what does it require?
     std::string model = m_force_model->m_force_model;
-    // It should have those following names in it
     const std::set<std::string> contact_wildcard_names = m_force_model->m_contact_wildcards;
     const std::set<std::string> owner_wildcard_names = m_force_model->m_owner_wildcards;
+    const std::set<std::string> geo_wildcard_names = m_force_model->m_geo_wildcards;
     m_owner_wc_num.clear();
+    m_geo_wc_num.clear();
+    m_cnt_wc_num.clear();
     // If we spot that the force model requires an ingredient, we make sure that order goes to the ingredient
     // acquisition module
     std::string ingredient_definition = " ", cnt_wildcard_acquisition = " ", ingredient_acquisition_A = " ",
-                ingredient_acquisition_B = " ", owner_wildcard_write_back = " ", cnt_wildcard_write_back = " ",
-                cnt_wildcard_destroy_record = " ";
+                ingredient_acquisition_B = " ", owner_geo_wildcard_write_back = " ", cnt_wildcard_write_back = " ",
+                cnt_wildcard_destroy_record = " ", geo_wc_acquisition_B_sph = " ", geo_wc_acquisition_B_tri = " ",
+                geo_wc_acquisition_B_anal = " ";
     scan_force_model_ingr(added_ingredients, model);
     // As our numerical method stands now, AOwnerFamily and BOwnerFamily are always needed.
     add_force_model_ingr(added_ingredients, "AOwnerFamily");
@@ -1189,9 +1212,9 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         add_force_model_ingr(added_ingredients, "AOwnerMOI");
         add_force_model_ingr(added_ingredients, "BOwnerMOI");
     }
-    // Then, owner wildcards should be added to the ingredient list too. But first we check whether a owner wildcard
+    // Then, owner/geo wildcards should be added to the ingredient list too. But first we check whether a wildcard
     // shares name with existing ingredients. If not, we add them to the list.
-    unsigned int owner_wc_num = 0;
+    unsigned int owner_wc_num = 0, geo_wc_num = 0, cnt_wc_num = 0;
     for (const auto& owner_wildcard_name : owner_wildcard_names) {
         if (added_ingredients.find(owner_wildcard_name) != added_ingredients.end()) {
             DEME_ERROR(
@@ -1205,10 +1228,39 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         m_owner_wc_num[owner_wildcard_name] = owner_wc_num;
         owner_wc_num++;
     }
+    for (const auto& geo_wildcard_name : geo_wildcard_names) {
+        if (added_ingredients.find(geo_wildcard_name) != added_ingredients.end()) {
+            DEME_ERROR(
+                "Geometry wildcard %s shares its name with a reserved contact force model ingredient.\nPlease select a "
+                "different name for this wildcard and try again.",
+                geo_wildcard_name.c_str());
+        }
+        added_geo_wildcards.insert(geo_wildcard_name);
+        // Finally, owner wildcards are subject to user modification, so it is better to keep tab of their numbering for
+        // later use.
+        m_geo_wc_num[geo_wildcard_name] = geo_wc_num;
+        geo_wc_num++;
+    }
+    for (const auto& contact_wildcard_name : contact_wildcard_names) {
+        if (added_ingredients.find(contact_wildcard_name) != added_ingredients.end()) {
+            DEME_ERROR(
+                "Contact wildcard %s shares its name with a reserved contact force model ingredient.\nPlease select a "
+                "different name for this wildcard and try again.",
+                contact_wildcard_name.c_str());
+        }
+        m_cnt_wc_num[contact_wildcard_name] = cnt_wc_num;
+        cnt_wc_num++;
+    }
+
     // Owner write-back needs ABOwner number
     if (owner_wildcard_names.size() > 0) {
         add_force_model_ingr(added_ingredients, "AOwner");
         add_force_model_ingr(added_ingredients, "BOwner");
+    }
+    // Geo wildcard write-back needs ABGeo number
+    if (geo_wildcard_names.size() > 0) {
+        add_force_model_ingr(added_ingredients, "AGeo");
+        add_force_model_ingr(added_ingredients, "BGeo");
     }
 
     // Equip those acquisition strategies that need to be there
@@ -1216,7 +1268,15 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
                                added_ingredients);
     // Then equip acquisition strategies for owner wildcards
     equip_owner_wildcards(ingredient_definition, ingredient_acquisition_A, ingredient_acquisition_B,
-                          owner_wildcard_write_back, added_owner_wildcards);
+                          owner_geo_wildcard_write_back, added_owner_wildcards);
+    // Then equip acquisition strategies for geo wildcards.
+    // geo_wc_acquisition_B_sph, geo_wc_acquisition_B_tri, geo_wc_acquisition_B_anal cannot be incorporated into
+    // ingredient_acquisition_B, since they are different for the 3 cases...
+    equip_geo_wildcards(ingredient_definition, ingredient_acquisition_A, geo_wc_acquisition_B_sph,
+                        geo_wc_acquisition_B_tri, geo_wc_acquisition_B_anal, added_geo_wildcards);
+    // Currently, owner_wildcard_write_back and geo_wildcard_write_back might be blank, since give the write-back
+    // control to the user, and they may need to use atomic operations (atomicExch or atomicAdd) to update the
+    // wildcards.
 
     // Acq strategies may have moi acq strategy in them that needs to be replaced first...
     ingredient_acquisition_A = replace_patterns(ingredient_acquisition_A, strMap);
@@ -1233,6 +1293,11 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         DEME_WARNING(
             "Owner wildcard %s is not used/set in your custom force model. Your force model will probably not produce "
             "what you expect.",
+            non_match.c_str());
+    if (!all_whole_word_match(model, geo_wildcard_names, non_match))
+        DEME_WARNING(
+            "Geometry wildcard %s is not used/set in your custom force model. Your force model will probably not "
+            "produce what you expect.",
             non_match.c_str());
     if (!all_whole_word_match(model, {"force"}, non_match)) {
         DEME_WARNING(
@@ -1270,8 +1335,13 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     strMap["_forceModelIngredientDefinition_"] = ingredient_definition;
     strMap["_forceModelIngredientAcqForA_"] = ingredient_acquisition_A;
     strMap["_forceModelIngredientAcqForB_"] = ingredient_acquisition_B;
+    // Geo wildcard acquisition is contact type-dependent.
+    strMap["_forceModelGeoWildcardAcqForSph_"] = geo_wc_acquisition_B_sph;
+    strMap["_forceModelGeoWildcardAcqForTri_"] = geo_wc_acquisition_B_tri;
+    strMap["_forceModelGeoWildcardAcqForAnal_"] = geo_wc_acquisition_B_anal;
 
-    strMap["_forceModelOwnerWildcardWrite_"] = owner_wildcard_write_back;
+    // This should be empty as of now...
+    strMap["_forceModelOwnerWildcardWrite_"] = owner_geo_wildcard_write_back;
 
     strMap["_forceModelContactWildcardAcq_"] = cnt_wildcard_acquisition;
     strMap["_forceModelContactWildcardWrite_"] = cnt_wildcard_write_back;
@@ -1559,7 +1629,7 @@ inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::strin
 
     // Depending on the force model, there could be a few material properties that should be specified by the user
     const std::set<std::string> mat_prop_that_must_exist = m_force_model->m_must_have_mat_props;
-    // Those must-haves will be added to the pool (whcih is a set of material prop names that we know)
+    // Those must-haves will be added to the pool (which is a set of material prop names that we know)
     m_material_prop_names.insert(mat_prop_that_must_exist.begin(), mat_prop_that_must_exist.end());
     m_material_prop_names.insert(m_pairwise_material_prop_names.begin(), m_pairwise_material_prop_names.end());
 
