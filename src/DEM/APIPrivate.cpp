@@ -1393,18 +1393,24 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
         posStr += "case " + std::to_string(preInfo.family) + ": {";
         accStr += "case " + std::to_string(preInfo.family) + ": {";
         {
-            if (preInfo.linVelX != "none")
+            if (preInfo.linVelX != "none") {
                 velStr += "vX = " + preInfo.linVelX + ";";
-            if (preInfo.linVelY != "none")
+            }
+            if (preInfo.linVelY != "none") {
                 velStr += "vY = " + preInfo.linVelY + ";";
-            if (preInfo.linVelZ != "none")
+            }
+            if (preInfo.linVelZ != "none") {
                 velStr += "vZ = " + preInfo.linVelZ + ";";
-            if (preInfo.rotVelX != "none")
+            }
+            if (preInfo.rotVelX != "none") {
                 velStr += "omgBarX = " + preInfo.rotVelX + ";";
-            if (preInfo.rotVelY != "none")
+            }
+            if (preInfo.rotVelY != "none") {
                 velStr += "omgBarY = " + preInfo.rotVelY + ";";
-            if (preInfo.rotVelZ != "none")
+            }
+            if (preInfo.rotVelZ != "none") {
                 velStr += "omgBarZ = " + preInfo.rotVelZ + ";";
+            }
             velStr += "LinXPrescribed = " + std::to_string(preInfo.linVelXPrescribed) + ";";
             velStr += "LinYPrescribed = " + std::to_string(preInfo.linVelYPrescribed) + ";";
             velStr += "LinZPrescribed = " + std::to_string(preInfo.linVelZPrescribed) + ";";

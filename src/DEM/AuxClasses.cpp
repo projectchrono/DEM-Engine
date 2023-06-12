@@ -391,6 +391,12 @@ size_t DEMTracker::GetContactForcesAndGlobalTorque(std::vector<float3>& points,
     return sys->GetOwnerContactForces(obj->ownerID + offset, points, forces, torques, false);
 }
 
+void DEMTracker::AddAcc(float3 acc, size_t offset) {
+    sys->AddOwnerNextStepAcc(obj->ownerID + offset, acc);
+}
+void DEMTracker::AddAngAcc(float3 angAcc, size_t offset) {
+    sys->AddOwnerNextStepAngAcc(obj->ownerID + offset, angAcc);
+}
 void DEMTracker::SetPos(float3 pos, size_t offset) {
     sys->SetOwnerPosition(obj->ownerID + offset, pos);
 }

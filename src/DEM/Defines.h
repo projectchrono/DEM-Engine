@@ -285,6 +285,9 @@ struct DEMDataDT {
     float* alphaY;
     float* alphaZ;
 
+    notStupidBool_t* accSpecified;
+    notStupidBool_t* angAccSpecified;
+
     bodyID_t* idGeometryA;
     bodyID_t* idGeometryB;
     contact_t* contactType;
