@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
     int cur_test = atoi(argv[1]);
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_Wheel_Steer_1";
+    out_dir += "/DEMdemo_Wheel_Steer_2";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -183,7 +183,7 @@ int main(int argc, char* argv[]) {
         DEMSim.AddFamilyPrescribedAcc(1, to_string_with_precision(-added_pressure * std::sin(G_ang) / wheel_mass),
                                       "none", to_string_with_precision(-added_pressure * std::cos(G_ang) / wheel_mass));
         // Must not prescribe Z ang vel
-        DEMSim.SetFamilyPrescribedAngVel(2, "0", to_string_with_precision(w_r), "none", false);
+        DEMSim.SetFamilyPrescribedAngVel(2, "none", to_string_with_precision(w_r), "none", false);
         DEMSim.AddFamilyPrescribedAcc(2, to_string_with_precision(-added_pressure * std::sin(G_ang) / wheel_mass),
                                       "none", to_string_with_precision(-added_pressure * std::cos(G_ang) / wheel_mass));
         // DEMSim.AddFamilyPrescribedAngAcc(2, "none", "none", to_string_with_precision(torque / wheel_IXX));
@@ -249,9 +249,7 @@ int main(int argc, char* argv[]) {
             for (float t = 0; t < sim_end; t += step_size) {
                 float4 oriQ = wheel_tracker->OriQ();
                 float3 acc_to_add = addded_angAcc;
-                applyFrameTransformGlobalToLocal(acc_to_add, make_float3(0), oriQ);
-                wheel_tracker->AddAngAcc(acc_to_add);
-
+                
                 // Remove the component in the angular velocity that will cause the wheel to fall over
                 float3 angV = wheel_tracker->AngVelGlobal();
                 float4 oriQ_onlyZ = oriQ;
@@ -267,6 +265,12 @@ int main(int argc, char* argv[]) {
                 // Move to wheel's own frame
                 applyFrameTransformGlobalToLocal(angV, make_float3(0), oriQ);
                 wheel_tracker->SetAngVel(angV);
+
+                // Add torque as well
+                applyFrameTransformLocalToGlobal(acc_to_add, make_float3(0), oriQ_onlyZ);
+                applyFrameTransformGlobalToLocal(acc_to_add, make_float3(0), oriQ);
+                wheel_tracker->AddAngAcc(acc_to_add);
+
                 DEMSim.DoDynamics(step_size);
             }
 
