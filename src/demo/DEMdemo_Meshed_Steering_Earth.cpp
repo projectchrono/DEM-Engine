@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
     double world_size_z = 4.0;
     float w_r = 0.8;
     double sim_end = 4.;
-    float torque = 0.5;
+    float torque = 2.;
 
     // Define the wheel geometry
     float wheel_rad = 0.25;
@@ -253,23 +253,24 @@ int main(int argc, char* argv[]) {
                 
                 // Remove the component in the angular velocity that will cause the wheel to fall over
                 float3 angV = wheel_tracker->AngVelGlobal();
-                float4 oriQ_onlyZ = oriQ;
-                oriQ_onlyZ.x = 0;
-                oriQ_onlyZ.y = 0;
-                oriQ_onlyZ /= length(oriQ_onlyZ);
+                // float4 oriQ_onlyZ = oriQ;
+                // oriQ_onlyZ.x = 0;
+                // oriQ_onlyZ.y = 0;
+                // oriQ_onlyZ /= length(oriQ_onlyZ);
                 // Move ang vel to forward-aligned frame first...
-                applyFrameTransformGlobalToLocal(angV, make_float3(0), oriQ_onlyZ);
+                // applyFrameTransformGlobalToLocal(angV, make_float3(0), oriQ_onlyZ);
                 // Remove xy component
                 angV.x = 0.;
                 angV.y = 0.;
+                angV.z = std::abs(angV.z);
                 // Move back to global
-                applyFrameTransformLocalToGlobal(angV, make_float3(0), oriQ_onlyZ);
+                // applyFrameTransformLocalToGlobal(angV, make_float3(0), oriQ_onlyZ);
                 // Move to wheel's own frame
                 applyFrameTransformGlobalToLocal(angV, make_float3(0), oriQ);
                 wheel_tracker->SetAngVel(angV);
 
                 // Add torque as well
-                applyFrameTransformLocalToGlobal(acc_to_add, make_float3(0), oriQ_onlyZ);
+                // applyFrameTransformLocalToGlobal(acc_to_add, make_float3(0), oriQ_onlyZ);
                 applyFrameTransformGlobalToLocal(acc_to_add, make_float3(0), oriQ);
                 wheel_tracker->AddAngAcc(acc_to_add);
 
@@ -279,7 +280,7 @@ int main(int argc, char* argv[]) {
             float3 V2 = wheel_tracker->Vel();
             float V2_mag = length(V2);
             std::cout << "V magnitude: " << V2_mag << std::endl;
-            std::cout << "Angle: " << std::asin(std::abs(V2.y) / V2_mag) << std::endl;
+            std::cout << "Angle: " << std::atan(std::abs(V2.y) / V2.x) << std::endl;
 
             {
                 // Overwrite previous...

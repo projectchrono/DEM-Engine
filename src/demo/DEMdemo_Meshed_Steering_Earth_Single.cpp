@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
     int cur_test = atoi(argv[1]);
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_Wheel_Steer_1";
+    out_dir += "/DEMdemo_Wheel_Steer_single";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -267,18 +267,14 @@ int main(int argc, char* argv[]) {
 
             // Remove the component in the angular velocity that will cause the wheel to fall over
             {
+                // Remove the component in the angular velocity that will cause the wheel to fall over
                 float3 angV = wheel_tracker->AngVelGlobal();
-                float4 oriQ = wheel_tracker->OriQ();
-                float4 oriQ_onlyZ = oriQ;
-                oriQ_onlyZ.x = 0;
-                oriQ_onlyZ.y = 0;
-                oriQ_onlyZ /= length(oriQ_onlyZ);
-                // Move ang vel to forward-aligned frame first...
-                applyFrameTransformGlobalToLocal(angV, make_float3(0), oriQ_onlyZ);
-                // Remove x component
+                // float ang = std::atan(std::abs(V2.y) / V2.x);
+                // float4 oriQ_onlyZ = make_float4(0,0,std::sin());
+                // Remove xy component
                 angV.x = 0.;
-                // Move back to global
-                applyFrameTransformLocalToGlobal(angV, make_float3(0), oriQ_onlyZ);
+                angV.y = 0.;
+                angV.z = std::abs(angV.z);
                 // Move to wheel's own frame
                 applyFrameTransformGlobalToLocal(angV, make_float3(0), oriQ);
                 wheel_tracker->SetAngVel(angV);
