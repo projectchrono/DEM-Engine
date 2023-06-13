@@ -100,27 +100,39 @@ inline __device__ void integrateVel(deme::bodyID_t thisClump,
     if (!LinXPrescribed) {
         v_update.x = (granData->aX[thisClump] + extra_acc.x + simParams->Gx) * h;
         granData->vX[thisClump] += v_update.x;
+    } else {
+        old_v.x = granData->vX[thisClump];
     }
     if (!LinYPrescribed) {
         v_update.y = (granData->aY[thisClump] + extra_acc.y + simParams->Gy) * h;
         granData->vY[thisClump] += v_update.y;
+    } else {
+        old_v.y = granData->vY[thisClump];
     }
     if (!LinZPrescribed) {
         v_update.z = (granData->aZ[thisClump] + extra_acc.z + simParams->Gz) * h;
         granData->vZ[thisClump] += v_update.z;
+    } else {
+        old_v.z = granData->vZ[thisClump];
     }
 
     if (!RotXPrescribed) {
         omgBar_update.x = (granData->alphaX[thisClump] + extra_angAcc.x) * h;
         granData->omgBarX[thisClump] += omgBar_update.x;
+    } else {
+        old_omgBar.x = granData->omgBarX[thisClump];
     }
     if (!RotYPrescribed) {
         omgBar_update.y = (granData->alphaY[thisClump] + extra_angAcc.y) * h;
         granData->omgBarY[thisClump] += omgBar_update.y;
+    } else {
+        old_omgBar.y = granData->omgBarY[thisClump];
     }
     if (!RotZPrescribed) {
         omgBar_update.z = (granData->alphaZ[thisClump] + extra_angAcc.z) * h;
         granData->omgBarZ[thisClump] += omgBar_update.z;
+    } else {
+        old_omgBar.z = granData->omgBarZ[thisClump];
     }
 
     // We need to set v and omgBar, and they will be used in position/quaternion update

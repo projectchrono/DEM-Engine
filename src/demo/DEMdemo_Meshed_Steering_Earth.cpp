@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
     int cur_test = atoi(argv[1]);
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_Wheel_Steer_2";
+    out_dir += "/DEMdemo_Wheel_Steer_1";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
     double world_size_z = 4.0;
     float w_r = 0.8;
     double sim_end = 4.;
-    float torque = 1.;
+    float torque = 0.5;
 
     // Define the wheel geometry
     float wheel_rad = 0.25;
@@ -53,6 +53,7 @@ int main(int argc, char* argv[]) {
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
         DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
         DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
+        DEMSim.SetIntegrator(TIME_INTEGRATOR::FORWARD_EULER);
         DEMSim.SetCollectAccRightAfterForceCalc(true);
 
         // E, nu, CoR, mu, Crr...
@@ -258,8 +259,9 @@ int main(int argc, char* argv[]) {
                 oriQ_onlyZ /= length(oriQ_onlyZ);
                 // Move ang vel to forward-aligned frame first...
                 applyFrameTransformGlobalToLocal(angV, make_float3(0), oriQ_onlyZ);
-                // Remove x component
+                // Remove xy component
                 angV.x = 0.;
+                angV.y = 0.;
                 // Move back to global
                 applyFrameTransformLocalToGlobal(angV, make_float3(0), oriQ_onlyZ);
                 // Move to wheel's own frame
