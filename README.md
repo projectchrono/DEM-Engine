@@ -48,6 +48,7 @@ On a Linux machine, [install CUDA](https://developer.nvidia.com/cuda-downloads).
 
 - You can install the newest CUDA for running the container. However, if you are also considering building from source later, I recommend just getting CUDA 12.0 or a CUDA 11 distro. CUDA 12.1 appears to cause troubles with jitify if built from source.
 - _DEME_ probably does not work on WSL. The reason is in **Installation** section. I recommend working with native Linux.
+- Got `Docker daemon permission denied` error? Maybe try [this page](https://stackoverflow.com/questions/48957195/how-to-fix-docker-got-permission-denied-issue).
 
 After those are done, you can launch the container by doing this in a Linux command prompt: `docker run -it --gpus all uwsbel/dem-engine:latest`
 

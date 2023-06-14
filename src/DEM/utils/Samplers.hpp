@@ -87,12 +87,39 @@ class Sampler {
         m_size = halfDim;
         return Sample(BOX);
     }
+    std::vector<std::vector<float>> SampleBox(const std::vector<float>& center, const std::vector<float>& halfDim) {
+        assertThreeElements(center, "SampleBox", "center");
+        assertThreeElements(halfDim, "SampleBox", "halfDim");
+        m_center = host_make_float3(center[0], center[1], center[2]);
+        m_size = host_make_float3(halfDim[0], halfDim[1], halfDim[2]);
+        auto res = Sample(BOX);
+        std::vector<std::vector<float>> xyz(res.size(), std::vector<float>(3, 0.));
+        for (size_t i = 0; i < res.size(); i++) {
+            xyz[i][0] = res[i].x;
+            xyz[i][1] = res[i].y;
+            xyz[i][2] = res[i].z;
+        }
+        return xyz;
+    }
 
     /// Return points sampled from the specified spherical volume.
     std::vector<float3> SampleSphere(const float3& center, float radius) {
         m_center = center;
         m_size = host_make_float3(radius, radius, radius);
         return Sample(SPHERE);
+    }
+    std::vector<std::vector<float>> SampleSphere(const std::vector<float>& center, float radius) {
+        assertThreeElements(center, "SampleSphere", "center");
+        m_center = host_make_float3(center[0], center[1], center[2]);
+        m_size = host_make_float3(radius, radius, radius);
+        auto res = Sample(SPHERE);
+        std::vector<std::vector<float>> xyz(res.size(), std::vector<float>(3, 0.));
+        for (size_t i = 0; i < res.size(); i++) {
+            xyz[i][0] = res[i].x;
+            xyz[i][1] = res[i].y;
+            xyz[i][2] = res[i].z;
+        }
+        return xyz;
     }
 
     /// Return points sampled from the specified X-aligned cylindrical volume.
@@ -101,6 +128,19 @@ class Sampler {
         m_size = host_make_float3(halfHeight, radius, radius);
         return Sample(CYLINDER_X);
     }
+    std::vector<std::vector<float>> SampleCylinderX(const std::vector<float>& center, float radius, float halfHeight) {
+        assertThreeElements(center, "SampleCylinderX", "center");
+        m_center = host_make_float3(center[0], center[1], center[2]);
+        m_size = host_make_float3(halfHeight, radius, radius);
+        auto res = Sample(CYLINDER_X);
+        std::vector<std::vector<float>> xyz(res.size(), std::vector<float>(3, 0.));
+        for (size_t i = 0; i < res.size(); i++) {
+            xyz[i][0] = res[i].x;
+            xyz[i][1] = res[i].y;
+            xyz[i][2] = res[i].z;
+        }
+        return xyz;
+    }
 
     /// Return points sampled from the specified Y-aligned cylindrical volume.
     std::vector<float3> SampleCylinderY(const float3& center, float radius, float halfHeight) {
@@ -108,12 +148,38 @@ class Sampler {
         m_size = host_make_float3(radius, halfHeight, radius);
         return Sample(CYLINDER_Y);
     }
+    std::vector<std::vector<float>> SampleCylinderY(const std::vector<float>& center, float radius, float halfHeight) {
+        assertThreeElements(center, "SampleCylinderY", "center");
+        m_center = host_make_float3(center[0], center[1], center[2]);
+        m_size = host_make_float3(radius, halfHeight, radius);
+        auto res = Sample(CYLINDER_Y);
+        std::vector<std::vector<float>> xyz(res.size(), std::vector<float>(3, 0.));
+        for (size_t i = 0; i < res.size(); i++) {
+            xyz[i][0] = res[i].x;
+            xyz[i][1] = res[i].y;
+            xyz[i][2] = res[i].z;
+        }
+        return xyz;
+    }
 
     /// Return points sampled from the specified Z-aligned cylindrical volume.
     std::vector<float3> SampleCylinderZ(const float3& center, float radius, float halfHeight) {
         m_center = center;
         m_size = host_make_float3(radius, radius, halfHeight);
         return Sample(CYLINDER_Z);
+    }
+    std::vector<std::vector<float>> SampleCylinderZ(const std::vector<float>& center, float radius, float halfHeight) {
+        assertThreeElements(center, "SampleCylinderZ", "center");
+        m_center = host_make_float3(center[0], center[1], center[2]);
+        m_size = host_make_float3(radius, radius, halfHeight);
+        auto res = Sample(CYLINDER_Z);
+        std::vector<std::vector<float>> xyz(res.size(), std::vector<float>(3, 0.));
+        for (size_t i = 0; i < res.size(); i++) {
+            xyz[i][0] = res[i].x;
+            xyz[i][1] = res[i].y;
+            xyz[i][2] = res[i].z;
+        }
+        return xyz;
     }
 
     /// Get the current value of the minimum separation.

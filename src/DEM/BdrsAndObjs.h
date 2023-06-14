@@ -138,6 +138,10 @@ struct DEMExternObj {
     void SetMass(float mass) { this->mass = mass; }
     /// Set MOI (in principal frame)
     void SetMOI(float3 MOI) { this->MOI = MOI; }
+    void SetMOI(const std::vector<float>& MOI) {
+        assertThreeElements(MOI, "SetMOI", "MOI");
+        SetMOI(host_make_float3(MOI[0], MOI[1], MOI[2]));
+    }
 
     /// @brief Set the initial quaternion for this object (before simulation initializes).
     /// @param rotQ Initial quaternion.
@@ -335,6 +339,10 @@ class DEMMeshConnected {
     void SetMass(float mass) { this->mass = mass; }
     /// Set MOI (in principal frame)
     void SetMOI(float3 MOI) { this->MOI = MOI; }
+    void SetMOI(const std::vector<float>& MOI) {
+        assertThreeElements(MOI, "SetMOI", "MOI");
+        SetMOI(host_make_float3(MOI[0], MOI[1], MOI[2]));
+    }
     /// Set mesh family number
     void SetFamily(unsigned int num) { this->family_code = num; }
 

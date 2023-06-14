@@ -128,6 +128,7 @@ class DEMTracker {
     /// simulation entities. In most cases, this means excluding the gravitational acceleration. The acceleration is in
     /// global frame.
     float3 ContactAcc(size_t offset = 0);
+    std::vector<float> GetContactAcc(size_t offset = 0);
     /// Get the a portion of the angular acceleration of this tracked object, that is the result of its contact with
     /// other simulation entities. The acceleration is in this object's local frame.
     float3 ContactAngAccLocal(size_t offset = 0);
@@ -149,6 +150,7 @@ class DEMTracker {
 
     /// @brief Set the position of this tracked object.
     void SetPos(float3 pos, size_t offset = 0);
+    void SetPos(const std::vector<float>& pos, size_t offset = 0);
     /// @brief Set the angular velocity of this tracked object in its own local coordinate system.
     void SetAngVel(float3 angVel, size_t offset = 0);
     /// @brief Set the velocity of this tracked object in global frame.
