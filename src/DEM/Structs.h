@@ -698,6 +698,7 @@ class DEMClumpBatch {
     ~DEMClumpBatch() {}
     size_t GetNumClumps() const { return nClumps; }
     size_t GetNumSpheres() const { return nSpheres; }
+
     void SetTypes(const std::vector<std::shared_ptr<DEMClumpTemplate>>& input) {
         assertLength(input.size(), "SetTypes");
         types = input;
@@ -708,26 +709,43 @@ class DEMClumpBatch {
     void SetType(const std::shared_ptr<DEMClumpTemplate>& input) {
         SetTypes(std::vector<std::shared_ptr<DEMClumpTemplate>>(nClumps, input));
     }
+
     void SetPos(const std::vector<float3>& input) {
         assertLength(input.size(), "SetPos");
         xyz = input;
     }
     void SetPos(float3 input) { SetPos(std::vector<float3>(nClumps, input)); }
+
     void SetVel(const std::vector<float3>& input) {
         assertLength(input.size(), "SetVel");
         vel = input;
     }
+    void SetVel(const std::vector<std::vector<float>>& input) {
+        assertThreeElementsVector(input, "SetVel", "input");
+        std::vector<float3> vel_xyz(input.size());
+        for (size_t i = 0; i < input.size(); i++) {
+            vel_xyz[i] = host_make_float3(input[i][0], input[i][1], input[i][2]);
+        }
+        SetVel(vel_xyz);
+    }
     void SetVel(float3 input) { SetVel(std::vector<float3>(nClumps, input)); }
+    void SetVel(const std::vector<float>& input) {
+        assertThreeElements(input, "SetVel", "input");
+        SetVel(host_make_float3(input[0], input[1], input[2]));
+    }
+
     void SetAngVel(const std::vector<float3>& input) {
         assertLength(input.size(), "SetAngVel");
         angVel = input;
     }
     void SetAngVel(float3 input) { SetAngVel(std::vector<float3>(nClumps, input)); }
+
     void SetOriQ(const std::vector<float4>& input) {
         assertLength(input.size(), "SetOriQ");
         oriQ = input;
     }
     void SetOriQ(float4 input) { SetOriQ(std::vector<float4>(nClumps, input)); }
+
     /// Specify the `family' code for each clump. Then you can specify if they should go with some prescribed motion or
     /// some special physics (for example, being fixed). The default behavior (without specification) for every family
     /// is using `normal' physics.

@@ -321,6 +321,10 @@ float3 DEMTracker::MOI(size_t offset) {
 float3 DEMTracker::ContactAcc(size_t offset) {
     return sys->GetOwnerAcc(obj->ownerID + offset);
 }
+std::vector<float> DEMTracker::GetContactAcc(size_t offset) {
+    float3 res = ContactAcc(offset);
+    return {res.x, res.y, res.z};
+}
 float3 DEMTracker::ContactAngAccLocal(size_t offset) {
     return sys->GetOwnerAngAcc(obj->ownerID + offset);
 }
@@ -399,6 +403,10 @@ void DEMTracker::AddAngAcc(float3 angAcc, size_t offset) {
 }
 void DEMTracker::SetPos(float3 pos, size_t offset) {
     sys->SetOwnerPosition(obj->ownerID + offset, pos);
+}
+void DEMTracker::SetPos(const std::vector<float>& pos, size_t offset) {
+    assertThreeElements(pos, "SetPos", "pos");
+    SetPos(host_make_float3(pos[0], pos[1], pos[2]), offset);
 }
 void DEMTracker::SetAngVel(float3 angVel, size_t offset) {
     sys->SetOwnerAngVel(obj->ownerID + offset, angVel);
