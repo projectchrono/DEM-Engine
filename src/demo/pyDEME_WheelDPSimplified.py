@@ -26,11 +26,11 @@ if __name__ == "__main__":
     
     DEMSim = DEME.DEMSolver
     # TODO: May just comment all the following options and use default, for now
-    DEMSim.SetVerbosity(INFO)
-    DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV)
-    DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV)
-    DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK)
-    DEMSim.SetContactOutputContent(OWNER | FORCE | POINT)
+    # DEMSim.SetVerbosity(INFO)
+    # DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV)
+    # DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV)
+    # DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK)
+    # DEMSim.SetContactOutputContent(OWNER | FORCE | POINT)
 
     # E, nu, CoR, mu, Crr...
     mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.01}})
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     # Then load it to system
     # TODO: May just be a path, rather than a GetDEMEDataFile
     # TODO: If have to use MOI1.tolist(), that is fine too
-    my_template = DEMSim.LoadClumpType(mass1, MOI1, GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain)
+    my_template = DEMSim.LoadClumpType(mass1, MOI1.tolist(), GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain)
     # Now scale the template
     # Note the mass and MOI are also scaled in the process, automatically. But if you are not happy with this, you
     # can always manually change mass and MOI afterwards.
@@ -100,12 +100,12 @@ if __name__ == "__main__":
     # Sample initial particles
     sample_center = np.array([0, 0, offset_z])
     # TODO: If have to use sample_center.tolist(), that is fine too
-    terrain_particles_xyz = sampler.SampleBox(sample_center, [sample_halfwidth_x, sample_halfwidth_y, sample_halfheight])
+    terrain_particles_xyz = sampler.SampleBox(sample_center.tolist(), [sample_halfwidth_x, sample_halfwidth_y, sample_halfheight])
     terrain_template_in_use = [my_template] * len(terrain_particles_xyz)
     heap_family = [0] * len(terrain_particles_xyz)
     terrain_particles = DEMSim.AddClumps(terrain_template_in_use, terrain_particles_xyz)
     # Give ground particles a small initial velocity so they `collapse' at the start of the simulation
-    terrain_particles.SetVel(np.array([0.00, 0, -0.05]))
+    terrain_particles.SetVel([0.00, 0, -0.05])
     terrain_particles.SetFamilies(heap_family)
     print(f"Current number of clumps: {len(terrain_particles_xyz)}") 
 
@@ -137,7 +137,7 @@ if __name__ == "__main__":
 
     # Make ready for simulation
     DEMSim.SetInitTimeStep(step_size)
-    DEMSim.SetGravitationalAcceleration(np.array([0, 0, -G_mag]))
+    DEMSim.SetGravitationalAcceleration([0, 0, -G_mag])
     # Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
     # wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     # happen anyway and if it does, something already went wrong.
@@ -158,7 +158,7 @@ if __name__ == "__main__":
 
     # Put the wheel in place, then let the wheel sink in initially
     max_z = max_z_finder.GetValue()
-    wheel_tracker.SetPos(np.array([-0.45, 0, max_z + 0.03 + wheel_rad]))
+    wheel_tracker.SetPos([-0.45, 0, max_z + 0.03 + wheel_rad])
 
     t = 0.
     while t < 1.:
@@ -188,8 +188,8 @@ if __name__ == "__main__":
             DEMSim.ShowThreadCollaborationStats()
 
         if (curr_step % report_steps == 0):
-            forces = wheel_tracker.ContactAcc()
-            forces *= wheel_mass
+            force_list = wheel_tracker.ContactAcc()
+            forces = np.array(force_list) * wheel_mass
             print(f"Time: {t}")
             print(f"Force on wheel: {forces[0]}, {forces[1]}, {forces[2]}")
             print(f"Drawbar pull coeff: {(forces[0] / total_pressure)}")
