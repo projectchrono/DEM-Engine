@@ -29,12 +29,9 @@ int main(int argc, char* argv[]) {
     // `World'
     float G_mag = 9.81;
     float step_size = 5e-6;
-    double world_size_y = 2.;
+    double world_size_y = .75;
     double world_size_x = 2.;
     double world_size_z = 4.0;
-    float w_r = 0.8;
-    double sim_end = 4.;
-    float torque = 2.;
 
     // Define the wheel geometry
     float wheel_rad = 0.25;
@@ -44,6 +41,13 @@ int main(int argc, char* argv[]) {
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
+
+    // Wheel movements
+    float w_r = 0.8;
+    float forward_slip = 0.1;
+    double sim_end = 6.;
+    float tilt = 5. / 180. * math_PI;
+    float forward_v = w_r * wheel_rad * std::cos(tilt) * (1. - forward_slip);
 
     float Slopes_deg[] = {0};
 
@@ -80,6 +84,8 @@ int main(int argc, char* argv[]) {
         wheel->SetMOI(make_float3(wheel_IXX, wheel_IYY, wheel_IXX));
         // Give the wheel a family number so we can potentially add prescription
         wheel->SetFamily(11);
+        float4 initMeshQ = make_float4(0, 0, 1 * std::sin(tilt / 2.), std::cos(tilt / 2.));
+        wheel->SetInitQuat(initMeshQ);
         DEMSim.SetFamilyFixed(11);
         DEMSim.DisableContactBetweenFamilies(11, 0);
         // Track it
@@ -92,7 +98,7 @@ int main(int argc, char* argv[]) {
         float mass1 = terrain_density * volume1;
         float3 MOI1 = make_float3(1.6850426, 1.6375114, 2.1187753) * terrain_density;
         // Scale the template we just created
-        std::vector<double> scales = {0.007, 0.0035};
+        std::vector<double> scales = {0.008};
         // Then load it to system
         std::shared_ptr<DEMClumpTemplate> my_template1 =
             DEMSim.LoadClumpType(mass1, MOI1, GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain);
@@ -180,15 +186,11 @@ int main(int argc, char* argv[]) {
 
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
         // (move freely linearly)
-        DEMSim.SetFamilyPrescribedAngVel(1, "0", to_string_with_precision(w_r), "0", false);
-        DEMSim.AddFamilyPrescribedAcc(1, to_string_with_precision(-added_pressure * std::sin(G_ang) / wheel_mass),
-                                      "none", to_string_with_precision(-added_pressure * std::cos(G_ang) / wheel_mass));
-        // Must not prescribe Z ang vel
-        DEMSim.SetFamilyPrescribedAngVel(2, "none", to_string_with_precision(w_r), "none", false);
+        DEMSim.SetFamilyPrescribedAngVel(1, "0", "0", "0", false);
+        DEMSim.SetFamilyPrescribedLinVel(2, to_string_with_precision(forward_v), "0", "0", false);
+        DEMSim.SetFamilyPrescribedAngVel(2, "0", to_string_with_precision(w_r), "0", false);
         DEMSim.AddFamilyPrescribedAcc(2, to_string_with_precision(-added_pressure * std::sin(G_ang) / wheel_mass),
                                       "none", to_string_with_precision(-added_pressure * std::cos(G_ang) / wheel_mass));
-        // DEMSim.AddFamilyPrescribedAngAcc(2, "none", "none", to_string_with_precision(torque / wheel_IXX));
-        float3 addded_angAcc = make_float3(0, 0, torque / wheel_IXX);
         DEMSim.SetFamilyFixed(10);
         DEMSim.DisableContactBetweenFamilies(10, 10);
         DEMSim.DisableContactBetweenFamilies(10, 255);
@@ -218,17 +220,18 @@ int main(int argc, char* argv[]) {
             init_x = -1.6 + corr;
         }
 
-        float settle_time = 0.4;
+        float settle_time = 0.2;
         { DEMSim.DoDynamicsThenSync(settle_time); }
 
         // Put the wheel in place, then let the wheel sink in initially
         float max_z = max_z_finder->GetValue();
         wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.1 + wheel_rad));
 
-        // float bulk_den_high = partial_mass_finder->GetValue() / ((-0.41 + 0.5) * world_size_x * world_size_y);
-        // float bulk_den_low = total_mass_finder->GetValue() / ((max_z + 0.5) * world_size_x * world_size_y);
-        // std::cout << "Bulk density high: " << bulk_den_high << std::endl;
-        // std::cout << "Bulk density low: " << bulk_den_low << std::endl;
+        int report_ps = 1000;
+        unsigned int report_steps = (unsigned int)(1.0 / (report_ps * step_size));
+        unsigned int cur_step = 0;
+        double xforce = 0., yforce = 0.;
+        unsigned int report_num = 0;
 
         DEMSim.ChangeFamily(11, 1);
 
@@ -242,45 +245,23 @@ int main(int argc, char* argv[]) {
             }
 
             std::cout << "Test num: " << cur_test << std::endl;
-            DEMSim.DoDynamicsThenSync(1.);
+            DEMSim.DoDynamicsThenSync(0.5);
             DEMSim.ChangeFamily(1, 2);
+            DEMSim.DoDynamicsThenSync(1.);
 
-            // float3 V1 = wheel_tracker->Vel();
-
-            for (float t = 0; t < sim_end; t += step_size) {
-                float4 oriQ = wheel_tracker->OriQ();
-                float3 acc_to_add = addded_angAcc;
-                
-                // Remove the component in the angular velocity that will cause the wheel to fall over
-                float3 angV = wheel_tracker->AngVelGlobal();
-                // float4 oriQ_onlyZ = oriQ;
-                // oriQ_onlyZ.x = 0;
-                // oriQ_onlyZ.y = 0;
-                // oriQ_onlyZ /= length(oriQ_onlyZ);
-                // Move ang vel to forward-aligned frame first...
-                // applyFrameTransformGlobalToLocal(angV, make_float3(0), oriQ_onlyZ);
-                // Remove xy component
-                angV.x = 0.;
-                angV.y = 0.;
-                angV.z = std::abs(angV.z);
-                // Move back to global
-                // applyFrameTransformLocalToGlobal(angV, make_float3(0), oriQ_onlyZ);
-                // Move to wheel's own frame
-                applyFrameTransformGlobalToLocal(angV, make_float3(0), oriQ);
-                wheel_tracker->SetAngVel(angV);
-
-                // Add torque as well
-                // applyFrameTransformLocalToGlobal(acc_to_add, make_float3(0), oriQ_onlyZ);
-                applyFrameTransformGlobalToLocal(acc_to_add, make_float3(0), oriQ);
-                wheel_tracker->AddAngAcc(acc_to_add);
+            for (float t = 0; t < sim_end; t += step_size, cur_step++) {
+                if (cur_step % report_steps == 0) {
+                    float3 force = wheel_tracker->ContactAcc();
+                    xforce += (double)force.x;
+                    yforce += (double)force.y;
+                    report_num++;
+                }
 
                 DEMSim.DoDynamics(step_size);
             }
 
-            float3 V2 = wheel_tracker->Vel();
-            float V2_mag = length(V2);
-            std::cout << "V magnitude: " << V2_mag << std::endl;
-            std::cout << "Angle: " << std::atan(std::abs(V2.y) / V2.x) << std::endl;
+            std::cout << "Force X: " << -xforce / report_num << std::endl;
+            std::cout << "Force Y: " << -yforce / report_num << std::endl;
 
             {
                 // Overwrite previous...
