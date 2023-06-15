@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
     double world_size_z = 4.0;
     float w_r = 0.8;
     double sim_end = 20.;
-    float z_adv_targ = 0.5;
+    float z_adv_targ = 0.1;
 
     // Define the wheel geometry
     float eff_mass = 88.;
@@ -250,7 +250,7 @@ int main(int argc, char* argv[]) {
                 if (z_adv >= z_adv_targ)
                     break;
                 float3 angAcc = wheel_tracker->ContactAngAccLocal();
-                energy += (double)angAcc.y * wheel_IYY * w_r * (double)report_time;
+                energy += std::abs((double)angAcc.y * wheel_IYY * w_r * (double)report_time);
                 x2 = wheel_tracker->Pos().x;
                 z_adv = x2 * std::sin(Slope_deg / 180. * math_PI) - z1;
 
