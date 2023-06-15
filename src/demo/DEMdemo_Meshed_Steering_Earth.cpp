@@ -36,8 +36,8 @@ int main(int argc, char* argv[]) {
     // Define the wheel geometry
     float wheel_rad = 0.25;
     float wheel_width = 0.2;
-    float wheel_mass = 5.;              // 8.7;
-    float total_pressure = 22. * 9.81;  // 22.
+    float wheel_mass = 5.;               // 8.7;
+    float total_pressure = 110. * 9.81;  // 22.
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
@@ -48,6 +48,7 @@ int main(int argc, char* argv[]) {
     double sim_end = 5.;
     float tilt = 5. / 180. * math_PI;
     float forward_v = w_r * wheel_rad * std::cos(tilt) * (1. - forward_slip);
+    float forward_ref_v = w_r * wheel_rad * std::cos(tilt);
 
     float Slopes_deg[] = {0};
 
@@ -187,7 +188,8 @@ int main(int argc, char* argv[]) {
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
         // (move freely linearly)
         DEMSim.SetFamilyPrescribedAngVel(1, "0", "0", "0", false);
-        DEMSim.SetFamilyPrescribedLinVel(2, to_string_with_precision(forward_v), "0", "none", false);
+        // DEMSim.SetFamilyPrescribedLinVel(2, to_string_with_precision(forward_v), "0", "none", false);
+        DEMSim.SetFamilyPrescribedLinVel(2, "none", "0", "none", false);
         DEMSim.SetFamilyPrescribedAngVel(2, "0", to_string_with_precision(w_r), "0", false);
         DEMSim.AddFamilyPrescribedAcc(2, to_string_with_precision(-added_pressure * std::sin(G_ang) / wheel_mass),
                                       "none", to_string_with_precision(-added_pressure * std::cos(G_ang) / wheel_mass));
@@ -228,7 +230,8 @@ int main(int argc, char* argv[]) {
         wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.1 + wheel_rad));
 
         int report_ps = 1000;
-        unsigned int report_steps = (unsigned int)(1.0 / (report_ps * step_size));
+        float report_time = report_ps * step_size;
+        unsigned int report_steps = (unsigned int)(1.0 / report_time);
         unsigned int cur_step = 0;
         double xforce = 0., yforce = 0.;
         unsigned int report_num = 0;
@@ -249,17 +252,20 @@ int main(int argc, char* argv[]) {
             DEMSim.ChangeFamily(1, 2);
             DEMSim.DoDynamicsThenSync(1.);
 
-            for (float t = 0; t < sim_end; t += step_size, cur_step++) {
-                if (cur_step % report_steps == 0) {
-                    float3 force = wheel_tracker->ContactAcc();
-                    xforce += (double)force.x * wheel_mass;
-                    yforce += (double)force.y * wheel_mass;
-                    report_num++;
-                }
+            float x1 = wheel_tracker->Pos().x;
 
-                DEMSim.DoDynamics(step_size);
+            float t;
+            for (t = 0; t < sim_end; t += report_time) {
+                float3 force = wheel_tracker->ContactAcc();
+                xforce += (double)force.x * wheel_mass;
+                yforce += (double)force.y * wheel_mass;
+                report_num++;
+
+                DEMSim.DoDynamics(report_time);
             }
 
+            float adv = wheel_tracker->Pos().x - x1;
+            std::cout << "Slip: " << 1. - adv / (forward_ref_v * t) << std::endl;
             std::cout << "Force X: " << xforce / report_num << std::endl;
             std::cout << "Force Y: " << yforce / report_num << std::endl;
 
