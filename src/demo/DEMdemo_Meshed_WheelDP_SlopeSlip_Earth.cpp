@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
     int cur_test = atoi(argv[1]);
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_Wheel_Tests_Sensitivity";
+    out_dir += "/DEMdemo_Wheel_Tests_1";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -33,13 +33,15 @@ int main(int argc, char* argv[]) {
     double world_size_x = 3.;
     double world_size_z = 4.0;
     float w_r = 0.8;
-    double sim_end = 8.;
+    double sim_end = 20.;
+    float z_adv_targ = 0.5;
 
     // Define the wheel geometry
+    float eff_mass = 88.;
     float wheel_rad = 0.25;
     float wheel_width = 0.2;
     float wheel_mass = 5.;  // 8.7;
-    float total_pressure = 88. * 9.81; // 22.
+    float total_pressure = eff_mass * 9.81;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
@@ -217,10 +219,12 @@ int main(int argc, char* argv[]) {
         float max_z = max_z_finder->GetValue();
         wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.1 + wheel_rad));
 
-        // float bulk_den_high = partial_mass_finder->GetValue() / ((-0.41 + 0.5) * world_size_x * world_size_y);
-        // float bulk_den_low = total_mass_finder->GetValue() / ((max_z + 0.5) * world_size_x * world_size_y);
-        // std::cout << "Bulk density high: " << bulk_den_high << std::endl;
-        // std::cout << "Bulk density low: " << bulk_den_low << std::endl;
+        int report_ps = 1000;
+        float report_time = report_ps * step_size;
+        unsigned int report_steps = (unsigned int)(1.0 / report_time);
+        unsigned int cur_step = 0;
+        double energy = 0.;
+        unsigned int report_num = 0;
 
         DEMSim.ChangeFamily(11, 1);
 
@@ -238,13 +242,28 @@ int main(int argc, char* argv[]) {
 
             float3 V = wheel_tracker->Vel();
             float x1 = wheel_tracker->Pos().x;
+            float z1 = x1 * std::sin(Slope_deg / 180. * math_PI);
+            float x2, z2, z_adv = 0.;
 
-            DEMSim.DoDynamicsThenSync(sim_end);
+            float t;
+            for (t = 0; t < sim_end; t += report_time, report_num++) {
+                if (z_adv >= z_adv_targ)
+                    break;
+                float3 angAcc = wheel_tracker->ContactAngAccLocal();
+                energy += (double)angAcc.y * wheel_IYY * w_r * (double)report_time;
+                x2 = wheel_tracker->Pos().x;
+                z_adv = x2 * std::sin(Slope_deg / 180. * math_PI) - z1;
 
-            float x2 = wheel_tracker->Pos().x;
+                DEMSim.DoDynamics(report_time);
+            }
+
             float adv = x2 - x1;
-            std::cout << "Advancement: " << adv << std::endl;
-            std::cout << "Slip: " << 1. - adv / (v_ref * sim_end) << std::endl;
+            float eff_energy = eff_mass * z_adv * G_mag;
+            std::cout << "Time: " << t << std::endl;
+            std::cout << "Slip: " << 1. - adv / (v_ref * t) << std::endl;
+            std::cout << "Energy: " << energy << std::endl;
+            std::cout << "Efficiency: " << eff_energy / energy << std::endl;
+            std::cout << "Z advance: " << z_adv << std::endl;
 
             {
                 // Overwrite previous...
@@ -255,6 +274,7 @@ int main(int argc, char* argv[]) {
                 DEMSim.WriteMeshFile(std::string(meshname));
                 std::cout << "=================================" << std::endl;
             }
+            DEMSim.DoDynamicsThenSync(0);
         }
 
         // DEMSim.ShowTimingStats();

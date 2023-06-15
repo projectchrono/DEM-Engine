@@ -45,7 +45,7 @@ int main(int argc, char* argv[]) {
     // Wheel movements
     float w_r = 0.8;
     float forward_slip = 0.1;
-    double sim_end = 6.;
+    double sim_end = 5.;
     float tilt = 5. / 180. * math_PI;
     float forward_v = w_r * wheel_rad * std::cos(tilt) * (1. - forward_slip);
 
@@ -187,7 +187,7 @@ int main(int argc, char* argv[]) {
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
         // (move freely linearly)
         DEMSim.SetFamilyPrescribedAngVel(1, "0", "0", "0", false);
-        DEMSim.SetFamilyPrescribedLinVel(2, to_string_with_precision(forward_v), "0", "0", false);
+        DEMSim.SetFamilyPrescribedLinVel(2, to_string_with_precision(forward_v), "0", "none", false);
         DEMSim.SetFamilyPrescribedAngVel(2, "0", to_string_with_precision(w_r), "0", false);
         DEMSim.AddFamilyPrescribedAcc(2, to_string_with_precision(-added_pressure * std::sin(G_ang) / wheel_mass),
                                       "none", to_string_with_precision(-added_pressure * std::cos(G_ang) / wheel_mass));
@@ -252,16 +252,16 @@ int main(int argc, char* argv[]) {
             for (float t = 0; t < sim_end; t += step_size, cur_step++) {
                 if (cur_step % report_steps == 0) {
                     float3 force = wheel_tracker->ContactAcc();
-                    xforce += (double)force.x;
-                    yforce += (double)force.y;
+                    xforce += (double)force.x * wheel_mass;
+                    yforce += (double)force.y * wheel_mass;
                     report_num++;
                 }
 
                 DEMSim.DoDynamics(step_size);
             }
 
-            std::cout << "Force X: " << -xforce / report_num << std::endl;
-            std::cout << "Force Y: " << -yforce / report_num << std::endl;
+            std::cout << "Force X: " << xforce / report_num << std::endl;
+            std::cout << "Force Y: " << yforce / report_num << std::endl;
 
             {
                 // Overwrite previous...
