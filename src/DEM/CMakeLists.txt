@@ -47,6 +47,11 @@ set(DEM_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/AuxClasses.cpp
 )
 
+set(PyDEME_sources
+	${CMAKE_CURRENT_SOURCE_DIR}/BdrsAndObjs.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/Defines.cpp
+)
+
 target_sources(
 	DEM
 	PUBLIC ${DEM_headers}
@@ -78,13 +83,13 @@ install(
 		PATTERN "utils/*.hpp"
 )
 
-message(STATUS "==== Building Tester Object for DEMExternObj Component ====")
+message(STATUS "==== Building PyDEME Components ====")
 
-pybind11_add_module(BdrsAndObjs ${DEM_headers} ${DEM_sources} ${CMAKE_CURRENT_SOURCE_DIR}/BdrsAndObjs.cpp)
-set_target_properties(BdrsAndObjs PROPERTIES LINKER_LANGUAGE CXX)
+pybind11_add_module(DEME ${DEM_headers} ${DEM_sources} ${PyDEME_sources})
+set_target_properties(DEME PROPERTIES LINKER_LANGUAGE CXX)
 
 target_include_directories(
-	BdrsAndObjs
+	DEME
 	PUBLIC ${ProjectIncludeSource}
 	PUBLIC ${ProjectIncludeGenerated}
 	PUBLIC ${NVIDIAMathDir}
@@ -92,7 +97,7 @@ target_include_directories(
 )
 
 target_link_libraries(
-	BdrsAndObjs
+	DEME
 	PUBLIC CUB::CUB
 	PUBLIC ${ChPF_IMPORTED_NAME}
 	PUBLIC ${PYTHON_LIBRARIES}
@@ -101,10 +106,10 @@ target_link_libraries(
 )
 
 set_target_properties(
-	BdrsAndObjs PROPERTIES
+	DEME PROPERTIES
 	POSITION_INDEPENDENT_CODE True
 	CXX_STANDARD ${CXXSTD_SUPPORTED}
 	PUBLIC_HEADER "${DEM_headers}"
 )
 
-message(STATUS "==== Completed Build for Tester Object for DEMExternObj Component ====")
+message(STATUS "==== Completed Building PyDEME Components ====")

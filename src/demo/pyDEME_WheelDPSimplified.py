@@ -24,7 +24,7 @@ if __name__ == "__main__":
     out_dir = os.path.join(os.getcwd(), out_dir)
     os.makedirs(out_dir, exist_ok = True)
     
-    DEMSim = DEME.DEMSolver
+    DEMSim = DEME.DEMSolver()
     # TODO: May just comment all the following options and use default, for now
     # DEMSim.SetVerbosity(INFO)
     # DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV)
