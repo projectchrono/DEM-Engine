@@ -96,7 +96,10 @@ int main() {
         unsigned int fps = 20;
 
         mixer_tracker->SetPos(make_float3(0, 0, chamber_bottom + chamber_height / 2.0));
-        DEMSim.DoDynamicsThenSync(1.);
+        for (double t = 0; t < .75; t += 0.05) {
+            std::cout << "At time " << t << std::endl;
+            DEMSim.DoDynamicsThenSync(0.05);
+        }
         DEMSim.ClearThreadCollaborationStats();
         DEMSim.ClearTimingStats();
         std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
