@@ -672,10 +672,11 @@ class DEMClumpBatch {
     bool family_isSpecified = false;
     std::vector<std::shared_ptr<DEMClumpTemplate>> types;
     std::vector<unsigned int> families;
-    std::vector<float3> vel;
-    std::vector<float3> angVel;
-    std::vector<float3> xyz;
-    std::vector<float4> oriQ;
+    std::vector<vector<float>> vel;
+    std::vector<vector<float>> angVel;
+    std::vector<vector<float>> xyz;
+    std::vector<vector<float>> oriQ;
+
     // Existing contact/contact wildcard info. If it is a new simulation, they should be empty; but if it is a restarted
     // one, it can have some existing contacts/wildcards. Note that all of them are "SS" type of contact. The contact
     // pair IDs are relative to this batch (starting from 0, up to num of this batch - 1, that is).

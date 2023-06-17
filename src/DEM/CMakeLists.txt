@@ -50,6 +50,7 @@ set(DEM_sources
 set(PyDEME_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/BdrsAndObjs.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/Defines.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/Structs.cpp
 )
 
 target_sources(
