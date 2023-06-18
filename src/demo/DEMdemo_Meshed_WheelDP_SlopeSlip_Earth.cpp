@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
     int cur_test = atoi(argv[1]);
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_Wheel_Tests_1";
+    out_dir += "/DEMdemo_Wheel_Tests_2";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -34,10 +34,10 @@ int main(int argc, char* argv[]) {
     double world_size_z = 4.0;
     float w_r = 0.8;
     double sim_end = 20.;
-    float z_adv_targ = 0.1;
+    float z_adv_targ = 0.2; // 0.1;
 
     // Define the wheel geometry
-    float eff_mass = 88.;
+    float eff_mass = 22.;
     float wheel_rad = 0.25;
     float wheel_width = 0.2;
     float wheel_mass = 5.;  // 8.7;
