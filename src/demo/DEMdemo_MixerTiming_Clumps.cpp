@@ -18,7 +18,7 @@ using namespace deme;
 using namespace std::filesystem;
 
 int main() {
-    float granular_rad = 0.00075;
+    float granular_rad = 0.0008;
     unsigned int num_particles = 0;
     double world_size = 1.;
     double CDFreq = 25.1;
