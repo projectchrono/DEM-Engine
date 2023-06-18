@@ -451,8 +451,8 @@ class DEMSolver {
     std::vector<std::pair<bodyID_t, bodyID_t>> GetClumpContacts(
         std::vector<std::pair<family_t, family_t>>& family_pair) const;
 
-    /// Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial location
-    /// means the location of the clumps' CoM coordinates in the global frame.
+    /// .Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial location
+    /// means the location of the clumps' CoM coordinates in the global frame
     std::shared_ptr<DEMClumpBatch> AddClumps(DEMClumpBatch& input_batch);
     /// @brief Load clumps into the simulation.
     /// @param input_types Vector of the types of the clumps (vector of shared pointers).

@@ -51,6 +51,8 @@ set(PyDEME_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/BdrsAndObjs.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/Defines.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/Structs.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/API.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/Samplers.cpp
 )
 
 target_sources(

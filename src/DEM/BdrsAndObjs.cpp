@@ -43,4 +43,39 @@ PYBIND11_MODULE(BdrsAndObjs, obj) {
         .def_readwrite("MOI", &deme::DEMExternObj::MOI)
         .def_readwrite("load_order", &deme::DEMExternObj::load_order)
         .def_readwrite("entity_params", &deme::DEMExternObj::entity_params);
+
+    py::class_<deme::DEMMeshConnected>(obj, "DEMMeshConnected")
+        .def(py::init<>())
+        .def("__del__", &deme::DEMMeshConnected::~DEMMeshConnected,
+             "Linker to DEMMeshConnected object destructor in underlying C++ framework")
+        .def("Clear", &deme::DEMMeshConnected::Clear, "Clears everything from memory")
+        .def("LoadWavefrontMesh", &deme::DEMMeshConnected::LoadWavefrontMesh,
+             "Load a triangle mesh saved as a Wavefront .obj file")
+        .def("WriteWavefront", &deme::DEMMeshConnected::WriteWavefront,
+             "Write the specified meshes in a Wavefront .obj file")
+        .def("Merge", &deme::DEMMeshConnected::Merge, "Utility function for merging multiple meshes")
+        .def("GetNumTriangles", &deme::DEMMeshConnected::GetNumTriangles,
+             "Get the number of triangles already added to this mesh")
+        .def("GetNumNodes", &deme::DEMMeshConnected::GetNumNodes, "Get the number of nodes in the mesh")
+        .def("UseNormals", &deme::DEMMeshConnected::UseNormals,
+             "Instruct that when the mesh is initialized into the system, it will re-order the nodes of each triangle "
+             "so that the normals derived from right-hand-rule are the same as the normals in the mesh file")
+        .def("GetTriangle", &deme::DEMMeshConnected::GetTriangle, "Access the n-th triangle in mesh")
+        .def("SetMass", &deme::DEMMeshConnected::SetMass)
+        .def("SetMOI", &deme::DEMMeshConnected::SetMOI)
+        .def("SetFamily", &deme::DEMMeshConnected::SetFamily)
+        .def("SetMaterial", &deme::DEMMeshConnected::SetMaterial)
+        .def("ComputeMassProperties", &deme::DEMMeshConnected::ComputeMassProperties)
+        .def("SetInitQuat", &deme::DEMMeshConnected::SetInitQuat)
+        .def("SetInitPos", &deme::DEMMeshConnected::SetInitPos)
+        .def("InformCentroidPrincipal", &deme::DEMMeshConnected::InformCentroidPrincipal)
+        .def("Move", &deme::DEMMeshConnected::Move)
+        .def("Mirror", &deme::DEMMeshConnected::Mirror)
+        .def("Scale", &deme::DEMMeshConnected::Scale)
+        .def("ComputeNeighbouringTriangleMap", &deme::DEMMeshConnected::ComputeNeighbouringTriangleMap)
+        .def("ClearWildcards", &deme::DEMMeshConnected::ClearWildcards)
+        .def("SetGeometryWildcards", &deme::DEMMeshConnected::SetGeometryWildcards)
+        .def("AddGeometryWildcard", &deme::DEMMeshConnected::AddGeometryWildcard);
+
+    // TODO: Insert readwrite functions to access all public class objects!
 }
