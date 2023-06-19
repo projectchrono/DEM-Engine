@@ -39,6 +39,7 @@
 #include <utility>
 #include <vector>
 #include <DEM/HostSideHelpers.hpp>
+#include <DEM/Defines.h>
 
 namespace deme {
 

@@ -17,6 +17,7 @@
 #include <regex>
 #include <fstream>
 #include <filesystem>
+#include <unordered_map>
 #include <nvmath/helper_math.cuh>
 #include <DEM/VariableTypes.h>
 // #include <DEM/Defines.h>

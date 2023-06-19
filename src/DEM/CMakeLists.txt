@@ -48,11 +48,7 @@ set(DEM_sources
 )
 
 set(PyDEME_sources
-	${CMAKE_CURRENT_SOURCE_DIR}/BdrsAndObjs.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/Defines.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/Structs.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/API.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/utils/Samplers.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/PyDEME.cpp
 )
 
 target_sources(
@@ -66,6 +62,23 @@ set_target_properties(
 	POSITION_INDEPENDENT_CODE True
 	CXX_STANDARD ${CXXSTD_SUPPORTED}
 	PUBLIC_HEADER "${DEM_headers}"
+)
+
+target_include_directories(
+	DEM
+	PUBLIC ${ProjectIncludeSource}
+	PUBLIC ${ProjectIncludeGenerated}
+	PUBLIC ${NVIDIAMathDir}
+	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
+)
+
+target_link_libraries(
+	DEM
+	PUBLIC CUB::CUB
+	PUBLIC ${ChPF_IMPORTED_NAME}
+	PUBLIC ${PYTHON_LIBRARIES}
+	PUBLIC pybind11::headers
+	PUBLIC DEMERuntimeDataHelper
 )
 
 #foreach(header ${DEM_headers})
@@ -89,7 +102,7 @@ install(
 message(STATUS "==== Building PyDEME Components ====")
 
 pybind11_add_module(DEME ${DEM_headers} ${DEM_sources} ${PyDEME_sources})
-set_target_properties(DEME PROPERTIES LINKER_LANGUAGE CXX)
+set_target_properties(DEME PROPERTIES LINKER_LANGUAGE CUDA)
 
 target_include_directories(
 	DEME
@@ -101,7 +114,8 @@ target_include_directories(
 
 target_link_libraries(
 	DEME
-	PUBLIC CUB::CUB
+	PUBLIC CUDA::cudart
+    PUBLIC CUDA::nvrtc
 	PUBLIC ${ChPF_IMPORTED_NAME}
 	PUBLIC ${PYTHON_LIBRARIES}
 	PUBLIC pybind11::headers

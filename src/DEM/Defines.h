@@ -10,7 +10,9 @@
 #include <stdint.h>
 #include <algorithm>
 #include <cmath>
-
+#include <cuda.h>
+#include <cuda_runtime_api.h>
+#include <cuda_runtime.h>
 #include <DEM/VariableTypes.h>
 
 #define DEME_MIN(a, b) ((a < b) ? a : b)

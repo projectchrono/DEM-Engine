@@ -276,7 +276,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     DEME_TRACKED_RESIZE_DEBUGPRINT(alphaZ, nOwnerBodies, "alphaZ", 0);
     DEME_TRACKED_RESIZE_DEBUGPRINT(accSpecified, nOwnerBodies, "accSpecified", 0);
     DEME_TRACKED_RESIZE_DEBUGPRINT(angAccSpecified, nOwnerBodies, "angAccSpecified", 0);
-    
+
     // Resize the family mask `matrix' (in fact it is flattened)
     DEME_TRACKED_RESIZE_DEBUGPRINT(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2,
                                    "familyMaskMatrix", DONT_PREVENT_CONTACT);
@@ -544,13 +544,13 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                 type_marks.at(j) = a_batch->types.at(j)->mark;
             }
             // Now a ref to xyz
-            const std::vector<float3>& input_clump_xyz = a_batch->xyz;
+            const std::vector<std::vector<float>>& input_clump_xyz = a_batch->xyz;
             // Now a ref to vel
-            const std::vector<float3>& input_clump_vel = a_batch->vel;
+            const std::vector<std::vector<float>>& input_clump_vel = a_batch->vel;
             // Now a ref to quaternion
-            const std::vector<float4>& input_clump_oriQ = a_batch->oriQ;
+            const std::vector<std::vector<float>>& input_clump_oriQ = a_batch->oriQ;
             // Now a ref to angular velocity
-            const std::vector<float3>& input_clump_angVel = a_batch->angVel;
+            const std::vector<std::vector<float>>& input_clump_angVel = a_batch->angVel;
             // For family numbers, we check if the user has explicitly set them. If not, send a warning.
             if (!(a_batch->family_isSpecified)) {
                 pop_family_msg = true;
@@ -572,7 +572,8 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                 }
 
                 // For clumps, special courtesy from us to check if it falls in user's box
-                float3 this_clump_xyz = input_clump_xyz.at(j);
+                float3 this_clump_xyz = {input_clump_xyz.at(j)[0], input_clump_xyz.at(j)[1], input_clump_xyz.at(j)[2]};
+
                 if (!isBetween(this_clump_xyz, simParams->userBoxMin, simParams->userBoxMax)) {
                     sus_point = this_clump_xyz;
                     in_domain_msg = true;
@@ -617,22 +618,22 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
 
                 // Set initial oriQ
                 auto oriQ_of_this_clump = input_clump_oriQ.at(j);
-                oriQw.at(nExistOwners + i) = oriQ_of_this_clump.w;
-                oriQx.at(nExistOwners + i) = oriQ_of_this_clump.x;
-                oriQy.at(nExistOwners + i) = oriQ_of_this_clump.y;
-                oriQz.at(nExistOwners + i) = oriQ_of_this_clump.z;
+                oriQw.at(nExistOwners + i) = oriQ_of_this_clump[0];
+                oriQx.at(nExistOwners + i) = oriQ_of_this_clump[1];
+                oriQy.at(nExistOwners + i) = oriQ_of_this_clump[2];
+                oriQz.at(nExistOwners + i) = oriQ_of_this_clump[3];
 
                 // Set initial velocity
                 auto vel_of_this_clump = input_clump_vel.at(j);
-                vX.at(nExistOwners + i) = vel_of_this_clump.x;
-                vY.at(nExistOwners + i) = vel_of_this_clump.y;
-                vZ.at(nExistOwners + i) = vel_of_this_clump.z;
+                vX.at(nExistOwners + i) = vel_of_this_clump[0];
+                vY.at(nExistOwners + i) = vel_of_this_clump[1];
+                vZ.at(nExistOwners + i) = vel_of_this_clump[2];
 
                 // Set initial angular velocity
                 auto angVel_of_this_clump = input_clump_angVel.at(j);
-                omgBarX.at(nExistOwners + i) = angVel_of_this_clump.x;
-                omgBarY.at(nExistOwners + i) = angVel_of_this_clump.y;
-                omgBarZ.at(nExistOwners + i) = angVel_of_this_clump.z;
+                omgBarX.at(nExistOwners + i) = angVel_of_this_clump[0];
+                omgBarY.at(nExistOwners + i) = angVel_of_this_clump[1];
+                omgBarZ.at(nExistOwners + i) = angVel_of_this_clump[2];
 
                 // Set family code
                 family_t this_family_num = input_clump_family.at(j);
