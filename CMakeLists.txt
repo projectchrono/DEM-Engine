@@ -21,7 +21,6 @@ project(
 )
 
 set (CMAKE_CXX_STANDARD 14)
-set (CMAKE_CXX_FLAGS "-fno-lto")
 
 # ---------------------------------------------------------------------------- #
 # Additional Packages

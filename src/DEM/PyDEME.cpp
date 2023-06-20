@@ -262,7 +262,6 @@ PYBIND11_MODULE(DEME, obj) {
              "Load a triangle mesh saved as a Wavefront .obj file")
         .def("WriteWavefront", &deme::DEMMeshConnected::WriteWavefront,
              "Write the specified meshes in a Wavefront .obj file")
-        .def("Merge", &deme::DEMMeshConnected::Merge, "Utility function for merging multiple meshes")
         .def("GetNumTriangles", &deme::DEMMeshConnected::GetNumTriangles,
              "Get the number of triangles already added to this mesh")
         .def("GetNumNodes", &deme::DEMMeshConnected::GetNumNodes, "Get the number of nodes in the mesh")
@@ -279,14 +278,12 @@ PYBIND11_MODULE(DEME, obj) {
         .def("SetMaterial",
              static_cast<void (deme::DEMMeshConnected::*)(const std::vector<std::shared_ptr<deme::DEMMaterial>>&)>(
                  &deme::DEMMeshConnected::SetMaterial))
-        .def("ComputeMassProperties", &deme::DEMMeshConnected::ComputeMassProperties)
         .def("SetInitQuat", &deme::DEMMeshConnected::SetInitQuat)
         .def("SetInitPos", &deme::DEMMeshConnected::SetInitPos)
         .def("InformCentroidPrincipal", &deme::DEMMeshConnected::InformCentroidPrincipal)
         .def("Move", &deme::DEMMeshConnected::Move)
         .def("Mirror", &deme::DEMMeshConnected::Mirror)
         .def("Scale", static_cast<void (deme::DEMMeshConnected::*)(float)>(&deme::DEMMeshConnected::Scale))
-        .def("ComputeNeighbouringTriangleMap", &deme::DEMMeshConnected::ComputeNeighbouringTriangleMap)
         .def("ClearWildcards", &deme::DEMMeshConnected::ClearWildcards)
         .def("SetGeometryWildcards", &deme::DEMMeshConnected::SetGeometryWildcards)
         .def("AddGeometryWildcard",

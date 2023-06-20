@@ -13,6 +13,9 @@ target_include_directories(
 	PUBLIC ${ProjectIncludeGenerated}
 	PUBLIC ${NVIDIAMathDir}
 	PUBLIC ${PYTHON_INCLUDE_DIRS}
+	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
+	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/core
+	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/algorithms
 )
 
 target_link_libraries(
@@ -20,9 +23,12 @@ target_link_libraries(
 	PUBLIC CUB::CUB
 	PUBLIC ${ChPF_IMPORTED_NAME}
 	PUBLIC ${PYTHON_LIBRARIES}
+	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
+	PUBLIC core
+	PUBLIC algorithms
 	pybind11::headers
+	-static-libgcc -static-libstdc++
 )
-
 
 set(DEM_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/kT.h
@@ -70,6 +76,7 @@ target_include_directories(
 	PUBLIC ${ProjectIncludeGenerated}
 	PUBLIC ${NVIDIAMathDir}
 	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
+	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/core
 )
 
 target_link_libraries(
@@ -77,8 +84,12 @@ target_link_libraries(
 	PUBLIC CUB::CUB
 	PUBLIC ${ChPF_IMPORTED_NAME}
 	PUBLIC ${PYTHON_LIBRARIES}
+	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
 	PUBLIC pybind11::headers
 	PUBLIC DEMERuntimeDataHelper
+	PUBLIC core
+	PUBLIC algorithms
+	-static-libgcc -static-libstdc++
 )
 
 #foreach(header ${DEM_headers})
@@ -102,7 +113,8 @@ install(
 message(STATUS "==== Building PyDEME Components ====")
 
 pybind11_add_module(DEME ${DEM_headers} ${DEM_sources} ${PyDEME_sources})
-set_target_properties(DEME PROPERTIES LINKER_LANGUAGE CUDA)
+
+set_target_properties(DEME PROPERTIES LINKER_LANGUAGE CXX)
 
 target_include_directories(
 	DEME
@@ -110,6 +122,8 @@ target_include_directories(
 	PUBLIC ${ProjectIncludeGenerated}
 	PUBLIC ${NVIDIAMathDir}
 	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
+	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/core
+	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/algorithms
 )
 
 target_link_libraries(
@@ -120,6 +134,9 @@ target_link_libraries(
 	PUBLIC ${PYTHON_LIBRARIES}
 	PUBLIC pybind11::headers
 	PUBLIC DEMERuntimeDataHelper
+	PUBLIC core
+	PUBLIC algorithms
+	-static-libgcc -static-libstdc++
 )
 
 set_target_properties(
@@ -129,4 +146,5 @@ set_target_properties(
 	PUBLIC_HEADER "${DEM_headers}"
 )
 
+target_compile_options(DEME PUBLIC -flto=auto -fno-lto)
 message(STATUS "==== Completed Building PyDEME Components ====")
