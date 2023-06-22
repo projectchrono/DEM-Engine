@@ -18,15 +18,15 @@ using namespace deme;
 using namespace std::filesystem;
 
 int main() {
-    float granular_rad = 0.00107803 * std::pow(0.5, 1. / 3.);
+    float granular_rad = 0.0008;
     unsigned int num_particles = 0;
     double CDFreq = 30.1;
     double world_size = 1;
     double pi = 3.14159;
-    float step_size = 2e-6;
+    float step_size = 0.5e-6;
     size_t n_steps = 5e5;
 
-    while (num_particles < 80e6) {
+    {
         DEMSolver DEMSim;
         DEMSim.SetVerbosity(ERROR);
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
