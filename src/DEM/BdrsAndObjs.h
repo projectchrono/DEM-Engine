@@ -88,7 +88,8 @@ class DEMObjComponent {
 };
 
 /// API-(Host-)side struct that holds cached user-input external objects
-struct DEMExternObj {
+class DEMExternObj {
+    public:
     // Component object types
     std::vector<OBJ_COMPONENT> types;
     // Component object materials

@@ -118,6 +118,7 @@ set_target_properties(DEME PROPERTIES LINKER_LANGUAGE CXX)
 
 target_include_directories(
 	DEME
+	PUBLIC ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
 	PUBLIC ${ProjectIncludeSource}
 	PUBLIC ${ProjectIncludeGenerated}
 	PUBLIC ${NVIDIAMathDir}

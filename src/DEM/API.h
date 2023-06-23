@@ -325,7 +325,7 @@ class DEMSolver {
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
                                                     const std::vector<float>& moi,
                                                     const std::string filename,
-                                                    const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
+                                                    const std::shared_ptr<DEMMaterial>& sp_materials) {
         assertThreeElements(moi, "LoadClumpType", "moi");
         return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), filename, sp_materials);
     }
@@ -334,13 +334,7 @@ class DEMSolver {
                                                     float3 moi,
                                                     const std::string filename,
                                                     const std::shared_ptr<DEMMaterial>& sp_material);
-    std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
-                                                    const std::vector<float>& moi,
-                                                    const std::string filename,
-                                                    const std::shared_ptr<DEMMaterial>& sp_material) {
-        assertThreeElements(moi, "LoadClumpType", "moi");
-        return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), filename, sp_material);
-    }
+
     /// A simplified version of LoadClumpType: it just loads a one-sphere clump template
     std::shared_ptr<DEMClumpTemplate> LoadSphereType(float mass,
                                                      float radius,
@@ -511,6 +505,10 @@ class DEMSolver {
                                                              bool load_normals = true,
                                                              bool load_uv = false);
     std::shared_ptr<DEMMeshConnected> AddWavefrontMeshObject(DEMMeshConnected& mesh);
+
+    std::shared_ptr<DEMTracker> TrackExternObj(std::shared_ptr<DEMExternObj>& obj);
+    std::shared_ptr<DEMTracker> TrackClump(std::shared_ptr<DEMClumpBatch>& obj);
+    std::shared_ptr<DEMTracker> TrackMesh(std::shared_ptr<DEMMeshConnected>& obj);
 
     /// Create a DEMTracker to allow direct control/modification/query to this external object
     std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMExternObj>& obj);

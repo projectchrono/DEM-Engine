@@ -68,7 +68,7 @@ int main() {
     particles1->AddOwnerWildcard("mu_custom", 0.5);
     // This one is never used in force model, yet it should not create an error
     particles1->AddOwnerWildcard("some_property", 1.0);
-    auto tracker1 = DEMSim.Track(particles1);
+auto tracker1 = DEMSim.Track(particles1);
 
     // DEMSim.DisableContactBetweenFamilies(0, 1);
 

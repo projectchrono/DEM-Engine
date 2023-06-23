@@ -279,7 +279,7 @@ void DEMSolver::SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<f
     }
     dT->setTriNodeRelPos(triID, new_triangles);
     dT->solverFlags.willMeshDeform = true;
-    
+
     // kT just received update from dT, to avoid mem hazards
     // kT->setTriNodeRelPos(triID, new_triangles);
 }
@@ -302,7 +302,7 @@ void DEMSolver::UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vecto
     }
     dT->setTriNodeRelPos(triID, new_triangles);
     dT->solverFlags.willMeshDeform = true;
-    
+
     // kT just received update from dT, to avoid mem hazards
     // kT->setTriNodeRelPos(triID, new_triangles);
 }
@@ -1068,19 +1068,6 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(float mass,
 std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(
     float mass,
     float3 moi,
-    const std::string filename,
-    const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
-    DEMClumpTemplate clump;
-    clump.mass = mass;
-    clump.MOI = moi;
-    clump.ReadComponentFromFile(filename);
-    clump.materials = sp_materials;
-    return LoadClumpType(clump);
-}
-
-std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(
-    float mass,
-    float3 moi,
     const std::vector<float>& sp_radii,
     const std::vector<float3>& sp_locations_xyz,
     const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
@@ -1246,8 +1233,13 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(DEMMeshConne
     // But we still need to record a tri-mesh loaded
     nTriObjLoad++;
 
-    cached_mesh_objs.push_back(std::make_shared<DEMMeshConnected>(std::move(mesh)));
-    return cached_mesh_objs.back();
+    std::shared_ptr<DEMMeshConnected> ptr_tmp = std::make_shared<DEMMeshConnected>(std::move(mesh));
+    cached_mesh_objs.push_back(ptr_tmp);
+    std::shared_ptr<DEMMeshConnected> ptr;
+    ptr = cached_mesh_objs.back();
+
+    std::cout << (ptr->GetNumNodes()) << std::endl;
+    return ptr;
 }
 
 std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
@@ -1259,8 +1251,11 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::s
     if (!flag) {
         DEME_ERROR("Failed to load in mesh file %s.", filename.c_str());
     }
+
     mesh.SetMaterial(mat);
-    return AddWavefrontMeshObject(mesh);
+    std::shared_ptr<DEMMeshConnected> ptr = AddWavefrontMeshObject(mesh);
+    std::cout << (ptr->GetNumNodes()) << std::endl;
+    return ptr;
 }
 
 std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
@@ -1311,6 +1306,18 @@ std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMClumpBatch>& obj
     DEMTracker tracker(this);
     tracker.obj = m_tracked_objs.back();
     return std::make_shared<DEMTracker>(std::move(tracker));
+}
+
+std::shared_ptr<DEMTracker> DEMSolver::TrackExternObj(std::shared_ptr<DEMExternObj>& obj) {
+    return Track(obj);
+}
+
+std::shared_ptr<DEMTracker> DEMSolver::TrackMesh(std::shared_ptr<DEMMeshConnected>& obj) {
+    return Track(obj);
+}
+
+std::shared_ptr<DEMTracker> DEMSolver::TrackClump(std::shared_ptr<DEMClumpBatch>& obj) {
+    return Track(obj);
 }
 
 std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity) {

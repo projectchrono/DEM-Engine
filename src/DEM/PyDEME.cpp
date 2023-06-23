@@ -3,6 +3,8 @@
 #include <pybind11/functional.h>
 #include <memory>
 #include "API.h"
+#include "AuxClasses.h"
+#include <core/utils/DEMEPaths.h>
 
 #include <vector>
 #include <string>
@@ -24,8 +26,22 @@ namespace py = pybind11;
 // Defining PyBind11 inclusion code
 
 PYBIND11_MODULE(DEME, obj) {
+    obj.def("GetDEMEDataFile", &deme::GetDEMEDataFile);
+
+    py::class_<deme::DEMInspector, std::shared_ptr<deme::DEMInspector>>(obj, "DEMInspector")
+        .def(py::init<deme::DEMSolver*, deme::DEMDynamicThread*, const std::string&>())
+        .def("GetValue", &deme::DEMInspector::GetValue);
+
+    py::class_<deme::DEMTracker, std::shared_ptr<deme::DEMTracker>>(obj, "Tracker")
+        .def(py::init<deme::DEMSolver*>())
+        .def("SetPos",
+             static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::SetPos))
+        .def("GetContactAcc",
+             static_cast<std::vector<float> (deme::DEMTracker::*)(size_t)>(&deme::DEMTracker::GetContactAcc));
+
     py::class_<deme::HCPSampler>(obj, "HCPSampler")
         .def(py::init<float>())
+
         .def("SampleBox",
              static_cast<std::vector<std::vector<float>> (deme::HCPSampler::*)(
                  const std::vector<float>& center, const std::vector<float>& halfDim)>(&deme::HCPSampler::SampleBox),
@@ -63,27 +79,13 @@ PYBIND11_MODULE(DEME, obj) {
                  const std::vector<float>&, const std::vector<float>&, const std::shared_ptr<deme::DEMMaterial>&)>(
                  &deme::DEMSolver::AddBCPlane),
              "Add an (analytical or clump-represented) external object to the simulation system")
-        .def("Track",
-             static_cast<std::shared_ptr<deme::DEMTracker> (deme::DEMSolver::*)(std::shared_ptr<deme::DEMExternObj>&)>(
-                 &deme::DEMSolver::Track),
-             "Create a DEMTracker to allow direct control/modification/query to this external object")
-        .def("Track",
-             static_cast<std::shared_ptr<deme::DEMTracker> (deme::DEMSolver::*)(std::shared_ptr<deme::DEMClumpBatch>&)>(
-                 &deme::DEMSolver::Track),
-             "Create a DEMTracker to allow direct control/modification/query to this external object")
-        .def("Track",
-             static_cast<std::shared_ptr<deme::DEMTracker> (deme::DEMSolver::*)(
-                 std::shared_ptr<deme::DEMMeshConnected>&)>(&deme::DEMSolver::Track),
-             "Create a DEMTracker to allow direct control/modification/query to this external object")
-        .def("AddWavefrontMeshObject",
-             static_cast<std::shared_ptr<deme::DEMMeshConnected> (deme::DEMSolver::*)(
-                 const std::string&, const std::shared_ptr<deme::DEMMaterial>&, bool, bool)>(
-                 &deme::DEMSolver::AddWavefrontMeshObject),
-             "Load a mesh-represented object")
-        .def("AddWavefrontMeshObject",
-             static_cast<std::shared_ptr<deme::DEMMeshConnected> (deme::DEMSolver::*)(const std::string&, bool, bool)>(
-                 &deme::DEMSolver::AddWavefrontMeshObject),
-             "Load a mesh-represented object")
+        .def("TrackExternObj", (&deme::DEMSolver::TrackExternObj),
+             "Create a DEMTracker to allow direct control/modification/query to this external object for DEMExternObj")
+        .def("TrackClump", (&deme::DEMSolver::TrackClump),
+             "Create a DEMTracker to allow direct control/modification/query to this external object for DEMClumpBatch")
+        .def("TrackMesh", (&deme::DEMSolver::TrackMesh),
+             "Create a DEMTracker to allow direct control/modification/query to this external object for "
+             "DEMMeshConnected")
         .def("AddWavefrontMeshObject",
              static_cast<std::shared_ptr<deme::DEMMeshConnected> (deme::DEMSolver::*)(
                  const std::string&, const std::shared_ptr<deme::DEMMaterial>&, bool, bool)>(
@@ -91,8 +93,8 @@ PYBIND11_MODULE(DEME, obj) {
              "Load a mesh-represented object")
         .def("LoadClumpType",
              static_cast<std::shared_ptr<deme::DEMClumpTemplate> (deme::DEMSolver::*)(
-                 float, const std::vector<float>&, const std::vector<float>&, const std::vector<std::vector<float>>&,
-                 const std::vector<std::shared_ptr<deme::DEMMaterial>>&)>(&deme::DEMSolver::LoadClumpType),
+                 float, const std::vector<float>&, const std::string, const std::shared_ptr<deme::DEMMaterial>&)>(
+                 &deme::DEMSolver::LoadClumpType),
              "Load a clump type into the API-level cache")
         .def("AddClumps",
              static_cast<std::shared_ptr<deme::DEMClumpBatch> (deme::DEMSolver::*)(deme::DEMClumpBatch&)>(
@@ -181,11 +183,12 @@ PYBIND11_MODULE(DEME, obj) {
         .def("ShowAnomalies", &deme::DEMSolver::ShowAnomalies,
              "Show potential anomalies that may have been there in the simulation, then clear the anomaly log.");
 
-    py::class_<deme::DEMMaterial>(obj, "DEMMaterial")
+    py::class_<deme::DEMMaterial, std::shared_ptr<deme::DEMMaterial>>(obj, "DEMMaterial")
         .def(py::init<const std::unordered_map<std::string, float>&>())
-        .def_readwrite("mat_prop", &deme::DEMMaterial::mat_prop);
+        .def_readwrite("mat_prop", &deme::DEMMaterial::mat_prop)
+        .def_readwrite("load_order", &deme::DEMMaterial::load_order);
 
-    py::class_<deme::DEMClumpTemplate>(obj, "DEMClumpTemplate")
+    py::class_<deme::DEMClumpTemplate, std::shared_ptr<deme::DEMClumpTemplate>>(obj, "DEMClumpTemplate")
         .def(py::init<>())
         .def("SetVolume", &deme::DEMClumpTemplate::SetVolume)
         .def("ReadComponentFromFile", &deme::DEMClumpTemplate::ReadComponentFromFile)
@@ -229,7 +232,7 @@ PYBIND11_MODULE(DEME, obj) {
                                         &deme::DEMClumpBatch::AddGeometryWildcard))
         .def("GetNumContacts", &deme::DEMClumpBatch::GetNumContacts);
 
-    py::class_<deme::DEMExternObj>(obj, "DEMExternObj")
+    py::class_<deme::DEMExternObj, std::shared_ptr<deme::DEMExternObj>>(obj, "DEMExternObj")
         .def(py::init<>())
         .def("SetFamily", &deme::DEMExternObj::SetFamily, "Defines an object contact family number")
         .def("SetMass", &deme::DEMExternObj::SetMass, "Sets the mass of this object")
@@ -255,8 +258,10 @@ PYBIND11_MODULE(DEME, obj) {
         .def_readwrite("load_order", &deme::DEMExternObj::load_order)
         .def_readwrite("entity_params", &deme::DEMExternObj::entity_params);
 
-    py::class_<deme::DEMMeshConnected>(obj, "DEMMeshConnected")
+    py::class_<deme::DEMMeshConnected, std::shared_ptr<deme::DEMMeshConnected>>(obj, "DEMMeshConnected")
         .def(py::init<>())
+        .def(py::init<std::string&>())
+        .def(py::init<std::string, const std::shared_ptr<deme::DEMMaterial>&>())
         .def("Clear", &deme::DEMMeshConnected::Clear, "Clears everything from memory")
         .def("LoadWavefrontMesh", &deme::DEMMeshConnected::LoadWavefrontMesh,
              "Load a triangle mesh saved as a Wavefront .obj file")
@@ -344,7 +349,8 @@ PYBIND11_MODULE(DEME, obj) {
         .value("X", deme::SPATIAL_DIR::X)
         .value("Y", deme::SPATIAL_DIR::Y)
         .value("Z", deme::SPATIAL_DIR::Z)
-        .value("NONE", deme::SPATIAL_DIR::NONE);
+        .value("NONE", deme::SPATIAL_DIR::NONE)
+        .export_values();
 
     py::enum_<deme::CNT_OUTPUT_CONTENT>(obj, "CNT_OUTPUT_CONTENT")
         .value("CNT_TYPE", deme::CNT_OUTPUT_CONTENT::CNT_TYPE)
