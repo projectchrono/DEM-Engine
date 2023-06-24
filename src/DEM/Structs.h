@@ -672,10 +672,10 @@ class DEMClumpBatch {
     bool family_isSpecified = false;
     std::vector<std::shared_ptr<DEMClumpTemplate>> types;
     std::vector<unsigned int> families;
-    std::vector<std::vector<float>> vel;
-    std::vector<std::vector<float>> angVel;
-    std::vector<std::vector<float>> xyz;
-    std::vector<std::vector<float>> oriQ;
+    std::vector<float3> vel;
+    std::vector<float3> angVel;
+    std::vector<float3> xyz;
+    std::vector<float4> oriQ;
 
     // Existing contact/contact wildcard info. If it is a new simulation, they should be empty; but if it is a restarted
     // one, it can have some existing contacts/wildcards. Note that all of them are "SS" type of contact. The contact
@@ -691,10 +691,10 @@ class DEMClumpBatch {
     DEMClumpBatch(size_t num) : nClumps(num) {
         types.resize(num);
         families.resize(num, DEFAULT_CLUMP_FAMILY_NUM);
-        vel.resize(num, {0, 0, 0});
-        angVel.resize(num, {0, 0, 0});
+        vel.resize(num, make_float3(0));
+        angVel.resize(num, make_float3(0));
         xyz.resize(num);
-        oriQ.resize(num, {0, 0, 0, 1});
+        oriQ.resize(num, host_make_float4(0, 0, 0, 1));
     }
     ~DEMClumpBatch() {}
     size_t GetNumClumps() const { return nClumps; }
@@ -714,35 +714,14 @@ class DEMClumpBatch {
 
     void SetPos(const std::vector<float3>& input) {
         assertLength(input.size(), "SetPos");
-
-        xyz.resize(input.size());
-
-        for (int i = 0; i < input.size(); i++) {
-            std::vector<float> temp_vec;
-            temp_vec.push_back(input[i].x);
-            temp_vec.push_back(input[i].y);
-            temp_vec.push_back(input[i].z);
-
-            xyz[i] = temp_vec;
-        }
+        xyz = input;
     }
     void SetPos(float3 input) { SetPos(std::vector<float3>(nClumps, input)); }
 
     void SetVel(const std::vector<float3>& input) {
         assertLength(input.size(), "SetVel");
-
-        vel.resize(input.size());
-
-        for (int i = 0; i < input.size(); i++) {
-            std::vector<float> temp_vec;
-            temp_vec.push_back(input[i].x);
-            temp_vec.push_back(input[i].y);
-            temp_vec.push_back(input[i].z);
-
-            vel[i] = temp_vec;
-        }
+        vel = input;
     }
-
     void SetVel(const std::vector<std::vector<float>>& input) {
         assertThreeElementsVector(input, "SetVel", "input");
         std::vector<float3> vel_xyz(input.size());
@@ -759,34 +738,13 @@ class DEMClumpBatch {
 
     void SetAngVel(const std::vector<float3>& input) {
         assertLength(input.size(), "SetAngVel");
-
-        angVel.resize(input.size());
-
-        for (int i = 0; i < input.size(); i++) {
-            std::vector<float> temp_vec;
-            temp_vec.push_back(input[i].x);
-            temp_vec.push_back(input[i].y);
-            temp_vec.push_back(input[i].z);
-
-            angVel[i] = temp_vec;
-        }
+        angVel = input;
     }
     void SetAngVel(float3 input) { SetAngVel(std::vector<float3>(nClumps, input)); }
 
     void SetOriQ(const std::vector<float4>& input) {
         assertLength(input.size(), "SetOriQ");
-
-        oriQ.resize(input.size());
-
-        for (int i = 0; i < input.size(); i++) {
-            std::vector<float> temp_vec;
-            temp_vec.push_back(input[i].w);
-            temp_vec.push_back(input[i].x);
-            temp_vec.push_back(input[i].y);
-            temp_vec.push_back(input[i].z);
-
-            oriQ[i] = temp_vec;
-        }
+        oriQ = input;
     }
     void SetOriQ(float4 input) { SetOriQ(std::vector<float4>(nClumps, input)); }
 

@@ -12,6 +12,8 @@
 # wheel is measured (we only test one slip case in this demo, to make it faster).
 # =============================================================================
 
+# TODO: DEM/CMake has a LOT of entries?
+
 import DEME
 from DEME import HCPSampler
 
@@ -61,8 +63,6 @@ if __name__ == "__main__":
     added_pressure = total_pressure - wheel_weight
     wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2
     wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width)
-    
-    # TODO: May just be a path, rather than a GetDEMEDataFile
 
     wheel = DEMSim.AddWavefrontMeshObject(DEME.GetDEMEDataFile("mesh/rover_wheels/viper_wheel_right.obj"), mat_type_wheel, True, False)
     
@@ -85,15 +85,12 @@ if __name__ == "__main__":
     # Scale the template we just created
     scale = 0.02
     # Then load it to system
-    # TODO: May just be a path, rather than a GetDEMEDataFile
-    # TODO: If have to use MOI1.tolist(), that is fine too
     my_template = DEMSim.LoadClumpType(mass1, MOI1.tolist(), DEME.GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain)
     # Now scale the template
     # Note the mass and MOI are also scaled in the process, automatically. But if you are not happy with this, you
     # can always manually change mass and MOI afterwards.
     my_template.Scale(scale)
     # Give these templates names, 0000, 0001 etc.
-    # TODO: May choose not to give names for now
     template_num = 0
     t_name = f"{template_num:04d}"
     my_template.AssignName(t_name)
@@ -106,7 +103,6 @@ if __name__ == "__main__":
     offset_z = bottom + sample_halfheight + 0.03
     # Sample initial particles
     sample_center = np.array([0, 0, offset_z])
-    # TODO: If have to use sample_center.tolist(), that is fine too
     terrain_particles_xyz = sampler.SampleBox(sample_center.tolist(), [sample_halfwidth_x, sample_halfwidth_y, sample_halfheight])
     terrain_template_in_use = [my_template] * len(terrain_particles_xyz)
     heap_family = [0] * len(terrain_particles_xyz)
@@ -176,7 +172,7 @@ if __name__ == "__main__":
     while t < 1.:
         print(f"Outputting frame: {currframe}")
         filename = os.path.join(out_dir, f"DEMdemo_output_{currframe:04d}.csv")
-        meshname = os.path.join(out_dir, f"DEMdemo_mesh_{currframe:04d}.csv")
+        meshname = os.path.join(out_dir, f"DEMdemo_mesh_{currframe:04d}.vtk")
         DEMSim.WriteSphereFile(filename)
         DEMSim.WriteMeshFile(meshname)
         currframe += 1
@@ -193,11 +189,11 @@ if __name__ == "__main__":
         if (curr_step % out_steps == 0):
             print(f"Outputting frame: {currframe}")
             filename = os.path.join(out_dir, f"DEMdemo_output_{currframe:04d}.csv")
-            meshname = os.path.join(out_dir, f"DEMdemo_mesh_{currframe:04d}.csv")
+            meshname = os.path.join(out_dir, f"DEMdemo_mesh_{currframe:04d}.vtk")
             DEMSim.WriteSphereFile(filename)
             DEMSim.WriteMeshFile(meshname)
             currframe += 1
-            DEMSim.ShowThreadCollaborationStats()
+            DEMSim.ShowThreadCollaborationStats() # TODO: Not showing?
 
         if (curr_step % report_steps == 0):
             force_list = wheel_tracker.GetContactAcc()

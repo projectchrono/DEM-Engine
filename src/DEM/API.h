@@ -325,7 +325,7 @@ class DEMSolver {
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
                                                     const std::vector<float>& moi,
                                                     const std::string filename,
-                                                    const std::shared_ptr<DEMMaterial>& sp_materials) {
+                                                    const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
         assertThreeElements(moi, "LoadClumpType", "moi");
         return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), filename, sp_materials);
     }
@@ -334,7 +334,13 @@ class DEMSolver {
                                                     float3 moi,
                                                     const std::string filename,
                                                     const std::shared_ptr<DEMMaterial>& sp_material);
-
+    std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
+                                                    const std::vector<float>& moi,
+                                                    const std::string filename,
+                                                    const std::shared_ptr<DEMMaterial>& sp_material) {
+        assertThreeElements(moi, "LoadClumpType", "moi");
+        return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), filename, sp_material);
+    }
     /// A simplified version of LoadClumpType: it just loads a one-sphere clump template
     std::shared_ptr<DEMClumpTemplate> LoadSphereType(float mass,
                                                      float radius,
@@ -445,8 +451,8 @@ class DEMSolver {
     std::vector<std::pair<bodyID_t, bodyID_t>> GetClumpContacts(
         std::vector<std::pair<family_t, family_t>>& family_pair) const;
 
-    /// .Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial location
-    /// means the location of the clumps' CoM coordinates in the global frame
+    /// Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial location
+    /// means the location of the clumps' CoM coordinates in the global frame.
     std::shared_ptr<DEMClumpBatch> AddClumps(DEMClumpBatch& input_batch);
     /// @brief Load clumps into the simulation.
     /// @param input_types Vector of the types of the clumps (vector of shared pointers).

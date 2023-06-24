@@ -209,8 +209,9 @@ PYBIND11_MODULE(DEME, obj) {
                            &deme::DEMClumpBatch::SetVel))
         .def("SetVel",
              static_cast<void (deme::DEMClumpBatch::*)(const std::vector<float>&)>(&deme::DEMClumpBatch::SetVel))
-        .def("SetAngVel",
-             static_cast<void (deme::DEMClumpBatch::*)(const std::vector<float3>&)>(&deme::DEMClumpBatch::SetAngVel))
+        //    .def("SetAngVel",
+        //         static_cast<void (deme::DEMClumpBatch::*)(const
+        //         std::vector<float3>&)>(&deme::DEMClumpBatch::SetAngVel))
         .def("SetFamilies", static_cast<void (deme::DEMClumpBatch::*)(const std::vector<unsigned int>&)>(
                                 &deme::DEMClumpBatch::SetFamilies))
         .def("SetFamilies", static_cast<void (deme::DEMClumpBatch::*)(unsigned int)>(&deme::DEMClumpBatch::SetFamilies))
@@ -297,7 +298,7 @@ PYBIND11_MODULE(DEME, obj) {
         .def("AddGeometryWildcard", static_cast<void (deme::DEMMeshConnected::*)(const std::string&, float)>(
                                         &deme::DEMMeshConnected::AddGeometryWildcard));
 
-    // TODO: Insert readwrite functions to access all public class objects!
+    //// TODO: Insert readwrite functions to access all public class objects!
 
     py::enum_<deme::VERBOSITY>(obj, "VERBOSITY")
         .value("QUIET", deme::VERBOSITY::QUIET)

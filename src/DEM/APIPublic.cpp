@@ -1068,6 +1068,19 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(float mass,
 std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(
     float mass,
     float3 moi,
+    const std::string filename,
+    const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
+    DEMClumpTemplate clump;
+    clump.mass = mass;
+    clump.MOI = moi;
+    clump.ReadComponentFromFile(filename);
+    clump.materials = sp_materials;
+    return LoadClumpType(clump);
+}
+
+std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(
+    float mass,
+    float3 moi,
     const std::vector<float>& sp_radii,
     const std::vector<float3>& sp_locations_xyz,
     const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
@@ -1233,13 +1246,8 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(DEMMeshConne
     // But we still need to record a tri-mesh loaded
     nTriObjLoad++;
 
-    std::shared_ptr<DEMMeshConnected> ptr_tmp = std::make_shared<DEMMeshConnected>(std::move(mesh));
-    cached_mesh_objs.push_back(ptr_tmp);
-    std::shared_ptr<DEMMeshConnected> ptr;
-    ptr = cached_mesh_objs.back();
-
-    std::cout << (ptr->GetNumNodes()) << std::endl;
-    return ptr;
+    cached_mesh_objs.push_back(std::make_shared<DEMMeshConnected>(std::move(mesh)));
+    return cached_mesh_objs.back();
 }
 
 std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
@@ -1253,9 +1261,7 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::s
     }
 
     mesh.SetMaterial(mat);
-    std::shared_ptr<DEMMeshConnected> ptr = AddWavefrontMeshObject(mesh);
-    std::cout << (ptr->GetNumNodes()) << std::endl;
-    return ptr;
+    return AddWavefrontMeshObject(mesh);
 }
 
 std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::string& filename,
