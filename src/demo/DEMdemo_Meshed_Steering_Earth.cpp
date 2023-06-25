@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
     int cur_test = atoi(argv[1]);
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_Wheel_Steer_1";
+    out_dir += "/DEMdemo_Wheel_Steer_2";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -34,13 +34,14 @@ int main(int argc, char* argv[]) {
     double world_size_z = 4.0;
 
     // Define the wheel geometry
-    float wheel_rad = 0.25;
+    float wheel_rad = atof(argv[2]);
     float wheel_width = 0.2;
     float wheel_mass = 5.;               // 8.7;
-    float total_pressure = 110. * 9.81;  // 22.
+    float total_pressure = atof(argv[3]) * 9.81;  // 22.
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
+    float grouser_height = atof(argv[4]);
 
     // Wheel movements
     float w_r = 0.8;
@@ -227,7 +228,7 @@ int main(int argc, char* argv[]) {
 
         // Put the wheel in place, then let the wheel sink in initially
         float max_z = max_z_finder->GetValue();
-        wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.1 + wheel_rad));
+        wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.05 + grouser_height + wheel_rad));
 
         int report_ps = 1000;
         float report_time = report_ps * step_size;
