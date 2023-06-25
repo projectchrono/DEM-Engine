@@ -670,6 +670,9 @@ class DEMClumpBatch {
     size_t nClumps = 0;
     size_t nSpheres = 0;
     bool family_isSpecified = false;
+    // The type of a clump batch is CLUMP (it is used by tracker objs)
+    const OWNER_TYPE obj_type = OWNER_TYPE::CLUMP;
+
     std::vector<std::shared_ptr<DEMClumpTemplate>> types;
     std::vector<unsigned int> families;
     std::vector<float3> vel;

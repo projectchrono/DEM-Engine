@@ -1274,45 +1274,6 @@ std::shared_ptr<DEMMeshConnected> DEMSolver::AddWavefrontMeshObject(const std::s
     return AddWavefrontMeshObject(mesh);
 }
 
-std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMExternObj>& obj) {
-    // Create a middle man: DEMTrackedObj. The reason we use it is because a simple struct should be used to transfer to
-    // dT for owner-number processing. If we cut the middle man and use things such as DEMExtObj, there will not be a
-    // universal treatment that dT can apply, besides we may have some include-related issues.
-    DEMTrackedObj tracked_obj;
-    tracked_obj.load_order = obj->load_order;
-    tracked_obj.type = OWNER_TYPE::ANALYTICAL;
-    m_tracked_objs.push_back(std::make_shared<DEMTrackedObj>(std::move(tracked_obj)));
-
-    // Create a Tracker for this tracked object
-    DEMTracker tracker(this);
-    tracker.obj = m_tracked_objs.back();
-    return std::make_shared<DEMTracker>(std::move(tracker));
-}
-
-std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMMeshConnected>& obj) {
-    DEMTrackedObj tracked_obj;
-    tracked_obj.load_order = obj->load_order;
-    tracked_obj.type = OWNER_TYPE::MESH;
-    m_tracked_objs.push_back(std::make_shared<DEMTrackedObj>(std::move(tracked_obj)));
-
-    // Create a Tracker for this tracked object
-    DEMTracker tracker(this);
-    tracker.obj = m_tracked_objs.back();
-    return std::make_shared<DEMTracker>(std::move(tracker));
-}
-
-std::shared_ptr<DEMTracker> DEMSolver::Track(std::shared_ptr<DEMClumpBatch>& obj) {
-    DEMTrackedObj tracked_obj;
-    tracked_obj.load_order = obj->load_order;
-    tracked_obj.type = OWNER_TYPE::CLUMP;
-    m_tracked_objs.push_back(std::make_shared<DEMTrackedObj>(std::move(tracked_obj)));
-
-    // Create a Tracker for this tracked object
-    DEMTracker tracker(this);
-    tracker.obj = m_tracked_objs.back();
-    return std::make_shared<DEMTracker>(std::move(tracker));
-}
-
 std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quantity) {
     DEMInspector insp(this, this->dT, quantity);
     m_inspectors.push_back(std::make_shared<DEMInspector>(std::move(insp)));
