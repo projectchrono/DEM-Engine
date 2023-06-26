@@ -121,7 +121,7 @@ int main() {
         sprintf(cnt_filename, "%s/Contact_pairs_%04d.csv", out_dir.c_str(), currframe++);
         DEMSim.WriteSphereFile(std::string(filename));
         DEMSim.WriteMeshFile(std::string(meshfilename));
-        DEMSim.WriteContactFile(std::string(cnt_filename));
+        // DEMSim.WriteContactFile(std::string(cnt_filename));
 
         float max_v = max_v_finder->GetValue();
         std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;

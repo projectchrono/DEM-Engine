@@ -512,18 +512,25 @@ class DEMSolver {
                                                              bool load_uv = false);
     std::shared_ptr<DEMMeshConnected> AddWavefrontMeshObject(DEMMeshConnected& mesh);
 
-    std::shared_ptr<DEMTracker> TrackExternObj(std::shared_ptr<DEMExternObj>& obj);
-    std::shared_ptr<DEMTracker> TrackClump(std::shared_ptr<DEMClumpBatch>& obj);
-    std::shared_ptr<DEMTracker> TrackMesh(std::shared_ptr<DEMMeshConnected>& obj);
+    /// @brief Create a DEMTracker to allow direct control/modification/query to this external object/batch of
+    /// clumps/triangle mesh object.
+    /// @details By default, it refers to the first clump in this batch. The user can refer to other clumps in this
+    /// batch by supplying an offset when using this tracker's querying or assignment methods.
+    template <typename T>
+    std::shared_ptr<DEMTracker> Track(const std::shared_ptr<T>& obj) {
+        // Create a middle man: DEMTrackedObj. The reason we use it is because a simple struct should be used to
+        // transfer to  dT for owner-number processing. If we cut the middle man and use things such as DEMExtObj, there
+        // will not be a universal treatment that dT can apply, besides we may have some include-related issues.
+        DEMTrackedObj tracked_obj;
+        tracked_obj.load_order = obj->load_order;
+        tracked_obj.type = obj->obj_type;
+        m_tracked_objs.push_back(std::make_shared<DEMTrackedObj>(std::move(tracked_obj)));
 
-    /// Create a DEMTracker to allow direct control/modification/query to this external object
-    std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMExternObj>& obj);
-    /// Create a DEMTracker to allow direct control/modification/query to this batch of clumps. By default, it refers to
-    /// the first clump in this batch. The user can refer to other clumps in this batch by supplying an offset when
-    /// using this tracker's querying or assignment methods.
-    std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMClumpBatch>& obj);
-    /// Create a DEMTracker to allow direct control/modification/query to this triangle mesh object
-    std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMMeshConnected>& obj);
+        // Create a Tracker for this tracked object
+        DEMTracker tracker(this);
+        tracker.obj = m_tracked_objs.back();
+        return std::make_shared<DEMTracker>(std::move(tracker));
+    }
 
     /// Create a inspector object that can help query some statistical info of the clumps in the simulation
     std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity = "clump_max_z");

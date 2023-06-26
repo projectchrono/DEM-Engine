@@ -88,9 +88,11 @@ class DEMObjComponent {
 };
 
 /// API-(Host-)side struct that holds cached user-input external objects
-class DEMExternObj {
-  public:
-    // Component object types
+struct DEMExternObj {
+    // The type of a extern obj is ANALYTICAL (it is used by tracker objs)
+    const OWNER_TYPE obj_type = OWNER_TYPE::ANALYTICAL;
+
+    // Component object types. This means the types of each component, and is different from obj_type.
     std::vector<OBJ_COMPONENT> types;
     // Component object materials
     std::vector<std::shared_ptr<DEMMaterial>> materials;
@@ -230,6 +232,9 @@ class DEMMeshConnected {
     }
 
   public:
+    // The type of a mesh obj is MESH (it is used by tracker objs)
+    const OWNER_TYPE obj_type = OWNER_TYPE::MESH;
+
     // Number of triangle facets in the mesh
     size_t nTri = 0;
 
