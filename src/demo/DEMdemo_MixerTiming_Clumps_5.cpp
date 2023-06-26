@@ -36,6 +36,9 @@ int main() {
         DEMSim.SetCollectAccRightAfterForceCalc(true);
         DEMSim.SetNoForceRecord();
 
+        DEMSim.SetJitifyClumpTemplates();
+        DEMSim.SetJitifyMassProperties();
+        
         // E, nu, CoR, mu, Crr...
         auto mat_type_mixer = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
         auto mat_type_granular =
