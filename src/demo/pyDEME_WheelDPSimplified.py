@@ -114,8 +114,8 @@ if __name__ == "__main__":
 
 
     # Track it
-    bot_wall_tracker = DEMSim.TrackExternObj(bot_wall)
-    wheel_tracker = DEMSim.TrackMesh(wheel)
+    bot_wall_tracker = DEMSim.Track(bot_wall)
+    wheel_tracker = DEMSim.Track(wheel)
 
     # Families' prescribed motions
     math_PI = 3.1415927

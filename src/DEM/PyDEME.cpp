@@ -32,6 +32,11 @@ PYBIND11_MODULE(DEME, obj) {
         .def(py::init<deme::DEMSolver*, deme::DEMDynamicThread*, const std::string&>())
         .def("GetValue", &deme::DEMInspector::GetValue);
 
+    py::class_<deme::DEMInitializer, std::shared_ptr<deme::DEMInitializer>>(obj, "DEMInitializer").def(py::init<>());
+
+    py::class_<deme::DEMTrackedObj, deme::DEMInitializer, std::shared_ptr<deme::DEMTrackedObj>>(obj, "DEMTrackedObj")
+        .def(py::init<deme::DEMTrackedObj>());
+
     py::class_<deme::DEMTracker, std::shared_ptr<deme::DEMTracker>>(obj, "Tracker")
         .def(py::init<deme::DEMSolver*>())
         .def("SetPos",
@@ -79,13 +84,16 @@ PYBIND11_MODULE(DEME, obj) {
                  const std::vector<float>&, const std::vector<float>&, const std::shared_ptr<deme::DEMMaterial>&)>(
                  &deme::DEMSolver::AddBCPlane),
              "Add an (analytical or clump-represented) external object to the simulation system")
-        .def("TrackExternObj", (&deme::DEMSolver::TrackExternObj),
-             "Create a DEMTracker to allow direct control/modification/query to this external object for DEMExternObj")
-        .def("TrackClump", (&deme::DEMSolver::TrackClump),
-             "Create a DEMTracker to allow direct control/modification/query to this external object for DEMClumpBatch")
-        .def("TrackMesh", (&deme::DEMSolver::TrackMesh),
-             "Create a DEMTracker to allow direct control/modification/query to this external object for "
-             "DEMMeshConnected")
+        .def("Track", (&deme::DEMSolver::PythonTrack), "Tracker object")
+        //  .def("Track", (&deme::DEMSolver::Track),
+        //       "Create a DEMTracker to allow direct control/modification/query to this external object for
+        //       DEMExternObj")
+        //  .def("Track", (&deme::DEMSolver::Track),
+        //       "Create a DEMTracker to allow direct control/modification/query to this external object for
+        //       DEMClumpBatch")
+        //  .def("Track", (&deme::DEMSolver::Track),
+        //       "Create a DEMTracker to allow direct control/modification/query to this external object for "
+        //       "DEMMeshConnected")
         .def("AddWavefrontMeshObject",
              static_cast<std::shared_ptr<deme::DEMMeshConnected> (deme::DEMSolver::*)(
                  const std::string&, const std::shared_ptr<deme::DEMMaterial>&, bool, bool)>(
@@ -197,7 +205,7 @@ PYBIND11_MODULE(DEME, obj) {
         .def("Scale", &deme::DEMClumpTemplate::Scale)
         .def("AssignName", &deme::DEMClumpTemplate::AssignName);
 
-    py::class_<deme::DEMClumpBatch>(obj, "DEMClumpBatch")
+    py::class_<deme::DEMClumpBatch, deme::DEMInitializer, std::shared_ptr<deme::DEMClumpBatch>>(obj, "DEMClumpBatch")
         .def(py::init<size_t&>())
         .def("SetTypes",
              static_cast<void (deme::DEMClumpBatch::*)(const std::vector<std::shared_ptr<deme::DEMClumpTemplate>>&)>(
@@ -233,7 +241,7 @@ PYBIND11_MODULE(DEME, obj) {
                                         &deme::DEMClumpBatch::AddGeometryWildcard))
         .def("GetNumContacts", &deme::DEMClumpBatch::GetNumContacts);
 
-    py::class_<deme::DEMExternObj, std::shared_ptr<deme::DEMExternObj>>(obj, "DEMExternObj")
+    py::class_<deme::DEMExternObj, deme::DEMInitializer, std::shared_ptr<deme::DEMExternObj>>(obj, "DEMExternObj")
         .def(py::init<>())
         .def("SetFamily", &deme::DEMExternObj::SetFamily, "Defines an object contact family number")
         .def("SetMass", &deme::DEMExternObj::SetMass, "Sets the mass of this object")
@@ -259,7 +267,8 @@ PYBIND11_MODULE(DEME, obj) {
         .def_readwrite("load_order", &deme::DEMExternObj::load_order)
         .def_readwrite("entity_params", &deme::DEMExternObj::entity_params);
 
-    py::class_<deme::DEMMeshConnected, std::shared_ptr<deme::DEMMeshConnected>>(obj, "DEMMeshConnected")
+    py::class_<deme::DEMMeshConnected, deme::DEMInitializer, std::shared_ptr<deme::DEMMeshConnected>>(
+        obj, "DEMMeshConnected")
         .def(py::init<>())
         .def(py::init<std::string&>())
         .def(py::init<std::string, const std::shared_ptr<deme::DEMMaterial>&>())
