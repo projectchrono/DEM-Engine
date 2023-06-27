@@ -893,7 +893,7 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
     // Also note, we just have to process those haven't been processed
     for (unsigned int i = nTrackersProcessed; i < tracked_objs.size(); i++) {
         auto& tracked_obj = tracked_objs.at(i);
-        switch (tracked_obj->type) {
+        switch (tracked_obj->obj_type) {
             case (OWNER_TYPE::CLUMP):
                 tracked_obj->ownerID = nExistOwners + prescans_batch_size.at(tracked_obj->load_order);
                 tracked_obj->nSpanOwners = prescans_batch_size.at(tracked_obj->load_order + 1) -

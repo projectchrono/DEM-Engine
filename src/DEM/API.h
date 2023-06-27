@@ -523,7 +523,7 @@ class DEMSolver {
         // will not be a universal treatment that dT can apply, besides we may have some include-related issues.
         DEMTrackedObj tracked_obj;
         tracked_obj.load_order = obj->load_order;
-        tracked_obj.type = obj->obj_type;
+        tracked_obj.obj_type = obj->obj_type;
         m_tracked_objs.push_back(std::make_shared<DEMTrackedObj>(std::move(tracked_obj)));
 
         // Create a Tracker for this tracked object
