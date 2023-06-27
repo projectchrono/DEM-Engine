@@ -11,6 +11,7 @@ _analyticalEntityDefs_;
 _materialDefs_;
 // If mass properties are jitified, then they are below
 _massDefs_;
+_moiDefs_;
 
 template <typename T1>
 inline __device__ void equipOwnerPosRot(deme::DEMSimParams* simParams,

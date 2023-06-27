@@ -653,8 +653,18 @@ class DEMClumpTemplate {
     void AssignName(const std::string& some_name) { m_name = some_name; }
 };
 
-/// API-(Host-)side struct that holds cached user-input batches of clumps
-class DEMClumpBatch {
+// Initializer includes batch of clumps, a mesh, a analytical object, and a tracked object. But this parent class is
+// small, and is mainly there for the purpose of pyDEME entry point.
+class DEMInitializer {
+  public:
+    // The type of a clump batch is CLUMP (it is used by tracker objs)
+    OWNER_TYPE obj_type;
+    // Its offset when this obj got loaded into the API-level user raw-input array
+    unsigned int load_order;
+};
+
+// API-(Host-)side struct that holds cached user-input batches of clumps
+class DEMClumpBatch : public DEMInitializer {
   private:
     size_t nExistContacts = 0;
     void assertLength(size_t len, const std::string name) {
@@ -670,8 +680,6 @@ class DEMClumpBatch {
     size_t nClumps = 0;
     size_t nSpheres = 0;
     bool family_isSpecified = false;
-    // The type of a clump batch is CLUMP (it is used by tracker objs)
-    const OWNER_TYPE obj_type = OWNER_TYPE::CLUMP;
 
     std::vector<std::shared_ptr<DEMClumpTemplate>> types;
     std::vector<unsigned int> families;
@@ -689,8 +697,7 @@ class DEMClumpBatch {
     std::unordered_map<std::string, std::vector<float>> owner_wildcards;
     // Initial geometry wildcard that this batch of clumps should have
     std::unordered_map<std::string, std::vector<float>> geo_wildcards;
-    // Its offset when this obj got loaded into the API-level user raw-input array
-    size_t load_order;
+
     DEMClumpBatch(size_t num) : nClumps(num) {
         types.resize(num);
         families.resize(num, DEFAULT_CLUMP_FAMILY_NUM);
@@ -698,6 +705,7 @@ class DEMClumpBatch {
         angVel.resize(num, make_float3(0));
         xyz.resize(num);
         oriQ.resize(num, host_make_float4(0, 0, 0, 1));
+        obj_type = OWNER_TYPE::CLUMP;
     }
     ~DEMClumpBatch() {}
     size_t GetNumClumps() const { return nClumps; }
@@ -847,14 +855,13 @@ class DEMClumpBatch {
 };
 
 // A struct to get or set tracked owner entities
-struct DEMTrackedObj {
+class DEMTrackedObj : public DEMInitializer {
+  public:
+    DEMTrackedObj() {}
+    ~DEMTrackedObj() {}
+
     // ownerID will be updated by dT on initialization
     bodyID_t ownerID = NULL_BODYID;
-    // Type of this tracked object
-    OWNER_TYPE type;
-    // A tracker tracks a owner loaded into the system via its respective loading method, so load_order registers
-    // the position of this object in the corresponding API-side array
-    size_t load_order;
     // Number of owners that are covered by this tracker. This exists because if you track a batch of clumps, ownerID is
     // but the first owner of that batch.
     size_t nSpanOwners = 1;

@@ -88,9 +88,10 @@ class DEMObjComponent {
 };
 
 /// API-(Host-)side struct that holds cached user-input external objects
-struct DEMExternObj {
-    // The type of a extern obj is ANALYTICAL (it is used by tracker objs)
-    const OWNER_TYPE obj_type = OWNER_TYPE::ANALYTICAL;
+class DEMExternObj : public DEMInitializer {
+  public:
+    DEMExternObj() { obj_type = OWNER_TYPE::ANALYTICAL; }
+    ~DEMExternObj() {}
 
     // Component object types. This means the types of each component, and is different from obj_type.
     std::vector<OBJ_COMPONENT> types;
@@ -116,8 +117,6 @@ struct DEMExternObj {
     float mass = 1e6;
     // Obj's MOI (huge by default)
     float3 MOI = make_float3(1e6);
-    // Its offset when this obj got loaded into the API-level user raw-input array
-    unsigned int load_order;
 
     union DEMAnalEntParams {
         DEMPlateParams_t plate;
@@ -213,7 +212,7 @@ struct DEMExternObj {
 };
 
 // DEM mesh object
-class DEMMeshConnected {
+class DEMMeshConnected : public DEMInitializer {
   private:
     void assertLength(size_t len, const std::string name) {
         if (nTri == 0) {
@@ -232,9 +231,6 @@ class DEMMeshConnected {
     }
 
   public:
-    // The type of a mesh obj is MESH (it is used by tracker objs)
-    const OWNER_TYPE obj_type = OWNER_TYPE::MESH;
-
     // Number of triangle facets in the mesh
     size_t nTri = 0;
 
@@ -286,8 +282,6 @@ class DEMMeshConnected {
     float mass = 1.f;
     // Mesh's MOI
     float3 MOI = make_float3(1.f);
-    // Its offset when this obj got loaded into the API-level user raw-input array
-    unsigned int load_order;
 
     std::string filename;  ///< file string if loading an obj file
 
@@ -295,11 +289,15 @@ class DEMMeshConnected {
     // normals derived from right-hand-rule are the same as the normals in the mesh file
     bool use_mesh_normals = false;
 
-    DEMMeshConnected() {}
-    DEMMeshConnected(std::string input_file) { LoadWavefrontMesh(input_file); }
+    DEMMeshConnected() { obj_type = OWNER_TYPE::MESH; }
+    DEMMeshConnected(std::string input_file) {
+        LoadWavefrontMesh(input_file);
+        obj_type = OWNER_TYPE::MESH;
+    }
     DEMMeshConnected(std::string input_file, const std::shared_ptr<DEMMaterial>& mat) {
         LoadWavefrontMesh(input_file);
         SetMaterial(mat);
+        obj_type = OWNER_TYPE::MESH;
     }
     ~DEMMeshConnected() {}
 
