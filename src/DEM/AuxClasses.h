@@ -128,6 +128,7 @@ class DEMTracker {
     /// simulation entities. In most cases, this means excluding the gravitational acceleration. The acceleration is in
     /// global frame.
     float3 ContactAcc(size_t offset = 0);
+    std::vector<float> GetContactAcc(size_t offset = 0);
     /// Get the a portion of the angular acceleration of this tracked object, that is the result of its contact with
     /// other simulation entities. The acceleration is in this object's local frame.
     float3 ContactAngAccLocal(size_t offset = 0);
@@ -149,6 +150,7 @@ class DEMTracker {
 
     /// @brief Set the position of this tracked object.
     void SetPos(float3 pos, size_t offset = 0);
+    void SetPos(const std::vector<float>& pos, size_t offset = 0);
     /// @brief Set the angular velocity of this tracked object in its own local coordinate system.
     void SetAngVel(float3 angVel, size_t offset = 0);
     /// @brief Set the velocity of this tracked object in global frame.
@@ -157,7 +159,10 @@ class DEMTracker {
     void SetOriQ(float4 oriQ, size_t offset = 0);
     /// Add an extra acc to the tracked body, for the next time step. Note if the user intends to add a persistent
     /// external force, then using family prescription is the better method.
-    void AddAcc(float3 force, size_t offset = 0);
+    void AddAcc(float3 acc, size_t offset = 0);
+    /// Add an extra angular acceleration to the tracked body, for the next time step. Note if the user intends to add a
+    /// persistent external torque, then using family prescription is the better method.
+    void AddAngAcc(float3 angAcc, size_t offset = 0);
     /// Change the size of clump entities
     void ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors);
     /// @brief Change the family numbers of all the entities tracked by this tracker.

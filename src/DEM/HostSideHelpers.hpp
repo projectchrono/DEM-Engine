@@ -594,6 +594,39 @@ inline std::string read_file_to_string(const std::filesystem::path& sourcefile) 
     return buffer.str();
 }
 
+// Asserters (for the convenience of Python wrapper)
+template <typename T>
+inline void assertThreeElements(const std::vector<T>& vec, const std::string& func_name, const std::string& var_name) {
+    if (vec.size() != 3) {
+        std::stringstream out;
+        out << func_name << "'s " << var_name << " argument needs to be a length 3 list/vector. The provided size is "
+            << vec.size() << ".\n";
+        throw std::runtime_error(out.str());
+    }
+}
+template <typename T>
+inline void assertFourElements(const std::vector<T>& vec, const std::string& func_name, const std::string& var_name) {
+    if (vec.size() != 4) {
+        std::stringstream out;
+        out << func_name << "'s " << var_name << " argument needs to be a length 4 list/vector. The provided size is "
+            << vec.size() << ".\n";
+        throw std::runtime_error(out.str());
+    }
+}
+template <typename T>
+inline void assertThreeElementsVector(const std::vector<std::vector<T>>& vec,
+                                      const std::string& func_name,
+                                      const std::string& var_name) {
+    if (vec.at(0).size() != 3) {
+        std::stringstream out;
+        out << func_name << "'s " << var_name
+            << " argument needs to be a list/vector of length 3 vectors (in other words, n by 3 matrix).\n The "
+               "provided size is "
+            << vec.size() << " by " << vec.at(0).size() << ".\n";
+        throw std::runtime_error(out.str());
+    }
+}
+
 }  // namespace deme
 
 #endif

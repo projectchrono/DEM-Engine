@@ -40,7 +40,27 @@ SPDX-License-Identifier: BSD-3-Clause
 
 New authors should add their name to the file `CONTRIBUTORS.md` rather than to individual copyright headers.
 
+### Using _DEME_ in Container
+
+_DEME_ is now [hosted on DockerHub](https://hub.docker.com/r/uwsbel/dem-engine) for those who want to run it in a container. It can potentially save your time that would otherwise be spent on getting the dependencies right, and for you to test out if _DEME_ is what you needed.
+
+On a Linux machine, [install CUDA](https://developer.nvidia.com/cuda-downloads). Then install [docker](https://docs.docker.com/desktop/install/linux-install/) depending on your OS. Then [install Nvidia container toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) for running GPU-based containers. Things to note about installing the prerequisites:
+
+- You can install the newest CUDA for running the container. However, if you are also considering building from source later, I recommend just getting CUDA 12.0 or a CUDA 11 distro. CUDA 12.1 appears to cause troubles with jitify if built from source.
+- _DEME_ probably does not work on WSL. The reason is in **Installation** section. I recommend working with native Linux.
+- Got `Docker daemon permission denied` error? Maybe try [this page](https://stackoverflow.com/questions/48957195/how-to-fix-docker-got-permission-denied-issue).
+
+After those are done, you can launch the container by doing this in a Linux command prompt: `docker run -it --gpus all uwsbel/dem-engine:latest`
+
+Then the source code along with a pre-built _DEME_ can be found in `/DEM-Engine` and `/DEM-Engine/build`. See **Examples** section for running example simulations. 
+
+Starting from this point, you can start adding new scripts or modify existing ones for your own simulations. You can also build and run your newly added code, and commit the modified container as needed. If you encounter problems when re-building the project in the container, then you may refer to the troubleshooting tips in the **Installation** section for help, or turn to the [forum](https://groups.google.com/g/projectchrono).
+
+Note that the container imagine is not updated as often for bug-fixes and new features as the GitHub repo. 
+
 ### Installation
+
+You can also build _DEME_ locally.
 
 On a Linux machine, install CUDA if you do not already have it. Useful installation instructions may be found [here](https://developer.nvidia.com/cuda-downloads). 
 
@@ -79,6 +99,7 @@ You generally do not have to change the build options in the GUI, but preferably
 
 Some additional troubleshooting tips for generating the project:
 
+- For now, I suggest using CUDA version 12.0 or below. CUDA 12.1 does not seem to work well with the jitified kernels in _DEME_.
 - If some dependencies such as CUB are not found, then you probably need to manually set `$PATH` and `$LD_LIBRARY_PATH`. An example is given below for a specific version of CUDA, note it may be different on your machine or cluster. You should also inspect if `nvidia-smi` and `nvcc --version` give correct returns.
 ```
 export CPATH=/usr/local/cuda-12.0/targets/x86_64-linux/include${CPATH:+:${CPATH}}
@@ -97,11 +118,14 @@ ninja
 Some additional troubleshooting tips for building the project:
 
 - If you see some grammatical errors during compilation, such as `filesystem` not being a member of `std` or arguments not expanded with `...`, then manually setting the flag `TargetCXXStandard` to `STD_CXX17` might help.
+- If CUB is not found, then you may manually set it in the `ccmake` GUI as `/usr/local/cuda/lib64/cmake/cub`. It may be a slightly different path on your machine or cluster.
+- If `libcudacxx` is not found, then you may manually set it in the `ccmake` GUI as `/usr/local/cuda-12.0/targets/x86_64-linux/lib/cmake/libcudacxx`. Depending on your CUDA version it may be a slightly different path on your machine or cluster. You may also try to find these packages using `find`.
 
 ### Examples
 
 After the build process is done, you can start trying out the demos.
 
+- `./src/demo/DEMdemo_SingleSphereCollide` can be used to test a correct installation. If it runs outputting a lot of texts and stops without an error in the end, the installation is probably good.
 - An all-rounder beginner example featuring a bladed mixer interacting with complex shaped particles: `./src/demo/DEMdemo_Mixer`.
 - A place to learn how prescribed motions work in this package, using either analytical boundaries or particle-represented boundaries: `./src/demo/DEMdemo_Centrifuge` and `./src/demo/DEMdemo_Sieve`.
 - A few representative engineering experiments reproduced in DEM simulations, which potentially serve as starting points for your own DEM scripts: `/src/demo/DEMdemo_BallDrop`, `./src/demo/DEMdemo_ConePenetration`, `/src/demo/DEMdemo_RotatingDrum`, `./src/demo/DEMdemo_Repose`.
@@ -110,7 +134,7 @@ After the build process is done, you can start trying out the demos.
 - `./src/demo/DEMdemo_Indentation` is a more advanced examples showing the usage of the custom additional properties (called _wildcards_) that you can associate with the simulation entities, and use them in the force model and/or change them in simulation then deposit them into the output files. _Wildcards_ have more use cases especially if coupled together with a custom force model, as shown in some of the follwing demos.
 - `./src/demo/DEMdemo_Electrostatic` simulates a pile of complex-shaped and charged granular particles interacting with a mesh that is also charged. Its purpose is to show how to define a non-local force (electrostatic force) which takes effect even when the bodies are not in contact, using a custom force model file. This idea can be extended to modeling a custom cohesion force etc.
 - `./src/demo/DEMdemo_FlexibleMesh` simulates a deforming mesh interacting with DEM particles. The intention is to show that the user can extract the force pairs acting on a mesh, then update the mesh with deformation information. _DEME_ does not care how this deformation is calculated. Presumably the user can feed the forces to their own solid mechanics solver to get the deformation. _DEME_ does not come with a built-in linear solver so for simplicity, in this demo the mesh deformation is instead prescribed.
-- `./src/demo/DEMdemo_GameOfLife`is a fun game-of-life simulator built with the package, showing the flexibility in terms of how you can use this tool.
+- `./src/demo/DEMdemo_GameOfLife` is a fun game-of-life simulator built with the package, showing the flexibility in terms of how you can use this tool.
 - `./src/demo/DEMdemo_SolarSystem` simulates our solar system. It is yet another fun simulation that is not strictly DEM per se, but shows how to define a mid-to-long-ranged force (gravitational force) using a custom force model file.
 - It is a good idea to read the comment lines at the top of the demo files to understand what they each does.
 

@@ -46,6 +46,8 @@ void DEMDynamicThread::packDataPointers() {
     granData->alphaX = alphaX.data();
     granData->alphaY = alphaY.data();
     granData->alphaZ = alphaZ.data();
+    granData->accSpecified = accSpecified.data();
+    granData->angAccSpecified = angAccSpecified.data();
     granData->idGeometryA = idGeometryA.data();
     granData->idGeometryB = idGeometryB.data();
     granData->contactType = contactType.data();
@@ -272,7 +274,9 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     DEME_TRACKED_RESIZE_DEBUGPRINT(alphaX, nOwnerBodies, "alphaX", 0);
     DEME_TRACKED_RESIZE_DEBUGPRINT(alphaY, nOwnerBodies, "alphaY", 0);
     DEME_TRACKED_RESIZE_DEBUGPRINT(alphaZ, nOwnerBodies, "alphaZ", 0);
-
+    DEME_TRACKED_RESIZE_DEBUGPRINT(accSpecified, nOwnerBodies, "accSpecified", 0);
+    DEME_TRACKED_RESIZE_DEBUGPRINT(angAccSpecified, nOwnerBodies, "angAccSpecified", 0);
+    
     // Resize the family mask `matrix' (in fact it is flattened)
     DEME_TRACKED_RESIZE_DEBUGPRINT(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2,
                                    "familyMaskMatrix", DONT_PREVENT_CONTACT);
@@ -889,7 +893,7 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
     // Also note, we just have to process those haven't been processed
     for (unsigned int i = nTrackersProcessed; i < tracked_objs.size(); i++) {
         auto& tracked_obj = tracked_objs.at(i);
-        switch (tracked_obj->type) {
+        switch (tracked_obj->obj_type) {
             case (OWNER_TYPE::CLUMP):
                 tracked_obj->ownerID = nExistOwners + prescans_batch_size.at(tracked_obj->load_order);
                 tracked_obj->nSpanOwners = prescans_batch_size.at(tracked_obj->load_order + 1) -

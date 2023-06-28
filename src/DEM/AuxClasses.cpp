@@ -249,7 +249,7 @@ void DEMTracker::assertThereIsForcePairs(const std::string& name) {
     }
 }
 void DEMTracker::assertMesh(const std::string& name) {
-    if (obj->type != OWNER_TYPE::MESH) {
+    if (obj->obj_type != OWNER_TYPE::MESH) {
         std::stringstream ss;
         ss << name << " is only callable for trackers tracking a mesh!" << std::endl;
         throw std::runtime_error(ss.str());
@@ -321,6 +321,10 @@ float3 DEMTracker::MOI(size_t offset) {
 float3 DEMTracker::ContactAcc(size_t offset) {
     return sys->GetOwnerAcc(obj->ownerID + offset);
 }
+std::vector<float> DEMTracker::GetContactAcc(size_t offset) {
+    float3 res = ContactAcc(offset);
+    return {res.x, res.y, res.z};
+}
 float3 DEMTracker::ContactAngAccLocal(size_t offset) {
     return sys->GetOwnerAngAcc(obj->ownerID + offset);
 }
@@ -336,7 +340,7 @@ float DEMTracker::GetOwnerWildcardValue(const std::string& name, size_t offset) 
 }
 float DEMTracker::GetGeometryWildcardValue(const std::string& name, size_t offset) {
     std::vector<float> res;
-    switch (obj->type) {
+    switch (obj->obj_type) {
         case (OWNER_TYPE::CLUMP):
             res = sys->GetSphereWildcardValue(obj->geoID + offset, name, 1);
             break;
@@ -351,7 +355,7 @@ float DEMTracker::GetGeometryWildcardValue(const std::string& name, size_t offse
 }
 std::vector<float> DEMTracker::GetGeometryWildcardValue(const std::string& name) {
     std::vector<float> res;
-    switch (obj->type) {
+    switch (obj->obj_type) {
         case (OWNER_TYPE::CLUMP):
             res = sys->GetSphereWildcardValue(obj->geoID, name, obj->nGeos);
             break;
@@ -391,8 +395,18 @@ size_t DEMTracker::GetContactForcesAndGlobalTorque(std::vector<float3>& points,
     return sys->GetOwnerContactForces(obj->ownerID + offset, points, forces, torques, false);
 }
 
+void DEMTracker::AddAcc(float3 acc, size_t offset) {
+    sys->AddOwnerNextStepAcc(obj->ownerID + offset, acc);
+}
+void DEMTracker::AddAngAcc(float3 angAcc, size_t offset) {
+    sys->AddOwnerNextStepAngAcc(obj->ownerID + offset, angAcc);
+}
 void DEMTracker::SetPos(float3 pos, size_t offset) {
     sys->SetOwnerPosition(obj->ownerID + offset, pos);
+}
+void DEMTracker::SetPos(const std::vector<float>& pos, size_t offset) {
+    assertThreeElements(pos, "SetPos", "pos");
+    SetPos(host_make_float3(pos[0], pos[1], pos[2]), offset);
 }
 void DEMTracker::SetAngVel(float3 angVel, size_t offset) {
     sys->SetOwnerAngVel(obj->ownerID + offset, angVel);
@@ -455,7 +469,7 @@ void DEMTracker::SetOwnerWildcardValue(const std::string& name, const std::vecto
 }
 
 void DEMTracker::SetGeometryWildcardValue(const std::string& name, float wc, size_t offset) {
-    switch (obj->type) {
+    switch (obj->obj_type) {
         case (OWNER_TYPE::CLUMP):
             sys->SetSphereWildcardValue(obj->geoID + offset, name, std::vector<float>(1, wc));
             break;
@@ -469,7 +483,7 @@ void DEMTracker::SetGeometryWildcardValue(const std::string& name, float wc, siz
 }
 
 void DEMTracker::SetGeometryWildcardValue(const std::string& name, const std::vector<float>& wc) {
-    switch (obj->type) {
+    switch (obj->obj_type) {
         case (OWNER_TYPE::CLUMP):
             assertGeoSize(wc.size(), "SetGeometryWildcardValue", "spheres");
             sys->SetSphereWildcardValue(obj->geoID, name, wc);

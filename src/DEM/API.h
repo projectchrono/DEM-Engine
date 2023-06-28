@@ -79,6 +79,10 @@ class DEMSolver {
 
     /// Set gravitational pull.
     void SetGravitationalAcceleration(float3 g) { G = g; }
+    void SetGravitationalAcceleration(const std::vector<float>& g) {
+        assertThreeElements(g, "SetGravitationalAcceleration", "g");
+        G = host_make_float3(g[0], g[1], g[2]);
+    }
     /// Set the initial time step size. If using constant step size, then this will be used throughout; otherwise, the
     /// actual step size depends on the variable step strategy.
     void SetInitTimeStep(double ts_size) { m_ts_size = ts_size; }
@@ -272,19 +276,45 @@ class DEMSolver {
     /// Set the number of threads per block in force calculation (default 512).
     void SetForceCalcThreadsPerBlock(unsigned int nTh) { dT->DT_FORCE_CALC_NTHREADS_PER_BLOCK = nTh; }
 
-    /// Load possible clump types into the API-level cache
-    /// Return the shared ptr to the clump type just loaded
+    /// @brief Load a clump type into the API-level cache.
+    /// @return the shared ptr to the clump type just loaded.
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
                                                     float3 moi,
                                                     const std::vector<float>& sp_radii,
                                                     const std::vector<float3>& sp_locations_xyz,
                                                     const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials);
+    std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
+                                                    const std::vector<float>& moi,
+                                                    const std::vector<float>& sp_radii,
+                                                    const std::vector<std::vector<float>>& sp_locations_xyz,
+                                                    const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
+        assertThreeElements(moi, "LoadClumpType", "moi");
+        assertThreeElementsVector(sp_locations_xyz, "LoadClumpType", "sp_locations_xyz");
+        std::vector<float3> loc_xyz(sp_locations_xyz.size());
+        for (size_t i = 0; i < sp_locations_xyz.size(); i++) {
+            loc_xyz[i] = host_make_float3(sp_locations_xyz[i][0], sp_locations_xyz[i][1], sp_locations_xyz[i][2]);
+        }
+        return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), sp_radii, loc_xyz, sp_materials);
+    }
     /// An overload of LoadClumpType where all components use the same material
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
                                                     float3 moi,
                                                     const std::vector<float>& sp_radii,
                                                     const std::vector<float3>& sp_locations_xyz,
                                                     const std::shared_ptr<DEMMaterial>& sp_material);
+    std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
+                                                    const std::vector<float>& moi,
+                                                    const std::vector<float>& sp_radii,
+                                                    const std::vector<std::vector<float>>& sp_locations_xyz,
+                                                    const std::shared_ptr<DEMMaterial>& sp_material) {
+        assertThreeElements(moi, "LoadClumpType", "moi");
+        assertThreeElementsVector(sp_locations_xyz, "LoadClumpType", "sp_locations_xyz");
+        std::vector<float3> loc_xyz(sp_locations_xyz.size());
+        for (size_t i = 0; i < sp_locations_xyz.size(); i++) {
+            loc_xyz[i] = host_make_float3(sp_locations_xyz[i][0], sp_locations_xyz[i][1], sp_locations_xyz[i][2]);
+        }
+        return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), sp_radii, loc_xyz, sp_material);
+    }
     /// An overload of LoadClumpType where the user builds the DEMClumpTemplate struct themselves then supply it
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(DEMClumpTemplate& clump);
     /// An overload of LoadClumpType which loads sphere components from a file
@@ -292,12 +322,25 @@ class DEMSolver {
                                                     float3 moi,
                                                     const std::string filename,
                                                     const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials);
+    std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
+                                                    const std::vector<float>& moi,
+                                                    const std::string filename,
+                                                    const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
+        assertThreeElements(moi, "LoadClumpType", "moi");
+        return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), filename, sp_materials);
+    }
     /// An overload of LoadClumpType which loads sphere components from a file and all components use the same material
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
                                                     float3 moi,
                                                     const std::string filename,
                                                     const std::shared_ptr<DEMMaterial>& sp_material);
-
+    std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
+                                                    const std::vector<float>& moi,
+                                                    const std::string filename,
+                                                    const std::shared_ptr<DEMMaterial>& sp_material) {
+        assertThreeElements(moi, "LoadClumpType", "moi");
+        return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), filename, sp_material);
+    }
     /// A simplified version of LoadClumpType: it just loads a one-sphere clump template
     std::shared_ptr<DEMClumpTemplate> LoadSphereType(float mass,
                                                      float radius,
@@ -411,15 +454,52 @@ class DEMSolver {
     /// Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial location
     /// means the location of the clumps' CoM coordinates in the global frame.
     std::shared_ptr<DEMClumpBatch> AddClumps(DEMClumpBatch& input_batch);
+    /// @brief Load clumps into the simulation.
+    /// @param input_types Vector of the types of the clumps (vector of shared pointers).
+    /// @param input_xyz Vector of the initial locations of the clumps.
+    /// @return Handle to the loaded batch of clumps.
     std::shared_ptr<DEMClumpBatch> AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& input_types,
                                              const std::vector<float3>& input_xyz);
+    std::shared_ptr<DEMClumpBatch> AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& input_types,
+                                             const std::vector<std::vector<float>>& input_xyz) {
+        assertThreeElementsVector(input_xyz, "AddClumps", "input_xyz");
+        std::vector<float3> loc_xyz(input_xyz.size());
+        for (size_t i = 0; i < input_xyz.size(); i++) {
+            loc_xyz[i] = host_make_float3(input_xyz[i][0], input_xyz[i][1], input_xyz[i][2]);
+        }
+        return AddClumps(input_types, loc_xyz);
+    }
+
+    /// @brief Load a clump into the simulation.
+    /// @param input_type The type (shared pointer pointing to the clump type handle).
+    /// @param input_xyz Initial location of the clump.
+    /// @return Handle to the clump.
     std::shared_ptr<DEMClumpBatch> AddClumps(std::shared_ptr<DEMClumpTemplate>& input_type, float3 input_xyz) {
         return AddClumps(std::vector<std::shared_ptr<DEMClumpTemplate>>(1, input_type),
                          std::vector<float3>(1, input_xyz));
     }
     std::shared_ptr<DEMClumpBatch> AddClumps(std::shared_ptr<DEMClumpTemplate>& input_type,
+                                             const std::vector<float>& input_xyz) {
+        assertThreeElements(input_xyz, "AddClumps", "input_xyz");
+        return AddClumps(input_type, host_make_float3(input_xyz[0], input_xyz[1], input_xyz[2]));
+    }
+
+    /// @brief Load clumps (of the same template) into the simulation.
+    /// @param input_types The type (shared pointer pointing to the clump type handle).
+    /// @param input_xyz Vector of the initial locations of the clumps.
+    /// @return Handle to the loaded batch of clumps.
+    std::shared_ptr<DEMClumpBatch> AddClumps(std::shared_ptr<DEMClumpTemplate>& input_type,
                                              const std::vector<float3>& input_xyz) {
         return AddClumps(std::vector<std::shared_ptr<DEMClumpTemplate>>(input_xyz.size(), input_type), input_xyz);
+    }
+    std::shared_ptr<DEMClumpBatch> AddClumps(std::shared_ptr<DEMClumpTemplate>& input_type,
+                                             const std::vector<std::vector<float>>& input_xyz) {
+        assertThreeElementsVector(input_xyz, "AddClumps", "input_xyz");
+        std::vector<float3> loc_xyz(input_xyz.size());
+        for (size_t i = 0; i < input_xyz.size(); i++) {
+            loc_xyz[i] = host_make_float3(input_xyz[i][0], input_xyz[i][1], input_xyz[i][2]);
+        }
+        return AddClumps(input_type, loc_xyz);
     }
 
     /// Load a mesh-represented object
@@ -432,18 +512,38 @@ class DEMSolver {
                                                              bool load_uv = false);
     std::shared_ptr<DEMMeshConnected> AddWavefrontMeshObject(DEMMeshConnected& mesh);
 
-    /// Create a DEMTracker to allow direct control/modification/query to this external object
-    std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMExternObj>& obj);
-    /// Create a DEMTracker to allow direct control/modification/query to this batch of clumps. By default, it refers to
-    /// the first clump in this batch. The user can refer to other clumps in this batch by supplying an offset when
-    /// using this tracker's querying or assignment methods.
-    std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMClumpBatch>& obj);
-    /// Create a DEMTracker to allow direct control/modification/query to this triangle mesh object
-    std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMMeshConnected>& obj);
+    /// @brief Create a DEMTracker to allow direct control/modification/query to this external object/batch of
+    /// clumps/triangle mesh object.
+    /// @details By default, it refers to the first clump in this batch. The user can refer to other clumps in this
+    /// batch by supplying an offset when using this tracker's querying or assignment methods.
+    template <typename T>
+    std::shared_ptr<DEMTracker> Track(const std::shared_ptr<T>& obj) {
+        // Create a middle man: DEMTrackedObj. The reason we use it is because a simple struct should be used to
+        // transfer to  dT for owner-number processing. If we cut the middle man and use things such as DEMExtObj, there
+        // will not be a universal treatment that dT can apply, besides we may have some include-related issues.
+        DEMTrackedObj tracked_obj;
+        tracked_obj.load_order = obj->load_order;
+        tracked_obj.obj_type = obj->obj_type;
+        m_tracked_objs.push_back(std::make_shared<DEMTrackedObj>(std::move(tracked_obj)));
+
+        // Create a Tracker for this tracked object
+        DEMTracker tracker(this);
+        tracker.obj = m_tracked_objs.back();
+        return std::make_shared<DEMTracker>(std::move(tracker));
+    }
 
     /// Create a inspector object that can help query some statistical info of the clumps in the simulation
     std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity = "clump_max_z");
     std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity, const std::string& region);
+
+    /// @brief Add an extra acceleration to a owner for the next time step.
+    /// @param ownerID The number of that owner.
+    /// @param acc The extra acceleration to add.
+    void AddOwnerNextStepAcc(bodyID_t ownerID, float3 acc);
+    /// @brief Add an extra angular acceleration to a owner for the next time step.
+    /// @param ownerID The number of that owner.
+    /// @param acc The extra angular acceleration to add.
+    void AddOwnerNextStepAngAcc(bodyID_t ownerID, float3 angAcc);
 
     /// Instruct the solver that the 2 input families should not have contacts (a.k.a. ignored, if such a pair is
     /// encountered in contact detection). These 2 families can be the same (which means no contact within members of
@@ -688,11 +788,25 @@ class DEMSolver {
             collect_force_in_force_kernel = flag;
     }
 
-    /// Add an (analytical or clump-represented) external object to the simulation system
+    /// Add an (analytical or clump-represented) external object to the simulation system.
     std::shared_ptr<DEMExternObj> AddExternalObject();
+    /// @brief Add an analytical plane to the simulation.
+    /// @param pos A point on the plane.
+    /// @param normal The normal direction of the plane. Note entities are always considered in-contact with the plane
+    /// from the positive normal direction.
+    /// @param material Material of the plane.
+    /// @return A handle to the added plane object.
     std::shared_ptr<DEMExternObj> AddBCPlane(const float3 pos,
                                              const float3 normal,
                                              const std::shared_ptr<DEMMaterial>& material);
+    std::shared_ptr<DEMExternObj> AddBCPlane(const std::vector<float>& pos,
+                                             const std::vector<float>& normal,
+                                             const std::shared_ptr<DEMMaterial>& material) {
+        assertThreeElements(pos, "AddBCPlane", "pos");
+        assertThreeElements(normal, "AddBCPlane", "normal");
+        return AddBCPlane(host_make_float3(pos[0], pos[1], pos[2]), host_make_float3(normal[0], normal[1], normal[2]),
+                          material);
+    }
 
     /// Remove host-side cached vectors (so you can re-define them, and then re-initialize system)
     void ClearCache();

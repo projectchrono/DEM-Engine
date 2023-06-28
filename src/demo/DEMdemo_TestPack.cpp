@@ -37,6 +37,11 @@ void SetSolverProp(DEMSolver& DEMSim) {
     // Must disable this if you want to run dT and kT synchronizely, or the solver will automatically find a non-zero
     // update frequency that it sees fit to run it in an async fashion.
     DEMSim.UseAdaptiveUpdateFreq(false);
+
+    // Testing jitified clump templates here in this demo...
+    DEMSim.SetJitifyClumpTemplates();
+    DEMSim.SetJitifyMassProperties();
+    DEMSim.UseCubForceCollection();
 }
 
 void EllpsiodFallingOver() {

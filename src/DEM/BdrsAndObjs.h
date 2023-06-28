@@ -88,8 +88,12 @@ class DEMObjComponent {
 };
 
 /// API-(Host-)side struct that holds cached user-input external objects
-struct DEMExternObj {
-    // Component object types
+class DEMExternObj : public DEMInitializer {
+  public:
+    DEMExternObj() { obj_type = OWNER_TYPE::ANALYTICAL; }
+    ~DEMExternObj() {}
+
+    // Component object types. This means the types of each component, and is different from obj_type.
     std::vector<OBJ_COMPONENT> types;
     // Component object materials
     std::vector<std::shared_ptr<DEMMaterial>> materials;
@@ -113,8 +117,6 @@ struct DEMExternObj {
     float mass = 1e6;
     // Obj's MOI (huge by default)
     float3 MOI = make_float3(1e6);
-    // Its offset when this obj got loaded into the API-level user raw-input array
-    unsigned int load_order;
 
     union DEMAnalEntParams {
         DEMPlateParams_t plate;
@@ -138,6 +140,10 @@ struct DEMExternObj {
     void SetMass(float mass) { this->mass = mass; }
     /// Set MOI (in principal frame)
     void SetMOI(float3 MOI) { this->MOI = MOI; }
+    void SetMOI(const std::vector<float>& MOI) {
+        assertThreeElements(MOI, "SetMOI", "MOI");
+        SetMOI(host_make_float3(MOI[0], MOI[1], MOI[2]));
+    }
 
     /// @brief Set the initial quaternion for this object (before simulation initializes).
     /// @param rotQ Initial quaternion.
@@ -206,7 +212,7 @@ struct DEMExternObj {
 };
 
 // DEM mesh object
-class DEMMeshConnected {
+class DEMMeshConnected : public DEMInitializer {
   private:
     void assertLength(size_t len, const std::string name) {
         if (nTri == 0) {
@@ -276,8 +282,6 @@ class DEMMeshConnected {
     float mass = 1.f;
     // Mesh's MOI
     float3 MOI = make_float3(1.f);
-    // Its offset when this obj got loaded into the API-level user raw-input array
-    unsigned int load_order;
 
     std::string filename;  ///< file string if loading an obj file
 
@@ -285,11 +289,15 @@ class DEMMeshConnected {
     // normals derived from right-hand-rule are the same as the normals in the mesh file
     bool use_mesh_normals = false;
 
-    DEMMeshConnected() {}
-    DEMMeshConnected(std::string input_file) { LoadWavefrontMesh(input_file); }
+    DEMMeshConnected() { obj_type = OWNER_TYPE::MESH; }
+    DEMMeshConnected(std::string input_file) {
+        LoadWavefrontMesh(input_file);
+        obj_type = OWNER_TYPE::MESH;
+    }
     DEMMeshConnected(std::string input_file, const std::shared_ptr<DEMMaterial>& mat) {
         LoadWavefrontMesh(input_file);
         SetMaterial(mat);
+        obj_type = OWNER_TYPE::MESH;
     }
     ~DEMMeshConnected() {}
 
@@ -335,6 +343,10 @@ class DEMMeshConnected {
     void SetMass(float mass) { this->mass = mass; }
     /// Set MOI (in principal frame)
     void SetMOI(float3 MOI) { this->MOI = MOI; }
+    void SetMOI(const std::vector<float>& MOI) {
+        assertThreeElements(MOI, "SetMOI", "MOI");
+        SetMOI(host_make_float3(MOI[0], MOI[1], MOI[2]));
+    }
     /// Set mesh family number
     void SetFamily(unsigned int num) { this->family_code = num; }
 
