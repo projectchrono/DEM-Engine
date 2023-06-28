@@ -229,6 +229,8 @@ int main() {
     double tip_z_when_first_hit;
     bool hit_terrain = false;
     unsigned int frame_count = 0;
+
+    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_end; t += frame_time) {
         // float terrain_max_z = max_z_finder->GetValue();
         float3 forces = tip_tracker->ContactAcc();
@@ -262,6 +264,9 @@ int main() {
 
         frame_count++;
     }
+    std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+    std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
 
     std::cout << "ConeDrop demo exiting..." << std::endl;
     return 0;

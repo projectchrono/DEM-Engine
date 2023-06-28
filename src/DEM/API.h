@@ -532,6 +532,13 @@ class DEMSolver {
         return std::make_shared<DEMTracker>(std::move(tracker));
     }
 
+    /// @brief Create a DEMTracker to allow direct control/modification/query to this external object/batch of
+    /// clumps/triangle mesh object.
+    /// @details C++ users do not have to use this method. Using Track is enough. This method is for Python wrapper.
+    std::shared_ptr<DEMTracker> PythonTrack(const std::shared_ptr<DEMInitializer>& obj) {
+        return Track<DEMInitializer>(obj);
+    }
+
     /// Create a inspector object that can help query some statistical info of the clumps in the simulation
     std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity = "clump_max_z");
     std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity, const std::string& region);

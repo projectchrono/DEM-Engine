@@ -186,6 +186,7 @@ int main() {
     // the opposite charge to the particles. So the rod should attract the particles.
     rod_tracker->SetGeometryWildcardValue("Q", std::vector<float>(num_tri, -10. * init_charge));
 
+    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_end; t += step_size, step_count++) {
         if (step_count % out_steps == 0) {
             char filename[200], meshname[200];
@@ -208,6 +209,9 @@ int main() {
         }  // else the rod does not move
         rod_tracker->SetPos(make_float3(0, 0, rod_length / 2. + current_height));
     }
+    std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+    std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
 
     DEMSim.ShowTimingStats();
     std::cout << "Electrostatic demo exiting..." << std::endl;
