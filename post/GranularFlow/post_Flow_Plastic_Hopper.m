@@ -51,6 +51,7 @@ expCylWood=[0.02, 0.74
 
 folder=['../'  '../build/DemoOutput_Granular_PlasticCylinders/Hopper/'];
  folder=['../'  '../build/DemoOutput_Granular_PlasticSpheres/Hopper/'];
+ folder=['../'  '../build/DemoOutput_Granular_WoodenCylinders/Hopper/'];
 files=dir(folder);
 
 d=0.0060;
@@ -107,7 +108,7 @@ figure(2); hold on; box on;grid on
  plot(time,level_z,'--' ,'DisplayName','DEME','Color',[1 0 0])
  plot(expBall(:,1),expBall(:,2)/100,'-sk','DisplayName','Exp.')
 % plot(expCyl(:,1),expCyl(:,2)/100,'sr','DisplayName','Exp.')
- % plot(expCylWood(:,1),expCylWood(:,2)/100,'gd','DisplayName','Exp.')
+ plot(expCylWood(:,1),expCylWood(:,2)/100,'-gd','DisplayName','Exp.')
 
 axis([0 8 0 1.00])
 xlabel('Time (s)','Interpreter','latex',FontSize=8)

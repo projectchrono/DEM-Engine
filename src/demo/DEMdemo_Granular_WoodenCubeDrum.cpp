@@ -56,8 +56,8 @@ void runDEME(int caseDef, float frictionMaterial) {
     //DEMSim.SetExpandSafetyAdder(0.5);
    
     path out_dir = current_path();
-        out_dir += "/DemoOutput_Granular_WoodenSphere/";
-    out_dir += "Drum_1/";
+        out_dir += "/DemoOutput_Granular_WoodenCube/";
+    out_dir += "Drum_4/";
     out_dir += std::to_string(caseDef);
 
     // Scale factor
@@ -65,10 +65,13 @@ void runDEME(int caseDef, float frictionMaterial) {
 
     // total number of random clump templates to generate
 
-    double radius = 0.0059 * scaling /2.0 ;
-    double density = 674;
+    double base = 0.0061 ;
+    
+    int n_sphere = 8;
 
-    int totalSpheres = 17000;
+    double density = 488;
+
+    int totalSpheres = 9000;
 
     int num_template = 1;
 
@@ -80,7 +83,7 @@ void runDEME(int caseDef, float frictionMaterial) {
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}, {"mu", 0.04}, {"Crr", 0.00}});
     
     auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", frictionMaterial}, {"Crr", 0.00}});
+        DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", frictionMaterial}, {"Crr", 0.04}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.5);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.02);
@@ -98,7 +101,7 @@ void runDEME(int caseDef, float frictionMaterial) {
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(25.);
-    DEMSim.SetInitBinSize(radius * 5);
+    DEMSim.SetInitBinSize(base * 5);
 
     // Loaded meshes are by-default fixed
    auto fixed = DEMSim.AddWavefrontMeshObject("../data/granularFlow/drum.obj", mat_type_walls);     
@@ -119,42 +122,50 @@ void runDEME(int caseDef, float frictionMaterial) {
 
     double maxRadius= 0;
 
-    for (int i = 0; i < num_template; i++) {
-
+for (int i = 0; i < num_template; i++) {
         std::vector<float> radii;
         std::vector<float3> relPos;
         std::vector<std::shared_ptr<DEMMaterial>> mat;
 
+    std::vector<float3> sphereCenters = {
+        {-0.5f, -0.5f, -0.5f},  // Sphere 1
+        {-0.5f, -0.5f, 0.5f},   // Sphere 2
+        {-0.5f, 0.5f, -0.5f},   // Sphere 3
+        {-0.5f, 0.5f, 0.5f},    // Sphere 4
+        {0.5f, -0.5f, -0.5f},   // Sphere 5
+        {0.5f, -0.5f, 0.5f},    // Sphere 6
+        {0.5f, 0.5f, -0.5f},    // Sphere 7
+        {0.5f, 0.5f, 0.5f}      // Sphere 8
+    };
+
+    float3 tmp;
+
+    for (int j = 0; j < sphereCenters.size(); ++j) {
+        double radius=base/4.0;
+
+        std::cout << "Sphere " << j + 1 << ": (" << sphereCenters[j].x
+                  << ", " << sphereCenters[j].y << ", " << sphereCenters[j].z << ")" << std::endl;
+            tmp.x = sphereCenters[j].x*base/2;
+            tmp.y = sphereCenters[j].y*base/2;
+            tmp.z = sphereCenters[j].z*base/2;  
+            relPos.push_back(tmp);
+            mat.push_back(mat_type_particles);
+
+        radii.push_back(radius);          
+    }
+
+        float mass = base * base * base * density;
+        float Ixx = 1.f / 6.f * mass * base * base;
         
-        double radiusMin =  radius;
-        
+        float3 MOI = make_float3(Ixx, Ixx, Ixx);
+        std::cout << mass << " chosen moi ..." << mass << std::endl;
 
-        radii.push_back(radiusMin);
-        float3 tmp;
-        tmp.x = 0;
-        tmp.y = 0;
-        tmp.z = 0;
-
-        relPos.push_back(tmp);
-        mat.push_back(mat_type_particles);
-        radii.push_back(radiusMin); 
-
-        double c = radiusMin;  // smaller dim of the ellipse
-        double b = radiusMin;
-        double a = radiusMin;
-
-        float mass = 4.0 / 3.0 * PI * a * b * c * density;
-        float3 MOI = make_float3(   1.f / 5.f * mass * (b * b + c * c),
-                                    1.f / 5.f * mass * (a * a + c * c),
-                                    1.f / 5.f * mass * (b * b + a * a)
-                                );
-        std::cout << a << " chosen moi ..." << a / radius << std::endl;
-        
+        maxRadius = base;
         auto clump_ptr = DEMSim.LoadClumpType(mass, MOI, radii, relPos, mat_type_particles);
         // clump_ptr->AssignName("fsfs");
         clump_types.push_back(clump_ptr);
-       
     }
+
 
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
@@ -162,11 +173,11 @@ void runDEME(int caseDef, float frictionMaterial) {
 
 
     remove_all(out_dir);    
-    create_directory(out_dir);
+    create_directories(out_dir);
 
     char filename[200], meshfile[200];
 
-    float shift_xyz = 1.0* (radius) * 2.0;
+    float shift_xyz = 1.2* (base) * 1.0;
     float x = 0;
     float y = 0;
     
@@ -200,7 +211,7 @@ void runDEME(int caseDef, float frictionMaterial) {
         
         float sizeZ=(frame==0)? 0.15 : 0.00;
         float sizeX=0.10;        
-        float z= plane_bottom+shift_xyz+sizeZ/2.0;
+        float z= plane_bottom+maxRadius+sizeZ/2.0;
         
 
         float3 center_xyz = make_float3(0, 0, z);
@@ -237,7 +248,7 @@ void runDEME(int caseDef, float frictionMaterial) {
 
     initialization= (actualTotalSpheres < totalSpheres)? true : false;
 
-       if (generate && !(frame % 100)) {
+       if (generate && !(frame % 1)) {
         
         std::cout << "frame : " << frame << std::endl;
         sprintf(filename, "%s/DEMdemo_settling.csv", out_dir.c_str());
@@ -245,11 +256,9 @@ void runDEME(int caseDef, float frictionMaterial) {
         sprintf(meshfile, "%s/DEMdemo_mesh.vtk", out_dir.c_str());
         DEMSim.WriteMeshFile(std::string(meshfile));
         //DEMSim.ShowThreadCollaborationStats();
-        frame++;
         
         }
     frame++;
-
     DEMSim.DoDynamicsThenSync(settle_frame_time);
 
     plane_bottom=max_z_finder->GetValue();
@@ -257,7 +266,6 @@ void runDEME(int caseDef, float frictionMaterial) {
     }
 
 
-    
 
 
     float timeStep = 5e-3;
@@ -266,8 +274,11 @@ void runDEME(int caseDef, float frictionMaterial) {
     int timeOut = int(0.05f / timeStep);
     
     std::cout << "Time out in time steps is: " << timeOut << std::endl;
-    frame = 0;   
-
+    frame = 0;
+    
+    
+    DEMSim.WriteMeshFile(std::string(meshfile));
+    char cnt_filename[200];
 
 
     int counterSim = 0;

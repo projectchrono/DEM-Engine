@@ -26,7 +26,7 @@ void runDEME (int caseID, float friction);
 
 int main(){
 
-    std::vector<float> friction = {0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70};
+    std::vector<float> friction = {0.00, 0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90};
     int nsim=int(friction.size());
     
     int counter=0;
@@ -56,7 +56,8 @@ void runDEME(int caseDef, float frictionMaterial) {
     //DEMSim.SetExpandSafetyAdder(0.5);
    
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Granular_WoodenCylindersDrum_";
+        out_dir += "/DemoOutput_Granular_WoodenCylinders/";
+    out_dir += "Drum_5/";
     out_dir += std::to_string(caseDef);
 
     // Scale factor
@@ -72,17 +73,17 @@ void runDEME(int caseDef, float frictionMaterial) {
 
     int totalSpheres = 17000;
 
-    int num_template = 5000;
+    int num_template = 5;
 
     float plane_bottom = -0.08f * scaling;
        
-    std::vector<double> angular ={3.60, 10.80, 17.9}; // value given in rpm
+    std::vector<double> angular ={3.60}; // value given in rpm
  
    
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}, {"mu", 0.04}, {"Crr", 0.00}});
     
     auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", frictionMaterial}, {"Crr", 0.00}});
+        DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", frictionMaterial}, {"Crr", 0.10}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.5);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.02);
@@ -119,51 +120,45 @@ void runDEME(int caseDef, float frictionMaterial) {
     // Make an array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
     std::default_random_engine generator;
-    std::normal_distribution<double> distribution(radius,radius*0.02);
+    std::normal_distribution<double> distribution(radius,0.00);
     double maxRadius= 0;
 
-    for (int i = 0; i < num_template; i++) {
-
+for (int i = 0; i < num_template; i++) {
         std::vector<float> radii;
         std::vector<float3> relPos;
         std::vector<std::shared_ptr<DEMMaterial>> mat;
 
-        double radiusMed = distribution(generator);        
-        double eccentricity = 1.0 / 8.0 *radiusMed;
-        
-        float init= -length/2.0+radiusMed;
-        float trail= length/2.0-radiusMed;
-        float incrR = (trail-init)/(n_sphere-1);
+        double radiusMed = distribution(generator);
+        radiusMed=radius;
+        double eccentricity = 0.0 / 8.0 * radiusMed;
+
+        float init = -length / 2.0 + radiusMed;
+        float trail = length / 2.0 - radiusMed;
+        float incrR = (trail - init) / (n_sphere - 1);
         float3 tmp;
 
-        for (int j=0; j < n_sphere; j++){
-
+        for (int j = 0; j < n_sphere; j++) {
             radii.push_back(radiusMed);
-            
-            tmp.x = init+(j*incrR) + eccentricity;
+
+            tmp.x = init + (j * incrR) + eccentricity;
             tmp.y = 0;
             tmp.z = 0;
             relPos.push_back(tmp);
             mat.push_back(mat_type_particles);
-
         }
 
-
-        float mass = PI*radiusMed*radiusMed * length * density;
-        float Ixx = 1.f / 2.f * mass * radiusMed*radiusMed;
-        float Iyy = Ixx / 2.0 +1.0/12.0*mass*length*length;
-        float3 MOI = make_float3(   Ixx,
-                                    Iyy,
-                                    Iyy
-                                );
+        float mass = PI * radiusMed * radiusMed * length * density;
+        float Ixx = 1.f / 2.f * mass * radiusMed * radiusMed;
+        float Iyy = Ixx / 2.0 + 1.0 / 12.0 * mass * length * length;
+        float3 MOI = make_float3(Ixx, Iyy, Iyy);
         std::cout << mass << " chosen moi ..." << radiusMed / radius << std::endl;
 
         maxRadius = (radiusMed > maxRadius) ? radiusMed : maxRadius;
         auto clump_ptr = DEMSim.LoadClumpType(mass, MOI, radii, relPos, mat_type_particles);
         // clump_ptr->AssignName("fsfs");
         clump_types.push_back(clump_ptr);
-       
     }
+
 
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
@@ -171,7 +166,7 @@ void runDEME(int caseDef, float frictionMaterial) {
 
 
     remove_all(out_dir);    
-    create_directory(out_dir);
+    create_directories(out_dir);
 
     char filename[200], meshfile[200];
 
@@ -267,7 +262,7 @@ void runDEME(int caseDef, float frictionMaterial) {
 
 
     float timeStep = 5e-3;
-    int numStep = 15.0f / timeStep;
+    int numStep = 5.0f / timeStep;
     int numChangeSim =5.0f /timeStep;
     int timeOut = int(0.05f / timeStep);
     

@@ -25,7 +25,7 @@ measureAngle=zeros(numel(50:99),11,6);
 
 test=3;
 
-for jj=test
+for jj=2:2
 counterTotal=0;
 for q=0:1:10
 
@@ -111,7 +111,7 @@ end
 clc
 x=[0.00, 0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90];
 code={'A','B','C','D','E'};
-for i =test
+for i =2:2
     A=(measureAngle(:,:,i));
     meanVec=mean(A,1);
     for j=1:numel(x)

@@ -42,6 +42,8 @@ SET(DEMOS
 		DEMdemo_Granular_WoodenSpheresDrum
 		DEMdemo_Granular_WoodenSpheresDrum_sensDistr
 		DEMdemo_Granular_WoodenCylinderDrum
+		DEMdemo_Granular_WoodenCubeDrum
+		DEMdemo_Granular_FreeFalling
 		DEMdemo_Granular_WoodenCylindersHopper
 		DEMdemo_SolarSystem
 		DEMdemo_Repose_Cylinder
