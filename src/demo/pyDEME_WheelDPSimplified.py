@@ -12,14 +12,12 @@
 # wheel is measured (we only test one slip case in this demo, to make it faster).
 # =============================================================================
 
-# TODO: DEM/CMake has a LOT of entries?
-
 import DEME
 from DEME import HCPSampler
 
 import numpy as np
 import os  
-import ctypes
+# import ctypes
 
 if __name__ == "__main__":
     out_dir = "DemoOutput_WheelDPSimplified/"
@@ -27,12 +25,11 @@ if __name__ == "__main__":
     os.makedirs(out_dir, exist_ok = True)
     
     DEMSim = DEME.DEMSolver(2)
-    # TODO: May just comment all the following options and use default, for now
-    # DEMSim.SetVerbosity(INFO)
-    # DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV)
-    # DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV)
-    # DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK)
-    # DEMSim.SetContactOutputContent(OWNER | FORCE | POINT)
+    DEMSim.SetVerbosity(INFO)
+    DEMSim.SetOutputFormat(CSV)
+    DEMSim.SetOutputContent(ABSV)
+    DEMSim.SetMeshOutputFormat(VTK)
+    DEMSim.SetContactOutputContent(OWNER | FORCE | POINT)
 
     # E, nu, CoR, mu, Crr...
     mat_type_wheel = DEMSim.LoadMaterial({"E": 1e9, "nu": 0.3, "CoR": 0.6, "mu": 0.5, "Crr": 0.01})
@@ -53,7 +50,6 @@ if __name__ == "__main__":
     bottom = -0.5
     bot_wall = DEMSim.AddBCPlane([0, 0, bottom], [0, 0, 1], mat_type_terrain)
     
-  
     # Define the wheel geometry
     wheel_rad = 0.25
     wheel_width = 0.2
@@ -70,10 +66,7 @@ if __name__ == "__main__":
     wheel.SetMOI([wheel_IXX, wheel_IYY, wheel_IXX])
     
     # Give the wheel a family number so we can potentially add prescription
-    wheel.SetFamily(1)
-    print(type(bot_wall))
-
-    
+    wheel.SetFamily(1)  
     
     # Define the terrain particle templates
     # Calculate its mass and MOI
@@ -111,7 +104,6 @@ if __name__ == "__main__":
     terrain_particles.SetVel([0.00, 0, -0.05])
     terrain_particles.SetFamilies(heap_family)
     print(f"Current number of clumps: {len(terrain_particles_xyz)}") 
-
 
     # Track it
     bot_wall_tracker = DEMSim.Track(bot_wall)
