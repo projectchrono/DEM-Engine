@@ -217,6 +217,8 @@ int main() {
     compressor_tracker->SetPos(make_float3(0, 0, now_z));
     double compressor_final_dist = (now_z > -0.37) ? now_z - (-0.37) : 0.0;
     double compressor_v = compressor_final_dist / compress_time;
+
+    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (double t = 0; t < compress_time; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
             std::cout << "Frame: " << currframe << std::endl;
@@ -253,6 +255,11 @@ int main() {
     DEMSim.DisableContactBetweenFamilies(0, 1);
     DEMSim.DoDynamicsThenSync(0.3);
     matter_mass = total_mass_finder->GetValue();
+
+    std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+    std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
+
     std::cout << "Bulk density after settling " << matter_mass / total_volume << std::endl;
 
     // Final write

@@ -1,7 +1,7 @@
 #  Copyright (c) 2021, SBEL GPU Development Team
 #  Copyright (c) 2021, University of Wisconsin - Madison
 #
-#	SPDX-License-Identifier: BSD-3-Clause
+# SPDX-License-Identifier: BSD-3-Clause
 
 # =============================================================================
 # A simplified wheel drawbar-pull test, featuring Curiosity wheel geometry and
@@ -16,14 +16,14 @@ import DEME
 from DEME import HCPSampler
 
 import numpy as np
-import os  
+import os
 # import ctypes
 
 if __name__ == "__main__":
     out_dir = "DemoOutput_WheelDPSimplified/"
     out_dir = os.path.join(os.getcwd(), out_dir)
-    os.makedirs(out_dir, exist_ok = True)
-    
+    os.makedirs(out_dir, exist_ok=True)
+
     DEMSim = DEME.DEMSolver(2)
     DEMSim.SetVerbosity(INFO)
     DEMSim.SetOutputFormat(CSV)
@@ -32,12 +32,15 @@ if __name__ == "__main__":
     DEMSim.SetContactOutputContent(OWNER | FORCE | POINT)
 
     # E, nu, CoR, mu, Crr...
-    mat_type_wheel = DEMSim.LoadMaterial({"E": 1e9, "nu": 0.3, "CoR": 0.6, "mu": 0.5, "Crr": 0.01})
-    mat_type_terrain = DEMSim.LoadMaterial({"E": 1e9, "nu": 0.3, "CoR": 0.4, "mu": 0.5, "Crr": 0.01})
-    
+    mat_type_wheel = DEMSim.LoadMaterial(
+        {"E": 1e9, "nu": 0.3, "CoR": 0.6, "mu": 0.5, "Crr": 0.01})
+    mat_type_terrain = DEMSim.LoadMaterial(
+        {"E": 1e9, "nu": 0.3, "CoR": 0.4, "mu": 0.5, "Crr": 0.01})
+
     # If you don't have this line, then mu between drum material and granular material will be the average of the two.
     DEMSim.SetMaterialPropertyPair("mu", mat_type_wheel, mat_type_terrain, 0.8)
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_wheel, mat_type_terrain, 0.6)
+    DEMSim.SetMaterialPropertyPair(
+        "CoR", mat_type_wheel, mat_type_terrain, 0.6)
 
     # `World'
     G_mag = 9.81
@@ -45,11 +48,12 @@ if __name__ == "__main__":
     world_size_y = 1.
     world_size_x = 2.
     world_size_z = 2.
-    DEMSim.InstructBoxDomainDimension(world_size_x, world_size_y, world_size_z, "none")
+    DEMSim.InstructBoxDomainDimension(
+        world_size_x, world_size_y, world_size_z, "none")
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain)
     bottom = -0.5
     bot_wall = DEMSim.AddBCPlane([0, 0, bottom], [0, 0, 1], mat_type_terrain)
-    
+
     # Define the wheel geometry
     wheel_rad = 0.25
     wheel_width = 0.2
@@ -58,27 +62,30 @@ if __name__ == "__main__":
     total_pressure = 200.0
     added_pressure = total_pressure - wheel_weight
     wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2
-    wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width)
+    wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad *
+                                     wheel_rad + wheel_width * wheel_width)
 
-    wheel = DEMSim.AddWavefrontMeshObject(DEME.GetDEMEDataFile("mesh/rover_wheels/viper_wheel_right.obj"), mat_type_wheel, True, False)
-    
+    wheel = DEMSim.AddWavefrontMeshObject(DEME.GetDEMEDataFile(
+        "mesh/rover_wheels/viper_wheel_right.obj"), mat_type_wheel, True, False)
+
     wheel.SetMass(wheel_mass)
     wheel.SetMOI([wheel_IXX, wheel_IYY, wheel_IXX])
-    
+
     # Give the wheel a family number so we can potentially add prescription
-    wheel.SetFamily(1)  
-    
+    wheel.SetFamily(1)
+
     # Define the terrain particle templates
     # Calculate its mass and MOI
     terrain_density = 2.6e3
     volume1 = 4.2520508
     mass1 = terrain_density * volume1
     MOI1 = np.array([1.6850426, 1.6375114, 2.1187753]) * terrain_density
-    
+
     # Scale the template we just created
     scale = 0.02
     # Then load it to system
-    my_template = DEMSim.LoadClumpType(mass1, MOI1.tolist(), DEME.GetDEMEDataFile("clumps/triangular_flat.csv"), mat_type_terrain)
+    my_template = DEMSim.LoadClumpType(mass1, MOI1.tolist(), DEME.GetDEMEDataFile(
+        "clumps/triangular_flat.csv"), mat_type_terrain)
     # Now scale the template
     # Note the mass and MOI are also scaled in the process, automatically. But if you are not happy with this, you
     # can always manually change mass and MOI afterwards.
@@ -96,14 +103,16 @@ if __name__ == "__main__":
     offset_z = bottom + sample_halfheight + 0.03
     # Sample initial particles
     sample_center = np.array([0, 0, offset_z])
-    terrain_particles_xyz = sampler.SampleBox(sample_center.tolist(), [sample_halfwidth_x, sample_halfwidth_y, sample_halfheight])
+    terrain_particles_xyz = sampler.SampleBox(sample_center.tolist(
+    ), [sample_halfwidth_x, sample_halfwidth_y, sample_halfheight])
     terrain_template_in_use = [my_template] * len(terrain_particles_xyz)
     heap_family = [0] * len(terrain_particles_xyz)
-    terrain_particles = DEMSim.AddClumps(terrain_template_in_use, terrain_particles_xyz)
+    terrain_particles = DEMSim.AddClumps(
+        terrain_template_in_use, terrain_particles_xyz)
     # Give ground particles a small initial velocity so they `collapse' at the start of the simulation
     terrain_particles.SetVel([0.00, 0, -0.05])
     terrain_particles.SetFamilies(heap_family)
-    print(f"Current number of clumps: {len(terrain_particles_xyz)}") 
+    print(f"Current number of clumps: {len(terrain_particles_xyz)}")
 
     # Track it
     bot_wall_tracker = DEMSim.Track(bot_wall)
@@ -119,15 +128,18 @@ if __name__ == "__main__":
     # (move freely linearly)
     DEMSim.SetFamilyPrescribedAngVel(1, "0", f"{w_r:09}", "0", False)
     # An extra force (acceleration) is addedd to simulate the load that the wheel carries
-    DEMSim.AddFamilyPrescribedAcc(1, "none", "none", f"{(-added_pressure / wheel_mass):09}")
+    DEMSim.AddFamilyPrescribedAcc(
+        1, "none", "none", f"{(-added_pressure / wheel_mass):09}")
     # `Real sim' family number
     DEMSim.SetFamilyPrescribedAngVel(2, "0", f"{w_r:09}", "0", False)
     # Note: this wheel is not `dictated' by our prescrption of motion (hence the false argument), because it
     # can sink into the ground (move on Z dir); but its X and Y motions are explicitly controlled.
     # This one says when the experiment is going, the slip ratio is 0.5 (by our prescribing linear and angular vel)
-    DEMSim.SetFamilyPrescribedLinVel(2, f"{(v_ref * 0.5):09}", "0", "none", False)
+    DEMSim.SetFamilyPrescribedLinVel(
+        2, f"{(v_ref * 0.5):09}", "0", "none", False)
     # An extra force (acceleration) is addedd to simulate the load that the wheel carries
-    DEMSim.AddFamilyPrescribedAcc(2, "none", "none", f"{(-added_pressure / wheel_mass):09}")
+    DEMSim.AddFamilyPrescribedAcc(
+        2, "none", "none", f"{(-added_pressure / wheel_mass):09}")
 
     # Some inspectors
     max_z_finder = DEMSim.CreateInspector("clump_max_z")
@@ -180,12 +192,14 @@ if __name__ == "__main__":
     while (t < sim_end):
         if (curr_step % out_steps == 0):
             print(f"Outputting frame: {currframe}")
-            filename = os.path.join(out_dir, f"DEMdemo_output_{currframe:04d}.csv")
-            meshname = os.path.join(out_dir, f"DEMdemo_mesh_{currframe:04d}.vtk")
+            filename = os.path.join(
+                out_dir, f"DEMdemo_output_{currframe:04d}.csv")
+            meshname = os.path.join(
+                out_dir, f"DEMdemo_mesh_{currframe:04d}.vtk")
             DEMSim.WriteSphereFile(filename)
             DEMSim.WriteMeshFile(meshname)
             currframe += 1
-            DEMSim.ShowThreadCollaborationStats() # TODO: Not showing?
+            DEMSim.ShowThreadCollaborationStats()
 
         if (curr_step % report_steps == 0):
             force_list = wheel_tracker.GetContactAcc()

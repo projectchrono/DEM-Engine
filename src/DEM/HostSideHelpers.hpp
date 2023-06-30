@@ -627,6 +627,19 @@ inline void assertThreeElementsVector(const std::vector<std::vector<T>>& vec,
         throw std::runtime_error(out.str());
     }
 }
+template <typename T>
+inline void assertFourElementsVector(const std::vector<std::vector<T>>& vec,
+                                     const std::string& func_name,
+                                     const std::string& var_name) {
+    if (vec.at(0).size() != 4) {
+        std::stringstream out;
+        out << func_name << "'s " << var_name
+            << " argument needs to be a list/vector of length 4 vectors (in other words, n by 4 matrix).\n The "
+               "provided size is "
+            << vec.size() << " by " << vec.at(0).size() << ".\n";
+        throw std::runtime_error(out.str());
+    }
+}
 
 }  // namespace deme
 

@@ -130,6 +130,8 @@ int main() {
     float offset_z = bottom + sample_halfheight + 0.15;
     float settle_frame_time = 0.2;
     float settle_batch_time = 2.0;
+
+    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     while (DEMSim.GetNumClumps() < 0.25e6) {
         // DEMSim.ClearCache(); // Clearing cache is no longer needed
         float3 sample_center = make_float3(0, 0, offset_z);
@@ -166,6 +168,9 @@ int main() {
 
     // Settle for some time more
     DEMSim.DoDynamicsThenSync(1.0);
+    std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+    std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
 
     char cp_filename[200];
     sprintf(cp_filename, "%s/GRC_3e5.csv", out_dir.c_str());
