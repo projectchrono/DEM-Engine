@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
     int cur_test = atoi(argv[1]);
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_Wheel_Tests_4";
+    out_dir += "/DEMdemo_Wheel_Tests_5";
     std::filesystem::create_directory(out_dir);
 
     // `World'
