@@ -145,6 +145,8 @@ int main() {
     out_dir += "/DemoOutput_Repose";
     create_directory(out_dir);
 
+    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
+    
     for (int i = 0; i < 140; i++) {
         char filename[200], meshfile[200];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
@@ -155,6 +157,11 @@ int main() {
         DEMSim.DoDynamics(1e-1);
         DEMSim.ShowThreadCollaborationStats();
     }
+
+    std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+    std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
+
     DEMSim.ShowTimingStats();
     DEMSim.ClearTimingStats();
 

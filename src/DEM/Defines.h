@@ -146,9 +146,10 @@ enum OUTPUT_CONTENT {
     FAMILY = 128,
     MAT = 256,
     OWNER_WILDCARD = 512,
+    GEO_WILDCARD = 1024,
     // How much this clump expanded in size via ChangeClumpSizes, compared to its `vanilla' template. Can be useful if
     // the user imposed some fine-grain clump size control.
-    EXP_FACTOR = 1024
+    EXP_FACTOR = 2048
 };
 // Output particles as individual (component) spheres, or as owner clumps (clump CoMs for location, as an example)?
 enum class SPATIAL_DIR { X, Y, Z, NONE };
@@ -159,8 +160,7 @@ enum CNT_OUTPUT_CONTENT {
     POINT = 2,      // Contact point in global frame
     COMPONENT = 4,  // The component numbers (such as triangle number for a mesh) that involved in this contact
     NORMAL = 8,     // Contact normal direction in global frame
-    TORQUE_ONLY_FORCE =
-        16,  // This is a standalone force and produces torque only (typical example: rolling resistance force)
+    TORQUE = 16,    // This is a standalone force and produces torque only (typical example: rolling resistance force)
     CNT_WILDCARD = 32,
     OWNER = 64,
     GEO_ID = 128,
@@ -236,9 +236,10 @@ struct DEMSimParams {
     // Stepping method
     TIME_INTEGRATOR stepping = TIME_INTEGRATOR::FORWARD_EULER;
 
-    // Number of wildcards (extra property) arrays associated with contacts and owners
+    // Number of wildcards (extra property) arrays associated with contacts and owners and geometries
     unsigned int nContactWildcards;
     unsigned int nOwnerWildcards;
+    unsigned int nGeoWildcards;
 
     // The max vel at which the solver errors out
     float errOutVel = DEME_HUGE_FLOAT;
@@ -283,6 +284,9 @@ struct DEMDataDT {
     float* alphaX;
     float* alphaY;
     float* alphaZ;
+
+    notStupidBool_t* accSpecified;
+    notStupidBool_t* angAccSpecified;
 
     bodyID_t* idGeometryA;
     bodyID_t* idGeometryB;
@@ -333,6 +337,9 @@ struct DEMDataDT {
     oriQ_t* pKTOwnedBuffer_oriQ2 = NULL;
     oriQ_t* pKTOwnedBuffer_oriQ3 = NULL;
     family_t* pKTOwnedBuffer_familyID = NULL;
+    float3* pKTOwnedBuffer_relPosNode1 = NULL;
+    float3* pKTOwnedBuffer_relPosNode2 = NULL;
+    float3* pKTOwnedBuffer_relPosNode3 = NULL;
 
     // The collection of pointers to DEM template arrays such as radiiSphere, still useful when there are template info
     // not directly jitified into the kernels
@@ -346,11 +353,14 @@ struct DEMDataDT {
     float* mmiZZ;
     float* volumeOwnerBody;
 
-    // Wildcards. These are some quantities that you can associate with contact pairs and/or owner objects. Very
+    // Wildcards. These are some quantities that you can associate with contact pairs and objects. Very
     // typically, contact history info in Hertzian model in this DEM tool is a wildcard, and electric charges can be
-    // registered on granular particles with wildcards.
+    // registered on spheres (clump components) with wildcards.
     float* contactWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
     float* ownerWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
+    float* sphereWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
+    float* analWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
+    float* triWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
 
     // dT believes this amount of future drift is ideal
     unsigned int perhapsIdealFutureDrift = 0;
@@ -402,6 +412,10 @@ struct DEMDataKT {
     float3* relPosNode1;
     float3* relPosNode2;
     float3* relPosNode3;
+    // For mesh deformation
+    float3* relPosNode1_buffer;
+    float3* relPosNode2_buffer;
+    float3* relPosNode3_buffer;
 
     // kT's own work arrays. Now these array pointers get assigned in contactDetection() which point to shared scratch
     // spaces. No need to do forward declaration anymore. They are left here for reference, should contactDetection()

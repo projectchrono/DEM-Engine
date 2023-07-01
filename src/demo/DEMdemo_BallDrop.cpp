@@ -89,9 +89,6 @@ int main() {
     unsigned int fps = 20;
     float frame_time = 1.0 / fps;
 
-    // Testing UpdateMesh... not needed
-    proj_tracker->UpdateMesh(projectile);
-
     std::cout << "Output at " << fps << " FPS" << std::endl;
     unsigned int currframe = 0;
 
@@ -113,6 +110,8 @@ int main() {
     step_size *= 0.5;
     DEMSim.UpdateStepSize(step_size);
     DEMSim.ChangeFamily(2, 1);
+
+    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_time; t += frame_time) {
         std::cout << "Frame: " << currframe << std::endl;
         char filename[200], meshfilename[200], cnt_filename[200];
@@ -127,7 +126,11 @@ int main() {
         DEMSim.DoDynamicsThenSync(frame_time);
         DEMSim.ShowThreadCollaborationStats();
     }
+    std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+    std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
 
+    DEMSim.ShowTimingStats();
     DEMSim.ShowAnomalies();
     std::cout << "DEMdemo_BallDrop exiting..." << std::endl;
     return 0;

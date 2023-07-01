@@ -530,13 +530,23 @@ inline void hostApplyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Qw, const T2& 
         ((T2)2.0 * (Qw * Qw + Qz * Qz) - (T2)1.0) * oldZ;
 }
 
-/// Host version of applying a local rotation then a translation
+/// Host version of applying a local rotation then a translation.
 template <typename T1, typename T2, typename T3>
-inline void hostApplyFrameTransform(T1& pos, const T2& vec, const T3& rot_Q) {
+inline void applyFrameTransformLocalToGlobal(T1& pos, const T2& vec, const T3& rot_Q) {
     hostApplyOriQToVector3(pos.x, pos.y, pos.z, rot_Q.w, rot_Q.x, rot_Q.y, rot_Q.z);
     pos.x += vec.x;
     pos.y += vec.y;
     pos.z += vec.z;
+}
+
+/// Host version of translating the inverse of the provided vec then applying a local inverse rotation of the provided
+/// rot_Q.
+template <typename T1, typename T2, typename T3>
+inline void applyFrameTransformGlobalToLocal(T1& pos, const T2& vec, const T3& rot_Q) {
+    pos.x -= vec.x;
+    pos.y -= vec.y;
+    pos.z -= vec.z;
+    hostApplyOriQToVector3(pos.x, pos.y, pos.z, rot_Q.w, -rot_Q.x, -rot_Q.y, -rot_Q.z);
 }
 
 // Default accuracy is 17. This accuracy is especially needed for MOIs and length-unit (l).
@@ -582,6 +592,52 @@ inline std::string read_file_to_string(const std::filesystem::path& sourcefile) 
     std::stringstream buffer;
     buffer << t.rdbuf();
     return buffer.str();
+}
+
+// Asserters (for the convenience of Python wrapper)
+template <typename T>
+inline void assertThreeElements(const std::vector<T>& vec, const std::string& func_name, const std::string& var_name) {
+    if (vec.size() != 3) {
+        std::stringstream out;
+        out << func_name << "'s " << var_name << " argument needs to be a length 3 list/vector. The provided size is "
+            << vec.size() << ".\n";
+        throw std::runtime_error(out.str());
+    }
+}
+template <typename T>
+inline void assertFourElements(const std::vector<T>& vec, const std::string& func_name, const std::string& var_name) {
+    if (vec.size() != 4) {
+        std::stringstream out;
+        out << func_name << "'s " << var_name << " argument needs to be a length 4 list/vector. The provided size is "
+            << vec.size() << ".\n";
+        throw std::runtime_error(out.str());
+    }
+}
+template <typename T>
+inline void assertThreeElementsVector(const std::vector<std::vector<T>>& vec,
+                                      const std::string& func_name,
+                                      const std::string& var_name) {
+    if (vec.at(0).size() != 3) {
+        std::stringstream out;
+        out << func_name << "'s " << var_name
+            << " argument needs to be a list/vector of length 3 vectors (in other words, n by 3 matrix).\n The "
+               "provided size is "
+            << vec.size() << " by " << vec.at(0).size() << ".\n";
+        throw std::runtime_error(out.str());
+    }
+}
+template <typename T>
+inline void assertFourElementsVector(const std::vector<std::vector<T>>& vec,
+                                     const std::string& func_name,
+                                     const std::string& var_name) {
+    if (vec.at(0).size() != 4) {
+        std::stringstream out;
+        out << func_name << "'s " << var_name
+            << " argument needs to be a list/vector of length 4 vectors (in other words, n by 4 matrix).\n The "
+               "provided size is "
+            << vec.size() << " by " << vec.at(0).size() << ".\n";
+        throw std::runtime_error(out.str());
+    }
 }
 
 }  // namespace deme

@@ -11,13 +11,21 @@ inline __device__ void cleanUpContactForces(size_t thisContact,
 }
 
 inline __device__ void cleanUpAcc(size_t thisClump, deme::DEMSimParams* simParams, deme::DEMDataDT* granData) {
-    granData->aX[thisClump] = 0;
-    granData->aY[thisClump] = 0;
-    granData->aZ[thisClump] = 0;
-    granData->alphaX[thisClump] = 0;
-    granData->alphaY[thisClump] = 0;
-    granData->alphaZ[thisClump] = 0;
-    // TODO: Prescribed accelerations to be added here
+    // If should not clear acc arrays, then just mark it to be clear in the next ts
+    if (granData->accSpecified[thisClump]) {
+        granData->accSpecified[thisClump] = 0;
+    } else {
+        granData->aX[thisClump] = 0;
+        granData->aY[thisClump] = 0;
+        granData->aZ[thisClump] = 0;
+    }
+    if (granData->angAccSpecified[thisClump]) {
+        granData->angAccSpecified[thisClump] = 0;
+    } else {
+        granData->alphaX[thisClump] = 0;
+        granData->alphaY[thisClump] = 0;
+        granData->alphaZ[thisClump] = 0;
+    }
 }
 
 __global__ void prepareForceArrays(deme::DEMSimParams* simParams, deme::DEMDataDT* granData, size_t nContactPairs) {

@@ -171,6 +171,18 @@ inline void DEMKinematicThread::unpackMyBuffer() {
         DEME_GPU_CALL(cudaMemcpy(granData->familyID, granData->familyID_buffer,
                                  simParams->nOwnerBodies * sizeof(family_t), cudaMemcpyDeviceToDevice));
     }
+
+    // If dT received a mesh deformation request from user, then it is now passed to kT
+    if (solverFlags.willMeshDeform) {
+        DEME_GPU_CALL(cudaMemcpy(granData->relPosNode1, granData->relPosNode1_buffer,
+                                 simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
+        DEME_GPU_CALL(cudaMemcpy(granData->relPosNode2, granData->relPosNode2_buffer,
+                                 simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
+        DEME_GPU_CALL(cudaMemcpy(granData->relPosNode3, granData->relPosNode3_buffer,
+                                 simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
+        // dT won't be sending if kT is loading, so it is safe
+        solverFlags.willMeshDeform = false;
+    }
 }
 
 inline void DEMKinematicThread::sendToTheirBuffer() {
@@ -462,7 +474,8 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
                                       float expand_safety_param,
                                       float expand_safety_adder,
                                       const std::set<std::string>& contact_wildcards,
-                                      const std::set<std::string>& owner_wildcards) {
+                                      const std::set<std::string>& owner_wildcards,
+                                      const std::set<std::string>& geo_wildcards) {
     simParams->nvXp2 = nvXp2;
     simParams->nvYp2 = nvYp2;
     simParams->nvZp2 = nvZp2;
@@ -488,6 +501,7 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
 
     simParams->nContactWildcards = contact_wildcards.size();
     simParams->nOwnerWildcards = owner_wildcards.size();
+    simParams->nGeoWildcards = geo_wildcards.size();
 }
 
 void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
@@ -571,6 +585,11 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
             // DEME_ADVISE_DEVICE(familyID_buffer, dT->streamInfo.device);
             DEME_DEVICE_PTR_ALLOC(granData->familyID_buffer, nOwnerBodies);
         }
+
+        DEME_DEVICE_PTR_ALLOC(granData->relPosNode1_buffer, nTriGM);
+        DEME_DEVICE_PTR_ALLOC(granData->relPosNode2_buffer, nTriGM);
+        DEME_DEVICE_PTR_ALLOC(granData->relPosNode3_buffer, nTriGM);
+
         // Unset the device change we just did
         DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
     }
@@ -778,7 +797,9 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
                                                size_t nExistingClumps,
                                                size_t nExistingSpheres,
                                                size_t nExistingTriMesh,
-                                               size_t nExistingFacets) {
+                                               size_t nExistingFacets,
+                                               unsigned int nExistingObj,
+                                               unsigned int nExistingAnalGM) {
     populateEntityArrays(input_clump_batches, input_ext_obj_family, input_mesh_obj_family, input_mesh_facet_owner,
                          input_mesh_facets, clump_templates, nExistingOwners, nExistingSpheres, nExistingFacets);
 }
@@ -833,19 +854,19 @@ void DEMKinematicThread::initAllocation() {
 
 void DEMKinematicThread::deallocateEverything() {}
 
-void DEMKinematicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite) {
-    if (overwrite) {
-        for (size_t i = 0; i < triangles.size(); i++) {
-            relPosNode1[start + i] = triangles[i].p1;
-            relPosNode2[start + i] = triangles[i].p2;
-            relPosNode3[start + i] = triangles[i].p3;
-        }
-    } else {
-        for (size_t i = 0; i < triangles.size(); i++) {
-            relPosNode1[start + i] += triangles[i].p1;
-            relPosNode2[start + i] += triangles[i].p2;
-            relPosNode3[start + i] += triangles[i].p3;
-        }
+void DEMKinematicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles) {
+    for (size_t i = 0; i < triangles.size(); i++) {
+        relPosNode1[start + i] = triangles[i].p1;
+        relPosNode2[start + i] = triangles[i].p2;
+        relPosNode3[start + i] = triangles[i].p3;
+    }
+}
+
+void DEMKinematicThread::updateTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& updates) {
+    for (size_t i = 0; i < updates.size(); i++) {
+        relPosNode1[start + i] += updates[i].p1;
+        relPosNode2[start + i] += updates[i].p2;
+        relPosNode3[start + i] += updates[i].p3;
     }
 }
 

@@ -304,7 +304,9 @@ class DEMKinematicThread {
                                size_t nExistingClumps,
                                size_t nExistingSpheres,
                                size_t nExistingTriMesh,
-                               size_t nExistingFacets);
+                               size_t nExistingFacets,
+                               unsigned int nExistingObj,
+                               unsigned int nExistingAnalGM);
 
     /// Set SimParams items
     void setSimParams(unsigned char nvXp2,
@@ -326,7 +328,8 @@ class DEMKinematicThread {
                       float expand_safety_param,
                       float expand_safety_adder,
                       const std::set<std::string>& contact_wildcards,
-                      const std::set<std::string>& owner_wildcards);
+                      const std::set<std::string>& owner_wildcards,
+                      const std::set<std::string>& geo_wildcards);
 
     // Put sim data array pointers in place
     void packDataPointers();
@@ -352,9 +355,11 @@ class DEMKinematicThread {
     void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs);
 
     /// Rewrite the relative positions of the flattened triangle soup, starting from `start', using triangle nodal
-    /// positions in `triangles'. If `overwrite' is true, then it is overwriting the existing nodal info; otherwise it
-    /// just adds to it.
-    void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles, bool overwrite = true);
+    /// positions in `triangles'.
+    void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles);
+    /// Rewrite the relative positions of the flattened triangle soup, starting from `start', using triangle nodal
+    /// positions in `triangles', by the amount stipulated in updates.
+    void updateTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& updates);
 
     /// Update (overwrite) kT's previous contact array based on input
     void updatePrevContactArrays(DEMDataDT* dT_data, size_t nContacts);
