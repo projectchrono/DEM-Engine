@@ -38,9 +38,9 @@ void SetSolverProp(DEMSolver& DEMSim) {
     // update frequency that it sees fit to run it in an async fashion.
     DEMSim.UseAdaptiveUpdateFreq(false);
 
-    // Testing jitified clump templates here in this demo...
-    DEMSim.SetJitifyClumpTemplates();
-    DEMSim.SetJitifyMassProperties();
+    // Testing non-jitified clump templates here in this demo...
+    DEMSim.DisableJitifyClumpTemplates();
+    DEMSim.DisableJitifyMassProperties();
     DEMSim.UseCubForceCollection();
 }
 

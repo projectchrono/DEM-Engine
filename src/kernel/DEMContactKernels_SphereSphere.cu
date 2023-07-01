@@ -10,8 +10,6 @@
 
 // If clump templates are jitified, they will be below
 _clumpTemplateDefs_;
-// Family mask, _nFamilyMaskEntries_ elements are in this array
-// __constant__ __device__ bool familyMasks[] = {_familyMasks_};
 
 template <typename T1, typename T2>
 inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
