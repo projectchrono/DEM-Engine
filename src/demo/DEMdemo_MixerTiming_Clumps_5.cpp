@@ -27,7 +27,7 @@ int main() {
     size_t n_steps = 5e5;
     int test_num = 0;
 
-    while (num_particles < 2e8) {
+    while (num_particles < 3e7) {
         DEMSolver DEMSim;
         DEMSim.SetVerbosity(ERROR);
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
