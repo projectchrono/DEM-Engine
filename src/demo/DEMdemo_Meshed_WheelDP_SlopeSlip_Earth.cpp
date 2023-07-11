@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
     int cur_test = atoi(argv[1]);
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_Wheel_Tests_7";
+    out_dir += "/DEMdemo_Wheel_Tests_8";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
     double world_size_z = 4.0;
     float w_r = 0.8;
     double sim_end = 20.;
-    float z_adv_targ = 0.2; // 0.1;
+    float z_adv_targ = 0.2;  // 0.1;
 
     // Define the wheel geometry
     float wheel_rad = atof(argv[2]);
@@ -238,6 +238,8 @@ int main(int argc, char* argv[]) {
                 DEMSim.WriteMeshFile(std::string(meshname));
             }
 
+            std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
+
             std::cout << "Test num: " << cur_test << std::endl;
             DEMSim.DoDynamicsThenSync(1.);
 
@@ -265,6 +267,11 @@ int main(int argc, char* argv[]) {
             std::cout << "Energy: " << energy << std::endl;
             std::cout << "Efficiency: " << eff_energy / energy << std::endl;
             std::cout << "Z advance: " << z_adv << std::endl;
+
+            std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double> time_sec =
+                std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+            std::cout << "Runtime: " << (time_sec.count()) << std::endl;
 
             {
                 // Overwrite previous...
