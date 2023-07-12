@@ -47,7 +47,7 @@ int main(int argc, char* argv[]) {
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
     float grouser_height = atof(argv[4]);
 
-    float Slopes_deg[] = {15};
+    float Slopes_deg[] = {5};
 
     for (float Slope_deg : Slopes_deg) {
         DEMSolver DEMSim;
