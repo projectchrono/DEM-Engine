@@ -47,7 +47,7 @@ int main(int argc, char* argv[]) {
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
     float grouser_height = atof(argv[4]);
 
-    float Slopes_deg[] = {5};
+    float Slopes_deg[] = {15};
 
     for (float Slope_deg : Slopes_deg) {
         DEMSolver DEMSim;
@@ -218,7 +218,7 @@ int main(int argc, char* argv[]) {
 
         // Put the wheel in place, then let the wheel sink in initially
         float max_z = max_z_finder->GetValue();
-        wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.05 + grouser_height + wheel_rad));
+        wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.08 + grouser_height + wheel_rad));
 
         int report_ps = 1000;
         float report_time = report_ps * step_size;
