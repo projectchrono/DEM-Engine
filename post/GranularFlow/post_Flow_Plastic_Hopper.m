@@ -49,9 +49,9 @@ expCylWood=[0.02, 0.74
 6.10, 88.58
 7.01, 88.49];
 
-folder=['../'  '../build/DemoOutput_Granular_PlasticCylinders/Hopper/'];
- folder=['../'  '../build/DemoOutput_Granular_PlasticSpheres/Hopper/'];
- folder=['../'  '../build/DemoOutput_Granular_WoodenCylinders/Hopper/'];
+folder=['../'  '../build/DemoOutput_Granular_PlasticSphere/Hopper/'];
+  folder=['../'  '../build/DemoOutput_Granular_WoodenSpheres/Hopper/'];
+ % folder=['../'  '../build/DemoOutput_Granular_WoodenCylinders/Hopper/'];
 files=dir(folder);
 
 d=0.0060;
@@ -74,7 +74,7 @@ level_z=zeros(numel(time),1);
 discharge=zeros(numel(time),1);
 
 
-for i=0:1:699
+for i=1:1:699
     file=['DEMdemo_output_' num2str(i,'%04i.csv')];
     disp(file)
     data=readtable([folder file]);

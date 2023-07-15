@@ -57,7 +57,7 @@ void runDEME(int caseDef, float frictionMaterial) {
    
     path out_dir = current_path();
         out_dir += "/DemoOutput_Granular_WoodenCube/";
-    out_dir += "Drum_4/";
+    out_dir += "Drum_5/";
     out_dir += std::to_string(caseDef);
 
     // Scale factor
@@ -83,7 +83,7 @@ void runDEME(int caseDef, float frictionMaterial) {
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}, {"mu", 0.04}, {"Crr", 0.00}});
     
     auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", frictionMaterial}, {"Crr", 0.04}});
+        DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", frictionMaterial}, {"Crr", 0.08}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.5);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.02);

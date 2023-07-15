@@ -57,7 +57,7 @@ void runDEME(int caseDef, float frictionMaterial) {
    
     path out_dir = current_path();
         out_dir += "/DemoOutput_Granular_WoodenSphere/";
-    out_dir += "Drum_1/";
+    out_dir += "Drum_2/";
     out_dir += std::to_string(caseDef);
 
     // Scale factor
@@ -80,7 +80,7 @@ void runDEME(int caseDef, float frictionMaterial) {
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}, {"mu", 0.04}, {"Crr", 0.00}});
     
     auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", frictionMaterial}, {"Crr", 0.00}});
+        DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", frictionMaterial}, {"Crr", 0.02}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.5);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.02);
@@ -89,7 +89,7 @@ void runDEME(int caseDef, float frictionMaterial) {
  
     
     // Make ready for simulation
-    float step_size =5.0e-6;
+    float step_size =2.50e-6;
     DEMSim.InstructBoxDomainDimension({-0.09, 0.09}, {-0.15, 0.15}, {-0.15, 0.15});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
@@ -129,7 +129,7 @@ void runDEME(int caseDef, float frictionMaterial) {
         double radiusMin =  radius;
         
 
-        radii.push_back(radiusMin);
+        
         float3 tmp;
         tmp.x = 0;
         tmp.y = 0;
@@ -137,7 +137,7 @@ void runDEME(int caseDef, float frictionMaterial) {
 
         relPos.push_back(tmp);
         mat.push_back(mat_type_particles);
-        radii.push_back(radiusMin); 
+        radii.push_back(radiusMin);
 
         double c = radiusMin;  // smaller dim of the ellipse
         double b = radiusMin;
@@ -162,7 +162,7 @@ void runDEME(int caseDef, float frictionMaterial) {
 
 
     remove_all(out_dir);    
-    create_directory(out_dir);
+    create_directories(out_dir);
 
     char filename[200], meshfile[200];
 

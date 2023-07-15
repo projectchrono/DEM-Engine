@@ -23,7 +23,7 @@ level_z=zeros(numel(time),1);
 points=(-0.04:0.01:0.05);
 measureAngle=zeros(numel(50:99),11,6);
 
-test=3;
+test=1:5;
 
 for jj=test
 counterTotal=0;
@@ -31,7 +31,7 @@ for q=0:1:10
 
 folder=['../../' 'build/DemoOutput_Granular_WoodenCylinders/Drum_' num2str(jj) '/' num2str(q)  '/'];
 folder=['../../' 'build/DemoOutput_Granular_WoodenCube/Drum_' num2str(jj) '/' num2str(q)  '/'];
-% folder=['../../' 'build/DemoOutput_Granular_WoodenSpheresDrum_' num2str(q)  '/'];
+folder=['../../' 'build/DemoOutput_Granular_WoodenSphere/Drum_' num2str(jj) '/' num2str(q)  '/'];
 files=dir(folder);
 
 
