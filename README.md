@@ -59,7 +59,7 @@ SPDX-License-Identifier: BSD-3-Clause
 
 New authors should add their name to the file `CONTRIBUTORS.md` rather than to individual copyright headers.
 
-<h2 id="using-DEME-in-Container">Using _DEME_ in Container</h2>
+<h2 id="using-DEME-in-Container">Using DEME in Container</h2>
 
 _DEME_ is now [hosted on DockerHub](https://hub.docker.com/r/uwsbel/dem-engine) for those who want to run it in a container. It can potentially save your time that would otherwise be spent on getting the dependencies right, and for you to test out if _DEME_ is what you needed.
 
