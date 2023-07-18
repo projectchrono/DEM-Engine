@@ -1,5 +1,33 @@
 # SBEL GPU DEM-Engine
-_A Dual-GPU DEM solver with complex grain geometry support_
+__A Dual-GPU DEM solver with complex grain geometry support__
+
+<p>
+  <img width="380" src="https://i.imgur.com/DKGlM14.jpg">
+  <img width="380" src="https://i.imgur.com/c9DWwqk.gif">
+</p>
+
+<p>
+  <img width="380" src="https://i.imgur.com/YOEbAd8.gif">
+  <img width="380" src="https://i.imgur.com/4R25TPX.gif">
+</p>
+
+### Quick links
+
+[Overview, and where to get help](#Description)
+
+[How to compile](#Installation)
+
+[Numerical examples and use cases](#Examples)
+
+[Container](#Using-DEME-in-Container)
+
+[Install as C++ library](#Install-as-C++-library)
+
+[Licensing](#Licensing)
+
+[Limitations](#Limitations)
+
+[Cite this work](#Citation)
 
 ### Description
 
@@ -11,16 +39,6 @@ DEM-Engine, nicknamed _DEME_, does Discrete Element Method simulations:
 - With an emphasis on computational efficiency. As a rule of thumb, using 3-sphere clump elements, simulating 1 million elements for 1 million time steps takes around 1 hour on two RTX 3080s.
 - Supporting a wide range of problems with flexible API designs. Deformable meshes and grain breakage can be simulated by leveraging the explicit controls given to the user.
 - With support for co-simulation with other C/C++ packages, such as [Chrono](https://github.com/projectchrono/chrono).
-
-<p>
-  <img width="380" src="https://i.imgur.com/DKGlM14.jpg">
-  <img width="380" src="https://i.imgur.com/c9DWwqk.gif">
-</p>
-
-<p>
-  <img width="380" src="https://i.imgur.com/YOEbAd8.gif">
-  <img width="380" src="https://i.imgur.com/4R25TPX.gif">
-</p>
 
 Currently _DEME_ is a C++ package with an API design similar to Chrono's, and should be easy to learn for existing Chrono users. We are building a Python wrapper for _DEME_.
 
@@ -204,3 +222,17 @@ This project exists independently of Chrono so developers should be sure to incl
 > 
 > THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 > ```
+
+### Citation
+
+See [a related _DEME_ paper](https://arxiv.org/abs/2307.03445) and cite
+```bibtex
+@article{zhang2023gpuaccelerated,
+      title={A GPU-accelerated simulator for the DEM analysis of granular systems composed of clump-shaped elements}, 
+      author={Ruochun Zhang and Colin Vanden Heuvel and Alexander Schepelmann and Arno Rogg and Dimitrios Apostolopoulos and Samuel Chandler and Radu Serban and Dan Negrut},
+      year={2023},
+      eprint={2307.03445},
+      archivePrefix={arXiv},
+      primaryClass={cs.CE}
+}
+```
