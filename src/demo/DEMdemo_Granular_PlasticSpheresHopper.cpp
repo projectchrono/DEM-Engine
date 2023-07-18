@@ -27,7 +27,7 @@ int main() {
     DEMSim.UseFrictionalHertzianModel();
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ | OUTPUT_CONTENT::ANG_VEL);
+    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ | OUTPUT_CONTENT::VEL);
     DEMSim.EnsureKernelErrMsgLineNum();
 
     srand(7001);
@@ -46,17 +46,18 @@ int main() {
 
     int totalSpheres = 14000;
 
-    int num_template = 5000;
+    int num_template = 1;
 
     float plane_bottom = 0.02f * scaling;
     float funnel_bottom = 0.02f * scaling;
 
     double gateOpen = 0.30;
-    double gateSpeed = -3.5;  // good discarge -- too fast the flow
+    double gateSpeed = -3.5;
     double hopperW = 0.04;
+    double gateWidth = 0.1295;
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Granular_PlasticSpheres/";
+    out_dir += "/DemoOutput_Granular_PlasticSphere/";
     out_dir += "Hopper/";
 
     auto mat_type_bottom = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
@@ -64,7 +65,7 @@ int main() {
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
 
     auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", 0.45}, {"Crr", 0.03}});
+        DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.60}, {"Crr", 0.02}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.5);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.02);
@@ -86,10 +87,10 @@ int main() {
     DEMSim.SetInitBinSize(radius * 5);
 
     // Loaded meshes are by-default fixed
-    double gateWidth = 0.1295;
+
     auto fixed_left = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
     float3 move = make_float3(-hopperW / 2.0, 0, 0);
-    float4 rot = make_float4(0.7071, 0, 0,0.7071);
+    float4 rot = make_float4(0.7071, 0, 0, 0.7071);
     fixed_left->Move(move, rot);
 
     auto fixed_right = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
@@ -118,42 +119,25 @@ int main() {
 
     // Make an array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
-    std::default_random_engine generator;
-    std::normal_distribution<double> distribution(radius, radius * 0.00);
+
     double maxRadius = 0;
 
     for (int i = 0; i < num_template; i++) {
         std::vector<float> radii;
         std::vector<float3> relPos;
         std::vector<std::shared_ptr<DEMMaterial>> mat;
-
-        //double radiusMax = distribution(generator);
+        auto tmp = make_float3(0, 0, 0);
+        // double radiusMax = distribution(generator);
         double radiusMax = radius;
-        double radiusMin = 8.0 / 8.0 * radiusMax;
-        double eccentricity = 1.0 / 16.0 * radiusMax;
 
-        radii.push_back(radiusMin);
-        float3 tmp;
-        tmp.x = -1.0 * eccentricity / 2.0;
-        tmp.y = 0;
-        tmp.z = 0;
         relPos.push_back(tmp);
         mat.push_back(mat_type_particles);
 
-        double x = 1.0 * eccentricity / 2.0;
-        double y = 0;
-        double z = 0;
-        tmp.x = x;
-        tmp.y = y;
-        tmp.z = z;
-        relPos.push_back(tmp);
-        mat.push_back(mat_type_particles);
+        radii.push_back(radiusMax);
 
-        radii.push_back(radiusMin);
-
-        double c = radiusMin;  // smaller dim of the ellipse
-        double b = radiusMin;
-        double a = radiusMin + 0.50 * eccentricity;
+        double c = radiusMax;  // smaller dim of the ellipse
+        double b = radiusMax;
+        double a = radiusMax;
 
         float mass = 4.0 / 3.0 * PI * a * b * c * density;
         float3 MOI = make_float3(1.f / 5.f * mass * (b * b + c * c), 1.f / 5.f * mass * (a * a + c * c),
@@ -269,7 +253,7 @@ int main() {
 
     std::cout << "dt critical is: " << dt_crit << std::endl;
 
-    float timeStep = step_size * 400.0;
+    float timeStep = step_size * 100.0;
     int numStep = 7.0 / timeStep;
     int timeOut = 0.01 / timeStep;
     int gateMotion = (gateOpen / gateSpeed) / timeStep;

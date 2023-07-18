@@ -50,8 +50,8 @@ expCylWood=[0.02, 0.74
 7.01, 88.49];
 
 folder=['../'  '../build/DemoOutput_Granular_PlasticSphere/Hopper/'];
-  folder=['../'  '../build/DemoOutput_Granular_WoodenSpheres/Hopper/'];
- % folder=['../'  '../build/DemoOutput_Granular_WoodenCylinders/Hopper/'];
+  % folder=['../'  '../build/DemoOutput_Granular_WoodenSphere/Hopper/'];
+   % folder=['../'  '../build/DemoOutput_Granular_WoodenCylinder/Hopper/3S_/'];
 files=dir(folder);
 
 d=0.0060;
@@ -123,6 +123,20 @@ set(gcf,'units','centimeters' ,'position',[1,1,8,5])
 
     set(gca,'fontsize',8);
 
-f = gcf;
-exportgraphics(f,['P4'  '.png'],'Resolution',600)
+% f = gcf;
+% exportgraphics(f,['P4'  '.png'],'Resolution',600)
 
+[time,level_z]
+
+clc
+x=expCylWood(:,1);
+y=expCylWood(:,2)/100;
+code={'A','B','C','D','E'};
+for i = 2   
+    
+    for j=1:numel(x)
+        fprintf('(%1.2f, %1.3f) [%s]', x(j), y(j),code{i});
+
+    end
+    % fprintf('\n')    % clipboard('copy', data)
+end

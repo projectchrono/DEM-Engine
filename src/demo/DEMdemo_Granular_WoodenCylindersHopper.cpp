@@ -27,7 +27,7 @@ int main() {
     DEMSim.UseFrictionalHertzianModel();
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ | OUTPUT_CONTENT::VEL |OUTPUT_CONTENT::ANG_VEL);
+    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ | OUTPUT_CONTENT::VEL | OUTPUT_CONTENT::ANG_VEL);
     DEMSim.EnsureKernelErrMsgLineNum();
 
     srand(7001);
@@ -49,17 +49,18 @@ int main() {
 
     int totalSpheres = 20000;
 
-    int num_template = 5;
+    int num_template = 1;
 
     float plane_bottom = 0.02f * scaling;
     float funnel_bottom = 0.02f * scaling;
 
     double gateOpen = 0.30;
-    double gateSpeed = -3.5;  
+    double gateSpeed = -3.5;
     double hopperW = 0.04;
+    double gateWidth = 0.1295;
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Granular_WoodenCylinders/";
+    out_dir += "/DemoOutput_Granular_WoodenCylinder/";
     out_dir += "Hopper/7S_";
 
     auto mat_type_bottom = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
@@ -67,7 +68,7 @@ int main() {
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
 
     auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", 0.70}, {"Crr", 0.05}});
+        DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", 0.70}, {"Crr", 0.07}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.5);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.02);
@@ -89,10 +90,10 @@ int main() {
     DEMSim.SetInitBinSize(radius * 5);
 
     // Loaded meshes are by-default fixed
-    double gateWidth = 0.1295;
+
     auto fixed_left = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
     float3 move = make_float3(-hopperW / 2.0, 0, 0);
-    float4 rot = make_float4(0.7071, 0, 0,0.7071);
+    float4 rot = make_float4(0.7071, 0, 0, 0.7071);
     fixed_left->Move(move, rot);
 
     auto fixed_right = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
@@ -121,8 +122,7 @@ int main() {
 
     // Make an array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
-    std::default_random_engine generator;
-    std::normal_distribution<double> distribution(radius, radius * 0.00);
+
     double maxRadius = 0;
 
     for (int i = 0; i < num_template; i++) {
@@ -130,11 +130,9 @@ int main() {
         std::vector<float3> relPos;
         std::vector<std::shared_ptr<DEMMaterial>> mat;
 
-        double radiusMed = distribution(generator);
-        radiusMed=radius;
-        double eccentricity = 0.0 / 8.0 * radiusMed;
+        double radiusMed = radius;
 
-        float init = -length / 2.0 + radiusMed;
+        float init = -1.0 * length / 2.0 + radiusMed;
         float trail = length / 2.0 - radiusMed;
         float incrR = (trail - init) / (n_sphere - 1);
         float3 tmp;
@@ -142,7 +140,7 @@ int main() {
         for (int j = 0; j < n_sphere; j++) {
             radii.push_back(radiusMed);
 
-            tmp.x = init + (j * incrR) + eccentricity;
+            tmp.x = init + (j * incrR);
             tmp.y = 0;
             tmp.z = 0;
             relPos.push_back(tmp);
@@ -196,7 +194,7 @@ int main() {
         std::vector<float3> input_pile_xyz;
         PDSampler sampler(shift_xyz);
 
-        bool generate = (plane_bottom + shift_xyz/2 > emitterZ) ? false : true;
+        bool generate = (plane_bottom + shift_xyz / 2 > emitterZ) ? false : true;
 
         if (generate) {
             float sizeZ = (frame == 0) ? 0.95 : 0;
@@ -250,7 +248,7 @@ int main() {
             for (int i = 0; i < (int)(0.4 / settle_frame_time); i++) {
                 DEMSim.DoDynamics(settle_frame_time);
                 sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), i);
-                 DEMSim.WriteSphereFile(std::string(filename));
+                DEMSim.WriteSphereFile(std::string(filename));
                 std::cout << "consolidating for " << i * settle_frame_time << "s " << std::endl;
             }
         }
