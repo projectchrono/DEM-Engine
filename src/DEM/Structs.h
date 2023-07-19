@@ -629,6 +629,13 @@ class DEMClumpTemplate {
             applyFrameTransformGlobalToLocal(pos, center, prin_Q);
         }
     }
+    void InformCentroidPrincipal(const std::vector<float>& center, const std::vector<float>& prin_Q) {
+        assertThreeElements(center, "InformCentroidPrincipal", "center");
+        assertFourElements(prin_Q, "InformCentroidPrincipal", "prin_Q");
+        InformCentroidPrincipal(host_make_float3(center[0], center[1], center[2]),
+                                host_make_float4(prin_Q[0], prin_Q[1], prin_Q[2], prin_Q[3]));
+    }
+
     /// The opposite of InformCentroidPrincipal, and it is another way to align this clump's coordinate system with its
     /// centroid and principal system: rotate then move this clump, so that at the end of this operation, the original
     /// `origin' point should hit the CoM of this clump.
@@ -637,6 +644,12 @@ class DEMClumpTemplate {
             applyFrameTransformLocalToGlobal(pos, vec, rot_Q);
         }
     }
+    void Move(const std::vector<float>& vec, const std::vector<float>& rot_Q) {
+        assertThreeElements(vec, "Move", "vec");
+        assertFourElements(rot_Q, "Move", "rot_Q");
+        Move(host_make_float3(vec[0], vec[1], vec[2]), host_make_float4(rot_Q[0], rot_Q[1], rot_Q[2], rot_Q[3]));
+    }
+
     /// Scale all geometry component of this clump
     void Scale(float s) {
         for (auto& pos : relPos) {
@@ -726,10 +739,27 @@ class DEMClumpBatch : public DEMInitializer {
         xyz = input;
     }
     void SetPos(float3 input) { SetPos(std::vector<float3>(nClumps, input)); }
+    void SetPos(const std::vector<float>& input) {
+        assertThreeElements(input, "SetPos", "input");
+        SetPos(host_make_float3(input[0], input[1], input[2]));
+    }
+    void SetPos(const std::vector<std::vector<float>>& input) {
+        assertThreeElementsVector(input, "SetPos", "input");
+        std::vector<float3> pos_xyz(input.size());
+        for (size_t i = 0; i < input.size(); i++) {
+            pos_xyz[i] = host_make_float3(input[i][0], input[i][1], input[i][2]);
+        }
+        SetPos(pos_xyz);
+    }
 
     void SetVel(const std::vector<float3>& input) {
         assertLength(input.size(), "SetVel");
         vel = input;
+    }
+    void SetVel(float3 input) { SetVel(std::vector<float3>(nClumps, input)); }
+    void SetVel(const std::vector<float>& input) {
+        assertThreeElements(input, "SetVel", "input");
+        SetVel(host_make_float3(input[0], input[1], input[2]));
     }
     void SetVel(const std::vector<std::vector<float>>& input) {
         assertThreeElementsVector(input, "SetVel", "input");
@@ -739,23 +769,42 @@ class DEMClumpBatch : public DEMInitializer {
         }
         SetVel(vel_xyz);
     }
-    void SetVel(float3 input) { SetVel(std::vector<float3>(nClumps, input)); }
-    void SetVel(const std::vector<float>& input) {
-        assertThreeElements(input, "SetVel", "input");
-        SetVel(host_make_float3(input[0], input[1], input[2]));
-    }
 
     void SetAngVel(const std::vector<float3>& input) {
         assertLength(input.size(), "SetAngVel");
         angVel = input;
     }
     void SetAngVel(float3 input) { SetAngVel(std::vector<float3>(nClumps, input)); }
+    void SetAngVel(const std::vector<float>& input) {
+        assertThreeElements(input, "SetAngVel", "input");
+        SetAngVel(host_make_float3(input[0], input[1], input[2]));
+    }
+    void SetAngVel(const std::vector<std::vector<float>>& input) {
+        assertThreeElementsVector(input, "SetAngVel", "input");
+        std::vector<float3> vel_xyz(input.size());
+        for (size_t i = 0; i < input.size(); i++) {
+            vel_xyz[i] = host_make_float3(input[i][0], input[i][1], input[i][2]);
+        }
+        SetAngVel(vel_xyz);
+    }
 
     void SetOriQ(const std::vector<float4>& input) {
         assertLength(input.size(), "SetOriQ");
         oriQ = input;
     }
     void SetOriQ(float4 input) { SetOriQ(std::vector<float4>(nClumps, input)); }
+    void SetOriQ(const std::vector<float>& input) {
+        assertFourElements(input, "SetOriQ", "input");
+        SetOriQ(host_make_float4(input[0], input[1], input[2], input[3]));
+    }
+    void SetOriQ(const std::vector<std::vector<float>>& input) {
+        assertFourElementsVector(input, "SetOriQ", "input");
+        std::vector<float4> Q(input.size());
+        for (size_t i = 0; i < input.size(); i++) {
+            Q[i] = host_make_float4(input[i][0], input[i][1], input[i][2], input[i][3]);
+        }
+        SetOriQ(Q);
+    }
 
     /// Specify the `family' code for each clump. Then you can specify if they should go with some prescribed motion or
     /// some special physics (for example, being fixed). The default behavior (without specification) for every family

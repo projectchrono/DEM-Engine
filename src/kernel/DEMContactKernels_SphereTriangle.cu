@@ -11,8 +11,6 @@
 
 // If clump templates are jitified, they will be below
 _clumpTemplateDefs_;
-// Family mask, _nFamilyMaskEntries_ elements are in this array
-// __constant__ __device__ bool familyMasks[] = {_familyMasks_};
 
 inline __device__ void fillSharedMemTriangles(deme::DEMSimParams* simParams,
                                               deme::DEMDataKT* granData,

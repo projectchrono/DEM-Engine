@@ -276,7 +276,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     DEME_TRACKED_RESIZE_DEBUGPRINT(alphaZ, nOwnerBodies, "alphaZ", 0);
     DEME_TRACKED_RESIZE_DEBUGPRINT(accSpecified, nOwnerBodies, "accSpecified", 0);
     DEME_TRACKED_RESIZE_DEBUGPRINT(angAccSpecified, nOwnerBodies, "angAccSpecified", 0);
-    
+
     // Resize the family mask `matrix' (in fact it is flattened)
     DEME_TRACKED_RESIZE_DEBUGPRINT(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2,
                                    "familyMaskMatrix", DONT_PREVENT_CONTACT);
@@ -2112,6 +2112,13 @@ void DEMDynamicThread::workerThread() {
                     // loop to avoid spurious wakeups
                     pSchedSupport->cv_DynamicCanProceed.wait(lock);
                 }
+            }
+
+            // We unpack it only when it is a `dry-run', meaning the user just wants to update this system, without
+            // doing simulation; it also happens at system initialization. We do this so the kT-supplied contact info is
+            // registered on dT.
+            if (cycleDuration <= 0.0) {
+                ifProduceFreshThenUseIt();
             }
         }
 

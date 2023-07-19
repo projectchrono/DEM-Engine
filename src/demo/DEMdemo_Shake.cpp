@@ -130,6 +130,7 @@ int main() {
     std::cout << "Output at " << fps << " FPS" << std::endl;
     float bulk_density;
 
+    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (double t = 0; t < sim_end; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
             char filename[200];
@@ -155,6 +156,10 @@ int main() {
 
         DEMSim.DoDynamics(step_size);
     }
+
+    std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+    std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
 
     // Output the final configuration of the clumps as a file. This is just a demonstration. This particular
     // configuration is not that useful as no other demos actually use it, unlike the GRC-1 soil.
