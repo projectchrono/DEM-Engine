@@ -177,6 +177,8 @@ int main() {
 
     // Switch wheel from free fall into DP test
     DEMSim.DoDynamicsThenSync(0);
+    // You don't have to do this! I am just testing if sync-ing it twice breaks the system.
+    DEMSim.DoDynamicsThenSync(0);
     DEMSim.ChangeFamily(1, 2);
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
