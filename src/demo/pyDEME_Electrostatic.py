@@ -31,7 +31,7 @@ math_PI = 3.1415927
 
 
 def force_model():
-    pass
+    return "temp_value"
 
 
 if __name__ == "__main__":
@@ -39,13 +39,13 @@ if __name__ == "__main__":
     out_dir = os.path.join(os.getcwd(), out_dir)
     os.makedirs(out_dir, exist_ok=True)
 
-    DEMSim = DEME.DEMSolver()
-    DEMSim.SetVerbosity(INFO)
-    DEMSim.SetOutputFormat(CSV)
-    DEMSim.SetOutputContent(ABSV)
-    DEMSim.SetMeshOutputFormat(VTK)
-    DEMSim.SetContactOutputContent(OWNER | FORCE | POINT)
-
+    DEMSim = DEME.DEMSolver(2)
+    DEMSim.SetVerbosity(DEME.INFO)
+    DEMSim.SetOutputFormat(DEME.CSV)
+    DEMSim.SetOutputContent(DEME.ABSV)
+    DEMSim.SetMeshOutputFormat(DEME.VTK)
+    DEMSim.SetContactOutputContent(DEME.OWNER) # TODO: Understand how to make bitwise operations work for enum type
+    
     # E, nu, CoR, mu, Crr...
     mat_type_rod = DEMSim.LoadMaterial(
         {"E": 1e9, "nu": 0.3, "CoR": 0.5, "mu": 0.7, "Crr": 0.00})
@@ -59,18 +59,18 @@ if __name__ == "__main__":
     # called a `geometry wildcard'. This is an extra property that we can associate with each geometry entity,
     # such as triangle and sphere. We use this value to derive the electrostatic force. But first, we need to
     # declare in the force model that a geometry wildcard is in use...
-    my_force_model = DEMSim.DefineContactForceModel(force_model())
+    my_force_model = DEMSim.DefineContactForceModel("temp")
     # my_force_model = DEMSim.ReadContactForceModel("ForceModelWithElectrostatic.cu");
-
+    
     # Those following lines are needed. We must let the solver know that those var names are history variable etc.
-    my_force_model.SetMustHaveMatProp(["E", "nu", "CoR", "mu", "Crr"])
-    my_force_model.SetMustPairwiseMatProp(["CoR", "mu", "Crr"])
+    my_force_model.SetMustHaveMatProp(set(["E", "nu", "CoR", "mu", "Crr"]))
+    my_force_model.SetMustPairwiseMatProp(set(["CoR", "mu", "Crr"]))
     my_force_model.SetPerContactWildcards(
-        ["delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"])
+        set(["delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"]))
     # Use variable name `Q' for the amount of electrc charge.
     # NOTE! If you call it Q here, then you can refer to this wildcard array using variable names Q_A amd Q_B in
     # your custom force model.
-    my_force_model.SetPerGeometryWildcards(["Q"])
+    my_force_model.SetPerGeometryWildcards(set(["Q"]))
 
     init_charge = 2e-8  # Coulomb as the unit...
     cone_speed = 0.1
@@ -99,7 +99,7 @@ if __name__ == "__main__":
     mass = terrain_density * clump_vol
     MOI = np.array([2.0 / 5.0, 2.0 / 5.0, 2.0 / 5.0]) * mass
     # Then load it to system
-    my_template = DEMSim.LoadClumpType(mass, MOI.tolist(), GetDEMEDataFile(
+    my_template = DEMSim.LoadClumpType(mass, MOI.tolist(), DEME.GetDEMEDataFile(
         "clumps/spiky_sphere.csv"), mat_type_terrain)
     my_template.SetVolume(clump_vol)
     # Decide the scalings of the templates we just created (so that they are... like particles, not rocks)
@@ -111,9 +111,12 @@ if __name__ == "__main__":
     fill_height = 1.
     fill_center = [0, 0, bottom + fill_height / 2]
     fill_radius = soil_bin_diameter / 2. - scale * 3.
+    
     input_xyz = sampler.SampleCylinderZ(
         fill_center, fill_radius, fill_height / 2 - scale * 2.)
+    
     particles = DEMSim.AddClumps(my_template, input_xyz)
+
     print(f"Total num of particles: {particles.GetNumClumps()}")
     print(f"Total num of spheres: {particles.GetNumSpheres()}")
     # Add electric charge Q to each sphere. It is important to add it to each sphere, not each clump. This

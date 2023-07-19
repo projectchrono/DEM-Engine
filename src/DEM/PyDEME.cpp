@@ -5,7 +5,7 @@
 #include "API.h"
 #include "AuxClasses.h"
 #include <core/utils/DEMEPaths.h>
-
+#include "VariableTypes.h"
 #include <vector>
 #include <string>
 #include <limits>
@@ -28,6 +28,69 @@ namespace py = pybind11;
 PYBIND11_MODULE(DEME, obj) {
     obj.def("GetDEMEDataFile", &deme::GetDEMEDataFile);
 
+    /*
+    py::class_<deme::Sampler>(obj, "Sampler")
+        .def(py::init<float>())
+        .def("SampleBox", static_cast<std::vector<std::vector<float>> (deme::Sampler::*)(
+                              const std::vector<float>&, const std::vector<float>&)>(&deme::Sampler::SampleBox))
+        .def("SampleSphere",
+             static_cast<std::vector<std::vector<float>> (deme::Sampler::*)(const std::vector<float>&, float)>(
+                 &deme::Sampler::SampleSphere))
+        .def("SampleCylinderX",
+             static_cast<std::vector<std::vector<float>> (deme::Sampler::*)(const std::vector<float>&, float, float)>(
+                 &deme::Sampler::SampleCylinderX))
+        .def("SampleCylinderY",
+             static_cast<std::vector<std::vector<float>> (deme::Sampler::*)(const std::vector<float>&, float, float)>(
+                 &deme::Sampler::SampleCylinderY))
+        .def("SampleCylinderZ",
+             static_cast<std::vector<std::vector<float>> (deme::Sampler::*)(const std::vector<float>&, float, float)>(
+                 &deme::Sampler::SampleCylinderZ))
+        .def("GetSeparation", &deme::Sampler::GetSeparation)
+        .def("SetSeparation", &deme::Sampler::SetSeparation);
+     */
+    py::class_<deme::GridSampler>(obj, "GridSampler")
+        .def(py::init<float>())
+        .def("SetSeparation", &deme::GridSampler::SetSeparation)
+        .def("SampleBox",
+             static_cast<std::vector<std::vector<float>> (deme::GridSampler::*)(
+                 const std::vector<float>& center, const std::vector<float>& halfDim)>(&deme::GridSampler::SampleBox),
+             "Generates a sample box")
+        .def("SampleSphere",
+             static_cast<std::vector<std::vector<float>> (deme::GridSampler::*)(const std::vector<float>&, float)>(
+                 &deme::GridSampler::SampleSphere))
+        .def("SampleCylinderX", static_cast<std::vector<std::vector<float>> (deme::GridSampler::*)(
+                                    const std::vector<float>&, float, float)>(&deme::GridSampler::SampleCylinderX))
+        .def("SampleCylinderY", static_cast<std::vector<std::vector<float>> (deme::GridSampler::*)(
+                                    const std::vector<float>&, float, float)>(&deme::GridSampler::SampleCylinderY))
+        .def("SampleCylinderZ", static_cast<std::vector<std::vector<float>> (deme::GridSampler::*)(
+                                    const std::vector<float>&, float, float)>(&deme::GridSampler::SampleCylinderZ))
+        .def("GetSeparation", &deme::Sampler::GetSeparation);
+
+    py::class_<deme::HCPSampler>(obj, "HCPSampler")
+        .def(py::init<float>())
+
+        .def("SampleBox",
+             static_cast<std::vector<std::vector<float>> (deme::HCPSampler::*)(
+                 const std::vector<float>& center, const std::vector<float>& halfDim)>(&deme::HCPSampler::SampleBox),
+             "Generates a sample box")
+        .def("SetSeparation", &deme::HCPSampler::SetSeparation)
+        .def("SampleSphere",
+             static_cast<std::vector<std::vector<float>> (deme::HCPSampler::*)(const std::vector<float>&, float)>(
+                 &deme::HCPSampler::SampleSphere))
+        .def(
+            "SampleCylinderX",
+            static_cast<std::vector<std::vector<float>> (deme::HCPSampler::*)(const std::vector<float>&, float, float)>(
+                &deme::HCPSampler::SampleCylinderX))
+        .def(
+            "SampleCylinderY",
+            static_cast<std::vector<std::vector<float>> (deme::HCPSampler::*)(const std::vector<float>&, float, float)>(
+                &deme::HCPSampler::SampleCylinderY))
+        .def(
+            "SampleCylinderZ",
+            static_cast<std::vector<std::vector<float>> (deme::HCPSampler::*)(const std::vector<float>&, float, float)>(
+                &deme::HCPSampler::SampleCylinderZ))
+        .def("GetSeparation", &deme::HCPSampler::GetSeparation);
+
     py::class_<deme::DEMInspector, std::shared_ptr<deme::DEMInspector>>(obj, "DEMInspector")
         .def(py::init<deme::DEMSolver*, deme::DEMDynamicThread*, const std::string&>())
         .def("GetValue", &deme::DEMInspector::GetValue);
@@ -44,18 +107,82 @@ PYBIND11_MODULE(DEME, obj) {
         .def("GetContactAcc",
              static_cast<std::vector<float> (deme::DEMTracker::*)(size_t)>(&deme::DEMTracker::GetContactAcc));
 
-    py::class_<deme::HCPSampler>(obj, "HCPSampler")
-        .def(py::init<float>())
-
-        .def("SampleBox",
-             static_cast<std::vector<std::vector<float>> (deme::HCPSampler::*)(
-                 const std::vector<float>& center, const std::vector<float>& halfDim)>(&deme::HCPSampler::SampleBox),
-             "Generates a sample box");
+    py::class_<deme::DEMForceModel>(obj, "DEMForceModel")
+        .def(py::init<deme::FORCE_MODEL>())
+        .def("SetForceModelType", &deme::DEMForceModel::SetForceModelType)
+        .def("DefineCustomModel", &deme::DEMForceModel::DefineCustomModel)
+        .def("ReadCustomModelFile", &deme::DEMForceModel::ReadCustomModelFile)
+        .def("SetMustHaveMatProp", &deme::DEMForceModel::SetMustHaveMatProp)
+        .def("SetMustPairwiseMatProp", &deme::DEMForceModel::SetMustPairwiseMatProp)
+        .def("SetPerContactWildcards", &deme::DEMForceModel::SetPerContactWildcards)
+        .def("SetPerOwnerWildcards", &deme::DEMForceModel::SetPerOwnerWildcards)
+        .def("SetPerGeometryWildcards", &deme::DEMForceModel::SetPerGeometryWildcards);
 
     py::class_<deme::DEMSolver>(obj, "DEMSolver")
-        .def(py::init<unsigned int&>())
+        .def(py::init<unsigned int>())
+        .def("SetInitBinSize", &deme::DEMSolver::SetInitBinSize)
+        .def("SetOutputFormat", &deme::DEMSolver::SetOutputFormat)
+        .def("GetNumContacts", &deme::DEMSolver::GetNumContacts)
+        .def("SetCDUpdateFreq", &deme::DEMSolver::SetCDUpdateFreq)
+        .def("GetSimTime", &deme::DEMSolver::GetSimTime)
+        .def("SetSimTime", &deme::DEMSolver::SetSimTime)
+        .def("UpdateClumps", &deme::DEMSolver::UpdateClumps)
+        .def("SetAdaptiveTimeStepType", &deme::DEMSolver::SetAdaptiveTimeStepType)
+        .def("SetIntegrator",
+             static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetIntegrator))
+        .def("SetIntegrator",
+             static_cast<void (deme::DEMSolver::*)(deme::TIME_INTEGRATOR)>(&deme::DEMSolver::SetIntegrator))
+        .def("GetInitStatus", &deme::DEMSolver::GetInitStatus)
+        .def("GetJitStringSubs", &deme::DEMSolver::GetJitStringSubs)
+        .def("SetInitBinSize", &deme::DEMSolver::SetInitBinSize)
+        .def("SetInitBinSizeAsMultipleOfSmallestSphere", &deme::DEMSolver::SetInitBinSizeAsMultipleOfSmallestSphere)
+        .def("InstructNumOwners", &deme::DEMSolver::InstructNumOwners)
+        .def("UseFrictionalHertzianModel", &deme::DEMSolver::UseFrictionalHertzianModel)
+        .def("UseFrictionlessHertzianModel", &deme::DEMSolver::UseFrictionlessHertzianModel)
+        .def("DefineContactForceModel", &deme::DEMSolver::DefineContactForceModel)
+        .def("ReadContactForceModel", &deme::DEMSolver::ReadContactForceModel)
+        .def("GetContactForceModel", &deme::DEMSolver::GetContactForceModel)
+        .def("SetSortContactPairs", &deme::DEMSolver::SetSortContactPairs)
+        .def("SetJitifyClumpTemplates", &deme::DEMSolver::SetJitifyClumpTemplates)
+        .def("SetJitifyMassProperties", &deme::DEMSolver::SetJitifyMassProperties)
+        .def("SetExpandFactor", &deme::DEMSolver::SetExpandFactor)
+        .def("SetMaxVelocity", &deme::DEMSolver::SetMaxVelocity)
+        .def("SetExpandSafetyType", &deme::DEMSolver::SetExpandSafetyType)
+        .def("SetExpandSafetyMultiplier", &deme::DEMSolver::SetExpandSafetyMultiplier)
+        .def("SetExpandSafetyAdder", &deme::DEMSolver::SetExpandSafetyAdder)
+        .def("SetMaxSphereInBin", &deme::DEMSolver::SetMaxSphereInBin)
+        .def("SetMaxTriangleInBin", &deme::DEMSolver::SetMaxTriangleInBin)
+        .def("SetErrorOutVelocity", &deme::DEMSolver::SetErrorOutVelocity)
+        .def("SetErrorOutAvgContacts", &deme::DEMSolver::SetErrorOutAvgContacts)
+        .def("GetAvgSphContacts", &deme::DEMSolver::GetAvgSphContacts)
+        .def("UseAdaptiveBinSize", &deme::DEMSolver::UseAdaptiveBinSize)
+        .def("DisableAdaptiveBinSize", &deme::DEMSolver::DisableAdaptiveBinSize)
+        .def("UseAdaptiveUpdateFreq", &deme::DEMSolver::UseAdaptiveUpdateFreq)
+        .def("DisableAdaptiveUpdateFreq", &deme::DEMSolver::DisableAdaptiveUpdateFreq)
+        .def("SetAdaptiveBinSizeDelaySteps", &deme::DEMSolver::SetAdaptiveBinSizeDelaySteps)
+        .def("SetAdaptiveBinSizeMaxRate", &deme::DEMSolver::SetAdaptiveBinSizeMaxRate)
+        .def("SetAdaptiveBinSizeAcc", &deme::DEMSolver::SetAdaptiveBinSizeAcc)
+        .def("SetAdaptiveBinSizeUpperProactivity", &deme::DEMSolver::SetAdaptiveBinSizeUpperProactivity)
+        .def("SetAdaptiveBinSizeLowerProactivity", &deme::DEMSolver::SetAdaptiveBinSizeLowerProactivity)
+        .def("SetCDMaxUpdateFreq", &deme::DEMSolver::SetCDMaxUpdateFreq)
+        .def("SetCDNumStepsMaxDriftAheadOfAvg", &deme::DEMSolver::SetCDNumStepsMaxDriftAheadOfAvg)
+        .def("SetCDNumStepsMaxDriftMultipleOfAvg", &deme::DEMSolver::SetCDNumStepsMaxDriftMultipleOfAvg)
+        .def("SetCDNumStepsMaxDriftHistorySize", &deme::DEMSolver::SetCDNumStepsMaxDriftHistorySize)
+        .def("GetUpdateFreq", &deme::DEMSolver::GetUpdateFreq)
+        .def("SetForceCalcThreadsPerBlock", &deme::DEMSolver::SetForceCalcThreadsPerBlock)
+        .def("Duplicate", static_cast<std::shared_ptr<deme::DEMMaterial> (deme::DEMSolver::*)(
+                              const std::shared_ptr<deme::DEMMaterial>&)>(&deme::DEMSolver::Duplicate))
+        .def("Duplicate", static_cast<std::shared_ptr<deme::DEMClumpTemplate> (deme::DEMSolver::*)(
+                              const std::shared_ptr<deme::DEMClumpTemplate>&)>(&deme::DEMSolver::Duplicate))
+        .def("Duplicate", static_cast<std::shared_ptr<deme::DEMClumpBatch> (deme::DEMSolver::*)(
+                              const std::shared_ptr<deme::DEMClumpBatch>&)>(&deme::DEMSolver::Duplicate))
+        .def("AddExternalObject", &deme::DEMSolver::AddExternalObject)
+        .def("SetOutputContent", &deme::DEMSolver::SetOutputContent)
+        .def("SetMeshOutputFormat", &deme::DEMSolver::SetMeshOutputFormat)
+        .def("SetContactOutputContent", &deme::DEMSolver::SetContactOutputContent)
         .def("SetVerbosity", &deme::DEMSolver::SetVerbosity,
              "Defines the desired verbosity level to be chosen from the VERBOSITY enumeration object")
+        .def("DefineContactForceModel", &deme::DEMSolver::DefineContactForceModel)
         .def("LoadMaterial",
              static_cast<std::shared_ptr<deme::DEMMaterial> (deme::DEMSolver::*)(
                  const std::unordered_map<std::string, float>&)>(&deme::DEMSolver::LoadMaterial),
@@ -67,7 +194,7 @@ PYBIND11_MODULE(DEME, obj) {
         .def("InstructBoxDomainDimension",
              static_cast<void (deme::DEMSolver::*)(float, float, float, const std::string&)>(
                  &deme::DEMSolver::InstructBoxDomainDimension),
-             "Sets the Box Domain Dimension")
+             "Sets the Box Domain Dimension", py::arg("x"), py::arg("y"), py::arg("z"), py::arg("dir_exact") = "none")
         .def("InstructBoxDomainDimension",
              static_cast<void (deme::DEMSolver::*)(const std::pair<float, float>&, const std::pair<float, float>&,
                                                    const std::pair<float, float>&, const std::string& dir_exact)>(
@@ -85,15 +212,6 @@ PYBIND11_MODULE(DEME, obj) {
                  &deme::DEMSolver::AddBCPlane),
              "Add an (analytical or clump-represented) external object to the simulation system")
         .def("Track", (&deme::DEMSolver::PythonTrack), "Tracker object")
-        //  .def("Track", (&deme::DEMSolver::Track),
-        //       "Create a DEMTracker to allow direct control/modification/query to this external object for
-        //       DEMExternObj")
-        //  .def("Track", (&deme::DEMSolver::Track),
-        //       "Create a DEMTracker to allow direct control/modification/query to this external object for
-        //       DEMClumpBatch")
-        //  .def("Track", (&deme::DEMSolver::Track),
-        //       "Create a DEMTracker to allow direct control/modification/query to this external object for "
-        //       "DEMMeshConnected")
         .def("AddWavefrontMeshObject",
              static_cast<std::shared_ptr<deme::DEMMeshConnected> (deme::DEMSolver::*)(
                  const std::string&, const std::shared_ptr<deme::DEMMaterial>&, bool, bool)>(
@@ -154,6 +272,7 @@ PYBIND11_MODULE(DEME, obj) {
              static_cast<std::shared_ptr<deme::DEMInspector> (deme::DEMSolver::*)(const std::string&)>(
                  &deme::DEMSolver::CreateInspector),
              "Create a inspector object that can help query some statistical info of the clumps in the simulation")
+        .def("GetNumClumps", &deme::DEMSolver::GetNumClumps)
         .def("CreateInspector",
              static_cast<std::shared_ptr<deme::DEMInspector> (deme::DEMSolver::*)(
                  const std::string&, const std::string&)>(&deme::DEMSolver::CreateInspector),
@@ -200,8 +319,12 @@ PYBIND11_MODULE(DEME, obj) {
         .def(py::init<>())
         .def("SetVolume", &deme::DEMClumpTemplate::SetVolume)
         .def("ReadComponentFromFile", &deme::DEMClumpTemplate::ReadComponentFromFile)
-        .def("InformCentroidPrincipal", &deme::DEMClumpTemplate::InformCentroidPrincipal)
-        .def("Move", &deme::DEMClumpTemplate::Move)
+        .def("InformCentroidPrincipal",
+             static_cast<void (deme::DEMClumpTemplate::*)(const std::vector<float>&, const std::vector<float>&)>(
+                 &deme::DEMClumpTemplate::InformCentroidPrincipal))
+        .def("Move",
+             static_cast<void (deme::DEMClumpTemplate::*)(const std::vector<float>&, const std::vector<float>&)>(
+                 &deme::DEMClumpTemplate::Move))
         .def("Scale", &deme::DEMClumpTemplate::Scale)
         .def("AssignName", &deme::DEMClumpTemplate::AssignName);
 
@@ -248,14 +371,27 @@ PYBIND11_MODULE(DEME, obj) {
         .def("SetMOI",
              static_cast<void (deme::DEMExternObj::*)(const std::vector<float>&)>(&deme::DEMExternObj::SetMOI),
              "Sets the MOI (in the principal frame)")
-        .def("SetInitQuat", &deme::DEMExternObj::SetInitQuat,
+        .def("SetInitQuat",
+             static_cast<void (deme::DEMExternObj::*)(const std::vector<float>&)>(&deme::DEMExternObj::SetInitQuat),
              "Set the initial quaternion for this object (before simulation initializes).")
-        .def("SetInitPos", &deme::DEMExternObj::SetInitPos,
+        .def("SetInitPos",
+             static_cast<void (deme::DEMExternObj::*)(const std::vector<float>&)>(&deme::DEMExternObj::SetInitPos),
              "Set the initial position for this object (before simulation initializes).")
-        .def("AddPlane", &deme::DEMExternObj::AddPlane, "Add a plane with infinite size.")
-        .def("AddPlate", &deme::DEMExternObj::AddPlate, "Add a plate with finite size.")
-        .def("AddZCylinder", &deme::DEMExternObj::AddZCylinder, "Add a z-axis-aligned cylinder of infinite length")
-        .def("AddCylinder", &deme::DEMExternObj::AddCylinder,
+        .def("AddPlane",
+             static_cast<void (deme::DEMExternObj::*)(const std::vector<float>&, const std::vector<float>&,
+                                                      const std::shared_ptr<deme::DEMMaterial>&)>(
+                 &deme::DEMExternObj::AddPlane),
+             "Add a plane with infinite size.")
+        //.def("AddPlate", static_cast<void (&deme::DEMExternObj::AddPlate, "Add a plate with finite size.")
+        .def("AddZCylinder",
+             static_cast<void (deme::DEMExternObj::*)(const std::vector<float>&, const float,
+                                                      const std::shared_ptr<deme::DEMMaterial>&,
+                                                      const deme::objNormal_t)>(&deme::DEMExternObj::AddZCylinder),
+             "Add a z-axis-aligned cylinder of infinite length")
+        .def("AddCylinder",
+             static_cast<void (deme::DEMExternObj::*)(const std::vector<float>&, const std::vector<float>&, const float,
+                                                      const std::shared_ptr<deme::DEMMaterial>&,
+                                                      const deme::objNormal_t)>(&deme::DEMExternObj::AddCylinder),
              "Add a cylinder of infinite length, which is along a user-specific axis")
         .def_readwrite("types", &deme::DEMExternObj::types)
         .def_readwrite("materials", &deme::DEMExternObj::materials)
@@ -293,11 +429,19 @@ PYBIND11_MODULE(DEME, obj) {
         .def("SetMaterial",
              static_cast<void (deme::DEMMeshConnected::*)(const std::vector<std::shared_ptr<deme::DEMMaterial>>&)>(
                  &deme::DEMMeshConnected::SetMaterial))
-        .def("SetInitQuat", &deme::DEMMeshConnected::SetInitQuat)
-        .def("SetInitPos", &deme::DEMMeshConnected::SetInitPos)
-        .def("InformCentroidPrincipal", &deme::DEMMeshConnected::InformCentroidPrincipal)
-        .def("Move", &deme::DEMMeshConnected::Move)
-        .def("Mirror", &deme::DEMMeshConnected::Mirror)
+        .def("SetInitQuat", static_cast<void (deme::DEMMeshConnected::*)(const std::vector<float>&)>(
+                                &deme::DEMMeshConnected::SetInitQuat))
+        .def("SetInitPos", static_cast<void (deme::DEMMeshConnected::*)(const std::vector<float>&)>(
+                               &deme::DEMMeshConnected::SetInitPos))
+        .def("InformCentroidPrincipal",
+             static_cast<void (deme::DEMMeshConnected::*)(const std::vector<float>&, const std::vector<float>&)>(
+                 &deme::DEMMeshConnected::InformCentroidPrincipal))
+        .def("Move",
+             static_cast<void (deme::DEMMeshConnected::*)(const std::vector<float>&, const std::vector<float>&)>(
+                 &deme::DEMMeshConnected::Move))
+        .def("Mirror",
+             static_cast<void (deme::DEMMeshConnected::*)(const std::vector<float>&, const std::vector<float>&)>(
+                 &deme::DEMMeshConnected::Mirror))
         .def("Scale", static_cast<void (deme::DEMMeshConnected::*)(float)>(&deme::DEMMeshConnected::Scale))
         .def("ClearWildcards", &deme::DEMMeshConnected::ClearWildcards)
         .def("SetGeometryWildcards", &deme::DEMMeshConnected::SetGeometryWildcards)
@@ -353,6 +497,17 @@ PYBIND11_MODULE(DEME, obj) {
         .value("OWNER_WILDCARD", deme::OUTPUT_CONTENT::OWNER_WILDCARD)
         .value("GEO_WILDCARD", deme::OUTPUT_CONTENT::GEO_WILDCARD)
         .value("EXP_FACTOR", deme::OUTPUT_CONTENT::EXP_FACTOR)
+        .export_values();
+
+    py::enum_<deme::OUTPUT_FORMAT>(obj, "OUTPUT_FORMAT")
+        .value("CSV", deme::OUTPUT_FORMAT::CSV)
+        .value("BINARY", deme::OUTPUT_FORMAT::BINARY)
+        .value("CHPF", deme::OUTPUT_FORMAT::CHPF)
+        .export_values();
+
+    py::enum_<deme::MESH_FORMAT>(obj, "MESH_FORMAT")
+        .value("VTK", deme::MESH_FORMAT::VTK)
+        .value("OBJ", deme::MESH_FORMAT::OBJ)
         .export_values();
 
     py::enum_<deme::SPATIAL_DIR>(obj, "SPATIAL_DIR")

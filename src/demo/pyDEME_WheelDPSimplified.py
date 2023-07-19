@@ -25,11 +25,11 @@ if __name__ == "__main__":
     os.makedirs(out_dir, exist_ok=True)
 
     DEMSim = DEME.DEMSolver(2)
-    DEMSim.SetVerbosity(INFO)
-    DEMSim.SetOutputFormat(CSV)
-    DEMSim.SetOutputContent(ABSV)
-    DEMSim.SetMeshOutputFormat(VTK)
-    DEMSim.SetContactOutputContent(OWNER | FORCE | POINT)
+    DEMSim.SetVerbosity(DEME.INFO)
+    DEMSim.SetOutputFormat(DEME.CSV)
+    DEMSim.SetOutputContent(DEME.ABSV)
+    DEMSim.SetMeshOutputFormat(DEME.VTK)
+    DEMSim.SetContactOutputContent(DEME.OWNER) # TODO: Understand how to make bitwise operations work for enum type
 
     # E, nu, CoR, mu, Crr...
     mat_type_wheel = DEMSim.LoadMaterial(
@@ -107,6 +107,7 @@ if __name__ == "__main__":
     ), [sample_halfwidth_x, sample_halfwidth_y, sample_halfheight])
     terrain_template_in_use = [my_template] * len(terrain_particles_xyz)
     heap_family = [0] * len(terrain_particles_xyz)
+
     terrain_particles = DEMSim.AddClumps(
         terrain_template_in_use, terrain_particles_xyz)
     # Give ground particles a small initial velocity so they `collapse' at the start of the simulation

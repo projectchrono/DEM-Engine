@@ -23,11 +23,11 @@ if __name__ == "__main__":
     out_dir = os.path.join(os.getcwd(), out_dir)
     os.makedirs(out_dir, exist_ok=True)
 
-    DEMSim = DEME.DEMSolver()
-    DEMSim.SetVerbosity(INFO)
-    DEMSim.SetOutputFormat(CSV)
-    DEMSim.SetOutputContent(FAMILY)
-    DEMSim.SetOutputContent(XYZ)
+    DEMSim = DEME.DEMSolver(2)
+    DEMSim.SetVerbosity(DEME.INFO)
+    DEMSim.SetOutputFormat(DEME.CSV)
+    DEMSim.SetOutputContent(DEME.FAMILY)
+    DEMSim.SetOutputContent(DEME.XYZ)
 
     # Define materials
     mat_type_terrain = DEMSim.LoadMaterial(

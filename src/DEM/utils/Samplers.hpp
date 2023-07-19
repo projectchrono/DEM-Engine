@@ -129,6 +129,7 @@ class Sampler {
         m_size = host_make_float3(halfHeight, radius, radius);
         return Sample(CYLINDER_X);
     }
+
     std::vector<std::vector<float>> SampleCylinderX(const std::vector<float>& center, float radius, float halfHeight) {
         assertThreeElements(center, "SampleCylinderX", "center");
         m_center = host_make_float3(center[0], center[1], center[2]);
@@ -149,6 +150,7 @@ class Sampler {
         m_size = host_make_float3(radius, halfHeight, radius);
         return Sample(CYLINDER_Y);
     }
+
     std::vector<std::vector<float>> SampleCylinderY(const std::vector<float>& center, float radius, float halfHeight) {
         assertThreeElements(center, "SampleCylinderY", "center");
         m_center = host_make_float3(center[0], center[1], center[2]);
@@ -170,6 +172,7 @@ class Sampler {
         return Sample(CYLINDER_Z);
     }
     std::vector<std::vector<float>> SampleCylinderZ(const std::vector<float>& center, float radius, float halfHeight) {
+        
         assertThreeElements(center, "SampleCylinderZ", "center");
         m_center = host_make_float3(center[0], center[1], center[2]);
         m_size = host_make_float3(radius, radius, halfHeight);
