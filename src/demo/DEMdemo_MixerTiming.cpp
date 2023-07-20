@@ -18,7 +18,7 @@ using namespace deme;
 using namespace std::filesystem;
 
 int main() {
-    float granular_rad = 0.0008;
+    float granular_rad = 0.0009;
     unsigned int num_particles = 0;
     double CDFreq = 30.1;
     double world_size = 1;
@@ -34,6 +34,9 @@ int main() {
         DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
         DEMSim.SetCollectAccRightAfterForceCalc(true);
         DEMSim.SetNoForceRecord();
+
+        DEMSim.SetJitifyClumpTemplates();
+        DEMSim.SetJitifyMassProperties();
 
         // E, nu, CoR, mu, Crr...
         auto mat_type_mixer = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.2}, {"mu", 0.5}, {"Crr", 0.0}});
