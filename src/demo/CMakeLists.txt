@@ -47,6 +47,7 @@ SET(DEMOS
 		DEMdemo_Repose_Cylinder
 		DEMdemo_Electrostatic
 		DEMdemo_FlexibleMesh
+		DEMdemo_Fracture
 )
 
 # ------------------------------------------------------------------------------
