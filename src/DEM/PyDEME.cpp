@@ -48,6 +48,7 @@ PYBIND11_MODULE(DEME, obj) {
         .def("GetSeparation", &deme::Sampler::GetSeparation)
         .def("SetSeparation", &deme::Sampler::SetSeparation);
      */
+
     py::class_<deme::GridSampler>(obj, "GridSampler")
         .def(py::init<float>())
         .def("SetSeparation", &deme::GridSampler::SetSeparation)
@@ -120,62 +121,132 @@ PYBIND11_MODULE(DEME, obj) {
 
     py::class_<deme::DEMSolver>(obj, "DEMSolver")
         .def(py::init<unsigned int>())
-        .def("SetInitBinSize", &deme::DEMSolver::SetInitBinSize)
-        .def("SetOutputFormat", &deme::DEMSolver::SetOutputFormat)
-        .def("GetNumContacts", &deme::DEMSolver::GetNumContacts)
-        .def("SetCDUpdateFreq", &deme::DEMSolver::SetCDUpdateFreq)
-        .def("GetSimTime", &deme::DEMSolver::GetSimTime)
-        .def("SetSimTime", &deme::DEMSolver::SetSimTime)
-        .def("UpdateClumps", &deme::DEMSolver::UpdateClumps)
-        .def("SetAdaptiveTimeStepType", &deme::DEMSolver::SetAdaptiveTimeStepType)
+        .def("SetFamilyFixed", &deme::DEMSolver::SetFamilyFixed, "Mark all entities in this family to be fixed")
+        .def("SetInitBinSize", &deme::DEMSolver::SetInitBinSize,
+             " Explicitly instruct the bin size (for contact detection) that the solver should use")
+        .def("SetOutputFormat", &deme::DEMSolver::SetOutputFormat, "Choose output format")
+        .def("GetNumContacts", &deme::DEMSolver::GetNumContacts,
+             "Get the number of kT-reported potential contact pairs")
+        .def("SetCDUpdateFreq", &deme::DEMSolver::SetCDUpdateFreq,
+             "Set the number of dT steps before it waits for a contact-pair info update from kT")
+        .def("GetSimTime", &deme::DEMSolver::GetSimTime, "Get the simulation time passed since the start of simulation")
+        .def("SetSimTime", &deme::DEMSolver::SetSimTime, "Get the simulation time passed since the start of simulation")
+        .def("UpdateClumps", &deme::DEMSolver::UpdateClumps,
+             "TTransfer newly loaded clumps to the GPU-side in mid-simulation")
+        .def("SetAdaptiveTimeStepType", &deme::DEMSolver::SetAdaptiveTimeStepType,
+             "Set the strategy for auto-adapting time step size (NOT implemented, no effect yet)")
         .def("SetIntegrator",
-             static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetIntegrator))
+             static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetIntegrator),
+             "Set the time integrator for this simulator")
         .def("SetIntegrator",
-             static_cast<void (deme::DEMSolver::*)(deme::TIME_INTEGRATOR)>(&deme::DEMSolver::SetIntegrator))
-        .def("GetInitStatus", &deme::DEMSolver::GetInitStatus)
-        .def("GetJitStringSubs", &deme::DEMSolver::GetJitStringSubs)
-        .def("SetInitBinSize", &deme::DEMSolver::SetInitBinSize)
-        .def("SetInitBinSizeAsMultipleOfSmallestSphere", &deme::DEMSolver::SetInitBinSizeAsMultipleOfSmallestSphere)
-        .def("InstructNumOwners", &deme::DEMSolver::InstructNumOwners)
-        .def("UseFrictionalHertzianModel", &deme::DEMSolver::UseFrictionalHertzianModel)
-        .def("UseFrictionlessHertzianModel", &deme::DEMSolver::UseFrictionlessHertzianModel)
-        .def("DefineContactForceModel", &deme::DEMSolver::DefineContactForceModel)
-        .def("ReadContactForceModel", &deme::DEMSolver::ReadContactForceModel)
-        .def("GetContactForceModel", &deme::DEMSolver::GetContactForceModel)
-        .def("SetSortContactPairs", &deme::DEMSolver::SetSortContactPairs)
-        .def("SetJitifyClumpTemplates", &deme::DEMSolver::SetJitifyClumpTemplates)
-        .def("SetJitifyMassProperties", &deme::DEMSolver::SetJitifyMassProperties)
-        .def("SetExpandFactor", &deme::DEMSolver::SetExpandFactor)
-        .def("SetMaxVelocity", &deme::DEMSolver::SetMaxVelocity)
-        .def("SetExpandSafetyType", &deme::DEMSolver::SetExpandSafetyType)
-        .def("SetExpandSafetyMultiplier", &deme::DEMSolver::SetExpandSafetyMultiplier)
-        .def("SetExpandSafetyAdder", &deme::DEMSolver::SetExpandSafetyAdder)
-        .def("SetMaxSphereInBin", &deme::DEMSolver::SetMaxSphereInBin)
-        .def("SetMaxTriangleInBin", &deme::DEMSolver::SetMaxTriangleInBin)
-        .def("SetErrorOutVelocity", &deme::DEMSolver::SetErrorOutVelocity)
-        .def("SetErrorOutAvgContacts", &deme::DEMSolver::SetErrorOutAvgContacts)
-        .def("GetAvgSphContacts", &deme::DEMSolver::GetAvgSphContacts)
-        .def("UseAdaptiveBinSize", &deme::DEMSolver::UseAdaptiveBinSize)
-        .def("DisableAdaptiveBinSize", &deme::DEMSolver::DisableAdaptiveBinSize)
-        .def("UseAdaptiveUpdateFreq", &deme::DEMSolver::UseAdaptiveUpdateFreq)
-        .def("DisableAdaptiveUpdateFreq", &deme::DEMSolver::DisableAdaptiveUpdateFreq)
-        .def("SetAdaptiveBinSizeDelaySteps", &deme::DEMSolver::SetAdaptiveBinSizeDelaySteps)
-        .def("SetAdaptiveBinSizeMaxRate", &deme::DEMSolver::SetAdaptiveBinSizeMaxRate)
-        .def("SetAdaptiveBinSizeAcc", &deme::DEMSolver::SetAdaptiveBinSizeAcc)
-        .def("SetAdaptiveBinSizeUpperProactivity", &deme::DEMSolver::SetAdaptiveBinSizeUpperProactivity)
-        .def("SetAdaptiveBinSizeLowerProactivity", &deme::DEMSolver::SetAdaptiveBinSizeLowerProactivity)
-        .def("SetCDMaxUpdateFreq", &deme::DEMSolver::SetCDMaxUpdateFreq)
-        .def("SetCDNumStepsMaxDriftAheadOfAvg", &deme::DEMSolver::SetCDNumStepsMaxDriftAheadOfAvg)
-        .def("SetCDNumStepsMaxDriftMultipleOfAvg", &deme::DEMSolver::SetCDNumStepsMaxDriftMultipleOfAvg)
+             static_cast<void (deme::DEMSolver::*)(deme::TIME_INTEGRATOR)>(&deme::DEMSolver::SetIntegrator),
+             "Set the time integrator for this simulator")
+        .def("GetInitStatus", &deme::DEMSolver::GetInitStatus, "Return whether this simulation system is initialized")
+        .def("GetJitStringSubs", &deme::DEMSolver::GetJitStringSubs,
+             "Get the jitification string substitution laundary list. It is needed by some of this simulation system's "
+             "friend classes")
+        .def("SetInitBinSize", &deme::DEMSolver::SetInitBinSize,
+             "Explicitly instruct the bin size (for contact detection) that the solver should use.")
+        .def("SetInitBinSizeAsMultipleOfSmallestSphere", &deme::DEMSolver::SetInitBinSizeAsMultipleOfSmallestSphere,
+             "Explicitly instruct the bin size (for contact detection) that the solver should use, as a multiple of "
+             "the radius of the smallest sphere in simulation")
+        .def("InstructNumOwners", &deme::DEMSolver::InstructNumOwners,
+             "Explicitly instruct the sizes for the arrays at initialization time. This is useful when the number of "
+             "owners tends to change (especially gradually increase) frequently in the simulation")
+        .def("UseFrictionalHertzianModel", &deme::DEMSolver::UseFrictionalHertzianModel,
+             "Instruct the solver to use frictonal (history-based) Hertzian contact force model.")
+        .def("UseFrictionlessHertzianModel", &deme::DEMSolver::UseFrictionlessHertzianModel,
+             "Instruct the solver to use frictonless Hertzian contact force model")
+        .def("DefineContactForceModel", &deme::DEMSolver::DefineContactForceModel,
+             "Define a custom contact force model by a string. Returns a shared_ptr to the force model in use")
+        .def("ReadContactForceModel", &deme::DEMSolver::ReadContactForceModel,
+             "Read user custom contact force model from a file (which by default should reside in "
+             "kernel/DEMUserScripts). Returns a shared_ptr to the force model in use")
+        .def("GetContactForceModel", &deme::DEMSolver::GetContactForceModel, "Get the current force model")
+        .def("SetSortContactPairs", &deme::DEMSolver::SetSortContactPairs,
+             "Instruct the solver if contact pair arrays should be sorted (based on the types of contacts) before "
+             "usage.")
+        .def(
+            "SetJitifyClumpTemplates", &deme::DEMSolver::SetJitifyClumpTemplates,
+            "Instruct the solver to rearrange and consolidate clump templates information, then jitify it into GPU "
+            "kernels (if set to true), rather than using flattened sphere component configuration arrays whose entries "
+            "are associated with individual spheres. Note: setting it to true gives no performance benefit known to me")
+        .def("SetJitifyMassProperties", &deme::DEMSolver::SetJitifyMassProperties,
+             "Instruct the solver to rearrange and consolidate mass property information (for all owner types), then "
+             "jitify it into GPU kernels (if set to true), rather than using flattened mass property arrays whose "
+             "entries are associated with individual owners. Note: setting it to true gives no performance benefit "
+             "known to me")
+        .def("SetExpandFactor", &deme::DEMSolver::SetExpandFactor,
+             "(Explicitly) set the amount by which the radii of the spheres (and the thickness of the boundaries) are "
+             "expanded for the purpose of contact detection (safe, and creates false positives). If fix is set to "
+             "true, then this expand factor does not change even if the user uses variable time step size")
+        .def("SetMaxVelocity", &deme::DEMSolver::SetMaxVelocity,
+             "Set the maximum expected particle velocity. The solver will not use a velocity larger than this for "
+             "determining the margin thickness, and velocity larger than this will be considered a system anomaly")
+        .def("SetExpandSafetyType", &deme::DEMSolver::SetExpandSafetyType,
+             "A string. If 'auto': the solver automatically derives")
+        .def("SetExpandSafetyMultiplier", &deme::DEMSolver::SetExpandSafetyMultiplier,
+             "Assign a multiplier to our estimated maximum system velocity, when deriving the thinckness of the "
+             "contact safety margin")
+        .def("SetExpandSafetyAdder", &deme::DEMSolver::SetExpandSafetyAdder,
+             "Set a `base' velocity, which we will always add to our estimated maximum system velocity, when deriving "
+             "the thinckness of the contact `safety' margin")
+        .def("SetMaxSphereInBin", &deme::DEMSolver::SetMaxSphereInBin,
+             "Used to force the solver to error out when there are too many spheres in a bin. A huge number can be "
+             "used to discourage this error type")
+        .def("SetMaxTriangleInBin", &deme::DEMSolver::SetMaxTriangleInBin,
+             "Used to force the solver to error out when there are too many spheres in a bin. A huge number can be "
+             "used to discourage this error type")
+        .def("SetErrorOutVelocity", &deme::DEMSolver::SetErrorOutVelocity,
+             "Set the velocity which when exceeded, the solver errors out. A huge number can be used to discourage "
+             "this error type. Defaulted to 5e4")
+        .def("SetErrorOutAvgContacts", &deme::DEMSolver::SetErrorOutAvgContacts,
+             "Set the average number of contacts a sphere has, before the solver errors out. A huge number can be used "
+             "to discourage this error type. Defaulted to 100")
+        .def("GetAvgSphContacts", &deme::DEMSolver::GetAvgSphContacts,
+             "Get the current number of contacts each sphere has")
+        .def("UseAdaptiveBinSize", &deme::DEMSolver::UseAdaptiveBinSize,
+             "Enable or disable the use of adaptive bin size (by default it is on)")
+        .def("DisableAdaptiveBinSize", &deme::DEMSolver::DisableAdaptiveBinSize,
+             "Disable the use of adaptive bin size (always use initial size)")
+        .def("UseAdaptiveUpdateFreq", &deme::DEMSolver::UseAdaptiveUpdateFreq,
+             "Enable or disable the use of adaptive max update step count (by default it is on)")
+        .def("DisableAdaptiveUpdateFreq", &deme::DEMSolver::DisableAdaptiveUpdateFreq,
+             "Disable the use of adaptive max update step count (always use initial update frequency)")
+        .def("SetAdaptiveBinSizeDelaySteps", &deme::DEMSolver::SetAdaptiveBinSizeDelaySteps,
+             "Adjust how frequent kT updates the bin size")
+        .def("SetAdaptiveBinSizeMaxRate", &deme::DEMSolver::SetAdaptiveBinSizeMaxRate,
+             "Set the max rate that the bin size can change in one adjustment")
+        .def("SetAdaptiveBinSizeAcc", &deme::DEMSolver::SetAdaptiveBinSizeAcc,
+             "Set how fast kT changes the direction of bin size adjustmemt when there's a more beneficial direction")
+        .def("SetAdaptiveBinSizeUpperProactivity", &deme::DEMSolver::SetAdaptiveBinSizeUpperProactivity,
+             "Set how proactive the solver is in avoiding the bin being too big (leading to too many geometries in a "
+             "bin)")
+        .def(
+            "SetAdaptiveBinSizeLowerProactivity", &deme::DEMSolver::SetAdaptiveBinSizeLowerProactivity,
+            "Set how proactive the solver is in avoiding the bin being too small (leading to too many bins in domain).")
+        .def("SetCDMaxUpdateFreq", &deme::DEMSolver::SetCDMaxUpdateFreq,
+             "Set the upper bound of kT update frequency (when it is adjusted automatically).")
+        .def("SetCDNumStepsMaxDriftAheadOfAvg", &deme::DEMSolver::SetCDNumStepsMaxDriftAheadOfAvg,
+             "Set the number of steps dT configures its max drift more than average drift steps.")
+        .def("SetCDNumStepsMaxDriftMultipleOfAvg", &deme::DEMSolver::SetCDNumStepsMaxDriftMultipleOfAvg,
+             "Set the multiplier which dT configures its max drift to be w.r.t. the average drift steps")
         .def("SetCDNumStepsMaxDriftHistorySize", &deme::DEMSolver::SetCDNumStepsMaxDriftHistorySize)
-        .def("GetUpdateFreq", &deme::DEMSolver::GetUpdateFreq)
-        .def("SetForceCalcThreadsPerBlock", &deme::DEMSolver::SetForceCalcThreadsPerBlock)
-        .def("Duplicate", static_cast<std::shared_ptr<deme::DEMMaterial> (deme::DEMSolver::*)(
-                              const std::shared_ptr<deme::DEMMaterial>&)>(&deme::DEMSolver::Duplicate))
-        .def("Duplicate", static_cast<std::shared_ptr<deme::DEMClumpTemplate> (deme::DEMSolver::*)(
-                              const std::shared_ptr<deme::DEMClumpTemplate>&)>(&deme::DEMSolver::Duplicate))
-        .def("Duplicate", static_cast<std::shared_ptr<deme::DEMClumpBatch> (deme::DEMSolver::*)(
-                              const std::shared_ptr<deme::DEMClumpBatch>&)>(&deme::DEMSolver::Duplicate))
+        .def("GetUpdateFreq", &deme::DEMSolver::GetUpdateFreq, "Get the current update frequency used by the solver")
+        .def("SetForceCalcThreadsPerBlock", &deme::DEMSolver::SetForceCalcThreadsPerBlock,
+             "Set the number of threads per block in force calculation (default 512)")
+        .def("Duplicate",
+             static_cast<std::shared_ptr<deme::DEMMaterial> (deme::DEMSolver::*)(
+                 const std::shared_ptr<deme::DEMMaterial>&)>(&deme::DEMSolver::Duplicate),
+             "Duplicate a material that is loaded into the system")
+        .def("Duplicate",
+             static_cast<std::shared_ptr<deme::DEMClumpTemplate> (deme::DEMSolver::*)(
+                 const std::shared_ptr<deme::DEMClumpTemplate>&)>(&deme::DEMSolver::Duplicate),
+             "Duplicate a material that is loaded into the system")
+        .def("Duplicate",
+             static_cast<std::shared_ptr<deme::DEMClumpBatch> (deme::DEMSolver::*)(
+                 const std::shared_ptr<deme::DEMClumpBatch>&)>(&deme::DEMSolver::Duplicate),
+             "Duplicate a material that is loaded into the system")
         .def("AddExternalObject", &deme::DEMSolver::AddExternalObject)
         .def("SetOutputContent", &deme::DEMSolver::SetOutputContent)
         .def("SetMeshOutputFormat", &deme::DEMSolver::SetMeshOutputFormat)
@@ -229,6 +300,12 @@ PYBIND11_MODULE(DEME, obj) {
              "location means the location of the clumps' CoM coordinates in the global frame")
         .def("AddClumps",
              static_cast<std::shared_ptr<deme::DEMClumpBatch> (deme::DEMSolver::*)(
+                 std::shared_ptr<deme::DEMClumpTemplate>&, const std::vector<std::vector<float>>&)>(
+                 &deme::DEMSolver::AddClumps),
+             "Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial "
+             "location means the location of the clumps' CoM coordinates in the global frame")
+        .def("AddClumps",
+             static_cast<std::shared_ptr<deme::DEMClumpBatch> (deme::DEMSolver::*)(
                  const std::vector<std::shared_ptr<deme::DEMClumpTemplate>>&, const std::vector<std::vector<float>>&)>(
                  &deme::DEMSolver::AddClumps),
              "Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial "
@@ -246,6 +323,8 @@ PYBIND11_MODULE(DEME, obj) {
              "Set the prescribed angular velocity to all entities in a family. If dictate is set to true, then this "
              "family will not be fluenced by the force exerted from other simulation entites (both linear and "
              "rotational motions).")
+        .def("SetFamilyMeshMaterial", &deme::DEMSolver::SetFamilyMeshMaterial)
+        .def("SetFamilyExtraMargin", &deme::DEMSolver::SetFamilyExtraMargin)
         .def("SetFamilyPrescribedLinVel",
              static_cast<void (deme::DEMSolver::*)(unsigned int ID)>(&deme::DEMSolver::SetFamilyPrescribedLinVel),
              "Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this "
@@ -308,8 +387,68 @@ PYBIND11_MODULE(DEME, obj) {
         .def("ShowTimingStats", &deme::DEMSolver::ShowTimingStats,
              "Show the wall time and percentages of wall time spend on various solver tasks")
         .def("ShowAnomalies", &deme::DEMSolver::ShowAnomalies,
-             "Show potential anomalies that may have been there in the simulation, then clear the anomaly log.");
-
+             "Show potential anomalies that may have been there in the simulation, then clear the anomaly log.")
+        .def("ClearThreadCollaborationStats", &deme::DEMSolver::ClearThreadCollaborationStats,
+             "Reset the collaboration stats between dT and kT back to the initial value (0). You should call this if "
+             "you want to start over and re-inspect the stats of the new run; otherwise, it is generally not needed, "
+             "you can go ahead and destroy DEMSolver")
+        .def("ClearTimingStats", &deme::DEMSolver::ClearTimingStats,
+             "Reset the recordings of the wall time and percentages of wall time spend on various solver tasks")
+        .def("PurgeFamily", &deme::DEMSolver::PurgeFamily)
+        .def("ReleaseFlattenedArrays", &deme::DEMSolver::ReleaseFlattenedArrays)
+        .def("GetWhetherForceCollectInKernel", &deme::DEMSolver::GetWhetherForceCollectInKernel)
+        .def("AddOwnerNextStepAcc", &deme::DEMSolver::AddOwnerNextStepAcc,
+             "Add an extra acceleration to a owner for the next time step")
+        .def("AddOwnerNextStepAngAcc", &deme::DEMSolver::AddOwnerNextStepAngAcc,
+             " Add an extra angular acceleration to a owner for the next time step.")
+        .def("DisableContactBetweenFamilies", &deme::DEMSolver::DisableContactBetweenFamilies,
+             "Instruct the solver that the 2 input families should not have contacts (a.k.a. ignored, if such a pair "
+             "is encountered in contact detection). These 2 families can be the same (which means no contact within "
+             "members of that family)")
+        .def("EnableContactBetweenFamilies", &deme::DEMSolver::EnableContactBetweenFamilies,
+             "Re-enable contact between 2 families after the system is initialized")
+        .def("DisableFamilyOutput", &deme::DEMSolver::DisableFamilyOutput,
+             "Prevent entites associated with this family to be outputted to files")
+        .def("SetFamilyFixed", &deme::DEMSolver::SetFamilyFixed, "Mark all entities in this family to be fixed")
+        .def("SetFamilyPrescribedLinVel",
+             static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, const std::string&,
+                                                   const std::string&, bool)>(
+                 &deme::DEMSolver::SetFamilyPrescribedLinVel),
+             "Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this "
+             "family will not be influenced by the force exerted from other simulation entites (both linear and "
+             "rotational motions).")
+        .def("SetFamilyPrescribedLinVel",
+             static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedLinVel),
+             "Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this "
+             "family will not be influenced by the force exerted from other simulation entites (both linear and "
+             "rotational motions).")
+        .def("SetFamilyPrescribedAngVel",
+             static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, const std::string&,
+                                                   const std::string&, bool)>(
+                 &deme::DEMSolver::SetFamilyPrescribedAngVel),
+             "Let the linear velocities of all entites in this family always keep `as is', and not influenced by the "
+             "force exerted from other simulation entites.")
+        .def("SetFamilyPrescribedAngVel",
+             static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedAngVel),
+             "Let the linear velocities of all entites in this family always keep `as is', and not influenced by the "
+             "force exerted from other simulation entites.")
+        .def("SetFamilyPrescribedPosition",
+             static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, const std::string&,
+                                                   const std::string&, bool)>(
+                 &deme::DEMSolver::SetFamilyPrescribedPosition),
+             "Keep the positions of all entites in this family to remain exactly the user-specified values")
+        .def("SetFamilyPrescribedPosition",
+             static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedPosition),
+             "Keep the positions of all entites in this family to remain as is")
+        .def("SetFamilyPrescribedQuaternion",
+             static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, bool)>(
+                 &deme::DEMSolver::SetFamilyPrescribedQuaternion),
+             "Keep the orientation quaternions of all entites in this family to remain exactly the user-specified "
+             "values")
+        .def("SetFamilyPrescribedQuaternion",
+             static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedQuaternion),
+             "Keep the orientation quaternions of all entites in this family to remain exactly the user-specified "
+             "values");
     py::class_<deme::DEMMaterial, std::shared_ptr<deme::DEMMaterial>>(obj, "DEMMaterial")
         .def(py::init<const std::unordered_map<std::string, float>&>())
         .def_readwrite("mat_prop", &deme::DEMMaterial::mat_prop)
@@ -330,6 +469,8 @@ PYBIND11_MODULE(DEME, obj) {
 
     py::class_<deme::DEMClumpBatch, deme::DEMInitializer, std::shared_ptr<deme::DEMClumpBatch>>(obj, "DEMClumpBatch")
         .def(py::init<size_t&>())
+        .def("GetNumClumps", &deme::DEMClumpBatch::GetNumClumps)
+        .def("GetNumSpheres", &deme::DEMClumpBatch::GetNumSpheres)
         .def("SetTypes",
              static_cast<void (deme::DEMClumpBatch::*)(const std::vector<std::shared_ptr<deme::DEMClumpTemplate>>&)>(
                  &deme::DEMClumpBatch::SetTypes))
@@ -443,6 +584,8 @@ PYBIND11_MODULE(DEME, obj) {
              static_cast<void (deme::DEMMeshConnected::*)(const std::vector<float>&, const std::vector<float>&)>(
                  &deme::DEMMeshConnected::Mirror))
         .def("Scale", static_cast<void (deme::DEMMeshConnected::*)(float)>(&deme::DEMMeshConnected::Scale))
+        .def("Scale",
+             static_cast<void (deme::DEMMeshConnected::*)(const std::vector<float>&)>(&deme::DEMMeshConnected::Scale))
         .def("ClearWildcards", &deme::DEMMeshConnected::ClearWildcards)
         .def("SetGeometryWildcards", &deme::DEMMeshConnected::SetGeometryWildcards)
         .def("AddGeometryWildcard",

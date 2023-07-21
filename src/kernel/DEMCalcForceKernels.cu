@@ -242,7 +242,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             _forceModelContactWildcardDestroy_;
         }
 
-        // Updated contact wildcards need to be write back to global mem. It is here because contact wildcard may need
+        // Updaed contact wildcards need to be write back to global mem. It is here because contact wildcard may need
         // to be destroyed for non-contact, so it has to go last.
         _forceModelContactWildcardWrite_;
     }
