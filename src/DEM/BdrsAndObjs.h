@@ -355,15 +355,16 @@ class DEMMeshConnected : public DEMInitializer {
         this->owner = NULL_BODYID;
     }
 
-    /// Set mass
+    /// Set mass.
     void SetMass(float mass) { this->mass = mass; }
-    /// Set MOI (in principal frame)
+    /// Set MOI (in principal frame).
     void SetMOI(float3 MOI) { this->MOI = MOI; }
+    /// Set MOI (in principal frame).
     void SetMOI(const std::vector<float>& MOI) {
         assertThreeElements(MOI, "SetMOI", "MOI");
         SetMOI(host_make_float3(MOI[0], MOI[1], MOI[2]));
     }
-    /// Set mesh family number
+    /// Set mesh family number.
     void SetFamily(unsigned int num) { this->family_code = num; }
 
     /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
@@ -372,6 +373,7 @@ class DEMMeshConnected : public DEMInitializer {
         materials = input;
         isMaterialSet = true;
     }
+    /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
     void SetMaterial(const std::shared_ptr<DEMMaterial>& input) {
         SetMaterial(std::vector<std::shared_ptr<DEMMaterial>>(nTri, input));
     }
