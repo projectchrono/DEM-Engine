@@ -160,12 +160,18 @@ class DEMSolver {
 
     /// Instruct the solver to rearrange and consolidate clump templates information, then jitify it into GPU kernels
     /// (if set to true), rather than using flattened sphere component configuration arrays whose entries are associated
-    /// with individual spheres. Note: setting it to true gives no performance benefit known to me.
+    /// with individual spheres.
     void SetJitifyClumpTemplates(bool use = true) { jitify_clump_templates = use; }
+    /// Use flattened sphere component configuration arrays whose entries are associated with individual spheres, rather
+    /// than jitifying them it into GPU kernels.
+    void DisableJitifyClumpTemplates() { jitify_clump_templates = false; }
     /// Instruct the solver to rearrange and consolidate mass property information (for all owner types), then jitify it
     /// into GPU kernels (if set to true), rather than using flattened mass property arrays whose entries are associated
-    /// with individual owners. Note: setting it to true gives no performance benefit known to me.
+    /// with individual owners.
     void SetJitifyMassProperties(bool use = true) { jitify_mass_moi = use; }
+    /// Use flattened mass property arrays whose entries are associated with individual spheres, rather than jitifying
+    /// them it into GPU kernels.
+    void DisableJitifyMassProperties() { jitify_mass_moi = false; }
 
     // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
     void UseCompactForceKernel(bool use_compact);
@@ -1047,9 +1053,9 @@ class DEMSolver {
     bool famnum_can_change_conditionally = false;
 
     // Should jitify clump template into kernels
-    bool jitify_clump_templates = false;
+    bool jitify_clump_templates = true;
     // Should jitify mass/MOI properties into kernels
-    bool jitify_mass_moi = false;
+    bool jitify_mass_moi = true;
 
     // User explicitly set a bin size to use
     bool use_user_defined_bin_size = false;

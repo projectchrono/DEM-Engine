@@ -1440,15 +1440,20 @@ void DEMSolver::Initialize() {
     // jitification
     ReleaseFlattenedArrays();
 
-    //// TODO: Give a warning if sys_initialized is true and the system is re-initialized: in that case, the user should
-    /// know what they are doing
-    sys_initialized = true;
-
     // Initialization is critical
     dT->announceCritical();
 
     // Always clear cache after init
     ClearCache();
+
+    //// TODO: Give a warning if sys_initialized is true and the system is re-initialized: in that case, the user should
+    /// know what they are doing
+    sys_initialized = true;
+
+    // Do a dry-run: It establishes contact pairs. It helps to locate obvious problems at the start (like, too many
+    // contact pairs), and if the user needs to modify the contact wildcards before simulation starts, this step is
+    // meaningful. Dry-run is automatically done if advancing the simulation by 0 or a negative amount of time.
+    DoDynamicsThenSync(-1.0);
 }
 
 void DEMSolver::ShowTimingStats() {

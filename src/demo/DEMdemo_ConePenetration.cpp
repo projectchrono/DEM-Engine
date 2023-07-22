@@ -268,6 +268,6 @@ int main() {
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
     std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
 
-    std::cout << "ConeDrop demo exiting..." << std::endl;
+    std::cout << "ConePenetration demo exiting..." << std::endl;
     return 0;
 }

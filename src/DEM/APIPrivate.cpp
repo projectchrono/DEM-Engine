@@ -142,8 +142,9 @@ void DEMSolver::postResourceGenChecksAndTabKeeping() {
             DEME_WARNING(
                 "There are %u clump templates loaded, but only %u templates (totalling %u components) are jitifiable "
                 "due to some of the clumps are big and/or there are many types of clumps.\nIt is probably because you "
-                "have external objects represented by spherical decomposition (a.k.a. have big clumps).\nIn this case, "
-                "I strongly suggest against calling SetJitifyClumpTemplates to use jitification for clump templates.",
+                "have some objects represented by spherical decomposition (a.k.a. have big clumps).\nIn this case, "
+                "I suggest calling DisableJitifyClumpTemplates() before system initialization to use flattened clump "
+                "templates.",
                 nDistinctClumpBodyTopologies, nJitifiableClumpTopo, nJitifiableClumpComponents);
         } else {
             nJitifiableClumpTopo = nDistinctClumpBodyTopologies;
@@ -156,9 +157,9 @@ void DEMSolver::postResourceGenChecksAndTabKeeping() {
         if (nDistinctMassProperties >= std::numeric_limits<inertiaOffset_t>::max()) {
             DEME_ERROR(
                 "%u different mass properties (from the contribution of clump templates, analytical objects and meshed "
-                "objects) are loaded, but the max allowance is %u (No.%u is reserved).\nIn general, I suggest against "
-                "calling SetJitifyMassProperties to use jitification for mass properties and here, you definitely "
-                "should not use it.",
+                "objects) are loaded, but the max allowance is %u (No.%u is reserved).\nYou may avoid this by calling "
+                "DisableJitifyMassProperties() before system initialization to disable jitification for mass "
+                "properties",
                 nDistinctMassProperties, std::numeric_limits<inertiaOffset_t>::max() - 1,
                 std::numeric_limits<inertiaOffset_t>::max());
         }

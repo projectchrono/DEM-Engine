@@ -6,8 +6,6 @@
 _clumpTemplateDefs_;
 // Definitions of analytical entites are below
 _analyticalEntityDefs_;
-// Family mask, _nFamilyMaskEntries_ elements are in this array
-// __constant__ __device__ bool familyMasks[] = {_familyMasks_};
 
 __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                                                  deme::DEMDataKT* granData,

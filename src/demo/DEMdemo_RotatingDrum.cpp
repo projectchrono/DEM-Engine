@@ -27,6 +27,10 @@ int main() {
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
+    // You can avoid one warning message by adding this.. No big deal, it just makes the solver not jitify big clumps
+    // like the drum present in this simulation, and instead flatten that array in system memory. The performance impact
+    // is minor one way or another.
+    DEMSim.DisableJitifyClumpTemplates();
 
     // A general template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
     std::vector<float> radii = {1.0, 0.88, 0.64, 0.88, 0.64};
