@@ -19,15 +19,16 @@
 
 import DEME
 from DEME import HCPSampler
-from DEME import GetDEMEDataFile
 
 import numpy as np
 import os
 
 math_PI = 3.1415927
 
-# For clarity, we attach the force model file at the end of this script.
+# For clarity, we attach the force model file here.
 # This model can be found in file ForceModelWithElectrostatic.cu, too.
+
+
 def force_model():
     model = """
         /////////////////////////////////////////////////////////////
@@ -206,8 +207,9 @@ if __name__ == "__main__":
     DEMSim.SetOutputFormat(DEME.CSV)
     DEMSim.SetOutputContent(DEME.ABSV)
     DEMSim.SetMeshOutputFormat(DEME.VTK)
-    DEMSim.SetContactOutputContent(DEME.OWNER) # TODO: Understand how to make bitwise operations work for enum type
-    
+    # TODO: Understand how to make bitwise operations work for enum type
+    DEMSim.SetContactOutputContent(DEME.OWNER)
+
     # E, nu, CoR, mu, Crr...
     mat_type_rod = DEMSim.LoadMaterial(
         {"E": 1e9, "nu": 0.3, "CoR": 0.5, "mu": 0.7, "Crr": 0.00})
@@ -223,7 +225,7 @@ if __name__ == "__main__":
     # declare in the force model that a geometry wildcard is in use...
     my_force_model = DEMSim.DefineContactForceModel(force_model())
     # my_force_model = DEMSim.ReadContactForceModel("ForceModelWithElectrostatic.cu");
-    
+
     # Those following lines are needed. We must let the solver know that those var names are history variable etc.
     my_force_model.SetMustHaveMatProp(set(["E", "nu", "CoR", "mu", "Crr"]))
     my_force_model.SetMustPairwiseMatProp(set(["CoR", "mu", "Crr"]))
@@ -273,10 +275,10 @@ if __name__ == "__main__":
     fill_height = 1.
     fill_center = [0, 0, bottom + fill_height / 2]
     fill_radius = soil_bin_diameter / 2. - scale * 3.
-    
+
     input_xyz = sampler.SampleCylinderZ(
         fill_center, fill_radius, fill_height / 2 - scale * 2.)
-    
+
     particles = DEMSim.AddClumps(my_template, input_xyz)
 
     print(f"Total num of particles: {particles.GetNumClumps()}")
@@ -285,7 +287,7 @@ if __name__ == "__main__":
     # is because the contact pairs are resolved between geometries, not clumps. Using clumps leads to
     # double-count or triple-count or...
     particles.AddGeometryWildcard(
-     "Q", [init_charge] * particles.GetNumSpheres())
+        "Q", [init_charge] * particles.GetNumSpheres())
 
     # Load in the cone used for this penetration test
     rod_body = DEMSim.AddWavefrontMeshObject(
@@ -328,7 +330,7 @@ if __name__ == "__main__":
     fps = 20
     frame_time = 1.0 / fps
     print(f"Output at {fps} FPS")
-    out_steps = (1.0 / (fps * step_size))
+    out_steps = (int)(1.0 / (fps * step_size))
     currframe = 0
     step_count = 0
 
@@ -389,5 +391,3 @@ if __name__ == "__main__":
 
     DEMSim.ShowTimingStats()
     print("Electrostatic demo exiting...")
-
-

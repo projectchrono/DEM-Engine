@@ -29,7 +29,8 @@ if __name__ == "__main__":
     DEMSim.SetOutputFormat(DEME.CSV)
     DEMSim.SetOutputContent(DEME.ABSV)
     DEMSim.SetMeshOutputFormat(DEME.VTK)
-    DEMSim.SetContactOutputContent(DEME.OWNER) # TODO: Understand how to make bitwise operations work for enum type
+    # TODO: Understand how to make bitwise operations work for enum type
+    DEMSim.SetContactOutputContent(DEME.OWNER)
 
     # E, nu, CoR, mu, Crr...
     mat_type_wheel = DEMSim.LoadMaterial(
@@ -161,12 +162,12 @@ if __name__ == "__main__":
     DEMSim.Initialize()
 
     fps = 10
-    out_steps = (1.0 // (fps * step_size))
+    out_steps = (int)(1.0 / (fps * step_size))
     curr_step = 0
     currframe = 0
     frame_time = 1.0 / fps
     report_ps = 100
-    report_steps = (1.0 // (report_ps * step_size))
+    report_steps = (int)(1.0 / (report_ps * step_size))
     print(f"Output at {fps} FPS")
 
     # Put the wheel in place, then let the wheel sink in initially

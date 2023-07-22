@@ -5,7 +5,6 @@
 
 import DEME
 from DEME import HCPSampler
-from DEME import GetDEMEDataFile
 
 import numpy as np
 import os
@@ -26,7 +25,6 @@ if __name__ == "__main__":
     DEMSim = DEME.DEMSolver(2)
     DEMSim.SetVerbosity(DEME.INFO)
     DEMSim.SetOutputFormat(DEME.CSV)
-    DEMSim.SetOutputContent(DEME.FAMILY)
     DEMSim.SetOutputContent(DEME.XYZ)
 
     # Define materials
@@ -55,9 +53,9 @@ if __name__ == "__main__":
     # Scale the template we just created
     scales = [0.014, 0.0075833, 0.0044, 0.003, 0.002, 0.0018333, 0.0017]
     # Then load it to system
-    my_template2 = DEMSim.LoadClumpType(mass2, MOI2.tolist(), GetDEMEDataFile(
+    my_template2 = DEMSim.LoadClumpType(mass2, MOI2.tolist(), DEME.GetDEMEDataFile(
         "clumps/triangular_flat_6comp.csv"), mat_type_terrain)
-    my_template1 = DEMSim.LoadClumpType(mass1, MOI1.tolist(), GetDEMEDataFile(
+    my_template1 = DEMSim.LoadClumpType(mass1, MOI1.tolist(), DEME.GetDEMEDataFile(
         "clumps/triangular_flat.csv"), mat_type_terrain)
     ground_particle_templates = [my_template2, DEMSim.Duplicate(my_template2),
                                  my_template1,
