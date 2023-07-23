@@ -1,7 +1,7 @@
 #  Copyright (c) 2021, SBEL GPU Development Team
 #  Copyright (c) 2021, University of Wisconsin - Madison
 #
-# SPDX-License-Identifier: BSD-3-Clause
+#  SPDX-License-Identifier: BSD-3-Clause
 
 # =============================================================================
 # This demo features an analytical boundary-represented fast rotating container
