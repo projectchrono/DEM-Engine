@@ -134,7 +134,9 @@ PYBIND11_MODULE(DEME, obj) {
         .def("SetFamilyFixed", &deme::DEMSolver::SetFamilyFixed, "Mark all entities in this family to be fixed")
         .def("SetInitBinSize", &deme::DEMSolver::SetInitBinSize,
              " Explicitly instruct the bin size (for contact detection) that the solver should use")
-        .def("SetOutputFormat", &deme::DEMSolver::SetOutputFormat, "Choose output format")
+        .def("SetOutputFormat",
+             static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetOutputFormat),
+             "Choose output format")
         .def("GetNumContacts", &deme::DEMSolver::GetNumContacts,
              "Get the number of kT-reported potential contact pairs")
         .def("SetCDUpdateFreq", &deme::DEMSolver::SetCDUpdateFreq,
@@ -258,10 +260,13 @@ PYBIND11_MODULE(DEME, obj) {
                  const std::shared_ptr<deme::DEMClumpBatch>&)>(&deme::DEMSolver::Duplicate),
              "Duplicate a material that is loaded into the system")
         .def("AddExternalObject", &deme::DEMSolver::AddExternalObject)
-        .def("SetOutputContent", &deme::DEMSolver::SetOutputContent)
-        .def("SetMeshOutputFormat", &deme::DEMSolver::SetMeshOutputFormat)
-        .def("SetContactOutputContent", &deme::DEMSolver::SetContactOutputContent)
-        .def("SetVerbosity", &deme::DEMSolver::SetVerbosity,
+        .def("SetOutputContent", static_cast<void (deme::DEMSolver::*)(const std::vector<std::string>&)>(
+                                     &deme::DEMSolver::SetOutputContent))
+        .def("SetMeshOutputFormat",
+             static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetMeshOutputFormat))
+        .def("SetContactOutputContent", static_cast<void (deme::DEMSolver::*)(const std::vector<std::string>&)>(
+                                            &deme::DEMSolver::SetContactOutputContent))
+        .def("SetVerbosity", static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetVerbosity),
              "Defines the desired verbosity level to be chosen from the VERBOSITY enumeration object")
         .def("DefineContactForceModel", &deme::DEMSolver::DefineContactForceModel)
         .def("LoadMaterial",
@@ -640,13 +645,13 @@ PYBIND11_MODULE(DEME, obj) {
                  &deme::DEMMeshConnected::AddGeometryWildcard))
         .def("AddGeometryWildcard", static_cast<void (deme::DEMMeshConnected::*)(const std::string&, float)>(
                                         &deme::DEMMeshConnected::AddGeometryWildcard))
-        .def("GetCoordsVertices", &deme::DEMMeshConnected::GetCoordsVerticesPython)
-        .def("GetCoordsUV", &deme::DEMMeshConnected::GetCoordsUVPython)
-        .def("GetCoordsColors", &deme::DEMMeshConnected::GetCoordsColorsPython)
-        .def("GetIndicesVertexes", &deme::DEMMeshConnected::GetIndicesVertexesPython)
-        .def("GetIndicesNormals", &deme::DEMMeshConnected::GetIndicesNormalsPython)
-        .def("GetIndicesUV", &deme::DEMMeshConnected::GetIndicesUVPython)
-        .def("GetIndicesColors", &deme::DEMMeshConnected::GetIndicesColorsPython);
+        .def("GetCoordsVertices", &deme::DEMMeshConnected::GetCoordsVerticesAsVectorOfVectors)
+        //.def("GetCoordsUV", &deme::DEMMeshConnected::GetCoordsUVPython)
+        //.def("GetCoordsColors", &deme::DEMMeshConnected::GetCoordsColorsPython)
+        .def("GetIndicesVertexes", &deme::DEMMeshConnected::GetIndicesVertexesAsVectorOfVectors);
+    //    .def("GetIndicesNormals", &deme::DEMMeshConnected::GetIndicesNormalsPython)
+    //    .def("GetIndicesUV", &deme::DEMMeshConnected::GetIndicesUVPython)
+    //    .def("GetIndicesColors", &deme::DEMMeshConnected::GetIndicesColorsPython);
 
     //// TODO: Insert readwrite functions to access all public class objects!
 

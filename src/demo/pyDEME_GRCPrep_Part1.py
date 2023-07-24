@@ -23,9 +23,9 @@ if __name__ == "__main__":
     os.makedirs(out_dir, exist_ok=True)
 
     DEMSim = DEME.DEMSolver(2)
-    DEMSim.SetVerbosity(DEME.INFO)
-    DEMSim.SetOutputFormat(DEME.CSV)
-    DEMSim.SetOutputContent(DEME.XYZ)
+    DEMSim.SetVerbosity("INFO")
+    DEMSim.SetOutputFormat("CSV")
+    DEMSim.SetOutputContent(["XYZ"]) # XYZ is default so this doesn't do anything
 
     # Define materials
     mat_type_terrain = DEMSim.LoadMaterial(

@@ -21,29 +21,10 @@ if __name__ == "__main__":
     os.makedirs(out_dir, exist_ok=True)
 
     DEMSim = DEME.DEMSolver(2)
-    DEMSim.SetOutputFormat(DEME.CSV)
+    DEMSim.SetOutputFormat("CSV")
     # Output family numbers (used to identify the centrifuging effect)
-    DEMSim.SetOutputContent(DEME.FAMILY)
-    # DEMSim.SetVerbosity(DEME.STEP_METRIC);
-
-    # What will be loaded from the file, is a template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
-    ellipsoid = DEME.DEMClumpTemplate()
-
-    ellipsoid.ReadComponentFromFile(
-        DEME.GetDEMEDataFile("clumps/ellipsoid_2_1_1.csv"), "x", "y", "z", "r")
-    # We can scale this general template to make it smaller, like a DEM particle that you would actually use
-    scaling = 0.01
-    # Scale the template we just created
-    ellipsoid.Scale(scaling)
-    # Calculate its mass and MOI (scaled according to the size)
-    mass = 2.6e3 * 4. / 3. * DEME.PI * 2 * 1 * 1
-    MOI = np.array([1. / 5. * mass * (1 * 1 + 2 * 2), 1. / 5. *
-                   mass * (1 * 1 + 2 * 2), 1. / 5. * mass * (1 * 1 + 1 * 1)])
-    mass *= scaling * scaling * scaling
-    MOI *= scaling * scaling * scaling * scaling * scaling
-    # Shlok: Sorry, you need to wrap the SetMass and SetMOI methods for DEMClumpTemplate for it to work.
-    ellipsoid.SetMass(mass)
-    ellipsoid.SetMOI(MOI.tolist())
+    DEMSim.SetOutputContent(["ABSV", "FAMILY"])
+    # DEMSim.SetVerbosity("STEP_METRIC");
 
     mat_type_sand = DEMSim.LoadMaterial(
         {"E": 1e9, "nu": 0.3, "CoR": 0.6, "mu": 0.5, "Crr": 0.01})
@@ -52,6 +33,23 @@ if __name__ == "__main__":
     # Since two types of materials have the same mu, this following call does not change the default mu for their
     # interaction, it's still 0.5.
     DEMSim.SetMaterialPropertyPair("mu", mat_type_sand, mat_type_drum, 0.5)
+    
+
+    # We can scale this general template to make it smaller, like a DEM particle that you would actually use
+    scaling = 0.01
+    # Calculate its mass and MOI (scaled according to the size)
+    mass = 2.6e3 * 4. / 3. * DEME.PI * 2 * 1 * 1
+    MOI = np.array([1. / 5. * mass * (1 * 1 + 2 * 2), 1. / 5. *
+                   mass * (1 * 1 + 2 * 2), 1. / 5. * mass * (1 * 1 + 1 * 1)])
+    # What will be loaded from the file, is a template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
+    ellipsoid = DEMSim.LoadClumpType(mass, MOI.tolist(), DEME.GetDEMEDataFile(
+        "clumps/ellipsoid_2_1_1.csv"), mat_type_sand)
+    # Scale the template we just created
+    ellipsoid.Scale(scaling)
+    mass *= scaling * scaling * scaling
+    MOI *= scaling * scaling * scaling * scaling * scaling
+    ellipsoid.SetMass(mass)
+    ellipsoid.SetMOI(MOI.tolist())
 
     # Define material type for the particles (on a per-sphere-component basis)
     ellipsoid.SetMaterial(mat_type_sand)
@@ -65,13 +63,12 @@ if __name__ == "__main__":
         # it separating materials with different densities.
         mult = 1.5**i
         # Then make a new copy of the template then do the scaling of mass
-        ellipsoid_template = ellipsoid
+        ellipsoid_template = DEMSim.Duplicate(ellipsoid)
         ellipsoid_template.SetMass(mass*mult)
         ellipsoid_template.SetMOI((MOI*mult).tolist())
 
         # Load a (ellipsoid-shaped) clump and a sphere
-
-        clump_types.append(DEMSim.LoadClumpType(ellipsoid_template))
+        clump_types.append(ellipsoid_template)
         clump_types.append(DEMSim.LoadSphereType(
             mass*mult, np.cbrt(2.0) * scaling, mat_type_sand))
 
