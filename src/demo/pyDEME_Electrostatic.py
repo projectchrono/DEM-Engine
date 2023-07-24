@@ -203,12 +203,12 @@ if __name__ == "__main__":
     os.makedirs(out_dir, exist_ok=True)
 
     DEMSim = DEME.DEMSolver(2)
-    DEMSim.SetVerbosity(DEME.INFO)
-    DEMSim.SetOutputFormat(DEME.CSV)
-    DEMSim.SetOutputContent(DEME.ABSV)
-    DEMSim.SetMeshOutputFormat(DEME.VTK)
+    DEMSim.SetVerbosity("INFO")
+    DEMSim.SetOutputFormat("CSV")
+    DEMSim.SetOutputContent(["ABSV", "XYZ"])
+    DEMSim.SetMeshOutputFormat("VTK")
     # TODO: Understand how to make bitwise operations work for enum type
-    DEMSim.SetContactOutputContent(DEME.OWNER)
+    DEMSim.SetContactOutputContent(["OWNER", "FORCE", "POINT"])
 
     # E, nu, CoR, mu, Crr...
     mat_type_rod = DEMSim.LoadMaterial(

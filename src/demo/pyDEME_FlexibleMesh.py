@@ -40,13 +40,13 @@ if __name__ == "__main__":
     out_dir = os.path.join(os.getcwd(), out_dir)
     os.makedirs(out_dir, exist_ok=True)
 
-    # Shlok: Don't worry about binary anymore: I'll add string-based solver flag setters.
+    # Shlok: Don't worry about binary anymore: I added string-based solver flag setters. But you need to wrap them now...
     DEMSim = DEME.DEMSolver(2)
-    DEMSim.SetVerbosity(DEME.INFO)
-    DEMSim.SetOutputFormat(DEME.CSV)
-    DEMSim.SetOutputContent(DEME.ABSV)
-    DEMSim.SetMeshOutputFormat(DEME.VTK)
-    # DEMSim.SetContactOutputContent(OWNER | FORCE | POINT | TORQUE); # Binary operators?
+    DEMSim.SetVerbosity("INFO")
+    DEMSim.SetOutputFormat("CSV")
+    DEMSim.SetOutputContent(["ABSV", "XYZ"])
+    DEMSim.SetMeshOutputFormat("VTK")
+    DEMSim.SetContactOutputContent(["OWNER", "FORCE", "POINT", "TORQUE"])
 
     # E, nu, CoR, mu, Crr...
     mat_type_mesh = DEMSim.LoadMaterial(
@@ -258,7 +258,7 @@ if __name__ == "__main__":
             mesh_CoM_pos = flex_mesh_tracker.Pos()
             mesh_frame_oriQ = flex_mesh_tracker.OriQ()
             for node in node_current_location:
-                node = DEME.ApplyFrameTransformGlobalToLocal(
+                node = DEME.FrameTransformGlobalToLocal(
                     node, mesh_CoM_pos, mesh_frame_oriQ)
             flex_mesh_tracker.UpdateMesh(node_current_location)
 

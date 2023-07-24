@@ -18,10 +18,10 @@ if __name__ == "__main__":
     os.makedirs(out_dir, exist_ok=True)
 
     DEMSim = DEME.DEMSolver(2)
-    DEMSim.SetVerbosity(DEME.STEP_METRIC)
-    DEMSim.SetOutputFormat(DEME.CSV)
-    DEMSim.SetOutputContent(DEME.ABSV)
-    DEMSim.SetMeshOutputFormat(DEME.VTK)
+    DEMSim.SetVerbosity("STEP_METRIC")
+    DEMSim.SetOutputFormat("CSV")
+    DEMSim.SetOutputContent(["ABSV", "XYZ"])
+    DEMSim.SetMeshOutputFormat("VTK")
     DEMSim.EnsureKernelErrMsgLineNum()
 
     # E, nu, CoR, mu, Crr... Material properties

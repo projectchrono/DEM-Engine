@@ -21,10 +21,10 @@ if __name__ == "__main__":
     os.makedirs(out_dir, exist_ok=True)
 
     DEMSim = DEME.DEMSolver(2)
-    DEMSim.SetOutputFormat(DEME.CSV)
+    DEMSim.SetOutputFormat("CSV")
     # Output family numbers (used to identify the centrifuging effect)
-    DEMSim.SetOutputContent(DEME.FAMILY)
-    # DEMSim.SetVerbosity(DEME.STEP_METRIC);
+    DEMSim.SetOutputContent(["ABSV", "FAMILY"])
+    # DEMSim.SetVerbosity("STEP_METRIC");
 
     # What will be loaded from the file, is a template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
     ellipsoid = DEME.DEMClumpTemplate()

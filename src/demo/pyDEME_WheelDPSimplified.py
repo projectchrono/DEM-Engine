@@ -25,12 +25,10 @@ if __name__ == "__main__":
     os.makedirs(out_dir, exist_ok=True)
 
     DEMSim = DEME.DEMSolver(2)
-    DEMSim.SetVerbosity(DEME.INFO)
-    DEMSim.SetOutputFormat(DEME.CSV)
-    DEMSim.SetOutputContent(DEME.ABSV)
-    DEMSim.SetMeshOutputFormat(DEME.VTK)
-    # TODO: Understand how to make bitwise operations work for enum type
-    DEMSim.SetContactOutputContent(DEME.OWNER)
+    DEMSim.SetVerbosity("INFO")
+    DEMSim.SetOutputFormat("CSV")
+    DEMSim.SetMeshOutputFormat("VTK")
+    DEMSim.SetContactOutputContent(["OWNER", "FORCE", "POINT"])
 
     # E, nu, CoR, mu, Crr...
     mat_type_wheel = DEMSim.LoadMaterial(
