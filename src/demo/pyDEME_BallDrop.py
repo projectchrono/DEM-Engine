@@ -5,7 +5,7 @@
 
 # =============================================================================
 # A meshed ball hitting a granular bed under gravity.
-# =============================================================================
+# ========= ====================================================================
 
 import DEME
 
@@ -22,7 +22,7 @@ if __name__ == "__main__":
     DEMSim.SetOutputFormat(DEME.CSV)
     DEMSim.SetOutputContent(DEME.ABSV)
     DEMSim.SetMeshOutputFormat(DEME.VTK)
-    DEMSim.EnsureKernelErrMsgLineNum()
+    DEMSim.EnsureKernelErrMsgLineNum(True)
 
     # E, nu, CoR, mu, Crr... Material properties
     mat_type_ball = DEMSim.LoadMaterial(
@@ -36,13 +36,13 @@ if __name__ == "__main__":
 
     step_size = 1e-5
     world_size = 10
-    # Shlok: [0,world_size] is a std::pair. Can we convert it from a Python 2-element list?
+
     DEMSim.InstructBoxDomainDimension(
-        [0, world_size], [0, world_size], [0, world_size])
+        tuple([0, world_size]), tuple([0, world_size]), tuple([0, world_size]), "none")
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain)
 
     projectile = DEMSim.AddWavefrontMeshObject(
-        DEME.GetDEMEDataFile("mesh/sphere.obj"), mat_type_ball)
+        DEME.GetDEMEDataFile("mesh/sphere.obj"), mat_type_ball, True, False)
     print(f"Total num of triangles: {projectile.GetNumTriangles()}")
 
     projectile.SetInitPos([world_size / 2, world_size / 2, world_size / 3 * 2])
@@ -63,7 +63,7 @@ if __name__ == "__main__":
     sample_halfheight = world_size / 8
     sample_center = [world_size / 2, world_size / 2, sample_halfheight + 0.05]
     sample_halfwidth = world_size / 2 * 0.95
-    # Shlok: You may have to wrap the following method DEMBoxHCPSampler
+    
     input_xyz = DEME.DEMBoxHCPSampler(sample_center, [
                                       sample_halfwidth, sample_halfwidth, sample_halfheight], 2.01 * terrain_rad)
     DEMSim.AddClumps(template_terrain, input_xyz)
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     sim_time = 6.0
     settle_time = 2.0
     fps = 20
-    frame_time = (int)(1.0 / fps)
+    frame_time = (1.0 / fps)
 
     print(f"Output at {fps} FPS")
     currframe = 0

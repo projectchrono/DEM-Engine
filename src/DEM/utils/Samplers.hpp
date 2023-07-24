@@ -172,7 +172,6 @@ class Sampler {
         return Sample(CYLINDER_Z);
     }
     std::vector<std::vector<float>> SampleCylinderZ(const std::vector<float>& center, float radius, float halfHeight) {
-        
         assertThreeElements(center, "SampleCylinderZ", "center");
         m_center = host_make_float3(center[0], center[1], center[2]);
         m_size = host_make_float3(radius, radius, halfHeight);
@@ -588,15 +587,31 @@ inline std::vector<float3> DEMBoxGridSampler(float3 BoxCenter,
     return sampler.SampleBox(BoxCenter, HalfDims);
 }
 /// A wrapper for a grid sampler of a box domain.
-inline std::vector<float3> DEMBoxGridSampler(const std::vector<float>& BoxCenter,
-                                             const std::vector<float>& HalfDims,
-                                             float GridSizeX,
-                                             float GridSizeY = -1.0,
-                                             float GridSizeZ = -1.0) {
+inline std::vector<std::vector<float>> DEMBoxGridSampler(const std::vector<float>& BoxCenter,
+                                                         const std::vector<float>& HalfDims,
+                                                         float GridSizeX,
+                                                         float GridSizeY = -1.0,
+                                                         float GridSizeZ = -1.0) {
     assertThreeElements(BoxCenter, "DEMBoxGridSampler", "BoxCenter");
     assertThreeElements(HalfDims, "DEMBoxGridSampler", "HalfDims");
-    return DEMBoxGridSampler(host_make_float3(BoxCenter[0], BoxCenter[1], BoxCenter[2]),
-                             host_make_float3(HalfDims[0], HalfDims[1], HalfDims[2]), GridSizeX, GridSizeY, GridSizeZ);
+
+    std::vector<std::vector<float>> return_vec;
+
+    std::vector<float3> return_val =
+        DEMBoxGridSampler(host_make_float3(BoxCenter[0], BoxCenter[1], BoxCenter[2]),
+                          host_make_float3(HalfDims[0], HalfDims[1], HalfDims[2]), GridSizeX, GridSizeY, GridSizeZ);
+
+    for (int i = 0; i < return_val.size(); i++) {
+        std::vector<float> tmp;
+
+        tmp.push_back(return_val[i].x);
+        tmp.push_back(return_val[i].y);
+        tmp.push_back(return_val[i].z);
+
+        return_vec.push_back(tmp);
+    }
+
+    return return_vec;
 }
 
 /// A wrapper for a HCP sampler of a box domain.
@@ -604,14 +619,31 @@ inline std::vector<float3> DEMBoxHCPSampler(float3 BoxCenter, float3 HalfDims, f
     HCPSampler sampler(GridSize);
     return sampler.SampleBox(BoxCenter, HalfDims);
 }
+
 /// A wrapper for a HCP sampler of a box domain.
-inline std::vector<float3> DEMBoxHCPSampler(const std::vector<float>& BoxCenter,
-                                            const std::vector<float>& HalfDims,
-                                            float GridSize) {
+inline std::vector<std::vector<float>> DEMBoxHCPSampler(const std::vector<float>& BoxCenter,
+                                                        const std::vector<float>& HalfDims,
+                                                        float GridSize) {
     assertThreeElements(BoxCenter, "DEMBoxHCPSampler", "BoxCenter");
     assertThreeElements(HalfDims, "DEMBoxHCPSampler", "HalfDims");
-    return DEMBoxHCPSampler(host_make_float3(BoxCenter[0], BoxCenter[1], BoxCenter[2]),
-                             host_make_float3(HalfDims[0], HalfDims[1], HalfDims[2]), GridSize);
+
+    std::vector<std::vector<float>> return_vec;
+
+    std::vector<float3> return_val =
+        DEMBoxHCPSampler(host_make_float3(BoxCenter[0], BoxCenter[1], BoxCenter[2]),
+                         host_make_float3(HalfDims[0], HalfDims[1], HalfDims[2]), GridSize);
+
+    for (int i = 0; i < return_val.size(); i++) {
+        std::vector<float> tmp;
+
+        tmp.push_back(return_val[i].x);
+        tmp.push_back(return_val[i].y);
+        tmp.push_back(return_val[i].z);
+
+        return_vec.push_back(tmp);
+    }
+
+    return return_vec;
 }
 
 /// A light-weight sampler that generates a shell made of particles that resembles a cylindrical surface.

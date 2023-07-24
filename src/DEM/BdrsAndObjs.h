@@ -267,15 +267,133 @@ class DEMMeshConnected : public DEMInitializer {
     std::vector<int3> m_face_col_indices;
 
     std::vector<float3>& GetCoordsVertices() { return m_vertices; }
+
+    std::vector<std::vector<float>>& GetCoordsVerticesPython() {
+        std::vector<std::vector<float>> return_vec;
+
+        for (int i = 0; i < m_vertices.size(); i++) {
+            std::vector<float> tmp;
+            tmp.push_back(m_vertices[i].x);
+            tmp.push_back(m_vertices[i].y);
+            tmp.push_back(m_vertices[i].z);
+
+            return_vec.push_back(tmp);
+        }
+
+        return return_vec;
+    }
+
     std::vector<float3>& GetCoordsNormals() { return m_normals; }
+
+    std::vector<std::vector<float>>& GetCoordsNormalsPython() {
+        std::vector<std::vector<float>> return_vec;
+
+        for (int i = 0; i < m_normals.size(); i++) {
+            std::vector<float> tmp;
+            tmp.push_back(m_normals[i].x);
+            tmp.push_back(m_normals[i].y);
+            tmp.push_back(m_normals[i].z);
+
+            return_vec.push_back(tmp);
+        }
+
+        return return_vec;
+    }
+
     std::vector<float3>& GetCoordsUV() { return m_UV; }
+
+    std::vector<std::vector<float>>& GetCoordsUVPython() {
+        std::vector<std::vector<float>> return_vec;
+
+        for (int i = 0; i < m_UV.size(); i++) {
+            std::vector<float> tmp;
+            tmp.push_back(m_UV[i].x);
+            tmp.push_back(m_UV[i].y);
+            tmp.push_back(m_UV[i].z);
+
+            return_vec.push_back(tmp);
+        }
+
+        return return_vec;
+    }
+
     std::vector<float3>& GetCoordsColors() { return m_colors; }
 
+    std::vector<std::vector<float>>& GetCoordsColorsPython() {
+        std::vector<std::vector<float>> return_vec;
+
+        for (int i = 0; i < m_colors.size(); i++) {
+            std::vector<float> tmp;
+            tmp.push_back(m_colors[i].x);
+            tmp.push_back(m_colors[i].y);
+            tmp.push_back(m_colors[i].z);
+
+            return_vec.push_back(tmp);
+        }
+
+        return return_vec;
+    }
     std::vector<int3>& GetIndicesVertexes() { return m_face_v_indices; }
+
+    std::vector<std::vector<int>>& GetIndicesVertexesPython() {
+        std::vector<std::vector<int>> return_vec;
+        for (int i = 0; i < m_face_v_indices.size(); i++) {
+            std::vector<int> tmp;
+
+            tmp.push_back(m_face_v_indices[i].x);
+            tmp.push_back(m_face_v_indices[i].y);
+            tmp.push_back(m_face_v_indices[i].z);
+        }
+
+        return return_vec;
+    }
+
     std::vector<int3>& GetIndicesNormals() { return m_face_n_indices; }
+
+    std::vector<std::vector<int>>& GetIndicesNormalsPython() {
+        std::vector<std::vector<int>> return_vec;
+        for (int i = 0; i < m_face_n_indices.size(); i++) {
+            std::vector<int> tmp;
+
+            tmp.push_back(m_face_n_indices[i].x);
+            tmp.push_back(m_face_n_indices[i].y);
+            tmp.push_back(m_face_n_indices[i].z);
+        }
+
+        return return_vec;
+    }
+
     std::vector<int3>& GetIndicesUV() { return m_face_uv_indices; }
+
+    std::vector<std::vector<int>>& GetIndicesUVPython() {
+        std::vector<std::vector<int>> return_vec;
+        for (int i = 0; i < m_face_uv_indices.size(); i++) {
+            std::vector<int> tmp;
+
+            tmp.push_back(m_face_uv_indices[i].x);
+            tmp.push_back(m_face_uv_indices[i].y);
+            tmp.push_back(m_face_uv_indices[i].z);
+        }
+
+        return return_vec;
+    }
+
     std::vector<int3>& GetIndicesColors() { return m_face_col_indices; }
 
+    std::vector<std::vector<int>>& GetIndicesColorsPython() {
+        std::vector<std::vector<int>> return_vec;
+
+        for (int i = 0; i < m_face_col_indices.size(); i++) {
+            std::vector<int> tmp;
+
+            tmp.push_back(m_face_col_indices[i].x);
+            tmp.push_back(m_face_col_indices[i].y);
+            tmp.push_back(m_face_col_indices[i].z);
+        }
+
+        return return_vec;
+    }
+    
     // Material types for each mesh facet
     std::vector<std::shared_ptr<DEMMaterial>> materials;
     bool isMaterialSet = false;

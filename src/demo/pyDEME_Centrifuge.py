@@ -28,8 +28,9 @@ if __name__ == "__main__":
 
     # What will be loaded from the file, is a template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
     ellipsoid = DEME.DEMClumpTemplate()
+
     ellipsoid.ReadComponentFromFile(
-        DEME.GetDEMEDataFile("clumps/ellipsoid_2_1_1.csv"))
+        DEME.GetDEMEDataFile("clumps/ellipsoid_2_1_1.csv"), "x", "y", "z", "r")
     # We can scale this general template to make it smaller, like a DEM particle that you would actually use
     scaling = 0.01
     # Scale the template we just created
@@ -69,6 +70,7 @@ if __name__ == "__main__":
         ellipsoid_template.SetMOI((MOI*mult).tolist())
 
         # Load a (ellipsoid-shaped) clump and a sphere
+
         clump_types.append(DEMSim.LoadClumpType(ellipsoid_template))
         clump_types.append(DEMSim.LoadSphereType(
             mass*mult, np.cbrt(2.0) * scaling, mat_type_sand))
@@ -91,7 +93,7 @@ if __name__ == "__main__":
     drum_family = 100
     Drum.SetFamily(drum_family)
     # The drum rotates (facing Z direction)
-    DEMSim.SetFamilyPrescribedAngVel(drum_family, "0", "0", "6.0")
+    DEMSim.SetFamilyPrescribedAngVel(drum_family, "0", "0", "6.0", False)
     # Then add planes to `close up' the drum. We add it as another object b/c we want to track the force on it
     # separately.
     top_bot_planes = DEMSim.AddExternalObject()
@@ -159,15 +161,15 @@ if __name__ == "__main__":
             print(f"Max velocity of any point in simulation is {max_v}")
 
             # Torque on the side walls are?
-            drum_moi = np.array(Drum_tracker.MOI())
-            drum_pos = np.array(Drum_tracker.ContactAngAccLocal())
+            drum_moi = np.array(Drum_tracker.GetMOI(0))
+            drum_pos = np.array(Drum_tracker.GetContactAngAccLocal(0))
             drum_torque = np.multiply(drum_pos, drum_moi)
             print(
                 f"Contact torque on the side walls is {drum_torque[0]}, {drum_torque[1]}, {drum_torque[2]}")
 
             # The force on the bottom plane?
             force_on_BC = np.array(
-                planes_tracker.ContactAcc()) * planes_tracker.Mass()
+                planes_tracker.GetContactAcc(0)) * planes_tracker.Mass(0)
             print(f"Contact force on bottom plane is {force_on_BC[2]}")
 
         DEMSim.DoDynamics(step_size)

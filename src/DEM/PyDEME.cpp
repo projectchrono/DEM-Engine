@@ -27,6 +27,14 @@ namespace py = pybind11;
 
 PYBIND11_MODULE(DEME, obj) {
     obj.def("GetDEMEDataFile", &deme::GetDEMEDataFile);
+    obj.def("DEMBoxGridSampler",
+            static_cast<std::vector<std::vector<float>> (*)(const std::vector<float>&, const std::vector<float>&, float,
+                                                            float, float)>(&deme::DEMBoxGridSampler));
+    obj.def(
+        "DEMBoxHCPSampler",
+        static_cast<std::vector<std::vector<float>> (*)(const std::vector<float>&, const std::vector<float>&, float)>(
+            &deme::DEMBoxHCPSampler));
+    obj.attr("PI") = py::float_(3.14);
 
     /*
     py::class_<deme::Sampler>(obj, "Sampler")
@@ -37,15 +45,12 @@ PYBIND11_MODULE(DEME, obj) {
              static_cast<std::vector<std::vector<float>> (deme::Sampler::*)(const std::vector<float>&, float)>(
                  &deme::Sampler::SampleSphere))
         .def("SampleCylinderX",
-             static_cast<std::vector<std::vector<float>> (deme::Sampler::*)(const std::vector<float>&, float, float)>(
-                 &deme::Sampler::SampleCylinderX))
-        .def("SampleCylinderY",
-             static_cast<std::vector<std::vector<float>> (deme::Sampler::*)(const std::vector<float>&, float, float)>(
-                 &deme::Sampler::SampleCylinderY))
+             static_cast<std::vector<std::vector<float>> (deme::Sampler::*)(const std::vector<float>&, float,
+    float)>( &deme::Sampler::SampleCylinderX)) .def("SampleCylinderY", static_cast<std::vector<std::vector<float>>
+    (deme::Sampler::*)(const std::vector<float>&, float, float)>( &deme::Sampler::SampleCylinderY))
         .def("SampleCylinderZ",
-             static_cast<std::vector<std::vector<float>> (deme::Sampler::*)(const std::vector<float>&, float, float)>(
-                 &deme::Sampler::SampleCylinderZ))
-        .def("GetSeparation", &deme::Sampler::GetSeparation)
+             static_cast<std::vector<std::vector<float>> (deme::Sampler::*)(const std::vector<float>&, float,
+    float)>( &deme::Sampler::SampleCylinderZ)) .def("GetSeparation", &deme::Sampler::GetSeparation)
         .def("SetSeparation", &deme::Sampler::SetSeparation);
      */
 
@@ -69,7 +74,6 @@ PYBIND11_MODULE(DEME, obj) {
 
     py::class_<deme::HCPSampler>(obj, "HCPSampler")
         .def(py::init<float>())
-
         .def("SampleBox",
              static_cast<std::vector<std::vector<float>> (deme::HCPSampler::*)(
                  const std::vector<float>& center, const std::vector<float>& halfDim)>(&deme::HCPSampler::SampleBox),
@@ -106,7 +110,11 @@ PYBIND11_MODULE(DEME, obj) {
         .def("SetPos",
              static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::SetPos))
         .def("GetContactAcc",
-             static_cast<std::vector<float> (deme::DEMTracker::*)(size_t)>(&deme::DEMTracker::GetContactAcc));
+             static_cast<std::vector<float> (deme::DEMTracker::*)(size_t)>(&deme::DEMTracker::GetContactAcc))
+        .def("GetMOI", &deme::DEMTracker::GetMOI)
+        .def("Mass", &deme::DEMTracker::Mass)
+        .def("GetContactAngAccLocal", &deme::DEMTracker::GetContactAngAccLocal)
+        .def("GetMesh", &deme::DEMTracker::GetMesh);
 
     py::class_<deme::DEMForceModel>(obj, "DEMForceModel")
         .def(py::init<deme::FORCE_MODEL>())
@@ -121,6 +129,8 @@ PYBIND11_MODULE(DEME, obj) {
 
     py::class_<deme::DEMSolver>(obj, "DEMSolver")
         .def(py::init<unsigned int>())
+        .def("LoadSphereType", &deme::DEMSolver::LoadSphereType)
+        .def("EnsureKernelErrMsgLineNum", &deme::DEMSolver::EnsureKernelErrMsgLineNum)
         .def("SetFamilyFixed", &deme::DEMSolver::SetFamilyFixed, "Mark all entities in this family to be fixed")
         .def("SetInitBinSize", &deme::DEMSolver::SetInitBinSize,
              " Explicitly instruct the bin size (for contact detection) that the solver should use")
@@ -288,6 +298,34 @@ PYBIND11_MODULE(DEME, obj) {
                  const std::string&, const std::shared_ptr<deme::DEMMaterial>&, bool, bool)>(
                  &deme::DEMSolver::AddWavefrontMeshObject),
              "Load a mesh-represented object")
+        .def("AddWavefrontMeshObject",
+             static_cast<std::shared_ptr<deme::DEMMeshConnected> (deme::DEMSolver::*)(deme::DEMMeshConnected&)>(
+                 &deme::DEMSolver::AddWavefrontMeshObject),
+             "Load a mesh-represented object")
+        .def("AddWavefrontMeshObject",
+             static_cast<std::shared_ptr<deme::DEMMeshConnected> (deme::DEMSolver::*)(
+                 const std::string& filename, bool, bool)>(&deme::DEMSolver::AddWavefrontMeshObject),
+             "Load a mesh-represented object")
+        .def("LoadClumpType",
+             static_cast<std::shared_ptr<deme::DEMClumpTemplate> (deme::DEMSolver::*)(
+                 float, const std::vector<float>&, const std::string, const std::shared_ptr<deme::DEMMaterial>&)>(
+                 &deme::DEMSolver::LoadClumpType),
+             "Load a clump type into the API-level cache")
+        .def("LoadClumpType",
+             static_cast<std::shared_ptr<deme::DEMClumpTemplate> (deme::DEMSolver::*)(
+                 float mass, const std::vector<float>&, const std::vector<float>&,
+                 const std::vector<std::vector<float>>&, const std::shared_ptr<deme::DEMMaterial>&)>(
+                 &deme::DEMSolver::LoadClumpType),
+             "Load a clump type into the API-level cache")
+        .def("LoadClumpType",
+             static_cast<std::shared_ptr<deme::DEMClumpTemplate> (deme::DEMSolver::*)(deme::DEMClumpTemplate&)>(
+                 &deme::DEMSolver::LoadClumpType),
+             "Load a clump type into the API-level cache")
+        .def("LoadClumpType",
+             static_cast<std::shared_ptr<deme::DEMClumpTemplate> (deme::DEMSolver::*)(
+                 float, const std::vector<float>&, const std::string,
+                 const std::vector<std::shared_ptr<deme::DEMMaterial>>&)>(&deme::DEMSolver::LoadClumpType),
+             "Load a clump type into the API-level cache")
         .def("LoadClumpType",
              static_cast<std::shared_ptr<deme::DEMClumpTemplate> (deme::DEMSolver::*)(
                  float, const std::vector<float>&, const std::string, const std::shared_ptr<deme::DEMMaterial>&)>(
@@ -456,6 +494,15 @@ PYBIND11_MODULE(DEME, obj) {
 
     py::class_<deme::DEMClumpTemplate, std::shared_ptr<deme::DEMClumpTemplate>>(obj, "DEMClumpTemplate")
         .def(py::init<>())
+        .def("SetMass", &deme::DEMClumpTemplate::SetMass)
+        .def("SetMOI",
+             static_cast<void (deme::DEMClumpTemplate::*)(const std::vector<float>&)>(&deme::DEMClumpTemplate::SetMOI))
+        .def("SetMaterial",
+             static_cast<void (deme::DEMClumpTemplate::*)(const std::vector<std::shared_ptr<deme::DEMMaterial>>&)>(
+                 &deme::DEMClumpTemplate::SetMaterial))
+        .def("SetMaterial",
+             static_cast<void (deme::DEMClumpTemplate::*)(const std::shared_ptr<deme::DEMMaterial>& input)>(
+                 &deme::DEMClumpTemplate::SetMaterial))
         .def("SetVolume", &deme::DEMClumpTemplate::SetVolume)
         .def("ReadComponentFromFile", &deme::DEMClumpTemplate::ReadComponentFromFile)
         .def("InformCentroidPrincipal",
@@ -592,7 +639,14 @@ PYBIND11_MODULE(DEME, obj) {
              static_cast<void (deme::DEMMeshConnected::*)(const std::string&, const std::vector<float>&)>(
                  &deme::DEMMeshConnected::AddGeometryWildcard))
         .def("AddGeometryWildcard", static_cast<void (deme::DEMMeshConnected::*)(const std::string&, float)>(
-                                        &deme::DEMMeshConnected::AddGeometryWildcard));
+                                        &deme::DEMMeshConnected::AddGeometryWildcard))
+        .def("GetCoordsVertices", &deme::DEMMeshConnected::GetCoordsVerticesPython)
+        .def("GetCoordsUV", &deme::DEMMeshConnected::GetCoordsUVPython)
+        .def("GetCoordsColors", &deme::DEMMeshConnected::GetCoordsColorsPython)
+        .def("GetIndicesVertexes", &deme::DEMMeshConnected::GetIndicesVertexesPython)
+        .def("GetIndicesNormals", &deme::DEMMeshConnected::GetIndicesNormalsPython)
+        .def("GetIndicesUV", &deme::DEMMeshConnected::GetIndicesUVPython)
+        .def("GetIndicesColors", &deme::DEMMeshConnected::GetIndicesColorsPython);
 
     //// TODO: Insert readwrite functions to access all public class objects!
 

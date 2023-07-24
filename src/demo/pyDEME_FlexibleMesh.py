@@ -102,7 +102,7 @@ if __name__ == "__main__":
 
     # Load in the mesh which is a 2x2 (yz) plate. Its thickness is 0.05 in the x direction.
     flex_mesh = DEMSim.AddWavefrontMeshObject(
-        DEME.GetDEMEDataFile("mesh/thin_plate.obj"), mat_type_mesh)
+        DEME.GetDEMEDataFile("mesh/thin_plate.obj"), mat_type_mesh, True, False)
     num_tri = flex_mesh.GetNumTriangles()
     print(f"Total num of triangles: {num_tri}")
 
