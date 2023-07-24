@@ -44,6 +44,170 @@ DEMSolver::~DEMSolver() {
     delete dTkT_GpuManager;
 }
 
+void DEMSolver::SetVerbosity(const std::string& verbose) {
+    std::string u_verbose = str_to_upper(verbose);
+    switch (hash_charr(u_verbose.c_str())) {
+        case ("QUIET"_):
+            verbosity = VERBOSITY::QUIET;
+            break;
+        case ("ERROR"_):
+            verbosity = VERBOSITY::ERROR;
+            break;
+        case ("WARNING"_):
+            verbosity = VERBOSITY::WARNING;
+            break;
+        case ("INFO"_):
+            verbosity = VERBOSITY::INFO;
+            break;
+        case ("STEP_ANOMALY"_):
+            verbosity = VERBOSITY::STEP_ANOMALY;
+            break;
+        case ("STEP_METRIC"_):
+            verbosity = VERBOSITY::STEP_METRIC;
+            break;
+        case ("DEBUG"_):
+            verbosity = VERBOSITY::DEBUG;
+            break;
+        case ("STEP_DEBUG"_):
+            verbosity = VERBOSITY::STEP_DEBUG;
+            break;
+        default:
+            DEME_ERROR("Instruction %s is not unknown in SetVerbosity call.", verbose.c_str());
+    }
+}
+void DEMSolver::SetOutputFormat(const std::string& format) {
+    std::string u_format = str_to_upper(format);
+    switch (hash_charr(u_format.c_str())) {
+        case ("CSV"_):
+            m_out_format = OUTPUT_FORMAT::CSV;
+            break;
+        case ("BINARY"_):
+            m_out_format = OUTPUT_FORMAT::BINARY;
+            break;
+        case ("CHPF"_):
+            m_out_format = OUTPUT_FORMAT::CHPF;
+            break;
+        default:
+            DEME_ERROR("Instruction %s is not unknown in SetOutputFormat call.", format.c_str());
+    }
+}
+void DEMSolver::SetContactOutputFormat(const std::string& format) {
+    std::string u_format = str_to_upper(format);
+    switch (hash_charr(u_format.c_str())) {
+        case ("CSV"_):
+            m_cnt_out_format = OUTPUT_FORMAT::CSV;
+            break;
+        case ("BINARY"_):
+            m_cnt_out_format = OUTPUT_FORMAT::BINARY;
+            break;
+        case ("CHPF"_):
+            m_cnt_out_format = OUTPUT_FORMAT::CHPF;
+            break;
+        default:
+            DEME_ERROR("Instruction %s is not unknown in SetContactOutputFormat call.", format.c_str());
+    }
+}
+void DEMSolver::SetMeshOutputFormat(const std::string& format) {
+    std::string u_format = str_to_upper(format);
+    switch (hash_charr(u_format.c_str())) {
+        case ("VTK"_):
+            m_mesh_out_format = MESH_FORMAT::VTK;
+            break;
+        case ("OBJ"_):
+            m_mesh_out_format = MESH_FORMAT::OBJ;
+            break;
+        default:
+            DEME_ERROR("Instruction %s is not unknown in SetMeshOutputFormat call.", format.c_str());
+    }
+}
+
+void DEMSolver::SetOutputContent(const std::vector<std::string>& content) {
+    std::vector<std::string> u_content(content.size());
+    for (unsigned int i = 0; i < content.size(); i++) {
+        u_content[i] = str_to_upper(content[i]);
+    }
+    m_out_content = OUTPUT_CONTENT::XYZ;
+    for (unsigned int i = 0; i < content.size(); i++) {
+        switch (hash_charr(u_content[i].c_str())) {
+            case ("QUAT"_):
+                m_out_content = m_out_content | OUTPUT_CONTENT::QUAT;
+                break;
+            case ("ABSV"_):
+                m_out_content = m_out_content | OUTPUT_CONTENT::ABSV;
+                break;
+            case ("VEL"_):
+                m_out_content = m_out_content | OUTPUT_CONTENT::VEL;
+                break;
+            case ("ANG_VEL"_):
+                m_out_content = m_out_content | OUTPUT_CONTENT::ANG_VEL;
+                break;
+            case ("ABS_ACC"_):
+                m_out_content = m_out_content | OUTPUT_CONTENT::ABS_ACC;
+                break;
+            case ("ACC"_):
+                m_out_content = m_out_content | OUTPUT_CONTENT::ACC;
+                break;
+            case ("ANG_ACC"_):
+                m_out_content = m_out_content | OUTPUT_CONTENT::ANG_ACC;
+                break;
+            case ("FAMILY"_):
+                m_out_content = m_out_content | OUTPUT_CONTENT::FAMILY;
+                break;
+            case ("MAT"_):
+                m_out_content = m_out_content | OUTPUT_CONTENT::MAT;
+                break;
+            case ("OWNER_WILDCARD"_):
+                m_out_content = m_out_content | OUTPUT_CONTENT::OWNER_WILDCARD;
+                break;
+            case ("GEO_WILDCARD"_):
+                m_out_content = m_out_content | OUTPUT_CONTENT::GEO_WILDCARD;
+                break;
+            default:
+                DEME_ERROR("Instruction %s is not unknown in SetOutputContent call.", content[i].c_str());
+        }
+    }
+}
+void DEMSolver::SetContactOutputContent(const std::vector<std::string>& content) {
+    std::vector<std::string> u_content(content.size());
+    for (unsigned int i = 0; i < content.size(); i++) {
+        u_content[i] = str_to_upper(content[i]);
+    }
+    m_cnt_out_content = CNT_OUTPUT_CONTENT::CNT_TYPE;
+    for (unsigned int i = 0; i < content.size(); i++) {
+        switch (hash_charr(u_content[i].c_str())) {
+            case ("FORCE"_):
+                m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::FORCE;
+                break;
+            case ("POINT"_):
+                m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::POINT;
+                break;
+            case ("COMPONENT"_):
+                m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::COMPONENT;
+                break;
+            case ("NORMAL"_):
+                m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::NORMAL;
+                break;
+            case ("TORQUE"_):
+                m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::TORQUE;
+                break;
+            case ("CNT_WILDCARD"_):
+                m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::CNT_WILDCARD;
+                break;
+            case ("OWNER"_):
+                m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::OWNER;
+                break;
+            case ("GEO_ID"_):
+                m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::GEO_ID;
+                break;
+            case ("NICKNAME"_):
+                m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::NICKNAME;
+                break;
+            default:
+                DEME_ERROR("Instruction %s is not unknown in SetContactOutputContent call.", content[i].c_str());
+        }
+    }
+}
+
 std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
     // Is this owner a clump?
     ownerType_t this_type = dT->ownerTypes.at(ownerID);
@@ -338,14 +502,15 @@ float DEMSolver::GetUpdateFreq() const {
 }
 
 void DEMSolver::SetIntegrator(const std::string& intg) {
-    switch (hash_charr(intg.c_str())) {
-        case ("forward_euler"_):
+    std::string u_intg = str_to_upper(intg);
+    switch (hash_charr(u_intg.c_str())) {
+        case ("FORWARD_EULER"_):
             m_integrator = TIME_INTEGRATOR::FORWARD_EULER;
             break;
-        case ("centered_difference"_):
+        case ("CENTERED_DIFFERENCE"_):
             m_integrator = TIME_INTEGRATOR::CENTERED_DIFFERENCE;
             break;
-        case ("extended_taylor"_):
+        case ("EXTENDED_TAYLOR"_):
             m_integrator = TIME_INTEGRATOR::EXTENDED_TAYLOR;
             break;
         default:

@@ -277,7 +277,7 @@ void writeFloat3VectorsToCSV(const std::string& header,
         return;
     }
 
-    file << force_csv_header << "\n";
+    file << header << "\n";
 
     // Write vectors as columns
     for (size_t i = 0; i < num_items; ++i) {

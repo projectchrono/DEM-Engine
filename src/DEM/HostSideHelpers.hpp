@@ -539,6 +539,25 @@ inline void applyFrameTransformLocalToGlobal(T1& pos, const T2& vec, const T3& r
     pos.y += vec.y;
     pos.z += vec.z;
 }
+/// Apply a local rotation then a translation, then return the result.
+inline std::vector<double> FrameTransformLocalToGlobal(const std::vector<double>& pos,
+                                                       const std::vector<double>& vec,
+                                                       const std::vector<double>& rot_Q) {
+    double3 deme_pos, deme_vec;
+    double4 deme_Q;
+    deme_pos.x = pos[0];
+    deme_pos.y = pos[1];
+    deme_pos.z = pos[2];
+    deme_vec.x = vec[0];
+    deme_vec.y = vec[1];
+    deme_vec.z = vec[2];
+    deme_Q.x = rot_Q[0];
+    deme_Q.y = rot_Q[1];
+    deme_Q.z = rot_Q[2];
+    deme_Q.w = rot_Q[3];
+    applyFrameTransformLocalToGlobal<double3, double3, double4>(deme_pos, deme_vec, deme_Q);
+    return {deme_pos.x, deme_pos.y, deme_pos.z};
+}
 
 /// Host version of translating the inverse of the provided vec then applying a local inverse rotation of the provided
 /// rot_Q.
@@ -548,6 +567,26 @@ inline void applyFrameTransformGlobalToLocal(T1& pos, const T2& vec, const T3& r
     pos.y -= vec.y;
     pos.z -= vec.z;
     hostApplyOriQToVector3(pos.x, pos.y, pos.z, rot_Q.w, -rot_Q.x, -rot_Q.y, -rot_Q.z);
+}
+/// Translating the inverse of the provided vec then applying a local inverse rotation of the provided rot_Q, then
+/// return the result.
+inline std::vector<double> FrameTransformGlobalToLocal(const std::vector<double>& pos,
+                                                       const std::vector<double>& vec,
+                                                       const std::vector<double>& rot_Q) {
+    double3 deme_pos, deme_vec;
+    double4 deme_Q;
+    deme_pos.x = pos[0];
+    deme_pos.y = pos[1];
+    deme_pos.z = pos[2];
+    deme_vec.x = vec[0];
+    deme_vec.y = vec[1];
+    deme_vec.z = vec[2];
+    deme_Q.x = rot_Q[0];
+    deme_Q.y = rot_Q[1];
+    deme_Q.z = rot_Q[2];
+    deme_Q.w = rot_Q[3];
+    applyFrameTransformGlobalToLocal<double3, double3, double4>(deme_pos, deme_vec, deme_Q);
+    return {deme_pos.x, deme_pos.y, deme_pos.z};
 }
 
 // Default accuracy is 17. This accuracy is especially needed for MOIs and length-unit (l).
