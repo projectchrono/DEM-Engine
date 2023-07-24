@@ -51,7 +51,7 @@ class DEMSolver {
     DEMSolver(unsigned int nGPUs = 2);
     ~DEMSolver();
 
-    /// Set output detail level
+    /// Set output detail level.
     void SetVerbosity(VERBOSITY verbose) { verbosity = verbose; }
 
     /// Instruct the dimension of the `world'. On initialization, this info will be used to figure out how to assign the
@@ -945,7 +945,7 @@ class DEMSolver {
         return w_vals;
     }
 
-    /// Intialize the simulation system
+    /// Intialize the simulation system.
     void Initialize();
 
     /// Advance simulation by this amount of time, and at the end of this call, synchronize kT and dT. This is suitable
@@ -956,7 +956,7 @@ class DEMSolver {
     /// and short call durations and allows interplay with co-simulation APIs.
     void DoDynamics(double thisCallDuration);
 
-    /// Equivalent to calling DoDynamics with the time step size as the argument
+    /// Equivalent to calling DoDynamics with the time step size as the argument.
     void DoStepDynamics() { DoDynamics(m_ts_size); }
 
     /// @brief Transferthe cached sim params to the workers. Used for sim environment modification after system
@@ -974,7 +974,7 @@ class DEMSolver {
     /// dT should be allowed to be in advance of kT.
     void ShowThreadCollaborationStats();
 
-    /// Show the wall time and percentages of wall time spend on various solver tasks
+    /// Show the wall time and percentages of wall time spend on various solver tasks.
     void ShowTimingStats();
 
     /// Show potential anomalies that may have been there in the simulation, then clear the anomaly log.
@@ -985,14 +985,14 @@ class DEMSolver {
     /// and destroy DEMSolver.
     void ClearThreadCollaborationStats();
 
-    /// Reset the recordings of the wall time and percentages of wall time spend on various solver tasks
+    /// Reset the recordings of the wall time and percentages of wall time spend on various solver tasks.
     void ClearTimingStats();
 
-    /// Removes all entities associated with a family from the arrays (to save memory space)
+    /// Removes all entities associated with a family from the arrays (to save memory space).
     void PurgeFamily(unsigned int family_num);
 
     /// Release the memory for the flattened arrays (which are used for initialization pre-processing and transferring
-    /// info the worker threads)
+    /// info the worker threads).
     void ReleaseFlattenedArrays();
 
     /// @brief Return whether the solver is currently reducing force in the force calculation kernel.
@@ -1011,15 +1011,15 @@ class DEMSolver {
     // call.
     // void SetClumpOutputMode(OUTPUT_MODE mode) { m_clump_out_mode = mode; }
 
-    /// Choose output format
+    /// Choose output format.
     void SetOutputFormat(OUTPUT_FORMAT format) { m_out_format = format; }
-    /// Specify the information that needs to go into the clump or sphere output files
+    /// Specify the information that needs to go into the clump or sphere output files.
     void SetOutputContent(unsigned int content) { m_out_content = content; }
-    /// Specify the file format of contact pairs
+    /// Specify the file format of contact pairs.
     void SetContactOutputFormat(OUTPUT_FORMAT format) { m_cnt_out_format = format; }
-    /// Specify the information that needs to go into the contact pair output files
+    /// Specify the information that needs to go into the contact pair output files.
     void SetContactOutputContent(unsigned int content) { m_cnt_out_content = content; }
-    /// Specify the file format of meshes
+    /// Specify the file format of meshes.
     void SetMeshOutputFormat(MESH_FORMAT format) { m_mesh_out_format = format; }
     /// Enable/disable outputting owner wildcard values to file.
     void EnableOwnerWildcardOutput(bool enable = true) { m_is_out_owner_wildcards = enable; }
@@ -1028,7 +1028,32 @@ class DEMSolver {
     /// Enable/disable outputting geometry wildcard values to the contact file.
     void EnableGeometryWildcardOutput(bool enable = true) { m_is_out_geo_wildcards = enable; }
 
-    /// Let dT do this call and return the reduce value of the inspected quantity
+    /// @brief Set the verbosity level of the solver.
+    /// @param verbose "QUIET", "ERROR", "WARNING", "INFO", "STEP_ANOMALY", "STEP_METRIC", "DEBUG" or "STEP_DEBUG".
+    /// Recommend "INFO".
+    void SetVerbosity(const std::string& verbose);
+    /// @brief Choose sphere and clump output file format.
+    /// @param format Choice among "CSV", "BINARY" or "CHPF".
+    void SetOutputFormat(const std::string& format);
+    /// @brief Specify the information that needs to go into the clump or sphere output files.
+    /// @param content A list of "XYZ", "QUAT", "ABSV", "VEL", "ANG_VEL", "ABS_ACC", "ACC", "ANG_ACC", "FAMILY", "MAT",
+    /// "OWNER_WILDCARD" and/or "GEO_WILDCARD".
+    void SetOutputContent(const std::vector<std::string>& content);
+    /// @brief Specify the file format of contact pairs.
+    /// @param format Choice among "CSV", "BINARY" or "CHPF".
+    void SetContactOutputFormat(const std::string& format);
+    /// @brief Specify the information that needs to go into the contact pair output files.
+    /// @param content A list of "CNT_TYPE", "FORCE", "POINT", "COMPONENT", "NORMAL", "TORQUE", "CNT_WILDCARD", "OWNER",
+    /// "GEO_ID" and/or "NICKNAME".
+    void SetContactOutputContent(const std::vector<std::string>& content);
+    /// @brief Specify the output file format of meshes.
+    /// @param format A choice between "VTK", "OBJ".
+    void SetMeshOutputFormat(const std::string& format);
+
+    void SetOutputContent(const std::string& content) { SetOutputContent({content}); }
+    void SetContactOutputContent(const std::string& content) { SetContactOutputContent({content}); }
+
+    /// Let dT do this call and return the reduce value of the inspected quantity.
     float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
                           const std::string& kernel_name,
                           INSPECT_ENTITY_TYPE thing_to_insp,

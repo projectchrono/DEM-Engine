@@ -266,12 +266,24 @@ class DEMMeshConnected : public DEMInitializer {
     std::vector<int3> m_face_uv_indices;
     std::vector<int3> m_face_col_indices;
 
+    /// @brief Get the coordinates of the vertices of this mesh.
+    /// @return A reference to the vertices data vector (of float3) of the mesh.
     std::vector<float3>& GetCoordsVertices() { return m_vertices; }
+    /// @brief Get the coordinates of the vertices of this mesh.
+    /// @return N (number of vertices) by 3 matrix.
+    std::vector<std::vector<float>> GetCoordsVerticesAsVectorOfVectors();
+
     std::vector<float3>& GetCoordsNormals() { return m_normals; }
     std::vector<float3>& GetCoordsUV() { return m_UV; }
     std::vector<float3>& GetCoordsColors() { return m_colors; }
 
+    /// @brief Get the vertices number of all the triangles of this mesh.
+    /// @return A reference to the vertices number data vector (of int3) of the mesh.
     std::vector<int3>& GetIndicesVertexes() { return m_face_v_indices; }
+    /// @brief Get the vertices number of all the triangles of this mesh.
+    /// @return N (number of vertices) by 3 matrix.
+    std::vector<std::vector<int>> GetIndicesVertexesAsVectorOfVectors();
+
     std::vector<int3>& GetIndicesNormals() { return m_face_n_indices; }
     std::vector<int3>& GetIndicesUV() { return m_face_uv_indices; }
     std::vector<int3>& GetIndicesColors() { return m_face_col_indices; }
