@@ -129,6 +129,9 @@ void DEMSolver::SetOutputContent(const std::vector<std::string>& content) {
     m_out_content = OUTPUT_CONTENT::XYZ;
     for (unsigned int i = 0; i < content.size(); i++) {
         switch (hash_charr(u_content[i].c_str())) {
+            case ("XYZ"_):
+                m_out_content = m_out_content | OUTPUT_CONTENT::XYZ;
+                break;
             case ("QUAT"_):
                 m_out_content = m_out_content | OUTPUT_CONTENT::QUAT;
                 break;
@@ -175,6 +178,9 @@ void DEMSolver::SetContactOutputContent(const std::vector<std::string>& content)
     m_cnt_out_content = CNT_OUTPUT_CONTENT::CNT_TYPE;
     for (unsigned int i = 0; i < content.size(); i++) {
         switch (hash_charr(u_content[i].c_str())) {
+            case ("CNT_TYPE"_):
+                m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::CNT_TYPE;
+                break;
             case ("FORCE"_):
                 m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::FORCE;
                 break;
