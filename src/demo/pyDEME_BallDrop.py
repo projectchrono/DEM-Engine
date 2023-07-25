@@ -20,7 +20,7 @@ if __name__ == "__main__":
     DEMSim = DEME.DEMSolver(2)
     DEMSim.SetVerbosity("STEP_METRIC")
     DEMSim.SetOutputFormat("CSV")
-    DEMSim.SetOutputContent(["ABSV"])
+    DEMSim.SetOutputContent(["ABSV", "XYZ"])
     DEMSim.SetMeshOutputFormat("VTK")
     DEMSim.EnsureKernelErrMsgLineNum(True)
 

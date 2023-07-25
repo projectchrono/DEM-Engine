@@ -44,7 +44,7 @@ if __name__ == "__main__":
     DEMSim = DEME.DEMSolver(2)
     DEMSim.SetVerbosity("INFO")
     DEMSim.SetOutputFormat("CSV")
-    DEMSim.SetOutputContent(["ABSV"])
+    DEMSim.SetOutputContent(["ABSV", "XYZ"])
     DEMSim.SetMeshOutputFormat("VTK")
     DEMSim.SetContactOutputContent(["OWNER", "FORCE", "POINT", "TORQUE"])
 
