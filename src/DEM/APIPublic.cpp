@@ -1003,6 +1003,16 @@ void DEMSolver::SetFamilyContactWildcardValueAll(unsigned int N, const std::stri
     }
     dT->setFamilyContactWildcardValueAll(N, m_cnt_wc_num.at(name), val);
 }
+void DEMSolver::SetFamilyContactWildcardValue(unsigned int N1, unsigned int N2, const std::string& name, float val) {
+    assertSysInit("SetFamilyContactWildcardValue");
+    if (m_cnt_wc_num.find(name) == m_cnt_wc_num.end()) {
+        DEME_ERROR(
+            "No contact wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerContactWildcards in the force model first.",
+            name.c_str());
+    }
+    dT->setFamilyContactWildcardValue(N1, N2, m_cnt_wc_num.at(name), val);
+}
 void DEMSolver::SetContactWildcardValue(const std::string& name, float val) {
     assertSysInit("SetContactWildcardValue");
     if (m_cnt_wc_num.find(name) == m_cnt_wc_num.end()) {

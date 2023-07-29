@@ -641,6 +641,13 @@ class DEMSolver {
     /// @param name Name of the contact wildcard to modify.
     /// @param val The value to change to.
     void SetFamilyContactWildcardValueAll(unsigned int N, const std::string& name, float val);
+    /// @brief Change the value of contact wildcards to val if one of the contact geometry is in family N1, and the
+    /// other is in N2.
+    /// @param N1 First family number.
+    /// @param N2 Second family number.
+    /// @param name Name of the contact wildcard to modify.
+    /// @param val The value to change to.
+    void SetFamilyContactWildcardValue(unsigned int N1, unsigned int N2, const std::string& name, float val);
     /// @brief Change the value of contact wildcards to val. Apply to all simulation bodies that are present.
     /// @param name Name of the contact wildcard to modify.
     /// @param val The value to change to.
