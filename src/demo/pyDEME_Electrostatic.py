@@ -207,7 +207,6 @@ if __name__ == "__main__":
     DEMSim.SetOutputFormat("CSV")
     DEMSim.SetOutputContent(["ABSV", "XYZ"])
     DEMSim.SetMeshOutputFormat("VTK")
-    # TODO: Understand how to make bitwise operations work for enum type
     DEMSim.SetContactOutputContent(["OWNER", "FORCE", "POINT"])
 
     # E, nu, CoR, mu, Crr...

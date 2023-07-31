@@ -40,7 +40,6 @@ if __name__ == "__main__":
     out_dir = os.path.join(os.getcwd(), out_dir)
     os.makedirs(out_dir, exist_ok=True)
 
-    # Shlok: Don't worry about binary anymore: I added string-based solver flag setters. But you need to wrap them now...
     DEMSim = DEME.DEMSolver(2)
     DEMSim.SetVerbosity("INFO")
     DEMSim.SetOutputFormat("CSV")
