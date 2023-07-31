@@ -72,7 +72,7 @@ void DEMSolver::SetVerbosity(const std::string& verbose) {
             verbosity = VERBOSITY::STEP_DEBUG;
             break;
         default:
-            DEME_ERROR("Instruction %s is not unknown in SetVerbosity call.", verbose.c_str());
+            DEME_ERROR("Instruction %s is unknown in SetVerbosity call.", verbose.c_str());
     }
 }
 void DEMSolver::SetOutputFormat(const std::string& format) {
@@ -88,7 +88,7 @@ void DEMSolver::SetOutputFormat(const std::string& format) {
             m_out_format = OUTPUT_FORMAT::CHPF;
             break;
         default:
-            DEME_ERROR("Instruction %s is not unknown in SetOutputFormat call.", format.c_str());
+            DEME_ERROR("Instruction %s is unknown in SetOutputFormat call.", format.c_str());
     }
 }
 void DEMSolver::SetContactOutputFormat(const std::string& format) {
@@ -104,7 +104,7 @@ void DEMSolver::SetContactOutputFormat(const std::string& format) {
             m_cnt_out_format = OUTPUT_FORMAT::CHPF;
             break;
         default:
-            DEME_ERROR("Instruction %s is not unknown in SetContactOutputFormat call.", format.c_str());
+            DEME_ERROR("Instruction %s is unknown in SetContactOutputFormat call.", format.c_str());
     }
 }
 void DEMSolver::SetMeshOutputFormat(const std::string& format) {
@@ -117,7 +117,7 @@ void DEMSolver::SetMeshOutputFormat(const std::string& format) {
             m_mesh_out_format = MESH_FORMAT::OBJ;
             break;
         default:
-            DEME_ERROR("Instruction %s is not unknown in SetMeshOutputFormat call.", format.c_str());
+            DEME_ERROR("Instruction %s is unknown in SetMeshOutputFormat call.", format.c_str());
     }
 }
 
@@ -166,7 +166,7 @@ void DEMSolver::SetOutputContent(const std::vector<std::string>& content) {
                 m_out_content = m_out_content | OUTPUT_CONTENT::GEO_WILDCARD;
                 break;
             default:
-                DEME_ERROR("Instruction %s is not unknown in SetOutputContent call.", content[i].c_str());
+                DEME_ERROR("Instruction %s is unknown in SetOutputContent call.", content[i].c_str());
         }
     }
 }
@@ -209,7 +209,7 @@ void DEMSolver::SetContactOutputContent(const std::vector<std::string>& content)
                 m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::NICKNAME;
                 break;
             default:
-                DEME_ERROR("Instruction %s is not unknown in SetContactOutputContent call.", content[i].c_str());
+                DEME_ERROR("Instruction %s is unknown in SetContactOutputContent call.", content[i].c_str());
         }
     }
 }

@@ -1057,8 +1057,8 @@ class DEMSolver {
     /// @param format A choice between "VTK", "OBJ".
     void SetMeshOutputFormat(const std::string& format);
 
-    void SetOutputContent(const std::string& content) { SetOutputContent({content}); }
-    void SetContactOutputContent(const std::string& content) { SetContactOutputContent({content}); }
+    // void SetOutputContent(const std::string& content) { SetOutputContent({content}); }
+    // void SetContactOutputContent(const std::string& content) { SetContactOutputContent({content}); }
 
     /// Let dT do this call and return the reduce value of the inspected quantity.
     float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,

@@ -58,7 +58,9 @@ __global__ void computeMarginFromAbsv(deme::DEMSimParams* simParams, deme::DEMDa
         if (absv > simParams->approxMaxVel) {
             absv = simParams->approxMaxVel;
         }
-        // User-specified extra margin also needs to be added here.
+        // User-specified extra margin also needs to be added here. This marginSize is used for bin--sph or bin--tri
+        // contacts but not entirely the same as the one used for sph--sph or sph--tri contacts, since the latter is
+        // stricter.
         granData->marginSize[ownerID] = (absv * simParams->expSafetyMulti + simParams->expSafetyAdder) *
                                             (granData->ts_buffer * granData->maxDrift) +
                                         granData->familyExtraMarginSize[my_family];

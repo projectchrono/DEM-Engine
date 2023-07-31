@@ -224,13 +224,9 @@ inline __device__ void HamiltonProduct(T1& A,
     D = a1 * d2 + b1 * c2 - c1 * b2 + d1 * a2;
 }
 
-/**
- * Template arguments:
- *   - T1: the floating point accuracy level for contact point location/penetration depth
- *
- * Basic idea: determines whether 2 spheres intersect and the intersection point coordinates
- *
- */
+/*
+// This version of checkSpheresOverlap is not used anymore for code clarity, and the fact that every use case now
+// requires overlapDepth.
 template <typename T1>
 inline __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
                                                       const T1& YA,
@@ -262,14 +258,15 @@ inline __device__ deme::contact_t checkSpheresOverlap(const T1& XA,
     CPZ = ZB + (radB - halfOverlapDepth) * B2AVecZ;
     return contactType;
 }
+*/
 
 /**
  * Template arguments:
  *   - T1: the floating point accuracy level for contact point location/penetration depth
  *   - T2: the floating point accuracy level for the relative position of 2 bodies involved
  *
- * Basic idea: this is another version of checkSpheresOverlap which also gives the penetration length and bodyB's
- * outward contact normal
+ * Basic idea: determines whether 2 spheres intersect and the intersection point coordinates which also gives the
+ * penetration length and bodyB's outward contact normal.
  *
  */
 template <typename T1, typename T2>
@@ -354,16 +351,6 @@ inline __device__ bool cuda_binary_search(T1* A, const T1& val, T2 imin, T2 imax
 
     return false;
 }
-// inline __device__ bool cuda_binary_search(T1* A, const T1& val, T2 imin, T2 imax, T2& res) {
-//     for (T2 i=imin; i<=imax; i++) {
-//         if (val == A[i]) {
-//             res = i;
-//             return true;
-//         }
-//     }
-
-//     return false;
-// }
 
 /**
  * Template arguments:
@@ -421,6 +408,9 @@ inline void matProxy2ContactParam(T1& E_eff, const T1& Y1, const T1& nu1, const 
     E_eff = (T1)1 / invE;
 }
 
+/*
+// This version of checkSphereEntityOverlap is not used anymore for code clarity, and the fact that every use case now
+// requires overlapDepth.
 template <typename T1, typename T2>
 inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
                                                            const T2& radA,
@@ -468,8 +458,10 @@ inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
             return deme::NOT_A_CONTACT;
     }
 }
+*/
 
-// Another version of checkSphereEntityOverlap which gives contact point and contact normal
+// Check whether a sphere and an analytical boundary are in contact, and gives overlap depth, contact point and contact
+// normal.
 template <typename T1, typename T2, typename T3>
 inline __device__ deme::contact_t checkSphereEntityOverlap(const T1& A,
                                                            const T2& radA,
