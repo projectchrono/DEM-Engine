@@ -12,14 +12,40 @@ float E_cnt, G_cnt, CoR_cnt, mu_cnt, Crr_cnt, E_A, E_B;
     mu_cnt = mu[bodyAMatType][bodyBMatType];
     Crr_cnt = Crr[bodyAMatType][bodyBMatType];
 }
+float3 rotVelCPA, rotVelCPB;
+{
+    // We also need the relative velocity between A and B in global frame to use in the damping terms
+    // To get that, we need contact points' rotational velocity in GLOBAL frame
+    // This is local rotational velocity (the portion of linear vel contributed by rotation)
+    rotVelCPA = cross(ARotVel, locCPA);
+    rotVelCPB = cross(BRotVel, locCPB);
+    // This is mapping from local rotational velocity to global
+    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x, AOriQ.y, AOriQ.z);
+    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
+}
 float mass_eff, sqrt_Rd, beta;
 float3 vrel_tan;
 float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
+
+// The (total) relative linear velocity of A relative to B
+const float3 velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
+const float projection = dot(velB2A, B2A);
+vrel_tan = velB2A - projection * B2A;
+
+// Now we already have sufficient info to update contact history
+{
+    delta_tan += ts * vrel_tan;
+    const float disp_proj = dot(delta_tan, B2A);
+    delta_tan -= disp_proj * B2A;
+    delta_time += ts;
+}
+
 // If this contact is marked as not broken (unbroken is 1 means it stands for the bond between the components of a
 // unbroken particle in grain breakage simulation), then it takes this force model which is a strong cohesion.
 if (unbroken > DEME_TINY_FLOAT) {
     initialLength = (unbroken > 1.0) ? overlapDepth : initialLength;  // reusing a variable that survives the loop
     unbroken = (unbroken > 1.0) ? 1.0 : unbroken;
+    float coesion = 10e5;
 
     float kN = 2.0 * (ARadius * BRadius) * (E_A * E_B) /
                ((ARadius * E_A) + (BRadius + E_B));  // to be checked for formulation with 2
@@ -30,21 +56,35 @@ if (unbroken > DEME_TINY_FLOAT) {
 
     float deltaD = (overlapDepth - initialLength);  // initial relative displacement considered from the initial overlap
 
-    const float3 velB2A = ALinVel - BLinVel;
     mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
-    float c = 0.01*2.0*sqrt(mass_eff*kN);
-
+    float c = 0.01 * 2.0 * sqrt(mass_eff * kN);
 
     // To A, gravity pulls it towards B, so -B2A direction
     // float3 bond_force = B2A;  // vector direction
 
     float force_to_A_mag = 1 * kN * deltaD;
 
-    force += B2A * force_to_A_mag - c * velB2A;
+    // tangetial forces
 
+    force += B2A * force_to_A_mag - c * velB2A;
+    float Fsmax = length(force) * 1.2 * mu_cnt + coesion * intialArea;
+
+    float kt = 0.30 * kN;
+
+    const float loge = (CoR_cnt < DEME_TINY_FLOAT) ? log(DEME_TINY_FLOAT) : log(CoR_cnt);
+    beta = loge / sqrt(loge * loge + deme::PI_SQUARED);
+    float gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
+
+    auto tangent_force = -kt * delta_tan;
+    tangent_force = (length(tangent_force) < Fsmax) ? kt * delta_tan : tangent_force;
+    delta_tan = (tangent_force + gt * vrel_tan) / (-kt);
+    // float3 coesionForce= coesion * intialArea * (-B2A);
+
+    force += 1.0 * tangent_force;
     // If this condition is met, the bond breaks, meaning in the next time step, this bonding force model no longer
     // takes effect.
-    damage=(force_to_A_mag)/BreakingForce;
+
+    damage = (force_to_A_mag) / BreakingForce;
     unbroken = (force_to_A_mag < BreakingForce) ? 0.0 : unbroken;
 } else {  // If unbroken == 0, then the bond is broken, and the grain is broken, components are now separate particles,
           // so they just follow Hertzian contact law.
