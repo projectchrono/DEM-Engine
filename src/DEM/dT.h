@@ -425,6 +425,9 @@ class DEMDynamicThread {
     void setFamilyContactWildcardValueAny(unsigned int N, unsigned int wc_num, float val);
     /// @brief Change the value of contact wildcards no.wc_num to val if both of the contact geometries are in family N.
     void setFamilyContactWildcardValueAll(unsigned int N, unsigned int wc_num, float val);
+    /// @brief Change the value of contact wildcards no.wc_num to val if the contacts are in family N1 and N2
+    /// respectively.
+    void setFamilyContactWildcardValue(unsigned int N1, unsigned int N2, unsigned int wc_num, float val);
     /// @brief Change the value of contact wildcards no.wc_num to val.
     void setContactWildcardValue(unsigned int wc_num, float val);
 

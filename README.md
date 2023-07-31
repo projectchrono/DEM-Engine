@@ -13,7 +13,7 @@ __A Dual-GPU DEM solver with complex grain geometry support__
 
 ## Quick links
 
-<li><a href="#description">Overview and where to get help</a></li>
+<li><a href="#description">Overview, movies of demos, and where to get help</a></li>
 
 <li><a href="#installation">How to compile</a></li>
 
