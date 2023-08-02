@@ -19,9 +19,9 @@ __A Dual-GPU DEM solver with complex grain geometry support__
 
 <li><a href="#examples">Numerical examples and use cases</a></li>
 
-<li><a href="#using-DEME-in-Container">Container</a></li>
+<li><a href="#ccontainer">Container</a></li>
 
-<li><a href="#install-as-C-library">Install as C++ library</a></li>
+<li><a href="#library">Install as C++ library</a></li>
 
 <li><a href="#licensing">Licensing</a></li>
 
@@ -59,7 +59,7 @@ SPDX-License-Identifier: BSD-3-Clause
 
 New authors should add their name to the file `CONTRIBUTORS.md` rather than to individual copyright headers.
 
-<h2 id="using-DEME-in-Container">Using DEME in Container</h2>
+<h2 id="ccontainer">Using DEME in Container</h2>
 
 _DEME_ is now [hosted on DockerHub](https://hub.docker.com/r/uwsbel/dem-engine) for those who want to run it in a container. It can potentially save your time that would otherwise be spent on getting the dependencies right, and for you to test out if _DEME_ is what you needed.
 
@@ -172,7 +172,7 @@ _DEME_ is designed to simulate the interaction among clump-represented particles
 - It is able to handle mesh-represented bodies with relatively simple physics, for example a meshed plow moving through granular materials with a prescribed velocity, or several meshed projectiles flying and hitting the granular ground. 
 - However, if the bodies' physics are complex multibody problems, say it is a vehicle that has joint-connected parts and a motor with certain driving policies, or the meshed bodies have collisions among themselves that needs to be simulated, then _DEME_ alone does not have the infrastructure to handle them. But you can install _DEME_ as a library and do coupled simulations with other tools such as [Chrono](https://github.com/projectchrono/chrono), where _DEME_ is exclusively tasked with handling the granular materials and the influence they exert on the outside world (with high efficiency, of course). See the following section.
 
-<h2 id="install-as-C-library">Install as C++ library</h2>
+<h2 id="library">Install as C++ library</h2>
 
 Set the `CMAKE_INSTALL_PREFIX` flag in `cmake` GUI to your desired installation path and then 
 
