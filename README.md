@@ -21,7 +21,7 @@ __A Dual-GPU DEM solver with complex grain geometry support__
 
 <li><a href="#using-DEME-in-Container">Container</a></li>
 
-<li><a href="#install-as-C++-library">Install as C++ library</a></li>
+<li><a href="#install-as-C-library">Install as C++ library</a></li>
 
 <li><a href="#licensing">Licensing</a></li>
 
@@ -77,7 +77,7 @@ Starting from this point, you can start adding new scripts or modify existing on
 
 Note that the container imagine is not updated as often for bug-fixes and new features as the GitHub repo. 
 
-<h2 id="installation">Installation</h2>
+<h2 id="installation">Compilation</h2>
 
 You can also build _DEME_ locally.
 
@@ -144,7 +144,7 @@ Some additional troubleshooting tips for building the project:
 
 After the build process is done, you can start trying out the demos.
 
-- `./src/demo/DEMdemo_SingleSphereCollide` can be used to test a correct installation. If it runs outputting a lot of texts and stops without an error in the end, the installation is probably good.
+- `./src/demo/DEMdemo_SingleSphereCollide` can be used to test a correct installation. If it runs outputting a lot of texts (those are debug messages; the user do not have to worry about the content) and stops without an error in the end, the installation is probably good.
 - An all-rounder beginner example featuring a bladed mixer interacting with complex shaped particles: `./src/demo/DEMdemo_Mixer`.
 - A place to learn how prescribed motions work in this package, using either analytical boundaries or particle-represented boundaries: `./src/demo/DEMdemo_Centrifuge` and `./src/demo/DEMdemo_Sieve`.
 - A few representative engineering experiments reproduced in DEM simulations, which potentially serve as starting points for your own DEM scripts: `/src/demo/DEMdemo_BallDrop`, `./src/demo/DEMdemo_ConePenetration`, `/src/demo/DEMdemo_RotatingDrum`, `./src/demo/DEMdemo_Repose`.
@@ -172,7 +172,7 @@ _DEME_ is designed to simulate the interaction among clump-represented particles
 - It is able to handle mesh-represented bodies with relatively simple physics, for example a meshed plow moving through granular materials with a prescribed velocity, or several meshed projectiles flying and hitting the granular ground. 
 - However, if the bodies' physics are complex multibody problems, say it is a vehicle that has joint-connected parts and a motor with certain driving policies, or the meshed bodies have collisions among themselves that needs to be simulated, then _DEME_ alone does not have the infrastructure to handle them. But you can install _DEME_ as a library and do coupled simulations with other tools such as [Chrono](https://github.com/projectchrono/chrono), where _DEME_ is exclusively tasked with handling the granular materials and the influence they exert on the outside world (with high efficiency, of course). See the following section.
 
-<h2 id="install-as-C++-library">Install as C++ library</h2>
+<h2 id="install-as-C-library">Install as C++ library</h2>
 
 Set the `CMAKE_INSTALL_PREFIX` flag in `cmake` GUI to your desired installation path and then 
 
@@ -180,13 +180,15 @@ Set the `CMAKE_INSTALL_PREFIX` flag in `cmake` GUI to your desired installation 
 ninja install
 ```
 
-We provide examples of linking against both [Chrono](https://github.com/projectchrono/chrono) and _DEME_ for co-simulations in [chrono-projects](https://github.com/projectchrono/chrono-projects/tree/feature/DEME).
+We provide examples of linking against both [Chrono](https://github.com/projectchrono/chrono) and _DEME_ for co-simulations in [chrono-projects](https://github.com/projectchrono/chrono-projects/tree/feature/DEME). You need to checkout the `feature/DEME` branch after cloning the code.
 
-Assuming you know how to build `chrono-projects` linking against a Chrono installation, then the extra things that you should do to link against _DEME_ are
+You need to build `chrono-projects` linking against a Chrono installation (Chrono installation guide is [here](https://api.projectchrono.org/tutorial_install_chrono_linux.html); note you have to `make install` to install Chrono, not just build it), then link against _DEME_. The steps for building `chrono-projects`:
 
-- Set `ENABLE_DEME_TESTS` to `ON`;
-- Set `ChPF_DIR` when prompted. It should be in `<your_install_dir>/lib64/cmake/ChPF`;
-- Set `DEME_DIR` when prompted. It should be in `<your_install_dir>/lib64/cmake/DEME`.
+- Start by linking against Chrono. Set `Chrono_DIR`. It should be in `<your_Chrono_install_dir>/lib/cmake`. Then configure the project;
+- Make sure `ENABLE_PROJECTS` to `ON` and configure the project;
+- Linkage against Chrono is done, now move on to link against _DEME_. Set `ENABLE_DEME_TESTS` to `ON`. Then configure the project;
+- Set `ChPF_DIR` when prompted. It should be in `<your_DEME_install_dir>/lib64/cmake/ChPF`. Then configure the project;
+- Set `DEME_DIR` when prompted. It should be in `<your_DEME_install_dir>/lib64/cmake/DEME`. Then configure the project.
 
 Then build the project and you should be able to run the demo scripts that demonstrate the co-simulation between _DEME_ and Chrono.
 
