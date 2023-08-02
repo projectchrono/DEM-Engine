@@ -139,6 +139,7 @@ target_include_directories(simulator_multi_gpu
 target_link_libraries(simulator_multi_gpu
 	PUBLIC CUDA::cudart
 	PUBLIC CUDA::nvrtc
+	PUBLIC CUDA::cuda_driver
 	PUBLIC ${ChPF_IMPORTED_NAME}
 	PUBLIC DEMERuntimeDataHelper
 )
