@@ -1,0 +1,41 @@
+package:
+  name: pydeme
+  version: 1.0.0
+
+source:
+  path: ..
+
+build:
+  number: 0
+  script: {{ PYTHON }} -m pip install . -vvv
+
+requirements:
+  build:
+    - {{ compiler('cxx') }}
+    - python
+    - make
+    - cmake
+    - ninja
+    - pip
+    - pybind11
+    - cuda ==12.0.0
+    - numpy >=1.17
+
+  host:
+    - python
+    - pip 
+    - cmake
+    - make
+    - ninja
+    - pybind11
+    - cuda ==12.0.0
+    - numpy >=1.17
+
+  run:
+    - python
+    - cuda ==12.0.0
+
+about:
+  summary: PyDEME is a Python-wrapped library that provides easy accessibility to DEM Engine (A novel physics solver).
+  home: https://github.com/projectchrono/DEM-Engine
+  license: BSD 3-Clause

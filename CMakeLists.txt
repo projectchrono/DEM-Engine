@@ -20,7 +20,14 @@ project(
 	LANGUAGES CXX CUDA
 )
 
-set (CMAKE_CXX_STANDARD 14)
+add_compile_options(-fno-lto)
+
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_THREAD_LIBS_INIT "-lpthread")
+set(CMAKE_HAVE_THREADS_LIBRARY 1)
+set(CMAKE_USE_WIN32_THREADS_INIT 0)
+set(CMAKE_USE_PTHREADS_INIT 1)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 # ---------------------------------------------------------------------------- #
 # Additional Packages
@@ -30,13 +37,10 @@ include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 include(FetchContent)
 
-include(cmake/FixNinjaColors.cmake)
-fix_ninja_colors()
-
 
 find_package(CUDAToolkit REQUIRED)
-find_package(PythonLibs 3.11 REQUIRED)
-find_package(pybind11 CONFIG)
+find_package(PythonLibs REQUIRED)
+add_subdirectory(thirdparty/pybind11)
 
 # Find CUB library (this might need to be done in source-level config)
 find_package(
@@ -51,6 +55,8 @@ find_path(
 	PATHS "${CMAKE_CURRENT_LIST_DIR}/thirdparty/jitify"
 )
 
+#set(NVIDIAJitifyPath "${CMAKE_CURRENT_LIST_DIR}/thirdparty/jitify")
+
 # Include pyBind11 library
 include_directories(${PYTHON_INCLUDE_DIRS})
 
@@ -60,6 +66,7 @@ set(NVIDIAMathDir ${CMAKE_CURRENT_LIST_DIR}/thirdparty/nvidia_helper_math)
 # Find ChPF, else fetch it 
 find_package(ChPF 3.0 QUIET)
 
+message(${ChPF_FOUND})
 if (NOT ChPF_FOUND) 		
 	FetchContent_Declare(
 		ChPF
@@ -146,9 +153,9 @@ target_include_directories(simulator_multi_gpu
 target_link_libraries(simulator_multi_gpu
 	PUBLIC CUDA::cudart
 	PUBLIC CUDA::nvrtc
+	PUBLIC CUDA::cuda_driver
 	PUBLIC ${ChPF_IMPORTED_NAME}
 	PUBLIC DEMERuntimeDataHelper
-	PUBLIC pybind11::headers
 	PUBLIC ${PYTHON_LIBRARIES}	
 )
 

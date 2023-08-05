@@ -130,13 +130,14 @@ target_include_directories(
 target_link_libraries(
 	DEME
 	PUBLIC CUDA::cudart
-    PUBLIC CUDA::nvrtc
+        PUBLIC CUDA::nvrtc
+	PUBLIC CUDA::cuda_driver	
 	PUBLIC ${ChPF_IMPORTED_NAME}
 	PUBLIC ${PYTHON_LIBRARIES}
-	PUBLIC pybind11::headers
-	PUBLIC DEMERuntimeDataHelper
 	PUBLIC core
-	PUBLIC algorithms
+        PUBLIC algorithms
+	PUBLIC DEMERuntimeDataHelper
+	PUBLIC pybind11::headers
 	-static-libgcc -static-libstdc++
 )
 
@@ -147,5 +148,6 @@ set_target_properties(
 	PUBLIC_HEADER "${DEM_headers}"
 )
 
-target_compile_options(DEME PUBLIC -flto=auto -fno-lto)
+add_compile_options(-fno-lto)
+
 message(STATUS "==== Completed Building PyDEME Components ====")

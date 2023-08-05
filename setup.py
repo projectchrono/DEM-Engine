@@ -15,7 +15,6 @@ PLAT_TO_CMAKE = {
     "win-arm64": "ARM64",
 }
 
-
 # A CMakeExtension needs a sourcedir instead of a file list.
 # The name must be the _single_ output extension from the CMake build.
 # If you need multiple extensions, see scikit-build.
@@ -47,7 +46,8 @@ class CMakeBuild(build_ext):
         cmake_args = [
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}{os.sep}",
             f"-DPYTHON_EXECUTABLE={sys.executable}",
-            f"-DCMAKE_BUILD_TYPE={cfg}",  # not used on MSVC, but no harm
+            f"-DCUB_DIR=/usr/local/cuda/lib64/cmake/cub",
+            f"-DCMAKE_BUILD_TYPE={cfg}",
         ]
         build_args = []
         # Adding CMake arguments set as environment variable
@@ -70,7 +70,7 @@ class CMakeBuild(build_ext):
 
                     ninja_executable_path = Path(ninja.BIN_DIR) / "ninja"
                     cmake_args += [
-                        "-GNinja",
+                        "-G Ninja",
                         f"-DCMAKE_MAKE_PROGRAM:FILEPATH={ninja_executable_path}",
                     ]
                 except ImportError:
@@ -119,22 +119,24 @@ class CMakeBuild(build_ext):
             ["cmake", ext.sourcedir, *cmake_args], cwd=build_temp, check=True
         )
         subprocess.run(
-            ["cmake", "--build", ".", *build_args], cwd=build_temp, check=True
+            ["cmake", "--build", ".", "-j 8", *build_args], cwd=build_temp, check=True
         )
 
 
 # The information here can also be placed in setup.cfg - better separation of
 # logic and declaration, and simpler if you include description/version in a file.
 setup(
-    name="PyDEME",
+    name="DEME",
     version="0.0.0",
     author="Rouchun Zhang",
     author_email="N.A.",
     description="PyBind Wrapper Library for DEM-Engine",
     long_description="",
-    ext_modules=[CMakeExtension("cmake_example")],
+    ext_modules=[CMakeExtension("DEME")],
     cmdclass={"build_ext": CMakeBuild},
     zip_safe=False,
+    parallel=8,
+    install_requires=['numpy'],
     extras_require={"test": ["pytest>=6.0"]},
-    python_requires=">=3.11",
+    python_requires=">=3.8",
 )
