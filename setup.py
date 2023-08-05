@@ -20,7 +20,7 @@ PLAT_TO_CMAKE = {
 # If you need multiple extensions, see scikit-build.
 class CMakeExtension(Extension):
     def __init__(self, name: str, sourcedir: str = "") -> None:
-        super().__init__(name, sources=[])
+        super().__init__(name, sources=[], include_dirs=["./src/DEM/", "./src/DEM/VariableTypes"], extra_objects=["./build"])
         self.sourcedir = os.fspath(Path(sourcedir).resolve())
 
 
