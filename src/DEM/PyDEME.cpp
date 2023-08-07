@@ -36,24 +36,6 @@ PYBIND11_MODULE(DEME, obj) {
             &deme::DEMBoxHCPSampler));
     obj.attr("PI") = py::float_(3.14);
 
-    /*
-    py::class_<deme::Sampler>(obj, "Sampler")
-        .def(py::init<float>())
-        .def("SampleBox", static_cast<std::vector<std::vector<float>> (deme::Sampler::*)(
-                              const std::vector<float>&, const std::vector<float>&)>(&deme::Sampler::SampleBox))
-        .def("SampleSphere",
-             static_cast<std::vector<std::vector<float>> (deme::Sampler::*)(const std::vector<float>&, float)>(
-                 &deme::Sampler::SampleSphere))
-        .def("SampleCylinderX",
-             static_cast<std::vector<std::vector<float>> (deme::Sampler::*)(const std::vector<float>&, float,
-    float)>( &deme::Sampler::SampleCylinderX)) .def("SampleCylinderY", static_cast<std::vector<std::vector<float>>
-    (deme::Sampler::*)(const std::vector<float>&, float, float)>( &deme::Sampler::SampleCylinderY))
-        .def("SampleCylinderZ",
-             static_cast<std::vector<std::vector<float>> (deme::Sampler::*)(const std::vector<float>&, float,
-    float)>( &deme::Sampler::SampleCylinderZ)) .def("GetSeparation", &deme::Sampler::GetSeparation)
-        .def("SetSeparation", &deme::Sampler::SetSeparation);
-     */
-
     py::class_<deme::GridSampler>(obj, "GridSampler")
         .def(py::init<float>())
         .def("SetSeparation", &deme::GridSampler::SetSeparation)
@@ -108,7 +90,8 @@ PYBIND11_MODULE(DEME, obj) {
     py::class_<deme::DEMTracker, std::shared_ptr<deme::DEMTracker>>(obj, "Tracker")
         .def(py::init<deme::DEMSolver*>())
         .def("SetPos",
-             static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::SetPos))
+             static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::SetPos),
+             "Set the position of this tracked object.", py::arg("pos"), py::arg("offset") = 0)
         .def("GetContactAcc",
              static_cast<std::vector<float> (deme::DEMTracker::*)(size_t)>(&deme::DEMTracker::GetContactAcc))
         .def("GetMOI", &deme::DEMTracker::GetMOI)
@@ -118,19 +101,37 @@ PYBIND11_MODULE(DEME, obj) {
 
     py::class_<deme::DEMForceModel>(obj, "DEMForceModel")
         .def(py::init<deme::FORCE_MODEL>())
-        .def("SetForceModelType", &deme::DEMForceModel::SetForceModelType)
-        .def("DefineCustomModel", &deme::DEMForceModel::DefineCustomModel)
-        .def("ReadCustomModelFile", &deme::DEMForceModel::ReadCustomModelFile)
-        .def("SetMustHaveMatProp", &deme::DEMForceModel::SetMustHaveMatProp)
-        .def("SetMustPairwiseMatProp", &deme::DEMForceModel::SetMustPairwiseMatProp)
-        .def("SetPerContactWildcards", &deme::DEMForceModel::SetPerContactWildcards)
-        .def("SetPerOwnerWildcards", &deme::DEMForceModel::SetPerOwnerWildcards)
-        .def("SetPerGeometryWildcards", &deme::DEMForceModel::SetPerGeometryWildcards);
+        .def("SetForceModelType", &deme::DEMForceModel::SetForceModelType, "Set the contact force model type")
+        .def("DefineCustomModel", &deme::DEMForceModel::DefineCustomModel,
+             "Define user-custom force model with a string which is your force calculation code")
+        .def("ReadCustomModelFile", &deme::DEMForceModel::ReadCustomModelFile,
+             "Read user-custom force model from a file (which by default should reside in kernel/DEMUserScripts), "
+             "which contains your force calculation code. Returns 0 if read successfully, otherwise 1.")
+        .def("SetMustHaveMatProp", &deme::DEMForceModel::SetMustHaveMatProp,
+             "Specifiy the material properties that this force model will use")
+        .def("SetMustPairwiseMatProp", &deme::DEMForceModel::SetMustPairwiseMatProp,
+             "Specifiy the material properties that are pair-wise (instead of being associated with each individual "
+             "material).")
+        .def("SetPerContactWildcards", &deme::DEMForceModel::SetPerContactWildcards,
+             "Set the names for the extra quantities that will be associated with each contact pair. For example, "
+             "history-based models should have 3 float arrays to store contact history. Only float is supported. Note "
+             "the initial value of all contact wildcard arrays is automatically 0")
+        .def("SetPerOwnerWildcards", &deme::DEMForceModel::SetPerOwnerWildcards,
+             " Set the names for the extra quantities that will be associated with each owner. For example, you can "
+             "use this to associate a cohesion parameter to each particle. Only float is supported.")
+        .def("SetPerGeometryWildcards", &deme::DEMForceModel::SetPerGeometryWildcards,
+             "Set the names for the extra quantities that will be associated with each geometry. For example, you can "
+             "use this to associate certain electric charges to each particle's each component which represents a "
+             "distribution of the charges. Only float is supported.");
 
     py::class_<deme::DEMSolver>(obj, "DEMSolver")
-        .def(py::init<unsigned int>())
+        .def(py::init<unsigned int>(), py::arg("nGPUs") = 2)
         .def("LoadSphereType", &deme::DEMSolver::LoadSphereType)
-        .def("EnsureKernelErrMsgLineNum", &deme::DEMSolver::EnsureKernelErrMsgLineNum)
+        .def("EnsureKernelErrMsgLineNum", &deme::DEMSolver::EnsureKernelErrMsgLineNum,
+             "If true, each jitification string substitution will do a one-liner to one-liner replacement, so that if "
+             "the kernel compilation fails, the error meessage line number will reflex the actual spot where that "
+             "happens (instead of some random number)",
+             py::arg("flag") = true)
         .def("SetFamilyFixed", &deme::DEMSolver::SetFamilyFixed, "Mark all entities in this family to be fixed")
         .def("SetInitBinSize", &deme::DEMSolver::SetInitBinSize,
              " Explicitly instruct the bin size (for contact detection) that the solver should use")
@@ -182,16 +183,19 @@ PYBIND11_MODULE(DEME, obj) {
             "SetJitifyClumpTemplates", &deme::DEMSolver::SetJitifyClumpTemplates,
             "Instruct the solver to rearrange and consolidate clump templates information, then jitify it into GPU "
             "kernels (if set to true), rather than using flattened sphere component configuration arrays whose entries "
-            "are associated with individual spheres. Note: setting it to true gives no performance benefit known to me")
+            "are associated with individual spheres. Note: setting it to true gives no performance benefit known to me",
+            py::arg("use") = true)
         .def("SetJitifyMassProperties", &deme::DEMSolver::SetJitifyMassProperties,
              "Instruct the solver to rearrange and consolidate mass property information (for all owner types), then "
              "jitify it into GPU kernels (if set to true), rather than using flattened mass property arrays whose "
              "entries are associated with individual owners. Note: setting it to true gives no performance benefit "
-             "known to me")
+             "known to me",
+             py::arg("use") = true)
         .def("SetExpandFactor", &deme::DEMSolver::SetExpandFactor,
              "(Explicitly) set the amount by which the radii of the spheres (and the thickness of the boundaries) are "
              "expanded for the purpose of contact detection (safe, and creates false positives). If fix is set to "
-             "true, then this expand factor does not change even if the user uses variable time step size")
+             "true, then this expand factor does not change even if the user uses variable time step size",
+             py::arg("beta"), py::arg("fix") = true)
         .def("SetMaxVelocity", &deme::DEMSolver::SetMaxVelocity,
              "Set the maximum expected particle velocity. The solver will not use a velocity larger than this for "
              "determining the margin thickness, and velocity larger than this will be considered a system anomaly")
@@ -218,11 +222,11 @@ PYBIND11_MODULE(DEME, obj) {
         .def("GetAvgSphContacts", &deme::DEMSolver::GetAvgSphContacts,
              "Get the current number of contacts each sphere has")
         .def("UseAdaptiveBinSize", &deme::DEMSolver::UseAdaptiveBinSize,
-             "Enable or disable the use of adaptive bin size (by default it is on)")
+             "Enable or disable the use of adaptive bin size (by default it is on)", py::arg("use") = true)
         .def("DisableAdaptiveBinSize", &deme::DEMSolver::DisableAdaptiveBinSize,
              "Disable the use of adaptive bin size (always use initial size)")
         .def("UseAdaptiveUpdateFreq", &deme::DEMSolver::UseAdaptiveUpdateFreq,
-             "Enable or disable the use of adaptive max update step count (by default it is on)")
+             "Enable or disable the use of adaptive max update step count (by default it is on)", py::arg("use") = true)
         .def("DisableAdaptiveUpdateFreq", &deme::DEMSolver::DisableAdaptiveUpdateFreq,
              "Disable the use of adaptive max update step count (always use initial update frequency)")
         .def("SetAdaptiveBinSizeDelaySteps", &deme::DEMSolver::SetAdaptiveBinSizeDelaySteps,
@@ -302,7 +306,8 @@ PYBIND11_MODULE(DEME, obj) {
              static_cast<std::shared_ptr<deme::DEMMeshConnected> (deme::DEMSolver::*)(
                  const std::string&, const std::shared_ptr<deme::DEMMaterial>&, bool, bool)>(
                  &deme::DEMSolver::AddWavefrontMeshObject),
-             "Load a mesh-represented object")
+             "Load a mesh-represented object", py::arg("filename"), py::arg("mat"), py::arg("load_normals") = true,
+             py::arg("load_uv") = false)
         .def("AddWavefrontMeshObject",
              static_cast<std::shared_ptr<deme::DEMMeshConnected> (deme::DEMSolver::*)(deme::DEMMeshConnected&)>(
                  &deme::DEMSolver::AddWavefrontMeshObject),
@@ -310,7 +315,8 @@ PYBIND11_MODULE(DEME, obj) {
         .def("AddWavefrontMeshObject",
              static_cast<std::shared_ptr<deme::DEMMeshConnected> (deme::DEMSolver::*)(
                  const std::string& filename, bool, bool)>(&deme::DEMSolver::AddWavefrontMeshObject),
-             "Load a mesh-represented object")
+             "Load a mesh-represented object", py::arg("filename"), py::arg("load_normals") = true,
+             py::arg("load_uv") = false)
         .def("LoadClumpType",
              static_cast<std::shared_ptr<deme::DEMClumpTemplate> (deme::DEMSolver::*)(
                  float, const std::vector<float>&, const std::string, const std::shared_ptr<deme::DEMMaterial>&)>(
@@ -393,7 +399,8 @@ PYBIND11_MODULE(DEME, obj) {
         .def("CreateInspector",
              static_cast<std::shared_ptr<deme::DEMInspector> (deme::DEMSolver::*)(const std::string&)>(
                  &deme::DEMSolver::CreateInspector),
-             "Create a inspector object that can help query some statistical info of the clumps in the simulation")
+             "Create a inspector object that can help query some statistical info of the clumps in the simulation",
+             py::arg("quantity") = "clump_max_z")
         .def("GetNumClumps", &deme::DEMSolver::GetNumClumps)
         .def("CreateInspector",
              static_cast<std::shared_ptr<deme::DEMInspector> (deme::DEMSolver::*)(
@@ -459,7 +466,8 @@ PYBIND11_MODULE(DEME, obj) {
                  &deme::DEMSolver::SetFamilyPrescribedLinVel),
              "Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this "
              "family will not be influenced by the force exerted from other simulation entites (both linear and "
-             "rotational motions).")
+             "rotational motions).",
+             py::arg("ID"), py::arg("velX"), py::arg("velY"), py::arg("velZ"), py::arg("dictate") = true)
         .def("SetFamilyPrescribedLinVel",
              static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedLinVel),
              "Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this "
@@ -470,7 +478,8 @@ PYBIND11_MODULE(DEME, obj) {
                                                    const std::string&, bool)>(
                  &deme::DEMSolver::SetFamilyPrescribedAngVel),
              "Let the linear velocities of all entites in this family always keep `as is', and not influenced by the "
-             "force exerted from other simulation entites.")
+             "force exerted from other simulation entites.",
+             py::arg("ID"), py::arg("velX"), py::arg("velY"), py::arg("velZ"), py::arg("dictate") = true)
         .def("SetFamilyPrescribedAngVel",
              static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedAngVel),
              "Let the linear velocities of all entites in this family always keep `as is', and not influenced by the "
@@ -479,7 +488,8 @@ PYBIND11_MODULE(DEME, obj) {
              static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, const std::string&,
                                                    const std::string&, bool)>(
                  &deme::DEMSolver::SetFamilyPrescribedPosition),
-             "Keep the positions of all entites in this family to remain exactly the user-specified values")
+             "Keep the positions of all entites in this family to remain exactly the user-specified values",
+             py::arg("ID"), py::arg("velX"), py::arg("velY"), py::arg("velZ"), py::arg("dictate") = true)
         .def("SetFamilyPrescribedPosition",
              static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedPosition),
              "Keep the positions of all entites in this family to remain as is")
@@ -487,11 +497,13 @@ PYBIND11_MODULE(DEME, obj) {
              static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, bool)>(
                  &deme::DEMSolver::SetFamilyPrescribedQuaternion),
              "Keep the orientation quaternions of all entites in this family to remain exactly the user-specified "
-             "values")
+             "values",
+             py::arg("ID"), py::arg("q_formula"), py::arg("dictate") = true)
         .def("SetFamilyPrescribedQuaternion",
              static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedQuaternion),
              "Keep the orientation quaternions of all entites in this family to remain exactly the user-specified "
              "values");
+
     py::class_<deme::DEMMaterial, std::shared_ptr<deme::DEMMaterial>>(obj, "DEMMaterial")
         .def(py::init<const std::unordered_map<std::string, float>&>())
         .def_readwrite("mat_prop", &deme::DEMMaterial::mat_prop)
@@ -509,7 +521,9 @@ PYBIND11_MODULE(DEME, obj) {
              static_cast<void (deme::DEMClumpTemplate::*)(const std::shared_ptr<deme::DEMMaterial>& input)>(
                  &deme::DEMClumpTemplate::SetMaterial))
         .def("SetVolume", &deme::DEMClumpTemplate::SetVolume)
-        .def("ReadComponentFromFile", &deme::DEMClumpTemplate::ReadComponentFromFile)
+        .def("ReadComponentFromFile", &deme::DEMClumpTemplate::ReadComponentFromFile,
+             "Retrieve clump's sphere component information from a file", py::arg("filename"), py::arg("x_id") = "x",
+             py::arg("y_id") = "y", py::arg("z_id") = "z")
         .def("InformCentroidPrincipal",
              static_cast<void (deme::DEMClumpTemplate::*)(const std::vector<float>&, const std::vector<float>&)>(
                  &deme::DEMClumpTemplate::InformCentroidPrincipal))
@@ -580,12 +594,14 @@ PYBIND11_MODULE(DEME, obj) {
              static_cast<void (deme::DEMExternObj::*)(const std::vector<float>&, const float,
                                                       const std::shared_ptr<deme::DEMMaterial>&,
                                                       const deme::objNormal_t)>(&deme::DEMExternObj::AddZCylinder),
-             "Add a z-axis-aligned cylinder of infinite length")
+             "Add a z-axis-aligned cylinder of infinite length", py::arg("pos"), py::arg("rad"), py::arg("material"),
+             py::arg("normal") = deme::objNormal_t::ENTITY_NORMAL_INWARD)
         .def("AddCylinder",
              static_cast<void (deme::DEMExternObj::*)(const std::vector<float>&, const std::vector<float>&, const float,
                                                       const std::shared_ptr<deme::DEMMaterial>&,
                                                       const deme::objNormal_t)>(&deme::DEMExternObj::AddCylinder),
-             "Add a cylinder of infinite length, which is along a user-specific axis")
+             "Add a cylinder of infinite length, which is along a user-specific axis", py::arg("pos"), py::arg("axis"),
+             py::arg("rad"), py::arg("material"), py::arg("normal") = deme::objNormal_t::ENTITY_NORMAL_INWARD)
         .def_readwrite("types", &deme::DEMExternObj::types)
         .def_readwrite("materials", &deme::DEMExternObj::materials)
         .def_readwrite("family_code", &deme::DEMExternObj::family_code)
@@ -603,7 +619,8 @@ PYBIND11_MODULE(DEME, obj) {
         .def(py::init<std::string, const std::shared_ptr<deme::DEMMaterial>&>())
         .def("Clear", &deme::DEMMeshConnected::Clear, "Clears everything from memory")
         .def("LoadWavefrontMesh", &deme::DEMMeshConnected::LoadWavefrontMesh,
-             "Load a triangle mesh saved as a Wavefront .obj file")
+             "Load a triangle mesh saved as a Wavefront .obj file", py::arg("input_file"),
+             py::arg("load_normals") = true, py::arg("load_uv") = false)
         .def("WriteWavefront", &deme::DEMMeshConnected::WriteWavefront,
              "Write the specified meshes in a Wavefront .obj file")
         .def("GetNumTriangles", &deme::DEMMeshConnected::GetNumTriangles,
@@ -611,7 +628,8 @@ PYBIND11_MODULE(DEME, obj) {
         .def("GetNumNodes", &deme::DEMMeshConnected::GetNumNodes, "Get the number of nodes in the mesh")
         .def("UseNormals", &deme::DEMMeshConnected::UseNormals,
              "Instruct that when the mesh is initialized into the system, it will re-order the nodes of each triangle "
-             "so that the normals derived from right-hand-rule are the same as the normals in the mesh file")
+             "so that the normals derived from right-hand-rule are the same as the normals in the mesh file",
+             py::arg("use") = true)
         .def("GetTriangle", &deme::DEMMeshConnected::GetTriangle, "Access the n-th triangle in mesh")
         .def("SetMass", &deme::DEMMeshConnected::SetMass)
         .def("SetMOI",
