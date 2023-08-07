@@ -32,7 +32,7 @@ if __name__ == "__main__":
     n_init = 10000
 
     # Material is formaility... you can opt not to set it at all, it works the same
-    mat_type_1 = DEMSim.LoadMaterial({{"junk", 1.0}})
+    mat_type_1 = DEMSim.LoadMaterial({"junk": 1.0})
 
     template_sphere = DEMSim.LoadSphereType(1.0, r, mat_type_1)
 

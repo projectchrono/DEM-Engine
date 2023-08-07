@@ -29,7 +29,9 @@ PYBIND11_MODULE(DEME, obj) {
     obj.def("GetDEMEDataFile", &deme::GetDEMEDataFile);
     obj.def("DEMBoxGridSampler",
             static_cast<std::vector<std::vector<float>> (*)(const std::vector<float>&, const std::vector<float>&, float,
-                                                            float, float)>(&deme::DEMBoxGridSampler));
+                                                            float, float)>(&deme::DEMBoxGridSampler),
+            py::arg("BoxCenter"), py::arg("HalfDims"), py::arg("GridSizeX"), py::arg("GridSizeY") = -1.0,
+            py::arg("GridSizeZ") = -1.0);
     obj.def(
         "DEMBoxHCPSampler",
         static_cast<std::vector<std::vector<float>> (*)(const std::vector<float>&, const std::vector<float>&, float)>(
@@ -523,7 +525,7 @@ PYBIND11_MODULE(DEME, obj) {
         .def("SetVolume", &deme::DEMClumpTemplate::SetVolume)
         .def("ReadComponentFromFile", &deme::DEMClumpTemplate::ReadComponentFromFile,
              "Retrieve clump's sphere component information from a file", py::arg("filename"), py::arg("x_id") = "x",
-             py::arg("y_id") = "y", py::arg("z_id") = "z")
+             py::arg("y_id") = "y", py::arg("z_id") = "z", py::arg("r_id") = "r")
         .def("InformCentroidPrincipal",
              static_cast<void (deme::DEMClumpTemplate::*)(const std::vector<float>&, const std::vector<float>&)>(
                  &deme::DEMClumpTemplate::InformCentroidPrincipal))
@@ -595,13 +597,13 @@ PYBIND11_MODULE(DEME, obj) {
                                                       const std::shared_ptr<deme::DEMMaterial>&,
                                                       const deme::objNormal_t)>(&deme::DEMExternObj::AddZCylinder),
              "Add a z-axis-aligned cylinder of infinite length", py::arg("pos"), py::arg("rad"), py::arg("material"),
-             py::arg("normal") = deme::objNormal_t::ENTITY_NORMAL_INWARD)
+             py::arg("normal") = deme::ENTITY_NORMAL_INWARD)
         .def("AddCylinder",
              static_cast<void (deme::DEMExternObj::*)(const std::vector<float>&, const std::vector<float>&, const float,
                                                       const std::shared_ptr<deme::DEMMaterial>&,
                                                       const deme::objNormal_t)>(&deme::DEMExternObj::AddCylinder),
              "Add a cylinder of infinite length, which is along a user-specific axis", py::arg("pos"), py::arg("axis"),
-             py::arg("rad"), py::arg("material"), py::arg("normal") = deme::objNormal_t::ENTITY_NORMAL_INWARD)
+             py::arg("rad"), py::arg("material"), py::arg("normal") = deme::ENTITY_NORMAL_INWARD)
         .def_readwrite("types", &deme::DEMExternObj::types)
         .def_readwrite("materials", &deme::DEMExternObj::materials)
         .def_readwrite("family_code", &deme::DEMExternObj::family_code)

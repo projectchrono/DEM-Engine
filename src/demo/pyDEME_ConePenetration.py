@@ -29,9 +29,9 @@ if __name__ == "__main__":
 
     # E, nu, CoR, mu, Crr... Material properties.
     mat_type_cone = DEMSim.LoadMaterial(
-        {"E", 1e9, "nu", 0.3, "CoR", 0.8, "mu", 0.7, "Crr", 0.00})
+        {"E": 1e9, "nu": 0.3, "CoR": 0.8, "mu": 0.7, "Crr": 0.00})
     mat_type_terrain = DEMSim.LoadMaterial(
-        {"E", 1e9, "nu", 0.3, "CoR", 0.8, "mu", 0.4, "Crr", 0.00})
+        {"E": 1e9, "nu": 0.3, "CoR": 0.8, "mu": 0.4, "Crr": 0.00})
     # If you don't have this line, then values will take average between 2 materials, when they are in contact
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_cone, mat_type_terrain, 0.8)
     DEMSim.SetMaterialPropertyPair("mu", mat_type_cone, mat_type_terrain, 0.7)
