@@ -113,7 +113,7 @@ int main() {
     // Error out vel is used to force the simulation to abort when something goes wrong.
     DEMSim.SetErrorOutVelocity(15.);
     DEMSim.SetExpandSafetyMultiplier(1.2);
-    DEMSim.SetInitBinSize(scales.at(2));
+    DEMSim.SetInitBinNumTarget(1e7);
     DEMSim.Initialize();
 
     float time_end = 10.0;

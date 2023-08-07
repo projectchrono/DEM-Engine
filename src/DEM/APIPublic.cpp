@@ -1165,8 +1165,9 @@ std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterial(const std::unordered_map<st
         m_material_prop_names.insert(a_pair.first);
         if (a_pair.first == "CoR") {
             if (a_pair.second < DEME_TINY_FLOAT)
-                DEME_WARNING("Material type %zu is set to have 0 restitution. Please make sure this is intentional.",
-                             m_loaded_materials.size());
+                DEME_WARNING(
+                    "Material type %zu is set to have near-zero restitution. Please make sure this is intentional.",
+                    m_loaded_materials.size());
             if (a_pair.second > 1.f)
                 DEME_WARNING(
                     "Material type %zu is set to have a restitution coefficient larger than 1. This is typically not "
@@ -1212,8 +1213,8 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clu
     }
     if (clump.mass < DEME_TINY_FLOAT || length(clump.MOI) < DEME_TINY_FLOAT) {
         DEME_WARNING(
-            "A type of clump is instructed to have 0 mass or moment of inertia. This will most likely destabilize the "
-            "simulation.");
+            "A type of clump is instructed to have near-zero mass or moment of inertia. This may "
+            "destabilize the simulation.");
     }
 
     // Print the mark to this clump template

@@ -142,8 +142,10 @@ int main() {
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
-    DEMSim.SetCDUpdateFreq(15);
-    DEMSim.SetInitBinSize(4 * granular_rad);
+    DEMSim.SetCDUpdateFreq(20);
+    // You usually don't have to worry about initial bin size. But sometimes if you can set the init bin size so that
+    // the kT--dT work at a sweet collaboration pattern, it could make the solver run faster.
+    DEMSim.SetInitBinNumTarget(2e7);
     DEMSim.Initialize();
 
     float sim_end = cube_height * 1.5 / cube_speed;  // 3.0;
@@ -189,7 +191,7 @@ int main() {
     // Doing this, we change the mu between particles from 0.3 (lower, for getting something denser
     // after settling) to 0.4 (the value we use for the main simulation).
     DEMSim.SetFamilyClumpMaterial(1, mat_type_granular_2);
-    
+
     double cube_zpos = max_z_finder->GetValue() + cube_height / 2;
     cube_tracker->SetPos(make_float3(0, 0, cube_zpos));
     std::cout << "Initially the cube is at Z = " << cube_zpos << std::endl;
@@ -239,6 +241,7 @@ int main() {
     std::cout << (time_sec.count()) / sim_end / (1e-5 / step_size)
               << " seconds (wall time) to finish 1e5 steps' simulation" << std::endl;
 
+    DEMSim.ShowTimingStats();
     std::cout << "DEMdemo_Indentation exiting..." << std::endl;
     return 0;
 }
