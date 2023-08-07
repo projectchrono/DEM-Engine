@@ -1,3 +1,6 @@
 graft src
-recursive-include build *.so
-global-include CMakeLists.txt *.cmake
+graft cmake
+graft thirdparty
+graft data
+
+include *.txt

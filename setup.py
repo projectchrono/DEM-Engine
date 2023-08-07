@@ -121,21 +121,24 @@ class CMakeBuild(build_ext):
         subprocess.run(
             ["cmake", "--build", ".", "-j 8", *build_args], cwd=build_temp, check=True
         )
+        subprocess.run(["make", "install"], cwd=build_temp, check=True)
 
 
 # The information here can also be placed in setup.cfg - better separation of
 # logic and declaration, and simpler if you include description/version in a file.
 setup(
     name="DEME",
-    version="0.0.0",
+    version="0.1.3",
     author="Rouchun Zhang",
-    author_email="N.A.",
+    author_email="noreply@wisc.edu",
     description="PyBind Wrapper Library for DEM-Engine",
     long_description="",
     ext_modules=[CMakeExtension("DEME")],
     cmdclass={"build_ext": CMakeBuild},
     zip_safe=False,
+    include_package_data=True,
     parallel=8,
+    sources=["./src/"],
     install_requires=['numpy'],
     extras_require={"test": ["pytest>=6.0"]},
     python_requires=">=3.8",

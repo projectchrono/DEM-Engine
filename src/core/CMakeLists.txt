@@ -176,6 +176,14 @@ set_target_properties(
 	LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib_install"
 )
 
+set_target_properties(
+        DEMERuntimeDataHelper_install PROPERTIES
+        POSITION_INDEPENDENT_CODE True
+        CXX_STANDARD ${CXXSTD_SUPPORTED}
+        LIBRARY_OUTPUT_NAME "DEMERuntimeDataHelper"
+        LIBRARY_OUTPUT_DIRECTORY "/usr/lib"
+)
+
 # Make sure this target is generated **AFTER** the build-tree version 
 add_dependencies(DEMERuntimeDataHelper_install DEMERuntimeDataHelper)
 
