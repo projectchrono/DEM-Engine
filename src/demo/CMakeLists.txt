@@ -14,6 +14,7 @@ SET(LIBRARIES
 
 SET(DEMOS
 		DEMdemo_Repose
+		DEMdemo_Plow
 		DEMdemo_Sieve
 		DEMdemo_SingleSphereCollide
 		DEMdemo_TestPack

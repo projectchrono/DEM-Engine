@@ -145,7 +145,7 @@ int main() {
     DEMSim.SetCDUpdateFreq(20);
     // You usually don't have to worry about initial bin size. But sometimes if you can set the init bin size so that
     // the kT--dT work at a sweet collaboration pattern, it could make the solver run faster.
-    DEMSim.SetInitBinNumTarget(2e7);
+    DEMSim.SetInitBinNumTarget(5e7);
     DEMSim.Initialize();
 
     float sim_end = cube_height * 1.5 / cube_speed;  // 3.0;
@@ -162,7 +162,7 @@ int main() {
     unsigned int curr_step = 0;
 
     // Settle
-    for (double t = 0; t < 0.9; t += frame_time) {
+    for (double t = 0; t < 0.3; t += frame_time) {
         // char filename[200], meshname[200];
         // std::cout << "Outputting frame: " << currframe << std::endl;
         // sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
