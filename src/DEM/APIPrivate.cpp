@@ -408,13 +408,15 @@ void DEMSolver::decideBinSize() {
     } else {
         if (use_user_defined_bin_size == INIT_BIN_SIZE_TYPE::MULTI_MIN_SPH) {
             DEME_ERROR(
-                "There are spheres in clump templates that have near-zero radii, and the user did not specify the bin "
-                "size (for contact detection)!\nBecause the bin size is supposed to be defaulted to the size of the "
-                "smallest sphere, now the solver does not know what to do.");
+                "There are spheres in clump templates that have near-zero radii (%.9g), and the user did not specify "
+                "the bin size (for contact detection)!\nBecause the bin size is supposed to be defaulted to the size "
+                "of the smallest sphere, now the solver does not know what to do.",
+                m_smallest_radius);
         } else {
             DEME_WARNING(
-                "There are spheres in clump templates that have near-zero radii! Please make sure this is "
-                "intentional.");
+                "There are spheres in clump templates that have near-zero radii (%.9g)! Please make sure this is "
+                "intentional.",
+                m_smallest_radius);
         }
     }
 
@@ -666,6 +668,12 @@ void DEMSolver::preprocessTriangleObjs() {
         // Note that cache_offset needs to be modified by dT in init. This info is important if we need to modify the
         // mesh later on.
 
+        if (mesh_obj->mass < 1e-15 || length(mesh_obj->MOI) < 1e-15) {
+            DEME_WARNING(
+                "A mesh is instructed to have near-zero (or negative) mass or moment of inertia (mass: %.9g, MOI "
+                "magnitude: %.9g). This could destabilize the simulation.\nPlease make sure this is intentional.",
+                mesh_obj->mass, length(mesh_obj->MOI));
+        }
         m_mesh_obj_mass.push_back(mesh_obj->mass);
         m_mesh_obj_moi.push_back(mesh_obj->MOI);
 

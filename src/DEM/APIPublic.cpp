@@ -1166,13 +1166,14 @@ std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterial(const std::unordered_map<st
         if (a_pair.first == "CoR") {
             if (a_pair.second < DEME_TINY_FLOAT)
                 DEME_WARNING(
-                    "Material type %zu is set to have near-zero restitution. Please make sure this is intentional.",
-                    m_loaded_materials.size());
+                    "Material type %zu is set to have near-zero restitution (%.9g). Please make sure this is "
+                    "intentional.",
+                    m_loaded_materials.size(), a_pair.second);
             if (a_pair.second > 1.f)
                 DEME_WARNING(
-                    "Material type %zu is set to have a restitution coefficient larger than 1. This is typically not "
-                    "physical and should destabilize the simulation.",
-                    m_loaded_materials.size());
+                    "Material type %zu is set to have a restitution coefficient larger than 1 (%.9g). This is "
+                    "typically not physical and should destabilize the simulation.",
+                    m_loaded_materials.size(), a_pair.second);
         }
         // Material names cannot have spaces in them
         if (match_pattern(a_pair.first, " ")) {
@@ -1211,10 +1212,11 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clu
             "agree with nComp.",
             clump.nComp, clump.radii.size(), clump.relPos.size(), clump.materials.size());
     }
-    if (clump.mass < DEME_TINY_FLOAT || length(clump.MOI) < DEME_TINY_FLOAT) {
+    if (clump.mass < 1e-15 || length(clump.MOI) < 1e-15) {
         DEME_WARNING(
-            "A type of clump is instructed to have near-zero mass or moment of inertia. This may "
-            "destabilize the simulation.");
+            "A type of clump is instructed to have near-zero (or negative) mass or moment of inertia (mass: %.9g, MOI "
+            "magnitude: %.9g). This could destabilize the simulation.\nPlease make sure this is intentional.",
+            clump.mass, length(clump.MOI));
     }
 
     // Print the mark to this clump template

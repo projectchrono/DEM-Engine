@@ -44,7 +44,7 @@ int main() {
     float3 MOI = make_float3(1. / 5. * mass * (1 * 1 + 2 * 2), 1. / 5. * mass * (1 * 1 + 2 * 2),
                              1. / 5. * mass * (1 * 1 + 1 * 1));
     // We can scale this general template to make it smaller, like a DEM particle that you would actually use
-    float scaling = 0.1;
+    float scaling = 0.04;
     std::shared_ptr<DEMClumpTemplate> my_template =
         DEMSim.LoadClumpType(mass, MOI, GetDEMEDataFile("clumps/ellipsoid_2_1_1.csv"), mat_type_particles);
     my_template->Scale(scaling);
@@ -60,16 +60,19 @@ int main() {
     float4 init_Q = make_float4(1, 0, 0, 0);  // 180deg about x
     bowl->SetInitPos(init_pos);
     bowl->SetInitQuat(init_Q);
-    bowl->SetFamily(1);
+    bowl->SetFamily(10);
     cap->SetInitPos(init_pos);
     cap->SetInitQuat(init_Q);
-    cap->SetFamily(1);
+    cap->SetFamily(10);
+    // No contact in the settling phase
+    DEMSim.DisableContactBetweenFamilies(0, 10);
+    DEMSim.SetFamilyFixed(10);
 
     // Generate initial clumps for piling
     float spacing = 2. * scaling;
     float fill_halfwidth = world_halfsize - 4. * scaling;
-    float fill_height = world_halfsize;
-    float fill_bottom = bowl_bottom + 2.5 * scaling;
+    float fill_height = world_halfsize * 1.9;
+    float fill_bottom = bowl_bottom + 3. * scaling;
     PDSampler sampler(spacing);
     // Use a PDSampler-based clump generation process. For PD sampler it is better to do it layer by layer.
     std::vector<float3> input_pile_xyz;
@@ -78,21 +81,22 @@ int main() {
         float3 sample_center = make_float3(0, 0, fill_bottom + layer_z);
         auto layer_xyz = sampler.SampleBox(sample_center, make_float3(fill_halfwidth, fill_halfwidth, 0));
         input_pile_xyz.insert(input_pile_xyz.end(), layer_xyz.begin(), layer_xyz.end());
-        layer_z += 6. * scaling;
+        layer_z += 4.5 * scaling;
     }
     // Note: AddClumps can be called multiple times before initialization to add more clumps to the system.
     auto the_pile = DEMSim.AddClumps(my_template, input_pile_xyz);
+    the_pile->SetFamily(0);
 
     // Two sets of prescribed motions. We are just using families, since families are for bulk control of know
     // prescribed motions. You can use trackers too, but remember trackers are usually for fine-grain explicit motion
     // control.
     // Family 1 rotated about Point (0, 0, 0.4 * world_halfsize), and this is a fixed point in space not on the bowl. So
-    // what we have to prescribe is the bowl's linear velocity. And its angular velocity is actually 0, since it does
-    // not rotate about its own frame.
+    // what we have to prescribe is the bowl's linear velocity. And its angular velocity is just a constant spin about
+    // its own x.
     DEMSim.SetFamilyPrescribedLinVel(1, "0",
-                                     "-" + to_string_with_precision(0.15 * world_halfsize) + " * sin(3.14 / 4. * t)",
-                                     "-" + to_string_with_precision(0.15 * world_halfsize) + " * cos(3.14 / 4. * t)");
-    DEMSim.SetFamilyPrescribedAngVel(1, "0", "0", "0");
+                                     "-" + to_string_with_precision(0.6 * world_halfsize) + " * sin(3.14 / 4. * t)",
+                                     "-" + to_string_with_precision(0.6 * world_halfsize) + " * cos(3.14 / 4. * t)");
+    DEMSim.SetFamilyPrescribedAngVel(1, "-3.14 / 4", "0", "0");
     // For family 2, it represents the bowl rotating about itself to pour out the granular material it holds. So it is a
     // rotation about its own frame.
     DEMSim.SetFamilyPrescribedLinVel(2, "0", "0", "0");
@@ -101,7 +105,7 @@ int main() {
     float step_size = 5e-6;
     DEMSim.InstructBoxDomainDimension({-world_halfsize, world_halfsize}, {-world_halfsize, world_halfsize},
                                       {-world_halfsize, world_halfsize});
-    DEMSim.InstructBoxDomainBoundingBC("all", mat_type_walls);
+    DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.Initialize();
@@ -116,6 +120,10 @@ int main() {
     std::cout << "Output at " << fps << " FPS" << std::endl;
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
+
+    // Settle
+    DEMSim.DoDynamicsThenSync(1.);
+    DEMSim.ChangeFamily(10, 1);
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
 
@@ -153,7 +161,7 @@ int main() {
 
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
-    std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
+    std::cout << time_sec.count() << " seconds (wall time) to finish the 5-second plowing simulation." << std::endl;
 
     DEMSim.ShowTimingStats();
     DEMSim.ClearTimingStats();

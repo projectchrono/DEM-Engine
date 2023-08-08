@@ -470,8 +470,10 @@ class DEMMeshConnected : public DEMInitializer {
         for (auto& node : m_vertices) {
             node *= s;
         }
-        mass *= (double)s * (double)s * (double)s;
-        MOI *= (double)s * (double)s * (double)s * (double)s * (double)s;
+        // Never let mass become negative.
+        double positive_s = (double)std::abs(s);
+        mass *= positive_s * positive_s * positive_s;
+        MOI *= positive_s * positive_s * positive_s * positive_s * positive_s;
     }
     /// @brief Scale all geometry component of this mesh. Specify x, y, z respectively.
     void Scale(float3 s) {
@@ -479,9 +481,10 @@ class DEMMeshConnected : public DEMInitializer {
             node = node * s;
         }
         // Really just an estimate. The user should reset mass properties manually afterwards.
-        double prod = (double)s.x * (double)s.y * (double)s.z;
+        // Never let mass become negative.
+        double prod = std::abs((double)s.x * (double)s.y * (double)s.z);
         mass *= prod;
-        MOI.x *= prod * s.x * s.x;
+        MOI.x *= prod * s.x * s.x; // Square, so always positive
         MOI.y *= prod * s.y * s.y;
         MOI.z *= prod * s.z * s.z;
     }
