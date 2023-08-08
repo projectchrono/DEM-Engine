@@ -28,7 +28,7 @@ int main() {
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
     DEMSim.SetContactOutputContent(OWNER | FORCE | POINT | CNT_WILDCARD);
 
-    DEMSim.SetErrorOutAvgContacts(40);
+    DEMSim.SetErrorOutAvgContacts(150);
     // E, nu, CoR, mu, Crr...
     auto mat_type_container =
         DEMSim.LoadMaterial({{"E", 100e9}, {"nu", 0.3}, {"CoR", 0.7}, {"mu", 0.80}, {"Crr", 0.10}});
@@ -48,7 +48,7 @@ int main() {
 
     float world_size = 0.5;
     float container_diameter = 0.05;
-    float step_size = 1.0e-7;
+    float step_size = 5.0e-7;
     DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
     // No need to add simulation `world' boundaries, b/c we'll add a cylinderical container manually
     DEMSim.InstructBoxDomainBoundingBC("all", mat_type_container);
@@ -57,11 +57,11 @@ int main() {
     double top = 0.10;
     auto walls = DEMSim.AddExternalObject();
 
-    std::string shake_pattern_xz = " 0.01 * sin( 300 * 2 * deme::PI * t)";
+    std::string shake_pattern_xz = " 0.01 * sin( 500 * 2 * deme::PI * t)";
     walls->AddPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_container);
     walls->AddPlane(make_float3(0, 0, world_size / 2. - world_size / 20.), make_float3(0, 0, -1), mat_type_container);
 
-    DEMSim.SetFamilyPrescribedLinVel(11, "0", "0", to_string_with_precision(-0.10));
+    DEMSim.SetFamilyPrescribedLinVel(11, "0", "0", to_string_with_precision(-0.010));
 
     auto cylinder = DEMSim.AddExternalObject();
     cylinder->AddCylinder(make_float3(0), make_float3(0, 0, 1), container_diameter / 2., mat_type_container, 0);
@@ -70,18 +70,18 @@ int main() {
     DEMSim.SetFamilyPrescribedLinVel(10, shake_pattern_xz, shake_pattern_xz, shake_pattern_xz);
 
     auto plate = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_container);
-    float3 move = make_float3(0.05, 0, top);
+    float3 move = make_float3(0.05, 0, 0.105);
     float4 rot = make_float4(0.7071, 0, 0, 0.7071);
     plate->Scale(make_float3(1, 2., 4.));
     plate->Move(move, rot);
     plate->SetFamily(20);
     DEMSim.SetFamilyFixed(20);
 
-    DEMSim.SetFamilyPrescribedLinVel(21, "0", "0", to_string_with_precision(-0.10));
+    DEMSim.SetFamilyPrescribedLinVel(21, "0", "0", to_string_with_precision(-0.050));
     // Define the terrain particle templates
     // Calculate its mass and MOI
     float terrain_density = 2.8e3;
-    float sphere_rad = 0.0009;
+    float sphere_rad = 0.002;
     float sphere_vol = 4. / 3. * math_PI * sphere_rad * sphere_rad * sphere_rad;
     float mass = terrain_density * sphere_vol;
     // Then load it to system
@@ -113,7 +113,7 @@ int main() {
     DEMSim.DisableContactBetweenFamilies(20, 1);
     std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
 
-    float sim_end = 1.0;
+    float sim_end = 3.0;
     unsigned int fps = 100;
     float frame_time = 1.0 / fps;
     std::cout << "Output at " << fps << " FPS" << std::endl;
@@ -124,11 +124,11 @@ int main() {
     bool status_1 = true;
     bool status_2 = true;
 
-     DEMSim.DisableContactBetweenFamilies(10, 1);
+    //DEMSim.DisableContactBetweenFamilies(10, 1);
 
     DEMSim.SetFamilyContactWildcardValueAll(1, "initialLength", 0.0);
     DEMSim.SetFamilyContactWildcardValueAll(1, "damage", 0.0);
-    DEMSim.SetFamilyContactWildcardValueAll(1, "unbroken", 2.0);
+    DEMSim.SetFamilyContactWildcardValueAll(1, "unbroken", 0.0);
 
     // Simulation loop
     for (float t = 0; t < sim_end; t += frame_time) {
@@ -145,14 +145,14 @@ int main() {
         frame_count++;
         DEMSim.ShowThreadCollaborationStats();
         std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
-        DEMSim.DoDynamics(frame_time);
+
 
         if (t > 0.0 && status_1) {
             status_1 = false;
             DEMSim.DoDynamicsThenSync(0);
-            
+            DEMSim.SetFamilyContactWildcardValueAll(1, "unbroken", 2.0);
             DEMSim.ChangeFamily(20, 21);  // start compression
-
+            DEMSim.DisableContactBetweenFamilies(10, 1);
             std::cout << "Establishing inner forces: " << frame_count << std::endl;
         }
 
@@ -160,9 +160,10 @@ int main() {
             status_2 = false;
             DEMSim.DoDynamicsThenSync(0);
 
-            // DEMSim.DisableContactBetweenFamilies(10, 1);
+            DEMSim.DisableContactBetweenFamilies(10, 1);
             std::cout << "freeing the material: " << frame_count << std::endl;
         }
+        DEMSim.DoDynamics(frame_time);
     }
 
     DEMSim.ShowTimingStats();
