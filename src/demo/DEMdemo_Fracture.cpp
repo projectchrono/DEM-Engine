@@ -28,7 +28,7 @@ int main() {
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
     DEMSim.SetContactOutputContent(OWNER | FORCE | POINT | CNT_WILDCARD);
 
-    DEMSim.SetErrorOutAvgContacts(150);
+    DEMSim.SetErrorOutAvgContacts(400);
     // E, nu, CoR, mu, Crr...
     auto mat_type_container =
         DEMSim.LoadMaterial({{"E", 100e9}, {"nu", 0.3}, {"CoR", 0.7}, {"mu", 0.80}, {"Crr", 0.10}});
@@ -81,7 +81,7 @@ int main() {
     // Define the terrain particle templates
     // Calculate its mass and MOI
     float terrain_density = 2.8e3;
-    float sphere_rad = 0.002;
+    float sphere_rad = 0.0012;
     float sphere_vol = 4. / 3. * math_PI * sphere_rad * sphere_rad * sphere_rad;
     float mass = terrain_density * sphere_vol;
     // Then load it to system
@@ -105,7 +105,7 @@ int main() {
     // Some inspectors
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
 
-    DEMSim.SetFamilyExtraMargin(1, 0.8 * sphere_rad);
+    DEMSim.SetFamilyExtraMargin(1, 1.0 * sphere_rad);
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0.00, -9.81));

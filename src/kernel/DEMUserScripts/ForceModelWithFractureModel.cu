@@ -1,172 +1,216 @@
-//  Copyright (c) 2021, SBEL GPU Development Team
-//  Copyright (c) 2021, University of Wisconsin - Madison
-//
-//	SPDX-License-Identifier: BSD-3-Clause
+// DEM force calculation strategies for grain breakage
+float E_cnt, G_cnt, CoR_cnt, mu_cnt, Crr_cnt, E_A, E_B;
+{
+    // E and nu are associated with each material, so obtain them this way
+    E_A = E[bodyAMatType];
+    float nu_A = nu[bodyAMatType];
+    E_B = E[bodyBMatType];
+    float nu_B = nu[bodyBMatType];
+    matProxy2ContactParam<float>(E_cnt, G_cnt, E_A, nu_A, E_B, nu_B);
+    // CoR, mu and Crr are pair-wise, so obtain them this way
+    CoR_cnt = CoR[bodyAMatType][bodyBMatType];
+    mu_cnt = mu[bodyAMatType][bodyBMatType];
+    Crr_cnt = Crr[bodyAMatType][bodyBMatType];
+}
+float3 rotVelCPA, rotVelCPB;
+{
+    // We also need the relative velocity between A and B in global frame to use in the damping terms
+    // To get that, we need contact points' rotational velocity in GLOBAL frame
+    // This is local rotational velocity (the portion of linear vel contributed by rotation)
+    rotVelCPA = cross(ARotVel, locCPA);
+    rotVelCPB = cross(BRotVel, locCPB);
+    // This is mapping from local rotational velocity to global
+    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x, AOriQ.y, AOriQ.z);
+    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
+}
+float mass_eff, sqrt_Rd, beta;
+float3 vrel_tan;
+float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
 
-// =============================================================================
-// Fracture
-// =============================================================================
+// The (total) relative linear velocity of A relative to B
+const float3 velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
+const float projection = dot(velB2A, B2A);
+vrel_tan = velB2A - projection * B2A;
 
-#include <DEM/API.h>
-#include <DEM/HostSideHelpers.hpp>
-#include <DEM/utils/Samplers.hpp>
+// Now we already have sufficient info to update contact history
+{
+    delta_tan += ts * vrel_tan;
+    const float disp_proj = dot(delta_tan, B2A);
+    delta_tan -= disp_proj * B2A;
+    delta_time += ts;
+}
 
-#include <chrono>
-#include <cmath>
-#include <cstdio>
-#include <filesystem>
+// If this contact is marked as not broken (unbroken is 1 means it stands for the bond between the components of a
+// unbroken particle in grain breakage simulation), then it takes this force model which is a strong cohesion.
+if (unbroken > DEME_TINY_FLOAT) {
+    initialLength = (unbroken > 1.0) ? overlapDepth : initialLength;  // reusing a variable that survives the loop
+    unbroken = (unbroken > 1.0) ? 1.0 : unbroken;
 
-using namespace deme;
+    float kn = 2.0 * (ARadius * BRadius) * (E_A * E_B) /
+               ((ARadius * E_A) + (BRadius + E_B));  // to be checked for formulation with 2
 
-const double math_PI = 3.1415927;
+    float intialArea = ((ARadius > BRadius) ? ARadius * ARadius : BRadius * BRadius) * deme::PI;
 
-int main() {
-    DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
-    DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
-    DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
-    DEMSim.SetContactOutputContent(OWNER | FORCE | POINT | CNT_WILDCARD);
+    float coesion = 200e6;
+    float tension = -9.3e6f;
+    float BreakingForce = tension * intialArea;
+    float deltaY=BreakingForce/kn;
+    float deltaU=2.0f*deltaY;
+    float deltaD = (overlapDepth - initialLength);  // initial relative displacement considered from the initial overlap
 
-    DEMSim.SetErrorOutAvgContacts(150);
-    // E, nu, CoR, mu, Crr...
-    auto mat_type_container =
-        DEMSim.LoadMaterial({{"E", 100e9}, {"nu", 0.3}, {"CoR", 0.7}, {"mu", 0.80}, {"Crr", 0.10}});
-    auto mat_type_particle = DEMSim.LoadMaterial({{"E", 60e9}, {"nu", 0.5}, {"CoR", 0.5}, {"mu", 0.50}, {"Crr", 0.00}});
-    // If you don't have this line, then values will take average between 2 materials, when they are in contact
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_container, mat_type_particle, 0.7);
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_container, mat_type_particle, 0.6);
-    // We can specify the force model using a file.
-    auto my_force_model = DEMSim.ReadContactForceModel("ForceModelWithFractureModel.cu");
+    mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
+    float c = 0.005 * 2.0 * sqrt(mass_eff * kn);
 
-    // Those following lines are needed. We must let the solver know that those var names are history variable etc.
-    my_force_model->SetMustHaveMatProp({"E", "nu", "CoR", "mu", "Crr"});
-    my_force_model->SetMustPairwiseMatProp({"CoR", "mu", "Crr"});
-    // Pay attention to the extra per-contact wildcard `unbroken' here.
-    my_force_model->SetPerContactWildcards(
-        {"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z", "unbroken", "initialLength", "damage"});
+    // To A, gravity pulls it towards B, so -B2A direction
+    // float3 bond_force = B2A;  // vector direction
+    float force_to_A_mag;
 
-    float world_size = 0.5;
-    float container_diameter = 0.05;
-    float step_size = 5.0e-7;
-    DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
-    // No need to add simulation `world' boundaries, b/c we'll add a cylinderical container manually
-    DEMSim.InstructBoxDomainBoundingBC("all", mat_type_container);
-    // Now add a cylinderical boundary along with a bottom plane
-    double bottom = -0;
-    double top = 0.10;
-    auto walls = DEMSim.AddExternalObject();
+    force_to_A_mag = (deltaD > deltaY)? kn * deltaD : (deltaU-deltaD)*kn*0.5;
 
-    std::string shake_pattern_xz = " 0.01 * sin( 500 * 2 * deme::PI * t)";
-    walls->AddPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_container);
-    walls->AddPlane(make_float3(0, 0, world_size / 2. - world_size / 20.), make_float3(0, 0, -1), mat_type_container);
+    // tangetial forces
 
-    DEMSim.SetFamilyPrescribedLinVel(11, "0", "0", to_string_with_precision(-0.010));
+    force += B2A * force_to_A_mag - c * velB2A;
 
-    auto cylinder = DEMSim.AddExternalObject();
-    cylinder->AddCylinder(make_float3(0), make_float3(0, 0, 1), container_diameter / 2., mat_type_container, 0);
-    cylinder->SetFamily(10);
+    float Fsmax = (deltaD > deltaY) ? length(force) * mu_cnt + coesion * intialArea: length(force) * mu_cnt;
 
-    DEMSim.SetFamilyPrescribedLinVel(10, shake_pattern_xz, shake_pattern_xz, shake_pattern_xz);
+    float kt = 1.f / 2.5f * kn;
 
-    auto plate = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_container);
-    float3 move = make_float3(0.05, 0, 0.105);
-    float4 rot = make_float4(0.7071, 0, 0, 0.7071);
-    plate->Scale(make_float3(1, 2., 4.));
-    plate->Move(move, rot);
-    plate->SetFamily(20);
-    DEMSim.SetFamilyFixed(20);
+    const float loge = (CoR_cnt < DEME_TINY_FLOAT) ? log(DEME_TINY_FLOAT) : log(CoR_cnt);
+    beta = loge / sqrt(loge * loge + deme::PI_SQUARED);
+    float gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
 
-    DEMSim.SetFamilyPrescribedLinVel(21, "0", "0", to_string_with_precision(-0.050));
-    // Define the terrain particle templates
-    // Calculate its mass and MOI
-    float terrain_density = 2.8e3;
-    float sphere_rad = 0.002;
-    float sphere_vol = 4. / 3. * math_PI * sphere_rad * sphere_rad * sphere_rad;
-    float mass = terrain_density * sphere_vol;
-    // Then load it to system
-    std::shared_ptr<DEMClumpTemplate> my_template = DEMSim.LoadSphereType(mass, sphere_rad, mat_type_particle);
+    auto tangent_force = -kt * delta_tan;
+    tangent_force = (length(tangent_force) < Fsmax) ? -kt * delta_tan : tangent_force;
+    delta_tan = (tangent_force + gt * vrel_tan) / (-kt);
+    // float3 coesionForce= coesion * intialArea * (-B2A);
 
-    // Sampler to sample
-    GridSampler sampler(sphere_rad * 2.00);
-    float fill_height = top - sphere_rad * 0.0;
-    float3 fill_center = make_float3(0, 0, bottom + fill_height / 2);
-    const float fill_radius = container_diameter / 2. - sphere_rad * 2.;
-    auto input_xyz = sampler.SampleCylinderZ(fill_center, fill_radius, fill_height / 2 - sphere_rad * 2.);
-    auto particles = DEMSim.AddClumps(my_template, input_xyz);
-    particles->SetFamily(1);
-    std::cout << "Total num of particles: " << particles->GetNumClumps() << std::endl;
+    force += tangent_force;
+    // If this condition is met, the bond breaks, meaning in the next time step, this bonding force model no longer
+    // takes effect.
 
-    std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DemoOutput_Fracture";
-    remove_all(out_dir);
-    create_directory(out_dir);
+    damage = (force_to_A_mag) / BreakingForce;
+    unbroken = (deltaD < deltaU) ? 0.0 : unbroken;
+} else {  // If unbroken == 0, then the bond is broken, and the grain is broken, components are now separate particles,
+          // so they just follow Hertzian contact law.
 
-    // Some inspectors
-    auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
+    // Whether or not the bonding force among particle components exists, contact forces are always active if two
+    // particles are in contact: This is a part of our model.
+    if (overlapDepth > 0.0) {
+        // Material properties
+        initialLength = (unbroken == 0.0) ? overlapDepth : initialLength;  // reusing a variable that survives the loop
+        unbroken = (unbroken == 0.0) ? -1.0 : unbroken;
+        float temp = overlapDepth - initialLength;
+        if (temp > 0.0) {
+            float3 rotVelCPA, rotVelCPB;
+            {
+                // We also need the relative velocity between A and B in global frame to use in the damping terms
+                // To get that, we need contact points' rotational velocity in GLOBAL frame
+                // This is local rotational velocity (the portion of linear vel contributed by rotation)
+                rotVelCPA = cross(ARotVel, locCPA);
+                rotVelCPB = cross(BRotVel, locCPB);
+                // This is mapping from local rotational velocity to global
+                applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x,
+                                                        AOriQ.y, AOriQ.z);
+                applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x,
+                                                        BOriQ.y, BOriQ.z);
+            }
 
-    DEMSim.SetFamilyExtraMargin(1, 0.8 * sphere_rad);
+            // A few re-usables
+            float mass_eff, sqrt_Rd, beta;
+            float3 vrel_tan;
+            float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
 
-    DEMSim.SetInitTimeStep(step_size);
-    DEMSim.SetGravitationalAcceleration(make_float3(0, 0.00, -9.81));
-    DEMSim.Initialize();
-    DEMSim.DisableContactBetweenFamilies(20, 1);
-    std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
+            // Normal force part
+            {
+                // The (total) relative linear velocity of A relative to B
+                const float3 velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
+                const float projection = dot(velB2A, B2A);
+                vrel_tan = velB2A - projection * B2A;
 
-    float sim_end = 3.0;
-    unsigned int fps = 100;
-    float frame_time = 1.0 / fps;
-    std::cout << "Output at " << fps << " FPS" << std::endl;
-    unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
-    unsigned int frame_count = 0;
-    unsigned int step_count = 0;
+                // Now we already have sufficient info to update contact history
+                {
+                    delta_tan += ts * vrel_tan;
+                    const float disp_proj = dot(delta_tan, B2A);
+                    delta_tan -= disp_proj * B2A;
+                    delta_time += ts;
+                }
 
-    bool status_1 = true;
-    bool status_2 = true;
+                mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
+                sqrt_Rd = sqrt(temp * (ARadius * BRadius) / (ARadius + BRadius));
+                const float Sn = 2. * E_cnt * sqrt_Rd;
 
-    //DEMSim.DisableContactBetweenFamilies(10, 1);
+                const float loge = (CoR_cnt < DEME_TINY_FLOAT) ? log(DEME_TINY_FLOAT) : log(CoR_cnt);
+                beta = loge / sqrt(loge * loge + deme::PI_SQUARED);
 
-    DEMSim.SetFamilyContactWildcardValueAll(1, "initialLength", 0.0);
-    DEMSim.SetFamilyContactWildcardValueAll(1, "damage", 0.0);
-    DEMSim.SetFamilyContactWildcardValueAll(1, "unbroken", 0.0);
+                const float k_n = deme::TWO_OVER_THREE * Sn;
+                const float gamma_n = deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
 
-    // Simulation loop
-    for (float t = 0; t < sim_end; t += frame_time) {
-        char filename[200];
-        char meshname[200];
-        char cnt_filename[200];
-        std::cout << "Outputting frame: " << frame_count << std::endl;
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame_count);
-        sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame_count);
-        DEMSim.WriteSphereFile(std::string(filename));
-        DEMSim.WriteMeshFile(std::string(meshname));
-        sprintf(cnt_filename, "%s/DEMdemo_contact_%04d.csv", out_dir.c_str(), frame_count);
-        DEMSim.WriteContactFile(std::string(cnt_filename));
-        frame_count++;
-        DEMSim.ShowThreadCollaborationStats();
-        std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
+                force += (k_n * temp + gamma_n * projection) * B2A;
+                // printf("normal force: %f, %f, %f\n", force.x, force.y, force.z);
+            }
 
+            // Rolling resistance part
+            if (Crr_cnt > 0.0) {
+                // Figure out if we should apply rolling resistance force
+                bool should_add_rolling_resistance = true;
+                {
+                    const float R_eff = sqrtf((ARadius * BRadius) / (ARadius + BRadius));
+                    const float kn_simple = deme::FOUR_OVER_THREE * E_cnt * sqrtf(R_eff);
+                    const float gn_simple =
+                        -2.f * sqrtf(deme::FIVE_OVER_THREE * mass_eff * E_cnt) * beta * powf(R_eff, 0.25f);
 
-        if (t > 0.0 && status_1) {
-            status_1 = false;
-            DEMSim.DoDynamicsThenSync(0);
-            DEMSim.SetFamilyContactWildcardValueAll(1, "unbroken", 2.0);
-            DEMSim.ChangeFamily(20, 21);  // start compression
-            DEMSim.DisableContactBetweenFamilies(10, 1);
-            std::cout << "Establishing inner forces: " << frame_count << std::endl;
+                    const float d_coeff = gn_simple / (2.f * sqrtf(kn_simple * mass_eff));
+
+                    if (d_coeff < 1.0) {
+                        float t_collision = deme::PI * sqrtf(mass_eff / (kn_simple * (1.f - d_coeff * d_coeff)));
+                        if (delta_time <= t_collision) {
+                            should_add_rolling_resistance = false;
+                        }
+                    }
+                }
+                // If should, then compute it (using Schwartz model)
+                if (should_add_rolling_resistance) {
+                    // Tangential velocity (only rolling contribution) of B relative to A, at contact point, in global
+                    const float3 v_rot = rotVelCPB - rotVelCPA;
+                    // This v_rot is only used for identifying resistance direction
+                    const float v_rot_mag = length(v_rot);
+                    if (v_rot_mag > DEME_TINY_FLOAT) {
+                        // You should know that Crr_cnt * normal_force is the underlying formula, and in our model,
+                        // it is a `force' that produces torque only, instead of also cancelling out friction.
+                        // Its direction is that it `resists' rotation, see picture in
+                        // https://en.wikipedia.org/wiki/Rolling_resistance.
+                        torque_only_force = (v_rot / v_rot_mag) * (Crr_cnt * length(force));
+                        // printf("torque force: %f, %f, %f\n", torque_only_force.x, torque_only_force.y,
+                        // torque_only_force.z);
+                    }
+                }
+            }
+
+            // Tangential force part
+            if (mu_cnt > 0.0) {
+                const float kt = 8. * G_cnt * sqrt_Rd;
+                const float gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
+                float3 tangent_force = -kt * delta_tan - gt * vrel_tan;
+                const float ft = length(tangent_force);
+                if (ft > DEME_TINY_FLOAT) {
+                    // Reverse-engineer to get tangential displacement
+                    const float ft_max = length(force) * mu_cnt;
+                    if (ft > ft_max) {
+                        tangent_force = (ft_max / ft) * tangent_force;
+                        delta_tan = (tangent_force + gt * vrel_tan) / (-kt);
+                    }
+                } else {
+                    tangent_force = make_float3(0, 0, 0);
+                }
+                // Use force to collect tangent_force
+                force += tangent_force;
+                // printf("tangent force: %f, %f, %f\n", tangent_force.x, tangent_force.y, tangent_force.z);
+            }
+
+            // Make sure we update those wildcards (in this case, contact history)
+            delta_tan_x = delta_tan.x;
+            delta_tan_y = delta_tan.y;
+            delta_tan_z = delta_tan.z;
         }
-
-        if (t > 0.0100 && status_2) {
-            status_2 = false;
-            DEMSim.DoDynamicsThenSync(0);
-
-            DEMSim.DisableContactBetweenFamilies(10, 1);
-            std::cout << "freeing the material: " << frame_count << std::endl;
-        }
-        DEMSim.DoDynamics(frame_time);
     }
-
-    DEMSim.ShowTimingStats();
-    std::cout << "Fracture demo exiting..." << std::endl;
-    return 0;
 }
