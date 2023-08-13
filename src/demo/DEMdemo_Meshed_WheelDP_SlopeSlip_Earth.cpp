@@ -246,7 +246,7 @@ int main(int argc, char* argv[]) {
 
             std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
 
-            std::cout << "Test num: " << cur_test << std::endl;
+            std::cout << "Slip test num: " << cur_test << std::endl;
             DEMSim.DoDynamicsThenSync(2.);
 
             float3 V = wheel_tracker->Vel();

@@ -257,7 +257,7 @@ int main(int argc, char* argv[]) {
             DEMSim.DoDynamicsThenSync(0.5);
             DEMSim.ChangeFamily(1, 2);
             DEMSim.DoDynamicsThenSync(2.);
-            std::cout << "Test num: " << cur_test << std::endl;
+            std::cout << "Steer test num: " << cur_test << std::endl;
 
             float x1 = wheel_tracker->Pos().x;
 
