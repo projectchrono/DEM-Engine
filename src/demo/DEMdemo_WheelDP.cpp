@@ -229,7 +229,10 @@ int main() {
         // Error out vel is used to force the simulation to abort when something goes wrong and sim diverges.
         DEMSim.SetErrorOutVelocity(60.);
         DEMSim.SetExpandSafetyMultiplier(1.1);
-        DEMSim.SetInitBinSize(2 * scales.at(2));
+        // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto
+        // bin size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case
+        // setting init bin size may save the simulation.
+        // DEMSim.SetInitBinSize(2 * scales.at(2));
         DEMSim.Initialize();
 
         // Compress until dense enough

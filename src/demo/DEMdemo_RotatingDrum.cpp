@@ -132,10 +132,10 @@ int main() {
     // for dT to be aahead of kT to be a * n + b, based on the inputs you give using the 2 methods.
     DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1.1);
     DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(3);
-    // User-given max vel and bin size with the current version of solver, are only for its reference, since they
-    // auto-adapt.
+    // User-given max vel with the current version of solver, are only for its reference, since they auto-adapt.
     DEMSim.SetMaxVelocity(3.);
-    DEMSim.SetInitBinSizeAsMultipleOfSmallestSphere(15);
+    DEMSim.SetInitBinNumTarget(5e5);
+    // DEMSim.SetInitBinSizeAsMultipleOfSmallestSphere(15);
     DEMSim.Initialize();
 
     path out_dir = current_path();

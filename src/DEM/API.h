@@ -126,14 +126,19 @@ class DEMSolver {
 
     /// Explicitly instruct the bin size (for contact detection) that the solver should use.
     void SetInitBinSize(double bin_size) {
-        use_user_defined_bin_size = true;
+        use_user_defined_bin_size = INIT_BIN_SIZE_TYPE::EXPLICIT;
         m_binSize = bin_size;
     }
     /// Explicitly instruct the bin size (for contact detection) that the solver should use, as a multiple of the radius
     /// of the smallest sphere in simulation.
     void SetInitBinSizeAsMultipleOfSmallestSphere(float bin_size) {
-        use_user_defined_bin_size = false;
+        use_user_defined_bin_size = INIT_BIN_SIZE_TYPE::MULTI_MIN_SPH;
         m_binSize_as_multiple = bin_size;
+    }
+    /// @brief Set the target number of bins (for contact detection) at the start of the simulation upon initialization.
+    void SetInitBinNumTarget(size_t num) {
+        use_user_defined_bin_size = INIT_BIN_SIZE_TYPE::TARGET_NUM;
+        m_target_init_bin_num = num;
     }
 
     /// Explicitly instruct the sizes for the arrays at initialization time. This is useful when the number of owners
@@ -1079,7 +1084,7 @@ class DEMSolver {
 
     // Verbosity
     VERBOSITY verbosity = INFO;
-    // If true, dT should sort contact arrays (based on contact type) before usage (not implemented)
+    // If true, dT should sort contact arrays (based on contact type) before usage 
     bool should_sort_contacts = true;
     // If true, the solvers may need to do a per-step sweep to apply family number changes
     bool famnum_can_change_conditionally = false;
@@ -1089,10 +1094,18 @@ class DEMSolver {
     // Should jitify mass/MOI properties into kernels
     bool jitify_mass_moi = true;
 
+    enum class INIT_BIN_SIZE_TYPE { EXPLICIT, MULTI_MIN_SPH, TARGET_NUM };
     // User explicitly set a bin size to use
-    bool use_user_defined_bin_size = false;
+    INIT_BIN_SIZE_TYPE use_user_defined_bin_size = INIT_BIN_SIZE_TYPE::TARGET_NUM;
     // User explicity specify a expand factor to use
     bool use_user_defined_expand_factor = false;
+    // Whether to auto-adjust the bin size and the max update frequency
+    bool auto_adjust_bin_size = true;
+    bool auto_adjust_update_freq = true;
+    // User-instructed initial bin size as a multiple of smallest sphere radius
+    float m_binSize_as_multiple = 8.0;
+    // Target initial bin number
+    size_t m_target_init_bin_num = 1e6;
 
     // I/O related flags
     // The output file format for clumps and spheres
@@ -1148,8 +1161,6 @@ class DEMSolver {
     float l = FLT_MAX;
     // The edge length of a bin (for contact detection)
     double m_binSize;
-    // User-instructed initial bin size as a multiple of smallest sphere radius
-    float m_binSize_as_multiple = 2.0;
     // Total number of bins
     size_t m_num_bins;
     // Number of bins on each direction
@@ -1213,9 +1224,6 @@ class DEMSolver {
     unsigned int threshold_too_many_tri_in_bin = 32768;
     // The max velocity at which the simulation should error out
     float threshold_error_out_vel = 1e3;
-    // Whether to auto-adjust the bin size and the max update frequency
-    bool auto_adjust_bin_size = true;
-    bool auto_adjust_update_freq = true;
     // Num of steps that kT takes average before making a conclusion on the performance of this bin size
     unsigned int auto_adjust_observe_steps = 20;
     // See corresponding method for those...
@@ -1224,8 +1232,8 @@ class DEMSolver {
     float auto_adjust_upper_proactive_ratio = 1.0;
     float auto_adjust_lower_proactive_ratio = 0.3;
     unsigned int upper_bound_future_drift = 5000;
-    float max_drift_ahead_of_avg_drift = 6.;
-    float max_drift_multiple_of_avg_drift = 1.1;
+    float max_drift_ahead_of_avg_drift = 4.;
+    float max_drift_multiple_of_avg_drift = 1.05;
     unsigned int max_drift_gauge_history_size = 200;
 
     // See SetNoForceRecord

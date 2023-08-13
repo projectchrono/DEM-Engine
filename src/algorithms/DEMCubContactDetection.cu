@@ -542,8 +542,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             this_stream, scratchPad);
         // Now, we do a tab-keeping job: how many contacts on average a sphere has?
         {
-            // Figure out how many contacts an item in idA array typically has. Luckily, right now idA is sorted
-            // based
+            // Figure out how many contacts an item in idA array typically has.
             stateParams.avgCntsPerSphere =
                 (*pNumUniqueNewA > 0) ? (float)(*scratchPad.pNumContacts) / (float)(*pNumUniqueNewA) : 0.0;
 
@@ -552,7 +551,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 DEME_ERROR(
                     "On average a sphere has %.7g contacts, more than the max allowance (%.7g).\nIf you believe "
                     "this is not abnormal, set the allowance high using SetErrorOutAvgContacts before "
-                    "initialization.",
+                    "initialization.\nOtherwise, the simulation may have diverged and relaxing the physics may help, "
+                    "such as decreasing the step size and modifying material properties.",
                     stateParams.avgCntsPerSphere, solverFlags.errOutAvgSphCnts);
             }
         }

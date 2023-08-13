@@ -693,9 +693,11 @@ class DEMClumpTemplate {
         for (auto& rad : radii) {
             rad *= s;
         }
-        mass *= (double)s * (double)s * (double)s;
-        MOI *= (double)s * (double)s * (double)s * (double)s * (double)s;
-        volume *= (double)s * (double)s * (double)s;
+        // Never let mass become negative.
+        double positive_s = (double)std::abs(s);
+        mass *= positive_s * positive_s * positive_s;
+        MOI *= positive_s * positive_s * positive_s * positive_s * positive_s;
+        volume *= positive_s * positive_s * positive_s;
     }
 
     void AssignName(const std::string& some_name) { m_name = some_name; }

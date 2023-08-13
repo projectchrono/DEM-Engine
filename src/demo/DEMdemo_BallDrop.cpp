@@ -77,7 +77,10 @@ int main() {
     // have this problem. In the Centrifuge demo though, this can be a problem since the centrifuge's CoM is not moving,
     // but its pointwise velocity can be high, so it needs to be accounted for using this method.
     DEMSim.SetExpandSafetyAdder(5.);
-    DEMSim.SetInitBinSize(4 * terrain_rad);
+    // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto bin
+    // size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case setting
+    // init bin size may save the simulation. 
+    // DEMSim.SetInitBinSize(4 * terrain_rad);
     DEMSim.Initialize();
 
     path out_dir = current_path();
