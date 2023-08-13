@@ -287,7 +287,7 @@ int main(int argc, char* argv[]) {
                 DEMSim.WriteSphereFile(std::string(filename));
                 DEMSim.WriteMeshFile(std::string(meshname));
                 // std::cout << "Success: 1" << std::endl;
-                std::cout << "=================================" << std::endl;
+                // std::cout << "=================================" << std::endl;
             }
             DEMSim.DoDynamicsThenSync(0);
         }
