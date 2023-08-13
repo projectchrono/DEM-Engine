@@ -286,7 +286,7 @@ int main(int argc, char* argv[]) {
                 sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), cur_test);
                 DEMSim.WriteSphereFile(std::string(filename));
                 DEMSim.WriteMeshFile(std::string(meshname));
-                std::cout << "Success: 1" << std::endl;
+                // std::cout << "Success: 1" << std::endl;
                 std::cout << "=================================" << std::endl;
             }
             DEMSim.DoDynamicsThenSync(0);
