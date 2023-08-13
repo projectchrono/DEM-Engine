@@ -23,23 +23,23 @@ int main(int argc, char* argv[]) {
     int cur_test = atoi(argv[1]);
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_Wheel_Tests_10";
+    out_dir += "/DEMdemo_Wheel_Tests_1";
     std::filesystem::create_directory(out_dir);
 
     // `World'
     float G_mag = 9.81;
-    float step_size = 5e-6;
-    double world_size_y = 0.52;
-    double world_size_x = 3.;
+    float step_size = 1e-5; // 5e-6;
+    double world_size_y = 0.6; // 0.52;
+    double world_size_x = 4.;
     double world_size_z = 4.0;
     float w_r = 0.8;
-    double sim_end = 20.;
-    float z_adv_targ = 0.2;  // 0.1;
+    double sim_end = 30.;
+    float z_adv_targ = 0.1;
 
     // Define the wheel geometry
     float wheel_rad = atof(argv[2]);
     float eff_mass = atof(argv[3]);
-    float wheel_width = 0.2;
+    float wheel_width = atof(argv[5]);
     float wheel_mass = 5.;  // 8.7;
     float total_pressure = eff_mass * 9.81;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
@@ -47,7 +47,7 @@ int main(int argc, char* argv[]) {
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
     float grouser_height = atof(argv[4]);
 
-    float Slopes_deg[] = {15};
+    float Slopes_deg[] = {7.5};
 
     for (float Slope_deg : Slopes_deg) {
         DEMSolver DEMSim;
@@ -144,7 +144,7 @@ int main(int argc, char* argv[]) {
             std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
             for (size_t i = 0; i < in_xyz.size(); i++) {
                 if (std::abs(in_xyz.at(i).y) > (world_size_y - 0.05) / 2 ||
-                    std::abs(in_xyz.at(i).x) > (world_size_x - 0.05) / 2)
+                    std::abs(in_xyz.at(i).x) > (world_size_x) / 2)
                     elem_to_remove.at(i) = 1;
             }
             in_xyz.erase(std::remove_if(in_xyz.begin(), in_xyz.end(),
@@ -200,14 +200,14 @@ int main(int argc, char* argv[]) {
 
         DEMSim.SetInitTimeStep(step_size);
         DEMSim.SetCDUpdateFreq(10);
-        DEMSim.SetExpandSafetyAdder(.1);
+        DEMSim.SetExpandSafetyAdder(v_ref);
         DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1);
         DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(5);
         DEMSim.SetErrorOutVelocity(150.);
         DEMSim.Initialize();
 
         // Put the wheel in place, then let the wheel sink in initially
-        float corr = 1.0;  // 0
+        float corr = 0.5;  // 0
         float init_x = -1.2 + corr;
         if (Slope_deg < 21) {
             init_x = -1.8 + corr;
@@ -240,7 +240,6 @@ int main(int argc, char* argv[]) {
 
             std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
 
-            std::cout << "Test num: " << cur_test << std::endl;
             DEMSim.DoDynamicsThenSync(1.);
 
             float3 V = wheel_tracker->Vel();
@@ -280,6 +279,7 @@ int main(int argc, char* argv[]) {
                 sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), cur_test);
                 DEMSim.WriteSphereFile(std::string(filename));
                 DEMSim.WriteMeshFile(std::string(meshname));
+                std::cout << "Test num: " << cur_test << std::endl;
                 std::cout << "=================================" << std::endl;
             }
             DEMSim.DoDynamicsThenSync(0);

@@ -23,20 +23,20 @@ int main(int argc, char* argv[]) {
     int cur_test = atoi(argv[1]);
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_Wheel_Steer_4";
+    out_dir += "/DEMdemo_Wheel_Steer_1";
     std::filesystem::create_directory(out_dir);
 
     // `World'
     float G_mag = 9.81;
-    float step_size = 5e-6;
+    float step_size = 1e-5; // 5e-6;
     double world_size_y = .75;
-    double world_size_x = 2.;
+    double world_size_x = 3.;
     double world_size_z = 4.0;
 
     // Define the wheel geometry
     float wheel_rad = atof(argv[2]);
-    float wheel_width = 0.2;
-    float wheel_mass = 5.;               // 8.7;
+    float wheel_width = atof(argv[5]);
+    float wheel_mass = 5.;                        // 8.7;
     float total_pressure = atof(argv[3]) * 9.81;  // 22.
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
@@ -210,14 +210,14 @@ int main(int argc, char* argv[]) {
 
         DEMSim.SetInitTimeStep(step_size);
         DEMSim.SetCDUpdateFreq(10);
-        DEMSim.SetExpandSafetyAdder(.1);
+        DEMSim.SetExpandSafetyAdder(v_ref);
         DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1);
         DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(5);
         DEMSim.SetErrorOutVelocity(150.);
         DEMSim.Initialize();
 
         // Put the wheel in place, then let the wheel sink in initially
-        float corr = 1.0;  // 0
+        float corr = 0.5;  // 0
         float init_x = -1. + corr;
         if (Slope_deg < 21) {
             init_x = -1.6 + corr;
@@ -248,7 +248,6 @@ int main(int argc, char* argv[]) {
                 DEMSim.WriteMeshFile(std::string(meshname));
             }
 
-            std::cout << "Test num: " << cur_test << std::endl;
             DEMSim.DoDynamicsThenSync(0.5);
             DEMSim.ChangeFamily(1, 2);
             DEMSim.DoDynamicsThenSync(1.);
@@ -266,7 +265,7 @@ int main(int argc, char* argv[]) {
             }
 
             float adv = wheel_tracker->Pos().x - x1;
-            std::cout << "Slip: " << 1. - adv / (forward_ref_v * t) << std::endl;
+            std::cout << "SteerSlip: " << 1. - adv / (forward_ref_v * t) << std::endl;
             std::cout << "Force X: " << xforce / report_num << std::endl;
             std::cout << "Force Y: " << yforce / report_num << std::endl;
 
@@ -277,6 +276,7 @@ int main(int argc, char* argv[]) {
                 sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), cur_test);
                 DEMSim.WriteSphereFile(std::string(filename));
                 DEMSim.WriteMeshFile(std::string(meshname));
+                std::cout << "Test num: " << cur_test << std::endl;
                 std::cout << "=================================" << std::endl;
             }
         }
