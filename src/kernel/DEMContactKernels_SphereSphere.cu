@@ -10,8 +10,6 @@
 
 // If clump templates are jitified, they will be below
 _clumpTemplateDefs_;
-// Family mask, _nFamilyMaskEntries_ elements are in this array
-// __constant__ __device__ bool familyMasks[] = {_familyMasks_};
 
 template <typename T1, typename T2>
 inline __device__ void fillSharedMemSpheres(deme::DEMSimParams* simParams,
@@ -64,12 +62,26 @@ inline __device__ bool calcContactPoint(deme::DEMSimParams* simParams,
                                         const double& YB,
                                         const double& ZB,
                                         const float& rB,
-                                        deme::binID_t& binID) {
+                                        deme::binID_t& binID,
+                                        float artificialMarginA,
+                                        float artificialMarginB) {
     double contactPntX;
     double contactPntY;
     double contactPntZ;
     bool in_contact;
-    in_contact = checkSpheresOverlap<double>(XA, YA, ZA, rA, XB, YB, ZB, rB, contactPntX, contactPntY, contactPntZ);
+    float normX;  // Normal directions are placeholders here
+    float normY;
+    float normZ;
+    double overlapDepth;  // overlapDepth is needed for making artificial contacts not too loose.
+
+    //// TODO: I guess <float, float> is fine too.
+    in_contact = checkSpheresOverlap<double, float>(XA, YA, ZA, rA, XB, YB, ZB, rB, contactPntX, contactPntY,
+                                                    contactPntZ, normX, normY, normZ, overlapDepth);
+
+    // The contact needs to be larger than the smaller articifical margin so that we don't double count the artificially
+    // added margin. This is a design choice, to avoid having too many contact pairs when adding artificial margins.
+    float artificialMargin = (artificialMarginA < artificialMarginB) ? artificialMarginA : artificialMarginB;
+    in_contact = in_contact && (overlapDepth > (double)artificialMargin);
     binID = getPointBinID<deme::binID_t>(contactPntX, contactPntY, contactPntZ, simParams->binSize, simParams->nbX,
                                          simParams->nbY);
     return in_contact;
@@ -169,9 +181,10 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
                 }
 
                 deme::binID_t contactPntBin;
-                bool in_contact =
-                    calcContactPoint(simParams, bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], radii[bodyA], bodyX[bodyB],
-                                     bodyY[bodyB], bodyZ[bodyB], radii[bodyB], contactPntBin);
+                bool in_contact = calcContactPoint(simParams, bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], radii[bodyA],
+                                                   bodyX[bodyB], bodyY[bodyB], bodyZ[bodyB], radii[bodyB],
+                                                   contactPntBin, granData->familyExtraMarginSize[bodyAFamily],
+                                                   granData->familyExtraMarginSize[bodyBFamily]);
                 /*
                 if (in_contact) {
                     printf("Contact point I see: %e, %e, %e\n", contactPntX, contactPntY, contactPntZ);
@@ -233,9 +246,10 @@ __global__ void getNumberOfSphereContactsEachBin(deme::DEMSimParams* simParams,
                 }
 
                 deme::binID_t contactPntBin;
-                bool in_contact =
-                    calcContactPoint(simParams, bodyX[myThreadID], bodyY[myThreadID], bodyZ[myThreadID],
-                                     radii[myThreadID], cur_bodyX, cur_bodyY, cur_bodyZ, cur_radii, contactPntBin);
+                bool in_contact = calcContactPoint(simParams, bodyX[myThreadID], bodyY[myThreadID], bodyZ[myThreadID],
+                                                   radii[myThreadID], cur_bodyX, cur_bodyY, cur_bodyZ, cur_radii,
+                                                   contactPntBin, granData->familyExtraMarginSize[bodyAFamily],
+                                                   granData->familyExtraMarginSize[cur_ownerFamily]);
 
                 if (in_contact && (contactPntBin == binID)) {
                     atomicAdd(&blockPairCnt, 1);
@@ -339,9 +353,10 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
                 }
 
                 deme::binID_t contactPntBin;
-                bool in_contact =
-                    calcContactPoint(simParams, bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], radii[bodyA], bodyX[bodyB],
-                                     bodyY[bodyB], bodyZ[bodyB], radii[bodyB], contactPntBin);
+                bool in_contact = calcContactPoint(simParams, bodyX[bodyA], bodyY[bodyA], bodyZ[bodyA], radii[bodyA],
+                                                   bodyX[bodyB], bodyY[bodyB], bodyZ[bodyB], radii[bodyB],
+                                                   contactPntBin, granData->familyExtraMarginSize[bodyAFamily],
+                                                   granData->familyExtraMarginSize[bodyBFamily]);
 
                 if (in_contact && (contactPntBin == binID)) {
                     deme::contactPairs_t inBlockOffset = myReportOffset + atomicAdd(&blockPairCnt, 1);
@@ -388,9 +403,10 @@ __global__ void populateSphSphContactPairsEachBin(deme::DEMSimParams* simParams,
                 }
 
                 deme::binID_t contactPntBin;
-                bool in_contact =
-                    calcContactPoint(simParams, bodyX[myThreadID], bodyY[myThreadID], bodyZ[myThreadID],
-                                     radii[myThreadID], cur_bodyX, cur_bodyY, cur_bodyZ, cur_radii, contactPntBin);
+                bool in_contact = calcContactPoint(simParams, bodyX[myThreadID], bodyY[myThreadID], bodyZ[myThreadID],
+                                                   radii[myThreadID], cur_bodyX, cur_bodyY, cur_bodyZ, cur_radii,
+                                                   contactPntBin, granData->familyExtraMarginSize[bodyAFamily],
+                                                   granData->familyExtraMarginSize[cur_ownerFamily]);
 
                 if (in_contact && (contactPntBin == binID)) {
                     deme::contactPairs_t inBlockOffset = myReportOffset + atomicAdd(&blockPairCnt, 1);

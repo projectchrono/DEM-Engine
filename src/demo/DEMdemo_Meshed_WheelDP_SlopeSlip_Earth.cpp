@@ -28,9 +28,9 @@ int main(int argc, char* argv[]) {
 
     // `World'
     float G_mag = 9.81;
-    float step_size = 1e-5; // 5e-6;
-    double world_size_y = 0.6; // 0.52;
-    double world_size_x = 4.;
+    float step_size = 1e-5;     // 5e-6;
+    double world_size_y = 0.6;  // 0.52;
+    double world_size_x = 3.;
     double world_size_z = 4.0;
     float w_r = 0.8;
     double sim_end = 30.;
@@ -47,9 +47,15 @@ int main(int argc, char* argv[]) {
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
     float grouser_height = atof(argv[4]);
 
-    float Slopes_deg[] = {7.5};
+    float Slope_deg = atof(argv[6]);
+    float cp_dev;
+    if (atof(argv[7]) > 0.) {
+        cp_dev = atof(argv[7]) / 5.;
+    } else {
+        cp_dev = 0.;
+    }
 
-    for (float Slope_deg : Slopes_deg) {
+    {
         DEMSolver DEMSim;
         DEMSim.SetVerbosity(ERROR);
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
@@ -144,7 +150,7 @@ int main(int argc, char* argv[]) {
             std::vector<notStupidBool_t> elem_to_remove(in_xyz.size(), 0);
             for (size_t i = 0; i < in_xyz.size(); i++) {
                 if (std::abs(in_xyz.at(i).y) > (world_size_y - 0.05) / 2 ||
-                    std::abs(in_xyz.at(i).x) > (world_size_x) / 2)
+                    std::abs(in_xyz.at(i).x) > (world_size_x - 0.05) / 2)
                     elem_to_remove.at(i) = 1;
             }
             in_xyz.erase(std::remove_if(in_xyz.begin(), in_xyz.end(),
@@ -176,7 +182,7 @@ int main(int argc, char* argv[]) {
         // auto compressor_tracker = DEMSim.Track(compressor);
 
         // Families' prescribed motions (Earth)
-        float v_ref = w_r * wheel_rad;
+        float v_ref = w_r * (wheel_rad + cp_dev + grouser_height);
         double G_ang = Slope_deg * math_PI / 180.;
 
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
@@ -207,7 +213,7 @@ int main(int argc, char* argv[]) {
         DEMSim.Initialize();
 
         // Put the wheel in place, then let the wheel sink in initially
-        float corr = 0.5;  // 0
+        float corr = 1;  // 0
         float init_x = -1.2 + corr;
         if (Slope_deg < 21) {
             init_x = -1.8 + corr;
@@ -218,7 +224,7 @@ int main(int argc, char* argv[]) {
 
         // Put the wheel in place, then let the wheel sink in initially
         float max_z = max_z_finder->GetValue();
-        wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.08 + grouser_height + wheel_rad));
+        wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.03 + cp_dev + grouser_height + wheel_rad));
 
         int report_ps = 1000;
         float report_time = report_ps * step_size;
@@ -240,7 +246,8 @@ int main(int argc, char* argv[]) {
 
             std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
 
-            DEMSim.DoDynamicsThenSync(1.);
+            std::cout << "Test num: " << cur_test << std::endl;
+            DEMSim.DoDynamicsThenSync(2.);
 
             float3 V = wheel_tracker->Vel();
             float x1 = wheel_tracker->Pos().x;
@@ -279,7 +286,7 @@ int main(int argc, char* argv[]) {
                 sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), cur_test);
                 DEMSim.WriteSphereFile(std::string(filename));
                 DEMSim.WriteMeshFile(std::string(meshname));
-                std::cout << "Test num: " << cur_test << std::endl;
+                std::cout << "Success: 1" << std::endl;
                 std::cout << "=================================" << std::endl;
             }
             DEMSim.DoDynamicsThenSync(0);

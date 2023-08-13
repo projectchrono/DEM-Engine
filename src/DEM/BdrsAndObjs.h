@@ -64,32 +64,13 @@ struct DEMCylinderParams_t {
     objNormal_t normal;
 };
 
-/// GPU-side struct that holds external object component info. Only component, not their parents, so this is the
-/// equivalent of clump templates. External objects themselves (and their position, velocity etc.) are not stored with
-/// this struct; instead, they are considered a general owner (or clump)
-class DEMObjComponent {
-  public:
-    // float3* pSomething;
-
-    //
-    // std::vector<scratch_t, ManagedAllocator<scratch_t>> something;
-
-    union {
-        ManagedAllocator<DEMPlateParams_t> plate;
-        ManagedAllocator<DEMPlaneParams_t> plane;
-    };
-
-    DEMObjComponent() {
-        // cudaMallocManaged(&pSomething, sizeof(float3));
-    }
-    ~DEMObjComponent() {
-        // cudaFree(pSomething);
-    }
-};
-
 /// API-(Host-)side struct that holds cached user-input external objects
-struct DEMExternObj {
-    // Component object types
+class DEMExternObj : public DEMInitializer {
+  public:
+    DEMExternObj() { obj_type = OWNER_TYPE::ANALYTICAL; }
+    ~DEMExternObj() {}
+
+    // Component object types. This means the types of each component, and is different from obj_type.
     std::vector<OBJ_COMPONENT> types;
     // Component object materials
     std::vector<std::shared_ptr<DEMMaterial>> materials;
@@ -113,8 +94,6 @@ struct DEMExternObj {
     float mass = 1e6;
     // Obj's MOI (huge by default)
     float3 MOI = make_float3(1e6);
-    // Its offset when this obj got loaded into the API-level user raw-input array
-    unsigned int load_order;
 
     union DEMAnalEntParams {
         DEMPlateParams_t plate;
@@ -138,13 +117,26 @@ struct DEMExternObj {
     void SetMass(float mass) { this->mass = mass; }
     /// Set MOI (in principal frame)
     void SetMOI(float3 MOI) { this->MOI = MOI; }
+    void SetMOI(const std::vector<float>& MOI) {
+        assertThreeElements(MOI, "SetMOI", "MOI");
+        SetMOI(host_make_float3(MOI[0], MOI[1], MOI[2]));
+    }
 
     /// @brief Set the initial quaternion for this object (before simulation initializes).
     /// @param rotQ Initial quaternion.
     void SetInitQuat(const float4 rotQ) { init_oriQ = rotQ; }
+    void SetInitQuat(const std::vector<float>& rotQ) {
+        assertFourElements(rotQ, "SetInitQuat", "rotQ");
+        SetInitQuat(host_make_float4(rotQ[0], rotQ[1], rotQ[2], rotQ[3]));
+    }
+
     /// @brief Set the initial position for this object (before simulation initializes).
     /// @param displ Initial position.
     void SetInitPos(const float3 displ) { init_pos = displ; }
+    void SetInitPos(const std::vector<float>& displ) {
+        assertThreeElements(displ, "SetInitPos", "displ");
+        SetInitPos(host_make_float3(displ[0], displ[1], displ[2]));
+    }
 
     /// Add a plane with infinite size
     void AddPlane(const float3 pos, const float3 normal, const std::shared_ptr<DEMMaterial>& material) {
@@ -156,6 +148,15 @@ struct DEMExternObj {
         params.plane.normal = unit_normal;
         entity_params.push_back(params);
     }
+    void AddPlane(const std::vector<float>& pos,
+                  const std::vector<float>& normal,
+                  const std::shared_ptr<DEMMaterial>& material) {
+        assertThreeElements(pos, "AddPlane", "pos");
+        assertThreeElements(normal, "AddPlane", "normal");
+        AddPlane(host_make_float3(pos[0], pos[1], pos[2]), host_make_float3(normal[0], normal[1], normal[2]), material);
+    }
+
+    /*
     /// Add a plate with finite size.
     /// Assuming the normal you specified is the z-direction and that normal vector originates from the pos point you
     /// input. Then specify the dimensions along x- and y-axes to define the plate's area.
@@ -174,6 +175,8 @@ struct DEMExternObj {
         params.plate.h_dim_y = ydim / 2.0;
         entity_params.push_back(params);
     }
+    */
+
     /// Add a z-axis-aligned cylinder of infinite length
     void AddZCylinder(const float3 pos,
                       const float rad,
@@ -188,6 +191,15 @@ struct DEMExternObj {
         params.cyl.normal = normal;
         entity_params.push_back(params);
     }
+    void AddZCylinder(const std::vector<float>& pos,
+                      const float rad,
+                      const std::shared_ptr<DEMMaterial>& material,
+                      const objNormal_t normal = ENTITY_NORMAL_INWARD) {  // ENTITY_NORMAL_INWARD is 0, and objNormal_t
+                                                                          // is an integer (for Shlok)
+        assertThreeElements(pos, "AddZCylinder", "pos");
+        AddZCylinder(host_make_float3(pos[0], pos[1], pos[2]), rad, material, normal);
+    }
+
     /// Add a cylinder of infinite length, which is along a user-specific axis
     void AddCylinder(const float3 pos,
                      const float3 axis,
@@ -203,10 +215,20 @@ struct DEMExternObj {
         params.cyl.normal = normal;
         entity_params.push_back(params);
     }
+    void AddCylinder(const std::vector<float>& pos,
+                     const std::vector<float>& axis,
+                     const float rad,
+                     const std::shared_ptr<DEMMaterial>& material,
+                     const objNormal_t normal = ENTITY_NORMAL_INWARD) {
+        assertThreeElements(pos, "AddCylinder", "pos");
+        assertThreeElements(axis, "AddCylinder", "axis");
+        AddCylinder(host_make_float3(pos[0], pos[1], pos[2]), host_make_float3(axis[0], axis[1], axis[2]), rad,
+                    material, normal);
+    }
 };
 
 // DEM mesh object
-class DEMMeshConnected {
+class DEMMeshConnected : public DEMInitializer {
   private:
     void assertLength(size_t len, const std::string name) {
         if (nTri == 0) {
@@ -244,12 +266,24 @@ class DEMMeshConnected {
     std::vector<int3> m_face_uv_indices;
     std::vector<int3> m_face_col_indices;
 
+    /// @brief Get the coordinates of the vertices of this mesh.
+    /// @return A reference to the vertices data vector (of float3) of the mesh.
     std::vector<float3>& GetCoordsVertices() { return m_vertices; }
+    /// @brief Get the coordinates of the vertices of this mesh.
+    /// @return N (number of vertices) by 3 matrix.
+    std::vector<std::vector<float>> GetCoordsVerticesAsVectorOfVectors();
+
     std::vector<float3>& GetCoordsNormals() { return m_normals; }
     std::vector<float3>& GetCoordsUV() { return m_UV; }
     std::vector<float3>& GetCoordsColors() { return m_colors; }
 
+    /// @brief Get the vertices number of all the triangles of this mesh.
+    /// @return A reference to the vertices number data vector (of int3) of the mesh.
     std::vector<int3>& GetIndicesVertexes() { return m_face_v_indices; }
+    /// @brief Get the vertices number of all the triangles of this mesh.
+    /// @return N (number of vertices) by 3 matrix.
+    std::vector<std::vector<int>> GetIndicesVertexesAsVectorOfVectors();
+
     std::vector<int3>& GetIndicesNormals() { return m_face_n_indices; }
     std::vector<int3>& GetIndicesUV() { return m_face_uv_indices; }
     std::vector<int3>& GetIndicesColors() { return m_face_col_indices; }
@@ -276,8 +310,6 @@ class DEMMeshConnected {
     float mass = 1.f;
     // Mesh's MOI
     float3 MOI = make_float3(1.f);
-    // Its offset when this obj got loaded into the API-level user raw-input array
-    unsigned int load_order;
 
     std::string filename;  ///< file string if loading an obj file
 
@@ -285,11 +317,15 @@ class DEMMeshConnected {
     // normals derived from right-hand-rule are the same as the normals in the mesh file
     bool use_mesh_normals = false;
 
-    DEMMeshConnected() {}
-    DEMMeshConnected(std::string input_file) { LoadWavefrontMesh(input_file); }
+    DEMMeshConnected() { obj_type = OWNER_TYPE::MESH; }
+    DEMMeshConnected(std::string input_file) {
+        LoadWavefrontMesh(input_file);
+        obj_type = OWNER_TYPE::MESH;
+    }
     DEMMeshConnected(std::string input_file, const std::shared_ptr<DEMMaterial>& mat) {
         LoadWavefrontMesh(input_file);
         SetMaterial(mat);
+        obj_type = OWNER_TYPE::MESH;
     }
     ~DEMMeshConnected() {}
 
@@ -313,7 +349,7 @@ class DEMMeshConnected {
     void UseNormals(bool use = true) { use_mesh_normals = use; }
 
     /// Access the n-th triangle in mesh
-    DEMTriangle GetTriangle(size_t index) const {
+    DEMTriangle GetTriangle(size_t index) const {  // No need to wrap (for Shlok)
         return DEMTriangle(m_vertices[m_face_v_indices[index].x], m_vertices[m_face_v_indices[index].y],
                            m_vertices[m_face_v_indices[index].z]);
     }
@@ -331,11 +367,16 @@ class DEMMeshConnected {
         this->owner = NULL_BODYID;
     }
 
-    /// Set mass
+    /// Set mass.
     void SetMass(float mass) { this->mass = mass; }
-    /// Set MOI (in principal frame)
+    /// Set MOI (in principal frame).
     void SetMOI(float3 MOI) { this->MOI = MOI; }
-    /// Set mesh family number
+    /// Set MOI (in principal frame).
+    void SetMOI(const std::vector<float>& MOI) {
+        assertThreeElements(MOI, "SetMOI", "MOI");
+        SetMOI(host_make_float3(MOI[0], MOI[1], MOI[2]));
+    }
+    /// Set mesh family number.
     void SetFamily(unsigned int num) { this->family_code = num; }
 
     /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
@@ -344,16 +385,35 @@ class DEMMeshConnected {
         materials = input;
         isMaterialSet = true;
     }
+    /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
     void SetMaterial(const std::shared_ptr<DEMMaterial>& input) {
         SetMaterial(std::vector<std::shared_ptr<DEMMaterial>>(nTri, input));
     }
 
+    /*
     /// Compute barycenter, mass and MOI in CoM frame
     void ComputeMassProperties(double& mass, float3& center, float3& inertia);
 
-    /// Transform the meshed object so it gets to its initial position, before the simulation starts
+    /// Create a map of neighboring triangles, vector of:
+    /// [Ti TieA TieB TieC]
+    /// (the free sides have triangle id = -1).
+    /// Return false if some edge has more than 2 neighboring triangles
+    bool ComputeNeighbouringTriangleMap(std::vector<std::array<int, 4>>& tri_map) const;
+    */
+
+    /// @brief Give the meshed object an initial rotation, before the simulation starts.
     void SetInitQuat(const float4 rotQ) { init_oriQ = rotQ; }
+    void SetInitQuat(const std::vector<float>& rotQ) {
+        assertFourElements(rotQ, "SetInitQuat", "rotQ");
+        SetInitQuat(host_make_float4(rotQ[0], rotQ[1], rotQ[2], rotQ[3]));
+    }
+
+    /// @brief Transform the meshed object so it gets to its initial position, before the simulation starts.
     void SetInitPos(const float3 displ) { init_pos = displ; }
+    void SetInitPos(const std::vector<float>& displ) {
+        assertThreeElements(displ, "SetInitPos", "displ");
+        SetInitPos(host_make_float3(displ[0], displ[1], displ[2]));
+    }
 
     /// If this mesh's component sphere relPos is not reported by the user in its CoM frame, then the user needs to
     /// call this method immediately to report this mesh's Volume Centroid and Principal Axes, and relPos will be
@@ -365,6 +425,13 @@ class DEMMeshConnected {
             applyFrameTransformGlobalToLocal(node, center, prin_Q);
         }
     }
+    void InformCentroidPrincipal(const std::vector<float>& center, const std::vector<float>& prin_Q) {
+        assertThreeElements(center, "InformCentroidPrincipal", "center");
+        assertFourElements(prin_Q, "InformCentroidPrincipal", "prin_Q");
+        InformCentroidPrincipal(host_make_float3(center[0], center[1], center[2]),
+                                host_make_float4(prin_Q[0], prin_Q[1], prin_Q[2], prin_Q[3]));
+    }
+
     /// The opposite of InformCentroidPrincipal, and it is another way to align this mesh's coordinate system with its
     /// centroid and principal system: rotate then move this clump, so that at the end of this operation, the original
     /// `origin' point should hit the CoM of this mesh.
@@ -373,6 +440,12 @@ class DEMMeshConnected {
             applyFrameTransformLocalToGlobal(node, vec, rot_Q);
         }
     }
+    void Move(const std::vector<float>& vec, const std::vector<float>& rot_Q) {
+        assertThreeElements(vec, "Move", "vec");
+        assertFourElements(rot_Q, "Move", "rot_Q");
+        Move(host_make_float3(vec[0], vec[1], vec[2]), host_make_float4(rot_Q[0], rot_Q[1], rot_Q[2], rot_Q[3]));
+    }
+
     /// Mirror all points in the mesh about a plane. If this changes the mass properties of this mesh, it is the user's
     /// responsibility to reset them.
     void Mirror(float3 plane_point, float3 plane_normal) {
@@ -385,31 +458,40 @@ class DEMMeshConnected {
             node += 2 * proj * plane_normal;
         }
     }
-    /// Scale all geometry component of this mesh
+    void Mirror(const std::vector<float>& plane_point, const std::vector<float>& plane_normal) {
+        assertThreeElements(plane_point, "Mirror", "plane_point");
+        assertThreeElements(plane_normal, "Mirror", "plane_normal");
+        Mirror(host_make_float3(plane_point[0], plane_point[1], plane_point[2]),
+               host_make_float3(plane_normal[0], plane_normal[1], plane_normal[2]));
+    }
+
+    /// @brief Scale all geometry component of this mesh.
     void Scale(float s) {
         for (auto& node : m_vertices) {
             node *= s;
         }
-        mass *= (double)s * (double)s * (double)s;
-        MOI *= (double)s * (double)s * (double)s * (double)s * (double)s;
+        // Never let mass become negative.
+        double positive_s = (double)std::abs(s);
+        mass *= positive_s * positive_s * positive_s;
+        MOI *= positive_s * positive_s * positive_s * positive_s * positive_s;
     }
+    /// @brief Scale all geometry component of this mesh. Specify x, y, z respectively.
     void Scale(float3 s) {
         for (auto& node : m_vertices) {
             node = node * s;
         }
         // Really just an estimate. The user should reset mass properties manually afterwards.
-        double prod = (double)s.x * (double)s.y * (double)s.z;
+        // Never let mass become negative.
+        double prod = std::abs((double)s.x * (double)s.y * (double)s.z);
         mass *= prod;
-        MOI.x *= prod * s.x * s.x;
+        MOI.x *= prod * s.x * s.x; // Square, so always positive
         MOI.y *= prod * s.y * s.y;
         MOI.z *= prod * s.z * s.z;
     }
-
-    /// Create a map of neighboring triangles, vector of:
-    /// [Ti TieA TieB TieC]
-    /// (the free sides have triangle id = -1).
-    /// Return false if some edge has more than 2 neighboring triangles
-    bool ComputeNeighbouringTriangleMap(std::vector<std::array<int, 4>>& tri_map) const;
+    void Scale(const std::vector<float>& s) {
+        assertThreeElements(s, "Scale", "s");
+        Scale(host_make_float3(s[0], s[1], s[2]));
+    }
 
     ////////////////////////////////////////////////////////
     // Some geo wildcard-related stuff
@@ -442,6 +524,31 @@ class DEMMeshConnected {
         AddGeometryWildcard(name, std::vector<float>(nTri, val));
     }
 };
+
+/*
+/// GPU-side struct that holds external object component info. Only component, not their parents, so this is the
+/// equivalent of clump templates. External objects themselves (and their position, velocity etc.) are not stored with
+/// this struct; instead, they are considered a general owner (or clump)
+class DEMObjComponent {
+  public:
+    // float3* pSomething;
+
+    //
+    // std::vector<scratch_t, ManagedAllocator<scratch_t>> something;
+
+    union {
+        ManagedAllocator<DEMPlateParams_t> plate;
+        ManagedAllocator<DEMPlaneParams_t> plane;
+    };
+
+    DEMObjComponent() {
+        // cudaMallocManaged(&pSomething, sizeof(float3));
+    }
+    ~DEMObjComponent() {
+        // cudaFree(pSomething);
+    }
+};
+*/
 
 }  // namespace deme
 

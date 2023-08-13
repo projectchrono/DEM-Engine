@@ -1,16 +1,5 @@
 # SBEL GPU DEM-Engine
-_A Dual-GPU DEM solver with complex grain geometry support_
-
-### Description
-
-DEM-Engine, nicknamed _DEME_, does Discrete Element Method simulations:
-
-- Using up to two GPUs at the same time (works great on consumer _and_ data center GPUs).
-- With the particles having complex shapes represented by clumped spheres.
-- With support for customizable contact force models (want to add a non-standard cohesive force, or an electrostatic repulsive force? You got this).
-- With an emphasis on computational efficiency. As a rule of thumb, using 3-sphere clump elements, simulating 1 million elements for 1 million time steps takes around 1 hour on two RTX 3080s.
-- Supporting a wide range of problems with flexible API designs. Deformable meshes and grain breakage can be simulated by leveraging the explicit controls given to the user.
-- With support for co-simulation with other C/C++ packages, such as [Chrono](https://github.com/projectchrono/chrono).
+__A Dual-GPU DEM solver with complex grain geometry support__
 
 <p>
   <img width="380" src="https://i.imgur.com/DKGlM14.jpg">
@@ -22,13 +11,43 @@ DEM-Engine, nicknamed _DEME_, does Discrete Element Method simulations:
   <img width="380" src="https://i.imgur.com/4R25TPX.gif">
 </p>
 
+## Quick links
+
+<li><a href="#description">Overview, movies of demos, and where to get help</a></li>
+
+<li><a href="#installation">How to compile</a></li>
+
+<li><a href="#examples">Numerical examples and use cases</a></li>
+
+<li><a href="#ccontainer">Container</a></li>
+
+<li><a href="#library">Install as C++ library</a></li>
+
+<li><a href="#licensing">Licensing</a></li>
+
+<li><a href="#limitations">Limitations</a></li>
+
+<li><a href="#citation">Cite this work</a></li>
+
+
+<h2 id="description">Description</h2>
+
+DEM-Engine, nicknamed _DEME_, does Discrete Element Method simulations:
+
+- Using up to two GPUs at the same time (works great on consumer _and_ data center GPUs).
+- With the particles having complex shapes represented by clumped spheres.
+- With support for customizable contact force models (want to add a non-standard cohesive force, or an electrostatic repulsive force? You got this).
+- With an emphasis on computational efficiency. As a rule of thumb, using 3-sphere clump elements, simulating 1 million elements for 1 million time steps takes around 1 hour on two RTX 3080s.
+- Supporting a wide range of problems with flexible API designs. Deformable meshes and grain breakage can be simulated by leveraging the explicit controls given to the user.
+- With support for co-simulation with other C/C++ packages, such as [Chrono](https://github.com/projectchrono/chrono).
+
 Currently _DEME_ is a C++ package with an API design similar to Chrono's, and should be easy to learn for existing Chrono users. We are building a Python wrapper for _DEME_.
 
 You can find the movies of some of _DEME_'s demos [here](https://uwmadison.app.box.com/s/u4m9tee3k1vizf097zkq3rgv54orphyv).
 
 You are welcome to discuss _DEME_ on [Project Chrono's forum](https://groups.google.com/g/projectchrono). 
 
-### Licensing
+<h2 id="licensing">Licensing</h2>
 
 This project should be treated as the collective intellectual property of the Author(s) and the University of Wisconsin - Madison. The following copyright statement should be included in any new or modified source files
 ```
@@ -40,7 +59,27 @@ SPDX-License-Identifier: BSD-3-Clause
 
 New authors should add their name to the file `CONTRIBUTORS.md` rather than to individual copyright headers.
 
-### Installation
+<h2 id="ccontainer">Using DEME in Container</h2>
+
+_DEME_ is now [hosted on DockerHub](https://hub.docker.com/r/uwsbel/dem-engine) for those who want to run it in a container. It can potentially save your time that would otherwise be spent on getting the dependencies right, and for you to test out if _DEME_ is what you needed.
+
+On a Linux machine, [install CUDA](https://developer.nvidia.com/cuda-downloads). Then install [docker](https://docs.docker.com/desktop/install/linux-install/) depending on your OS. Then [install Nvidia container toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) for running GPU-based containers. Things to note about installing the prerequisites:
+
+- You can install the newest CUDA for running the container. However, if you are also considering building from source later, I recommend just getting CUDA 12.0 or a CUDA 11 distro. CUDA 12.1 appears to cause troubles with jitify if built from source.
+- _DEME_ probably does not work on WSL. The reason is in **Installation** section. I recommend working with native Linux.
+- Got `Docker daemon permission denied` error? Maybe try [this page](https://stackoverflow.com/questions/48957195/how-to-fix-docker-got-permission-denied-issue).
+
+After those are done, you can launch the container by doing this in a Linux command prompt: `docker run -it --gpus all uwsbel/dem-engine:latest`
+
+Then the source code along with a pre-built _DEME_ can be found in `/DEM-Engine` and `/DEM-Engine/build`. See **Examples** section for running example simulations. 
+
+Starting from this point, you can start adding new scripts or modify existing ones for your own simulations. You can also build and run your newly added code, and commit the modified container as needed. If you encounter problems when re-building the project in the container, then you may refer to the troubleshooting tips in the **Installation** section for help, or turn to the [forum](https://groups.google.com/g/projectchrono).
+
+Note that the container imagine is not updated as often for bug-fixes and new features as the GitHub repo. 
+
+<h2 id="installation">Compilation</h2>
+
+You can also build _DEME_ locally.
 
 On a Linux machine, install CUDA if you do not already have it. Useful installation instructions may be found [here](https://developer.nvidia.com/cuda-downloads). 
 
@@ -98,14 +137,17 @@ ninja
 Some additional troubleshooting tips for building the project:
 
 - If you see some grammatical errors during compilation, such as `filesystem` not being a member of `std` or arguments not expanded with `...`, then manually setting the flag `TargetCXXStandard` to `STD_CXX17` might help.
+- If CUB is not found, then you may manually set it in the `ccmake` GUI as `/usr/local/cuda/lib64/cmake/cub`. It may be a slightly different path on your machine or cluster.
+- If `libcudacxx` is not found, then you may manually set it in the `ccmake` GUI as `/usr/local/cuda-12.0/targets/x86_64-linux/lib/cmake/libcudacxx`. Depending on your CUDA version it may be a slightly different path on your machine or cluster. You may also try to find these packages using `find`.
 
-### Examples
+<h2 id="examples">Examples</h2>
 
 After the build process is done, you can start trying out the demos.
 
+- `./src/demo/DEMdemo_SingleSphereCollide` can be used to test a correct installation. If it runs outputting a lot of texts (those are debug messages; the user do not have to worry about the content) and stops without an error in the end, the installation is probably good.
 - An all-rounder beginner example featuring a bladed mixer interacting with complex shaped particles: `./src/demo/DEMdemo_Mixer`.
 - A place to learn how prescribed motions work in this package, using either analytical boundaries or particle-represented boundaries: `./src/demo/DEMdemo_Centrifuge` and `./src/demo/DEMdemo_Sieve`.
-- A few representative engineering experiments reproduced in DEM simulations, which potentially serve as starting points for your own DEM scripts: `/src/demo/DEMdemo_BallDrop`, `./src/demo/DEMdemo_ConePenetration`, `/src/demo/DEMdemo_RotatingDrum`, `./src/demo/DEMdemo_Repose`.
+- A few representative engineering experiments reproduced in DEM simulations, which potentially serve as starting points for your own DEM scripts: `/src/demo/DEMdemo_BallDrop`, `./src/demo/DEMdemo_ConePenetration`, `/src/demo/DEMdemo_RotatingDrum`, `./src/demo/DEMdemo_Repose`, `./src/demo/DEMdemo_Plow`.
 - `./src/demo/DEMdemo_WheelDP` shows how to load a checkpointed configuration file to instantly generate a settled granular terrain, then run a drawbar-pull test on it. This demo therefore requires you to first finish the two GRCPrep demos to obtain the terrain checkpoint file. The granular terrain in these demos features DEM particles with a variety of sizes and shapes.
 - `./src/demo/DEMdemo_WheelDPSimplified` is a simplified version of the previous drawbar-pull test which has no prerequisite. The terrain is simpilified to be made of only one type of irregular-shaped particles. It serves as a quick starting point for people who want to create similar experiments.
 - `./src/demo/DEMdemo_Indentation` is a more advanced examples showing the usage of the custom additional properties (called _wildcards_) that you can associate with the simulation entities, and use them in the force model and/or change them in simulation then deposit them into the output files. _Wildcards_ have more use cases especially if coupled together with a custom force model, as shown in some of the follwing demos.
@@ -123,14 +165,14 @@ Some additional troubleshooting tips for running the demos:
 - Used your own force model but got runtime compilation error like `expression must have pointer-to-object type but it has type "float"`, or `unknown variable "delta_time"`? Check out what we did in demo `DEMdemo_Electrostatic`. You may need to manually specify what material properties are pairwise and what contact wildcards you have using `SetMustPairwiseMatProp` and `SetPerContactWildcards`.
 - Just running provided demos or a script that used to work, but the jitification of the force model failed or the simulation fails at the first kernel call (probably in `DEMCubContactDetection.cu`)? Then did you pull a new version and just re-built in-place? A new update may modify the force model, and the force model in _DEME_ are given as text files so might not be automatically copied over when the project is re-built. I am sorry for the trouble it might cause, but you can do a clean re-build from an empty directory and it should fix the problem. Do not forget to first commit your own branches' changes and relocate the data you generated in the build directory. Another solution is to copy everything in `src/DEM` to the `DEM` directory in the build directory, then everything in `src/kernel` to the `kernel` directory in the build directory, then try again.
 
-### Limitations
+<h2 id="limitations">Limitations</h2>
 
 _DEME_ is designed to simulate the interaction among clump-represented particles, the interaction between particles and mesh-represented bodies, as well as the interaction between particles and analytical boundaries. _DEME_ does not resolve mesh&ndash;mesh or mesh&ndash;analytical contacts.
 
 - It is able to handle mesh-represented bodies with relatively simple physics, for example a meshed plow moving through granular materials with a prescribed velocity, or several meshed projectiles flying and hitting the granular ground. 
 - However, if the bodies' physics are complex multibody problems, say it is a vehicle that has joint-connected parts and a motor with certain driving policies, or the meshed bodies have collisions among themselves that needs to be simulated, then _DEME_ alone does not have the infrastructure to handle them. But you can install _DEME_ as a library and do coupled simulations with other tools such as [Chrono](https://github.com/projectchrono/chrono), where _DEME_ is exclusively tasked with handling the granular materials and the influence they exert on the outside world (with high efficiency, of course). See the following section.
 
-### Install as C++ library
+<h2 id="library">Install as C++ library</h2>
 
 Set the `CMAKE_INSTALL_PREFIX` flag in `cmake` GUI to your desired installation path and then 
 
@@ -138,13 +180,15 @@ Set the `CMAKE_INSTALL_PREFIX` flag in `cmake` GUI to your desired installation 
 ninja install
 ```
 
-We provide examples of linking against both [Chrono](https://github.com/projectchrono/chrono) and _DEME_ for co-simulations in [chrono-projects](https://github.com/projectchrono/chrono-projects/tree/feature/DEME).
+We provide examples of linking against both [Chrono](https://github.com/projectchrono/chrono) and _DEME_ for co-simulations in [chrono-projects](https://github.com/projectchrono/chrono-projects/tree/feature/DEME). You need to checkout the `feature/DEME` branch after cloning the code.
 
-Assuming you know how to build `chrono-projects` linking against a Chrono installation, then the extra things that you should do to link against _DEME_ are
+You need to build `chrono-projects` linking against a Chrono installation (Chrono installation guide is [here](https://api.projectchrono.org/tutorial_install_chrono_linux.html); note you have to `make install` to install Chrono, not just build it), then link against _DEME_. The steps for building `chrono-projects`:
 
-- Set `ENABLE_DEME_TESTS` to `ON`;
-- Set `ChPF_DIR` when prompted. It should be in `<your_install_dir>/lib64/cmake/ChPF`;
-- Set `DEME_DIR` when prompted. It should be in `<your_install_dir>/lib64/cmake/DEME`.
+- Start by linking against Chrono. Set `Chrono_DIR`. It should be in `<your_Chrono_install_dir>/lib/cmake`. Then configure the project;
+- Make sure `ENABLE_PROJECTS` to `ON` and configure the project;
+- Linkage against Chrono is done, now move on to link against _DEME_. Set `ENABLE_DEME_TESTS` to `ON`. Then configure the project;
+- Set `ChPF_DIR` when prompted. It should be in `<your_DEME_install_dir>/lib64/cmake/ChPF`. Then configure the project;
+- Set `DEME_DIR` when prompted. It should be in `<your_DEME_install_dir>/lib64/cmake/DEME`. Then configure the project.
 
 Then build the project and you should be able to run the demo scripts that demonstrate the co-simulation between _DEME_ and Chrono.
 
@@ -181,3 +225,17 @@ This project exists independently of Chrono so developers should be sure to incl
 > 
 > THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 > ```
+
+<h2 id="citation">Citation</h2>
+
+See [a related _DEME_ paper](https://arxiv.org/abs/2307.03445) and cite
+```bibtex
+@article{zhang2023gpuaccelerated,
+      title={A GPU-accelerated simulator for the DEM analysis of granular systems composed of clump-shaped elements}, 
+      author={Ruochun Zhang and Colin Vanden Heuvel and Alexander Schepelmann and Arno Rogg and Dimitrios Apostolopoulos and Samuel Chandler and Radu Serban and Dan Negrut},
+      year={2023},
+      eprint={2307.03445},
+      archivePrefix={arXiv},
+      primaryClass={cs.CE}
+}
+```

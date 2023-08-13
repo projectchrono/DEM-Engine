@@ -41,6 +41,24 @@ namespace deme {
 
 using namespace WAVEFRONT;
 
+std::vector<std::vector<float>> DEMMeshConnected::GetCoordsVerticesAsVectorOfVectors() {
+    auto vec = GetCoordsVertices();
+    std::vector<std::vector<float>> res(vec.size());
+    for (size_t i = 0; i < vec.size(); i++) {
+        res[i] = {vec[i].x, vec[i].y, vec[i].z};
+    }
+    return res;
+}
+
+std::vector<std::vector<int>> DEMMeshConnected::GetIndicesVertexesAsVectorOfVectors() {
+    auto vec = GetIndicesVertexes();
+    std::vector<std::vector<int>> res(vec.size());
+    for (size_t i = 0; i < vec.size(); i++) {
+        res[i] = {vec[i].x, vec[i].y, vec[i].z};
+    }
+    return res;
+}
+
 bool DEMMeshConnected::LoadWavefrontMesh(std::string input_file, bool load_normals, bool load_uv) {
     this->m_vertices.clear();
     this->m_normals.clear();

@@ -274,9 +274,17 @@ int main() {
         DEMSim.SetInitTimeStep(step_size);
         DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -G_mag));
         DEMSim.SetCDUpdateFreq(30);
-        DEMSim.SetExpandSafetyAdder(0.5);
-        DEMSim.SetMaxVelocity(40);
-        DEMSim.SetInitBinSizeAsMultipleOfSmallestSphere(2);
+        // Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
+        // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
+        // happen anyway and if it does, something already went wrong.
+        DEMSim.SetMaxVelocity(50.);
+        // Error out vel is used to force the simulation to abort when something goes wrong and sim diverges.
+        DEMSim.SetErrorOutVelocity(60.);
+        DEMSim.SetExpandSafetyMultiplier(1.1);
+        // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto
+        // bin size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case
+        // setting init bin size may save the simulation.
+        // DEMSim.SetInitBinSize(2 * scales.at(2));
         DEMSim.Initialize();
 
         // Compress until dense enough

@@ -10,11 +10,11 @@ GpuManager::GpuManager(unsigned int total_streams) {
     DEME_GPU_CALL(cudaGetDeviceCount(&ndevices));
 
     if (ndevices == 0) {
-        std::cerr << "Exactly 0 GPU device is detected. Try lspci and see what you get.\nIf you indeed have GPU "
+        std::cerr << "No GPU device is detected. Try lspci and see what you get.\nIf you indeed have GPU "
                      "devices, maybe you should try rebooting or reinstalling cuda components?\n";
         throw std::runtime_error("No GPU device detected!");
     } else if (ndevices == 1) {
-        std::cerr << "\nExactly 1 GPU device is detected. Currently, DEME's performance edge is limited with only 1 "
+        std::cerr << "\nOne GPU device is detected. Currently, DEME's performance edge is limited with only one "
                      "GPU.\nTry allocating 2 GPU devices if possible.\n\n";
     }
 
@@ -82,7 +82,7 @@ const GpuManager::StreamInfo& GpuManager::getAvailableStream() {
 
     // This exception is not meant to be handled, it serves as a notifier that the algorithm is using more streams than
     // it allocated
-    throw std::range_error("no available streams!");
+    throw std::range_error("No available streams!");
 }
 
 const GpuManager::StreamInfo& GpuManager::getAvailableStreamFromDevice(int index) {
@@ -94,7 +94,7 @@ const GpuManager::StreamInfo& GpuManager::getAvailableStreamFromDevice(int index
     }
 
     // This exception should rarely be thrown, so it shouldn't have a notable performance impact
-    throw std::range_error("no available streams on device [" + std::to_string(index) + "]!");
+    throw std::range_error("No available streams on device [" + std::to_string(index) + "]!");
 }
 
 void GpuManager::setStreamAvailable(const StreamInfo& info) {

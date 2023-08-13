@@ -567,6 +567,21 @@ class DEMTriangle {
 // A struct that defines a `clump' (one of the core concepts of this solver). A clump is typically small which consists
 // of several sphere components, but it can be as large as having thousands of spheres.
 class DEMClumpTemplate {
+  private:
+    void assertLength(size_t len, const std::string name) {
+        if (nComp == 0) {
+            std::cerr << "The settings at the " << name
+                      << " call were applied to 0 sphere components.\nPlease consider using " << name
+                      << " only after loading the clump template." << std::endl;
+        }
+        if (len != nComp) {
+            std::stringstream ss;
+            ss << name << " input argument must have length " << nComp << " (not " << len
+               << "), same as the number of sphere components in the clump template." << std::endl;
+            throw std::runtime_error(ss.str());
+        }
+    }
+
   public:
     float mass = 0;
     float3 MOI = make_float3(0);
@@ -574,6 +589,26 @@ class DEMClumpTemplate {
     std::vector<float3> relPos;
     std::vector<std::shared_ptr<DEMMaterial>> materials;
     unsigned int nComp = 0;  // Number of components
+
+    /// Set mass.
+    void SetMass(float mass) { this->mass = mass; }
+    /// Set MOI (in principal frame).
+    void SetMOI(float3 MOI) { this->MOI = MOI; }
+    /// Set MOI (in principal frame).
+    void SetMOI(const std::vector<float>& MOI) {
+        assertThreeElements(MOI, "SetMOI", "MOI");
+        SetMOI(host_make_float3(MOI[0], MOI[1], MOI[2]));
+    }
+
+    /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
+    void SetMaterial(const std::vector<std::shared_ptr<DEMMaterial>>& input) {
+        assertLength(input.size(), "SetMaterial");
+        materials = input;
+    }
+    /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
+    void SetMaterial(const std::shared_ptr<DEMMaterial>& input) {
+        SetMaterial(std::vector<std::shared_ptr<DEMMaterial>>(nComp, input));
+    }
 
     // Position of this clump's CoM, in the frame which is used to report the positions of this clump's component
     // spheres. It is usually all 0, unless the user specifies it, in which case we need to process relPos such that
@@ -629,6 +664,13 @@ class DEMClumpTemplate {
             applyFrameTransformGlobalToLocal(pos, center, prin_Q);
         }
     }
+    void InformCentroidPrincipal(const std::vector<float>& center, const std::vector<float>& prin_Q) {
+        assertThreeElements(center, "InformCentroidPrincipal", "center");
+        assertFourElements(prin_Q, "InformCentroidPrincipal", "prin_Q");
+        InformCentroidPrincipal(host_make_float3(center[0], center[1], center[2]),
+                                host_make_float4(prin_Q[0], prin_Q[1], prin_Q[2], prin_Q[3]));
+    }
+
     /// The opposite of InformCentroidPrincipal, and it is another way to align this clump's coordinate system with its
     /// centroid and principal system: rotate then move this clump, so that at the end of this operation, the original
     /// `origin' point should hit the CoM of this clump.
@@ -637,6 +679,12 @@ class DEMClumpTemplate {
             applyFrameTransformLocalToGlobal(pos, vec, rot_Q);
         }
     }
+    void Move(const std::vector<float>& vec, const std::vector<float>& rot_Q) {
+        assertThreeElements(vec, "Move", "vec");
+        assertFourElements(rot_Q, "Move", "rot_Q");
+        Move(host_make_float3(vec[0], vec[1], vec[2]), host_make_float4(rot_Q[0], rot_Q[1], rot_Q[2], rot_Q[3]));
+    }
+
     /// Scale all geometry component of this clump
     void Scale(float s) {
         for (auto& pos : relPos) {
@@ -645,16 +693,28 @@ class DEMClumpTemplate {
         for (auto& rad : radii) {
             rad *= s;
         }
-        mass *= (double)s * (double)s * (double)s;
-        MOI *= (double)s * (double)s * (double)s * (double)s * (double)s;
-        volume *= (double)s * (double)s * (double)s;
+        // Never let mass become negative.
+        double positive_s = (double)std::abs(s);
+        mass *= positive_s * positive_s * positive_s;
+        MOI *= positive_s * positive_s * positive_s * positive_s * positive_s;
+        volume *= positive_s * positive_s * positive_s;
     }
 
     void AssignName(const std::string& some_name) { m_name = some_name; }
 };
 
-/// API-(Host-)side struct that holds cached user-input batches of clumps
-class DEMClumpBatch {
+// Initializer includes batch of clumps, a mesh, a analytical object, and a tracked object. But this parent class is
+// small, and is mainly there for the purpose of pyDEME entry point.
+class DEMInitializer {
+  public:
+    // The type of a clump batch is CLUMP (it is used by tracker objs)
+    OWNER_TYPE obj_type;
+    // Its offset when this obj got loaded into the API-level user raw-input array
+    unsigned int load_order;
+};
+
+// API-(Host-)side struct that holds cached user-input batches of clumps
+class DEMClumpBatch : public DEMInitializer {
   private:
     size_t nExistContacts = 0;
     void assertLength(size_t len, const std::string name) {
@@ -670,6 +730,7 @@ class DEMClumpBatch {
     size_t nClumps = 0;
     size_t nSpheres = 0;
     bool family_isSpecified = false;
+
     std::vector<std::shared_ptr<DEMClumpTemplate>> types;
     std::vector<unsigned int> families;
     std::vector<float3> vel;
@@ -685,8 +746,7 @@ class DEMClumpBatch {
     std::unordered_map<std::string, std::vector<float>> owner_wildcards;
     // Initial geometry wildcard that this batch of clumps should have
     std::unordered_map<std::string, std::vector<float>> geo_wildcards;
-    // Its offset when this obj got loaded into the API-level user raw-input array
-    size_t load_order;
+
     DEMClumpBatch(size_t num) : nClumps(num) {
         types.resize(num);
         families.resize(num, DEFAULT_CLUMP_FAMILY_NUM);
@@ -694,10 +754,12 @@ class DEMClumpBatch {
         angVel.resize(num, make_float3(0));
         xyz.resize(num);
         oriQ.resize(num, host_make_float4(0, 0, 0, 1));
+        obj_type = OWNER_TYPE::CLUMP;
     }
     ~DEMClumpBatch() {}
     size_t GetNumClumps() const { return nClumps; }
     size_t GetNumSpheres() const { return nSpheres; }
+
     void SetTypes(const std::vector<std::shared_ptr<DEMClumpTemplate>>& input) {
         assertLength(input.size(), "SetTypes");
         types = input;
@@ -708,26 +770,79 @@ class DEMClumpBatch {
     void SetType(const std::shared_ptr<DEMClumpTemplate>& input) {
         SetTypes(std::vector<std::shared_ptr<DEMClumpTemplate>>(nClumps, input));
     }
+
     void SetPos(const std::vector<float3>& input) {
         assertLength(input.size(), "SetPos");
         xyz = input;
     }
     void SetPos(float3 input) { SetPos(std::vector<float3>(nClumps, input)); }
+    void SetPos(const std::vector<float>& input) {
+        assertThreeElements(input, "SetPos", "input");
+        SetPos(host_make_float3(input[0], input[1], input[2]));
+    }
+    void SetPos(const std::vector<std::vector<float>>& input) {
+        assertThreeElementsVector(input, "SetPos", "input");
+        std::vector<float3> pos_xyz(input.size());
+        for (size_t i = 0; i < input.size(); i++) {
+            pos_xyz[i] = host_make_float3(input[i][0], input[i][1], input[i][2]);
+        }
+        SetPos(pos_xyz);
+    }
+
     void SetVel(const std::vector<float3>& input) {
         assertLength(input.size(), "SetVel");
         vel = input;
     }
     void SetVel(float3 input) { SetVel(std::vector<float3>(nClumps, input)); }
+    void SetVel(const std::vector<float>& input) {
+        assertThreeElements(input, "SetVel", "input");
+        SetVel(host_make_float3(input[0], input[1], input[2]));
+    }
+    void SetVel(const std::vector<std::vector<float>>& input) {
+        assertThreeElementsVector(input, "SetVel", "input");
+        std::vector<float3> vel_xyz(input.size());
+        for (size_t i = 0; i < input.size(); i++) {
+            vel_xyz[i] = host_make_float3(input[i][0], input[i][1], input[i][2]);
+        }
+        SetVel(vel_xyz);
+    }
+
     void SetAngVel(const std::vector<float3>& input) {
         assertLength(input.size(), "SetAngVel");
         angVel = input;
     }
     void SetAngVel(float3 input) { SetAngVel(std::vector<float3>(nClumps, input)); }
+    void SetAngVel(const std::vector<float>& input) {
+        assertThreeElements(input, "SetAngVel", "input");
+        SetAngVel(host_make_float3(input[0], input[1], input[2]));
+    }
+    void SetAngVel(const std::vector<std::vector<float>>& input) {
+        assertThreeElementsVector(input, "SetAngVel", "input");
+        std::vector<float3> vel_xyz(input.size());
+        for (size_t i = 0; i < input.size(); i++) {
+            vel_xyz[i] = host_make_float3(input[i][0], input[i][1], input[i][2]);
+        }
+        SetAngVel(vel_xyz);
+    }
+
     void SetOriQ(const std::vector<float4>& input) {
         assertLength(input.size(), "SetOriQ");
         oriQ = input;
     }
     void SetOriQ(float4 input) { SetOriQ(std::vector<float4>(nClumps, input)); }
+    void SetOriQ(const std::vector<float>& input) {
+        assertFourElements(input, "SetOriQ", "input");
+        SetOriQ(host_make_float4(input[0], input[1], input[2], input[3]));
+    }
+    void SetOriQ(const std::vector<std::vector<float>>& input) {
+        assertFourElementsVector(input, "SetOriQ", "input");
+        std::vector<float4> Q(input.size());
+        for (size_t i = 0; i < input.size(); i++) {
+            Q[i] = host_make_float4(input[i][0], input[i][1], input[i][2], input[i][3]);
+        }
+        SetOriQ(Q);
+    }
+
     /// Specify the `family' code for each clump. Then you can specify if they should go with some prescribed motion or
     /// some special physics (for example, being fixed). The default behavior (without specification) for every family
     /// is using `normal' physics.
@@ -824,14 +939,13 @@ class DEMClumpBatch {
 };
 
 // A struct to get or set tracked owner entities
-struct DEMTrackedObj {
+class DEMTrackedObj : public DEMInitializer {
+  public:
+    DEMTrackedObj() {}
+    ~DEMTrackedObj() {}
+
     // ownerID will be updated by dT on initialization
     bodyID_t ownerID = NULL_BODYID;
-    // Type of this tracked object
-    OWNER_TYPE type;
-    // A tracker tracks a owner loaded into the system via its respective loading method, so load_order registers
-    // the position of this object in the corresponding API-side array
-    size_t load_order;
     // Number of owners that are covered by this tracker. This exists because if you track a batch of clumps, ownerID is
     // but the first owner of that batch.
     size_t nSpanOwners = 1;

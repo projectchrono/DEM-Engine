@@ -11,6 +11,7 @@ _analyticalEntityDefs_;
 _materialDefs_;
 // If mass properties are jitified, then they are below
 _massDefs_;
+_moiDefs_;
 
 template <typename T1>
 inline __device__ void equipOwnerPosRot(deme::DEMSimParams* simParams,
@@ -84,7 +85,7 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
 
             ARadius = myRadius;
             bodyAMatType = granData->sphereMaterialOffset[sphereID];
-            extraMarginSize += granData->familyExtraMarginSize[AOwnerFamily];
+            extraMarginSize = granData->familyExtraMarginSize[AOwnerFamily];
         }
 
         // Then B, location and velocity
@@ -114,7 +115,12 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
 
             BRadius = myRadius;
             bodyBMatType = granData->sphereMaterialOffset[sphereID];
-            extraMarginSize += granData->familyExtraMarginSize[BOwnerFamily];
+
+            // As the grace margin, the distance (negative overlap) just needs to be within the grace margin. So we pick
+            // the larger of the 2 familyExtraMarginSize.
+            extraMarginSize = (extraMarginSize > granData->familyExtraMarginSize[BOwnerFamily])
+                                  ? extraMarginSize
+                                  : granData->familyExtraMarginSize[BOwnerFamily];
 
             checkSpheresOverlap<double, float>(bodyAPos.x, bodyAPos.y, bodyAPos.z, ARadius, bodyBPos.x, bodyBPos.y,
                                                bodyBPos.z, BRadius, contactPnt.x, contactPnt.y, contactPnt.z, B2A.x,
@@ -133,7 +139,12 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             //// TODO: Is this OK?
             BRadius = DEME_HUGE_FLOAT;
             bodyBMatType = granData->triMaterialOffset[sphereID];
-            extraMarginSize += granData->familyExtraMarginSize[BOwnerFamily];
+
+            // As the grace margin, the distance (negative overlap) just needs to be within the grace margin. So we pick
+            // the larger of the 2 familyExtraMarginSize.
+            extraMarginSize = (extraMarginSize > granData->familyExtraMarginSize[BOwnerFamily])
+                                  ? extraMarginSize
+                                  : granData->familyExtraMarginSize[BOwnerFamily];
 
             double3 triNode1 = to_double3(granData->relPosNode1[sphereID]);
             double3 triNode2 = to_double3(granData->relPosNode2[sphereID]);
@@ -193,7 +204,12 @@ __global__ void calculateContactForces(deme::DEMSimParams* simParams, deme::DEMD
             _forceModelGeoWildcardAcqForAnal_;
 
             equipOwnerPosRot(simParams, granData, myOwner, myRelPos, BOwnerPos, bodyBPos, BOriQ);
-            extraMarginSize += granData->familyExtraMarginSize[BOwnerFamily];
+
+            // As the grace margin, the distance (negative overlap) just needs to be within the grace margin. So we pick
+            // the larger of the 2 familyExtraMarginSize.
+            extraMarginSize = (extraMarginSize > granData->familyExtraMarginSize[BOwnerFamily])
+                                  ? extraMarginSize
+                                  : granData->familyExtraMarginSize[BOwnerFamily];
 
             // B's orientation (such as plane normal) is rotated with its owner too
             bodyBRot.x = objRotX[sphereID];

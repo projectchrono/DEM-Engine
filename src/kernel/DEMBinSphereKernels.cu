@@ -6,8 +6,6 @@
 _clumpTemplateDefs_;
 // Definitions of analytical entites are below
 _analyticalEntityDefs_;
-// Family mask, _nFamilyMaskEntries_ elements are in this array
-// __constant__ __device__ bool familyMasks[] = {_familyMasks_};
 
 __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
                                                  deme::DEMDataKT* granData,
@@ -78,7 +76,6 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
 
         // Each sphere entity should also check if it overlaps with an analytical boundary-type geometry
         for (deme::objID_t objB = 0; objB < simParams->nAnalGM; objB++) {
-            deme::contact_t contact_type;
             deme::bodyID_t objBOwner = objOwner[objB];
             // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
             unsigned int objFamilyNum = granData->familyID[objBOwner];
@@ -107,11 +104,24 @@ __global__ void getNumberOfBinsEachSphereTouches(deme::DEMSimParams* simParams,
             applyOriQToVector3<float, deme::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx, ownerOriQy,
                                                     ownerOriQz);
             double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
-            contact_type = checkSphereEntityOverlap<double3, float>(
-                myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner]);
 
-            if (contact_type) {
+            double overlapDepth;
+            deme::contact_t contact_type;
+            {
+                double3 cntPnt;  // cntPnt here is a placeholder
+                float3 cntNorm;  // cntNorm is placeholder too
+                contact_type = checkSphereEntityOverlap<double3, float, double>(
+                    myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner],
+                    cntPnt, cntNorm, overlapDepth);
+            }
+            // overlapDepth (which has both entities' full margins) needs to be larger than the smaller one of the two
+            // added margin to be considered in-contact.
+            double marginThres =
+                (granData->familyExtraMarginSize[sphFamilyNum] < granData->familyExtraMarginSize[objFamilyNum])
+                    ? granData->familyExtraMarginSize[sphFamilyNum]
+                    : granData->familyExtraMarginSize[objFamilyNum];
+            if (contact_type && overlapDepth > marginThres) {
                 contact_count++;
             }
         }
@@ -204,7 +214,6 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
         deme::binSphereTouchPairs_t mySphereGeoReportOffset_end = numAnalGeoSphereTouchesScan[sphereID + 1];
         // Each sphere entity should also check if it overlaps with an analytical boundary-type geometry
         for (deme::objID_t objB = 0; objB < simParams->nAnalGM; objB++) {
-            deme::contact_t contact_type;
             deme::bodyID_t objBOwner = objOwner[objB];
             // Grab family number from memory (not jitified: b/c family number can change frequently in a sim)
             unsigned int objFamilyNum = granData->familyID[objBOwner];
@@ -232,11 +241,24 @@ __global__ void populateBinSphereTouchingPairs(deme::DEMSimParams* simParams,
             applyOriQToVector3<float, deme::oriQ_t>(objBRotX, objBRotY, objBRotZ, ownerOriQw, ownerOriQx, ownerOriQy,
                                                     ownerOriQz);
             double3 objBPosXYZ = ownerXYZ + make_double3(objBRelPosX, objBRelPosY, objBRelPosZ);
-            contact_type = checkSphereEntityOverlap<double3, float>(
-                myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
-                objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner]);
 
-            if (contact_type) {
+            double overlapDepth;
+            deme::contact_t contact_type;
+            {
+                double3 cntPnt;  // cntPnt here is a placeholder
+                float3 cntNorm;  // cntNorm is placeholder too
+                contact_type = checkSphereEntityOverlap<double3, float, double>(
+                    myPosXYZ, myRadius, objType[objB], objBPosXYZ, make_float3(objBRotX, objBRotY, objBRotZ),
+                    objSize1[objB], objSize2[objB], objSize3[objB], objNormal[objB], granData->marginSize[objBOwner],
+                    cntPnt, cntNorm, overlapDepth);
+            }
+            // overlapDepth (which has both entities' full margins) needs to be larger than the smaller one of the two
+            // added margin to be considered in-contact.
+            double marginThres =
+                (granData->familyExtraMarginSize[sphFamilyNum] < granData->familyExtraMarginSize[objFamilyNum])
+                    ? granData->familyExtraMarginSize[sphFamilyNum]
+                    : granData->familyExtraMarginSize[objFamilyNum];
+            if (contact_type && overlapDepth > marginThres) {
                 idGeoA[mySphereGeoReportOffset] = sphereID;
                 idGeoB[mySphereGeoReportOffset] = (deme::bodyID_t)objB;
                 contactType[mySphereGeoReportOffset] = contact_type;

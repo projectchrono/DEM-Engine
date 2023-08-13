@@ -51,7 +51,7 @@ class DEMSolver {
     DEMSolver(unsigned int nGPUs = 2);
     ~DEMSolver();
 
-    /// Set output detail level
+    /// Set output detail level.
     void SetVerbosity(VERBOSITY verbose) { verbosity = verbose; }
 
     /// Instruct the dimension of the `world'. On initialization, this info will be used to figure out how to assign the
@@ -79,6 +79,10 @@ class DEMSolver {
 
     /// Set gravitational pull.
     void SetGravitationalAcceleration(float3 g) { G = g; }
+    void SetGravitationalAcceleration(const std::vector<float>& g) {
+        assertThreeElements(g, "SetGravitationalAcceleration", "g");
+        G = host_make_float3(g[0], g[1], g[2]);
+    }
     /// Set the initial time step size. If using constant step size, then this will be used throughout; otherwise, the
     /// actual step size depends on the variable step strategy.
     void SetInitTimeStep(double ts_size) { m_ts_size = ts_size; }
@@ -122,14 +126,19 @@ class DEMSolver {
 
     /// Explicitly instruct the bin size (for contact detection) that the solver should use.
     void SetInitBinSize(double bin_size) {
-        use_user_defined_bin_size = true;
+        use_user_defined_bin_size = INIT_BIN_SIZE_TYPE::EXPLICIT;
         m_binSize = bin_size;
     }
     /// Explicitly instruct the bin size (for contact detection) that the solver should use, as a multiple of the radius
     /// of the smallest sphere in simulation.
     void SetInitBinSizeAsMultipleOfSmallestSphere(float bin_size) {
-        use_user_defined_bin_size = false;
+        use_user_defined_bin_size = INIT_BIN_SIZE_TYPE::MULTI_MIN_SPH;
         m_binSize_as_multiple = bin_size;
+    }
+    /// @brief Set the target number of bins (for contact detection) at the start of the simulation upon initialization.
+    void SetInitBinNumTarget(size_t num) {
+        use_user_defined_bin_size = INIT_BIN_SIZE_TYPE::TARGET_NUM;
+        m_target_init_bin_num = num;
     }
 
     /// Explicitly instruct the sizes for the arrays at initialization time. This is useful when the number of owners
@@ -156,12 +165,18 @@ class DEMSolver {
 
     /// Instruct the solver to rearrange and consolidate clump templates information, then jitify it into GPU kernels
     /// (if set to true), rather than using flattened sphere component configuration arrays whose entries are associated
-    /// with individual spheres. Note: setting it to true gives no performance benefit known to me.
+    /// with individual spheres.
     void SetJitifyClumpTemplates(bool use = true) { jitify_clump_templates = use; }
+    /// Use flattened sphere component configuration arrays whose entries are associated with individual spheres, rather
+    /// than jitifying them it into GPU kernels.
+    void DisableJitifyClumpTemplates() { jitify_clump_templates = false; }
     /// Instruct the solver to rearrange and consolidate mass property information (for all owner types), then jitify it
     /// into GPU kernels (if set to true), rather than using flattened mass property arrays whose entries are associated
-    /// with individual owners. Note: setting it to true gives no performance benefit known to me.
+    /// with individual owners.
     void SetJitifyMassProperties(bool use = true) { jitify_mass_moi = use; }
+    /// Use flattened mass property arrays whose entries are associated with individual spheres, rather than jitifying
+    /// them it into GPU kernels.
+    void DisableJitifyMassProperties() { jitify_mass_moi = false; }
 
     // NOTE: compact force calculation (in the hope to use shared memory) is not implemented
     void UseCompactForceKernel(bool use_compact);
@@ -272,19 +287,45 @@ class DEMSolver {
     /// Set the number of threads per block in force calculation (default 512).
     void SetForceCalcThreadsPerBlock(unsigned int nTh) { dT->DT_FORCE_CALC_NTHREADS_PER_BLOCK = nTh; }
 
-    /// Load possible clump types into the API-level cache
-    /// Return the shared ptr to the clump type just loaded
+    /// @brief Load a clump type into the API-level cache.
+    /// @return the shared ptr to the clump type just loaded.
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
                                                     float3 moi,
                                                     const std::vector<float>& sp_radii,
                                                     const std::vector<float3>& sp_locations_xyz,
                                                     const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials);
+    std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
+                                                    const std::vector<float>& moi,
+                                                    const std::vector<float>& sp_radii,
+                                                    const std::vector<std::vector<float>>& sp_locations_xyz,
+                                                    const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
+        assertThreeElements(moi, "LoadClumpType", "moi");
+        assertThreeElementsVector(sp_locations_xyz, "LoadClumpType", "sp_locations_xyz");
+        std::vector<float3> loc_xyz(sp_locations_xyz.size());
+        for (size_t i = 0; i < sp_locations_xyz.size(); i++) {
+            loc_xyz[i] = host_make_float3(sp_locations_xyz[i][0], sp_locations_xyz[i][1], sp_locations_xyz[i][2]);
+        }
+        return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), sp_radii, loc_xyz, sp_materials);
+    }
     /// An overload of LoadClumpType where all components use the same material
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
                                                     float3 moi,
                                                     const std::vector<float>& sp_radii,
                                                     const std::vector<float3>& sp_locations_xyz,
                                                     const std::shared_ptr<DEMMaterial>& sp_material);
+    std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
+                                                    const std::vector<float>& moi,
+                                                    const std::vector<float>& sp_radii,
+                                                    const std::vector<std::vector<float>>& sp_locations_xyz,
+                                                    const std::shared_ptr<DEMMaterial>& sp_material) {
+        assertThreeElements(moi, "LoadClumpType", "moi");
+        assertThreeElementsVector(sp_locations_xyz, "LoadClumpType", "sp_locations_xyz");
+        std::vector<float3> loc_xyz(sp_locations_xyz.size());
+        for (size_t i = 0; i < sp_locations_xyz.size(); i++) {
+            loc_xyz[i] = host_make_float3(sp_locations_xyz[i][0], sp_locations_xyz[i][1], sp_locations_xyz[i][2]);
+        }
+        return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), sp_radii, loc_xyz, sp_material);
+    }
     /// An overload of LoadClumpType where the user builds the DEMClumpTemplate struct themselves then supply it
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(DEMClumpTemplate& clump);
     /// An overload of LoadClumpType which loads sphere components from a file
@@ -292,12 +333,25 @@ class DEMSolver {
                                                     float3 moi,
                                                     const std::string filename,
                                                     const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials);
+    std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
+                                                    const std::vector<float>& moi,
+                                                    const std::string filename,
+                                                    const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
+        assertThreeElements(moi, "LoadClumpType", "moi");
+        return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), filename, sp_materials);
+    }
     /// An overload of LoadClumpType which loads sphere components from a file and all components use the same material
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
                                                     float3 moi,
                                                     const std::string filename,
                                                     const std::shared_ptr<DEMMaterial>& sp_material);
-
+    std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
+                                                    const std::vector<float>& moi,
+                                                    const std::string filename,
+                                                    const std::shared_ptr<DEMMaterial>& sp_material) {
+        assertThreeElements(moi, "LoadClumpType", "moi");
+        return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), filename, sp_material);
+    }
     /// A simplified version of LoadClumpType: it just loads a one-sphere clump template
     std::shared_ptr<DEMClumpTemplate> LoadSphereType(float mass,
                                                      float radius,
@@ -411,15 +465,52 @@ class DEMSolver {
     /// Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial location
     /// means the location of the clumps' CoM coordinates in the global frame.
     std::shared_ptr<DEMClumpBatch> AddClumps(DEMClumpBatch& input_batch);
+    /// @brief Load clumps into the simulation.
+    /// @param input_types Vector of the types of the clumps (vector of shared pointers).
+    /// @param input_xyz Vector of the initial locations of the clumps.
+    /// @return Handle to the loaded batch of clumps.
     std::shared_ptr<DEMClumpBatch> AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& input_types,
                                              const std::vector<float3>& input_xyz);
+    std::shared_ptr<DEMClumpBatch> AddClumps(const std::vector<std::shared_ptr<DEMClumpTemplate>>& input_types,
+                                             const std::vector<std::vector<float>>& input_xyz) {
+        assertThreeElementsVector(input_xyz, "AddClumps", "input_xyz");
+        std::vector<float3> loc_xyz(input_xyz.size());
+        for (size_t i = 0; i < input_xyz.size(); i++) {
+            loc_xyz[i] = host_make_float3(input_xyz[i][0], input_xyz[i][1], input_xyz[i][2]);
+        }
+        return AddClumps(input_types, loc_xyz);
+    }
+
+    /// @brief Load a clump into the simulation.
+    /// @param input_type The type (shared pointer pointing to the clump type handle).
+    /// @param input_xyz Initial location of the clump.
+    /// @return Handle to the clump.
     std::shared_ptr<DEMClumpBatch> AddClumps(std::shared_ptr<DEMClumpTemplate>& input_type, float3 input_xyz) {
         return AddClumps(std::vector<std::shared_ptr<DEMClumpTemplate>>(1, input_type),
                          std::vector<float3>(1, input_xyz));
     }
     std::shared_ptr<DEMClumpBatch> AddClumps(std::shared_ptr<DEMClumpTemplate>& input_type,
+                                             const std::vector<float>& input_xyz) {
+        assertThreeElements(input_xyz, "AddClumps", "input_xyz");
+        return AddClumps(input_type, host_make_float3(input_xyz[0], input_xyz[1], input_xyz[2]));
+    }
+
+    /// @brief Load clumps (of the same template) into the simulation.
+    /// @param input_types The type (shared pointer pointing to the clump type handle).
+    /// @param input_xyz Vector of the initial locations of the clumps.
+    /// @return Handle to the loaded batch of clumps.
+    std::shared_ptr<DEMClumpBatch> AddClumps(std::shared_ptr<DEMClumpTemplate>& input_type,
                                              const std::vector<float3>& input_xyz) {
         return AddClumps(std::vector<std::shared_ptr<DEMClumpTemplate>>(input_xyz.size(), input_type), input_xyz);
+    }
+    std::shared_ptr<DEMClumpBatch> AddClumps(std::shared_ptr<DEMClumpTemplate>& input_type,
+                                             const std::vector<std::vector<float>>& input_xyz) {
+        assertThreeElementsVector(input_xyz, "AddClumps", "input_xyz");
+        std::vector<float3> loc_xyz(input_xyz.size());
+        for (size_t i = 0; i < input_xyz.size(); i++) {
+            loc_xyz[i] = host_make_float3(input_xyz[i][0], input_xyz[i][1], input_xyz[i][2]);
+        }
+        return AddClumps(input_type, loc_xyz);
     }
 
     /// Load a mesh-represented object
@@ -432,14 +523,32 @@ class DEMSolver {
                                                              bool load_uv = false);
     std::shared_ptr<DEMMeshConnected> AddWavefrontMeshObject(DEMMeshConnected& mesh);
 
-    /// Create a DEMTracker to allow direct control/modification/query to this external object
-    std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMExternObj>& obj);
-    /// Create a DEMTracker to allow direct control/modification/query to this batch of clumps. By default, it refers to
-    /// the first clump in this batch. The user can refer to other clumps in this batch by supplying an offset when
-    /// using this tracker's querying or assignment methods.
-    std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMClumpBatch>& obj);
-    /// Create a DEMTracker to allow direct control/modification/query to this triangle mesh object
-    std::shared_ptr<DEMTracker> Track(std::shared_ptr<DEMMeshConnected>& obj);
+    /// @brief Create a DEMTracker to allow direct control/modification/query to this external object/batch of
+    /// clumps/triangle mesh object.
+    /// @details By default, it refers to the first clump in this batch. The user can refer to other clumps in this
+    /// batch by supplying an offset when using this tracker's querying or assignment methods.
+    template <typename T>
+    std::shared_ptr<DEMTracker> Track(const std::shared_ptr<T>& obj) {
+        // Create a middle man: DEMTrackedObj. The reason we use it is because a simple struct should be used to
+        // transfer to  dT for owner-number processing. If we cut the middle man and use things such as DEMExtObj, there
+        // will not be a universal treatment that dT can apply, besides we may have some include-related issues.
+        DEMTrackedObj tracked_obj;
+        tracked_obj.load_order = obj->load_order;
+        tracked_obj.obj_type = obj->obj_type;
+        m_tracked_objs.push_back(std::make_shared<DEMTrackedObj>(std::move(tracked_obj)));
+
+        // Create a Tracker for this tracked object
+        DEMTracker tracker(this);
+        tracker.obj = m_tracked_objs.back();
+        return std::make_shared<DEMTracker>(std::move(tracker));
+    }
+
+    /// @brief Create a DEMTracker to allow direct control/modification/query to this external object/batch of
+    /// clumps/triangle mesh object.
+    /// @details C++ users do not have to use this method. Using Track is enough. This method is for Python wrapper.
+    std::shared_ptr<DEMTracker> PythonTrack(const std::shared_ptr<DEMInitializer>& obj) {
+        return Track<DEMInitializer>(obj);
+    }
 
     /// Create a inspector object that can help query some statistical info of the clumps in the simulation
     std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity = "clump_max_z");
@@ -537,6 +646,13 @@ class DEMSolver {
     /// @param name Name of the contact wildcard to modify.
     /// @param val The value to change to.
     void SetFamilyContactWildcardValueAll(unsigned int N, const std::string& name, float val);
+    /// @brief Change the value of contact wildcards to val if one of the contact geometry is in family N1, and the
+    /// other is in N2.
+    /// @param N1 First family number.
+    /// @param N2 Second family number.
+    /// @param name Name of the contact wildcard to modify.
+    /// @param val The value to change to.
+    void SetFamilyContactWildcardValue(unsigned int N1, unsigned int N2, const std::string& name, float val);
     /// @brief Change the value of contact wildcards to val. Apply to all simulation bodies that are present.
     /// @param name Name of the contact wildcard to modify.
     /// @param val The value to change to.
@@ -697,11 +813,25 @@ class DEMSolver {
             collect_force_in_force_kernel = flag;
     }
 
-    /// Add an (analytical or clump-represented) external object to the simulation system
+    /// Add an (analytical or clump-represented) external object to the simulation system.
     std::shared_ptr<DEMExternObj> AddExternalObject();
+    /// @brief Add an analytical plane to the simulation.
+    /// @param pos A point on the plane.
+    /// @param normal The normal direction of the plane. Note entities are always considered in-contact with the plane
+    /// from the positive normal direction.
+    /// @param material Material of the plane.
+    /// @return A handle to the added plane object.
     std::shared_ptr<DEMExternObj> AddBCPlane(const float3 pos,
                                              const float3 normal,
                                              const std::shared_ptr<DEMMaterial>& material);
+    std::shared_ptr<DEMExternObj> AddBCPlane(const std::vector<float>& pos,
+                                             const std::vector<float>& normal,
+                                             const std::shared_ptr<DEMMaterial>& material) {
+        assertThreeElements(pos, "AddBCPlane", "pos");
+        assertThreeElements(normal, "AddBCPlane", "normal");
+        return AddBCPlane(host_make_float3(pos[0], pos[1], pos[2]), host_make_float3(normal[0], normal[1], normal[2]),
+                          material);
+    }
 
     /// Remove host-side cached vectors (so you can re-define them, and then re-initialize system)
     void ClearCache();
@@ -827,7 +957,7 @@ class DEMSolver {
         return w_vals;
     }
 
-    /// Intialize the simulation system
+    /// Intialize the simulation system.
     void Initialize();
 
     /// Advance simulation by this amount of time, and at the end of this call, synchronize kT and dT. This is suitable
@@ -838,7 +968,7 @@ class DEMSolver {
     /// and short call durations and allows interplay with co-simulation APIs.
     void DoDynamics(double thisCallDuration);
 
-    /// Equivalent to calling DoDynamics with the time step size as the argument
+    /// Equivalent to calling DoDynamics with the time step size as the argument.
     void DoStepDynamics() { DoDynamics(m_ts_size); }
 
     /// @brief Transferthe cached sim params to the workers. Used for sim environment modification after system
@@ -856,7 +986,7 @@ class DEMSolver {
     /// dT should be allowed to be in advance of kT.
     void ShowThreadCollaborationStats();
 
-    /// Show the wall time and percentages of wall time spend on various solver tasks
+    /// Show the wall time and percentages of wall time spend on various solver tasks.
     void ShowTimingStats();
 
     /// Show potential anomalies that may have been there in the simulation, then clear the anomaly log.
@@ -867,14 +997,14 @@ class DEMSolver {
     /// and destroy DEMSolver.
     void ClearThreadCollaborationStats();
 
-    /// Reset the recordings of the wall time and percentages of wall time spend on various solver tasks
+    /// Reset the recordings of the wall time and percentages of wall time spend on various solver tasks.
     void ClearTimingStats();
 
-    /// Removes all entities associated with a family from the arrays (to save memory space)
+    /// Removes all entities associated with a family from the arrays (to save memory space).
     void PurgeFamily(unsigned int family_num);
 
     /// Release the memory for the flattened arrays (which are used for initialization pre-processing and transferring
-    /// info the worker threads)
+    /// info the worker threads).
     void ReleaseFlattenedArrays();
 
     /// @brief Return whether the solver is currently reducing force in the force calculation kernel.
@@ -893,15 +1023,15 @@ class DEMSolver {
     // call.
     // void SetClumpOutputMode(OUTPUT_MODE mode) { m_clump_out_mode = mode; }
 
-    /// Choose output format
+    /// Choose output format.
     void SetOutputFormat(OUTPUT_FORMAT format) { m_out_format = format; }
-    /// Specify the information that needs to go into the clump or sphere output files
+    /// Specify the information that needs to go into the clump or sphere output files.
     void SetOutputContent(unsigned int content) { m_out_content = content; }
-    /// Specify the file format of contact pairs
+    /// Specify the file format of contact pairs.
     void SetContactOutputFormat(OUTPUT_FORMAT format) { m_cnt_out_format = format; }
-    /// Specify the information that needs to go into the contact pair output files
+    /// Specify the information that needs to go into the contact pair output files.
     void SetContactOutputContent(unsigned int content) { m_cnt_out_content = content; }
-    /// Specify the file format of meshes
+    /// Specify the file format of meshes.
     void SetMeshOutputFormat(MESH_FORMAT format) { m_mesh_out_format = format; }
     /// Enable/disable outputting owner wildcard values to file.
     void EnableOwnerWildcardOutput(bool enable = true) { m_is_out_owner_wildcards = enable; }
@@ -910,7 +1040,32 @@ class DEMSolver {
     /// Enable/disable outputting geometry wildcard values to the contact file.
     void EnableGeometryWildcardOutput(bool enable = true) { m_is_out_geo_wildcards = enable; }
 
-    /// Let dT do this call and return the reduce value of the inspected quantity
+    /// @brief Set the verbosity level of the solver.
+    /// @param verbose "QUIET", "ERROR", "WARNING", "INFO", "STEP_ANOMALY", "STEP_METRIC", "DEBUG" or "STEP_DEBUG".
+    /// Recommend "INFO".
+    void SetVerbosity(const std::string& verbose);
+    /// @brief Choose sphere and clump output file format.
+    /// @param format Choice among "CSV", "BINARY" or "CHPF".
+    void SetOutputFormat(const std::string& format);
+    /// @brief Specify the information that needs to go into the clump or sphere output files.
+    /// @param content A list of "XYZ", "QUAT", "ABSV", "VEL", "ANG_VEL", "ABS_ACC", "ACC", "ANG_ACC", "FAMILY", "MAT",
+    /// "OWNER_WILDCARD" and/or "GEO_WILDCARD".
+    void SetOutputContent(const std::vector<std::string>& content);
+    /// @brief Specify the file format of contact pairs.
+    /// @param format Choice among "CSV", "BINARY" or "CHPF".
+    void SetContactOutputFormat(const std::string& format);
+    /// @brief Specify the information that needs to go into the contact pair output files.
+    /// @param content A list of "CNT_TYPE", "FORCE", "POINT", "COMPONENT", "NORMAL", "TORQUE", "CNT_WILDCARD", "OWNER",
+    /// "GEO_ID" and/or "NICKNAME".
+    void SetContactOutputContent(const std::vector<std::string>& content);
+    /// @brief Specify the output file format of meshes.
+    /// @param format A choice between "VTK", "OBJ".
+    void SetMeshOutputFormat(const std::string& format);
+
+    // void SetOutputContent(const std::string& content) { SetOutputContent({content}); }
+    // void SetContactOutputContent(const std::string& content) { SetContactOutputContent({content}); }
+
+    /// Let dT do this call and return the reduce value of the inspected quantity.
     float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
                           const std::string& kernel_name,
                           INSPECT_ENTITY_TYPE thing_to_insp,
@@ -929,20 +1084,28 @@ class DEMSolver {
 
     // Verbosity
     VERBOSITY verbosity = INFO;
-    // If true, dT should sort contact arrays (based on contact type) before usage (not implemented)
+    // If true, dT should sort contact arrays (based on contact type) before usage 
     bool should_sort_contacts = true;
     // If true, the solvers may need to do a per-step sweep to apply family number changes
     bool famnum_can_change_conditionally = false;
 
     // Should jitify clump template into kernels
-    bool jitify_clump_templates = false;
+    bool jitify_clump_templates = true;
     // Should jitify mass/MOI properties into kernels
-    bool jitify_mass_moi = false;
+    bool jitify_mass_moi = true;
 
+    enum class INIT_BIN_SIZE_TYPE { EXPLICIT, MULTI_MIN_SPH, TARGET_NUM };
     // User explicitly set a bin size to use
-    bool use_user_defined_bin_size = false;
+    INIT_BIN_SIZE_TYPE use_user_defined_bin_size = INIT_BIN_SIZE_TYPE::TARGET_NUM;
     // User explicity specify a expand factor to use
     bool use_user_defined_expand_factor = false;
+    // Whether to auto-adjust the bin size and the max update frequency
+    bool auto_adjust_bin_size = true;
+    bool auto_adjust_update_freq = true;
+    // User-instructed initial bin size as a multiple of smallest sphere radius
+    float m_binSize_as_multiple = 8.0;
+    // Target initial bin number
+    size_t m_target_init_bin_num = 1e6;
 
     // I/O related flags
     // The output file format for clumps and spheres
@@ -998,8 +1161,6 @@ class DEMSolver {
     float l = FLT_MAX;
     // The edge length of a bin (for contact detection)
     double m_binSize;
-    // User-instructed initial bin size as a multiple of smallest sphere radius
-    float m_binSize_as_multiple = 2.0;
     // Total number of bins
     size_t m_num_bins;
     // Number of bins on each direction
@@ -1063,9 +1224,6 @@ class DEMSolver {
     unsigned int threshold_too_many_tri_in_bin = 32768;
     // The max velocity at which the simulation should error out
     float threshold_error_out_vel = 1e3;
-    // Whether to auto-adjust the bin size and the max update frequency
-    bool auto_adjust_bin_size = true;
-    bool auto_adjust_update_freq = true;
     // Num of steps that kT takes average before making a conclusion on the performance of this bin size
     unsigned int auto_adjust_observe_steps = 20;
     // See corresponding method for those...
@@ -1074,8 +1232,8 @@ class DEMSolver {
     float auto_adjust_upper_proactive_ratio = 1.0;
     float auto_adjust_lower_proactive_ratio = 0.3;
     unsigned int upper_bound_future_drift = 5000;
-    float max_drift_ahead_of_avg_drift = 6.;
-    float max_drift_multiple_of_avg_drift = 1.1;
+    float max_drift_ahead_of_avg_drift = 4.;
+    float max_drift_multiple_of_avg_drift = 1.05;
     unsigned int max_drift_gauge_history_size = 200;
 
     // See SetNoForceRecord

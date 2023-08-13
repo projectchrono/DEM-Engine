@@ -138,13 +138,18 @@ int main() {
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(25.);
-    DEMSim.SetInitBinSize(min_rad * 6);
+    // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto bin
+    // size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case setting
+    // init bin size may save the simulation. 
+    // DEMSim.SetInitBinSize(min_rad * 6);
     DEMSim.Initialize();
 
     path out_dir = current_path();
     out_dir += "/DemoOutput_Repose";
     create_directory(out_dir);
 
+    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
+    
     for (int i = 0; i < 140; i++) {
         char filename[200], meshfile[200];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
@@ -155,6 +160,11 @@ int main() {
         DEMSim.DoDynamics(1e-1);
         DEMSim.ShowThreadCollaborationStats();
     }
+
+    std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+    std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
+
     DEMSim.ShowTimingStats();
     DEMSim.ClearTimingStats();
 

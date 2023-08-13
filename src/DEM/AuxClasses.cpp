@@ -249,7 +249,7 @@ void DEMTracker::assertThereIsForcePairs(const std::string& name) {
     }
 }
 void DEMTracker::assertMesh(const std::string& name) {
-    if (obj->type != OWNER_TYPE::MESH) {
+    if (obj->obj_type != OWNER_TYPE::MESH) {
         std::stringstream ss;
         ss << name << " is only callable for trackers tracking a mesh!" << std::endl;
         throw std::runtime_error(ss.str());
@@ -284,30 +284,62 @@ bodyID_t DEMTracker::GetOwnerID(size_t offset) {
 float3 DEMTracker::Pos(size_t offset) {
     return sys->GetOwnerPosition(obj->ownerID + offset);
 }
+std::vector<float> DEMTracker::GetPos(size_t offset) {
+    float3 res = Pos(offset);
+    return {res.x, res.y, res.z};
+}
+
 float3 DEMTracker::AngVelLocal(size_t offset) {
     return sys->GetOwnerAngVel(obj->ownerID + offset);
 }
+std::vector<float> DEMTracker::GetAngVelLocal(size_t offset) {
+    float3 res = AngVelLocal(offset);
+    return {res.x, res.y, res.z};
+}
+
 float3 DEMTracker::AngVelGlobal(size_t offset) {
     float3 ang_v = sys->GetOwnerAngVel(obj->ownerID + offset);
     float4 oriQ = sys->GetOwnerOriQ(obj->ownerID + offset);
     hostApplyOriQToVector3(ang_v.x, ang_v.y, ang_v.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
     return ang_v;
 }
+std::vector<float> DEMTracker::GetAngVelGlobal(size_t offset) {
+    float3 res = AngVelGlobal(offset);
+    return {res.x, res.y, res.z};
+}
+
 float3 DEMTracker::Vel(size_t offset) {
     return sys->GetOwnerVelocity(obj->ownerID + offset);
 }
+std::vector<float> DEMTracker::GetVel(size_t offset) {
+    float3 res = Vel(offset);
+    return {res.x, res.y, res.z};
+}
+
 float4 DEMTracker::OriQ(size_t offset) {
     return sys->GetOwnerOriQ(obj->ownerID + offset);
 }
+std::vector<float> DEMTracker::GetOriQ(size_t offset) {
+    float4 res = OriQ(offset);
+    return {res.x, res.y, res.z, res.w};
+}
+
 unsigned int DEMTracker::GetFamily(size_t offset) {
     return sys->GetOwnerFamily(obj->ownerID + offset);
 }
+
 float DEMTracker::Mass(size_t offset) {
     return sys->GetOwnerMass(obj->ownerID + offset);
 }
+
 float3 DEMTracker::MOI(size_t offset) {
     return sys->GetOwnerMOI(obj->ownerID + offset);
 }
+std::vector<float> DEMTracker::GetMOI(size_t offset) {
+    float3 res = MOI(offset);
+    return {res.x, res.y, res.z};
+}
+
 // float3 DEMTracker::Acc(size_t offset) {
 //     float3 contact_acc = sys->GetOwnerAcc(obj->ownerID + offset);
 //     // Contact acceleration is not total acc, we need to add gravity and manually added forces
@@ -318,25 +350,41 @@ float3 DEMTracker::MOI(size_t offset) {
 //     // Contact angAcc is not total angAcc, we need to add manually added angular acc
 //     //// TODO: How to do that?
 // }
+
 float3 DEMTracker::ContactAcc(size_t offset) {
     return sys->GetOwnerAcc(obj->ownerID + offset);
 }
+std::vector<float> DEMTracker::GetContactAcc(size_t offset) {
+    float3 res = ContactAcc(offset);
+    return {res.x, res.y, res.z};
+}
+
 float3 DEMTracker::ContactAngAccLocal(size_t offset) {
     return sys->GetOwnerAngAcc(obj->ownerID + offset);
 }
+std::vector<float> DEMTracker::GetContactAngAccLocal(size_t offset) {
+    float3 res = ContactAngAccLocal(offset);
+    return {res.x, res.y, res.z};
+}
+
 float3 DEMTracker::ContactAngAccGlobal(size_t offset) {
     float3 ang_acc = sys->GetOwnerAngAcc(obj->ownerID + offset);
     float4 oriQ = sys->GetOwnerOriQ(obj->ownerID + offset);
     hostApplyOriQToVector3(ang_acc.x, ang_acc.y, ang_acc.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
     return ang_acc;
 }
+std::vector<float> DEMTracker::GetContactAngAccGlobal(size_t offset) {
+    float3 res = ContactAngAccGlobal(offset);
+    return {res.x, res.y, res.z};
+}
 
 float DEMTracker::GetOwnerWildcardValue(const std::string& name, size_t offset) {
     return sys->GetOwnerWildcardValue(obj->ownerID + offset, name);
 }
+
 float DEMTracker::GetGeometryWildcardValue(const std::string& name, size_t offset) {
     std::vector<float> res;
-    switch (obj->type) {
+    switch (obj->obj_type) {
         case (OWNER_TYPE::CLUMP):
             res = sys->GetSphereWildcardValue(obj->geoID + offset, name, 1);
             break;
@@ -349,9 +397,10 @@ float DEMTracker::GetGeometryWildcardValue(const std::string& name, size_t offse
     }
     return res[0];
 }
+
 std::vector<float> DEMTracker::GetGeometryWildcardValue(const std::string& name) {
     std::vector<float> res;
-    switch (obj->type) {
+    switch (obj->obj_type) {
         case (OWNER_TYPE::CLUMP):
             res = sys->GetSphereWildcardValue(obj->geoID, name, obj->nGeos);
             break;
@@ -364,12 +413,30 @@ std::vector<float> DEMTracker::GetGeometryWildcardValue(const std::string& name)
     }
     return res;
 }
+
 size_t DEMTracker::GetContactForces(std::vector<float3>& points, std::vector<float3>& forces, size_t offset) {
     assertThereIsForcePairs("GetContactForces");
     points.clear();
     forces.clear();
     return sys->GetOwnerContactForces(obj->ownerID + offset, points, forces);
 }
+size_t DEMTracker::GetContactForces(std::vector<std::vector<float>>& points,
+                                    std::vector<std::vector<float>>& forces,
+                                    size_t offset) {
+    std::vector<float3> float3_points, float3_forces;
+    size_t nPairs = GetContactForces(float3_points, float3_forces, offset);
+
+    points.resize(nPairs);
+    forces.resize(nPairs);
+    for (size_t i = 0; i < nPairs; i++) {
+        std::vector<float> float_point = {float3_points[i].x, float3_points[i].y, float3_points[i].z};
+        std::vector<float> float_force = {float3_forces[i].x, float3_forces[i].y, float3_forces[i].z};
+        points[i] = float_point;
+        forces[i] = float_force;
+    }
+    return nPairs;
+}
+
 size_t DEMTracker::GetContactForcesAndLocalTorque(std::vector<float3>& points,
                                                   std::vector<float3>& forces,
                                                   std::vector<float3>& torques,
@@ -380,6 +447,27 @@ size_t DEMTracker::GetContactForcesAndLocalTorque(std::vector<float3>& points,
     torques.clear();
     return sys->GetOwnerContactForces(obj->ownerID + offset, points, forces, torques, true);
 }
+size_t DEMTracker::GetContactForcesAndLocalTorque(std::vector<std::vector<float>>& points,
+                                                  std::vector<std::vector<float>>& forces,
+                                                  std::vector<std::vector<float>>& torques,
+                                                  size_t offset) {
+    std::vector<float3> float3_points, float3_forces, float3_torques;
+    size_t nPairs = GetContactForcesAndLocalTorque(float3_points, float3_forces, float3_torques, offset);
+
+    points.resize(nPairs);
+    forces.resize(nPairs);
+    torques.resize(nPairs);
+    for (size_t i = 0; i < nPairs; i++) {
+        std::vector<float> float_point = {float3_points[i].x, float3_points[i].y, float3_points[i].z};
+        std::vector<float> float_force = {float3_forces[i].x, float3_forces[i].y, float3_forces[i].z};
+        std::vector<float> float_torque = {float3_torques[i].x, float3_torques[i].y, float3_torques[i].z};
+        points[i] = float_point;
+        forces[i] = float_force;
+        torques[i] = float_torque;
+    }
+    return nPairs;
+}
+
 size_t DEMTracker::GetContactForcesAndGlobalTorque(std::vector<float3>& points,
                                                    std::vector<float3>& forces,
                                                    std::vector<float3>& torques,
@@ -390,25 +478,75 @@ size_t DEMTracker::GetContactForcesAndGlobalTorque(std::vector<float3>& points,
     torques.clear();
     return sys->GetOwnerContactForces(obj->ownerID + offset, points, forces, torques, false);
 }
+size_t DEMTracker::GetContactForcesAndGlobalTorque(std::vector<std::vector<float>>& points,
+                                                   std::vector<std::vector<float>>& forces,
+                                                   std::vector<std::vector<float>>& torques,
+                                                   size_t offset) {
+    std::vector<float3> float3_points, float3_forces, float3_torques;
+    size_t nPairs = GetContactForcesAndGlobalTorque(float3_points, float3_forces, float3_torques, offset);
+
+    points.resize(nPairs);
+    forces.resize(nPairs);
+    torques.resize(nPairs);
+    for (size_t i = 0; i < nPairs; i++) {
+        std::vector<float> float_point = {float3_points[i].x, float3_points[i].y, float3_points[i].z};
+        std::vector<float> float_force = {float3_forces[i].x, float3_forces[i].y, float3_forces[i].z};
+        std::vector<float> float_torque = {float3_torques[i].x, float3_torques[i].y, float3_torques[i].z};
+        points[i] = float_point;
+        forces[i] = float_force;
+        torques[i] = float_torque;
+    }
+    return nPairs;
+}
 
 void DEMTracker::AddAcc(float3 acc, size_t offset) {
     sys->AddOwnerNextStepAcc(obj->ownerID + offset, acc);
 }
+void DEMTracker::AddAcc(const std::vector<float>& acc, size_t offset) {
+    assertThreeElements(acc, "AddAcc", "acc");
+    AddAcc(host_make_float3(acc[0], acc[1], acc[2]), offset);
+}
+
 void DEMTracker::AddAngAcc(float3 angAcc, size_t offset) {
     sys->AddOwnerNextStepAngAcc(obj->ownerID + offset, angAcc);
 }
+void DEMTracker::AddAngAcc(const std::vector<float>& angAcc, size_t offset) {
+    assertThreeElements(angAcc, "AddAngAcc", "angAcc");
+    AddAngAcc(host_make_float3(angAcc[0], angAcc[1], angAcc[2]), offset);
+}
+
 void DEMTracker::SetPos(float3 pos, size_t offset) {
     sys->SetOwnerPosition(obj->ownerID + offset, pos);
 }
+void DEMTracker::SetPos(const std::vector<float>& pos, size_t offset) {
+    assertThreeElements(pos, "SetPos", "pos");
+    SetPos(host_make_float3(pos[0], pos[1], pos[2]), offset);
+}
+
 void DEMTracker::SetAngVel(float3 angVel, size_t offset) {
     sys->SetOwnerAngVel(obj->ownerID + offset, angVel);
 }
+void DEMTracker::SetAngVel(const std::vector<float>& angVel, size_t offset) {
+    assertThreeElements(angVel, "SetAngVel", "angVel");
+    SetAngVel(host_make_float3(angVel[0], angVel[1], angVel[2]), offset);
+}
+
 void DEMTracker::SetVel(float3 vel, size_t offset) {
     sys->SetOwnerVelocity(obj->ownerID + offset, vel);
 }
+void DEMTracker::SetVel(const std::vector<float>& vel, size_t offset) {
+    assertThreeElements(vel, "SetVel", "vel");
+    SetVel(host_make_float3(vel[0], vel[1], vel[2]), offset);
+}
+
 void DEMTracker::SetOriQ(float4 oriQ, size_t offset) {
     sys->SetOwnerOriQ(obj->ownerID + offset, oriQ);
 }
+void DEMTracker::SetOriQ(const std::vector<float>& oriQ, size_t offset) {
+    assertFourElements(oriQ, "SetOriQ", "oriQ");
+    SetOriQ(host_make_float4(oriQ[0], oriQ[1], oriQ[2], oriQ[3]), offset);
+}
+
 void DEMTracker::SetFamily(const std::vector<unsigned int>& fam_nums) {
     assertOwnerSize(fam_nums.size(), "SetFamily");
     for (size_t i = 0; i < fam_nums.size(); i++) {
@@ -436,19 +574,47 @@ void DEMTracker::UpdateMesh(const std::vector<float3>& new_nodes) {
     // Outsource to API system to handle...
     sys->SetTriNodeRelPos(obj->ownerID, obj->geoID, new_nodes);
 }
+void DEMTracker::UpdateMesh(const std::vector<std::vector<float>>& new_nodes) {
+    assertThreeElementsVector(new_nodes, "UpdateMesh", "new_nodes");
+    std::vector<float3> float3_nodes(new_nodes.size());
+    for (size_t i = 0; i < new_nodes.size(); i++) {
+        float3_nodes[i] = host_make_float3(new_nodes[i][0], new_nodes[i][1], new_nodes[i][2]);
+    }
+    UpdateMesh(float3_nodes);
+}
+
 // Deformation is per-node, yet UpdateTriNodeRelPos need per-triangle info.
 void DEMTracker::UpdateMeshByIncrement(const std::vector<float3>& deformation) {
     assertMesh("UpdateMeshByIncrement");
     // Outsource to API system to handle...
     sys->UpdateTriNodeRelPos(obj->ownerID, obj->geoID, deformation);
 }
+void DEMTracker::UpdateMeshByIncrement(const std::vector<std::vector<float>>& deformation) {
+    assertThreeElementsVector(deformation, "UpdateMeshByIncrement", "deformation");
+    std::vector<float3> float3_nodes(deformation.size());
+    for (size_t i = 0; i < deformation.size(); i++) {
+        float3_nodes[i] = host_make_float3(deformation[i][0], deformation[i][1], deformation[i][2]);
+    }
+    UpdateMeshByIncrement(float3_nodes);
+}
+
 std::shared_ptr<DEMMeshConnected>& DEMTracker::GetMesh() {
     assertMesh("GetMesh");
     return sys->GetCachedMesh(obj->ownerID);
 }
+
 std::vector<float3> DEMTracker::GetMeshNodesGlobal() {
     assertMesh("GetMeshNodesGlobal");
     return sys->GetMeshNodesGlobal(obj->ownerID);
+}
+std::vector<std::vector<float>> DEMTracker::GetMeshNodesGlobalAsVectorOfVector() {
+    std::vector<float3> res = GetMeshNodesGlobal();
+    std::vector<std::vector<float>> vector_nodes(res.size());
+    for (size_t i = 0; i < res.size(); i++) {
+        std::vector<float> float_elem = {res[i].x, res[i].y, res[i].z};
+        vector_nodes[i] = float_elem;
+    }
+    return vector_nodes;
 }
 
 void DEMTracker::SetOwnerWildcardValue(const std::string& name, float wc, size_t offset) {
@@ -461,7 +627,7 @@ void DEMTracker::SetOwnerWildcardValue(const std::string& name, const std::vecto
 }
 
 void DEMTracker::SetGeometryWildcardValue(const std::string& name, float wc, size_t offset) {
-    switch (obj->type) {
+    switch (obj->obj_type) {
         case (OWNER_TYPE::CLUMP):
             sys->SetSphereWildcardValue(obj->geoID + offset, name, std::vector<float>(1, wc));
             break;
@@ -475,7 +641,7 @@ void DEMTracker::SetGeometryWildcardValue(const std::string& name, float wc, siz
 }
 
 void DEMTracker::SetGeometryWildcardValue(const std::string& name, const std::vector<float>& wc) {
-    switch (obj->type) {
+    switch (obj->obj_type) {
         case (OWNER_TYPE::CLUMP):
             assertGeoSize(wc.size(), "SetGeometryWildcardValue", "spheres");
             sys->SetSphereWildcardValue(obj->geoID, name, wc);

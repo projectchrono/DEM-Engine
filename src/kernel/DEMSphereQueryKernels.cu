@@ -2,6 +2,9 @@
 #include <DEM/Defines.h>
 #include <DEMHelperKernels.cu>
 
+// If clump templates are jitified, they will be below
+_clumpTemplateDefs_;
+
 // Mass properties are below... but inspecting spheres doesn't seem to require mass or MOI
 // _massDefs_;
 // _moiDefs_;

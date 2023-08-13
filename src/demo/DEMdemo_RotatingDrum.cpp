@@ -27,6 +27,10 @@ int main() {
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
+    // You can avoid one warning message by adding this.. No big deal, it just makes the solver not jitify big clumps
+    // like the drum present in this simulation, and instead flatten that array in system memory. The performance impact
+    // is minor one way or another.
+    DEMSim.DisableJitifyClumpTemplates();
 
     // A general template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
     std::vector<float> radii = {1.0, 0.88, 0.64, 0.88, 0.64};
@@ -128,10 +132,10 @@ int main() {
     // for dT to be aahead of kT to be a * n + b, based on the inputs you give using the 2 methods.
     DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1.1);
     DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(3);
-    // User-given max vel and bin size with the current version of solver, are only for its reference, since they
-    // auto-adapt.
+    // User-given max vel with the current version of solver, are only for its reference, since they auto-adapt.
     DEMSim.SetMaxVelocity(3.);
-    DEMSim.SetInitBinSizeAsMultipleOfSmallestSphere(15);
+    DEMSim.SetInitBinNumTarget(5e5);
+    // DEMSim.SetInitBinSizeAsMultipleOfSmallestSphere(15);
     DEMSim.Initialize();
 
     path out_dir = current_path();

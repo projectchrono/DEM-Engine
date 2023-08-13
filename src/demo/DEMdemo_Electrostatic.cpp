@@ -36,11 +36,11 @@ std::string force_model();
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
-    DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
-    DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
-    DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
+    DEMSim.SetVerbosity("INFO");
+    DEMSim.SetOutputFormat("CSV");
+    DEMSim.SetOutputContent({"ABSV"});
+    DEMSim.SetMeshOutputFormat("VTK");
+    DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT"});
 
     // E, nu, CoR, mu, Crr...
     auto mat_type_rod = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.7}, {"Crr", 0.00}});
@@ -136,12 +136,13 @@ int main() {
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
 
     // This ensures that the force model is in effect even for some `contacts' that are not physical contacts, since the
-    // electrostatic force should work in a distance. We assume that this effect won't be longer than 5mm.
-    DEMSim.SetFamilyExtraMargin(0, 0.005);
-    DEMSim.SetFamilyExtraMargin(1, 0.005);
+    // electrostatic force should work in a distance. We assume that this effect won't be longer than 7mm. This means
+    // for any particle, it can affect another particle (to be considered in contact with) for up to 1cm away from it.
+    DEMSim.SetFamilyExtraMargin(0, 0.007);
+    DEMSim.SetFamilyExtraMargin(1, 0.007);
     // If you know your extra margin policy gonna make the average number of contacts per sphere huge, then set this so
     // that the solver does not error out when checking it.
-    DEMSim.SetErrorOutAvgContacts(200);
+    DEMSim.SetErrorOutAvgContacts(100);
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
@@ -186,6 +187,7 @@ int main() {
     // the opposite charge to the particles. So the rod should attract the particles.
     rod_tracker->SetGeometryWildcardValue("Q", std::vector<float>(num_tri, -10. * init_charge));
 
+    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_end; t += step_size, step_count++) {
         if (step_count % out_steps == 0) {
             char filename[200], meshname[200];
@@ -208,6 +210,9 @@ int main() {
         }  // else the rod does not move
         rod_tracker->SetPos(make_float3(0, 0, rod_length / 2. + current_height));
     }
+    std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+    std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
 
     DEMSim.ShowTimingStats();
     std::cout << "Electrostatic demo exiting..." << std::endl;

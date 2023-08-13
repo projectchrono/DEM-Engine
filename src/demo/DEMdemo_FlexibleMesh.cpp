@@ -35,11 +35,11 @@ void writeFloat3VectorsToCSV(const std::string& header,
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(INFO);
-    DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
-    DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
-    DEMSim.SetContactOutputContent(OWNER | FORCE | POINT | TORQUE);
+    DEMSim.SetVerbosity("INFO");
+    DEMSim.SetOutputFormat("CSV");
+    DEMSim.SetOutputContent({"ABSV"});
+    DEMSim.SetMeshOutputFormat("VTK");
+    DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT", "TORQUE"});
 
     // E, nu, CoR, mu, Crr...
     auto mat_type_mesh = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.7}, {"Crr", 0.00}});
@@ -187,6 +187,7 @@ int main() {
     float wave_period = 3.0;
 
     // Main simulation loop starts...
+    std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_end; t += step_size, step_count++) {
         if (step_count % out_steps == 0) {
             char filename[200], meshname[200], force_filename[200];
@@ -255,6 +256,9 @@ int main() {
         // Means advance simulation by one time step
         DEMSim.DoStepDynamics();
     }
+    std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
+    std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
 
     DEMSim.ShowTimingStats();
     std::cout << "FlexibleMesh demo exiting..." << std::endl;
@@ -273,7 +277,7 @@ void writeFloat3VectorsToCSV(const std::string& header,
         return;
     }
 
-    file << force_csv_header << "\n";
+    file << header << "\n";
 
     // Write vectors as columns
     for (size_t i = 0; i < num_items; ++i) {

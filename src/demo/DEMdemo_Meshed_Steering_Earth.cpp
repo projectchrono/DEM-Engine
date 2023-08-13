@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
 
     // `World'
     float G_mag = 9.81;
-    float step_size = 1e-5; // 5e-6;
+    float step_size = 1e-5;  // 5e-6;
     double world_size_y = .75;
     double world_size_x = 3.;
     double world_size_z = 4.0;
@@ -46,12 +46,18 @@ int main(int argc, char* argv[]) {
     // Wheel movements
     float w_r = 0.8;
     float forward_slip = 0.1;
-    double sim_end = 5.;
+    double sim_end = 3.;
     float tilt = 5. / 180. * math_PI;
     float forward_v = w_r * wheel_rad * std::cos(tilt) * (1. - forward_slip);
-    float forward_ref_v = w_r * wheel_rad * std::cos(tilt);
 
     float Slopes_deg[] = {0};
+    float cp_dev;
+    if (atof(argv[7]) > 0.) {
+        cp_dev = atof(argv[7]) / 5.;
+    } else {
+        cp_dev = 0.;
+    }
+    float forward_ref_v = w_r * (wheel_rad + cp_dev + grouser_height) * std::cos(tilt);
 
     for (float Slope_deg : Slopes_deg) {
         DEMSolver DEMSim;
@@ -183,7 +189,7 @@ int main(int argc, char* argv[]) {
         // auto compressor_tracker = DEMSim.Track(compressor);
 
         // Families' prescribed motions (Earth)
-        float v_ref = w_r * wheel_rad;
+        float v_ref = w_r * w_r * (wheel_rad + cp_dev + grouser_height);
         double G_ang = Slope_deg * math_PI / 180.;
 
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
@@ -217,7 +223,7 @@ int main(int argc, char* argv[]) {
         DEMSim.Initialize();
 
         // Put the wheel in place, then let the wheel sink in initially
-        float corr = 0.5;  // 0
+        float corr = 1;  // 0
         float init_x = -1. + corr;
         if (Slope_deg < 21) {
             init_x = -1.6 + corr;
@@ -228,7 +234,7 @@ int main(int argc, char* argv[]) {
 
         // Put the wheel in place, then let the wheel sink in initially
         float max_z = max_z_finder->GetValue();
-        wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.05 + grouser_height + wheel_rad));
+        wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.03 + cp_dev + grouser_height + wheel_rad));
 
         int report_ps = 1000;
         float report_time = report_ps * step_size;
@@ -250,7 +256,8 @@ int main(int argc, char* argv[]) {
 
             DEMSim.DoDynamicsThenSync(0.5);
             DEMSim.ChangeFamily(1, 2);
-            DEMSim.DoDynamicsThenSync(1.);
+            DEMSim.DoDynamicsThenSync(2.);
+            std::cout << "Test num: " << cur_test << std::endl;
 
             float x1 = wheel_tracker->Pos().x;
 
@@ -276,7 +283,7 @@ int main(int argc, char* argv[]) {
                 sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), cur_test);
                 DEMSim.WriteSphereFile(std::string(filename));
                 DEMSim.WriteMeshFile(std::string(meshname));
-                std::cout << "Test num: " << cur_test << std::endl;
+                std::cout << "Success: 1" << std::endl;
                 std::cout << "=================================" << std::endl;
             }
         }

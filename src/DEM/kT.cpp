@@ -135,7 +135,9 @@ inline void DEMKinematicThread::unpackMyBuffer() {
     if (granData->maxVel > simParams->errOutVel) {
         DEME_ERROR(
             "System max velocity is %.7g, exceeded max allowance (%.7g).\nIf this velocity is not abnormal and you "
-            "want to increase this allowance, use SetErrorOutVelocity before initializing simulation.",
+            "want to increase this allowance, use SetErrorOutVelocity before initializing simulation.\nOtherwise, the "
+            "simulation may have diverged and relaxing the physics may help, such as decreasing the step size and "
+            "modifying material properties.",
             granData->maxVel, simParams->errOutVel);
     } else if (granData->maxVel >
                simParams->approxMaxVel) {  // If maxVel is larger than the user estimation, that is an anomaly

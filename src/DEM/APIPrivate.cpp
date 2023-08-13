@@ -142,8 +142,9 @@ void DEMSolver::postResourceGenChecksAndTabKeeping() {
             DEME_WARNING(
                 "There are %u clump templates loaded, but only %u templates (totalling %u components) are jitifiable "
                 "due to some of the clumps are big and/or there are many types of clumps.\nIt is probably because you "
-                "have external objects represented by spherical decomposition (a.k.a. have big clumps).\nIn this case, "
-                "I strongly suggest against calling SetJitifyClumpTemplates to use jitification for clump templates.",
+                "have some objects represented by spherical decomposition (a.k.a. have big clumps).\nIn this case, "
+                "I suggest calling DisableJitifyClumpTemplates() before system initialization to use flattened clump "
+                "templates.",
                 nDistinctClumpBodyTopologies, nJitifiableClumpTopo, nJitifiableClumpComponents);
         } else {
             nJitifiableClumpTopo = nDistinctClumpBodyTopologies;
@@ -156,9 +157,9 @@ void DEMSolver::postResourceGenChecksAndTabKeeping() {
         if (nDistinctMassProperties >= std::numeric_limits<inertiaOffset_t>::max()) {
             DEME_ERROR(
                 "%u different mass properties (from the contribution of clump templates, analytical objects and meshed "
-                "objects) are loaded, but the max allowance is %u (No.%u is reserved).\nIn general, I suggest against "
-                "calling SetJitifyMassProperties to use jitification for mass properties and here, you definitely "
-                "should not use it.",
+                "objects) are loaded, but the max allowance is %u (No.%u is reserved).\nYou may avoid this by calling "
+                "DisableJitifyMassProperties() before system initialization to disable jitification for mass "
+                "properties",
                 nDistinctMassProperties, std::numeric_limits<inertiaOffset_t>::max() - 1,
                 std::numeric_limits<inertiaOffset_t>::max());
         }
@@ -399,20 +400,23 @@ void DEMSolver::decideBinSize() {
         }
     }
 
-    // use_user_defined_bin_size means the user explicitly gave a number for bin size
+    // use_user_defined_bin_size records whether the user explicitly gave a number for bin size
     if (m_smallest_radius > DEME_TINY_FLOAT) {
-        if (!use_user_defined_bin_size) {
+        if (use_user_defined_bin_size != INIT_BIN_SIZE_TYPE::EXPLICIT) {
             m_binSize = m_binSize_as_multiple * m_smallest_radius;
         }
     } else {
-        if (!use_user_defined_bin_size) {
+        if (use_user_defined_bin_size == INIT_BIN_SIZE_TYPE::MULTI_MIN_SPH) {
             DEME_ERROR(
-                "There are spheres in clump templates that have 0 radii, and the user did not specify the bin size "
-                "(for contact detection)!\nBecause the bin size is supposed to be defaulted to the size of the "
-                "smallest sphere, now the solver does not know what to do.");
+                "There are spheres in clump templates that have near-zero radii (%.9g), and the user did not specify "
+                "the bin size (for contact detection)!\nBecause the bin size is supposed to be defaulted to the size "
+                "of the smallest sphere, now the solver does not know what to do.",
+                m_smallest_radius);
         } else {
             DEME_WARNING(
-                "There are spheres in clump templates that have 0 radii!! Please make sure this is intentional.");
+                "There are spheres in clump templates that have near-zero radii (%.9g)! Please make sure this is "
+                "intentional.",
+                m_smallest_radius);
         }
     }
 
@@ -420,9 +424,29 @@ void DEMSolver::decideBinSize() {
     // It's better to compute num of bins this way, rather than...
     // (uint64_t)(m_boxX / m_binSize + 1) * (uint64_t)(m_boxY / m_binSize + 1) * (uint64_t)(m_boxZ / m_binSize + 1);
     // because the space bins and voxels can cover may be larger than the user-defined sim domain
-    // Do we have more bins that our data type can handle?
+
+    // Now we have a bin size. We adjust it here if the user specified a target init number.
+    if (use_user_defined_bin_size == INIT_BIN_SIZE_TYPE::TARGET_NUM) {
+        size_t prev_num = m_num_bins;
+        while ((double)m_num_bins < 0.67 * m_target_init_bin_num || (double)m_num_bins > 1.5 * m_target_init_bin_num) {
+            if (m_num_bins < m_target_init_bin_num) {
+                m_binSize *= 0.8;
+            } else {
+                m_binSize *= 1.2;
+            }
+            m_num_bins = hostCalcBinNum(nbX, nbY, nbZ, m_voxelSize, m_binSize, nvXp2, nvYp2, nvZp2);
+            // If changed size relationship, good enough.
+            if ((prev_num < m_target_init_bin_num && m_num_bins >= m_target_init_bin_num) ||
+                (prev_num >= m_target_init_bin_num && m_num_bins < m_target_init_bin_num)) {
+                break;
+            }
+            prev_num = m_num_bins;
+        }
+    }
+
+    // A final safety check: Do we have more bins that our data type can handle?
     if (m_num_bins > std::numeric_limits<binID_t>::max() - 1) {
-        if (!use_user_defined_bin_size) {
+        if (use_user_defined_bin_size != INIT_BIN_SIZE_TYPE::EXPLICIT) {
             DEME_WARNING(
                 "%zu initial bins created with size %.6g. This is more than max allowance %zu. Auto-adjusting...",
                 m_num_bins, m_binSize, (size_t)(std::numeric_limits<binID_t>::max() - 1));
@@ -430,7 +454,11 @@ void DEMSolver::decideBinSize() {
                 m_binSize *= 1.5;
                 m_num_bins = hostCalcBinNum(nbX, nbY, nbZ, m_voxelSize, m_binSize, nvXp2, nvYp2, nvZp2);
             }
-            DEME_WARNING("Bin size auto-adjusted to %.6g, now we have %zu initial bins.", m_binSize, m_num_bins);
+            DEME_WARNING(
+                "Bin size auto-adjusted to %.6g, now we have %zu initial bins. Note this number may be large and it "
+                "potentially slows down kT.\nUsing SetInitBinNumTarget to set a reasonable target initial bin number "
+                "is recommended.",
+                m_binSize, m_num_bins);
         } else {
             DEME_ERROR(
                 "The simulation world has %zu bins (for domain partitioning in contact detection), but the largest bin "
@@ -640,6 +668,12 @@ void DEMSolver::preprocessTriangleObjs() {
         // Note that cache_offset needs to be modified by dT in init. This info is important if we need to modify the
         // mesh later on.
 
+        if (mesh_obj->mass < 1e-15 || length(mesh_obj->MOI) < 1e-15) {
+            DEME_WARNING(
+                "A mesh is instructed to have near-zero (or negative) mass or moment of inertia (mass: %.9g, MOI "
+                "magnitude: %.9g). This could destabilize the simulation.\nPlease make sure this is intentional.",
+                mesh_obj->mass, length(mesh_obj->MOI));
+        }
         m_mesh_obj_mass.push_back(mesh_obj->mass);
         m_mesh_obj_moi.push_back(mesh_obj->MOI);
 
