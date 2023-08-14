@@ -23,7 +23,7 @@ int main(int argc, char* argv[]) {
     int cur_test = atoi(argv[1]);
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DEMdemo_Wheel_Steer_1";
+    out_dir += "/" + std::string(argv[8]);
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -87,7 +87,7 @@ int main(int argc, char* argv[]) {
         auto bot_wall = DEMSim.AddBCPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_wall);
         auto bot_wall_tracker = DEMSim.Track(bot_wall);
 
-        auto wheel = DEMSim.AddWavefrontMeshObject("./wheel.obj", mat_type_wheel);
+        auto wheel = DEMSim.AddWavefrontMeshObject(std::string(argv[9]), mat_type_wheel);
         wheel->SetMass(wheel_mass);
         wheel->SetMOI(make_float3(wheel_IXX, wheel_IYY, wheel_IXX));
         // Give the wheel a family number so we can potentially add prescription
