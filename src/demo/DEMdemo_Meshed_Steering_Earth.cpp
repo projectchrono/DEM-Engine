@@ -224,9 +224,9 @@ int main(int argc, char* argv[]) {
 
         // Put the wheel in place, then let the wheel sink in initially
         float corr = 1;  // 0
-        float init_x = -1. + corr;
+        float init_x = -1.4 + corr;
         if (Slope_deg < 21) {
-            init_x = -1.6 + corr;
+            init_x = -2.0 + corr;
         }
 
         float settle_time = 0.2;
