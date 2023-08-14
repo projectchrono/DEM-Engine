@@ -27,6 +27,9 @@ generate_random_integer_range() {
     echo "$random_integer"
 }
 
+echo "Run id is " $SLURM_JOB_ID
+echo "=================================="
+
 for sim_num in {1..200}; do
     height=$(generate_random_real_range 0.02 0.08)
     thickness=$(generate_random_real_range 0.01 0.025) #0.01
