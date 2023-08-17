@@ -149,7 +149,7 @@ int main() {
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, 0));
     DEMSim.InstructBoxDomainDimension({-50, 50}, {-50, 50}, {-50, 50});
-    DEMSim.SetInitBinSize(10);
+    DEMSim.SetInitBinNumTarget(10);
 
     // By adding a contact margin that is as large as the simulation domain, we ensure everything is in contact with
     // everything, so all the gravitational force pair is calculated. NOTE HOWEVER! In serious simulations where

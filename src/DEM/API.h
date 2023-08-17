@@ -51,7 +51,7 @@ class DEMSolver {
     DEMSolver(unsigned int nGPUs = 2);
     ~DEMSolver();
 
-    /// Set output detail level
+    /// Set output detail level.
     void SetVerbosity(VERBOSITY verbose) { verbosity = verbose; }
 
     /// Instruct the dimension of the `world'. On initialization, this info will be used to figure out how to assign the
@@ -126,14 +126,19 @@ class DEMSolver {
 
     /// Explicitly instruct the bin size (for contact detection) that the solver should use.
     void SetInitBinSize(double bin_size) {
-        use_user_defined_bin_size = true;
+        use_user_defined_bin_size = INIT_BIN_SIZE_TYPE::EXPLICIT;
         m_binSize = bin_size;
     }
     /// Explicitly instruct the bin size (for contact detection) that the solver should use, as a multiple of the radius
     /// of the smallest sphere in simulation.
     void SetInitBinSizeAsMultipleOfSmallestSphere(float bin_size) {
-        use_user_defined_bin_size = false;
+        use_user_defined_bin_size = INIT_BIN_SIZE_TYPE::MULTI_MIN_SPH;
         m_binSize_as_multiple = bin_size;
+    }
+    /// @brief Set the target number of bins (for contact detection) at the start of the simulation upon initialization.
+    void SetInitBinNumTarget(size_t num) {
+        use_user_defined_bin_size = INIT_BIN_SIZE_TYPE::TARGET_NUM;
+        m_target_init_bin_num = num;
     }
 
     /// Explicitly instruct the sizes for the arrays at initialization time. This is useful when the number of owners
@@ -641,6 +646,13 @@ class DEMSolver {
     /// @param name Name of the contact wildcard to modify.
     /// @param val The value to change to.
     void SetFamilyContactWildcardValueAll(unsigned int N, const std::string& name, float val);
+    /// @brief Change the value of contact wildcards to val if one of the contact geometry is in family N1, and the
+    /// other is in N2.
+    /// @param N1 First family number.
+    /// @param N2 Second family number.
+    /// @param name Name of the contact wildcard to modify.
+    /// @param val The value to change to.
+    void SetFamilyContactWildcardValue(unsigned int N1, unsigned int N2, const std::string& name, float val);
     /// @brief Change the value of contact wildcards to val. Apply to all simulation bodies that are present.
     /// @param name Name of the contact wildcard to modify.
     /// @param val The value to change to.
@@ -945,7 +957,7 @@ class DEMSolver {
         return w_vals;
     }
 
-    /// Intialize the simulation system
+    /// Intialize the simulation system.
     void Initialize();
 
     /// Advance simulation by this amount of time, and at the end of this call, synchronize kT and dT. This is suitable
@@ -956,7 +968,7 @@ class DEMSolver {
     /// and short call durations and allows interplay with co-simulation APIs.
     void DoDynamics(double thisCallDuration);
 
-    /// Equivalent to calling DoDynamics with the time step size as the argument
+    /// Equivalent to calling DoDynamics with the time step size as the argument.
     void DoStepDynamics() { DoDynamics(m_ts_size); }
 
     /// @brief Transferthe cached sim params to the workers. Used for sim environment modification after system
@@ -974,7 +986,7 @@ class DEMSolver {
     /// dT should be allowed to be in advance of kT.
     void ShowThreadCollaborationStats();
 
-    /// Show the wall time and percentages of wall time spend on various solver tasks
+    /// Show the wall time and percentages of wall time spend on various solver tasks.
     void ShowTimingStats();
 
     /// Show potential anomalies that may have been there in the simulation, then clear the anomaly log.
@@ -985,14 +997,14 @@ class DEMSolver {
     /// and destroy DEMSolver.
     void ClearThreadCollaborationStats();
 
-    /// Reset the recordings of the wall time and percentages of wall time spend on various solver tasks
+    /// Reset the recordings of the wall time and percentages of wall time spend on various solver tasks.
     void ClearTimingStats();
 
-    /// Removes all entities associated with a family from the arrays (to save memory space)
+    /// Removes all entities associated with a family from the arrays (to save memory space).
     void PurgeFamily(unsigned int family_num);
 
     /// Release the memory for the flattened arrays (which are used for initialization pre-processing and transferring
-    /// info the worker threads)
+    /// info the worker threads).
     void ReleaseFlattenedArrays();
 
     /// @brief Return whether the solver is currently reducing force in the force calculation kernel.
@@ -1011,15 +1023,15 @@ class DEMSolver {
     // call.
     // void SetClumpOutputMode(OUTPUT_MODE mode) { m_clump_out_mode = mode; }
 
-    /// Choose output format
+    /// Choose output format.
     void SetOutputFormat(OUTPUT_FORMAT format) { m_out_format = format; }
-    /// Specify the information that needs to go into the clump or sphere output files
+    /// Specify the information that needs to go into the clump or sphere output files.
     void SetOutputContent(unsigned int content) { m_out_content = content; }
-    /// Specify the file format of contact pairs
+    /// Specify the file format of contact pairs.
     void SetContactOutputFormat(OUTPUT_FORMAT format) { m_cnt_out_format = format; }
-    /// Specify the information that needs to go into the contact pair output files
+    /// Specify the information that needs to go into the contact pair output files.
     void SetContactOutputContent(unsigned int content) { m_cnt_out_content = content; }
-    /// Specify the file format of meshes
+    /// Specify the file format of meshes.
     void SetMeshOutputFormat(MESH_FORMAT format) { m_mesh_out_format = format; }
     /// Enable/disable outputting owner wildcard values to file.
     void EnableOwnerWildcardOutput(bool enable = true) { m_is_out_owner_wildcards = enable; }
@@ -1028,7 +1040,32 @@ class DEMSolver {
     /// Enable/disable outputting geometry wildcard values to the contact file.
     void EnableGeometryWildcardOutput(bool enable = true) { m_is_out_geo_wildcards = enable; }
 
-    /// Let dT do this call and return the reduce value of the inspected quantity
+    /// @brief Set the verbosity level of the solver.
+    /// @param verbose "QUIET", "ERROR", "WARNING", "INFO", "STEP_ANOMALY", "STEP_METRIC", "DEBUG" or "STEP_DEBUG".
+    /// Recommend "INFO".
+    void SetVerbosity(const std::string& verbose);
+    /// @brief Choose sphere and clump output file format.
+    /// @param format Choice among "CSV", "BINARY" or "CHPF".
+    void SetOutputFormat(const std::string& format);
+    /// @brief Specify the information that needs to go into the clump or sphere output files.
+    /// @param content A list of "XYZ", "QUAT", "ABSV", "VEL", "ANG_VEL", "ABS_ACC", "ACC", "ANG_ACC", "FAMILY", "MAT",
+    /// "OWNER_WILDCARD" and/or "GEO_WILDCARD".
+    void SetOutputContent(const std::vector<std::string>& content);
+    /// @brief Specify the file format of contact pairs.
+    /// @param format Choice among "CSV", "BINARY" or "CHPF".
+    void SetContactOutputFormat(const std::string& format);
+    /// @brief Specify the information that needs to go into the contact pair output files.
+    /// @param content A list of "CNT_TYPE", "FORCE", "POINT", "COMPONENT", "NORMAL", "TORQUE", "CNT_WILDCARD", "OWNER",
+    /// "GEO_ID" and/or "NICKNAME".
+    void SetContactOutputContent(const std::vector<std::string>& content);
+    /// @brief Specify the output file format of meshes.
+    /// @param format A choice between "VTK", "OBJ".
+    void SetMeshOutputFormat(const std::string& format);
+
+    // void SetOutputContent(const std::string& content) { SetOutputContent({content}); }
+    // void SetContactOutputContent(const std::string& content) { SetContactOutputContent({content}); }
+
+    /// Let dT do this call and return the reduce value of the inspected quantity.
     float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
                           const std::string& kernel_name,
                           INSPECT_ENTITY_TYPE thing_to_insp,
@@ -1047,7 +1084,7 @@ class DEMSolver {
 
     // Verbosity
     VERBOSITY verbosity = INFO;
-    // If true, dT should sort contact arrays (based on contact type) before usage (not implemented)
+    // If true, dT should sort contact arrays (based on contact type) before usage 
     bool should_sort_contacts = true;
     // If true, the solvers may need to do a per-step sweep to apply family number changes
     bool famnum_can_change_conditionally = false;
@@ -1057,10 +1094,18 @@ class DEMSolver {
     // Should jitify mass/MOI properties into kernels
     bool jitify_mass_moi = true;
 
+    enum class INIT_BIN_SIZE_TYPE { EXPLICIT, MULTI_MIN_SPH, TARGET_NUM };
     // User explicitly set a bin size to use
-    bool use_user_defined_bin_size = false;
+    INIT_BIN_SIZE_TYPE use_user_defined_bin_size = INIT_BIN_SIZE_TYPE::TARGET_NUM;
     // User explicity specify a expand factor to use
     bool use_user_defined_expand_factor = false;
+    // Whether to auto-adjust the bin size and the max update frequency
+    bool auto_adjust_bin_size = true;
+    bool auto_adjust_update_freq = true;
+    // User-instructed initial bin size as a multiple of smallest sphere radius
+    float m_binSize_as_multiple = 8.0;
+    // Target initial bin number
+    size_t m_target_init_bin_num = 1e6;
 
     // I/O related flags
     // The output file format for clumps and spheres
@@ -1116,8 +1161,6 @@ class DEMSolver {
     float l = FLT_MAX;
     // The edge length of a bin (for contact detection)
     double m_binSize;
-    // User-instructed initial bin size as a multiple of smallest sphere radius
-    float m_binSize_as_multiple = 2.0;
     // Total number of bins
     size_t m_num_bins;
     // Number of bins on each direction
@@ -1181,9 +1224,6 @@ class DEMSolver {
     unsigned int threshold_too_many_tri_in_bin = 32768;
     // The max velocity at which the simulation should error out
     float threshold_error_out_vel = 1e3;
-    // Whether to auto-adjust the bin size and the max update frequency
-    bool auto_adjust_bin_size = true;
-    bool auto_adjust_update_freq = true;
     // Num of steps that kT takes average before making a conclusion on the performance of this bin size
     unsigned int auto_adjust_observe_steps = 20;
     // See corresponding method for those...
@@ -1192,8 +1232,8 @@ class DEMSolver {
     float auto_adjust_upper_proactive_ratio = 1.0;
     float auto_adjust_lower_proactive_ratio = 0.3;
     unsigned int upper_bound_future_drift = 5000;
-    float max_drift_ahead_of_avg_drift = 6.;
-    float max_drift_multiple_of_avg_drift = 1.1;
+    float max_drift_ahead_of_avg_drift = 4.;
+    float max_drift_multiple_of_avg_drift = 1.05;
     unsigned int max_drift_gauge_history_size = 200;
 
     // See SetNoForceRecord

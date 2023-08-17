@@ -24,6 +24,8 @@ using namespace std::filesystem;
 int main() {
     DEMSolver DEMSim;
     DEMSim.SetVerbosity(STEP_METRIC);
+    // For general use cases, you want to set the verbosity to INFO: It's also a bit faster than STEP_METRIC.
+    // DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
@@ -85,7 +87,10 @@ int main() {
     // Mixer has a big angular velocity-contributed linear speed at its blades, this is something the solver do not
     // account for, for now. And that means it needs to be added as an estimated value.
     DEMSim.SetExpandSafetyAdder(2.0);
-    DEMSim.SetInitBinSize(25 * granular_rad);
+    // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto bin
+    // size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case setting
+    // init bin size may save the simulation. 
+    // DEMSim.SetInitBinSize(25 * granular_rad);
     DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1.2);
     DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(6);
     DEMSim.SetSortContactPairs(true);

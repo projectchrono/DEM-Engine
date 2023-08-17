@@ -2558,6 +2558,24 @@ void DEMDynamicThread::setFamilyContactWildcardValueAll(unsigned int N, unsigned
     }
 }
 
+void DEMDynamicThread::setFamilyContactWildcardValue(unsigned int N1, unsigned int N2, unsigned int wc_num, float val) {
+    size_t numCnt = *stateOfSolver_resources.pNumContacts;
+    for (size_t i = 0; i < numCnt; i++) {
+        bodyID_t geoA = idGeometryA.at(i);
+        bodyID_t ownerA = ownerClumpBody.at(geoA);
+        bodyID_t geoB = idGeometryB.at(i);
+        contact_t typeB = contactType.at(i);
+        bodyID_t ownerB = getOwnerForContactB(geoB, typeB);
+
+        unsigned int famA = +(familyID.at(ownerA));
+        unsigned int famB = +(familyID.at(ownerB));
+
+        if ((N1 == famA && N2 == famB) || (N2 == famA && N1 == famB)) {
+            contactWildcards[wc_num].at(i) = val;
+        }
+    }
+}
+
 void DEMDynamicThread::setContactWildcardValue(unsigned int wc_num, float val) {
     size_t numCnt = *stateOfSolver_resources.pNumContacts;
     for (size_t i = 0; i < numCnt; i++) {

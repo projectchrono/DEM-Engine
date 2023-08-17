@@ -266,12 +266,24 @@ class DEMMeshConnected : public DEMInitializer {
     std::vector<int3> m_face_uv_indices;
     std::vector<int3> m_face_col_indices;
 
+    /// @brief Get the coordinates of the vertices of this mesh.
+    /// @return A reference to the vertices data vector (of float3) of the mesh.
     std::vector<float3>& GetCoordsVertices() { return m_vertices; }
+    /// @brief Get the coordinates of the vertices of this mesh.
+    /// @return N (number of vertices) by 3 matrix.
+    std::vector<std::vector<float>> GetCoordsVerticesAsVectorOfVectors();
+
     std::vector<float3>& GetCoordsNormals() { return m_normals; }
     std::vector<float3>& GetCoordsUV() { return m_UV; }
     std::vector<float3>& GetCoordsColors() { return m_colors; }
 
+    /// @brief Get the vertices number of all the triangles of this mesh.
+    /// @return A reference to the vertices number data vector (of int3) of the mesh.
     std::vector<int3>& GetIndicesVertexes() { return m_face_v_indices; }
+    /// @brief Get the vertices number of all the triangles of this mesh.
+    /// @return N (number of vertices) by 3 matrix.
+    std::vector<std::vector<int>> GetIndicesVertexesAsVectorOfVectors();
+
     std::vector<int3>& GetIndicesNormals() { return m_face_n_indices; }
     std::vector<int3>& GetIndicesUV() { return m_face_uv_indices; }
     std::vector<int3>& GetIndicesColors() { return m_face_col_indices; }
@@ -355,15 +367,16 @@ class DEMMeshConnected : public DEMInitializer {
         this->owner = NULL_BODYID;
     }
 
-    /// Set mass
+    /// Set mass.
     void SetMass(float mass) { this->mass = mass; }
-    /// Set MOI (in principal frame)
+    /// Set MOI (in principal frame).
     void SetMOI(float3 MOI) { this->MOI = MOI; }
+    /// Set MOI (in principal frame).
     void SetMOI(const std::vector<float>& MOI) {
         assertThreeElements(MOI, "SetMOI", "MOI");
         SetMOI(host_make_float3(MOI[0], MOI[1], MOI[2]));
     }
-    /// Set mesh family number
+    /// Set mesh family number.
     void SetFamily(unsigned int num) { this->family_code = num; }
 
     /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
@@ -372,6 +385,7 @@ class DEMMeshConnected : public DEMInitializer {
         materials = input;
         isMaterialSet = true;
     }
+    /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
     void SetMaterial(const std::shared_ptr<DEMMaterial>& input) {
         SetMaterial(std::vector<std::shared_ptr<DEMMaterial>>(nTri, input));
     }
@@ -456,8 +470,10 @@ class DEMMeshConnected : public DEMInitializer {
         for (auto& node : m_vertices) {
             node *= s;
         }
-        mass *= (double)s * (double)s * (double)s;
-        MOI *= (double)s * (double)s * (double)s * (double)s * (double)s;
+        // Never let mass become negative.
+        double positive_s = (double)std::abs(s);
+        mass *= positive_s * positive_s * positive_s;
+        MOI *= positive_s * positive_s * positive_s * positive_s * positive_s;
     }
     /// @brief Scale all geometry component of this mesh. Specify x, y, z respectively.
     void Scale(float3 s) {
@@ -465,9 +481,10 @@ class DEMMeshConnected : public DEMInitializer {
             node = node * s;
         }
         // Really just an estimate. The user should reset mass properties manually afterwards.
-        double prod = (double)s.x * (double)s.y * (double)s.z;
+        // Never let mass become negative.
+        double prod = std::abs((double)s.x * (double)s.y * (double)s.z);
         mass *= prod;
-        MOI.x *= prod * s.x * s.x;
+        MOI.x *= prod * s.x * s.x; // Square, so always positive
         MOI.y *= prod * s.y * s.y;
         MOI.z *= prod * s.z * s.z;
     }

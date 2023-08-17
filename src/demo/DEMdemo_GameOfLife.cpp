@@ -115,7 +115,10 @@ int main() {
     particles->SetFamilies(family_code);
     // The game board is somewhat large so we have to define it, because the solver defaults the world size to be 1000.
     DEMSim.InstructBoxDomainDimension(world_size * 1.1, world_size * 1.1, world_size * 1.1);
-    DEMSim.SetInitBinSize(world_size / 100.);
+    // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto bin
+    // size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case setting
+    // init bin size may save the simulation. 
+    // DEMSim.SetInitBinSize(world_size / 100.);
 
     DEMSim.SetInitTimeStep(1.);
     DEMSim.SetCDUpdateFreq(0);

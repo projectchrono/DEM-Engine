@@ -570,7 +570,7 @@ class GridSampler : public Sampler {
     float3 m_sep3D;
 };
 
-/// A wrapper for a grid sampler of a box domain
+/// A wrapper for a grid sampler of a box domain.
 inline std::vector<float3> DEMBoxGridSampler(float3 BoxCenter,
                                              float3 HalfDims,
                                              float GridSizeX,
@@ -583,14 +583,34 @@ inline std::vector<float3> DEMBoxGridSampler(float3 BoxCenter,
     GridSampler sampler(host_make_float3(GridSizeX, GridSizeY, GridSizeZ));
     return sampler.SampleBox(BoxCenter, HalfDims);
 }
+/// A wrapper for a grid sampler of a box domain.
+inline std::vector<float3> DEMBoxGridSampler(const std::vector<float>& BoxCenter,
+                                             const std::vector<float>& HalfDims,
+                                             float GridSizeX,
+                                             float GridSizeY = -1.0,
+                                             float GridSizeZ = -1.0) {
+    assertThreeElements(BoxCenter, "DEMBoxGridSampler", "BoxCenter");
+    assertThreeElements(HalfDims, "DEMBoxGridSampler", "HalfDims");
+    return DEMBoxGridSampler(host_make_float3(BoxCenter[0], BoxCenter[1], BoxCenter[2]),
+                             host_make_float3(HalfDims[0], HalfDims[1], HalfDims[2]), GridSizeX, GridSizeY, GridSizeZ);
+}
 
-/// A wrapper for a HCP sampler of a box domain
+/// A wrapper for a HCP sampler of a box domain.
 inline std::vector<float3> DEMBoxHCPSampler(float3 BoxCenter, float3 HalfDims, float GridSize) {
     HCPSampler sampler(GridSize);
     return sampler.SampleBox(BoxCenter, HalfDims);
 }
+/// A wrapper for a HCP sampler of a box domain.
+inline std::vector<float3> DEMBoxHCPSampler(const std::vector<float>& BoxCenter,
+                                            const std::vector<float>& HalfDims,
+                                            float GridSize) {
+    assertThreeElements(BoxCenter, "DEMBoxHCPSampler", "BoxCenter");
+    assertThreeElements(HalfDims, "DEMBoxHCPSampler", "HalfDims");
+    return DEMBoxHCPSampler(host_make_float3(BoxCenter[0], BoxCenter[1], BoxCenter[2]),
+                             host_make_float3(HalfDims[0], HalfDims[1], HalfDims[2]), GridSize);
+}
 
-/// A light-weight sampler that generates a shell made of particles that resembles a cylindrical surface
+/// A light-weight sampler that generates a shell made of particles that resembles a cylindrical surface.
 inline std::vector<float3> DEMCylSurfSampler(float3 CylCenter,
                                              float3 CylAxis,
                                              float CylRad,
@@ -616,6 +636,19 @@ inline std::vector<float3> DEMCylSurfSampler(float3 CylCenter,
         RadDir = Rodrigues(RadDir, UnitCylAxis, RadIncr);
     }
     return points;
+}
+/// A light-weight sampler that generates a shell made of particles that resembles a cylindrical surface.
+inline std::vector<float3> DEMCylSurfSampler(const std::vector<float>& CylCenter,
+                                             const std::vector<float>& CylAxis,
+                                             float CylRad,
+                                             float CylHeight,
+                                             float ParticleRad,
+                                             float spacing = 1.2f) {
+    assertThreeElements(CylCenter, "DEMCylSurfSampler", "CylCenter");
+    assertThreeElements(CylAxis, "DEMCylSurfSampler", "CylAxis");
+    return DEMCylSurfSampler(host_make_float3(CylCenter[0], CylCenter[1], CylCenter[2]),
+                             host_make_float3(CylAxis[0], CylAxis[1], CylAxis[2]), CylRad, CylHeight, ParticleRad,
+                             spacing);
 }
 
 }  // namespace deme
