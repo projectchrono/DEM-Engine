@@ -176,16 +176,16 @@ set_target_properties(
 	LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib_install"
 )
 
-install(TARGETS DEMERuntimeDataHelper_install
-	LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
-	RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
-)
-
 set(lib_path "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}")
 
 set_target_properties(DEMERuntimeDataHelper_install PROPERTIES
 	INSTALL_RPATH_USE_LINK_PATH TRUE
 	INSTALL_RPATH "${lib_path}")
+
+install(TARGETS DEMERuntimeDataHelper_install
+	LIBRARY DESTINATION "${lib_path}"
+	RUNTIME DESTINATION "${lib_path}"
+)
 
 # Make sure this target is generated **AFTER** the build-tree version
 add_dependencies(DEMERuntimeDataHelper_install DEMERuntimeDataHelper)
