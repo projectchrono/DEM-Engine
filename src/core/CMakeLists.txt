@@ -1,6 +1,6 @@
 # Copyright (c) 2021, SBEL GPU Development Team
 # Copyright (c) 2021, University of Wisconsin - Madison
-# 
+#
 #	SPDX-License-Identifier: BSD-3-Clause
 
 message(STATUS "==== Configuring Core Components ====")
@@ -15,7 +15,7 @@ configure_file(
 
 
 
-message(STATUS "${core_message} Extracting NVIDIA Jitify header...") 
+message(STATUS "${core_message} Extracting NVIDIA Jitify header...")
 configure_file(
 	${NVIDIAJitifyPath}/jitify.hpp
 	${CMAKE_BINARY_DIR}/src/jitify/jitify.hpp
@@ -67,7 +67,7 @@ target_sources(
 )
 
 set_target_properties(
-	core PROPERTIES 
+	core PROPERTIES
 	POSITION_INDEPENDENT_CODE True
 	CXX_STANDARD ${CXXSTD_SUPPORTED}
 	PUBLIC_HEADER "${core_headers}"
@@ -77,34 +77,34 @@ set_target_properties(
 install(
 	DIRECTORY ${ProjectIncludeSource}/core
 		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-		FILES_MATCHING 
+		FILES_MATCHING
 			PATTERN "*.h"
 			PATTERN "*.hpp"
 )
 
-# Install Generated Headers 
+# Install Generated Headers
 install(
-	FILES 
+	FILES
 		"${CMAKE_BINARY_DIR}/src/core/ApiVersion.h"
 	DESTINATION
 		${CMAKE_INSTALL_INCLUDEDIR}/core
 )
 
-# Install Third-party Headers 
+# Install Third-party Headers
 install(
 	DIRECTORY ${NVIDIAMathDir}/nvmath
 		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 install(
-	FILES 
+	FILES
 		"${NVIDIAJitifyPath}/jitify.hpp"
-	DESTINATION 
+	DESTINATION
 		${CMAKE_INSTALL_INCLUDEDIR}/jitify
 )
 
 
 # --------------------------------------------------------- #
-# Runtime data path helper library 
+# Runtime data path helper library
 # --------------------------------------------------------- #
 
 
@@ -131,7 +131,7 @@ add_library(DEMERuntimeDataHelper SHARED)
 
 target_sources(DEMERuntimeDataHelper
 	PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils/RuntimeData.h> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/core/utils/RuntimeData.h>
-	PRIVATE "${CMAKE_BINARY_DIR}/src/core/utils/RuntimeDataBuild.cpp" 
+	PRIVATE "${CMAKE_BINARY_DIR}/src/core/utils/RuntimeDataBuild.cpp"
 )
 
 target_include_directories(
@@ -148,14 +148,14 @@ set_target_properties(
 # Install tree version
 
 ##
-## This MUST be installed after the Build tree version as it overwrites the .so file 
+## This MUST be installed after the Build tree version as it overwrites the .so file
 ##
 
 add_library(DEMERuntimeDataHelper_install SHARED)
 
 target_sources(DEMERuntimeDataHelper_install
 	PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils/RuntimeData.h> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/core/utils/RuntimeData.h>
-	PRIVATE "${CMAKE_BINARY_DIR}/src/core/utils/RuntimeDataInstall.cpp" 
+	PRIVATE "${CMAKE_BINARY_DIR}/src/core/utils/RuntimeDataInstall.cpp"
 )
 
 
@@ -176,14 +176,16 @@ set_target_properties(
 	LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib_install"
 )
 
-set_target_properties(
-        DEMERuntimeDataHelper_install PROPERTIES
-        POSITION_INDEPENDENT_CODE True
-        CXX_STANDARD ${CXXSTD_SUPPORTED}
-        LIBRARY_OUTPUT_NAME "DEMERuntimeDataHelper"
-        LIBRARY_OUTPUT_DIRECTORY "/usr/lib"
+install(TARGETS DEMERuntimeDataHelper_install
+	LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
+	RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
 )
 
-# Make sure this target is generated **AFTER** the build-tree version 
-add_dependencies(DEMERuntimeDataHelper_install DEMERuntimeDataHelper)
+set(lib_path "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}")
 
+set_target_properties(DEMERuntimeDataHelper_install PROPERTIES
+	INSTALL_RPATH_USE_LINK_PATH TRUE
+	INSTALL_RPATH "${lib_path}")
+
+# Make sure this target is generated **AFTER** the build-tree version
+add_dependencies(DEMERuntimeDataHelper_install DEMERuntimeDataHelper)

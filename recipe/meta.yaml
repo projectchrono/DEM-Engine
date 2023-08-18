@@ -11,29 +11,26 @@ build:
 
 requirements:
   build:
-    - {{ compiler('cxx') }}
     - python
     - make
     - cmake
     - ninja
+    - cuda-toolkit
     - pip
-    - pybind11
-    - cuda ==12.0.0
     - numpy >=1.17
 
   host:
     - python
-    - pip 
+    - pip
     - cmake
     - make
+    - cuda-toolkit
     - ninja
-    - pybind11
-    - cuda ==12.0.0
     - numpy >=1.17
 
   run:
     - python
-    - cuda ==12.0.0
+    - numpy
 
 about:
   summary: PyDEME is a Python-wrapped library that provides easy accessibility to DEM Engine (A novel physics solver).

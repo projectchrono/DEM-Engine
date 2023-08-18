@@ -1,6 +1,6 @@
 # Copyright (c) 2021, SBEL GPU Development Team
 # Copyright (c) 2021, University of Wisconsin - Madison
-# 
+#
 #	SPDX-License-Identifier: BSD-3-Clause
 
 # ---------------------------------------------------------------------------- #
@@ -15,7 +15,7 @@ set(VERSION_MINOR   0)
 set(VERSION_PATCH   0)
 
 project(
-	Simulator-MUlti-Gpu 
+	Simulator-MUlti-Gpu
 	VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
 	LANGUAGES CXX CUDA
 )
@@ -43,27 +43,33 @@ find_package(PythonLibs REQUIRED)
 
 add_subdirectory(thirdparty/pybind11)
 
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+
+set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 # Find CUB library (this might need to be done in source-level config)
 find_package(
 	CUB REQUIRED
 	HINTS ${CUDAToolkit_ROOT}/lib64/cmake/cub
 )
 
-# Find NVIDIA's Jitify library 
+# Find NVIDIA's Jitify library
 find_path(
 	NVIDIAJitifyPath
 	NAMES jitify.hpp
 	PATHS "${CMAKE_CURRENT_LIST_DIR}/thirdparty/jitify"
 )
 
-#set(NVIDIAJitifyPath "${CMAKE_CURRENT_LIST_DIR}/thirdparty/jitify")
+set(NVIDIAJitifyPath "${CMAKE_CURRENT_LIST_DIR}/thirdparty/jitify")
 
 # Include pyBind11 library
 include_directories(${PYTHON_INCLUDE_DIRS})
 
-# nvidia_helper_math doesn't require any extra configuration, so just set the path 
+# nvidia_helper_math doesn't require any extra configuration, so just set the path
 set(NVIDIAMathDir ${CMAKE_CURRENT_LIST_DIR}/thirdparty/nvidia_helper_math)
-	
+
 FetchContent_Declare(
 	ChPF
 	GIT_REPOSITORY	https://gitlab.com/uwsbel/chpf.git
@@ -121,7 +127,7 @@ add_subdirectory(src/algorithms)
 # ---------------------------------------------------------------------------- #
 
 add_library(
-	simulator_multi_gpu 
+	simulator_multi_gpu
 	STATIC
 	$<TARGET_OBJECTS:core>
 	$<TARGET_OBJECTS:DEM>
@@ -134,7 +140,7 @@ get_target_property(DEM_INTERFACE DEM INTERFACE_INCLUDE_DIRECTORIES)
 get_target_property(ALGORITHMS_INTERFACE algorithms INTERFACE_INCLUDE_DIRECTORIES)
 
 # All targets use the same include directories, so we can cheat and just export one of them
-target_include_directories(simulator_multi_gpu 
+target_include_directories(simulator_multi_gpu
 	PUBLIC ${CORE_INTERFACE}
 )
 
@@ -144,7 +150,7 @@ target_link_libraries(simulator_multi_gpu
 	PUBLIC CUDA::cuda_driver
 	PUBLIC ${ChPF_IMPORTED_NAME}
 	PUBLIC DEMERuntimeDataHelper
-	PUBLIC ${PYTHON_LIBRARIES}	
+	PUBLIC ${PYTHON_LIBRARIES}
 )
 
 # Attach include directories to the top-level library target
@@ -154,12 +160,12 @@ set_target_properties(simulator_multi_gpu
 )
 
 # ---------------------------------------------------------------------------- #
-# Export and Install The Generated Targets 
+# Export and Install The Generated Targets
 # ---------------------------------------------------------------------------- #
 
 set(config_directory ${CMAKE_INSTALL_LIBDIR}/cmake/DEME)
 
-# Install the library, creating an export target for it as well 
+# Install the library, creating an export target for it as well
 install(
 	TARGETS simulator_multi_gpu DEMERuntimeDataHelper
 	EXPORT DEMETargets
@@ -183,16 +189,16 @@ export(EXPORT DEMETargets
 	NAMESPACE DEME::
 )
 
-# Set the install location for the exported target file 
+# Set the install location for the exported target file
 install(
 	EXPORT DEMETargets
-	DESTINATION 
+	DESTINATION
 		${config_directory}
 	NAMESPACE DEME::
 )
 
 
-# These macros aid in the generation of the installable config files 
+# These macros aid in the generation of the installable config files
 
 
 # Generate the **Build Tree** version of DEMEConfig.cmake from the base file

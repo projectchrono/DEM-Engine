@@ -28,7 +28,8 @@ class CMakeBuild(build_ext):
     def build_extension(self, ext: CMakeExtension) -> None:
         # Must be in this form due to bug in .resolve() only fixed in Python 3.10+
         ext_fullpath = Path.cwd() / self.get_ext_fullpath(ext.name)
-        extdir = ext_fullpath.parent.resolve()
+
+        extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
 
         # Using this requires trailing slash for auto-detection & inclusion of
         # auxiliary "native" libs
@@ -46,6 +47,8 @@ class CMakeBuild(build_ext):
         cmake_args = [
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}{os.sep}",
             f"-DPYTHON_EXECUTABLE={sys.executable}",
+            f"-DCMAKE_INSTALL_PREFIX={extdir}{os.sep}",
+            f"-Dlibcudacxx_DIR=/usr/local/cuda/targets/x86_64-linux/lib/cmake/libcudacxx",
             f"-DCUB_DIR=/usr/local/cuda/lib64/cmake/cub",
             f"-DCMAKE_BUILD_TYPE={cfg}",
         ]
@@ -118,9 +121,11 @@ class CMakeBuild(build_ext):
         subprocess.run(
             ["cmake", ext.sourcedir, *cmake_args], cwd=build_temp, check=True
         )
+
         subprocess.run(
             ["cmake", "--build", ".", "-j 8", *build_args], cwd=build_temp, check=True
         )
+
         subprocess.run(["make", "install"], cwd=build_temp, check=True)
 
 
@@ -128,7 +133,7 @@ class CMakeBuild(build_ext):
 # logic and declaration, and simpler if you include description/version in a file.
 setup(
     name="DEME",
-    version="0.1.3",
+    version="0.1.5",
     author="Rouchun Zhang",
     author_email="noreply@wisc.edu",
     description="PyBind Wrapper Library for DEM-Engine",
