@@ -68,6 +68,7 @@ set_target_properties(
 	POSITION_INDEPENDENT_CODE True
 	CXX_STANDARD ${CXXSTD_SUPPORTED}
 	PUBLIC_HEADER "${DEM_headers}"
+	INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}"
 )
 
 target_include_directories(
@@ -135,6 +136,7 @@ target_link_libraries(
 	PUBLIC ${ChPF_IMPORTED_NAME}
 	PUBLIC ${PYTHON_LIBRARIES}
 	PUBLIC core
+	PUBLIC DEMERuntimeDataHelper
     PUBLIC algorithms
 	PUBLIC pybind11::headers
 	-static-libgcc -static-libstdc++
@@ -145,6 +147,7 @@ set_target_properties(
 	POSITION_INDEPENDENT_CODE True
 	CXX_STANDARD ${CXXSTD_SUPPORTED}
 	PUBLIC_HEADER "${DEM_headers}"
+	INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}"
 )
 
 add_compile_options(-fno-lto)
