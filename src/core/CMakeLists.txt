@@ -117,13 +117,12 @@ configure_file(
 )
 
 message(STATUS "${core_message} Generating Runtime Data helper (install)...")
-set(RUNTIME_DATA_DIRECTORY "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/DEME")
-set(RUNTIME_INCLUDE_DIRECTORY "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}")
+set(RUNTIME_DATA_DIRECTORY "../share/DEME")
+set(RUNTIME_INCLUDE_DIRECTORY "../${CMAKE_INSTALL_INCLUDEDIR}")
 configure_file(
 	utils/RuntimeData.cpp.in utils/RuntimeDataInstall.cpp
 	@ONLY
 )
-
 
 # Build tree version
 
@@ -158,11 +157,6 @@ target_sources(DEMERuntimeDataHelper_install
 	PRIVATE "${CMAKE_BINARY_DIR}/src/core/utils/RuntimeDataInstall.cpp"
 )
 
-
-target_link_options(DEMERuntimeDataHelper_install
-	PUBLIC "LINKER:-soname,libDEMERuntimeDataHelper.so"
-)
-
 target_include_directories(
 	DEMERuntimeDataHelper_install
 	PUBLIC $<BUILD_INTERFACE:${ProjectIncludeSource}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
@@ -171,20 +165,9 @@ target_include_directories(
 set_target_properties(
 	DEMERuntimeDataHelper_install PROPERTIES
 	POSITION_INDEPENDENT_CODE True
-	CXX_STANDARD ${CXXSTD_SUPPORTED}
+	CXX_STANDARD "${CXXSTD_SUPPORTED}"
 	LIBRARY_OUTPUT_NAME "DEMERuntimeDataHelper"
-	LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib_install"
-)
-
-set(lib_path "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}")
-
-set_target_properties(DEMERuntimeDataHelper_install PROPERTIES
-	INSTALL_RPATH_USE_LINK_PATH TRUE
-	INSTALL_RPATH "${lib_path}")
-
-install(TARGETS DEMERuntimeDataHelper_install
-	LIBRARY DESTINATION "${lib_path}"
-	RUNTIME DESTINATION "${lib_path}"
+	LIBRARY_OUTPUT_DIRECTORY "${CMAKE_INSTALL_PREFIX}/lib"
 )
 
 # Make sure this target is generated **AFTER** the build-tree version
