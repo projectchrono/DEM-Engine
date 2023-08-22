@@ -1649,12 +1649,16 @@ void DEMSolver::ShowTimingStats() {
     dT_total_time = vector_sum<double>(dT_timer_vals);
     DEME_PRINTF("\n~~ kT TIMING STATISTICS ~~\n");
     DEME_PRINTF("kT total active time: %.9g seconds\n", kT_total_time);
+    if (kT_total_time == 0.)
+        kT_total_time = DEME_TINY_FLOAT;
     for (unsigned int i = 0; i < kT_timer_names.size(); i++) {
         DEME_PRINTF("%s: %.9g seconds, %.6g%% of kT total runtime\n", kT_timer_names.at(i).c_str(), kT_timer_vals.at(i),
                     kT_timer_vals.at(i) / kT_total_time * 100.);
     }
     DEME_PRINTF("\n~~ dT TIMING STATISTICS ~~\n");
     DEME_PRINTF("dT total active time: %.9g seconds\n", dT_total_time);
+    if (dT_total_time == 0.)
+        dT_total_time = DEME_TINY_FLOAT;
     for (unsigned int i = 0; i < dT_timer_names.size(); i++) {
         DEME_PRINTF("%s: %.9g seconds, %.6g%% of dT total runtime\n", dT_timer_names.at(i).c_str(), dT_timer_vals.at(i),
                     dT_timer_vals.at(i) / dT_total_time * 100.);
