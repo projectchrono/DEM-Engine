@@ -117,8 +117,9 @@ configure_file(
 )
 
 message(STATUS "${core_message} Generating Runtime Data helper (install)...")
-set(RUNTIME_DATA_DIRECTORY "../share/DEME")
-set(RUNTIME_INCLUDE_DIRECTORY "../${CMAKE_INSTALL_INCLUDEDIR}")
+set(RUNTIME_DATA_DIRECTORY "${CMAKE_INSTALL_PREFIX}/share/DEME")
+set(RUNTIME_INCLUDE_DIRECTORY "${CMAKE_INSTALL_PREFIX}/include")
+
 configure_file(
 	utils/RuntimeData.cpp.in utils/RuntimeDataInstall.cpp
 	@ONLY
