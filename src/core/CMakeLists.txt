@@ -109,16 +109,19 @@ install(
 
 
 message(STATUS "${core_message} Generating Runtime Data helper (build)...")
+
 set(RUNTIME_DATA_DIRECTORY "${CMAKE_BINARY_DIR}")
 set(RUNTIME_INCLUDE_DIRECTORY "${CMAKE_BINARY_DIR}")
+
 configure_file(
 	utils/RuntimeData.cpp.in utils/RuntimeDataBuild.cpp
 	@ONLY
 )
 
-message(STATUS "${core_message} Generating Runtime Data helper (install)...")
-set(RUNTIME_DATA_DIRECTORY "${CMAKE_INSTALL_PREFIX}/share/DEME")
-set(RUNTIME_INCLUDE_DIRECTORY "${CMAKE_INSTALL_PREFIX}/include")
+message(STATUS "${core_message} Generating Runtime Data helper (install)... ${CONDA_PREFIX}")
+
+set(RUNTIME_DATA_DIRECTORY "$ENV{CONDA_PREFIX}/lib/python3.10/site-packages/share/DEME")
+set(RUNTIME_INCLUDE_DIRECTORY "$ENV{CONDA_PREFIX}/lib/python3.10/site-packages/include")
 
 configure_file(
 	utils/RuntimeData.cpp.in utils/RuntimeDataInstall.cpp
@@ -168,8 +171,13 @@ set_target_properties(
 	POSITION_INDEPENDENT_CODE True
 	CXX_STANDARD "${CXXSTD_SUPPORTED}"
 	LIBRARY_OUTPUT_NAME "DEMERuntimeDataHelper"
-	LIBRARY_OUTPUT_DIRECTORY "${CMAKE_INSTALL_PREFIX}/lib"
 )
+
+install(TARGETS
+	DEMERuntimeDataHelper_install
+	LIBRARY DESTINATION "${CMAKE_INSTALL_PREFIX}/lib"
+	RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}/bin")
 
 # Make sure this target is generated **AFTER** the build-tree version
 add_dependencies(DEMERuntimeDataHelper_install DEMERuntimeDataHelper)
+

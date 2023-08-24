@@ -15,7 +15,6 @@ requirements:
     - make
     - cmake
     - ninja
-    - cuda-toolkit
     - pip
     - numpy >=1.17
 
@@ -24,7 +23,6 @@ requirements:
     - pip
     - cmake
     - make
-    - cuda-toolkit
     - ninja
     - numpy >=1.17
 

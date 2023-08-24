@@ -1,6 +1,6 @@
 # Copyright (c) 2021, SBEL GPU Development Team
 # Copyright (c) 2021, University of Wisconsin - Madison
-# 
+#
 #	SPDX-License-Identifier: BSD-3-Clause
 
 message(STATUS "==== Building DEM Components ====")
@@ -87,7 +87,6 @@ target_link_libraries(
 	PUBLIC ${PYTHON_LIBRARIES}
 	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
 	PUBLIC pybind11::headers
-	PUBLIC DEMERuntimeDataHelper
 	PUBLIC core
 	PUBLIC algorithms
 	-static-libgcc -static-libstdc++
@@ -100,7 +99,7 @@ target_link_libraries(
 install(
 	TARGETS DEM
 	PUBLIC_HEADER
-		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/DEM 
+		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/DEM
 )
 
 install(
@@ -131,13 +130,13 @@ target_include_directories(
 target_link_libraries(
 	DEME
 	PUBLIC CUDA::cudart
-    PUBLIC CUDA::nvrtc
-	PUBLIC CUDA::cuda_driver	
+        PUBLIC CUDA::nvrtc
+	PUBLIC CUDA::cuda_driver
 	PUBLIC ${ChPF_IMPORTED_NAME}
 	PUBLIC ${PYTHON_LIBRARIES}
 	PUBLIC core
 	PUBLIC DEMERuntimeDataHelper
-    PUBLIC algorithms
+	PUBLIC algorithms
 	PUBLIC pybind11::headers
 	-static-libgcc -static-libstdc++
 )

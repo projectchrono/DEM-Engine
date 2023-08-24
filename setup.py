@@ -20,7 +20,11 @@ PLAT_TO_CMAKE = {
 # If you need multiple extensions, see scikit-build.
 class CMakeExtension(Extension):
     def __init__(self, name: str, sourcedir: str = "") -> None:
-        super().__init__(name, sources=[], include_dirs=["./src/DEM/", "./src/DEM/VariableTypes"], extra_objects=["./build"])
+
+        # Obtaining conda_prefix environment variable
+        conda_prefix = os.environ.get("CONDA_PREFIX")
+
+        super().__init__(name, sources=[], runtime_library_dirs=[conda_prefix + "/lib/python3.10/site-packages/lib/"], libraries=["libDEMERuntimeDataHelper"], include_dirs=["./src/DEM/", "./src/DEM/VariableTypes"], extra_objects=["./build"])
         self.sourcedir = os.fspath(Path(sourcedir).resolve())
 
 
@@ -133,7 +137,7 @@ class CMakeBuild(build_ext):
 # logic and declaration, and simpler if you include description/version in a file.
 setup(
     name="DEME",
-    version="0.1.5",
+    version="0.2.0",
     author="Rouchun Zhang",
     author_email="noreply@wisc.edu",
     description="PyBind Wrapper Library for DEM-Engine",
@@ -142,9 +146,8 @@ setup(
     cmdclass={"build_ext": CMakeBuild},
     zip_safe=False,
     include_package_data=True,
-    parallel=8,
     sources=["./src/"],
     install_requires=['numpy'],
     extras_require={"test": ["pytest>=6.0"]},
-    python_requires=">=3.8",
+    python_requires=">=3.10",
 )
