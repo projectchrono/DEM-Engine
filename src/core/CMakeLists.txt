@@ -118,10 +118,11 @@ configure_file(
 	@ONLY
 )
 
-message(STATUS "${core_message} Generating Runtime Data helper (install)... ${CONDA_PREFIX}")
+message(STATUS "${core_message} Generating Runtime Data helper (install)...")
 
-set(RUNTIME_DATA_DIRECTORY "$ENV{CONDA_PREFIX}/lib/python3.10/site-packages/share/DEME")
-set(RUNTIME_INCLUDE_DIRECTORY "$ENV{CONDA_PREFIX}/lib/python3.10/site-packages/include")
+# This function takes the environment variables CONDA_PREFIX and PY_VER to dynamically locate accurate misc. file locations
+set(RUNTIME_DATA_DIRECTORY "$ENV{CONDA_PREFIX}/lib/python$ENV{PY_VER}/site-packages/share/DEME")
+set(RUNTIME_INCLUDE_DIRECTORY "$ENV{CONDA_PREFIX}/lib/python$ENV{PY_VER}/site-packages/include")
 
 configure_file(
 	utils/RuntimeData.cpp.in utils/RuntimeDataInstall.cpp

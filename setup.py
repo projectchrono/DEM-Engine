@@ -24,6 +24,10 @@ class CMakeExtension(Extension):
         # Obtaining conda_prefix environment variable
         conda_prefix = os.environ.get("CONDA_PREFIX")
 
+        # Obtaining and setting to environment variable the current python version
+        PY_VER = sys.version.split()[0]
+        os.environ["PY_VER"] = PY_VER
+
         super().__init__(name, sources=[], runtime_library_dirs=[conda_prefix + "/lib/python3.10/site-packages/lib/"], libraries=["libDEMERuntimeDataHelper"], include_dirs=["./src/DEM/", "./src/DEM/VariableTypes"], extra_objects=["./build"])
         self.sourcedir = os.fspath(Path(sourcedir).resolve())
 
