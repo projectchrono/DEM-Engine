@@ -89,7 +89,7 @@ if (unbroken > DEME_TINY_FLOAT) {
     // takes effect.
 
     damage = (force_to_A_mag) / BreakingForce;
-    unbroken = (deltaD < deltaU) ? 0.0 : unbroken;
+    unbroken = (deltaD < deltaU) ? -1.0 : unbroken;
 } else {  // If unbroken == 0, then the bond is broken, and the grain is broken, components are now separate particles,
           // so they just follow Hertzian contact law.
 
@@ -97,8 +97,8 @@ if (unbroken > DEME_TINY_FLOAT) {
     // particles are in contact: This is a part of our model.
     if (overlapDepth > 0.0) {
         // Material properties
-        initialLength = (unbroken == 0.0) ? overlapDepth : initialLength;  // reusing a variable that survives the loop
-        unbroken = (unbroken == 0.0) ? -1.0 : unbroken;
+        initialLength = (unbroken == -1.0) ? overlapDepth : initialLength;  // reusing a variable that survives the loop
+        unbroken = (unbroken == -1.0) ? 0.0 : unbroken;
         float temp = overlapDepth - initialLength;
         if (temp > 0.0) {
             float3 rotVelCPA, rotVelCPB;
