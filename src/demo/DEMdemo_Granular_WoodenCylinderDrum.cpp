@@ -22,18 +22,20 @@
 using namespace deme;
 using namespace std::filesystem;
 
-void runDEME(path dir_output, float friction, float rollingMaterial);
+void runDEME(std::string dir_output, float friction, float rollingMaterial);
 
 int main(int argc, char* argv[]) {
     int case_ID = atoi(argv[1]);             // takes the test ID
-    float rolling_friction = atof(argv[2]);  // takes the test ID
+    float rolling_friction = atof(argv[2]);  // takes the value
 
     std::vector<float> friction = {0.00, 0.01, 0.025, 0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90};
     int nsim = int(friction.size());
 
     for (int i = 0; i < nsim; i++) {
-        path out_dir = "/Test_Granular_WoodenCylinders/";
-        out_dir += "Drum_/" + std::to_string(case_ID) + std::to_string(i);
+        std::string out_dir = "/Test_Granular_WoodenCylinders/";
+        out_dir += "Drum_" + std::to_string(case_ID) + "/" + std::to_string(i);
+        
+        std::cout << "Running case with friction: " << friction[i] <<", and rolling friction: "<< rolling_friction << std::endl;
 
         runDEME(out_dir, friction[i], rolling_friction);
     }
@@ -41,7 +43,7 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-void runDEME(path dir_output, float frictionMaterial, float rollingMaterial) {
+void runDEME(std::string dir_output, float frictionMaterial, float rollingMaterial) {
     DEMSolver DEMSim;
     DEMSim.UseFrictionalHertzianModel();
     DEMSim.SetVerbosity(INFO);
@@ -53,8 +55,8 @@ void runDEME(path dir_output, float frictionMaterial, float rollingMaterial) {
     DEMSim.SetCollectAccRightAfterForceCalc(true);
     DEMSim.SetErrorOutAvgContacts(120);
 
-    path out_dir = current_path() + dir_output;
-
+    path out_dir = current_path();
+    out_dir += dir_output;
     // Scale factor
     float scaling = 1.f;
 
@@ -66,7 +68,8 @@ void runDEME(path dir_output, float frictionMaterial, float rollingMaterial) {
 
     double density = 476;
 
-    int totalSpheres = 17000;
+    //int totalSpheres = 17000;
+    int totalSpheres = 500;
 
     int num_template = 5;
 
@@ -76,8 +79,8 @@ void runDEME(path dir_output, float frictionMaterial, float rollingMaterial) {
 
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}, {"mu", 0.04}, {"Crr", 0.00}});
 
-    auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", frictionMaterial}, {"Crr", rollingMaterial}});
+    auto mat_type_particles = DEMSim.LoadMaterial(
+        {{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", frictionMaterial}, {"Crr", rollingMaterial}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.50);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.05);
@@ -119,7 +122,6 @@ void runDEME(path dir_output, float frictionMaterial, float rollingMaterial) {
         std::vector<float3> relPos;
         std::vector<std::shared_ptr<DEMMaterial>> mat;
 
-        
         double radiusMed = radius;
         double eccentricity = 0.0 / 8.0 * radiusMed;
 
@@ -276,6 +278,6 @@ void runDEME(path dir_output, float frictionMaterial, float rollingMaterial) {
 
     DEMSim.ShowTimingStats();
     DEMSim.ClearTimingStats();
-
-    std::cout << "DEMdemo_Repose exiting..." << std::endl;
+    
+    std::cout << "DEME exiting..." << std::endl;
 }
