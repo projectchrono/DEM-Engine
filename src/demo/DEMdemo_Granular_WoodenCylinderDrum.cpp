@@ -53,7 +53,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
 
     srand(7001);
     DEMSim.SetCollectAccRightAfterForceCalc(true);
-    DEMSim.SetErrorOutAvgContacts(120);
+    DEMSim.SetErrorOutAvgContacts(100);
 
     path out_dir = current_path();
     out_dir += dir_output;
@@ -68,8 +68,8 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
 
     double density = 476;
 
-    //int totalSpheres = 17000;
-    int totalSpheres = 500;
+    int totalSpheres = 17000;
+    //int totalSpheres = 500;
 
     int num_template = 5;
 
