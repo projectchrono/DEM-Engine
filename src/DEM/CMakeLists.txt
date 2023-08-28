@@ -18,18 +18,6 @@ target_include_directories(
 	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/algorithms
 )
 
-target_link_libraries(
-	DEM
-	PUBLIC CUB::CUB
-	PUBLIC ${ChPF_IMPORTED_NAME}
-	PUBLIC ${PYTHON_LIBRARIES}
-	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
-	PUBLIC core
-	PUBLIC algorithms
-	pybind11::headers
-	-static-libgcc -static-libstdc++
-)
-
 set(DEM_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/kT.h
 	${CMAKE_CURRENT_SOURCE_DIR}/dT.h
@@ -80,17 +68,33 @@ target_include_directories(
 	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/core
 )
 
-target_link_libraries(
-	DEM
-	PUBLIC CUB::CUB
-	PUBLIC ${ChPF_IMPORTED_NAME}
-	PUBLIC ${PYTHON_LIBRARIES}
-	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
-	PUBLIC pybind11::headers
-	PUBLIC core
-	PUBLIC algorithms
-	-static-libgcc -static-libstdc++
-)
+if(NOT PYTHON_BUILD)
+	target_link_libraries(
+		DEM
+		PUBLIC CUB::CUB
+		PUBLIC ${ChPF_IMPORTED_NAME}
+		PUBLIC ${PYTHON_LIBRARIES}
+		PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
+		PUBLIC core
+		PUBLIC DEMERuntimeDataHelper_install
+		PUBLIC algorithms
+		pybind11::headers
+		-static-libgcc -static-libstdc++
+	)
+else()
+	target_link_libraries(
+		DEM
+		PUBLIC CUB::CUB
+		PUBLIC ${ChPF_IMPORTED_NAME}
+		PUBLIC ${PYTHON_LIBRARIES}
+		PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
+		PUBLIC core
+		PUBLIC DEMERuntimeDataHelper_python
+		PUBLIC algorithms
+		pybind11::headers
+		-static-libgcc -static-libstdc++
+	)
+endif()
 
 #foreach(header ${DEM_headers})
 #	set_target_properties(DEM PROPERTIES PUBLIC_HEADER ${header})
@@ -110,45 +114,48 @@ install(
 		PATTERN "utils/*.hpp"
 )
 
-message(STATUS "==== Building PyDEME Components ====")
+if(PYTHON_BUILD)
+	message(STATUS "==== Building PyDEME Components ====")
 
-pybind11_add_module(DEME ${DEM_headers} ${DEM_sources} ${PyDEME_sources})
+	pybind11_add_module(DEME ${DEM_headers} ${DEM_sources} ${PyDEME_sources})
 
-set_target_properties(DEME PROPERTIES LINKER_LANGUAGE CXX)
+	set_target_properties(DEME PROPERTIES LINKER_LANGUAGE CXX)
 
-target_include_directories(
-	DEME
-	PUBLIC ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
-	PUBLIC ${ProjectIncludeSource}
-	PUBLIC ${ProjectIncludeGenerated}
-	PUBLIC ${NVIDIAMathDir}
-	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
-	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/core
-	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/algorithms
-)
+	target_include_directories(
+		DEME
+		PUBLIC ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
+		PUBLIC ${ProjectIncludeSource}
+		PUBLIC ${ProjectIncludeGenerated}
+		PUBLIC ${NVIDIAMathDir}
+		PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
+		PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/core
+		PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/algorithms
+	)
 
-target_link_libraries(
-	DEME
-	PUBLIC CUDA::cudart
-        PUBLIC CUDA::nvrtc
-	PUBLIC CUDA::cuda_driver
-	PUBLIC ${ChPF_IMPORTED_NAME}
-	PUBLIC ${PYTHON_LIBRARIES}
-	PUBLIC core
-	PUBLIC DEMERuntimeDataHelper
-	PUBLIC algorithms
-	PUBLIC pybind11::headers
-	-static-libgcc -static-libstdc++
-)
+	target_link_libraries(
+		DEME
+		PUBLIC CUDA::cudart
+		PUBLIC CUDA::nvrtc
+		PUBLIC CUDA::cuda_driver
+		PUBLIC ${ChPF_IMPORTED_NAME}
+		PUBLIC ${PYTHON_LIBRARIES}
+		PUBLIC core
+		PUBLIC DEMERuntimeDataHelper_python
+		PUBLIC algorithms
+		PUBLIC pybind11::headers
+		PRIVATE pybind11::embed
+		-static-libgcc -static-libstdc++
+	)
 
-set_target_properties(
-	DEME PROPERTIES
-	POSITION_INDEPENDENT_CODE True
-	CXX_STANDARD ${CXXSTD_SUPPORTED}
-	PUBLIC_HEADER "${DEM_headers}"
-	INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}"
-)
+	set_target_properties(
+		DEME PROPERTIES
+		POSITION_INDEPENDENT_CODE True
+		CXX_STANDARD ${CXXSTD_SUPPORTED}
+		PUBLIC_HEADER "${DEM_headers}"
+		INSTALL_RPATH "$ENV{CONDA_PREFIX}/lib/python3.10/site-packages/lib"
+	)
 
-add_compile_options(-fno-lto)
+	add_compile_options(-fno-lto)
 
-message(STATUS "==== Completed Building PyDEME Components ====")
+	message(STATUS "==== Completed Building PyDEME Components ====")
+endif()

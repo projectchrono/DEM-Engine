@@ -50,11 +50,19 @@ FOREACH(PROGRAM ${DEMOS})
 		
 		source_group("" FILES "${PROGRAM}.cpp")
 		
-		target_link_libraries(${PROGRAM} 
+		if(NOT PYTHON_BUILD)
+			target_link_libraries(${PROGRAM} 
+				PUBLIC ${LIBRARIES}
+				PUBLIC DEMERuntimeDataHelper_install
+				PUBLIC ${EXTERNAL_LIBRARIES}
+			)
+		else()
+			target_link_libraries(${PROGRAM} 
 			PUBLIC ${LIBRARIES}
+			PUBLIC DEMERuntimeDataHelper_python
 			PUBLIC ${EXTERNAL_LIBRARIES}
-		)
-		
+			)
+		endif()
 		add_dependencies(${PROGRAM} ${LIBRARIES})
 
 		set_target_properties(

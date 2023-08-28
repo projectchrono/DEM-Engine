@@ -13,7 +13,9 @@
 #include <sstream>
 #include <array>
 #include <cmath>
+#include <string>
 
+#include <core/utils/RuntimeData.h>
 #include <nvmath/helper_math.cuh>
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
@@ -23,20 +25,35 @@
 
 namespace py = pybind11;
 
-// Defining PyBind11 inclusion code
-
 PYBIND11_MODULE(DEME, obj) {
+    // Obtaining the location of python's site-packages dynamically and setting it
+    // as path prefix
+
+    py::module _site = py::module_::import("site");
+    std::string loc = _site.attr("getsitepackages")().cast<py::list>()[0].cast<py::str>();
+    py::print(loc);
+
+    std::filesystem::path path = loc;
+
+    RuntimeDataHelper::SetPathPrefix(path);
+
     obj.def("GetDEMEDataFile", &deme::GetDEMEDataFile);
     obj.def("DEMBoxGridSampler",
             static_cast<std::vector<std::vector<float>> (*)(const std::vector<float>&, const std::vector<float>&, float,
                                                             float, float)>(&deme::DEMBoxGridSampler),
             py::arg("BoxCenter"), py::arg("HalfDims"), py::arg("GridSizeX"), py::arg("GridSizeY") = -1.0,
             py::arg("GridSizeZ") = -1.0);
+
     obj.def(
         "DEMBoxHCPSampler",
         static_cast<std::vector<std::vector<float>> (*)(const std::vector<float>&, const std::vector<float>&, float)>(
             &deme::DEMBoxHCPSampler));
+
     obj.attr("PI") = py::float_(3.14);
+
+    py::class_<RuntimeDataHelper>(obj, "RuntimeDataHelper")
+        .def(py::init<>())
+        .def_static("SetPathPrefix", &RuntimeDataHelper::SetPathPrefix);
 
     py::class_<deme::GridSampler>(obj, "GridSampler")
         .def(py::init<float>())
@@ -45,15 +62,20 @@ PYBIND11_MODULE(DEME, obj) {
              static_cast<std::vector<std::vector<float>> (deme::GridSampler::*)(
                  const std::vector<float>& center, const std::vector<float>& halfDim)>(&deme::GridSampler::SampleBox),
              "Generates a sample box")
+
         .def("SampleSphere",
              static_cast<std::vector<std::vector<float>> (deme::GridSampler::*)(const std::vector<float>&, float)>(
                  &deme::GridSampler::SampleSphere))
+
         .def("SampleCylinderX", static_cast<std::vector<std::vector<float>> (deme::GridSampler::*)(
                                     const std::vector<float>&, float, float)>(&deme::GridSampler::SampleCylinderX))
+
         .def("SampleCylinderY", static_cast<std::vector<std::vector<float>> (deme::GridSampler::*)(
                                     const std::vector<float>&, float, float)>(&deme::GridSampler::SampleCylinderY))
+
         .def("SampleCylinderZ", static_cast<std::vector<std::vector<float>> (deme::GridSampler::*)(
                                     const std::vector<float>&, float, float)>(&deme::GridSampler::SampleCylinderZ))
+
         .def("GetSeparation", &deme::Sampler::GetSeparation);
 
     py::class_<deme::HCPSampler>(obj, "HCPSampler")
@@ -62,22 +84,27 @@ PYBIND11_MODULE(DEME, obj) {
              static_cast<std::vector<std::vector<float>> (deme::HCPSampler::*)(
                  const std::vector<float>& center, const std::vector<float>& halfDim)>(&deme::HCPSampler::SampleBox),
              "Generates a sample box")
+
         .def("SetSeparation", &deme::HCPSampler::SetSeparation)
         .def("SampleSphere",
              static_cast<std::vector<std::vector<float>> (deme::HCPSampler::*)(const std::vector<float>&, float)>(
                  &deme::HCPSampler::SampleSphere))
+
         .def(
             "SampleCylinderX",
             static_cast<std::vector<std::vector<float>> (deme::HCPSampler::*)(const std::vector<float>&, float, float)>(
                 &deme::HCPSampler::SampleCylinderX))
+
         .def(
             "SampleCylinderY",
             static_cast<std::vector<std::vector<float>> (deme::HCPSampler::*)(const std::vector<float>&, float, float)>(
                 &deme::HCPSampler::SampleCylinderY))
+
         .def(
             "SampleCylinderZ",
             static_cast<std::vector<std::vector<float>> (deme::HCPSampler::*)(const std::vector<float>&, float, float)>(
                 &deme::HCPSampler::SampleCylinderZ))
+
         .def("GetSeparation", &deme::HCPSampler::GetSeparation);
 
     py::class_<deme::DEMInspector, std::shared_ptr<deme::DEMInspector>>(obj, "DEMInspector")

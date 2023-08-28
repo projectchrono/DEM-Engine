@@ -7,8 +7,6 @@ message(STATUS "==== Configuring GPU Algorithm Components ====")
 
 set (algorithms_message "[algorithms]")
 
-
-
 add_library(algorithms OBJECT)
 
 target_include_directories(
@@ -18,10 +16,19 @@ target_include_directories(
 	PUBLIC ${NVIDIAMathDir}
 )
 
-target_link_libraries(
-	algorithms
-	PUBLIC CUB::CUB
-)
+if(NOT PYTHON_BUILD)
+	target_link_libraries(
+		algorithms
+		PUBLIC DEMERuntimeDataHelper_install
+		PUBLIC CUB::CUB
+	)
+else()
+	target_link_libraries(
+		algorithms
+		PUBLIC DEMERuntimeDataHelper_python
+		PUBLIC CUB::CUB
+	)
+endif()
 
 ### HOST HEADERS ONLY (.h, .hpp) ###
 set(algorithms_interface

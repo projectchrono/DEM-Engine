@@ -15,6 +15,7 @@ requirements:
     - make
     - cmake
     - ninja
+    - pybind11
     - pip
     - numpy >=1.17
 
@@ -28,6 +29,7 @@ requirements:
 
   run:
     - python
+    - pybind11
     - numpy
 
 about:

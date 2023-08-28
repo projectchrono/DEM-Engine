@@ -39,14 +39,12 @@ include(FetchContent)
 
 
 find_package(CUDAToolkit REQUIRED)
-find_package(PythonLibs REQUIRED)
+find_package(Python COMPONENTS Interpreter Development)
 
 add_subdirectory(thirdparty/pybind11)
 
 set(CMAKE_SKIP_BUILD_RPATH FALSE)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
-
-set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 # Find CUB library (this might need to be done in source-level config)
@@ -92,6 +90,11 @@ set_property(
 	PROPERTY
 	STRINGS STD_AUTODETECT STD_CXX11 STD_CXX14 STD_CXX17 STD_CXX20
 )
+
+# Defining option to build PyDEME wrapper
+
+option(PYTHON_BUILD "Sets the build process for Python wrapper around DEME" OFF)
+mark_as_advanced(PYTHON_BUILD)
 
 # Convert the standard into something CMake will understand
 if(TargetCXXStandard STREQUAL STD_CXX11)
@@ -144,14 +147,25 @@ target_include_directories(simulator_multi_gpu
 	PUBLIC ${CORE_INTERFACE}
 )
 
-target_link_libraries(simulator_multi_gpu
-	PUBLIC CUDA::cudart
-	PUBLIC CUDA::nvrtc
-	PUBLIC CUDA::cuda_driver
-	PUBLIC ${ChPF_IMPORTED_NAME}
-	PUBLIC DEMERuntimeDataHelper
-	PUBLIC ${PYTHON_LIBRARIES}
-)
+if(NOT PYTHON_BUILD)
+	target_link_libraries(simulator_multi_gpu
+		PUBLIC CUDA::cudart
+		PUBLIC CUDA::nvrtc
+		PUBLIC CUDA::cuda_driver
+		PUBLIC ${ChPF_IMPORTED_NAME}
+		PUBLIC DEMERuntimeDataHelper_install
+		PUBLIC ${PYTHON_LIBRARIES}
+	)
+else()
+	target_link_libraries(simulator_multi_gpu
+		PUBLIC CUDA::cudart
+		PUBLIC CUDA::nvrtc
+		PUBLIC CUDA::cuda_driver
+		PUBLIC ${ChPF_IMPORTED_NAME}
+		PUBLIC DEMERuntimeDataHelper_python
+		PUBLIC ${PYTHON_LIBRARIES}
+	)
+endif()
 
 # Attach include directories to the top-level library target
 set_target_properties(simulator_multi_gpu
@@ -257,4 +271,3 @@ install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/src/kernel/ DESTINATION ${CMAKE_INST
 # Build embedded demos
 # ---------------------------------------------------------------------------- #
 add_subdirectory(src/demo)
-
