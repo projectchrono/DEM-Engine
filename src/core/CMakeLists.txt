@@ -130,20 +130,17 @@ target_include_directories(
 )
 
 if(NOT PYTHON_BUILD)
-	target_link_libraries(
-		core
-		PUBLIC DEMERuntimeDataHelper_install
-		PUBLIC CUB::CUB
-		INTERFACE ${ChPF_IMPORTED_NAME}
-	)
+	set(deme_runtime_library DEMERuntimeDataHelper_install)
 else()
-	target_link_libraries(
-		core
-		PUBLIC DEMERuntimeDataHelper_python
-		PUBLIC CUB::CUB
-		INTERFACE ${ChPF_IMPORTED_NAME}
-	)
+	set(deme_runtime_library DEMERuntimeDataHelper_python)
 endif()
+
+target_link_libraries(
+	core
+	PUBLIC ${deme_runtime_library} 
+	PUBLIC CUB::CUB
+	INTERFACE ${ChPF_IMPORTED_NAME}
+)
 
 set(core_headers
 	${CMAKE_BINARY_DIR}/src/core/ApiVersion.h
