@@ -45,6 +45,8 @@ add_subdirectory(thirdparty/pybind11)
 
 set(CMAKE_SKIP_BUILD_RPATH FALSE)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+
+set(CMAKE_INSTALL_RPATH "$ENV{CONDA_PREFIX}/lib/python3.10/site-packages/lib")
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 # Find CUB library (this might need to be done in source-level config)
@@ -158,15 +160,14 @@ if(NOT PYTHON_BUILD)
 	)
 else()
 	target_link_libraries(simulator_multi_gpu
-		PUBLIC CUDA::cudart
-		PUBLIC CUDA::nvrtc
-		PUBLIC CUDA::cuda_driver
-		PUBLIC ${ChPF_IMPORTED_NAME}
-		PUBLIC DEMERuntimeDataHelper_python
-		PUBLIC ${PYTHON_LIBRARIES}
+	PUBLIC CUDA::cudart
+	PUBLIC CUDA::nvrtc
+	PUBLIC CUDA::cuda_driver
+	PUBLIC ${ChPF_IMPORTED_NAME}
+	PUBLIC DEMERuntimeDataHelper_python
+	PUBLIC ${PYTHON_LIBRARIES}
 	)
 endif()
-
 # Attach include directories to the top-level library target
 set_target_properties(simulator_multi_gpu
 	PROPERTIES
@@ -179,23 +180,35 @@ set_target_properties(simulator_multi_gpu
 
 set(config_directory ${CMAKE_INSTALL_LIBDIR}/cmake/DEME)
 
+
 # Install the library, creating an export target for it as well
-install(
-	TARGETS simulator_multi_gpu DEMERuntimeDataHelper
-	EXPORT DEMETargets
-	LIBRARY
-		DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
+if(NOT PYTHON_BUILD)
+	install(
+		TARGETS simulator_multi_gpu DEMERuntimeDataHelper
+		EXPORT DEMETargets
+		LIBRARY
+			DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	)
+else()
+	install(
+		TARGETS simulator_multi_gpu DEMERuntimeDataHelper_python
+		EXPORT DEMETargets
+		LIBRARY
+			DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	)
+endif()
 
 install(CODE "message(\"Removing build-tree libraries from installation target...\")")
 install(CODE "file(REMOVE \"$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libDEMERuntimeDataHelper.so\")")
 
-install(
-	TARGETS DEMERuntimeDataHelper_install
-	EXPORT DEMETargets
-	LIBRARY
-		DESTINATION ${CMAKE_INSTALL_LIBDIR}
+if(NOT PYTHON_BUILD)
+	install(
+		TARGETS DEMERuntimeDataHelper_install
+		EXPORT DEMETargets
+		LIBRARY
+			DESTINATION ${CMAKE_INSTALL_LIBDIR}
 	)
+endif()
 
 # Export the generated library target
 export(EXPORT DEMETargets
@@ -271,3 +284,4 @@ install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/src/kernel/ DESTINATION ${CMAKE_INST
 # Build embedded demos
 # ---------------------------------------------------------------------------- #
 add_subdirectory(src/demo)
+

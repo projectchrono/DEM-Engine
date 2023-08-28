@@ -1,6 +1,6 @@
 # Copyright (c) 2021, SBEL GPU Development Team
 # Copyright (c) 2021, University of Wisconsin - Madison
-#
+# 
 #	SPDX-License-Identifier: BSD-3-Clause
 
 message(STATUS "==== Building DEM Components ====")
@@ -17,6 +17,34 @@ target_include_directories(
 	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/core
 	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/algorithms
 )
+
+if(NOT PYTHON_BUILD)
+	target_link_libraries(
+		DEM
+		PUBLIC CUB::CUB
+		PUBLIC ${ChPF_IMPORTED_NAME}
+		PUBLIC ${PYTHON_LIBRARIES}
+		PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
+		PUBLIC core
+		PUBLIC DEMERuntimeDataHelper_install
+		PUBLIC algorithms
+		pybind11::headers
+		-static-libgcc -static-libstdc++
+	)
+else()
+	target_link_libraries(
+		DEM
+		PUBLIC CUB::CUB
+		PUBLIC ${ChPF_IMPORTED_NAME}
+		PUBLIC ${PYTHON_LIBRARIES}
+		PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
+		PUBLIC core
+		PUBLIC DEMERuntimeDataHelper_python
+		PUBLIC algorithms
+		pybind11::headers
+		-static-libgcc -static-libstdc++
+	)
+endif()
 
 set(DEM_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/kT.h
@@ -75,10 +103,10 @@ if(NOT PYTHON_BUILD)
 		PUBLIC ${ChPF_IMPORTED_NAME}
 		PUBLIC ${PYTHON_LIBRARIES}
 		PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
-		PUBLIC core
+		PUBLIC pybind11::headers
 		PUBLIC DEMERuntimeDataHelper_install
+		PUBLIC core
 		PUBLIC algorithms
-		pybind11::headers
 		-static-libgcc -static-libstdc++
 	)
 else()
@@ -88,14 +116,13 @@ else()
 		PUBLIC ${ChPF_IMPORTED_NAME}
 		PUBLIC ${PYTHON_LIBRARIES}
 		PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
-		PUBLIC core
+		PUBLIC pybind11::headers
 		PUBLIC DEMERuntimeDataHelper_python
+		PUBLIC core
 		PUBLIC algorithms
-		pybind11::headers
 		-static-libgcc -static-libstdc++
 	)
 endif()
-
 #foreach(header ${DEM_headers})
 #	set_target_properties(DEM PROPERTIES PUBLIC_HEADER ${header})
 #endforeach()
@@ -103,7 +130,7 @@ endif()
 install(
 	TARGETS DEM
 	PUBLIC_HEADER
-		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/DEM
+		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/DEM 
 )
 
 install(
@@ -136,7 +163,7 @@ if(PYTHON_BUILD)
 		DEME
 		PUBLIC CUDA::cudart
 		PUBLIC CUDA::nvrtc
-		PUBLIC CUDA::cuda_driver
+		PUBLIC CUDA::cuda_driver	
 		PUBLIC ${ChPF_IMPORTED_NAME}
 		PUBLIC ${PYTHON_LIBRARIES}
 		PUBLIC core

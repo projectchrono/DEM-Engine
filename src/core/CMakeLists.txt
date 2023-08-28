@@ -87,7 +87,7 @@ else()
 	configure_file(utils/RuntimeData.cpp.in utils/RuntimeDataPython.cpp)
 
 	target_sources(DEMERuntimeDataHelper_python
-	PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils/RuntimeData.h> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/core/utils/RuntimeData.h
+	PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils/RuntimeData.h> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/core/utils/RuntimeData.h>
 	PRIVATE "${CMAKE_BINARY_DIR}/src/core/utils/RuntimeDataPython.cpp")
 
 	target_include_directories(

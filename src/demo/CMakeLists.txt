@@ -63,6 +63,7 @@ FOREACH(PROGRAM ${DEMOS})
 			PUBLIC ${EXTERNAL_LIBRARIES}
 			)
 		endif()
+		
 		add_dependencies(${PROGRAM} ${LIBRARIES})
 
 		set_target_properties(

@@ -7,6 +7,8 @@ message(STATUS "==== Configuring GPU Algorithm Components ====")
 
 set (algorithms_message "[algorithms]")
 
+
+
 add_library(algorithms OBJECT)
 
 target_include_directories(
@@ -29,7 +31,6 @@ else()
 		PUBLIC CUB::CUB
 	)
 endif()
-
 ### HOST HEADERS ONLY (.h, .hpp) ###
 set(algorithms_interface
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubBasedSubroutines.h
