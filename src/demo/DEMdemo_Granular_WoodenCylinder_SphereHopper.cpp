@@ -337,7 +337,7 @@ int main() {
                 std::cout << "number of particles at this level ... " << num_clumps << std::endl;
 
                 for (unsigned int i = actualTotalSpheres; i < actualTotalSpheres + num_clumps; i++) {
-                    input_pile_template_type.push_back(clump_types.at(i % num_template));
+                    input_pile_template_type.push_back(clump_sphere.at(i % num_template));
                 }
 
                 input_pile_xyz.insert(input_pile_xyz.end(), heap_particles_xyz.begin(), heap_particles_xyz.end());
