@@ -37,13 +37,13 @@ SET(DEMOS
 		DEMdemo_Granular_NonSpherical
 		DEMdemo_Granular_WoodenSpheresHopper
 		DEMdemo_Granular_PlasticSpheresHopper
-		DEMdemo_Granular_PlasticCylindersHopper
-		DEMdemo_Granular_WoodenSpheresDrum
+		DEMdemo_Granular_PlasticCylinderHopper
+		DEMdemo_Granular_WoodenSphereDrum
 		DEMdemo_Granular_WoodenCylinderDrum
 		DEMdemo_Granular_WoodenCubeDrum
 		DEMdemo_Granular_WoodenCubeHopper
 		DEMdemo_Granular_FreeFalling
-		DEMdemo_Granular_WoodenCylindersHopper
+		DEMdemo_Granular_WoodenCylinderHopper
 		DEMdemo_SolarSystem
 		DEMdemo_Repose_Cylinder
 		DEMdemo_Electrostatic

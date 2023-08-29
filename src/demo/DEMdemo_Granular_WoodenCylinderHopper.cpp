@@ -43,7 +43,7 @@ int main() {
 
     double radius = 0.0040 / 2.0;
     double length = 0.00850;
-    int n_sphere = 7;
+    int n_sphere = 5;
 
     double density = 476;
 
@@ -61,7 +61,7 @@ int main() {
 
     path out_dir = current_path();
     out_dir += "/DemoOutput_Granular_WoodenCylinder/";
-    out_dir += "Hopper/7S_";
+    out_dir += "Hopper/5S_";
 
     auto mat_type_bottom = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
     auto mat_type_flume = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});

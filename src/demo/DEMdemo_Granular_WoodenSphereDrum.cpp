@@ -4,8 +4,8 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 // =============================================================================
-// A repose angle test. Particles flow through a mesh-represented funnel and form
-// a pile that has an apparent angle.
+// This benchmark test the angle of repose of a given material using a drum test.
+//  Set by btagliafierro 28 Aug 2023
 // =============================================================================
 
 #include <core/ApiVersion.h>
@@ -22,44 +22,42 @@
 using namespace deme;
 using namespace std::filesystem;
 
-void runDEME (int caseID, float friction);
+void runDEME(std::string dir_output, float friction, float rollingMaterial);
 
-int main(){
+int main(int argc, char* argv[]) {
+    int case_ID = atoi(argv[1]);             // takes the test ID
+    float rolling_friction = atof(argv[2]);  // takes the value
 
-    std::vector<float> friction = {0.00, 0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90};
-    int nsim=int(friction.size());
-    
-    int counter=0;
+    std::vector<float> friction = {0.00, 0.01, 0.025, 0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90};
+    int nsim = int(friction.size());
 
     for (int i = 0; i < nsim; i++) {
-        runDEME(counter, friction[i]);
-        counter++;
+        std::string out_dir = "/Test_Granular_WoodenSphere/";
+        out_dir += "Drum_" + std::to_string(case_ID) + "/" + std::to_string(i);
+        
+        std::cout << "Running case with friction: " << friction[i] <<", and rolling friction: "<< rolling_friction << std::endl;
+
+        runDEME(out_dir, friction[i], rolling_friction);
     }
 
     return 0;
 }
 
-
-void runDEME(int caseDef, float frictionMaterial) {
+void runDEME(std::string dir_output, float frictionMaterial, float rollingMaterial) {
     DEMSolver DEMSim;
     DEMSim.UseFrictionalHertzianModel();
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ);    
-    DEMSim.SetOutputContent(OUTPUT_CONTENT::ANG_VEL);
+    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ | OUTPUT_CONTENT::VEL);
     DEMSim.EnsureKernelErrMsgLineNum();
 
     srand(7001);
     DEMSim.SetCollectAccRightAfterForceCalc(true);
-    DEMSim.SetErrorOutAvgContacts(120);
+    DEMSim.SetErrorOutAvgContacts(50);
 
-    //DEMSim.SetExpandSafetyAdder(0.5);
    
     path out_dir = current_path();
-        out_dir += "/DemoOutput_Granular_WoodenSphere/";
-    out_dir += "Drum_2/";
-    out_dir += std::to_string(caseDef);
-
+    out_dir += dir_output;
     // Scale factor
     float scaling = 1.f;
 
@@ -73,17 +71,17 @@ void runDEME(int caseDef, float frictionMaterial) {
     int num_template = 1;
 
     float plane_bottom = -0.08f * scaling;
-       
-    std::vector<double> angular ={3.60}; // value given in rpm
- 
-   
+
+    std::vector<double> angular = {3.60};  // value given in rpm
+
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}, {"mu", 0.04}, {"Crr", 0.00}});
     
-    auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", frictionMaterial}, {"Crr", 0.02}});
 
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.5);
-    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.02);
+    auto mat_type_particles = DEMSim.LoadMaterial(
+        {{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", frictionMaterial}, {"Crr", rollingMaterial}});
+
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.50);
+    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.05);
     DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_type_particles, 0.30);
 
  
@@ -93,7 +91,7 @@ void runDEME(int caseDef, float frictionMaterial) {
     DEMSim.InstructBoxDomainDimension({-0.09, 0.09}, {-0.15, 0.15}, {-0.15, 0.15});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
-    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81 ));
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     // Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     // happen anyway and if it does, something already went wrong.
@@ -101,13 +99,13 @@ void runDEME(int caseDef, float frictionMaterial) {
     DEMSim.SetInitBinSize(radius * 5);
 
     // Loaded meshes are by-default fixed
-   auto fixed = DEMSim.AddWavefrontMeshObject("../data/granularFlow/drum.obj", mat_type_walls);     
-  
-    fixed->Scale(0.19*1.0);
+    auto fixed = DEMSim.AddWavefrontMeshObject("../data/granularFlow/drum.obj", mat_type_walls);
+
+    fixed->Scale(0.19 * 1.0);
     fixed->SetFamily(10);
-    DEMSim.SetFamilyPrescribedAngVel(10, to_string_with_precision(-2.0*PI*angular[0]/60.0), "0.0", "0.0");
-    DEMSim.SetFamilyPrescribedAngVel(11, to_string_with_precision(-2.0*PI*angular[1]/60.0), "0.0", "0.0");
-    DEMSim.SetFamilyPrescribedAngVel(12, to_string_with_precision(-2.0*PI*angular[2]/60.0), "0.0", "0.0");    
+    DEMSim.SetFamilyPrescribedAngVel(10, to_string_with_precision(-2.0 * PI * angular[0] / 60.0), "0.0", "0.0");
+    DEMSim.SetFamilyPrescribedAngVel(11, to_string_with_precision(-2.0 * PI * angular[1] / 60.0), "0.0", "0.0");
+    DEMSim.SetFamilyPrescribedAngVel(12, to_string_with_precision(-2.0 * PI * angular[2] / 60.0), "0.0", "0.0");
 
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
     auto min_z_finder = DEMSim.CreateInspector("clump_min_z");
@@ -117,7 +115,7 @@ void runDEME(int caseDef, float frictionMaterial) {
     // Make an array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
 
-    double maxRadius= 0;
+    double maxRadius = 0;
 
     for (int i = 0; i < num_template; i++) {
 
@@ -160,8 +158,7 @@ void runDEME(int caseDef, float frictionMaterial) {
     unsigned int curr_step = 0;
     float settle_frame_time = 0.004;
 
-
-    remove_all(out_dir);    
+    remove_all(out_dir);
     create_directories(out_dir);
 
     char filename[200], meshfile[200];
@@ -301,6 +298,6 @@ void runDEME(int caseDef, float frictionMaterial) {
     DEMSim.ShowTimingStats();
     DEMSim.ClearTimingStats();
 
-    std::cout << "DEMdemo_Repose exiting..." << std::endl;
+    std::cout << "DEME exiting..." << std::endl;
     
 }
