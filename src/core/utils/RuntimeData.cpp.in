@@ -17,7 +17,7 @@ std::filesystem::path RuntimeDataHelper::include_path = std::filesystem::path(RU
 // p should be something like /path/to/pip/prefix/bin/../lib/python${PY_VER}/site-packages
 // can get path from python's sys.executable, then run os.path.dirname on it to strip away the binary name
 
-void RuntimeDataHelper::SetPathPrefix(std::filesystem::path& p) {
+void RuntimeDataHelper::SetPathPrefix(const std::filesystem::path& p) {
     data_path = p / "share/DEME";
     include_path = p / "include";
 }

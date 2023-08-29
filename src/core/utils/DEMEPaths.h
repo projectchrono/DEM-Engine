@@ -19,14 +19,19 @@ namespace deme {
 // -----------------------------------------------------------------------------
 
 // Build or installation data path
-const std::filesystem::path BUILD_DATA_PATH = RuntimeDataHelper::data_path / "data";
-static std::filesystem::path DEME_data_path(BUILD_DATA_PATH);
+static std::filesystem::path DEME_data_path(RuntimeDataHelper::data_path / "data");
 
 // Set the path to the DEME data directory (ATTENTION: not thread safe)
 void SetDEMEDataPath(const std::string& path);
 
+// Set the path to the DEME data kernel directory
+void SetDEMEKernelPath(const std::filesystem::path& kernel_path);
+
+// Set the path to the DEME include directory
+void SetDEMEIncludePath(const std::filesystem::path& include_path);
+
 // Obtain the current path to the DEME data directory (thread safe)
-const std::filesystem::path& GetDEMEDataPath();
+std::filesystem::path& GetDEMEDataPath();
 
 // Obtain the complete path to the specified filename, given relative to the
 // DEME data directory (thread safe)

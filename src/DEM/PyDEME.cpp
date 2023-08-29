@@ -31,11 +31,15 @@ PYBIND11_MODULE(DEME, obj) {
 
     py::module _site = py::module_::import("site");
     std::string loc = _site.attr("getsitepackages")().cast<py::list>()[0].cast<py::str>();
-    py::print(loc);
-
+    
+    // Setting path prefix
     std::filesystem::path path = loc;
-
     RuntimeDataHelper::SetPathPrefix(path);
+    deme::SetDEMEDataPath(path / "share/data");
+
+    // Setting JitHelper variables
+    deme::SetDEMEKernelPath(path / "share/kernel");
+    deme::SetDEMEIncludePath(path / "include");
 
     obj.def("GetDEMEDataFile", &deme::GetDEMEDataFile);
     obj.def("DEMBoxGridSampler",

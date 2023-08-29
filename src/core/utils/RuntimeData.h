@@ -14,7 +14,7 @@ class RuntimeDataHelper {
     static std::filesystem::path include_path;
 
     // or std::string
-    static void SetPathPrefix(std::filesystem::path& p);
+    static void SetPathPrefix(const std::filesystem::path& p);
 };
 
 #endif

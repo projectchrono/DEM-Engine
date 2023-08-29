@@ -6,6 +6,8 @@
 #include <filesystem>
 #include <cstring>
 #include "DEMEPaths.h"
+#include <iostream>
+#include <core/utils/JitHelper.h>
 
 namespace deme {
 
@@ -19,14 +21,24 @@ void SetDEMEDataPath(const std::string& path) {
 }
 
 // Obtain the current path to the DEME data directory (thread safe)
-const std::filesystem::path& GetDEMEDataPath() {
+std::filesystem::path& GetDEMEDataPath() {
     return DEME_data_path;
 }
 
 // Obtain the complete path to the specified filename, given relative to the
 // DEME data directory (thread safe)
 std::string GetDEMEDataFile(const std::string& filename) {
-    return (DEME_data_path / filename).string();
+    return (RuntimeDataHelper::data_path / "data" / filename).string();
+}
+
+// Set the path to the DEME data kernel directory
+void SetDEMEKernelPath(const std::filesystem::path& kernel_path) {
+    JitHelper::KERNEL_DIR = RuntimeDataHelper::data_path / "kernel";
+}
+
+// Set the path to the DEME include directory
+void SetDEMEIncludePath(const std::filesystem::path& include_path) {
+    JitHelper::KERNEL_INCLUDE_DIR = RuntimeDataHelper::include_path;
 }
 
 }  // namespace deme
