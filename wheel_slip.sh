@@ -3,11 +3,12 @@
 #SBATCH --time=10-20:33:00
 #SBATCH --cpus-per-task=2
 #SBATCH --ntasks-per-node=1
-#SBATCH --mem=40000
+#SBATCH --mem=60000
 #SBATCH --gres=gpu:rtx2080ti:2
-##SBATCH --gres=gpu:rtxa4500:2
+##SBATCH --gres=gpu:a100:1
+##SBATCH --gres=gpu:v100:2
 
-#SBATCH --output=wheel_auto_explore_6.out
+#SBATCH --output=wheel_auto_explore_3.out
 
 generate_random_real_range() {
     sleep 0.01
@@ -31,15 +32,15 @@ echo "Run id is " $SLURM_JOB_ID
 echo "=================================="
 
 for sim_num in {1..200}; do
-    height=$(generate_random_real_range 0.02 0.08)
+    height=$(generate_random_real_range 0.005 0.08)
     thickness=$(generate_random_real_range 0.01 0.025) #0.01
     ampl=$(generate_random_real_range 0.0 0.03) #0.0
-    wave_num=$(generate_random_integer_range 0 4) #1
+    wave_num=$(generate_random_integer_range 1 4) #1
     cp_dev=$(generate_random_real_range -0.3 0.3)
     num_g=$(generate_random_integer_range 8 32)
     width=$(generate_random_real_range 0.1 0.5)
     rad=$(generate_random_real_range 0.15 0.5)
-    slope=7.5
+    slope=$(generate_random_real_range 5.0 15.0)
     mass=$(generate_random_real_range 22.0 132.0)
 
     echo "Amplitude: " $ampl
