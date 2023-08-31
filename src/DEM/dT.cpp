@@ -1748,8 +1748,10 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_absVel, pCycleMaxVel, simParams->nOwnerBodies * sizeof(float),
                              cudaMemcpyDeviceToDevice));
 
-    // Send simulation metrics for kT's reference
+    // Send simulation metrics for kT's reference.
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_ts, &(simParams->h), sizeof(float), cudaMemcpyDeviceToDevice));
+    // Note that perhapsIdealFutureDrift is non-negative, and it will be used to determine the margin size; however, if
+    // scheduleHelper is instructed to have negative future drift then perhapsIdealFutureDrift no longer affects them.
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxDrift, &(granData->perhapsIdealFutureDrift),
                              sizeof(unsigned int), cudaMemcpyDeviceToDevice));
 
