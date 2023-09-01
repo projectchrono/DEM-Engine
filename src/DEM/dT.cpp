@@ -2147,7 +2147,8 @@ void DEMDynamicThread::workerThread() {
                 }
                 pSchedSupport->schedulingStats.nTimesDynamicHeldBack++;
                 // If dT waits, it is penalized, since waiting means double-wait, very bad.
-                granData->perhapsIdealFutureDrift += FUTURE_DRIFT_TWEAK_STEP_SIZE;
+                if (solverFlags.autoUpdateFreq)
+                    granData->perhapsIdealFutureDrift += FUTURE_DRIFT_TWEAK_STEP_SIZE;
                 timers.GetTimer("Wait for kT update").stop();
             }
             // NOTE: This ShouldWait check should follow the ifProduceFreshThenUseItAndSendNewOrder call. Because we
