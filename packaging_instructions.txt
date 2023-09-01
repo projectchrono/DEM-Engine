@@ -1,0 +1,27 @@
+Pip distributions:
+
+To perform a pip distribution, follow the steps listed below:
+
+1. Define DEME version in setup.py's setup function
+2. Download python build with the following command: python3 -m pip install --upgrade build
+3. Run the following command in the DEM-Engine directory: python -m build .
+4. Download Twine in order to upload packages to pyPi: python3 -m pip install --upgrade twine
+5. Upload the built package from the following command: python3 -m twine upload --repository pypi dist/DEME-<VERSION>.tar.bz2
+
+NOTE: You will be prompted for a username after step 5. Enter '__token__' as the username, and enter your PyPi token obtained
+from the UW-SBEL pypi.org account.
+
+Conda distributions:
+
+To perform a conda distribution, follow the steps listed below:
+
+1. Define DEME version in setup.py's setup function and in recipe/meta.yaml (Both versions should be the same!)
+2. Define desired python version in recipe/meta.yaml in the requirement sections for build, host and run.
+3. Checkout all required submodules
+4. Run the following command in DEM-Engine's root directory to build a conda package: conda build . -c conda-forge --python=<DESIRED_VERSION>
+5. If build successful, note location of DEM-Engine's conda package listed near the end of logs during build process. (Should be in anaconda3/conda-bld/linux-64/ folder, although not guaranteed)
+6. Download anaconda-client from the following command: conda install anaconda-client
+7. Run the following command to login to your Anaconda account: anaconda login
+8. Run anaconda upload <PACKAGE_NAME>
+
+For further queries, please feel free to reach out to me at ssabarwal@wisc.edu. 

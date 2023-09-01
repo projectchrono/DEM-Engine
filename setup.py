@@ -148,9 +148,9 @@ class CMakeBuild(build_ext):
 # logic and declaration, and simpler if you include description/version in a file.
 setup(
     name="DEME",
-    version="0.2.7",
+    version="0.3.0",
     author="Rouchun Zhang",
-    author_email="noreply@wisc.edu",
+    author_email="rzhang294@wisc.edu",
     description="PyBind Wrapper Library for DEM-Engine",
     long_description="",
     ext_modules=[CMakeExtension("DEME")],
@@ -160,5 +160,4 @@ setup(
     sources=["./src/"],
     install_requires=['numpy', 'pybind11'],
     extras_require={"dev": ['pybind11'], "test": ["pytest>=6.0"]},
-    python_requires=">=3.8",
 )

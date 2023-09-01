@@ -6,12 +6,11 @@ source:
   path: ..
 
 build:
-  number: 0
   script: {{ PYTHON }} -m pip install . -vvv
 
 requirements:
   build:
-    - python
+    - python=3.10
     - make
     - cmake
     - ninja
@@ -20,15 +19,16 @@ requirements:
     - numpy >=1.17
 
   host:
-    - python
+    - python=3.10
     - pip
     - cmake
     - make
+    - pybind11
     - ninja
     - numpy >=1.17
 
   run:
-    - python
+    - python=3.10
     - pybind11
     - numpy
 
