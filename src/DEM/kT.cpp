@@ -126,8 +126,11 @@ inline void DEMKinematicThread::unpackMyBuffer() {
     DEME_GPU_CALL(cudaMemcpy(&(granData->maxDrift), &(granData->maxDrift_buffer), sizeof(unsigned int),
                              cudaMemcpyDeviceToDevice));
 
-    // Whatever drift value dT says, kT listens
-    pSchedSupport->kinematicMaxFutureDrift = granData->maxDrift;
+    // Whatever drift value dT says, kT listens; unless kinematicMaxFutureDrift is negative in which case the user
+    // explicitly said not caring the future drift.
+    pSchedSupport->kinematicMaxFutureDrift = (pSchedSupport->kinematicMaxFutureDrift.load() < 0.)
+                                                 ? pSchedSupport->kinematicMaxFutureDrift.load()
+                                                 : granData->maxDrift;
 
     // Need to reduce to check if max velocity is exceeded (right now, array marginSize is still storing absv...)
     floatMaxReduce(granData->marginSize, &(granData->maxVel), simParams->nOwnerBodies, streamInfo.stream,

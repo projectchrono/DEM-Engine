@@ -277,13 +277,16 @@ void SphereStack() {
                     std::cout << "Rolling resistance: " << Crr << std::endl;
                     std::cout << "Init gap: " << gap << std::endl;
                     std::cout << "Time it takes: " << frame_time * i << std::endl;
-                    std::cout << "========== Pile collapse with this params ==========" << std::endl;
+                    std::cout << "========== Pile collapse with these params ==========" << std::endl;
                     found = true;
                     break;
                 }
             }
             if (!found) {
                 std::cout << "WARNING!!! Even with largest mass it did not collapse!" << std::endl;
+            }
+            if (Crr > 0.1) {
+                Crr += 0.02;  // Make it runs less data points so faster
             }
         }
     }
