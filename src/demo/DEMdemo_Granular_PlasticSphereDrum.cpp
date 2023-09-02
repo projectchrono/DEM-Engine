@@ -78,7 +78,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     
 
     auto mat_type_particles = DEMSim.LoadMaterial(
-        {{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", frictionMaterial}, {"Crr", rollingMaterial}});
+        {{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", frictionMaterial}, {"Crr", rollingMaterial}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.50);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.05);
