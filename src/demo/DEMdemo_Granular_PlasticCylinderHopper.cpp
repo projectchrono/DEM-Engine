@@ -60,7 +60,7 @@ int main() {
     double gateWidth = 0.1295;
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Granular_WoodenCylinder/";
+    out_dir += "/Test_WoodenCylinder/";
     out_dir += "Hopper/5S_";
 
     auto mat_type_bottom = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});

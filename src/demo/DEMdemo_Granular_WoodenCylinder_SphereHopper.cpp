@@ -34,8 +34,6 @@ int main() {
     DEMSim.SetCollectAccRightAfterForceCalc(true);
     DEMSim.SetErrorOutAvgContacts(120);
 
-    // DEMSim.SetExpandSafetyAdder(0.5);
-
     // Scale factor
     float scaling = 1.f;
 

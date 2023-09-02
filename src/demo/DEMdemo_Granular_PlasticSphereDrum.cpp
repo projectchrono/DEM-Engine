@@ -32,7 +32,7 @@ int main(int argc, char* argv[]) {
     int nsim = int(friction.size());
 
     for (int i = 0; i < nsim; i++) {
-        std::string out_dir = "/Test_Granular_PlasticSphere/";
+        std::string out_dir = "/Test_PlasticSphere/";
         out_dir += "Drum_" + std::to_string(case_ID) + "/" + std::to_string(i);
         
         std::cout << "Running case with friction: " << friction[i] <<", and rolling friction: "<< rolling_friction << std::endl;

@@ -36,26 +36,23 @@ int main() {
 
     // DEMSim.SetExpandSafetyAdder(0.5);
 
-    // Scale factor
-    float scaling = 1.f;
+    int totalSph = 7000;
+    int totalCyl = 10000 + totalSph;
+    int num_template = 1;
 
     // total number of random clump templates to generate
     // data for the cylinders
     double radiusCyl = 0.0040 / 2.0;
-    double length = 0.00850;
-    int n_sphere = 5;
-    double densityCyl = 476;
-    int totalCyl = 10000;
-
-    int num_template = 1;
+    double length = 0.0080;
+    int n_sphere = 5;  // spheres that are required to form a cylinder
+    double densityCyl = 1128;
 
     // data for the spheres
-    double radiusSph = 0.0059 * scaling / 2.0;
-    double densitySph = 674;
-    int totalSph = 8000 + totalCyl;
+    double radiusSph = 0.0060 / 2.0;
+    double densitySph = 1592;
 
-    float plane_bottom = 0.02f * scaling;
-    float funnel_bottom = 0.02f * scaling;
+    float plane_bottom = 0.02f;
+    float funnel_bottom = 0.02f;
 
     double gateOpen = 0.30;
     double gateSpeed = -3.5;
@@ -63,8 +60,8 @@ int main() {
     double gateWidth = 0.1295;
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Granular_WoodenCylinder/";
-    out_dir += "Hopper/5S_";
+    out_dir += "/Test_Plastic_Sphere_Cylinder/";
+    out_dir += "Hopper/";
 
     auto mat_type_flume = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
@@ -206,98 +203,12 @@ int main() {
         }
     }
 
-    {
-        float shift_xyz = 1.0 * (length)*1.1;
-        float x = 0;
-        float y = 0;
-
-        z = shift_xyz / 2;  // by default we create beads at 0
-        double emitterZ = 0.60;
-        unsigned int actualTotalSpheres = 0;
-
-        bool generate = true;
-        bool initialization = true;
-        double consolidation = true;
-
-        DEMSim.Initialize();
-
-        sprintf(meshfile, "%s/DEMdemo_funnel_%04d.vtk", out_dir.c_str(), frame);
-        DEMSim.WriteMeshFile(std::string(meshfile));
-
-        while (initialization) {
-            std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
-            std::vector<float3> input_pile_xyz;
-            PDSampler sampler(shift_xyz);
-
-            bool generate = (plane_bottom + shift_xyz / 2 > emitterZ) ? false : true;
-
-            if (generate) {
-                float sizeZ = (frame == 0) ? 0.20 : 0;
-                float sizeX = 0.20;
-                float z = plane_bottom + shift_xyz + sizeZ / 2.0;
-
-                float3 center_xyz = make_float3(0, 0, z);
-                float3 size_xyz = make_float3((sizeX - shift_xyz) / 2.0, (0.04 - shift_xyz) / 2.0, sizeZ / 2.0);
-
-                std::cout << "level of particles position ... " << center_xyz.z << std::endl;
-
-                auto heap_particles_xyz = sampler.SampleBox(center_xyz, size_xyz);
-                unsigned int num_clumps = heap_particles_xyz.size();
-                std::cout << "number of particles at this level ... " << num_clumps << std::endl;
-
-                for (unsigned int i = actualTotalSpheres; i < actualTotalSpheres + num_clumps; i++) {
-                    input_pile_template_type.push_back(clump_cylinder.at(i % num_template));
-                }
-
-                input_pile_xyz.insert(input_pile_xyz.end(), heap_particles_xyz.begin(), heap_particles_xyz.end());
-
-                auto the_pile = DEMSim.AddClumps(input_pile_template_type, input_pile_xyz);
-                the_pile->SetVel(make_float3(-0.00, 0.0, -0.80));
-                the_pile->SetFamily(100);
-
-                DEMSim.UpdateClumps();
-
-                std::cout << "Total num of particles: " << (int)DEMSim.GetNumClumps() << std::endl;
-                actualTotalSpheres = (int)DEMSim.GetNumClumps();
-                // Generate initial clumps for piling
-            }
-            
-            timeTotal += settle_frame_time;
-            std::cout << "Total runtime: " << timeTotal << "s; settling for: " << settle_frame_time << std::endl;
-            std::cout << "maxZ is: " << max_z_finder->GetValue() << std::endl;
-
-            initialization = (actualTotalSpheres < totalCyl) ? true : false;
-
-            if (generate) {
-                std::cout << "frame : " << frame << std::endl;
-                sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), frame);
-                DEMSim.WriteSphereFile(std::string(filename));
-                // DEMSim.ShowThreadCollaborationStats();
-                frame++;
-            }
-
-            DEMSim.DoDynamicsThenSync(settle_frame_time);
-
-            plane_bottom = max_z_finder->GetValue();
-            /// here the settling phase starts
-            if (!initialization) {
-                for (int i = 0; i < (int)(0.1 / settle_frame_time); i++) {
-                    DEMSim.DoDynamics(settle_frame_time);
-                    sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), i);
-                    DEMSim.WriteSphereFile(std::string(filename));
-                    std::cout << "consolidating for " << i * settle_frame_time << "s " << std::endl;
-                }
-            }
-        }
-    }
-
-    DEMSim.DoDynamicsThenSync(0.0);
-
     //
     // Sphere generation
     //
+    DEMSim.Initialize();
     {
-        float shift_xyz = 1.0 * (radiusSph)*2.0;
+        float shift_xyz = 1.0 * (radiusSph) * 2.0;
         float x = 0;
         float y = 0;
 
@@ -376,6 +287,94 @@ int main() {
             }
         }
     }
+
+    DEMSim.DoDynamicsThenSync(0.0);
+    //
+    // make cylinders
+    //
+    {
+        float shift_xyz = 1.0 * (length) * 1.1;
+        float x = 0;
+        float y = 0;
+
+        z = shift_xyz / 2;  // by default we create beads at 0
+        double emitterZ = 0.60;
+        unsigned int actualTotalSpheres = 0;
+
+        bool generate = true;
+        bool initialization = true;
+        double consolidation = true;
+
+        sprintf(meshfile, "%s/DEMdemo_funnel_%04d.vtk", out_dir.c_str(), frame);
+        DEMSim.WriteMeshFile(std::string(meshfile));
+
+        while (initialization) {
+            std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
+            std::vector<float3> input_pile_xyz;
+            PDSampler sampler(shift_xyz);
+
+            bool generate = (plane_bottom + shift_xyz / 2 > emitterZ) ? false : true;
+
+            if (generate) {
+                float sizeZ = (frame == 0) ? 0.20 : 0;
+                float sizeX = 0.20;
+                float z = plane_bottom + shift_xyz + sizeZ / 2.0;
+
+                float3 center_xyz = make_float3(0, 0, z);
+                float3 size_xyz = make_float3((sizeX - shift_xyz) / 2.0, (0.04 - shift_xyz) / 2.0, sizeZ / 2.0);
+
+                std::cout << "level of particles position ... " << center_xyz.z << std::endl;
+
+                auto heap_particles_xyz = sampler.SampleBox(center_xyz, size_xyz);
+                unsigned int num_clumps = heap_particles_xyz.size();
+                std::cout << "number of particles at this level ... " << num_clumps << std::endl;
+
+                for (unsigned int i = actualTotalSpheres; i < actualTotalSpheres + num_clumps; i++) {
+                    input_pile_template_type.push_back(clump_cylinder.at(i % num_template));
+                }
+
+                input_pile_xyz.insert(input_pile_xyz.end(), heap_particles_xyz.begin(), heap_particles_xyz.end());
+
+                auto the_pile = DEMSim.AddClumps(input_pile_template_type, input_pile_xyz);
+                the_pile->SetVel(make_float3(-0.00, 0.0, -0.80));
+                the_pile->SetFamily(100);
+
+                DEMSim.UpdateClumps();
+
+                std::cout << "Total num of particles: " << (int)DEMSim.GetNumClumps() << std::endl;
+                actualTotalSpheres = (int)DEMSim.GetNumClumps();
+                // Generate initial clumps for piling
+            }
+
+            timeTotal += settle_frame_time;
+            std::cout << "Total runtime: " << timeTotal << "s; settling for: " << settle_frame_time << std::endl;
+            std::cout << "maxZ is: " << max_z_finder->GetValue() << std::endl;
+
+            initialization = (actualTotalSpheres < totalCyl) ? true : false;
+
+            if (generate) {
+                std::cout << "frame : " << frame << std::endl;
+                sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), frame);
+                DEMSim.WriteSphereFile(std::string(filename));
+                // DEMSim.ShowThreadCollaborationStats();
+                frame++;
+            }
+
+            DEMSim.DoDynamicsThenSync(settle_frame_time);
+
+            plane_bottom = max_z_finder->GetValue();
+            /// here the settling phase starts
+            if (!initialization) {
+                for (int i = 0; i < (int)(0.3 / settle_frame_time); i++) {
+                    DEMSim.DoDynamics(settle_frame_time);
+                    sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), i);
+                    DEMSim.WriteSphereFile(std::string(filename));
+                    std::cout << "consolidating for " << i * settle_frame_time << "s " << std::endl;
+                }
+            }
+        }
+    }
+
     DEMSim.DoDynamicsThenSync(0.0);
 
     float timeStep = step_size * 500.0;
