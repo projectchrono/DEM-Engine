@@ -66,7 +66,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     double radius = 0.0060 * scaling /2.0 ;
     double density = 1592;
 
-    int totalSpheres = 15000;
+    int totalSpheres = 14000;
 
     int num_template = 1;
 
