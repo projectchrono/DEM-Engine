@@ -95,20 +95,3 @@ end
 end
 end
 
-
-
-
-clc
-x=[0.00, 0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90];
-code={'A','B','C','D','E'};
-for i =test
-    A=(measureAngle(:,:,i));
-    meanVec=mean(A,1);
-    for j=1:numel(x)
-        fprintf('(%1.2f, %1.4f) [%s]', x(j), meanVec(j),code{i});
-
-    end
-    % fprintf('\n')    % clipboard('copy', data)
-end
-
-
