@@ -1,10 +1,6 @@
 clear;close all;clc
 
-%%% Experimental data from Sarno et al. 2018
-%exp=readtable("../../data/granularFlow/heightSarno2018.dat");
-
-
-
+test='PlasticSphere';
 
 dx=0.0029*1;
 pathX=(-0.03:dx:0.03)';
@@ -23,22 +19,18 @@ level_z=zeros(numel(time),1);
 points=(-0.04:0.01:0.05);
 measureAngle=zeros(numel(50:99),11,6);
 
-test=1:5;
+test=1:6;
 
 for jj=test
 counterTotal=0;
-for q=0:1:10
+for q=0:1:12
 
-folder=['../../' 'build/DemoOutput_Granular_WoodenCylinders/Drum_' num2str(jj) '/' num2str(q)  '/'];
-folder=['../../' 'build/DemoOutput_Granular_WoodenCube/Drum_' num2str(jj) '/' num2str(q)  '/'];
-folder=['../../' 'build/DemoOutput_Granular_WoodenSphere/Drum_' num2str(jj) '/' num2str(q)  '/'];
+folder=['' 'Test_PlasticCylinders/Drum_' num2str(jj) '/' num2str(q)  '/'];
 files=dir(folder);
-
 
 for p=1:1
     range=(p-1)*100+(50:99);
     counterTotal=counterTotal+1;
-
 
     counter=0;
 
@@ -93,8 +85,6 @@ for p=1:1
         % figure(3); hold on
         angle=abs(atand(P(1)));
         measureAngle(counter,counterTotal,jj)=(angle);
-
-
 
         % plot(curve1_x, abs(dy1))
 

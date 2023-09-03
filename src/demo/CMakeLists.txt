@@ -48,6 +48,7 @@ SET(DEMOS
 		DEMdemo_Granular_WoodenCylinderHopper
 		DEMdemo_Granular_WoodenCylinder_SphereHopper
 		DEMdemo_PlasticSphere_CylinderHopper
+		DEMdemo_PlasticCylinder_SphereHopper
 		DEMdemo_SolarSystem
 		DEMdemo_Repose_Cylinder
 		DEMdemo_Electrostatic
