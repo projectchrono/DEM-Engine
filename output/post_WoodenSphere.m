@@ -1,6 +1,6 @@
 clear;close all;clc
 
-testName='PlasticSphere';
+testName='WoodenSphere';
 
 dx=0.0029*1;
 pathX=(-0.03:dx:0.03)';
@@ -24,7 +24,7 @@ for jj=test
     counterTotal=0;
     for q=0:1:12
         
-        folder=['' 'Test_PlasticSphere/Drum_' num2str(jj) '/' num2str(q)  '/'];
+        folder=['' 'Test_WoodenSphere/Drum_' num2str(jj) '/' num2str(q)  '/'];
         files=dir(folder);
         disp(folder)
         for p=1:1
