@@ -4,3 +4,4 @@ build*
 output/*
 !output/*.sh
 !output/*.m
+*.asv
