@@ -49,8 +49,8 @@ expCylWood=[0.02, 0.74
 6.10, 88.58
 7.01, 88.49];
 
-folder=['../'  '../build/Test_Plastic_Cylinder_Sphere/Hopper/'];
-% folder=['../'  '../build/Test_Plastic_Sphere_Cylinder/Hopper/'];
+% folder=['../'  '../build/Test_Plastic_Cylinder_Sphere/Hopper/'];
+folder=['../'  '../build/Test_Plastic_Sphere_Cylinder/Hopper/'];
   % folder=['../'  '../build/DemoOutput_Granular_WoodenSphere/Hopper/'];
    % folder=['../'  '../build/DemoOutput_Granular_WoodenCylinder/Hopper/3S_/'];
 files=dir(folder);

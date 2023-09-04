@@ -18,7 +18,7 @@ level_z=zeros(numel(time),1);
 points=(-0.04:0.01:0.05);
 measureAngle=zeros(numel(50:99),11,6);
 
-test=1:6;
+test=1:5;
 
 for jj=test
     counterTotal=0;
