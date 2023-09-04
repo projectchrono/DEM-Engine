@@ -68,7 +68,7 @@ int main() {
 
     auto mat_spheres = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.50}, {"Crr", 0.02}});
 
-    auto mat_cylinders = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.60}, {"Crr", 0.05}});
+    auto mat_cylinders = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.60}, {"Crr", 0.03}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_cylinders, 0.5);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_cylinders, 0.02);

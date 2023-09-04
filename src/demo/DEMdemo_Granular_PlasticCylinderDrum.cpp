@@ -34,8 +34,9 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < nsim; i++) {
         std::string out_dir = "/Test_PlasticCylinders/";
         out_dir += "Drum_" + std::to_string(case_ID) + "/" + std::to_string(i);
-        
-        std::cout << "Running case with friction: " << friction[i] <<", and rolling friction: "<< rolling_friction << std::endl;
+
+        std::cout << "Running case with friction: " << friction[i] << ", and rolling friction: " << rolling_friction
+                  << std::endl;
 
         runDEME(out_dir, friction[i], rolling_friction);
     }
@@ -69,7 +70,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     double density = 1128;
 
     int totalSpheres = 19000;
-    //int totalSpheres = 500;
+    // int totalSpheres = 500;
 
     int num_template = 5;
 
@@ -87,7 +88,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_type_particles, 0.30);
 
     // Make ready for simulation
-    float step_size = 5.0e-6;
+    float step_size = 2.50e-6;
     DEMSim.InstructBoxDomainDimension({-0.09, 0.09}, {-0.15, 0.15}, {-0.15, 0.15});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
@@ -161,7 +162,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
 
     char filename[200], meshfile[200];
 
-    float shift_xyz = 1.2 * (length)*1.0;
+    float shift_xyz = 1.2 * (length) * 1.0;
     float x = 0;
     float y = 0;
 
@@ -177,8 +178,8 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     double timeTotal = 0;
     double consolidation = true;
 
-    sprintf(meshfile, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame);
-    DEMSim.WriteMeshFile(std::string(meshfile));
+    // sprintf(meshfile, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame);
+    // DEMSim.WriteMeshFile(std::string(meshfile));
 
     while (initialization) {
         DEMSim.ClearCache();
@@ -197,11 +198,11 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
             float3 center_xyz = make_float3(0, 0, z);
             float3 size_xyz = make_float3((sizeX - shift_xyz) / 2.0, (0.09 - shift_xyz) / 2.0, sizeZ / 2.0);
 
-            std::cout << "level of particles position ... " << center_xyz.z << std::endl;
+            // std::cout << "level of particles position ... " << center_xyz.z << std::endl;
 
             auto heap_particles_xyz = sampler.SampleBox(center_xyz, size_xyz);
             unsigned int num_clumps = heap_particles_xyz.size();
-            std::cout << "number of particles at this level ... " << num_clumps << std::endl;
+            // std::cout << "number of particles at this level ... " << num_clumps << std::endl;
 
             for (unsigned int i = actualTotalSpheres; i < actualTotalSpheres + num_clumps; i++) {
                 input_pile_template_type.push_back(clump_types.at(i % num_template));
@@ -220,12 +221,12 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
             // Generate initial clumps for piling
         }
         timeTotal += settle_frame_time;
-        std::cout << "Total runtime: " << timeTotal << "s; settling for: " << settle_frame_time << std::endl;
-        std::cout << "maxZ is: " << max_z_finder->GetValue() << std::endl;
+        // std::cout << "Total runtime: " << timeTotal << "s; settling for: " << settle_frame_time << std::endl;
+        // std::cout << "maxZ is: " << max_z_finder->GetValue() << std::endl;
 
         initialization = (actualTotalSpheres < totalSpheres) ? true : false;
 
-        if (generate && !(frame % 100)) {
+        if (generate && !(frame % 1000)) {
             std::cout << "frame : " << frame << std::endl;
             sprintf(filename, "%s/DEMdemo_settling.csv", out_dir.c_str());
             DEMSim.WriteSphereFile(std::string(filename));
@@ -238,13 +239,13 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
 
         plane_bottom = max_z_finder->GetValue();
     }
-
+    std::cout << "Initialization done with : " << actualTotalSpheres << "particles" << std::endl;
     float timeStep = 5e-3;
     int numStep = 5.0f / timeStep;
     int numChangeSim = 5.0f / timeStep;
     int timeOut = int(0.05f / timeStep);
 
-    std::cout << "Time out in time steps is: " << timeOut << std::endl;
+    //std::cout << "Time out in time steps is: " << timeOut << std::endl;
     frame = 0;
 
     DEMSim.WriteMeshFile(std::string(meshfile));
@@ -260,7 +261,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
             DEMSim.WriteMeshFile(std::string(meshfile));
             DEMSim.WriteSphereFile(std::string(filename));
 
-            std::cout << "Frame: " << frame << std::endl;
+            //std::cout << "Frame: " << frame << std::endl;
             std::cout << "Elapsed time: " << timeStep * (i) << std::endl;
             // DEMSim.ShowThreadCollaborationStats();
             frame++;
@@ -277,7 +278,8 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     }
 
     DEMSim.ShowTimingStats();
+    DEMSim.ShowAnomalies();
     DEMSim.ClearTimingStats();
-    
+
     std::cout << "DEME exiting..." << std::endl;
 }

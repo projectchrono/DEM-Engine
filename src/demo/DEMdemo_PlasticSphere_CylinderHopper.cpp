@@ -36,7 +36,7 @@ int main() {
 
     // DEMSim.SetExpandSafetyAdder(0.5);
 
-    int totalSph = 6800;
+    int totalSph = 6900;
     int totalCyl = 11000 + totalSph;
     int num_template = 1;
 
@@ -66,9 +66,9 @@ int main() {
     auto mat_type_flume = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
 
-    auto mat_spheres = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.60}, {"Crr", 0.06}});
+    auto mat_spheres = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.50}, {"Crr", 0.02}});
 
-    auto mat_cylinders = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.60}, {"Crr", 0.06}});
+    auto mat_cylinders = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.50}, {"Crr", 0.05}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_cylinders, 0.5);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_cylinders, 0.02);
