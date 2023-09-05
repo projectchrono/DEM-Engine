@@ -25,21 +25,18 @@ using namespace std::filesystem;
 void runDEME(std::string dir_output, float friction, float rollingMaterial);
 
 int main(int argc, char* argv[]) {
-    int case_ID = atoi(argv[1]);             // takes the test ID
-    float rolling_friction = atof(argv[2]);  // takes the value
+    int case_Folder = atoi(argv[0]);          // takes the test ID
+    int case_ID = atoi(argv[1]);              // takes the test ID
+    float conctact_friction = atof(argv[2]);  // takes the value
+    float rolling_friction = atof(argv[3]);   // takes the value
 
-    std::vector<float> friction = {0.00, 0.01, 0.025, 0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90};
-    int nsim = int(friction.size());
+    std::string out_dir = "/Test_WoodenSphere/";
+    out_dir += "Drum_" + std::to_string(case_Folder) + "/" + std::to_string(case_ID) + "/";
 
-    for (int i = 0; i < nsim; i++) {
-        std::string out_dir = "/Test_WoodenSphere/";
-        out_dir += "Drum_" + std::to_string(case_ID) + "/" + std::to_string(i);
+    std::cout << "Running case with friction: " << conctact_friction << ", and rolling friction: " << rolling_friction
+              << std::endl;
 
-        std::cout << "Running case with friction: " << friction[i] << ", and rolling friction: " << rolling_friction
-                  << std::endl;
-
-        runDEME(out_dir, friction[i], rolling_friction);
-    }
+    runDEME(out_dir, conctact_friction, rolling_friction);
 
     return 0;
 }
@@ -84,7 +81,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_type_particles, 0.30);
 
     // Make ready for simulation
-    float step_size = 2.5e-6;
+    float step_size = 2.50e-6;
     DEMSim.InstructBoxDomainDimension({-0.09, 0.09}, {-0.15, 0.15}, {-0.15, 0.15});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
@@ -235,7 +232,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     int numChangeSim = 5.0f / timeStep;
     int timeOut = int(0.05f / timeStep);
 
-    std::cout << "Time out in time steps is: " << timeOut << std::endl;
+    // std::cout << "Time out in time steps is: " << timeOut << std::endl;
     frame = 0;
 
     int counterSim = 0;
@@ -265,6 +262,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     }
 
     DEMSim.ShowTimingStats();
+    DEMSim.ShowAnomalies();
     DEMSim.ClearTimingStats();
 
     std::cout << "DEME exiting..." << std::endl;

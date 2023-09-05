@@ -4,8 +4,8 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 // =============================================================================
-// A repose angle test. Particles flow through a mesh-represented funnel and form
-// a pile that has an apparent angle.
+// This benchmark test the angle of repose of a given material using a drum test.
+//  Set by btagliafierro 05 Sept 2023
 // =============================================================================
 
 #include <core/ApiVersion.h>
@@ -60,22 +60,21 @@ int main() {
     double gateWidth = 0.1295;
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Granular_WoodenCylinder/";
+    out_dir += "/Test_WoodenCylinder/";
     out_dir += "Hopper/5S_";
 
     auto mat_type_bottom = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
     auto mat_type_flume = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
 
-    auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.50}, {"mu", 0.70}, {"Crr", 0.07}});
+    auto mat_cyl = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.60}, {"Crr", 0.06}});
 
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.5);
-    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.02);
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_cyl, 0.5);
+    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_cyl, 0.02);
 
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_flume, mat_type_particles, 0.7);   // it is supposed to be
-    DEMSim.SetMaterialPropertyPair("Crr", mat_type_flume, mat_type_particles, 0.05);  // plexiglass
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_flume, mat_type_particles, 0.30);
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_flume, mat_cyl, 0.7);   // it is supposed to be
+    DEMSim.SetMaterialPropertyPair("Crr", mat_type_flume, mat_cyl, 0.05);  // plexiglass
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_flume, mat_cyl, 0.30);
 
     // Make ready for simulation
     float step_size = 5.0e-6;
@@ -87,7 +86,7 @@ int main() {
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(25.);
-    DEMSim.SetInitBinSize(radius * 5);
+    DEMSim.SetInitBinSize(radius * 8);
 
     // Loaded meshes are by-default fixed
 
@@ -144,7 +143,7 @@ int main() {
             tmp.y = 0;
             tmp.z = 0;
             relPos.push_back(tmp);
-            mat.push_back(mat_type_particles);
+            mat.push_back(mat_cyl);
         }
 
         float mass = PI * radiusMed * radiusMed * length * density;
@@ -154,7 +153,7 @@ int main() {
         std::cout << mass << " chosen moi ..." << radiusMed / radius << std::endl;
 
         maxRadius = (radiusMed > maxRadius) ? radiusMed : maxRadius;
-        auto clump_ptr = DEMSim.LoadClumpType(mass, MOI, radii, relPos, mat_type_particles);
+        auto clump_ptr = DEMSim.LoadClumpType(mass, MOI, radii, relPos, mat_cyl);
         // clump_ptr->AssignName("fsfs");
         clump_types.push_back(clump_ptr);
     }
@@ -168,7 +167,7 @@ int main() {
 
     char filename[200], meshfile[200];
 
-    float shift_xyz = 1.0 * (length)*1.1;
+    float shift_xyz = 1.0 * (length) * 1.1;
     float x = 0;
     float y = 0;
 
@@ -188,8 +187,7 @@ int main() {
     DEMSim.WriteMeshFile(std::string(meshfile));
 
     while (initialization) {
-        DEMSim.ClearCache();
-
+        
         std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
         std::vector<float3> input_pile_xyz;
         PDSampler sampler(shift_xyz);
@@ -204,11 +202,11 @@ int main() {
             float3 center_xyz = make_float3(0, 0, z);
             float3 size_xyz = make_float3((sizeX - shift_xyz) / 2.0, (0.04 - shift_xyz) / 2.0, sizeZ / 2.0);
 
-            std::cout << "level of particles position ... " << center_xyz.z << std::endl;
+            // std::cout << "level of particles position ... " << center_xyz.z << std::endl;
 
             auto heap_particles_xyz = sampler.SampleBox(center_xyz, size_xyz);
             unsigned int num_clumps = heap_particles_xyz.size();
-            std::cout << "number of particles at this level ... " << num_clumps << std::endl;
+            // std::cout << "number of particles at this level ... " << num_clumps << std::endl;
 
             for (unsigned int i = actualTotalSpheres; i < actualTotalSpheres + num_clumps; i++) {
                 input_pile_template_type.push_back(clump_types.at(i % num_template));
@@ -227,14 +225,14 @@ int main() {
             // Generate initial clumps for piling
         }
         timeTotal += settle_frame_time;
-        std::cout << "Total runtime: " << timeTotal << "s; settling for: " << settle_frame_time << std::endl;
-        std::cout << "maxZ is: " << max_z_finder->GetValue() << std::endl;
+        //std::cout << "Total runtime: " << timeTotal << "s; settling for: " << settle_frame_time << std::endl;
+        //std::cout << "maxZ is: " << max_z_finder->GetValue() << std::endl;
 
         initialization = (actualTotalSpheres < totalSpheres) ? true : false;
 
         if (generate) {
-            std::cout << "frame : " << frame << std::endl;
-            sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), frame);
+            //std::cout << "frame : " << frame << std::endl;
+            //sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), frame);
             // DEMSim.WriteSphereFile(std::string(filename));
             // DEMSim.ShowThreadCollaborationStats();
             frame++;
@@ -256,11 +254,6 @@ int main() {
 
     DEMSim.DoDynamicsThenSync(0.0);
 
-    double k = 4.0 / 3.0 * 10e7 * std::pow(radius / 2.0, 0.5f);
-    double m = 4.0 / 3.0 * PI * std::pow(radius, 3);
-    double dt_crit = 0.64 * std::pow(m / k, 0.5f);
-
-    std::cout << "dt critical is: " << dt_crit << std::endl;
 
     float timeStep = step_size * 500.0;
     int numStep = 7.0 / timeStep;
@@ -316,6 +309,6 @@ int main() {
     DEMSim.ShowTimingStats();
     DEMSim.ClearTimingStats();
 
-    std::cout << "DEMdemo_Repose exiting..." << std::endl;
+    std::cout << "DEMdemo exiting..." << std::endl;
     return 0;
 }

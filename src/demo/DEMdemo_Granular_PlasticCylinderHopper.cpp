@@ -4,8 +4,8 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 // =============================================================================
-// A repose angle test. Particles flow through a mesh-represented funnel and form
-// a pile that has an apparent angle.
+// This benchmark test the angle of repose of a given material using a drum test.
+//  Set by btagliafierro 05 Sept 2023
 // =============================================================================
 
 #include <core/ApiVersion.h>

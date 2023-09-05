@@ -170,7 +170,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     // DEMSim.WriteMeshFile(std::string(meshfile));
 
     while (initialization) {
-        DEMSim.ClearCache();
+     
 
         std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
         std::vector<float3> input_pile_xyz;
@@ -199,12 +199,12 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
             input_pile_xyz.insert(input_pile_xyz.end(), heap_particles_xyz.begin(), heap_particles_xyz.end());
 
             auto the_pile = DEMSim.AddClumps(input_pile_template_type, input_pile_xyz);
-            the_pile->SetVel(make_float3(-0.00, 0.0, -0.90));
+            the_pile->SetVel(make_float3(-0.00, 0.0, -0.80));
             the_pile->SetFamily(100);
 
             DEMSim.UpdateClumps();
 
-            std::cout << "Total num of particles: " << (int)DEMSim.GetNumClumps() << std::endl;
+            // std::cout << "Total num of particles: " << (int)DEMSim.GetNumClumps() << std::endl;
             actualTotalSpheres = (int)DEMSim.GetNumClumps();
             // Generate initial clumps for piling
         }
@@ -214,14 +214,14 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
 
         initialization = (actualTotalSpheres < totalSpheres) ? true : false;
 
-        if (generate && !(frame % 100)) {
+        if (generate && !(frame % 1000)) {
             std::cout << "frame : " << frame << std::endl;
             sprintf(filename, "%s/DEMdemo_settling.csv", out_dir.c_str());
             DEMSim.WriteSphereFile(std::string(filename));
             sprintf(meshfile, "%s/DEMdemo_mesh.vtk", out_dir.c_str());
             DEMSim.WriteMeshFile(std::string(meshfile));
             // DEMSim.ShowThreadCollaborationStats();
-            frame++;
+            
         }
         frame++;
 
@@ -250,7 +250,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
             DEMSim.WriteMeshFile(std::string(meshfile));
             DEMSim.WriteSphereFile(std::string(filename));
 
-            std::cout << "Frame: " << frame << std::endl;
+            // std::cout << "Frame: " << frame << std::endl;
             std::cout << "Elapsed time: " << timeStep * (i) << std::endl;
             // DEMSim.ShowThreadCollaborationStats();
             frame++;

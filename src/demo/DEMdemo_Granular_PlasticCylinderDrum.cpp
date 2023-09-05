@@ -25,21 +25,18 @@ using namespace std::filesystem;
 void runDEME(std::string dir_output, float friction, float rollingMaterial);
 
 int main(int argc, char* argv[]) {
-    int case_ID = atoi(argv[1]);             // takes the test ID
-    float rolling_friction = atof(argv[2]);  // takes the value
+    int case_Folder = atoi(argv[0]);          // takes the test ID
+    int case_ID = atoi(argv[1]);              // takes the test ID
+    float conctact_friction = atof(argv[2]);  // takes the value
+    float rolling_friction = atof(argv[3]);   // takes the value
 
-    std::vector<float> friction = {0.00, 0.01, 0.025, 0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90};
-    int nsim = int(friction.size());
+    std::string out_dir = "/Test_PlasticCylinder/";
+    out_dir += "Drum_" + std::to_string(case_Folder) + "/" + std::to_string(case_ID) + "/";
 
-    for (int i = 0; i < nsim; i++) {
-        std::string out_dir = "/Test_PlasticCylinders/";
-        out_dir += "Drum_" + std::to_string(case_ID) + "/" + std::to_string(i);
+    std::cout << "Running case with friction: " << conctact_friction << ", and rolling friction: " << rolling_friction
+              << std::endl;
 
-        std::cout << "Running case with friction: " << friction[i] << ", and rolling friction: " << rolling_friction
-                  << std::endl;
-
-        runDEME(out_dir, friction[i], rolling_friction);
-    }
+    runDEME(out_dir, conctact_friction, rolling_friction);
 
     return 0;
 }
@@ -182,7 +179,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     // DEMSim.WriteMeshFile(std::string(meshfile));
 
     while (initialization) {
-        DEMSim.ClearCache();
+     
 
         std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
         std::vector<float3> input_pile_xyz;
@@ -211,12 +208,12 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
             input_pile_xyz.insert(input_pile_xyz.end(), heap_particles_xyz.begin(), heap_particles_xyz.end());
 
             auto the_pile = DEMSim.AddClumps(input_pile_template_type, input_pile_xyz);
-            the_pile->SetVel(make_float3(-0.00, 0.0, -0.90));
+            the_pile->SetVel(make_float3(-0.00, 0.0, -0.80));
             the_pile->SetFamily(100);
 
             DEMSim.UpdateClumps();
 
-            std::cout << "Total num of particles: " << (int)DEMSim.GetNumClumps() << std::endl;
+            // std::cout << "Total num of particles: " << (int)DEMSim.GetNumClumps() << std::endl;
             actualTotalSpheres = (int)DEMSim.GetNumClumps();
             // Generate initial clumps for piling
         }
@@ -233,23 +230,24 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
             sprintf(meshfile, "%s/DEMdemo_mesh.vtk", out_dir.c_str());
             DEMSim.WriteMeshFile(std::string(meshfile));
             // DEMSim.ShowThreadCollaborationStats();
+            
         }
         frame++;
+
         DEMSim.DoDynamicsThenSync(settle_frame_time);
 
         plane_bottom = max_z_finder->GetValue();
     }
+
     std::cout << "Initialization done with : " << actualTotalSpheres << "particles" << std::endl;
+
     float timeStep = 5e-3;
     int numStep = 5.0f / timeStep;
     int numChangeSim = 5.0f / timeStep;
     int timeOut = int(0.05f / timeStep);
 
-    //std::cout << "Time out in time steps is: " << timeOut << std::endl;
+    // std::cout << "Time out in time steps is: " << timeOut << std::endl;
     frame = 0;
-
-    DEMSim.WriteMeshFile(std::string(meshfile));
-    char cnt_filename[200];
 
     int counterSim = 0;
 
@@ -261,7 +259,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
             DEMSim.WriteMeshFile(std::string(meshfile));
             DEMSim.WriteSphereFile(std::string(filename));
 
-            //std::cout << "Frame: " << frame << std::endl;
+            // std::cout << "Frame: " << frame << std::endl;
             std::cout << "Elapsed time: " << timeStep * (i) << std::endl;
             // DEMSim.ShowThreadCollaborationStats();
             frame++;
