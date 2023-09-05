@@ -4,8 +4,8 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 // =============================================================================
-// A repose angle test. Particles flow through a mesh-represented funnel and form
-// a pile that has an apparent angle.
+// This benchmark test the angle of repose of a given material using a drum test.
+//  Set by btagliafierro 28 Aug 2023
 // =============================================================================
 
 #include <core/ApiVersion.h>
@@ -57,25 +57,24 @@ int main() {
     double gateWidth = 0.1295;
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Granular_PlasticSphere/";
+    out_dir += "/Test_PlasticSphere/";
     out_dir += "Hopper/";
 
     auto mat_type_bottom = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
     auto mat_type_flume = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
 
-    auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.60}, {"Crr", 0.04}});
+    auto mat_spheres = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.70}, {"Crr", 0.02}});
 
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.5);
-    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.02);
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_spheres, 0.5);
+    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_spheres, 0.02);
 
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_flume, mat_type_particles, 0.7);   // it is supposed to be
-    DEMSim.SetMaterialPropertyPair("Crr", mat_type_flume, mat_type_particles, 0.05);  // plexiglass
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_flume, mat_type_particles, 0.20);
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_flume, mat_spheres, 0.7);   // it is supposed to be
+    DEMSim.SetMaterialPropertyPair("Crr", mat_type_flume, mat_spheres, 0.05);  // plexiglass
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_flume, mat_spheres, 0.20);
 
     // Make ready for simulation
-    float step_size = 5.0e-6;
+    float step_size = 2.5e-6;
     DEMSim.InstructBoxDomainDimension({-0.10, 0.10}, {-0.02, 0.02}, {-0.50, 1.0});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
@@ -131,7 +130,7 @@ int main() {
         double radiusMax = radius;
 
         relPos.push_back(tmp);
-        mat.push_back(mat_type_particles);
+        mat.push_back(mat_spheres);
 
         radii.push_back(radiusMax);
 
@@ -145,7 +144,7 @@ int main() {
         std::cout << a << " chosen moi ..." << a / radius << std::endl;
 
         maxRadius = (radiusMax > maxRadius) ? radiusMax : maxRadius;
-        auto clump_ptr = DEMSim.LoadClumpType(mass, MOI, radii, relPos, mat_type_particles);
+        auto clump_ptr = DEMSim.LoadClumpType(mass, MOI, radii, relPos, mat_spheres);
         // clump_ptr->AssignName("fsfs");
         clump_types.push_back(clump_ptr);
     }

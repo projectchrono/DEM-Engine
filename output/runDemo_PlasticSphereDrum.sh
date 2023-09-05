@@ -1,9 +1,15 @@
 #!/usr/bin/bash
 
-counter=0
-for rolling_value in [0.00 0.01 0.02 0.04 0.08]; do
-    ((counter++))
-    echo "Iteration: $counter"
-    ../build/src/demo/DEMdemo_Granular_PlasticSphereDrum $counter $rolling_value
-    
+
+counterFolder=0
+
+for rolling_value in [0.00 0.01 0.02 0.04 0.08]; do    
+    counterCase=0
+    for contact_friction in [0.00, 0.01, 0.025, 0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90]; do
+        
+        echo "Iteration: $counterCase in folder $counterFolder"
+        ../build/src/demo/DEMdemo_Granular_PlasticSphereDrum $counterFolder $counterCase $contactFriction $rolling_value
+        ((counterCase++))
+    done
+    ((counterFolder++))
 done

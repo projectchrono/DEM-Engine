@@ -50,7 +50,7 @@ expCylWood=[0.02, 0.74
 7.01, 88.49];
 
 % folder=['../'  '../build/Test_Plastic_Cylinder_Sphere/Hopper/'];
-folder=['../'  '../build/Test_Plastic_Sphere_Cylinder/Hopper/'];
+folder=['../'  '../build/Test_PlasticCylinder/Hopper/5S_/'];
   % folder=['../'  '../build/DemoOutput_Granular_WoodenSphere/Hopper/'];
    % folder=['../'  '../build/DemoOutput_Granular_WoodenCylinder/Hopper/3S_/'];
 files=dir(folder);
@@ -74,6 +74,12 @@ time=(0:0.01:7)';
 level_z=zeros(numel(time),1);
 discharge=zeros(numel(time),1);
 
+cylinder=5;
+familyCyl=100;
+massCyl=pi*0.002^2*0.008*1128;
+familySph=99;
+massSph=4/3*pi*0.003^3*1592;
+
 
 for i=1:1:699
     file=['DEMdemo_output_' num2str(i,'%04i.csv')];
@@ -88,14 +94,16 @@ for i=1:1:699
     x=x(index);
     y=y(index);
     z=z(index);
+
     
     tempMin=0.0;
     if numel(index)>1
         % a=sort(vec,'descend');
         % value=mean(vec)+1.96*std(vec);
         % disp(value)
-        level_z(i)=numel(index)/totalMass;
-        discharge(i)=numel(index)/(totalMass*time(i));
+    totalMassTemp=numel(x);
+        level_z(i)=totalMassTemp/totalMass;
+        discharge(i)=totalMassTemp/(totalMass*time(i));
     end
     
 
