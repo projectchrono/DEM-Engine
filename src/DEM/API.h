@@ -269,6 +269,8 @@ class DEMSolver {
         auto_adjust_lower_proactive_ratio = hostClampBetween(ratio, 0.0, 1.0);
     }
     /// @brief Set the upper bound of kT update frequency (when it is adjusted automatically).
+    /// @details This only affects when the update freq is updated automatically. To manually control the freq, use
+    /// SetCDUpdateFreq then call DisableAdaptiveUpdateFreq.
     /// @param max_freq dT will not receive updates less frequently than 1 update per max_freq steps.
     void SetCDMaxUpdateFreq(unsigned int max_freq) { upper_bound_future_drift = 2 * max_freq; }
     /// @brief Set the number of steps dT configures its max drift more than average drift steps.
@@ -284,7 +286,7 @@ class DEMSolver {
     /// @return The current update frequency.
     float GetUpdateFreq() const;
 
-    /// Set the number of threads per block in force calculation (default 512).
+    /// Set the number of threads per block in force calculation (default 256).
     void SetForceCalcThreadsPerBlock(unsigned int nTh) { dT->DT_FORCE_CALC_NTHREADS_PER_BLOCK = nTh; }
 
     /// @brief Load a clump type into the API-level cache.
@@ -1084,7 +1086,7 @@ class DEMSolver {
 
     // Verbosity
     VERBOSITY verbosity = INFO;
-    // If true, dT should sort contact arrays (based on contact type) before usage 
+    // If true, dT should sort contact arrays (based on contact type) before usage
     bool should_sort_contacts = true;
     // If true, the solvers may need to do a per-step sweep to apply family number changes
     bool famnum_can_change_conditionally = false;
@@ -1231,7 +1233,7 @@ class DEMSolver {
     float auto_adjust_acc = 0.2;
     float auto_adjust_upper_proactive_ratio = 1.0;
     float auto_adjust_lower_proactive_ratio = 0.3;
-    unsigned int upper_bound_future_drift = 5000;
+    unsigned int upper_bound_future_drift = 200;
     float max_drift_ahead_of_avg_drift = 4.;
     float max_drift_multiple_of_avg_drift = 1.05;
     unsigned int max_drift_gauge_history_size = 200;

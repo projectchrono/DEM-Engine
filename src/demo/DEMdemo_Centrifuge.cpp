@@ -30,6 +30,9 @@ int main() {
     DEMSim.SetOutputContent(OUTPUT_CONTENT::FAMILY);
     // DEMSim.SetVerbosity(STEP_METRIC);
 
+    // If you don't need individual force information, then this option makes the solver run a bit faster.
+    DEMSim.SetNoForceRecord();
+
     // What will be loaded from the file, is a template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
     DEMClumpTemplate ellipsoid;
     ellipsoid.ReadComponentFromFile((GET_DATA_PATH() / "clumps/ellipsoid_2_1_1.csv").string());
@@ -165,8 +168,8 @@ int main() {
 
             // Torque on the side walls are?
             float3 drum_moi = Drum_tracker->MOI();
-            float3 drum_pos = Drum_tracker->ContactAngAccLocal();
-            float3 drum_torque = drum_pos * drum_moi;
+            float3 drum_acc = Drum_tracker->ContactAngAccLocal();
+            float3 drum_torque = drum_acc * drum_moi;
             std::cout << "Contact torque on the side walls is " << drum_torque.x << ", " << drum_torque.y << ", "
                       << drum_torque.z << std::endl;
 

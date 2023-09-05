@@ -373,6 +373,15 @@ inline void DEME_DEVICE_PTR_ALLOC(T*& ptr, size_t size) {
     DEME_GPU_CALL(cudaMalloc((void**)&ptr, size * sizeof(T)));
 }
 
+template <typename T>
+inline void DEME_DEVICE_PTR_DEALLOC(T*& ptr) {
+    cudaPointerAttributes attrib;
+    DEME_GPU_CALL(cudaPointerGetAttributes(&attrib, ptr));
+
+    if (attrib.type != cudaMemoryType::cudaMemoryTypeUnregistered)
+        DEME_GPU_CALL(cudaFree(ptr));
+}
+
 // Managed advise doesn't seem to do anything...
 #define DEME_ADVISE_DEVICE(vec, device) \
     { advise(vec, ManagedAdvice::PREFERRED_LOC, device); }

@@ -551,8 +551,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 DEME_ERROR(
                     "On average a sphere has %.7g contacts, more than the max allowance (%.7g).\nIf you believe "
                     "this is not abnormal, set the allowance high using SetErrorOutAvgContacts before "
-                    "initialization.\nOtherwise, the simulation may have diverged and relaxing the physics may help, "
-                    "such as decreasing the step size and modifying material properties.",
+                    "initialization.\nIf you think this is because dT drifting too much ahead of kT so the contact "
+                    "margin added is too big, use SetCDMaxUpdateFreq to limit the max dT future drift.\nOtherwise, the "
+                    "simulation may have diverged and relaxing the physics may help, such as decreasing the step size "
+                    "and modifying material properties.",
                     stateParams.avgCntsPerSphere, solverFlags.errOutAvgSphCnts);
             }
         }

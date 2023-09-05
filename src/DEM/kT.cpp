@@ -857,7 +857,28 @@ void DEMKinematicThread::initAllocation() {
     DEME_TRACKED_RESIZE_DEBUGPRINT(familyExtraMarginSize, NUM_AVAL_FAMILIES, "familyExtraMarginSize", 0);
 }
 
-void DEMKinematicThread::deallocateEverything() {}
+void DEMKinematicThread::deallocateEverything() {
+    DEME_DEVICE_PTR_DEALLOC(dT->granData->idGeometryA_buffer);
+    DEME_DEVICE_PTR_DEALLOC(dT->granData->idGeometryB_buffer);
+    DEME_DEVICE_PTR_DEALLOC(dT->granData->contactType_buffer);
+    DEME_DEVICE_PTR_DEALLOC(dT->granData->contactMapping_buffer);
+
+    DEME_DEVICE_PTR_DEALLOC(granData->voxelID_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->locX_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->locY_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->locZ_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->oriQ0_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->oriQ1_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->oriQ2_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->oriQ3_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->absVel_buffer);
+
+    DEME_DEVICE_PTR_DEALLOC(granData->familyID_buffer);
+
+    DEME_DEVICE_PTR_DEALLOC(granData->relPosNode1_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->relPosNode2_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->relPosNode3_buffer);
+}
 
 void DEMKinematicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles) {
     for (size_t i = 0; i < triangles.size(); i++) {

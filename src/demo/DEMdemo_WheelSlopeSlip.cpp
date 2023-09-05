@@ -240,8 +240,14 @@ int main() {
         DEMSim.SetExpandSafetyMultiplier(1.1);
         // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto
         // bin size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case
-        // setting init bin size may save the simulation. 
+        // setting init bin size may save the simulation.
         // DEMSim.SetInitBinSize(2 * scales.at(2));
+
+        // 256 or 512 are common choices. Note that in cases where the force model is modified, too many registers may
+        // be used in the kernel, so we have to reduce this number to use 256. In other cases (and most cases), 512 is
+        // fine and may make the code run a bit faster. Usually, the user do not have to call
+        // SetForceCalcThreadsPerBlock if they don't know the implication.
+        DEMSim.SetForceCalcThreadsPerBlock(512);
         DEMSim.Initialize();
 
         // Compress until dense enough
