@@ -1090,10 +1090,12 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
         outstrstream << ",absv";
     }
     if (solverFlags.outputFlags & OUTPUT_CONTENT::VEL) {
-        outstrstream << ",v_x,v_y,v_z";
+        outstrstream << "," + OUTPUT_FILE_VEL_X_COL_NAME + "," + OUTPUT_FILE_VEL_Y_COL_NAME + "," +
+                            OUTPUT_FILE_VEL_X_COL_NAME;
     }
     if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_VEL) {
-        outstrstream << ",w_x,w_y,w_z";
+        outstrstream << "," + OUTPUT_FILE_ANGVEL_X_COL_NAME + "," + OUTPUT_FILE_ANGVEL_Y_COL_NAME + "," +
+                            OUTPUT_FILE_ANGVEL_X_COL_NAME;
     }
     if (solverFlags.outputFlags & OUTPUT_CONTENT::ABS_ACC) {
         outstrstream << ",abs_acc";
@@ -1292,8 +1294,8 @@ void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile, unsigned int acc
     Qz.resize(num_output_clumps);
     clump_type.resize(num_output_clumps);
     pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT,
-             {OUTPUT_FILE_X_COL_NAME, OUTPUT_FILE_Y_COL_NAME, OUTPUT_FILE_Z_COL_NAME, "Qw", "Qx", "Qy", "Qz",
-              OUTPUT_FILE_CLUMP_TYPE_NAME},
+             {OUTPUT_FILE_X_COL_NAME, OUTPUT_FILE_Y_COL_NAME, OUTPUT_FILE_Z_COL_NAME, OUTPUT_FILE_QW_COL_NAME,
+              OUTPUT_FILE_QX_COL_NAME, OUTPUT_FILE_QY_COL_NAME, OUTPUT_FILE_QZ_COL_NAME, OUTPUT_FILE_CLUMP_TYPE_NAME},
              posX, posY, posZ, Qw, Qx, Qy, Qz, clump_type);
     // Write family numbers
     if (solverFlags.outputFlags & OUTPUT_CONTENT::FAMILY) {
@@ -1314,10 +1316,12 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
         outstrstream << ",absv";
     }
     if (solverFlags.outputFlags & OUTPUT_CONTENT::VEL) {
-        outstrstream << ",v_x,v_y,v_z";
+        outstrstream << "," + OUTPUT_FILE_VEL_X_COL_NAME + "," + OUTPUT_FILE_VEL_Y_COL_NAME + "," +
+                            OUTPUT_FILE_VEL_X_COL_NAME;
     }
     if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_VEL) {
-        outstrstream << ",w_x,w_y,w_z";
+        outstrstream << "," + OUTPUT_FILE_ANGVEL_X_COL_NAME + "," + OUTPUT_FILE_ANGVEL_Y_COL_NAME + "," +
+                            OUTPUT_FILE_ANGVEL_X_COL_NAME;
     }
     if (solverFlags.outputFlags & OUTPUT_CONTENT::ABS_ACC) {
         outstrstream << ",abs_acc";
