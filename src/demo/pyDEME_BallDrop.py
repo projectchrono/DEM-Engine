@@ -17,7 +17,7 @@ if __name__ == "__main__":
     out_dir = os.path.join(os.getcwd(), out_dir)
     os.makedirs(out_dir, exist_ok=True)
 
-    DEMSim = DEME.DEMSolver(2)
+    DEMSim = DEME.DEMSolver()
     DEMSim.SetVerbosity("STEP_METRIC")
     DEMSim.SetOutputFormat("CSV")
     DEMSim.SetOutputContent(["ABSV", "XYZ"])

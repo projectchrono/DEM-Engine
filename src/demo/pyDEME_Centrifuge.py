@@ -20,11 +20,14 @@ if __name__ == "__main__":
     out_dir = os.path.join(os.getcwd(), out_dir)
     os.makedirs(out_dir, exist_ok=True)
 
-    DEMSim = DEME.DEMSolver(2)
+    DEMSim = DEME.DEMSolver()
     DEMSim.SetOutputFormat("CSV")
     # Output family numbers (used to identify the centrifuging effect)
     DEMSim.SetOutputContent(["ABSV", "FAMILY"])
     # DEMSim.SetVerbosity("STEP_METRIC");
+
+    # If you don't need individual force information, then this option makes the solver run a bit faster.
+    DEMSim.SetNoForceRecord(True)
 
     mat_type_sand = DEMSim.LoadMaterial(
         {"E": 1e9, "nu": 0.3, "CoR": 0.6, "mu": 0.5, "Crr": 0.01})
@@ -33,7 +36,6 @@ if __name__ == "__main__":
     # Since two types of materials have the same mu, this following call does not change the default mu for their
     # interaction, it's still 0.5.
     DEMSim.SetMaterialPropertyPair("mu", mat_type_sand, mat_type_drum, 0.5)
-    
 
     # We can scale this general template to make it smaller, like a DEM particle that you would actually use
     scaling = 0.01

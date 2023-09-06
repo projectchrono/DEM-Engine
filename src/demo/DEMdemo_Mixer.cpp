@@ -65,7 +65,7 @@ int main() {
     // auto template_granular = DEMSim.LoadSphereType(granular_rad * granular_rad * granular_rad * 2.8e3 * 4 / 3 * 3.14,
     //                                                granular_rad, mat_type_granular);
     // Calculate its mass and MOI
-    float mass = 2.6e3 * 5.5886717;  // in kg or g
+    float mass = 2.6e3 * 5.5886717; 
     float3 MOI = make_float3(2.928, 2.6029, 3.9908) * 2.6e3;
     std::shared_ptr<DEMClumpTemplate> template_granular =
         DEMSim.LoadClumpType(mass, MOI, GetDEMEDataFile("clumps/3_clump.csv"), mat_type_granular);
