@@ -27,6 +27,9 @@ int main() {
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
 
+    // If you don't need individual force information, then this option makes the solver run a bit faster.
+    DEMSim.SetNoForceRecord();
+
     srand(42);
 
     // Scale factor
@@ -140,8 +143,14 @@ int main() {
     DEMSim.SetMaxVelocity(25.);
     // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto bin
     // size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case setting
-    // init bin size may save the simulation. 
+    // init bin size may save the simulation.
     // DEMSim.SetInitBinSize(min_rad * 6);
+
+    // 256 or 512 are common choices. Note that in cases where the force model is modified, too many registers may be
+    // used in the kernel, so we have to reduce this number to use 256. In other cases (and most cases), 512 is fine and
+    // may make the code run a bit faster. Usually, the user do not have to call SetForceCalcThreadsPerBlock if they
+    // don't know the implication.
+    DEMSim.SetForceCalcThreadsPerBlock(512);
     DEMSim.Initialize();
 
     path out_dir = current_path();
@@ -149,7 +158,7 @@ int main() {
     create_directory(out_dir);
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
-    
+
     for (int i = 0; i < 140; i++) {
         char filename[200], meshfile[200];
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);

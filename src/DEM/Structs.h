@@ -37,6 +37,16 @@ const std::string OUTPUT_FILE_X_COL_NAME = std::string("X");
 const std::string OUTPUT_FILE_Y_COL_NAME = std::string("Y");
 const std::string OUTPUT_FILE_Z_COL_NAME = std::string("Z");
 const std::string OUTPUT_FILE_R_COL_NAME = std::string("r");
+const std::string OUTPUT_FILE_QW_COL_NAME = std::string("Qw");
+const std::string OUTPUT_FILE_QX_COL_NAME = std::string("Qx");
+const std::string OUTPUT_FILE_QY_COL_NAME = std::string("Qy");
+const std::string OUTPUT_FILE_QZ_COL_NAME = std::string("Qz");
+const std::string OUTPUT_FILE_VEL_X_COL_NAME = std::string("v_x");
+const std::string OUTPUT_FILE_VEL_Y_COL_NAME = std::string("v_y");
+const std::string OUTPUT_FILE_VEL_Z_COL_NAME = std::string("v_z");
+const std::string OUTPUT_FILE_ANGVEL_X_COL_NAME = std::string("w_x");
+const std::string OUTPUT_FILE_ANGVEL_Y_COL_NAME = std::string("w_y");
+const std::string OUTPUT_FILE_ANGVEL_Z_COL_NAME = std::string("w_z");
 const std::string OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
 const std::filesystem::path USER_SCRIPT_PATH = RuntimeDataHelper::data_path / "kernel" / "DEMUserScripts";
 // Column names for contact pair output file
@@ -371,6 +381,15 @@ inline void DEME_DEVICE_PTR_ALLOC(T*& ptr, size_t size) {
     if (attrib.type != cudaMemoryType::cudaMemoryTypeUnregistered)
         DEME_GPU_CALL(cudaFree(ptr));
     DEME_GPU_CALL(cudaMalloc((void**)&ptr, size * sizeof(T)));
+}
+
+template <typename T>
+inline void DEME_DEVICE_PTR_DEALLOC(T*& ptr) {
+    cudaPointerAttributes attrib;
+    DEME_GPU_CALL(cudaPointerGetAttributes(&attrib, ptr));
+
+    if (attrib.type != cudaMemoryType::cudaMemoryTypeUnregistered)
+        DEME_GPU_CALL(cudaFree(ptr));
 }
 
 // Managed advise doesn't seem to do anything...

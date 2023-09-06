@@ -26,6 +26,9 @@ int main() {
     // I generally use this demo to inspect if I have "lost contact pairs", so the verbosity is set to STEP_METRIC...
     DEMSim.SetVerbosity(STEP_METRIC);
 
+    // If you don't need individual force information, then this option makes the solver run a bit faster.
+    DEMSim.SetNoForceRecord();
+
     srand(759);
 
     // total number of random clump templates to generate

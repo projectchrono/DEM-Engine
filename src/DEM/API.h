@@ -269,6 +269,8 @@ class DEMSolver {
         auto_adjust_lower_proactive_ratio = hostClampBetween(ratio, 0.0, 1.0);
     }
     /// @brief Set the upper bound of kT update frequency (when it is adjusted automatically).
+    /// @details This only affects when the update freq is updated automatically. To manually control the freq, use
+    /// SetCDUpdateFreq then call DisableAdaptiveUpdateFreq.
     /// @param max_freq dT will not receive updates less frequently than 1 update per max_freq steps.
     void SetCDMaxUpdateFreq(unsigned int max_freq) { upper_bound_future_drift = 2 * max_freq; }
     /// @brief Set the number of steps dT configures its max drift more than average drift steps.
@@ -284,7 +286,7 @@ class DEMSolver {
     /// @return The current update frequency.
     float GetUpdateFreq() const;
 
-    /// Set the number of threads per block in force calculation (default 512).
+    /// Set the number of threads per block in force calculation (default 256).
     void SetForceCalcThreadsPerBlock(unsigned int nTh) { dT->DT_FORCE_CALC_NTHREADS_PER_BLOCK = nTh; }
 
     /// @brief Load a clump type into the API-level cache.
@@ -849,14 +851,19 @@ class DEMSolver {
     /// Write the current status of all meshes to a file
     void WriteMeshFile(const std::string& outfilename) const;
 
-    /// Read clump coordinates from a CSV file (whose format is consistent with this solver's clump output file).
-    /// Returns an unordered_map which maps each unique clump type name to a vector of float3 (XYZ coordinates).
-    static std::unordered_map<std::string, std::vector<float3>> ReadClumpXyzFromCsv(
+    /// @brief Read 3 columns of your choice from a CSV filem and group them by clump_header.
+    /// @param infilename CSV filename.
+    /// @param x_header CSV header for the first col.
+    /// @param y_header CSV header for the second col.
+    /// @param z_header CSV header for the third col.
+    /// @param clump_header The identifier column to separate types of clumps.
+    /// @return Unordered_map which maps types of clumps to a respective vector of float3s.
+    static std::unordered_map<std::string, std::vector<float3>> ReadClumpFloat3FromCsv(
         const std::string& infilename,
-        const std::string& clump_header = OUTPUT_FILE_CLUMP_TYPE_NAME,
-        const std::string& x_header = OUTPUT_FILE_X_COL_NAME,
-        const std::string& y_header = OUTPUT_FILE_Y_COL_NAME,
-        const std::string& z_header = OUTPUT_FILE_Z_COL_NAME) {
+        const std::string& x_header,
+        const std::string& y_header,
+        const std::string& z_header,
+        const std::string& clump_header) {
         std::unordered_map<std::string, std::vector<float3>> type_xyz_map;
         io::CSVReader<4, io::trim_chars<' ', '\t'>, io::no_quote_escape<','>, io::throw_on_overflow,
                       io::empty_line_comment>
@@ -871,21 +878,35 @@ class DEMSolver {
         }
         return type_xyz_map;
     }
+    /// Read clump coordinates from a CSV file (whose format is consistent with this solver's clump output file).
+    /// Returns an unordered_map which maps each unique clump type name to a vector of float3 (XYZ coordinates).
+    static std::unordered_map<std::string, std::vector<float3>> ReadClumpXyzFromCsv(const std::string& infilename) {
+        return ReadClumpFloat3FromCsv(infilename, OUTPUT_FILE_X_COL_NAME, OUTPUT_FILE_Y_COL_NAME,
+                                      OUTPUT_FILE_Z_COL_NAME, OUTPUT_FILE_CLUMP_TYPE_NAME);
+    }
+    /// Read clump velocity from a CSV file (whose format is consistent with this solver's clump output file).
+    /// Returns an unordered_map which maps each unique clump type name to a vector of float3 (velocity).
+    static std::unordered_map<std::string, std::vector<float3>> ReadClumpVelFromCsv(const std::string& infilename) {
+        return ReadClumpFloat3FromCsv(infilename, OUTPUT_FILE_VEL_X_COL_NAME, OUTPUT_FILE_VEL_Y_COL_NAME,
+                                      OUTPUT_FILE_VEL_Z_COL_NAME, OUTPUT_FILE_CLUMP_TYPE_NAME);
+    }
+    /// Read clump angular velocity from a CSV file (whose format is consistent with this solver's clump output file).
+    /// Returns an unordered_map which maps each unique clump type name to a vector of float3 (angular velocity).
+    static std::unordered_map<std::string, std::vector<float3>> ReadClumpAngVelFromCsv(const std::string& infilename) {
+        return ReadClumpFloat3FromCsv(infilename, OUTPUT_FILE_ANGVEL_X_COL_NAME, OUTPUT_FILE_ANGVEL_Y_COL_NAME,
+                                      OUTPUT_FILE_ANGVEL_Z_COL_NAME, OUTPUT_FILE_CLUMP_TYPE_NAME);
+    }
+
     /// Read clump quaternions from a CSV file (whose format is consistent with this solver's clump output file).
     /// Returns an unordered_map which maps each unique clump type name to a vector of float4 (4 components of the
     /// quaternion, (Qx, Qy, Qz, Qw) = (0, 0, 0, 1) means 0 rotation).
-    static std::unordered_map<std::string, std::vector<float4>> ReadClumpQuatFromCsv(
-        const std::string& infilename,
-        const std::string& clump_header = OUTPUT_FILE_CLUMP_TYPE_NAME,
-        const std::string& qw_header = "Qw",
-        const std::string& qx_header = "Qx",
-        const std::string& qy_header = "Qy",
-        const std::string& qz_header = "Qz") {
+    static std::unordered_map<std::string, std::vector<float4>> ReadClumpQuatFromCsv(const std::string& infilename) {
         std::unordered_map<std::string, std::vector<float4>> type_Q_map;
         io::CSVReader<5, io::trim_chars<' ', '\t'>, io::no_quote_escape<','>, io::throw_on_overflow,
                       io::empty_line_comment>
             in(infilename);
-        in.read_header(io::ignore_extra_column, clump_header, qw_header, qx_header, qy_header, qz_header);
+        in.read_header(io::ignore_extra_column, OUTPUT_FILE_CLUMP_TYPE_NAME, OUTPUT_FILE_QW_COL_NAME,
+                       OUTPUT_FILE_QX_COL_NAME, OUTPUT_FILE_QY_COL_NAME, OUTPUT_FILE_QZ_COL_NAME);
         std::string type_name;
         float4 Q;
         size_t count = 0;
@@ -1084,7 +1105,7 @@ class DEMSolver {
 
     // Verbosity
     VERBOSITY verbosity = INFO;
-    // If true, dT should sort contact arrays (based on contact type) before usage 
+    // If true, dT should sort contact arrays (based on contact type) before usage
     bool should_sort_contacts = true;
     // If true, the solvers may need to do a per-step sweep to apply family number changes
     bool famnum_can_change_conditionally = false;
@@ -1231,7 +1252,7 @@ class DEMSolver {
     float auto_adjust_acc = 0.2;
     float auto_adjust_upper_proactive_ratio = 1.0;
     float auto_adjust_lower_proactive_ratio = 0.3;
-    unsigned int upper_bound_future_drift = 5000;
+    unsigned int upper_bound_future_drift = 200;
     float max_drift_ahead_of_avg_drift = 4.;
     float max_drift_multiple_of_avg_drift = 1.05;
     unsigned int max_drift_gauge_history_size = 200;
