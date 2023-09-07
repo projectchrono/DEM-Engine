@@ -26,6 +26,20 @@ DEMSolver::DEMSolver(unsigned int nGPUs) {
 
     // 2 means 2 threads (nGPUs is currently not used)
     dTkT_GpuManager = new GpuManager(2);
+    int ndevices = dTkT_GpuManager->getNumDevices();
+    if (ndevices == 0) {
+        DEME_ERROR(
+            "No GPU device is detected. Try lspci and see what you get.\nIf you indeed have GPU devices, maybe you "
+            "should try rebooting or reinstalling cuda components?");
+    } else if (ndevices == 1) {
+        DEME_WARNING(
+            "One GPU device is detected. Currently, DEME's performance edge is limited with only one GPU.\nTry "
+            "allocating 2 GPU devices if possible.");
+    } else if (ndevices > 2) {
+        DEME_WARNING(
+            "More than two GPU devices are detected.\nCurrently, DEME can make use of at most two devices.\nMore "
+            "devices will not improve the performance.");
+    }
 
     dT = new DEMDynamicThread(dTMain_InteractionManager, dTkT_InteractionManager, dTkT_GpuManager);
     kT = new DEMKinematicThread(kTMain_InteractionManager, dTkT_InteractionManager, dTkT_GpuManager);
