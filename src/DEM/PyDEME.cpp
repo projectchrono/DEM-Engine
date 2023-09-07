@@ -31,7 +31,7 @@ PYBIND11_MODULE(DEME, obj) {
 
     py::module _site = py::module_::import("site");
     std::string loc = _site.attr("getsitepackages")().cast<py::list>()[0].cast<py::str>();
-    
+
     // Setting path prefix
     std::filesystem::path path = loc;
     RuntimeDataHelper::SetPathPrefix(path);
@@ -127,9 +127,14 @@ PYBIND11_MODULE(DEME, obj) {
              "Set the position of this tracked object.", py::arg("pos"), py::arg("offset") = 0)
         .def("GetContactAcc",
              static_cast<std::vector<float> (deme::DEMTracker::*)(size_t)>(&deme::DEMTracker::GetContactAcc))
-        .def("GetMOI", &deme::DEMTracker::GetMOI)
+        .def("MOI", &deme::DEMTracker::GetMOI, py::arg("offset") = 0)
         .def("Mass", &deme::DEMTracker::Mass)
-        .def("GetContactAngAccLocal", &deme::DEMTracker::GetContactAngAccLocal)
+        .def("ContactAngAccLocal", &deme::DEMTracker::GetContactAngAccLocal, py::arg("offset") = 0)
+        .def("GetOriQ", &deme::DEMTracker::GetOriQ)
+        .def("GetVel", &deme::DEMTracker::GetVel)
+        .def("GetAngVelGlobal", &deme::DEMTracker::GetAngVelGlobal)
+        .def("GetAngVelLocal", &deme::DEMTracker::GetAngVelLocal)
+        .def("GetPos", &deme::DEMTracker::GetPos)
         .def("GetMesh", &deme::DEMTracker::GetMesh);
 
     py::class_<deme::DEMForceModel>(obj, "DEMForceModel")
@@ -159,6 +164,10 @@ PYBIND11_MODULE(DEME, obj) {
 
     py::class_<deme::DEMSolver>(obj, "DEMSolver")
         .def(py::init<unsigned int>(), py::arg("nGPUs") = 2)
+        .def("SetNoForceRecord", &deme::DEMSolver::SetNoForceRecord,
+             "Instruct the solver that there is no need to record the contact force (and contact point location etc.) "
+             "in an array.",
+             py::arg("flag") = true)
         .def("LoadSphereType", &deme::DEMSolver::LoadSphereType)
         .def("EnsureKernelErrMsgLineNum", &deme::DEMSolver::EnsureKernelErrMsgLineNum,
              "If true, each jitification string substitution will do a one-liner to one-liner replacement, so that if "

@@ -132,7 +132,7 @@ if __name__ == "__main__":
 
         mixer_moi = np.array(mixer_tracker.MOI())
         mixer_acc = np.array(mixer_tracker.ContactAngAccLocal())
-        mixer_torque = np.dot(mixer_acc, mixer_moi)
+        mixer_torque = np.cross(mixer_acc, mixer_moi)
         print(
             f"Contact torque on the mixer is {mixer_torque[0]}, {mixer_torque[1]}, {mixer_torque[2]}")
 
