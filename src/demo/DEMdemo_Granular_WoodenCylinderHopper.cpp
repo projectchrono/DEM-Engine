@@ -67,7 +67,7 @@ int main() {
     auto mat_type_flume = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
 
-    auto mat_cyl = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.60}, {"Crr", 0.06}});
+    auto mat_cyl = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.55}, {"mu", 0.60}, {"Crr", 0.06}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_cyl, 0.5);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_cyl, 0.02);
@@ -77,7 +77,7 @@ int main() {
     DEMSim.SetMaterialPropertyPair("mu", mat_type_flume, mat_cyl, 0.30);
 
     // Make ready for simulation
-    float step_size = 5.0e-6;
+    float step_size = 2.50e-6;
     DEMSim.InstructBoxDomainDimension({-0.10, 0.10}, {-0.02, 0.02}, {-0.50, 1.0});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
