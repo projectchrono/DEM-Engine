@@ -238,7 +238,7 @@ class DEMTracker {
     /// @brief Set a wildcard value of the owner this tracker is tracking.
     /// @param name Name of the wildcard.
     /// @param wc Wildcard values as a vector (must have same length as the number of tracked owners).
-    void SetOwnerWildcardValue(const std::string& name, const std::vector<float>& wc);
+    void SetOwnerWildcardValues(const std::string& name, const std::vector<float>& wc);
 
     /// @brief Set a wildcard value of the geometry entity this tracker is tracking.
     /// @param name Name of the wildcard.
@@ -248,7 +248,7 @@ class DEMTracker {
     /// @brief Set a wildcard value of the geometry entities this tracker is tracking.
     /// @param name Name of the wildcard.
     /// @param wc Wildcard values as a vector (must have same length as the number of tracked geometry entities).
-    void SetGeometryWildcardValue(const std::string& name, const std::vector<float>& wc);
+    void SetGeometryWildcardValues(const std::string& name, const std::vector<float>& wc);
 
     /// @brief Get all contact forces that concern this track object, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object

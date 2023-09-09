@@ -198,7 +198,7 @@ int main() {
 
     // We demonstrate using trackers to set a geometry wildcard. Q is now set for each triangle facet, and it's
     // the opposite charge to the particles. So the rod should attract the particles.
-    rod_tracker->SetGeometryWildcardValue("Q", std::vector<float>(num_tri, -10. * init_charge));
+    rod_tracker->SetGeometryWildcardValues("Q", std::vector<float>(num_tri, -10. * init_charge));
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_end; t += step_size, step_count++) {

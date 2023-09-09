@@ -621,8 +621,8 @@ void DEMTracker::SetOwnerWildcardValue(const std::string& name, float wc, size_t
     sys->SetOwnerWildcardValue(obj->ownerID + offset, name, wc, 1);
 }
 
-void DEMTracker::SetOwnerWildcardValue(const std::string& name, const std::vector<float>& wc) {
-    assertOwnerSize(wc.size(), "SetOwnerWildcardValue");
+void DEMTracker::SetOwnerWildcardValues(const std::string& name, const std::vector<float>& wc) {
+    assertOwnerSize(wc.size(), "SetOwnerWildcardValues");
     sys->SetOwnerWildcardValue(obj->ownerID, name, wc);
 }
 
@@ -640,18 +640,18 @@ void DEMTracker::SetGeometryWildcardValue(const std::string& name, float wc, siz
     }
 }
 
-void DEMTracker::SetGeometryWildcardValue(const std::string& name, const std::vector<float>& wc) {
+void DEMTracker::SetGeometryWildcardValues(const std::string& name, const std::vector<float>& wc) {
     switch (obj->obj_type) {
         case (OWNER_TYPE::CLUMP):
-            assertGeoSize(wc.size(), "SetGeometryWildcardValue", "spheres");
+            assertGeoSize(wc.size(), "SetGeometryWildcardValues", "spheres");
             sys->SetSphereWildcardValue(obj->geoID, name, wc);
             break;
         case (OWNER_TYPE::ANALYTICAL):
-            assertGeoSize(wc.size(), "SetGeometryWildcardValue", "analytical components");
+            assertGeoSize(wc.size(), "SetGeometryWildcardValues", "analytical components");
             sys->SetAnalWildcardValue(obj->geoID, name, wc);
             break;
         case (OWNER_TYPE::MESH):
-            assertGeoSize(wc.size(), "SetGeometryWildcardValue", "triangles");
+            assertGeoSize(wc.size(), "SetGeometryWildcardValues", "triangles");
             sys->SetTriWildcardValue(obj->geoID, name, wc);
             break;
     }
