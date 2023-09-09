@@ -10,7 +10,7 @@ do
     do
         echo "Iteration: $counterCase in folder $counterFolder"
         echo "Parameters: mu=$contact_friction and Cr $rolling_value"
-        #../build/src/demo/DEMdemo_Granular_PlasticSphereDrum $counterFolder $counterCase $contactFriction $rolling_value
+        ../build/src/demo/DEMdemo_Granular_PlasticSphereDrum $counterFolder $counterCase $contactFriction $rolling_value
         ((counterCase++))
     done
     ((counterFolder++))
