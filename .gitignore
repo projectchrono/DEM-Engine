@@ -4,3 +4,5 @@ build*
 *.csv
 *.egg-info/
 .cache/
+dist/
+

@@ -47,13 +47,17 @@ PYBIND11_MODULE(DEME, obj) {
                                                             float, float)>(&deme::DEMBoxGridSampler),
             py::arg("BoxCenter"), py::arg("HalfDims"), py::arg("GridSizeX"), py::arg("GridSizeY") = -1.0,
             py::arg("GridSizeZ") = -1.0);
-
     obj.def(
         "DEMBoxHCPSampler",
         static_cast<std::vector<std::vector<float>> (*)(const std::vector<float>&, const std::vector<float>&, float)>(
             &deme::DEMBoxHCPSampler));
+    obj.def("DEMCylSurfSampler",
+            static_cast<std::vector<std::vector<float>> (*)(const std::vector<float>&, const std::vector<float>&, float,
+                                                            float, float, float)>(&deme::DEMCylSurfSampler),
+            py::arg("CylCenter"), py::arg("CylAxis"), py::arg("CylRad"), py::arg("CylHeight"), py::arg("ParticleRad"),
+            py::arg("spacing") = 1.2);
 
-    obj.attr("PI") = py::float_(3.14);
+    obj.attr("PI") = py::float_(3.141592653589793238462643383279502884197);
 
     py::class_<RuntimeDataHelper>(obj, "RuntimeDataHelper")
         .def(py::init<>())
@@ -122,20 +126,82 @@ PYBIND11_MODULE(DEME, obj) {
 
     py::class_<deme::DEMTracker, std::shared_ptr<deme::DEMTracker>>(obj, "Tracker")
         .def(py::init<deme::DEMSolver*>())
+        .def("GetOwnerID", &deme::DEMTracker::GetOwnerID, py::arg("offset") = 0)
+
+        .def("Pos", &deme::DEMTracker::GetPos, py::arg("offset") = 0)
+        .def("AngVelLocal", &deme::DEMTracker::GetAngVelLocal, py::arg("offset") = 0)
+        .def("AngVelGlobal", &deme::DEMTracker::GetAngVelGlobal, py::arg("offset") = 0)
+        .def("Vel", &deme::DEMTracker::GetVel, py::arg("offset") = 0)
+        .def("OriQ", &deme::DEMTracker::GetOriQ, py::arg("offset") = 0)
+        .def("MOI", &deme::DEMTracker::GetMOI, py::arg("offset") = 0)
+        .def("Mass", &deme::DEMTracker::Mass)
+        .def("GetFamily", &deme::DEMTracker::GetFamily, py::arg("offset") = 0)
+        .def("ContactAcc", &deme::DEMTracker::GetContactAcc, py::arg("offset") = 0)
+        .def("ContactAngAccLocal", &deme::DEMTracker::GetContactAngAccLocal, py::arg("offset") = 0)
+        .def("ContactAngAccGlobal", &deme::DEMTracker::GetContactAngAccGlobal, py::arg("offset") = 0)
+
+        .def("GetOwnerWildcardValue",
+             static_cast<float (deme::DEMTracker::*)(const std::string&, size_t)>(
+                 &deme::DEMTracker::GetOwnerWildcardValue),
+             py::arg("name"), py::arg("offset") = 0)
+        .def("GetGeometryWildcardValue",
+             static_cast<std::vector<float> (deme::DEMTracker::*)(const std::string&)>(
+                 &deme::DEMTracker::GetGeometryWildcardValue),
+             py::arg("name"))
+        .def("GetGeometryWildcardValue",
+             static_cast<float (deme::DEMTracker::*)(const std::string&, size_t)>(
+                 &deme::DEMTracker::GetGeometryWildcardValue),
+             py::arg("name"), py::arg("offset"))
+
         .def("SetPos",
              static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::SetPos),
              "Set the position of this tracked object.", py::arg("pos"), py::arg("offset") = 0)
-        .def("GetContactAcc",
-             static_cast<std::vector<float> (deme::DEMTracker::*)(size_t)>(&deme::DEMTracker::GetContactAcc))
-        .def("MOI", &deme::DEMTracker::GetMOI, py::arg("offset") = 0)
-        .def("Mass", &deme::DEMTracker::Mass)
-        .def("ContactAngAccLocal", &deme::DEMTracker::GetContactAngAccLocal, py::arg("offset") = 0)
-        .def("GetOriQ", &deme::DEMTracker::GetOriQ)
-        .def("GetVel", &deme::DEMTracker::GetVel)
-        .def("GetAngVelGlobal", &deme::DEMTracker::GetAngVelGlobal)
-        .def("GetAngVelLocal", &deme::DEMTracker::GetAngVelLocal)
-        .def("GetPos", &deme::DEMTracker::GetPos)
-        .def("GetMesh", &deme::DEMTracker::GetMesh);
+        .def("SetAngVel",
+             static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::SetAngVel),
+             py::arg("angVel"), py::arg("offset") = 0)
+        .def("SetVel",
+             static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::SetVel),
+             py::arg("vel"), py::arg("offset") = 0)
+        .def("SetOriQ",
+             static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::SetOriQ),
+             py::arg("oriQ"), py::arg("offset") = 0)
+        .def("AddAcc",
+             static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::AddAcc),
+             py::arg("acc"), py::arg("offset") = 0)
+        .def("AddAngAcc",
+             static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::AddAngAcc),
+             py::arg("angAcc"), py::arg("offset") = 0)
+        .def("SetFamily", static_cast<void (deme::DEMTracker::*)(unsigned int)>(&deme::DEMTracker::SetFamily),
+             "Change the family numbers of all the entities tracked by this tracker.", py::arg("fam_num"))
+        .def("SetFamilyList",
+             static_cast<void (deme::DEMTracker::*)(const std::vector<unsigned int>&)>(&deme::DEMTracker::SetFamily),
+             "Change the family numbers of all the entities tracked by this tracker by supplying a list the same "
+             "length as the number of tracked entities.",
+             py::arg("fam_nums"))
+        .def("SetFamilyOf", static_cast<void (deme::DEMTracker::*)(unsigned int, size_t)>(&deme::DEMTracker::SetFamily),
+             "Change the family number of one entities tracked by this tracker.", py::arg("fam_num"),
+             py::arg("offset") = 0)
+
+        .def("UpdateMesh",
+             static_cast<void (deme::DEMTracker::*)(const std::vector<std::vector<float>>&)>(
+                 &deme::DEMTracker::UpdateMesh),
+             py::arg("new_nodes"))
+        .def("UpdateMeshByIncrement",
+             static_cast<void (deme::DEMTracker::*)(const std::vector<std::vector<float>>&)>(
+                 &deme::DEMTracker::UpdateMeshByIncrement),
+             py::arg("deformation"))
+
+        .def("GetMeshNodesGlobal", static_cast<std::vector<std::vector<float>> (deme::DEMTracker::*)()>(
+                                       &deme::DEMTracker::GetMeshNodesGlobalAsVectorOfVector))
+
+        .def("GetMesh", &deme::DEMTracker::GetMesh)
+
+        .def("SetOwnerWildcardValue", &deme::DEMTracker::SetOwnerWildcardValue, py::arg("name"), py::arg("wc"),
+             py::arg("offset") = 0)
+        .def("SetOwnerWildcardValues", &deme::DEMTracker::SetOwnerWildcardValues, py::arg("name"), py::arg("wc"))
+        .def("SetGeometryWildcardValue", &deme::DEMTracker::SetGeometryWildcardValue, py::arg("name"), py::arg("wc"),
+             py::arg("offset") = 0)
+        .def("SetGeometryWildcardValues", &deme::DEMTracker::SetGeometryWildcardValues, py::arg("name"), py::arg("wc"));
 
     py::class_<deme::DEMForceModel>(obj, "DEMForceModel")
         .def(py::init<deme::FORCE_MODEL>())
@@ -466,6 +532,8 @@ PYBIND11_MODULE(DEME, obj) {
         .def("DoDynamics", &deme::DEMSolver::DoDynamics,
              "Advance simulation by this amount of time, and at the end of this call, synchronize kT and dT. This is "
              "suitable for a longer call duration and without co-simulation.")
+        .def("DoStepDynamics", &deme::DEMSolver::DoStepDynamics,
+             "Equivalent to calling DoDynamics with the time step size as the argument.")
         .def("DoDynamicsThenSync", &deme::DEMSolver::DoDynamicsThenSync,
              "Advance simulation by this amount of time, and at the end of this call, synchronize kT and dT. This is "
              "suitable for a longer call duration and without co-simulation.")

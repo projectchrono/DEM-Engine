@@ -363,7 +363,7 @@ if __name__ == "__main__":
 
     # We demonstrate using trackers to set a geometry wildcard. Q is now set for each triangle facet, and it's
     # the opposite charge to the particles. So the rod should attract the particles.
-    rod_tracker.SetGeometryWildcardValue("Q", [-10. * init_charge] * num_tri)
+    rod_tracker.SetGeometryWildcardValues("Q", [-10. * init_charge] * num_tri)
 
     t = 0.
     while (t < sim_end):
