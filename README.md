@@ -62,20 +62,20 @@ Some additional troubleshooting tips for getting CUDA ready:
 - I recommend just getting CUDA 12.0, or a CUDA 11 distro. CUDA 12.1 and 12.2 appears to cause troubles with jitify.
 - On WSL this code may be buildable (and [this](https://docs.nvidia.com/cuda/wsl-user-guide/index.html) is the guide for installing CUDA on WSL), but may not run. This is due to the [many limitations on unified memory and pinned memory support](https://docs.nvidia.com/cuda/wsl-user-guide/index.html#known-limitations-for-linux-cuda-applications) on WSL. A native Linux machine or cluster is recommended.
 
-Once CUDA is ready, you can install _pyDEME_ via `conda install`:
-
+Once CUDA is ready, you can `pip` install _pyDEME_. In your conda environement, do
+```
+conda create -n pyDEME python=3.11
+conda activate pyDEME
+conda install cmake
+pip3 install DEME
+```
+~~You can also install pyDEME via `conda install`:~~ (Please don't use `conda install` for now, it is not yet behaving correctly)
 ```
 conda create -n pyDEME python=3.11
 conda activate pyDEME
 conda install -c projectchrono pydeme
 ```
 `pyDEME` can be replaced with an environement name of your choice. Other Python versions other than 3.11 should work as well.
-
-You can also `pip` install _pyDEME_. In your conda environement, do
-```
-conda install cmake
-pip3 install DEME
-```
 
 Then [Python scripts](https://github.com/projectchrono/DEM-Engine/tree/pyDEME_demo/src/demo) can be executed in this environment. To understand the content of each Python demo, refer to the explanations of the C++ demos with the same names in **Examples** section.
 
