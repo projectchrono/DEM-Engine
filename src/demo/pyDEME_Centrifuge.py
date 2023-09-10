@@ -92,7 +92,7 @@ if __name__ == "__main__":
     drum_family = 100
     Drum.SetFamily(drum_family)
     # The drum rotates (facing Z direction)
-    DEMSim.SetFamilyPrescribedAngVel(drum_family, "0", "0", "6.0", False)
+    DEMSim.SetFamilyPrescribedAngVel(drum_family, "0", "0", "6.0")
     # Then add planes to `close up' the drum. We add it as another object b/c we want to track the force on it
     # separately.
     top_bot_planes = DEMSim.AddExternalObject()
@@ -149,7 +149,7 @@ if __name__ == "__main__":
     t = 0.
     while (t < time_end):
         if (curr_step % out_steps == 0):
-            print(f"Frame: {currframe}")
+            print(f"Frame: {currframe}", flush=True)
             filename = os.path.join(
                 out_dir, f"DEMdemo_output_{currframe:04d}.csv")
             DEMSim.WriteSphereFile(filename)
@@ -157,19 +157,21 @@ if __name__ == "__main__":
 
             DEMSim.ShowThreadCollaborationStats()
             max_v = max_v_finder.GetValue()
-            print(f"Max velocity of any point in simulation is {max_v}")
+            print(
+                f"Max velocity of any point in simulation is {max_v}", flush=True)
 
             # Torque on the side walls are?
-            drum_moi = np.array(Drum_tracker.GetMOI(0))
-            drum_pos = np.array(Drum_tracker.GetContactAngAccLocal(0))
+            drum_moi = np.array(Drum_tracker.MOI())
+            drum_pos = np.array(Drum_tracker.ContactAngAccLocal())
             drum_torque = np.multiply(drum_pos, drum_moi)
             print(
-                f"Contact torque on the side walls is {drum_torque[0]}, {drum_torque[1]}, {drum_torque[2]}")
+                f"Contact torque on the side walls is {drum_torque[0]}, {drum_torque[1]}, {drum_torque[2]}", flush=True)
 
             # The force on the bottom plane?
             force_on_BC = np.array(
-                planes_tracker.GetContactAcc(0)) * planes_tracker.Mass(0)
-            print(f"Contact force on bottom plane is {force_on_BC[2]}")
+                planes_tracker.ContactAcc()) * planes_tracker.Mass()
+            print(
+                f"Contact force on bottom plane is {force_on_BC[2]}", flush=True)
 
         DEMSim.DoDynamics(step_size)
         t += step_size

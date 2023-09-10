@@ -51,6 +51,8 @@ You are welcome to discuss _DEME_ on [Project Chrono's forum](https://groups.goo
 
 <h2 id="pyDEME">PyDEME</h2>
 
+#### _pyDEME_ is BEING TESTED, many methods are not yet wrapped and the scripts may not work yet. For now it is recommended to <a href="#installation">install _DEME_ from source</a>.
+
 _DEME_ is now available as a Python package, _pyDEME_.
 
 To install _pyDEME_, use a Linux machine, install CUDA if you do not already have it. Useful installation instructions may be found [here](https://developer.nvidia.com/cuda-downloads). 
@@ -60,13 +62,18 @@ Some additional troubleshooting tips for getting CUDA ready:
 - I recommend just getting CUDA 12.0, or a CUDA 11 distro. CUDA 12.1 and 12.2 appears to cause troubles with jitify.
 - On WSL this code may be buildable (and [this](https://docs.nvidia.com/cuda/wsl-user-guide/index.html) is the guide for installing CUDA on WSL), but may not run. This is due to the [many limitations on unified memory and pinned memory support](https://docs.nvidia.com/cuda/wsl-user-guide/index.html#known-limitations-for-linux-cuda-applications) on WSL. A native Linux machine or cluster is recommended.
 
-Once CUDA is ready, you can install _pyDEME_ via `pip`:
-
+Once CUDA is ready, you can `pip` install _pyDEME_. In your conda environement, do
 ```
 conda create -n pyDEME python=3.11
 conda activate pyDEME
 conda install cmake
 pip3 install DEME
+```
+~~You can also install pyDEME via `conda install`:~~ (Please don't use `conda install` for now, it is not yet behaving correctly)
+```
+conda create -n pyDEME python=3.11
+conda activate pyDEME
+conda install -c projectchrono pydeme
 ```
 `pyDEME` can be replaced with an environement name of your choice. Other Python versions other than 3.11 should work as well.
 

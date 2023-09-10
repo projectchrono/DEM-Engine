@@ -63,7 +63,7 @@ if __name__ == "__main__":
     sample_halfheight = world_size / 8
     sample_center = [world_size / 2, world_size / 2, sample_halfheight + 0.05]
     sample_halfwidth = world_size / 2 * 0.95
-    
+
     input_xyz = DEME.DEMBoxHCPSampler(sample_center, [
                                       sample_halfwidth, sample_halfwidth, sample_halfheight], 2.01 * terrain_rad)
     DEMSim.AddClumps(template_terrain, input_xyz)
@@ -94,7 +94,7 @@ if __name__ == "__main__":
     # We can let it settle first
     t = 0.
     while (t < settle_time):
-        print(f"Frame: {currframe}")
+        print(f"Frame: {currframe}", flush=True)
         filename = os.path.join(out_dir, f"DEMdemo_output_{currframe:04d}.csv")
         meshname = os.path.join(out_dir, f"DEMdemo_mesh_{currframe:04d}.vtk")
         DEMSim.WriteSphereFile(filename)
@@ -112,7 +112,7 @@ if __name__ == "__main__":
 
     t = 0.
     while (t < sim_time):
-        print(f"Frame: {currframe}")
+        print(f"Frame: {currframe}", flush=True)
         filename = os.path.join(out_dir, f"DEMdemo_output_{currframe:04d}.csv")
         meshname = os.path.join(out_dir, f"DEMdemo_mesh_{currframe:04d}.vtk")
         DEMSim.WriteSphereFile(filename)

@@ -116,7 +116,7 @@ if __name__ == "__main__":
     t = 0.
     start = time.process_time()
     while (t < sim_end):
-        print(f"Frame: {currframe}")
+        print(f"Frame: {currframe}", flush=True)
         filename = os.path.join(out_dir, f"DEMdemo_output_{currframe:04d}.csv")
         meshname = os.path.join(out_dir, f"DEMdemo_mesh_{currframe:04d}.vtk")
         DEMSim.WriteSphereFile(filename)
@@ -124,17 +124,18 @@ if __name__ == "__main__":
         currframe += 1
 
         max_v = max_v_finder.GetValue()
-        print(f"Max velocity of any point in simulation is {max_v}")
         print(
-            f"Solver's current update frequency (auto-adapted): {DEMSim.GetUpdateFreq()}")
+            f"Max velocity of any point in simulation is {max_v}", flush=True)
         print(
-            f"Average contacts each sphere has: {DEMSim.GetAvgSphContacts()}")
+            f"Solver's current update frequency (auto-adapted): {DEMSim.GetUpdateFreq()}", flush=True)
+        print(
+            f"Average contacts each sphere has: {DEMSim.GetAvgSphContacts()}", flush=True)
 
         mixer_moi = np.array(mixer_tracker.MOI())
         mixer_acc = np.array(mixer_tracker.ContactAngAccLocal())
         mixer_torque = np.cross(mixer_acc, mixer_moi)
         print(
-            f"Contact torque on the mixer is {mixer_torque[0]}, {mixer_torque[1]}, {mixer_torque[2]}")
+            f"Contact torque on the mixer is {mixer_torque[0]}, {mixer_torque[1]}, {mixer_torque[2]}", flush=True)
 
         DEMSim.DoDynamics(frame_time)
         DEMSim.ShowThreadCollaborationStats()

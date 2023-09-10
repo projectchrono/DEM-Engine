@@ -177,7 +177,7 @@ if __name__ == "__main__":
 
     t = 0.
     while t < 1.:
-        print(f"Outputting frame: {currframe}")
+        print(f"Outputting frame: {currframe}", flush=True)
         filename = os.path.join(out_dir, f"DEMdemo_output_{currframe:04d}.csv")
         meshname = os.path.join(out_dir, f"DEMdemo_mesh_{currframe:04d}.vtk")
         DEMSim.WriteSphereFile(filename)
@@ -194,7 +194,7 @@ if __name__ == "__main__":
     t = 0.
     while (t < sim_end):
         if (curr_step % out_steps == 0):
-            print(f"Outputting frame: {currframe}")
+            print(f"Outputting frame: {currframe}", flush=True)
             filename = os.path.join(
                 out_dir, f"DEMdemo_output_{currframe:04d}.csv")
             meshname = os.path.join(
@@ -205,11 +205,13 @@ if __name__ == "__main__":
             DEMSim.ShowThreadCollaborationStats()
 
         if (curr_step % report_steps == 0):
-            force_list = wheel_tracker.GetContactAcc()
+            force_list = wheel_tracker.ContactAcc()
             forces = np.array(force_list) * wheel_mass
-            print(f"Time: {t}")
-            print(f"Force on wheel: {forces[0]}, {forces[1]}, {forces[2]}")
-            print(f"Drawbar pull coeff: {(forces[0] / total_pressure)}")
+            print(f"Time: {t}", flush=True)
+            print(
+                f"Force on wheel: {forces[0]}, {forces[1]}, {forces[2]}", flush=True)
+            print(
+                f"Drawbar pull coeff: {(forces[0] / total_pressure)}", flush=True)
 
         DEMSim.DoDynamics(step_size)
         curr_step += 1
