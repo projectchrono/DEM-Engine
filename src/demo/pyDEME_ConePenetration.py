@@ -161,14 +161,14 @@ if __name__ == "__main__":
             (soil_bin_diameter * soil_bin_diameter / 4) * (terrain_max_z - bottom)
         bulk_density = matter_mass / total_volume
         if (curr_step % out_steps == 0):
-            print(f"Outputting frame: {currframe}")
+            print(f"Outputting frame: {currframe}", flush=True)
             filename = os.path.join(
                 out_dir, f"DEMdemo_output_{currframe:04d}.csv")
             # meshname = os.path.join(out_dir, f"DEMdemo_mesh_{currframe:04d}.vtk")
             DEMSim.WriteSphereFile(filename)
             # DEMSim.WriteMeshFile(meshname)
             currframe += 1
-            print(f"Compression bulk density: {bulk_density}")
+            print(f"Compression bulk density: {bulk_density}", flush=True)
 
         terrain_max_z -= compressor_vel * step_size
         compressor_tracker.SetPos([0, 0, terrain_max_z])
@@ -178,7 +178,7 @@ if __name__ == "__main__":
     # Then gradually remove the compressor
     while (terrain_max_z < init_max_z):
         if (curr_step % out_steps == 0):
-            print(f"Outputting frame: {currframe}")
+            print(f"Outputting frame: {currframe}", flush=True)
             filename = os.path.join(
                 out_dir, f"DEMdemo_output_{currframe:04d}.csv")
             # meshname = os.path.join(out_dir, f"DEMdemo_mesh_{currframe:04d}.vtk")
@@ -189,7 +189,7 @@ if __name__ == "__main__":
                 (soil_bin_diameter * soil_bin_diameter / 4) * \
                 (max_z_finder.GetValue() - bottom)
             bulk_density = matter_mass / total_volume
-            print(f"Compression bulk density: {bulk_density}")
+            print(f"Compression bulk density: {bulk_density}", flush=True)
             currframe += 1
 
         terrain_max_z += compressor_vel * step_size
@@ -224,7 +224,7 @@ if __name__ == "__main__":
     total_volume = math_PI * (soil_bin_diameter *
                               soil_bin_diameter / 4) * (terrain_max_z - bottom)
     bulk_density = matter_mass / total_volume
-    print(f"Bulk density: {bulk_density}")
+    print(f"Bulk density: {bulk_density}", flush=True)
 
     tip_z_when_first_hit = 9999.
     hit_terrain = False
@@ -243,14 +243,15 @@ if __name__ == "__main__":
             tip_z_when_first_hit = tip_z
 
         penetration = tip_z_when_first_hit - tip_z if hit_terrain else 0.
-        print(f"Time: {t}")
-        print(f"Z coord of tip: {tip_z}")
-        print(f"Penetration: {penetration}")
-        print(f"Force on cone: {forces[0]}, {forces[1]}, {forces[2]}")
-        print(f"Pressure: {pressure}")
+        print(f"Time: {t}", flush=True)
+        print(f"Z coord of tip: {tip_z}", flush=True)
+        print(f"Penetration: {penetration}, flush=True")
+        print(
+            f"Force on cone: {forces[0]}, {forces[1]}, {forces[2]}", flush=True)
+        print(f"Pressure: {pressure}", flush=True)
 
         if (frame_count % 500 == 0):
-            print(f"Outputting frame: {currframe}")
+            print(f"Outputting frame: {currframe}", flush=True)
             filename = os.path.join(
                 out_dir, f"DEMdemo_output_{currframe:04d}.csv")
             meshname = os.path.join(

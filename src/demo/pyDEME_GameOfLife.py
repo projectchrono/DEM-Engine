@@ -115,11 +115,11 @@ if __name__ == "__main__":
     DEMSim.Initialize()
 
     for i in range(3000):
-        print(f"Outputting frame: {i}")
+        print(f"Outputting frame: {i}", flush=True)
         filename = os.path.join(out_dir, f"DEMdemo_output_{i:04d}.csv")
         DEMSim.WriteSphereFile(filename)
         print(
-            f"Average contacts each sphere has: {DEMSim.GetAvgSphContacts()}")
+            f"Average contacts each sphere has: {DEMSim.GetAvgSphContacts()}", flush=True)
 
         DEMSim.DoDynamicsThenSync(1.)
 

@@ -25,7 +25,8 @@ if __name__ == "__main__":
     DEMSim = DEME.DEMSolver()
     DEMSim.SetVerbosity("INFO")
     DEMSim.SetOutputFormat("CSV")
-    DEMSim.SetOutputContent(["XYZ"]) # XYZ is default so this doesn't do anything
+    # XYZ is default so this doesn't do anything
+    DEMSim.SetOutputContent(["XYZ"])
 
     # Define materials
     mat_type_terrain = DEMSim.LoadMaterial(
@@ -138,7 +139,7 @@ if __name__ == "__main__":
         # point of time.
         t = 0.
         while (t < settle_batch_time):
-            print(f"Frame: {currframe}")
+            print(f"Frame: {currframe}", flush=True)
             filename = os.path.join(
                 out_dir, f"DEMdemo_output_{currframe:04d}.csv")
             # meshname = os.path.join(out_dir, f"DEMdemo_mesh_{currframe:04d}.vtk")

@@ -169,7 +169,7 @@ if __name__ == "__main__":
     # Settle
     t = 0.
     while (t < 0.5):
-        print(f"Outputting frame: {frame_count}")
+        print(f"Outputting frame: {frame_count}", flush=True)
         filename = os.path.join(
             out_dir, f"DEMdemo_output_{frame_count:04d}.csv")
         meshname = os.path.join(
@@ -198,7 +198,7 @@ if __name__ == "__main__":
     t = 0.
     while (t < sim_end):
         if (step_count % out_steps == 0):
-            print(f"Outputting frame: {frame_count}")
+            print(f"Outputting frame: {frame_count}", flush=True)
             filename = os.path.join(
                 out_dir, f"DEMdemo_output_{frame_count:04d}.csv")
             meshname = os.path.join(
@@ -209,7 +209,7 @@ if __name__ == "__main__":
             DEMSim.WriteMeshFile(meshname)
             frame_count += 1
             # We write force pairs that are related to the mesh to a file
-            points, forces = flex_mesh_tracker.GetContactForces()
+            [points, forces] = flex_mesh_tracker.GetContactForces()
             writePointsForcesToCSV(
                 force_csv_header, points, forces, force_filename)
             DEMSim.ShowThreadCollaborationStats()
@@ -263,8 +263,7 @@ if __name__ == "__main__":
             # Forces need to be extracted, if you want to use an external solver to solve the mesh's deformation. You
             # can do it like shown below. In this example, we did not use it other than writing it to a file; however
             # you may want to feed the array directly to your soild mechanics solver.
-            num_force_pairs = flex_mesh_tracker.GetContactForces(
-                points, forces)
+            [points, forces] = flex_mesh_tracker.GetContactForces()
 
         # Means advance simulation by one time step
         DEMSim.DoStepDynamics()

@@ -487,7 +487,8 @@ PYBIND11_MODULE(DEME, obj) {
                  &deme::DEMSolver::SetFamilyPrescribedAngVel),
              "Set the prescribed angular velocity to all entities in a family. If dictate is set to true, then this "
              "family will not be fluenced by the force exerted from other simulation entites (both linear and "
-             "rotational motions).")
+             "rotational motions).",
+             py::arg("ID"), py::arg("velX"), py::arg("velY"), py::arg("velZ"), py::arg("dictate") = true)
         .def("SetFamilyPrescribedAngVel",
              static_cast<void (deme::DEMSolver::*)(unsigned int ID)>(&deme::DEMSolver::SetFamilyPrescribedAngVel),
              "Set the prescribed angular velocity to all entities in a family. If dictate is set to true, then this "

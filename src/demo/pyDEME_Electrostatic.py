@@ -341,7 +341,7 @@ if __name__ == "__main__":
 
     t = 0.
     while (t < 1.):
-        print(f"Outputting frame: {currframe}")
+        print(f"Outputting frame: {currframe}", flush=True)
         filename = os.path.join(out_dir, f"DEMdemo_output_{currframe:04d}.csv")
         meshname = os.path.join(out_dir, f"DEMdemo_mesh_{currframe:04d}.vtk")
         DEMSim.WriteSphereFile(filename)
@@ -368,7 +368,7 @@ if __name__ == "__main__":
     t = 0.
     while (t < sim_end):
         if (step_count % out_steps == 0):
-            print(f"Outputting frame: {currframe}")
+            print(f"Outputting frame: {currframe}", flush=True)
             filename = os.path.join(
                 out_dir, f"DEMdemo_output_{currframe:04d}.csv")
             meshname = os.path.join(
