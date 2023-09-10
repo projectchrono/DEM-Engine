@@ -398,7 +398,7 @@ float DEMTracker::GetGeometryWildcardValue(const std::string& name, size_t offse
     return res[0];
 }
 
-std::vector<float> DEMTracker::GetGeometryWildcardValue(const std::string& name) {
+std::vector<float> DEMTracker::GetGeometryWildcardValues(const std::string& name) {
     std::vector<float> res;
     switch (obj->obj_type) {
         case (OWNER_TYPE::CLUMP):

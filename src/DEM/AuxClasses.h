@@ -151,7 +151,7 @@ class DEMTracker {
     /// @brief Get the geometry wildcard values for all the geometry entities tracked by this tracker.
     /// @param name Name of the wildcard.
     /// @return All the values.
-    std::vector<float> GetGeometryWildcardValue(const std::string& name);
+    std::vector<float> GetGeometryWildcardValues(const std::string& name);
     /// @brief Get the geometry wildcard values for a geometry entity tracked by this tracker.
     /// @param name Name of the wildcard.
     /// @param offset The offset to this entity (where to start the modification). If first entity, input 0.
