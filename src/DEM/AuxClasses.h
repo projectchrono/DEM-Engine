@@ -260,9 +260,9 @@ class DEMTracker {
     /// @param offset The offset to this owner (where to start querying). If first entity, input 0.
     /// @return Number of force pairs.
     size_t GetContactForces(std::vector<float3>& points, std::vector<float3>& forces, size_t offset = 0);
-    size_t GetContactForces(std::vector<std::vector<float>>& points,
-                            std::vector<std::vector<float>>& forces,
-                            size_t offset = 0);
+    std::vector<std::vector<std::vector<float>>> GetContactForces(std::vector<std::vector<float>>& points,
+                                                                  std::vector<std::vector<float>>& forces,
+                                                                  size_t offset = 0);
 
     /// @brief Get all contact forces and global torques that concern this track object, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
@@ -280,10 +280,11 @@ class DEMTracker {
                                            std::vector<float3>& forces,
                                            std::vector<float3>& torques,
                                            size_t offset = 0);
-    size_t GetContactForcesAndGlobalTorque(std::vector<std::vector<float>>& points,
-                                           std::vector<std::vector<float>>& forces,
-                                           std::vector<std::vector<float>>& torques,
-                                           size_t offset = 0);
+    std::vector<std::vector<std::vector<float>>> GetContactForcesAndGlobalTorque(
+        std::vector<std::vector<float>>& points,
+        std::vector<std::vector<float>>& forces,
+        std::vector<std::vector<float>>& torques,
+        size_t offset = 0);
 
     /// @brief Get all contact forces and local torques that concern this track object, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
@@ -301,10 +302,11 @@ class DEMTracker {
                                           std::vector<float3>& forces,
                                           std::vector<float3>& torques,
                                           size_t offset = 0);
-    size_t GetContactForcesAndLocalTorque(std::vector<std::vector<float>>& points,
-                                          std::vector<std::vector<float>>& forces,
-                                          std::vector<std::vector<float>>& torques,
-                                          size_t offset = 0);
+    std::vector<std::vector<std::vector<float>>> GetContactForcesAndLocalTorque(
+        std::vector<std::vector<float>>& points,
+        std::vector<std::vector<float>>& forces,
+        std::vector<std::vector<float>>& torques,
+        size_t offset = 0);
 };
 
 class DEMForceModel {
