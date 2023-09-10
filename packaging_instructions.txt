@@ -7,7 +7,7 @@ To perform a pip distribution, follow the steps listed below:
 3. Make sure you conda install cmake.
 4. Run the following command in the DEM-Engine directory: python -m build .
 5. Download Twine in order to upload packages to pyPi: python3 -m pip install --upgrade twine
-6. Upload the built package from the following command: python3 -m twine upload --repository pypi dist/DEME-<VERSION>.tar.bz2
+6. Upload the built package from the following command: python3 -m twine upload --repository pypi dist/DEME-<VERSION>.tar.gz
 
 NOTE: You will be prompted for a username after step 5. Enter '__token__' as the username, and enter your PyPi token obtained
 from the UW-SBEL pypi.org account.

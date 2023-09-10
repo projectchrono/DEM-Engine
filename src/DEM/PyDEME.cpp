@@ -41,6 +41,10 @@ PYBIND11_MODULE(DEME, obj) {
     deme::SetDEMEKernelPath(path / "share/kernel");
     deme::SetDEMEIncludePath(path / "include");
 
+    // To define methods independent of a class, use obj.def() syntax to wrap them!
+    obj.def("FrameTransformGlobalToLocal", &deme::FrameTransformGlobalToLocal,
+            "Translating the inverse of the provided vec then applying a local inverse rotation of the provided rot_Q, "
+            "then return the result");
     obj.def("GetDEMEDataFile", &deme::GetDEMEDataFile);
     obj.def("DEMBoxGridSampler",
             static_cast<std::vector<std::vector<float>> (*)(const std::vector<float>&, const std::vector<float>&, float,
@@ -128,14 +132,12 @@ PYBIND11_MODULE(DEME, obj) {
         .def(py::init<deme::DEMSolver*>())
         .def("GetContactForcesAndLocalTorque",
              static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(
-                 std::vector<std::vector<float>>& points, std::vector<std::vector<float>>& forces,
-                 std::vector<std::vector<float>>& torques, size_t offset)>(
-                 &deme::DEMTracker::GetContactForcesAndLocalTorque))
+                 std::vector<std::vector<float>>&, std::vector<std::vector<float>>&, std::vector<std::vector<float>>&,
+                 size_t)>(&deme::DEMTracker::GetContactForcesAndLocalTorque))
         .def("GetContactForcesAndGlobalTorque",
-             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracler::*)(
-                 std::vector<std::vector<float>>& points, std::vector<std::vector<float>>& forces,
-                 std::vector<std::vector<float>>& torques, size_t offset)>(
-                 &deme::DEMTracker::GetContactForcesAndGlobalTorque))
+             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(
+                 std::vector<std::vector<float>>&, std::vector<std::vector<float>>&, std::vector<std::vector<float>>&,
+                 size_t)>(&deme::DEMTracker::GetContactForcesAndGlobalTorque))
         .def("GetContactForces", static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(
                                      std::vector<std::vector<float>>&, std::vector<std::vector<float>>&, size_t)>(
                                      &deme::DEMTracker::GetContactForces))
