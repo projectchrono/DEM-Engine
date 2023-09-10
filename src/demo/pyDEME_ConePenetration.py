@@ -233,7 +233,7 @@ if __name__ == "__main__":
     t = 0.
     while (t < sim_end):
         # terrain_max_z = max_z_finder.GetValue()
-        forces = tip_tracker.GetContactAcc()
+        forces = tip_tracker.ContactAcc()
         # Note cone_mass is not the true mass, b/c we scaled the the cone tip! So we use true mass by using cone_mass
         forces = np.array(forces) * cone_mass
         # forces[2] is the z dir force

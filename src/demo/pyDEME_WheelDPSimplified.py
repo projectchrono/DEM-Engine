@@ -205,7 +205,7 @@ if __name__ == "__main__":
             DEMSim.ShowThreadCollaborationStats()
 
         if (curr_step % report_steps == 0):
-            force_list = wheel_tracker.GetContactAcc()
+            force_list = wheel_tracker.ContactAcc()
             forces = np.array(force_list) * wheel_mass
             print(f"Time: {t}")
             print(f"Force on wheel: {forces[0]}, {forces[1]}, {forces[2]}")

@@ -160,15 +160,15 @@ if __name__ == "__main__":
             print(f"Max velocity of any point in simulation is {max_v}")
 
             # Torque on the side walls are?
-            drum_moi = np.array(Drum_tracker.GetMOI(0))
-            drum_pos = np.array(Drum_tracker.GetContactAngAccLocal(0))
+            drum_moi = np.array(Drum_tracker.MOI())
+            drum_pos = np.array(Drum_tracker.ContactAngAccLocal())
             drum_torque = np.multiply(drum_pos, drum_moi)
             print(
                 f"Contact torque on the side walls is {drum_torque[0]}, {drum_torque[1]}, {drum_torque[2]}")
 
             # The force on the bottom plane?
             force_on_BC = np.array(
-                planes_tracker.GetContactAcc(0)) * planes_tracker.Mass(0)
+                planes_tracker.ContactAcc()) * planes_tracker.Mass()
             print(f"Contact force on bottom plane is {force_on_BC[2]}")
 
         DEMSim.DoDynamics(step_size)

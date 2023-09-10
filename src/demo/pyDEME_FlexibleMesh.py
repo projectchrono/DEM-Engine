@@ -150,7 +150,7 @@ if __name__ == "__main__":
     mesh_handle = flex_mesh_tracker.GetMesh()
     # This is keeping a copy of the RELATIVE (to the CoM) locations of the mesh nodes. In our case, the Z coordinates
     # of these nodes range from -0.5 to 0.5. In Python, you get a n by 3 matrix, and here we create a copy of this matrix.
-    
+
     node_resting_location = np.array(mesh_handle.GetCoordsVertices())
 
     sim_end = 9.0
@@ -209,8 +209,7 @@ if __name__ == "__main__":
             DEMSim.WriteMeshFile(meshname)
             frame_count += 1
             # We write force pairs that are related to the mesh to a file
-            num_force_pairs = flex_mesh_tracker.GetContactForces(
-                points, forces)
+            points, forces = flex_mesh_tracker.GetContactForces()
             writePointsForcesToCSV(
                 force_csv_header, points, forces, force_filename)
             DEMSim.ShowThreadCollaborationStats()

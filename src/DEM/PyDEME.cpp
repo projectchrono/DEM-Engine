@@ -127,18 +127,17 @@ PYBIND11_MODULE(DEME, obj) {
     py::class_<deme::DEMTracker, std::shared_ptr<deme::DEMTracker>>(obj, "Tracker")
         .def(py::init<deme::DEMSolver*>())
         .def("GetContactForcesAndLocalTorque",
-             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(
-                 std::vector<std::vector<float>>& points, std::vector<std::vector<float>>& forces,
-                 std::vector<std::vector<float>>& torques, size_t offset)>(
-                 &deme::DEMTracker::GetContactForcesAndLocalTorque))
+             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(size_t)>(
+                 &deme::DEMTracker::GetContactForcesAndLocalTorque),
+             py::arg("offset") = 0)
         .def("GetContactForcesAndGlobalTorque",
-             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracler::*)(
-                 std::vector<std::vector<float>>& points, std::vector<std::vector<float>>& forces,
-                 std::vector<std::vector<float>>& torques, size_t offset)>(
-                 &deme::DEMTracker::GetContactForcesAndGlobalTorque))
-        .def("GetContactForces", static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(
-                                     std::vector<std::vector<float>>&, std::vector<std::vector<float>>&, size_t)>(
-                                     &deme::DEMTracker::GetContactForces))
+             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(size_t)>(
+                 &deme::DEMTracker::GetContactForcesAndGlobalTorque),
+             py::arg("offset") = 0)
+        .def("GetContactForces",
+             static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(size_t)>(
+                 &deme::DEMTracker::GetContactForces),
+             py::arg("offset") = 0)
         .def("GetOwnerID", &deme::DEMTracker::GetOwnerID, py::arg("offset") = 0)
 
         .def("Pos", &deme::DEMTracker::GetPos, py::arg("offset") = 0)
@@ -147,7 +146,7 @@ PYBIND11_MODULE(DEME, obj) {
         .def("Vel", &deme::DEMTracker::GetVel, py::arg("offset") = 0)
         .def("OriQ", &deme::DEMTracker::GetOriQ, py::arg("offset") = 0)
         .def("MOI", &deme::DEMTracker::GetMOI, py::arg("offset") = 0)
-        .def("Mass", &deme::DEMTracker::Mass)
+        .def("Mass", &deme::DEMTracker::Mass, py::arg("offset") = 0)
         .def("GetFamily", &deme::DEMTracker::GetFamily, py::arg("offset") = 0)
         .def("ContactAcc", &deme::DEMTracker::GetContactAcc, py::arg("offset") = 0)
         .def("ContactAngAccLocal", &deme::DEMTracker::GetContactAngAccLocal, py::arg("offset") = 0)
@@ -157,9 +156,9 @@ PYBIND11_MODULE(DEME, obj) {
              static_cast<float (deme::DEMTracker::*)(const std::string&, size_t)>(
                  &deme::DEMTracker::GetOwnerWildcardValue),
              py::arg("name"), py::arg("offset") = 0)
-        .def("GetGeometryWildcardValue",
+        .def("GetGeometryWildcardValues",
              static_cast<std::vector<float> (deme::DEMTracker::*)(const std::string&)>(
-                 &deme::DEMTracker::GetGeometryWildcardValue),
+                 &deme::DEMTracker::GetGeometryWildcardValues),
              py::arg("name"))
         .def("GetGeometryWildcardValue",
              static_cast<float (deme::DEMTracker::*)(const std::string&, size_t)>(
@@ -243,7 +242,7 @@ PYBIND11_MODULE(DEME, obj) {
 
     py::class_<deme::DEMSolver>(obj, "DEMSolver")
         .def(py::init<unsigned int>(), py::arg("nGPUs") = 2)
-        .def("UpdateStepSize", &deme::DEMsolver::UpdateStepSize)
+        .def("UpdateStepSize", &deme::DEMSolver::UpdateStepSize)
         .def("SetNoForceRecord", &deme::DEMSolver::SetNoForceRecord,
              "Instruct the solver that there is no need to record the contact force (and contact point location etc.) "
              "in an array.",
