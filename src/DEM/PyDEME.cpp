@@ -44,7 +44,9 @@ PYBIND11_MODULE(DEME, obj) {
     // To define methods independent of a class, use obj.def() syntax to wrap them!
     obj.def("FrameTransformGlobalToLocal", &deme::FrameTransformGlobalToLocal,
             "Translating the inverse of the provided vec then applying a local inverse rotation of the provided rot_Q, "
-            "then return the result");
+            "then return the result.");
+    obj.def("FrameTransformLocalToGlobal", &deme::FrameTransformLocalToGlobal,
+            "Apply a local rotation then a translation, then return the result.");
     obj.def("GetDEMEDataFile", &deme::GetDEMEDataFile);
     obj.def("DEMBoxGridSampler",
             static_cast<std::vector<std::vector<float>> (*)(const std::vector<float>&, const std::vector<float>&, float,
@@ -639,6 +641,8 @@ PYBIND11_MODULE(DEME, obj) {
 
     py::class_<deme::DEMClumpTemplate, std::shared_ptr<deme::DEMClumpTemplate>>(obj, "DEMClumpTemplate")
         .def(py::init<>())
+        .def("Mass", &deme::DEMClumpTemplate::GetMass)
+        .def("MOI", &deme::DEMClumpTemplate::GetMOI)
         .def("SetMass", &deme::DEMClumpTemplate::SetMass)
         .def("SetMOI",
              static_cast<void (deme::DEMClumpTemplate::*)(const std::vector<float>&)>(&deme::DEMClumpTemplate::SetMOI))
@@ -701,6 +705,8 @@ PYBIND11_MODULE(DEME, obj) {
 
     py::class_<deme::DEMExternObj, deme::DEMInitializer, std::shared_ptr<deme::DEMExternObj>>(obj, "DEMExternObj")
         .def(py::init<>())
+        .def("Mass", &deme::DEMExternObj::GetMass)
+        .def("MOI", &deme::DEMExternObj::GetMOI)
         .def("SetFamily", &deme::DEMExternObj::SetFamily, "Defines an object contact family number")
         .def("SetMass", &deme::DEMExternObj::SetMass, "Sets the mass of this object")
         .def("SetMOI",
@@ -745,6 +751,8 @@ PYBIND11_MODULE(DEME, obj) {
         .def(py::init<>())
         .def(py::init<std::string&>())
         .def(py::init<std::string, const std::shared_ptr<deme::DEMMaterial>&>())
+        .def("Mass", &deme::DEMMeshConnected::GetMass)
+        .def("MOI", &deme::DEMMeshConnected::GetMOI)
         .def("Clear", &deme::DEMMeshConnected::Clear, "Clears everything from memory")
         .def("LoadWavefrontMesh", &deme::DEMMeshConnected::LoadWavefrontMesh,
              "Load a triangle mesh saved as a Wavefront .obj file", py::arg("input_file"),

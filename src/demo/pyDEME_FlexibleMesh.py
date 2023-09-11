@@ -226,7 +226,7 @@ if __name__ == "__main__":
                 flex_mesh_tracker.GetMeshNodesGlobal())
             # If you need the current RELATIVE (to the CoM) locations of the mesh nodes instead of global coordinates,
             # you can get it like the following:
-            # std::vector<float3> node_current_location(mesh_handle->GetCoordsVertices());
+            # node_current_location = mesh_handle.GetCoordsVertices()
 
             # Now calculate how much each node should `wave' and update the node location array. Remember z = 1 is
             # where the highest (relative) mesh node is. Again, this is artificial and only for showcasing this
@@ -243,11 +243,11 @@ if __name__ == "__main__":
 
             # 1. We should respect the actual CoM location of the mesh. We get the global coords of mesh nodes using
             # GetMeshNodesGlobal, but UpdateMesh works with mesh's local or say relative coordinates, and that is why
-            # we do applyFrameTransformGlobalToLocal first. And depending on your setup, the CoM and coord frame of
+            # we do FrameTransformGlobalToLocal first. And depending on your setup, the CoM and coord frame of
             # your mesh might be moving, and if it moves and rotates then you probably need to move and rotate the
             # points you got to offset the influence of CoM and local frame first. That said, if you use
-            # mesh_handle->GetCoordsVertices() as I mentioned above to get the relative node positions of the mesh,
-            # then no need to applyFrameTransformGlobalToLocal the CoM and rotate the frame.
+            # mesh_handle.GetCoordsVertices() as I mentioned above to get the relative node positions of the mesh,
+            # then no need to FrameTransformGlobalToLocal the CoM and rotate the frame.
 
             # 2. UpdateMesh will update the relative locations of mesh nodes to your specified locations. But if you
             # just have the information on the amount of mesh deformation, then you can use UpdateMeshByIncrement
@@ -255,9 +255,9 @@ if __name__ == "__main__":
 
             mesh_CoM_pos = flex_mesh_tracker.Pos()
             mesh_frame_oriQ = flex_mesh_tracker.OriQ()
-            for node in node_current_location:
-                node = DEME.FrameTransformGlobalToLocal(
-                    node, mesh_CoM_pos, mesh_frame_oriQ)
+            for i in range(node_current_location.shape[0]):
+                node_current_location[i, :] = DEME.FrameTransformGlobalToLocal(
+                    node_current_location[i, :], mesh_CoM_pos, mesh_frame_oriQ)
             flex_mesh_tracker.UpdateMesh(node_current_location)
 
             # Forces need to be extracted, if you want to use an external solver to solve the mesh's deformation. You

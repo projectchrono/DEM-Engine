@@ -235,7 +235,7 @@ if __name__ == "__main__":
         # terrain_max_z = max_z_finder.GetValue()
         forces = tip_tracker.ContactAcc()
         # Note cone_mass is not the true mass, b/c we scaled the the cone tip! So we use true mass by using cone_mass
-        forces = np.array(forces) * cone_mass
+        forces = np.array(forces) * cone_tip.Mass()
         # forces[2] is the z dir force
         pressure = np.abs(forces[2]) / cone_surf_area
         if ((pressure > 1e-4) and not (hit_terrain)):
@@ -245,7 +245,7 @@ if __name__ == "__main__":
         penetration = tip_z_when_first_hit - tip_z if hit_terrain else 0.
         print(f"Time: {t}", flush=True)
         print(f"Z coord of tip: {tip_z}", flush=True)
-        print(f"Penetration: {penetration}, flush=True")
+        print(f"Penetration: {penetration}", flush=True)
         print(
             f"Force on cone: {forces[0]}, {forces[1]}, {forces[2]}", flush=True)
         print(f"Pressure: {pressure}", flush=True)

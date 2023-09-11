@@ -95,6 +95,12 @@ class DEMExternObj : public DEMInitializer {
     // Obj's MOI (huge by default)
     float3 MOI = make_float3(1e6);
 
+    float GetMass() { return mass; }
+    std::vector<float> GetMOI() {
+        std::vector<float> res = {MOI.x, MOI.y, MOI.z};
+        return res;
+    }
+
     union DEMAnalEntParams {
         DEMPlateParams_t plate;
         DEMPlaneParams_t plane;
@@ -384,6 +390,12 @@ class DEMMeshConnected : public DEMInitializer {
     // Mesh's MOI
     float3 MOI = make_float3(1.f);
 
+    float GetMass() { return mass; }
+    std::vector<float> GetMOI() {
+        std::vector<float> res = {MOI.x, MOI.y, MOI.z};
+        return res;
+    }
+
     std::string filename;  ///< file string if loading an obj file
 
     // If true, when the mesh is initialized into the system, it will re-order the nodes of each triangle so that the
@@ -557,7 +569,7 @@ class DEMMeshConnected : public DEMInitializer {
         // Never let mass become negative.
         double prod = std::abs((double)s.x * (double)s.y * (double)s.z);
         mass *= prod;
-        MOI.x *= prod * s.x * s.x; // Square, so always positive
+        MOI.x *= prod * s.x * s.x;  // Square, so always positive
         MOI.y *= prod * s.y * s.y;
         MOI.z *= prod * s.z * s.z;
     }

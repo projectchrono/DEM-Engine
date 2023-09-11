@@ -609,6 +609,12 @@ class DEMClumpTemplate {
     std::vector<std::shared_ptr<DEMMaterial>> materials;
     unsigned int nComp = 0;  // Number of components
 
+    float GetMass() { return mass; }
+    std::vector<float> GetMOI() {
+        std::vector<float> res = {MOI.x, MOI.y, MOI.z};
+        return res;
+    }
+
     /// Set mass.
     void SetMass(float mass) { this->mass = mass; }
     /// Set MOI (in principal frame).
