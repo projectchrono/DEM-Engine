@@ -648,7 +648,12 @@ std::shared_ptr<DEMForceModel> DEMSolver::DefineContactForceModel(const std::str
     DEMForceModel force_model;  // Custom
     force_model.DefineCustomModel(model);
     m_force_model = std::make_shared<DEMForceModel>(std::move(force_model));
-    return m_force_model;
+
+    // Create a copy of shared_ptr, mainly for python wrapper. If no copy, the ownership is given to Python directly,
+    // and it could accidently destroy it. Note this is not a problem for methods that return shared_ptr by using
+    // .back().
+    std::shared_ptr<DEMForceModel> returned_ptr = m_force_model;
+    return returned_ptr;
 }
 
 std::shared_ptr<DEMForceModel> DEMSolver::ReadContactForceModel(const std::string& filename) {
@@ -660,17 +665,23 @@ std::shared_ptr<DEMForceModel> DEMSolver::ReadContactForceModel(const std::strin
             DEME_ERROR("The force model file %s is not found.", filename.c_str());
     }
     m_force_model = std::make_shared<DEMForceModel>(std::move(force_model));
-    return m_force_model;
+
+    std::shared_ptr<DEMForceModel> returned_ptr = m_force_model;
+    return returned_ptr;
 }
 
 std::shared_ptr<DEMForceModel> DEMSolver::UseFrictionalHertzianModel() {
     m_force_model->SetForceModelType(FORCE_MODEL::HERTZIAN);
-    return m_force_model;
+
+    std::shared_ptr<DEMForceModel> returned_ptr = m_force_model;
+    return returned_ptr;
 }
 
 std::shared_ptr<DEMForceModel> DEMSolver::UseFrictionlessHertzianModel() {
     m_force_model->SetForceModelType(FORCE_MODEL::HERTZIAN_FRICTIONLESS);
-    return m_force_model;
+
+    std::shared_ptr<DEMForceModel> returned_ptr = m_force_model;
+    return returned_ptr;
 }
 
 void DEMSolver::ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const std::string& condition) {

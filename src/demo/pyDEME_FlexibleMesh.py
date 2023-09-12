@@ -30,7 +30,7 @@ def writePointsForcesToCSV(force_csv_header,
     combined_array = np.hstack((np.array(points), np.array(forces)))
     with open(filename, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(force_csv_header)
+        writer.writerow([force_csv_header])
         for row in combined_array:
             writer.writerow(row)
 
@@ -175,7 +175,7 @@ if __name__ == "__main__":
         meshname = os.path.join(
             out_dir, f"DEMdemo_mesh_{frame_count:04d}.vtk")
         force_filename = os.path.join(
-            out_dir, f"DEMdemo_forces_{frame_count:04d}.vtk")
+            out_dir, f"DEMdemo_forces_{frame_count:04d}.csv")
         DEMSim.WriteSphereFile(filename)
         DEMSim.WriteMeshFile(meshname)
         writePointsForcesToCSV(force_csv_header, points,
@@ -204,7 +204,7 @@ if __name__ == "__main__":
             meshname = os.path.join(
                 out_dir, f"DEMdemo_mesh_{frame_count:04d}.vtk")
             force_filename = os.path.join(
-                out_dir, f"DEMdemo_forces_{frame_count:04d}.vtk")
+                out_dir, f"DEMdemo_forces_{frame_count:04d}.csv")
             DEMSim.WriteSphereFile(filename)
             DEMSim.WriteMeshFile(meshname)
             frame_count += 1

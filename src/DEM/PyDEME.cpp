@@ -561,6 +561,10 @@ PYBIND11_MODULE(DEME, obj) {
              "Change all entities with family number ID_from to have a new number ID_to, when the condition defined by "
              "the string is satisfied by the entities in question. This should be called before initialization, and "
              "will be baked into the solver, so the conditions will be checked and changes applied every time step.")
+        .def("ChangeFamilyWhen", &deme::DEMSolver::ChangeFamilyWhen,
+             "Change all entities with family number ID_from to have a new number ID_to, when the condition defined by "
+             "the string is satisfied by the entities in question. This should be called before initialization, and "
+             "will be baked into the solver, so the conditions will be checked and changes applied every time step.")
         .def("ShowThreadCollaborationStats", &deme::DEMSolver::ShowThreadCollaborationStats,
              "Show the collaboration stats between dT and kT. This is more useful for tweaking the number of time "
              "steps that dT should be allowed to be in advance of kT.")
