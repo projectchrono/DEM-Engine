@@ -35,6 +35,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Running case with friction: " << conctact_friction << ", and rolling friction: " << rolling_friction
               << std::endl;
+    std::cout <<  out_dir << std::endl;
 
     runDEME(out_dir, conctact_friction, rolling_friction);
 
@@ -150,7 +151,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
 
     char filename[200], meshfile[200];
 
-    float shift_xyz = 1.0 * (radius) * 2.0;
+    float shift_xyz = 1.0 * (radius)*2.0;
     float x = 0;
     float y = 0;
 
@@ -170,8 +171,6 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     // DEMSim.WriteMeshFile(std::string(meshfile));
 
     while (initialization) {
-     
-
         std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
         std::vector<float3> input_pile_xyz;
         PDSampler sampler(shift_xyz);
@@ -221,7 +220,6 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
             sprintf(meshfile, "%s/DEMdemo_mesh.vtk", out_dir.c_str());
             DEMSim.WriteMeshFile(std::string(meshfile));
             // DEMSim.ShowThreadCollaborationStats();
-            
         }
         frame++;
 
