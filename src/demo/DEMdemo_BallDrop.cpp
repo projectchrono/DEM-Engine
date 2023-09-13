@@ -45,7 +45,7 @@ int main() {
     std::cout << "Total num of triangles: " << projectile->GetNumTriangles() << std::endl;
 
     projectile->SetInitPos(make_float3(world_size / 2, world_size / 2, world_size / 3 * 2));
-    float ball_mass = 7.8e3 * 4 / 3 * 3.1416;
+    float ball_mass = 5*7.8e3 * 4 / 3 * 3.1416;
     projectile->SetMass(ball_mass);
     projectile->SetMOI(make_float3(ball_mass * 2 / 5, ball_mass * 2 / 5, ball_mass * 2 / 5));
     projectile->SetFamily(2);
