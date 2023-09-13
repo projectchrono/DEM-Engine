@@ -549,6 +549,11 @@ PYBIND11_MODULE(DEME, obj) {
         .def("Initialize", &deme::DEMSolver::Initialize, "Initializes the system")
         .def("WriteSphereFile", &deme::DEMSolver::WriteSphereFile, "Writes a sphere file")
         .def("WriteMeshFile", &deme::DEMSolver::WriteMeshFile, "Write the current status of all meshes to a file")
+        .def("WriteClumpFile", &deme::DEMSolver::WriteClumpFile, "Write the current status of clumps to a file.",
+             py::arg("outfilename"), py::arg("accuracy") = 10)
+        .def("WriteContactFile", &deme::DEMSolver::WriteContactFile,
+             "Write all contact pairs to a file. Forces smaller than threshold will not be outputted.",
+             py::arg("outfilename"), py::arg("force_thres") = 1e-15)
         .def("DoDynamics", &deme::DEMSolver::DoDynamics,
              "Advance simulation by this amount of time, and at the end of this call, synchronize kT and dT. This is "
              "suitable for a longer call duration and without co-simulation.")
