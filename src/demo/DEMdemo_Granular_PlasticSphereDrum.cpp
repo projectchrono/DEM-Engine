@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Running case with friction: " << conctact_friction << ", and rolling friction: " << rolling_friction
               << std::endl;
-    std::cout << "Dir out is " out_dir << std::endl;
+    std::cout << "Dir out is " << out_dir << std::endl;
 
     runDEME(out_dir, conctact_friction, rolling_friction);
 
