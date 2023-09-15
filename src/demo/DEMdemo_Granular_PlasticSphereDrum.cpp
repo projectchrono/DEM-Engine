@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
  
     if ( argc =~ 5) {
         printf("You have entered %d arguments, which is wrong!\n", argc);
-        return 0;∫
+        return 0;
     }
     
     int case_Folder = atoi(argv[1]);          // takes the test ID
