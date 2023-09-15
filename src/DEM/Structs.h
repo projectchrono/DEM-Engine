@@ -49,6 +49,7 @@ const std::string OUTPUT_FILE_ANGVEL_Y_COL_NAME = std::string("w_y");
 const std::string OUTPUT_FILE_ANGVEL_Z_COL_NAME = std::string("w_z");
 const std::string OUTPUT_FILE_CLUMP_TYPE_NAME = std::string("clump_type");
 const std::filesystem::path USER_SCRIPT_PATH = RuntimeDataHelper::data_path / "kernel" / "DEMUserScripts";
+const std::string DEFAULT_FORCE_MODEL_NAME = std::string("DEM_Contact");
 // Column names for contact pair output file
 const std::string OUTPUT_FILE_OWNER_1_NAME = std::string("A");
 const std::string OUTPUT_FILE_OWNER_2_NAME = std::string("B");

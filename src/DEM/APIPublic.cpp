@@ -47,6 +47,10 @@ DEMSolver::DEMSolver(unsigned int nGPUs) {
     // Make friends
     dT->kT = kT;
     kT->dT = dT;
+
+    // Specify force model
+    m_force_model[DEFAULT_FORCE_MODEL_NAME] =
+        std::make_shared<DEMForceModel>(std::move(DEMForceModel(FORCE_MODEL::HERTZIAN)));
 }
 
 DEMSolver::~DEMSolver() {
@@ -647,13 +651,9 @@ void DEMSolver::InstructBoxDomainDimension(const std::pair<float, float>& x,
 std::shared_ptr<DEMForceModel> DEMSolver::DefineContactForceModel(const std::string& model) {
     DEMForceModel force_model;  // Custom
     force_model.DefineCustomModel(model);
-    m_force_model = std::make_shared<DEMForceModel>(std::move(force_model));
+    m_force_model[DEFAULT_FORCE_MODEL_NAME] = std::make_shared<DEMForceModel>(std::move(force_model));
 
-    // Create a copy of shared_ptr, mainly for python wrapper. If no copy, the ownership is given to Python directly,
-    // and it could accidently destroy it. Note this is not a problem for methods that return shared_ptr by using
-    // .back().
-    std::shared_ptr<DEMForceModel> returned_ptr = m_force_model;
-    return returned_ptr;
+    return m_force_model[DEFAULT_FORCE_MODEL_NAME];
 }
 
 std::shared_ptr<DEMForceModel> DEMSolver::ReadContactForceModel(const std::string& filename) {
@@ -664,24 +664,21 @@ std::shared_ptr<DEMForceModel> DEMSolver::ReadContactForceModel(const std::strin
         if (!force_model.ReadCustomModelFile(std::filesystem::path(filename)))
             DEME_ERROR("The force model file %s is not found.", filename.c_str());
     }
-    m_force_model = std::make_shared<DEMForceModel>(std::move(force_model));
+    m_force_model[DEFAULT_FORCE_MODEL_NAME] = std::make_shared<DEMForceModel>(std::move(force_model));
 
-    std::shared_ptr<DEMForceModel> returned_ptr = m_force_model;
-    return returned_ptr;
+    return m_force_model[DEFAULT_FORCE_MODEL_NAME];
 }
 
 std::shared_ptr<DEMForceModel> DEMSolver::UseFrictionalHertzianModel() {
-    m_force_model->SetForceModelType(FORCE_MODEL::HERTZIAN);
+    m_force_model[DEFAULT_FORCE_MODEL_NAME]->SetForceModelType(FORCE_MODEL::HERTZIAN);
 
-    std::shared_ptr<DEMForceModel> returned_ptr = m_force_model;
-    return returned_ptr;
+    return m_force_model[DEFAULT_FORCE_MODEL_NAME];
 }
 
 std::shared_ptr<DEMForceModel> DEMSolver::UseFrictionlessHertzianModel() {
-    m_force_model->SetForceModelType(FORCE_MODEL::HERTZIAN_FRICTIONLESS);
+    m_force_model[DEFAULT_FORCE_MODEL_NAME]->SetForceModelType(FORCE_MODEL::HERTZIAN_FRICTIONLESS);
 
-    std::shared_ptr<DEMForceModel> returned_ptr = m_force_model;
-    return returned_ptr;
+    return m_force_model[DEFAULT_FORCE_MODEL_NAME];
 }
 
 void DEMSolver::ChangeFamilyWhen(unsigned int ID_from, unsigned int ID_to, const std::string& condition) {
@@ -1157,15 +1154,15 @@ std::vector<float> DEMSolver::GetFamilyOwnerWildcardValue(unsigned int N, const 
 }
 
 void DEMSolver::SetContactWildcards(const std::set<std::string>& wildcards) {
-    m_force_model->SetPerContactWildcards(wildcards);
+    m_force_model[DEFAULT_FORCE_MODEL_NAME]->SetPerContactWildcards(wildcards);
 }
 
 void DEMSolver::SetOwnerWildcards(const std::set<std::string>& wildcards) {
-    m_force_model->SetPerOwnerWildcards(wildcards);
+    m_force_model[DEFAULT_FORCE_MODEL_NAME]->SetPerOwnerWildcards(wildcards);
 }
 
 void DEMSolver::SetGeometryWildcards(const std::set<std::string>& wildcards) {
-    m_force_model->SetPerGeometryWildcards(wildcards);
+    m_force_model[DEFAULT_FORCE_MODEL_NAME]->SetPerGeometryWildcards(wildcards);
 }
 
 void DEMSolver::DisableFamilyOutput(unsigned int ID) {

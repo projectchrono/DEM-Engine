@@ -158,7 +158,7 @@ class DEMSolver {
     /// Returns a shared_ptr to the force model in use.
     std::shared_ptr<DEMForceModel> ReadContactForceModel(const std::string& filename);
     /// Get the current force model.
-    std::shared_ptr<DEMForceModel> GetContactForceModel() { return m_force_model; }
+    std::shared_ptr<DEMForceModel> GetContactForceModel() { return m_force_model[DEFAULT_FORCE_MODEL_NAME]; }
 
     /// Instruct the solver if contact pair arrays should be sorted (based on the types of contacts) before usage.
     void SetSortContactPairs(bool use_sort) { should_sort_contacts = use_sort; }
@@ -1269,8 +1269,7 @@ class DEMSolver {
     TIME_INTEGRATOR m_integrator = TIME_INTEGRATOR::EXTENDED_TAYLOR;
 
     // The force model which will be used
-    std::shared_ptr<DEMForceModel> m_force_model =
-        std::make_shared<DEMForceModel>(std::move(DEMForceModel(FORCE_MODEL::HERTZIAN)));
+    std::unordered_map<std::string, std::shared_ptr<DEMForceModel>> m_force_model;
 
     // Strategy for auto-adapting time steps size
     ADAPT_TS_TYPE adapt_ts_type = ADAPT_TS_TYPE::NONE;

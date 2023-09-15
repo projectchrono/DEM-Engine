@@ -508,7 +508,7 @@ void DEMSolver::reportInitStats() const {
     DEME_INFO("Grand total number of owners: %zu", nOwnerBodies);
 
     DEME_INFO("The number of material types: %u", nMatTuples);
-    switch (m_force_model->type) {
+    switch (m_force_model.find(DEFAULT_FORCE_MODEL_NAME)->second->type) {
         case (FORCE_MODEL::HERTZIAN):
             DEME_INFO("History-based Hertzian contact model is in use.");
             break;
@@ -925,8 +925,8 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.cntOutFlags = output_level;
 
     // Transfer historyless-ness
-    kT->solverFlags.isHistoryless = (m_force_model->m_contact_wildcards.size() == 0);
-    dT->solverFlags.isHistoryless = (m_force_model->m_contact_wildcards.size() == 0);
+    kT->solverFlags.isHistoryless = (m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_contact_wildcards.size() == 0);
+    dT->solverFlags.isHistoryless = (m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_contact_wildcards.size() == 0);
 
     // Time step constant-ness and expand factor constant-ness
     dT->solverFlags.isStepConst = ts_size_is_const;
@@ -1019,9 +1019,9 @@ void DEMSolver::transferSimParams() {
             m_suggestedFutureDrift, m_expand_safety_multi, m_expand_base_vel);
     }
     // Compute the number of wildcards in our force model
-    unsigned int nContactWildcards = m_force_model->m_contact_wildcards.size();
-    unsigned int nOwnerWildcards = m_force_model->m_owner_wildcards.size();
-    unsigned int nGeoWildcards = m_force_model->m_geo_wildcards.size();
+    unsigned int nContactWildcards = m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_contact_wildcards.size();
+    unsigned int nOwnerWildcards = m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_owner_wildcards.size();
+    unsigned int nGeoWildcards = m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_geo_wildcards.size();
     if (nContactWildcards > DEME_MAX_WILDCARD_NUM || nOwnerWildcards > DEME_MAX_WILDCARD_NUM ||
         nGeoWildcards > DEME_MAX_WILDCARD_NUM) {
         DEME_ERROR(
@@ -1034,12 +1034,14 @@ void DEMSolver::transferSimParams() {
 
     dT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
                      m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_expand_safety_multi,
-                     m_expand_base_vel, m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards,
-                     m_force_model->m_geo_wildcards);
+                     m_expand_base_vel, m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_contact_wildcards,
+                     m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_owner_wildcards,
+                     m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_geo_wildcards);
     kT->setSimParams(nvXp2, nvYp2, nvZp2, l, m_voxelSize, m_binSize, nbX, nbY, nbZ, m_boxLBF, m_user_box_min,
                      m_user_box_max, G, m_ts_size, m_expand_factor, m_approx_max_vel, m_expand_safety_multi,
-                     m_expand_base_vel, m_force_model->m_contact_wildcards, m_force_model->m_owner_wildcards,
-                     m_force_model->m_geo_wildcards);
+                     m_expand_base_vel, m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_contact_wildcards,
+                     m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_owner_wildcards,
+                     m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_geo_wildcards);
 }
 
 void DEMSolver::allocateGPUArrays() {
@@ -1225,10 +1227,10 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     //// TODO: Reassemble geo and owner wildcards here again in a set is not needed... Since set is ordered.
     std::set<std::string> added_owner_wildcards, added_geo_wildcards;
     // Analyze this model... what does it require?
-    std::string model = m_force_model->m_force_model;
-    const std::set<std::string> contact_wildcard_names = m_force_model->m_contact_wildcards;
-    const std::set<std::string> owner_wildcard_names = m_force_model->m_owner_wildcards;
-    const std::set<std::string> geo_wildcard_names = m_force_model->m_geo_wildcards;
+    std::string model = m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_force_model;
+    const std::set<std::string> contact_wildcard_names = m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_contact_wildcards;
+    const std::set<std::string> owner_wildcard_names = m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_owner_wildcards;
+    const std::set<std::string> geo_wildcard_names = m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_geo_wildcards;
     m_owner_wc_num.clear();
     m_geo_wc_num.clear();
     m_cnt_wc_num.clear();
@@ -1661,11 +1663,13 @@ inline void DEMSolver::equipMassMoiVolume(std::unordered_map<std::string, std::s
 
 inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::string>& strMap) {
     // Force model gives us info on what mat props should be pairwise
-    const std::set<std::string> mat_prop_that_are_pairwise = m_force_model->m_pairwise_mat_props;
+    const std::set<std::string> mat_prop_that_are_pairwise =
+        m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_pairwise_mat_props;
     m_pairwise_material_prop_names.insert(mat_prop_that_are_pairwise.begin(), mat_prop_that_are_pairwise.end());
 
     // Depending on the force model, there could be a few material properties that should be specified by the user
-    const std::set<std::string> mat_prop_that_must_exist = m_force_model->m_must_have_mat_props;
+    const std::set<std::string> mat_prop_that_must_exist =
+        m_force_model[DEFAULT_FORCE_MODEL_NAME]->m_must_have_mat_props;
     // Those must-haves will be added to the pool (which is a set of material prop names that we know)
     m_material_prop_names.insert(mat_prop_that_must_exist.begin(), mat_prop_that_must_exist.end());
     m_material_prop_names.insert(m_pairwise_material_prop_names.begin(), m_pairwise_material_prop_names.end());
