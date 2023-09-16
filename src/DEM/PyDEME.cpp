@@ -294,15 +294,22 @@ PYBIND11_MODULE(DEME, obj) {
              "Explicitly instruct the sizes for the arrays at initialization time. This is useful when the number of "
              "owners tends to change (especially gradually increase) frequently in the simulation")
         .def("UseFrictionalHertzianModel", &deme::DEMSolver::UseFrictionalHertzianModel,
+             py::return_value_policy::reference_internal,
              "Instruct the solver to use frictonal (history-based) Hertzian contact force model.")
         .def("UseFrictionlessHertzianModel", &deme::DEMSolver::UseFrictionlessHertzianModel,
+             py::return_value_policy::reference_internal,
              "Instruct the solver to use frictonless Hertzian contact force model")
         .def("DefineContactForceModel", &deme::DEMSolver::DefineContactForceModel,
+             py::return_value_policy::reference_internal,
              "Define a custom contact force model by a string. Returns a shared_ptr to the force model in use")
         .def("ReadContactForceModel", &deme::DEMSolver::ReadContactForceModel,
+             py::return_value_policy::reference_internal,
              "Read user custom contact force model from a file (which by default should reside in "
              "kernel/DEMUserScripts). Returns a shared_ptr to the force model in use")
-        .def("GetContactForceModel", &deme::DEMSolver::GetContactForceModel, "Get the current force model")
+        .def("DefineContactForceModel", &deme::DEMSolver::DefineContactForceModel,
+             py::return_value_policy::reference_internal)
+        .def("GetContactForceModel", &deme::DEMSolver::GetContactForceModel, "Get the current force model",
+             py::return_value_policy::reference_internal)
         .def("SetSortContactPairs", &deme::DEMSolver::SetSortContactPairs,
              "Instruct the solver if contact pair arrays should be sorted (based on the types of contacts) before "
              "usage.")
@@ -399,7 +406,6 @@ PYBIND11_MODULE(DEME, obj) {
                                             &deme::DEMSolver::SetContactOutputContent))
         .def("SetVerbosity", static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetVerbosity),
              "Defines the desired verbosity level to be chosen from the VERBOSITY enumeration object")
-        .def("DefineContactForceModel", &deme::DEMSolver::DefineContactForceModel)
         .def("LoadMaterial",
              static_cast<std::shared_ptr<deme::DEMMaterial> (deme::DEMSolver::*)(
                  const std::unordered_map<std::string, float>&)>(&deme::DEMSolver::LoadMaterial),

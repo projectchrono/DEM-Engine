@@ -85,7 +85,7 @@ if __name__ == "__main__":
     # The force model just serves as a contact number register here. So let's say if 2 spheres are in contact, the
     # force is constant 1, so you have 4+ neighbours if you feel 4+ force, and 2- if you got 2- neighbours.
     # To avoid force cancelling out, we let alive cells always get positive force, and dead cells negative.
-    DEMSim.DefineContactForceModel(
+    model = DEMSim.DefineContactForceModel(
         "if (AOwnerFamily == 0) force = make_float3(0, 0, 1); else force = make_float3(0, 0, -1);")
     DEMSim.DisableContactBetweenFamilies(0, 0)
     DEMSim.DisableContactBetweenFamilies(10, 10)
