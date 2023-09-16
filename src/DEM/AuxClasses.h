@@ -299,6 +299,7 @@ class DEMTracker {
     std::vector<std::vector<std::vector<float>>> GetContactForcesAndLocalTorque(size_t offset = 0);
 };
 
+// class DEMForceModel : public std::enable_shared_from_this<DEMForceModel> {
 class DEMForceModel {
   protected:
     // Those material property names that the user must set. This is non-empty usually when the user uses our on-shelf
@@ -308,7 +309,7 @@ class DEMForceModel {
     // materials. An example is friction coeff. Young's modulus on the other hand, is not pair-wise.
     std::set<std::string> m_pairwise_mat_props;
     // Custom or on-shelf
-    FORCE_MODEL type;
+    FORCE_MODEL type = FORCE_MODEL::CUSTOM;
     // The model
     std::string m_force_model = " ";
     // Quatity names that we want to associate each contact pair with. An array will be allocated for storing this, and
@@ -324,7 +325,8 @@ class DEMForceModel {
   public:
     friend class DEMSolver;
 
-    DEMForceModel(FORCE_MODEL model_type = FORCE_MODEL::CUSTOM) { SetForceModelType(model_type); }
+    DEMForceModel(FORCE_MODEL model_type) { SetForceModelType(model_type); }
+    DEMForceModel() {}
     ~DEMForceModel() {}
 
     /// Set the contact force model type

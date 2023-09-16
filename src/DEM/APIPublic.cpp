@@ -649,7 +649,7 @@ void DEMSolver::InstructBoxDomainDimension(const std::pair<float, float>& x,
 }
 
 std::shared_ptr<DEMForceModel> DEMSolver::DefineContactForceModel(const std::string& model) {
-    DEMForceModel force_model;  // Custom
+    DEMForceModel force_model(FORCE_MODEL::CUSTOM);  // Custom
     force_model.DefineCustomModel(model);
     m_force_model[DEFAULT_FORCE_MODEL_NAME] = std::make_shared<DEMForceModel>(std::move(force_model));
 
@@ -657,7 +657,7 @@ std::shared_ptr<DEMForceModel> DEMSolver::DefineContactForceModel(const std::str
 }
 
 std::shared_ptr<DEMForceModel> DEMSolver::ReadContactForceModel(const std::string& filename) {
-    DEMForceModel force_model;  // Custom
+    DEMForceModel force_model(FORCE_MODEL::CUSTOM);  // Custom
     std::filesystem::path sourcefile = USER_SCRIPT_PATH / filename;
     if (!force_model.ReadCustomModelFile(sourcefile)) {
         // If not in that folder, then maybe the user meant an absolute path

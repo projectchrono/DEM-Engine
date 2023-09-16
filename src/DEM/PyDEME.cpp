@@ -221,7 +221,7 @@ PYBIND11_MODULE(DEME, obj) {
              py::arg("offset") = 0)
         .def("SetGeometryWildcardValues", &deme::DEMTracker::SetGeometryWildcardValues, py::arg("name"), py::arg("wc"));
 
-    py::class_<deme::DEMForceModel>(obj, "DEMForceModel")
+    py::class_<deme::DEMForceModel, std::shared_ptr<deme::DEMForceModel>>(obj, "DEMForceModel")
         .def(py::init<deme::FORCE_MODEL>())
         .def("SetForceModelType", &deme::DEMForceModel::SetForceModelType, "Set the contact force model type")
         .def("DefineCustomModel", &deme::DEMForceModel::DefineCustomModel,
