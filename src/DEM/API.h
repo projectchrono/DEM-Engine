@@ -1001,7 +1001,7 @@ class DEMSolver {
 
     /// @brief Update the time step size. Used after system initialization.
     /// @param ts Time step size.
-    void UpdateStepSize(float ts = -1.0);
+    void UpdateStepSize(double ts = -1.0);
 
     /// Show the collaboration stats between dT and kT. This is more useful for tweaking the number of time steps that
     /// dT should be allowed to be in advance of kT.

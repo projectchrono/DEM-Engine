@@ -9,8 +9,8 @@
 #include <unordered_map>
 #include <core/utils/JitHelper.h>
 #include <DEM/Defines.h>
-#include <cuda.h>
-#include <cuda_runtime_api.h>
+// #include <cuda.h>
+// #include <cuda_runtime_api.h>
 
 // Forward declare jitify::Program to avoid downstream dependency
 namespace jitify {

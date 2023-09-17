@@ -1754,7 +1754,7 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
                              cudaMemcpyDeviceToDevice));
 
     // Send simulation metrics for kT's reference.
-    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_ts, &(simParams->h), sizeof(float), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_ts, &(simParams->h), sizeof(double), cudaMemcpyDeviceToDevice));
     // Note that perhapsIdealFutureDrift is non-negative, and it will be used to determine the margin size; however, if
     // scheduleHelper is instructed to have negative future drift then perhapsIdealFutureDrift no longer affects them.
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxDrift, &(granData->perhapsIdealFutureDrift),
@@ -2139,7 +2139,8 @@ void DEMDynamicThread::workerThread() {
             }
         }
 
-        for (double cycle = 0.0; cycle < cycleDuration - DEME_TINY_FLOAT; cycle += simParams->h) {
+        // for (double cycle = 0.0; cycle < cycleDuration - DEME_TINY_FLOAT; cycle += simParams->h) {
+        for (double cycle = 0.0; cycle < cycleDuration; cycle += simParams->h) {
             // If the produce is fresh, use it, and then send kT a new work order.
             // We used to send work order to kT whenever kT unpacks its buffer. This can lead to a situation where dT
             // sends a new work order and then immediately bails out (user asks it to do something else). A bit later

@@ -222,7 +222,7 @@ struct DEMSimParams {
     float3 userBoxMin;
     float3 userBoxMax;
     // Time step size
-    float h;
+    double h;
     // Time elappsed since start of simulation
     double timeElapsed = 0;
     // Sphere radii/geometry thickness inflation amount (for safer contact detection)
@@ -327,7 +327,7 @@ struct DEMDataDT {
     // pointer to remote buffer where kinematic thread stores work-order data provided by the dynamic thread
     unsigned int* pKTOwnedBuffer_maxDrift = NULL;
     float* pKTOwnedBuffer_absVel = NULL;
-    float* pKTOwnedBuffer_ts = NULL;
+    double* pKTOwnedBuffer_ts = NULL;
     voxelID_t* pKTOwnedBuffer_voxelID = NULL;
     subVoxelPos_t* pKTOwnedBuffer_locX = NULL;
     subVoxelPos_t* pKTOwnedBuffer_locY = NULL;
@@ -384,8 +384,8 @@ struct DEMDataKT {
     // kT-owned buffer pointers, for itself's usage
     // float maxVel_buffer; // buffer for the current max vel sent by dT
     float maxVel = 0;              // kT's own storage of max vel
-    float ts_buffer;               // buffer for the current ts size sent by dT
-    float ts;                      // kT's own storage of ts size
+    double ts_buffer;               // buffer for the current ts size sent by dT
+    double ts;                      // kT's own storage of ts size
     unsigned int maxDrift_buffer;  // buffer for max dT future drift steps
     unsigned int maxDrift;         // kT's own storage for max future drift
     voxelID_t* voxelID_buffer;
