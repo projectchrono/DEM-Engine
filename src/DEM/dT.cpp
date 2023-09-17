@@ -2139,7 +2139,7 @@ void DEMDynamicThread::workerThread() {
             }
         }
 
-        for (double cycle = 0.0; cycle < cycleDuration; cycle += simParams->h) {
+        for (double cycle = 0.0; cycle < cycleDuration - DEME_TINY_FLOAT; cycle += simParams->h) {
             // If the produce is fresh, use it, and then send kT a new work order.
             // We used to send work order to kT whenever kT unpacks its buffer. This can lead to a situation where dT
             // sends a new work order and then immediately bails out (user asks it to do something else). A bit later

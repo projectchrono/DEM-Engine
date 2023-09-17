@@ -18,7 +18,8 @@ import os
 import csv
 
 math_PI = 3.1415927
-force_csv_header = "point_x,point_y,point_z,force_x,force_y,force_z"
+force_csv_header = ["point_x", "point_y",
+                    "point_z", "force_x", "force_y", "force_z"]
 
 # Used to write pairwise force concerning the mesh to a file.
 
@@ -29,8 +30,8 @@ def writePointsForcesToCSV(force_csv_header,
                            filename):
     combined_array = np.hstack((np.array(points), np.array(forces)))
     with open(filename, 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow([force_csv_header])
+        writer = csv.writer(csvfile, quoting=csv.QUOTE_NONE, escapechar=',')
+        writer.writerow(force_csv_header)
         for row in combined_array:
             writer.writerow(row)
 

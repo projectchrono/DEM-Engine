@@ -146,4 +146,4 @@ if __name__ == "__main__":
     print(f"{elapsed_time} seconds (wall time) to finish this simulation")
 
     DEMSim.ShowTimingStats()
-    print("BallDrop demo exiting...")
+    print("Mixer demo exiting...")
