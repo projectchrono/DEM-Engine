@@ -987,8 +987,9 @@ void DEMSolver::transferSolverParams() {
         kT->stateParams.binChangeRateAcc = auto_adjust_acc;
         // Suppose for avoiding bins too big, the most proactive thing you can do is starting to shrink it when half max
         // geo count is reached...
-        kT->stateParams.binChangeUpperSafety = 0.5 + (1. - auto_adjust_upper_proactive_ratio) * 0.5;
-        kT->stateParams.binChangeLowerSafety = 0.5 + (1. - auto_adjust_lower_proactive_ratio) * 0.5;
+        double base_val = 0.01;
+        kT->stateParams.binChangeUpperSafety = base_val + (1. - auto_adjust_upper_proactive_ratio) * (1. - base_val);
+        kT->stateParams.binChangeLowerSafety = base_val + (1. - auto_adjust_lower_proactive_ratio) * (1. - base_val);
     }
 
     // CDFreq auto-adapt related
