@@ -268,6 +268,13 @@ class DEMSolver {
     void SetAdaptiveBinSizeLowerProactivity(float ratio) {
         auto_adjust_lower_proactive_ratio = hostClampBetween(ratio, 0.0, 1.0);
     }
+    /// @brief Get the current bin (for contact detection) size. Must be called from synchronized stance.
+    /// @return Bin size.
+    float GetBinSize() { return kT->simParams->binSize; }
+    /// @brief Get the current number of bins (for contact detection). Must be called from synchronized stance.
+    /// @return Number of bins.
+    size_t GetBinNum() { return kT->stateParams.numBins; }
+
     /// @brief Set the upper bound of kT update frequency (when it is adjusted automatically).
     /// @details This only affects when the update freq is updated automatically. To manually control the freq, use
     /// SetCDUpdateFreq then call DisableAdaptiveUpdateFreq.
