@@ -182,13 +182,13 @@ struct kTStateParams {
     // The `acceleration' of bin size change rate, (0, 1]: 1 means each time a change is applied, it's at top speed
     float binChangeRateAcc = 0.1;
     // Number of CD steps before the solver makes a decision on how to change the bin size
-    unsigned int binChangeObserveSteps = 5;
+    unsigned int binChangeObserveSteps = 25;
     // Past the point that (this number * error out bin geometry count)-many geometries found in a bin, the solver will
     // force the bin to shrink
-    float binChangeUpperSafety = 0.5;
+    float binChangeUpperSafety = 0.25;
     // Past the point that (this number * max num of bin)-many bins in the domain, the solver will force the bin to
     // expand
-    float binChangeLowerSafety = 0.85;
+    float binChangeLowerSafety = 0.3;
 
     // The max num of geometries in a bin that appeared in the CD process
     size_t maxSphFoundInBin;

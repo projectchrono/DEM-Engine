@@ -250,7 +250,14 @@ class DEMSolver {
     void DisableAdaptiveUpdateFreq() { auto_adjust_update_freq = false; }
     /// @brief Adjust how frequent kT updates the bin size.
     /// @param n Number of contact detections before kT makes one adjustment to bin size.
-    void SetAdaptiveBinSizeDelaySteps(unsigned int n) { auto_adjust_observe_steps = n; }
+    void SetAdaptiveBinSizeDelaySteps(unsigned int n) {
+        if (n < NUM_STEPS_RESERVED_AFTER_CHANGING_BIN_SIZE)
+            DEME_WARNING(
+                "SetAdaptiveBinSizeDelaySteps is called with argument %u.\nThis is probably sub-optimal and may cause "
+                "kT to try adjusting bin size before enough knowledge is gained.",
+                n);
+        auto_adjust_observe_steps = (n >= 1) ? n : 1;
+    }
     /// @brief Set the max rate that the bin size can change in one adjustment.
     /// @param rate 0: never changes; 1: can double or halve size in one go; suggest using default.
     void SetAdaptiveBinSizeMaxRate(float rate) { auto_adjust_max_rate = (rate > 0) ? rate : 0; }
@@ -1253,12 +1260,12 @@ class DEMSolver {
     // The max velocity at which the simulation should error out
     float threshold_error_out_vel = 1e3;
     // Num of steps that kT takes average before making a conclusion on the performance of this bin size
-    unsigned int auto_adjust_observe_steps = 20;
+    unsigned int auto_adjust_observe_steps = 25;
     // See corresponding method for those...
     float auto_adjust_max_rate = 0.03;
     float auto_adjust_acc = 0.2;
-    float auto_adjust_upper_proactive_ratio = 1.0;
-    float auto_adjust_lower_proactive_ratio = 0.3;
+    float auto_adjust_upper_proactive_ratio = 0.75;
+    float auto_adjust_lower_proactive_ratio = 0.5;
     unsigned int upper_bound_future_drift = 200;
     float max_drift_ahead_of_avg_drift = 4.;
     float max_drift_multiple_of_avg_drift = 1.05;
