@@ -18,11 +18,19 @@
 #include <fstream>
 #include <filesystem>
 #include <unordered_map>
+#include <random>
 #include <nvmath/helper_math.cuh>
 #include <DEM/VariableTypes.h>
 // #include <DEM/Defines.h>
 
 namespace deme {
+
+inline int randomZeroOrOne() {
+    std::random_device rd;   // Random number device to seed the generator
+    std::mt19937 gen(rd());  // Mersenne Twister generator
+    std::uniform_int_distribution<> dist(0, 1);
+    return dist(gen);
+}
 
 // Sign function
 template <typename T1>
