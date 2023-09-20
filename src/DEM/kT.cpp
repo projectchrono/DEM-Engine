@@ -179,6 +179,7 @@ inline void DEMKinematicThread::unpackMyBuffer() {
 
     // If dT received a mesh deformation request from user, then it is now passed to kT
     if (solverFlags.willMeshDeform) {
+        DEME_DEBUG_PRINTF("kT is unpacking a triangle soup update...");
         DEME_GPU_CALL(cudaMemcpy(granData->relPosNode1, granData->relPosNode1_buffer,
                                  simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
         DEME_GPU_CALL(cudaMemcpy(granData->relPosNode2, granData->relPosNode2_buffer,
@@ -187,6 +188,8 @@ inline void DEMKinematicThread::unpackMyBuffer() {
                                  simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
         // dT won't be sending if kT is loading, so it is safe
         solverFlags.willMeshDeform = false;
+        DEME_DEBUG_PRINTF("%zu bytes were transferred in this triangle soup update",
+                          simParams->nTriGM * sizeof(float3) * 3);
     }
 }
 
