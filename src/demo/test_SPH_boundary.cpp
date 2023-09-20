@@ -4,54 +4,23 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 // =============================================================================
-// This benchmark test the angle of repose of a given material using a drum test.
-//  Set by btagliafierro 28 Aug 2023
+// Fracture
 // =============================================================================
 
-#include <core/ApiVersion.h>
-#include <core/utils/ThreadManager.h>
 #include <DEM/API.h>
 #include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
-#include <cstdio>
 #include <chrono>
+#include <cmath>
+#include <cstdio>
 #include <filesystem>
-#include <random>
 
 using namespace deme;
-using namespace std::filesystem;
 
-void runDEME(std::string dir_output, float friction, float rollingMaterial);
+const double math_PI = 3.1415927;
 
-int main(int argc, char* argv[]) {
-    
-    
- 
-    if ( argc =~ 5) {
-        printf("You have entered %d arguments, which is wrong!\n", argc);
-        return 0;
-    }
-    
-    int case_Folder = atoi(argv[1]);          // takes the test ID
-    int case_ID = atoi(argv[2]);              // takes the test ID
-    float conctact_friction = atof(argv[3]);  // takes the value
-    float rolling_friction = atof(argv[4]);   // takes the value
-    
-
-    std::string out_dir = "/Test_PlasticSphere/";
-    out_dir += "Drum_" + std::to_string(case_Folder) + "/" + std::to_string(case_ID) + "/";
-
-    std::cout << "Running case with friction: " << conctact_friction << ", and rolling friction: " << rolling_friction
-              << std::endl;
-    std::cout << "Dir out is " << out_dir << std::endl;
-
-    runDEME(out_dir, conctact_friction, rolling_friction);
-
-    return 0;
-}
-
-void runDEME(std::string dir_output, float frictionMaterial, float rollingMaterial) {
+int main() {
     DEMSolver DEMSim;
     DEMSim.UseFrictionalHertzianModel();
     DEMSim.SetVerbosity(INFO);
@@ -63,36 +32,32 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     DEMSim.SetCollectAccRightAfterForceCalc(true);
     DEMSim.SetErrorOutAvgContacts(50);
 
-    path out_dir = current_path();
-    out_dir += dir_output;
     // Scale factor
     float scaling = 1.f;
 
     // total number of random clump templates to generate
 
-    double radius = 0.0060 * scaling / 2.0;
-    double density = 1592;
+    double radius = 0.12 / 5.0 / 2.0;
+    double density = 1000;
 
-    int totalSpheres = 13000;
+    int totalSpheres = 3550;
 
     int num_template = 1;
 
-    float plane_bottom = -0.08f * scaling;
-
-    std::vector<double> angular = {3.60};  // value given in rpm
+    float plane_bottom = -0.35;
 
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}, {"mu", 0.04}, {"Crr", 0.00}});
 
-    auto mat_type_particles = DEMSim.LoadMaterial(
-        {{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", frictionMaterial}, {"Crr", rollingMaterial}});
+    auto mat_type_particles =
+        DEMSim.LoadMaterial({{"E", 1.0e9}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.0}, {"Crr", 0.0}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.50);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.05);
     DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_type_particles, 0.30);
 
     // Make ready for simulation
-    float step_size = 2.50e-6;
-    DEMSim.InstructBoxDomainDimension({-0.09, 0.09}, {-0.15, 0.15}, {-0.15, 0.15});
+    float step_size = 5.0e-6;
+    DEMSim.InstructBoxDomainDimension({-0.5, 0.5}, {-0.5, 0.5}, {-0.5, 1.50});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
@@ -103,18 +68,12 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     DEMSim.SetInitBinSize(radius * 5);
 
     // Loaded meshes are by-default fixed
-    auto fixed = DEMSim.AddWavefrontMeshObject("../data/granularFlow/drum.obj", mat_type_walls);
+    auto fixed = DEMSim.AddWavefrontMeshObject("../data/granularFlow/float_1.obj", mat_type_walls);
 
-    fixed->Scale(0.19 * 1.0);
+    fixed->Scale(1 * 1.0);
     fixed->SetFamily(10);
-    DEMSim.SetFamilyPrescribedAngVel(10, to_string_with_precision(-2.0 * PI * angular[0] / 60.0), "0.0", "0.0");
-    DEMSim.SetFamilyPrescribedAngVel(11, to_string_with_precision(-2.0 * PI * angular[1] / 60.0), "0.0", "0.0");
-    DEMSim.SetFamilyPrescribedAngVel(12, to_string_with_precision(-2.0 * PI * angular[2] / 60.0), "0.0", "0.0");
-
-    auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
-    auto min_z_finder = DEMSim.CreateInspector("clump_min_z");
-    auto total_mass_finder = DEMSim.CreateInspector("clump_mass");
-    auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
+    std::string shake_pattern_xz = " 0.01 * sin( 50 * 2 * deme::PI * t)";
+    DEMSim.SetFamilyPrescribedLinVel(10, shake_pattern_xz, shake_pattern_xz, shake_pattern_xz);
 
     // Make an array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
@@ -151,12 +110,14 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
         clump_types.push_back(clump_ptr);
     }
 
+    std::filesystem::path out_dir = std::filesystem::current_path();
+    out_dir += "/test_SPH";
+    remove_all(out_dir);
+    create_directory(out_dir);
+
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
     float settle_frame_time = 0.004;
-
-    remove_all(out_dir);
-    create_directories(out_dir);
 
     char filename[200], meshfile[200];
 
@@ -165,19 +126,25 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     float y = 0;
 
     float z = shift_xyz / 2;  // by default we create beads at 0
-    double emitterZ = 0.065;
+    double emitterZ = 0.5;
     unsigned int actualTotalSpheres = 0;
 
+    // Some inspectors
+    auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
+
+    DEMSim.SetFamilyExtraMargin(1, 1.0 * radius);
+
+    DEMSim.SetInitTimeStep(step_size);
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0.00, -9.81));
     DEMSim.Initialize();
+    DEMSim.DisableContactBetweenFamilies(20, 1);
+    std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
 
     int frame = 0;
     bool generate = true;
     bool initialization = true;
     double timeTotal = 0;
     double consolidation = true;
-
-    // sprintf(meshfile, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame);
-    // DEMSim.WriteMeshFile(std::string(meshfile));
 
     while (initialization) {
         std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
@@ -187,16 +154,15 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
         bool generate = (plane_bottom + shift_xyz / 2 > emitterZ) ? false : true;
 
         if (generate) {
-            float sizeZ = (frame == 0) ? 0.15 : 0.00;
-            float sizeX = 0.10;
+            float sizeZ = (frame == 0) ? 1.30 : 0.00;
+            float sizeX = 0.21;
             float z = plane_bottom + shift_xyz + sizeZ / 2.0;
 
             float3 center_xyz = make_float3(0, 0, z);
-            float3 size_xyz = make_float3((sizeX - shift_xyz) / 2.0, (0.09 - shift_xyz) / 2.0, sizeZ / 2.0);
 
             // std::cout << "level of particles position ... " << center_xyz.z << std::endl;
 
-            auto heap_particles_xyz = sampler.SampleBox(center_xyz, size_xyz);
+            auto heap_particles_xyz = sampler.SampleCylinderZ(center_xyz, sizeX / 2, sizeZ / 2.0);
             unsigned int num_clumps = heap_particles_xyz.size();
             // std::cout << "number of particles at this level ... " << num_clumps << std::endl;
 
@@ -207,14 +173,13 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
             input_pile_xyz.insert(input_pile_xyz.end(), heap_particles_xyz.begin(), heap_particles_xyz.end());
 
             auto the_pile = DEMSim.AddClumps(input_pile_template_type, input_pile_xyz);
-            the_pile->SetVel(make_float3(-0.00, 0.0, -0.80));
+            the_pile->SetVel(make_float3(-0.00, 0.0, -0.90));
             the_pile->SetFamily(100);
 
             DEMSim.UpdateClumps();
 
-            // std::cout << "Total num of particles: " << (int)DEMSim.GetNumClumps() << std::endl;
+            std::cout << "Total num of particles: " << (int)DEMSim.GetNumClumps() << std::endl;
             actualTotalSpheres = (int)DEMSim.GetNumClumps();
-            // Generate initial clumps for piling
         }
         timeTotal += settle_frame_time;
         // std::cout << "Total runtime: " << timeTotal << "s; settling for: " << settle_frame_time << std::endl;
@@ -222,60 +187,70 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
 
         initialization = (actualTotalSpheres < totalSpheres) ? true : false;
 
-        if (generate && !(frame % 1000)) {
+        if (generate && !(frame % 1)) {
             std::cout << "frame : " << frame << std::endl;
-            sprintf(filename, "%s/DEMdemo_settling.csv", out_dir.c_str());
+            sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), frame);
             DEMSim.WriteSphereFile(std::string(filename));
             sprintf(meshfile, "%s/DEMdemo_mesh.vtk", out_dir.c_str());
             DEMSim.WriteMeshFile(std::string(meshfile));
             // DEMSim.ShowThreadCollaborationStats();
+            frame++;
         }
-        frame++;
 
         DEMSim.DoDynamicsThenSync(settle_frame_time);
 
         plane_bottom = max_z_finder->GetValue();
     }
-
     std::cout << "Initialization done with : " << actualTotalSpheres << "particles" << std::endl;
 
-    float timeStep = 5e-3;
-    int numStep = 5.0f / timeStep;
-    int numChangeSim = 5.0f / timeStep;
-    int timeOut = int(0.05f / timeStep);
+    float sim_end = 1.0;
+    unsigned int fps = 20;
+    float frame_time = 1.0 / fps;
 
-    // std::cout << "Time out in time steps is: " << timeOut << std::endl;
+    std::cout << "Output at " << fps << " FPS" << std::endl;
+    std::cout << "time output " << frame_time << "" << std::endl;
+
+    unsigned int frame_count = 0;
+    unsigned int step_count = 0;
+
     frame = 0;
 
-    int counterSim = 0;
+    sprintf(meshfile, "%s/DEMdemo_funnel_%04d.vtk", out_dir.c_str(), frame);
+    DEMSim.WriteMeshFile(std::string(meshfile));
+    sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), frame++);
+    DEMSim.WriteSphereFile(std::string(filename));
 
-    for (int i = 0; i < numStep; i++) {
-        if (!(i % timeOut) || i == 0) {
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame);
-            sprintf(meshfile, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame);
+    bool status_1 = true;
+    bool status_2 = false;
 
-            DEMSim.WriteMeshFile(std::string(meshfile));
-            DEMSim.WriteSphereFile(std::string(filename));
+    // DEMSim.DisableContactBetweenFamilies(10, 1);
+    float totalRunTime = 0.0f;
 
-            // std::cout << "Frame: " << frame << std::endl;
-            std::cout << "Elapsed time: " << timeStep * (i) << std::endl;
-            // DEMSim.ShowThreadCollaborationStats();
-            frame++;
-        }
-
-        if (!(i % numChangeSim) && i > 0) {
+    // Simulation loop
+    for (int i = 0; totalRunTime < sim_end; i++) {
+        totalRunTime += frame_time;
+        char filename[200];
+        char meshname[200];
+        char cnt_filename[200];
+        std::cout << "Outputting frame: " << frame_time << std::endl;
+        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame_count);
+        sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame_count);
+        DEMSim.WriteSphereFile(std::string(filename));
+        DEMSim.WriteMeshFile(std::string(meshname));
+        frame_count++;
+        DEMSim.ShowThreadCollaborationStats();
+        // std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
+        if (totalRunTime > 0.9 && status_1) {
             DEMSim.DoDynamicsThenSync(0);
-            std::cout << "change family of drum to " << 10 + 1 + counterSim << " " << std::endl;
-            DEMSim.ChangeFamily(10 + counterSim, 10 + 1 + counterSim);
-            counterSim++;
+            std::cout << "gate is in motion from: " << totalRunTime << " s" << std::endl;
+            std::cout << "and it will stop in : " << totalRunTime << " s" << std::endl;
+            DEMSim.ChangeFamily(10, 0);
+            status_1 = false;
         }
-
-        DEMSim.DoDynamics(timeStep);
+        DEMSim.DoDynamics(frame_time);
     }
 
     DEMSim.ShowTimingStats();
-    DEMSim.ShowAnomalies();
-    DEMSim.ClearTimingStats();
-
-    std::cout << "DEME exiting..." << std::endl;
+    std::cout << "Fracture demo exiting..." << std::endl;
+    return 0;
 }
