@@ -169,6 +169,10 @@ inline void DEMKinematicThread::unpackMyBuffer() {
     }
 
     DEME_DEBUG_PRINTF("kT received a velocity update: %.6g", granData->maxVel);
+    DEME_DEBUG_PRINTF("kT received roughly %zu bytes in clump states transfer",
+                      (size_t)simParams->nOwnerBodies * sizeof(voxelID_t) +
+                          simParams->nOwnerBodies * sizeof(subVoxelPos_t) * 3 +
+                          simParams->nOwnerBodies * sizeof(oriQ_t) * 4 + simParams->nOwnerBodies * sizeof(float));
     // DEME_DEBUG_PRINTF("A margin of thickness %.6g is added", simParams->beta);
 
     // Family number is a typical changable quantity on-the-fly. If this flag is on, kT received changes from dT.
@@ -188,7 +192,7 @@ inline void DEMKinematicThread::unpackMyBuffer() {
                                  simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
         // dT won't be sending if kT is loading, so it is safe
         solverFlags.willMeshDeform = false;
-        DEME_DEBUG_PRINTF("%zu bytes were transferred in this triangle soup update",
+        DEME_DEBUG_PRINTF("kT received roughly %zu in this triangle soup update",
                           simParams->nTriGM * sizeof(float3) * 3);
     }
 }
