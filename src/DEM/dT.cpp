@@ -2207,8 +2207,11 @@ void DEMDynamicThread::workerThread() {
         pendingCriticalUpdate = false;
 
         // When getting here, dT has finished one user call (although perhaps not at the end of the user script)
-        pPagerToMain->userCallDone = true;
-        pPagerToMain->cv_mainCanProceed.notify_all();
+        {
+            std::lock_guard<std::mutex> lock(pPagerToMain->mainCanProceed);
+            pPagerToMain->userCallDone = true;
+            pPagerToMain->cv_mainCanProceed.notify_all();
+        }
     }
 }
 
