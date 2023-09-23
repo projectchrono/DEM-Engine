@@ -312,8 +312,11 @@ void DEMKinematicThread::workerThread() {
         pSchedSupport->cv_DynamicCanProceed.notify_all();
 
         // When getting here, kT has finished one user call (although perhaps not at the end of the user script)
-        pPagerToMain->userCallDone = true;
-        pPagerToMain->cv_mainCanProceed.notify_all();
+        {
+            std::lock_guard<std::mutex> lock(pPagerToMain->mainCanProceed);
+            pPagerToMain->userCallDone = true;
+            pPagerToMain->cv_mainCanProceed.notify_all();
+        }
     }
 }
 
