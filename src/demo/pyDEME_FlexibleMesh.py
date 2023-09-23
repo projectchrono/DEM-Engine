@@ -59,8 +59,8 @@ if __name__ == "__main__":
     world_size = 2.
     # You have the choice to not specify the world size. In that case, the world is 20^3. And you might want to add
     # world boundaries yourself, like we did in this demo.
-    # DEMSim.InstructBoxDomainDimension([-world_size / 2, world_size / 2],
-    #                                   [-world_size / 2, world_size / 2], [0, world_size]);
+    DEMSim.InstructBoxDomainDimension([-world_size / 2, world_size / 2],
+                                      [-world_size / 2, world_size / 2], [0, world_size])
 
     # No need to add simulation `world' boundaries, b/c we'll add a cylinderical container manually
     DEMSim.InstructBoxDomainBoundingBC("none", mat_type_mesh)
