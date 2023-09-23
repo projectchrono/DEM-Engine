@@ -1745,13 +1745,15 @@ void DEMSolver::ReleaseFlattenedArrays() {
 void DEMSolver::resetWorkerThreads() {
     // The user won't be calling this when dT is working, so our only problem is that kT may be spinning in the inner
     // loop. So let's release kT.
-    std::unique_lock<std::mutex> lock(kTMain_InteractionManager->mainCanProceed);
-    kT->breakWaitingStatus();
-    while (!kTMain_InteractionManager->userCallDone) {
-        kTMain_InteractionManager->cv_mainCanProceed.wait(lock);
+    {
+        std::unique_lock<std::mutex> lock(kTMain_InteractionManager->mainCanProceed);
+        kT->breakWaitingStatus();
+        while (!kTMain_InteractionManager->userCallDone) {
+            kTMain_InteractionManager->cv_mainCanProceed.wait(lock);
+        }
+        // Reset to make ready for next user call, don't forget it
+        kTMain_InteractionManager->userCallDone = false;
     }
-    // Reset to make ready for next user call, don't forget it
-    kTMain_InteractionManager->userCallDone = false;
 
     // Finally, reset the thread stats and wait for potential new user calls
     kT->resetUserCallStat();
@@ -1890,13 +1892,15 @@ void DEMSolver::DoDynamics(double thisCallDuration) {
     kT->startThread();
 
     // Wait till dT is done
-    std::unique_lock<std::mutex> lock(dTMain_InteractionManager->mainCanProceed);
-    while (!dTMain_InteractionManager->userCallDone) {
-        dTMain_InteractionManager->cv_mainCanProceed.wait(lock);
+    {
+        std::unique_lock<std::mutex> lock(dTMain_InteractionManager->mainCanProceed);
+        while (!dTMain_InteractionManager->userCallDone) {
+            dTMain_InteractionManager->cv_mainCanProceed.wait(lock);
+        }
+        // Reset to make ready for next user call, don't forget it. We don't do a `deep' reset using resetUserCallStat,
+        // since that's only used when kT and dT sync.
+        dTMain_InteractionManager->userCallDone = false;
     }
-    // Reset to make ready for next user call, don't forget it. We don't do a `deep' reset using resetUserCallStat,
-    // since that's only used when kT and dT sync.
-    dTMain_InteractionManager->userCallDone = false;
 }
 
 void DEMSolver::DoDynamicsThenSync(double thisCallDuration) {
