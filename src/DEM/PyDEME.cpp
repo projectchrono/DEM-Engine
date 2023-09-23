@@ -417,12 +417,12 @@ PYBIND11_MODULE(DEME, obj) {
         .def("InstructBoxDomainDimension",
              static_cast<void (deme::DEMSolver::*)(float, float, float, const std::string&)>(
                  &deme::DEMSolver::InstructBoxDomainDimension),
-             "Sets the Box Domain Dimension", py::arg("x"), py::arg("y"), py::arg("z"), py::arg("dir_exact") = "none")
+             "Set the Box Domain Dimension", py::arg("x"), py::arg("y"), py::arg("z"), py::arg("dir_exact") = "none")
         .def("InstructBoxDomainDimension",
              static_cast<void (deme::DEMSolver::*)(const std::pair<float, float>&, const std::pair<float, float>&,
                                                    const std::pair<float, float>&, const std::string& dir_exact)>(
                  &deme::DEMSolver::InstructBoxDomainDimension),
-             "Sets the Box Domain Dimension")
+             "Set the span of the Box Domain", py::arg("x"), py::arg("y"), py::arg("z"), py::arg("dir_exact") = "none")
         .def("InstructBoxDomainBoundingBC", &deme::DEMSolver::InstructBoxDomainBoundingBC,
              "Instruct if and how we should add boundaries to the simulation world upon initialization. Choose between "
              "`none', `all' (add 6 boundary planes) and `top_open' (add 5 boundary planes and leave the z-directon top "
