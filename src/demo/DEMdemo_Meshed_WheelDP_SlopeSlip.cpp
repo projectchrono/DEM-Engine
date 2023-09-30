@@ -27,12 +27,12 @@ int main(int argc, char* argv[]) {
     std::filesystem::create_directory(out_dir);
 
     // `World'
-    float G_mag = 9.81;
+    float G_mag = atof(argv[11]);
     float step_size = 1e-5;     // 5e-6;
     double world_size_y = 0.6;  // 0.52;
     double world_size_x = 3.;
     double world_size_z = 4.0;
-    float w_r = 0.8;
+    float w_r = atof(argv[10]);
     double sim_end = 30.;
     float z_adv_targ = 0.1;
 
@@ -41,7 +41,7 @@ int main(int argc, char* argv[]) {
     float eff_mass = atof(argv[3]);
     float wheel_width = atof(argv[5]);
     float wheel_mass = 5.;  // 8.7;
-    float total_pressure = eff_mass * 9.81;
+    float total_pressure = eff_mass * G_mag;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
@@ -65,7 +65,7 @@ int main(int argc, char* argv[]) {
 
         // E, nu, CoR, mu, Crr...
         float mu = 0.4;
-        float mu_wheel = 0.8;
+        float mu_wheel = atof(argv[12]);
         float mu_wall = 1.;
         auto mat_type_wall =
             DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", mu_wall}, {"Crr", 0.00}});
@@ -271,6 +271,7 @@ int main(int argc, char* argv[]) {
             std::cout << "Time: " << t << std::endl;
             std::cout << "Slip: " << 1. - adv / (v_ref * t) << std::endl;
             std::cout << "Energy: " << energy << std::endl;
+            std::cout << "Power: " << energy / t << std::endl;
             std::cout << "Efficiency: " << eff_energy / energy << std::endl;
             std::cout << "Z advance: " << z_adv << std::endl;
 

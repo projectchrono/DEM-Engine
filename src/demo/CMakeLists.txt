@@ -36,12 +36,12 @@ SET(DEMOS
 		DEMdemo_WheelDPSimplified
 		DEMdemo_WheelSlopeSlip
 		DEMdemo_Meshed_WheelDP_SlopeSlip_Moon
-		DEMdemo_Meshed_WheelDP_SlopeSlip_Earth
+		DEMdemo_Meshed_WheelDP_SlopeSlip
 		DEMdemo_WheelDP_SlopeSlip_Earth_Single
 		DEMdemo_Indentation
 		DEMdemo_Repose_GRC
 		DEMdemo_SolarSystem
-		DEMdemo_Meshed_Steering_Earth
+		DEMdemo_Meshed_Steering
 		DEMdemo_Meshed_Steering_Earth_Single
 		DEMdemo_Electrostatic
 		DEMdemo_FlexibleMesh

@@ -27,7 +27,7 @@ int main(int argc, char* argv[]) {
     std::filesystem::create_directory(out_dir);
 
     // `World'
-    float G_mag = 9.81;
+    float G_mag = atof(argv[11]);
     float step_size = 1e-5;  // 5e-6;
     double world_size_y = .75;
     double world_size_x = 3.;
@@ -37,16 +37,16 @@ int main(int argc, char* argv[]) {
     float wheel_rad = atof(argv[2]);
     float wheel_width = atof(argv[5]);
     float wheel_mass = 5.;                        // 8.7;
-    float total_pressure = atof(argv[3]) * 9.81;  // 22.
+    float total_pressure = atof(argv[3]) * G_mag;  // 22.
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
     float grouser_height = atof(argv[4]);
 
     // Wheel movements
-    float w_r = 0.8;
+    float w_r = atof(argv[10]);
     float forward_slip = 0.1;
-    double sim_end = 3.;
+    double sim_end = math_PI * 2. / 3. / w_r; // 1/3 a revolution
     float tilt = 5. / 180. * math_PI;
     float forward_v = w_r * wheel_rad * std::cos(tilt) * (1. - forward_slip);
 
@@ -70,7 +70,7 @@ int main(int argc, char* argv[]) {
 
         // E, nu, CoR, mu, Crr...
         float mu = 0.4;
-        float mu_wheel = 0.8;
+        float mu_wheel = atof(argv[12]);
         float mu_wall = 1.;
         auto mat_type_wall =
             DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", mu_wall}, {"Crr", 0.00}});
