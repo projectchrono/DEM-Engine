@@ -53,7 +53,7 @@ int main(int argc, char* argv[]) {
     float Slopes_deg[] = {0};
     float cp_dev;
     if (atof(argv[7]) > 0.) {
-        cp_dev = atof(argv[7]) / 5.;
+        cp_dev = atof(argv[7]) / 4.;
     } else {
         cp_dev = 0.;
     }

@@ -50,7 +50,7 @@ int main(int argc, char* argv[]) {
     float Slope_deg = atof(argv[6]);
     float cp_dev;
     if (atof(argv[7]) > 0.) {
-        cp_dev = atof(argv[7]) / 5.;
+        cp_dev = atof(argv[7]) / 4.;
     } else {
         cp_dev = 0.;
     }
