@@ -6,17 +6,16 @@
 #include "GpuError.h"
 
 GpuManager::GpuManager(unsigned int total_streams) {
-    int ndevices = 0;
-    DEME_GPU_CALL(cudaGetDeviceCount(&ndevices));
+    ndevices = scanNumDevices();
 
-    if (ndevices == 0) {
-        std::cerr << "No GPU device is detected. Try lspci and see what you get.\nIf you indeed have GPU "
-                     "devices, maybe you should try rebooting or reinstalling cuda components?\n";
-        throw std::runtime_error("No GPU device detected!");
-    } else if (ndevices == 1) {
-        std::cerr << "\nOne GPU device is detected. Currently, DEME's performance edge is limited with only one "
-                     "GPU.\nTry allocating 2 GPU devices if possible.\n\n";
-    }
+    // if (ndevices == 0) {
+    //     std::cerr << "No GPU device is detected. Try lspci and see what you get.\nIf you indeed have GPU "
+    //                  "devices, maybe you should try rebooting or reinstalling cuda components?\n";
+    //     throw std::runtime_error("No GPU device detected!");
+    // } else if (ndevices == 1) {
+    //     std::cerr << "\nOne GPU device is detected. Currently, DEME's performance edge is limited with only one "
+    //                  "GPU.\nTry allocating 2 GPU devices if possible.\n\n";
+    // }
 
     this->streams.resize(ndevices);
 
@@ -42,9 +41,9 @@ GpuManager::~GpuManager() {
 }
 
 // TODO: add CUDA error checking
-int GpuManager::getNumDevices() {
+int GpuManager::scanNumDevices() {
     int ndevices = 0;
-    cudaGetDeviceCount(&ndevices);
+    DEME_GPU_CALL(cudaGetDeviceCount(&ndevices));
     return ndevices;
 }
 

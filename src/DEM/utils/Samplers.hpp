@@ -607,7 +607,7 @@ inline std::vector<float3> DEMBoxHCPSampler(const std::vector<float>& BoxCenter,
     assertThreeElements(BoxCenter, "DEMBoxHCPSampler", "BoxCenter");
     assertThreeElements(HalfDims, "DEMBoxHCPSampler", "HalfDims");
     return DEMBoxHCPSampler(host_make_float3(BoxCenter[0], BoxCenter[1], BoxCenter[2]),
-                             host_make_float3(HalfDims[0], HalfDims[1], HalfDims[2]), GridSize);
+                            host_make_float3(HalfDims[0], HalfDims[1], HalfDims[2]), GridSize);
 }
 
 /// A light-weight sampler that generates a shell made of particles that resembles a cylindrical surface.
@@ -638,17 +638,22 @@ inline std::vector<float3> DEMCylSurfSampler(float3 CylCenter,
     return points;
 }
 /// A light-weight sampler that generates a shell made of particles that resembles a cylindrical surface.
-inline std::vector<float3> DEMCylSurfSampler(const std::vector<float>& CylCenter,
-                                             const std::vector<float>& CylAxis,
-                                             float CylRad,
-                                             float CylHeight,
-                                             float ParticleRad,
-                                             float spacing = 1.2f) {
+inline std::vector<std::vector<float>> DEMCylSurfSampler(const std::vector<float>& CylCenter,
+                                                         const std::vector<float>& CylAxis,
+                                                         float CylRad,
+                                                         float CylHeight,
+                                                         float ParticleRad,
+                                                         float spacing = 1.2f) {
     assertThreeElements(CylCenter, "DEMCylSurfSampler", "CylCenter");
     assertThreeElements(CylAxis, "DEMCylSurfSampler", "CylAxis");
-    return DEMCylSurfSampler(host_make_float3(CylCenter[0], CylCenter[1], CylCenter[2]),
-                             host_make_float3(CylAxis[0], CylAxis[1], CylAxis[2]), CylRad, CylHeight, ParticleRad,
-                             spacing);
+    std::vector<float3> res_float3 = DEMCylSurfSampler(host_make_float3(CylCenter[0], CylCenter[1], CylCenter[2]),
+                                                       host_make_float3(CylAxis[0], CylAxis[1], CylAxis[2]), CylRad,
+                                                       CylHeight, ParticleRad, spacing);
+    std::vector<std::vector<float>> res(res_float3.size());
+    for (size_t i = 0; i < res_float3.size(); i++) {
+        res[i] = {res_float3[i].x, res_float3[i].y, res_float3[i].z};
+    }
+    return res;
 }
 
 }  // namespace deme

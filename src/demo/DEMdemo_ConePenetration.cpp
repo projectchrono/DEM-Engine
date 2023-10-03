@@ -140,6 +140,7 @@ int main() {
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(10.);
+
     DEMSim.Initialize();
 
     std::filesystem::path out_dir = std::filesystem::current_path();

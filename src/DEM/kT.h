@@ -399,20 +399,16 @@ class DEMKinematicThread {
       public:
         AccumTimer() { timer = Timer<double>(); }
         ~AccumTimer() {}
-        void Begin() {
-            if (cached_count >= NUM_STEPS_RESERVED_AFTER_CHANGING_BIN_SIZE)
-                timer.start();
-        }
+        void Begin() { timer.start(); }
         void End() {
-            if (cached_count >= NUM_STEPS_RESERVED_AFTER_CHANGING_BIN_SIZE)
-                timer.stop();
+            timer.stop();
             cached_count++;
         }
 
         double GetPrevTime() { return prev_time; }
 
         void Query(double& prev, double& curr) {
-            double avg_time = timer.GetTimeSeconds() / (cached_count - NUM_STEPS_RESERVED_AFTER_CHANGING_BIN_SIZE);
+            double avg_time = timer.GetTimeSeconds() / (double)(cached_count);
             prev = prev_time;
             curr = avg_time;
             // Record the time for this run
@@ -422,7 +418,7 @@ class DEMKinematicThread {
         }
 
         bool QueryOn(double& prev, double& curr, unsigned int n) {
-            if (cached_count >= n + NUM_STEPS_RESERVED_AFTER_CHANGING_BIN_SIZE) {
+            if (cached_count >= n) {
                 Query(prev, curr);
                 return true;
             } else {

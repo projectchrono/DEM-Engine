@@ -32,6 +32,9 @@ int main() {
     // is minor one way or another.
     DEMSim.DisableJitifyClumpTemplates();
 
+    // If you don't need individual force information, then this option makes the solver run a bit faster.
+    DEMSim.SetNoForceRecord();
+
     // A general template for ellipsoid with b = c = 1 and a = 2, where Z is the long axis
     std::vector<float> radii = {1.0, 0.88, 0.64, 0.88, 0.64};
     std::vector<float3> relPos = {make_float3(0, 0, 0), make_float3(0, 0, 0.86), make_float3(0, 0, 1.44),

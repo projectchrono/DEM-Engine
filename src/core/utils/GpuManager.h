@@ -18,27 +18,31 @@ class GpuManager {
         bool _impl_active;  // Reserved for the implementation
     };
 
-    // Returns the LEAST number of streams available on any device
+    // Returns the LEAST number of streams available on any device.
     unsigned int getStreamsPerDevice();
-    // Returns the HIGHEST number of streams per device
+    // Returns the HIGHEST number of streams per device.
     unsigned int getMaxStreamsPerDevice();
 
-    int getNumDevices();
+    int scanNumDevices();
 
-    // DO NOT USE UNLESS YOU INTEND TO MANUALLY HANDLE YOUR STREAMS
+    // DO NOT USE UNLESS YOU INTEND TO MANUALLY HANDLE YOUR STREAMS.
     const std::vector<StreamInfo>& getStreamsFromDevice(int index);
 
-    // DO NOT USE UNLESS YOU INTEND TO MANUALLY HANDLE YOUR STREAMS
+    // DO NOT USE UNLESS YOU INTEND TO MANUALLY HANDLE YOUR STREAMS.
     const std::vector<StreamInfo>& getStreamsFromDevice(const StreamInfo&);
 
-    // Get a stream which hasn't been used yet and mark it as used
+    // Get a stream which hasn't been used yet and mark it as used.
     const StreamInfo& getAvailableStream();
     const StreamInfo& getAvailableStreamFromDevice(int index);
 
-    // Mark a stream as unused
+    // Mark a stream as unused.
     void setStreamAvailable(const StreamInfo&);
 
+    // Return the number of devices detected.
+    int getNumDevices() { return ndevices; }
+
   private:
+    int ndevices;
     std::vector<std::vector<StreamInfo>> streams;
 };
 

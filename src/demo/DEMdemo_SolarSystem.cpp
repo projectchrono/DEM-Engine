@@ -44,6 +44,7 @@ int main() {
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
     DEMSim.EnsureKernelErrMsgLineNum();
+    DEMSim.SetNoForceRecord();
 
     // Material for the planets, but they ultimately do not matter at all.
     auto mat_type = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.8}});
