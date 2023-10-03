@@ -14,6 +14,8 @@
 #include <map>
 #include <random>
 #include <cstdlib>
+#include <iostream>
+#include <fstream>
 
 using namespace deme;
 
@@ -37,7 +39,8 @@ int main(int argc, char* argv[]) {
     float wheel_rad = atof(argv[2]);
     float wheel_width = atof(argv[5]);
     float wheel_mass = 5.;                        // 8.7;
-    float total_pressure = atof(argv[3]) * 9.81;  // 22.
+    float eff_mass = atof(argv[3]);
+    float total_pressure = eff_mass * 9.81;  // 22.
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
@@ -257,7 +260,6 @@ int main(int argc, char* argv[]) {
             DEMSim.DoDynamicsThenSync(0.5);
             DEMSim.ChangeFamily(1, 2);
             DEMSim.DoDynamicsThenSync(2.);
-            std::cout << "Steer test num: " << cur_test << std::endl;
 
             float x1 = wheel_tracker->Pos().x;
 
@@ -272,9 +274,11 @@ int main(int argc, char* argv[]) {
             }
 
             float adv = wheel_tracker->Pos().x - x1;
-            std::cout << "SteerSlip: " << 1. - adv / (forward_ref_v * t) << std::endl;
-            std::cout << "Force X: " << xforce / report_num << std::endl;
-            std::cout << "Force Y: " << yforce / report_num << std::endl;
+
+            std::filesystem::path outfilepath = out_dir / "forcey.txt";
+            std::ofstream outFile(outfilepath);
+            outFile << yforce / (double)report_num / (double)total_pressure << std::endl;
+            outFile.close();
 
             {
                 // Overwrite previous...

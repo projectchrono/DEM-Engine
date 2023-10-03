@@ -14,6 +14,8 @@
 #include <map>
 #include <random>
 #include <cstdlib>
+#include <iostream>
+#include <fstream>
 
 using namespace deme;
 
@@ -246,7 +248,6 @@ int main(int argc, char* argv[]) {
 
             std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
 
-            std::cout << "Slip test num: " << cur_test << std::endl;
             DEMSim.DoDynamicsThenSync(2.);
 
             float3 V = wheel_tracker->Vel();
@@ -268,16 +269,15 @@ int main(int argc, char* argv[]) {
 
             float adv = x2 - x1;
             float eff_energy = eff_mass * z_adv * G_mag;
-            std::cout << "Time: " << t << std::endl;
-            std::cout << "Slip: " << 1. - adv / (v_ref * t) << std::endl;
-            std::cout << "Energy: " << energy << std::endl;
-            std::cout << "Efficiency: " << eff_energy / energy << std::endl;
-            std::cout << "Z advance: " << z_adv << std::endl;
 
             std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
             std::chrono::duration<double> time_sec =
                 std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
-            std::cout << "Runtime: " << (time_sec.count()) << std::endl;
+
+            std::filesystem::path outfilepath = out_dir / "efficiency.txt";
+            std::ofstream outFile(outfilepath);
+            outFile << eff_energy / energy << std::endl;
+            outFile.close();
 
             {
                 // Overwrite previous...
