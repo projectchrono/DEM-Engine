@@ -14,10 +14,57 @@
 #include <map>
 #include <random>
 #include <cstdlib>
+#include <vector>
+#include <array>
 
 using namespace deme;
 
 const double math_PI = 3.1415927;
+
+unsigned long long comb(int n, int k) {
+    if (k < 0 || k > n)
+        return 0;
+    if (k > n - k)
+        k = n - k;
+    unsigned long long result = 1;
+    for (int i = 1; i <= k; ++i) {
+        result *= n - i + 1;
+        result /= i;
+    }
+    return result;
+}
+
+std::vector<double> cBernstein(int degree, double t) {
+    std::vector<double> B(degree + 1);
+    for (int i = 0; i <= degree; ++i) {
+        B[i] = comb(degree, i) * std::pow(t, i) * std::pow(1.0 - t, degree - i);
+    }
+    return B;
+}
+
+double deviationCausedHighest(double cp_deviation, double rad, double width) {
+    if (cp_deviation <= 0.) {
+        return 0.;
+    }
+    const int num_CPs = 4;
+    double t = 0.5;
+    std::vector<std::array<double, 2>> outer_CPs(num_CPs);
+    outer_CPs[0] = {0., width / 2};
+    outer_CPs[1] = {rad * cp_deviation, width / 2 - width / 3};
+    outer_CPs[2] = {rad * cp_deviation, width / 2 - width / 3 * 2};
+    outer_CPs[3] = {0., -width / 2};
+
+    std::vector<double> b = cBernstein(num_CPs - 1, t);
+
+    // Matrix multiplication (b @ outer_CPs)
+    std::array<double, 2> eval_pnt = {0., 0.};
+    for (int i = 0; i < num_CPs; ++i) {
+        eval_pnt[0] += b[i] * outer_CPs[i][0];
+        eval_pnt[1] += b[i] * outer_CPs[i][1];
+    }
+
+    return eval_pnt[0];
+}
 
 int main(int argc, char* argv[]) {
     int cur_test = atoi(argv[1]);
@@ -49,11 +96,7 @@ int main(int argc, char* argv[]) {
 
     float Slope_deg = atof(argv[6]);
     float cp_dev;
-    if (atof(argv[7]) > 0.) {
-        cp_dev = atof(argv[7]) / 4.;
-    } else {
-        cp_dev = 0.;
-    }
+    cp_dev = deviationCausedHighest(atof(argv[7]), wheel_rad, wheel_width);
 
     {
         DEMSolver DEMSim;
