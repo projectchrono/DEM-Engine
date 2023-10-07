@@ -27,9 +27,9 @@ void runDEME(std::string dir_output, float friction, float rollingMaterial);
 int main(int argc, char* argv[]) {
     
     
- 
-    if ( argc =~ 5) {
-        printf("You have entered %d arguments, which is wrong!\n", argc);
+
+    if ( argc != 5) {
+        std::cout << "You have entered " << argc << " arguments, which is wrong!" << std::endl;
         return 0;
     }
     
