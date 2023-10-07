@@ -100,7 +100,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(25.);
-    DEMSim.SetInitBinSize(radius * 5);
+    DEMSim.SetInitBinSize(radius * 3);
 
     // Loaded meshes are by-default fixed
     auto fixed = DEMSim.AddWavefrontMeshObject("../data/granularFlow/drum.obj", mat_type_walls);

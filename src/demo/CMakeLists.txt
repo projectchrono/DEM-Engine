@@ -35,7 +35,7 @@ SET(DEMOS
 		DEMdemo_Granular_Flow
 		DEMdemo_Granular_FlowSpheresDrum
 		DEMdemo_Granular_NonSpherical
-		DEMdemo_Granular_WoodenSpheresHopper
+		DEMdemo_Granular_WoodenSphereHopper
 		DEMdemo_Granular_PlasticSphereDrum
 		DEMdemo_Granular_PlasticSphereHopper
 		DEMdemo_Granular_PlasticCylinderDrum

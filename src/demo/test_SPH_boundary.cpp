@@ -30,7 +30,7 @@ int main() {
 
     srand(7001);
     DEMSim.SetCollectAccRightAfterForceCalc(true);
-    DEMSim.SetErrorOutAvgContacts(50);
+    DEMSim.SetErrorOutAvgContacts(150);
 
     // Scale factor
     float scaling = 1.f;
@@ -56,7 +56,7 @@ int main() {
     DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_type_particles, 0.30);
 
     // Make ready for simulation
-    float step_size = 5.0e-6;
+    float step_size = 2.0e-6;
     DEMSim.InstructBoxDomainDimension({-0.5, 0.5}, {-0.5, 0.5}, {-0.5, 1.50});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
@@ -132,7 +132,7 @@ int main() {
     // Some inspectors
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
 
-    DEMSim.SetFamilyExtraMargin(1, 1.0 * radius);
+    //DEMSim.SetFamilyExtraMargin(1, 0.0 * radius);
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0.00, -9.81));
@@ -155,7 +155,7 @@ int main() {
 
         if (generate) {
             float sizeZ = (frame == 0) ? 1.30 : 0.00;
-            float sizeX = 0.21;
+            float sizeX = 0.20;
             float z = plane_bottom + shift_xyz + sizeZ / 2.0;
 
             float3 center_xyz = make_float3(0, 0, z);
