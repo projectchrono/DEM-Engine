@@ -57,7 +57,7 @@ void DEMKinematicThread::calibrateParams() {
             // Note the speed can be 0, yet we find performance variance. Then this is purely noise. We still wish the
             // bin size to change in the next iteration, so we assign a direction randomly.
             if (speed_dir == 0)
-                speed_dir = 1;
+                speed_dir = (randomZeroOrOne() == 0) ? -1 : 1;
             float speed_update;
             if (curr_time < prev_time) {
                 // If there is improvement, then we accelerate the current change direction
@@ -126,8 +126,11 @@ inline void DEMKinematicThread::unpackMyBuffer() {
     DEME_GPU_CALL(cudaMemcpy(&(granData->maxDrift), &(granData->maxDrift_buffer), sizeof(unsigned int),
                              cudaMemcpyDeviceToDevice));
 
-    // Whatever drift value dT says, kT listens
-    pSchedSupport->kinematicMaxFutureDrift = granData->maxDrift;
+    // Whatever drift value dT says, kT listens; unless kinematicMaxFutureDrift is negative in which case the user
+    // explicitly said not caring the future drift.
+    pSchedSupport->kinematicMaxFutureDrift = (pSchedSupport->kinematicMaxFutureDrift.load() < 0.)
+                                                 ? pSchedSupport->kinematicMaxFutureDrift.load()
+                                                 : granData->maxDrift;
 
     // Need to reduce to check if max velocity is exceeded (right now, array marginSize is still storing absv...)
     floatMaxReduce(granData->marginSize, &(granData->maxVel), simParams->nOwnerBodies, streamInfo.stream,
@@ -302,8 +305,11 @@ void DEMKinematicThread::workerThread() {
         pSchedSupport->cv_DynamicCanProceed.notify_all();
 
         // When getting here, kT has finished one user call (although perhaps not at the end of the user script)
-        pPagerToMain->userCallDone = true;
-        pPagerToMain->cv_mainCanProceed.notify_all();
+        {
+            std::lock_guard<std::mutex> lock(pPagerToMain->mainCanProceed);
+            pPagerToMain->userCallDone = true;
+            pPagerToMain->cv_mainCanProceed.notify_all();
+        }
     }
 }
 
@@ -854,7 +860,28 @@ void DEMKinematicThread::initAllocation() {
     DEME_TRACKED_RESIZE_DEBUGPRINT(familyExtraMarginSize, NUM_AVAL_FAMILIES, "familyExtraMarginSize", 0);
 }
 
-void DEMKinematicThread::deallocateEverything() {}
+void DEMKinematicThread::deallocateEverything() {
+    DEME_DEVICE_PTR_DEALLOC(dT->granData->idGeometryA_buffer);
+    DEME_DEVICE_PTR_DEALLOC(dT->granData->idGeometryB_buffer);
+    DEME_DEVICE_PTR_DEALLOC(dT->granData->contactType_buffer);
+    DEME_DEVICE_PTR_DEALLOC(dT->granData->contactMapping_buffer);
+
+    DEME_DEVICE_PTR_DEALLOC(granData->voxelID_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->locX_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->locY_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->locZ_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->oriQ0_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->oriQ1_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->oriQ2_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->oriQ3_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->absVel_buffer);
+
+    DEME_DEVICE_PTR_DEALLOC(granData->familyID_buffer);
+
+    DEME_DEVICE_PTR_DEALLOC(granData->relPosNode1_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->relPosNode2_buffer);
+    DEME_DEVICE_PTR_DEALLOC(granData->relPosNode3_buffer);
+}
 
 void DEMKinematicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles) {
     for (size_t i = 0; i < triangles.size(); i++) {

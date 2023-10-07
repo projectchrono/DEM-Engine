@@ -531,8 +531,9 @@ void DEMSolver::reportInitStats() const {
                   (m_expand_factor / m_smallest_radius) * 100.0);
     } else {
         DEME_INFO("The solver to set to adaptively change the contact margin size.");
+        float initFutureDrift = (m_suggestedFutureDrift < 0.) ? 10.0 : m_suggestedFutureDrift;
         float expand_factor = (m_expand_safety_multi * AN_EXAMPLE_MAX_VEL_FOR_SHOWING_MARGIN_SIZE + m_expand_base_vel) *
-                              m_suggestedFutureDrift * m_ts_size;
+                              initFutureDrift * m_ts_size;
         DEME_STEP_METRIC(
             "To give an example, all geometries may be enlarged/thickened by around %.6g (estimated with the initial "
             "step size, initial update frequency and velocity %.4g) for contact detection purpose.",
@@ -942,14 +943,15 @@ void DEMSolver::transferSolverParams() {
     kT->solverFlags.isAsync = !((m_suggestedFutureDrift == 0) && !auto_adjust_update_freq);
     dT->solverFlags.isAsync = !((m_suggestedFutureDrift == 0) && !auto_adjust_update_freq);
     // Ideal max drift in solverFlags may not be up-to-date, and only represents what the solver thinks it ought to be.
-    // Interaction manager's copy prevails.
-    dT->granData->perhapsIdealFutureDrift = m_suggestedFutureDrift;
+    // Interaction manager's copy prevails. This one is used for margin decision so should be non-negative.
+    dT->granData->perhapsIdealFutureDrift = (m_suggestedFutureDrift < 0.) ? 10 : m_suggestedFutureDrift;
     // The reason why we use dTMaxFutureDrift rather than m_updateFreq is the following...
     // dT's contact pair info is actually in a `double stale' situation. kT-supplied contact pairs are based on some old
     // position info already (because kT needs time to run after a dT's order is placed), and dT needs to use this
     // contact info for some extra steps. That's why 2 * m_updateFreq (m_updateFreq can be used-estimated and derived
     // from kT--dT collab stats, so the solver has no control over how it is inputted; it just has to use it wisely) is
     // actually a better guess for the max dT-into-future steps.
+    // Also, these values can be negative per user instruction.
     dTkT_InteractionManager->dynamicMaxFutureDrift = m_suggestedFutureDrift;
     dTkT_InteractionManager->kinematicMaxFutureDrift = m_suggestedFutureDrift;
 
@@ -985,8 +987,11 @@ void DEMSolver::transferSolverParams() {
         kT->stateParams.binChangeRateAcc = auto_adjust_acc;
         // Suppose for avoiding bins too big, the most proactive thing you can do is starting to shrink it when half max
         // geo count is reached...
-        kT->stateParams.binChangeUpperSafety = 0.5 + (1. - auto_adjust_upper_proactive_ratio) * 0.5;
-        kT->stateParams.binChangeLowerSafety = 0.5 + (1. - auto_adjust_lower_proactive_ratio) * 0.5;
+        double base_val = 0.01;
+        kT->stateParams.binChangeUpperSafety =
+            base_val + (1. - auto_adjust_upper_proactive_ratio) * (1. - 2 * base_val);
+        kT->stateParams.binChangeLowerSafety =
+            base_val + (1. - auto_adjust_lower_proactive_ratio) * (1. - 2 * base_val);
     }
 
     // CDFreq auto-adapt related
@@ -1181,7 +1186,8 @@ void DEMSolver::validateUserInputs() {
     if (m_suggestedFutureDrift < 0) {
         DEME_WARNING(
             "The physics of the DEM system can drift into the future as much as it wants compared to contact "
-            "detections, because SetCDUpdateFreq was called with a negative argument. Please make sure this is "
+            "detections, because SetCDUpdateFreq was called with a negative argument.\nThere is also no guarantee on "
+            "the contact margin size to be added, other than it will be no less than 0.\nPlease make sure this is "
             "intended.");
     }
 

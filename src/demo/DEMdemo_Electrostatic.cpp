@@ -42,6 +42,9 @@ int main() {
     DEMSim.SetMeshOutputFormat("VTK");
     DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT"});
 
+    // If you don't need individual force information, then this option makes the solver run a bit faster.
+    DEMSim.SetNoForceRecord();
+
     // E, nu, CoR, mu, Crr...
     auto mat_type_rod = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.7}, {"Crr", 0.00}});
     auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.4}, {"Crr", 0.00}});
@@ -137,7 +140,7 @@ int main() {
 
     // This ensures that the force model is in effect even for some `contacts' that are not physical contacts, since the
     // electrostatic force should work in a distance. We assume that this effect won't be longer than 7mm. This means
-    // for any particle, it can affect another particle (to be considered in contact with) for up to 1cm away from it.
+    // for any particle, it can affect another particle (to be considered in contact with) for up to 7mm away from it.
     DEMSim.SetFamilyExtraMargin(0, 0.007);
     DEMSim.SetFamilyExtraMargin(1, 0.007);
     // If you know your extra margin policy gonna make the average number of contacts per sphere huge, then set this so
@@ -145,6 +148,15 @@ int main() {
     DEMSim.SetErrorOutAvgContacts(100);
 
     DEMSim.SetInitTimeStep(step_size);
+    // In this test we don't want dT to drift too much ahead of kT, or the contact margin could be too large, resulting
+    // in too many false positive contacts, making the solver slower.
+    DEMSim.SetCDMaxUpdateFreq(60);
+
+    // For this demo specifically, we are using a big custom force kernel, and the registers may be at high demand. We
+    // should use 256 to ensure that kernel runs successfully. The default is actually the conservative choice 256, so
+    // if the user don't know the implication they can leave it default.
+    DEMSim.SetForceCalcThreadsPerBlock(256);
+
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.Initialize();
 
@@ -173,6 +185,7 @@ int main() {
 
         DEMSim.DoDynamics(frame_time);
     }
+    DEMSim.DoDynamicsThenSync(0);
 
     // Put the cone in place
     float terrain_max_z = max_z_finder->GetValue();
@@ -185,7 +198,7 @@ int main() {
 
     // We demonstrate using trackers to set a geometry wildcard. Q is now set for each triangle facet, and it's
     // the opposite charge to the particles. So the rod should attract the particles.
-    rod_tracker->SetGeometryWildcardValue("Q", std::vector<float>(num_tri, -10. * init_charge));
+    rod_tracker->SetGeometryWildcardValues("Q", std::vector<float>(num_tri, -10. * init_charge));
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_end; t += step_size, step_count++) {
