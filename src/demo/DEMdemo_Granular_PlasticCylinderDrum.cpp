@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
     
     
  
-    if ( argc =~ 5) {
+    if ( argc != 5) {
         printf("You have entered %d arguments, which is wrong!\n", argc);
         return 0;
     }
