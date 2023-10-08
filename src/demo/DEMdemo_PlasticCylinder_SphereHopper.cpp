@@ -82,7 +82,7 @@ int main() {
     DEMSim.SetMaterialPropertyPair("mu", mat_type_flume, mat_cylinders, 0.30);
 
     // Make ready for simulation
-    float step_size = 5.0e-6;
+    float step_size = 2.5e-6;
     DEMSim.InstructBoxDomainDimension({-0.10, 0.10}, {-0.02, 0.02}, {-0.50, 1.0});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);

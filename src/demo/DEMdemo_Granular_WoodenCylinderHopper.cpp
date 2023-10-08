@@ -74,7 +74,7 @@ int main() {
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_flume, mat_cyl, 0.7);   // it is supposed to be
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_flume, mat_cyl, 0.05);  // plexiglass
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_flume, mat_cyl, 0.30);
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_flume, mat_cyl, 0.40);
 
     // Make ready for simulation
     float step_size = 2.50e-6;
@@ -86,7 +86,7 @@ int main() {
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(25.);
-    DEMSim.SetInitBinSize(radius * 8);
+    DEMSim.SetInitBinSize(radius * 5);
 
     // Loaded meshes are by-default fixed
 
