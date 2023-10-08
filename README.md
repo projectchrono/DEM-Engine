@@ -51,7 +51,7 @@ You are welcome to discuss _DEME_ on [Project Chrono's forum](https://groups.goo
 
 <h2 id="pyDEME">PyDEME</h2>
 
-#### _pyDEME_ is BEING TESTED, many methods are not yet wrapped and the scripts may not work yet. For now it is recommended to <a href="#installation">install _DEME_ from source</a>.
+#### _pyDEME_ is BEING TESTED, many methods are not yet wrapped. For now it is recommended to <a href="#installation">install _DEME_ from source</a> if you want a complete experience.
 
 _DEME_ is now available as a Python package, _pyDEME_.
 
@@ -69,12 +69,15 @@ conda activate pyDEME
 conda install cmake
 pip3 install DEME
 ```
+
 ~~You can also install pyDEME via `conda install`:~~ (Please don't use `conda install` for now, it is not yet behaving correctly)
-```
-conda create -n pyDEME python=3.11
-conda activate pyDEME
-conda install -c projectchrono pydeme
-```
+
+~~`conda create -n pyDEME python=3.11`~~
+
+~~`conda activate pyDEME`~~
+
+~~`conda install -c projectchrono pydeme`~~
+
 `pyDEME` can be replaced with an environement name of your choice. Other Python versions other than 3.11 should work as well.
 
 Then [Python scripts](https://github.com/projectchrono/DEM-Engine/tree/pyDEME_demo/src/demo) can be executed in this environment. To understand the content of each Python demo, refer to the explanations of the C++ demos with the same names in **Examples** section.
@@ -160,7 +163,7 @@ After the build process is done, you can start trying out the demos.
 Some additional troubleshooting tips for running the demos:
 
 - If errors similar to `CUDA_ERROR_UNSUPPORTED_PTX_VERSION` are encountered while you run the demos, or (rarely) the simulations proceed without detecting any contacts, then please make sure the CUDA installation is the same version as when the code is compiled.
-- Another cause for the simulations proceeding without detecting any contacts, could be the force kernel silently failed. This is usually because it was launched with too many threads per block, therefore not enough registers can be leveraged. This can be avoided by calling `SetForceCalcThreadsPerBlock` prior to the start of simulation with the argument being 256 or even smaller choices like 128.
+- Another cause for the simulations proceeding without detecting any contacts, could be the force kernel silently failed. This could also lead to a **too-many-geometries-in-bin** crash. The cause is usually that the force kernel was launched with too many threads per block, therefore not enough registers can be leveraged. This can be avoided by calling `SetForceCalcThreadsPerBlock` prior to the start of simulation with the argument being 256 or even smaller choices like 128.
 - Used your own force model but got runtime compilation error like `expression must have pointer-to-object type but it has type "float"`, or `unknown variable "delta_time"`? Check out what we did in demo `DEMdemo_Electrostatic`. You may need to manually specify what material properties are pairwise and what contact wildcards you have using `SetMustPairwiseMatProp` and `SetPerContactWildcards`.
 - Just running provided demos or a script that used to work, but the jitification of the force model failed or the simulation fails at the first kernel call (probably in `DEMCubContactDetection.cu`)? Then did you pull a new version and just re-built in-place? A new update may modify the force model, and the force model in _DEME_ are given as text files so might not be automatically copied over when the project is re-built. I am sorry for the trouble it might cause, but you can do a clean re-build from an empty directory and it should fix the problem. Do not forget to first commit your own branches' changes and relocate the data you generated in the build directory. Another solution is to copy everything in `src/DEM` to the `DEM` directory in the build directory, then everything in `src/kernel` to the `kernel` directory in the build directory, then try again.
 
