@@ -1,10 +1,10 @@
 #!/usr/bin/bash
 
 make -C ../build/ -j 12
-# ../build/src/demo/DEMdemo_Granular_PlasticCylinderHopper
-# ../build/src/demo/DEMdemo_Granular_PlasticSphereHopper
+ ../build/src/demo/DEMdemo_Granular_PlasticCylinderHopper
+ ../build/src/demo/DEMdemo_Granular_PlasticSphereHopper
 
-# ../build/src/demo/DEMdemo_Granular_WoodenSphereHopper
+ ../build/src/demo/DEMdemo_Granular_WoodenSphereHopper
 
 ../build/src/demo/DEMdemo_PlasticCylinder_SphereHopper
 ../build/src/demo/DEMdemo_PlasticSphere_CylinderHopper
