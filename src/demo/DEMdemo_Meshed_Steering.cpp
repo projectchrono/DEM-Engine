@@ -233,7 +233,7 @@ int main(int argc, char* argv[]) {
         // auto compressor_tracker = DEMSim.Track(compressor);
 
         // Families' prescribed motions (Earth)
-        float v_ref = w_r * w_r * (wheel_rad + cp_dev + grouser_height);
+        float v_ref = w_r * (wheel_rad + cp_dev + grouser_height);
         double G_ang = Slope_deg * math_PI / 180.;
 
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
