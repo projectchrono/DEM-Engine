@@ -39,6 +39,9 @@ int main() {
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
     DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
 
+    // If you don't need individual force information, then this option makes the solver run a bit faster.
+    DEMSim.SetNoForceRecord();
+
     // E, nu, CoR, mu, Crr...
     auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.6}, {"mu", 0.5}, {"Crr", 0.01}});
     auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", 0.5}, {"Crr", 0.01}});
@@ -150,6 +153,15 @@ int main() {
     // Error out vel is used to force the simulation to abort when something goes wrong.
     DEMSim.SetErrorOutVelocity(35.);
     DEMSim.SetExpandSafetyMultiplier(1.);
+    //// TODO: Implement the better CDUpdateFreq adapt algorithm that overperforms the current one...
+    DEMSim.SetCDUpdateFreq(40);
+    DEMSim.DisableAdaptiveUpdateFreq();
+
+    // 256 or 512 are common choices. Note that in cases where the force model is modified, too many registers may be
+    // used in the kernel, so we have to reduce this number to use 256. In other cases (and most cases), 512 is fine and
+    // may make the code run a bit faster. Usually, the user do not have to call SetForceCalcThreadsPerBlock if they
+    // don't know the implication.
+    DEMSim.SetForceCalcThreadsPerBlock(512);
     DEMSim.Initialize();
 
     unsigned int fps = 10;

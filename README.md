@@ -1,5 +1,5 @@
 # SBEL GPU DEM-Engine
-__A Dual-GPU DEM solver with complex grain geometry support__
+__A dual-GPU DEM solver with complex grain geometry support__
 
 <p>
   <img width="380" src="https://i.imgur.com/DKGlM14.jpg">
@@ -15,7 +15,9 @@ __A Dual-GPU DEM solver with complex grain geometry support__
 
 <li><a href="#description">Overview, movies of demos, and where to get help</a></li>
 
-<li><a href="#installation">How to compile</a></li>
+<li><a href="#pyDEME">Use DEME with Python</a></li>
+
+<li><a href="#installation">How to compile from source</a></li>
 
 <li><a href="#examples">Numerical examples and use cases</a></li>
 
@@ -41,51 +43,50 @@ DEM-Engine, nicknamed _DEME_, does Discrete Element Method simulations:
 - Supporting a wide range of problems with flexible API designs. Deformable meshes and grain breakage can be simulated by leveraging the explicit controls given to the user.
 - With support for co-simulation with other C/C++ packages, such as [Chrono](https://github.com/projectchrono/chrono).
 
-Currently _DEME_ is a C++ package with an API design similar to Chrono's, and should be easy to learn for existing Chrono users. We are building a Python wrapper for _DEME_.
+Currently _DEME_ is a C++ package with an API design similar to Chrono's, and should be easy to learn for existing Chrono users.
 
 You can find the movies of some of _DEME_'s demos [here](https://uwmadison.app.box.com/s/u4m9tee3k1vizf097zkq3rgv54orphyv).
 
 You are welcome to discuss _DEME_ on [Project Chrono's forum](https://groups.google.com/g/projectchrono). 
 
-<h2 id="licensing">Licensing</h2>
+<h2 id="pyDEME">PyDEME</h2>
 
-This project should be treated as the collective intellectual property of the Author(s) and the University of Wisconsin - Madison. The following copyright statement should be included in any new or modified source files
-```
-Copyright (c) 2021, Simulation-Based Engineering Laboratory
-Copyright (c) 2021, University of Wisconsin - Madison
+#### _pyDEME_ is BEING TESTED, many methods are not yet wrapped. For now it is recommended to <a href="#installation">install _DEME_ from source</a> if you want a complete experience.
 
-SPDX-License-Identifier: BSD-3-Clause
-```
+_DEME_ is now available as a Python package, _pyDEME_.
 
-New authors should add their name to the file `CONTRIBUTORS.md` rather than to individual copyright headers.
-
-<h2 id="ccontainer">Using DEME in Container</h2>
-
-_DEME_ is now [hosted on DockerHub](https://hub.docker.com/r/uwsbel/dem-engine) for those who want to run it in a container. It can potentially save your time that would otherwise be spent on getting the dependencies right, and for you to test out if _DEME_ is what you needed.
-
-On a Linux machine, [install CUDA](https://developer.nvidia.com/cuda-downloads). Then install [docker](https://docs.docker.com/desktop/install/linux-install/) depending on your OS. Then [install Nvidia container toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) for running GPU-based containers. Things to note about installing the prerequisites:
-
-- You can install the newest CUDA for running the container. However, if you are also considering building from source later, I recommend just getting CUDA 12.0 or a CUDA 11 distro. CUDA 12.1 appears to cause troubles with jitify if built from source.
-- _DEME_ probably does not work on WSL. The reason is in **Installation** section. I recommend working with native Linux.
-- Got `Docker daemon permission denied` error? Maybe try [this page](https://stackoverflow.com/questions/48957195/how-to-fix-docker-got-permission-denied-issue).
-
-After those are done, you can launch the container by doing this in a Linux command prompt: `docker run -it --gpus all uwsbel/dem-engine:latest`
-
-Then the source code along with a pre-built _DEME_ can be found in `/DEM-Engine` and `/DEM-Engine/build`. See **Examples** section for running example simulations. 
-
-Starting from this point, you can start adding new scripts or modify existing ones for your own simulations. You can also build and run your newly added code, and commit the modified container as needed. If you encounter problems when re-building the project in the container, then you may refer to the troubleshooting tips in the **Installation** section for help, or turn to the [forum](https://groups.google.com/g/projectchrono).
-
-Note that the container imagine is not updated as often for bug-fixes and new features as the GitHub repo. 
-
-<h2 id="installation">Compilation</h2>
-
-You can also build _DEME_ locally.
-
-On a Linux machine, install CUDA if you do not already have it. Useful installation instructions may be found [here](https://developer.nvidia.com/cuda-downloads). 
+To install _pyDEME_, use a Linux machine, install CUDA if you do not already have it. Useful installation instructions may be found [here](https://developer.nvidia.com/cuda-downloads). 
 
 Some additional troubleshooting tips for getting CUDA ready:
 
+- I recommend just getting CUDA 12.0, or a CUDA 11 distro. CUDA 12.1 and 12.2 appears to cause troubles with jitify.
 - On WSL this code may be buildable (and [this](https://docs.nvidia.com/cuda/wsl-user-guide/index.html) is the guide for installing CUDA on WSL), but may not run. This is due to the [many limitations on unified memory and pinned memory support](https://docs.nvidia.com/cuda/wsl-user-guide/index.html#known-limitations-for-linux-cuda-applications) on WSL. A native Linux machine or cluster is recommended.
+
+Once CUDA is ready, you can `pip` install _pyDEME_. In your conda environement, do
+```
+conda create -n pyDEME python=3.11
+conda activate pyDEME
+conda install cmake
+pip3 install DEME
+```
+
+~~You can also install pyDEME via `conda install`:~~ (Please don't use `conda install` for now, it is not yet behaving correctly)
+
+~~`conda create -n pyDEME python=3.11`~~
+
+~~`conda activate pyDEME`~~
+
+~~`conda install -c projectchrono pydeme`~~
+
+`pyDEME` can be replaced with an environement name of your choice. Other Python versions other than 3.11 should work as well.
+
+Then [Python scripts](https://github.com/projectchrono/DEM-Engine/tree/pyDEME_demo/src/demo) can be executed in this environment. To understand the content of each Python demo, refer to the explanations of the C++ demos with the same names in **Examples** section.
+
+<h2 id="installation">Compilation</h2>
+
+You can also build C++ _DEME_ from source. It allows for potentially more performance and more tailoring.
+
+On a Linux machine, [install CUDA](https://developer.nvidia.com/cuda-downloads). I recommend CUDA 12.0.
 
 Once CUDA is ready, clone this project and then:
 
@@ -162,8 +163,26 @@ After the build process is done, you can start trying out the demos.
 Some additional troubleshooting tips for running the demos:
 
 - If errors similar to `CUDA_ERROR_UNSUPPORTED_PTX_VERSION` are encountered while you run the demos, or (rarely) the simulations proceed without detecting any contacts, then please make sure the CUDA installation is the same version as when the code is compiled.
+- Another cause for the simulations proceeding without detecting any contacts, could be the force kernel silently failed. This could also lead to a **too-many-geometries-in-bin** crash. The cause is usually that the force kernel was launched with too many threads per block, therefore not enough registers can be leveraged. This can be avoided by calling `SetForceCalcThreadsPerBlock` prior to the start of simulation with the argument being 256 or even smaller choices like 128.
 - Used your own force model but got runtime compilation error like `expression must have pointer-to-object type but it has type "float"`, or `unknown variable "delta_time"`? Check out what we did in demo `DEMdemo_Electrostatic`. You may need to manually specify what material properties are pairwise and what contact wildcards you have using `SetMustPairwiseMatProp` and `SetPerContactWildcards`.
 - Just running provided demos or a script that used to work, but the jitification of the force model failed or the simulation fails at the first kernel call (probably in `DEMCubContactDetection.cu`)? Then did you pull a new version and just re-built in-place? A new update may modify the force model, and the force model in _DEME_ are given as text files so might not be automatically copied over when the project is re-built. I am sorry for the trouble it might cause, but you can do a clean re-build from an empty directory and it should fix the problem. Do not forget to first commit your own branches' changes and relocate the data you generated in the build directory. Another solution is to copy everything in `src/DEM` to the `DEM` directory in the build directory, then everything in `src/kernel` to the `kernel` directory in the build directory, then try again.
+
+<h2 id="ccontainer">Using DEME in Container</h2>
+
+_DEME_ is now [hosted on DockerHub](https://hub.docker.com/r/uwsbel/dem-engine) for those who want to run it in a container. It can potentially save your time that would otherwise be spent on getting the dependencies right, and for you to test out if _DEME_ is what you needed.
+
+On a Linux machine, [install CUDA](https://developer.nvidia.com/cuda-downloads). Then install [docker](https://docs.docker.com/desktop/install/linux-install/) depending on your OS. Then [install Nvidia container toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) for running GPU-based containers. Things to note about installing the prerequisites:
+
+- Got `Docker daemon permission denied` error? Maybe try [this page](https://stackoverflow.com/questions/48957195/how-to-fix-docker-got-permission-denied-issue).
+- You can install the newest CUDA for running the container. However, I still recommend CUDA 12.0 or a CUDA 11 distro.
+
+After those are done, you can launch the container by doing this in a Linux command prompt: `docker run -it --gpus all uwsbel/dem-engine:latest`
+
+Then the source code along with a pre-built _DEME_ can be found in `/DEM-Engine` and `/DEM-Engine/build`. See **Examples** section for running example simulations. 
+
+Starting from this point, you can start adding new scripts or modify existing ones for your own simulations. You can also build and run your newly added code, and commit the modified container as needed. If you encounter problems when re-building the project in the container, then you may refer to the troubleshooting tips in the **Installation** section for help, or turn to the [forum](https://groups.google.com/g/projectchrono).
+
+Note that the container imagine is not updated as often for bug-fixes and new features as the GitHub repo. 
 
 <h2 id="limitations">Limitations</h2>
 
@@ -193,6 +212,18 @@ You need to build `chrono-projects` linking against a Chrono installation (Chron
 Then build the project and you should be able to run the demo scripts that demonstrate the co-simulation between _DEME_ and Chrono.
 
 More documentations on using this package for co-simulations are being added.
+
+<h2 id="licensing">Licensing</h2>
+
+This project should be treated as the collective intellectual property of the Author(s) and the University of Wisconsin - Madison. The following copyright statement should be included in any new or modified source files
+```
+Copyright (c) 2021, Simulation-Based Engineering Laboratory
+Copyright (c) 2021, University of Wisconsin - Madison
+
+SPDX-License-Identifier: BSD-3-Clause
+```
+
+New authors should add their name to the file `CONTRIBUTORS.md` rather than to individual copyright headers.
 
 #### Notes on code included from Project Chrono
 
