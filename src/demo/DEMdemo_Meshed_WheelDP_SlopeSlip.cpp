@@ -78,10 +78,11 @@ int main(int argc, char* argv[]) {
     float step_size = 1e-5;     // 5e-6;
     double world_size_y = 0.6;  // 0.52;
     double world_size_x = 3.;
+    float safe_x = 1.2;
     double world_size_z = 4.0;
     float w_r = atof(argv[10]);
-    double sim_end = 30.;
-    float z_adv_targ = 0.1;
+    double sim_end = 20.;
+    float z_adv_targ = 0.2;
 
     // Define the wheel geometry
     float wheel_rad = atof(argv[2]);
@@ -256,10 +257,9 @@ int main(int argc, char* argv[]) {
         DEMSim.Initialize();
 
         // Put the wheel in place, then let the wheel sink in initially
-        float corr = 1;  // 0
-        float init_x = -1.2 + corr;
+        float init_x = -0.2;
         if (Slope_deg < 21) {
-            init_x = -1.8 + corr;
+            init_x = -1.;
         }
 
         float settle_time = 0.4;
@@ -269,9 +269,8 @@ int main(int argc, char* argv[]) {
         float max_z = max_z_finder->GetValue();
         wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.03 + cp_dev + grouser_height + wheel_rad));
 
-        int report_ps = 1000;
-        float report_time = report_ps * step_size;
-        unsigned int report_steps = (unsigned int)(1.0 / report_time);
+        int report_steps = 100;
+        float report_time = report_steps * step_size;
         unsigned int cur_step = 0;
         double energy = 0.;
         unsigned int report_num = 0;
@@ -294,7 +293,7 @@ int main(int argc, char* argv[]) {
 
             float3 V = wheel_tracker->Vel();
             float x1 = wheel_tracker->Pos().x;
-            float z1 = x1 * std::sin(Slope_deg / 180. * math_PI);
+            float z1 = x1 * std::sin(G_ang);
             float x2, z2, z_adv = 0.;
 
             float t;
@@ -304,7 +303,9 @@ int main(int argc, char* argv[]) {
                 float3 angAcc = wheel_tracker->ContactAngAccLocal();
                 energy += std::abs((double)angAcc.y * wheel_IYY * w_r * (double)report_time);
                 x2 = wheel_tracker->Pos().x;
-                z_adv = x2 * std::sin(Slope_deg / 180. * math_PI) - z1;
+                z_adv = x2 * std::sin(G_ang) - z1;
+                if (x2 > safe_x)
+                    break;
 
                 DEMSim.DoDynamics(report_time);
             }
@@ -333,7 +334,6 @@ int main(int argc, char* argv[]) {
                 // std::cout << "Success: 1" << std::endl;
                 // std::cout << "=================================" << std::endl;
             }
-            DEMSim.DoDynamicsThenSync(0);
         }
 
         // DEMSim.ShowTimingStats();

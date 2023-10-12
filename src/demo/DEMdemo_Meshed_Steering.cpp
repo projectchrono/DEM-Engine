@@ -78,6 +78,7 @@ int main(int argc, char* argv[]) {
     float step_size = 1e-5;  // 5e-6;
     double world_size_y = .75;
     double world_size_x = 3.;
+    float safe_x = 1.2;
     double world_size_z = 4.0;
 
     // Define the wheel geometry
@@ -266,10 +267,9 @@ int main(int argc, char* argv[]) {
         DEMSim.Initialize();
 
         // Put the wheel in place, then let the wheel sink in initially
-        float corr = 1;  // 0
-        float init_x = -1.4 + corr;
+        float init_x = -0.4;
         if (Slope_deg < 21) {
-            init_x = -2.0 + corr;
+            init_x = -1.0;
         }
 
         float settle_time = 0.2;
@@ -279,9 +279,8 @@ int main(int argc, char* argv[]) {
         float max_z = max_z_finder->GetValue();
         wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.03 + cp_dev + grouser_height + wheel_rad));
 
-        int report_ps = 1000;
-        float report_time = report_ps * step_size;
-        unsigned int report_steps = (unsigned int)(1.0 / report_time);
+        int report_steps = 100;
+        float report_time = report_steps * step_size;
         unsigned int cur_step = 0;
         double xforce = 0., yforce = 0.;
         unsigned int report_num = 0;
@@ -299,13 +298,16 @@ int main(int argc, char* argv[]) {
 
             DEMSim.DoDynamicsThenSync(0.5);
             DEMSim.ChangeFamily(1, 2);
-            DEMSim.DoDynamicsThenSync(2.);
+            DEMSim.DoDynamicsThenSync(1.5);
             std::cout << "Steer test num: " << cur_test << std::endl;
 
             float x1 = wheel_tracker->Pos().x;
 
             float t;
             for (t = 0; t < sim_end; t += report_time) {
+                float x2 = wheel_tracker->Pos().x;
+                if (x2 > safe_x)
+                    break;
                 float3 force = wheel_tracker->ContactAcc();
                 xforce += (double)force.x * wheel_mass;
                 yforce += (double)force.y * wheel_mass;
@@ -330,7 +332,6 @@ int main(int argc, char* argv[]) {
                 // std::cout << "=================================" << std::endl;
             }
         }
-
         // DEMSim.ShowTimingStats();
         // DEMSim.ShowAnomalies();
     }
