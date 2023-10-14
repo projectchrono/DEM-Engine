@@ -16,15 +16,15 @@ time=(0:0.01:3)';
 level_z=zeros(numel(time),1);
 
 points=(-0.04:0.01:0.05);
-measureAngle=zeros(numel(50:99),11,6);
+measureAngle=zeros(numel(50:99),13,6);
 
-test=1:5;
+test=0:4;
 
 for jj=test
     counterTotal=0;
     for q=0:1:12
         
-        folder=['' 'Test_WoodenCylinder/Drum_' num2str(jj) '/' num2str(q)  '/'];
+        folder=['' 'Test_PlasticCylinder/Drum_' num2str(jj) '/' num2str(q)  '/'];
         files=dir(folder);
         disp(folder)
         for p=1:1
@@ -72,7 +72,7 @@ for jj=test
                 curve1_z=sgolayfilt(Z(:,X_idx),3,15);
                 results=interp1(curve1_x,curve1_z,points);
                 
-                figure(2); hold on
+                % figure(2); hold on
                 % plot(curve1_x,curve1_z)
                 % plot(points,results,'.')
                 
@@ -83,7 +83,7 @@ for jj=test
                 
                 % figure(3); hold on
                 angle=abs(atand(P(1)));
-                measureAngle(counter,counterTotal,jj)=(angle);
+                measureAngle(counter,counterTotal,jj+1)=(angle);
                 
                 % plot(curve1_x, abs(dy1))
                 
@@ -97,4 +97,25 @@ end
 disp('writing output file...')
 save ([testName '.mat'], "measureAngle")
 disp('all done.')
+
+clc
+% x=expCylWood(:,1);
+% y=expCylWood(:,2)/100;
+
+code={'A','B','C','D','E'};
+x=[0.00 0.01 0.025 0.05 0.10 0.20 0.30 0.40 0.50 0.60 0.70 0.80 0.90];
+
+for i = 1:5  
+    string='';
+    y=measureAngle(:,:,i);
+    y=mean(y,1);
+    for j=1:numel(x)
+        string=[string sprintf('(%1.2f, %1.3f) [%s]', x(j), y(j),code{i})];
+    end
+     fprintf('\n')
+     % clipboard('copy', data)
+     disp(string)
+
+end
+
 

@@ -66,12 +66,17 @@ int main() {
     auto mat_type_flume = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
 
-    auto mat_spheres = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.50}, {"Crr", 0.02}});
+    auto mat_spheres = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.50}, {"Crr", 0.03}});
 
-    auto mat_cylinders = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.50}, {"Crr", 0.05}});
+    auto mat_cylinders = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.60}, {"Crr", 0.05}});
 
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_cylinders, 0.5);
-    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_cylinders, 0.02);
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_cylinders, 0.7);
+    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_cylinders, 0.05);
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_spheres, 0.30);
+
+       DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_spheres, 0.7);
+    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_spheres, 0.05);
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_spheres, 0.30);
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_flume, mat_spheres, 0.70);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_flume, mat_spheres, 0.05);
@@ -91,7 +96,7 @@ int main() {
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(25.);
-    DEMSim.SetInitBinSize(radiusCyl * 5);
+    DEMSim.SetInitBinSize(radiusCyl * 4);
 
     // Loaded meshes are by-default fixed
 

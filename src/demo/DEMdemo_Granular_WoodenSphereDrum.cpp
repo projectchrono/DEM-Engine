@@ -25,16 +25,26 @@ using namespace std::filesystem;
 void runDEME(std::string dir_output, float friction, float rollingMaterial);
 
 int main(int argc, char* argv[]) {
-    int case_Folder = atoi(argv[0]);          // takes the test ID
-    int case_ID = atoi(argv[1]);              // takes the test ID
-    float conctact_friction = atof(argv[2]);  // takes the value
-    float rolling_friction = atof(argv[3]);   // takes the value
+    
+    
+
+    if ( argc != 5) {
+        std::cout << "You have entered " << argc << " arguments, which is wrong!" << std::endl;
+        return 0;
+    }
+    
+    int case_Folder = atoi(argv[1]);          // takes the test ID
+    int case_ID = atoi(argv[2]);              // takes the test ID
+    float conctact_friction = atof(argv[3]);  // takes the value
+    float rolling_friction = atof(argv[4]);   // takes the value
+    
 
     std::string out_dir = "/Test_WoodenSphere/";
     out_dir += "Drum_" + std::to_string(case_Folder) + "/" + std::to_string(case_ID) + "/";
 
     std::cout << "Running case with friction: " << conctact_friction << ", and rolling friction: " << rolling_friction
               << std::endl;
+    std::cout << "Dir out is " << out_dir << std::endl;
 
     runDEME(out_dir, conctact_friction, rolling_friction);
 
@@ -64,6 +74,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     double density = 674;
 
     int totalSpheres = 17000;
+    //int totalSpheres = 100;
 
     int num_template = 1;
 
@@ -90,7 +101,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(25.);
-    DEMSim.SetInitBinSize(radius * 5);
+    DEMSim.SetInitBinSize(radius * 3);
 
     // Loaded meshes are by-default fixed
     auto fixed = DEMSim.AddWavefrontMeshObject("../data/granularFlow/drum.obj", mat_type_walls);
@@ -197,13 +208,14 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
             input_pile_xyz.insert(input_pile_xyz.end(), heap_particles_xyz.begin(), heap_particles_xyz.end());
 
             auto the_pile = DEMSim.AddClumps(input_pile_template_type, input_pile_xyz);
-            the_pile->SetVel(make_float3(-0.00, 0.0, -0.90));
+            the_pile->SetVel(make_float3(-0.00, 0.0, -0.80));
             the_pile->SetFamily(100);
 
             DEMSim.UpdateClumps();
 
-            std::cout << "Total num of particles: " << (int)DEMSim.GetNumClumps() << std::endl;
+            // std::cout << "Total num of particles: " << (int)DEMSim.GetNumClumps() << std::endl;
             actualTotalSpheres = (int)DEMSim.GetNumClumps();
+            // Generate initial clumps for piling
         }
         timeTotal += settle_frame_time;
         // std::cout << "Total runtime: " << timeTotal << "s; settling for: " << settle_frame_time << std::endl;
@@ -218,7 +230,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
             sprintf(meshfile, "%s/DEMdemo_mesh.vtk", out_dir.c_str());
             DEMSim.WriteMeshFile(std::string(meshfile));
             // DEMSim.ShowThreadCollaborationStats();
-            frame++;
+            
         }
         frame++;
 
@@ -226,7 +238,9 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
 
         plane_bottom = max_z_finder->GetValue();
     }
+
     std::cout << "Initialization done with : " << actualTotalSpheres << "particles" << std::endl;
+
     float timeStep = 5e-3;
     int numStep = 5.0f / timeStep;
     int numChangeSim = 5.0f / timeStep;

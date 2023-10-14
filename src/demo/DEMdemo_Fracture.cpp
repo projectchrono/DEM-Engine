@@ -48,7 +48,7 @@ int main() {
 
     float world_size = 0.5;
     float container_diameter = 0.05;
-    float step_size = 5.0e-7;
+    float step_size = 2.5e-7;
     DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
     // No need to add simulation `world' boundaries, b/c we'll add a cylinderical container manually
     DEMSim.InstructBoxDomainBoundingBC("all", mat_type_container);

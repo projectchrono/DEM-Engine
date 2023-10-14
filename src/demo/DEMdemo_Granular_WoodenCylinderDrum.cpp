@@ -25,16 +25,26 @@ using namespace std::filesystem;
 void runDEME(std::string dir_output, float friction, float rollingMaterial);
 
 int main(int argc, char* argv[]) {
-    int case_Folder = atoi(argv[0]);          // takes the test ID
-    int case_ID = atoi(argv[1]);              // takes the test ID
-    float conctact_friction = atof(argv[2]);  // takes the value
-    float rolling_friction = atof(argv[3]);   // takes the value
+    
+    
+ 
+    if ( argc != 5) {
+        printf("You have entered %d arguments, which is wrong!\n", argc);
+        return 0;
+    }
+    
+    int case_Folder = atoi(argv[1]);          // takes the test ID
+    int case_ID = atoi(argv[2]);              // takes the test ID
+    float conctact_friction = atof(argv[3]);  // takes the value
+    float rolling_friction = atof(argv[4]);   // takes the value
+    
 
     std::string out_dir = "/Test_WoodenCylinder/";
     out_dir += "Drum_" + std::to_string(case_Folder) + "/" + std::to_string(case_ID) + "/";
 
     std::cout << "Running case with friction: " << conctact_friction << ", and rolling friction: " << rolling_friction
               << std::endl;
+    std::cout << "Dir out is " << out_dir << std::endl;
 
     runDEME(out_dir, conctact_friction, rolling_friction);
 
@@ -67,7 +77,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     double density = 476;
 
     int totalSpheres = 17000;
-    // int totalSpheres = 500;
+   // int totalSpheres = 100;
 
     int num_template = 1;
 
@@ -94,7 +104,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(25.);
-    DEMSim.SetInitBinSize(radius * 5);
+    DEMSim.SetInitBinSize(radius * 3);
 
     // Loaded meshes are by-default fixed
     auto fixed = DEMSim.AddWavefrontMeshObject("../data/granularFlow/drum.obj", mat_type_walls);
@@ -230,6 +240,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
             sprintf(meshfile, "%s/DEMdemo_mesh.vtk", out_dir.c_str());
             DEMSim.WriteMeshFile(std::string(meshfile));
             // DEMSim.ShowThreadCollaborationStats();
+            
         }
         frame++;
 

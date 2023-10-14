@@ -27,12 +27,12 @@ int main() {
     DEMSim.UseFrictionalHertzianModel();
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ | OUTPUT_CONTENT::VEL | OUTPUT_CONTENT::ANG_VEL);
+    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ | OUTPUT_CONTENT::VEL);
     DEMSim.EnsureKernelErrMsgLineNum();
 
     srand(7001);
     DEMSim.SetCollectAccRightAfterForceCalc(true);
-    DEMSim.SetErrorOutAvgContacts(80);
+    DEMSim.SetErrorOutAvgContacts(100);
 
     // DEMSim.SetExpandSafetyAdder(0.5);
 
@@ -67,10 +67,11 @@ int main() {
     auto mat_type_flume = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
 
-    auto mat_cyl = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.55}, {"mu", 0.60}, {"Crr", 0.06}});
+    auto mat_cyl = DEMSim.LoadMaterial({{"E", 1.0e8}, {"nu", 0.35}, {"CoR", 0.55}, {"mu", 0.70}, {"Crr", 0.07}});
 
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_cyl, 0.5);
-    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_cyl, 0.02);
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_cyl, 0.7);
+    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_cyl, 0.05);
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_cyl, 0.40);
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_flume, mat_cyl, 0.7);   // it is supposed to be
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_flume, mat_cyl, 0.05);  // plexiglass
@@ -86,7 +87,7 @@ int main() {
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(25.);
-    DEMSim.SetInitBinSize(radius * 5);
+    DEMSim.SetInitBinSize(radius * 3);
 
     // Loaded meshes are by-default fixed
 

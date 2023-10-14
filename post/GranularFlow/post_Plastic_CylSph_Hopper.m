@@ -145,12 +145,21 @@ set(gcf,'units','centimeters' ,'position',[1,1,8,5])
 clc
 x=expCylWood(:,1);
 y=expCylWood(:,2)/100;
+
 code={'A','B','C','D','E'};
-for i = 2   
+x=[0.00 0.01 0.025 0.05 0.10 0.20 0.30 0.40 0.50 0.60 0.70 0.80 0.90];
+string='';
+for i = 1   
     
+    y=measureAngle(:,:,i);
+    y=mean(y,1);
     for j=1:numel(x)
-        fprintf('(%1.2f, %1.3f) [%s]', x(j), y(j),code{i});
+        string=[string sprintf('(%1.2f, %1.3f) [%s]', x(j), y(j),code{i})];
 
     end
-    % fprintf('\n')    % clipboard('copy', data)
+     fprintf('\n')
+     % clipboard('copy', data)
 end
+
+disp(string)
+

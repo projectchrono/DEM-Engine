@@ -50,9 +50,9 @@ expCylWood=[0.02, 0.74
 7.01, 88.49];
 
 % folder=['../'  '../build/Test_Plastic_Cylinder_Sphere/Hopper/'];
- folder=['../'  '../output/Test_WoodenCylinder/Hopper/5S_/'];
+% folder=['../'  '../output/Test_WoodenCylinder/Hopper/5S_/'];
 % folder=[''  '../../output/Test_PlasticCylinder/Hopper/5S_/'];
-% folder=[''  '../../output/Test_PlasticSphere/Hopper/'];
+ folder=[''  '../../output/Test_PlasticSphere/Hopper/'];
   % folder=['../'  '../build/DemoOutput_Granular_WoodenSphere/Hopper/'];
    % folder=['../'  '../build/DemoOutput_Granular_WoodenCylinder/Hopper/3S_/'];
 files=dir(folder);
@@ -140,14 +140,17 @@ set(gcf,'units','centimeters' ,'position',[1,1,8,5])
 [time,level_z]
 
 clc
-x=expCylWood(:,1);
-y=expCylWood(:,2)/100;
-code={'A','B','C','D','E'};
-for i = 2   
+
+x=expBall(:,1);
+y=expBall(:,2)/100;
+
+x=time;
+y=level_z;
     
     for j=1:numel(x)
-        fprintf('(%1.2f, %1.3f) [%s]', x(j), y(j),code{i});
-
+        fprintf('(%1.2f, %1.3f)', x(j), y(j));
     end
-    % fprintf('\n')    % clipboard('copy', data)
-end
+
+     fprintf('\n')   
+     % clipboard('copy', data)
+
