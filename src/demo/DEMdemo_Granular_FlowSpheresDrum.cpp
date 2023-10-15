@@ -22,23 +22,32 @@
 using namespace deme;
 using namespace std::filesystem;
 
-void runDEME(int caseID, float friction);
+void runDEME(std::string dir_output, float friction, float rollingMaterial);
 
-int main() {
-    std::vector<float> friction = {0.0, 0.01, 0.05, 0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 1.00};
-    int nsim = int(friction.size());
-
-    int counter = 0;
-
-    for (int i = 0; i < nsim; i++) {
-        runDEME(i, friction[i]);
-        counter++;
+int main(int argc, char* argv[]) {
+    if (argc != 5) {
+        std::cout << "You have entered " << argc << " arguments, which is wrong!" << std::endl;
+        return 0;
     }
+
+    int case_Folder = atoi(argv[1]);          // takes the test ID
+    int case_ID = atoi(argv[2]);              // takes the test ID
+    float conctact_friction = atof(argv[3]);  // takes the value
+    float rolling_friction = atof(argv[4]);   // takes the value
+
+    std::string out_dir = "/Test_FlowSphere/";
+    out_dir += "Drum_" + std::to_string(case_Folder) + "/" + std::to_string(case_ID) + "/";
+
+    std::cout << "Running case with friction: " << conctact_friction << ", and rolling friction: " << rolling_friction
+              << std::endl;
+    std::cout << "Dir out is " << out_dir << std::endl;
+
+    runDEME(out_dir, conctact_friction, rolling_friction);
 
     return 0;
 }
 
-void runDEME(int caseDef, float frictionMaterial) {
+void runDEME(std::string dir_output, float frictionMaterial, float rollingMaterial) {
     DEMSolver DEMSim;
     DEMSim.UseFrictionalHertzianModel();
     DEMSim.SetVerbosity(INFO);
@@ -51,11 +60,7 @@ void runDEME(int caseDef, float frictionMaterial) {
     DEMSim.SetErrorOutAvgContacts(50);
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Granular/";
-    out_dir += "FlowSpheresDrum/";
-    out_dir += "sensRolling/F_";
-    out_dir += std::to_string(caseDef);
-
+    out_dir += dir_output;
     // Scale factor
     float scaling = 1.f;
     float diamDrum = 0.12;
@@ -121,7 +126,8 @@ void runDEME(int caseDef, float frictionMaterial) {
         std::vector<float3> relPos;
         std::vector<std::shared_ptr<DEMMaterial>> mat;
 
-        double radiusMax = distribution(generator);
+        //double radiusMax = distribution(generator);
+        double radiusMax = radius;
         double radiusMin = 8.0 / 8.0 * radiusMax;
         double eccentricity = 0.0 / 8.0 * radiusMax;
 
@@ -147,6 +153,7 @@ void runDEME(int caseDef, float frictionMaterial) {
         // clump_ptr->AssignName("fsfs");
         clump_types.push_back(clump_ptr);
     }
+    std::cout << " maximum radius is " << maxRadius / radius << std::endl;
 
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
@@ -157,7 +164,7 @@ void runDEME(int caseDef, float frictionMaterial) {
 
     char filename[200], meshfile[200];
 
-    float shift_xyz = 1.0 * (maxRadius)*2.0;
+    float shift_xyz = 1.2 * (maxRadius) * 2.0;
     float x = 0;
     float y = 0;
 
@@ -173,11 +180,10 @@ void runDEME(int caseDef, float frictionMaterial) {
     double timeTotal = 0;
     double consolidation = true;
 
-    // sprintf(meshfile, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame);
-    // DEMSim.WriteMeshFile(std::string(meshfile));
+    sprintf(meshfile, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame);
+    DEMSim.WriteMeshFile(std::string(meshfile));
 
     while (initialization) {
-
         std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
         std::vector<float3> input_pile_xyz;
         PDSampler sampler(shift_xyz);
@@ -190,10 +196,11 @@ void runDEME(int caseDef, float frictionMaterial) {
             float z = plane_bottom + sizeZ / 2;
 
             float3 center_xyz = make_float3(0, 0, 0);
-            
+
             std::cout << "level of particles position ... " << center_xyz.z << std::endl;
 
-            auto heap_particles_xyz = sampler.SampleCylinderX(center_xyz, diamDrum/2-shift_xyz/2,diamDrum/2-shift_xyz/2);
+            auto heap_particles_xyz =
+                sampler.SampleCylinderX(center_xyz, diamDrum / 2 - shift_xyz / 2, diamDrum / 2 - shift_xyz / 2);
             unsigned int num_clumps = heap_particles_xyz.size();
             std::cout << "number of particles at this level ... " << num_clumps << std::endl;
 
@@ -219,16 +226,16 @@ void runDEME(int caseDef, float frictionMaterial) {
 
         initialization = (actualTotalSpheres < totalSpheres) ? true : false;
 
-        if (generate && !(frame % 1000)) {
+        if (generate && !(frame % 1)) {
             std::cout << "frame : " << frame << std::endl;
             sprintf(filename, "%s/DEMdemo_settling.csv", out_dir.c_str());
             DEMSim.WriteSphereFile(std::string(filename));
             // sprintf(meshfile, "%s/DEMdemo_mesh.vtk", out_dir.c_str());
             // DEMSim.WriteMeshFile(std::string(meshfile));
             // DEMSim.ShowThreadCollaborationStats();
-            // frame++;
+             frame++;
         }
-        frame++;
+        //frame++;
 
         DEMSim.DoDynamicsThenSync(settle_frame_time);
 
