@@ -67,14 +67,17 @@ int main() {
     auto mat_type_flume = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
 
-    auto mat_cyl = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.50}, {"Crr", 0.05}});
+    //auto mat_cyl = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.50}, {"Crr", 0.05}});
+    auto mat_cylinders = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.30}, {"Crr", 0.03}});
 
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_cyl, 0.5);
-    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_cyl, 0.02);
 
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_flume, mat_cyl, 0.7);   // it is supposed to be
-    DEMSim.SetMaterialPropertyPair("Crr", mat_type_flume, mat_cyl, 0.05);  // plexiglass
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_flume, mat_cyl, 0.30);
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_cylinders, 0.50);
+    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_cylinders, 0.05);
+DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_cylinders, 0.50);
+
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_flume, mat_cylinders, 0.70);   // it is supposed to be
+    DEMSim.SetMaterialPropertyPair("Crr", mat_type_flume, mat_cylinders, 0.05);  // plexiglass
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_flume, mat_cylinders, 0.30);
 
     // Make ready for simulation
     float step_size = 5.0e-6;
@@ -86,21 +89,21 @@ int main() {
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(25.);
-    DEMSim.SetInitBinSize(radius * 8);
+    DEMSim.SetInitBinSize(radius * 3);
 
     // Loaded meshes are by-default fixed
 
     auto fixed_left = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
-    float3 move = make_float3(-hopperW / 2.0, 0, 0);
+    float3 move = make_float3(-hopperW / 2.0, 0, -0.01);
     float4 rot = make_float4(0.7071, 0, 0, 0.7071);
     fixed_left->Move(move, rot);
 
     auto fixed_right = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
-    move = make_float3(gateWidth + hopperW / 2.0, 0, 0);
+    move = make_float3(gateWidth + hopperW / 2.0, 0, -0.01);
     fixed_right->Move(move, rot);
 
     auto gate = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
-    gate->Move(make_float3(gateWidth / 2, 0, -0.001), rot);
+    gate->Move(make_float3(gateWidth / 2, 0, -0.011), rot);
 
     fixed_left->SetFamily(10);
     fixed_right->SetFamily(10);
@@ -143,7 +146,7 @@ int main() {
             tmp.y = 0;
             tmp.z = 0;
             relPos.push_back(tmp);
-            mat.push_back(mat_cyl);
+            mat.push_back(mat_cylinders);
         }
 
         float mass = PI * radiusMed * radiusMed * length * density;
@@ -153,7 +156,7 @@ int main() {
         std::cout << mass << " chosen moi ..." << radiusMed / radius << std::endl;
 
         maxRadius = (radiusMed > maxRadius) ? radiusMed : maxRadius;
-        auto clump_ptr = DEMSim.LoadClumpType(mass, MOI, radii, relPos, mat_cyl);
+        auto clump_ptr = DEMSim.LoadClumpType(mass, MOI, radii, relPos, mat_cylinders);
         // clump_ptr->AssignName("fsfs");
         clump_types.push_back(clump_ptr);
     }
@@ -187,6 +190,7 @@ int main() {
     DEMSim.WriteMeshFile(std::string(meshfile));
 
     while (initialization) {
+        
         std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
         std::vector<float3> input_pile_xyz;
         PDSampler sampler(shift_xyz);
@@ -242,7 +246,7 @@ int main() {
         plane_bottom = max_z_finder->GetValue();
         /// here the settling phase starts
         if (!initialization) {
-            for (int i = 0; i < (int)(0.4 / settle_frame_time); i++) {
+            for (int i = 0; i < (int)(0.1 / settle_frame_time); i++) {
                 DEMSim.DoDynamics(settle_frame_time);
                 sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), i);
                 DEMSim.WriteSphereFile(std::string(filename));
@@ -253,8 +257,9 @@ int main() {
 
     DEMSim.DoDynamicsThenSync(0.0);
 
+
     float timeStep = step_size * 500.0;
-    int numStep = 7.0 / timeStep;
+    int numStep = 7.5 / timeStep;
     int timeOut = 0.01 / timeStep;
     int gateMotion = (gateOpen / gateSpeed) / timeStep;
     std::cout << "Frame: " << timeOut << std::endl;
@@ -288,7 +293,7 @@ int main() {
             frame++;
         }
 
-        if ((i > (timeOut * 2)) && status) {
+        if ((i > (timeOut * 4)) && status) {
             DEMSim.DoDynamicsThenSync(0);
             std::cout << "gate is in motion from: " << timeStep * i << " s" << std::endl;
             DEMSim.ChangeFamily(10, 1);
@@ -296,7 +301,7 @@ int main() {
             status = false;
         }
 
-        if ((i >= (timeOut * (2) + gateMotion - 1)) && stopGate) {
+        if ((i >= (timeOut * (4) + gateMotion - 1)) && stopGate) {
             DEMSim.DoDynamicsThenSync(0);
             std::cout << "gate has stopped at: " << timeStep * i << " s" << std::endl;
             DEMSim.ChangeFamily(4, 3);

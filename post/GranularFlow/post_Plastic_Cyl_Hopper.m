@@ -70,7 +70,7 @@ N=2.344/(4/3*pi*(d/2)^3*rho);
 fowler=0.221*A0*rho*(2*g*Dh)^0.50*(Dh/(k*d))^0.185;
 
 
-time=(0:0.01:7)';
+time=(0:0.01:7.5)';
 level_z=zeros(numel(time),1);
 discharge=zeros(numel(time),1);
 

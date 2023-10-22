@@ -39,7 +39,7 @@ int main(int argc, char* argv[]) {
     float rolling_friction = atof(argv[4]);   // takes the value
     
 
-    std::string out_dir = "/Test_PlasticSphere/";
+    std::string out_dir = "/Test_PlasticSphere_1790/";
     out_dir += "Drum_" + std::to_string(case_Folder) + "/" + std::to_string(case_ID) + "/";
 
     std::cout << "Running case with friction: " << conctact_friction << ", and rolling friction: " << rolling_friction
@@ -79,7 +79,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
 
     float plane_bottom = -0.08f * scaling;
 
-    std::vector<double> angular = {3.60};  // value given in rpm
+    std::vector<double> angular = {17.90};  // value given in rpm
 
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}, {"mu", 0.04}, {"Crr", 0.00}});
 

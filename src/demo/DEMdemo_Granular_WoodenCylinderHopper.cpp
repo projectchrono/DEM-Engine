@@ -27,12 +27,12 @@ int main() {
     DEMSim.UseFrictionalHertzianModel();
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ | OUTPUT_CONTENT::VEL);
+    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ | OUTPUT_CONTENT::VEL | OUTPUT_CONTENT::ANG_VEL);
     DEMSim.EnsureKernelErrMsgLineNum();
 
     srand(7001);
     DEMSim.SetCollectAccRightAfterForceCalc(true);
-    DEMSim.SetErrorOutAvgContacts(100);
+    DEMSim.SetErrorOutAvgContacts(80);
 
     // DEMSim.SetExpandSafetyAdder(0.5);
 
@@ -67,18 +67,18 @@ int main() {
     auto mat_type_flume = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
 
-    auto mat_cyl = DEMSim.LoadMaterial({{"E", 1.0e8}, {"nu", 0.35}, {"CoR", 0.55}, {"mu", 0.70}, {"Crr", 0.07}});
+    auto mat_cyl = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.55}, {"mu", 0.70}, {"Crr", 0.07}});
 
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_cyl, 0.7);
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_cyl, 0.50);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_cyl, 0.05);
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_cyl, 0.40);
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_cyl, 0.50);
 
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_flume, mat_cyl, 0.7);   // it is supposed to be
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_flume, mat_cyl, 0.70);   // it is supposed to be
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_flume, mat_cyl, 0.05);  // plexiglass
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_flume, mat_cyl, 0.40);
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_flume, mat_cyl, 0.30);
 
     // Make ready for simulation
-    float step_size = 2.50e-6;
+    float step_size = 5.0e-6;
     DEMSim.InstructBoxDomainDimension({-0.10, 0.10}, {-0.02, 0.02}, {-0.50, 1.0});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
@@ -92,16 +92,16 @@ int main() {
     // Loaded meshes are by-default fixed
 
     auto fixed_left = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
-    float3 move = make_float3(-hopperW / 2.0, 0, 0);
+    float3 move = make_float3(-hopperW / 2.0, 0, -0.01);
     float4 rot = make_float4(0.7071, 0, 0, 0.7071);
     fixed_left->Move(move, rot);
 
     auto fixed_right = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
-    move = make_float3(gateWidth + hopperW / 2.0, 0, 0);
+    move = make_float3(gateWidth + hopperW / 2.0, 0, -0.01);
     fixed_right->Move(move, rot);
 
     auto gate = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
-    gate->Move(make_float3(gateWidth / 2, 0, -0.001), rot);
+    gate->Move(make_float3(gateWidth / 2, 0, -0.011), rot);
 
     fixed_left->SetFamily(10);
     fixed_right->SetFamily(10);
@@ -257,7 +257,7 @@ int main() {
 
 
     float timeStep = step_size * 500.0;
-    int numStep = 7.0 / timeStep;
+    int numStep = 7.5 / timeStep;
     int timeOut = 0.01 / timeStep;
     int gateMotion = (gateOpen / gateSpeed) / timeStep;
     std::cout << "Frame: " << timeOut << std::endl;
@@ -291,7 +291,7 @@ int main() {
             frame++;
         }
 
-        if ((i > (timeOut * 2)) && status) {
+        if ((i > (timeOut * 4)) && status) {
             DEMSim.DoDynamicsThenSync(0);
             std::cout << "gate is in motion from: " << timeStep * i << " s" << std::endl;
             DEMSim.ChangeFamily(10, 1);
@@ -299,7 +299,7 @@ int main() {
             status = false;
         }
 
-        if ((i >= (timeOut * (2) + gateMotion - 1)) && stopGate) {
+        if ((i >= (timeOut * (4) + gateMotion - 1)) && stopGate) {
             DEMSim.DoDynamicsThenSync(0);
             std::cout << "gate has stopped at: " << timeStep * i << " s" << std::endl;
             DEMSim.ChangeFamily(4, 3);

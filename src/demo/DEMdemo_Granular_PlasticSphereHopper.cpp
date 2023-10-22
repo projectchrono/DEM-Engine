@@ -27,7 +27,7 @@ int main() {
     DEMSim.UseFrictionalHertzianModel();
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ | OUTPUT_CONTENT::VEL);
+    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ | OUTPUT_CONTENT::VEL | OUTPUT_CONTENT::FAMILY);
     DEMSim.EnsureKernelErrMsgLineNum();
 
     srand(7001);
@@ -58,23 +58,25 @@ int main() {
 
     path out_dir = current_path();
     out_dir += "/Test_PlasticSphere/";
-    out_dir += "Hopper/";
+    out_dir += "Hopper/5S_";
 
     auto mat_type_bottom = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
     auto mat_type_flume = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
 
-    auto mat_spheres = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.70}, {"Crr", 0.02}});
+    // auto mat_spheres = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.70}, {"Crr", 0.02}});
+    auto mat_spheres = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.40}, {"Crr", 0.04}});
 
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_spheres, 0.5);
-    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_spheres, 0.02);
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_spheres, 0.50);
+    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_spheres, 0.05);
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_spheres, 0.50);
 
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_flume, mat_spheres, 0.7);   // it is supposed to be
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_flume, mat_spheres, 0.70);  // it is supposed to be
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_flume, mat_spheres, 0.05);  // plexiglass
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_flume, mat_spheres, 0.20);
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_flume, mat_spheres, 0.30);
 
     // Make ready for simulation
-    float step_size = 2.5e-6;
+    float step_size = 5.0e-6;
     DEMSim.InstructBoxDomainDimension({-0.10, 0.10}, {-0.02, 0.02}, {-0.50, 1.0});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
@@ -83,21 +85,21 @@ int main() {
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(25.);
-    DEMSim.SetInitBinSize(radius * 5);
+    DEMSim.SetInitBinSize(radius * 3);
 
     // Loaded meshes are by-default fixed
 
     auto fixed_left = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
-    float3 move = make_float3(-hopperW / 2.0, 0, 0);
+    float3 move = make_float3(-hopperW / 2.0, 0, -0.01);
     float4 rot = make_float4(0.7071, 0, 0, 0.7071);
     fixed_left->Move(move, rot);
 
     auto fixed_right = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
-    move = make_float3(gateWidth + hopperW / 2.0, 0, 0);
+    move = make_float3(gateWidth + hopperW / 2.0, 0, -0.01);
     fixed_right->Move(move, rot);
 
     auto gate = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
-    gate->Move(make_float3(gateWidth / 2, 0, -0.001), rot);
+    gate->Move(make_float3(gateWidth / 2, 0, -0.011), rot);
 
     fixed_left->SetFamily(10);
     fixed_right->SetFamily(10);
@@ -158,7 +160,7 @@ int main() {
 
     char filename[200], meshfile[200];
 
-    float shift_xyz = 1.0 * (maxRadius)*2.0;
+    float shift_xyz = 1.0 * (maxRadius) * 2.0;
     float x = 0;
     float y = 0;
 
@@ -178,8 +180,7 @@ int main() {
     DEMSim.WriteMeshFile(std::string(meshfile));
 
     while (initialization) {
-        DEMSim.ClearCache();
-
+        
         std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
         std::vector<float3> input_pile_xyz;
         PDSampler sampler(shift_xyz);
@@ -217,14 +218,14 @@ int main() {
             // Generate initial clumps for piling
         }
         timeTotal += settle_frame_time;
-        std::cout << "Total runtime: " << timeTotal << "s; settling for: " << settle_frame_time << std::endl;
-        std::cout << "maxZ is: " << max_z_finder->GetValue() << std::endl;
+        //std::cout << "Total runtime: " << timeTotal << "s; settling for: " << settle_frame_time << std::endl;
+        //std::cout << "maxZ is: " << max_z_finder->GetValue() << std::endl;
 
         initialization = (actualTotalSpheres < totalSpheres) ? true : false;
 
         if (generate) {
-            std::cout << "frame : " << frame << std::endl;
-            sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), frame);
+            //std::cout << "frame : " << frame << std::endl;
+            //sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), frame);
             // DEMSim.WriteSphereFile(std::string(filename));
             // DEMSim.ShowThreadCollaborationStats();
             frame++;
@@ -238,7 +239,7 @@ int main() {
             for (int i = 0; i < (int)(0.4 / settle_frame_time); i++) {
                 DEMSim.DoDynamics(settle_frame_time);
                 sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), i);
-                // DEMSim.WriteSphereFile(std::string(filename));
+                DEMSim.WriteSphereFile(std::string(filename));
                 std::cout << "consolidating for " << i * settle_frame_time << "s " << std::endl;
             }
         }
@@ -246,13 +247,8 @@ int main() {
 
     DEMSim.DoDynamicsThenSync(0.0);
 
-    double k = 4.0 / 3.0 * 10e7 * std::pow(radius / 2.0, 0.5f);
-    double m = 4.0 / 3.0 * PI * std::pow(radius, 3);
-    double dt_crit = 0.64 * std::pow(m / k, 0.5f);
 
-    std::cout << "dt critical is: " << dt_crit << std::endl;
-
-    float timeStep = step_size * 100.0;
+    float timeStep = step_size * 500.0;
     int numStep = 7.0 / timeStep;
     int timeOut = 0.01 / timeStep;
     int gateMotion = (gateOpen / gateSpeed) / timeStep;
@@ -306,6 +302,6 @@ int main() {
     DEMSim.ShowTimingStats();
     DEMSim.ClearTimingStats();
 
-    std::cout << "DEMdemo_Repose exiting..." << std::endl;
+    std::cout << "DEMdemo exiting..." << std::endl;
     return 0;
 }

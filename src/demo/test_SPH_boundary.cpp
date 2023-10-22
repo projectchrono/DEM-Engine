@@ -37,7 +37,7 @@ int main() {
 
     // total number of random clump templates to generate
 
-    double radius = 0.12 / 5.0 / 2.0;
+    double radius = 0.12 / 8.0 / 2.0;
     double density = 1000;
 
     int totalSpheres = 3550;

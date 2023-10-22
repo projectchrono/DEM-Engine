@@ -50,9 +50,9 @@ expCylWood=[0.02, 0.74
 7.01, 88.49];
 
 % folder=['../'  '../build/Test_Plastic_Cylinder_Sphere/Hopper/'];
-% folder=['../'  '../output/Test_WoodenCylinder/Hopper/5S_/'];
+folder=['../'  '../output/Test_WoodenCylinder/Hopper/5S_/'];
 % folder=[''  '../../output/Test_PlasticCylinder/Hopper/5S_/'];
- folder=[''  '../../output/Test_PlasticSphere/Hopper/'];
+%   folder=[''  '../../output/Test_PlasticSphere/Hopper/5S_/'];
   % folder=['../'  '../build/DemoOutput_Granular_WoodenSphere/Hopper/'];
    % folder=['../'  '../build/DemoOutput_Granular_WoodenCylinder/Hopper/3S_/'];
 files=dir(folder);
@@ -72,7 +72,7 @@ N=2.344/(4/3*pi*(d/2)^3*rho);
 fowler=0.221*A0*rho*(2*g*Dh)^0.50*(Dh/(k*d))^0.185;
 
 
-time=(0:0.01:7)';
+time=(0:0.01:8.0)';
 level_z=zeros(numel(time),1);
 discharge=zeros(numel(time),1);
 
@@ -83,7 +83,7 @@ familySph=99;
 massSph=4/3*pi*0.003^3*1592;
 
 
-for i=1:1:699
+for i=1:1:749
     file=['DEMdemo_output_' num2str(i,'%04i.csv')];
     disp(file)
     data=readtable([folder file]);

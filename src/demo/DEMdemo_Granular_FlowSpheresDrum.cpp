@@ -233,7 +233,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float rollingMateri
             // sprintf(meshfile, "%s/DEMdemo_mesh.vtk", out_dir.c_str());
             // DEMSim.WriteMeshFile(std::string(meshfile));
             // DEMSim.ShowThreadCollaborationStats();
-             frame++;
+            frame++;
         }
         //frame++;
 

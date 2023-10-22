@@ -32,7 +32,7 @@ int main() {
 
     srand(7001);
     DEMSim.SetCollectAccRightAfterForceCalc(true);
-    DEMSim.SetErrorOutAvgContacts(120);
+    DEMSim.SetErrorOutAvgContacts(80);
 
     // DEMSim.SetExpandSafetyAdder(0.5);
 
@@ -63,12 +63,18 @@ int main() {
     out_dir += "/Test_Plastic_Cylinder_Sphere/";
     out_dir += "Hopper/";
 
+    auto mat_type_bottom = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
     auto mat_type_flume = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
 
-    auto mat_spheres = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.50}, {"Crr", 0.03}});
+    //auto mat_spheres = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.50}, {"Crr", 0.03}});
 
-    auto mat_cylinders = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.60}, {"Crr", 0.05}});
+    //auto mat_cylinders = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.60}, {"Crr", 0.05}});
+
+    auto mat_spheres = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.40}, {"Crr", 0.04}});
+
+    auto mat_cylinders = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.30}, {"Crr", 0.03}});
+
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_cylinders, 0.7);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_cylinders, 0.05);
@@ -87,7 +93,7 @@ int main() {
     DEMSim.SetMaterialPropertyPair("mu", mat_type_flume, mat_cylinders, 0.30);
 
     // Make ready for simulation
-    float step_size = 2.5e-6;
+    float step_size = 5.0e-6;
     DEMSim.InstructBoxDomainDimension({-0.10, 0.10}, {-0.02, 0.02}, {-0.50, 1.0});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
@@ -96,21 +102,21 @@ int main() {
     // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
     // happen anyway and if it does, something already went wrong.
     DEMSim.SetMaxVelocity(25.);
-    DEMSim.SetInitBinSize(radiusCyl * 4);
+    DEMSim.SetInitBinSize(radiusCyl * 2);
 
     // Loaded meshes are by-default fixed
 
     auto fixed_left = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
-    float3 move = make_float3(-hopperW / 2.0, 0, 0);
+    float3 move = make_float3(-hopperW / 2.0, 0, -0.01);
     float4 rot = make_float4(0.7071, 0, 0, 0.7071);
     fixed_left->Move(move, rot);
 
     auto fixed_right = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
-    move = make_float3(gateWidth + hopperW / 2.0, 0, 0);
+    move = make_float3(gateWidth + hopperW / 2.0, 0, -0.01);
     fixed_right->Move(move, rot);
 
     auto gate = DEMSim.AddWavefrontMeshObject("../data/granularFlow/funnel_left.obj", mat_type_flume);
-    gate->Move(make_float3(gateWidth / 2, 0, -0.001), rot);
+    gate->Move(make_float3(gateWidth / 2, 0, -0.011), rot);
 
     fixed_left->SetFamily(10);
     fixed_right->SetFamily(10);
@@ -208,10 +214,11 @@ int main() {
         }
     }
 
+    DEMSim.Initialize();
+
     //
     // Sphere generation
     //
-    DEMSim.Initialize();
     {
         float shift_xyz = 1.0 * (radiusSph) * 2.0;
         float x = 0;
@@ -264,6 +271,7 @@ int main() {
                 actualTotalSpheres = (int)DEMSim.GetNumClumps();
                 // Generate initial clumps for piling
             }
+
             timeTotal += settle_frame_time;
             std::cout << "Total runtime: " << timeTotal << "s; settling for: " << settle_frame_time << std::endl;
             std::cout << "maxZ is: " << max_z_finder->GetValue() << std::endl;
@@ -382,8 +390,9 @@ int main() {
 
     DEMSim.DoDynamicsThenSync(0.0);
 
+
     float timeStep = step_size * 500.0;
-    int numStep = 7.0 / timeStep;
+    int numStep = 7.5 / timeStep;
     int timeOut = 0.01 / timeStep;
     int gateMotion = (gateOpen / gateSpeed) / timeStep;
     std::cout << "Frame: " << timeOut << std::endl;
@@ -436,6 +445,6 @@ int main() {
     DEMSim.ShowTimingStats();
     DEMSim.ClearTimingStats();
 
-    std::cout << "DEMdemo_Repose exiting..." << std::endl;
+    std::cout << "DEMdemo exiting..." << std::endl;
     return 0;
 }
