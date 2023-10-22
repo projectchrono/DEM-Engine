@@ -1095,7 +1095,7 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
     }
     if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_VEL) {
         outstrstream << "," + OUTPUT_FILE_ANGVEL_X_COL_NAME + "," + OUTPUT_FILE_ANGVEL_Y_COL_NAME + "," +
-                            OUTPUT_FILE_ANGVEL_X_COL_NAME;
+                            OUTPUT_FILE_ANGVEL_Z_COL_NAME;
     }
     if (solverFlags.outputFlags & OUTPUT_CONTENT::ABS_ACC) {
         outstrstream << ",abs_acc";
@@ -1321,7 +1321,7 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
     }
     if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_VEL) {
         outstrstream << "," + OUTPUT_FILE_ANGVEL_X_COL_NAME + "," + OUTPUT_FILE_ANGVEL_Y_COL_NAME + "," +
-                            OUTPUT_FILE_ANGVEL_X_COL_NAME;
+                            OUTPUT_FILE_ANGVEL_Z_COL_NAME;
     }
     if (solverFlags.outputFlags & OUTPUT_CONTENT::ABS_ACC) {
         outstrstream << ",abs_acc";
