@@ -32,6 +32,10 @@ const float3 velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
 const float projection = dot(velB2A, B2A);
 vrel_tan = velB2A - projection * B2A;
 
+const float3 v_rot = rotVelCPB - rotVelCPA;
+// This v_rot is only used for identifying resistance direction
+const float v_rot_mag = length(v_rot);
+
 // Now we already have sufficient info to update contact history
 {
     delta_tan += ts * vrel_tan;
@@ -45,17 +49,21 @@ vrel_tan = velB2A - projection * B2A;
 if (unbroken > DEME_TINY_FLOAT) {
     initialLength = (unbroken > 1.0) ? overlapDepth : initialLength;  // reusing a variable that survives the loop
     unbroken = (unbroken > 1.0) ? 1.0 : unbroken;
+    ;
 
-    float kn = 2.0 * (ARadius * BRadius) * (E_A * E_B) /
+    float kn = 15.0 * (ARadius * BRadius) * (E_A * E_B) /
                ((ARadius * E_A) + (BRadius + E_B));  // to be checked for formulation with 2
+    // float kn = 0.5 * ARadius * E_A ;
+    float kt = 1.f / 2.5f * kn;
+    float kr = ARadius * BRadius * kt;
 
     float intialArea = ((ARadius > BRadius) ? ARadius * ARadius : BRadius * BRadius) * deme::PI;
 
     float coesion = 200e6;
     float tension = -9.3e6f;
     float BreakingForce = tension * intialArea;
-    float deltaY=BreakingForce/kn;
-    float deltaU=2.0f*deltaY;
+    float deltaY = BreakingForce / kn;
+    float deltaU = 2.0f * deltaY;
     float deltaD = (overlapDepth - initialLength);  // initial relative displacement considered from the initial overlap
 
     mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
@@ -65,15 +73,15 @@ if (unbroken > DEME_TINY_FLOAT) {
     // float3 bond_force = B2A;  // vector direction
     float force_to_A_mag;
 
-    force_to_A_mag = (deltaD > deltaY)? kn * deltaD : (deltaU-deltaD)*kn*0.5;
+    force_to_A_mag = (deltaD > deltaY) ? kn * deltaD : (deltaU - deltaD) * kn * 0.5;
 
     // tangetial forces
 
     force += B2A * force_to_A_mag - c * velB2A;
 
-    float Fsmax = (deltaD > deltaY) ? length(force) * mu_cnt + coesion * intialArea: length(force) * mu_cnt;
+    float Fsmax = (deltaD > deltaY) ? length(force) * mu_cnt + coesion * intialArea : length(force) * mu_cnt;
 
-    float kt = 1.f / 2.5f * kn;
+    
 
     const float loge = (CoR_cnt < DEME_TINY_FLOAT) ? log(DEME_TINY_FLOAT) : log(CoR_cnt);
     beta = loge / sqrt(loge * loge + deme::PI_SQUARED);
@@ -87,9 +95,18 @@ if (unbroken > DEME_TINY_FLOAT) {
     force += tangent_force;
     // If this condition is met, the bond breaks, meaning in the next time step, this bonding force model no longer
     // takes effect.
+    float3 torque_force;
+    if (v_rot_mag > DEME_TINY_FLOAT) {
+        torque_force = (v_rot / v_rot_mag) * ts * kr/ARadius;
+        // printf("torque force: %f, %f, %f\n", torque_only_force.x, torque_only_force.y,
+        // torque_only_force.z);
+    }
+
+    //force += torque_force;
 
     damage = (force_to_A_mag) / BreakingForce;
     unbroken = (deltaD < deltaU) ? -1.0 : unbroken;
+
 } else {  // If unbroken == 0, then the bond is broken, and the grain is broken, components are now separate particles,
           // so they just follow Hertzian contact law.
 

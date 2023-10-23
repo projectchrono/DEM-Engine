@@ -54,6 +54,7 @@ SET(DEMOS
 		DEMdemo_Electrostatic
 		DEMdemo_FlexibleMesh
 		DEMdemo_Fracture
+		DEMdemo_FractureBox
 		DEMdemo_FractureBeam
 		test_SPH_boundary
 )

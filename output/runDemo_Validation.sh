@@ -3,7 +3,7 @@
 make -C ../build/ -j 16
   # ../build/src/demo/DEMdemo_Granular_PlasticSphereHopper
   # ../build/src/demo/DEMdemo_Granular_PlasticCylinderHopper
-  ../build/src/demo/DEMdemo_Granular_WoodenCylinderHopper
+  # ../build/src/demo/DEMdemo_Granular_WoodenCylinderHopper
   
 
 #  ../build/src/demo/DEMdemo_Granular_WoodenSphereHopper
