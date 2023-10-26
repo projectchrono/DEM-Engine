@@ -48,7 +48,7 @@ int main() {
 
     float world_size = 5.;
     float container_diameter = 0.50;
-    float step_size = 1e-6;
+    float step_size = 1e-7;
     DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
     // No need to add simulation `world' boundaries, b/c we'll add a cylinderical container manually
     DEMSim.InstructBoxDomainBoundingBC("all", mat_type_container);
@@ -91,7 +91,7 @@ int main() {
     std::shared_ptr<DEMClumpTemplate> my_template = DEMSim.LoadSphereType(mass, sphere_rad, mat_type_particle);
 
     // Sampler to sample
-    GridSampler sampler(sphere_rad * 2.0);
+    HCPSampler sampler(sphere_rad * 2.0);
     
     float3 fill_center = make_float3(0, beamWidth / 2.0 , beamHeight/2.0 +sphere_rad);
     float3 fill_size = make_float3(0.40, beamWidth / 2.0, beamHeight / 2.0);
