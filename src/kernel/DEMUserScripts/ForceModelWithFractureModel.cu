@@ -35,6 +35,7 @@ vrel_tan = velB2A - projection * B2A;
 const float3 v_rot = rotVelCPB - rotVelCPA;
 // This v_rot is only used for identifying resistance direction
 const float v_rot_mag = length(v_rot);
+mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
 
 // Now we already have sufficient info to update contact history
 {
@@ -49,9 +50,8 @@ const float v_rot_mag = length(v_rot);
 if (unbroken > DEME_TINY_FLOAT) {
     initialLength = (unbroken > 1.0) ? overlapDepth : initialLength;  // reusing a variable that survives the loop
     unbroken = (unbroken > 1.0) ? 1.0 : unbroken;
-    ;
 
-    float kn = 15.0 * (ARadius * BRadius) * (E_A * E_B) /
+    float kn = 150.0 * (ARadius * BRadius) * (E_A * E_B) /
                ((ARadius * E_A) + (BRadius + E_B));  // to be checked for formulation with 2
     // float kn = 0.5 * ARadius * E_A ;
     float kt = 1.f / 2.5f * kn;
@@ -60,13 +60,13 @@ if (unbroken > DEME_TINY_FLOAT) {
     float intialArea = ((ARadius > BRadius) ? ARadius * ARadius : BRadius * BRadius) * deme::PI;
 
     float coesion = 200e6;
-    float tension = -9.3e6f;
+    float tension = -10e6f;
     float BreakingForce = tension * intialArea;
     float deltaY = BreakingForce / kn;
-    float deltaU = 2.0f * deltaY;
+    float deltaU = 3.0f * deltaY;
     float deltaD = (overlapDepth - initialLength);  // initial relative displacement considered from the initial overlap
 
-    mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
+    
     float c = 0.005 * 2.0 * sqrt(mass_eff * kn);
 
     // To A, gravity pulls it towards B, so -B2A direction
@@ -81,30 +81,37 @@ if (unbroken > DEME_TINY_FLOAT) {
 
     float Fsmax = (deltaD > deltaY) ? length(force) * mu_cnt + coesion * intialArea : length(force) * mu_cnt;
 
-    
-
     const float loge = (CoR_cnt < DEME_TINY_FLOAT) ? log(DEME_TINY_FLOAT) : log(CoR_cnt);
     beta = loge / sqrt(loge * loge + deme::PI_SQUARED);
     float gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
 
     auto tangent_force = -kt * delta_tan;
-    tangent_force = (length(tangent_force) < Fsmax) ? -kt * delta_tan : tangent_force;
+    // tangent_force = (length(tangent_force) < Fsmax) ? -kt * delta_tan : tangent_force;
     delta_tan = (tangent_force + gt * vrel_tan) / (-kt);
+
+    // breaking  for excess of tangential stress
+    unbroken = (length(tangent_force) > Fsmax) ? -1.0 : unbroken;
     // float3 coesionForce= coesion * intialArea * (-B2A);
 
     force += tangent_force;
     // If this condition is met, the bond breaks, meaning in the next time step, this bonding force model no longer
     // takes effect.
     float3 torque_force;
+    float a = ts * kr / ARadius;
+    float b = 0.1 * ARadius * length(force);
+
     if (v_rot_mag > DEME_TINY_FLOAT) {
-        torque_force = (v_rot / v_rot_mag) * ts * kr/ARadius;
+        float torque_force_mag = (a < b) ? a : b;
+        torque_force = (v_rot / v_rot_mag) * torque_force_mag;
+        // rollimit limit coeffiecient 0.1
+
         // printf("torque force: %f, %f, %f\n", torque_only_force.x, torque_only_force.y,
         // torque_only_force.z);
     }
 
-    //force += torque_force;
+    force += torque_force;
 
-    damage = (force_to_A_mag) / BreakingForce;
+    damage = length(force) / intialArea;
     unbroken = (deltaD < deltaU) ? -1.0 : unbroken;
 
 } else {  // If unbroken == 0, then the bond is broken, and the grain is broken, components are now separate particles,

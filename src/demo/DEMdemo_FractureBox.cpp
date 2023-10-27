@@ -53,8 +53,10 @@ int main() {
     float world_size = 1.5;
     float container_diameter = 0.04;
     float terrain_density = 2.80e3;
-    float sphere_rad = 0.0010;
-    float step_size = 10e-8;
+    float sphere_rad = 0.0012;
+    float step_size = 5e-8;
+    float fact_radius = 1.2;
+
     DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
     // No need to add simulation `world' boundaries, b/c we'll add a cylinderical container manually
     DEMSim.InstructBoxDomainBoundingBC("all", mat_type_container);
@@ -124,7 +126,8 @@ int main() {
     std::cout << "Total num of particles: " << particles->GetNumClumps() << std::endl;
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DemoOutput_Fracture";
+    std::string nameOutFolder = "R" + std::to_string(sphere_rad) + "_Int" + std::to_string(fact_radius) + "";
+    out_dir += "/DemoOutput_Fracture_" + nameOutFolder;
     remove_all(out_dir);
     create_directory(out_dir);
 
@@ -133,7 +136,7 @@ int main() {
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
     auto min_z_finder = DEMSim.CreateInspector("clump_min_z");
 
-    DEMSim.SetFamilyExtraMargin(1, 1.0 * sphere_rad);
+    DEMSim.SetFamilyExtraMargin(1, fact_radius * sphere_rad);
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0.00, 1 * -9.81));
@@ -158,7 +161,7 @@ int main() {
 
     double L0;
     double stress;
-    std::string nameOutFile = "data" + std::to_string(sphere_rad) + ".csv";
+    std::string nameOutFile = "data_R" + std::to_string(sphere_rad) + "_Int" + std::to_string(fact_radius) + ".csv";
     std::ofstream csvFile(nameOutFile);
 
     DEMSim.SetFamilyContactWildcardValueAll(1, "initialLength", 0.0);
