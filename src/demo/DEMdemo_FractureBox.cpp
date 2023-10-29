@@ -35,11 +35,11 @@ int main() {
     //  E, nu, CoR, mu, Crr...
     auto mat_type_container =
         DEMSim.LoadMaterial({{"E", 100e9}, {"nu", 0.3}, {"CoR", 0.7}, {"mu", 0.80}, {"Crr", 0.10}});
-    auto mat_type_particle = DEMSim.LoadMaterial({{"E", 60e9}, {"nu", 0.5}, {"CoR", 0.5}, {"mu", 0.5}, {"Crr", 0.05}});
+    auto mat_type_particle = DEMSim.LoadMaterial({{"E", 60e9}, {"nu", 0.20}, {"CoR", 0.5}, {"mu", 0.5}, {"Crr", 0.05}});
     // If you don't have this line, then values will take average between 2 materials, when they are in contact
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_container, mat_type_particle, 0.0);
-    DEMSim.SetMaterialPropertyPair("Crr", mat_type_container, mat_type_particle, 1.0);
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_container, mat_type_particle, 1.0);
+    DEMSim.SetMaterialPropertyPair("Crr", mat_type_container, mat_type_particle, 0.0);
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_container, mat_type_particle, 0.0);
     // We can specify the force model using a file.
     auto my_force_model = DEMSim.ReadContactForceModel("ForceModelWithFractureModel.cu");
 
@@ -48,14 +48,14 @@ int main() {
     my_force_model->SetMustPairwiseMatProp({"CoR", "mu", "Crr"});
     // Pay attention to the extra per-contact wildcard `unbroken' here.
     my_force_model->SetPerContactWildcards(
-        {"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z", "unbroken", "initialLength", "damage"});
+        {"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z", "unbroken", "initialLength"});
 
     float world_size = 1.5;
-    float container_diameter = 0.04;
+    float container_diameter = 0.05;
     float terrain_density = 2.80e3;
     float sphere_rad = 0.0012;
     float step_size = 5e-8;
-    float fact_radius = 1.2;
+    float fact_radius = 0.9;
 
     DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
     // No need to add simulation `world' boundaries, b/c we'll add a cylinderical container manually
@@ -144,9 +144,9 @@ int main() {
     // DEMSim.DisableContactBetweenFamilies(20, 1);
     std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
 
-    float sim_end = 1.0;
-    unsigned int fps = 100;
-    unsigned int datafps = 100;
+    float sim_end = 0.5;
+    unsigned int fps = 200;
+    unsigned int datafps = 200;
     unsigned int modfpsGeo = datafps / fps;
     float frame_time = 1.0 / datafps;
     std::cout << "Output at " << fps << " FPS" << std::endl;
@@ -165,7 +165,7 @@ int main() {
     std::ofstream csvFile(nameOutFile);
 
     DEMSim.SetFamilyContactWildcardValueAll(1, "initialLength", 0.0);
-    DEMSim.SetFamilyContactWildcardValueAll(1, "damage", 0.0);
+    //DEMSim.SetFamilyContactWildcardValueAll(1, "damage", 0.0);
     DEMSim.SetFamilyContactWildcardValueAll(1, "unbroken", 0.0);
 
     // Simulation loop
@@ -196,7 +196,7 @@ int main() {
         if (frame_count % 1 == 0) {
             float3 forces = plate_tracker->ContactAcc();
             float3 pos = plate_tracker->Pos();
-            stress = forces.z / (deme::PI * container_diameter * container_diameter / 4);
+            stress = forces.z / (container_diameter * container_diameter);
             double L = max_z_finder->GetValue() - min_z_finder->GetValue() + 2 * sphere_rad;
             std::cout << "Time: " << t << std::endl;
             std::cout << "Pos of plate: " << pos.z << std::endl;
