@@ -163,12 +163,12 @@ int main() {
 
     // Settle
     for (double t = 0; t < 0.3; t += frame_time) {
-        // char filename[200], meshname[200];
-        // std::cout << "Outputting frame: " << currframe << std::endl;
-        // sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-        // sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
-        // DEMSim.WriteSphereFile(std::string(filename));
-        // DEMSim.WriteMeshFile(std::string(meshname));
+        char filename[200], meshname[200];
+        std::cout << "Outputting frame: " << currframe << std::endl;
+        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
+        sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
+        DEMSim.WriteSphereFile(std::string(filename));
+        DEMSim.WriteMeshFile(std::string(meshname));
         DEMSim.ShowThreadCollaborationStats();
 
         DEMSim.DoDynamicsThenSync(frame_time);
