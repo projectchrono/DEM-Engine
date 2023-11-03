@@ -77,8 +77,8 @@ int main(int argc, char* argv[]) {
     float G_mag = atof(argv[11]);
     float step_size = 1e-5;  // 5e-6;
     double world_size_y = .75;
-    double world_size_x = 3.;
-    float safe_x = 1.2;
+    double world_size_x = 4.;
+    float safe_x = 1.6;
     double world_size_z = 4.0;
 
     // Define the wheel geometry
@@ -267,9 +267,9 @@ int main(int argc, char* argv[]) {
         DEMSim.Initialize();
 
         // Put the wheel in place, then let the wheel sink in initially
-        float init_x = -0.4;
+        float init_x = -0.6;
         if (Slope_deg < 21) {
-            init_x = -1.0;
+            init_x = -1.4;
         }
 
         float settle_time = 0.2;
