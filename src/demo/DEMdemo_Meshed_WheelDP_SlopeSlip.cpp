@@ -81,7 +81,7 @@ int main(int argc, char* argv[]) {
     float safe_x = 1.6;
     double world_size_z = 4.0;
     float w_r = atof(argv[10]);
-    double sim_end = 20.;
+    double sim_end = 10.;
     float z_adv_targ = 0.2;
 
     // Define the wheel geometry

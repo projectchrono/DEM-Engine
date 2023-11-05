@@ -94,7 +94,8 @@ int main(int argc, char* argv[]) {
     // Wheel movements
     float w_r = atof(argv[10]);
     float forward_slip = 0.1;
-    double sim_end = math_PI * 2. / 3. / w_r;  // 1/3 a revolution
+    double sim_end = math_PI * 4. / 3. / w_r;  
+    sim_end = (sim_end > 5.0) ? 5.0 : sim_end; // 2/3 a revolution or 5s
     float tilt = 5. / 180. * math_PI;
     float forward_v = w_r * wheel_rad * std::cos(tilt) * (1. - forward_slip);
 
