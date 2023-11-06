@@ -17,7 +17,7 @@ __A dual-GPU DEM solver with complex grain geometry support__
 
 <li><a href="#pyDEME">Use DEME with Python</a></li>
 
-<li><a href="#installation">How to compile from source</a></li>
+<li><a href="#compilation">How to compile from source</a></li>
 
 <li><a href="#examples">Numerical examples and use cases</a></li>
 
@@ -82,7 +82,7 @@ pip3 install DEME
 
 Then [Python scripts](https://github.com/projectchrono/DEM-Engine/tree/pyDEME_demo/src/demo) can be executed in this environment. To understand the content of each Python demo, refer to the explanations of the C++ demos with the same names in **Examples** section.
 
-<h2 id="installation">Compilation</h2>
+<h2 id="compilation">Compilation</h2>
 
 You can also build C++ _DEME_ from source. It allows for potentially more performance and more tailoring.
 
