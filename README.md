@@ -21,9 +21,9 @@ __A dual-GPU DEM solver with complex grain geometry support__
 
 <li><a href="#examples">Numerical examples and use cases</a></li>
 
-<li><a href="#ccontainer">Container</a></li>
+<!-- <li><a href="#ccontainer">Container</a></li> -->
 
-<li><a href="#library">Install as C++ library</a></li>
+<li><a href="#install-as-library">Install as C++ library</a></li>
 
 <li><a href="#licensing">Licensing</a></li>
 
@@ -167,7 +167,7 @@ Some additional troubleshooting tips for running the demos:
 - Used your own force model but got runtime compilation error like `expression must have pointer-to-object type but it has type "float"`, or `unknown variable "delta_time"`? Check out what we did in demo `DEMdemo_Electrostatic`. You may need to manually specify what material properties are pairwise and what contact wildcards you have using `SetMustPairwiseMatProp` and `SetPerContactWildcards`.
 - Just running provided demos or a script that used to work, but the jitification of the force model failed or the simulation fails at the first kernel call (probably in `DEMCubContactDetection.cu`)? Then did you pull a new version and just re-built in-place? A new update may modify the force model, and the force model in _DEME_ are given as text files so might not be automatically copied over when the project is re-built. I am sorry for the trouble it might cause, but you can do a clean re-build from an empty directory and it should fix the problem. Do not forget to first commit your own branches' changes and relocate the data you generated in the build directory. Another solution is to copy everything in `src/DEM` to the `DEM` directory in the build directory, then everything in `src/kernel` to the `kernel` directory in the build directory, then try again.
 
-<h2 id="ccontainer">Using DEME in Container</h2>
+<!-- <h2 id="ccontainer">Using DEME in Container</h2>
 
 _DEME_ is now [hosted on DockerHub](https://hub.docker.com/r/uwsbel/dem-engine) for those who want to run it in a container. It can potentially save your time that would otherwise be spent on getting the dependencies right, and for you to test out if _DEME_ is what you needed.
 
@@ -182,7 +182,7 @@ Then the source code along with a pre-built _DEME_ can be found in `/DEM-Engine`
 
 Starting from this point, you can start adding new scripts or modify existing ones for your own simulations. You can also build and run your newly added code, and commit the modified container as needed. If you encounter problems when re-building the project in the container, then you may refer to the troubleshooting tips in the **Installation** section for help, or turn to the [forum](https://groups.google.com/g/projectchrono).
 
-Note that the container imagine is not updated as often for bug-fixes and new features as the GitHub repo. 
+Note that the container imagine is not updated as often for bug-fixes and new features as the GitHub repo.  -->
 
 <h2 id="limitations">Limitations</h2>
 
@@ -191,7 +191,7 @@ _DEME_ is designed to simulate the interaction among clump-represented particles
 - It is able to handle mesh-represented bodies with relatively simple physics, for example a meshed plow moving through granular materials with a prescribed velocity, or several meshed projectiles flying and hitting the granular ground. 
 - However, if the bodies' physics are complex multibody problems, say it is a vehicle that has joint-connected parts and a motor with certain driving policies, or the meshed bodies have collisions among themselves that needs to be simulated, then _DEME_ alone does not have the infrastructure to handle them. But you can install _DEME_ as a library and do coupled simulations with other tools such as [Chrono](https://github.com/projectchrono/chrono), where _DEME_ is exclusively tasked with handling the granular materials and the influence they exert on the outside world (with high efficiency, of course). See the following section.
 
-<h2 id="library">Install as C++ library</h2>
+<h2 id="install-as-library">Install as library</h2>
 
 Set the `CMAKE_INSTALL_PREFIX` flag in `cmake` GUI to your desired installation path and then 
 
