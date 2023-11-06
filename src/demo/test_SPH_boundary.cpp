@@ -37,10 +37,10 @@ int main() {
 
     // total number of random clump templates to generate
 
-    double radius = 0.12 / 8.0 / 2.0;
+    double radius = 0.12 / 10.0 / 2.0;
     double density = 1000;
 
-    int totalSpheres = 3550;
+    int totalSpheres = 20050;
 
     int num_template = 1;
 
@@ -203,7 +203,7 @@ int main() {
     }
     std::cout << "Initialization done with : " << actualTotalSpheres << "particles" << std::endl;
 
-    float sim_end = 1.0;
+    float sim_end = 2.0;
     unsigned int fps = 20;
     float frame_time = 1.0 / fps;
 

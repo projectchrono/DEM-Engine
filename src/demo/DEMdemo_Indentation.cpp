@@ -59,7 +59,7 @@ int main() {
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
-    DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
+    DEMSim.SetOutputContent(OUTPUT_CONTENT::VEL);
     // You can enforce owner wildcard output by the following call, or directly include OUTPUT_CONTENT::OWNER_WILDCARD
     // in SetOutputContent
     DEMSim.EnableOwnerWildcardOutput();
@@ -69,66 +69,78 @@ int main() {
     create_directory(out_dir);
 
     // E, nu, CoR, mu, Crr...
-    auto mat_type_cube = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.4}, {"Crr", 0.0}});
-    auto mat_type_granular_1 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.3}, {"Crr", 0.0}});
-    auto mat_type_granular_2 = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.8}, {"mu", 0.4}, {"Crr", 0.0}});
+    auto mat_type_cube = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", 0.4}, {"Crr", 0.04}});
+    auto mat_type_granular_1 = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", 0.3}, {"Crr", 0.02}});
+    auto mat_type_granular_2 = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", 0.8}, {"Crr", 0.08}});
     // CoR is a pair-wise property, so it should be mentioned here
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_cube, mat_type_granular_1, 0.8);
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_cube, mat_type_granular_2, 0.8);
 
-    float granular_rad = 0.001;  // 0.002;
+    float granular_rad = 0.004;  // 0.002;
     auto template_granular = DEMSim.LoadSphereType(granular_rad * granular_rad * granular_rad * 2.6e3 * 4 / 3 * 3.14,
                                                    granular_rad, mat_type_granular_1);
 
-    float step_size = 1e-6;
-    const double world_size = 0.6;
-    const float fill_height = 0.3;
-    const float chamber_bottom = -world_size / 2.;
-    const float fill_bottom = chamber_bottom + granular_rad;
+    float step_size = 10e-6;
+    const double world_size = 0.8;
+    const float fill_height = 0.8;
+    const float chamber_bottom = -fill_height / 2.;
+    const float fill_bottom = -fill_height + granular_rad;
 
-    DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
+    DEMSim.InstructBoxDomainDimension({-world_size / 2, world_size / 2}, {-world_size / 2, world_size / 2},
+                                      {-fill_height, 1.0});
     DEMSim.InstructBoxDomainBoundingBC("all", mat_type_granular_2);
 
     // Now add a cylinderical boundary
     auto walls = DEMSim.AddExternalObject();
-    walls->AddCylinder(make_float3(0), make_float3(0, 0, 1), world_size / 2., mat_type_cube, 0);
+    walls->AddCylinder(make_float3(0, 0, fill_height), make_float3(0, 0, 1), world_size / 2., mat_type_cube, 0);
 
-    auto cube = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/cube.obj"), mat_type_cube);
-    std::cout << "Total num of triangles: " << cube->GetNumTriangles() << std::endl;
-    // Make the cube about 10cm by 2cm
-    float cube_width = 0.1;
-    float cube_height = 0.04;
-    double cube_speed = 0.25;  // 0.1 and 0.02, try them too... very similar though
-    cube->Scale(make_float3(cube_width, cube_width, cube_height));
-    cube->SetFamily(10);
-    DEMSim.SetFamilyFixed(10);
-    DEMSim.SetFamilyPrescribedLinVel(11, "0", "0", to_string_with_precision(-cube_speed));
+    double cube_speed = -0.3;
+
+    float mass = 7;
+    float3 MOI = make_float3(0.1, 0.1, 0.1) * 2000;
+    float w_r = 2 * deme::PI;
+
+    auto pile = DEMSim.AddWavefrontMeshObject("../data/granularFlow/pile.obj", mat_type_cube);
+    float3 move = make_float3(0.00, 0.00, 0.02);  // z
+    float4 rot = make_float4(0, 0, 1, 0);
+    pile->Scale(make_float3(0.01));
+    pile->Move(move, rot);
+    pile->SetMass(mass);
+    pile->SetMOI(MOI);
+
+    pile->SetFamily(10);
+    // DEMSim.SetFamilyFixed(10);
+
+    DEMSim.SetFamilyPrescribedAngVel(11, "0", "0", to_string_with_precision(w_r), false);
+    DEMSim.SetFamilyPrescribedLinVel(11, "0", "0", to_string_with_precision(cube_speed));
+
+    DEMSim.SetFamilyPrescribedLinVel(12, "0", "0", to_string_with_precision(-cube_speed));
     // Track the cube
-    auto cube_tracker = DEMSim.Track(cube);
+    auto cube_tracker = DEMSim.Track(pile);
 
     // Sampler to use
-    const float spacing = 2.05f * granular_rad;
+    const float spacing = 2.02f * granular_rad;
     const float fill_radius = world_size / 2. - 2. * granular_rad;
 
-    PDSampler sampler(spacing);
-    std::vector<float3> input_xyz;
-    float layer_z = 0;
-    while (layer_z < fill_height) {
-        float3 sample_center = make_float3(0, 0, fill_bottom + layer_z + spacing / 2);
-        auto layer_xyz = sampler.SampleCylinderZ(sample_center, fill_radius, 0);
-        input_xyz.insert(input_xyz.end(), layer_xyz.begin(), layer_xyz.end());
-        layer_z += spacing;
-    }
+    // PDSampler sampler(spacing);
+    // std::vector<float3> input_xyz;
+    // float layer_z = 0;
+    // while (layer_z < fill_height) {
+    //     float3 sample_center = make_float3(0, 0, fill_bottom + layer_z + spacing / 2);
+    //     auto layer_xyz = sampler.SampleCylinderZ(sample_center, fill_radius, 0);
+    //     input_xyz.insert(input_xyz.end(), layer_xyz.begin(), layer_xyz.end());
+    //     layer_z += spacing;
+    // }
 
-    // HCPSampler sampler(spacing);
-    // float3 fill_center = make_float3(0, 0, fill_bottom + fill_height / 2);
-    // auto input_xyz = sampler.SampleCylinderZ(fill_center, fill_radius, fill_height / 2);
+    HCPSampler sampler(spacing);
+    float3 fill_center = make_float3(0, 0, fill_bottom + fill_height / 2);
+    auto input_xyz = sampler.SampleCylinderZ(fill_center, fill_radius, fill_height / 2);
 
     // Note: AddClumps can be called multiple times before initialization to add more clumps to the system
     auto particles = DEMSim.AddClumps(template_granular, input_xyz);
     particles->SetFamily(1);
     // Initially, no contact between the brick and the granular material
-    DEMSim.DisableContactBetweenFamilies(1, 10);
+    // DEMSim.DisableContactBetweenFamilies(1, 10);
 
     // Use a owner wildcard to record tangential displacement compared to initial pos
     auto force_model = DEMSim.GetContactForceModel();
@@ -148,8 +160,8 @@ int main() {
     DEMSim.SetInitBinNumTarget(5e7);
     DEMSim.Initialize();
 
-    float sim_end = cube_height * 1.5 / cube_speed;  // 3.0;
-    unsigned int fps = 200;                          // 20;
+    float sim_end = 5;
+    unsigned int fps = 50;  // 20;
     float frame_time = 1.0 / fps;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
@@ -161,8 +173,12 @@ int main() {
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
 
+    bool cond_1 = true;
+    bool cond_2 = true;
+
+    DEMSim.ChangeFamily(10, 11);
     // Settle
-    for (double t = 0; t < 0.3; t += frame_time) {
+    for (double t = 0; t < 0.1; t += frame_time) {
         char filename[200], meshname[200];
         std::cout << "Outputting frame: " << currframe << std::endl;
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
@@ -185,19 +201,43 @@ int main() {
     // Ready to start indentation
     std::cout << "Simulation starts..." << std::endl;
     // Let the brick sink with a downward velocity.
-    DEMSim.ChangeFamily(10, 11);
 
     // This is meant to show that you can change the material type of the clumps in mid-simulation.
     // Doing this, we change the mu between particles from 0.3 (lower, for getting something denser
     // after settling) to 0.4 (the value we use for the main simulation).
-    DEMSim.SetFamilyClumpMaterial(1, mat_type_granular_2);
+    // DEMSim.SetFamilyClumpMaterial(1, mat_type_granular_2);
 
-    double cube_zpos = max_z_finder->GetValue() + cube_height / 2;
-    cube_tracker->SetPos(make_float3(0, 0, cube_zpos));
+    std::string nameOutFile = "Indentation.csv";
+    std::ofstream csvFile(nameOutFile);
+
+    double cube_zpos = max_z_finder->GetValue();
+    // cube_tracker->SetPos(make_float3(0, 0, cube_zpos));
     std::cout << "Initially the cube is at Z = " << cube_zpos << std::endl;
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (double t = 0; t < sim_end; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
+            float3 forces = cube_tracker->ContactAcc();
+            float3 pos = cube_tracker->Pos();
+            float3 rot = cube_tracker->AngVelLocal();
+            std::cout << "Time: " << t << std::endl;
+            std::cout << "Pos of pile: " << pos.z << std::endl;
+            std::cout << "Rot of pile: " << rot.z << std::endl;
+            csvFile << t << "; " << pos.z << "; " << forces.x << "; " << forces.y << "; " << forces.z << std::endl;
+
+            if (pos.z < -0.50 && cond_1) {
+                DEMSim.DoDynamicsThenSync(0);
+                DEMSim.ChangeFamily(11, 10);
+                DEMSim.SetFamilyClumpMaterial(1, mat_type_granular_2);
+                cond_1 = false;
+            }
+
+            if (t > 2.00 && cond_2) {
+                DEMSim.DoDynamicsThenSync(0);
+                DEMSim.ChangeFamily(10, 12);
+
+                cond_2 = false;
+            }
+
             // Compute relative displacement
             std::vector<float> gran_strain(num_particles);
             for (unsigned int i = 0; i < num_particles; i++) {
@@ -207,8 +247,8 @@ int main() {
                 for (auto& ID : particle_cnt_map.at(i)) {
                     rel_pos.push_back(DEMSim.GetOwnerPosition(ID) - main_loc);
                 }
-                // How large is the strain?
-                // float3 strains = make_float3(0);
+                //     // How large is the strain?
+                //     // float3 strains = make_float3(0);
                 float strains = 0.;
                 int num_neighbors = particle_init_relative_pos.at(i).size();
                 for (int j = 0; j < num_neighbors; j++) {
@@ -229,7 +269,7 @@ int main() {
             sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
             DEMSim.WriteSphereFile(std::string(filename));
             DEMSim.WriteMeshFile(std::string(meshname));
-            DEMSim.ShowThreadCollaborationStats();
+            // DEMSim.ShowThreadCollaborationStats();
         }
 
         DEMSim.DoDynamics(step_size);
@@ -241,6 +281,7 @@ int main() {
     std::cout << (time_sec.count()) / sim_end / (1e-5 / step_size)
               << " seconds (wall time) to finish 1e5 steps' simulation" << std::endl;
 
+    csvFile.close();
     DEMSim.ShowTimingStats();
     std::cout << "DEMdemo_Indentation exiting..." << std::endl;
     return 0;

@@ -125,7 +125,7 @@ int main() {
     double sim_end = 6.;
     // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
     // (move freely linearly)
-    DEMSim.SetFamilyPrescribedAngVel(1, "0", to_string_with_precision(w_r), "0", false);
+    DEMSim.SetFamilyPrescribedAngVel(1, "0", "0", to_string_with_precision(w_r), false);
     // An extra force (acceleration) is addedd to simulate the load that the wheel carries
     DEMSim.AddFamilyPrescribedAcc(1, "none", "none", to_string_with_precision(-added_pressure / wheel_mass));
     // `Real sim' family number
