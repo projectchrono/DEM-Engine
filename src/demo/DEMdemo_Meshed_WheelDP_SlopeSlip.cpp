@@ -253,7 +253,7 @@ int main(int argc, char* argv[]) {
         DEMSim.SetExpandSafetyAdder(v_ref);
         DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1);
         DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(5);
-        DEMSim.SetErrorOutVelocity(150.);
+        DEMSim.SetErrorOutVelocity(50.);
         DEMSim.Initialize();
 
         // Put the wheel in place, then let the wheel sink in initially
