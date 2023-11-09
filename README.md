@@ -3,7 +3,7 @@ __A dual-GPU DEM solver with complex grain geometry support__
 
 <p>
   <img width="380" src="https://i.imgur.com/DKGlM14.jpg">
-  <img width="380" src="https://i.imgur.com/c9DWwqk.gif">
+  <img width="380" src="https://i.imgur.com/A3utANi.gif">
 </p>
 
 <p>
@@ -259,7 +259,19 @@ This project exists independently of Chrono so developers should be sure to incl
 
 <h2 id="citation">Citation</h2>
 
-See [a related _DEME_ paper](https://arxiv.org/abs/2307.03445) and cite
+See [the paper that explains the design and usage of _DEME_](https://arxiv.org/abs/2311.04648) and cite
+```bibtex
+@article{zhang2023deme,
+      title={Chrono DEM-Engine: A Discrete Element Method dual-GPU simulator with customizable contact forces and element shape}, 
+      author={Ruochun Zhang and Bonaventura Tagliafierro and Colin Vanden Heuvel and Shlok Sabarwal1 and Luning Bakke and Yulong Yue and Xin Wei and Radu Serban and Dan Negrut},
+      year={2023},
+      eprint={2311.04648},
+      archivePrefix={arXiv},
+      primaryClass={cs.CE}
+}
+```
+
+See [the paper on using _DEME_ for simulating rover dynamics](https://arxiv.org/abs/2307.03445) and cite
 ```bibtex
 @article{zhang2023gpuaccelerated,
       title={A GPU-accelerated simulator for the DEM analysis of granular systems composed of clump-shaped elements}, 
