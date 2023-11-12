@@ -40,7 +40,7 @@ int main() {
     double radius = 0.12 / 10.0 / 2.0;
     double density = 1000;
 
-    int totalSpheres = 20050;
+    int totalSpheres = 28050;
 
     int num_template = 1;
 

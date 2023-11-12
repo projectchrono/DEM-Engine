@@ -56,6 +56,7 @@ SET(DEMOS
 		DEMdemo_Fracture
 		DEMdemo_FractureBox
 		DEMdemo_FractureBeam
+		DEMdemo_FractureCylinderSteel
 		test_SPH_boundary
 )
 

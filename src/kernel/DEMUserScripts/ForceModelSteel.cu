@@ -66,8 +66,7 @@ if (unbroken > DEME_TINY_FLOAT) {
     float deltaU = 3.0f * deltaY;
     float deltaD = (overlapDepth - initialLength);  // initial relative displacement considered from the initial overlap
 
-   
-    float c = 0.005 * 2.0 * sqrt(mass_eff * kn);
+       float c = 0.005 * 2.0 * sqrt(mass_eff * kn);
 
     // To A, gravity pulls it towards B, so -B2A direction
     // float3 bond_force = B2A;  // vector direction
