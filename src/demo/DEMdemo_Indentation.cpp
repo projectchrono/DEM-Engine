@@ -155,7 +155,7 @@ int main() {
     DEMSim.SetFamilyExtraMargin(2, 1.0 * CylParticleRad);
 
     float CylHeightAnular = 0.10;
-    float3 CylCenter_Up = make_float3(0, 0, 1.1 * CylHeight / 2+CylHeight / 2+ CylHeightAnular/2);
+    float3 CylCenter_Up = make_float3(0, 0, 1.1 * CylHeight / 2+CylHeight / 2+ CylHeightAnular/2+6*CylParticleRad/5);
     
    
     auto monopile_Up = DEMCylSurfSampler(CylCenter_Up, CylAxis, CylRad, CylHeightAnular, CylParticleRad);
