@@ -129,6 +129,12 @@ configure_file(
 
 add_library(DEMERuntimeDataHelper SHARED)
 
+# Windows specific: Define DLL export macros
+if(WIN32)
+    target_compile_definitions(DEMERuntimeDataHelper PRIVATE DEMERuntimeDataHelper_EXPORTS)
+endif()
+
+
 target_sources(DEMERuntimeDataHelper
 	PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils/RuntimeData.h> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/core/utils/RuntimeData.h>
 	PRIVATE "${CMAKE_BINARY_DIR}/src/core/utils/RuntimeDataBuild.cpp" 
@@ -153,15 +159,28 @@ set_target_properties(
 
 add_library(DEMERuntimeDataHelper_install SHARED)
 
+if(WIN32)
+    target_compile_definitions(DEMERuntimeDataHelper_install PRIVATE DEMERuntimeDataHelper_EXPORTS)
+endif()
+
 target_sources(DEMERuntimeDataHelper_install
 	PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/utils/RuntimeData.h> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/core/utils/RuntimeData.h>
 	PRIVATE "${CMAKE_BINARY_DIR}/src/core/utils/RuntimeDataInstall.cpp" 
 )
 
 
-target_link_options(DEMERuntimeDataHelper_install
-	PUBLIC "LINKER:-soname,libDEMERuntimeDataHelper.so"
-)
+if(WIN32)
+    # Windows-specific linker options
+    # You can add options here if needed. Often, you don't need to specify the DLL name as in Unix.
+    target_link_libraries(DEMERuntimeDataHelper_install PRIVATE DEMERuntimeDataHelper)
+else()
+    # Unix-like OS specific linker options
+    target_link_options(DEMERuntimeDataHelper_install
+        PUBLIC "LINKER:-soname,libDEMERuntimeDataHelper.so"
+    )
+endif()
+
+
 
 target_include_directories(
 	DEMERuntimeDataHelper_install
