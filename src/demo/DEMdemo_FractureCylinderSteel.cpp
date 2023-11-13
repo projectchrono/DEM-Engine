@@ -50,7 +50,7 @@ int main() {
     my_force_model->SetPerContactWildcards(
         {"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z", "innerInteraction", "initialLength"});
 
-    float world_size = 1.5;
+    float world_size = 1.e5;
     float container_diameter = 0.06;
     float terrain_density = 7.80e3;
     float sphere_rad = 0.0008;

@@ -59,7 +59,7 @@ int main() {
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
-    DEMSim.SetOutputContent(OUTPUT_CONTENT::VEL);
+    DEMSim.SetOutputContent(OUTPUT_CONTENT::VEL | OUTPUT_CONTENT::FAMILY);
     // You can enforce owner wildcard output by the following call, or directly include OUTPUT_CONTENT::OWNER_WILDCARD
     // in SetOutputContent
     DEMSim.EnableOwnerWildcardOutput();
@@ -81,7 +81,7 @@ int main() {
     auto template_granular = DEMSim.LoadSphereType(granular_rad * granular_rad * granular_rad * 2.6e3 * 4 / 3 * 3.14,
                                                    granular_rad, mat_type_granular_1);
 
-    float step_size = 1e-5;
+    float step_size = 1e-6;
     const double world_size = 4.0;
     const float fill_height = 3.0;
     const float chamber_bottom = -fill_height / 2.;
@@ -153,9 +153,20 @@ int main() {
     std::cout << monopile.size() << " spheres make up the rotating drum" << std::endl;
     particles_pile->SetFamily(2);
     DEMSim.SetFamilyExtraMargin(2, 1.0 * CylParticleRad);
-    DEMSim.SetFamilyPrescribedLinVel(2, "none", "none", to_string_with_precision(2 * cube_speed));
-    DEMSim.AddFamilyPrescribedAcc(3, "none", 
-                                  to_string_with_precision( 3./ 50),"none");
+
+    float CylHeightAnular = 0.10;
+    float3 CylCenter_Up = make_float3(0, 0, 1.1 * CylHeight / 2+CylHeight / 2+ CylHeightAnular/2);
+    
+   
+    auto monopile_Up = DEMCylSurfSampler(CylCenter_Up, CylAxis, CylRad, CylHeightAnular, CylParticleRad);
+    auto particles_pile_Up = DEMSim.AddClumps(my_template, monopile_Up);
+    
+    std::cout << monopile_Up.size() << " spheres make up the rotating drum" << std::endl;
+    particles_pile_Up->SetFamily(30);
+    DEMSim.SetFamilyExtraMargin(30, 1.0 * CylParticleRad);
+
+    //DEMSim.SetFamilyPrescribedLinVel(2, "none", "none", to_string_with_precision(2 * cube_speed));
+    DEMSim.AddFamilyPrescribedAcc(4, "none", to_string_with_precision( -1./ 500),"none");
 
     // Drum->SetFamily(2);
 
@@ -195,14 +206,17 @@ int main() {
     std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
 
     DEMSim.SetFamilyContactWildcardValueAll(2, "initialLength", 0.0);
+    DEMSim.SetFamilyContactWildcardValueAll(3, "initialLength", 0.0);
     DEMSim.SetFamilyContactWildcardValueAll(2, "innerInteraction", 2.0);
+    DEMSim.SetFamilyContactWildcardValueAll(3, "innerInteraction", 2.0);
     DEMSim.SetFamilyContactWildcardValueAll(1, "innerInteraction", 0.0);
 
     DEMSim.SetFamilyClumpMaterial(1, mat_type_granular_1);
     DEMSim.SetFamilyClumpMaterial(2, mat_type_cube);
+    DEMSim.SetFamilyClumpMaterial(3, mat_type_cube);
 
     float sim_end = 15;
-    unsigned int fps = 10;  // 20;
+    unsigned int fps = 20;  // 20;
     float frame_time = 1.0 / fps;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * frame_time));
 
@@ -273,9 +287,9 @@ int main() {
             //     cond_1 = false;
             // }
 
-            if (t > 1.00 && cond_2) {
+            if (t > 0.50 && cond_2) {
                 DEMSim.DoDynamicsThenSync(0);
-                DEMSim.ChangeFamily(2, 3);
+                DEMSim.ChangeFamily(30, 4);
 
                 cond_2 = false;
             }
