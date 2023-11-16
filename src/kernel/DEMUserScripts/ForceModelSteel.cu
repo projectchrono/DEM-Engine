@@ -52,7 +52,7 @@ if (innerInteraction > DEME_TINY_FLOAT) {
     innerInteraction = (innerInteraction > 1.0) ? 1.0 : innerInteraction;
 
 
-    float kn = 0.5 * ARadius * E_A ;
+    float kn = 10 * ARadius * E_A ;
     float kt = 1.f / 2.5f * kn;
     float kr = ARadius * ARadius * kt;
 
@@ -77,13 +77,12 @@ if (innerInteraction > DEME_TINY_FLOAT) {
     float gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
 
     auto tangent_force = -kt * delta_tan - gt * vrel_tan;
-    // tangent_force = (length(tangent_force) < Fsmax) ? -kt * delta_tan : tangent_force;
+    
     delta_tan = (tangent_force + gt * vrel_tan) / (-kt);
 
-
     force += tangent_force;
-    // If this condition is met, the bond breaks, meaning in the next time step, this bonding force model no longer
-    // takes effect.
+
+
     float3 torque_force;
     float a = ts * kr / ARadius;
     float b = 0.1 * length(force);
@@ -98,7 +97,7 @@ if (innerInteraction > DEME_TINY_FLOAT) {
     }
 
     force += torque_force;
-a
+
 
 } else {  // If unbroken == 0, then the bond is broken, and the grain is broken, components are now separate particles,
           // so they just follow Hertzian contact law.
@@ -107,45 +106,14 @@ a
     // particles are in contact: This is a part of our model.
     if (overlapDepth > 0.0) {
         // Material properties
-        initialLength = (innerInteraction == -1.0) ? overlapDepth : initialLength; 
-        innerInteraction = (innerInteraction == -1.0) ? 0.0 : innerInteraction;
-        float temp = overlapDepth - initialLength;
-        if (temp > 0.0) {
-            float3 rotVelCPA, rotVelCPB;
-            {
-                // We also need the relative velocity between A and B in global frame to use in the damping terms
-                // To get that, we need contact points' rotational velocity in GLOBAL frame
-                // This is local rotational velocity (the portion of linear vel contributed by rotation)
-                rotVelCPA = cross(ARotVel, locCPA);
-                rotVelCPB = cross(BRotVel, locCPB);
-                // This is mapping from local rotational velocity to global
-                applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x,
-                                                        AOriQ.y, AOriQ.z);
-                applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x,
-                                                        BOriQ.y, BOriQ.z);
-            }
 
-            // A few re-usables
-            float mass_eff, sqrt_Rd, beta;
-            float3 vrel_tan;
-            float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
+        float temp = overlapDepth;
+        if (temp > 0.0) {
 
             // Normal force part
             {
-                // The (total) relative linear velocity of A relative to B
-                const float3 velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
-                const float projection = dot(velB2A, B2A);
-                vrel_tan = velB2A - projection * B2A;
 
-                // Now we already have sufficient info to update contact history
-                {
-                    delta_tan += ts * vrel_tan;
-                    const float disp_proj = dot(delta_tan, B2A);
-                    delta_tan -= disp_proj * B2A;
-                    delta_time += ts;
-                }
 
-                mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
                 sqrt_Rd = sqrt(temp * (ARadius * BRadius) / (ARadius + BRadius));
                 const float Sn = 2. * E_cnt * sqrt_Rd;
 
