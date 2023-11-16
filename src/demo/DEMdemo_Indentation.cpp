@@ -124,7 +124,7 @@ int main() {
     modelCohesion->SetPerContactWildcards(
         {"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z", "innerInteraction", "initialLength"});
 
-    const float spacing = 2.02f * granular_rad;
+    const float spacing = 2.04f * granular_rad;
     const float fill_radius = world_size / 2. - 2. * granular_rad;
 
     // PDSampler sampler(spacing);
@@ -140,7 +140,7 @@ int main() {
     float3 CylAxis = make_float3(0, 0, 1);
     float CylRad = 0.60;
     float CylHeight = 2.0;
-    float3 CylCenter = make_float3(0, 0, 1.1 * CylHeight / 2);
+    float3 CylCenter = make_float3(0, 0, granular_rad + CylHeight / 2);
 
     float CylParticleRad = 0.01;
     float CylMass = 100;
@@ -155,15 +155,15 @@ int main() {
     DEMSim.SetFamilyExtraMargin(2, 1.0 * CylParticleRad);
 
     float CylHeightAnular = 0.10;
-    float3 CylCenter_Up = make_float3(0, 0, 1.1 * CylHeight / 2+CylHeight / 2+ CylHeightAnular/2+6*CylParticleRad/5);
+    float3 CylCenter_Up = make_float3(0, 0, granular_rad+ CylHeight+ CylHeightAnular/2+ CylParticleRad);
     
    
     auto monopile_Up = DEMCylSurfSampler(CylCenter_Up, CylAxis, CylRad, CylHeightAnular, CylParticleRad);
     auto particles_pile_Up = DEMSim.AddClumps(my_template, monopile_Up);
     
     std::cout << monopile_Up.size() << " spheres make up the rotating drum" << std::endl;
-    particles_pile_Up->SetFamily(30);
-    DEMSim.SetFamilyExtraMargin(30, 1.0 * CylParticleRad);
+    particles_pile_Up->SetFamily(3);
+    DEMSim.SetFamilyExtraMargin(3, 1.0 * CylParticleRad);
 
     //DEMSim.SetFamilyPrescribedLinVel(2, "none", "none", to_string_with_precision(2 * cube_speed));
     DEMSim.AddFamilyPrescribedAcc(4, "none", to_string_with_precision( -1./ 500),"none");
@@ -204,6 +204,8 @@ int main() {
     DEMSim.Initialize();
 
     std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
+
+    //DEMSim.DoDynamicsThenSync(step_size);  
 
     DEMSim.SetFamilyContactWildcardValueAll(2, "initialLength", 0.0);
     DEMSim.SetFamilyContactWildcardValueAll(3, "initialLength", 0.0);
@@ -248,6 +250,7 @@ int main() {
     double init_max_z = max_z_finder->GetValue();
     std::cout << "After settling, max particle Z coord is " << init_max_z << std::endl;
 
+
     // Record init positions of the particles
     std::vector<std::vector<bodyID_t>> particle_cnt_map;
     std::vector<std::vector<float3>> particle_init_relative_pos;
@@ -289,7 +292,7 @@ int main() {
 
             if (t > 0.50 && cond_2) {
                 DEMSim.DoDynamicsThenSync(0);
-                DEMSim.ChangeFamily(30, 4);
+                DEMSim.ChangeFamily(3, 4);
 
                 cond_2 = false;
             }

@@ -37,10 +37,10 @@ int main() {
 
     // total number of random clump templates to generate
 
-    double radius = 0.12 / 10.0 / 2.0;
+    double radius = 0.12 / 5.0 / 2.0;
     double density = 1000;
 
-    int totalSpheres = 28050;
+    int totalSpheres = 3600;
 
     int num_template = 1;
 
@@ -56,7 +56,7 @@ int main() {
     DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_type_particles, 0.30);
 
     // Make ready for simulation
-    float step_size = 2.0e-6;
+    float step_size = 1.0e-6;
     DEMSim.InstructBoxDomainDimension({-0.5, 0.5}, {-0.5, 0.5}, {-0.5, 1.50});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
@@ -135,7 +135,7 @@ int main() {
     //DEMSim.SetFamilyExtraMargin(1, 0.0 * radius);
 
     DEMSim.SetInitTimeStep(step_size);
-    DEMSim.SetGravitationalAcceleration(make_float3(0, 0.00, -9.81));
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0.00, -19.81));
     DEMSim.Initialize();
     DEMSim.DisableContactBetweenFamilies(20, 1);
     std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;

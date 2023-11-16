@@ -47,57 +47,46 @@ mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
 
 // If this contact is marked as not broken (unbroken is 1 means it stands for the bond between the components of a
 // unbroken particle in grain breakage simulation), then it takes this force model which is a strong cohesion.
-if (unbroken > DEME_TINY_FLOAT) {
-    initialLength = (unbroken > 1.0) ? overlapDepth : initialLength;  // reusing a variable that survives the loop
-    unbroken = (unbroken > 1.0) ? 1.0 : unbroken;
+if (innerInteraction > DEME_TINY_FLOAT) {
+    initialLength = (innerInteraction > 1.0) ? overlapDepth : initialLength;  // reusing a variable that survives the loop
+    innerInteraction = (innerInteraction > 1.0) ? 1.0 : innerInteraction;
 
-    float kn = 150.0 * (ARadius * BRadius) * (E_A * E_B) /
-               ((ARadius * E_A) + (BRadius + E_B));  // to be checked for formulation with 2
-    // float kn = 0.5 * ARadius * E_A ;
+
+    float kn = 0.5 * ARadius * E_A ;
     float kt = 1.f / 2.5f * kn;
-    float kr = ARadius * BRadius * kt;
+    float kr = ARadius * ARadius * kt;
 
-    float intialArea = ((ARadius > BRadius) ? ARadius * ARadius : BRadius * BRadius) * deme::PI;
+    float intialArea =  ARadius * ARadius  * deme::PI;
 
-    float coesion = 200e6;
-    float tension = -10e6f;
-    float BreakingForce = tension * intialArea;
-    float deltaY = BreakingForce / kn;
-    float deltaU = 3.0f * deltaY;
     float deltaD = (overlapDepth - initialLength);  // initial relative displacement considered from the initial overlap
 
-       float c = 0.005 * 2.0 * sqrt(mass_eff * kn);
+    float c = 0.005 * 2.0 * sqrt(mass_eff * kn);
 
     // To A, gravity pulls it towards B, so -B2A direction
     // float3 bond_force = B2A;  // vector direction
     float force_to_A_mag;
 
-    force_to_A_mag = (deltaD > deltaY) ? kn * deltaD : (deltaU - deltaD) * kn * 0.5;
+    force_to_A_mag =  kn * deltaD ;
 
     // tangetial forces
 
     force += B2A * force_to_A_mag - c * velB2A;
 
-    float Fsmax = (deltaD > deltaY) ? length(force) * mu_cnt + coesion * intialArea : length(force) * mu_cnt;
-
     const float loge = (CoR_cnt < DEME_TINY_FLOAT) ? log(DEME_TINY_FLOAT) : log(CoR_cnt);
     beta = loge / sqrt(loge * loge + deme::PI_SQUARED);
     float gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
 
-    auto tangent_force = -kt * delta_tan;
+    auto tangent_force = -kt * delta_tan - gt * vrel_tan;
     // tangent_force = (length(tangent_force) < Fsmax) ? -kt * delta_tan : tangent_force;
     delta_tan = (tangent_force + gt * vrel_tan) / (-kt);
 
-    // breaking  for excess of tangential stress
-    unbroken = (length(tangent_force) > Fsmax) ? -1.0 : unbroken;
-    // float3 coesionForce= coesion * intialArea * (-B2A);
 
     force += tangent_force;
     // If this condition is met, the bond breaks, meaning in the next time step, this bonding force model no longer
     // takes effect.
     float3 torque_force;
     float a = ts * kr / ARadius;
-    float b = 0.1 * ARadius * length(force);
+    float b = 0.1 * length(force);
 
     if (v_rot_mag > DEME_TINY_FLOAT) {
         float torque_force_mag = (a < b) ? a : b;
@@ -109,8 +98,7 @@ if (unbroken > DEME_TINY_FLOAT) {
     }
 
     force += torque_force;
-
-    unbroken = (deltaD < deltaU) ? -1.0 : unbroken;
+a
 
 } else {  // If unbroken == 0, then the bond is broken, and the grain is broken, components are now separate particles,
           // so they just follow Hertzian contact law.
@@ -119,8 +107,8 @@ if (unbroken > DEME_TINY_FLOAT) {
     // particles are in contact: This is a part of our model.
     if (overlapDepth > 0.0) {
         // Material properties
-        initialLength = (unbroken == -1.0) ? overlapDepth : initialLength;  // reusing a variable that survives the loop
-        unbroken = (unbroken == -1.0) ? 0.0 : unbroken;
+        initialLength = (innerInteraction == -1.0) ? overlapDepth : initialLength; 
+        innerInteraction = (innerInteraction == -1.0) ? 0.0 : innerInteraction;
         float temp = overlapDepth - initialLength;
         if (temp > 0.0) {
             float3 rotVelCPA, rotVelCPB;
