@@ -641,9 +641,9 @@ std::shared_ptr<DEMForceModel> DEMSolver::DefineContactForceModel(const std::str
 std::shared_ptr<DEMForceModel> DEMSolver::ReadContactForceModel(const std::string& filename) {
     DEMForceModel force_model;  // Custom
     std::filesystem::path sourcefile = USER_SCRIPT_PATH / filename;
-    if (!force_model.ReadCustomModelFile(sourcefile)) {
+    if (force_model.ReadCustomModelFile(std::filesystem::path(filename))) {
         // If not in that folder, then maybe the user meant an absolute path
-        if (!force_model.ReadCustomModelFile(std::filesystem::path(filename)))
+        if (force_model.ReadCustomModelFile(sourcefile))
             DEME_ERROR("The force model file %s is not found.", filename.c_str());
     }
     m_force_model = std::make_shared<DEMForceModel>(std::move(force_model));

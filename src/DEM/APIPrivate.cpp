@@ -1343,23 +1343,23 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     std::string non_match;
     if (!all_whole_word_match(model, contact_wildcard_names, non_match))
         DEME_WARNING(
-            "Contact wildcard %s is not used/set in your custom force model. Your force model will probably not "
-            "produce what you expect.",
+            "Contact wildcard(s) %s are not used/set in your custom force model. "
+            "Your force model will probably not produce what you expect.",
             non_match.c_str());
     if (!all_whole_word_match(model, owner_wildcard_names, non_match))
         DEME_WARNING(
-            "Owner wildcard %s is not used/set in your custom force model. Your force model will probably not produce "
-            "what you expect.",
+            "Owner wildcard(s) %s are not used/set in your custom force model. "
+            "Your force model will probably not produce what you expect.",
             non_match.c_str());
     if (!all_whole_word_match(model, geo_wildcard_names, non_match))
         DEME_WARNING(
-            "Geometry wildcard %s is not used/set in your custom force model. Your force model will probably not "
-            "produce what you expect.",
+            "Geometry wildcard(s) %s are not used/set in your custom force model. "
+            "Your force model will probably not produce what you expect.",
             non_match.c_str());
     if (!all_whole_word_match(model, {"force"}, non_match)) {
         DEME_WARNING(
-            "Your custom force model does not set the variable %s at all. You probably will not see any contact in the "
-            "simulation.",
+            "Your custom force model does not set the %s variable at all. "
+            "You probably will not see any contact in the simulation.",
             non_match.c_str());
     }
 
