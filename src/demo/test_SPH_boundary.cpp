@@ -40,23 +40,24 @@ int main() {
     double radius = 0.12 / 5.0 / 2.0;
     double density = 1000;
 
-    int totalSpheres = 3600;
+    int totalSpheres = 3700;
+        //int totalSpheres = 200;
 
     int num_template = 1;
 
     float plane_bottom = -0.35;
 
-    auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}, {"mu", 0.04}, {"Crr", 0.00}});
+    auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.10}, {"mu", 0.00}, {"Crr", 0.00}});
 
     auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 1.0e9}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.0}, {"Crr", 0.0}});
+        DEMSim.LoadMaterial({{"E", 10.0e9}, {"nu", 0.35}, {"CoR", 0.15}, {"mu", 0.0}, {"Crr", 0.0}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.50);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.05);
     DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_type_particles, 0.30);
 
     // Make ready for simulation
-    float step_size = 1.0e-6;
+    float step_size = 5.0e-7;
     DEMSim.InstructBoxDomainDimension({-0.5, 0.5}, {-0.5, 0.5}, {-0.5, 1.50});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
@@ -68,13 +69,25 @@ int main() {
     DEMSim.SetInitBinSize(radius * 5);
 
     // Loaded meshes are by-default fixed
-    auto fixed = DEMSim.AddWavefrontMeshObject("../data/granularFlow/float_1.obj", mat_type_walls);
+    auto fixed = DEMSim.AddWavefrontMeshObject("../data/granularFlow/floater.obj", mat_type_walls);
 
     fixed->Scale(1 * 1.0);
     fixed->SetFamily(10);
+    float3 move = make_float3(0.00, 0.00, -0.40);  // z
+    float4 rot = make_float4(0, 0, 1, 0);
+
+    fixed->Move(move, rot);
     std::string shake_pattern_xz = " 0.01 * sin( 50 * 2 * deme::PI * t)";
     DEMSim.SetFamilyPrescribedLinVel(10, shake_pattern_xz, shake_pattern_xz, shake_pattern_xz);
+    DEMSim.SetFamilyPrescribedLinVel(11, "0", "0","0");
 
+    auto top_plane = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/plane_20by20_inverted.obj").string(), mat_type_walls);
+    top_plane->SetInitPos(make_float3(0, 0, 0.30));
+    top_plane->SetMass(1.);
+    top_plane->Scale(0.02);
+    top_plane->SetFamily(20);
+    DEMSim.SetFamilyPrescribedLinVel(20, "0", "0", to_string_with_precision(0.00));
+    DEMSim.SetFamilyPrescribedLinVel(21, "0", "0", to_string_with_precision(-0.06/1.0));
     // Make an array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
 
@@ -132,7 +145,7 @@ int main() {
     // Some inspectors
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
 
-    //DEMSim.SetFamilyExtraMargin(1, 0.0 * radius);
+    // DEMSim.SetFamilyExtraMargin(1, 0.0 * radius);
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0.00, -19.81));
@@ -174,7 +187,7 @@ int main() {
 
             auto the_pile = DEMSim.AddClumps(input_pile_template_type, input_pile_xyz);
             the_pile->SetVel(make_float3(-0.00, 0.0, -0.90));
-            the_pile->SetFamily(100);
+            the_pile->SetFamily(1);
 
             DEMSim.UpdateClumps();
 
@@ -203,7 +216,7 @@ int main() {
     }
     std::cout << "Initialization done with : " << actualTotalSpheres << "particles" << std::endl;
 
-    float sim_end = 2.0;
+    float sim_end = 4.0;
     unsigned int fps = 20;
     float frame_time = 1.0 / fps;
 
@@ -232,7 +245,7 @@ int main() {
         char filename[200];
         char meshname[200];
         char cnt_filename[200];
-        std::cout << "Outputting frame: " << frame_time << std::endl;
+        std::cout << "Outputting frame: " << frame_count << std::endl;
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame_count);
         sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame_count);
         DEMSim.WriteSphereFile(std::string(filename));
@@ -244,9 +257,22 @@ int main() {
             DEMSim.DoDynamicsThenSync(0);
             std::cout << "gate is in motion from: " << totalRunTime << " s" << std::endl;
             std::cout << "and it will stop in : " << totalRunTime << " s" << std::endl;
-            DEMSim.ChangeFamily(10, 0);
+            DEMSim.ChangeFamily(10, 11);
+            DEMSim.ChangeFamily(20, 21);
+            DEMSim.EnableContactBetweenFamilies(21, 1);
             status_1 = false;
         }
+        
+        if (totalRunTime > 1.9 + frame_time && status_2) {
+            DEMSim.DoDynamicsThenSync(0);
+            std::cout << "gate is in motion from: " << totalRunTime << " s" << std::endl;
+            std::cout << "and it will stop in : " << totalRunTime << " s" << std::endl;
+            DEMSim.ChangeFamily(21, 20);
+            
+            status_2 = false;
+        }
+
+
         DEMSim.DoDynamics(frame_time);
     }
 
