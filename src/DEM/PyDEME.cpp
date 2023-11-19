@@ -135,91 +135,128 @@ PYBIND11_MODULE(DEME, obj) {
         .def("GetContactForcesAndLocalTorque",
              static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(size_t)>(
                  &deme::DEMTracker::GetContactForcesAndLocalTorque),
+             "Get all contact forces and local torques that concern this track object, as a list.",
              py::arg("offset") = 0)
         .def("GetContactForcesAndGlobalTorque",
              static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(size_t)>(
                  &deme::DEMTracker::GetContactForcesAndGlobalTorque),
+             "Get all contact forces and global torques that concern this track object, as a list.",
              py::arg("offset") = 0)
         .def("GetContactForces",
              static_cast<std::vector<std::vector<std::vector<float>>> (deme::DEMTracker::*)(size_t)>(
                  &deme::DEMTracker::GetContactForces),
-             py::arg("offset") = 0)
-        .def("GetOwnerID", &deme::DEMTracker::GetOwnerID, py::arg("offset") = 0)
+             "Get all contact forces that concern this track object, as a list.", py::arg("offset") = 0)
+        .def("GetOwnerID", &deme::DEMTracker::GetOwnerID, "Get the owner ID of the tracked obj.", py::arg("offset") = 0)
 
-        .def("Pos", &deme::DEMTracker::GetPos, py::arg("offset") = 0)
-        .def("AngVelLocal", &deme::DEMTracker::GetAngVelLocal, py::arg("offset") = 0)
-        .def("AngVelGlobal", &deme::DEMTracker::GetAngVelGlobal, py::arg("offset") = 0)
-        .def("Vel", &deme::DEMTracker::GetVel, py::arg("offset") = 0)
-        .def("OriQ", &deme::DEMTracker::GetOriQ, py::arg("offset") = 0)
-        .def("MOI", &deme::DEMTracker::GetMOI, py::arg("offset") = 0)
-        .def("Mass", &deme::DEMTracker::Mass, py::arg("offset") = 0)
-        .def("GetFamily", &deme::DEMTracker::GetFamily, py::arg("offset") = 0)
-        .def("ContactAcc", &deme::DEMTracker::GetContactAcc, py::arg("offset") = 0)
-        .def("ContactAngAccLocal", &deme::DEMTracker::GetContactAngAccLocal, py::arg("offset") = 0)
-        .def("ContactAngAccGlobal", &deme::DEMTracker::GetContactAngAccGlobal, py::arg("offset") = 0)
+        .def("Pos", &deme::DEMTracker::GetPos, "Get the position of this tracked object.", py::arg("offset") = 0)
+        .def("AngVelLocal", &deme::DEMTracker::GetAngVelLocal,
+             "Get the angular velocity of this tracked object in its own local coordinate system. Applying OriQ to it "
+             "would give you the ang vel in global frame.",
+             py::arg("offset") = 0)
+        .def("AngVelGlobal", &deme::DEMTracker::GetAngVelGlobal,
+             "Get the angular velocity of this tracked object in global coordinate system.", py::arg("offset") = 0)
+        .def("Vel", &deme::DEMTracker::GetVel, "Get the velocity of this tracked object in global frame.",
+             py::arg("offset") = 0)
+        .def("OriQ", &deme::DEMTracker::GetOriQ,
+             "Get the quaternion that represents the orientation of this tracked object's own coordinate system.",
+             py::arg("offset") = 0)
+        .def("MOI", &deme::DEMTracker::GetMOI,
+             "Get the moment of inertia (in principal axis frame) of the tracked object.", py::arg("offset") = 0)
+        .def("Mass", &deme::DEMTracker::Mass, "Get the mass of the tracked object.", py::arg("offset") = 0)
+        .def("GetFamily", &deme::DEMTracker::GetFamily, "Get the family number of the tracked object.",
+             py::arg("offset") = 0)
+        .def("GetContactClumps", &deme::DEMTracker::GetContactClumps,
+             "Get the clumps that are in contact with this tracked owner as a vector.", py::arg("offset") = 0)
+        .def("ContactAcc", &deme::DEMTracker::GetContactAcc,
+             "Get the a portion of the acceleration of this tracked object, that is the result of its contact with "
+             "other simulation entities. In most cases, this means excluding the gravitational acceleration. The "
+             "acceleration is in global frame.",
+             py::arg("offset") = 0)
+        .def("ContactAngAccLocal", &deme::DEMTracker::GetContactAngAccLocal,
+             "Get the a portion of the angular acceleration of this tracked object, that is the result of its contact "
+             "with other simulation entities. The acceleration is in this object's local frame.",
+             py::arg("offset") = 0)
+        .def("ContactAngAccGlobal", &deme::DEMTracker::GetContactAngAccGlobal,
+             "Get the a portion of the angular acceleration of this tracked object, that is the result of its contact "
+             "with other simulation entities. The acceleration is in this object's global frame.",
+             py::arg("offset") = 0)
 
         .def("GetOwnerWildcardValue",
              static_cast<float (deme::DEMTracker::*)(const std::string&, size_t)>(
                  &deme::DEMTracker::GetOwnerWildcardValue),
-             py::arg("name"), py::arg("offset") = 0)
+             "Get the owner's wildcard value.", py::arg("name"), py::arg("offset") = 0)
         .def("GetGeometryWildcardValues",
              static_cast<std::vector<float> (deme::DEMTracker::*)(const std::string&)>(
                  &deme::DEMTracker::GetGeometryWildcardValues),
-             py::arg("name"))
+             "Get the geometry wildcard values for all the geometry entities tracked by this tracker.", py::arg("name"))
         .def("GetGeometryWildcardValue",
              static_cast<float (deme::DEMTracker::*)(const std::string&, size_t)>(
                  &deme::DEMTracker::GetGeometryWildcardValue),
-             py::arg("name"), py::arg("offset"))
+             "Get the geometry wildcard values for a geometry entity tracked by this tracker.", py::arg("name"),
+             py::arg("offset"))
 
         .def("SetPos",
              static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::SetPos),
              "Set the position of this tracked object.", py::arg("pos"), py::arg("offset") = 0)
         .def("SetAngVel",
              static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::SetAngVel),
-             py::arg("angVel"), py::arg("offset") = 0)
+             "Set the angular velocity of this tracked object in its own local coordinate system.", py::arg("angVel"),
+             py::arg("offset") = 0)
         .def("SetVel",
              static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::SetVel),
-             py::arg("vel"), py::arg("offset") = 0)
+             "Set the velocity of this tracked object in global frame.", py::arg("vel"), py::arg("offset") = 0)
         .def("SetOriQ",
              static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::SetOriQ),
+             "Set the quaternion which represents the orientation of this tracked object's coordinate system.",
              py::arg("oriQ"), py::arg("offset") = 0)
         .def("AddAcc",
              static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::AddAcc),
+             "Add an extra acc to the tracked body, for the next time step. Note if the user intends to add a "
+             "persistent external force, then using family prescription is the better method.",
              py::arg("acc"), py::arg("offset") = 0)
         .def("AddAngAcc",
              static_cast<void (deme::DEMTracker::*)(const std::vector<float>&, size_t)>(&deme::DEMTracker::AddAngAcc),
+             "Add an extra angular acceleration to the tracked body, for the next time step. Note if the user intends "
+             "to add a persistent external torque, then using family prescription is the better method.",
              py::arg("angAcc"), py::arg("offset") = 0)
+
         .def("SetFamily", static_cast<void (deme::DEMTracker::*)(unsigned int)>(&deme::DEMTracker::SetFamily),
              "Change the family numbers of all the entities tracked by this tracker.", py::arg("fam_num"))
-        .def("SetFamilyList",
+        .def("SetFamily",
              static_cast<void (deme::DEMTracker::*)(const std::vector<unsigned int>&)>(&deme::DEMTracker::SetFamily),
              "Change the family numbers of all the entities tracked by this tracker by supplying a list the same "
              "length as the number of tracked entities.",
              py::arg("fam_nums"))
-        .def("SetFamilyOf", static_cast<void (deme::DEMTracker::*)(unsigned int, size_t)>(&deme::DEMTracker::SetFamily),
-             "Change the family number of one entities tracked by this tracker.", py::arg("fam_num"),
-             py::arg("offset") = 0)
+        .def("SetFamily", static_cast<void (deme::DEMTracker::*)(unsigned int, size_t)>(&deme::DEMTracker::SetFamily),
+             "Change the family number of one entities tracked by this tracker.", py::arg("fam_num"), py::arg("offset"))
 
         .def("UpdateMesh",
              static_cast<void (deme::DEMTracker::*)(const std::vector<std::vector<float>>&)>(
                  &deme::DEMTracker::UpdateMesh),
+             "Apply the new mesh node positions such that the tracked mesh is replaced by the new_nodes.",
              py::arg("new_nodes"))
         .def("UpdateMeshByIncrement",
              static_cast<void (deme::DEMTracker::*)(const std::vector<std::vector<float>>&)>(
                  &deme::DEMTracker::UpdateMeshByIncrement),
-             py::arg("deformation"))
+             "Change the coordinates of each mesh node by the given amount.", py::arg("deformation"))
 
-        .def("GetMeshNodesGlobal", static_cast<std::vector<std::vector<float>> (deme::DEMTracker::*)()>(
-                                       &deme::DEMTracker::GetMeshNodesGlobalAsVectorOfVector))
+        .def("GetMeshNodesGlobal",
+             static_cast<std::vector<std::vector<float>> (deme::DEMTracker::*)()>(
+                 &deme::DEMTracker::GetMeshNodesGlobalAsVectorOfVector),
+             "Get the current locations of all the nodes in the mesh being tracked.")
 
-        .def("GetMesh", &deme::DEMTracker::GetMesh)
+        .def("GetMesh", &deme::DEMTracker::GetMesh, "Get a handle for the mesh this tracker is tracking.")
 
-        .def("SetOwnerWildcardValue", &deme::DEMTracker::SetOwnerWildcardValue, py::arg("name"), py::arg("wc"),
+        .def("SetOwnerWildcardValue", &deme::DEMTracker::SetOwnerWildcardValue,
+             "Set a wildcard value of the owner this tracker is tracking.", py::arg("name"), py::arg("wc"),
              py::arg("offset") = 0)
-        .def("SetOwnerWildcardValues", &deme::DEMTracker::SetOwnerWildcardValues, py::arg("name"), py::arg("wc"))
-        .def("SetGeometryWildcardValue", &deme::DEMTracker::SetGeometryWildcardValue, py::arg("name"), py::arg("wc"),
+        .def("SetOwnerWildcardValues", &deme::DEMTracker::SetOwnerWildcardValues,
+             "Set a wildcard value of the owner this tracker is tracking.", py::arg("name"), py::arg("wc"))
+        .def("SetGeometryWildcardValue", &deme::DEMTracker::SetGeometryWildcardValue,
+             "Set a wildcard value of the geometry entity this tracker is tracking.", py::arg("name"), py::arg("wc"),
              py::arg("offset") = 0)
-        .def("SetGeometryWildcardValues", &deme::DEMTracker::SetGeometryWildcardValues, py::arg("name"), py::arg("wc"));
+        .def("SetGeometryWildcardValues", &deme::DEMTracker::SetGeometryWildcardValues,
+             "Set a wildcard value of the geometry entities this tracker is tracking.", py::arg("name"), py::arg("wc"));
 
     py::class_<deme::DEMForceModel, std::shared_ptr<deme::DEMForceModel>>(obj, "DEMForceModel")
         .def(py::init<deme::FORCE_MODEL>())
@@ -248,7 +285,8 @@ PYBIND11_MODULE(DEME, obj) {
 
     py::class_<deme::DEMSolver>(obj, "DEMSolver")
         .def(py::init<unsigned int>(), py::arg("nGPUs") = 2)
-        .def("UpdateStepSize", &deme::DEMSolver::UpdateStepSize)
+        .def("UpdateStepSize", &deme::DEMSolver::UpdateStepSize,
+             "Update the time step size. Used after system initialization.", py::arg("ts") = -1.0)
         .def("SetNoForceRecord", &deme::DEMSolver::SetNoForceRecord,
              "Instruct the solver that there is no need to record the contact force (and contact point location etc.) "
              "in an array.",
@@ -257,42 +295,57 @@ PYBIND11_MODULE(DEME, obj) {
         .def("EnsureKernelErrMsgLineNum", &deme::DEMSolver::EnsureKernelErrMsgLineNum,
              "If true, each jitification string substitution will do a one-liner to one-liner replacement, so that if "
              "the kernel compilation fails, the error meessage line number will reflex the actual spot where that "
-             "happens (instead of some random number)",
+             "happens (instead of some random number).",
              py::arg("flag") = true)
-        .def("SetFamilyFixed", &deme::DEMSolver::SetFamilyFixed, "Mark all entities in this family to be fixed")
+        .def("UseCubForceCollection", &deme::DEMSolver::UseCubForceCollection,
+             "Whether the force collection (acceleration calc and reduction) process should be using CUB. If true, the "
+             "acceleration array is flattened and reduced using CUB; if false, the acceleration is computed and "
+             "directly applied to each body through atomic operations.",
+             py::arg("flag") = true)
+        .def("SetCollectAccRightAfterForceCalc", &deme::DEMSolver::SetCollectAccRightAfterForceCalc,
+             "Reduce contact forces to accelerations right after calculating them, in the same kernel. This may give "
+             "some performance boost if you have only polydisperse spheres, no clumps.",
+             py::arg("flag") = true)
+        .def("SetFamilyFixed", &deme::DEMSolver::SetFamilyFixed, "Mark all entities in this family to be fixed.")
         .def("SetInitBinSize", &deme::DEMSolver::SetInitBinSize,
-             " Explicitly instruct the bin size (for contact detection) that the solver should use")
+             " Explicitly instruct the bin size (for contact detection) that the solver should use.")
         .def("SetOutputFormat",
              static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetOutputFormat),
-             "Choose output format")
+             "Choose sphere and clump output file format.")
         .def("GetNumContacts", &deme::DEMSolver::GetNumContacts,
-             "Get the number of kT-reported potential contact pairs")
+             "Get the number of kT-reported potential contact pairs.")
+        .def("GetTimeStepSize", &deme::DEMSolver::GetTimeStepSize, "Get the current time step size in simulation.")
         .def("SetCDUpdateFreq", &deme::DEMSolver::SetCDUpdateFreq,
-             "Set the number of dT steps before it waits for a contact-pair info update from kT")
-        .def("GetSimTime", &deme::DEMSolver::GetSimTime, "Get the simulation time passed since the start of simulation")
-        .def("SetSimTime", &deme::DEMSolver::SetSimTime, "Get the simulation time passed since the start of simulation")
+             "Set the number of dT steps before it waits for a contact-pair info update from kT.")
+        .def("GetSimTime", &deme::DEMSolver::GetSimTime,
+             "Get the simulation time passed since the start of simulation.")
+        .def("SetSimTime", &deme::DEMSolver::SetSimTime,
+             "Get the simulation time passed since the start of simulation.")
         .def("UpdateClumps", &deme::DEMSolver::UpdateClumps,
-             "TTransfer newly loaded clumps to the GPU-side in mid-simulation")
+             "Transfer newly loaded clumps to the GPU-side in mid-simulation.")
         .def("SetAdaptiveTimeStepType", &deme::DEMSolver::SetAdaptiveTimeStepType,
-             "Set the strategy for auto-adapting time step size (NOT implemented, no effect yet)")
+             "Set the strategy for auto-adapting time step size (NOT implemented, no effect yet).")
         .def("SetIntegrator",
              static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetIntegrator),
              "Set the time integrator for this simulator")
         .def("SetIntegrator",
              static_cast<void (deme::DEMSolver::*)(deme::TIME_INTEGRATOR)>(&deme::DEMSolver::SetIntegrator),
              "Set the time integrator for this simulator")
-        .def("GetInitStatus", &deme::DEMSolver::GetInitStatus, "Return whether this simulation system is initialized")
+        .def("GetInitStatus", &deme::DEMSolver::GetInitStatus, "Return whether this simulation system is initialized.")
         .def("GetJitStringSubs", &deme::DEMSolver::GetJitStringSubs,
              "Get the jitification string substitution laundary list. It is needed by some of this simulation system's "
-             "friend classes")
+             "friend classes.")
         .def("SetInitBinSize", &deme::DEMSolver::SetInitBinSize,
              "Explicitly instruct the bin size (for contact detection) that the solver should use.")
         .def("SetInitBinSizeAsMultipleOfSmallestSphere", &deme::DEMSolver::SetInitBinSizeAsMultipleOfSmallestSphere,
              "Explicitly instruct the bin size (for contact detection) that the solver should use, as a multiple of "
-             "the radius of the smallest sphere in simulation")
+             "the radius of the smallest sphere in simulation.")
+        .def(
+            "SetInitBinNumTarget", &deme::DEMSolver::SetInitBinNumTarget,
+            "Set the target number of bins (for contact detection) at the start of the simulation upon initialization.")
         .def("InstructNumOwners", &deme::DEMSolver::InstructNumOwners,
              "Explicitly instruct the sizes for the arrays at initialization time. This is useful when the number of "
-             "owners tends to change (especially gradually increase) frequently in the simulation")
+             "owners tends to change (especially gradually increase) frequently in the simulation.")
         .def("UseFrictionalHertzianModel", &deme::DEMSolver::UseFrictionalHertzianModel,
              py::return_value_policy::reference_internal,
              "Instruct the solver to use frictonal (history-based) Hertzian contact force model.")
@@ -317,22 +370,21 @@ PYBIND11_MODULE(DEME, obj) {
             "SetJitifyClumpTemplates", &deme::DEMSolver::SetJitifyClumpTemplates,
             "Instruct the solver to rearrange and consolidate clump templates information, then jitify it into GPU "
             "kernels (if set to true), rather than using flattened sphere component configuration arrays whose entries "
-            "are associated with individual spheres. Note: setting it to true gives no performance benefit known to me",
+            "are associated with individual spheres.",
             py::arg("use") = true)
         .def("SetJitifyMassProperties", &deme::DEMSolver::SetJitifyMassProperties,
              "Instruct the solver to rearrange and consolidate mass property information (for all owner types), then "
              "jitify it into GPU kernels (if set to true), rather than using flattened mass property arrays whose "
-             "entries are associated with individual owners. Note: setting it to true gives no performance benefit "
-             "known to me",
+             "entries are associated with individual owners.",
              py::arg("use") = true)
         .def("SetExpandFactor", &deme::DEMSolver::SetExpandFactor,
              "(Explicitly) set the amount by which the radii of the spheres (and the thickness of the boundaries) are "
              "expanded for the purpose of contact detection (safe, and creates false positives). If fix is set to "
-             "true, then this expand factor does not change even if the user uses variable time step size",
+             "true, then this expand factor does not change even if the user uses variable time step size.",
              py::arg("beta"), py::arg("fix") = true)
         .def("SetMaxVelocity", &deme::DEMSolver::SetMaxVelocity,
              "Set the maximum expected particle velocity. The solver will not use a velocity larger than this for "
-             "determining the margin thickness, and velocity larger than this will be considered a system anomaly")
+             "determining the margin thickness, and velocity larger than this will be considered a system anomaly.")
         .def("SetExpandSafetyType", &deme::DEMSolver::SetExpandSafetyType,
              "A string. If 'auto': the solver automatically derives")
         .def("SetExpandSafetyMultiplier", &deme::DEMSolver::SetExpandSafetyMultiplier,
@@ -375,45 +427,59 @@ PYBIND11_MODULE(DEME, obj) {
         .def(
             "SetAdaptiveBinSizeLowerProactivity", &deme::DEMSolver::SetAdaptiveBinSizeLowerProactivity,
             "Set how proactive the solver is in avoiding the bin being too small (leading to too many bins in domain).")
+        .def("GetBinSize", &deme::DEMSolver::GetBinSize,
+             "Get the current bin (for contact detection) size. Must be called from synchronized stance.")
+        .def("GetBinNum", &deme::DEMSolver::GetBinNum,
+             "Get the current number of bins (for contact detection). Must be called from synchronized stance.")
         .def("SetCDMaxUpdateFreq", &deme::DEMSolver::SetCDMaxUpdateFreq,
              "Set the upper bound of kT update frequency (when it is adjusted automatically).")
         .def("SetCDNumStepsMaxDriftAheadOfAvg", &deme::DEMSolver::SetCDNumStepsMaxDriftAheadOfAvg,
              "Set the number of steps dT configures its max drift more than average drift steps.")
         .def("SetCDNumStepsMaxDriftMultipleOfAvg", &deme::DEMSolver::SetCDNumStepsMaxDriftMultipleOfAvg,
-             "Set the multiplier which dT configures its max drift to be w.r.t. the average drift steps")
+             "Set the multiplier which dT configures its max drift to be w.r.t. the average drift steps.")
         .def("SetCDNumStepsMaxDriftHistorySize", &deme::DEMSolver::SetCDNumStepsMaxDriftHistorySize)
-        .def("GetUpdateFreq", &deme::DEMSolver::GetUpdateFreq, "Get the current update frequency used by the solver")
+        .def("GetUpdateFreq", &deme::DEMSolver::GetUpdateFreq, "Get the current update frequency used by the solver.")
         .def("SetForceCalcThreadsPerBlock", &deme::DEMSolver::SetForceCalcThreadsPerBlock,
-             "Set the number of threads per block in force calculation (default 512)")
+             "Set the number of threads per block in force calculation (default 256).")
         .def("Duplicate",
              static_cast<std::shared_ptr<deme::DEMMaterial> (deme::DEMSolver::*)(
                  const std::shared_ptr<deme::DEMMaterial>&)>(&deme::DEMSolver::Duplicate),
-             "Duplicate a material that is loaded into the system")
+             "Duplicate a material that is loaded into the system.")
         .def("Duplicate",
              static_cast<std::shared_ptr<deme::DEMClumpTemplate> (deme::DEMSolver::*)(
                  const std::shared_ptr<deme::DEMClumpTemplate>&)>(&deme::DEMSolver::Duplicate),
-             "Duplicate a material that is loaded into the system")
+             "Duplicate a clump template that is loaded into the system.")
         .def("Duplicate",
              static_cast<std::shared_ptr<deme::DEMClumpBatch> (deme::DEMSolver::*)(
                  const std::shared_ptr<deme::DEMClumpBatch>&)>(&deme::DEMSolver::Duplicate),
-             "Duplicate a material that is loaded into the system")
-        .def("AddExternalObject", &deme::DEMSolver::AddExternalObject)
-        .def("SetOutputContent", static_cast<void (deme::DEMSolver::*)(const std::vector<std::string>&)>(
-                                     &deme::DEMSolver::SetOutputContent))
+             "Duplicate a batch of clumps that is loaded into the system.")
+        .def("AddExternalObject", &deme::DEMSolver::AddExternalObject,
+             "Add an analytical object to the simulation system.")
+        .def(
+            "SetOutputContent",
+            static_cast<void (deme::DEMSolver::*)(const std::vector<std::string>&)>(&deme::DEMSolver::SetOutputContent),
+            "Specify the information that needs to go into the clump or sphere output files.")
         .def("SetMeshOutputFormat",
-             static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetMeshOutputFormat))
-        .def("SetContactOutputContent", static_cast<void (deme::DEMSolver::*)(const std::vector<std::string>&)>(
-                                            &deme::DEMSolver::SetContactOutputContent))
+             static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetMeshOutputFormat),
+             "Specify the output file format of meshes.")
+        .def("SetContactOutputContent",
+             static_cast<void (deme::DEMSolver::*)(const std::vector<std::string>&)>(
+                 &deme::DEMSolver::SetContactOutputContent),
+             "Specify the information that needs to go into the contact pair output files.")
+        .def("SetContactOutputFormat",
+             static_cast<void (deme::DEMSolver::*)(const std::vector<std::string>&)>(
+                 &deme::DEMSolver::SetContactOutputFormat),
+             "Specify the file format of contact pairs.")
         .def("SetVerbosity", static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetVerbosity),
-             "Defines the desired verbosity level to be chosen from the VERBOSITY enumeration object")
+             "Set the verbosity level of the solver.")
         .def("LoadMaterial",
              static_cast<std::shared_ptr<deme::DEMMaterial> (deme::DEMSolver::*)(
                  const std::unordered_map<std::string, float>&)>(&deme::DEMSolver::LoadMaterial),
-             "Loads in a DEMMaterial")
+             "Load materials properties (Young's modulus, Poisson's ratio...) into the system.")
         .def("LoadMaterial",
              static_cast<std::shared_ptr<deme::DEMMaterial> (deme::DEMSolver::*)(deme::DEMMaterial&)>(
                  &deme::DEMSolver::LoadMaterial),
-             "Loads in a DEMMaterial")
+             "Load materials properties into the system.")
         .def("InstructBoxDomainDimension",
              static_cast<void (deme::DEMSolver::*)(float, float, float, const std::string&)>(
                  &deme::DEMSolver::InstructBoxDomainDimension),
@@ -428,13 +494,16 @@ PYBIND11_MODULE(DEME, obj) {
              "`none', `all' (add 6 boundary planes) and `top_open' (add 5 boundary planes and leave the z-directon top "
              "open). Also specifies the material that should be assigned to those bounding boundaries.")
         .def("SetMaterialPropertyPair", &deme::DEMSolver::SetMaterialPropertyPair,
-             "Defines a pair of DEMMaterial objects")
+             "Set the value for a material property that by nature involves a pair of a materials (e.g. friction "
+             "coefficient).")
         .def("AddBCPlane",
              static_cast<std::shared_ptr<deme::DEMExternObj> (deme::DEMSolver::*)(
                  const std::vector<float>&, const std::vector<float>&, const std::shared_ptr<deme::DEMMaterial>&)>(
                  &deme::DEMSolver::AddBCPlane),
-             "Add an (analytical or clump-represented) external object to the simulation system")
-        .def("Track", (&deme::DEMSolver::PythonTrack), "Tracker object")
+             "Add an analytical plane to the simulation.")
+        .def("Track", (&deme::DEMSolver::PythonTrack),
+             "Create a DEMTracker to allow direct control/modification/query to this external object/batch of "
+             "clumps/triangle mesh object.")
         .def("AddWavefrontMeshObject",
              static_cast<std::shared_ptr<deme::DEMMeshConnected> (deme::DEMSolver::*)(
                  const std::string&, const std::shared_ptr<deme::DEMMaterial>&, bool, bool)>(
@@ -475,23 +544,39 @@ PYBIND11_MODULE(DEME, obj) {
                  float, const std::vector<float>&, const std::string, const std::shared_ptr<deme::DEMMaterial>&)>(
                  &deme::DEMSolver::LoadClumpType),
              "Load a clump type into the API-level cache")
+
+        .def("GetClumpContacts",
+             static_cast<std::vector<std::pair<bodyID_t, bodyID_t>> (deme::DEMSolver::*)() const>(
+                 &deme::DEMSolver::GetClumpContacts),
+             "Get all clump--clump contacts in the simulation system.")
+
+        .def("GetClumpContacts",
+             static_cast<std::vector<std::pair<bodyID_t, bodyID_t>> (deme::DEMSolver::*)(const std::set<family_t>&)
+                             const>(&deme::DEMSolver::GetClumpContacts),
+             "Get all clump--clump contacts in the simulation system.")
+
+        .def("GetClumpContacts",
+             static_cast<std::vector<std::pair<bodyID_t, bodyID_t>> (deme::DEMSolver::*)(
+                 std::vector<std::pair<family_t, family_t>>&) const>(&deme::DEMSolver::GetClumpContacts),
+             "Get all clump--clump contacts in the simulation system.")
+
         .def("AddClumps",
              static_cast<std::shared_ptr<deme::DEMClumpBatch> (deme::DEMSolver::*)(deme::DEMClumpBatch&)>(
                  &deme::DEMSolver::AddClumps),
              "Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial "
-             "location means the location of the clumps' CoM coordinates in the global frame")
+             "location means the location of the clumps' CoM coordinates in the global frame.")
         .def("AddClumps",
              static_cast<std::shared_ptr<deme::DEMClumpBatch> (deme::DEMSolver::*)(
                  std::shared_ptr<deme::DEMClumpTemplate>&, const std::vector<std::vector<float>>&)>(
                  &deme::DEMSolver::AddClumps),
              "Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial "
-             "location means the location of the clumps' CoM coordinates in the global frame")
+             "location means the location of the clumps' CoM coordinates in the global frame.")
         .def("AddClumps",
              static_cast<std::shared_ptr<deme::DEMClumpBatch> (deme::DEMSolver::*)(
                  const std::vector<std::shared_ptr<deme::DEMClumpTemplate>>&, const std::vector<std::vector<float>>&)>(
                  &deme::DEMSolver::AddClumps),
              "Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial "
-             "location means the location of the clumps' CoM coordinates in the global frame")
+             "location means the location of the clumps' CoM coordinates in the global frame.")
 
         .def("SetFamilyPrescribedAngVel",
              static_cast<void (deme::DEMSolver::*)(unsigned int ID, const std::string&, const std::string&,
@@ -506,8 +591,7 @@ PYBIND11_MODULE(DEME, obj) {
              "Set the prescribed angular velocity to all entities in a family. If dictate is set to true, then this "
              "family will not be fluenced by the force exerted from other simulation entites (both linear and "
              "rotational motions).")
-        .def("SetFamilyMeshMaterial", &deme::DEMSolver::SetFamilyMeshMaterial)
-        .def("SetFamilyExtraMargin", &deme::DEMSolver::SetFamilyExtraMargin)
+
         .def("SetFamilyPrescribedLinVel",
              static_cast<void (deme::DEMSolver::*)(unsigned int ID)>(&deme::DEMSolver::SetFamilyPrescribedLinVel),
              "Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this "
@@ -522,24 +606,72 @@ PYBIND11_MODULE(DEME, obj) {
              "rotational motions).")
         .def("SetFamilyPrescribedPosition",
              static_cast<void (deme::DEMSolver::*)(unsigned int ID)>(&deme::DEMSolver::SetFamilyPrescribedPosition),
-             "Keep the positions of all entites in this family to remain exactly the user-specified values")
+             "Keep the positions of all entites in this family to remain exactly the user-specified values.")
         .def("SetFamilyPrescribedPosition",
              static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, const std::string&,
                                                    const std::string&, bool)>(
                  &deme::DEMSolver::SetFamilyPrescribedPosition),
-             "Keep the positions of all entites in this family to remain exactly the user-specified values")
+             "Keep the positions of all entites in this family to remain exactly the user-specified values.")
         .def("AddFamilyPrescribedAcc", &deme::DEMSolver::AddFamilyPrescribedAcc,
-             "The entities in this family will always experienced an extra acceleration defined using this method")
+             "The entities in this family will always experienced an extra acceleration defined using this method.")
+        .def("AddFamilyPrescribedAngAcc", &deme::DEMSolver::AddFamilyPrescribedAngAcc,
+             "The entities in this family will always experienced an extra angular acceleration defined using this "
+             "method.")
+
+        .def("SetContactWildcards", &deme::DEMSolver::SetContactWildcards,
+             "Set the names for the extra quantities that will be associated with each contact pair.")
+        .def("SetOwnerWildcards", &deme::DEMSolver::SetOwnerWildcards,
+             "Set the names for the extra quantities that will be associated with each owner.")
+        .def("SetGeometryWildcards", &deme::DEMSolver::SetGeometryWildcards,
+             "Set the names for the extra quantities that will be associated with each geometry entity (such as "
+             "sphere, triangle).")
+
+        .def("SetFamilyContactWildcardValueAny", &deme::DEMSolver::SetFamilyContactWildcardValueAny,
+             "Change the value of contact wildcards to val if either of the contact geometries is in family N.")
+        .def("SetFamilyContactWildcardValueAll", &deme::DEMSolver::SetFamilyContactWildcardValueAll,
+             "Change the value of contact wildcards to val if both of the contact geometries are in family N.")
+        .def("SetFamilyContactWildcardValue", &deme::DEMSolver::SetFamilyContactWildcardValue,
+             "Change the value of contact wildcards to val if one of the contact geometry is in family N1, and the "
+             "other is in N2.")
+        .def("SetContactWildcardValue", &deme::DEMSolver::SetContactWildcardValue,
+             "Change the value of contact wildcards to val. Apply to all simulation bodies that are present.")
+
+        .def("SetFamilyOwnerWildcardValue",
+             static_cast<void (deme::DEMSolver::*)(unsigned int N, const std::string& name,
+                                                   const std::vector<float>& vals)>(
+                 &deme::DEMSolver::SetFamilyOwnerWildcardValue),
+             "Modify the owner wildcard's values of all entities in family N.")
+        .def("SetFamilyOwnerWildcardValue",
+             static_cast<void (deme::DEMSolver::*)(unsigned int N, const std::string& name, float val)>(
+                 &deme::DEMSolver::SetFamilyOwnerWildcardValue),
+             "Modify the owner wildcard's values of all entities in family N.")
+
+        .def("SetFamilyClumpMaterial", &deme::DEMSolver::SetFamilyClumpMaterial,
+             "Set all clumps in this family to have this material.")
+        .def("SetFamilyMeshMaterial", &deme::DEMSolver::SetFamilyMeshMaterial,
+             "Set all meshes in this family to have this material.")
+        .def("SetFamilyExtraMargin", &deme::DEMSolver::SetFamilyExtraMargin,
+             "Add an extra contact margin to entities in a family so they are registered as potential contact pairs "
+             "earlier.")
+
+        .def("GetAllOwnerWildcardValue", &deme::DEMSolver::GetAllOwnerWildcardValue,
+             "Get the owner wildcard's values of all entities.")
+        .def("GetFamilyOwnerWildcardValue", &deme::DEMSolver::GetFamilyOwnerWildcardValue,
+             "Get the owner wildcard's values of all entities in family N.")
+
+        .def("ClearCache", &deme::DEMSolver::ClearCache,
+             "Remove host-side cached vectors (so you can re-define them, and then re-initialize system).")
+
         .def("CreateInspector",
              static_cast<std::shared_ptr<deme::DEMInspector> (deme::DEMSolver::*)(const std::string&)>(
                  &deme::DEMSolver::CreateInspector),
-             "Create a inspector object that can help query some statistical info of the clumps in the simulation",
+             "Create a inspector object that can help query some statistical info of the clumps in the simulation.",
              py::arg("quantity") = "clump_max_z")
         .def("GetNumClumps", &deme::DEMSolver::GetNumClumps)
         .def("CreateInspector",
              static_cast<std::shared_ptr<deme::DEMInspector> (deme::DEMSolver::*)(
                  const std::string&, const std::string&)>(&deme::DEMSolver::CreateInspector),
-             "Create a inspector object that can help query some statistical info of the clumps in the simulation")
+             "Create a inspector object that can help query some statistical info of the clumps in the simulation.")
         .def("SetInitTimeStep", &deme::DEMSolver::SetInitTimeStep,
              "Set the initial time step size. If using constant step size, then this will be used throughout; "
              "otherwise, the actual step size depends on the variable step strategy.")
@@ -547,27 +679,35 @@ PYBIND11_MODULE(DEME, obj) {
              static_cast<void (deme::DEMSolver::*)(const std::vector<float>&)>(
                  &deme::DEMSolver::SetGravitationalAcceleration),
              "Set gravitational pull")
-        .def("SetMaxVelocity", &deme::DEMSolver::SetMaxVelocity, "Sets the maximum velocity")
-        .def("SetErrorOutVelocity", &deme::DEMSolver::SetErrorOutVelocity, "Sets the Error out velocity")
+        .def("SetMaxVelocity", &deme::DEMSolver::SetMaxVelocity,
+             "Set the maximum expected particle velocity. The solver will not use a velocity larger than this for "
+             "determining the margin thickness, and velocity larger than this will be considered a system anomaly.")
+        .def("SetErrorOutVelocity", &deme::DEMSolver::SetErrorOutVelocity,
+             "Set the velocity which when exceeded, the solver errors out. A huge number can be used to discourage "
+             "this error type. Defaulted to 5e4.")
         .def("SetExpandSafetyMultiplier", &deme::DEMSolver::SetExpandSafetyMultiplier,
              "Assign a multiplier to our estimated maximum system velocity, when deriving the thinckness of the "
-             "contact `safety' margin")
-        .def("Initialize", &deme::DEMSolver::Initialize, "Initializes the system")
-        .def("WriteSphereFile", &deme::DEMSolver::WriteSphereFile, "Writes a sphere file")
-        .def("WriteMeshFile", &deme::DEMSolver::WriteMeshFile, "Write the current status of all meshes to a file")
+             "contact `safety' margin.")
+        .def("Initialize", &deme::DEMSolver::Initialize, "Initializes the system.")
+        .def("WriteSphereFile", &deme::DEMSolver::WriteSphereFile, "Writes a sphere file.")
+        .def("WriteMeshFile", &deme::DEMSolver::WriteMeshFile, "Write the current status of all meshes to a file.")
         .def("WriteClumpFile", &deme::DEMSolver::WriteClumpFile, "Write the current status of clumps to a file.",
              py::arg("outfilename"), py::arg("accuracy") = 10)
         .def("WriteContactFile", &deme::DEMSolver::WriteContactFile,
              "Write all contact pairs to a file. Forces smaller than threshold will not be outputted.",
              py::arg("outfilename"), py::arg("force_thres") = 1e-15)
+        // Maybe add checkpoint-reading methods here...
         .def("DoDynamics", &deme::DEMSolver::DoDynamics,
-             "Advance simulation by this amount of time, and at the end of this call, synchronize kT and dT. This is "
-             "suitable for a longer call duration and without co-simulation.")
+             "Advance simulation by this amount of time (but does not attempt to sync kT and dT). This can work with "
+             "both long and short call durations and allows interplay with co-simulation APIs.")
         .def("DoStepDynamics", &deme::DEMSolver::DoStepDynamics,
              "Equivalent to calling DoDynamics with the time step size as the argument.")
         .def("DoDynamicsThenSync", &deme::DEMSolver::DoDynamicsThenSync,
              "Advance simulation by this amount of time, and at the end of this call, synchronize kT and dT. This is "
              "suitable for a longer call duration and without co-simulation.")
+        .def("UpdateSimParams", &deme::DEMSolver::UpdateSimParams,
+             "Transfer the cached sim params to the workers. Used for sim environment modification after system "
+             "initialization.")
         .def("ChangeFamily", &deme::DEMSolver::ChangeFamily,
              "Change all entities with family number ID_from to have a new number ID_to, when the condition defined by "
              "the string is satisfied by the entities in question. This should be called before initialization, and "
@@ -576,35 +716,43 @@ PYBIND11_MODULE(DEME, obj) {
              "Change all entities with family number ID_from to have a new number ID_to, when the condition defined by "
              "the string is satisfied by the entities in question. This should be called before initialization, and "
              "will be baked into the solver, so the conditions will be checked and changes applied every time step.")
+        .def("ChangeClumpFamily", &deme::DEMSolver::ChangeClumpFamily,
+             "Change the family number for the clumps in a box region to the specified value.", py::arg("fam_num"),
+             py::arg("X") = std::pair<double, double>(-DEME_HUGE_FLOAT, DEME_HUGE_FLOAT),
+             py::arg("Y") = std::pair<double, double>(-DEME_HUGE_FLOAT, DEME_HUGE_FLOAT),
+             py::arg("Z") = std::pair<double, double>(-DEME_HUGE_FLOAT, DEME_HUGE_FLOAT),
+             py::arg("orig_fam") = std::set<unsigned int>())
+
         .def("ShowThreadCollaborationStats", &deme::DEMSolver::ShowThreadCollaborationStats,
              "Show the collaboration stats between dT and kT. This is more useful for tweaking the number of time "
              "steps that dT should be allowed to be in advance of kT.")
         .def("ShowTimingStats", &deme::DEMSolver::ShowTimingStats,
-             "Show the wall time and percentages of wall time spend on various solver tasks")
+             "Show the wall time and percentages of wall time spend on various solver tasks.")
         .def("ShowAnomalies", &deme::DEMSolver::ShowAnomalies,
              "Show potential anomalies that may have been there in the simulation, then clear the anomaly log.")
         .def("ClearThreadCollaborationStats", &deme::DEMSolver::ClearThreadCollaborationStats,
              "Reset the collaboration stats between dT and kT back to the initial value (0). You should call this if "
              "you want to start over and re-inspect the stats of the new run; otherwise, it is generally not needed, "
-             "you can go ahead and destroy DEMSolver")
+             "you can go ahead and destroy DEMSolver.")
         .def("ClearTimingStats", &deme::DEMSolver::ClearTimingStats,
-             "Reset the recordings of the wall time and percentages of wall time spend on various solver tasks")
+             "Reset the recordings of the wall time and percentages of wall time spend on various solver tasks.")
         .def("PurgeFamily", &deme::DEMSolver::PurgeFamily)
         .def("ReleaseFlattenedArrays", &deme::DEMSolver::ReleaseFlattenedArrays)
-        .def("GetWhetherForceCollectInKernel", &deme::DEMSolver::GetWhetherForceCollectInKernel)
+        .def("GetWhetherForceCollectInKernel", &deme::DEMSolver::GetWhetherForceCollectInKernel,
+             "Return whether the solver is currently reducing force in the force calculation kernel.")
         .def("AddOwnerNextStepAcc", &deme::DEMSolver::AddOwnerNextStepAcc,
-             "Add an extra acceleration to a owner for the next time step")
+             "Add an extra acceleration to a owner for the next time step.")
         .def("AddOwnerNextStepAngAcc", &deme::DEMSolver::AddOwnerNextStepAngAcc,
              " Add an extra angular acceleration to a owner for the next time step.")
         .def("DisableContactBetweenFamilies", &deme::DEMSolver::DisableContactBetweenFamilies,
              "Instruct the solver that the 2 input families should not have contacts (a.k.a. ignored, if such a pair "
              "is encountered in contact detection). These 2 families can be the same (which means no contact within "
-             "members of that family)")
+             "members of that family).")
         .def("EnableContactBetweenFamilies", &deme::DEMSolver::EnableContactBetweenFamilies,
-             "Re-enable contact between 2 families after the system is initialized")
+             "Re-enable contact between 2 families after the system is initialized.")
         .def("DisableFamilyOutput", &deme::DEMSolver::DisableFamilyOutput,
-             "Prevent entites associated with this family to be outputted to files")
-        .def("SetFamilyFixed", &deme::DEMSolver::SetFamilyFixed, "Mark all entities in this family to be fixed")
+             "Prevent entites associated with this family to be outputted to files.")
+        .def("SetFamilyFixed", &deme::DEMSolver::SetFamilyFixed, "Mark all entities in this family to be fixed.")
         .def("SetFamilyPrescribedLinVel",
              static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, const std::string&,
                                                    const std::string&, bool)>(
@@ -633,7 +781,7 @@ PYBIND11_MODULE(DEME, obj) {
              static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, const std::string&,
                                                    const std::string&, bool)>(
                  &deme::DEMSolver::SetFamilyPrescribedPosition),
-             "Keep the positions of all entites in this family to remain exactly the user-specified values",
+             "Keep the positions of all entites in this family to remain exactly the user-specified values.",
              py::arg("ID"), py::arg("velX"), py::arg("velY"), py::arg("velZ"), py::arg("dictate") = true)
         .def("SetFamilyPrescribedPosition",
              static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedPosition),
@@ -642,12 +790,12 @@ PYBIND11_MODULE(DEME, obj) {
              static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, bool)>(
                  &deme::DEMSolver::SetFamilyPrescribedQuaternion),
              "Keep the orientation quaternions of all entites in this family to remain exactly the user-specified "
-             "values",
+             "values.",
              py::arg("ID"), py::arg("q_formula"), py::arg("dictate") = true)
         .def("SetFamilyPrescribedQuaternion",
              static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedQuaternion),
              "Keep the orientation quaternions of all entites in this family to remain exactly the user-specified "
-             "values");
+             "values.");
 
     py::class_<deme::DEMMaterial, std::shared_ptr<deme::DEMMaterial>>(obj, "DEMMaterial")
         .def(py::init<const std::unordered_map<std::string, float>&>())

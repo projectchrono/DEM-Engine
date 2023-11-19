@@ -546,7 +546,7 @@ class DEMSolver {
     template <typename T>
     std::shared_ptr<DEMTracker> Track(const std::shared_ptr<T>& obj) {
         // Create a middle man: DEMTrackedObj. The reason we use it is because a simple struct should be used to
-        // transfer to  dT for owner-number processing. If we cut the middle man and use things such as DEMExtObj, there
+        // transfer to dT for owner-number processing. If we cut the middle man and use things such as DEMExtObj, there
         // will not be a universal treatment that dT can apply, besides we may have some include-related issues.
         DEMTrackedObj tracked_obj;
         tracked_obj.load_order = obj->load_order;
@@ -627,21 +627,21 @@ class DEMSolver {
                                      const std::string& Y,
                                      const std::string& Z,
                                      bool dictate = true);
-    /// @brief Let the linear positions of all entites in this family always keep `as is'
+    /// @brief Let the linear positions of all entites in this family always keep `as is'.
     void SetFamilyPrescribedPosition(unsigned int ID);
     /// @brief Keep the orientation quaternions of all entites in this family to remain exactly the user-specified
-    /// values
+    /// values.
     /// @param ID Family number.
     /// @param q_formula A formula from which the quaternion should be calculated.
     /// @param dictate If true, prevent entities in this family to have (both linear and rotational) positional updates
     /// resulted from `simulation physics' unless the prescription is specified as none.
     void SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula, bool dictate = true);
-    /// @brief Let the orientation quaternions of all entites in this family always keep `as is'
+    /// @brief Let the orientation quaternions of all entites in this family always keep `as is'.
     void SetFamilyPrescribedQuaternion(unsigned int ID);
 
-    /// The entities in this family will always experienced an extra acceleration defined using this method
+    /// The entities in this family will always experienced an extra acceleration defined using this method.
     void AddFamilyPrescribedAcc(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
-    /// The entities in this family will always experienced an extra angular acceleration defined using this method
+    /// The entities in this family will always experienced an extra angular acceleration defined using this method.
     void AddFamilyPrescribedAngAcc(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
 
     /// @brief Set the names for the extra quantities that will be associated with each contact pair.
@@ -724,8 +724,9 @@ class DEMSolver {
         SetOwnerWildcardValue(ownerID, name, std::vector<float>(n, val));
     }
 
-    /// Modify the owner wildcard's values of all entities in family N
+    /// Modify the owner wildcard's values of all entities in family N.
     void SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, const std::vector<float>& vals);
+    /// Modify the owner wildcard's values of all entities in family N.
     void SetFamilyOwnerWildcardValue(unsigned int N, const std::string& name, float val) {
         SetFamilyOwnerWildcardValue(N, name, std::vector<float>(1, val));
     }
@@ -829,7 +830,7 @@ class DEMSolver {
             collect_force_in_force_kernel = flag;
     }
 
-    /// Add an (analytical or clump-represented) external object to the simulation system.
+    /// Add an analytical object to the simulation system.
     std::shared_ptr<DEMExternObj> AddExternalObject();
     /// @brief Add an analytical plane to the simulation.
     /// @param pos A point on the plane.
@@ -849,7 +850,7 @@ class DEMSolver {
                           material);
     }
 
-    /// Remove host-side cached vectors (so you can re-define them, and then re-initialize system)
+    /// Remove host-side cached vectors (so you can re-define them, and then re-initialize system).
     void ClearCache();
 
     /// Write the current status of clumps to a file
@@ -1006,11 +1007,11 @@ class DEMSolver {
     /// Equivalent to calling DoDynamics with the time step size as the argument.
     void DoStepDynamics() { DoDynamics(m_ts_size); }
 
-    /// @brief Transferthe cached sim params to the workers. Used for sim environment modification after system
+    /// @brief Transfer the cached sim params to the workers. Used for sim environment modification after system
     /// initialization.
     void UpdateSimParams();
 
-    /// @brief TTransfer newly loaded clumps to the GPU-side in mid-simulation.
+    /// @brief Transfer newly loaded clumps to the GPU-side in mid-simulation.
     void UpdateClumps();
 
     /// @brief Update the time step size. Used after system initialization.

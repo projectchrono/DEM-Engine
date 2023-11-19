@@ -149,7 +149,7 @@ class CMakeBuild(build_ext):
 setup(
     name="DEME",
     version="0.3.0",
-    author="Rouchun Zhang",
+    author="Ruochun Zhang",
     author_email="rzhang294@wisc.edu",
     description="PyBind Wrapper Library for DEM-Engine",
     long_description="",
