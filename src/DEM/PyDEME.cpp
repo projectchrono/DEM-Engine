@@ -467,8 +467,7 @@ PYBIND11_MODULE(DEME, obj) {
                  &deme::DEMSolver::SetContactOutputContent),
              "Specify the information that needs to go into the contact pair output files.")
         .def("SetContactOutputFormat",
-             static_cast<void (deme::DEMSolver::*)(const std::vector<std::string>&)>(
-                 &deme::DEMSolver::SetContactOutputFormat),
+             static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetContactOutputFormat),
              "Specify the file format of contact pairs.")
         .def("SetVerbosity", static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetVerbosity),
              "Set the verbosity level of the solver.")
@@ -546,18 +545,18 @@ PYBIND11_MODULE(DEME, obj) {
              "Load a clump type into the API-level cache")
 
         .def("GetClumpContacts",
-             static_cast<std::vector<std::pair<bodyID_t, bodyID_t>> (deme::DEMSolver::*)() const>(
+             static_cast<std::vector<std::pair<deme::bodyID_t, deme::bodyID_t>> (deme::DEMSolver::*)() const>(
                  &deme::DEMSolver::GetClumpContacts),
              "Get all clump--clump contacts in the simulation system.")
 
         .def("GetClumpContacts",
-             static_cast<std::vector<std::pair<bodyID_t, bodyID_t>> (deme::DEMSolver::*)(const std::set<family_t>&)
-                             const>(&deme::DEMSolver::GetClumpContacts),
+             static_cast<std::vector<std::pair<deme::bodyID_t, deme::bodyID_t>> (deme::DEMSolver::*)(
+                 const std::set<deme::family_t>&) const>(&deme::DEMSolver::GetClumpContacts),
              "Get all clump--clump contacts in the simulation system.")
 
         .def("GetClumpContacts",
-             static_cast<std::vector<std::pair<bodyID_t, bodyID_t>> (deme::DEMSolver::*)(
-                 std::vector<std::pair<family_t, family_t>>&) const>(&deme::DEMSolver::GetClumpContacts),
+             static_cast<std::vector<std::pair<deme::bodyID_t, deme::bodyID_t>> (deme::DEMSolver::*)(
+                 std::vector<std::pair<deme::family_t, deme::family_t>>&) const>(&deme::DEMSolver::GetClumpContacts),
              "Get all clump--clump contacts in the simulation system.")
 
         .def("AddClumps",
