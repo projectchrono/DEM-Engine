@@ -204,13 +204,15 @@ inline bool any_whole_word_match(const std::string& sentence, const std::set<std
 inline bool all_whole_word_match(const std::string& sentence,
                                  const std::set<std::string>& words,
                                  std::string& non_match) {
+    non_match = "";
+    bool res = true;
     for (const auto& word : words) {
         if (!match_whole_word(sentence, word)) {
-            non_match = word;
-            return false;
+            non_match += word + ",";
+            res = false;
         }
     }
-    return true;
+    return res;
 }
 
 /// Change all characters in a string to upper case.

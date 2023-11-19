@@ -1178,6 +1178,23 @@ void DEMSolver::validateUserInputs() {
     //     LoadClumpType.");
     // }
 
+    // If not 2 GPUs detected, output warnings as needed
+    int ndevices = dTkT_GpuManager->getNumDevices();
+    if (ndevices == 0) {
+        DEME_ERROR(
+            "No GPU device is detected. Try lspci and see what you get.\nIf you indeed have GPU devices, maybe you "
+            "should try rebooting or reinstalling cuda components?");
+    } else if (ndevices == 1) {
+        DEME_WARNING(
+            "One GPU device is detected. Currently, DEME's performance edge is limited with only one GPU.\nTry "
+            "allocating 2 GPU devices if possible.");
+    } else if (ndevices > 2) {
+        DEME_WARNING(
+            "More than two GPU devices are detected.\nCurrently, DEME can make use of at most two devices.\nMore "
+            "devices will not improve the performance.");
+    }
+
+    // Box size OK?
     float3 user_box_size = m_user_box_max - m_user_box_min;
     if (user_box_size.x <= 0.f || user_box_size.y <= 0.f || user_box_size.z <= 0.f) {
         DEME_ERROR(
@@ -1328,23 +1345,23 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     std::string non_match;
     if (!all_whole_word_match(model, contact_wildcard_names, non_match))
         DEME_WARNING(
-            "Contact wildcard %s is not used/set in your custom force model. Your force model will probably not "
-            "produce what you expect.",
+            "Contact wildcard(s) %s are not used/set in your custom force model. "
+            "Your force model will probably not produce what you expect.",
             non_match.c_str());
     if (!all_whole_word_match(model, owner_wildcard_names, non_match))
         DEME_WARNING(
-            "Owner wildcard %s is not used/set in your custom force model. Your force model will probably not produce "
-            "what you expect.",
+            "Owner wildcard(s) %s are not used/set in your custom force model. "
+            "Your force model will probably not produce what you expect.",
             non_match.c_str());
     if (!all_whole_word_match(model, geo_wildcard_names, non_match))
         DEME_WARNING(
-            "Geometry wildcard %s is not used/set in your custom force model. Your force model will probably not "
-            "produce what you expect.",
+            "Geometry wildcard(s) %s are not used/set in your custom force model. "
+            "Your force model will probably not produce what you expect.",
             non_match.c_str());
     if (!all_whole_word_match(model, {"force"}, non_match)) {
         DEME_WARNING(
-            "Your custom force model does not set the variable %s at all. You probably will not see any contact in the "
-            "simulation.",
+            "Your custom force model does not set the %s variable at all. "
+            "You probably will not see any contact in the simulation.",
             non_match.c_str());
     }
 
