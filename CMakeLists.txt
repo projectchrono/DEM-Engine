@@ -10,13 +10,13 @@
 cmake_minimum_required(VERSION 3.18)
 
 # Version information
-set(VERSION_MAJOR   0)
-set(VERSION_MINOR   0)
-set(VERSION_PATCH   0)
+set(DEME_VERSION_MAJOR   0)
+set(DEME_VERSION_MINOR   0)
+set(DEME_VERSION_PATCH   0)
 
 project(
-	Simulator-MUlti-Gpu
-	VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
+	Simulator-MUlti-Gpu 
+	VERSION ${DEME_VERSION_MAJOR}.${DEME_VERSION_MINOR}.${DEME_VERSION_PATCH}
 	LANGUAGES CXX CUDA
 )
 
@@ -119,6 +119,13 @@ set(ProjectIncludeGenerated "${CMAKE_BINARY_DIR}/src")
 # Global fix for CUDA language bug
 include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
+
+#------------------------------------------------------------
+# Install destinations for data and demo programs
+#------------------------------------------------------------
+
+set(DEME_INSTALL_DEMO "bin")
+
 # ---------------------------------------------------------------------------- #
 # Source-level configuration
 # ---------------------------------------------------------------------------- #
@@ -155,8 +162,7 @@ if(NOT PYTHON_BUILD)
 		PUBLIC CUDA::nvrtc
 		PUBLIC CUDA::cuda_driver
 		PUBLIC ${ChPF_IMPORTED_NAME}
-		PUBLIC DEMERuntimeDataHelper_install
-		PUBLIC ${PYTHON_LIBRARIES}
+		PUBLIC DEMERuntimeDataHelper
 	)
 else()
 	target_link_libraries(simulator_multi_gpu
@@ -168,6 +174,12 @@ else()
 	PUBLIC ${PYTHON_LIBRARIES}
 	)
 endif()
+
+if(WIN32)
+	target_link_libraries(simulator_multi_gpu 
+		PUBLIC dbghelp)
+endif()
+
 # Attach include directories to the top-level library target
 set_target_properties(simulator_multi_gpu
 	PROPERTIES
@@ -199,7 +211,7 @@ else()
 endif()
 
 install(CODE "message(\"Removing build-tree libraries from installation target...\")")
-install(CODE "file(REMOVE \"$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libDEMERuntimeDataHelper.so\")")
+install(CODE "file(REMOVE \"$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libDEMERuntimeDataHelper.*\")")
 
 if(NOT PYTHON_BUILD)
 	install(
@@ -253,7 +265,7 @@ configure_file(cmake/DEMEConfig.cmake.in
 
 write_basic_package_version_file(
 	${CMAKE_CURRENT_BINARY_DIR}/DEME/DEMEConfigVersion.cmake
-	VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
+	VERSION ${DEME_VERSION_MAJOR}.${DEME_VERSION_MINOR}.${DEME_VERSION_PATCH}
 	COMPATIBILITY AnyNewerVersion
 )
 

@@ -8,8 +8,6 @@
 #include <string>
 #include <regex>
 
-#include <jitify/jitify.hpp>
-
 #include <core/ApiVersion.h>
 #include <core/utils/RuntimeData.h>
 #include <core/utils/JitHelper.h>

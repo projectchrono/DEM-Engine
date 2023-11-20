@@ -13,9 +13,6 @@ target_include_directories(
 	PUBLIC ${ProjectIncludeGenerated}
 	PUBLIC ${NVIDIAMathDir}
 	PUBLIC ${PYTHON_INCLUDE_DIRS}
-	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
-	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/core
-	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/algorithms
 )
 
 if(NOT PYTHON_BUILD)
@@ -23,13 +20,6 @@ if(NOT PYTHON_BUILD)
 		DEM
 		PUBLIC CUB::CUB
 		PUBLIC ${ChPF_IMPORTED_NAME}
-		PUBLIC ${PYTHON_LIBRARIES}
-		PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
-		PUBLIC core
-		PUBLIC DEMERuntimeDataHelper_install
-		PUBLIC algorithms
-		pybind11::headers
-		-static-libgcc -static-libstdc++
 	)
 else()
 	target_link_libraries(
@@ -86,46 +76,6 @@ set_target_properties(
 	PUBLIC_HEADER "${DEM_headers}"
 	INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}"
 )
-
-target_include_directories(
-	DEM
-	PUBLIC ${ProjectIncludeSource}
-	PUBLIC ${ProjectIncludeGenerated}
-	PUBLIC ${NVIDIAMathDir}
-	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
-	PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/core
-)
-
-if(NOT PYTHON_BUILD)
-	target_link_libraries(
-		DEM
-		PUBLIC CUB::CUB
-		PUBLIC ${ChPF_IMPORTED_NAME}
-		PUBLIC ${PYTHON_LIBRARIES}
-		PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
-		PUBLIC pybind11::headers
-		PUBLIC DEMERuntimeDataHelper_install
-		PUBLIC core
-		PUBLIC algorithms
-		-static-libgcc -static-libstdc++
-	)
-else()
-	target_link_libraries(
-		DEM
-		PUBLIC CUB::CUB
-		PUBLIC ${ChPF_IMPORTED_NAME}
-		PUBLIC ${PYTHON_LIBRARIES}
-		PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
-		PUBLIC pybind11::headers
-		PUBLIC DEMERuntimeDataHelper_python
-		PUBLIC core
-		PUBLIC algorithms
-		-static-libgcc -static-libstdc++
-	)
-endif()
-#foreach(header ${DEM_headers})
-#	set_target_properties(DEM PROPERTIES PUBLIC_HEADER ${header})
-#endforeach()
 
 install(
 	TARGETS DEM

@@ -3,12 +3,22 @@
 //
 //  SPDX-License-Identifier: BSD-3-Clause
 
-#ifndef RUNTIMEDATA_H
-#define RUNTIMEDATA_H
+#ifndef DEME_RUNTIMEDATA_H
+#define DEME_RUNTIMEDATA_H
 
 #include <filesystem>
 
-class RuntimeDataHelper {
+#if defined(_WIN32) || defined(_WIN64)
+    #ifdef DEMERuntimeDataHelper_EXPORTS
+        #define DEMERuntimeDataHelper_API __declspec(dllexport)
+    #else
+        #define DEMERuntimeDataHelper_API __declspec(dllimport)
+    #endif
+#else
+    #define DEMERuntimeDataHelper_API
+#endif
+
+class DEMERuntimeDataHelper_API RuntimeDataHelper {
   public:
     static std::filesystem::path data_path;
     static std::filesystem::path include_path;

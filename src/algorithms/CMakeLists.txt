@@ -21,7 +21,6 @@ target_include_directories(
 if(NOT PYTHON_BUILD)
 	target_link_libraries(
 		algorithms
-		PUBLIC DEMERuntimeDataHelper_install
 		PUBLIC CUB::CUB
 	)
 else()

@@ -973,7 +973,7 @@ PYBIND11_MODULE(DEME, obj) {
 
     py::enum_<deme::VERBOSITY>(obj, "VERBOSITY")
         .value("QUIET", deme::VERBOSITY::QUIET)
-        .value("ERROR", deme::VERBOSITY::ERROR)
+        .value("ERROR", deme::VERBOSITY::DEME_ERROR)
         .value("WARNING", deme::VERBOSITY::WARNING)
         .value("INFO", deme::VERBOSITY::INFO)
         .value("STEP_ANOMALY", deme::VERBOSITY::STEP_ANOMALY)
@@ -1038,7 +1038,7 @@ PYBIND11_MODULE(DEME, obj) {
     py::enum_<deme::CNT_OUTPUT_CONTENT>(obj, "CNT_OUTPUT_CONTENT")
         .value("CNT_TYPE", deme::CNT_OUTPUT_CONTENT::CNT_TYPE)
         .value("FORCE", deme::CNT_OUTPUT_CONTENT::FORCE)
-        .value("POINT", deme::CNT_OUTPUT_CONTENT::POINT)
+        .value("POINT", deme::CNT_OUTPUT_CONTENT::DEME_POINT)
         .value("COMPONENT", deme::CNT_OUTPUT_CONTENT::COMPONENT)
         .value("NORMAL", deme::CNT_OUTPUT_CONTENT::NORMAL)
         .value("TORQUE", deme::CNT_OUTPUT_CONTENT::TORQUE)

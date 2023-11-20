@@ -57,7 +57,7 @@ void DEMSolver::SetVerbosity(const std::string& verbose) {
             verbosity = VERBOSITY::QUIET;
             break;
         case ("ERROR"_):
-            verbosity = VERBOSITY::ERROR;
+            verbosity = VERBOSITY::DEME_ERROR;
             break;
         case ("WARNING"_):
             verbosity = VERBOSITY::WARNING;
@@ -191,7 +191,7 @@ void DEMSolver::SetContactOutputContent(const std::vector<std::string>& content)
                 m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::FORCE;
                 break;
             case ("POINT"_):
-                m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::POINT;
+                m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::DEME_POINT;
                 break;
             case ("COMPONENT"_):
                 m_cnt_out_content = m_cnt_out_content | CNT_OUTPUT_CONTENT::COMPONENT;
