@@ -106,6 +106,13 @@ set(ProjectIncludeGenerated "${CMAKE_BINARY_DIR}/src")
 # Global fix for CUDA language bug
 include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
 
+
+#------------------------------------------------------------
+# Install destinations for data and demo programs
+#------------------------------------------------------------
+
+set(DEME_INSTALL_DEMO "bin")
+
 # ---------------------------------------------------------------------------- #
 # Source-level configuration
 # ---------------------------------------------------------------------------- #
