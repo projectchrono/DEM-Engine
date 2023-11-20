@@ -4,17 +4,9 @@
 
 # INCLUDE_DIRECTORIES(${ProjectIncludeRoot})
 
-if(WIN32)
-       SET(LIBRARIES
-               simulator_multi_gpu
-       )
-else()
-       SET(LIBRARIES
-               simulator_multi_gpu
-               DEMERuntimeDataHelper_install
-               DEMERuntimeDataHelper
-       )
-endif()
+SET(LIBRARIES
+		simulator_multi_gpu
+)
 
 # ------------------------------------------------------------------------------
 # List of all executables
