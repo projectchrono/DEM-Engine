@@ -36,7 +36,7 @@ float3 delta_tan = make_float3(delta_tan_x, 0.0, delta_tan_z);
 const float3 velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
 const float projection = dot(velB2A, B2A);
 vrel_tan = velB2A - projection * B2A;
-//vrel_tan.y=0.0;
+vrel_tan.y=0.0;
 
 const float3 v_rot = rotVelCPB - rotVelCPA;
 // This v_rot is only used for identifying resistance direction
@@ -91,7 +91,7 @@ mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
         // If should, then compute it (using Schwartz model)
         if (should_add_rolling_resistance) {
             // Tangential velocity (only rolling contribution) of B relative to A, at contact point, in global
-            const float3 v_rot = rotVelCPB - rotVelCPA;
+            const float3 v_rot = make_float3(0.0, rotVelCPB.y - rotVelCPA.y, 0.0);
             // This v_rot is only used for identifying resistance direction
             const float v_rot_mag = length(v_rot);
             if (v_rot_mag > DEME_TINY_FLOAT) {

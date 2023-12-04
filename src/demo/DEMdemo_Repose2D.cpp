@@ -33,7 +33,7 @@ int main() {
     srand(42);
 
     // Scale factor
-    float scaling = 2;
+    float scaling = 4;
 
     // total number of random clump templates to generate
     int num_template = 6;
@@ -48,7 +48,7 @@ int main() {
     float max_relpos = 0.01 * scaling;
 
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 1}});
-    auto mat_type_particles = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.7}, {"mu", 1}});
+    auto mat_type_particles = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.7}, {"mu", 0.50}, {"Crr", 0.03}});
     // If you don't have this line, then CoR between wall material and granular material will be 0.5 (average of the
     // two).
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.3);
@@ -58,6 +58,23 @@ int main() {
     modelCohesion->SetMustHaveMatProp({"E", "nu", "CoR", "mu", "Crr"});
     modelCohesion->SetMustPairwiseMatProp({"CoR", "mu", "Crr"});
     modelCohesion->SetPerContactWildcards({"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"});
+
+    float funnel_bottom = 0.f;
+    // Generate initial clumps for piling
+    float spacing = max_rad * 2.0;
+    float fill_width = 5.f;
+    float fill_height = 5.f * fill_width;
+    float fill_bottom = funnel_bottom + fill_width + spacing + fill_height / 2.0;
+
+    DEMSim.InstructBoxDomainDimension({-10, 10}, {-10, 10}, {funnel_bottom - 10.f, funnel_bottom + 20.f});
+    DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
+    DEMSim.SetInitTimeStep(5e-6);
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
+    // Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
+    // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
+    // happen anyway and if it does, something already went wrong.
+    DEMSim.SetMaxVelocity(25.);
+
     /*
     // First create clump type 0 for representing the ground
     float ground_sp_r = 0.02;
@@ -67,7 +84,6 @@ int main() {
     // Loaded meshes are by-default fixed
     auto funnel = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/funnel.obj"), mat_type_walls);
     funnel->Scale(0.15);
-    float funnel_bottom = 0.f;
 
     // Make an array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
@@ -75,8 +91,8 @@ int main() {
     // Then randomly create some clumps for piling up
     for (int i = 0; i < num_template; i++) {
         // first decide the number of spheres that live in this clump
-        int num_sphere = rand() % (max_sphere - min_sphere + 1) + 1;
-
+        // int num_sphere = rand() % (max_sphere - min_sphere + 1) + 1;
+        int num_sphere = 1;
         // then allocate the clump template definition arrays (all in SI)
         float mass = 0.1 * (float)num_sphere * std::pow(scaling, 3);
         float3 MOI = make_float3(2e-5 * (float)num_sphere, 1.5e-5 * (float)num_sphere, 1.8e-5 * (float)num_sphere) *
@@ -96,7 +112,7 @@ int main() {
                 tmp.z = 0;
             } else {
                 tmp.x = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
-                tmp.y = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
+                tmp.y = 0;
                 tmp.z = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
             }
             tmp += seed_pos;
@@ -114,49 +130,24 @@ int main() {
         clump_types.push_back(clump_ptr);
     }
 
-    // Generate initial clumps for piling
-    float spacing = 0.08 * scaling;
-    float fill_width = 5.f;
-    float fill_height = 2.f * fill_width;
-    float fill_bottom = funnel_bottom + fill_width + spacing;
-
     PDSampler sampler(spacing);
     // Use a PDSampler-based clump generation process
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
     std::vector<float3> input_pile_xyz;
-    float layer_z = 0;
-    while (layer_z < fill_height) {
-        float3 sample_center = make_float3(0, 0, fill_bottom + layer_z + spacing / 2);
-        auto layer_xyz = sampler.SampleCylinderZ(sample_center, fill_width, 0);
-        unsigned int num_clumps = layer_xyz.size();
-        // Select from available clump types
-        for (unsigned int i = 0; i < num_clumps; i++) {
-            input_pile_template_type.push_back(clump_types.at(i % num_template));
-        }
-        input_pile_xyz.insert(input_pile_xyz.end(), layer_xyz.begin(), layer_xyz.end());
-        layer_z += spacing;
+
+    float3 sample_center = make_float3(0, 0, fill_bottom);
+    float3 sample_size = make_float3(fill_width, 0, fill_height / 2);
+    auto layer_xyz = sampler.SampleBox(sample_center, sample_size);
+    unsigned int num_clumps = layer_xyz.size();
+    // Select from available clump types
+    for (unsigned int i = 0; i < num_clumps; i++) {
+        input_pile_template_type.push_back(clump_types.at(i % num_template));
     }
+    input_pile_xyz.insert(input_pile_xyz.end(), layer_xyz.begin(), layer_xyz.end());
+
     // Note: AddClumps can be called multiple times before initialization to add more clumps to the system
     auto the_pile = DEMSim.AddClumps(input_pile_template_type, input_pile_xyz);
 
-    DEMSim.InstructBoxDomainDimension({-10, 10}, {-10, 10}, {funnel_bottom - 10.f, funnel_bottom + 20.f});
-    DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
-    DEMSim.SetInitTimeStep(5e-6);
-    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
-    // Max velocity info is generally just for the solver's reference and the user do not have to set it. The solver
-    // wouldn't take into account a vel larger than this when doing async-ed contact detection: but this vel won't
-    // happen anyway and if it does, something already went wrong.
-    DEMSim.SetMaxVelocity(25.);
-    // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto bin
-    // size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case setting
-    // init bin size may save the simulation.
-    // DEMSim.SetInitBinSize(min_rad * 6);
-
-    // 256 or 512 are common choices. Note that in cases where the force model is modified, too many registers may be
-    // used in the kernel, so we have to reduce this number to use 256. In other cases (and most cases), 512 is fine and
-    // may make the code run a bit faster. Usually, the user do not have to call SetForceCalcThreadsPerBlock if they
-    // don't know the implication.
-    DEMSim.SetForceCalcThreadsPerBlock(512);
     DEMSim.Initialize();
 
     path out_dir = current_path();
