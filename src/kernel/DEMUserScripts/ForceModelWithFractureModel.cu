@@ -89,6 +89,7 @@ if (unbroken > DEME_TINY_FLOAT) {
     // tangent_force = (length(tangent_force) < Fsmax) ? -kt * delta_tan : tangent_force;
     delta_tan = (tangent_force + gt * vrel_tan) / (-kt);
 
+
     // breaking  for excess of tangential stress
     unbroken = (length(tangent_force) > Fsmax) ? -1.0 : unbroken;
     // float3 coesionForce= coesion * intialArea * (-B2A);

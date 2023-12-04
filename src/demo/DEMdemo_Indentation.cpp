@@ -77,13 +77,13 @@ int main() {
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_cube, mat_type_granular_1, 0.8);
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_cube, mat_type_granular_2, 0.8);
 
-    float granular_rad = 0.02;  // 0.002;
+    float granular_rad = 0.03;  // 0.002;
     auto template_granular = DEMSim.LoadSphereType(granular_rad * granular_rad * granular_rad * 2.6e3 * 4 / 3 * 3.14,
                                                    granular_rad, mat_type_granular_1);
 
-    float step_size = 1e-6;
-    const double world_size = 4.0;
-    const float fill_height = 3.0;
+    float step_size = 5e-7;
+    const double world_size = 3.0;
+    const float fill_height = 5.0;
     const float chamber_bottom = -fill_height / 2.;
     const float fill_bottom = -fill_height + granular_rad;
 
@@ -114,7 +114,7 @@ int main() {
 
     DEMSim.SetFamilyPrescribedAngVel(11, "0", "0", to_string_with_precision(w_r), false);
 
-    DEMSim.SetFamilyPrescribedLinVel(12, "0", "0", to_string_with_precision(-cube_speed));
+    DEMSim.SetFamilyPrescribedLinVel(12, "0", "0", to_string_with_precision(cube_speed));
     // Track the cube
 
     // Sampler to use
@@ -124,7 +124,7 @@ int main() {
     modelCohesion->SetPerContactWildcards(
         {"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z", "innerInteraction", "initialLength"});
 
-    const float spacing = 2.04f * granular_rad;
+    const float spacing = 2.02f * granular_rad;
     const float fill_radius = world_size / 2. - 2. * granular_rad;
 
     // PDSampler sampler(spacing);
@@ -140,33 +140,44 @@ int main() {
     float3 CylAxis = make_float3(0, 0, 1);
     float CylRad = 0.60;
     float CylHeight = 2.0;
-    float3 CylCenter = make_float3(0, 0, granular_rad + CylHeight / 2);
+    
 
-    float CylParticleRad = 0.01;
+    float CylHeightAnular = 0.10;
+
+
+    // float3 CylCenter_Up = make_float3(0, 0, granular_rad+ CylHeight+ CylHeightAnular/2+ CylParticleRad);
+    // float3 CylCenter_Up = make_float3(0, 0, 2*granular_rad+ CylHeight+ CylHeightAnular/2+ CylParticleRad);
+
+
+    
+   
+    // auto monopile_Up = DEMCylSurfSampler(CylCenter_Up, CylAxis, CylRad, CylHeightAnular, CylParticleRad);
+    // auto particles_pile_Up = DEMSim.AddClumps(my_template, monopile_Up);
+    
+    // std::cout << monopile_Up.size() << " spheres make up the rotating drum" << std::endl;
+    // particles_pile_Up->SetFamily(3);
+    // DEMSim.SetFamilyExtraMargin(3, 1.0 * CylParticleRad);
+
+
+    float3 CylCenter = make_float3(0, 0, 2*granular_rad + CylHeight / 2 + CylHeightAnular/2);
+
+    float CylParticleRad = 0.02;
     float CylMass = 100;
     float sphere_vol = 4. / 3. * deme::PI * CylParticleRad * CylParticleRad * CylParticleRad;
     float mass = 7850 * sphere_vol;
     std::shared_ptr<DEMClumpTemplate> my_template = DEMSim.LoadSphereType(mass, CylParticleRad, mat_type_cube);
-    auto monopile = DEMCylSurfSampler(CylCenter, CylAxis, CylRad, CylHeight, CylParticleRad);
+    auto monopile = DEMCylSurfSampler(CylCenter, CylAxis, CylRad, CylHeight + CylHeightAnular, CylParticleRad);
     auto particles_pile = DEMSim.AddClumps(my_template, monopile);
 
     std::cout << monopile.size() << " spheres make up the rotating drum" << std::endl;
     particles_pile->SetFamily(2);
     DEMSim.SetFamilyExtraMargin(2, 1.0 * CylParticleRad);
 
-    float CylHeightAnular = 0.10;
-    float3 CylCenter_Up = make_float3(0, 0, granular_rad+ CylHeight+ CylHeightAnular/2+ CylParticleRad);
-    
-   
-    auto monopile_Up = DEMCylSurfSampler(CylCenter_Up, CylAxis, CylRad, CylHeightAnular, CylParticleRad);
-    auto particles_pile_Up = DEMSim.AddClumps(my_template, monopile_Up);
-    
-    std::cout << monopile_Up.size() << " spheres make up the rotating drum" << std::endl;
-    particles_pile_Up->SetFamily(3);
-    DEMSim.SetFamilyExtraMargin(3, 1.0 * CylParticleRad);
+    // From cylinder top, down 0.10 m
+    float separation_z_coord = CylCenter.z + (CylHeight + CylHeightAnular) / 2.0 - CylHeightAnular;
 
     //DEMSim.SetFamilyPrescribedLinVel(2, "none", "none", to_string_with_precision(2 * cube_speed));
-    DEMSim.AddFamilyPrescribedAcc(4, "none", to_string_with_precision( -1./ 500),"none");
+    DEMSim.AddFamilyPrescribedAcc(4, "none", to_string_with_precision( 100.),"none");
 
     // Drum->SetFamily(2);
 
@@ -205,6 +216,13 @@ int main() {
 
     std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
 
+
+
+
+    std::pair<float, float> XYrange = std::pair<float, float>(-world_size / 2, world_size / 2);
+    std::pair<float, float> Zrange = std::pair<float, float>(separation_z_coord, 10.0);
+    DEMSim.ChangeClumpFamily(3, XYrange, XYrange, Zrange);
+
     //DEMSim.DoDynamicsThenSync(step_size);  
 
     DEMSim.SetFamilyContactWildcardValueAll(2, "initialLength", 0.0);
@@ -212,6 +230,9 @@ int main() {
     DEMSim.SetFamilyContactWildcardValueAll(2, "innerInteraction", 2.0);
     DEMSim.SetFamilyContactWildcardValueAll(3, "innerInteraction", 2.0);
     DEMSim.SetFamilyContactWildcardValueAll(1, "innerInteraction", 0.0);
+
+    DEMSim.SetFamilyContactWildcardValue(2, 3, "initialLength", 0.0);
+    DEMSim.SetFamilyContactWildcardValue(2, 3, "innerInteraction", 2.0);
 
     DEMSim.SetFamilyClumpMaterial(1, mat_type_granular_1);
     DEMSim.SetFamilyClumpMaterial(2, mat_type_cube);
@@ -233,7 +254,7 @@ int main() {
     bool cond_1 = true;
     bool cond_2 = true;
 
-    // DEMSim.ChangeFamily(10, 11);
+    DEMSim.ChangeFamily(2, 12);
 
     //  Settle
     for (double t = 0; t < 0.1; t += frame_time) {
@@ -290,8 +311,10 @@ int main() {
             //     cond_1 = false;
             // }
 
-            if (t > 0.50 && cond_2) {
+            if (t > 8.00 && cond_2) {
                 DEMSim.DoDynamicsThenSync(0);
+                DEMSim.ChangeFamily(12, 2);
+
                 DEMSim.ChangeFamily(3, 4);
 
                 cond_2 = false;

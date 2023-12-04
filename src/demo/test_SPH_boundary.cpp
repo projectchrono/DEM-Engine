@@ -38,26 +38,27 @@ int main() {
     // total number of random clump templates to generate
 
     double radius = 0.12 / 5.0 / 2.0;
-    double density = 1000;
+    double density = 100;
 
-    int totalSpheres = 3700;
+    int totalSpheres = 3700;// particles for dp5
+    //int totalSpheres = 6500;// particles for dp6
         //int totalSpheres = 200;
 
     int num_template = 1;
 
     float plane_bottom = -0.35;
 
-    auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.10}, {"mu", 0.00}, {"Crr", 0.00}});
+    auto mat_type_walls = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.10}, {"mu", 0.00}, {"Crr", 0.00}});
 
     auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 10.0e9}, {"nu", 0.35}, {"CoR", 0.15}, {"mu", 0.0}, {"Crr", 0.0}});
+        DEMSim.LoadMaterial({{"E", 1.0e9}, {"nu", 0.35}, {"CoR", 0.15}, {"mu", 0.0}, {"Crr", 0.0}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.50);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.05);
     DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_type_particles, 0.30);
 
     // Make ready for simulation
-    float step_size = 5.0e-7;
+    float step_size = 2.0e-7;
     DEMSim.InstructBoxDomainDimension({-0.5, 0.5}, {-0.5, 0.5}, {-0.5, 1.50});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
@@ -77,17 +78,17 @@ int main() {
     float4 rot = make_float4(0, 0, 1, 0);
 
     fixed->Move(move, rot);
-    std::string shake_pattern_xz = " 0.01 * sin( 50 * 2 * deme::PI * t)";
+    std::string shake_pattern_xz = " 0.01 * sin( 333 * 2 * deme::PI * t)";
     DEMSim.SetFamilyPrescribedLinVel(10, shake_pattern_xz, shake_pattern_xz, shake_pattern_xz);
     DEMSim.SetFamilyPrescribedLinVel(11, "0", "0","0");
 
-    auto top_plane = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/plane_20by20_inverted.obj").string(), mat_type_walls);
-    top_plane->SetInitPos(make_float3(0, 0, 0.30));
+    auto top_plane = DEMSim.AddWavefrontMeshObject("../data/granularFlow/cylinder.obj", mat_type_walls);
+    top_plane->SetInitPos(make_float3(0, 0, 0.28));
     top_plane->SetMass(1.);
-    top_plane->Scale(0.02);
+    top_plane->Scale(make_float3(0.15, 0.15, 0.010));
     top_plane->SetFamily(20);
-    DEMSim.SetFamilyPrescribedLinVel(20, "0", "0", to_string_with_precision(0.00));
-    DEMSim.SetFamilyPrescribedLinVel(21, "0", "0", to_string_with_precision(-0.06/1.0));
+    DEMSim.SetFamilyPrescribedLinVel(20, "0", "0", to_string_with_precision(0));
+    DEMSim.SetFamilyPrescribedLinVel(21, "0", "0", to_string_with_precision(-0.04/1.0));
     // Make an array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
 
@@ -148,7 +149,7 @@ int main() {
     // DEMSim.SetFamilyExtraMargin(1, 0.0 * radius);
 
     DEMSim.SetInitTimeStep(step_size);
-    DEMSim.SetGravitationalAcceleration(make_float3(0, 0.00, -19.81));
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0.00, -9.81));
     DEMSim.Initialize();
     DEMSim.DisableContactBetweenFamilies(20, 1);
     std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;

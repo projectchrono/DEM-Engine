@@ -46,7 +46,7 @@ int main() {
     DEMSim.SetMeshOutputFormat("VTK");
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_BallDrop";
+    out_dir += "/DemoOutput_BallDrop2D";
     create_directory(out_dir);
 
     // E, nu, CoR, mu, Crr...
@@ -76,7 +76,7 @@ int main() {
     auto proj_tracker = DEMSim.Track(projectile);
 
     // Sampler to use
-    auto modelCohesion = DEMSim.ReadContactForceModel("ForceModelSteel2D.cu");
+    auto modelCohesion = DEMSim.ReadContactForceModel("ForceModel2D.cu");
     modelCohesion->SetMustHaveMatProp({"E", "nu", "CoR", "mu", "Crr"});
     modelCohesion->SetMustPairwiseMatProp({"CoR", "mu", "Crr"});
     modelCohesion->SetPerContactWildcards(
