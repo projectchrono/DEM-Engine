@@ -14,6 +14,7 @@ SET(LIBRARIES
 
 SET(DEMOS
 		DEMdemo_Repose
+		DEMdemo_Repose2D
 		DEMdemo_Plow
 		DEMdemo_Sieve
 		DEMdemo_SingleSphereCollide
@@ -22,6 +23,7 @@ SET(DEMOS
 		DEMdemo_Centrifuge
 		DEMdemo_GameOfLife
 		DEMdemo_BallDrop
+		DEMdemo_BallDrop2D
 		DEMdemo_Mixer
 		DEMdemo_GRCPrep_Part1
 		DEMdemo_GRCPrep_Part2

@@ -53,6 +53,11 @@ int main() {
     // two).
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.3);
 
+    // Sampler to use
+    auto modelCohesion = DEMSim.ReadContactForceModel("ForceModel2D.cu");
+    modelCohesion->SetMustHaveMatProp({"E", "nu", "CoR", "mu", "Crr"});
+    modelCohesion->SetMustPairwiseMatProp({"CoR", "mu", "Crr"});
+    modelCohesion->SetPerContactWildcards({"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"});
     /*
     // First create clump type 0 for representing the ground
     float ground_sp_r = 0.02;
@@ -114,7 +119,7 @@ int main() {
     float fill_width = 5.f;
     float fill_height = 2.f * fill_width;
     float fill_bottom = funnel_bottom + fill_width + spacing;
-    
+
     PDSampler sampler(spacing);
     // Use a PDSampler-based clump generation process
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
@@ -155,7 +160,7 @@ int main() {
     DEMSim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Repose";
+    out_dir += "/DemoOutput_Repose2D";
     create_directory(out_dir);
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
