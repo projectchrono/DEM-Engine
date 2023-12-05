@@ -1,18 +1,13 @@
-/////////////////////////////////////////////////////////////
-// The first part is just the standard full Hertzian--Mindlin
-/////////////////////////////////////////////////////////////
-
-// No need to do any contact force calculation if no contact. And it can happen,
-// since we added extra contact margin for adding electrostatic forces before
-// physical contacts emerge.
-if (overlapDepth > 0) {
+if (overlapDepth > 0.0) {
     // Material properties
-    float E_cnt, G_cnt, CoR_cnt, mu_cnt, Crr_cnt;
+
+    // DEM force calculation strategies for grain breakage
+    float E_cnt, G_cnt, CoR_cnt, mu_cnt, Crr_cnt, E_A, E_B;
     {
         // E and nu are associated with each material, so obtain them this way
-        float E_A = E[bodyAMatType];
+        E_A = E[bodyAMatType];
         float nu_A = nu[bodyAMatType];
-        float E_B = E[bodyBMatType];
+        E_B = E[bodyBMatType];
         float nu_B = nu[bodyBMatType];
         matProxy2ContactParam<float>(E_cnt, G_cnt, E_A, nu_A, E_B, nu_B);
         // CoR, mu and Crr are pair-wise, so obtain them this way
@@ -20,7 +15,6 @@ if (overlapDepth > 0) {
         mu_cnt = mu[bodyAMatType][bodyBMatType];
         Crr_cnt = Crr[bodyAMatType][bodyBMatType];
     }
-
     float3 rotVelCPA, rotVelCPB;
     {
         // We also need the relative velocity between A and B in global frame to use in the damping terms
@@ -34,28 +28,31 @@ if (overlapDepth > 0) {
         applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y,
                                                 BOriQ.z);
     }
-
-    // A few re-usables
     float mass_eff, sqrt_Rd, beta;
     float3 vrel_tan;
-    float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
+    float3 delta_tan = make_float3(delta_tan_x, 0.0, delta_tan_z);
+
+    // The (total) relative linear velocity of A relative to B
+    const float3 velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
+    const float projection = dot(velB2A, B2A);
+    vrel_tan = velB2A - projection * B2A;
+    vrel_tan.y = 0.0;
+
+    const float3 v_rot = rotVelCPB - rotVelCPA;
+    // This v_rot is only used for identifying resistance direction
+    const float v_rot_mag = length(v_rot);
+    mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
+
+    // Now we already have sufficient info to update contact history
+    {
+        delta_tan += ts * vrel_tan;
+        const float disp_proj = dot(delta_tan, B2A);
+        delta_tan -= disp_proj * B2A;
+        delta_time += ts;
+    }
 
     // Normal force part
     {
-        // The (total) relative linear velocity of A relative to B
-        const float3 velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
-        const float projection = dot(velB2A, B2A);
-        vrel_tan = velB2A - projection * B2A;
-
-        // Now we already have sufficient info to update contact history
-        {
-            delta_tan += ts * vrel_tan;
-            const float disp_proj = dot(delta_tan, B2A);
-            delta_tan -= disp_proj * B2A;
-            delta_time += ts;
-        }
-
-        mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
         sqrt_Rd = sqrt(overlapDepth * (ARadius * BRadius) / (ARadius + BRadius));
         const float Sn = 2. * E_cnt * sqrt_Rd;
 
@@ -90,7 +87,7 @@ if (overlapDepth > 0) {
         // If should, then compute it (using Schwartz model)
         if (should_add_rolling_resistance) {
             // Tangential velocity (only rolling contribution) of B relative to A, at contact point, in global
-            const float3 v_rot = rotVelCPB - rotVelCPA;
+            const float3 v_rot = make_float3(0.0, rotVelCPB.y - rotVelCPA.y, 0.0);
             // This v_rot is only used for identifying resistance direction
             const float v_rot_mag = length(v_rot);
             if (v_rot_mag > DEME_TINY_FLOAT) {
@@ -99,6 +96,8 @@ if (overlapDepth > 0) {
                 // Its direction is that it `resists' rotation, see picture in
                 // https://en.wikipedia.org/wiki/Rolling_resistance.
                 torque_only_force = (v_rot / v_rot_mag) * (Crr_cnt * length(force));
+                // printf("torque force: %f, %f, %f\n", torque_only_force.x, torque_only_force.y,
+                // torque_only_force.z);
             }
         }
     }
@@ -124,42 +123,10 @@ if (overlapDepth > 0) {
         // printf("tangent force: %f, %f, %f\n", tangent_force.x, tangent_force.y, tangent_force.z);
     }
 
-    // Finally, make sure we update those wildcards (in this case, contact history)
+    // Make sure we update those wildcards (in this case, contact history)
     delta_tan_x = delta_tan.x;
-    delta_tan_y = delta_tan.y;
+    delta_tan_y = 0.0;
     delta_tan_z = delta_tan.z;
-} else {
-    // This is to be more rigorous. If in fact no physical contact, then contact wildcards (such as contact history)
-    // should be cleared (they will also be automatically cleared if the contact is no longer detected).
-    delta_time = 0;
-    delta_tan_x = 0;
-    delta_tan_y = 0;
-    delta_tan_z = 0;
+    force.y = 0.0;
 }
 
-/////////////////////////////////////////////////
-// Now we add an extra electrostatic force
-////////////////////////////////////////////////
-{
-    const float k = 8.99e9;
-    const double ABdist2 = dot(bodyAPos - bodyBPos, bodyAPos - bodyBPos);
-    // If Q_A and Q_B are the same sign, then the force pushes A away from B, so B2A is the direction.
-    force += k * Q_A[AGeo] * Q_B[BGeo] / ABdist2 * (B2A);
-    // Fun part: we can modify the electric charge on the fly. But we have to use atomic, since multiple contacts
-    // can modify the same Q.
-    // But this is not recommend unless you understand what you are doing, and there are a lot of details related to it.
-    // For example, although the charges transfer between geometries, the geometries within one clump cannot
-    // re-distribute elec charges among them, since no contact among geometries in one clump. Still, you could write
-    // your own subroutine to further modify those geometry and/or own wildcards in your script, or within the force
-    // model.
-    // On the other hand, if you do not need to modify the wildcards, you just need to use them for calculating
-    // the force, then that is probably easier and with less strings attached to it. I can see this being more
-    // useful.
-    if (overlapDepth > 0) {  // Exchange the elec charge only in physical contact
-        float avg_Q = (Q_A[AGeo] + Q_B[BGeo]) / 2.;
-        float A_change_dir = (abs(avg_Q - Q_A[AGeo]) > 1e-11) ? (avg_Q - Q_A[AGeo]) / abs(avg_Q - Q_A[AGeo]) : 0.;
-        // Modify the charge they carry... the rate is 1e-8 per second
-        atomicAdd(Q_A + AGeo, A_change_dir * 1e-8 * ts);
-        atomicAdd(Q_B + BGeo, -A_change_dir * 1e-8 * ts);
-    }
-}
