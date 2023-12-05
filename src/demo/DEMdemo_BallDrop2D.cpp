@@ -30,7 +30,7 @@ double randomBetween0and1() {
 }
 
 int main() {
-    float ball_density = 2.2e3;
+    float ball_density = 4.2e3;
     float H = 0.1;
     double R = 0.0254 / 2.;
 

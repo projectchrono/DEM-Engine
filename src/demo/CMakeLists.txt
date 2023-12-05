@@ -36,6 +36,8 @@ SET(DEMOS
 		DEMdemo_SolarSystem
 		DEMdemo_Electrostatic
 		DEMdemo_FlexibleMesh
+		DEMdemo_Hopper_Sphere_Cylinder
+		DEMdemo_Fracture_Box
 )
 
 # ------------------------------------------------------------------------------
