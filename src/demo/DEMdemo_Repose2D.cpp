@@ -112,7 +112,7 @@ int main() {
                 tmp.z = 0;
             } else {
                 tmp.x = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
-                tmp.y = 0;
+                tmp.y = 0.0;
                 tmp.z = ((float)rand() / RAND_MAX) * (max_relpos - min_relpos) + min_relpos;
             }
             tmp += seed_pos;

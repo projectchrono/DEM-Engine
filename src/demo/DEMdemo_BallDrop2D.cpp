@@ -30,7 +30,7 @@ double randomBetween0and1() {
 }
 
 int main() {
-    float ball_density = 4.2e3;
+    float ball_density = 6.2e3;
     float H = 0.1;
     double R = 0.0254 / 2.;
 
@@ -123,7 +123,7 @@ int main() {
 
     float sim_time = 3.0;
     float settle_time = 1.0;
-    unsigned int fps = 10;
+    unsigned int fps = 20;
     float frame_time = 1.0 / fps;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
