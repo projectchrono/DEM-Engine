@@ -82,7 +82,7 @@ int main() {
 
     std::vector<std::shared_ptr<DEMClumpTemplate>> templates_terrain;
     for (int i = 0; i < 11; i++) {
-        templates_terrain.push_back(DEMSim.LoadSphereType(terrain_rad * terrain_rad * terrain_rad * 2.5e3 * 4 / 3 * PI,
+        templates_terrain.push_back(DEMSim.LoadSphereType(terrain_rad * terrain_rad * terrain_rad * 2.0e3 * 4 / 3 * PI,
                                                           terrain_rad, mat_type_terrain));
         terrain_rad += 0.0001 / 2.;
     }
