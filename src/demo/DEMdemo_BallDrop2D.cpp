@@ -79,7 +79,6 @@ int main() {
     modelCohesion->SetMustPairwiseMatProp({"CoR", "mu", "Crr"});
     modelCohesion->SetPerContactWildcards({"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"});
 
-
     std::vector<std::shared_ptr<DEMClumpTemplate>> templates_terrain;
     for (int i = 0; i < 11; i++) {
         templates_terrain.push_back(DEMSim.LoadSphereType(terrain_rad * terrain_rad * terrain_rad * 2.0e3 * 4 / 3 * PI,
@@ -98,7 +97,7 @@ int main() {
     std::uniform_int_distribution<> dist(
         0, templates_terrain.size() - 1);  // Uniform distribution of integers between 0 and n
 
-    //HCPSampler sampler(2.01 * terrain_rad); // to be tested
+    // HCPSampler sampler(2.01 * terrain_rad); // to be tested
     PDSampler sampler(2.01 * terrain_rad);
 
     float3 sample_center = make_float3(0, 0, fullheight / 2 + 1 * terrain_rad);
@@ -164,20 +163,18 @@ int main() {
     // Then drop the ball
     DEMSim.ChangeFamily(2, 0);
     proj_tracker->SetPos(make_float3(0, 0, terrain_max_z + R + H));
-    
+
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_time; t += frame_time) {
-
-            std::cout << "Frame: " << currframe << std::endl;
-            char filename[200], meshfilename[200], cnt_filename[200];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
-            // sprintf(cnt_filename, "%s/Contact_pairs_%04d.csv", out_dir.c_str(), currframe);
-            DEMSim.WriteSphereFile(std::string(filename));
-            DEMSim.WriteMeshFile(std::string(meshfilename));
-            // DEMSim.WriteContactFile(std::string(cnt_filename));
-            currframe++;
-
+        std::cout << "Frame: " << currframe << std::endl;
+        char filename[200], meshfilename[200], cnt_filename[200];
+        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
+        sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
+        // sprintf(cnt_filename, "%s/Contact_pairs_%04d.csv", out_dir.c_str(), currframe);
+        DEMSim.WriteSphereFile(std::string(filename));
+        DEMSim.WriteMeshFile(std::string(meshfilename));
+        // DEMSim.WriteContactFile(std::string(cnt_filename));
+        currframe++;
 
         DEMSim.DoDynamics(frame_time);
         DEMSim.ShowThreadCollaborationStats();

@@ -67,20 +67,20 @@ int main() {
     auto mat_type_flume = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
     auto mat_type_walls = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
 
-    //auto mat_spheres = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.50}, {"Crr", 0.03}});
+    // auto mat_spheres = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.50}, {"Crr", 0.03}});
 
-    //auto mat_cylinders = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.60}, {"Crr", 0.05}});
+    // auto mat_cylinders = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.60}, {"Crr",
+    // 0.05}});
 
     auto mat_spheres = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.40}, {"Crr", 0.04}});
 
     auto mat_cylinders = DEMSim.LoadMaterial({{"E", 1.0e7}, {"nu", 0.35}, {"CoR", 0.85}, {"mu", 0.30}, {"Crr", 0.03}});
 
-
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_cylinders, 0.7);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_cylinders, 0.05);
     DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_spheres, 0.30);
 
-       DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_spheres, 0.7);
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_spheres, 0.7);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_spheres, 0.05);
     DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_spheres, 0.30);
 
@@ -220,7 +220,7 @@ int main() {
     // make cylinders
     //
     {
-        float shift_xyz = 1.0 * (length) * 1.1;
+        float shift_xyz = 1.0 * (length)*1.1;
         float x = 0;
         float y = 0;
 
@@ -309,7 +309,7 @@ int main() {
     //
 
     {
-        float shift_xyz = 1.0 * (radiusSph) * 2.0;
+        float shift_xyz = 1.0 * (radiusSph)*2.0;
         float x = 0;
         float y = 0;
 
@@ -390,7 +390,6 @@ int main() {
     }
 
     DEMSim.DoDynamicsThenSync(0.0);
-
 
     float timeStep = step_size * 500.0;
     int numStep = 7.5 / timeStep;

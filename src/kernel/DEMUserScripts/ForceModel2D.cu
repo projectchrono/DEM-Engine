@@ -1,59 +1,55 @@
-
-
 if (overlapDepth > 0.0) {
     // Material properties
 
-// DEM force calculation strategies for grain breakage
-float E_cnt, G_cnt, CoR_cnt, mu_cnt, Crr_cnt, E_A, E_B;
-{
-    // E and nu are associated with each material, so obtain them this way
-    E_A = E[bodyAMatType];
-    float nu_A = nu[bodyAMatType];
-    E_B = E[bodyBMatType];
-    float nu_B = nu[bodyBMatType];
-    matProxy2ContactParam<float>(E_cnt, G_cnt, E_A, nu_A, E_B, nu_B);
-    // CoR, mu and Crr are pair-wise, so obtain them this way
-    CoR_cnt = CoR[bodyAMatType][bodyBMatType];
-    mu_cnt = mu[bodyAMatType][bodyBMatType];
-    Crr_cnt = Crr[bodyAMatType][bodyBMatType];
-}
-float3 rotVelCPA, rotVelCPB;
-{
-    // We also need the relative velocity between A and B in global frame to use in the damping terms
-    // To get that, we need contact points' rotational velocity in GLOBAL frame
-    // This is local rotational velocity (the portion of linear vel contributed by rotation)
-    rotVelCPA = cross(ARotVel, locCPA);
-    rotVelCPB = cross(BRotVel, locCPB);
-    // This is mapping from local rotational velocity to global
-    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x, AOriQ.y, AOriQ.z);
-    applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
-}
-float mass_eff, sqrt_Rd, beta;
-float3 vrel_tan;
-float3 delta_tan = make_float3(delta_tan_x, 0.0, delta_tan_z);
+    // DEM force calculation strategies for grain breakage
+    float E_cnt, G_cnt, CoR_cnt, mu_cnt, Crr_cnt, E_A, E_B;
+    {
+        // E and nu are associated with each material, so obtain them this way
+        E_A = E[bodyAMatType];
+        float nu_A = nu[bodyAMatType];
+        E_B = E[bodyBMatType];
+        float nu_B = nu[bodyBMatType];
+        matProxy2ContactParam<float>(E_cnt, G_cnt, E_A, nu_A, E_B, nu_B);
+        // CoR, mu and Crr are pair-wise, so obtain them this way
+        CoR_cnt = CoR[bodyAMatType][bodyBMatType];
+        mu_cnt = mu[bodyAMatType][bodyBMatType];
+        Crr_cnt = Crr[bodyAMatType][bodyBMatType];
+    }
+    float3 rotVelCPA, rotVelCPB;
+    {
+        // We also need the relative velocity between A and B in global frame to use in the damping terms
+        // To get that, we need contact points' rotational velocity in GLOBAL frame
+        // This is local rotational velocity (the portion of linear vel contributed by rotation)
+        rotVelCPA = cross(ARotVel, locCPA);
+        rotVelCPB = cross(BRotVel, locCPB);
+        // This is mapping from local rotational velocity to global
+        applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x, AOriQ.y,
+                                                AOriQ.z);
+        applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y,
+                                                BOriQ.z);
+    }
+    float mass_eff, sqrt_Rd, beta;
+    float3 vrel_tan;
+    float3 delta_tan = make_float3(delta_tan_x, 0.0, delta_tan_z);
 
-// The (total) relative linear velocity of A relative to B
-const float3 velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
-const float projection = dot(velB2A, B2A);
-vrel_tan = velB2A - projection * B2A;
-vrel_tan.y=0.0;
+    // The (total) relative linear velocity of A relative to B
+    const float3 velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
+    const float projection = dot(velB2A, B2A);
+    vrel_tan = velB2A - projection * B2A;
+    vrel_tan.y = 0.0;
 
-const float3 v_rot = rotVelCPB - rotVelCPA;
-// This v_rot is only used for identifying resistance direction
-const float v_rot_mag = length(v_rot);
-mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
+    const float3 v_rot = rotVelCPB - rotVelCPA;
+    // This v_rot is only used for identifying resistance direction
+    const float v_rot_mag = length(v_rot);
+    mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
 
-// Now we already have sufficient info to update contact history
-{
-    delta_tan += ts * vrel_tan;
-    const float disp_proj = dot(delta_tan, B2A);
-    delta_tan -= disp_proj * B2A;
-    delta_time += ts;
-}
-
-
-
-
+    // Now we already have sufficient info to update contact history
+    {
+        delta_tan += ts * vrel_tan;
+        const float disp_proj = dot(delta_tan, B2A);
+        delta_tan -= disp_proj * B2A;
+        delta_time += ts;
+    }
 
     // Normal force part
     {
@@ -133,3 +129,4 @@ mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
     delta_tan_z = delta_tan.z;
     force.y = 0.0;
 }
+

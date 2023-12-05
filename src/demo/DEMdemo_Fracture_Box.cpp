@@ -166,7 +166,7 @@ int main() {
     std::ofstream csvFile(nameOutFile);
 
     DEMSim.SetFamilyContactWildcardValueAll(1, "initialLength", 0.0);
-    //DEMSim.SetFamilyContactWildcardValueAll(1, "damage", 0.0);
+    // DEMSim.SetFamilyContactWildcardValueAll(1, "damage", 0.0);
     DEMSim.SetFamilyContactWildcardValueAll(1, "unbroken", 0.0);
 
     // Simulation loop

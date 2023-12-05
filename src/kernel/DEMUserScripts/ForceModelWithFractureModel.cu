@@ -66,7 +66,6 @@ if (unbroken > DEME_TINY_FLOAT) {
     float deltaU = 3.0f * deltaY;
     float deltaD = (overlapDepth - initialLength);  // initial relative displacement considered from the initial overlap
 
-   
     float c = 0.005 * 2.0 * sqrt(mass_eff * kn);
 
     // To A, gravity pulls it towards B, so -B2A direction
@@ -88,7 +87,6 @@ if (unbroken > DEME_TINY_FLOAT) {
     auto tangent_force = -kt * delta_tan;
     // tangent_force = (length(tangent_force) < Fsmax) ? -kt * delta_tan : tangent_force;
     delta_tan = (tangent_force + gt * vrel_tan) / (-kt);
-
 
     // breaking  for excess of tangential stress
     unbroken = (length(tangent_force) > Fsmax) ? -1.0 : unbroken;
