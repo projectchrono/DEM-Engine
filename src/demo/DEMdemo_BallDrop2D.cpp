@@ -73,11 +73,11 @@ int main() {
     // Track the projectile
     auto proj_tracker = DEMSim.Track(projectile);
 
-    // Sampler to use
-    auto modelCohesion = DEMSim.ReadContactForceModel("ForceModel2D.cu");
-    modelCohesion->SetMustHaveMatProp({"E", "nu", "CoR", "mu", "Crr"});
-    modelCohesion->SetMustPairwiseMatProp({"CoR", "mu", "Crr"});
-    modelCohesion->SetPerContactWildcards({"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"});
+    // Force model to use
+    auto model2D = DEMSim.ReadContactForceModel("ForceModel2D.cu");
+    model2D->SetMustHaveMatProp({"E", "nu", "CoR", "mu", "Crr"});
+    model2D->SetMustPairwiseMatProp({"CoR", "mu", "Crr"});
+    model2D->SetPerContactWildcards({"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"});
 
     std::vector<std::shared_ptr<DEMClumpTemplate>> templates_terrain;
     for (int i = 0; i < 11; i++) {
