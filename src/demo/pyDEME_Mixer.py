@@ -97,8 +97,6 @@ if __name__ == "__main__":
     DEMSim.SetErrorOutVelocity(20.)
     # Force the solver to error out if something went crazy. A good practice to add them, but not necessary.
     DEMSim.SetErrorOutAvgContacts(50)
-    DEMSim.SetForceCalcThreadsPerBlock(512)
-    # DEMSim.UseCubForceCollection();
     DEMSim.Initialize()
 
     sim_end = 10.0

@@ -69,6 +69,32 @@ PYBIND11_MODULE(DEME, obj) {
         .def(py::init<>())
         .def_static("SetPathPrefix", &RuntimeDataHelper::SetPathPrefix);
 
+    py::class_<deme::PDSampler>(obj, "PDSampler")
+        .def(py::init<float>())
+        .def("SetSeparation", &deme::PDSampler::SetSeparation)
+        .def("SampleBox",
+             static_cast<std::vector<std::vector<float>> (deme::PDSampler::*)(
+                 const std::vector<float>& center, const std::vector<float>& halfDim)>(&deme::PDSampler::SampleBox),
+             "Generates a sample box")
+
+        .def("SampleSphere",
+             static_cast<std::vector<std::vector<float>> (deme::PDSampler::*)(const std::vector<float>&, float)>(
+                 &deme::PDSampler::SampleSphere))
+
+        .def("SampleCylinderX",
+             static_cast<std::vector<std::vector<float>> (deme::PDSampler::*)(const std::vector<float>&, float, float)>(
+                 &deme::PDSampler::SampleCylinderX))
+
+        .def("SampleCylinderY",
+             static_cast<std::vector<std::vector<float>> (deme::PDSampler::*)(const std::vector<float>&, float, float)>(
+                 &deme::PDSampler::SampleCylinderY))
+
+        .def("SampleCylinderZ",
+             static_cast<std::vector<std::vector<float>> (deme::PDSampler::*)(const std::vector<float>&, float, float)>(
+                 &deme::PDSampler::SampleCylinderZ))
+
+        .def("GetSeparation", &deme::Sampler::GetSeparation);
+
     py::class_<deme::GridSampler>(obj, "GridSampler")
         .def(py::init<float>())
         .def("SetSeparation", &deme::GridSampler::SetSeparation)
@@ -306,7 +332,7 @@ PYBIND11_MODULE(DEME, obj) {
              "Reduce contact forces to accelerations right after calculating them, in the same kernel. This may give "
              "some performance boost if you have only polydisperse spheres, no clumps.",
              py::arg("flag") = true)
-        .def("SetFamilyFixed", &deme::DEMSolver::SetFamilyFixed, "Mark all entities in this family to be fixed.")
+
         .def("SetInitBinSize", &deme::DEMSolver::SetInitBinSize,
              " Explicitly instruct the bin size (for contact detection) that the solver should use.")
         .def("SetOutputFormat",
@@ -327,16 +353,15 @@ PYBIND11_MODULE(DEME, obj) {
              "Set the strategy for auto-adapting time step size (NOT implemented, no effect yet).")
         .def("SetIntegrator",
              static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetIntegrator),
-             "Set the time integrator for this simulator")
+             "Set the time integrator for this simulator.")
         .def("SetIntegrator",
              static_cast<void (deme::DEMSolver::*)(deme::TIME_INTEGRATOR)>(&deme::DEMSolver::SetIntegrator),
-             "Set the time integrator for this simulator")
+             "Set the time integrator for this simulator.")
         .def("GetInitStatus", &deme::DEMSolver::GetInitStatus, "Return whether this simulation system is initialized.")
         .def("GetJitStringSubs", &deme::DEMSolver::GetJitStringSubs,
              "Get the jitification string substitution laundary list. It is needed by some of this simulation system's "
              "friend classes.")
-        .def("SetInitBinSize", &deme::DEMSolver::SetInitBinSize,
-             "Explicitly instruct the bin size (for contact detection) that the solver should use.")
+
         .def("SetInitBinSizeAsMultipleOfSmallestSphere", &deme::DEMSolver::SetInitBinSizeAsMultipleOfSmallestSphere,
              "Explicitly instruct the bin size (for contact detection) that the solver should use, as a multiple of "
              "the radius of the smallest sphere in simulation.")
@@ -354,13 +379,12 @@ PYBIND11_MODULE(DEME, obj) {
              "Instruct the solver to use frictonless Hertzian contact force model")
         .def("DefineContactForceModel", &deme::DEMSolver::DefineContactForceModel,
              py::return_value_policy::reference_internal,
-             "Define a custom contact force model by a string. Returns a shared_ptr to the force model in use")
+             "Define a custom contact force model by a string. Returns a pointer to the force model in use.")
         .def("ReadContactForceModel", &deme::DEMSolver::ReadContactForceModel,
              py::return_value_policy::reference_internal,
              "Read user custom contact force model from a file (which by default should reside in "
-             "kernel/DEMUserScripts). Returns a shared_ptr to the force model in use")
-        .def("DefineContactForceModel", &deme::DEMSolver::DefineContactForceModel,
-             py::return_value_policy::reference_internal)
+             "kernel/DEMUserScripts). Returns a pointer to the force model in use.")
+
         .def("GetContactForceModel", &deme::DEMSolver::GetContactForceModel, "Get the current force model",
              py::return_value_policy::reference_internal)
         .def("SetSortContactPairs", &deme::DEMSolver::SetSortContactPairs,
@@ -382,14 +406,9 @@ PYBIND11_MODULE(DEME, obj) {
              "expanded for the purpose of contact detection (safe, and creates false positives). If fix is set to "
              "true, then this expand factor does not change even if the user uses variable time step size.",
              py::arg("beta"), py::arg("fix") = true)
-        .def("SetMaxVelocity", &deme::DEMSolver::SetMaxVelocity,
-             "Set the maximum expected particle velocity. The solver will not use a velocity larger than this for "
-             "determining the margin thickness, and velocity larger than this will be considered a system anomaly.")
+
         .def("SetExpandSafetyType", &deme::DEMSolver::SetExpandSafetyType,
-             "A string. If 'auto': the solver automatically derives")
-        .def("SetExpandSafetyMultiplier", &deme::DEMSolver::SetExpandSafetyMultiplier,
-             "Assign a multiplier to our estimated maximum system velocity, when deriving the thinckness of the "
-             "contact safety margin")
+             "A string. If 'auto': the solver automatically derives.")
         .def("SetExpandSafetyAdder", &deme::DEMSolver::SetExpandSafetyAdder,
              "Set a `base' velocity, which we will always add to our estimated maximum system velocity, when deriving "
              "the thinckness of the contact `safety' margin")
@@ -399,9 +418,7 @@ PYBIND11_MODULE(DEME, obj) {
         .def("SetMaxTriangleInBin", &deme::DEMSolver::SetMaxTriangleInBin,
              "Used to force the solver to error out when there are too many spheres in a bin. A huge number can be "
              "used to discourage this error type")
-        .def("SetErrorOutVelocity", &deme::DEMSolver::SetErrorOutVelocity,
-             "Set the velocity which when exceeded, the solver errors out. A huge number can be used to discourage "
-             "this error type. Defaulted to 5e4")
+
         .def("SetErrorOutAvgContacts", &deme::DEMSolver::SetErrorOutAvgContacts,
              "Set the average number of contacts a sphere has, before the solver errors out. A huge number can be used "
              "to discourage this error type. Defaulted to 100")
@@ -507,16 +524,16 @@ PYBIND11_MODULE(DEME, obj) {
              static_cast<std::shared_ptr<deme::DEMMeshConnected> (deme::DEMSolver::*)(
                  const std::string&, const std::shared_ptr<deme::DEMMaterial>&, bool, bool)>(
                  &deme::DEMSolver::AddWavefrontMeshObject),
-             "Load a mesh-represented object", py::arg("filename"), py::arg("mat"), py::arg("load_normals") = true,
+             "Load a mesh-represented object.", py::arg("filename"), py::arg("mat"), py::arg("load_normals") = true,
              py::arg("load_uv") = false)
         .def("AddWavefrontMeshObject",
              static_cast<std::shared_ptr<deme::DEMMeshConnected> (deme::DEMSolver::*)(deme::DEMMeshConnected&)>(
                  &deme::DEMSolver::AddWavefrontMeshObject),
-             "Load a mesh-represented object")
+             "Load a mesh-represented object.")
         .def("AddWavefrontMeshObject",
              static_cast<std::shared_ptr<deme::DEMMeshConnected> (deme::DEMSolver::*)(
                  const std::string& filename, bool, bool)>(&deme::DEMSolver::AddWavefrontMeshObject),
-             "Load a mesh-represented object", py::arg("filename"), py::arg("load_normals") = true,
+             "Load a mesh-represented object.", py::arg("filename"), py::arg("load_normals") = true,
              py::arg("load_uv") = false)
         .def("LoadClumpType",
              static_cast<std::shared_ptr<deme::DEMClumpTemplate> (deme::DEMSolver::*)(
@@ -577,40 +594,53 @@ PYBIND11_MODULE(DEME, obj) {
              "Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial "
              "location means the location of the clumps' CoM coordinates in the global frame.")
 
+        .def("SetFamilyFixed", &deme::DEMSolver::SetFamilyFixed, "Mark all entities in this family to be fixed.")
+
         .def("SetFamilyPrescribedAngVel",
-             static_cast<void (deme::DEMSolver::*)(unsigned int ID, const std::string&, const std::string&,
-                                                   const std::string&, bool dictate)>(
+             static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, const std::string&,
+                                                   const std::string&, bool)>(
                  &deme::DEMSolver::SetFamilyPrescribedAngVel),
-             "Set the prescribed angular velocity to all entities in a family. If dictate is set to true, then this "
-             "family will not be fluenced by the force exerted from other simulation entites (both linear and "
-             "rotational motions).",
+             "Let the linear velocities of all entites in this family always keep `as is', and not influenced by the "
+             "force exerted from other simulation entites.",
              py::arg("ID"), py::arg("velX"), py::arg("velY"), py::arg("velZ"), py::arg("dictate") = true)
         .def("SetFamilyPrescribedAngVel",
-             static_cast<void (deme::DEMSolver::*)(unsigned int ID)>(&deme::DEMSolver::SetFamilyPrescribedAngVel),
-             "Set the prescribed angular velocity to all entities in a family. If dictate is set to true, then this "
-             "family will not be fluenced by the force exerted from other simulation entites (both linear and "
-             "rotational motions).")
+             static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedAngVel),
+             "Let the linear velocities of all entites in this family always keep `as is', and not influenced by the "
+             "force exerted from other simulation entites.")
 
-        .def("SetFamilyPrescribedLinVel",
-             static_cast<void (deme::DEMSolver::*)(unsigned int ID)>(&deme::DEMSolver::SetFamilyPrescribedLinVel),
-             "Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this "
-             "family will not be influenced by the force exerted from other simulation entites (both linear and "
-             "rotational motions).")
         .def("SetFamilyPrescribedLinVel",
              static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, const std::string&,
                                                    const std::string&, bool)>(
                  &deme::DEMSolver::SetFamilyPrescribedLinVel),
              "Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this "
              "family will not be influenced by the force exerted from other simulation entites (both linear and "
-             "rotational motions).")
-        .def("SetFamilyPrescribedPosition",
-             static_cast<void (deme::DEMSolver::*)(unsigned int ID)>(&deme::DEMSolver::SetFamilyPrescribedPosition),
-             "Keep the positions of all entites in this family to remain exactly the user-specified values.")
+             "rotational motions).",
+             py::arg("ID"), py::arg("velX"), py::arg("velY"), py::arg("velZ"), py::arg("dictate") = true)
+        .def("SetFamilyPrescribedLinVel",
+             static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedLinVel),
+             "Let the linear velocities of all entites in this family always keep `as is', and not influenced by the "
+             "force exerted from other simulation entites.")
+
         .def("SetFamilyPrescribedPosition",
              static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, const std::string&,
                                                    const std::string&, bool)>(
                  &deme::DEMSolver::SetFamilyPrescribedPosition),
-             "Keep the positions of all entites in this family to remain exactly the user-specified values.")
+             "Keep the positions of all entites in this family to remain exactly the user-specified values.",
+             py::arg("ID"), py::arg("velX"), py::arg("velY"), py::arg("velZ"), py::arg("dictate") = true)
+        .def("SetFamilyPrescribedPosition",
+             static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedPosition),
+             "Keep the positions of all entites in this family to remain as is.")
+
+        .def("SetFamilyPrescribedQuaternion",
+             static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, bool)>(
+                 &deme::DEMSolver::SetFamilyPrescribedQuaternion),
+             "Keep the orientation quaternions of all entites in this family to remain exactly the user-specified "
+             "values.",
+             py::arg("ID"), py::arg("q_formula"), py::arg("dictate") = true)
+        .def("SetFamilyPrescribedQuaternion",
+             static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedQuaternion),
+             "Let the orientation quaternions of all entites in this family always keep `as is'.")
+
         .def("AddFamilyPrescribedAcc", &deme::DEMSolver::AddFamilyPrescribedAcc,
              "The entities in this family will always experienced an extra acceleration defined using this method.")
         .def("AddFamilyPrescribedAngAcc", &deme::DEMSolver::AddFamilyPrescribedAngAcc,
@@ -750,51 +780,7 @@ PYBIND11_MODULE(DEME, obj) {
         .def("EnableContactBetweenFamilies", &deme::DEMSolver::EnableContactBetweenFamilies,
              "Re-enable contact between 2 families after the system is initialized.")
         .def("DisableFamilyOutput", &deme::DEMSolver::DisableFamilyOutput,
-             "Prevent entites associated with this family to be outputted to files.")
-        .def("SetFamilyFixed", &deme::DEMSolver::SetFamilyFixed, "Mark all entities in this family to be fixed.")
-        .def("SetFamilyPrescribedLinVel",
-             static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, const std::string&,
-                                                   const std::string&, bool)>(
-                 &deme::DEMSolver::SetFamilyPrescribedLinVel),
-             "Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this "
-             "family will not be influenced by the force exerted from other simulation entites (both linear and "
-             "rotational motions).",
-             py::arg("ID"), py::arg("velX"), py::arg("velY"), py::arg("velZ"), py::arg("dictate") = true)
-        .def("SetFamilyPrescribedLinVel",
-             static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedLinVel),
-             "Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this "
-             "family will not be influenced by the force exerted from other simulation entites (both linear and "
-             "rotational motions).")
-        .def("SetFamilyPrescribedAngVel",
-             static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, const std::string&,
-                                                   const std::string&, bool)>(
-                 &deme::DEMSolver::SetFamilyPrescribedAngVel),
-             "Let the linear velocities of all entites in this family always keep `as is', and not influenced by the "
-             "force exerted from other simulation entites.",
-             py::arg("ID"), py::arg("velX"), py::arg("velY"), py::arg("velZ"), py::arg("dictate") = true)
-        .def("SetFamilyPrescribedAngVel",
-             static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedAngVel),
-             "Let the linear velocities of all entites in this family always keep `as is', and not influenced by the "
-             "force exerted from other simulation entites.")
-        .def("SetFamilyPrescribedPosition",
-             static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, const std::string&,
-                                                   const std::string&, bool)>(
-                 &deme::DEMSolver::SetFamilyPrescribedPosition),
-             "Keep the positions of all entites in this family to remain exactly the user-specified values.",
-             py::arg("ID"), py::arg("velX"), py::arg("velY"), py::arg("velZ"), py::arg("dictate") = true)
-        .def("SetFamilyPrescribedPosition",
-             static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedPosition),
-             "Keep the positions of all entites in this family to remain as is")
-        .def("SetFamilyPrescribedQuaternion",
-             static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, bool)>(
-                 &deme::DEMSolver::SetFamilyPrescribedQuaternion),
-             "Keep the orientation quaternions of all entites in this family to remain exactly the user-specified "
-             "values.",
-             py::arg("ID"), py::arg("q_formula"), py::arg("dictate") = true)
-        .def("SetFamilyPrescribedQuaternion",
-             static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedQuaternion),
-             "Keep the orientation quaternions of all entites in this family to remain exactly the user-specified "
-             "values.");
+             "Prevent entites associated with this family to be outputted to files.");
 
     py::class_<deme::DEMMaterial, std::shared_ptr<deme::DEMMaterial>>(obj, "DEMMaterial")
         .def(py::init<const std::unordered_map<std::string, float>&>())
