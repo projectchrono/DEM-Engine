@@ -23,7 +23,7 @@ int main() {
     DEMSolver DEMSim;
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ)
+    DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ);
 
     // Define materials
     auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.5}});
@@ -41,18 +41,17 @@ int main() {
     // X-dir bounding planes
     DEMSim.AddBCPlane(make_float3(-world_x_size / 2, 0, 0), make_float3(1, 0, 0), mat_type_terrain);
     DEMSim.AddBCPlane(make_float3(world_x_size / 2, 0, 0), make_float3(-1, 0, 0), mat_type_terrain);
-    
+
     // Then the ground particle template
     DEMClumpTemplate shape_template1, shape_template2;
     shape_template1.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat.csv").string());
     shape_template2.ReadComponentFromFile((GET_DATA_PATH() / "clumps/triangular_flat_6comp.csv").string());
-    std::vector<DEMClumpTemplate> shape_template = {shape_template2, shape_template2, shape_template1,
-                                                    shape_template1, shape_template1, shape_template1,
-                                                    shape_template1};
+    std::vector<DEMClumpTemplate> shape_template = {shape_template2, shape_template2, shape_template1, shape_template1,
+                                                    shape_template1, shape_template1, shape_template1};
     // Calculate its mass and MOI
-    float mass1 = 2.6e3 * 4.2520508;  
+    float mass1 = 2.6e3 * 4.2520508;
     float3 MOI1 = make_float3(1.6850426, 1.6375114, 2.1187753) * 2.6e3;
-    float mass2 = 2.6e3 * 2.1670011;  
+    float mass2 = 2.6e3 * 2.1670011;
     float3 MOI2 = make_float3(0.57402126, 0.60616378, 0.92890173) * 2.6e3;
     std::vector<float> mass = {mass2, mass2, mass1, mass1, mass1, mass1, mass1};
     std::vector<float3> MOI = {MOI2, MOI2, MOI1, MOI1, MOI1, MOI1, MOI1};
@@ -73,10 +72,8 @@ int main() {
         std::cout << "MOIY: " << this_template.MOI.y << std::endl;
         std::cout << "MOIZ: " << this_template.MOI.z << std::endl;
         std::cout << "=====================" << std::endl;
-        std::for_each(this_template.radii.begin(), this_template.radii.end(),
-                        [scaling](float& r) { r *= scaling; });
-        std::for_each(this_template.relPos.begin(), this_template.relPos.end(),
-                        [scaling](float3& r) { r *= scaling; });
+        std::for_each(this_template.radii.begin(), this_template.radii.end(), [scaling](float& r) { r *= scaling; });
+        std::for_each(this_template.relPos.begin(), this_template.relPos.end(), [scaling](float3& r) { r *= scaling; });
         this_template.materials = std::vector<std::shared_ptr<DEMMaterial>>(this_template.nComp, mat_type_terrain);
 
         // Give these templates names, 0000, 0001 etc.
