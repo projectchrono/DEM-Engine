@@ -148,7 +148,7 @@ int main() {
     DEMSim.SetExpandSafetyAdder(1.0);
     // You usually don't have to worry about initial bin size. In very rare cases, init bin size is so bad that auto bin
     // size adaption is effectless, and you should notice in that case kT runs extremely slow. Then in that case setting
-    // init bin size may save the simulation. 
+    // init bin size may save the simulation.
     // DEMSim.SetInitBinSize(0.1);
     // DEMSim.DisableAdaptiveBinSize();
 
