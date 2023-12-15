@@ -20,7 +20,7 @@
 using namespace deme;
 using namespace std::filesystem;
 
-inline bool near(float a, float b, float t = 1e-6) {
+inline bool is_near(float a, float b, float t = 1e-6) {
     if (std::abs(a - b) < t) {
         return true;
     }
@@ -192,7 +192,7 @@ void SphereRollUpIncline() {
             std::cout << "Angular velocity (mag) of the sphere: " << angVel_mag << std::endl;
             if (vel_mag < 1e-2) {
                 std::cout << "It is stationary" << std::endl;
-            } else if (near(angVel_mag * sphere_rad, vel_mag, 1e-2)) {
+            } else if (is_near(angVel_mag * sphere_rad, vel_mag, 1e-2)) {
                 std::cout << "It is pure rolling" << std::endl;
             } else if (angVel_mag * sphere_rad < 1e-2) {
                 std::cout << "It is pure slipping" << std::endl;
@@ -219,7 +219,7 @@ void SphereStack() {
             for (float m_top = 0.1; m_top <= 50.0; m_top += 0.02) {
                 DEMSolver DEMSim;
                 SetSolverProp(DEMSim);
-                DEMSim.SetVerbosity(ERROR);
+                DEMSim.SetVerbosity("ERROR");
 
                 auto mat_type_1 =
                     DEMSim.LoadMaterial({{"E", 2e6}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", mu}, {"Crr", Crr}});
@@ -257,7 +257,7 @@ void SphereStack() {
                 out_dir += "/DemoOutput_TestPack";
                 create_directory(out_dir);
                 int i = 0;
-                while (!near(pos.z, top_sp_Z, 1e-4)) {
+                while (!is_near(pos.z, top_sp_Z, 1e-4)) {
                     top_sp_Z = pos.z;
                     if (run_num == 0) {
                         char filename[100];

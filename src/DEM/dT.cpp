@@ -1453,7 +1453,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
         outstrstream << "," + OUTPUT_FILE_FORCE_X_NAME + "," + OUTPUT_FILE_FORCE_Y_NAME + "," +
                             OUTPUT_FILE_FORCE_Z_NAME;
     }
-    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::POINT) {
+    if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::DEME_POINT) {
         outstrstream << "," + OUTPUT_FILE_X_COL_NAME + "," + OUTPUT_FILE_Y_COL_NAME + "," + OUTPUT_FILE_Z_COL_NAME;
     }
     // if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::COMPONENT) {
@@ -1540,7 +1540,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
             hostApplyOriQToVector3(cntPntA.x, cntPntA.y, cntPntA.z, oriQA.w, oriQA.x, oriQA.y, oriQA.z);
             cntPntA += CoM;
         }
-        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::POINT) {
+        if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::DEME_POINT) {
             // oriQ is updated already... whereas the contact point is effectively last step's... That's unfortunate.
             // Should we do somthing ahout it?
             outstrstream << "," << cntPntA.x << "," << cntPntA.y << "," << cntPntA.z;

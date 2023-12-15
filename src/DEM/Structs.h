@@ -331,7 +331,7 @@ enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
     }
 
 // Jitify options include suppressing variable-not-used warnings, but since we don't use CUB block primitives, we don't
-// need std::string(CUDA_TOOLKIT_HEADERS).
+// need std::string(DEME_CUDA_TOOLKIT_HEADERS).
 #define DEME_JITIFY_OPTIONS                                                                       \
     {                                                                                             \
         "-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(), \
@@ -482,7 +482,7 @@ struct familyPair_t {
     unsigned int ID2;
 };
 
-enum class VAR_TS_STRAT { CONST, MAX_VEL, INT_GAP };
+enum class VAR_TS_STRAT { DEME_CONST, MAX_VEL, INT_GAP };
 
 class ClumpTemplateFlatten {
   public:
@@ -526,7 +526,7 @@ struct SolverFlags {
     bool isStepConst = true;
     bool isExpandFactorFixed = false;
     // The strategy for selecting the variable time step size
-    VAR_TS_STRAT stepSizeStrat = VAR_TS_STRAT::CONST;
+    VAR_TS_STRAT stepSizeStrat = VAR_TS_STRAT::DEME_CONST;
     // Whether instructed to use jitification for mass properties and clump components (default to no and it is
     // recommended)
     bool useClumpJitify = false;

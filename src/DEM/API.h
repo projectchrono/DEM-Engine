@@ -92,7 +92,7 @@ class DEMSolver {
     /// @return Number of potential contact pairs.
     size_t GetNumContacts() const { return dT->getNumContacts(); }
     /// Get the current time step size in simulation.
-    double GetTimeStepSize() const;
+    double GetTimeStepSize() const { return m_ts_size; }
     /// Get the current expand factor in simulation.
     float GetExpandFactor() const;
     /// Set the number of dT steps before it waits for a contact-pair info update from kT.
@@ -1151,7 +1151,7 @@ class DEMSolver {
     OUTPUT_FORMAT m_cnt_out_format = OUTPUT_FORMAT::CSV;
     // The output file content for contact pairs
     unsigned int m_cnt_out_content = CNT_OUTPUT_CONTENT::GEO_ID | CNT_OUTPUT_CONTENT::FORCE |
-                                     CNT_OUTPUT_CONTENT::POINT | CNT_OUTPUT_CONTENT::CNT_WILDCARD;
+                                     CNT_OUTPUT_CONTENT::DEME_POINT | CNT_OUTPUT_CONTENT::CNT_WILDCARD;
     // The output file format for meshes
     MESH_FORMAT m_mesh_out_format = MESH_FORMAT::VTK;
     // If the solver should output wildcards to file

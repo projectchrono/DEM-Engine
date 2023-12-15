@@ -575,6 +575,12 @@ void OBJ::GetVertex(GeometryVertex& v, const char* face) const {
     }
 }
 
+#if defined(_WIN32) || defined(_WIN64)
+    #define STRCASECMP _stricmp
+#else
+    #define STRCASECMP strcasecmp
+#endif
+
 int OBJ::ParseLine(int /*lineno*/,
                    int argc,
                    const char** argv)  // return true to continue parsing, return false to abort parsing process
@@ -584,27 +590,27 @@ int OBJ::ParseLine(int /*lineno*/,
     if (argc >= 1) {
         const char* foo = argv[0];
         if (*foo != '#') {
-            if (strcasecmp(argv[0], "v") == 0 && argc == 4) {
+            if (STRCASECMP(argv[0], "v") == 0 && argc == 4) {
                 float vx = (float)atof(argv[1]);
                 float vy = (float)atof(argv[2]);
                 float vz = (float)atof(argv[3]);
                 mVerts.push_back(vx);
                 mVerts.push_back(vy);
                 mVerts.push_back(vz);
-            } else if (strcasecmp(argv[0], "vt") == 0 && (argc == 3 || argc == 4)) {
+            } else if (STRCASECMP(argv[0], "vt") == 0 && (argc == 3 || argc == 4)) {
                 // ignore 3rd component if present
                 float tx = (float)atof(argv[1]);
                 float ty = (float)atof(argv[2]);
                 mTexels.push_back(tx);
                 mTexels.push_back(ty);
-            } else if (strcasecmp(argv[0], "vn") == 0 && argc == 4) {
+            } else if (STRCASECMP(argv[0], "vn") == 0 && argc == 4) {
                 float normalx = (float)atof(argv[1]);
                 float normaly = (float)atof(argv[2]);
                 float normalz = (float)atof(argv[3]);
                 mNormals.push_back(normalx);
                 mNormals.push_back(normaly);
                 mNormals.push_back(normalz);
-            } else if (strcasecmp(argv[0], "f") == 0 && argc >= 4) {
+            } else if (STRCASECMP(argv[0], "f") == 0 && argc >= 4) {
                 // ***ALEX*** do not use the BuildMesh stuff
                 ////int vcount = argc - 1;
                 const char* argvT[3];

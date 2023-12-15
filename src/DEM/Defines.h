@@ -6,7 +6,7 @@
 #ifndef DEME_MISC_DEFINES
 #define DEME_MISC_DEFINES
 
-#include <limits>
+// #include <limits>
 #include <stdint.h>
 #include <algorithm>
 #include <cmath>
@@ -119,7 +119,7 @@ constexpr float BIN_SIZE_MAX_CHANGE_RATE = 0.2;
 // Verbosity
 enum VERBOSITY {
     QUIET = 0,
-    ERROR = 10,
+    DEME_ERROR = 10,
     WARNING = 20,
     INFO = 30,
     STEP_ANOMALY = 32,
@@ -157,7 +157,7 @@ enum class SPATIAL_DIR { X, Y, Z, NONE };
 enum CNT_OUTPUT_CONTENT {
     CNT_TYPE = 0,   // Owner numbers and contact type
     FORCE = 1,      // Force (that owner 1 feels) xyz components in global
-    POINT = 2,      // Contact point in global frame
+    DEME_POINT = 2,      // Contact point in global frame
     COMPONENT = 4,  // The component numbers (such as triangle number for a mesh) that involved in this contact
     NORMAL = 8,     // Contact normal direction in global frame
     TORQUE = 16,    // This is a standalone force and produces torque only (typical example: rolling resistance force)

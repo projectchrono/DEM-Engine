@@ -13,6 +13,12 @@
 
 #include <jitify/jitify.hpp>
 
+#if defined(_WIN32) || defined(_WIN64)
+    #undef max
+    #undef min
+    #undef strtok_r
+#endif
+
 class JitHelper {
   public:
     class Header {

@@ -30,13 +30,11 @@ double randomBetween0and1() {
 }
 
 int main() {
-    float ball_density = {2.2e3};
-    float H = {0.1};
+    float ball_density = 6.2e3;
+    float H = 0.1;
     double R = 0.0254 / 2.;
 
-    int run_num = 0;
-
-    double terrain_rad = 0.002 / 2.;
+    double terrain_rad = 0.006 / 2.;
 
     DEMSolver DEMSim;
     // Output less info at initialization
@@ -75,17 +73,15 @@ int main() {
     // Track the projectile
     auto proj_tracker = DEMSim.Track(projectile);
 
-    // Sampler to use
-    auto modelCohesion = DEMSim.ReadContactForceModel("ForceModel2D.cu");
-    modelCohesion->SetMustHaveMatProp({"E", "nu", "CoR", "mu", "Crr"});
-    modelCohesion->SetMustPairwiseMatProp({"CoR", "mu", "Crr"});
-    modelCohesion->SetPerContactWildcards(
-        {"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z", "innerInteraction", "initialLength"});
+    // Force model to use
+    auto model2D = DEMSim.ReadContactForceModel("ForceModel2D.cu");
+    model2D->SetMustHaveMatProp({"E", "nu", "CoR", "mu", "Crr"});
+    model2D->SetMustPairwiseMatProp({"CoR", "mu", "Crr"});
+    model2D->SetPerContactWildcards({"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"});
 
-    // 11 types of spheres, diameter from 0.25cm to 0.35cm
     std::vector<std::shared_ptr<DEMClumpTemplate>> templates_terrain;
-    for (int i = 0; i < 1; i++) {
-        templates_terrain.push_back(DEMSim.LoadSphereType(terrain_rad * terrain_rad * terrain_rad * 2.5e3 * 4 / 3 * PI,
+    for (int i = 0; i < 11; i++) {
+        templates_terrain.push_back(DEMSim.LoadSphereType(terrain_rad * terrain_rad * terrain_rad * 2.0e3 * 4 / 3 * PI,
                                                           terrain_rad, mat_type_terrain));
         terrain_rad += 0.0001 / 2.;
     }
@@ -96,53 +92,24 @@ int main() {
     float sample_halfwidth = world_size / 2 - 2 * terrain_rad;
     float init_v = 0.01;
 
-    // If first run, settle the material bed, then save to file; if not first run, just load the saved material
-    // bed file.
-    if (run_num > 0) {
-        char cp_filename[200];
-        sprintf(cp_filename, "%s/bed.csv", out_dir.c_str());
+    std::random_device rd;   // Random number device to seed the generator
+    std::mt19937 gen(rd());  // Mersenne Twister generator
+    std::uniform_int_distribution<> dist(
+        0, templates_terrain.size() - 1);  // Uniform distribution of integers between 0 and n
 
-        auto clump_xyz = DEMSim.ReadClumpXyzFromCsv(std::string(cp_filename));
-        auto clump_quaternion = DEMSim.ReadClumpQuatFromCsv(std::string(cp_filename));
-        for (int i = 0; i < templates_terrain.size(); i++) {
-            char t_name[20];
-            sprintf(t_name, "%04d", i);
+    // HCPSampler sampler(2.01 * terrain_rad); // to be tested
+    PDSampler sampler(2.01 * terrain_rad);
 
-            auto this_xyz = clump_xyz[std::string(t_name)];
-            auto this_quaternion = clump_quaternion[std::string(t_name)];
-            auto batch = DEMSim.AddClumps(templates_terrain[i], this_xyz);
-            batch->SetOriQ(this_quaternion);
-            num_particle += this_quaternion.size();
-        }
-    } else {
-        std::random_device rd;   // Random number device to seed the generator
-        std::mt19937 gen(rd());  // Mersenne Twister generator
-        std::uniform_int_distribution<> dist(
-            0, templates_terrain.size() - 1);  // Uniform distribution of integers between 0 and n
-
-        HCPSampler sampler(2.01 * terrain_rad);
-        // while (sample_z < fullheight) {
-        float3 sample_center = make_float3(0, 0, fullheight / 2 + 1 * terrain_rad);
-        auto input_xyz = sampler.SampleBox(sample_center, make_float3(sample_halfwidth, 0.f, fullheight / 2.));
-        std::vector<std::shared_ptr<DEMClumpTemplate>> template_to_use(input_xyz.size());
-        for (unsigned int i = 0; i < input_xyz.size(); i++) {
-            template_to_use[i] = templates_terrain[dist(gen)];
-        }
-        DEMSim.AddClumps(template_to_use, input_xyz);
-        num_particle += input_xyz.size();
-        sample_z += 2.01 * terrain_rad;
-        //}
+    float3 sample_center = make_float3(0, 0, fullheight / 2 + 1 * terrain_rad);
+    auto input_xyz = sampler.SampleBox(sample_center, make_float3(sample_halfwidth, 0.f, fullheight / 2.));
+    std::vector<std::shared_ptr<DEMClumpTemplate>> template_to_use(input_xyz.size());
+    for (unsigned int i = 0; i < input_xyz.size(); i++) {
+        template_to_use[i] = templates_terrain[dist(gen)];
     }
+    DEMSim.AddClumps(template_to_use, input_xyz);
+    num_particle += input_xyz.size();
 
     std::cout << "Total num of particles: " << num_particle << std::endl;
-
-    // Now add a plane to compress the sample
-    auto compressor = DEMSim.AddExternalObject();
-    compressor->AddPlane(make_float3(0, 0, 0), make_float3(0, 0, -1), mat_type_terrain);
-    compressor->SetFamily(10);
-    DEMSim.SetFamilyFixed(10);
-    DEMSim.DisableContactBetweenFamilies(0, 10);
-    auto compressor_tracker = DEMSim.Track(compressor);
 
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
     auto total_mass_finder = DEMSim.CreateInspector("clump_mass");
@@ -154,8 +121,8 @@ int main() {
     DEMSim.Initialize();
 
     float sim_time = 3.0;
-    float settle_time = 2.0;
-    unsigned int fps = 10;
+    float settle_time = 1.0;
+    unsigned int fps = 20;
     float frame_time = 1.0 / fps;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
@@ -163,25 +130,23 @@ int main() {
     unsigned int currframe = 0;
     double terrain_max_z;
 
-    if (run_num == 0) {
-        // We can let it settle first
-        for (float t = 0; t < settle_time; t += frame_time) {
-            std::cout << "Frame: " << currframe << std::endl;
-            char filename[200], meshfilename[200];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
-            DEMSim.WriteSphereFile(std::string(filename));
-            DEMSim.WriteMeshFile(std::string(meshfilename));
-            currframe++;
+    // We can let it settle first
+    for (float t = 0; t < settle_time; t += frame_time) {
+        std::cout << "Frame: " << currframe << std::endl;
+        char filename[200], meshfilename[200];
+        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
+        sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
+        DEMSim.WriteSphereFile(std::string(filename));
+        DEMSim.WriteMeshFile(std::string(meshfilename));
+        currframe++;
 
-            DEMSim.DoDynamicsThenSync(frame_time);
-            DEMSim.ShowThreadCollaborationStats();
-        }
-
-        char cp_filename[200];
-        sprintf(cp_filename, "%s/bed.csv", out_dir.c_str());
-        DEMSim.WriteClumpFile(std::string(cp_filename));
+        DEMSim.DoDynamicsThenSync(frame_time);
+        DEMSim.ShowThreadCollaborationStats();
     }
+
+    char cp_filename[200];
+    sprintf(cp_filename, "%s/bed.csv", out_dir.c_str());
+    DEMSim.WriteClumpFile(std::string(cp_filename));
 
     // This is to show that you can change the material for all the particles in a family... although here,
     // mat_type_terrain_sim and mat_type_terrain are the same material so there is no effect; you can define
@@ -198,20 +163,18 @@ int main() {
     // Then drop the ball
     DEMSim.ChangeFamily(2, 0);
     proj_tracker->SetPos(make_float3(0, 0, terrain_max_z + R + H));
+
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_time; t += frame_time) {
-        // Just output files for the first test. You can output all of them if you want.
-        if (run_num == 0) {
-            std::cout << "Frame: " << currframe << std::endl;
-            char filename[200], meshfilename[200], cnt_filename[200];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
-            // sprintf(cnt_filename, "%s/Contact_pairs_%04d.csv", out_dir.c_str(), currframe);
-            DEMSim.WriteSphereFile(std::string(filename));
-            DEMSim.WriteMeshFile(std::string(meshfilename));
-            // DEMSim.WriteContactFile(std::string(cnt_filename));
-            currframe++;
-        }
+        std::cout << "Frame: " << currframe << std::endl;
+        char filename[200], meshfilename[200], cnt_filename[200];
+        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
+        sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
+        // sprintf(cnt_filename, "%s/Contact_pairs_%04d.csv", out_dir.c_str(), currframe);
+        DEMSim.WriteSphereFile(std::string(filename));
+        DEMSim.WriteMeshFile(std::string(meshfilename));
+        // DEMSim.WriteContactFile(std::string(cnt_filename));
+        currframe++;
 
         DEMSim.DoDynamics(frame_time);
         DEMSim.ShowThreadCollaborationStats();
@@ -234,7 +197,6 @@ int main() {
 
     std::cout << "==============================================================" << std::endl;
 
-    run_num++;
     std::cout << "DEMdemo_BallDrop exiting..." << std::endl;
     return 0;
 }

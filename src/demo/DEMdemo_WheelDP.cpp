@@ -40,7 +40,7 @@ int main() {
         DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
         DEMSim.SetOutputContent(OUTPUT_CONTENT::ABSV);
         DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
-        DEMSim.SetContactOutputContent(OWNER | FORCE | POINT);
+        DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT"});
 
         // E, nu, CoR, mu, Crr...
         auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}, {"Crr", 0.00}});
