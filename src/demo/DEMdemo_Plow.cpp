@@ -73,9 +73,7 @@ int main() {
         DEMSim.LoadClumpType(mass, MOI, GetDEMEDataFile("clumps/ellipsoid_2_1_1.csv"), mat_type_particles);
     my_template->Scale(scaling);
 
-    // The bowl used has two parts. The bowl (hourglass.obj) we have in the repo has a hole at the bottom, so we use a
-    // cap (hourglass_cap.obj) to plug it. They were originally created for some other simulations, we just reuse them
-    // here...
+    // Load the excavator mesh...
     auto excavator = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/excavator.obj"), mat_type_walls);
     // Upon-loading move command is used to move the mesh's (0,0,0) to its MOI, this is needed for DEME simulations. But
     // the mesh is already created so.

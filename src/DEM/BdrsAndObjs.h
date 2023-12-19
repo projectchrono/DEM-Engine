@@ -484,7 +484,7 @@ class DEMMeshConnected : public DEMInitializer {
         // Never let mass become negative.
         double prod = std::abs((double)s.x * (double)s.y * (double)s.z);
         mass *= prod;
-        MOI.x *= prod * s.x * s.x; // Square, so always positive
+        MOI.x *= prod * s.x * s.x;  // Square, so always positive
         MOI.y *= prod * s.y * s.y;
         MOI.z *= prod * s.z * s.z;
     }

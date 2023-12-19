@@ -14,7 +14,6 @@ configure_file(
 )
 
 
-
 message(STATUS "${core_message} Extracting NVIDIA Jitify header...") 
 configure_file(
 	${NVIDIAJitifyPath}/jitify.hpp
@@ -32,11 +31,20 @@ target_include_directories(
 	PUBLIC $<BUILD_INTERFACE:${NVIDIAMathDir}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-target_link_libraries(
-	core
-	PUBLIC CUB::CUB
-	INTERFACE ${ChPF_IMPORTED_NAME}
-)
+
+if(USE_CHPF)
+	target_link_libraries(
+		core
+		PUBLIC CUB::CUB
+		INTERFACE ${ChPF_IMPORTED_NAME}
+	)
+else()
+	target_link_libraries(
+		core
+		PUBLIC CUB::CUB
+	)
+endif()
+
 
 set(core_headers
 	${CMAKE_BINARY_DIR}/src/core/ApiVersion.h
