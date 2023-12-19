@@ -58,19 +58,27 @@ target_include_directories(
 )
 
 if(NOT PYTHON_BUILD)
-	target_link_libraries(
-		core
-		PUBLIC CUB::CUB
-		INTERFACE ${ChPF_IMPORTED_NAME}
-	)
+	if(USE_CHPF)
+		target_link_libraries(
+			core
+			PUBLIC CUB::CUB
+			INTERFACE ${ChPF_IMPORTED_NAME}
+		)
+	else()
+		target_link_libraries(
+			core
+			PUBLIC CUB::CUB
+		)
+	endif()
 else()
+	# No need ChPF for python
 	target_link_libraries(
 		core
 		PUBLIC DEMERuntimeDataHelper_python
 		PUBLIC CUB::CUB
-		INTERFACE ${ChPF_IMPORTED_NAME}
 	)
 endif()
+
 
 set(core_headers
 	${CMAKE_BINARY_DIR}/src/core/ApiVersion.h

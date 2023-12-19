@@ -70,14 +70,28 @@ include_directories(${PYTHON_INCLUDE_DIRS})
 # nvidia_helper_math doesn't require any extra configuration, so just set the path
 set(NVIDIAMathDir ${CMAKE_CURRENT_LIST_DIR}/thirdparty/nvidia_helper_math)
 
-FetchContent_Declare(
-	ChPF
-	GIT_REPOSITORY	https://gitlab.com/uwsbel/chpf.git
-	GIT_TAG			0699f01e720cecf58719a1651ab797c6a62a1897
-)
+# Let the user decide if they want to use ChPF
+option(USE_CHPF "Toggle the use of ChPF for outputting" OFF)
 
-FetchContent_MakeAvailable(ChPF)
-set(ChPF_IMPORTED_NAME "ChPF")
+if(USE_CHPF)
+	# Find ChPF, else fetch it 
+    find_package(ChPF 3.0 QUIET)
+    if (NOT ChPF_FOUND)         
+        FetchContent_Declare(
+            ChPF
+            GIT_REPOSITORY  https://gitlab.com/uwsbel/chpf.git
+            GIT_TAG         0699f01e720cecf58719a1651ab797c6a62a1897
+        )
+        FetchContent_MakeAvailable(ChPF)
+    endif()
+
+	# Based on whether ChPF was found or fetched, set the target name CMake can use to find it 
+    if (ChPF_FOUND) 
+        set(ChPF_IMPORTED_NAME "ChPF::ChPF")
+    elseif (chpf_POPULATED)
+        set(ChPF_IMPORTED_NAME "ChPF")
+    endif()
+endif()
 
 # ---------------------------------------------------------------------------- #
 # Global Configuration
@@ -157,24 +171,43 @@ target_include_directories(simulator_multi_gpu
 )
 
 if(NOT PYTHON_BUILD)
+	# If use ChPF, inform the source
+	if(USE_CHPF)
+		target_compile_definitions(simulator_multi_gpu PUBLIC DEME_USE_CHPF)
+		set(USE_CHPF_STR "ON")
+
+		target_link_libraries(simulator_multi_gpu
+			PUBLIC CUDA::cudart
+			PUBLIC CUDA::nvrtc
+			PUBLIC CUDA::cuda_driver
+			PUBLIC ${ChPF_IMPORTED_NAME}
+			PUBLIC DEMERuntimeDataHelper
+		)
+	else()
+		set(USE_CHPF_STR "OFF")
+
+		target_link_libraries(simulator_multi_gpu
+			PUBLIC CUDA::cudart
+			PUBLIC CUDA::nvrtc
+			PUBLIC CUDA::cuda_driver
+			PUBLIC DEMERuntimeDataHelper
+		)
+	endif()
+else()
+	# py version does not use ChPF
+	set(USE_CHPF_STR "OFF")
+	
 	target_link_libraries(simulator_multi_gpu
 		PUBLIC CUDA::cudart
 		PUBLIC CUDA::nvrtc
 		PUBLIC CUDA::cuda_driver
-		PUBLIC ${ChPF_IMPORTED_NAME}
-		PUBLIC DEMERuntimeDataHelper
-	)
-else()
-	target_link_libraries(simulator_multi_gpu
-	PUBLIC CUDA::cudart
-	PUBLIC CUDA::nvrtc
-	PUBLIC CUDA::cuda_driver
-	PUBLIC ${ChPF_IMPORTED_NAME}
-	PUBLIC DEMERuntimeDataHelper_python
-	PUBLIC ${PYTHON_LIBRARIES}
+		PUBLIC DEMERuntimeDataHelper_python
+		PUBLIC ${PYTHON_LIBRARIES}
 	)
 endif()
 
+
+# Specific to Windows...
 if(WIN32)
 	target_link_libraries(simulator_multi_gpu 
 		PUBLIC dbghelp)

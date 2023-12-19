@@ -31,3 +31,6 @@ set(DEME_INCLUDE_DIRS @CONF_INCLUDE_DIRS@)
 set(DEME_DATA_DIRS @CONF_SHARE_DATA_DIRS@)
 set(DEME_LIBRARIES DEME::simulator_multi_gpu)
 
+# The info on whether it is compiled with ChPF on
+set(DEME_WITH_CHPF "@USE_CHPF_STR@")
+
