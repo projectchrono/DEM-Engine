@@ -91,7 +91,7 @@ void DEMSolver::SetOutputFormat(const std::string& format) {
             m_out_format = OUTPUT_FORMAT::CHPF;
             break;
 #else
-            DEME_ERROR("ChPF is not enabled when compiled.");
+            DEME_ERROR("ChPF is not enabled when the code was compiled.");
 #endif
         default:
             DEME_ERROR("Instruction %s is unknown in SetOutputFormat call.", format.c_str());
@@ -111,7 +111,7 @@ void DEMSolver::SetContactOutputFormat(const std::string& format) {
             m_cnt_out_format = OUTPUT_FORMAT::CHPF;
             break;
 #else
-            DEME_ERROR("ChPF is not enabled when compiled.");
+            DEME_ERROR("ChPF is not enabled when the code was compiled.");
 #endif
         default:
             DEME_ERROR("Instruction %s is unknown in SetContactOutputFormat call.", format.c_str());

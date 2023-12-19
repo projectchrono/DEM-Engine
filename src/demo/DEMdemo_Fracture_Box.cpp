@@ -30,8 +30,9 @@ int main() {
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
     DEMSim.SetContactOutputContent(OWNER | FORCE | CNT_WILDCARD);
 
+    // This demo could lead to large numbers of per-sphere contacts, so to be safe...
     DEMSim.SetErrorOutAvgContacts(200);
-    // DEMSim.SetForceCalcThreadsPerBlock(256);
+
     //  E, nu, CoR, mu, Crr...
     auto mat_type_container =
         DEMSim.LoadMaterial({{"E", 100e9}, {"nu", 0.3}, {"CoR", 0.7}, {"mu", 0.80}, {"Crr", 0.10}});

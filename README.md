@@ -206,7 +206,7 @@ You need to build `chrono-projects` linking against a Chrono installation (Chron
 - Start by linking against Chrono. Set `Chrono_DIR`. It should be in `<your_Chrono_install_dir>/lib/cmake`. Then configure the project;
 - Make sure `ENABLE_PROJECTS` to `ON` and configure the project;
 - Linkage against Chrono is done, now move on to link against _DEME_. Set `ENABLE_DEME_TESTS` to `ON`. Then configure the project;
-- Set `ChPF_DIR` when prompted. It should be in `<your_DEME_install_dir>/lib64/cmake/ChPF`. Then configure the project;
+- If `ChPF_DIR` option is prompted, set it to be `<your_DEME_install_dir>/lib64/cmake/ChPF`. It is likely that you are not prompted this option, and if so please ignore this step and move on;
 - Set `DEME_DIR` when prompted. It should be in `<your_DEME_install_dir>/lib64/cmake/DEME`. Then configure the project.
 
 Then build the project and you should be able to run the demo scripts that demonstrate the co-simulation between _DEME_ and Chrono.

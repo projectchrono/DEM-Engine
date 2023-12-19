@@ -152,11 +152,6 @@ int main() {
     // in too many false positive contacts, making the solver slower.
     DEMSim.SetCDMaxUpdateFreq(60);
 
-    // For this demo specifically, we are using a big custom force kernel, and the registers may be at high demand. We
-    // should use 256 to ensure that kernel runs successfully. The default is actually the conservative choice 256, so
-    // if the user don't know the implication they can leave it default.
-    DEMSim.SetForceCalcThreadsPerBlock(256);
-
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
     DEMSim.Initialize();
 

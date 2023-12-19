@@ -156,12 +156,6 @@ int main() {
     //// TODO: Implement the better CDUpdateFreq adapt algorithm that overperforms the current one...
     DEMSim.SetCDUpdateFreq(40);
     DEMSim.DisableAdaptiveUpdateFreq();
-
-    // 256 or 512 are common choices. Note that in cases where the force model is modified, too many registers may be
-    // used in the kernel, so we have to reduce this number to use 256. In other cases (and most cases), 512 is fine and
-    // may make the code run a bit faster. Usually, the user do not have to call SetForceCalcThreadsPerBlock if they
-    // don't know the implication.
-    DEMSim.SetForceCalcThreadsPerBlock(512);
     DEMSim.Initialize();
 
     unsigned int fps = 10;
