@@ -76,6 +76,9 @@ endif()
 # If use ChPF, inform the source
 if(USE_CHPF)
     target_compile_definitions(simulator_multi_gpu PUBLIC DEME_USE_CHPF)
+	set(USE_CHPF_STR "ON")
+else()
+	set(USE_CHPF_STR "OFF")
 endif()
 
 
