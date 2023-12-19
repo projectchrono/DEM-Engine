@@ -244,7 +244,7 @@ else()
 endif()
 
 install(CODE "message(\"Removing build-tree libraries from installation target...\")")
-install(CODE "file(REMOVE \"$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libDEMERuntimeDataHelper.*\")")
+install(CODE "file(REMOVE \"$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libDEMERuntimeDataHelper.so\")")
 
 if(NOT PYTHON_BUILD)
 	install(
