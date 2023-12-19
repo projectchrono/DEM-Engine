@@ -73,14 +73,6 @@ if(USE_CHPF)
     endif()
 endif()
 
-# If use ChPF, inform the source
-if(USE_CHPF)
-    target_compile_definitions(simulator_multi_gpu PUBLIC DEME_USE_CHPF)
-	set(USE_CHPF_STR "ON")
-else()
-	set(USE_CHPF_STR "OFF")
-endif()
-
 
 # ---------------------------------------------------------------------------- #
 # Global Configuration
@@ -154,7 +146,11 @@ target_include_directories(simulator_multi_gpu
 	PUBLIC ${CORE_INTERFACE}
 )
 
+# If use ChPF, inform the source
 if(USE_CHPF)
+    target_compile_definitions(simulator_multi_gpu PUBLIC DEME_USE_CHPF)
+	set(USE_CHPF_STR "ON")
+
 	target_link_libraries(simulator_multi_gpu
 		PUBLIC CUDA::cudart
 		PUBLIC CUDA::nvrtc
@@ -163,6 +159,8 @@ if(USE_CHPF)
 		PUBLIC DEMERuntimeDataHelper
 	)
 else()
+	set(USE_CHPF_STR "OFF")
+
 	target_link_libraries(simulator_multi_gpu
 		PUBLIC CUDA::cudart
 		PUBLIC CUDA::nvrtc
@@ -171,6 +169,7 @@ else()
 	)
 endif()
 
+# Specific to Windows...
 if(WIN32)
 	target_link_libraries(simulator_multi_gpu 
 		PUBLIC dbghelp)
