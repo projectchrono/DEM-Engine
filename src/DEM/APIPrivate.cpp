@@ -751,50 +751,38 @@ void DEMSolver::figureOutFamilyMasks() {
         this_family_info.used = true;
         this_family_info.family = user_family;
 
-        // If one positional coord is fixed then all of this object is fixed... this is just my design choice. If the
-        // user want to prescribe X but not Y, why don't they just prescribe velocity instead?
         if (preInfo.linPosX != "none") {
             this_family_info.linPosX = preInfo.linPosX;
-            this_family_info.linPosPrescribed = true;
         }
         if (preInfo.linPosY != "none") {
             this_family_info.linPosY = preInfo.linPosY;
-            this_family_info.linPosPrescribed = true;
         }
         if (preInfo.linPosZ != "none") {
             this_family_info.linPosZ = preInfo.linPosZ;
-            this_family_info.linPosPrescribed = true;
         }
         if (preInfo.oriQ != "none") {
             this_family_info.oriQ = preInfo.oriQ;
-            this_family_info.rotPosPrescribed = true;
         }
 
         // If it is not none, then it is automatically dictated by prescribed motion and will not accept influence by
         // other sim entities
         if (preInfo.linVelX != "none") {
             this_family_info.linVelX = preInfo.linVelX;
-            this_family_info.linVelXPrescribed = true;
         }
         if (preInfo.linVelY != "none") {
             this_family_info.linVelY = preInfo.linVelY;
-            this_family_info.linVelYPrescribed = true;
         }
         if (preInfo.linVelZ != "none") {
             this_family_info.linVelZ = preInfo.linVelZ;
-            this_family_info.linVelZPrescribed = true;
         }
         if (preInfo.rotVelX != "none") {
             this_family_info.rotVelX = preInfo.rotVelX;
-            this_family_info.rotVelXPrescribed = true;
         }
         if (preInfo.rotVelY != "none") {
             this_family_info.rotVelY = preInfo.rotVelY;
-            this_family_info.rotVelYPrescribed = true;
         }
         if (preInfo.rotVelZ != "none") {
             this_family_info.rotVelZ = preInfo.rotVelZ;
-            this_family_info.rotVelZPrescribed = true;
         }
 
         // Possibly the user explicitly ordered this family to not accept influence from other sim entities; if it is
@@ -807,7 +795,9 @@ void DEMSolver::figureOutFamilyMasks() {
         this_family_info.rotVelZPrescribed = this_family_info.rotVelZPrescribed || preInfo.rotVelZPrescribed;
 
         this_family_info.rotPosPrescribed = this_family_info.rotPosPrescribed || preInfo.rotPosPrescribed;
-        this_family_info.linPosPrescribed = this_family_info.linPosPrescribed || preInfo.linPosPrescribed;
+        this_family_info.linPosXPrescribed = this_family_info.linPosXPrescribed || preInfo.linPosXPrescribed;
+        this_family_info.linPosYPrescribed = this_family_info.linPosYPrescribed || preInfo.linPosYPrescribed;
+        this_family_info.linPosZPrescribed = this_family_info.linPosZPrescribed || preInfo.linPosZPrescribed;
 
         // Then register the accelerations that are added on top of `normal physics'
         if (preInfo.accX != "none") {
@@ -1487,7 +1477,9 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
                 posStr += "float4 myOriQ = " + preInfo.oriQ + ";";
                 posStr += "oriQw = myOriQ.w; oriQx = myOriQ.x; oriQy = myOriQ.y; oriQz = myOriQ.z;";
             }
-            posStr += "LinPrescribed = " + std::to_string(preInfo.linPosPrescribed) + ";";
+            posStr += "LinXPrescribed = " + std::to_string(preInfo.linPosXPrescribed) + ";";
+            posStr += "LinYPrescribed = " + std::to_string(preInfo.linPosYPrescribed) + ";";
+            posStr += "LinZPrescribed = " + std::to_string(preInfo.linPosZPrescribed) + ";";
             posStr += "RotPrescribed = " + std::to_string(preInfo.rotPosPrescribed) + ";";
         }
         posStr += "break; }";
