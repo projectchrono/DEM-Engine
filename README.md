@@ -51,9 +51,7 @@ You are welcome to discuss _DEME_ on [Project Chrono's forum](https://groups.goo
 
 <h2 id="pyDEME">PyDEME</h2>
 
-#### _pyDEME_ is BEING TESTED, many methods are not yet wrapped. For now it is recommended to <a href="#installation">install _DEME_ from source</a> if you want a complete experience.
-
-_DEME_ is now available as a Python package, _pyDEME_.
+_DEME_ is now available as a Python package, _pyDEME_. It is quick to install and pick up its usage by trying this Python version. If you want to maximize the performance and use the cutting-edge features, you can instead <a href="#compilation">install the C++ version of _DEME_ from source</a>.
 
 To install _pyDEME_, use a Linux machine, install CUDA if you do not already have it. Useful installation instructions may be found [here](https://developer.nvidia.com/cuda-downloads). 
 
