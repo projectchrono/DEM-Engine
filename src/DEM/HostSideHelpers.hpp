@@ -646,6 +646,14 @@ inline std::string read_file_to_string(const std::filesystem::path& sourcefile) 
 
 // Asserters (for the convenience of Python wrapper)
 template <typename T>
+inline void assertPositive(const T& var, const std::string& func_name, const std::string& var_name) {
+    if (var <= (T)0) {
+        std::stringstream out;
+        out << func_name << "'s " << var_name << " argument needs to be all-positive.\n";
+        throw std::runtime_error(out.str());
+    }
+}
+template <typename T>
 inline void assertThreeElements(const std::vector<T>& vec, const std::string& func_name, const std::string& var_name) {
     if (vec.size() != 3) {
         std::stringstream out;

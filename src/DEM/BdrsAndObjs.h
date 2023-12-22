@@ -542,6 +542,33 @@ class DEMMeshConnected : public DEMInitializer {
             // to go along the positive dir of the plane anyway
             node += 2 * proj * plane_normal;
         }
+        // The nodal normal also changes. Although, we don't need it in general.
+        for (auto& normal : m_normals) {
+            float proj = dot(normal, plane_normal);
+            // Different from mirroring nodes
+            normal -= 2 * proj * plane_normal;
+        }
+        // Mirroring will change the order of the facet nodes, so RHR becomes LHR. We have to account for that.
+        for (auto& face_v_indices : m_face_v_indices) {
+            auto tmp = face_v_indices.y;
+            face_v_indices.y = face_v_indices.z;
+            face_v_indices.z = tmp;
+        }
+        for (auto& face_n_indices : m_face_n_indices) {
+            auto tmp = face_n_indices.y;
+            face_n_indices.y = face_n_indices.z;
+            face_n_indices.z = tmp;
+        }
+        for (auto& face_uv_indices : m_face_uv_indices) {
+            auto tmp = face_uv_indices.y;
+            face_uv_indices.y = face_uv_indices.z;
+            face_uv_indices.z = tmp;
+        }
+        for (auto& face_col_indices : m_face_col_indices) {
+            auto tmp = face_col_indices.y;
+            face_col_indices.y = face_col_indices.z;
+            face_col_indices.z = tmp;
+        }
     }
     void Mirror(const std::vector<float>& plane_point, const std::vector<float>& plane_normal) {
         assertThreeElements(plane_point, "Mirror", "plane_point");
@@ -552,22 +579,26 @@ class DEMMeshConnected : public DEMInitializer {
 
     /// @brief Scale all geometry component of this mesh.
     void Scale(float s) {
+        // Never let mass become negative.
+        assertPositive(s, "Scale", "s");
         for (auto& node : m_vertices) {
             node *= s;
         }
-        // Never let mass become negative.
-        double positive_s = (double)std::abs(s);
-        mass *= positive_s * positive_s * positive_s;
-        MOI *= positive_s * positive_s * positive_s * positive_s * positive_s;
+        double double_s = (double)std::abs(s);
+        mass *= double_s * double_s * double_s;
+        MOI *= double_s * double_s * double_s * double_s * double_s;
     }
     /// @brief Scale all geometry component of this mesh. Specify x, y, z respectively.
     void Scale(float3 s) {
+        // Never let mass become negative.
+        assertPositive(s.x, "Scale", "s");
+        assertPositive(s.y, "Scale", "s");
+        assertPositive(s.z, "Scale", "s");
         for (auto& node : m_vertices) {
             node = node * s;
         }
         // Really just an estimate. The user should reset mass properties manually afterwards.
-        // Never let mass become negative.
-        double prod = std::abs((double)s.x * (double)s.y * (double)s.z);
+        double prod = (double)s.x * (double)s.y * (double)s.z;
         mass *= prod;
         MOI.x *= prod * s.x * s.x;  // Square, so always positive
         MOI.y *= prod * s.y * s.y;
