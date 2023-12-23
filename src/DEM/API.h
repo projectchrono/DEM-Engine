@@ -590,8 +590,9 @@ class DEMSolver {
     /// Prevent entites associated with this family to be outputted to files
     void DisableFamilyOutput(unsigned int ID);
 
-    /// Mark all entities in this family to be fixed
+    /// Mark all entities in this family to be fixed.
     void SetFamilyFixed(unsigned int ID);
+
     /// Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this family will
     /// not be influenced by the force exerted from other simulation entites (both linear and rotational motions).
     void SetFamilyPrescribedLinVel(unsigned int ID,
@@ -602,6 +603,16 @@ class DEMSolver {
     /// Let the linear velocities of all entites in this family always keep `as is', and not influenced by the force
     /// exerted from other simulation entites.
     void SetFamilyPrescribedLinVel(unsigned int ID);
+    /// Let the X component of the linear velocities of all entites in this family always keep `as is', and not
+    /// influenced by the force exerted from other simulation entites.
+    void SetFamilyPrescribedLinVelX(unsigned int ID);
+    /// Let the Y component of the linear velocities of all entites in this family always keep `as is', and not
+    /// influenced by the force exerted from other simulation entites.
+    void SetFamilyPrescribedLinVelY(unsigned int ID);
+    /// Let the Z component of the linear velocities of all entites in this family always keep `as is', and not
+    /// influenced by the force exerted from other simulation entites.
+    void SetFamilyPrescribedLinVelZ(unsigned int ID);
+
     /// Set the prescribed angular velocity to all entities in a family. If dictate is set to true, then this family
     /// will not be fluenced by the force exerted from other simulation entites (both linear and rotational motions).
     void SetFamilyPrescribedAngVel(unsigned int ID,
@@ -612,8 +623,15 @@ class DEMSolver {
     /// Let the linear velocities of all entites in this family always keep `as is', and not influenced by the force
     /// exerted from other simulation entites.
     void SetFamilyPrescribedAngVel(unsigned int ID);
-
-    /// @brief
+    /// Let the X component of the linear velocities of all entites in this family always keep `as is', and not
+    /// influenced by the force exerted from other simulation entites.
+    void SetFamilyPrescribedAngVelX(unsigned int ID);
+    /// Let the Y component of the linear velocities of all entites in this family always keep `as is', and not
+    /// influenced by the force exerted from other simulation entites.
+    void SetFamilyPrescribedAngVelY(unsigned int ID);
+    /// Let the Z component of the linear velocities of all entites in this family always keep `as is', and not
+    /// influenced by the force exerted from other simulation entites.
+    void SetFamilyPrescribedAngVelZ(unsigned int ID);
 
     /// @brief Keep the positions of all entites in this family to remain exactly the user-specified values.
     /// @param ID Family number.
@@ -621,7 +639,7 @@ class DEMSolver {
     /// @param Y Y coordinate (can be an expression).
     /// @param Z Z coordinate (can be an expression).
     /// @param dictate If true, prevent entities in this family to have (both linear and rotational) positional updates
-    /// resulted from `simulation physics' unless the prescription is specified as none.
+    /// resulted from the `simulation physics'; otherwise, the `simulation physics' still takes effect.
     void SetFamilyPrescribedPosition(unsigned int ID,
                                      const std::string& X,
                                      const std::string& Y,
@@ -629,20 +647,42 @@ class DEMSolver {
                                      bool dictate = true);
     /// @brief Let the linear positions of all entites in this family always keep `as is'.
     void SetFamilyPrescribedPosition(unsigned int ID);
+    /// @brief Let the X component of the linear positions of all entites in this family always keep `as is'.
+    void SetFamilyPrescribedPositionX(unsigned int ID);
+    /// @brief Let the Y component of the linear positions of all entites in this family always keep `as is'.
+    void SetFamilyPrescribedPositionY(unsigned int ID);
+    /// @brief Let the Z component of the linear positions of all entites in this family always keep `as is'.
+    void SetFamilyPrescribedPositionZ(unsigned int ID);
+
     /// @brief Keep the orientation quaternions of all entites in this family to remain exactly the user-specified
     /// values.
     /// @param ID Family number.
     /// @param q_formula A formula from which the quaternion should be calculated.
     /// @param dictate If true, prevent entities in this family to have (both linear and rotational) positional updates
-    /// resulted from `simulation physics' unless the prescription is specified as none.
+    /// resulted from the `simulation physics'; otherwise, the `simulation physics' still takes effect.
     void SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula, bool dictate = true);
     /// @brief Let the orientation quaternions of all entites in this family always keep `as is'.
     void SetFamilyPrescribedQuaternion(unsigned int ID);
 
-    /// The entities in this family will always experienced an extra acceleration defined using this method.
+    /// @brief The entities in this family will always experience an extra acceleration defined using this method.
     void AddFamilyPrescribedAcc(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
-    /// The entities in this family will always experienced an extra angular acceleration defined using this method.
+    /// @brief The entities in this family will always experience an extra angular acceleration defined using this
+    /// method.
     void AddFamilyPrescribedAngAcc(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
+
+    /// @brief The entities in this family will always experience an added linear-velocity correction defined using this
+    /// method. At the same time, they are still subject to the `simulation physics'.
+    void CorrectFamilyLinVel(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
+    /// @brief The entities in this family will always experience an added angular-velocity correction defined using
+    /// this method. At the same time, they are still subject to the `simulation physics'.
+    void CorrectFamilyAngVel(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
+
+    /// @brief The entities in this family will always experience an added positional correction defined using this
+    /// method. At the same time, they are still subject to the `simulation physics'.
+    void CorrectFamilyPosition(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
+    /// @brief The entities in this family will always experience an added quaternion correction defined using this
+    /// method. At the same time, they are still subject to the `simulation physics'.
+    void CorrectFamilyQuaternion(unsigned int ID, const std::string& q_formula);
 
     /// @brief Set the names for the extra quantities that will be associated with each contact pair.
     void SetContactWildcards(const std::set<std::string>& wildcards);

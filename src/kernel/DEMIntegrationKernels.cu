@@ -22,15 +22,15 @@ inline __device__ void applyPrescribedVel(bool& LinXPrescribed,
         _velPrescriptionStrategy_;
         default:
             // Default can just do nothing
-            // LinPrescribed = false;
-            // RotPrescribed = false;
             return;
     }
 }
 
 // Apply presecibed location and report whether the `true' physics should be skipped, rather than added on top of that
 template <typename T1, typename T2>
-inline __device__ void applyPrescribedPos(bool& LinPrescribed,
+inline __device__ void applyPrescribedPos(bool& LinXPrescribed,
+                                          bool& LinYPrescribed,
+                                          bool& LinZPrescribed,
                                           bool& RotPrescribed,
                                           T1& X,
                                           T1& Y,
@@ -45,8 +45,6 @@ inline __device__ void applyPrescribedPos(bool& LinPrescribed,
         _posPrescriptionStrategy_;
         default:
             // Default can just do nothing
-            // LinPrescribed = false;
-            // RotPrescribed = false;
             return;
     }
 }
@@ -179,15 +177,19 @@ inline __device__ void integratePos(deme::bodyID_t thisClump,
         granData->locZ[thisClump], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
 
     deme::family_t family_code = granData->familyID[thisClump];
-    bool LinPrescribed = false, RotPrescribed = false;
-    applyPrescribedPos<double, deme::oriQ_t>(LinPrescribed, RotPrescribed, X, Y, Z, granData->oriQw[thisClump],
-                                             granData->oriQx[thisClump], granData->oriQy[thisClump],
-                                             granData->oriQz[thisClump], family_code, (float)t);
+    bool LinXPrescribed = false, LinYPrescribed = false, LinZPrescribed = false, RotPrescribed = false;
+    applyPrescribedPos<double, deme::oriQ_t>(
+        LinXPrescribed, LinYPrescribed, LinZPrescribed, RotPrescribed, X, Y, Z, granData->oriQw[thisClump],
+        granData->oriQx[thisClump], granData->oriQy[thisClump], granData->oriQz[thisClump], family_code, (float)t);
 
-    if (!LinPrescribed) {
-        // Pos integration strategy here
+    if (!LinXPrescribed) {
+        // Impllicitly, pos integration strategy is here
         X += (double)v.x * h;
+    }
+    if (!LinYPrescribed) {
         Y += (double)v.y * h;
+    }
+    if (!LinZPrescribed) {
         Z += (double)v.z * h;
     }
     positionToVoxelID<deme::voxelID_t, deme::subVoxelPos_t, double>(

@@ -466,7 +466,9 @@ struct familyPrescription_t {
     bool rotVelYPrescribed = false;
     bool rotVelZPrescribed = false;
     bool rotPosPrescribed = false;
-    bool linPosPrescribed = false;
+    bool linPosXPrescribed = false;
+    bool linPosYPrescribed = false;
+    bool linPosZPrescribed = false;
     // Prescribed acc and ang acc; they are added to entities, sort of like gravity
     std::string accX = "none";
     std::string accY = "none";
@@ -713,13 +715,14 @@ class DEMClumpTemplate {
 
     /// Scale all geometry component of this clump
     void Scale(float s) {
+        // Never let mass become negative.
+        assertPositive(s, "Scale", "s");
         for (auto& pos : relPos) {
             pos *= s;
         }
         for (auto& rad : radii) {
             rad *= s;
         }
-        // Never let mass become negative.
         double positive_s = (double)std::abs(s);
         mass *= positive_s * positive_s * positive_s;
         MOI *= positive_s * positive_s * positive_s * positive_s * positive_s;
