@@ -156,6 +156,7 @@ inline __device__ void integrateVel(deme::bodyID_t thisClump,
 // }
 
 inline __device__ void integratePos(deme::bodyID_t thisClump,
+                                    deme::DEMSimParams* simParams,
                                     deme::DEMDataDT* granData,
                                     float3 v,
                                     float3 omgBar,
@@ -175,6 +176,10 @@ inline __device__ void integratePos(deme::bodyID_t thisClump,
     voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
         X, Y, Z, granData->voxelID[thisClump], granData->locX[thisClump], granData->locY[thisClump],
         granData->locZ[thisClump], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
+    // Do this and we get the `true' pos... Needed for prescription
+    X += (double)simParams->LBFX;
+    Y += (double)simParams->LBFY;
+    Z += (double)simParams->LBFZ;
 
     deme::family_t family_code = granData->familyID[thisClump];
     bool LinXPrescribed = false, LinYPrescribed = false, LinZPrescribed = false, RotPrescribed = false;
@@ -192,6 +197,10 @@ inline __device__ void integratePos(deme::bodyID_t thisClump,
     if (!LinZPrescribed) {
         Z += (double)v.z * h;
     }
+    // Undo the influence of LBF...
+    X -= (double)simParams->LBFX;
+    Y -= (double)simParams->LBFY;
+    Z -= (double)simParams->LBFZ;
     positionToVoxelID<deme::voxelID_t, deme::subVoxelPos_t, double>(
         granData->voxelID[thisClump], granData->locX[thisClump], granData->locY[thisClump], granData->locZ[thisClump],
         X, Y, Z, _nvXp2_, _nvYp2_, _voxelSize_, _l_);
@@ -222,6 +231,6 @@ __global__ void integrateOwners(deme::DEMSimParams* simParams, deme::DEMDataDT* 
         // Depending on the integration scheme in use, they can be different.
         float3 v, omgBar;
         integrateVel(thisClump, simParams, granData, v, omgBar, (float)simParams->h, (float)simParams->timeElapsed);
-        integratePos(thisClump, granData, v, omgBar, (float)simParams->h, (float)simParams->timeElapsed);
+        integratePos(thisClump, simParams, granData, v, omgBar, (float)simParams->h, (float)simParams->timeElapsed);
     }
 }

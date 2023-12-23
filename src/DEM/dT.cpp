@@ -1982,10 +1982,10 @@ inline void DEMDynamicThread::integrateOwnerMotions() {
 inline void DEMDynamicThread::routineChecks() {
     if (solverFlags.canFamilyChange) {
         size_t blocks_needed_for_clumps =
-            (simParams->nOwnerBodies + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
+            (simParams->nOwnerBodies + DEME_NUM_MODERATORS_PER_BLOCK - 1) / DEME_NUM_MODERATORS_PER_BLOCK;
         mod_kernels->kernel("applyFamilyChanges")
             .instantiate()
-            .configure(dim3(blocks_needed_for_clumps), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
+            .configure(dim3(blocks_needed_for_clumps), dim3(DEME_NUM_MODERATORS_PER_BLOCK), 0, streamInfo.stream)
             .launch(simParams, granData, simParams->nOwnerBodies);
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }

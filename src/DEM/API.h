@@ -623,13 +623,13 @@ class DEMSolver {
     /// Let the linear velocities of all entites in this family always keep `as is', and not influenced by the force
     /// exerted from other simulation entites.
     void SetFamilyPrescribedAngVel(unsigned int ID);
-    /// Let the X component of the linear velocities of all entites in this family always keep `as is', and not
+    /// Let the X component of the angular velocities of all entites in this family always keep `as is', and not
     /// influenced by the force exerted from other simulation entites.
     void SetFamilyPrescribedAngVelX(unsigned int ID);
-    /// Let the Y component of the linear velocities of all entites in this family always keep `as is', and not
+    /// Let the Y component of the angular velocities of all entites in this family always keep `as is', and not
     /// influenced by the force exerted from other simulation entites.
     void SetFamilyPrescribedAngVelY(unsigned int ID);
-    /// Let the Z component of the linear velocities of all entites in this family always keep `as is', and not
+    /// Let the Z component of the angular velocities of all entites in this family always keep `as is', and not
     /// influenced by the force exerted from other simulation entites.
     void SetFamilyPrescribedAngVelZ(unsigned int ID);
 
