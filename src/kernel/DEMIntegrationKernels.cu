@@ -156,6 +156,7 @@ inline __device__ void integrateVel(deme::bodyID_t thisClump,
 // }
 
 inline __device__ void integratePos(deme::bodyID_t thisClump,
+                                    deme::DEMSimParams* simParams,
                                     deme::DEMDataDT* granData,
                                     float3 v,
                                     float3 omgBar,
@@ -230,6 +231,6 @@ __global__ void integrateOwners(deme::DEMSimParams* simParams, deme::DEMDataDT* 
         // Depending on the integration scheme in use, they can be different.
         float3 v, omgBar;
         integrateVel(thisClump, simParams, granData, v, omgBar, simParams->h, simParams->timeElapsed);
-        integratePos(thisClump, granData, v, omgBar, simParams->h, simParams->timeElapsed);
+        integratePos(thisClump, simParams, granData, v, omgBar, simParams->h, simParams->timeElapsed);
     }
 }
