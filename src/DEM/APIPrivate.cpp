@@ -215,6 +215,7 @@ void DEMSolver::jitifyKernels() {
     equipFamilyOnFlyChanges(m_subs);
     equipForceModel(m_subs);
     equipIntegrationScheme(m_subs);
+    equipKernelIncludes(m_subs);
     kT->jitifyKernels(m_subs);
     dT->jitifyKernels(m_subs);
 
@@ -1923,6 +1924,10 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_nDistinctMassProperties_"] = std::to_string(nDistinctMassProperties);
     strMap["_nJitifiableClumpComponents_"] = std::to_string(nJitifiableClumpComponents);
     strMap["_nMatTuples_"] = std::to_string(nMatTuples);
+}
+
+inline void DEMSolver::equipKernelIncludes(std::unordered_map<std::string, std::string>& strMap) {
+    strMap["_kernelIncludes_"] = kernel_includes;
 }
 
 }  // namespace deme

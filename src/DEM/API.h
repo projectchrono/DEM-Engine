@@ -1140,6 +1140,16 @@ class DEMSolver {
     // void SetOutputContent(const std::string& content) { SetOutputContent({content}); }
     // void SetContactOutputContent(const std::string& content) { SetContactOutputContent({content}); }
 
+    /// @brief Add a library that the kernels will be compiled with (so that the user can use the provided methods in
+    /// their customized code, like force model).
+    /// @param lib_name The lib to include. For example, "time.h".
+    void AddKernelInclude(const std::string& lib_name);
+    /// @brief Set the kernels' headers' extra include lines. Useful for customization.
+    /// @param includes The extra headers, as a string.
+    void SetKernelInclude(const std::string& includes) { kernel_includes = includes; }
+    /// @brief Remove all extra libraries that the kernels `include' in their headers.
+    void RemoveKernelInclude() { kernel_includes = " "; }
+
     /// Let dT do this call and return the reduce value of the inspected quantity.
     float dTInspectReduce(const std::shared_ptr<jitify::Program>& inspection_kernel,
                           const std::string& kernel_name,
@@ -1277,6 +1287,9 @@ class DEMSolver {
 
     // This is an unused variable which is supposed to be related to m_suggestedFutureDrift...
     int m_updateFreq = 20;
+
+    // The extra libs that the kernels need to include.
+    std::string kernel_includes = "#include <stdlib.h>\n";
 
     // If and how we should add boundaries to the simulation world upon initialization. Choose between none, all and
     // top_open.
@@ -1694,6 +1707,7 @@ class DEMSolver {
     inline void equipFamilyOnFlyChanges(std::unordered_map<std::string, std::string>& strMap);
     inline void equipForceModel(std::unordered_map<std::string, std::string>& strMap);
     inline void equipIntegrationScheme(std::unordered_map<std::string, std::string>& strMap);
+    inline void equipKernelIncludes(std::unordered_map<std::string, std::string>& strMap);
 };
 
 }  // namespace deme
