@@ -25,6 +25,7 @@ inline __device__ void applyPrescribedVel(bool& LinVelXPrescribed,
                                           T4 oriQx,
                                           T4 oriQy,
                                           T4 oriQz,
+                                          deme::bodyID_t ownerID,
                                           const deme::family_t& family,
                                           const float& t) {
     switch (family) {
@@ -54,6 +55,7 @@ inline __device__ void applyPrescribedPos(bool& LinXPrescribed,
                                           T4 omgBarX,
                                           T4 omgBarY,
                                           T4 omgBarZ,
+                                          deme::bodyID_t ownerID,
                                           const deme::family_t& family,
                                           const float& t) {
     switch (family) {
@@ -85,6 +87,7 @@ inline __device__ void applyAddedAcceleration(T1& accX,
                                               T6 omgBarX,
                                               T6 omgBarY,
                                               T6 omgBarZ,
+                                              deme::bodyID_t ownerID,
                                               const deme::family_t& family,
                                               const float& t) {
     switch (family) {
@@ -94,7 +97,7 @@ inline __device__ void applyAddedAcceleration(T1& accX,
     }
 }
 
-inline __device__ void integrateVelPos(deme::bodyID_t thisClump,
+inline __device__ void integrateVelPos(deme::bodyID_t ownerID,
                                        deme::DEMSimParams* simParams,
                                        deme::DEMDataDT* granData,
                                        float3& v,
@@ -102,21 +105,20 @@ inline __device__ void integrateVelPos(deme::bodyID_t thisClump,
                                        float h,
                                        float t) {
     // Acquisition phase...
-    deme::family_t family_code = granData->familyID[thisClump];
+    deme::family_t family_code = granData->familyID[ownerID];
     bool LinVelXPrescribed = false, LinVelYPrescribed = false, LinVelZPrescribed = false, RotVelXPrescribed = false,
          RotVelYPrescribed = false, RotVelZPrescribed = false;
     bool LinXPrescribed = false, LinYPrescribed = false, LinZPrescribed = false, RotPrescribed = false;
     double X, Y, Z;
     // Keep tab of the old... we'll need that
-    float3 old_v = make_float3(granData->vX[thisClump], granData->vY[thisClump], granData->vZ[thisClump]);
-    float3 old_omgBar =
-        make_float3(granData->omgBarX[thisClump], granData->omgBarY[thisClump], granData->omgBarZ[thisClump]);
+    float3 old_v = make_float3(granData->vX[ownerID], granData->vY[ownerID], granData->vZ[ownerID]);
+    float3 old_omgBar = make_float3(granData->omgBarX[ownerID], granData->omgBarY[ownerID], granData->omgBarZ[ownerID]);
 
     {
         // Now XYZ gets the old position. We can write them directly back, then it is equivalent to being LinPrescribed.
         voxelIDToPosition<double, deme::voxelID_t, deme::subVoxelPos_t>(
-            X, Y, Z, granData->voxelID[thisClump], granData->locX[thisClump], granData->locY[thisClump],
-            granData->locZ[thisClump], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
+            X, Y, Z, granData->voxelID[ownerID], granData->locX[ownerID], granData->locY[ownerID],
+            granData->locZ[ownerID], _nvXp2_, _nvYp2_, _voxelSize_, _l_);
         // Do this and we get the `true' pos... Needed for prescription
         X += (double)simParams->LBFX;
         Y += (double)simParams->LBFY;
@@ -125,17 +127,16 @@ inline __device__ void integrateVelPos(deme::bodyID_t thisClump,
         // The user may directly change v and omgBar info in global memory in applyPrescribedVel (XYZ and oriQ in this
         // call are read-only)
         applyPrescribedVel(LinVelXPrescribed, LinVelYPrescribed, LinVelZPrescribed, RotVelXPrescribed,
-                           RotVelYPrescribed, RotVelZPrescribed, granData->vX[thisClump], granData->vY[thisClump],
-                           granData->vZ[thisClump], granData->omgBarX[thisClump], granData->omgBarY[thisClump],
-                           granData->omgBarZ[thisClump], X, Y, Z, granData->oriQw[thisClump],
-                           granData->oriQx[thisClump], granData->oriQy[thisClump], granData->oriQz[thisClump],
-                           family_code, (float)t);
+                           RotVelYPrescribed, RotVelZPrescribed, granData->vX[ownerID], granData->vY[ownerID],
+                           granData->vZ[ownerID], granData->omgBarX[ownerID], granData->omgBarY[ownerID],
+                           granData->omgBarZ[ownerID], X, Y, Z, granData->oriQw[ownerID], granData->oriQx[ownerID],
+                           granData->oriQy[ownerID], granData->oriQz[ownerID], ownerID, family_code, (float)t);
         // The user may directly change oriQ info (vX and omgBar in this call are read-only)
         applyPrescribedPos(LinXPrescribed, LinYPrescribed, LinZPrescribed, RotPrescribed, X, Y, Z,
-                           granData->oriQw[thisClump], granData->oriQx[thisClump], granData->oriQy[thisClump],
-                           granData->oriQz[thisClump], granData->vX[thisClump], granData->vY[thisClump],
-                           granData->vZ[thisClump], granData->omgBarX[thisClump], granData->omgBarY[thisClump],
-                           granData->omgBarZ[thisClump], family_code, (float)t);
+                           granData->oriQw[ownerID], granData->oriQx[ownerID], granData->oriQy[ownerID],
+                           granData->oriQz[ownerID], granData->vX[ownerID], granData->vY[ownerID],
+                           granData->vZ[ownerID], granData->omgBarX[ownerID], granData->omgBarY[ownerID],
+                           granData->omgBarZ[ownerID], ownerID, family_code, (float)t);
     }
 
     // Operation phase...
@@ -146,47 +147,47 @@ inline __device__ void integrateVelPos(deme::bodyID_t thisClump,
         float3 v_update = make_float3(0, 0, 0), omgBar_update = make_float3(0, 0, 0);
         float3 extra_acc = make_float3(0, 0, 0), extra_angAcc = make_float3(0, 0, 0);
         applyAddedAcceleration(extra_acc.x, extra_acc.y, extra_acc.z, extra_angAcc.x, extra_angAcc.y, extra_angAcc.z, X,
-                               Y, Z, granData->oriQw[thisClump], granData->oriQx[thisClump], granData->oriQy[thisClump],
-                               granData->oriQz[thisClump], granData->vX[thisClump], granData->vY[thisClump],
-                               granData->vZ[thisClump], granData->omgBarX[thisClump], granData->omgBarY[thisClump],
-                               granData->omgBarZ[thisClump], family_code, (float)t);
+                               Y, Z, granData->oriQw[ownerID], granData->oriQx[ownerID], granData->oriQy[ownerID],
+                               granData->oriQz[ownerID], granData->vX[ownerID], granData->vY[ownerID],
+                               granData->vZ[ownerID], granData->omgBarX[ownerID], granData->omgBarY[ownerID],
+                               granData->omgBarZ[ownerID], ownerID, family_code, (float)t);
 
         if (!LinVelXPrescribed) {
-            v_update.x = (granData->aX[thisClump] + extra_acc.x + simParams->Gx) * h;
-            granData->vX[thisClump] += v_update.x;
+            v_update.x = (granData->aX[ownerID] + extra_acc.x + simParams->Gx) * h;
+            granData->vX[ownerID] += v_update.x;
         } else {
-            old_v.x = granData->vX[thisClump];
+            old_v.x = granData->vX[ownerID];
         }
         if (!LinVelYPrescribed) {
-            v_update.y = (granData->aY[thisClump] + extra_acc.y + simParams->Gy) * h;
-            granData->vY[thisClump] += v_update.y;
+            v_update.y = (granData->aY[ownerID] + extra_acc.y + simParams->Gy) * h;
+            granData->vY[ownerID] += v_update.y;
         } else {
-            old_v.y = granData->vY[thisClump];
+            old_v.y = granData->vY[ownerID];
         }
         if (!LinVelZPrescribed) {
-            v_update.z = (granData->aZ[thisClump] + extra_acc.z + simParams->Gz) * h;
-            granData->vZ[thisClump] += v_update.z;
+            v_update.z = (granData->aZ[ownerID] + extra_acc.z + simParams->Gz) * h;
+            granData->vZ[ownerID] += v_update.z;
         } else {
-            old_v.z = granData->vZ[thisClump];
+            old_v.z = granData->vZ[ownerID];
         }
 
         if (!RotVelXPrescribed) {
-            omgBar_update.x = (granData->alphaX[thisClump] + extra_angAcc.x) * h;
-            granData->omgBarX[thisClump] += omgBar_update.x;
+            omgBar_update.x = (granData->alphaX[ownerID] + extra_angAcc.x) * h;
+            granData->omgBarX[ownerID] += omgBar_update.x;
         } else {
-            old_omgBar.x = granData->omgBarX[thisClump];
+            old_omgBar.x = granData->omgBarX[ownerID];
         }
         if (!RotVelYPrescribed) {
-            omgBar_update.y = (granData->alphaY[thisClump] + extra_angAcc.y) * h;
-            granData->omgBarY[thisClump] += omgBar_update.y;
+            omgBar_update.y = (granData->alphaY[ownerID] + extra_angAcc.y) * h;
+            granData->omgBarY[ownerID] += omgBar_update.y;
         } else {
-            old_omgBar.y = granData->omgBarY[thisClump];
+            old_omgBar.y = granData->omgBarY[ownerID];
         }
         if (!RotVelZPrescribed) {
-            omgBar_update.z = (granData->alphaZ[thisClump] + extra_angAcc.z) * h;
-            granData->omgBarZ[thisClump] += omgBar_update.z;
+            omgBar_update.z = (granData->alphaZ[ownerID] + extra_angAcc.z) * h;
+            granData->omgBarZ[ownerID] += omgBar_update.z;
         } else {
-            old_omgBar.z = granData->omgBarZ[thisClump];
+            old_omgBar.z = granData->omgBarZ[ownerID];
         }
 
         // We need to set v and omgBar, and they will be used in position/quaternion update
@@ -210,8 +211,8 @@ inline __device__ void integrateVelPos(deme::bodyID_t thisClump,
         Y -= (double)simParams->LBFY;
         Z -= (double)simParams->LBFZ;
         positionToVoxelID<deme::voxelID_t, deme::subVoxelPos_t, double>(
-            granData->voxelID[thisClump], granData->locX[thisClump], granData->locY[thisClump],
-            granData->locZ[thisClump], X, Y, Z, _nvXp2_, _nvYp2_, _voxelSize_, _l_);
+            granData->voxelID[ownerID], granData->locX[ownerID], granData->locY[ownerID], granData->locZ[ownerID], X, Y,
+            Z, _nvXp2_, _nvYp2_, _voxelSize_, _l_);
 
         if (!RotPrescribed) {
             // Then integrate the quaternion
@@ -221,15 +222,15 @@ inline __device__ void integrateVelPos(deme::bodyID_t thisClump,
             const float3 ha = 0.5 * h * omgBar;
             float4 oriQ = make_float4(ha.x, ha.y, ha.z, 1.0);  // xyzw
             // Note: Yes it is Quat * deltaRot, not the other way around. Then store result in oriQ.
-            HamiltonProduct(oriQ.w, oriQ.x, oriQ.y, oriQ.z, granData->oriQw[thisClump], granData->oriQx[thisClump],
-                            granData->oriQy[thisClump], granData->oriQz[thisClump], oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+            HamiltonProduct(oriQ.w, oriQ.x, oriQ.y, oriQ.z, granData->oriQw[ownerID], granData->oriQx[ownerID],
+                            granData->oriQy[ownerID], granData->oriQz[ownerID], oriQ.w, oriQ.x, oriQ.y, oriQ.z);
             // Normalizing it is essential. Note even if you use an exp map to update quaternion, you still need to
             // normalize.
             oriQ /= length(oriQ);
-            granData->oriQw[thisClump] = oriQ.w;
-            granData->oriQx[thisClump] = oriQ.x;
-            granData->oriQy[thisClump] = oriQ.y;
-            granData->oriQz[thisClump] = oriQ.z;
+            granData->oriQw[ownerID] = oriQ.w;
+            granData->oriQx[ownerID] = oriQ.x;
+            granData->oriQy[ownerID] = oriQ.y;
+            granData->oriQz[ownerID] = oriQ.z;
         }
     }
 }
@@ -253,11 +254,11 @@ inline __device__ void integrateVelPos(deme::bodyID_t thisClump,
 // }
 
 __global__ void integrateOwners(deme::DEMSimParams* simParams, deme::DEMDataDT* granData) {
-    deme::bodyID_t thisClump = blockIdx.x * blockDim.x + threadIdx.x;
-    if (thisClump < simParams->nOwnerBodies) {
+    deme::bodyID_t ownerID = blockIdx.x * blockDim.x + threadIdx.x;
+    if (ownerID < simParams->nOwnerBodies) {
         // These 2 quantities mean the velocity and ang vel used for updating position/quaternion for this step.
         // Depending on the integration scheme in use, they can be different.
         float3 v, omgBar;
-        integrateVelPos(thisClump, simParams, granData, v, omgBar, (float)simParams->h, (float)simParams->timeElapsed);
+        integrateVelPos(ownerID, simParams, granData, v, omgBar, (float)simParams->h, (float)simParams->timeElapsed);
     }
 }
