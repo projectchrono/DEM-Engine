@@ -87,8 +87,12 @@ void DEMSolver::SetOutputFormat(const std::string& format) {
             m_out_format = OUTPUT_FORMAT::BINARY;
             break;
         case ("CHPF"_):
+#ifdef DEME_USE_CHPF
             m_out_format = OUTPUT_FORMAT::CHPF;
             break;
+#else
+            DEME_ERROR("ChPF is not enabled when the code was compiled.");
+#endif
         default:
             DEME_ERROR("Instruction %s is unknown in SetOutputFormat call.", format.c_str());
     }
@@ -103,8 +107,12 @@ void DEMSolver::SetContactOutputFormat(const std::string& format) {
             m_cnt_out_format = OUTPUT_FORMAT::BINARY;
             break;
         case ("CHPF"_):
+#ifdef DEME_USE_CHPF
             m_cnt_out_format = OUTPUT_FORMAT::CHPF;
             break;
+#else
+            DEME_ERROR("ChPF is not enabled when the code was compiled.");
+#endif
         default:
             DEME_ERROR("Instruction %s is unknown in SetContactOutputFormat call.", format.c_str());
     }
@@ -1474,19 +1482,24 @@ std::shared_ptr<DEMInspector> DEMSolver::CreateInspector(const std::string& quan
 
 void DEMSolver::WriteSphereFile(const std::string& outfilename) const {
     switch (m_out_format) {
+#ifdef DEME_USE_CHPF
         case (OUTPUT_FORMAT::CHPF): {
             std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
             dT->writeSpheresAsChpf(ptFile);
             break;
         }
+#endif
         case (OUTPUT_FORMAT::CSV): {
             std::ofstream ptFile(outfilename, std::ios::out);
             dT->writeSpheresAsCsv(ptFile);
             break;
         }
         case (OUTPUT_FORMAT::BINARY): {
-            std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
+            // std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
             //// TODO: Implement it
+            std::ofstream ptFile(outfilename, std::ios::out);
+            DEME_WARNING("Binary sphere output is not implemented yet, using CSV...");
+            dT->writeSpheresAsCsv(ptFile);
             break;
         }
         default:
@@ -1496,19 +1509,24 @@ void DEMSolver::WriteSphereFile(const std::string& outfilename) const {
 
 void DEMSolver::WriteClumpFile(const std::string& outfilename, unsigned int accuracy) const {
     switch (m_out_format) {
+#ifdef DEME_USE_CHPF
         case (OUTPUT_FORMAT::CHPF): {
             std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
             dT->writeClumpsAsChpf(ptFile, accuracy);
             break;
         }
+#endif
         case (OUTPUT_FORMAT::CSV): {
             std::ofstream ptFile(outfilename, std::ios::out);
             dT->writeClumpsAsCsv(ptFile, accuracy);
             break;
         }
         case (OUTPUT_FORMAT::BINARY): {
-            std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
+            // std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
             //// TODO: Implement it
+            std::ofstream ptFile(outfilename, std::ios::out);
+            DEME_WARNING("Binary clump output is not implemented yet, using CSV...");
+            dT->writeClumpsAsCsv(ptFile, accuracy);
             break;
         }
         default:
@@ -1525,6 +1543,14 @@ void DEMSolver::WriteContactFile(const std::string& outfilename, float force_thr
     }
     switch (m_cnt_out_format) {
         case (OUTPUT_FORMAT::CSV): {
+            std::ofstream ptFile(outfilename, std::ios::out);
+            dT->writeContactsAsCsv(ptFile, force_thres);
+            break;
+        }
+        case (OUTPUT_FORMAT::BINARY): {
+            // std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
+            //// TODO: Implement it
+            DEME_WARNING("Binary contact pair output is not implemented yet, using CSV...");
             std::ofstream ptFile(outfilename, std::ios::out);
             dT->writeContactsAsCsv(ptFile, force_thres);
             break;

@@ -50,24 +50,27 @@ find_path(
 # nvidia_helper_math doesn't require any extra configuration, so just set the path 
 set(NVIDIAMathDir ${CMAKE_CURRENT_LIST_DIR}/thirdparty/nvidia_helper_math)
 
-# Find ChPF, else fetch it 
-find_package(ChPF 3.0 QUIET)
+# Let the user decide if they want to use ChPF
+option(USE_CHPF "Toggle the use of ChPF for outputting" OFF)
 
-if (NOT ChPF_FOUND) 		
-	FetchContent_Declare(
-		ChPF
-		GIT_REPOSITORY	https://gitlab.com/uwsbel/chpf.git
-		GIT_TAG			0699f01e720cecf58719a1651ab797c6a62a1897
-	)
-	FetchContent_MakeAvailable(ChPF)
+if(USE_CHPF)
+	# Find ChPF, else fetch it 
+    find_package(ChPF 3.0 QUIET)
+    if (NOT ChPF_FOUND)         
+        FetchContent_Declare(
+            ChPF
+            GIT_REPOSITORY  https://gitlab.com/uwsbel/chpf.git
+            GIT_TAG         0699f01e720cecf58719a1651ab797c6a62a1897
+        )
+        FetchContent_MakeAvailable(ChPF)
+    endif()
 
-endif()
-
-# Based on whether ChPF was found or fetched, set the target name CMake can use to find it 
-if (ChPF_FOUND) 
-	set(ChPF_IMPORTED_NAME "ChPF::ChPF")
-elseif (chpf_POPULATED)
-	set(ChPF_IMPORTED_NAME "ChPF")
+	# Based on whether ChPF was found or fetched, set the target name CMake can use to find it 
+    if (ChPF_FOUND) 
+        set(ChPF_IMPORTED_NAME "ChPF::ChPF")
+    elseif (chpf_POPULATED)
+        set(ChPF_IMPORTED_NAME "ChPF")
+    endif()
 endif()
 
 
@@ -143,14 +146,30 @@ target_include_directories(simulator_multi_gpu
 	PUBLIC ${CORE_INTERFACE}
 )
 
-target_link_libraries(simulator_multi_gpu
-	PUBLIC CUDA::cudart
-	PUBLIC CUDA::nvrtc
-	PUBLIC CUDA::cuda_driver
-	PUBLIC ${ChPF_IMPORTED_NAME}
-	PUBLIC DEMERuntimeDataHelper
-)
+# If use ChPF, inform the source
+if(USE_CHPF)
+    target_compile_definitions(simulator_multi_gpu PUBLIC DEME_USE_CHPF)
+	set(USE_CHPF_STR "ON")
 
+	target_link_libraries(simulator_multi_gpu
+		PUBLIC CUDA::cudart
+		PUBLIC CUDA::nvrtc
+		PUBLIC CUDA::cuda_driver
+		PUBLIC ${ChPF_IMPORTED_NAME}
+		PUBLIC DEMERuntimeDataHelper
+	)
+else()
+	set(USE_CHPF_STR "OFF")
+
+	target_link_libraries(simulator_multi_gpu
+		PUBLIC CUDA::cudart
+		PUBLIC CUDA::nvrtc
+		PUBLIC CUDA::cuda_driver
+		PUBLIC DEMERuntimeDataHelper
+	)
+endif()
+
+# Specific to Windows...
 if(WIN32)
 	target_link_libraries(simulator_multi_gpu 
 		PUBLIC dbghelp)
@@ -177,7 +196,7 @@ install(
 )
 
 install(CODE "message(\"Removing build-tree libraries from installation target...\")")
-install(CODE "file(REMOVE \"$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libDEMERuntimeDataHelper.*\")")
+install(CODE "file(REMOVE \"$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libDEMERuntimeDataHelper.so\")")
 
 install(
 	TARGETS DEMERuntimeDataHelper_install

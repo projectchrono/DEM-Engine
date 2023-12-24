@@ -73,9 +73,7 @@ int main() {
         DEMSim.LoadClumpType(mass, MOI, GetDEMEDataFile("clumps/ellipsoid_2_1_1.csv"), mat_type_particles);
     my_template->Scale(scaling);
 
-    // The bowl used has two parts. The bowl (hourglass.obj) we have in the repo has a hole at the bottom, so we use a
-    // cap (hourglass_cap.obj) to plug it. They were originally created for some other simulations, we just reuse them
-    // here...
+    // Load the excavator mesh...
     auto excavator = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/excavator.obj"), mat_type_walls);
     // Upon-loading move command is used to move the mesh's (0,0,0) to its MOI, this is needed for DEME simulations. But
     // the mesh is already created so.
@@ -132,12 +130,6 @@ int main() {
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
-
-    // 256 or 512 are common choices. Note that in cases where the force model is modified, too many registers may be
-    // used in the kernel, so we have to reduce this number to use 256. In other cases (and most cases), 512 is fine and
-    // may make the code run a bit faster. Usually, the user do not have to call SetForceCalcThreadsPerBlock if they
-    // don't know the implication.
-    DEMSim.SetForceCalcThreadsPerBlock(512);
     DEMSim.Initialize();
 
     path out_dir = current_path();

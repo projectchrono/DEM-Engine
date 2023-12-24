@@ -1080,14 +1080,14 @@ class DEMSolver {
     /// Recommend "INFO".
     void SetVerbosity(const std::string& verbose);
     /// @brief Choose sphere and clump output file format.
-    /// @param format Choice among "CSV", "BINARY" or "CHPF".
+    /// @param format Choice among "CSV", "BINARY".
     void SetOutputFormat(const std::string& format);
     /// @brief Specify the information that needs to go into the clump or sphere output files.
     /// @param content A list of "XYZ", "QUAT", "ABSV", "VEL", "ANG_VEL", "ABS_ACC", "ACC", "ANG_ACC", "FAMILY", "MAT",
     /// "OWNER_WILDCARD" and/or "GEO_WILDCARD".
     void SetOutputContent(const std::vector<std::string>& content);
     /// @brief Specify the file format of contact pairs.
-    /// @param format Choice among "CSV", "BINARY" or "CHPF".
+    /// @param format Choice among "CSV", "BINARY".
     void SetContactOutputFormat(const std::string& format);
     /// @brief Specify the information that needs to go into the contact pair output files.
     /// @param content A list of "CNT_TYPE", "FORCE", "POINT", "COMPONENT", "NORMAL", "TORQUE", "CNT_WILDCARD", "OWNER",

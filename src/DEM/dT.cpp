@@ -8,7 +8,9 @@
 #include <thread>
 #include <algorithm>
 
-#include <chpf.hpp>
+#ifdef DEME_USE_CHPF
+    #include <chpf.hpp>
+#endif
 #include <core/ApiVersion.h>
 #include <core/utils/JitHelper.h>
 #include <DEM/dT.h>
@@ -1005,6 +1007,7 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
                      nExistingSpheres, nExistingFacets, nExistingAnalGM);
 }
 
+#ifdef DEME_USE_CHPF
 void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
     chpf::Writer pw;
     // pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, mass);
@@ -1079,6 +1082,7 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
         // pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, {}, families);
     }
 }
+#endif
 
 void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
     std::ostringstream outstrstream;
@@ -1226,6 +1230,7 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
     ptFile << outstrstream.str();
 }
 
+#ifdef DEME_USE_CHPF
 void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy) const {
     //// TODO: Note using accuracy
     chpf::Writer pw;
@@ -1304,6 +1309,7 @@ void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile, unsigned int acc
         // pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, {}, families);
     }
 }
+#endif
 
 void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accuracy) const {
     std::ostringstream outstrstream;

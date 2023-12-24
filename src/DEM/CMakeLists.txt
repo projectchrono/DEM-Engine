@@ -14,12 +14,18 @@ target_include_directories(
 	PUBLIC ${NVIDIAMathDir}
 )
 
-target_link_libraries(
-	DEM
-	PUBLIC CUB::CUB
-	PUBLIC ${ChPF_IMPORTED_NAME}
-)
-
+if(USE_CHPF)
+	target_link_libraries(
+		DEM
+		PUBLIC CUB::CUB
+		PUBLIC ${ChPF_IMPORTED_NAME}
+	)
+else()
+	target_link_libraries(
+		DEM
+		PUBLIC CUB::CUB
+	)
+endif()
 
 set(DEM_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/kT.h

@@ -99,8 +99,6 @@ int main() {
     DEMSim.SetErrorOutVelocity(20.);
     // Force the solver to error out if something went crazy. A good practice to add them, but not necessary.
     DEMSim.SetErrorOutAvgContacts(50);
-    // If no custom force model is used, 512 should be safe. But ForceCalcThreadsPerBlock's effect is minor.
-    DEMSim.SetForceCalcThreadsPerBlock(512);
 
     // The two following methods set how proactive the solver is in avoiding having its bins (for contact detection) too
     // large or too small, and numbers close to 1 means more proactive. Usually, the user do not have to manually set it

@@ -564,9 +564,11 @@ class DEMDynamicThread {
     void packDataPointers();
     void packTransferPointers(DEMKinematicThread*& kT);
 
+#ifdef DEME_USE_CHPF
     void writeSpheresAsChpf(std::ofstream& ptFile) const;
-    void writeSpheresAsCsv(std::ofstream& ptFile) const;
     void writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy = 10) const;
+#endif
+    void writeSpheresAsCsv(std::ofstream& ptFile) const;
     void writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accuracy = 10) const;
     void writeContactsAsCsv(std::ofstream& ptFile, float force_thres = DEME_TINY_FLOAT) const;
     void writeMeshesAsVtk(std::ofstream& ptFile);
