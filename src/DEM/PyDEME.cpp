@@ -488,6 +488,15 @@ PYBIND11_MODULE(DEME, obj) {
              "Specify the file format of contact pairs.")
         .def("SetVerbosity", static_cast<void (deme::DEMSolver::*)(const std::string&)>(&deme::DEMSolver::SetVerbosity),
              "Set the verbosity level of the solver.")
+
+        .def("AddKernelInclude", &deme::DEMSolver::AddKernelInclude,
+             "Add a library that the kernels will be compiled with (so that the user can use the provided methods in "
+             "their customized code, like force model).")
+        .def("SetKernelInclude", &deme::DEMSolver::SetKernelInclude,
+             "Set the kernels' headers' extra include lines. Useful for customization.")
+        .def("RemoveKernelInclude", &deme::DEMSolver::RemoveKernelInclude,
+             "Remove all extra libraries that the kernels `include' in their headers.")
+
         .def("LoadMaterial",
              static_cast<std::shared_ptr<deme::DEMMaterial> (deme::DEMSolver::*)(
                  const std::unordered_map<std::string, float>&)>(&deme::DEMSolver::LoadMaterial),
