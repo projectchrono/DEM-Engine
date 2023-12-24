@@ -331,12 +331,11 @@ enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
         }                                         \
     }
 
-// Jitify options include suppressing variable-not-used warnings, but since we don't use CUB block primitives, we don't
-// need std::string(DEME_CUDA_TOOLKIT_HEADERS).
-#define DEME_JITIFY_OPTIONS                                                                       \
-    {                                                                                             \
-        "-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(), \
-            "-diag-suppress=550", "-diag-suppress=177"                                            \
+// Jitify options include suppressing variable-not-used warnings. We could use CUDA lib functions too.
+#define DEME_JITIFY_OPTIONS                                                                           \
+    {                                                                                                 \
+        "-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(),     \
+            "-I" + std::string(DEME_CUDA_TOOLKIT_HEADERS), "-diag-suppress=550", "-diag-suppress=177" \
     }
 
 // I wasn't able to resolve a decltype problem with vector of vectors, so I have to create another macro for this kind
