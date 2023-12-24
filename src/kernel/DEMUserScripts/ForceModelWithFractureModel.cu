@@ -51,7 +51,7 @@ if (unbroken > DEME_TINY_FLOAT) {
     initialLength = (unbroken > 1.0) ? overlapDepth : initialLength;  // reusing a variable that survives the loop
     unbroken = (unbroken > 1.0) ? 1.0 : unbroken;
 
-    float kn = 150.0 * (ARadius * BRadius) * (E_A * E_B) /
+    float kn = 50.0 * (ARadius * BRadius) * (E_A * E_B) /
                ((ARadius * E_A) + (BRadius + E_B));  // to be checked for formulation with 2
     // float kn = 0.5 * ARadius * E_A ;
     float kt = 1.f / 2.5f * kn;
