@@ -752,6 +752,9 @@ void DEMSolver::figureOutFamilyMasks() {
         this_family_info.used = true;
         this_family_info.family = user_family;
 
+        if (preInfo.linPosPre != "none") {
+            this_family_info.linPosPre = preInfo.linPosPre;
+        }
         if (preInfo.linPosX != "none") {
             this_family_info.linPosX = preInfo.linPosX;
         }
@@ -761,12 +764,16 @@ void DEMSolver::figureOutFamilyMasks() {
         if (preInfo.linPosZ != "none") {
             this_family_info.linPosZ = preInfo.linPosZ;
         }
+
         if (preInfo.oriQ != "none") {
             this_family_info.oriQ = preInfo.oriQ;
         }
 
         // If it is not none, then it is automatically dictated by prescribed motion and will not accept influence by
         // other sim entities
+        if (preInfo.linVelPre != "none") {
+            this_family_info.linVelPre = preInfo.linVelPre;
+        }
         if (preInfo.linVelX != "none") {
             this_family_info.linVelX = preInfo.linVelX;
         }
@@ -775,6 +782,10 @@ void DEMSolver::figureOutFamilyMasks() {
         }
         if (preInfo.linVelZ != "none") {
             this_family_info.linVelZ = preInfo.linVelZ;
+        }
+
+        if (preInfo.rotVelPre != "none") {
+            this_family_info.rotVelPre = preInfo.rotVelPre;
         }
         if (preInfo.rotVelX != "none") {
             this_family_info.rotVelX = preInfo.rotVelX;
@@ -801,6 +812,9 @@ void DEMSolver::figureOutFamilyMasks() {
         this_family_info.linPosZPrescribed = this_family_info.linPosZPrescribed || preInfo.linPosZPrescribed;
 
         // Then register the accelerations that are added on top of `normal physics'
+        if (preInfo.accPre != "none") {
+            this_family_info.accPre = preInfo.accPre;
+        }
         if (preInfo.accX != "none") {
             this_family_info.accX = preInfo.accX;
         }
@@ -809,6 +823,10 @@ void DEMSolver::figureOutFamilyMasks() {
         }
         if (preInfo.accZ != "none") {
             this_family_info.accZ = preInfo.accZ;
+        }
+
+        if (preInfo.angAccPre != "none") {
+            this_family_info.angAccPre = preInfo.angAccPre;
         }
         if (preInfo.angAccX != "none") {
             this_family_info.angAccX = preInfo.angAccX;
@@ -1441,6 +1459,7 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
         posStr += "case " + std::to_string(preInfo.family) + ": {";
         accStr += "case " + std::to_string(preInfo.family) + ": {";
         {
+            velStr += "{" + preInfo.linVelPre + ";";
             if (preInfo.linVelX != "none") {
                 velStr += "vX = " + preInfo.linVelX + ";";
             }
@@ -1450,6 +1469,9 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
             if (preInfo.linVelZ != "none") {
                 velStr += "vZ = " + preInfo.linVelZ + ";";
             }
+            velStr += "}";
+
+            velStr += "{" + preInfo.rotVelPre + ";";
             if (preInfo.rotVelX != "none") {
                 velStr += "omgBarX = " + preInfo.rotVelX + ";";
             }
@@ -1459,6 +1481,8 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
             if (preInfo.rotVelZ != "none") {
                 velStr += "omgBarZ = " + preInfo.rotVelZ + ";";
             }
+            velStr += "}";
+
             velStr += "LinXPrescribed = " + std::to_string(preInfo.linVelXPrescribed) + ";";
             velStr += "LinYPrescribed = " + std::to_string(preInfo.linVelYPrescribed) + ";";
             velStr += "LinZPrescribed = " + std::to_string(preInfo.linVelZPrescribed) + ";";
@@ -1468,16 +1492,25 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
         }
         velStr += "break; }";
         {
+            posStr += "{" + preInfo.linPosPre + ";";
             if (preInfo.linPosX != "none")
                 posStr += "X = " + preInfo.linPosX + ";";
             if (preInfo.linPosY != "none")
                 posStr += "Y = " + preInfo.linPosY + ";";
             if (preInfo.linPosZ != "none")
                 posStr += "Z = " + preInfo.linPosZ + ";";
+            posStr += "}";
+
             if (preInfo.oriQ != "none") {
-                posStr += "float4 myOriQ = " + preInfo.oriQ + ";";
-                posStr += "oriQw = myOriQ.w; oriQx = myOriQ.x; oriQy = myOriQ.y; oriQz = myOriQ.z;";
+                posStr += "{";
+                std::string user_str = replace_pattern(preInfo.oriQ, "return", "float4 DEME_Presc_OriQ = ");
+                posStr += user_str + ";";
+                posStr +=
+                    "oriQw = DEME_Presc_OriQ.w; oriQx = DEME_Presc_OriQ.x; oriQy = DEME_Presc_OriQ.y; oriQz = "
+                    "DEME_Presc_OriQ.z;";
+                posStr += "}";
             }
+
             posStr += "LinXPrescribed = " + std::to_string(preInfo.linPosXPrescribed) + ";";
             posStr += "LinYPrescribed = " + std::to_string(preInfo.linPosYPrescribed) + ";";
             posStr += "LinZPrescribed = " + std::to_string(preInfo.linPosZPrescribed) + ";";
@@ -1485,18 +1518,23 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
         }
         posStr += "break; }";
         {
+            accStr += "{" + preInfo.accPre + ";";
             if (preInfo.accX != "none")
                 accStr += "accX = " + preInfo.accX + ";";
             if (preInfo.accY != "none")
                 accStr += "accY = " + preInfo.accY + ";";
             if (preInfo.accZ != "none")
                 accStr += "accZ = " + preInfo.accZ + ";";
+            accStr += "}";
+
+            accStr += "{" + preInfo.angAccPre + ";";
             if (preInfo.angAccX != "none")
                 accStr += "angAccX = " + preInfo.angAccX + ";";
             if (preInfo.angAccY != "none")
                 accStr += "angAccY = " + preInfo.angAccY + ";";
             if (preInfo.angAccZ != "none")
                 accStr += "angAccZ = " + preInfo.angAccZ + ";";
+            accStr += "}";
         }
         accStr += "break; }";
     }

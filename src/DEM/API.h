@@ -584,22 +584,33 @@ class DEMSolver {
     /// that family).
     void DisableContactBetweenFamilies(unsigned int ID1, unsigned int ID2);
 
-    /// Re-enable contact between 2 families after the system is initialized
+    /// Re-enable contact between 2 families after the system is initialized.
     void EnableContactBetweenFamilies(unsigned int ID1, unsigned int ID2);
 
-    /// Prevent entites associated with this family to be outputted to files
+    /// Prevent entites associated with this family to be outputted to files.
     void DisableFamilyOutput(unsigned int ID);
 
     /// Mark all entities in this family to be fixed.
     void SetFamilyFixed(unsigned int ID);
 
-    /// Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this family will
-    /// not be influenced by the force exerted from other simulation entites (both linear and rotational motions).
+    /// If dictate is set to true, then
+
+    /// @brief Set the prescribed linear velocity to all entities in a family.
+    /// @param ID Family number.
+    /// @param velX X component of velocity.
+    /// @param velY Y component of velocity.
+    /// @param velZ Z component of velocity.
+    /// @param dictate If true, this family will not be influenced by the force exerted from other simulation entites
+    /// (both linear and rotational motions); if false, only specified components (that is, not specified with "none")
+    /// will not be influenced by the force exerted from other simulation entites.
+    /// @param pre Prerequisite code. For example, you can generate a float3 with this prerequisite code, then assign
+    /// XYZ components based on this float3.
     void SetFamilyPrescribedLinVel(unsigned int ID,
                                    const std::string& velX,
                                    const std::string& velY,
                                    const std::string& velZ,
-                                   bool dictate = true);
+                                   bool dictate = true,
+                                   const std::string& pre = " ");
     /// Let the linear velocities of all entites in this family always keep `as is', and not influenced by the force
     /// exerted from other simulation entites.
     void SetFamilyPrescribedLinVel(unsigned int ID);
@@ -613,13 +624,22 @@ class DEMSolver {
     /// influenced by the force exerted from other simulation entites.
     void SetFamilyPrescribedLinVelZ(unsigned int ID);
 
-    /// Set the prescribed angular velocity to all entities in a family. If dictate is set to true, then this family
-    /// will not be fluenced by the force exerted from other simulation entites (both linear and rotational motions).
+    /// @brief Set the prescribed angular velocity to all entities in a family.
+    /// @param ID Family number.
+    /// @param velX X component of angular velocity.
+    /// @param velY Y component of angular velocity.
+    /// @param velZ Z component of angular velocity.
+    /// @param dictate If true, this family will not be influenced by the force exerted from other simulation entites
+    /// (both linear and rotational motions); if false, only specified components (that is, not specified with "none")
+    /// will not be influenced by the force exerted from other simulation entites.
+    /// @param pre Prerequisite code. For example, you can generate a float3 with this prerequisite code, then assign
+    /// XYZ components based on this float3.
     void SetFamilyPrescribedAngVel(unsigned int ID,
                                    const std::string& velX,
                                    const std::string& velY,
                                    const std::string& velZ,
-                                   bool dictate = true);
+                                   bool dictate = true,
+                                   const std::string& pre = " ");
     /// Let the linear velocities of all entites in this family always keep `as is', and not influenced by the force
     /// exerted from other simulation entites.
     void SetFamilyPrescribedAngVel(unsigned int ID);
@@ -639,12 +659,16 @@ class DEMSolver {
     /// @param Y Y coordinate (can be an expression).
     /// @param Z Z coordinate (can be an expression).
     /// @param dictate If true, prevent entities in this family to have (both linear and rotational) positional updates
-    /// resulted from the `simulation physics'; otherwise, the `simulation physics' still takes effect.
+    /// resulted from the `simulation physics'; if false, only specified components (that is, not specified with "none")
+    /// will not be influenced by the force exerted from other simulation entites.
+    /// @param pre Prerequisite code. For example, you can generate a float3 with this prerequisite code, then assign
+    /// XYZ components based on this float3.
     void SetFamilyPrescribedPosition(unsigned int ID,
                                      const std::string& X,
                                      const std::string& Y,
                                      const std::string& Z,
-                                     bool dictate = true);
+                                     bool dictate = true,
+                                     const std::string& pre = " ");
     /// @brief Let the linear positions of all entites in this family always keep `as is'.
     void SetFamilyPrescribedPosition(unsigned int ID);
     /// @brief Let the X component of the linear positions of all entites in this family always keep `as is'.
@@ -657,7 +681,8 @@ class DEMSolver {
     /// @brief Keep the orientation quaternions of all entites in this family to remain exactly the user-specified
     /// values.
     /// @param ID Family number.
-    /// @param q_formula A formula from which the quaternion should be calculated.
+    /// @param q_formula The code from which the quaternion should be calculated. Must `return' a float4. For example,
+    /// "float tmp=make_float4(1,1,1,1); return tmp;".
     /// @param dictate If true, prevent entities in this family to have (both linear and rotational) positional updates
     /// resulted from the `simulation physics'; otherwise, the `simulation physics' still takes effect.
     void SetFamilyPrescribedQuaternion(unsigned int ID, const std::string& q_formula, bool dictate = true);
@@ -665,23 +690,55 @@ class DEMSolver {
     void SetFamilyPrescribedQuaternion(unsigned int ID);
 
     /// @brief The entities in this family will always experience an extra acceleration defined using this method.
-    void AddFamilyPrescribedAcc(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
+    /// @param pre Prerequisite code. For example, you can generate a float3 with this prerequisite code, then assign
+    /// XYZ components based on this float3.
+    void AddFamilyPrescribedAcc(unsigned int ID,
+                                const std::string& X,
+                                const std::string& Y,
+                                const std::string& Z,
+                                const std::string& pre = " ");
     /// @brief The entities in this family will always experience an extra angular acceleration defined using this
     /// method.
-    void AddFamilyPrescribedAngAcc(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
+    /// @param pre Prerequisite code. For example, you can generate a float3 with this prerequisite code, then assign
+    /// XYZ components based on this float3.
+    void AddFamilyPrescribedAngAcc(unsigned int ID,
+                                   const std::string& X,
+                                   const std::string& Y,
+                                   const std::string& Z,
+                                   const std::string& pre = " ");
 
     /// @brief The entities in this family will always experience an added linear-velocity correction defined using this
     /// method. At the same time, they are still subject to the `simulation physics'.
-    void CorrectFamilyLinVel(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
+    /// @param pre Prerequisite code. For example, you can generate a float3 with this prerequisite code, then assign
+    /// XYZ components based on this float3.
+    void CorrectFamilyLinVel(unsigned int ID,
+                             const std::string& X,
+                             const std::string& Y,
+                             const std::string& Z,
+                             const std::string& pre = " ");
     /// @brief The entities in this family will always experience an added angular-velocity correction defined using
     /// this method. At the same time, they are still subject to the `simulation physics'.
-    void CorrectFamilyAngVel(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
+    /// @param pre Prerequisite code. For example, you can generate a float3 with this prerequisite code, then assign
+    /// XYZ components based on this float3.
+    void CorrectFamilyAngVel(unsigned int ID,
+                             const std::string& X,
+                             const std::string& Y,
+                             const std::string& Z,
+                             const std::string& pre = " ");
 
     /// @brief The entities in this family will always experience an added positional correction defined using this
     /// method. At the same time, they are still subject to the `simulation physics'.
-    void CorrectFamilyPosition(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z);
+    /// @param pre Prerequisite code. For example, you can generate a float3 with this prerequisite code, then assign
+    /// XYZ components based on this float3.
+    void CorrectFamilyPosition(unsigned int ID,
+                               const std::string& X,
+                               const std::string& Y,
+                               const std::string& Z,
+                               const std::string& pre = " ");
     /// @brief The entities in this family will always experience an added quaternion correction defined using this
     /// method. At the same time, they are still subject to the `simulation physics'.
+    /// @param q_formula The code from which the quaternion should be calculated. Must `return' a float4. For example,
+    /// "float tmp=make_float4(1,1,1,1); return tmp;".
     void CorrectFamilyQuaternion(unsigned int ID, const std::string& q_formula);
 
     /// @brief Set the names for the extra quantities that will be associated with each contact pair.
@@ -1142,7 +1199,7 @@ class DEMSolver {
 
     /// @brief Add a library that the kernels will be compiled with (so that the user can use the provided methods in
     /// their customized code, like force model).
-    /// @param lib_name The lib to include. For example, "time.h".
+    /// @param lib_name The lib to include. For example, "math_functions.h".
     void AddKernelInclude(const std::string& lib_name);
     /// @brief Set the kernels' headers' extra include lines. Useful for customization.
     /// @param includes The extra headers, as a string.
@@ -1289,7 +1346,7 @@ class DEMSolver {
     int m_updateFreq = 20;
 
     // The extra libs that the kernels need to include.
-    std::string kernel_includes = "#include <stdlib.h>\n";
+    std::string kernel_includes = "#include <curand_kernel.h>\n";
 
     // If and how we should add boundaries to the simulation world upon initialization. Choose between none, all and
     // top_open.
