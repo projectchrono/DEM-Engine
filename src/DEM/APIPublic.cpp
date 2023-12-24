@@ -758,7 +758,8 @@ void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
                                           const std::string& velX,
                                           const std::string& velY,
                                           const std::string& velZ,
-                                          bool dictate) {
+                                          bool dictate,
+                                          const std::string& pre) {
     assertSysNotInit("SetFamilyPrescribedLinVel");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
@@ -788,6 +789,8 @@ void DEMSolver::SetFamilyPrescribedLinVel(unsigned int ID,
     if (velZ != "none") {
         preInfo.linVelZPrescribed = true;
     }
+
+    preInfo.linVelPre = pre;
 
     preInfo.used = true;
 
@@ -857,7 +860,8 @@ void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID,
                                           const std::string& velX,
                                           const std::string& velY,
                                           const std::string& velZ,
-                                          bool dictate) {
+                                          bool dictate,
+                                          const std::string& pre) {
     assertSysNotInit("SetFamilyPrescribedAngVel");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
@@ -888,6 +892,8 @@ void DEMSolver::SetFamilyPrescribedAngVel(unsigned int ID,
     if (velZ != "none") {
         preInfo.rotVelZPrescribed = true;
     }
+
+    preInfo.rotVelPre = pre;
 
     preInfo.used = true;
 
@@ -957,7 +963,8 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
                                             const std::string& X,
                                             const std::string& Y,
                                             const std::string& Z,
-                                            bool dictate) {
+                                            bool dictate,
+                                            const std::string& pre) {
     assertSysNotInit("SetFamilyPrescribedPosition");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied prescribed motion to family %u, but family number should not be larger than %u.", ID,
@@ -986,6 +993,8 @@ void DEMSolver::SetFamilyPrescribedPosition(unsigned int ID,
     if (Z != "none") {
         preInfo.linPosZPrescribed = true;
     }
+
+    preInfo.linPosPre = pre;
 
     preInfo.used = true;
 
@@ -1066,11 +1075,17 @@ void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID, const std::string
     preInfo.linPosYPrescribed = dictate;
     preInfo.linPosZPrescribed = dictate;
 
-    preInfo.oriQ = q_formula;
-    // If the user does specify, then `Set' methods dictate motion
-    if (q_formula != "none") {
-        preInfo.rotPosPrescribed = true;
+    // Make sure there is return
+    if (!match_whole_word(q_formula, "return")) {
+        DEME_ERROR(
+            "CorrectFamilyQuaternion call must supply a code string that returns a float4, like 'return "
+            "make_float4(0,0,0,1)'.");
     }
+
+    preInfo.oriQ = q_formula;
+
+    // If the user does specify, then `Set' methods dictate motion
+    preInfo.rotPosPrescribed = true;
 
     preInfo.used = true;
 
@@ -1094,7 +1109,8 @@ void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID) {
 void DEMSolver::AddFamilyPrescribedAcc(unsigned int ID,
                                        const std::string& X,
                                        const std::string& Y,
-                                       const std::string& Z) {
+                                       const std::string& Z,
+                                       const std::string& pre) {
     assertSysNotInit("AddFamilyPrescribedAcc");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You added acceleration to family %u, but family number should not be larger than %u.", ID,
@@ -1106,6 +1122,7 @@ void DEMSolver::AddFamilyPrescribedAcc(unsigned int ID,
     preInfo.accX = X;
     preInfo.accY = Y;
     preInfo.accZ = Z;
+    preInfo.accPre = pre;
 
     preInfo.used = true;
     m_input_family_prescription.push_back(preInfo);
@@ -1114,7 +1131,8 @@ void DEMSolver::AddFamilyPrescribedAcc(unsigned int ID,
 void DEMSolver::AddFamilyPrescribedAngAcc(unsigned int ID,
                                           const std::string& X,
                                           const std::string& Y,
-                                          const std::string& Z) {
+                                          const std::string& Z,
+                                          const std::string& pre) {
     assertSysNotInit("AddFamilyPrescribedAngAcc");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You added angular acceleration to family %u, but family number should not be larger than %u.", ID,
@@ -1126,12 +1144,17 @@ void DEMSolver::AddFamilyPrescribedAngAcc(unsigned int ID,
     preInfo.angAccX = X;
     preInfo.angAccY = Y;
     preInfo.angAccZ = Z;
+    preInfo.angAccPre = pre;
 
     preInfo.used = true;
     m_input_family_prescription.push_back(preInfo);
 }
 
-void DEMSolver::CorrectFamilyLinVel(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z) {
+void DEMSolver::CorrectFamilyLinVel(unsigned int ID,
+                                    const std::string& X,
+                                    const std::string& Y,
+                                    const std::string& Z,
+                                    const std::string& pre) {
     assertSysNotInit("CorrectFamilyLinVel");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied motion correction to family %u, but family number should not be larger than %u.", ID,
@@ -1143,6 +1166,7 @@ void DEMSolver::CorrectFamilyLinVel(unsigned int ID, const std::string& X, const
     preInfo.linVelX = X;
     preInfo.linVelY = Y;
     preInfo.linVelZ = Z;
+    preInfo.linVelPre = pre;
 
     // Correction methods do not resist true simulation physics
 
@@ -1150,7 +1174,11 @@ void DEMSolver::CorrectFamilyLinVel(unsigned int ID, const std::string& X, const
     m_input_family_prescription.push_back(preInfo);
 }
 
-void DEMSolver::CorrectFamilyAngVel(unsigned int ID, const std::string& X, const std::string& Y, const std::string& Z) {
+void DEMSolver::CorrectFamilyAngVel(unsigned int ID,
+                                    const std::string& X,
+                                    const std::string& Y,
+                                    const std::string& Z,
+                                    const std::string& pre) {
     assertSysNotInit("CorrectFamilyAngVel");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied motion correction to family %u, but family number should not be larger than %u.", ID,
@@ -1162,6 +1190,7 @@ void DEMSolver::CorrectFamilyAngVel(unsigned int ID, const std::string& X, const
     preInfo.rotVelX = X;
     preInfo.rotVelY = Y;
     preInfo.rotVelZ = Z;
+    preInfo.rotVelPre = pre;
 
     // Correction methods do not resist true simulation physics
 
@@ -1172,7 +1201,8 @@ void DEMSolver::CorrectFamilyAngVel(unsigned int ID, const std::string& X, const
 void DEMSolver::CorrectFamilyPosition(unsigned int ID,
                                       const std::string& X,
                                       const std::string& Y,
-                                      const std::string& Z) {
+                                      const std::string& Z,
+                                      const std::string& pre) {
     assertSysNotInit("CorrectFamilyPosition");
     if (ID > std::numeric_limits<family_t>::max()) {
         DEME_ERROR("You applied motion correction to family %u, but family number should not be larger than %u.", ID,
@@ -1184,6 +1214,7 @@ void DEMSolver::CorrectFamilyPosition(unsigned int ID,
     preInfo.linPosX = X;
     preInfo.linPosY = Y;
     preInfo.linPosZ = Z;
+    preInfo.linPosPre = pre;
 
     // Correction methods do not resist true simulation physics
 
@@ -1199,6 +1230,13 @@ void DEMSolver::CorrectFamilyQuaternion(unsigned int ID, const std::string& q_fo
     }
     familyPrescription_t preInfo;
     preInfo.family = ID;
+
+    // Make sure there is return
+    if (!match_whole_word(q_formula, "return")) {
+        DEME_ERROR(
+            "CorrectFamilyQuaternion call must supply a code string that returns a float4, like 'return "
+            "make_float4(0,0,0,1)'.");
+    }
 
     preInfo.oriQ = q_formula;
 
