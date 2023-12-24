@@ -1420,6 +1420,10 @@ void DEMSolver::DisableFamilyOutput(unsigned int ID) {
     m_no_output_families.insert(ID);
 }
 
+void DEMSolver::AddKernelInclude(const std::string& lib_name) {
+    kernel_includes += "#include <" + lib_name + ">\n";
+}
+
 std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterial(DEMMaterial& a_material) {
     std::shared_ptr<DEMMaterial> ptr = std::make_shared<DEMMaterial>(std::move(a_material));
     ptr->load_order = m_loaded_materials.size();
