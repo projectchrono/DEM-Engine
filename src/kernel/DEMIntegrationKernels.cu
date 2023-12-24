@@ -6,12 +6,12 @@ _kernelIncludes_
 // Apply presecibed velocity and report whether the `true' physics should be skipped, rather than added on top of
 // that
 template <typename T1, typename T2, typename T3, typename T4>
-inline __device__ void applyPrescribedVel(bool& LinXPrescribed,
-                                          bool& LinYPrescribed,
-                                          bool& LinZPrescribed,
-                                          bool& RotXPrescribed,
-                                          bool& RotYPrescribed,
-                                          bool& RotZPrescribed,
+inline __device__ void applyPrescribedVel(bool& LinVelXPrescribed,
+                                          bool& LinVelYPrescribed,
+                                          bool& LinVelZPrescribed,
+                                          bool& RotVelXPrescribed,
+                                          bool& RotVelYPrescribed,
+                                          bool& RotVelZPrescribed,
                                           T1& vX,
                                           T1& vY,
                                           T1& vZ,
@@ -103,8 +103,8 @@ inline __device__ void integrateVelPos(deme::bodyID_t thisClump,
                                        float t) {
     // Acquisition phase...
     deme::family_t family_code = granData->familyID[thisClump];
-    bool LinXPrescribed = false, LinYPrescribed = false, LinZPrescribed = false, RotXPrescribed = false,
-         RotYPrescribed = false, RotZPrescribed = false;
+    bool LinVelXPrescribed = false, LinVelYPrescribed = false, LinVelZPrescribed = false, RotVelXPrescribed = false,
+         RotVelYPrescribed = false, RotVelZPrescribed = false;
     bool LinXPrescribed = false, LinYPrescribed = false, LinZPrescribed = false, RotPrescribed = false;
     double X, Y, Z;
     // Keep tab of the old... we'll need that
@@ -124,11 +124,12 @@ inline __device__ void integrateVelPos(deme::bodyID_t thisClump,
 
         // The user may directly change v and omgBar info in global memory in applyPrescribedVel (XYZ and oriQ in this
         // call are read-only)
-        applyPrescribedVel(LinXPrescribed, LinYPrescribed, LinZPrescribed, RotXPrescribed, RotYPrescribed,
-                           RotZPrescribed, granData->vX[thisClump], granData->vY[thisClump], granData->vZ[thisClump],
-                           granData->omgBarX[thisClump], granData->omgBarY[thisClump], granData->omgBarZ[thisClump], X,
-                           Y, Z, granData->oriQw[thisClump], granData->oriQx[thisClump], granData->oriQy[thisClump],
-                           granData->oriQz[thisClump], family_code, (float)t);
+        applyPrescribedVel(LinVelXPrescribed, LinVelYPrescribed, LinVelZPrescribed, RotVelXPrescribed,
+                           RotVelYPrescribed, RotVelZPrescribed, granData->vX[thisClump], granData->vY[thisClump],
+                           granData->vZ[thisClump], granData->omgBarX[thisClump], granData->omgBarY[thisClump],
+                           granData->omgBarZ[thisClump], X, Y, Z, granData->oriQw[thisClump],
+                           granData->oriQx[thisClump], granData->oriQy[thisClump], granData->oriQz[thisClump],
+                           family_code, (float)t);
         // The user may directly change oriQ info (vX and omgBar in this call are read-only)
         applyPrescribedPos(LinXPrescribed, LinYPrescribed, LinZPrescribed, RotPrescribed, X, Y, Z,
                            granData->oriQw[thisClump], granData->oriQx[thisClump], granData->oriQy[thisClump],
@@ -150,38 +151,38 @@ inline __device__ void integrateVelPos(deme::bodyID_t thisClump,
                                granData->vZ[thisClump], granData->omgBarX[thisClump], granData->omgBarY[thisClump],
                                granData->omgBarZ[thisClump], family_code, (float)t);
 
-        if (!LinXPrescribed) {
+        if (!LinVelXPrescribed) {
             v_update.x = (granData->aX[thisClump] + extra_acc.x + simParams->Gx) * h;
             granData->vX[thisClump] += v_update.x;
         } else {
             old_v.x = granData->vX[thisClump];
         }
-        if (!LinYPrescribed) {
+        if (!LinVelYPrescribed) {
             v_update.y = (granData->aY[thisClump] + extra_acc.y + simParams->Gy) * h;
             granData->vY[thisClump] += v_update.y;
         } else {
             old_v.y = granData->vY[thisClump];
         }
-        if (!LinZPrescribed) {
+        if (!LinVelZPrescribed) {
             v_update.z = (granData->aZ[thisClump] + extra_acc.z + simParams->Gz) * h;
             granData->vZ[thisClump] += v_update.z;
         } else {
             old_v.z = granData->vZ[thisClump];
         }
 
-        if (!RotXPrescribed) {
+        if (!RotVelXPrescribed) {
             omgBar_update.x = (granData->alphaX[thisClump] + extra_angAcc.x) * h;
             granData->omgBarX[thisClump] += omgBar_update.x;
         } else {
             old_omgBar.x = granData->omgBarX[thisClump];
         }
-        if (!RotYPrescribed) {
+        if (!RotVelYPrescribed) {
             omgBar_update.y = (granData->alphaY[thisClump] + extra_angAcc.y) * h;
             granData->omgBarY[thisClump] += omgBar_update.y;
         } else {
             old_omgBar.y = granData->omgBarY[thisClump];
         }
-        if (!RotZPrescribed) {
+        if (!RotVelZPrescribed) {
             omgBar_update.z = (granData->alphaZ[thisClump] + extra_angAcc.z) * h;
             granData->omgBarZ[thisClump] += omgBar_update.z;
         } else {

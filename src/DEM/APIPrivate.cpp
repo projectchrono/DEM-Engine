@@ -1483,12 +1483,12 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
             }
             velStr += "}";
 
-            velStr += "LinXPrescribed = " + std::to_string(preInfo.linVelXPrescribed) + ";";
-            velStr += "LinYPrescribed = " + std::to_string(preInfo.linVelYPrescribed) + ";";
-            velStr += "LinZPrescribed = " + std::to_string(preInfo.linVelZPrescribed) + ";";
-            velStr += "RotXPrescribed = " + std::to_string(preInfo.rotVelXPrescribed) + ";";
-            velStr += "RotYPrescribed = " + std::to_string(preInfo.rotVelYPrescribed) + ";";
-            velStr += "RotZPrescribed = " + std::to_string(preInfo.rotVelZPrescribed) + ";";
+            velStr += "LinVelXPrescribed = " + std::to_string(preInfo.linVelXPrescribed) + ";";
+            velStr += "LinVelYPrescribed = " + std::to_string(preInfo.linVelYPrescribed) + ";";
+            velStr += "LinVelZPrescribed = " + std::to_string(preInfo.linVelZPrescribed) + ";";
+            velStr += "RotVelXPrescribed = " + std::to_string(preInfo.rotVelXPrescribed) + ";";
+            velStr += "RotVelYPrescribed = " + std::to_string(preInfo.rotVelYPrescribed) + ";";
+            velStr += "RotVelZPrescribed = " + std::to_string(preInfo.rotVelZPrescribed) + ";";
         }
         velStr += "break; }";
         {
