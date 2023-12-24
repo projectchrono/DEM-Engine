@@ -607,14 +607,17 @@ PYBIND11_MODULE(DEME, obj) {
 
         .def("SetFamilyPrescribedAngVel",
              static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, const std::string&,
-                                                   const std::string&, bool)>(
+                                                   const std::string&, bool, const std::string&)>(
                  &deme::DEMSolver::SetFamilyPrescribedAngVel),
-             "Let the linear velocities of all entites in this family always keep `as is', and not influenced by the "
-             "force exerted from other simulation entites.",
-             py::arg("ID"), py::arg("velX"), py::arg("velY"), py::arg("velZ"), py::arg("dictate") = true)
+             "Set the prescribed angular velocity to all entities in a family. If dictate is set to true, then this "
+             "family will not be influenced by the force exerted from other simulation entites (both linear and "
+             "rotational motions). If false, only specified components (that is, not specified with 'none') will not "
+             "be influenced by the force exerted from other simulation entites.",
+             py::arg("ID"), py::arg("velX"), py::arg("velY"), py::arg("velZ"), py::arg("dictate") = true,
+             py::arg("pre") = " ")
         .def("SetFamilyPrescribedAngVel",
              static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedAngVel),
-             "Let the linear velocities of all entites in this family always keep `as is', and not influenced by the "
+             "Let the angular velocities of all entites in this family always keep `as is', and not influenced by the "
              "force exerted from other simulation entites.")
         .def("SetFamilyPrescribedAngVelX", &deme::DEMSolver::SetFamilyPrescribedAngVelX,
              "Let the X component of the angular velocities of all entites in this family always keep `as is', and not "
@@ -628,12 +631,14 @@ PYBIND11_MODULE(DEME, obj) {
 
         .def("SetFamilyPrescribedLinVel",
              static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, const std::string&,
-                                                   const std::string&, bool)>(
+                                                   const std::string&, bool, const std::string&)>(
                  &deme::DEMSolver::SetFamilyPrescribedLinVel),
              "Set the prescribed linear velocity to all entities in a family. If dictate is set to true, then this "
              "family will not be influenced by the force exerted from other simulation entites (both linear and "
-             "rotational motions).",
-             py::arg("ID"), py::arg("velX"), py::arg("velY"), py::arg("velZ"), py::arg("dictate") = true)
+             "rotational motions). If false, only specified components (that is, not specified with 'none') will not "
+             "be influenced by the force exerted from other simulation entites.",
+             py::arg("ID"), py::arg("velX"), py::arg("velY"), py::arg("velZ"), py::arg("dictate") = true,
+             py::arg("pre") = " ")
         .def("SetFamilyPrescribedLinVel",
              static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedLinVel),
              "Let the linear velocities of all entites in this family always keep `as is', and not influenced by the "
@@ -650,10 +655,10 @@ PYBIND11_MODULE(DEME, obj) {
 
         .def("SetFamilyPrescribedPosition",
              static_cast<void (deme::DEMSolver::*)(unsigned int, const std::string&, const std::string&,
-                                                   const std::string&, bool)>(
+                                                   const std::string&, bool, const std::string&)>(
                  &deme::DEMSolver::SetFamilyPrescribedPosition),
              "Keep the positions of all entites in this family to remain exactly the user-specified values.",
-             py::arg("ID"), py::arg("velX"), py::arg("velY"), py::arg("velZ"), py::arg("dictate") = true)
+             py::arg("ID"), py::arg("X"), py::arg("Y"), py::arg("Z"), py::arg("dictate") = true, py::arg("pre") = " ")
         .def("SetFamilyPrescribedPosition",
              static_cast<void (deme::DEMSolver::*)(unsigned int)>(&deme::DEMSolver::SetFamilyPrescribedPosition),
              "Keep the positions of all entites in this family to remain as is.")
@@ -675,24 +680,30 @@ PYBIND11_MODULE(DEME, obj) {
              "Let the orientation quaternions of all entites in this family always keep `as is'.")
 
         .def("AddFamilyPrescribedAcc", &deme::DEMSolver::AddFamilyPrescribedAcc,
-             "The entities in this family will always experienced an extra acceleration defined using this method.")
+             "The entities in this family will always experienced an extra acceleration defined using this method.",
+             py::arg("ID"), py::arg("X"), py::arg("Y"), py::arg("Z"), py::arg("pre") = " ")
         .def("AddFamilyPrescribedAngAcc", &deme::DEMSolver::AddFamilyPrescribedAngAcc,
              "The entities in this family will always experienced an extra angular acceleration defined using this "
-             "method.")
+             "method.",
+             py::arg("ID"), py::arg("X"), py::arg("Y"), py::arg("Z"), py::arg("pre") = " ")
 
         .def("CorrectFamilyLinVel", &deme::DEMSolver::CorrectFamilyLinVel,
              "The entities in this family will always experience an added linear-velocity correction defined using "
-             "this method. At the same time, they are still subject to the `simulation physics'.")
+             "this method. At the same time, they are still subject to the `simulation physics'.",
+             py::arg("ID"), py::arg("X"), py::arg("Y"), py::arg("Z"), py::arg("pre") = " ")
         .def("CorrectFamilyAngVel", &deme::DEMSolver::CorrectFamilyAngVel,
              "The entities in this family will always experience an added angular-velocity correction defined using "
-             "this method. At the same time, they are still subject to the `simulation physics'.")
+             "this method. At the same time, they are still subject to the `simulation physics'.",
+             py::arg("ID"), py::arg("X"), py::arg("Y"), py::arg("Z"), py::arg("pre") = " ")
 
         .def("CorrectFamilyPosition", &deme::DEMSolver::CorrectFamilyPosition,
              "The entities in this family will always experience an added positional correction defined using this "
-             "method. At the same time, they are still subject to the `simulation physics'.")
+             "method. At the same time, they are still subject to the `simulation physics'.",
+             py::arg("ID"), py::arg("X"), py::arg("Y"), py::arg("Z"), py::arg("pre") = " ")
         .def("CorrectFamilyQuaternion", &deme::DEMSolver::CorrectFamilyQuaternion,
              "The entities in this family will always experience an added quaternion correction defined using this "
-             "method. At the same time, they are still subject to the `simulation physics'.")
+             "method. At the same time, they are still subject to the `simulation physics'.",
+             py::arg("ID"), py::arg("q_formula"))
 
         .def("SetContactWildcards", &deme::DEMSolver::SetContactWildcards,
              "Set the names for the extra quantities that will be associated with each contact pair.")
