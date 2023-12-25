@@ -610,7 +610,7 @@ class DEMSolver {
                                    const std::string& velY,
                                    const std::string& velZ,
                                    bool dictate = true,
-                                   const std::string& pre = " ");
+                                   const std::string& pre = "none");
     /// Let the linear velocities of all entites in this family always keep `as is', and not influenced by the force
     /// exerted from other simulation entites.
     void SetFamilyPrescribedLinVel(unsigned int ID);
@@ -639,7 +639,7 @@ class DEMSolver {
                                    const std::string& velY,
                                    const std::string& velZ,
                                    bool dictate = true,
-                                   const std::string& pre = " ");
+                                   const std::string& pre = "none");
     /// Let the linear velocities of all entites in this family always keep `as is', and not influenced by the force
     /// exerted from other simulation entites.
     void SetFamilyPrescribedAngVel(unsigned int ID);
@@ -668,7 +668,7 @@ class DEMSolver {
                                      const std::string& Y,
                                      const std::string& Z,
                                      bool dictate = true,
-                                     const std::string& pre = " ");
+                                     const std::string& pre = "none");
     /// @brief Let the linear positions of all entites in this family always keep `as is'.
     void SetFamilyPrescribedPosition(unsigned int ID);
     /// @brief Let the X component of the linear positions of all entites in this family always keep `as is'.
@@ -696,7 +696,7 @@ class DEMSolver {
                                 const std::string& X,
                                 const std::string& Y,
                                 const std::string& Z,
-                                const std::string& pre = " ");
+                                const std::string& pre = "none");
     /// @brief The entities in this family will always experience an extra angular acceleration defined using this
     /// method.
     /// @param pre Prerequisite code. For example, you can generate a float3 with this prerequisite code, then assign
@@ -705,7 +705,7 @@ class DEMSolver {
                                    const std::string& X,
                                    const std::string& Y,
                                    const std::string& Z,
-                                   const std::string& pre = " ");
+                                   const std::string& pre = "none");
 
     /// @brief The entities in this family will always experience an added linear-velocity correction defined using this
     /// method. At the same time, they are still subject to the `simulation physics'.
@@ -715,7 +715,7 @@ class DEMSolver {
                              const std::string& X,
                              const std::string& Y,
                              const std::string& Z,
-                             const std::string& pre = " ");
+                             const std::string& pre = "none");
     /// @brief The entities in this family will always experience an added angular-velocity correction defined using
     /// this method. At the same time, they are still subject to the `simulation physics'.
     /// @param pre Prerequisite code. For example, you can generate a float3 with this prerequisite code, then assign
@@ -724,7 +724,7 @@ class DEMSolver {
                              const std::string& X,
                              const std::string& Y,
                              const std::string& Z,
-                             const std::string& pre = " ");
+                             const std::string& pre = "none");
 
     /// @brief The entities in this family will always experience an added positional correction defined using this
     /// method. At the same time, they are still subject to the `simulation physics'.
@@ -734,7 +734,7 @@ class DEMSolver {
                                const std::string& X,
                                const std::string& Y,
                                const std::string& Z,
-                               const std::string& pre = " ");
+                               const std::string& pre = "none");
     /// @brief The entities in this family will always experience an added quaternion correction defined using this
     /// method. At the same time, they are still subject to the `simulation physics'.
     /// @param q_formula The code from which the quaternion should be calculated. Must `return' a float4. For example,
