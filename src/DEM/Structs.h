@@ -457,9 +457,9 @@ struct familyPrescription_t {
     std::string rotVelZ = "none";
 
     // Users can use same prerequisites before setting XYZ...
-    std::string linPosPre = " ";
-    std::string linVelPre = " ";
-    std::string rotVelPre = " ";
+    std::string linPosPre = "none";
+    std::string linVelPre = "none";
+    std::string rotVelPre = "none";
 
     // Is this prescribed motion dictating the motion of the entities (true), or should still accept the influence from
     // other contact forces (false)
@@ -481,8 +481,8 @@ struct familyPrescription_t {
     std::string angAccY = "none";
     std::string angAccZ = "none";
     // Users can use same prerequisites before setting XYZ...
-    std::string accPre = " ";
-    std::string angAccPre = " ";
+    std::string accPre = "none";
+    std::string angAccPre = "none";
     // A switch to mark if there is any prescription going on for this family at all
     bool used = false;
 };
