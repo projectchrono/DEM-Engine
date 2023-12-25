@@ -837,13 +837,21 @@ void DEMSolver::figureOutFamilyMasks() {
         if (preInfo.angAccZ != "none") {
             this_family_info.angAccZ = preInfo.angAccZ;
         }
+    }
 
-        DEME_DEBUG_PRINTF("User family %u has prescribed lin vel: %s, %s, %s", user_family,
-                          this_family_info.linVelX.c_str(), this_family_info.linVelY.c_str(),
-                          this_family_info.linVelZ.c_str());
-        DEME_DEBUG_PRINTF("User family %u has prescribed ang vel: %s, %s, %s", user_family,
-                          this_family_info.rotVelX.c_str(), this_family_info.rotVelY.c_str(),
-                          this_family_info.rotVelZ.c_str());
+    for (const auto& this_family_info : m_unique_family_prescription) {
+        if (!this_family_info.used)
+            continue;
+        unsigned int user_family = this_family_info.family;
+        DEME_DEBUG_PRINTF("User family %u has prescribed position: %s, %s, %s, %s", user_family,
+                          this_family_info.linPosPre.c_str(), this_family_info.linPosX.c_str(),
+                          this_family_info.linPosY.c_str(), this_family_info.linPosZ.c_str());
+        DEME_DEBUG_PRINTF("User family %u has prescribed lin vel: %s, %s, %s, %s", user_family,
+                          this_family_info.linVelPre.c_str(), this_family_info.linVelX.c_str(),
+                          this_family_info.linVelY.c_str(), this_family_info.linVelZ.c_str());
+        DEME_DEBUG_PRINTF("User family %u has prescribed ang vel: %s, %s, %s, %s", user_family,
+                          this_family_info.rotVelPre.c_str(), this_family_info.rotVelX.c_str(),
+                          this_family_info.rotVelY.c_str(), this_family_info.rotVelZ.c_str());
     }
 }
 
@@ -1461,7 +1469,10 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
         posStr += "case " + std::to_string(preInfo.family) + ": {";
         accStr += "case " + std::to_string(preInfo.family) + ": {";
         {
-            velStr += "{" + preInfo.linVelPre + ";";
+            velStr += "{";
+            if (preInfo.linVelPre != "none") {
+                velStr += preInfo.linVelPre + ";";
+            }
             if (preInfo.linVelX != "none") {
                 velStr += "vX = " + preInfo.linVelX + ";";
             }
@@ -1473,7 +1484,10 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
             }
             velStr += "}";
 
-            velStr += "{" + preInfo.rotVelPre + ";";
+            velStr += "{";
+            if (preInfo.rotVelPre != "none") {
+                velStr += preInfo.rotVelPre + ";";
+            }
             if (preInfo.rotVelX != "none") {
                 velStr += "omgBarX = " + preInfo.rotVelX + ";";
             }
@@ -1494,7 +1508,10 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
         }
         velStr += "break; }";
         {
-            posStr += "{" + preInfo.linPosPre + ";";
+            posStr += "{";
+            if (preInfo.linPosPre != "none") {
+                posStr += preInfo.linPosPre + ";";
+            }
             if (preInfo.linPosX != "none")
                 posStr += "X = " + preInfo.linPosX + ";";
             if (preInfo.linPosY != "none")
@@ -1520,7 +1537,10 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
         }
         posStr += "break; }";
         {
-            accStr += "{" + preInfo.accPre + ";";
+            accStr += "{";
+            if (preInfo.accPre != "none") {
+                accStr += preInfo.accPre + ";";
+            }
             if (preInfo.accX != "none")
                 accStr += "accX = " + preInfo.accX + ";";
             if (preInfo.accY != "none")
@@ -1529,7 +1549,10 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
                 accStr += "accZ = " + preInfo.accZ + ";";
             accStr += "}";
 
-            accStr += "{" + preInfo.angAccPre + ";";
+            accStr += "{";
+            if (preInfo.angAccPre != "none") {
+                accStr += preInfo.angAccPre + ";";
+            }
             if (preInfo.angAccX != "none")
                 accStr += "angAccX = " + preInfo.angAccX + ";";
             if (preInfo.angAccY != "none")
