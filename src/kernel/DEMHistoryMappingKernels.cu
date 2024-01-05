@@ -1,7 +1,7 @@
 // DEM history mapping related custom kernels
 #include <DEM/Defines.h>
 #include <DEMHelperKernels.cu>
-_kernelIncludes_
+_kernelIncludes_;
 
 __global__ void fillRunLengthArray(deme::geoSphereTouches_t* runlength_full,
                                    deme::bodyID_t* unique_ids,
@@ -46,7 +46,7 @@ __global__ void buildPersistentMap(deme::geoSphereTouches_t* new_idA_runlength_f
                 for (deme::geoSphereTouches_t j = 0; j < old_cnt_count; j++) {
                     deme::bodyID_t old_idB = granData->previous_idGeometryB[old_cnt_offset + j];
                     deme::contact_t old_cntType = granData->previous_contactType[old_cnt_offset + j];
-                    // If both idB and contact type match, then it is a persistent contact, write it to the mapping
+                    // If both idB and contact type match, then it is an enduring contact, write it to the mapping
                     // array
                     if (new_idB == old_idB && new_cntType == old_cntType) {
                         my_partner = old_cnt_offset + j;

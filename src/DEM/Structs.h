@@ -564,6 +564,9 @@ struct SolverFlags {
     // number of contacts for the sphere that has the most is that, well, we can have a huge sphere and it just will
     // have more contacts. But if avg cnt is high, that means probably the contact margin is out of control now.
     float errOutAvgSphCnts = 100.;
+
+    // Whether there are contacts that can never be removed.
+    bool hasPersistentContacts = false;
 };
 
 class DEMMaterial {

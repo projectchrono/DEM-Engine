@@ -1,7 +1,7 @@
 // DEM contact detection-related custom kernels
 #include <DEM/Defines.h>
 #include <DEMHelperKernels.cu>
-_kernelIncludes_
+_kernelIncludes_;
 
 // #include <cub/block/block_load.cuh>
 // #include <cub/block/block_store.cuh>

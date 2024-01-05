@@ -1789,7 +1789,7 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
     pSchedSupport->kinematicIngredProdDateStamp = (pSchedSupport->currentStampOfDynamic).load();
 }
 
-inline void DEMDynamicThread::migratePersistentContacts() {
+inline void DEMDynamicThread::migrateEnduringContacts() {
     // Use this newHistory and newDuration to store temporarily the rearranged contact history.  Note we cannot use
     // vector 0 or 1 since they may be in use (1 is used by granData->contactMapping).
 
@@ -2015,7 +2015,7 @@ inline void DEMDynamicThread::unpack_impl() {
     // If this is a history-based run, then when contacts are received, we need to migrate the contact
     // history info, to match the structure of the new contact array
     if (!solverFlags.isHistoryless) {
-        migratePersistentContacts();
+        migrateEnduringContacts();
     }
 }
 
@@ -2548,7 +2548,7 @@ size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
     return numUsefulCnt;
 }
 
-void DEMDynamicThread::setFamilyContactWildcardValueAny(unsigned int N, unsigned int wc_num, float val) {
+void DEMDynamicThread::setFamilyContactWildcardValueEither(unsigned int N, unsigned int wc_num, float val) {
     size_t numCnt = *stateOfSolver_resources.pNumContacts;
     for (size_t i = 0; i < numCnt; i++) {
         bodyID_t geoA = idGeometryA.at(i);
@@ -2566,7 +2566,7 @@ void DEMDynamicThread::setFamilyContactWildcardValueAny(unsigned int N, unsigned
     }
 }
 
-void DEMDynamicThread::setFamilyContactWildcardValueAll(unsigned int N, unsigned int wc_num, float val) {
+void DEMDynamicThread::setFamilyContactWildcardValueBoth(unsigned int N, unsigned int wc_num, float val) {
     size_t numCnt = *stateOfSolver_resources.pNumContacts;
     for (size_t i = 0; i < numCnt; i++) {
         bodyID_t geoA = idGeometryA.at(i);

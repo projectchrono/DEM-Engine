@@ -1,7 +1,7 @@
 // DEM integration related custom kernels
 #include <DEMHelperKernels.cu>
 #include <DEM/Defines.h>
-_kernelIncludes_
+_kernelIncludes_;
 
 // Apply presecibed velocity and report whether the `true' physics should be skipped, rather than added on top of
 // that

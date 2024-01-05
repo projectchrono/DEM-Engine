@@ -489,7 +489,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     ////////////////////////////////////////////////////////////////////////////////
 
     timers.GetTimer("Build history map").start();
-    // Now, sort idGeometryAB by their owners. Needed for identifying persistent contacts in history-based models.
+    // Now, sort idGeometryAB by their owners. Needed for identifying enduring contacts in history-based models.
     if (*scratchPad.pNumContacts > 0) {
         // All temp vectors are free now, and all of them are fairly long...
         size_t type_arr_bytes = (*scratchPad.pNumContacts) * sizeof(contact_t);

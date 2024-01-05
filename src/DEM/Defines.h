@@ -88,6 +88,11 @@ const ownerType_t OWNER_T_CLUMP = 1;
 const ownerType_t OWNER_T_ANALYTICAL = 2;
 const ownerType_t OWNER_T_MESH = 4;
 
+// Contact persistency marker consts...
+const notStupidBool_t CONTACT_NOT_PERSISTENT = 0;
+const notStupidBool_t CONTACT_IS_PERSISTENT = 1;
+const notStupidBool_t CONTACT_PERSISTENT_AND_FOUND = 2;
+
 // This ID marks that this is a new contact, not present when we did contact detection last time
 // TODO: half max add half max... so stupid... Better way?? numeric_limit won't work...
 constexpr contactPairs_t NULL_MAPPING_PARTNER = ((size_t)1 << (sizeof(contactPairs_t) * DEME_BITS_PER_BYTE - 1)) +
@@ -435,6 +440,7 @@ struct DEMDataKT {
     bodyID_t* idGeometryA;
     bodyID_t* idGeometryB;
     contact_t* contactType;
+    notStupidBool_t* contactPersistency;
     bodyID_t* previous_idGeometryA;
     bodyID_t* previous_idGeometryB;
     contact_t* previous_contactType;

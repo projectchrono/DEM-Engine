@@ -142,8 +142,10 @@ int main() {
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0.00, 1 * -9.81));
-    DEMSim.Initialize();
-    // DEMSim.DisableContactBetweenFamilies(20, 1);
+    // The `dry-run' option is on in this demo, which establishes the initial contact pairs while initializing. This is
+    // needed in this demo specifically, as we'll soon modify the contact wildcards associated with these contacts.
+    // You could also do a DoDynamicsThenSync(0) to achieve the same.
+    DEMSim.Initialize(true);
     std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
 
     float sim_end = 5;
@@ -166,9 +168,9 @@ int main() {
     std::string nameOutFile = "data_R" + std::to_string(sphere_rad) + "_Int" + std::to_string(fact_radius) + ".csv";
     std::ofstream csvFile(nameOutFile);
 
-    DEMSim.SetFamilyContactWildcardValueAll(1, "initialLength", 0.0);
-    // DEMSim.SetFamilyContactWildcardValueAll(1, "damage", 0.0);
-    DEMSim.SetFamilyContactWildcardValueAll(1, "unbroken", 0.0);
+    DEMSim.SetFamilyContactWildcardValueBoth(1, "initialLength", 0.0);
+    // DEMSim.SetFamilyContactWildcardValueBoth(1, "damage", 0.0);
+    DEMSim.SetFamilyContactWildcardValueBoth(1, "unbroken", 0.0);
 
     // Simulation loop
     for (float t = 0; t < sim_end; t += frame_time) {
@@ -179,7 +181,7 @@ int main() {
         if (t >= 0.0 && status_1) {
             status_1 = false;
             DEMSim.DoDynamicsThenSync(0);
-            DEMSim.SetFamilyContactWildcardValueAll(1, "unbroken", 2.0);
+            DEMSim.SetFamilyContactWildcardValueBoth(1, "unbroken", 2.0);
             DEMSim.ChangeFamily(20, 21);  // start compression
 
             L0 = max_z_finder->GetValue() - min_z_finder->GetValue() + 2 * sphere_rad;

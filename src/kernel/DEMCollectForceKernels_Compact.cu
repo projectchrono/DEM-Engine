@@ -1,7 +1,7 @@
 // DEM force computation related custom kernels
 #include <DEM/Defines.h>
 #include <DEMHelperKernels.cu>
-_kernelIncludes_
+_kernelIncludes_;
 
 // For analytical entities' owners
 __constant__ __device__ deme::bodyID_t objOwner[] = {_objOwner_};

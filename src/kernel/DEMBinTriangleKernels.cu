@@ -2,7 +2,7 @@
 #include <DEM/Defines.h>
 #include <DEMHelperKernels.cu>
 #include <DEMTriangleBoxIntersect.cu>
-_kernelIncludes_
+_kernelIncludes_;
 
 inline __device__ float3
 sandwichVertex(float3 vertex, const float3& incenter, const float3& side, const float3& normal, float beta) {

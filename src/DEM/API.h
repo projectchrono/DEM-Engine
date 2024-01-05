@@ -753,12 +753,12 @@ class DEMSolver {
     /// @param N Family number. If one contact geometry is in N, this contact wildcard is modified.
     /// @param name Name of the contact wildcard to modify.
     /// @param val The value to change to.
-    void SetFamilyContactWildcardValueAny(unsigned int N, const std::string& name, float val);
+    void SetFamilyContactWildcardValueEither(unsigned int N, const std::string& name, float val);
     /// @brief Change the value of contact wildcards to val if both of the contact geometries are in family N.
     /// @param N Family number. Only if both contact geometries are in N, this contact wildcard is modified.
     /// @param name Name of the contact wildcard to modify.
     /// @param val The value to change to.
-    void SetFamilyContactWildcardValueAll(unsigned int N, const std::string& name, float val);
+    void SetFamilyContactWildcardValueBoth(unsigned int N, const std::string& name, float val);
     /// @brief Change the value of contact wildcards to val if one of the contact geometry is in family N1, and the
     /// other is in N2.
     /// @param N1 First family number.
@@ -770,6 +770,43 @@ class DEMSolver {
     /// @param name Name of the contact wildcard to modify.
     /// @param val The value to change to.
     void SetContactWildcardValue(const std::string& name, float val);
+
+    /// @brief Make it so that for any currently-existing contact, if one of its contact geometries is in family N, then
+    /// this contact will never be removed.
+    /// @details This contact might be created through contact detection, or being a contact the user manually loaded at
+    /// the start of simulation. Note this is a one-time assignment and will not continuously mark future emerging
+    /// contact to be persistent.
+    /// @param N Family number.
+    void MarkFamilyPersistentContactEither(unsigned int N);
+    /// @brief Make it so that for any currently-existing contact, if both of its contact geometries are in family N,
+    /// then this contact will never be removed.
+    /// @details This contact might be created through contact detection, or being a contact the user manually loaded at
+    /// the start of simulation. Note this is a one-time assignment and will not continuously mark future emerging
+    /// contact to be persistent.
+    /// @param N Family number.
+    void MarkFamilyPersistentContactBoth(unsigned int N);
+    /// @brief Make it so that if for any currently-existing contact, if its two contact geometries are in family N1 and
+    /// N2 respectively, this contact will never be removed.
+    /// @details This contact might be created through contact detection, or being a contact the user manually loaded at
+    /// the start of simulation. Note this is a one-time assignment and will not continuously mark future emerging
+    /// contact to be persistent.
+    /// @param N1 Family number 1.
+    /// @param N2 Family number 2.
+    void MarkFamilyPersistentContact(unsigned int N1, unsigned int N2);
+    /// @brief Make it so that all currently-existing contacts in this simulation will never be removed.
+    /// @details The contacts might be created through contact detection, or being manually loaded at the start of
+    /// simulation. Note this is a one-time assignment and will not continuously mark future emerging contact to be
+    /// persistent.
+    void MarkPersistentContact();
+
+    /// @brief Cancel contact persistence qualification. Work like the inverse of MarkFamilyPersistentContactEither.
+    void RemoveFamilyPersistentContactEither(unsigned int N);
+    /// @brief Cancel contact persistence qualification. Work like the inverse of MarkFamilyPersistentContactBoth.
+    void RemoveFamilyPersistentContactBoth(unsigned int N);
+    /// @brief Cancel contact persistence qualification. Work like the inverse of MarkFamilyPersistentContact.
+    void RemoveFamilyPersistentContact(unsigned int N1, unsigned int N2);
+    /// @brief Cancel contact persistence qualification. Work like the inverse of MarkPersistentContact.
+    void RemovePersistentContact();
 
     /// @brief Get all contact forces that concern a owner.
     /// @param ownerID The ID of the owner.
@@ -1090,7 +1127,7 @@ class DEMSolver {
     }
 
     /// Intialize the simulation system.
-    void Initialize();
+    void Initialize(bool dry_run = false);
 
     /// Advance simulation by this amount of time, and at the end of this call, synchronize kT and dT. This is suitable
     /// for a longer call duration and without co-simulation.
@@ -1752,6 +1789,14 @@ class DEMSolver {
                           std::vector<family_t>& famA,
                           std::vector<family_t>& famB,
                           std::function<bool(contact_t)> type_func) const;
+    /// Get owner B's ID based on contact type.
+    bodyID_t getOwnerBasedOnContactType(bodyID_t bodyB, contact_t c_type) const;
+
+    // Persistent contact implementations
+    void assignFamilyPersistentContactEither(unsigned int N, notStupidBool_t is_or_not);
+    void assignFamilyPersistentContactBoth(unsigned int N, notStupidBool_t is_or_not);
+    void assignFamilyPersistentContact(unsigned int N1, unsigned int N2, notStupidBool_t is_or_not);
+    void assignPersistentContact(notStupidBool_t is_or_not);
 
     // Some JIT packaging helpers
     inline void equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap);
