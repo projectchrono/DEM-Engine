@@ -937,6 +937,7 @@ void overwritePrevContactArrays(DEMDataKT* kT_data,
                                 std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& previous_idGeometryA,
                                 std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& previous_idGeometryB,
                                 std::vector<contact_t, ManagedAllocator<contact_t>>& previous_contactType,
+                                std::vector<notStupidBool_t, ManagedAllocator<notStupidBool_t>>& contactPersistency,
                                 DEMSimParams* simParams,
                                 DEMSolverStateData& scratchPad,
                                 cudaStream_t& this_stream,
@@ -970,10 +971,14 @@ void overwritePrevContactArrays(DEMDataKT* kT_data,
         previous_idGeometryA.resize(nContacts);
         previous_idGeometryB.resize(nContacts);
         previous_contactType.resize(nContacts);
+        // In the case of user-loaded contacts, if the persistency array is not long enough then we have to manually
+        // extend it.
+        contactPersistency.resize(nContacts, CONTACT_NOT_PERSISTENT);
 
         kT_data->previous_idGeometryA = previous_idGeometryA.data();
         kT_data->previous_idGeometryB = previous_idGeometryB.data();
         kT_data->previous_contactType = previous_contactType.data();
+        kT_data->contactPersistency = contactPersistency.data();
     }
     DEME_GPU_CALL(
         cudaMemcpy(kT_data->previous_idGeometryA, idA_sorted, nContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));

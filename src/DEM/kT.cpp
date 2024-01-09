@@ -819,7 +819,7 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
 void DEMKinematicThread::updatePrevContactArrays(DEMDataDT* dT_data, size_t nContacts) {
     // Store the incoming info in temp arrays
     overwritePrevContactArrays(granData, dT_data, previous_idGeometryA, previous_idGeometryB, previous_contactType,
-                               simParams, stateOfSolver_resources, streamInfo.stream, nContacts);
+                               contactPersistency, simParams, stateOfSolver_resources, streamInfo.stream, nContacts);
     DEME_DEBUG_PRINTF("Number of contacts after a user-manual contact load: %zu", nContacts);
     DEME_DEBUG_PRINTF("Number of spheres after a user-manual contact load: %zu", (size_t)simParams->nSpheresGM);
 }
