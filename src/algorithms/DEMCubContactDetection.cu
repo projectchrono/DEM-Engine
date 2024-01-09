@@ -652,10 +652,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // All temp vectors are free now...
         // Note that if it hasPersistentContacts, idAB and types are already sorted based on idA, so there is no need to
         // do that again.
+        size_t type_arr_bytes = (*scratchPad.pNumContacts) * sizeof(contact_t);
+        size_t id_arr_bytes = (*scratchPad.pNumContacts) * sizeof(bodyID_t);
         if (!solverFlags.hasPersistentContacts) {
-            size_t type_arr_bytes = (*scratchPad.pNumContacts) * sizeof(contact_t);
             contact_t* contactType_sorted = (contact_t*)scratchPad.allocateTempVector(0, type_arr_bytes);
-            size_t id_arr_bytes = (*scratchPad.pNumContacts) * sizeof(bodyID_t);
             bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector(1, id_arr_bytes);
             bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector(2, id_arr_bytes);
 

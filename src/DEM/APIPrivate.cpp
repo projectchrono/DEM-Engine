@@ -57,7 +57,7 @@ void DEMSolver::assignFamilyPersistentContactEither(unsigned int N, notStupidBoo
 
     // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
     // as persistent but not found in CD, it will be added to the contact array.
-    for (size_t i = 0; i < kT->stateOfSolver_resources.pNumPrevContacts; i++) {
+    for (size_t i = 0; i < *(kT->stateOfSolver_resources.pNumPrevContacts); i++) {
         bodyID_t bodyA = kT->previous_idGeometryA[i];
         bodyID_t bodyB = kT->previous_idGeometryB[i];
         contact_t c_type = kT->previous_contactType[i];
@@ -88,7 +88,7 @@ void DEMSolver::assignFamilyPersistentContactBoth(unsigned int N, notStupidBool_
 
     // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
     // as persistent but not found in CD, it will be added to the contact array.
-    for (size_t i = 0; i < kT->stateOfSolver_resources.pNumPrevContacts; i++) {
+    for (size_t i = 0; i < *(kT->stateOfSolver_resources.pNumPrevContacts); i++) {
         bodyID_t bodyA = kT->previous_idGeometryA[i];
         bodyID_t bodyB = kT->previous_idGeometryB[i];
         contact_t c_type = kT->previous_contactType[i];
@@ -119,7 +119,7 @@ void DEMSolver::assignFamilyPersistentContact(unsigned int N1, unsigned int N2, 
 
     // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
     // as persistent but not found in CD, it will be added to the contact array.
-    for (size_t i = 0; i < kT->stateOfSolver_resources.pNumPrevContacts; i++) {
+    for (size_t i = 0; i < *(kT->stateOfSolver_resources.pNumPrevContacts); i++) {
         bodyID_t bodyA = kT->previous_idGeometryA[i];
         bodyID_t bodyB = kT->previous_idGeometryB[i];
         contact_t c_type = kT->previous_contactType[i];
@@ -151,7 +151,7 @@ void DEMSolver::assignPersistentContact(notStupidBool_t is_or_not) {
 
     // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
     // as persistent but not found in CD, it will be added to the contact array.
-    for (size_t i = 0; i < kT->stateOfSolver_resources.pNumPrevContacts; i++) {
+    for (size_t i = 0; i < *(kT->stateOfSolver_resources.pNumPrevContacts); i++) {
         kT->contactPersistency[i] = is_or_not;
     }
 
