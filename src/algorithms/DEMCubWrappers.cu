@@ -11,6 +11,14 @@
 
 namespace deme {
 
+// Functor type for selecting values less than some criteria
+template <typename T>
+struct CubEqualTo {
+    T compare;
+    CUB_RUNTIME_FUNCTION __forceinline__ CubEqualTo(T compare) : compare(compare) {}
+    CUB_RUNTIME_FUNCTION __forceinline__ bool operator()(const T& a) const { return (a == (T)compare); }
+};
+
 struct CubFloat3Add {
     CUB_RUNTIME_FUNCTION __forceinline__ __device__ __host__ float3 operator()(const float3& a, const float3& b) const {
         return ::make_float3(a.x + b.x, a.y + b.y, a.z + b.z);
@@ -34,6 +42,22 @@ struct CubFloatMax {
         return (b > a) ? b : a;
     }
 };
+
+template <typename T1, typename T2, typename T3>
+inline void cubDEMSelectFlagged(T1* d_in,
+                                T1* d_out,
+                                T2* d_flags,
+                                size_t* d_num_out,
+                                size_t n,
+                                cudaStream_t& this_stream,
+                                T3& scratchPad) {
+    size_t cub_scratch_bytes = 0;
+    cub::DeviceSelect::Flagged(NULL, cub_scratch_bytes, d_in, d_flags, d_out, d_num_out, n, this_stream);
+    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+    void* d_scratch_space = (void*)scratchPad.allocateScratchSpace(cub_scratch_bytes);
+    cub::DeviceSelect::Flagged(d_scratch_space, cub_scratch_bytes, d_in, d_flags, d_out, d_num_out, n, this_stream);
+    DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+}
 
 template <typename T1, typename T2, typename T3>
 inline void cubDEMPrefixScan(T1* d_in, T2* d_out, size_t n, cudaStream_t& this_stream, T3& scratchPad) {

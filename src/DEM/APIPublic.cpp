@@ -1563,7 +1563,7 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clu
     clump.mark = offset;
 
     // Give it a default name
-    if (clump.m_name == DEME_NUM_CLUMP_NAME) {
+    if (clump.m_name == DEME_NULL_CLUMP_NAME) {
         char my_name[200];
         sprintf(my_name, "%04d", (int)nClumpTemplateLoad);
         clump.AssignName(std::string(my_name));
