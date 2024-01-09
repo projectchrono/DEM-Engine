@@ -145,6 +145,9 @@ int main() {
         sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), i);
         DEMSim.WriteMeshFile(std::string(meshfilename));
 
+        // Testing persistent contact functionality...
+        DEMSim.MarkPersistentContact();
+
         DEMSim.DoDynamicsThenSync(1e-2);
         max_z = max_z_finder->GetValue();
         max_v = max_v_finder->GetValue();

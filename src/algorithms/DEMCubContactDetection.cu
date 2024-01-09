@@ -526,9 +526,11 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             size_t total_ids_bytes = (*scratchPad.pNumContacts + *pNumPersistCnts) * sizeof(bodyID_t);
             size_t total_types_bytes = (*scratchPad.pNumContacts + *pNumPersistCnts) * sizeof(contact_t);
             size_t total_persistency_bytes = (*scratchPad.pNumContacts + *pNumPersistCnts) * sizeof(notStupidBool_t);
-            bodyID_t* total_idA = (bodyID_t*)scratchPad.allocateTempVector(4, selected_ids_bytes);
-            bodyID_t* total_idB = (bodyID_t*)scratchPad.allocateTempVector(5, selected_ids_bytes);
-            contact_t* total_types = (contact_t*)scratchPad.allocateTempVector(6, selected_types_bytes);
+            selected_ids_bytes = (*pNumPersistCnts) * sizeof(bodyID_t);
+            selected_types_bytes = (*pNumPersistCnts) * sizeof(contact_t);
+            bodyID_t* total_idA = (bodyID_t*)scratchPad.allocateTempVector(4, total_ids_bytes);
+            bodyID_t* total_idB = (bodyID_t*)scratchPad.allocateTempVector(5, total_ids_bytes);
+            contact_t* total_types = (contact_t*)scratchPad.allocateTempVector(6, total_types_bytes);
             notStupidBool_t* total_persistency =
                 (notStupidBool_t*)scratchPad.allocateTempVector(7, total_persistency_bytes);
             DEME_GPU_CALL(cudaMemcpy(total_idA, selected_idA, selected_ids_bytes, cudaMemcpyDeviceToDevice));
@@ -569,6 +571,11 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 total_idA, idA_sorted, total_types, contactType_sorted, *pNumTotalCnts, this_stream, scratchPad);
             cubDEMSortByKeys<bodyID_t, notStupidBool_t, DEMSolverStateData>(
                 total_idA, idA_sorted, total_persistency, persistency_sorted, *pNumTotalCnts, this_stream, scratchPad);
+            // std::cout << "Contacts before duplication check: " << std::endl;
+            // displayArray<bodyID_t>(idA_sorted, *pNumTotalCnts);
+            // displayArray<bodyID_t>(idB_sorted, *pNumTotalCnts);
+            // displayArray<contact_t>(contactType_sorted, *pNumTotalCnts);
+            // displayArray<notStupidBool_t>(persistency_sorted, *pNumTotalCnts);
 
             // Then we run-length it...
             size_t run_length_bytes = simParams->nSpheresGM * sizeof(geoSphereTouches_t);
@@ -605,14 +612,16 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                             retain_flags, *pNumUniqueA);
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
+            // std::cout << "Marked retainers: " << std::endl;
+            // displayArray<notStupidBool_t>(retain_flags, *pNumTotalCnts);
 
             // Then remove redundency based on the flag array...
             // Note the contactPersistency array is managed by the current contact arr. It will also be copied over.
             size_t* pNumRetainedCnts = scratchPad.pTempSizeVar1;
             cubDEMSum<notStupidBool_t, size_t, DEMSolverStateData>(retain_flags, pNumRetainedCnts, *pNumTotalCnts,
                                                                    this_stream, scratchPad);
-            DEME_STEP_DEBUG_PRINTF("Found %zu contacts, including user-specified persistent contacts.",
-                                   *pNumRetainedCnts);
+            // DEME_STEP_DEBUG_PRINTF("Found %zu contacts, including user-specified persistent contacts.",
+            //                        *pNumRetainedCnts);
             if (*pNumRetainedCnts > idGeometryA.size()) {
                 contactEventArraysResize(*pNumRetainedCnts, idGeometryA, idGeometryB, contactType, granData);
             }
@@ -620,20 +629,25 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 contactPersistency.resize(*pNumRetainedCnts);
                 granData->contactPersistency = contactPersistency.data();
             }
-            cubDEMSelectFlagged<bodyID_t, notStupidBool_t, DEMSolverStateData>(granData->idGeometryA, idA_sorted,
+            cubDEMSelectFlagged<bodyID_t, notStupidBool_t, DEMSolverStateData>(idA_sorted, granData->idGeometryA,
                                                                                retain_flags, pNumRetainedCnts,
                                                                                *pNumTotalCnts, this_stream, scratchPad);
-            cubDEMSelectFlagged<bodyID_t, notStupidBool_t, DEMSolverStateData>(granData->idGeometryB, idB_sorted,
+            cubDEMSelectFlagged<bodyID_t, notStupidBool_t, DEMSolverStateData>(idB_sorted, granData->idGeometryB,
                                                                                retain_flags, pNumRetainedCnts,
                                                                                *pNumTotalCnts, this_stream, scratchPad);
             cubDEMSelectFlagged<contact_t, notStupidBool_t, DEMSolverStateData>(
-                granData->contactType, contactType_sorted, retain_flags, pNumRetainedCnts, *pNumTotalCnts, this_stream,
+                contactType_sorted, granData->contactType, retain_flags, pNumRetainedCnts, *pNumTotalCnts, this_stream,
                 scratchPad);
             cubDEMSelectFlagged<notStupidBool_t, notStupidBool_t, DEMSolverStateData>(
-                granData->contactPersistency, persistency_sorted, retain_flags, pNumRetainedCnts, *pNumTotalCnts,
+                persistency_sorted, granData->contactPersistency, retain_flags, pNumRetainedCnts, *pNumTotalCnts,
                 this_stream, scratchPad);
-            DEME_STEP_DEBUG_PRINTF("CUB confirms there are %zu contacts, including user-specified persistent contacts.",
-                                   *pNumRetainedCnts);
+            // DEME_STEP_DEBUG_PRINTF("CUB confirms there are %zu contacts, including user-specified persistent
+            // contacts.", *pNumRetainedCnts);
+            // std::cout << "Contacts after duplication check: " << std::endl;
+            // displayArray<bodyID_t>(granData->idGeometryA, *pNumRetainedCnts);
+            // displayArray<bodyID_t>(granData->idGeometryB, *pNumRetainedCnts);
+            // displayArray<contact_t>(granData->contactType, *pNumRetainedCnts);
+            // displayArray<notStupidBool_t>(granData->contactPersistency, *pNumRetainedCnts);
 
             // And update the number of contacts.
             *scratchPad.pNumContacts = *pNumRetainedCnts;

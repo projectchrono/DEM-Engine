@@ -111,12 +111,12 @@ __global__ void setArr(deme::notStupidBool_t* arr, size_t n, deme::notStupidBool
 }
 
 __global__ void markDuplicateContacts(deme::geoSphereTouches_t* idA_runlength,
-                                        deme::contactPairs_t* idA_scanned_runlength,
-                                        deme::bodyID_t* idB,
-                                        deme::contact_t* contactType,
-                                        deme::notStupidBool_t* persistency,
-                                        deme::contactPairs_t* retain_list,
-                                        size_t n) {
+                                      deme::contactPairs_t* idA_scanned_runlength,
+                                      deme::bodyID_t* idB,
+                                      deme::contact_t* contactType,
+                                      deme::notStupidBool_t* persistency,
+                                      deme::notStupidBool_t* retain_list,
+                                      size_t n) {
     deme::bodyID_t myID = blockIdx.x * blockDim.x + threadIdx.x;
     if (myID < n) {
         deme::geoSphereTouches_t cnt_count = idA_runlength[myID];
