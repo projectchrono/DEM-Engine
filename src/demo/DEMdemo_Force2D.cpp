@@ -22,19 +22,8 @@
 using namespace deme;
 using namespace std::filesystem;
 
-double randomBetween0and1() {
-    static std::mt19937 gen(std::random_device{}());                       // Random number generator
-    static std::uniform_real_distribution<double> distribution(0.0, 1.0);  // Uniform distribution between 0 and 1
-
-    return distribution(gen);
-}
-
 int main() {
-    float ball_density = 6.2e3;
-    float H = 0.1;
-    double R = 0.0254 / 2.;
-
-    double terrain_rad = 0.006 / 2.;
+    double terrain_rad = 0.01 / 2.;
 
     DEMSolver DEMSim;
     // Output less info at initialization
@@ -44,34 +33,17 @@ int main() {
     DEMSim.SetMeshOutputFormat("VTK");
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_BallDrop2D";
+    out_dir += "/DemoOutput_Force2D";
     create_directory(out_dir);
 
     // E, nu, CoR, mu, Crr...
-    auto mat_type_ball = DEMSim.LoadMaterial({{"E", 7e7}, {"nu", 0.24}, {"CoR", 0.9}, {"mu", 0.3}, {"Crr", 0.0}});
-    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 7e7}, {"nu", 0.24}, {"CoR", 0.9}, {"mu", 0.3}, {"Crr", 0.0}});
-    auto mat_type_terrain_sim =
-        DEMSim.LoadMaterial({{"E", 7e7}, {"nu", 0.24}, {"CoR", 0.9}, {"mu", 0.3}, {"Crr", 0.0}});
+    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 7e9}, {"nu", 0.24}, {"CoR", 0.9}, {"mu", 0.3}, {"Crr", 0.0}});
 
     float step_size = 2e-6;
-    double world_size = 0.2;
-    DEMSim.InstructBoxDomainDimension({-world_size / 2., world_size / 2.}, {-world_size / 2., world_size / 2.},
-                                      {0, 10 * world_size});
+    double world_size = 61 * terrain_rad;
+    DEMSim.InstructBoxDomainDimension({-world_size / 2., world_size / 2.}, {-terrain_rad, terrain_rad},
+                                      {0, 1 * world_size});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
-
-    auto projectile = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/sphere.obj").string(), mat_type_ball);
-    projectile->Scale(R);
-    std::cout << "Total num of triangles: " << projectile->GetNumTriangles() << std::endl;
-
-    projectile->SetInitPos(make_float3(0, 0, 8 * world_size));
-    float ball_mass = ball_density * 4. / 3. * PI * R * R * R;
-    projectile->SetMass(ball_mass);
-    projectile->SetMOI(make_float3(ball_mass * 2 / 5 * R * R, ball_mass * 2 / 5 * R * R, ball_mass * 2 / 5 * R * R));
-    projectile->SetFamily(2);
-    DEMSim.SetFamilyFixed(2);
-    DEMSim.DisableContactBetweenFamilies(0, 2);
-    // Track the projectile
-    auto proj_tracker = DEMSim.Track(projectile);
 
     // Force model to use
     auto model2D = DEMSim.ReadContactForceModel("ForceModel2D.cu");
@@ -80,25 +52,18 @@ int main() {
     model2D->SetPerContactWildcards({"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z"});
 
     std::vector<std::shared_ptr<DEMClumpTemplate>> templates_terrain;
-    for (int i = 0; i < 1; i++) {
-        templates_terrain.push_back(DEMSim.LoadSphereType(terrain_rad * terrain_rad * terrain_rad * 1.0e3 * 4 / 3 * PI,
-                                                          terrain_rad, mat_type_terrain));
-        terrain_rad += 0.0001 / 2.;
-    }
+
+    templates_terrain.push_back(DEMSim.LoadSphereType(terrain_rad * terrain_rad * terrain_rad * 1.0e3 * 4 / 3 * PI,
+                                                      terrain_rad, mat_type_terrain));
 
     unsigned int num_particle = 0;
     float sample_z = 1.5 * terrain_rad;
-    float fullheight = world_size * 6.;
+    float fullheight = world_size * 0.20;
     float sample_halfwidth = world_size / 2 - 2 * terrain_rad;
     float init_v = 0.01;
 
-    std::random_device rd;   // Random number device to seed the generator
-    std::mt19937 gen(rd());  // Mersenne Twister generator
-    std::uniform_int_distribution<> dist(
-        0, templates_terrain.size() - 1);  // Uniform distribution of integers between 0 and n
-
-    HCPSampler sampler(2.01 * terrain_rad); // to be tested
-    //PDSampler sampler(2.01 * terrain_rad);
+    HCPSampler sampler(2.01 * terrain_rad);  // to be tested
+    // PDSampler sampler(2.01 * terrain_rad);
 
     float3 sample_center = make_float3(0, 0, fullheight / 2 + 1 * terrain_rad);
     auto input_xyz = sampler.SampleBox(sample_center, make_float3(sample_halfwidth, 0.f, fullheight / 2.));

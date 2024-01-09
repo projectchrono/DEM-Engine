@@ -18,8 +18,6 @@
 
 using namespace deme;
 
-const double math_PI = 3.1415927;
-
 int main() {
     DEMSolver DEMSim;
     DEMSim.UseFrictionalHertzianModel();
@@ -30,19 +28,20 @@ int main() {
 
     srand(7001);
     DEMSim.SetCollectAccRightAfterForceCalc(true);
-    DEMSim.SetErrorOutAvgContacts(150);
+    //DEMSim.SetErrorOutAvgContacts(150);
 
     // Scale factor
     float scaling = 1.f;
 
     // total number of random clump templates to generate
 
-    double radius = 0.12 / 5.0 / 2.0;
+    double radius = 0.12 / 10.0 / 2.0;
     double density = 100;
 
-    int totalSpheres = 3700;// particles for dp5
+    //int totalSpheres = 3700;// particles for dp5
     //int totalSpheres = 6500;// particles for dp6
         //int totalSpheres = 200;
+    int totalSpheres=30900; //dp10
 
     int num_template = 1;
 
