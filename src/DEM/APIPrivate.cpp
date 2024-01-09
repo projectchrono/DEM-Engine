@@ -215,6 +215,7 @@ void DEMSolver::jitifyKernels() {
     equipFamilyOnFlyChanges(m_subs);
     equipForceModel(m_subs);
     equipIntegrationScheme(m_subs);
+    equipKernelIncludes(m_subs);
     kT->jitifyKernels(m_subs);
     dT->jitifyKernels(m_subs);
 
@@ -751,50 +752,49 @@ void DEMSolver::figureOutFamilyMasks() {
         this_family_info.used = true;
         this_family_info.family = user_family;
 
-        // If one positional coord is fixed then all of this object is fixed... this is just my design choice. If the
-        // user want to prescribe X but not Y, why don't they just prescribe velocity instead?
+        if (preInfo.linPosPre != "none") {
+            this_family_info.linPosPre = preInfo.linPosPre;
+        }
         if (preInfo.linPosX != "none") {
             this_family_info.linPosX = preInfo.linPosX;
-            this_family_info.linPosPrescribed = true;
         }
         if (preInfo.linPosY != "none") {
             this_family_info.linPosY = preInfo.linPosY;
-            this_family_info.linPosPrescribed = true;
         }
         if (preInfo.linPosZ != "none") {
             this_family_info.linPosZ = preInfo.linPosZ;
-            this_family_info.linPosPrescribed = true;
         }
+
         if (preInfo.oriQ != "none") {
             this_family_info.oriQ = preInfo.oriQ;
-            this_family_info.rotPosPrescribed = true;
         }
 
         // If it is not none, then it is automatically dictated by prescribed motion and will not accept influence by
         // other sim entities
+        if (preInfo.linVelPre != "none") {
+            this_family_info.linVelPre = preInfo.linVelPre;
+        }
         if (preInfo.linVelX != "none") {
             this_family_info.linVelX = preInfo.linVelX;
-            this_family_info.linVelXPrescribed = true;
         }
         if (preInfo.linVelY != "none") {
             this_family_info.linVelY = preInfo.linVelY;
-            this_family_info.linVelYPrescribed = true;
         }
         if (preInfo.linVelZ != "none") {
             this_family_info.linVelZ = preInfo.linVelZ;
-            this_family_info.linVelZPrescribed = true;
+        }
+
+        if (preInfo.rotVelPre != "none") {
+            this_family_info.rotVelPre = preInfo.rotVelPre;
         }
         if (preInfo.rotVelX != "none") {
             this_family_info.rotVelX = preInfo.rotVelX;
-            this_family_info.rotVelXPrescribed = true;
         }
         if (preInfo.rotVelY != "none") {
             this_family_info.rotVelY = preInfo.rotVelY;
-            this_family_info.rotVelYPrescribed = true;
         }
         if (preInfo.rotVelZ != "none") {
             this_family_info.rotVelZ = preInfo.rotVelZ;
-            this_family_info.rotVelZPrescribed = true;
         }
 
         // Possibly the user explicitly ordered this family to not accept influence from other sim entities; if it is
@@ -807,9 +807,14 @@ void DEMSolver::figureOutFamilyMasks() {
         this_family_info.rotVelZPrescribed = this_family_info.rotVelZPrescribed || preInfo.rotVelZPrescribed;
 
         this_family_info.rotPosPrescribed = this_family_info.rotPosPrescribed || preInfo.rotPosPrescribed;
-        this_family_info.linPosPrescribed = this_family_info.linPosPrescribed || preInfo.linPosPrescribed;
+        this_family_info.linPosXPrescribed = this_family_info.linPosXPrescribed || preInfo.linPosXPrescribed;
+        this_family_info.linPosYPrescribed = this_family_info.linPosYPrescribed || preInfo.linPosYPrescribed;
+        this_family_info.linPosZPrescribed = this_family_info.linPosZPrescribed || preInfo.linPosZPrescribed;
 
         // Then register the accelerations that are added on top of `normal physics'
+        if (preInfo.accPre != "none") {
+            this_family_info.accPre = preInfo.accPre;
+        }
         if (preInfo.accX != "none") {
             this_family_info.accX = preInfo.accX;
         }
@@ -818,6 +823,10 @@ void DEMSolver::figureOutFamilyMasks() {
         }
         if (preInfo.accZ != "none") {
             this_family_info.accZ = preInfo.accZ;
+        }
+
+        if (preInfo.angAccPre != "none") {
+            this_family_info.angAccPre = preInfo.angAccPre;
         }
         if (preInfo.angAccX != "none") {
             this_family_info.angAccX = preInfo.angAccX;
@@ -828,13 +837,21 @@ void DEMSolver::figureOutFamilyMasks() {
         if (preInfo.angAccZ != "none") {
             this_family_info.angAccZ = preInfo.angAccZ;
         }
+    }
 
-        DEME_DEBUG_PRINTF("User family %u has prescribed lin vel: %s, %s, %s", user_family,
-                          this_family_info.linVelX.c_str(), this_family_info.linVelY.c_str(),
-                          this_family_info.linVelZ.c_str());
-        DEME_DEBUG_PRINTF("User family %u has prescribed ang vel: %s, %s, %s", user_family,
-                          this_family_info.rotVelX.c_str(), this_family_info.rotVelY.c_str(),
-                          this_family_info.rotVelZ.c_str());
+    for (const auto& this_family_info : m_unique_family_prescription) {
+        if (!this_family_info.used)
+            continue;
+        unsigned int user_family = this_family_info.family;
+        DEME_DEBUG_PRINTF("User family %u has prescribed position: %s, %s, %s, %s", user_family,
+                          this_family_info.linPosPre.c_str(), this_family_info.linPosX.c_str(),
+                          this_family_info.linPosY.c_str(), this_family_info.linPosZ.c_str());
+        DEME_DEBUG_PRINTF("User family %u has prescribed lin vel: %s, %s, %s, %s", user_family,
+                          this_family_info.linVelPre.c_str(), this_family_info.linVelX.c_str(),
+                          this_family_info.linVelY.c_str(), this_family_info.linVelZ.c_str());
+        DEME_DEBUG_PRINTF("User family %u has prescribed ang vel: %s, %s, %s, %s", user_family,
+                          this_family_info.rotVelPre.c_str(), this_family_info.rotVelX.c_str(),
+                          this_family_info.rotVelY.c_str(), this_family_info.rotVelZ.c_str());
     }
 }
 
@@ -1450,6 +1467,10 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
         posStr += "case " + std::to_string(preInfo.family) + ": {";
         accStr += "case " + std::to_string(preInfo.family) + ": {";
         {
+            velStr += "{";
+            if (preInfo.linVelPre != "none") {
+                velStr += preInfo.linVelPre + ";";
+            }
             if (preInfo.linVelX != "none") {
                 velStr += "vX = " + preInfo.linVelX + ";";
             }
@@ -1458,6 +1479,12 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
             }
             if (preInfo.linVelZ != "none") {
                 velStr += "vZ = " + preInfo.linVelZ + ";";
+            }
+            velStr += "}";
+
+            velStr += "{";
+            if (preInfo.rotVelPre != "none") {
+                velStr += preInfo.rotVelPre + ";";
             }
             if (preInfo.rotVelX != "none") {
                 velStr += "omgBarX = " + preInfo.rotVelX + ";";
@@ -1468,42 +1495,69 @@ inline void DEMSolver::equipFamilyPrescribedMotions(std::unordered_map<std::stri
             if (preInfo.rotVelZ != "none") {
                 velStr += "omgBarZ = " + preInfo.rotVelZ + ";";
             }
-            velStr += "LinXPrescribed = " + std::to_string(preInfo.linVelXPrescribed) + ";";
-            velStr += "LinYPrescribed = " + std::to_string(preInfo.linVelYPrescribed) + ";";
-            velStr += "LinZPrescribed = " + std::to_string(preInfo.linVelZPrescribed) + ";";
-            velStr += "RotXPrescribed = " + std::to_string(preInfo.rotVelXPrescribed) + ";";
-            velStr += "RotYPrescribed = " + std::to_string(preInfo.rotVelYPrescribed) + ";";
-            velStr += "RotZPrescribed = " + std::to_string(preInfo.rotVelZPrescribed) + ";";
+            velStr += "}";
+
+            velStr += "LinVelXPrescribed = " + std::to_string(preInfo.linVelXPrescribed) + ";";
+            velStr += "LinVelYPrescribed = " + std::to_string(preInfo.linVelYPrescribed) + ";";
+            velStr += "LinVelZPrescribed = " + std::to_string(preInfo.linVelZPrescribed) + ";";
+            velStr += "RotVelXPrescribed = " + std::to_string(preInfo.rotVelXPrescribed) + ";";
+            velStr += "RotVelYPrescribed = " + std::to_string(preInfo.rotVelYPrescribed) + ";";
+            velStr += "RotVelZPrescribed = " + std::to_string(preInfo.rotVelZPrescribed) + ";";
         }
         velStr += "break; }";
         {
+            posStr += "{";
+            if (preInfo.linPosPre != "none") {
+                posStr += preInfo.linPosPre + ";";
+            }
             if (preInfo.linPosX != "none")
                 posStr += "X = " + preInfo.linPosX + ";";
             if (preInfo.linPosY != "none")
                 posStr += "Y = " + preInfo.linPosY + ";";
             if (preInfo.linPosZ != "none")
                 posStr += "Z = " + preInfo.linPosZ + ";";
+            posStr += "}";
+
             if (preInfo.oriQ != "none") {
-                posStr += "float4 myOriQ = " + preInfo.oriQ + ";";
-                posStr += "oriQw = myOriQ.w; oriQx = myOriQ.x; oriQy = myOriQ.y; oriQz = myOriQ.z;";
+                posStr += "{";
+                std::string user_str = replace_pattern(preInfo.oriQ, "return", "float4 DEME_Presc_OriQ = ");
+                posStr += user_str + ";";
+                posStr +=
+                    "oriQw = DEME_Presc_OriQ.w; oriQx = DEME_Presc_OriQ.x; oriQy = DEME_Presc_OriQ.y; oriQz = "
+                    "DEME_Presc_OriQ.z;";
+                posStr += "}";
             }
-            posStr += "LinPrescribed = " + std::to_string(preInfo.linPosPrescribed) + ";";
+
+            posStr += "LinXPrescribed = " + std::to_string(preInfo.linPosXPrescribed) + ";";
+            posStr += "LinYPrescribed = " + std::to_string(preInfo.linPosYPrescribed) + ";";
+            posStr += "LinZPrescribed = " + std::to_string(preInfo.linPosZPrescribed) + ";";
             posStr += "RotPrescribed = " + std::to_string(preInfo.rotPosPrescribed) + ";";
         }
         posStr += "break; }";
         {
+            accStr += "{";
+            if (preInfo.accPre != "none") {
+                accStr += preInfo.accPre + ";";
+            }
             if (preInfo.accX != "none")
                 accStr += "accX = " + preInfo.accX + ";";
             if (preInfo.accY != "none")
                 accStr += "accY = " + preInfo.accY + ";";
             if (preInfo.accZ != "none")
                 accStr += "accZ = " + preInfo.accZ + ";";
+            accStr += "}";
+
+            accStr += "{";
+            if (preInfo.angAccPre != "none") {
+                accStr += preInfo.angAccPre + ";";
+            }
             if (preInfo.angAccX != "none")
                 accStr += "angAccX = " + preInfo.angAccX + ";";
             if (preInfo.angAccY != "none")
                 accStr += "angAccY = " + preInfo.angAccY + ";";
             if (preInfo.angAccZ != "none")
                 accStr += "angAccZ = " + preInfo.angAccZ + ";";
+            accStr += "}";
         }
         accStr += "break; }";
     }
@@ -1931,6 +1985,10 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
     strMap["_nDistinctMassProperties_"] = std::to_string(nDistinctMassProperties);
     strMap["_nJitifiableClumpComponents_"] = std::to_string(nJitifiableClumpComponents);
     strMap["_nMatTuples_"] = std::to_string(nMatTuples);
+}
+
+inline void DEMSolver::equipKernelIncludes(std::unordered_map<std::string, std::string>& strMap) {
+    strMap["_kernelIncludes_"] = kernel_includes;
 }
 
 }  // namespace deme

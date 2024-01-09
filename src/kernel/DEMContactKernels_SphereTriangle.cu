@@ -2,6 +2,7 @@
 #include <DEM/Defines.h>
 #include <DEMHelperKernels.cu>
 #include <DEMCollisionKernels.cu>
+_kernelIncludes_
 
 // #include <cub/block/block_load.cuh>
 // #include <cub/block/block_store.cuh>

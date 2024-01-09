@@ -330,12 +330,11 @@ enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
         }                                         \
     }
 
-// Jitify options include suppressing variable-not-used warnings, but since we don't use CUB block primitives, we don't
-// need std::string(DEME_CUDA_TOOLKIT_HEADERS).
-#define DEME_JITIFY_OPTIONS                                                                       \
-    {                                                                                             \
-        "-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(), \
-            "-diag-suppress=550", "-diag-suppress=177"                                            \
+// Jitify options include suppressing variable-not-used warnings. We could use CUDA lib functions too.
+#define DEME_JITIFY_OPTIONS                                                                           \
+    {                                                                                                 \
+        "-I" + (JitHelper::KERNEL_INCLUDE_DIR).string(), "-I" + (JitHelper::KERNEL_DIR).string(),     \
+            "-I" + std::string(DEME_CUDA_TOOLKIT_HEADERS), "-diag-suppress=550", "-diag-suppress=177" \
     }
 
 // I wasn't able to resolve a decltype problem with vector of vectors, so I have to create another macro for this kind
@@ -456,6 +455,12 @@ struct familyPrescription_t {
     std::string rotVelX = "none";
     std::string rotVelY = "none";
     std::string rotVelZ = "none";
+
+    // Users can use same prerequisites before setting XYZ...
+    std::string linPosPre = "none";
+    std::string linVelPre = "none";
+    std::string rotVelPre = "none";
+
     // Is this prescribed motion dictating the motion of the entities (true), or should still accept the influence from
     // other contact forces (false)
     bool linVelXPrescribed = false;
@@ -465,7 +470,9 @@ struct familyPrescription_t {
     bool rotVelYPrescribed = false;
     bool rotVelZPrescribed = false;
     bool rotPosPrescribed = false;
-    bool linPosPrescribed = false;
+    bool linPosXPrescribed = false;
+    bool linPosYPrescribed = false;
+    bool linPosZPrescribed = false;
     // Prescribed acc and ang acc; they are added to entities, sort of like gravity
     std::string accX = "none";
     std::string accY = "none";
@@ -473,6 +480,9 @@ struct familyPrescription_t {
     std::string angAccX = "none";
     std::string angAccY = "none";
     std::string angAccZ = "none";
+    // Users can use same prerequisites before setting XYZ...
+    std::string accPre = "none";
+    std::string angAccPre = "none";
     // A switch to mark if there is any prescription going on for this family at all
     bool used = false;
 };
@@ -706,13 +716,14 @@ class DEMClumpTemplate {
 
     /// Scale all geometry component of this clump
     void Scale(float s) {
+        // Never let mass become negative.
+        assertPositive(s, "Scale", "s");
         for (auto& pos : relPos) {
             pos *= s;
         }
         for (auto& rad : radii) {
             rad *= s;
         }
-        // Never let mass become negative.
         double positive_s = (double)std::abs(s);
         mass *= positive_s * positive_s * positive_s;
         MOI *= positive_s * positive_s * positive_s * positive_s * positive_s;
