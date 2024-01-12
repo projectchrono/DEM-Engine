@@ -62,6 +62,7 @@ SET(DEMOS
 		DEMdemo_Indentation_2
 		#DEMdemo_Force2D
 		test_SPH_boundary
+		DEMdemo_FractureCylinderSteel
 )
 
 # ------------------------------------------------------------------------------
