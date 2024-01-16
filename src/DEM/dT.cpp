@@ -2051,8 +2051,8 @@ inline void DEMDynamicThread::ifProduceFreshThenUseItAndSendNewOrder() {
 
         timers.GetTimer("Send to kT buffer").start();
         // Acquire lock and refresh the work order for the kinematic
+        calibrateParams();
         {
-            calibrateParams();
             std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
             sendToTheirBuffer();
         }
@@ -2110,8 +2110,8 @@ void DEMDynamicThread::workerThread() {
 
             // In this `new-boot' case, we send kT a work order, b/c dT needs results from CD to proceed. After this one
             // instance, kT and dT may work in an async fashion.
+            pCycleMaxVel = determineSysVel();
             {
-                pCycleMaxVel = determineSysVel();
                 std::lock_guard<std::mutex> lock(pSchedSupport->kinematicOwnedBuffer_AccessCoordination);
                 sendToTheirBuffer();
             }
@@ -2223,9 +2223,11 @@ void DEMDynamicThread::getTiming(std::vector<std::string>& names, std::vector<do
 }
 
 void DEMDynamicThread::startThread() {
-    std::lock_guard<std::mutex> lock(pSchedSupport->dynamicStartLock);
-    pSchedSupport->dynamicStarted = true;
-    pSchedSupport->cv_DynamicStartLock.notify_one();
+    {
+        std::lock_guard<std::mutex> lock(pSchedSupport->dynamicStartLock);
+        pSchedSupport->dynamicStarted = true;
+        pSchedSupport->cv_DynamicStartLock.notify_one();
+    }
 }
 
 void DEMDynamicThread::resetUserCallStat() {

@@ -286,9 +286,9 @@ void DEMKinematicThread::workerThread() {
             CDAccumTimer.End();
 
             timers.GetTimer("Send to dT buffer").start();
+            // kT will reflect on how good the choice of parameters is
+            calibrateParams();
             {
-                // kT will reflect on how good the choice of parameters is
-                calibrateParams();
                 // Acquire lock and supply the dynamic with fresh produce
                 std::lock_guard<std::mutex> lock(pSchedSupport->dynamicOwnedBuffer_AccessCoordination);
                 sendToTheirBuffer();
@@ -369,21 +369,25 @@ void DEMKinematicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, cons
 }
 
 void DEMKinematicThread::startThread() {
-    std::lock_guard<std::mutex> lock(pSchedSupport->kinematicStartLock);
-    pSchedSupport->kinematicStarted = true;
-    pSchedSupport->cv_KinematicStartLock.notify_one();
+    {
+        std::lock_guard<std::mutex> lock(pSchedSupport->kinematicStartLock);
+        pSchedSupport->kinematicStarted = true;
+        pSchedSupport->cv_KinematicStartLock.notify_one();
+    }
 }
 
 void DEMKinematicThread::breakWaitingStatus() {
-    // dynamicDone == true and cv_KinematicCanProceed should ensure kT breaks to the outer loop
-    pSchedSupport->dynamicDone = true;
-    // We distrubed kinematicOwned_Cons2ProdBuffer_isFresh and kTShouldReset here, but it matters not, as when
-    // breakWaitingStatus is called, they will always be reset to default soon
-    pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
-    kTShouldReset = true;
+    {
+        std::lock_guard<std::mutex> lock(pSchedSupport->kinematicCanProceed);
+        // dynamicDone == true and cv_KinematicCanProceed should ensure kT breaks to the outer loop
+        pSchedSupport->dynamicDone = true;
+        // We distrubed kinematicOwned_Cons2ProdBuffer_isFresh and kTShouldReset here, but it matters not, as when
+        // breakWaitingStatus is called, they will always be reset to default soon
+        pSchedSupport->kinematicOwned_Cons2ProdBuffer_isFresh = true;
+        kTShouldReset = true;
 
-    std::lock_guard<std::mutex> lock(pSchedSupport->kinematicCanProceed);
-    pSchedSupport->cv_KinematicCanProceed.notify_one();
+        pSchedSupport->cv_KinematicCanProceed.notify_one();
+    }
 }
 
 void DEMKinematicThread::resetUserCallStat() {
