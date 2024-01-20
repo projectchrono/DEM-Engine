@@ -14,12 +14,57 @@
 #include <map>
 #include <random>
 #include <cstdlib>
-#include <iostream>
-#include <fstream>
+#include <vector>
+#include <array>
 
 using namespace deme;
 
 const double math_PI = 3.1415927;
+
+unsigned long long comb(int n, int k) {
+    if (k < 0 || k > n)
+        return 0;
+    if (k > n - k)
+        k = n - k;
+    unsigned long long result = 1;
+    for (int i = 1; i <= k; ++i) {
+        result *= n - i + 1;
+        result /= i;
+    }
+    return result;
+}
+
+std::vector<double> cBernstein(int degree, double t) {
+    std::vector<double> B(degree + 1);
+    for (int i = 0; i <= degree; ++i) {
+        B[i] = comb(degree, i) * std::pow(t, i) * std::pow(1.0 - t, degree - i);
+    }
+    return B;
+}
+
+double deviationCausedHighest(double cp_deviation, double rad, double width) {
+    if (cp_deviation <= 0.) {
+        return 0.;
+    }
+    const int num_CPs = 4;
+    double t = 0.5;
+    std::vector<std::array<double, 2>> outer_CPs(num_CPs);
+    outer_CPs[0] = {0., width / 2};
+    outer_CPs[1] = {rad * cp_deviation, width / 2 - width / 3};
+    outer_CPs[2] = {rad * cp_deviation, width / 2 - width / 3 * 2};
+    outer_CPs[3] = {0., -width / 2};
+
+    std::vector<double> b = cBernstein(num_CPs - 1, t);
+
+    // Matrix multiplication (b @ outer_CPs)
+    std::array<double, 2> eval_pnt = {0., 0.};
+    for (int i = 0; i < num_CPs; ++i) {
+        eval_pnt[0] += b[i] * outer_CPs[i][0];
+        eval_pnt[1] += b[i] * outer_CPs[i][1];
+    }
+
+    return eval_pnt[0];
+}
 
 int main(int argc, char* argv[]) {
     int cur_test = atoi(argv[1]);
@@ -29,21 +74,22 @@ int main(int argc, char* argv[]) {
     std::filesystem::create_directory(out_dir);
 
     // `World'
-    float G_mag = 9.81;
+    float G_mag = atof(argv[11]);
     float step_size = 1e-5;     // 5e-6;
     double world_size_y = 0.6;  // 0.52;
-    double world_size_x = 3.;
+    double world_size_x = 4.;
+    float safe_x = 1.6;
     double world_size_z = 4.0;
-    float w_r = 0.8;
-    double sim_end = 30.;
-    float z_adv_targ = 0.1;
+    float w_r = atof(argv[10]);
+    double sim_end = 10.;
+    float z_adv_targ = 0.2;
 
     // Define the wheel geometry
     float wheel_rad = atof(argv[2]);
     float eff_mass = atof(argv[3]);
     float wheel_width = atof(argv[5]);
     float wheel_mass = 5.;  // 8.7;
-    float total_pressure = eff_mass * 9.81;
+    float total_pressure = eff_mass * G_mag;
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
@@ -51,11 +97,7 @@ int main(int argc, char* argv[]) {
 
     float Slope_deg = atof(argv[6]);
     float cp_dev;
-    if (atof(argv[7]) > 0.) {
-        cp_dev = atof(argv[7]) / 5.;
-    } else {
-        cp_dev = 0.;
-    }
+    cp_dev = deviationCausedHighest(atof(argv[7]), wheel_rad, wheel_width);
 
     {
         DEMSolver DEMSim;
@@ -67,7 +109,7 @@ int main(int argc, char* argv[]) {
 
         // E, nu, CoR, mu, Crr...
         float mu = 0.4;
-        float mu_wheel = 0.8;
+        float mu_wheel = atof(argv[12]);
         float mu_wall = 1.;
         auto mat_type_wall =
             DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", mu_wall}, {"Crr", 0.00}});
@@ -211,14 +253,13 @@ int main(int argc, char* argv[]) {
         DEMSim.SetExpandSafetyAdder(v_ref);
         DEMSim.SetCDNumStepsMaxDriftMultipleOfAvg(1);
         DEMSim.SetCDNumStepsMaxDriftAheadOfAvg(5);
-        DEMSim.SetErrorOutVelocity(150.);
+        DEMSim.SetErrorOutVelocity(50.);
         DEMSim.Initialize();
 
         // Put the wheel in place, then let the wheel sink in initially
-        float corr = 1;  // 0
-        float init_x = -1.2 + corr;
+        float init_x = -0.6;
         if (Slope_deg < 21) {
-            init_x = -1.8 + corr;
+            init_x = -1.4;
         }
 
         float settle_time = 0.4;
@@ -251,7 +292,7 @@ int main(int argc, char* argv[]) {
 
             float3 V = wheel_tracker->Vel();
             float x1 = wheel_tracker->Pos().x;
-            float z1 = x1 * std::sin(Slope_deg / 180. * math_PI);
+            float z1 = x1 * std::sin(G_ang);
             float x2, z2, z_adv = 0.;
 
             float t;
@@ -261,22 +302,43 @@ int main(int argc, char* argv[]) {
                 float3 angAcc = wheel_tracker->ContactAngAccLocal();
                 energy += std::abs((double)angAcc.y * wheel_IYY * w_r * (double)report_time);
                 x2 = wheel_tracker->Pos().x;
-                z_adv = x2 * std::sin(Slope_deg / 180. * math_PI) - z1;
+                z_adv = x2 * std::sin(G_ang) - z1;
+                if (x2 > safe_x)
+                    break;
 
                 DEMSim.DoDynamics(report_time);
             }
 
             float adv = x2 - x1;
             float eff_energy = eff_mass * z_adv * G_mag;
+            // std::cout << "Time: " << t << std::endl;
+            float slip_ratio = 1. - adv / (v_ref * t);
+            float power = energy / t;
+            // std::cout << "Efficiency: " << eff_energy / energy << std::endl;
+            // std::cout << "Z advance: " << z_adv << std::endl;
 
             std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
             std::chrono::duration<double> time_sec =
                 std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
 
-            std::filesystem::path outfilepath = out_dir / "efficiency.txt";
-            std::ofstream outFile(outfilepath);
-            outFile << eff_energy / energy << std::endl;
-            outFile.close();
+            {
+                std::filesystem::path outfilepath = out_dir / "efficiency.txt";
+                std::ofstream outFile(outfilepath);
+                outFile << eff_energy / energy << std::endl;
+                outFile.close();
+            }
+            {
+                std::filesystem::path outfilepath = out_dir / "slip.txt";
+                std::ofstream outFile(outfilepath);
+                outFile << slip_ratio << std::endl;
+                outFile.close();
+            }
+            {
+                std::filesystem::path outfilepath = out_dir / "power.txt";
+                std::ofstream outFile(outfilepath);
+                outFile << power << std::endl;
+                outFile.close();
+            }
 
             {
                 // Overwrite previous...
@@ -288,7 +350,7 @@ int main(int argc, char* argv[]) {
                 // std::cout << "Success: 1" << std::endl;
                 // std::cout << "=================================" << std::endl;
             }
-            DEMSim.DoDynamicsThenSync(0);
+            // DEMSim.DoDynamicsThenSync(0);
         }
 
         // DEMSim.ShowTimingStats();

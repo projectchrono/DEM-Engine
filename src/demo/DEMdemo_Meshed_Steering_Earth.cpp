@@ -14,12 +14,57 @@
 #include <map>
 #include <random>
 #include <cstdlib>
-#include <iostream>
-#include <fstream>
+#include <vector>
+#include <array>
 
 using namespace deme;
 
 const double math_PI = 3.1415927;
+
+unsigned long long comb(int n, int k) {
+    if (k < 0 || k > n)
+        return 0;
+    if (k > n - k)
+        k = n - k;
+    unsigned long long result = 1;
+    for (int i = 1; i <= k; ++i) {
+        result *= n - i + 1;
+        result /= i;
+    }
+    return result;
+}
+
+std::vector<double> cBernstein(int degree, double t) {
+    std::vector<double> B(degree + 1);
+    for (int i = 0; i <= degree; ++i) {
+        B[i] = comb(degree, i) * std::pow(t, i) * std::pow(1.0 - t, degree - i);
+    }
+    return B;
+}
+
+double deviationCausedHighest(double cp_deviation, double rad, double width) {
+    if (cp_deviation <= 0.) {
+        return 0.;
+    }
+    const int num_CPs = 4;
+    double t = 0.5;
+    std::vector<std::array<double, 2>> outer_CPs(num_CPs);
+    outer_CPs[0] = {0., width / 2};
+    outer_CPs[1] = {rad * cp_deviation, width / 2 - width / 3};
+    outer_CPs[2] = {rad * cp_deviation, width / 2 - width / 3 * 2};
+    outer_CPs[3] = {0., -width / 2};
+
+    std::vector<double> b = cBernstein(num_CPs - 1, t);
+
+    // Matrix multiplication (b @ outer_CPs)
+    std::array<double, 2> eval_pnt = {0., 0.};
+    for (int i = 0; i < num_CPs; ++i) {
+        eval_pnt[0] += b[i] * outer_CPs[i][0];
+        eval_pnt[1] += b[i] * outer_CPs[i][1];
+    }
+
+    return eval_pnt[0];
+}
 
 int main(int argc, char* argv[]) {
     int cur_test = atoi(argv[1]);
@@ -29,37 +74,34 @@ int main(int argc, char* argv[]) {
     std::filesystem::create_directory(out_dir);
 
     // `World'
-    float G_mag = 9.81;
+    float G_mag = atof(argv[11]);
     float step_size = 1e-5;  // 5e-6;
     double world_size_y = .75;
-    double world_size_x = 3.;
+    double world_size_x = 4.;
+    float safe_x = 1.6;
     double world_size_z = 4.0;
 
     // Define the wheel geometry
     float wheel_rad = atof(argv[2]);
     float wheel_width = atof(argv[5]);
-    float wheel_mass = 5.;                        // 8.7;
-    float eff_mass = atof(argv[3]);
-    float total_pressure = eff_mass * 9.81;  // 22.
+    float wheel_mass = 5.;                         // 8.7;
+    float total_pressure = atof(argv[3]) * G_mag;  // 22.
     float added_pressure = (total_pressure - wheel_mass * G_mag);
     float wheel_IYY = wheel_mass * wheel_rad * wheel_rad / 2;
     float wheel_IXX = (wheel_mass / 12) * (3 * wheel_rad * wheel_rad + wheel_width * wheel_width);
     float grouser_height = atof(argv[4]);
 
     // Wheel movements
-    float w_r = 0.8;
+    float w_r = atof(argv[10]);
     float forward_slip = 0.1;
-    double sim_end = 3.;
+    double sim_end = math_PI * 4. / 3. / w_r;  
+    sim_end = (sim_end > 5.0) ? 5.0 : sim_end; // 2/3 a revolution or 5s
     float tilt = 5. / 180. * math_PI;
     float forward_v = w_r * wheel_rad * std::cos(tilt) * (1. - forward_slip);
 
     float Slopes_deg[] = {0};
     float cp_dev;
-    if (atof(argv[7]) > 0.) {
-        cp_dev = atof(argv[7]) / 5.;
-    } else {
-        cp_dev = 0.;
-    }
+    cp_dev = deviationCausedHighest(atof(argv[7]), wheel_rad, wheel_width);
     float forward_ref_v = w_r * (wheel_rad + cp_dev + grouser_height) * std::cos(tilt);
 
     for (float Slope_deg : Slopes_deg) {
@@ -73,7 +115,7 @@ int main(int argc, char* argv[]) {
 
         // E, nu, CoR, mu, Crr...
         float mu = 0.4;
-        float mu_wheel = 0.8;
+        float mu_wheel = atof(argv[12]);
         float mu_wall = 1.;
         auto mat_type_wall =
             DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", mu_wall}, {"Crr", 0.00}});
@@ -192,7 +234,7 @@ int main(int argc, char* argv[]) {
         // auto compressor_tracker = DEMSim.Track(compressor);
 
         // Families' prescribed motions (Earth)
-        float v_ref = w_r * w_r * (wheel_rad + cp_dev + grouser_height);
+        float v_ref = w_r * (wheel_rad + cp_dev + grouser_height);
         double G_ang = Slope_deg * math_PI / 180.;
 
         // Note: this wheel is not `dictated' by our prescrption of motion because it can still fall onto the ground
@@ -226,10 +268,9 @@ int main(int argc, char* argv[]) {
         DEMSim.Initialize();
 
         // Put the wheel in place, then let the wheel sink in initially
-        float corr = 1;  // 0
-        float init_x = -1.4 + corr;
+        float init_x = -0.6;
         if (Slope_deg < 21) {
-            init_x = -2.0 + corr;
+            init_x = -1.4;
         }
 
         float settle_time = 0.2;
@@ -239,7 +280,7 @@ int main(int argc, char* argv[]) {
         float max_z = max_z_finder->GetValue();
         wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.03 + cp_dev + grouser_height + wheel_rad));
 
-        int report_steps = 1000;
+        int report_steps = 100;
         float report_time = report_steps * step_size;
         unsigned int cur_step = 0;
         double xforce = 0., yforce = 0.;
@@ -258,12 +299,15 @@ int main(int argc, char* argv[]) {
 
             DEMSim.DoDynamicsThenSync(0.5);
             DEMSim.ChangeFamily(1, 2);
-            DEMSim.DoDynamicsThenSync(2.);
+            DEMSim.DoDynamicsThenSync(1.5);
 
             float x1 = wheel_tracker->Pos().x;
 
             float t;
             for (t = 0; t < sim_end; t += report_time) {
+                float x2 = wheel_tracker->Pos().x;
+                if (x2 > safe_x)
+                    break;
                 float3 force = wheel_tracker->ContactAcc();
                 xforce += (double)force.x * wheel_mass;
                 yforce += (double)force.y * wheel_mass;
