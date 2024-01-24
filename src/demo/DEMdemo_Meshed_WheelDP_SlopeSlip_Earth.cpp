@@ -269,7 +269,7 @@ int main(int argc, char* argv[]) {
         float max_z = max_z_finder->GetValue();
         wheel_tracker->SetPos(make_float3(init_x, 0, max_z + 0.03 + cp_dev + grouser_height + wheel_rad));
 
-        int report_steps = 1000;
+        int report_steps = 100;
         float report_time = report_steps * step_size;
         unsigned int cur_step = 0;
         double energy = 0.;
