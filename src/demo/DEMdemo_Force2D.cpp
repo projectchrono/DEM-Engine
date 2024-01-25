@@ -69,7 +69,7 @@ int main() {
     auto input_xyz = sampler.SampleBox(sample_center, make_float3(sample_halfwidth, 0.f, fullheight / 2.));
     std::vector<std::shared_ptr<DEMClumpTemplate>> template_to_use(input_xyz.size());
     for (unsigned int i = 0; i < input_xyz.size(); i++) {
-        template_to_use[i] = templates_terrain[dist(gen)];
+        template_to_use[i] = templates_terrain[0];
     }
     DEMSim.AddClumps(template_to_use, input_xyz);
     num_particle += input_xyz.size();
@@ -109,14 +109,11 @@ int main() {
         DEMSim.ShowThreadCollaborationStats();
     }
 
-    char cp_filename[200];
-    sprintf(cp_filename, "%s/bed.csv", out_dir.c_str());
-    DEMSim.WriteClumpFile(std::string(cp_filename));
 
     // This is to show that you can change the material for all the particles in a family... although here,
     // mat_type_terrain_sim and mat_type_terrain are the same material so there is no effect; you can define
     // them differently though.
-    DEMSim.SetFamilyClumpMaterial(0, mat_type_terrain_sim);
+    DEMSim.SetFamilyClumpMaterial(0, mat_type_terrain);
     DEMSim.DoDynamicsThenSync(0.2);
     terrain_max_z = max_z_finder->GetValue();
     float matter_mass = total_mass_finder->GetValue();
@@ -124,10 +121,6 @@ int main() {
     float bulk_density = matter_mass / total_volume;
     std::cout << "Original terrain height: " << terrain_max_z << std::endl;
     std::cout << "Bulk density: " << bulk_density << std::endl;
-
-    // Then drop the ball
-    DEMSim.ChangeFamily(2, 0);
-    proj_tracker->SetPos(make_float3(0, 0, terrain_max_z + R + H));
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_time; t += frame_time) {
@@ -144,9 +137,6 @@ int main() {
         DEMSim.DoDynamics(frame_time);
         DEMSim.ShowThreadCollaborationStats();
 
-        if (std::abs(proj_tracker->Vel().z) < 1e-4) {
-            break;
-        }
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
@@ -154,11 +144,11 @@ int main() {
 
     DEMSim.ShowTimingStats();
 
-    float3 final_pos = proj_tracker->Pos();
-    std::cout << "Ball density: " << ball_density << std::endl;
-    std::cout << "Ball rad: " << R << std::endl;
-    std::cout << "Drop height: " << H << std::endl;
-    std::cout << "Penetration: " << terrain_max_z - (final_pos.z - R) << std::endl;
+    // float3 final_pos = proj_tracker->Pos();
+    // std::cout << "Ball density: " << ball_density << std::endl;
+    // std::cout << "Ball rad: " << R << std::endl;
+    // std::cout << "Drop height: " << H << std::endl;
+    // std::cout << "Penetration: " << terrain_max_z - (final_pos.z - R) << std::endl;
 
     std::cout << "==============================================================" << std::endl;
 

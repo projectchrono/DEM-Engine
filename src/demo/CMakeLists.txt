@@ -60,8 +60,9 @@ SET(DEMOS
 		DEMdemo_Fracture_Box
 		DEMdemo_FractureBeam
 		DEMdemo_Indentation_2
-		#DEMdemo_Force2D
+		DEMdemo_Force2D
 		test_SPH_boundary
+		windTurb
 		DEMdemo_FractureCylinderSteel
 )
 

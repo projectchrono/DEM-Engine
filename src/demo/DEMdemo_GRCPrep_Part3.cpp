@@ -85,8 +85,8 @@ int main() {
     }
 
     // Now we load part2 clump locations from a part1 output file
-    auto part2_clump_xyz = DEMSim.ReadClumpXyzFromCsv("GRC_3e6.csv");
-    auto part2_clump_quaternion = DEMSim.ReadClumpQuatFromCsv("GRC_3e6.csv");
+    auto part2_clump_xyz = DEMSim.ReadClumpXyzFromCsv((GET_DATA_PATH() / "clumps/GRC_3e6.csv").string());
+    auto part2_clump_quaternion = DEMSim.ReadClumpQuatFromCsv((GET_DATA_PATH() / "clumps/GRC_3e6.csv").string());
     // auto part2_pairs = DEMSim.ReadContactPairsFromCsv("Contact_pairs_3e6.csv");
     // auto part2_wcs = DEMSim.ReadContactWildcardsFromCsv("Contact_pairs_3e6.csv");
     std::vector<float3> in_xyz;

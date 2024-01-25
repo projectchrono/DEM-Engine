@@ -61,7 +61,7 @@ int main() {
     // Define the prescribed motion of mixer
     DEMSim.SetFamilyPrescribedAngVel(10, "0", "0", "3.14159");
 
-    float granular_rad = 0.005;
+    float granular_rad = 0.002;
     // auto template_granular = DEMSim.LoadSphereType(granular_rad * granular_rad * granular_rad * 2.8e3 * 4 / 3 * 3.14,
     //                                                granular_rad, mat_type_granular);
     // Calculate its mass and MOI
