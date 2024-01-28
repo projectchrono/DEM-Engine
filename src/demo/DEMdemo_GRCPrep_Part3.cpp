@@ -126,7 +126,7 @@ int main() {
     // Based on the `base_batch', we can create more batches
     std::vector<float> x_shift_dist = {-1.5, -0.5, 0.5, 1.5};
     std::vector<float> y_shift_dist = {-0.5, 0.5};
-    // Add some patches of such graular bed
+    // Add some patches of such graular bed 
     for (float x_shift : x_shift_dist) {
         for (float y_shift : y_shift_dist) {
             DEMClumpBatch another_batch = base_batch;
