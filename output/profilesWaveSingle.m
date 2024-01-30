@@ -2,14 +2,14 @@ clear; close all; clc
 
 % load reference solution F0
 
-casefriction=3;
+casefriction=0;
 
-folder='../build/DemoOutput_Force2D/';
+folder='..//DemoOutput_Force3D_000/';
 
-folder='./DemoOutput_Force2D/';
+ folder='./DemoOutput_Force3D_000/';
 
 figure(1); hold on
-for i=0:7
+for i=0:4
     for j=casefriction:casefriction
         localFolder=[folder 'Test_' num2str(i) '/' num2str(j) '/'];
         A=readtable([localFolder 'Contact_pairs_0029.csv']);
@@ -29,9 +29,17 @@ for i=0:7
 
         Fz=B.f_z(index);
         Fext=sum(Fz)-Fgravity;
-
-
-        plot((Fz-F0)/Fext);
+        
+        y=(Fz-F0)/Fext;
+        x=-numel(y)/2:numel(y)/2-1;
+        plot(x,y,'.-');
         axis([-inf inf -0.1 inf])
+        string='';
+        for j=1:numel(x)
+            string=[string, sprintf('(%2d, %1.3e)', x(j), y(j))];
+       
+    end
+    disp(string)
+
     end
 end

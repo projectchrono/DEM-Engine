@@ -19,14 +19,16 @@ make -C ../build/ -j 16
 
 counterFolder=0
 
-for multiplierMass in 1 2 3 4 5 10 20 30
+# for multiplierMass in 1 2 3 4 5 10 20 30
+# for multiplierMass in 0.5 1 2 4 8 # for friction 000
+for multiplierMass in 1 5 10 15 20 30 # for friction 010
 do
     counterCase=0
-    for contact_friction in 0.00 0.05 0.10 0.20
+    for contact_friction in 0.10
     do
         echo "Iteration: $counterCase in folder $counterFolder"
         echo "Parameters: mu=$contact_friction and Cr $rolling_value"
-        ../build/bin/DEMdemo_Force2D $counterFolder $counterCase $contact_friction $multiplierMass
+        ../build/bin/DEMdemo_Force3D $counterFolder $counterCase $contact_friction $multiplierMass
         ((counterCase++))
     done
     ((counterFolder++))
