@@ -7,13 +7,14 @@ casefriction=0;
 folder='..//DemoOutput_Force3D_000/';
 
  folder='./DemoOutput_Force3D_000/';
+  folder='./DemoOutput_Force3D_1_010_dt1e6/';
 
 figure(1); hold on
-for i=0:4
+for i=1:5
     for j=casefriction:casefriction
         localFolder=[folder 'Test_' num2str(i) '/' num2str(j) '/'];
-        A=readtable([localFolder 'Contact_pairs_0029.csv']);
-        B=readtable([localFolder 'Contact_pairs_0060.csv']);
+        A=readtable([localFolder 'Contact_pairs_0020.csv']);
+        B=readtable([localFolder 'Contact_pairs_0070.csv']);
 
         radius=0.01;
         tolerance=0.01*radius;
@@ -36,9 +37,8 @@ for i=0:4
         axis([-inf inf -0.1 inf])
         string='';
         for j=1:numel(x)
-            string=[string, sprintf('(%2d, %1.3e)', x(j), y(j))];
-       
-    end
+            string=[string, sprintf('(%1.2f, %1.4e)', x(j), y(j))];
+        end
     disp(string)
 
     end

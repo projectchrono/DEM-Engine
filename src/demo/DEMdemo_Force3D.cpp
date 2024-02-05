@@ -42,7 +42,7 @@ int main(int argc, char* argv[]) {
     float conctact_friction = atof(argv[3]);  // takes the value
     float massMultiplier = atof(argv[4]);     // takes the value
 
-    std::string out_dir = "/DemoOutput_Force3D_010/";
+    std::string out_dir = "/DemoOutput_Force3D_1_010_dt1e6/";
     out_dir += "Test_" + std::to_string(case_Folder) + "/" + std::to_string(case_ID) + "/";
 
     std::cout << "Running case with friction: " << conctact_friction << ", and Mass multiplier: " << massMultiplier
@@ -72,15 +72,15 @@ void runDEME(std::string dir_output, float frictionMaterial, float massMultiplie
 
     // E, nu, CoR, mu, Crr...
     auto mat_type_terrain =
-        DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.33}, {"CoR", 0.5}, {"mu", frictionMaterial}, {"Crr", 0.0}});
+        DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.33}, {"CoR", 0.5}, {"mu", frictionMaterial}, {"Crr", 0.0}});
 
-    float gravityMagnitude = 10.;
-    float step_size = 1e-7;
+    float gravityMagnitude = 1.;
+    float step_size = 1e-6;
     double world_sizeX = 122.0 * terrain_rad;
     double world_sizeZ = 26.7 * terrain_rad;
 
-    DEMSim.InstructBoxDomainDimension({-world_sizeX / 2., world_sizeX / 2.}, {-2 * terrain_rad, 2 * terrain_rad},
-                                      {-1 * world_sizeZ, 2 * terrain_rad});
+    DEMSim.InstructBoxDomainDimension({-world_sizeX / 2., world_sizeX / 2.}, {-5 * terrain_rad, 5 * terrain_rad},
+                                      {-1 * world_sizeZ, 8 * terrain_rad});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
 
     // Force model to use
@@ -96,12 +96,9 @@ void runDEME(std::string dir_output, float frictionMaterial, float massMultiplie
                                                       terrain_rad, mat_type_terrain));
 
     templates_terrain.push_back(DEMSim.LoadSphereType(
-        terrain_rad * terrain_rad * massMultiplier * terrain_rad * 4 / 3 * 1.0e3 * PI, terrain_rad, mat_type_terrain));
+        terrain_rad * terrain_rad * terrain_rad * 4 / 3 * 1.0e3 * PI, terrain_rad, mat_type_terrain));
 
     unsigned int num_particle = 0;
-    float sample_z = 1.5 * terrain_rad;
-
-    float init_v = 0.01;
 
     auto data_xyz = DEMSim.ReadClumpXyzFromCsv("../data/clumps/xyz.csv");
     std::vector<float3> input_xyz;
@@ -129,7 +126,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float massMultiplie
     zeroParticle->SetFamily(3);
     auto driver = DEMSim.Track(zeroParticle);
 
-    DEMSim.AddFamilyPrescribedAcc(2, "none", "none", to_string_with_precision(-gravityMagnitude * 2.));
+    DEMSim.AddFamilyPrescribedAcc(2, "none", "none", to_string_with_precision(-gravityMagnitude*(massMultiplier-1)));
 
     num_particle += input_xyz.size();
 
@@ -141,7 +138,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float massMultiplie
 
     DEMSim.Initialize();
 
-    float sim_time = 6.0;
+    float sim_time = 7.0;
     unsigned int fps = 10;
     float frame_time = 1.0 / fps;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
@@ -166,7 +163,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float massMultiplie
         DEMSim.DoDynamicsThenSync(frame_time);
         // DEMSim.ShowThreadCollaborationStats();
 
-        if (t > sim_time / 2 && status) {
+        if (t > 2.00 && status) {
             DEMSim.DoDynamicsThenSync(0);
             DEMSim.ChangeFamily(3, 2);
             std::cout << "Extra mass applied" << std::endl;
