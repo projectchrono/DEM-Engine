@@ -42,7 +42,7 @@ int main(int argc, char* argv[]) {
     float conctact_friction = atof(argv[3]);  // takes the value
     float massMultiplier = atof(argv[4]);     // takes the value
 
-    std::string out_dir = "/DemoOutput_Force3D_1_010_dt1e6/";
+    std::string out_dir = "/DemoOutput_Force3D_2_020_dt1e6/";
     out_dir += "Test_" + std::to_string(case_Folder) + "/" + std::to_string(case_ID) + "/";
 
     std::cout << "Running case with friction: " << conctact_friction << ", and Mass multiplier: " << massMultiplier
@@ -75,7 +75,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float massMultiplie
         DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.33}, {"CoR", 0.5}, {"mu", frictionMaterial}, {"Crr", 0.0}});
 
     float gravityMagnitude = 1.;
-    float step_size = 1e-6;
+    float step_size = 1.0e-6;
     double world_sizeX = 122.0 * terrain_rad;
     double world_sizeZ = 26.7 * terrain_rad;
 

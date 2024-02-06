@@ -7,10 +7,10 @@ casefriction=0;
 folder='..//DemoOutput_Force3D_000/';
 
  folder='./DemoOutput_Force3D_000/';
-  folder='./DemoOutput_Force3D_1_010_dt1e6/';
+  folder='./DemoOutput_Force3D_2_020_dt1e6/';
 
 figure(1); hold on
-for i=1:5
+for i=0:5
     for j=casefriction:casefriction
         localFolder=[folder 'Test_' num2str(i) '/' num2str(j) '/'];
         A=readtable([localFolder 'Contact_pairs_0020.csv']);
