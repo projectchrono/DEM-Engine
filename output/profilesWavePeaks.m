@@ -5,22 +5,23 @@ clear; close all; clc
 casefriction=0;
 mass=(pi*0.01^3*4/3*1.0*1000);
 
-M=([1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 2 3 4 5 6 7 8 9 10 11 21 31 41 51 61 71 81 91 101]-1)*mass;
+M=[0 .1 .2 .3 .4 .5 .6 .7 .8 0.9 1 2 3 4 5 6 7 8 9 10 11 21 31 41 51 61 71 81 91 101 201 401 801]*mass;
 
 folder='..//DemoOutput_Force3D_000/';
 
  folder='./DemoOutput_Force3D_000/';
-  folder='./DemoOutput_Force3D_3_000_dt1e6/';
+  folder='./DemoOutput_Force3D_3_020_dt1e6/';
 
 figure(1); 
-
-
-for i=10:26
+string='';
+out=zeros(numel(M),1);
+for i=0:29
     m=M(i+1);
+    f=m*9.81;
     for j=casefriction:casefriction
         localFolder=[folder 'Test_' num2str(i) '/' num2str(j) '/'];
-        A=readtable([localFolder 'Contact_pairs_0020.csv']);
-        B=readtable([localFolder 'Contact_pairs_0070.csv']);
+        A=readtable([localFolder 'Contact_pairs_0025.csv']);
+        B=readtable([localFolder 'Contact_pairs_0099.csv']);
 
         radius=0.01;
         tolerance=0.01*radius;
@@ -33,11 +34,11 @@ for i=10:26
         partPosition=indexZ(indexX);
         contactPair=[A.A(partPosition) A.B(partPosition)];
 
-        Fgravity=A.f_z(partPosition)/m;
+        Fgravity=A.f_z(partPosition)/f;
         
         indexEnd=find(B.A==contactPair(1) & B.B==contactPair(2));
 
-        Fz=B.f_z(indexEnd)/m;
+        Fz=B.f_z(indexEnd)/f;
  
    
         
@@ -47,14 +48,14 @@ for i=10:26
         % 
         % x=-numel(y)/2:numel(y)/2-1;
         % x=x+0.5;
-        semilogx(m,y,'.-');
+        semilogx(m/mass,y,'.-');
         hold on
-        % axis([-inf inf -0.1 inf])
-    %     string='';
-    %     for j=1:numel(x)
-    %         string=[string, sprintf('(%1.2f, %1.4e)', x(j), y(j))];
-    %     end
-    % disp(string)
-
+         axis([-inf inf -0.1 0.3])
+        
+        
+        string=[string, sprintf('(%1.2f, %1.4e)', m/mass, y)];
+        
     end
-end
+end 
+disp(string)
+grid on

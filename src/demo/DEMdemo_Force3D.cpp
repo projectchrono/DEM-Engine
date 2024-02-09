@@ -101,7 +101,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float massMultiplie
 
     unsigned int num_particle = 0;
 
-    auto data_xyz = DEMSim.ReadClumpXyzFromCsv("../data/clumps/xyz.csv");
+    auto data_xyz = DEMSim.ReadClumpXyzFromCsv("../data/clumps/xyz_2.csv");
     std::vector<float3> input_xyz;
 
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
