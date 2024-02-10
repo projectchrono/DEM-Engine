@@ -18,18 +18,16 @@
 make -C ../build/ -j 16
 
 counterFolder=0
-
-for multiplierMass in 0 .1 .2 .3 .4 .5 .6 .7 .8 0.9 1 2 3 4 5 6 7 8 9 10 20 30 40 50 60 70 80 90 100 200 400 800 1600
+counterCase=1
+for multiplierMass in 0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1 2 3 4 5 6 7 8 9 10 20 30 40 50 60 70 80 90 100 200 400 800 1600
 do
-    counterCase=0
-    for contact_friction in 0.20
-    tagFolder="_4_""$contact_friction""_dt1e6"
+    for contact_friction in 0.10 0.20 0.50 1.0
     do
-        echo "Iteration: $counterCase in folder $counterFolder"
+        tagFolder="4_$contact_friction"
+        echo "Iteration: $counterCase in folder $tagFolder"
         echo "Parameters: mu=$contact_friction and Cr $rolling_value"
         echo "folder tag is:" 
-        ../build/bin/DEMdemo_Force3D $counterFolder $counterCase $tagFolder $contact_friction $multiplierMass
-        ((counterCase++))
+        ../build/bin/DEMdemo_Force3D $tagFolder $counterCase $contact_friction $multiplierMass
     done
-    ((counterFolder++))
+    ((counterCase++))
 done
