@@ -35,11 +35,11 @@ int main() {
 
     // total number of random clump templates to generate
 
-    double radius = 0.0625 / 5.0 / 2.0;
+    double radius = 0.0625 / 10.0 / 2.0;
     double density = 100;
 
-    int totalSpheres = 3845;  // particles for dp5
-    // int totalSpheres = 6500;// particles for dp6
+    //int totalSpheres = 3845;  // particles for dp5
+    int totalSpheres = 20000;// particles for dp6
     // int totalSpheres = 200;
     // int totalSpheres=30900; //dp10
 
