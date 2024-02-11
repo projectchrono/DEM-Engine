@@ -5,18 +5,21 @@ clear; close all; clc
 casefriction=0;
 mass=(pi*0.01^3*4/3*1.0*1000);
 
-M=[0 .1 .2 .3 .4 .5 .6 .7 .8 0.9 1 2 3 4 5 6 7 8 9 10 20 30 40 50 60 70 80 90 100 200 400 800 1600]*mass;
+M=[0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1 2 3 4 5 6 7 8 9 10 20 30 40 50 60 70 80 90 100 200 400 800 1600]*mass;
 
 folder='..//DemoOutput_Force3D_000/';
 
  folder='./DemoOutput_Force3D_000/';
    folder='./DemoOutput_Force3D_3_000_dt1e6/';
    folder='./DemoOutput_Force3D_4_0.20/';
+    folder='./DemoOutput_Force3D_4_0.0001/';
+    folder='./DemoOutput_Force3D_4_0.50/';
+
 
 figure(1); 
 string='';
 out=zeros(numel(M),1);
-for i=1:numel(M)-3
+for i=1:numel(M)-2
     m=M(i);
     f=m*9.81;
     for j=casefriction:casefriction

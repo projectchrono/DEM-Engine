@@ -32,19 +32,19 @@ void print(int id, const std::vector<int>& container) {
 void runDEME(std::string dir_output, float friction, float massMultiplier);
 
 int main(int argc, char* argv[]) {
-    if (argc != 6) {
+    if (argc != 5) {
         printf("You have entered %d arguments, which is wrong!\n", argc);
         return 0;
     }
 
-    int case_Folder = atoi(argv[1]);  // takes the test ID
-    int case_ID = atoi(argv[2]);      // takes the test ID
-    std::string tag = argv[3];
-    float conctact_friction = atof(argv[4]);  // takes the value
-    float massMultiplier = atof(argv[5]);     // takes the value
+    std::string tag = argv[1];
+    int case_ID = atoi(argv[2]);  // takes the test ID
+
+    float conctact_friction = atof(argv[3]);  // takes the value
+    float massMultiplier = atof(argv[4]);     // takes the value
 
     std::string out_dir = "/DemoOutput_Force3D_" + tag + "/";
-    out_dir += "Test_" + std::to_string(case_Folder) + "/" + std::to_string(case_ID) + "/";
+    out_dir += "Test_" + std::to_string(case_ID) + "/";
 
     std::cout << "Running case with friction: " << conctact_friction << ", and Mass multiplier: " << massMultiplier
               << std::endl;
@@ -56,8 +56,6 @@ int main(int argc, char* argv[]) {
 }
 
 void runDEME(std::string dir_output, float frictionMaterial, float massMultiplier) {
-    double terrain_rad = 0.02 / 2.;
-
     DEMSolver DEMSim;
     DEMSim.UseFrictionalHertzianModel();
     DEMSim.SetVerbosity("ERROR");
@@ -73,15 +71,21 @@ void runDEME(std::string dir_output, float frictionMaterial, float massMultiplie
 
     // E, nu, CoR, mu, Crr...
     auto mat_type_terrain =
-        DEMSim.LoadMaterial({{"E", 1e7}, {"nu", 0.33}, {"CoR", 0.5}, {"mu", frictionMaterial}, {"Crr", 0.0}});
+        DEMSim.LoadMaterial({{"E", 1e7}, {"nu", 0.33}, {"CoR", 0.3}, {"mu", frictionMaterial}, {"Crr", 0.0}});
 
+    auto mat_type_terrain_zero =
+        DEMSim.LoadMaterial({{"E", 1e7}, {"nu", 0.33}, {"CoR", 0.0}, {"mu", frictionMaterial}, {"Crr", 0.0}});
+
+    float terrain_rad = 0.01;
     float gravityMagnitude = 9.81;
-    float step_size = 5 * 1.0e-5 * sqrt(terrain_rad * gravityMagnitude);
-    double world_sizeX = 122.0 * terrain_rad;
-    double world_sizeZ = 26.7 * terrain_rad;
+    float DTc = PI * terrain_rad * sqrt(1e3 / (1e7 / (2 * (1 + 0.33)))) / (0.8766 + 0.163 * 0.33);
+ //float step_size = 5 * 1.0e-5 * sqrt(terrain_rad * gravityMagnitude);
+    float step_size = 0.1 * DTc;
+    double world_sizeX = 122.0 * terrain_rad;  // 122 works fine for frictionless
+    double world_sizeZ = 27 * terrain_rad;
 
     DEMSim.InstructBoxDomainDimension({-world_sizeX / 2., world_sizeX / 2.}, {-5 * terrain_rad, 5 * terrain_rad},
-                                      {-1 * world_sizeZ, 8 * terrain_rad});
+                                      {-1 * world_sizeZ, 10 * terrain_rad});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_terrain);
 
     // Force model to use
@@ -94,14 +98,15 @@ void runDEME(std::string dir_output, float frictionMaterial, float massMultiplie
     std::vector<std::shared_ptr<DEMClumpTemplate>> templates_terrain;
 
     templates_terrain.push_back(DEMSim.LoadSphereType(terrain_rad * terrain_rad * terrain_rad * 4 / 3 * 1.0e3 * PI,
-                                                      terrain_rad, mat_type_terrain));
+                                                      terrain_rad, mat_type_terrain_zero));
 
     templates_terrain.push_back(DEMSim.LoadSphereType(terrain_rad * terrain_rad * terrain_rad * 4 / 3 * 1.0e3 * PI,
                                                       terrain_rad, mat_type_terrain));
 
+    // templates_terrain=DEMSim.LoadSphereType();
     unsigned int num_particle = 0;
 
-    auto data_xyz = DEMSim.ReadClumpXyzFromCsv("../data/clumps/xyz_2.csv");
+    auto data_xyz = DEMSim.ReadClumpXyzFromCsv("../data/clumps/xyz.csv");
     std::vector<float3> input_xyz;
 
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
@@ -128,8 +133,10 @@ void runDEME(std::string dir_output, float frictionMaterial, float massMultiplie
     auto driver = DEMSim.Track(zeroParticle);
 
     float Aext = -gravityMagnitude * (massMultiplier);
-    float timeApplication = abs(Aext)>abs(gravityMagnitude)? 2*sqrt(terrain_rad*abs(Aext)): 2*sqrt(terrain_rad*abs(gravityMagnitude));
-    std::string Aext_pattern = to_string_with_precision(Aext) + "*erf(t/sqrt(" + to_string_with_precision(timeApplication) + "))";
+    float timeApplication = abs(Aext) > abs(gravityMagnitude) ? 2 * sqrt(terrain_rad * abs(Aext))
+                                                              : 2 * sqrt(terrain_rad * abs(gravityMagnitude));
+    std::string Aext_pattern =
+        to_string_with_precision(Aext) + "*erf(t/sqrt(" + to_string_with_precision(timeApplication) + "))";
     std::cout << "applying this force law" << timeApplication << std::endl;
     DEMSim.AddFamilyPrescribedAcc(2, "none", "none", Aext_pattern);
 
@@ -144,7 +151,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float massMultiplie
     DEMSim.Initialize();
 
     float sim_time = 20.0;
-    float time_settling=5.0;
+    float time_settling = 5.0;
     unsigned int fps = 5;
     float frame_time = 1.0 / fps;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
@@ -154,6 +161,7 @@ void runDEME(std::string dir_output, float frictionMaterial, float massMultiplie
     double terrain_max_z;
 
     bool status = true;
+    bool changeMaterial = true;
 
     for (float t = 0; t < sim_time; t += frame_time) {
         std::cout << "Output file: " << currframe << std::endl;
@@ -166,6 +174,13 @@ void runDEME(std::string dir_output, float frictionMaterial, float massMultiplie
         currframe++;
 
         DEMSim.DoDynamicsThenSync(frame_time);
+
+        if (t > time_settling / 2 && changeMaterial) {
+            DEMSim.DoDynamicsThenSync(0);
+            std::cout << "Including restitution coefficient" << std::endl;
+            changeMaterial = false;
+            DEMSim.SetFamilyClumpMaterial(1, mat_type_terrain);
+        }
 
         if (t > time_settling && status) {
             DEMSim.DoDynamicsThenSync(0);

@@ -20,7 +20,7 @@ make -C ../build/ -j 16
 counterFolder=0
 
 # for multiplierMass in 1 2 3 4 5 10 20 30
- for multiplierMass in 5 # for friction 000
+ for multiplierMass in 1 
 #for multiplierMass in 1.5 2 3 5 6 11 # for friction 010 and 020
 do
     counterCase=0

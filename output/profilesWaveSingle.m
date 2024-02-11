@@ -2,7 +2,7 @@ clear; close all; clc
 
 % load reference solution F0
 
-casefriction=0;
+casefriction=1;
 mass=(pi*0.01^3*4/3*1.0*1000);
 % mass=(pi*0.01^2*1000*0.05);
 
@@ -12,19 +12,22 @@ folder='..//DemoOutput_Force3D_000/';
 
  folder='./DemoOutput_Force3D_4_000_/';
 %   folder='./DemoOutput_Force3D_3_000_dt1e6/';
-% folder='./DemoOutput_Force3D_4_0.10/';
+ folder='./DemoOutput_Force3D_4_0.0001/';
+     folder='./DemoOutput_Force3D_4_0.20/';
+
 
  plotOnly=[0.5 1 2 4 6];
+ plotOnly=[5 10 20 40  100 200];
  [~,indexCase] = ismember(plotOnly,M/mass);
 
 figure(1); hold on
-for i=0
+for i=indexCase
     m=M(i+1);
     f=m*9.81;
     for j=casefriction:casefriction
         localFolder=[folder 'Test_' num2str(i) '/'];
         A=readtable([localFolder 'Contact_pairs_0026.csv']);
-        B=readtable([localFolder 'Contact_pairs_0080.csv']);
+        B=readtable([localFolder 'Contact_pairs_0099.csv']);
 
         radius=0.01;
         tolerance=0.02*radius;
