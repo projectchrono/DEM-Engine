@@ -269,14 +269,13 @@ See [the paper that explains the design and usage of _DEME_](https://arxiv.org/a
 }
 ```
 
-See [the paper on using _DEME_ for simulating rover dynamics](https://arxiv.org/abs/2307.03445) and cite
+See [the paper on using _DEME_ for simulating rover dynamics](https://link.springer.com/article/10.1007/s00366-023-01921-9) and cite
 ```bibtex
-@article{zhang2023gpuaccelerated,
-      title={A GPU-accelerated simulator for the DEM analysis of granular systems composed of clump-shaped elements}, 
+@article{ruochunGRC-DEM2023,
+      title={A {GPU}-accelerated simulator for the {DEM} analysis of granular systems composed of clump-shaped elements}, 
       author={Ruochun Zhang and Colin Vanden Heuvel and Alexander Schepelmann and Arno Rogg and Dimitrios Apostolopoulos and Samuel Chandler and Radu Serban and Dan Negrut},
-      year={2023},
-      eprint={2307.03445},
-      archivePrefix={arXiv},
-      primaryClass={cs.CE}
+      year={2024},
+      journal={Engineering with Computers},
+      doi={https://doi.org/10.1007/s00366-023-01921-9}
 }
 ```
