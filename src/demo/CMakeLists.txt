@@ -65,6 +65,7 @@ SET(DEMOS
 		test_SPH_boundary
 		windTurb
 		DEMdemo_FractureCylinderSteel
+		DEMdemo_FillingGeo
 )
 
 # ------------------------------------------------------------------------------

@@ -35,30 +35,30 @@ int main() {
 
     // total number of random clump templates to generate
 
-    double radius = 0.0625 / 10.0 / 2.0;
-    double density = 100;
+    double radius = 0.10 / 5.0 / 2.0;
+    double density = 1000;
 
-    //int totalSpheres = 3845;  // particles for dp5
-    int totalSpheres = 32100;// particles for dp6
+    // int totalSpheres = 3845;  // particles for dp5
+    int totalSpheres = 12000;  // particles for dp6
     // int totalSpheres = 200;
     // int totalSpheres=30900; //dp10
 
     int num_template = 1;
 
-    float plane_bottom = -0.208;
+    float plane_bottom = 0.01;
 
-    auto mat_type_walls = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.10}, {"mu", 0.00}, {"Crr", 0.00}});
+    auto mat_type_walls = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.10}, {"mu", 0.00001}, {"Crr", 0.00}});
 
     auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 1.0e9}, {"nu", 0.35}, {"CoR", 0.15}, {"mu", 0.0}, {"Crr", 0.0}});
+        DEMSim.LoadMaterial({{"E", 1.0e9}, {"nu", 0.35}, {"CoR", 0.15}, {"mu", 0.0001}, {"Crr", 0.0}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.50);
-    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.05);
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_type_particles, 0.30);
+    DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.00);
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_type_particles, 0.0000);
 
     // Make ready for simulation
-    float step_size = 2.0e-7;
-    DEMSim.InstructBoxDomainDimension({-0.5, 0.5}, {-0.5, 0.5}, {-0.5, 1.80});
+    float step_size = 2.0e-6;
+    DEMSim.InstructBoxDomainDimension({-1.0, 1.0}, {-1, 1}, {-1.0, 9.0});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
@@ -69,25 +69,36 @@ int main() {
     DEMSim.SetInitBinSize(radius * 5);
 
     // Loaded meshes are by-default fixed
-    auto fixed = DEMSim.AddWavefrontMeshObject("../data/granularFlow/float_96_2fill.obj", mat_type_walls);
+    auto fixed = DEMSim.AddWavefrontMeshObject("../data/my/FOWT_2fill.obj", mat_type_walls);
     // float_96_2fill
     fixed->Scale(1 * 1.0);
     fixed->SetFamily(10);
-    float3 move = make_float3(0.00, 0.00, -0.208+0.0625);  // z
-    float4 rot = make_float4(0, 0, 1, 0);
+    float ang = PI / 2;
+    float3 move = make_float3(0.00, 0.00, 0);  // z
+    float4 rot = make_float4(cos(ang / 2), 0, 0, sin(ang / 2));
 
     fixed->Move(move, rot);
-    std::string shake_pattern_xz = " 0.01 * sin( 33 * 2 * deme::PI * t)";
+    std::string shake_pattern_xz = " 0.01 * sin( 3 * 2 * deme::PI * t)";
     DEMSim.SetFamilyPrescribedLinVel(10, shake_pattern_xz, shake_pattern_xz, shake_pattern_xz);
     DEMSim.SetFamilyPrescribedLinVel(11, "0", "0", "0");
 
     auto top_plane = DEMSim.AddWavefrontMeshObject("../data/granularFlow/cylinder.obj", mat_type_walls);
-    top_plane->SetInitPos(make_float3(0, 0, 0.20));
+    top_plane->SetInitPos(make_float3(0, 0, 2.80));
     top_plane->SetMass(1.);
-    top_plane->Scale(make_float3(0.15, 0.15, 0.010));
+    top_plane->Scale(make_float3(0.9, 0.9, 0.010));
     top_plane->SetFamily(20);
+
+    auto funnel = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/funnel.obj"), mat_type_walls);
+    funnel->Scale(0.007);
+    move = make_float3(0.00, 0.00, 2.35);  // z
+    ang = PI;
+    rot = make_float4(cos(ang / 2), 0, 0, sin(ang / 2));
+
+    funnel->Move(move, rot);
+    funnel->SetFamily(10);
+
     DEMSim.SetFamilyPrescribedLinVel(20, "0", "0", to_string_with_precision(0));
-    DEMSim.SetFamilyPrescribedLinVel(21, "0", "0", to_string_with_precision(-0.04 / 1.0));
+    DEMSim.SetFamilyPrescribedLinVel(21, "0", "0", to_string_with_precision(-0.03 / 1.0));
     // Make an array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
 
@@ -124,7 +135,7 @@ int main() {
     }
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/test_SPH";
+    out_dir += "/Filling_Geo_FOWT_pewec";
     remove_all(out_dir);
     create_directory(out_dir);
 
@@ -134,12 +145,6 @@ int main() {
 
     char filename[200], meshfile[200];
 
-    float shift_xyz = 1.0 * (radius) * 2.0;
-    float x = 0;
-    float y = 0;
-
-    float z = shift_xyz / 2;  // by default we create beads at 0
-    double emitterZ = 0.5;
     unsigned int actualTotalSpheres = 0;
 
     // Some inspectors
@@ -158,68 +163,60 @@ int main() {
     bool initialization = true;
     double timeTotal = 0;
     double consolidation = true;
+    float shift_xyz = 1.0 * (radius) * 2.0;
 
-    while (initialization) {
-        std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
-        std::vector<float3> input_pile_xyz;
-        PDSampler sampler(shift_xyz);
+    std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
+    std::vector<float3> input_pile_xyz;
+    PDSampler sampler(shift_xyz);
 
-        bool generate = (plane_bottom + shift_xyz / 2 > emitterZ) ? false : true;
+    float x = 0;
+    float y = 0;
 
-        if (generate) {
-            float sizeZ = (frame == 0) ? 1.30 : 0.00;
-            float sizeX = 0.10;
-            float z = plane_bottom + shift_xyz + sizeZ / 2.0;
+    float sizeZ = (frame == 0) ? 2.20 : 0.00;
+    float sizeX = 0.10;
+    float z = plane_bottom + shift_xyz + sizeZ / 2.0;
 
-            float3 center_xyz = make_float3(0, 0, z);
+    float3 center_xyz = make_float3(0, 0, z);
 
-            // std::cout << "level of particles position ... " << center_xyz.z << std::endl;
+    // std::cout << "level of particles position ... " << center_xyz.z << std::endl;
 
-            auto heap_particles_xyz = sampler.SampleCylinderZ(center_xyz, sizeX / 2, sizeZ / 2.0);
-            unsigned int num_clumps = heap_particles_xyz.size();
-            // std::cout << "number of particles at this level ... " << num_clumps << std::endl;
+    auto heap_particles_xyz = sampler.SampleCylinderZ(center_xyz, sizeX / 2, sizeZ / 2.0);
+    unsigned int num_clumps = heap_particles_xyz.size();
+    // std::cout << "number of particles at this level ... " << num_clumps << std::endl;
+    z+=0.40 +sizeZ / 2.0;
+    sizeZ = 2.00;
+    sizeX = 0.50;
+    sizeZ = 2.00;
 
-            for (unsigned int i = actualTotalSpheres; i < actualTotalSpheres + num_clumps; i++) {
-                input_pile_template_type.push_back(clump_types.at(i % num_template));
-            }
-
-            input_pile_xyz.insert(input_pile_xyz.end(), heap_particles_xyz.begin(), heap_particles_xyz.end());
-
-            auto the_pile = DEMSim.AddClumps(input_pile_template_type, input_pile_xyz);
-            the_pile->SetVel(make_float3(-0.00, 0.0, -0.90));
-            the_pile->SetFamily(1);
-
-            DEMSim.UpdateClumps();
-
-            std::cout << "Total num of particles: " << (int)DEMSim.GetNumClumps() << std::endl;
-            actualTotalSpheres = (int)DEMSim.GetNumClumps();
-        }
-        timeTotal += settle_frame_time;
-        // std::cout << "Total runtime: " << timeTotal << "s; settling for: " << settle_frame_time << std::endl;
-        // std::cout << "maxZ is: " << max_z_finder->GetValue() << std::endl;
-
-        initialization = (actualTotalSpheres < totalSpheres) ? true : false;
-
-        if (generate && !(frame % 1)) {
-            std::cout << "frame : " << frame << std::endl;
-            sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), frame);
-            DEMSim.WriteSphereFile(std::string(filename));
-            sprintf(meshfile, "%s/DEMdemo_mesh.vtk", out_dir.c_str());
-            DEMSim.WriteMeshFile(std::string(meshfile));
-            // DEMSim.ShowThreadCollaborationStats();
-            frame++;
-        }
-
-        DEMSim.DoDynamicsThenSync(settle_frame_time);
-
-        plane_bottom = max_z_finder->GetValue();
+    z += sizeZ/2;
+    center_xyz = make_float3(0, 0, z);
+    //if (std::vector<float3>* newposition = &sampler.SampleCylinderZ(center_xyz, sizeX / 2, sizeZ)) 
+    {
+        std::vector<float3> newposition = sampler.SampleCylinderZ(center_xyz, sizeX / 2, sizeZ / 2);
+        heap_particles_xyz.insert(heap_particles_xyz.end(), newposition.begin(), newposition.end());
     }
-    std::cout << "extra settling time " << std::endl;
-    DEMSim.DoDynamicsThenSync(0.50);// extra settling
+    std::cout << "Total num of particles: " << heap_particles_xyz.size() << std::endl;
+    for (unsigned int i = 0; i < heap_particles_xyz.size(); i++) {
+        input_pile_template_type.push_back(clump_types.at(i % num_template));
+    }
+
+    input_pile_xyz.insert(input_pile_xyz.end(), heap_particles_xyz.begin(), heap_particles_xyz.end());
+
+    auto the_pile = DEMSim.AddClumps(input_pile_template_type, input_pile_xyz);
+    the_pile->SetVel(make_float3(-0.00, 0.0, -0.90));
+    the_pile->SetFamily(1);
+
+    DEMSim.UpdateClumps();
+
+    std::cout << "Total num of particles: " << (int)DEMSim.GetNumClumps() << std::endl;
+    actualTotalSpheres = (int)DEMSim.GetNumClumps();
+
+    // std::cout << "Total runtime: " << timeTotal << "s; settling for: " << settle_frame_time << std::endl;
+    // std::cout << "maxZ is: " << max_z_finder->GetValue() << std::endl;
 
     std::cout << "Initialization done with : " << actualTotalSpheres << "particles" << std::endl;
 
-    float sim_end = 4.0;
+    float sim_end = 40.0;
     unsigned int fps = 20;
     float frame_time = 1.0 / fps;
 
@@ -233,7 +230,7 @@ int main() {
 
     sprintf(meshfile, "%s/DEMdemo_funnel_%04d.vtk", out_dir.c_str(), frame);
     DEMSim.WriteMeshFile(std::string(meshfile));
-    sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), frame++);
+    sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), frame);
     DEMSim.WriteSphereFile(std::string(filename));
 
     bool status_1 = true;
@@ -256,21 +253,22 @@ int main() {
         frame_count++;
         DEMSim.ShowThreadCollaborationStats();
         // std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
-        if (totalRunTime > 0.9 && status_1) {
+        if (totalRunTime > 3 && status_1) {
             DEMSim.DoDynamicsThenSync(0);
             std::cout << "gate is in motion from: " << totalRunTime << " s" << std::endl;
             std::cout << "and it will stop in : " << totalRunTime << " s" << std::endl;
-            DEMSim.ChangeFamily(10, 11);
+            
             DEMSim.ChangeFamily(20, 21);
             DEMSim.EnableContactBetweenFamilies(21, 1);
             status_1 = false;
         }
 
-        if (totalRunTime > 1.9 + frame_time && status_2) {
+        if (totalRunTime > 10 + frame_time && status_2) {
             DEMSim.DoDynamicsThenSync(0);
             std::cout << "gate is in motion from: " << totalRunTime << " s" << std::endl;
             std::cout << "and it will stop in : " << totalRunTime << " s" << std::endl;
-            DEMSim.ChangeFamily(21, 20);
+            // DEMSim.ChangeFamily(21, 20);
+            DEMSim.ChangeFamily(10, 11);
 
             status_2 = false;
         }

@@ -13,13 +13,13 @@ folder='..//DemoOutput_Force3D_000/';
    folder='./DemoOutput_Force3D_3_000_dt1e6/';
    folder='./DemoOutput_Force3D_4_0.20/';
     folder='./DemoOutput_Force3D_4_0.0001/';
-    folder='./DemoOutput_Force3D_4_0.50/';
+    % folder='./DemoOutput_Force3D_4_0.50/';
 
 
 figure(1); 
 string='';
 out=zeros(numel(M),1);
-for i=1:numel(M)-2
+for i=1:numel(M)-3
     m=M(i);
     f=m*9.81;
     for j=casefriction:casefriction
