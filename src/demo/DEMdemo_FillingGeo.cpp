@@ -35,7 +35,7 @@ int main() {
 
     // total number of random clump templates to generate
 
-    double radius = 0.10 / 5.0 / 2.0;
+    double radius = (1.00/2); // 
     double density = 1000;
 
     // int totalSpheres = 3845;  // particles for dp5
@@ -45,20 +45,20 @@ int main() {
 
     int num_template = 1;
 
-    float plane_bottom = 0.01;
+    float plane_bottom = 0.30;
 
-    auto mat_type_walls = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.10}, {"mu", 0.00001}, {"Crr", 0.00}});
+    auto mat_type_walls = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.00}, {"mu", 0.10}, {"Crr", 0.00}});
 
     auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 1.0e9}, {"nu", 0.35}, {"CoR", 0.15}, {"mu", 0.0001}, {"Crr", 0.0}});
+        DEMSim.LoadMaterial({{"E", 1.0e9}, {"nu", 0.35}, {"CoR", 0.00}, {"mu", 0.10}, {"Crr", 0.0}});
 
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.50);
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.00);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.00);
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_type_particles, 0.0000);
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_type_particles, 0.10);
 
     // Make ready for simulation
     float step_size = 2.0e-6;
-    DEMSim.InstructBoxDomainDimension({-1.0, 1.0}, {-1, 1}, {-1.0, 9.0});
+    DEMSim.InstructBoxDomainDimension({-30.0, 30.0}, {-10, 10}, {-10.0, 140.0});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
@@ -69,36 +69,36 @@ int main() {
     DEMSim.SetInitBinSize(radius * 5);
 
     // Loaded meshes are by-default fixed
-    auto fixed = DEMSim.AddWavefrontMeshObject("../data/my/FOWT_2fill.obj", mat_type_walls);
+    auto fixed = DEMSim.AddWavefrontMeshObject("../data/my/wavestar2fill.obj", mat_type_walls);
     // float_96_2fill
-    fixed->Scale(1 * 1.0);
+    fixed->Scale(10 * 1.0);
     fixed->SetFamily(10);
-    float ang = PI / 2;
+    float ang = PI;
     float3 move = make_float3(0.00, 0.00, 0);  // z
     float4 rot = make_float4(cos(ang / 2), 0, 0, sin(ang / 2));
 
     fixed->Move(move, rot);
-    std::string shake_pattern_xz = " 0.01 * sin( 3 * 2 * deme::PI * t)";
+    std::string shake_pattern_xz = " 0.01 * sin( 30 * 2 * deme::PI * t)";
     DEMSim.SetFamilyPrescribedLinVel(10, shake_pattern_xz, shake_pattern_xz, shake_pattern_xz);
     DEMSim.SetFamilyPrescribedLinVel(11, "0", "0", "0");
 
     auto top_plane = DEMSim.AddWavefrontMeshObject("../data/granularFlow/cylinder.obj", mat_type_walls);
-    top_plane->SetInitPos(make_float3(0, 0, 2.80));
+    top_plane->SetInitPos(make_float3(0, 0, 05.50));
     top_plane->SetMass(1.);
-    top_plane->Scale(make_float3(0.9, 0.9, 0.010));
+    top_plane->Scale(make_float3(5, 5, 0.1));
     top_plane->SetFamily(20);
 
-    auto funnel = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/funnel.obj"), mat_type_walls);
-    funnel->Scale(0.007);
-    move = make_float3(0.00, 0.00, 2.35);  // z
-    ang = PI;
-    rot = make_float4(cos(ang / 2), 0, 0, sin(ang / 2));
+    // auto funnel = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/funnel.obj"), mat_type_walls);
+    // funnel->Scale(0.007);
+    // move = make_float3(0.00, 0.00, 2.35);  // z
+    // ang = PI;
+    // rot = make_float4(cos(ang / 2), 0, 0, sin(ang / 2));
 
-    funnel->Move(move, rot);
-    funnel->SetFamily(10);
+    // funnel->Move(move, rot);
+    // funnel->SetFamily(10);
 
     DEMSim.SetFamilyPrescribedLinVel(20, "0", "0", to_string_with_precision(0));
-    DEMSim.SetFamilyPrescribedLinVel(21, "0", "0", to_string_with_precision(-0.03 / 1.0));
+    DEMSim.SetFamilyPrescribedLinVel(21, "0", "0", to_string_with_precision(-radius * 2 / 1.0));
     // Make an array to store these generated clump templates
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_types;
 
@@ -135,15 +135,13 @@ int main() {
     }
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/Filling_Geo_FOWT_pewec";
+    out_dir += "/Filling_Geo_FOWT_wavestar6";
     remove_all(out_dir);
     create_directory(out_dir);
 
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
     float settle_frame_time = 0.004;
-
-    char filename[200], meshfile[200];
 
     unsigned int actualTotalSpheres = 0;
 
@@ -163,38 +161,26 @@ int main() {
     bool initialization = true;
     double timeTotal = 0;
     double consolidation = true;
-    float shift_xyz = 1.0 * (radius) * 2.0;
+    float shift_xyz = 1.02 * (radius) * 2.0;
 
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
     std::vector<float3> input_pile_xyz;
-    PDSampler sampler(shift_xyz);
+    HCPSampler sampler(shift_xyz);
 
-    float x = 0;
-    float y = 0;
+    float x = 0.0;
+    float y = -0.0;
 
-    float sizeZ = (frame == 0) ? 2.20 : 0.00;
-    float sizeX = 0.10;
-    float z = plane_bottom + shift_xyz + sizeZ / 2.0;
+    float sizeZ = plane_bottom + 80.40;
+    float sizeX = 2.00;
+    float z = plane_bottom + shift_xyz + sizeZ / 2.0; 
 
-    float3 center_xyz = make_float3(0, 0, z);
+    float3 center_xyz = make_float3(x, y, z);
 
     // std::cout << "level of particles position ... " << center_xyz.z << std::endl;
 
-    auto heap_particles_xyz = sampler.SampleCylinderZ(center_xyz, sizeX / 2, sizeZ / 2.0);
+    auto heap_particles_xyz = sampler.SampleBox(center_xyz, make_float3(sizeX / 2, sizeX / 2, sizeZ / 2.0));
     unsigned int num_clumps = heap_particles_xyz.size();
-    // std::cout << "number of particles at this level ... " << num_clumps << std::endl;
-    z+=0.40 +sizeZ / 2.0;
-    sizeZ = 2.00;
-    sizeX = 0.50;
-    sizeZ = 2.00;
 
-    z += sizeZ/2;
-    center_xyz = make_float3(0, 0, z);
-    //if (std::vector<float3>* newposition = &sampler.SampleCylinderZ(center_xyz, sizeX / 2, sizeZ)) 
-    {
-        std::vector<float3> newposition = sampler.SampleCylinderZ(center_xyz, sizeX / 2, sizeZ / 2);
-        heap_particles_xyz.insert(heap_particles_xyz.end(), newposition.begin(), newposition.end());
-    }
     std::cout << "Total num of particles: " << heap_particles_xyz.size() << std::endl;
     for (unsigned int i = 0; i < heap_particles_xyz.size(); i++) {
         input_pile_template_type.push_back(clump_types.at(i % num_template));
@@ -217,7 +203,7 @@ int main() {
     std::cout << "Initialization done with : " << actualTotalSpheres << "particles" << std::endl;
 
     float sim_end = 40.0;
-    unsigned int fps = 20;
+    unsigned int fps = 10;
     float frame_time = 1.0 / fps;
 
     std::cout << "Output at " << fps << " FPS" << std::endl;
@@ -227,11 +213,6 @@ int main() {
     unsigned int step_count = 0;
 
     frame = 0;
-
-    sprintf(meshfile, "%s/DEMdemo_funnel_%04d.vtk", out_dir.c_str(), frame);
-    DEMSim.WriteMeshFile(std::string(meshfile));
-    sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), frame);
-    DEMSim.WriteSphereFile(std::string(filename));
 
     bool status_1 = true;
     bool status_2 = false;
@@ -253,17 +234,17 @@ int main() {
         frame_count++;
         DEMSim.ShowThreadCollaborationStats();
         // std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
-        if (totalRunTime > 3 && status_1) {
+        if (totalRunTime > 8 && status_1) {
             DEMSim.DoDynamicsThenSync(0);
             std::cout << "gate is in motion from: " << totalRunTime << " s" << std::endl;
             std::cout << "and it will stop in : " << totalRunTime << " s" << std::endl;
-            
+
             DEMSim.ChangeFamily(20, 21);
             DEMSim.EnableContactBetweenFamilies(21, 1);
             status_1 = false;
         }
 
-        if (totalRunTime > 10 + frame_time && status_2) {
+        if (totalRunTime > 5 && status_2) {
             DEMSim.DoDynamicsThenSync(0);
             std::cout << "gate is in motion from: " << totalRunTime << " s" << std::endl;
             std::cout << "and it will stop in : " << totalRunTime << " s" << std::endl;
