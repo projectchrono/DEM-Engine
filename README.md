@@ -257,7 +257,7 @@ This project exists independently of Chrono so developers should be sure to incl
 
 <h2 id="citation">Citation</h2>
 
-See [the paper that explains the design and usage of _DEME_]([https://arxiv.org/abs/2311.04648](https://www.sciencedirect.com/science/article/pii/S001046552400119X?via%3Dihub) and cite
+See [the paper that explains the design and usage of _DEME_](https://www.sciencedirect.com/science/article/pii/S001046552400119X?via%3Dihub) and cite
 ```bibtex
 @article{zhang_2024_deme,
 title = {Chrono DEM-Engine: A Discrete Element Method dual-GPU simulator with customizable contact forces and element shape},
