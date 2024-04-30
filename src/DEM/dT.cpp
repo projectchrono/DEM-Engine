@@ -724,7 +724,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         }
         if (in_domain_msg) {
             DEME_WARNING(
-                "At least one clump is initialized with a position out of the box domian you specified.\nIt is found "
+                "At least one clump is initialized with a position out of the box domain you specified.\nIt is found "
                 "at %.5g, %.5g, %.5g (this message only shows one such example).\nThis simulation is unlikely to go as "
                 "planned.",
                 sus_point.x, sus_point.y, sus_point.z);
