@@ -14,7 +14,7 @@ folder='..//DemoOutput_Force3D_000/';
 %   folder='./DemoOutput_Force3D_3_000_dt1e6/';
  folder='./DemoOutput_Force3D_4_0.0001/';
      folder='./DemoOutput_Force3D_4_0.20/';
-folder='../build/ContactChain_out/';
+folder='./ContactChain_out/';
 
  plotOnly=[0.5 1 2 4 6];
  plotOnly=[5 10 20 40  100 200];
