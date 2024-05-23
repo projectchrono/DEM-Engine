@@ -131,8 +131,8 @@ int main() {
         std::vector<std::shared_ptr<DEMMaterial>> mat;
 
         double radiusMax = distribution(generator);
-        double radiusMin = 8.0 / 8.0 * radiusMax;
-        double eccentricity = 0.0 / 8.0 * radiusMax;
+        double radiusMin = 6.0 / 8.0 * radiusMax;
+        double eccentricity = 2.0 / 8.0 * radiusMax;
 
         float3 tmp;
         tmp.x = -1 * eccentricity / 2.0;
@@ -142,9 +142,21 @@ int main() {
         mat.push_back(mat_type_particles);
         radii.push_back(radiusMin);
 
+
+        double x = eccentricity/2.0;
+        double y = 0;
+        double z = 0;
+        tmp.x = x;
+        tmp.y = y;
+        tmp.z = z;
+        relPos.push_back(tmp);
+        mat.push_back(mat_type_particles);
+
+        radii.push_back(radiusMin);
+
         double c = radiusMin;  // smaller dim of the ellipse
         double b = radiusMin;
-        double a = radiusMin + 0.50 * eccentricity;
+        double a = radiusMax;
 
         float mass = 4.0 / 3.0 * 3.141592 * a * b * c * density;
         float3 MOI = make_float3(1.f / 5.f * mass * (b * b + c * c), 1.f / 5.f * mass * (a * a + c * c),

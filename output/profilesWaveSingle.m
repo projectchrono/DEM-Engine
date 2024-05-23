@@ -14,7 +14,7 @@ folder='..//DemoOutput_Force3D_000/';
 %   folder='./DemoOutput_Force3D_3_000_dt1e6/';
  folder='./DemoOutput_Force3D_4_0.0001/';
      folder='./DemoOutput_Force3D_4_0.20/';
-
+folder='../build/ContactChain_out/';
 
  plotOnly=[0.5 1 2 4 6];
  plotOnly=[5 10 20 40  100 200];
@@ -26,6 +26,7 @@ for i=indexCase
     f=m*9.81;
     for j=casefriction:casefriction
         localFolder=[folder 'Test_' num2str(i) '/'];
+        localFolder=[folder ''  '/'];
         A=readtable([localFolder 'Contact_pairs_0026.csv']);
         B=readtable([localFolder 'Contact_pairs_0099.csv']);
 

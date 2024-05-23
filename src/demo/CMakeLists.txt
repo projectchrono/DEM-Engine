@@ -67,6 +67,10 @@ SET(DEMOS
 		DEMdemo_FractureCylinderSteel
 		DEMdemo_FillingGeo
 		DEMdemo_Force3DSingle
+		gael
+		test
+		test_cons
+		DEMdemo_ContactChain
 )
 
 # ------------------------------------------------------------------------------

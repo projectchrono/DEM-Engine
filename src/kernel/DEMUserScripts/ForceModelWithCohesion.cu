@@ -131,6 +131,6 @@ delta_tan_z = delta_tan.z;
 {
     // The cohesion model is as simple as simple as Cohesion_coeff times effective mass.
     // And cohesion pulls A towards B, so direction is -B2A
-     printf("tangent force:");
+    //printf("tangent force:");
     force += Cohesion_coeff * mass_eff * (-B2A);
 }
