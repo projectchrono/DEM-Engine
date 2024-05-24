@@ -62,14 +62,9 @@ SET(DEMOS
 		DEMdemo_Indentation_2
 		DEMdemo_Force2D
 		DEMdemo_Force3D
-		test_SPH_boundary
-		windTurb
 		DEMdemo_FractureCylinderSteel
 		DEMdemo_FillingGeo
 		DEMdemo_Force3DSingle
-		gael
-		test
-		test_cons
 		DEMdemo_ContactChain
 )
 
