@@ -20,8 +20,6 @@
 
 using namespace deme;
 
-const double math_PI = 3.1415927;
-
 int main() {
     DEMSolver DEMSim;
     DEMSim.SetVerbosity(INFO);
@@ -109,7 +107,7 @@ int main() {
 
     // Calculate its mass and MOI
 
-    float sphere_vol = 4. / 3. * math_PI * sphere_rad * sphere_rad * sphere_rad;
+    float sphere_vol = 4. / 3. * deme::PI * sphere_rad * sphere_rad * sphere_rad;
     float mass = terrain_density * sphere_vol;
     // Then load it to system
     std::shared_ptr<DEMClumpTemplate> my_template = DEMSim.LoadSphereType(mass, sphere_rad, mat_type_particle);
