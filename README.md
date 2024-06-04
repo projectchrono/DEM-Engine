@@ -257,15 +257,18 @@ This project exists independently of Chrono so developers should be sure to incl
 
 <h2 id="citation">Citation</h2>
 
-See [the paper that explains the design and usage of _DEME_](https://arxiv.org/abs/2311.04648) and cite
+See [the paper that explains the design and usage of _DEME_](https://www.sciencedirect.com/science/article/pii/S001046552400119X?via%3Dihub) and cite
 ```bibtex
-@article{zhang2023deme,
-      title={Chrono DEM-Engine: A Discrete Element Method dual-GPU simulator with customizable contact forces and element shape}, 
-      author={Ruochun Zhang and Bonaventura Tagliafierro and Colin Vanden Heuvel and Shlok Sabarwal1 and Luning Bakke and Yulong Yue and Xin Wei and Radu Serban and Dan Negrut},
-      year={2023},
-      eprint={2311.04648},
-      archivePrefix={arXiv},
-      primaryClass={cs.CE}
+@article{zhang_2024_deme,
+title = {Chrono DEM-Engine: A Discrete Element Method dual-GPU simulator with customizable contact forces and element shape},
+journal = {Computer Physics Communications},
+volume = {300},
+pages = {109196},
+year = {2024},
+issn = {0010-4655},
+doi = {https://doi.org/10.1016/j.cpc.2024.109196},
+author = {Ruochun Zhang and Bonaventura Tagliafierro and Colin {Vanden Heuvel} and Shlok Sabarwal and Luning Bakke and Yulong Yue and Xin Wei and Radu Serban and Dan Negruţ},
+keywords = {Discrete Element Method, GPU computing, Physics-based simulation, Scientific package, BSD3 open-source},
 }
 ```
 

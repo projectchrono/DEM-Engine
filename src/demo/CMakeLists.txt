@@ -15,6 +15,7 @@ SET(LIBRARIES
 SET(DEMOS
 		DEMdemo_Repose
 		DEMdemo_Repose2D
+		DEMdemo_ContactChain
 		DEMdemo_Plow
 		DEMdemo_Sieve
 		DEMdemo_SingleSphereCollide
