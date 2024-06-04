@@ -66,7 +66,9 @@ SET(DEMOS
 		DEMdemo_FillingGeo
 		DEMdemo_Force3DSingle
 		DEMdemo_ContactChain
-)
+		gael
+		test
+		)
 
 # ------------------------------------------------------------------------------
 # Add all executables
