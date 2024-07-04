@@ -4,7 +4,7 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 // =============================================================================
-// Fracture
+// Fracture: Concrete bar breaking test via custom force model
 // =============================================================================
 
 #include <DEM/API.h>
@@ -57,21 +57,15 @@ int main() {
     float sphere_rad = 0.0010;
 
     float step_size = 2e-8;
+    // A ratio that we use to inflate the spheres, so we take into account the bonds
     float fact_radius = 0.9;
 
     DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
     // No need to add simulation `world' boundaries, b/c we'll add a cylinderical container manually
-    DEMSim.InstructBoxDomainBoundingBC("all", mat_type_container);
-    // DEMSim.SetInitBinSize(sphere_rad * 5);
+    DEMSim.InstructBoxDomainBoundingBC("none", mat_type_container);
     //  Now add a cylinderical boundary along with a bottom plane
-    double bottom = -0;
+    double bottom = 0;
     double top = 0.10;
-
-    // auto walls = DEMSim.AddExternalObject();
-    // std::string shake_pattern_xz = " 0.00 * sin( 500 * 2 * deme::PI * t)";
-    // walls->AddPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_container);
-    // walls->AddPlane(make_float3(0, 0, world_size / 2. - world_size / 20.), make_float3(0, 0, -1),
-    // mat_type_container); walls->SetFamily(2);
 
     auto walls = DEMSim.AddWavefrontMeshObject("../data/mesh/funnel_left.obj", mat_type_container);
     float3 move = make_float3(0.05, 0.00, 0 - 2 * sphere_rad);  // z
@@ -85,9 +79,8 @@ int main() {
     cylinder->AddCylinder(make_float3(0), make_float3(0, 0, 1), 1.8 * container_diameter / 2., mat_type_container, 0);
     cylinder->SetFamily(10);
     DEMSim.SetFamilyFixed(10);
-    // DEMSim.SetFamilyPrescribedLinVel(10, shake_pattern_xz, shake_pattern_xz, shake_pattern_xz);
 
-    auto plate = DEMSim.AddWavefrontMeshObject("../data/mesh/funnel_left.obj", mat_type_container);
+    auto plate = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/funnel_left.obj"), mat_type_container);
     move = make_float3(0.05, 0.00, top + 2.0 * sphere_rad);  // z
     rot = make_float4(0.7071, 0, 0, 0.7071);
     plate->Scale(make_float3(0.8, 0.1, 2.0));
@@ -95,20 +88,14 @@ int main() {
     plate->SetFamily(20);
     DEMSim.SetFamilyFixed(20);
 
-    // Track it
-
+    // Track the compression plate
     auto plate_tracker = DEMSim.Track(plate);
 
     DEMSim.SetFamilyPrescribedLinVel(21, "0", "0", to_string_with_precision(-0.010));
     DEMSim.SetFamilyPrescribedLinVel(22, "0", "0", to_string_with_precision(-0.0050));
 
-    // auto total_mass_finder = DEMSim.CreateInspector("clump_mass");
-    // auto max_v_finder = DEMSim.CreateInspector("clump_max_absv");
-
     // Define the terrain particle templates
-
     // Calculate its mass and MOI
-
     float sphere_vol = 4. / 3. * math_PI * sphere_rad * sphere_rad * sphere_rad;
     float mass = terrain_density * sphere_vol;
     // Then load it to system
@@ -121,6 +108,7 @@ int main() {
     float3 fill_center = make_float3(0, 0, bottom + fill_height / 2);
     const float fill_radius = container_diameter / 2. - sphere_rad * 0.;
     float3 fill = make_float3(fill_radius, fill_radius, bottom + fill_height / 2);
+    // Sample a concrete bar (it has squared intersection though)
     auto input_xyz = sampler.SampleBox(fill_center, fill);
     // auto input_xyz = sampler(fill_center, fill_radius, fill_height / 2 - sphere_rad * 0.);
     auto particles = DEMSim.AddClumps(my_template, input_xyz);
@@ -134,16 +122,14 @@ int main() {
     create_directory(out_dir);
 
     // Some inspectors
-
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
     auto min_z_finder = DEMSim.CreateInspector("clump_min_z");
 
     DEMSim.SetFamilyExtraMargin(1, fact_radius * sphere_rad);
 
     DEMSim.SetInitTimeStep(step_size);
-    DEMSim.SetGravitationalAcceleration(make_float3(0, 0.00, 1 * -9.81));
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0.00, -9.81));
     DEMSim.Initialize();
-    // DEMSim.DisableContactBetweenFamilies(20, 1);
     std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
 
     float sim_end = 5;
@@ -159,15 +145,12 @@ int main() {
     bool status_1 = true;
     bool status_2 = true;
 
-    // DEMSim.DisableContactBetweenFamilies(10, 1);
-
     double L0;
     double stress;
     std::string nameOutFile = "data_R" + std::to_string(sphere_rad) + "_Int" + std::to_string(fact_radius) + ".csv";
     std::ofstream csvFile(nameOutFile);
 
     DEMSim.SetFamilyContactWildcardValueAll(1, "initialLength", 0.0);
-    // DEMSim.SetFamilyContactWildcardValueAll(1, "damage", 0.0);
     DEMSim.SetFamilyContactWildcardValueAll(1, "unbroken", 0.0);
 
     // Simulation loop

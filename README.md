@@ -57,8 +57,8 @@ To install _pyDEME_, use a Linux machine, install CUDA if you do not already hav
 
 Some additional troubleshooting tips for getting CUDA ready:
 
-- I recommend just getting CUDA 12.0, or a CUDA 11 distro. CUDA 12.1 and 12.2 appears to cause troubles with jitify.
-- On WSL this code may be buildable (and [this](https://docs.nvidia.com/cuda/wsl-user-guide/index.html) is the guide for installing CUDA on WSL), but may not run. This is due to the [many limitations on unified memory and pinned memory support](https://docs.nvidia.com/cuda/wsl-user-guide/index.html#known-limitations-for-linux-cuda-applications) on WSL. A native Linux machine or cluster is recommended.
+- I recommend getting the newest CUDA. But note that the recent releases CUDA 12.1, 12.2 and 12.3 appear to cause troubles with jitify and you should not use them with DEME.
+- On WSL this code may be buildable (and [this](https://docs.nvidia.com/cuda/wsl-user-guide/index.html) is the guide for installing CUDA on WSL), but may not run. This is due to the [many limitations on unified memory and pinned memory support](https://docs.nvidia.com/cuda/wsl-user-guide/index.html#known-limitations-for-linux-cuda-applications) on WSL. We are looking into it and for now, a native Linux machine or cluster is recommended.
 
 Once CUDA is ready, you can `pip` install _pyDEME_. In your conda environement, do
 ```
@@ -153,7 +153,7 @@ After the build process is done, you can start trying out the demos.
 - `./bin/DEMdemo_Electrostatic` simulates a pile of complex-shaped and charged granular particles interacting with a mesh that is also charged. Its purpose is to show how to define a non-local force (electrostatic force) which takes effect even when the bodies are not in contact, using a custom force model file. This idea can be extended to modeling a custom cohesion force etc.
 - `./bin/DEMdemo_FlexibleMesh` simulates a deforming mesh interacting with DEM particles. The intention is to show that the user can extract the force pairs acting on a mesh, then update the mesh with deformation information. _DEME_ does not care how this deformation is calculated. Presumably the user can feed the forces to their own solid mechanics solver to get the deformation. _DEME_ does not come with a built-in linear solver so for simplicity, in this demo the mesh deformation is instead prescribed.
 - `./bin/DEMdemo_GameOfLife` is a fun game-of-life simulator built with the package, showing the flexibility in terms of how you can use this tool.
-- `./bin/DEMdemo_SolarSystem` simulates our solar system. It is yet another fun simulation that is not strictly DEM per se, but shows how to define a mid-to-long-ranged force (gravitational force) using a custom force model file.
+- `./bin/DEMdemo_Fracture_Box` simulates a concrete bar breaking using a custom force model that creates inter-particle bonds and lets them break under certain conditions. This is a showcase for advanced usage of custom models that involves per-contact wildcard variables.
 - It is a good idea to read the comment lines at the top of the demo files to understand what they each does.
 
 [The documentations for _DEME_](https://api.projectchrono.org/) are hosted on Chrono website (work in progress).
