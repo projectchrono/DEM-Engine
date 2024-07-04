@@ -84,7 +84,7 @@ Then [Python scripts](https://github.com/projectchrono/DEM-Engine/tree/pyDEME_de
 
 You can also build C++ _DEME_ from source. It allows for potentially more performance and more tailoring.
 
-On a Linux machine, [install CUDA](https://developer.nvidia.com/cuda-downloads). I recommend CUDA 12.0.
+On a Linux machine, [install CUDA](https://developer.nvidia.com/cuda-downloads). The newest release is recommended.
 
 Once CUDA is ready, clone this project and then:
 
@@ -117,14 +117,13 @@ You generally do not have to change the build options in the GUI, but preferably
 
 Some additional troubleshooting tips for generating the project:
 
-- For now, I suggest using CUDA version 12.0 or below. CUDA 12.1 does not seem to work well with the jitified kernels in _DEME_.
 - If some dependencies such as CUB are not found, then you probably need to manually set `$PATH` and `$LD_LIBRARY_PATH`. An example is given below for a specific version of CUDA, note it may be different on your machine or cluster. You should also inspect if `nvidia-smi` and `nvcc --version` give correct returns.
 ```
-export CPATH=/usr/local/cuda-12.0/targets/x86_64-linux/include${CPATH:+:${CPATH}}
-export PATH=/usr/local/cuda-12.0/bin${PATH:+:${PATH}}
-export PATH=/usr/local/cuda-12.0/lib64/cmake${PATH:+:${PATH}}
-export LD_LIBRARY_PATH=/usr/local/cuda-12.0/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-export CUDA_HOME=/usr/local/cuda-12.0
+export CPATH=/usr/local/cuda-12.5/targets/x86_64-linux/include${CPATH:+:${CPATH}}
+export PATH=/usr/local/cuda-12.5/bin${PATH:+:${PATH}}
+export PATH=/usr/local/cuda-12.5/lib64/cmake${PATH:+:${PATH}}
+export LD_LIBRARY_PATH=/usr/local/cuda-12.5/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export CUDA_HOME=/usr/local/cuda-12.5
 ```
 
 Finally, build the project.
