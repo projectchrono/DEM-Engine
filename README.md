@@ -259,7 +259,7 @@ This project exists independently of Chrono so developers should be sure to incl
 See [the paper that explains the design and usage of _DEME_](https://www.sciencedirect.com/science/article/pii/S001046552400119X?via%3Dihub) and cite
 ```bibtex
 @article{zhang_2024_deme,
-title = {Chrono DEM-Engine: A Discrete Element Method dual-GPU simulator with customizable contact forces and element shape},
+title = {Chrono {DEM-Engine}: A Discrete Element Method dual-{GPU} simulator with customizable contact forces and element shape},
 journal = {Computer Physics Communications},
 volume = {300},
 pages = {109196},
@@ -275,7 +275,7 @@ See [the paper on using _DEME_ for simulating rover dynamics](https://link.sprin
 ```bibtex
 @article{ruochunGRC-DEM2023,
       title={A {GPU}-accelerated simulator for the {DEM} analysis of granular systems composed of clump-shaped elements}, 
-      author={Ruochun Zhang and Colin Vanden Heuvel and Alexander Schepelmann and Arno Rogg and Dimitrios Apostolopoulos and Samuel Chandler and Radu Serban and Dan Negrut},
+      author={Ruochun Zhang and Colin {Vanden Heuvel} and Alexander Schepelmann and Arno Rogg and Dimitrios Apostolopoulos and Samuel Chandler and Radu Serban and Dan Negrut},
       year={2024},
       journal={Engineering with Computers},
       doi={https://doi.org/10.1007/s00366-023-01921-9}
