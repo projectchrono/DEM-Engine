@@ -2074,7 +2074,7 @@ void DEMSolver::UpdateSimParams() {
     dT->announceCritical();
 }
 
-void DEMSolver::UpdateStepSize(float ts) {
+void DEMSolver::UpdateStepSize(double ts) {
     m_ts_size = ts;
     kT->simParams->h = ts;
     dT->simParams->h = ts;
