@@ -57,8 +57,8 @@ To install _pyDEME_, use a Linux machine, install CUDA if you do not already hav
 
 Some additional troubleshooting tips for getting CUDA ready:
 
-- I recommend just getting CUDA 12.0, or a CUDA 11 distro. CUDA 12.1 and 12.2 appears to cause troubles with jitify.
-- On WSL this code may be buildable (and [this](https://docs.nvidia.com/cuda/wsl-user-guide/index.html) is the guide for installing CUDA on WSL), but may not run. This is due to the [many limitations on unified memory and pinned memory support](https://docs.nvidia.com/cuda/wsl-user-guide/index.html#known-limitations-for-linux-cuda-applications) on WSL. A native Linux machine or cluster is recommended.
+- I recommend getting the newest CUDA. But note that the recent releases CUDA 12.1, 12.2 and 12.3 appear to cause troubles with jitify and you should not use them with DEME.
+- On WSL this code may be buildable (and [this](https://docs.nvidia.com/cuda/wsl-user-guide/index.html) is the guide for installing CUDA on WSL), but may not run. This is due to the [many limitations on unified memory and pinned memory support](https://docs.nvidia.com/cuda/wsl-user-guide/index.html#known-limitations-for-linux-cuda-applications) on WSL. We are looking into it and for now, a native Linux machine or cluster is recommended.
 
 Once CUDA is ready, you can `pip` install _pyDEME_. In your conda environement, do
 ```
@@ -84,7 +84,7 @@ Then [Python scripts](https://github.com/projectchrono/DEM-Engine/tree/pyDEME_de
 
 You can also build C++ _DEME_ from source. It allows for potentially more performance and more tailoring.
 
-On a Linux machine, [install CUDA](https://developer.nvidia.com/cuda-downloads). I recommend CUDA 12.0.
+On a Linux machine, [install CUDA](https://developer.nvidia.com/cuda-downloads). The newest release is recommended.
 
 Once CUDA is ready, clone this project and then:
 
@@ -117,14 +117,13 @@ You generally do not have to change the build options in the GUI, but preferably
 
 Some additional troubleshooting tips for generating the project:
 
-- For now, I suggest using CUDA version 12.0 or below. CUDA 12.1 does not seem to work well with the jitified kernels in _DEME_.
 - If some dependencies such as CUB are not found, then you probably need to manually set `$PATH` and `$LD_LIBRARY_PATH`. An example is given below for a specific version of CUDA, note it may be different on your machine or cluster. You should also inspect if `nvidia-smi` and `nvcc --version` give correct returns.
 ```
-export CPATH=/usr/local/cuda-12.0/targets/x86_64-linux/include${CPATH:+:${CPATH}}
-export PATH=/usr/local/cuda-12.0/bin${PATH:+:${PATH}}
-export PATH=/usr/local/cuda-12.0/lib64/cmake${PATH:+:${PATH}}
-export LD_LIBRARY_PATH=/usr/local/cuda-12.0/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-export CUDA_HOME=/usr/local/cuda-12.0
+export CPATH=/usr/local/cuda-12.5/targets/x86_64-linux/include${CPATH:+:${CPATH}}
+export PATH=/usr/local/cuda-12.5/bin${PATH:+:${PATH}}
+export PATH=/usr/local/cuda-12.5/lib64/cmake${PATH:+:${PATH}}
+export LD_LIBRARY_PATH=/usr/local/cuda-12.5/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export CUDA_HOME=/usr/local/cuda-12.5
 ```
 
 Finally, build the project.
@@ -153,7 +152,7 @@ After the build process is done, you can start trying out the demos.
 - `./bin/DEMdemo_Electrostatic` simulates a pile of complex-shaped and charged granular particles interacting with a mesh that is also charged. Its purpose is to show how to define a non-local force (electrostatic force) which takes effect even when the bodies are not in contact, using a custom force model file. This idea can be extended to modeling a custom cohesion force etc.
 - `./bin/DEMdemo_FlexibleMesh` simulates a deforming mesh interacting with DEM particles. The intention is to show that the user can extract the force pairs acting on a mesh, then update the mesh with deformation information. _DEME_ does not care how this deformation is calculated. Presumably the user can feed the forces to their own solid mechanics solver to get the deformation. _DEME_ does not come with a built-in linear solver so for simplicity, in this demo the mesh deformation is instead prescribed.
 - `./bin/DEMdemo_GameOfLife` is a fun game-of-life simulator built with the package, showing the flexibility in terms of how you can use this tool.
-- `./bin/DEMdemo_SolarSystem` simulates our solar system. It is yet another fun simulation that is not strictly DEM per se, but shows how to define a mid-to-long-ranged force (gravitational force) using a custom force model file.
+- `./bin/DEMdemo_Fracture_Box` simulates a concrete bar breaking using a custom force model that creates inter-particle bonds and lets them break under certain conditions. This is a showcase for advanced usage of custom models that involves per-contact wildcard variables.
 - It is a good idea to read the comment lines at the top of the demo files to understand what they each does.
 
 [The documentations for _DEME_](https://api.projectchrono.org/) are hosted on Chrono website (work in progress).
@@ -260,7 +259,7 @@ This project exists independently of Chrono so developers should be sure to incl
 See [the paper that explains the design and usage of _DEME_](https://www.sciencedirect.com/science/article/pii/S001046552400119X?via%3Dihub) and cite
 ```bibtex
 @article{zhang_2024_deme,
-title = {Chrono DEM-Engine: A Discrete Element Method dual-GPU simulator with customizable contact forces and element shape},
+title = {Chrono {DEM-Engine}: A Discrete Element Method dual-{GPU} simulator with customizable contact forces and element shape},
 journal = {Computer Physics Communications},
 volume = {300},
 pages = {109196},
@@ -276,7 +275,7 @@ See [the paper on using _DEME_ for simulating rover dynamics](https://link.sprin
 ```bibtex
 @article{ruochunGRC-DEM2023,
       title={A {GPU}-accelerated simulator for the {DEM} analysis of granular systems composed of clump-shaped elements}, 
-      author={Ruochun Zhang and Colin Vanden Heuvel and Alexander Schepelmann and Arno Rogg and Dimitrios Apostolopoulos and Samuel Chandler and Radu Serban and Dan Negrut},
+      author={Ruochun Zhang and Colin {Vanden Heuvel} and Alexander Schepelmann and Arno Rogg and Dimitrios Apostolopoulos and Samuel Chandler and Radu Serban and Dan Negrut},
       year={2024},
       journal={Engineering with Computers},
       doi={https://doi.org/10.1007/s00366-023-01921-9}

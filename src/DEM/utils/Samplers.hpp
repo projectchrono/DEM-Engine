@@ -283,6 +283,9 @@ class PDSampler : public Sampler {
         rengine().seed(0);
     }
 
+    /// Set the current state of the random-number engine (default: 0).
+    void SetRandomEngineSeed(unsigned int seed) { rengine().seed(seed); }
+
   private:
     enum Direction2D { NONE, X_DIR, Y_DIR, Z_DIR };
 

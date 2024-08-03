@@ -72,6 +72,7 @@ PYBIND11_MODULE(DEME, obj) {
     py::class_<deme::PDSampler>(obj, "PDSampler")
         .def(py::init<float>())
         .def("SetSeparation", &deme::PDSampler::SetSeparation)
+        .def("SetRandomEngineSeed", &deme::PDSampler::SetRandomEngineSeed)
         .def("SampleBox",
              static_cast<std::vector<std::vector<float>> (deme::PDSampler::*)(
                  const std::vector<float>& center, const std::vector<float>& halfDim)>(&deme::PDSampler::SampleBox),

@@ -26,8 +26,8 @@ int main() {
     DEMSim.SetOutputContent(OUTPUT_CONTENT::XYZ);
 
     // Define materials
-    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.5}});
-    auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.5}, {"mu", 0.5}});
+    auto mat_type_terrain = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
+    auto mat_type_wheel = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.3}, {"mu", 0.5}});
 
     // Define the simulation world
     double world_y_size = 2.0;
@@ -85,10 +85,10 @@ int main() {
     }
 
     // Now we load part2 clump locations from a part1 output file
-    auto part2_clump_xyz = DEMSim.ReadClumpXyzFromCsv("GRC_3e6.csv");
-    auto part2_clump_quaternion = DEMSim.ReadClumpQuatFromCsv("GRC_3e6.csv");
-    // auto part2_pairs = DEMSim.ReadContactPairsFromCsv("Contact_pairs_3e6.csv");
-    // auto part2_wcs = DEMSim.ReadContactWildcardsFromCsv("Contact_pairs_3e6.csv");
+    auto part2_clump_xyz = DEMSim.ReadClumpXyzFromCsv("./DemoOutput_GRCPrep_Part2/GRC_3e6.csv");
+    auto part2_clump_quaternion = DEMSim.ReadClumpQuatFromCsv("./DemoOutput_GRCPrep_Part2/GRC_3e6.csv");
+    // auto part2_pairs = DEMSim.ReadContactPairsFromCsv("./DemoOutput_GRCPrep_Part2/Contact_pairs_3e6.csv");
+    // auto part2_wcs = DEMSim.ReadContactWildcardsFromCsv("./DemoOutput_GRCPrep_Part2/Contact_pairs_3e6.csv");
     std::vector<float3> in_xyz;
     std::vector<float4> in_quat;
     std::vector<std::shared_ptr<DEMClumpTemplate>> in_types;
@@ -163,24 +163,25 @@ int main() {
     double step_size = 2e-6;
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
-    DEMSim.SetMaxVelocity(15.);
-    DEMSim.SetExpandSafetyMultiplier(1.1);
-    DEMSim.SetInitBinSize(scales.at(1));
+    DEMSim.SetErrorOutVelocity(20.);
+    // DEMSim.SetInitBinSize(scales.at(1));
     DEMSim.Initialize();
 
     unsigned int fps = 20;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_GRCIter2_Prep_Part3";
+    out_dir += "/DemoOutput_GRCPrep_Part3";
     create_directory(out_dir);
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
 
     // Settle a bit
     DEMSim.DoDynamicsThenSync(0.3);
-    DEMSim.SetInitTimeStep(step_size);
-    DEMSim.UpdateStepSize();
+    // Doing this won't change the step size (and we don't need to in this demo),
+    // but if the physics of the simulation changes significantly at some point,
+    // you can UpdateStepSize after a DoDynamicsThenSync call.
+    DEMSim.UpdateStepSize(step_size);
 
     // Now compress it
     DEMSim.EnableContactBetweenFamilies(0, 1);
@@ -191,7 +192,7 @@ int main() {
 
     double now_z = max_z_finder->GetValue();
     compressor_tracker->SetPos(make_float3(0, 0, now_z));
-    double compressor_final_dist = (now_z > -0.37) ? now_z - (-0.37) : 0.0;
+    double compressor_final_dist = (now_z > -0.39) ? now_z - (-0.39) : 0.0;
     double compressor_v = compressor_final_dist / compress_time;
     for (double t = 0; t < compress_time; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
