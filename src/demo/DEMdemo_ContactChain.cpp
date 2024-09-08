@@ -37,11 +37,11 @@ int main() {
     std::cout << "Initializing DEMdemo_ContactChain demo." << std::endl;
     
     float innerFriction = 0.10;
-    float massMultiplier = 5.0;  // Magnitude of the external force
+    float massMultiplier = 80.0;  // Magnitude of the external force
     
     std::cout << "Inner friction: " << innerFriction << "; Mass multiplier: " << massMultiplier << "." << std::endl;
     path out_dir = "";
-    out_dir += "./ContactChain_out";
+    out_dir += "./ContactChain_out_2";
     remove_all(out_dir);
     create_directories(out_dir);
 
@@ -119,9 +119,9 @@ int main() {
 
     DEMSim.Initialize();
 
-    float sim_time = 20.0;
-    float time_settling = 5.0;
-    unsigned int fps = 5;
+    float sim_time = 2.0+timeApplication+1.0;
+    float time_settling = 1.0;
+    unsigned int fps = 150;
     float frame_time = 1.0 / fps;
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
@@ -156,7 +156,8 @@ int main() {
             DEMSim.ChangeFamily(3, 2);
             std::cout << "Ramping up the applied load for " << timeApplication << " s." << std::endl;
             status = false;
-            DEMSim.DoDynamicsThenSync(timeApplication);
+            // DEMSim.DoDynamicsThenSync(timeApplication);
+            
         }
     }
 

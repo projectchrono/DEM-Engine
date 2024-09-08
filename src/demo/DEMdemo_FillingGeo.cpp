@@ -35,7 +35,7 @@ int main() {
 
     // total number of random clump templates to generate
 
-    double radius = (9.81/15)/2; // 
+    double radius = 0.005/2; // 
     double density = 1000;
 
     // int totalSpheres = 3845;  // particles for dp5
@@ -45,20 +45,20 @@ int main() {
 
     int num_template = 1;
 
-    float plane_bottom = 0.30;
+    float plane_bottom = 0.08;
 
-    auto mat_type_walls = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.00}, {"mu", 0.60}, {"Crr", 0.01}});
+    auto mat_type_walls = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.00}, {"mu", 0.00}, {"Crr", 0.01}});
 
     auto mat_type_particles =
-        DEMSim.LoadMaterial({{"E", 1.0e9}, {"nu", 0.35}, {"CoR", 0.00}, {"mu", 0.60}, {"Crr", 0.01}});
+        DEMSim.LoadMaterial({{"E", 1.0e9}, {"nu", 0.35}, {"CoR", 0.001}, {"mu", 0.00}, {"Crr", 0.01}});
 
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_walls, mat_type_particles, 0.00);
     DEMSim.SetMaterialPropertyPair("Crr", mat_type_walls, mat_type_particles, 0.00);
     DEMSim.SetMaterialPropertyPair("mu", mat_type_walls, mat_type_particles, 0.10);
 
     // Make ready for simulation
-    float step_size = 2.0e-6;
-    DEMSim.InstructBoxDomainDimension({-30.0, 30.0}, {-30, 30}, {-10.0, 140.0});
+    float step_size = 1.0e-6;
+    DEMSim.InstructBoxDomainDimension({-3.0, 3.0}, {-3, 3}, {-1.0, 5.0});
     DEMSim.InstructBoxDomainBoundingBC("top_open", mat_type_walls);
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
@@ -69,13 +69,13 @@ int main() {
     DEMSim.SetInitBinSize(radius * 5);
 
     // Loaded meshes are by-default fixed
-    auto fixed = DEMSim.AddWavefrontMeshObject("../data/my/deepCwind2fill_2.obj", mat_type_walls);
+    auto fixed = DEMSim.AddWavefrontMeshObject("../data/my/tetrapod2fill.obj", mat_type_walls);
     // float_96_2fill
     fixed->Scale(1 * 1.0);
     fixed->SetFamily(10);
     float ang = PI;
     float3 move = make_float3(0.00, 0.00, 0);  // z
-    float4 rot = make_float4(cos(ang / 2), 0, 0, sin(ang / 2));
+    float4 rot = make_float4(cos(ang / 2), 0, sin(ang / 2), 0);
 
     fixed->Move(move, rot);
     std::string shake_pattern_xz = " 0.01 * sin( 30 * 2 * deme::PI * t)";
@@ -83,9 +83,9 @@ int main() {
     DEMSim.SetFamilyPrescribedLinVel(11, "0", "0", "0");
 
     auto top_plane = DEMSim.AddWavefrontMeshObject("../data/granularFlow/cylinder.obj", mat_type_walls);
-    top_plane->SetInitPos(make_float3(0, 0, 32.50));
+    top_plane->SetInitPos(make_float3(0, 0, 0.06));
     top_plane->SetMass(1.);
-    top_plane->Scale(make_float3(10, 10, 0.1));
+    top_plane->Scale(make_float3(0.1, 0.1, 0.001));
     top_plane->SetFamily(20);
 
     // auto funnel = DEMSim.AddWavefrontMeshObject(GetDEMEDataFile("mesh/funnel.obj"), mat_type_walls);
@@ -170,8 +170,8 @@ int main() {
     float x = 0.0;
     float y = -0.0;
 
-    float sizeZ = plane_bottom + 71.40;
-    float sizeX = 8.00;
+    float sizeZ = plane_bottom + 3.15;
+    float sizeX = 0.005;
     float z = plane_bottom + shift_xyz + sizeZ / 2.0; 
 
     float3 center_xyz = make_float3(x, y, z);
@@ -189,7 +189,7 @@ int main() {
     input_pile_xyz.insert(input_pile_xyz.end(), heap_particles_xyz.begin(), heap_particles_xyz.end());
 
     auto the_pile = DEMSim.AddClumps(input_pile_template_type, input_pile_xyz);
-    the_pile->SetVel(make_float3(-0.00, 0.0, -0.20));
+    the_pile->SetVel(make_float3(-0.00, 0.0, -0.10));
     the_pile->SetFamily(1);
 
     DEMSim.UpdateClumps();
@@ -203,7 +203,7 @@ int main() {
     std::cout << "Initialization done with : " << actualTotalSpheres << "particles" << std::endl;
 
     float sim_end = 40.0;
-    unsigned int fps = 10;
+    unsigned int fps = 40;
     float frame_time = 1.0 / fps;
 
     std::cout << "Output at " << fps << " FPS" << std::endl;
@@ -234,7 +234,7 @@ int main() {
         frame_count++;
         DEMSim.ShowThreadCollaborationStats();
         // std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
-        if (totalRunTime > 8 && status_1) {
+        if (totalRunTime > 4 && status_1) {
             DEMSim.DoDynamicsThenSync(0);
             std::cout << "gate is in motion from: " << totalRunTime << " s" << std::endl;
             std::cout << "and it will stop in : " << totalRunTime << " s" << std::endl;

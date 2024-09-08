@@ -16,6 +16,7 @@ SET(DEMOS
 		DEMdemo_Repose
 		DEMdemo_Repose2D
 		DEMdemo_ContactChain
+		DEMdemo_ContactChain_big
 		DEMdemo_Plow
 		DEMdemo_Sieve
 		DEMdemo_SingleSphereCollide
@@ -66,7 +67,7 @@ SET(DEMOS
 		DEMdemo_FractureCylinderSteel
 		DEMdemo_FillingGeo
 		DEMdemo_Force3DSingle
-		DEMdemo_ContactChain
+		DEMdemo_FlexibleNet
 		gael
 		test
 		)

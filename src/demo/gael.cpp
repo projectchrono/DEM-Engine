@@ -33,8 +33,8 @@ using namespace std::filesystem;
 double E_terrain = 1e8, nu_terrain = 0.3, CoR_terrain = 0.3, mu_terrain = 0.1, Crr_terrain = 0.0;
 int srandValue = 759;
 // double world_x_size = 1.10, world_y_size = 0.30, world_z_size = 1.00;//chrono simulation dimensions
-double world_x_size = 0.51, world_y_size = 0.51, world_z_size = 2.0;  // chrono simulation dimensions
-float sampleheight = 0.15;                                            // for the generation of the random material
+double world_x_size = 1.11, world_y_size = 0.31, world_z_size = 2.0;  // chrono simulation dimensions
+float sampleheight = 0.06;                                            // for the generation of the random material
 double bottom = -sampleheight;
 float size_z_batch = 3 * sampleheight;
 // location of bottom boundary plane
@@ -42,7 +42,7 @@ float size_z_batch = 3 * sampleheight;
 // Default values for GPR1 example
 // Calculate its mass and MOI
 float terrain_density = 2.320e3;  // 2.6e3;
-float targetMass = 0.58 * world_x_size * world_y_size * sampleheight * terrain_density;
+float targetMass = 0.60 * world_x_size * world_y_size * sampleheight * terrain_density;
 
 // Coarse sand
 // Define radius
@@ -87,7 +87,7 @@ int main() {
     auto top_plane = DEMSim.AddWavefrontMeshObject("../data/mesh/box.obj", mat_type_terrain);
     top_plane->SetInitPos(make_float3(0, 0, bottom - 0.010));
     top_plane->SetMass(1.);
-    top_plane->Scale(make_float3(world_x_size / 2.0, world_x_size / 2.0, 2.00));
+    top_plane->Scale(make_float3(world_x_size / 2.0, world_y_size / 2.0, 2.00));
     top_plane->SetFamily(10);
     DEMSim.SetFamilyFixed(10);
 

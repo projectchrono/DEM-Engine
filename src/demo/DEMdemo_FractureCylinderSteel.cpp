@@ -20,8 +20,6 @@
 
 using namespace deme;
 
-const double math_PI = 3.1415927;
-
 int main() {
     DEMSolver DEMSim;
     DEMSim.SetVerbosity(INFO);
@@ -50,12 +48,12 @@ int main() {
     my_force_model->SetPerContactWildcards(
         {"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z", "innerInteraction", "initialLength"});
 
-    float world_size = 1.e5;
+    float world_size = 10;
     float container_diameter = 0.06;
     float terrain_density = 7.80e3;
     float sphere_rad = 0.0008;
 
-    float step_size = 1e-8;
+    float step_size = 2e-8;
     float fact_radius = 1.2;
 
     DEMSim.InstructBoxDomainDimension(world_size, world_size, world_size);
@@ -108,7 +106,7 @@ int main() {
 
     // Calculate its mass and MOI
 
-    float sphere_vol = 4. / 3. * math_PI * sphere_rad * sphere_rad * sphere_rad;
+    float sphere_vol = 4. / 3. * deme::PI * sphere_rad * sphere_rad * sphere_rad;
     float mass = terrain_density * sphere_vol;
     // Then load it to system
     std::shared_ptr<DEMClumpTemplate> my_template = DEMSim.LoadSphereType(mass, sphere_rad, mat_type_particle);
@@ -117,7 +115,7 @@ int main() {
     float CylRad = 0.035;
 
     float CylParticleRad = sphere_rad;
-    float CylHeight = 0.10 - 2*CylParticleRad;
+    float CylHeight = 0.10 - 2 * CylParticleRad;
     float3 CylCenter = make_float3(0, 0, CylHeight / 2 + 1.0 * sphere_rad);
     float CylMass = 100;
 
@@ -127,7 +125,7 @@ int main() {
     auto monopile = DEMCylSurfSampler(CylCenter, CylAxis, CylRad, CylHeight, 1.7 * CylParticleRad);
     auto particles_pile = DEMSim.AddClumps(my_template, monopile);
     particles_pile->SetFamily(1);
-    std::cout << monopile.size() << " spheres make up the rotating drum" << std::endl;
+    std::cout << monopile.size() << " spheres make up the cylinder" << std::endl;
 
     // Sampler to sample
     // HCPSampler sampler(2.0 * sphere_rad);
@@ -144,7 +142,7 @@ int main() {
 
     std::filesystem::path out_dir = std::filesystem::current_path();
     std::string nameOutFolder = "R" + std::to_string(sphere_rad) + "_Int" + std::to_string(fact_radius) + "";
-    out_dir += "/DemoOutput_Fracture_";
+    out_dir += "/DemoOutput_Fracture_Cylinder";
     remove_all(out_dir);
     create_directory(out_dir);
 
@@ -176,8 +174,8 @@ int main() {
 
     // DEMSim.DisableContactBetweenFamilies(10, 1);
 
-    double L0;
-    double stress;
+    double L0 = 0.0;
+    double stress = 0.0;
     std::string nameOutFile = "data_R" + std::to_string(sphere_rad) + "_Int" + std::to_string(fact_radius) + ".csv";
     std::ofstream csvFile(nameOutFile);
 

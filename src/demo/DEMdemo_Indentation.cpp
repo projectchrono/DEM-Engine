@@ -69,21 +69,21 @@ int main() {
     create_directory(out_dir);
 
     // E, nu, CoR, mu, Crr...
-    auto mat_type_cube = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", 0.4}, {"Crr", 0.04}});
+    auto mat_type_cube = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", 0.4}, {"Crr", 0.04}});
     auto mat_type_granular_1 = DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", 0.3}, {"Crr", 0.02}});
     auto mat_type_granular_2 =
-        DEMSim.LoadMaterial({{"E", 1e8}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", 0.8}, {"Crr", 0.08}, {"Cohesion", 0.50}});
+        DEMSim.LoadMaterial({{"E", 4e8}, {"nu", 0.3}, {"CoR", 0.4}, {"mu", 0.8}, {"Crr", 0.08}, {"Cohesion", 0.50}});
     // CoR is a pair-wise property, so it should be mentioned here
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_cube, mat_type_granular_1, 0.8);
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_cube, mat_type_granular_2, 0.8);
 
-    float granular_rad = 0.03;  // 0.002;
+    float granular_rad = 0.02;  // 0.002;
     auto template_granular = DEMSim.LoadSphereType(granular_rad * granular_rad * granular_rad * 2.6e3 * 4 / 3 * 3.14,
                                                    granular_rad, mat_type_granular_1);
 
-    float step_size = 5e-7;
-    const double world_size = 3.0;
-    const float fill_height = 5.0;
+    float step_size = 2e-6;
+    const double world_size = 5.0;
+    const float fill_height = 3.0;
     const float chamber_bottom = -fill_height / 2.;
     const float fill_bottom = -fill_height + granular_rad;
 
@@ -95,7 +95,7 @@ int main() {
     auto walls = DEMSim.AddExternalObject();
     walls->AddCylinder(make_float3(0, 0, fill_height), make_float3(0, 0, 1), world_size / 2., mat_type_cube, 0);
 
-    double cube_speed = -0.5;
+    double cube_speed = -0.50;
 
     // float mass = 7;
     // float3 MOI = make_float3(0.1, 0.1, 0.1) * 2000;
@@ -112,7 +112,7 @@ int main() {
     // pile->SetFamily(10);
     // DEMSim.SetFamilyFixed(10);
 
-    DEMSim.SetFamilyPrescribedAngVel(11, "0", "0", to_string_with_precision(w_r), false);
+    DEMSim.SetFamilyPrescribedAngVel(12, "0", "0", to_string_with_precision(w_r), false);
 
     DEMSim.SetFamilyPrescribedLinVel(12, "0", "0", to_string_with_precision(cube_speed));
     // Track the cube
@@ -138,8 +138,8 @@ int main() {
     // // Drum is a `big clump', we now generate its template
 
     float3 CylAxis = make_float3(0, 0, 1);
-    float CylRad = 0.60;
-    float CylHeight = 2.0;
+    float CylRad = 0.50;
+    float CylHeight = 4;
     
 
     float CylHeightAnular = 0.10;
@@ -177,6 +177,7 @@ int main() {
     float separation_z_coord = CylCenter.z + (CylHeight + CylHeightAnular) / 2.0 - CylHeightAnular;
 
     //DEMSim.SetFamilyPrescribedLinVel(2, "none", "none", to_string_with_precision(2 * cube_speed));
+    
     DEMSim.AddFamilyPrescribedAcc(4, "none", to_string_with_precision( 100.),"none");
 
     // Drum->SetFamily(2);
@@ -216,9 +217,6 @@ int main() {
 
     std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
 
-
-
-
     std::pair<float, float> XYrange = std::pair<float, float>(-world_size / 2, world_size / 2);
     std::pair<float, float> Zrange = std::pair<float, float>(separation_z_coord, 10.0);
     DEMSim.ChangeClumpFamily(3, XYrange, XYrange, Zrange);
@@ -257,7 +255,7 @@ int main() {
     DEMSim.ChangeFamily(2, 12);
 
     //  Settle
-    for (double t = 0; t < 0.1; t += frame_time) {
+    for (double t = 0; t < 0.10; t += frame_time) {
         char filename[200], meshname[200];
         std::cout << "Outputting frame: " << currframe << std::endl;
         sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
@@ -311,7 +309,7 @@ int main() {
             //     cond_1 = false;
             // }
 
-            if (t > 8.00 && cond_2) {
+            if (t > 4.00 && cond_2) {
                 DEMSim.DoDynamicsThenSync(0);
                 DEMSim.ChangeFamily(12, 2);
 

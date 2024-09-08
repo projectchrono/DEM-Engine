@@ -24,7 +24,7 @@ float3 rotVelCPA, rotVelCPB;
     applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
 }
 float mass_eff, sqrt_Rd, beta;
-float3 vrel_tan;
+float3 vrel_tan = make_float3(0, 0, 0);
 float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
 
 // The (total) relative linear velocity of A relative to B
@@ -48,15 +48,15 @@ mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
 // If this contact is marked as not broken (unbroken is 1 means it stands for the bond between the components of a
 // unbroken particle in grain breakage simulation), then it takes this force model which is a strong cohesion.
 if (innerInteraction > DEME_TINY_FLOAT) {
-    initialLength = (innerInteraction > 1.0) ? overlapDepth : initialLength;  // reusing a variable that survives the loop
+    initialLength =
+        (innerInteraction > 1.0) ? overlapDepth : initialLength;  // reusing a variable that survives the loop
     innerInteraction = (innerInteraction > 1.0) ? 1.0 : innerInteraction;
 
-
-    float kn = 180 * ARadius * E_A ;
+    float kn = 80 * ARadius * E_A;
     float kt = 1.f / 2.5f * kn;
     float kr = ARadius * ARadius * kt;
 
-    float intialArea =  ARadius * ARadius  * deme::PI;
+    float intialArea = ARadius * ARadius * deme::PI;
 
     float deltaD = (overlapDepth - initialLength);  // initial relative displacement considered from the initial overlap
 
@@ -64,9 +64,9 @@ if (innerInteraction > DEME_TINY_FLOAT) {
 
     // To A, gravity pulls it towards B, so -B2A direction
     // float3 bond_force = B2A;  // vector direction
-    float force_to_A_mag;
+    float force_to_A_mag = 0.0;
 
-    force_to_A_mag =  kn * deltaD ;
+    force_to_A_mag = kn * deltaD;
 
     // tangetial forces
 
@@ -77,13 +77,12 @@ if (innerInteraction > DEME_TINY_FLOAT) {
     float gt = -deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(mass_eff * kt);
 
     auto tangent_force = -kt * delta_tan - gt * vrel_tan;
-    
+
     delta_tan = (tangent_force + gt * vrel_tan) / (-kt);
 
     force += tangent_force;
 
-
-    float3 torque_force;
+    float3 torque_force = make_float3(0, 0, 0);
     float a = ts * kr / ARadius;
     float b = 0.1 * length(force);
 
@@ -98,7 +97,6 @@ if (innerInteraction > DEME_TINY_FLOAT) {
 
     force += torque_force;
 
-
 } else {  // If unbroken == 0, then the bond is broken, and the grain is broken, components are now separate particles,
           // so they just follow Hertzian contact law.
 
@@ -109,11 +107,8 @@ if (innerInteraction > DEME_TINY_FLOAT) {
 
         float temp = overlapDepth;
         if (temp > 0.0) {
-
             // Normal force part
             {
-
-
                 sqrt_Rd = sqrt(temp * (ARadius * BRadius) / (ARadius + BRadius));
                 const float Sn = 2. * E_cnt * sqrt_Rd;
 

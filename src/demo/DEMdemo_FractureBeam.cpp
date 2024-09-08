@@ -44,7 +44,7 @@ int main() {
     my_force_model->SetMustPairwiseMatProp({"CoR", "mu", "Crr"});
     // Pay attention to the extra per-contact wildcard `unbroken' here.
     my_force_model->SetPerContactWildcards(
-        {"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z", "unbroken", "initialLength","damage"});
+        {"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z", "unbroken", "initialLength"});
 
     float world_size = 5.;
     float container_diameter = 0.50;
@@ -62,25 +62,27 @@ int main() {
     auto walls = DEMSim.AddExternalObject();
     walls->AddPlane(make_float3(0, 0, bottom), make_float3(0, 0, 1), mat_type_container);
     walls->SetFamily(10);
+
     auto fixed = DEMSim.AddWavefrontMeshObject("../data/granularFlow/drum.obj", mat_type_container);
-    fixed->Scale(0.20 * 1.0);
+    fixed->Scale(make_float3(1, 0.20 * 1.0 ,0.20 * 1.0 ));
     fixed->SetFamily(10);
-    fixed->Move(make_float3(-0.150, +0.10, -0.11), make_float4(0.7071,0.7071, 0, 0));
+    fixed->Move(make_float3(-0.20, +0.10, -0.11), make_float4(0.7071,0.7071, 0, 0));
 
     auto fixed_2 = DEMSim.AddWavefrontMeshObject("../data/granularFlow/drum.obj", mat_type_container);
-    fixed_2->Scale(0.20 * 1.0);
+    fixed_2->Scale(make_float3(1, 0.20 * 1.0 ,0.20 * 1.0 ));
     fixed_2->SetFamily(10);
-    fixed_2->Move(make_float3(0.150, +0.10, -0.11), make_float4(0.7071,0.7071, 0, 0));
+    fixed_2->Move(make_float3(0.20, +0.10, -0.11), make_float4(0.7071,0.7071, 0, 0));
 
     DEMSim.SetFamilyFixed(10);
 
     auto mobile = DEMSim.AddWavefrontMeshObject("../data/granularFlow/drum.obj", mat_type_container);
-    mobile->Scale(0.20 * 1.0);
+    mobile->Scale(make_float3(1, 0.20 * 1.0 ,0.20 * 1.0 ));
     mobile->SetFamily(10);
-    mobile->Move(make_float3(0.0, +0.10, beamHeight+2.5*sphere_rad + 0.20/2.0), make_float4(0.7071,0.7071, 0, 0));
+    mobile->Move(make_float3(0.0, +0.10, beamHeight+1.5*sphere_rad + 0.20/2.0), make_float4(0.7071,0.7071, 0, 0));
     mobile->SetFamily(20);
     DEMSim.SetFamilyFixed(20);
     DEMSim.SetFamilyPrescribedLinVel(21, "0", "0", to_string_with_precision(-0.01));
+    
     // Define the terrain particle templates
     // Calculate its mass and MOI
     float terrain_density = 2.6e3;
@@ -108,10 +110,10 @@ int main() {
     // Some inspectors
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
 
-    DEMSim.SetFamilyExtraMargin(1, 1.40 * sphere_rad); // compared to 0
+    DEMSim.SetFamilyExtraMargin(1, 1.20 * sphere_rad); // compared to 0
 
     DEMSim.SetInitTimeStep(step_size);
-    DEMSim.SetGravitationalAcceleration(make_float3(0, 0.0,  1* -9.81));
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0.0,  0.0));
     DEMSim.Initialize();
     //DEMSim.DisableContactBetweenFamilies(20, 1);
     std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
@@ -128,7 +130,6 @@ int main() {
     bool status_2 = true;
 
     DEMSim.SetFamilyContactWildcardValueAll(1, "initialLength", 0.0);
-     DEMSim.SetFamilyContactWildcardValueAll(1, "damage", 0.0);
     DEMSim.SetFamilyContactWildcardValueAll(1, "unbroken", 2.0);
     // Simulation loop
     for (float t = 0; t < sim_end; t += frame_time) {

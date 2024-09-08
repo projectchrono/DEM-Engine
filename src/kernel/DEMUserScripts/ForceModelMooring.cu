@@ -7,6 +7,10 @@ float E_cnt, G_cnt, CoR_cnt, mu_cnt, Crr_cnt, E_A, E_B;
     E_B = E[bodyBMatType];
     float nu_B = nu[bodyBMatType];
     matProxy2ContactParam<float>(E_cnt, G_cnt, E_A, nu_A, E_B, nu_B);
+    // CoR, mu and Crr are pair-wise, so obtain them this way
+    CoR_cnt = CoR[bodyAMatType][bodyBMatType];
+    mu_cnt = mu[bodyAMatType][bodyBMatType];
+    Crr_cnt = Crr[bodyAMatType][bodyBMatType];
 }
 float3 rotVelCPA, rotVelCPB;
 {
@@ -20,7 +24,7 @@ float3 rotVelCPA, rotVelCPB;
     applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x, BOriQ.y, BOriQ.z);
 }
 float mass_eff, sqrt_Rd, beta;
-float3 vrel_tan;
+float3 vrel_tan = make_float3(0, 0, 0);
 float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
 
 // The (total) relative linear velocity of A relative to B
@@ -33,30 +37,40 @@ const float3 v_rot = rotVelCPB - rotVelCPA;
 const float v_rot_mag = length(v_rot);
 mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
 
+// Now we already have sufficient info to update contact history
+{
+    delta_tan += ts * vrel_tan;
+    const float disp_proj = dot(delta_tan, B2A);
+    delta_tan -= disp_proj * B2A;
+    delta_time += ts;
+}
 
 // If this contact is marked as not broken (unbroken is 1 means it stands for the bond between the components of a
 // unbroken particle in grain breakage simulation), then it takes this force model which is a strong cohesion.
 if (innerInteraction > DEME_TINY_FLOAT) {
-    initialLength = (innerInteraction > 1.0) ? overlapDepth : initialLength;  // reusing a variable that survives the loop
+    initialLength =
+        (innerInteraction > 1.0) ? overlapDepth : initialLength;  // reusing a variable that survives the loop
     innerInteraction = (innerInteraction > 1.0) ? 1.0 : innerInteraction;
+
+    float kn = 80 * ARadius * E_A;
+    float kt = 1.f / 2.5f * kn;
+    float kr = ARadius * ARadius * kt;
+    
 
     float intialArea = ARadius * ARadius * deme::PI;
 
-    float kn = 2.f * initialArea * (E_A); 
-
     float deltaD = (overlapDepth - initialLength);  // initial relative displacement considered from the initial overlap
 
-    float c = 0.005 * 2.0 * sqrt(mass_eff * kn);
+    float c = 0.01 * 2.0 * sqrt(mass_eff * kn);
 
     // To A, gravity pulls it towards B, so -B2A direction
     // float3 bond_force = B2A;  // vector direction
+    float force_to_A_mag = 0.0;
 
-    float force_to_A_mag = kn * deltaD;
-
-    // tangetial forces
+    force_to_A_mag = kn * deltaD;
 
     force += B2A * force_to_A_mag - c * velB2A;
-    
+
 
 } else {  // If unbroken == 0, then the bond is broken, and the grain is broken, components are now separate particles,
           // so they just follow Hertzian contact law.
@@ -65,45 +79,11 @@ if (innerInteraction > DEME_TINY_FLOAT) {
     // particles are in contact: This is a part of our model.
     if (overlapDepth > 0.0) {
         // Material properties
-        initialLength = (unbroken == -1.0) ? overlapDepth : initialLength;  // reusing a variable that survives the loop
-        unbroken = (unbroken == -1.0) ? 0.0 : unbroken;
-        float temp = overlapDepth - initialLength;
+
+        float temp = overlapDepth;
         if (temp > 0.0) {
-            float3 rotVelCPA, rotVelCPB;
-            {
-                // We also need the relative velocity between A and B in global frame to use in the damping terms
-                // To get that, we need contact points' rotational velocity in GLOBAL frame
-                // This is local rotational velocity (the portion of linear vel contributed by rotation)
-                rotVelCPA = cross(ARotVel, locCPA);
-                rotVelCPB = cross(BRotVel, locCPB);
-                // This is mapping from local rotational velocity to global
-                applyOriQToVector3<float, deme::oriQ_t>(rotVelCPA.x, rotVelCPA.y, rotVelCPA.z, AOriQ.w, AOriQ.x,
-                                                        AOriQ.y, AOriQ.z);
-                applyOriQToVector3<float, deme::oriQ_t>(rotVelCPB.x, rotVelCPB.y, rotVelCPB.z, BOriQ.w, BOriQ.x,
-                                                        BOriQ.y, BOriQ.z);
-            }
-
-            // A few re-usables
-            float mass_eff, sqrt_Rd, beta;
-            float3 vrel_tan;
-            float3 delta_tan = make_float3(delta_tan_x, delta_tan_y, delta_tan_z);
-
             // Normal force part
             {
-                // The (total) relative linear velocity of A relative to B
-                const float3 velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
-                const float projection = dot(velB2A, B2A);
-                vrel_tan = velB2A - projection * B2A;
-
-                // Now we already have sufficient info to update contact history
-                {
-                    delta_tan += ts * vrel_tan;
-                    const float disp_proj = dot(delta_tan, B2A);
-                    delta_tan -= disp_proj * B2A;
-                    delta_time += ts;
-                }
-
-                mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
                 sqrt_Rd = sqrt(temp * (ARadius * BRadius) / (ARadius + BRadius));
                 const float Sn = 2. * E_cnt * sqrt_Rd;
 
@@ -182,4 +162,3 @@ if (innerInteraction > DEME_TINY_FLOAT) {
         }
     }
 }
-
