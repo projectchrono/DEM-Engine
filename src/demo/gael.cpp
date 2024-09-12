@@ -33,8 +33,8 @@ using namespace std::filesystem;
 double E_terrain = 1e8, nu_terrain = 0.3, CoR_terrain = 0.3, mu_terrain = 0.1, Crr_terrain = 0.0;
 int srandValue = 759;
 // double world_x_size = 1.10, world_y_size = 0.30, world_z_size = 1.00;//chrono simulation dimensions
-double world_x_size = 1.11, world_y_size = 0.31, world_z_size = 2.0;  // chrono simulation dimensions
-float sampleheight = 0.06;                                            // for the generation of the random material
+double world_x_size = 0.51, world_y_size = 0.51, world_z_size = 2.0;  // chrono simulation dimensions
+float sampleheight = 0.15;                                            // for the generation of the random material
 double bottom = -sampleheight;
 float size_z_batch = 3 * sampleheight;
 // location of bottom boundary plane
@@ -204,7 +204,7 @@ int main() {
     DEMSim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/Output";
+    out_dir += "/Output_DropBallPrep";
     create_directory(out_dir);
     unsigned int currframe = 0;
     unsigned int curr_step = 0;

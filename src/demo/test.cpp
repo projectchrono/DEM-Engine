@@ -63,7 +63,7 @@ std::vector<int> particlePerClump = {2, 2, 2, 2, 2, 1, 1};
 
 // Make ready for simulation
 float step_size = 5e-7;
-float sim_time = 0.20;
+float sim_time = 1.20;
 
 float paddingFactor = 1.7;  // distance between particles
 float toleranceFactor = 0.96;
@@ -296,7 +296,7 @@ int main() {
         // Settle a bit
         // DEMSim.DoDynamicsThenSync(0.3);
         DEMSim.SetInitTimeStep(step_size);
-        DEMSim.UpdateStepSize();
+        //DEMSim.UpdateStepSize();
 
         float frame_time = 1.0 / fps;
 
@@ -304,8 +304,8 @@ int main() {
         float terrain_max_z = max_z_finder->GetValue();
 
         DEMSim.ChangeFamily(2, 0);
-        proj_tracker->SetPos(make_float3(0, 0, terrain_max_z + drop_height - ballDrop_simH));
-        proj_tracker->SetVel(make_float3(0, 0, -sqrt(2 * ballDrop_simH * abs(gravity))));
+        //proj_tracker->SetPos(make_float3(0, 0, terrain_max_z + drop_height - ballDrop_simH));
+        //proj_tracker->SetVel(make_float3(0, 0, -sqrt(2 * ballDrop_simH * abs(gravity))));
 
         sprintf(filename, "%s/BallDrop_mesh_ini.vtk", out_dir.c_str());
         DEMSim.WriteMeshFile(std::string(filename));

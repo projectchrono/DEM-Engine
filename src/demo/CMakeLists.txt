@@ -62,12 +62,14 @@ SET(DEMOS
 		DEMdemo_Fracture_Box
 		DEMdemo_FractureBeam
 		DEMdemo_Indentation_2
+		DEMdemo_FlexibleFall
 		DEMdemo_Force2D
 		DEMdemo_Force3D
 		DEMdemo_FractureCylinderSteel
 		DEMdemo_FillingGeo
 		DEMdemo_Force3DSingle
 		DEMdemo_FlexibleNet
+		DEMdemo_MooredBox
 		gael
 		test
 		)
