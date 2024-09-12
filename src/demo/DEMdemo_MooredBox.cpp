@@ -74,7 +74,6 @@ int main() {
     std::vector<float3> input_xyz;
 
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
-
     std::cout << data_xyz.size() << " Data points are loaded from the external list." << std::endl;
 
     for (unsigned int i = 0; i < (data_xyz.size()); i++) {
@@ -89,6 +88,28 @@ int main() {
 
     auto allParticles = DEMSim.AddClumps(input_pile_template_type, input_xyz);
     allParticles->SetFamily(1);
+
+    auto data_xyz_anchor = DEMSim.ReadClumpXyzFromCsv("../data/clumps/line_anchor.csv");
+    std::vector<float3> input_xyz_2;
+
+    std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type_2;
+    std::cout << data_xyz_anchor.size() << " Data points are loaded from the external list." << std::endl;
+
+    for (unsigned int i = 0; i < (data_xyz_anchor.size()); i++) {
+        char t_name[20];
+        sprintf(t_name, "%d", i);
+
+        auto this_type_xyz = data_xyz_anchor[std::string(t_name)];
+        input_xyz_2.insert(input_xyz_2.end(), this_type_xyz.begin(), this_type_xyz.end());
+
+        input_pile_template_type_2.push_back(templates_terrain[0]);
+    }
+
+    allParticles = DEMSim.AddClumps(input_pile_template_type_2, input_xyz_2);
+    allParticles->SetFamily(2);
+    //DEMSim.SetFamilyFixed(2);
+    auto anchoring_track=DEMSim.Track(allParticles);
+
 
     auto top_plane = DEMSim.AddWavefrontMeshObject("../data/granularFlow/cylinder.obj", mat_type_container);
     top_plane->SetInitPos(make_float3(0, 0, 0.25));
@@ -118,6 +139,7 @@ int main() {
     auto min_z_finder = DEMSim.CreateInspector("clump_min_z");
 
     DEMSim.SetFamilyExtraMargin(1, fact_radius * sphere_rad);
+    DEMSim.SetFamilyExtraMargin(2, fact_radius * sphere_rad);
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0.00, 1 * -9.81));
@@ -147,24 +169,25 @@ int main() {
     std::ofstream csvFile(nameOutFile);
 
     DEMSim.SetFamilyContactWildcardValueAll(1, "initialLength", 0.0);
-    // DEMSim.SetFamilyContactWildcardValueAll(1, "damage", 0.0);
     DEMSim.SetFamilyContactWildcardValueAll(1, "innerInteraction", 0.0);
-
+    DEMSim.SetFamilyContactWildcardValueAll(2, "initialLength", 0.0);
+    DEMSim.SetFamilyContactWildcardValueAll(2, "innerInteraction", 0.0);
+    float3 position=anchoring_track->Pos();
     // Simulation loop
     for (float t = 0; t < sim_end; t += frame_time) {
         // DEMSim.ShowThreadCollaborationStats();
-
+        
         std::cout << "Contacts now: " << DEMSim.GetNumContacts() << std::endl;
 
         if (t >= 0.0 && status_1) {
             status_1 = false;
             DEMSim.DoDynamicsThenSync(0);
             DEMSim.SetFamilyContactWildcardValueAll(1, "innerInteraction", 2.0);
-            DEMSim.SetFamilyContactWildcardValue(1, 10, "innerInteraction", 2.0);
-            DEMSim.SetFamilyContactWildcardValue(1, 20, "innerInteraction", 2.0);
+            DEMSim.SetFamilyContactWildcardValue(1, 2, "innerInteraction", 2.0);
+            DEMSim.SetFamilyContactWildcardValueAll(2, "innerInteraction", 2.0);
             std::cout << "Establishing inner forces: " << frame_count << std::endl;
         }
-
+            anchoring_track->SetPos(position+make_float3(2*t,0,0));
         if (frame_count % 1 == 0) {
             char filename[200];
             char meshname[200];
