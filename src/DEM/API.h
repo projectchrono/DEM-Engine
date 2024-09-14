@@ -1149,7 +1149,7 @@ class DEMSolver {
 
     /// @brief Update the time step size. Used after system initialization.
     /// @param ts Time step size.
-    void UpdateStepSize(float ts = -1.0);
+    void UpdateStepSize(double ts);
 
     /// Show the collaboration stats between dT and kT. This is more useful for tweaking the number of time steps that
     /// dT should be allowed to be in advance of kT.
@@ -1333,7 +1333,7 @@ class DEMSolver {
     // Actual (double-precision) size of a voxel
     double m_voxelSize;
     // Time step size
-    double m_ts_size = -1.0;
+    double m_ts_size = 1e-5;
     // If the time step size is a constant (if not, it needs to be supplied with a file or a function)
     bool ts_size_is_const = true;
     // The length unit. Any XYZ we report to the user, is under the hood a multiple of this l.

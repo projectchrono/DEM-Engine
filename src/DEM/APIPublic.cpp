@@ -2112,14 +2112,10 @@ void DEMSolver::UpdateSimParams() {
     dT->announceCritical();
 }
 
-void DEMSolver::UpdateStepSize(float ts) {
-    if (ts < 0) {
-        kT->simParams->h = m_ts_size;
-        dT->simParams->h = m_ts_size;
-    } else {
-        kT->simParams->h = ts;
-        dT->simParams->h = ts;
-    }
+void DEMSolver::UpdateStepSize(double ts) {
+    m_ts_size = ts;
+    kT->simParams->h = ts;
+    dT->simParams->h = ts;
 }
 
 void DEMSolver::UpdateClumps() {

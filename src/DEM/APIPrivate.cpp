@@ -1332,8 +1332,8 @@ void DEMSolver::validateUserInputs() {
             "should try rebooting or reinstalling cuda components?");
     } else if (ndevices == 1) {
         DEME_WARNING(
-            "One GPU device is detected. Currently, DEME's performance edge is limited with only one GPU.\nTry "
-            "allocating 2 GPU devices if possible.");
+            "One GPU device is detected. On consumer cards, DEME's performance edge is limited with only one GPU.\n"
+            "Try allocating 2 GPU devices if possible.");
     } else if (ndevices > 2) {
         DEME_WARNING(
             "More than two GPU devices are detected.\nCurrently, DEME can make use of at most two devices.\nMore "
@@ -1397,6 +1397,16 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
     const std::set<std::string> contact_wildcard_names = m_force_model->m_contact_wildcards;
     const std::set<std::string> owner_wildcard_names = m_force_model->m_owner_wildcards;
     const std::set<std::string> geo_wildcard_names = m_force_model->m_geo_wildcards;
+    std::set<std::string> geo_wildcard_names_error_checking;
+    // geo_wildcard_names needs some treatments: Add _A and _B to them for error checking...
+    if (geo_wildcard_names.size() > 0) {
+        for (const std::string& wc_name : geo_wildcard_names) {
+            geo_wildcard_names_error_checking.insert(wc_name + "_A");
+            geo_wildcard_names_error_checking.insert(wc_name + "_B");
+        }
+    }
+
+    // Then clear the wc numbering registering array
     m_owner_wc_num.clear();
     m_geo_wc_num.clear();
     m_cnt_wc_num.clear();
@@ -1433,19 +1443,24 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
         m_owner_wc_num[owner_wildcard_name] = owner_wc_num;
         owner_wc_num++;
     }
-    for (const auto& geo_wildcard_name : geo_wildcard_names) {
-        if (added_ingredients.find(geo_wildcard_name) != added_ingredients.end()) {
+    // For geo wildcard, error checking is separated
+    for (const auto& geo_wildcard_name_error_checking : geo_wildcard_names_error_checking) {
+        if (added_ingredients.find(geo_wildcard_name_error_checking) != added_ingredients.end()) {
             DEME_ERROR(
                 "Geometry wildcard %s shares its name with a reserved contact force model ingredient.\nPlease select a "
                 "different name for this wildcard and try again.",
-                geo_wildcard_name.c_str());
+                geo_wildcard_name_error_checking.c_str());
         }
+    }
+    // Then the "vanilla" names for geo wildcard which go into m_geo_wc_num register
+    for (const auto& geo_wildcard_name : geo_wildcard_names) {
         added_geo_wildcards.insert(geo_wildcard_name);
         // Finally, owner wildcards are subject to user modification, so it is better to keep tab of their numbering for
         // later use.
         m_geo_wc_num[geo_wildcard_name] = geo_wc_num;
         geo_wc_num++;
     }
+    // Finally the contact wildcard
     for (const auto& contact_wildcard_name : contact_wildcard_names) {
         if (added_ingredients.find(contact_wildcard_name) != added_ingredients.end()) {
             DEME_ERROR(
@@ -1499,10 +1514,12 @@ inline void DEMSolver::equipForceModel(std::unordered_map<std::string, std::stri
             "Owner wildcard(s) %s are not used/set in your custom force model. "
             "Your force model will probably not produce what you expect.",
             non_match.c_str());
-    if (!all_whole_word_match(model, geo_wildcard_names, non_match))
+    if (!all_whole_word_match(model, geo_wildcard_names_error_checking, non_match))
         DEME_WARNING(
             "Geometry wildcard(s) %s are not used/set in your custom force model. "
-            "Your force model will probably not produce what you expect.",
+            "Your force model will probably not produce what you expect. "
+            "\nRemember for geometry wildcard you need to append _A and _B to wildcard names "
+            "to distinguish two contact geometries in the custom force model.",
             non_match.c_str());
     if (!all_whole_word_match(model, {"force"}, non_match)) {
         DEME_WARNING(

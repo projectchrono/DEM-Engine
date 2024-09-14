@@ -731,7 +731,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     "initialization.\nIf you think this is because dT drifting too much ahead of kT so the contact "
                     "margin added is too big, use SetCDMaxUpdateFreq to limit the max dT future drift.\nOtherwise, the "
                     "simulation may have diverged and relaxing the physics may help, such as decreasing the step size "
-                    "and modifying material properties.",
+                    "and modifying material properties.\nIf this happens at the start of simulation, check if there "
+                    "are initial penetrations, a.k.a. elements initialized inside walls.",
                     stateParams.avgCntsPerSphere, solverFlags.errOutAvgSphCnts);
             }
         }

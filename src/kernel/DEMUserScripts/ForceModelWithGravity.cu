@@ -1,8 +1,7 @@
 // A force model that each particle has a non-local effect that pulls other particles towards itself (gravity well)
 
-// No need to do any contact force calculation if no contact. And it can happen,
-// since we added extra contact margin for adding electrostatic forces before
-// physical contacts emerge.
+// Normal force. But you know, if you are simulating a solver system like the demo that uses this force model, then
+// the normal force does not matter unless 2 planets collide...
 if (overlapDepth > 0) {
     // Material properties represent a frictionless scenario
     float E_cnt, G_cnt, CoR_cnt;
@@ -30,25 +29,21 @@ if (overlapDepth > 0) {
                                                 BOriQ.z);
     }
 
-    // Normal force. But you know, if you are simulating a solver system like the demo that uses this force model, then
-    // the normal force does not matter unless 2 planets collide...
-    if (overlapDepth > 0.) {
-        // The (total) relative linear velocity of A relative to B
-        const float3 velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
-        const float projection = dot(velB2A, B2A);
+    // The (total) relative linear velocity of A relative to B
+    const float3 velB2A = (ALinVel + rotVelCPA) - (BLinVel + rotVelCPB);
+    const float projection = dot(velB2A, B2A);
 
-        const float mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
-        const float sqrt_Rd = sqrt(overlapDepth * (ARadius * BRadius) / (ARadius + BRadius));
-        const float Sn = 2. * E_cnt * sqrt_Rd;
+    const float mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
+    const float sqrt_Rd = sqrt(overlapDepth * (ARadius * BRadius) / (ARadius + BRadius));
+    const float Sn = 2. * E_cnt * sqrt_Rd;
 
-        const float loge = (CoR_cnt < DEME_TINY_FLOAT) ? log(DEME_TINY_FLOAT) : log(CoR_cnt);
-        const float beta = loge / sqrt(loge * loge + deme::PI_SQUARED);
+    const float loge = (CoR_cnt < DEME_TINY_FLOAT) ? log(DEME_TINY_FLOAT) : log(CoR_cnt);
+    const float beta = loge / sqrt(loge * loge + deme::PI_SQUARED);
 
-        const float k_n = deme::TWO_OVER_THREE * Sn;
-        const float gamma_n = deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
+    const float k_n = deme::TWO_OVER_THREE * Sn;
+    const float gamma_n = deme::TWO_TIMES_SQRT_FIVE_OVER_SIX * beta * sqrt(Sn * mass_eff);
 
-        force += (k_n * overlapDepth + gamma_n * projection) * B2A;
-    }
+    force += (k_n * overlapDepth + gamma_n * projection) * B2A;
 }
 
 // A non-local gravitational pull

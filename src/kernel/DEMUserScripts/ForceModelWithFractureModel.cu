@@ -95,7 +95,7 @@ if (unbroken > DEME_TINY_FLOAT) {
     force += tangent_force;
     // If this condition is met, the bond breaks, meaning in the next time step, this bonding force model no longer
     // takes effect.
-    float3 torque_force;
+    float3 torque_force = make_float3(0, 0, 0);
     float a = ts * kr / ARadius;
     float b = 0.1 * ARadius * length(force);
 

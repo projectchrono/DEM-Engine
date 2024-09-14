@@ -400,11 +400,11 @@ class DEMDynamicThread {
     /// @brief Set all meshes in this family to have this material.
     void setFamilyMeshMaterial(unsigned int N, unsigned int mat_id);
 
-    /// @brief Set the geometry wildcards of triangles, sarting from geoID, for the length of vals.
+    /// @brief Set the geometry wildcards of triangles, starting from geoID, for the length of vals.
     void setTriWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
-    /// @brief Set the geometry wildcards of spheres, sarting from geoID, for the length of vals.
+    /// @brief Set the geometry wildcards of spheres, starting from geoID, for the length of vals.
     void setSphWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
-    /// @brief Set the geometry wildcards of analytical components, sarting from geoID, for the length of vals.
+    /// @brief Set the geometry wildcards of analytical components, starting from geoID, for the length of vals.
     void setAnalWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
 
     /// @brief Returns the wildacard value of this owner.
