@@ -35,7 +35,7 @@ int main() {
 
     //  E, nu, CoR, mu, Crr...
     auto mat_type_container =
-        DEMSim.LoadMaterial({{"E", 100e9}, {"nu", 0.3}, {"CoR", 0.7}, {"mu", 0.80}, {"Crr", 0.10}});
+        DEMSim.LoadMaterial({{"E", 100e7}, {"nu", 0.3}, {"CoR", 0.7}, {"mu", 0.80}, {"Crr", 0.10}});
     auto mat_type_particle = DEMSim.LoadMaterial({{"E", 60e9}, {"nu", 0.20}, {"CoR", 0.5}, {"mu", 0.5}, {"Crr", 0.05}});
     // If you don't have this line, then values will take average between 2 materials, when they are in contact
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_container, mat_type_particle, 0.2);
