@@ -48,23 +48,32 @@ mass_eff = (AOwnerMass * BOwnerMass) / (AOwnerMass + BOwnerMass);
 // If this contact is marked as not broken (unbroken is 1 means it stands for the bond between the components of a
 // unbroken particle in grain breakage simulation), then it takes this force model which is a strong cohesion.
 if (innerInteraction > DEME_TINY_FLOAT) {
-    initialLength =
-        (innerInteraction > 1.0) ? overlapDepth : initialLength;  // reusing a variable that survives the loop
+    const double ABdist = length(bodyAPos - bodyBPos);
+    initialLength = (innerInteraction > 1.0) ? ABdist : initialLength;  // reusing a variable that survives the loop
     innerInteraction = (innerInteraction > 1.0) ? 1.0 : innerInteraction;
 
-    float kn = 3.14 * ARadius * ARadius * E_A / 0.03;
+    float deltaD = (ABdist - initialLength > DEME_TINY_FLOAT) ? (ABdist - initialLength) : 0.0;
+    if (deltaD > DEME_TINY_FLOAT) {
+        float kn = 20.0/ initialLength;
 
-    float intialArea = ((ARadius > BRadius) ? ARadius * ARadius : BRadius * BRadius) * deme::PI;
+        float c = 0.03 * 2.0 * sqrt(mass_eff * kn);
+        float3 A2B = -1.0 * (B2A);  // Unit vector pointing from A to B, which is also the segment direction
+        float tension = kn * deltaD;
+        float3 velAveFluid = -1.0 * (ALinVel + BLinVel) / 2.0;  // fluid velocity taken as segment motion
+        if (length(velAveFluid) > DEME_TINY_FLOAT) {
+            float velNormal = dot(velAveFluid, A2B);
+            float velTangential = length(velAveFluid) - velNormal;
+            // normal
+            float3 projVonA2B = A2B * dot(velAveFluid, A2B) / dot(A2B, A2B);
+            float3 normalToSegment = velAveFluid - projVonA2B;
+            normalToSegment = normalToSegment / length(normalToSegment);
+            float drag_normal = -10*0.50 * 0.5f * 1000.0 * (2.0 * ARadius) * initialLength * velNormal;
+            float drag_tangential = -0.10 * 0.5f * 1000.0 * (2.0 * ARadius) * initialLength * velTangential;
+            force += normalToSegment * drag_normal + A2B * drag_tangential;
+             //printf("%f ", length(A2B));
+        }
 
-    float deltaD = (overlapDepth - initialLength < DEME_TINY_FLOAT)
-                       ? overlapDepth - initialLength
-                       : 0.0; 
-    if (deltaD < DEME_TINY_FLOAT) {
-        float c = 0.02 * 2.0 * sqrt(mass_eff * kn);
-
-        float force_to_A_mag = kn * deltaD;
-
-        force += B2A * force_to_A_mag - c * velB2A;
+        force += A2B * tension - c * velB2A;
     }
 
 } else {  // If unbroken == 0, then the bond is broken, and the grain is broken, components are now separate particles,
@@ -75,7 +84,7 @@ if (innerInteraction > DEME_TINY_FLOAT) {
     if (overlapDepth > 0.0) {
         // Material properties
 
-        float temp = overlapDepth - initialLength;
+        float temp = overlapDepth;
         if (temp > 0.0) {
             float3 rotVelCPA, rotVelCPB;
             {
