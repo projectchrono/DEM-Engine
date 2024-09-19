@@ -28,16 +28,16 @@ int main() {
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
     DEMSim.SetContactOutputContent(DEME_POINT | OWNER | FORCE | CNT_WILDCARD);
 
-    DEMSim.SetErrorOutAvgContacts(200);
+    DEMSim.SetErrorOutAvgContacts(20);
     // DEMSim.SetForceCalcThreadsPerBlock(256);
     //  E, nu, CoR, mu, Crr...
     auto mat_type_container =
-        DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.7}, {"mu", 0.10}, {"Crr", 0.10}});
-    auto mat_type_particle = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.20}, {"CoR", 0.5}, {"mu", 0.10}, {"Crr", 0.05}});
+        DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.1}, {"mu", 0.50}, {"Crr", 0.10}});
+    auto mat_type_particle = DEMSim.LoadMaterial({{"E", 1e9}, {"nu", 0.20}, {"CoR", 0.1}, {"mu", 0.50}, {"Crr", 0.05}});
     // If you don't have this line, then values will take average between 2 materials, when they are in contact
-    DEMSim.SetMaterialPropertyPair("CoR", mat_type_container, mat_type_particle, 0.2);
-    DEMSim.SetMaterialPropertyPair("Crr", mat_type_container, mat_type_particle, 0.5);
-    DEMSim.SetMaterialPropertyPair("mu", mat_type_container, mat_type_particle, 0.5);
+    DEMSim.SetMaterialPropertyPair("CoR", mat_type_container, mat_type_particle, 0.20);
+    DEMSim.SetMaterialPropertyPair("Crr", mat_type_container, mat_type_particle, 0.50);
+    DEMSim.SetMaterialPropertyPair("mu", mat_type_container, mat_type_particle, 0.50);
     // We can specify the force model using a file.
     auto my_force_model = DEMSim.ReadContactForceModel("ForceModelMooringPosition.cu");
 
@@ -45,15 +45,15 @@ int main() {
     my_force_model->SetMustHaveMatProp({"E", "nu", "CoR", "mu", "Crr"});
     my_force_model->SetMustPairwiseMatProp({"CoR", "mu", "Crr"});
     // Pay attention to the extra per-contact wildcard `unbroken' here.
-    my_force_model->SetPerContactWildcards(
-        {"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z", "innerInteraction", "initialLength", "restLength"});
+    my_force_model->SetPerContactWildcards({"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z",
+                                            "innerInteraction", "initialLength", "restLength", "tension"});
 
     float world_size = 10;
     float container_diameter = 0.06;
     float terrain_density = 1.200e3;
     float sphere_rad = 0.003;
 
-    float step_size = 2e-6;
+    float step_size = 1e-6;
     float fact_radius = 1.0;
 
     DEMSim.InstructBoxDomainDimension({-3, 3}, {-1, 1}, {-1.0, 1});
@@ -108,6 +108,7 @@ int main() {
     allParticles_2->SetFamily(2);
     DEMSim.SetFamilyFixed(2);
 
+    float massFloater = 3.16;
     auto data_xyz_fairlead = DEMSim.ReadClumpXyzFromCsv("../data/my/CatenaryFairlead.csv");
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_cylinder;
     // Then load it to system
@@ -126,12 +127,11 @@ int main() {
             radii.push_back(sphere_rad);
         }
 
-        float mass = 3.16;
-        float Ixx = 1.f / 2.f * mass;
+        float Ixx = 1.f / 2.f * massFloater;
         float Iyy = Ixx;
         float3 MOI = make_float3(Ixx, Iyy, Iyy);
 
-        auto clump_ptr = DEMSim.LoadClumpType(mass, MOI, radii, relPos, mat_type_particle);
+        auto clump_ptr = DEMSim.LoadClumpType(massFloater, MOI, radii, relPos, mat_type_particle);
         // clump_ptr->AssignName("fsfs");
         clump_cylinder.push_back(clump_ptr);
     }
@@ -144,23 +144,30 @@ int main() {
     // DEMSim.SetFamilyFixed(3);
     auto anchoring_track = DEMSim.Track(the_pile);
 
-    DEMSim.AddFamilyPrescribedAcc(3, "0", "0", to_string_with_precision(9.81 + 5.00));
+    float zPos = 0.0;
+    std::string buoyancy = to_string_with_precision(0.20 * 0.20 * 0.08 * 1000 * 9.81 / massFloater);
+    std::string xMot = "";
+    // DEMSim.AddFamilyPrescribedAcc(3, "0", "0", buoyancy);
 
+    DEMSim.SetFamilyPrescribedPosition(3, " 0.110 *erf(t/sqrt(2.00))* sin(2 * deme::PI*1.0/1.80 * t)+0.02*erf(t/sqrt(2.00))", "0",
+                                       " 0.04 *erf(t/sqrt(2.00))* sin(2 * deme::PI*1.0/1.80 * t+deme::PI/6)");
+    DEMSim.SetFamilyPrescribedQuaternion(3,"float4 tmp=make_float4(0,sin(erf(t/sqrt(2.00))*-deme::PI/30*sin(2 * deme::PI*1.0/1.80 * t)),0,cos(erf(t/sqrt(2.00))*-deme::PI/30*sin(2 * deme::PI*1.0/1.80 * t))); return tmp;");                                       
+    
     std::cout << "Total num of particles: " << the_pile->GetNumClumps() << std::endl;
     std::cout << "Total num of spheres: " << the_pile->GetNumSpheres() << std::endl;
 
-    auto top_plane = DEMSim.AddWavefrontMeshObject("../data/my/cylinder.obj", mat_type_container);
-    top_plane->SetInitPos(make_float3(0, 0, 0.26));
+    auto top_plane = DEMSim.AddWavefrontMeshObject("../data/my/cube.obj", mat_type_container);
+    top_plane->SetInitPos(make_float3(0, 0, 0.0));
     top_plane->SetMass(100.);
-    top_plane->Scale(make_float3(1, 1, 0.01));
+    top_plane->Scale(make_float3(0.2, 0.2, 0.132));
     top_plane->SetFamily(10);
     DEMSim.SetFamilyFixed(10);
     auto phantom_track = DEMSim.Track(top_plane);
 
     auto bottom_plane = DEMSim.AddWavefrontMeshObject("../data/my/cylinder.obj", mat_type_container);
-    bottom_plane->SetInitPos(make_float3(0, 0, -5.06));
+    bottom_plane->SetInitPos(make_float3(0, 0, -0.50 - sphere_rad - 0.001));
     bottom_plane->SetMass(1.);
-    bottom_plane->Scale(make_float3(8, 8, 0.01));
+    bottom_plane->Scale(make_float3(2, 1, 0.001));
     bottom_plane->SetFamily(20);
     DEMSim.SetFamilyFixed(20);
 
@@ -188,7 +195,7 @@ int main() {
 
     float sim_end = 50;
 
-    unsigned int fps = 20;
+    unsigned int fps = 40;
     unsigned int datafps = 25;
     unsigned int modfpsGeo = datafps / fps;
     float frame_time = 1.0 / datafps;
@@ -230,21 +237,25 @@ int main() {
     std::cout << "Establishing inner forces: " << frame_count << std::endl;
 
     float3 position = anchoring_track->Pos();
-    float3 phantom_position = phantom_track->Pos();
+
+
     // Simulation loop
-    for (float t = 0; t < sim_end; t += frame_time) {
+    for (float time = 0; time < sim_end; time += frame_time) {
         // DEMSim.ShowThreadCollaborationStats();
 
         std::cout << "Contacts now: " << DEMSim.GetNumContacts() << std::endl;
 
-        if (t >= 0.0 && status_1) {
+        if (time >= 0.0 && status_1) {
             status_1 = false;
         }
-
-        // anchoring_track->SetPos(position + make_float3(0.1 * 0, 0, 0.1 * 0));
-        phantom_track->SetPos(phantom_position + make_float3(0.1 * 0, 0, 0.1 * 0));
-        auto temp = anchoring_track->ContactAcc();
         DEMSim.DoDynamicsThenSync(0);
+        // anchoring_track->SetPos(position + make_float3(0.1 * 0, 0, 0.1 * 0));
+            float3 phantom_position = anchoring_track->Pos();
+            float4 phantom_quat = anchoring_track->OriQ();
+        phantom_track->SetPos(phantom_position);
+        phantom_track->SetOriQ(phantom_quat);
+
+        auto temp = anchoring_track->ContactAcc();
 
         if (frame_count % 1 == 0) {
             char filename[200];
@@ -252,7 +263,7 @@ int main() {
             char cnt_filename[200];
 
             std::cout << "Outputting frame: " << frame_count << std::endl;
-            std::cout << "Force: " << temp.z * 100.0 << std::endl;
+            std::cout << "Force: " << temp.z * massFloater << std::endl;
             sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame_count);
             sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame_count);
             sprintf(cnt_filename, "%s/DEMdemo_contact_%04d.csv", out_dir.c_str(), frame_count);
