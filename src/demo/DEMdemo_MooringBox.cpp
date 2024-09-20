@@ -54,7 +54,7 @@ int main() {
     float sphere_rad = 0.003;
 
     float step_size = 1e-6;
-    float fact_radius = 1.0;
+    float fact_radius = 3;
 
     DEMSim.InstructBoxDomainDimension({-3, 3}, {-1, 1}, {-1.0, 1});
     // No need to add simulation `world' boundaries, b/c we'll add a cylinderical container manually
@@ -137,31 +137,35 @@ int main() {
     }
     std::cout << "Total num of clumps: " << clump_cylinder.size() << std::endl;
     std::vector<float3> input_pile_xyz;
-    input_pile_xyz.insert(input_pile_xyz.end(), make_float3(0.0, 0, 0.0));
+    input_pile_xyz.insert(input_pile_xyz.end(), make_float3(0.0, 0, -0.0126));
 
     auto the_pile = DEMSim.AddClumps(clump_cylinder, input_pile_xyz);
     the_pile->SetFamily(3);
-    // DEMSim.SetFamilyFixed(3);
+    DEMSim.SetFamilyFixed(3);
     auto anchoring_track = DEMSim.Track(the_pile);
 
     float zPos = 0.0;
     std::string buoyancy = to_string_with_precision(0.20 * 0.20 * 0.08 * 1000 * 9.81 / massFloater);
     std::string xMot = "";
-    // DEMSim.AddFamilyPrescribedAcc(3, "0", "0", buoyancy);
+    DEMSim.AddFamilyPrescribedAcc(3, "0", "0", buoyancy);
 
-    DEMSim.SetFamilyPrescribedPosition(3, " 0.110 *erf(t/sqrt(2.00))* sin(2 * deme::PI*1.0/1.80 * t)+0.02*erf(t/sqrt(2.00))", "0",
-                                       " 0.04 *erf(t/sqrt(2.00))* sin(2 * deme::PI*1.0/1.80 * t+deme::PI/6)");
-    DEMSim.SetFamilyPrescribedQuaternion(3,"float4 tmp=make_float4(0,sin(erf(t/sqrt(2.00))*-deme::PI/30*sin(2 * deme::PI*1.0/1.80 * t)),0,cos(erf(t/sqrt(2.00))*-deme::PI/30*sin(2 * deme::PI*1.0/1.80 * t))); return tmp;");                                       
-    
+    DEMSim.SetFamilyPrescribedPosition(
+        3, " 0.110 *erf(t/sqrt(2.00))* sin(2 * deme::PI*1.0/1.80 * t)+0.02*erf(t/sqrt(2.00))", "0",
+        "-0.0126+ 0.04 *erf(t/sqrt(2.00))* sin(2 * deme::PI*1.0/1.80 * t+erf(t/sqrt(2.00))*deme::PI/6)");
+    DEMSim.SetFamilyPrescribedQuaternion(
+        3,
+        "float4 tmp=make_float4(0,sin(erf(t/sqrt(2.00))*deme::PI/30*sin(2 * deme::PI*1.0/1.80 * "
+        "t)),0,cos(erf(t/sqrt(2.00))*deme::PI/30*sin(2 * deme::PI*1.0/1.80 * t))); return tmp;");
+
     std::cout << "Total num of particles: " << the_pile->GetNumClumps() << std::endl;
     std::cout << "Total num of spheres: " << the_pile->GetNumSpheres() << std::endl;
 
     auto top_plane = DEMSim.AddWavefrontMeshObject("../data/my/cube.obj", mat_type_container);
     top_plane->SetInitPos(make_float3(0, 0, 0.0));
-    top_plane->SetMass(100.);
+    top_plane->SetMass(1.);
     top_plane->Scale(make_float3(0.2, 0.2, 0.132));
     top_plane->SetFamily(10);
-    DEMSim.SetFamilyFixed(10);
+    // DEMSim.SetFamilyFixed(10);
     auto phantom_track = DEMSim.Track(top_plane);
 
     auto bottom_plane = DEMSim.AddWavefrontMeshObject("../data/my/cylinder.obj", mat_type_container);
@@ -238,7 +242,6 @@ int main() {
 
     float3 position = anchoring_track->Pos();
 
-
     // Simulation loop
     for (float time = 0; time < sim_end; time += frame_time) {
         // DEMSim.ShowThreadCollaborationStats();
@@ -249,9 +252,10 @@ int main() {
             status_1 = false;
         }
         DEMSim.DoDynamicsThenSync(0);
+        // DEMSim.AddFamilyPrescribedAcc(3, "0", "0", buoyancy);
         // anchoring_track->SetPos(position + make_float3(0.1 * 0, 0, 0.1 * 0));
-            float3 phantom_position = anchoring_track->Pos();
-            float4 phantom_quat = anchoring_track->OriQ();
+        float3 phantom_position = anchoring_track->Pos();
+        float4 phantom_quat = anchoring_track->OriQ();
         phantom_track->SetPos(phantom_position);
         phantom_track->SetOriQ(phantom_quat);
 
