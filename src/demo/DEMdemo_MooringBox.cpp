@@ -4,7 +4,7 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 // =============================================================================
-// Fracture
+// Mooring line case
 // =============================================================================
 
 #include <DEM/API.h>
@@ -50,7 +50,7 @@ int main() {
 
     float world_size = 10;
     float container_diameter = 0.06;
-    float terrain_density = 1.200e3;
+    float terrain_density = 1.200e3*4;
     float sphere_rad = 0.003;
 
     float step_size = 1e-6;
