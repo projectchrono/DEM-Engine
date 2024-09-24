@@ -17,8 +17,8 @@
 #include <filesystem>
 #include <iostream>
 #include <fstream>
-#include <eigen3/Eigen/Core>
-#include <eigen3/Eigen/Dense>
+
+
 
 class MotionSolver {
   public:
@@ -26,20 +26,20 @@ class MotionSolver {
     MotionSolver(double mass, double damping, double stiffness, double dt)
         : m(mass), c(damping), k(stiffness), dt(dt) {}
 
-    // first-order ODEs
+    // Equation of motion as a system of first-order ODEs
     // dx/dt = v
     // dv/dt = (1/m) * (F(t) - c * v - k * x)
     void equation_of_motion(double t,
                             const std::vector<double>& state,
                             std::vector<double>& derivatives,
                             double force) {
-        double x = state[0];
-        double v = state[1];
-        derivatives[0] = v;
-        derivatives[1] = (1 / m) * (force - c * v - k * (x + 0.08));
+        double x = state[0];                                // displacement
+        double v = state[1];                                // velocity
+        derivatives[0] = v;                                 // dx/dt = v
+        derivatives[1] = (1 / m) * (force- c * v - k * x);  // dv/dt
     }
 
-    // Runge-Kutta 4th order step
+    // Perform a single Runge-Kutta 4th order step
     void rk4_step(double t, std::vector<double>& state, double force) {
         std::vector<double> k1(2), k2(2), k3(2), k4(2), temp_state(2);
 
@@ -67,12 +67,15 @@ class MotionSolver {
     }
 
     // Solve the system using RK4 - it only advance one time step at a time
-    void solve(std::vector<double>& state, double force) {
+    void solve(std::vector<double>& state , double force) {
         // Initial state [x, v]
-
+        
+        
         double t = dt;
-
+        
         rk4_step(t, state, force);
+        
+        
     }
 
   private:
@@ -84,20 +87,9 @@ class MotionSolver {
 
 // external force function
 double harmonic_force(double t) {
-    double amplitude = 4.0;
-    double frequency = 1. / 1.8;
+    double amplitude = 1.0;
+    double frequency = 0.5;
     return amplitude * sin(2 * M_PI * frequency * t);
-}
-
-double evaluate_force(double z0, double L, double k, double H, double omega, double t) {
-    double rho = 1000;
-    double g = 9.81;
-
-    // double F1 = rho * g * z0 * L;
-
-    double F = k * rho * g * H * exp(k * z0) * (sin(k * L - omega * t) + sin(omega * t));
-
-    return F;
 }
 
 using namespace deme;
@@ -109,13 +101,6 @@ int main() {
     DEMSim.SetOutputContent(OUTPUT_CONTENT::VEL | FAMILY);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
     DEMSim.SetContactOutputContent(DEME_POINT | OWNER | FORCE | CNT_WILDCARD);
-
-    Eigen::Matrix3d m = Eigen::Matrix3d::Random();
-    m = (m + Eigen::Matrix3d::Constant(1.2)) * 50;
-    std::cout << "m =" << std::endl << m << std::endl;
-    Eigen::Vector3d v(1, 2, 3);
-
-    std::cout << "m * v =" << std::endl << m * v << std::endl;
 
     DEMSim.SetErrorOutAvgContacts(20);
     // DEMSim.SetForceCalcThreadsPerBlock(256);
@@ -139,10 +124,10 @@ int main() {
 
     float world_size = 10;
     float container_diameter = 0.06;
-    float terrain_density = 1.200e3 * 2;
+    float terrain_density = 1.200e3 * 4;
     float sphere_rad = 0.003;
 
-    float step_size = 2e-6;
+    float step_size = 1e-6;
     float fact_radius = 3;
 
     DEMSim.InstructBoxDomainDimension({-3, 3}, {-1, 1}, {-1.0, 1});
@@ -236,7 +221,15 @@ int main() {
     float zPos = 0.0;
     std::string buoyancy = to_string_with_precision(0.20 * 0.20 * 0.08 * 1000 * 9.81 / massFloater);
     std::string xMot = "";
-    //  DEMSim.AddFamilyPrescribedAcc(3, "0", "0", buoyancy);
+    DEMSim.AddFamilyPrescribedAcc(3, "0", "0", buoyancy);
+
+    DEMSim.SetFamilyPrescribedPosition(
+        3, " 0.110 *erf(t/sqrt(2.00))* sin(2 * deme::PI*1.0/1.80 * t)+0.02*erf(t/sqrt(2.00))", "0",
+        "-0.0126+ 0.04 *erf(t/sqrt(2.00))* sin(2 * deme::PI*1.0/1.80 * t+erf(t/sqrt(2.00))*deme::PI/6)");
+    DEMSim.SetFamilyPrescribedQuaternion(
+        3,
+        "float4 tmp=make_float4(0,sin(erf(t/sqrt(2.00))*deme::PI/30*sin(2 * deme::PI*1.0/1.80 * "
+        "t)),0,cos(erf(t/sqrt(2.00))*deme::PI/30*sin(2 * deme::PI*1.0/1.80 * t))); return tmp;");
 
     std::cout << "Total num of particles: " << the_pile->GetNumClumps() << std::endl;
     std::cout << "Total num of spheres: " << the_pile->GetNumSpheres() << std::endl;
@@ -281,7 +274,7 @@ int main() {
     float sim_end = 50;
 
     unsigned int fps = 100;
-    unsigned int datafps = 100;
+    unsigned int datafps = 25;
     unsigned int modfpsGeo = datafps / fps;
     float frame_time = 1.0 / datafps;
     std::cout << "Output at " << fps << " FPS" << std::endl;
@@ -325,52 +318,51 @@ int main() {
 
     // Simulation loop
 
-    float hydroStiffness = 1000.0 * 9.81 * 0.20 * 0.20;
-    float damping = 0.05 * 2 * sqrt(hydroStiffness * massFloater);
-    MotionSolver solver(massFloater, damping, hydroStiffness, frame_time);
+    MotionSolver solver(massFloater, 1, 10, frame_time);
     std::vector<double> state = {0.0, 0.0};
-
+    
     for (float time = 0; time < sim_end; time += frame_time) {
         // DEMSim.ShowThreadCollaborationStats();
+
+        std::cout << "Contacts now: " << DEMSim.GetNumContacts() << std::endl;
 
         if (time >= 0.0 && status_1) {
             status_1 = false;
         }
-        auto temp = anchoring_track->ContactAcc();
-        double force = -(0.20 * 0.20 * (-0.08 + state[0]) * 1000 * 9.81) + temp.z * massFloater;
-        // force += evaluate_force(0.080 + state[0], 0.20, 2 * PI / 3.56, 0.12, 2 * PI / 1.80, time);
-        std::cout << "force = " << float(force) << std::endl;
-        force += harmonic_force(time);
+
+        double force= 0.20 * 0.20 * 0.08 * 1000 * 9.81 / massFloater;
+        //double force=harmonic_force(time);        
         solver.solve(state, force);
-        // std::cout << "t = " << time << ", x = " << state[0] << ", v = " << state[1] << std::endl;
+        std::cout << "t = " << time << ", x = " << state[0] << ", v = " << state[1] << std::endl;
 
         DEMSim.DoDynamicsThenSync(0);
-
-        anchoring_track->SetPos(position + make_float3(0, 0, state[0]));
-        anchoring_track->SetVel(make_float3(0.1 * 0, 0, state[1]));
+        // DEMSim.AddFamilyPrescribedAcc(3, "0", "0", buoyancy);
+        // anchoring_track->SetPos(position + make_float3(0.1 * 0, 0, 0.1 * 0));
         float3 phantom_position = anchoring_track->Pos();
         float4 phantom_quat = anchoring_track->OriQ();
         phantom_track->SetPos(phantom_position);
         phantom_track->SetOriQ(phantom_quat);
 
-        int modPrintout = 5;
-        if (frame_count % modPrintout == 0 || frame_count == 0) {
+        auto temp = anchoring_track->ContactAcc();
+
+        if (frame_count % 1 == 0) {
             char filename[200];
             char meshname[200];
             char cnt_filename[200];
-            std::cout << "Contacts now: " << DEMSim.GetNumContacts() << std::endl;
-            std::cout << "Outputting frame: " << frame_count / modPrintout << std::endl;
+
+            std::cout << "Outputting frame: " << frame_count << std::endl;
             std::cout << "Force: " << temp.z * massFloater << std::endl;
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame_count / modPrintout);
-            sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame_count / modPrintout);
-            sprintf(cnt_filename, "%s/DEMdemo_contact_%04d.csv", out_dir.c_str(), frame_count / modPrintout);
+            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame_count);
+            sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame_count);
+            sprintf(cnt_filename, "%s/DEMdemo_contact_%04d.csv", out_dir.c_str(), frame_count);
 
             DEMSim.WriteSphereFile(std::string(filename));
             DEMSim.WriteMeshFile(std::string(meshname));
             DEMSim.WriteContactFile(std::string(cnt_filename));
         }
-        frame_count++;
+
         DEMSim.DoDynamics(frame_time);
+        frame_count++;
     }
     csvFile.close();
     DEMSim.ShowTimingStats();
