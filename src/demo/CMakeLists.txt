@@ -42,6 +42,7 @@ SET(DEMOS
 		#DEMdemo_Fracture_Box
 		DEMdemo_MooringLine
 		DEMdemo_MooringBox
+		DEMdemo_MooringBoxMotion
 		
 )
 

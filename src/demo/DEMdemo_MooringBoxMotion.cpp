@@ -18,80 +18,6 @@
 #include <iostream>
 #include <fstream>
 
-
-
-class MotionSolver {
-  public:
-    // Constructor
-    MotionSolver(double mass, double damping, double stiffness, double dt)
-        : m(mass), c(damping), k(stiffness), dt(dt) {}
-
-    // Equation of motion as a system of first-order ODEs
-    // dx/dt = v
-    // dv/dt = (1/m) * (F(t) - c * v - k * x)
-    void equation_of_motion(double t,
-                            const std::vector<double>& state,
-                            std::vector<double>& derivatives,
-                            double force) {
-        double x = state[0];                                // displacement
-        double v = state[1];                                // velocity
-        derivatives[0] = v;                                 // dx/dt = v
-        derivatives[1] = (1 / m) * (force- c * v - k * x);  // dv/dt
-    }
-
-    // Perform a single Runge-Kutta 4th order step
-    void rk4_step(double t, std::vector<double>& state, double force) {
-        std::vector<double> k1(2), k2(2), k3(2), k4(2), temp_state(2);
-
-        // k1
-        equation_of_motion(t, state, k1, force);
-
-        // k2
-        temp_state[0] = state[0] + 0.5 * dt * k1[0];
-        temp_state[1] = state[1] + 0.5 * dt * k1[1];
-        equation_of_motion(t + 0.5 * dt, temp_state, k2, force);
-
-        // k3
-        temp_state[0] = state[0] + 0.5 * dt * k2[0];
-        temp_state[1] = state[1] + 0.5 * dt * k2[1];
-        equation_of_motion(t + 0.5 * dt, temp_state, k3, force);
-
-        // k4
-        temp_state[0] = state[0] + dt * k3[0];
-        temp_state[1] = state[1] + dt * k3[1];
-        equation_of_motion(t + dt, temp_state, k4, force);
-
-        // Update state with RK4 formula
-        state[0] += (dt / 6.0) * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]);
-        state[1] += (dt / 6.0) * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]);
-    }
-
-    // Solve the system using RK4 - it only advance one time step at a time
-    void solve(std::vector<double>& state , double force) {
-        // Initial state [x, v]
-        
-        
-        double t = dt;
-        
-        rk4_step(t, state, force);
-        
-        
-    }
-
-  private:
-    double m;   // mass
-    double c;   // damping coefficient
-    double k;   // stiffness
-    double dt;  // time step
-};
-
-// external force function
-double harmonic_force(double t) {
-    double amplitude = 1.0;
-    double frequency = 0.5;
-    return amplitude * sin(2 * M_PI * frequency * t);
-}
-
 using namespace deme;
 
 int main() {
@@ -218,10 +144,6 @@ int main() {
     DEMSim.SetFamilyFixed(3);
     auto anchoring_track = DEMSim.Track(the_pile);
 
-    float zPos = 0.0;
-    std::string buoyancy = to_string_with_precision(0.20 * 0.20 * 0.08 * 1000 * 9.81 / massFloater);
-    std::string xMot = "";
-    DEMSim.AddFamilyPrescribedAcc(3, "0", "0", buoyancy);
 
     DEMSim.SetFamilyPrescribedPosition(
         3, " 0.110 *erf(t/sqrt(2.00))* sin(2 * deme::PI*1.0/1.80 * t)+0.02*erf(t/sqrt(2.00))", "0",
@@ -257,13 +179,9 @@ int main() {
     remove_all(out_dir);
     create_directory(out_dir);
 
-    // Some inspectors
-
-    auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
-    auto min_z_finder = DEMSim.CreateInspector("clump_min_z");
-
     DEMSim.SetFamilyExtraMargin(1, fact_radius * sphere_rad);
     DEMSim.SetFamilyExtraMargin(2, fact_radius * sphere_rad);
+    DEMSim.SetFamilyExtraMargin(3, fact_radius * sphere_rad);
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0.00, 1 * -9.81));
@@ -317,27 +235,13 @@ int main() {
     float3 position = anchoring_track->Pos();
 
     // Simulation loop
-
-    MotionSolver solver(massFloater, 1, 10, frame_time);
-    std::vector<double> state = {0.0, 0.0};
     
     for (float time = 0; time < sim_end; time += frame_time) {
         // DEMSim.ShowThreadCollaborationStats();
 
         std::cout << "Contacts now: " << DEMSim.GetNumContacts() << std::endl;
 
-        if (time >= 0.0 && status_1) {
-            status_1 = false;
-        }
-
-        double force= 0.20 * 0.20 * 0.08 * 1000 * 9.81 / massFloater;
-        //double force=harmonic_force(time);        
-        solver.solve(state, force);
-        std::cout << "t = " << time << ", x = " << state[0] << ", v = " << state[1] << std::endl;
-
         DEMSim.DoDynamicsThenSync(0);
-        // DEMSim.AddFamilyPrescribedAcc(3, "0", "0", buoyancy);
-        // anchoring_track->SetPos(position + make_float3(0.1 * 0, 0, 0.1 * 0));
         float3 phantom_position = anchoring_track->Pos();
         float4 phantom_quat = anchoring_track->OriQ();
         phantom_track->SetPos(phantom_position);
@@ -364,8 +268,8 @@ int main() {
         DEMSim.DoDynamics(frame_time);
         frame_count++;
     }
-    csvFile.close();
+
     DEMSim.ShowTimingStats();
-    std::cout << "Fracture demo exiting..." << std::endl;
+    std::cout << "Mooring solver demo exiting..." << std::endl;
     return 0;
 }

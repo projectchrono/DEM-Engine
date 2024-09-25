@@ -26,9 +26,21 @@ class MotionSolver {
     MotionSolver(double mass, double damping, double stiffness, double dt)
         : m(mass), c(damping), k(stiffness), dt(dt) {}
 
+    MotionSolver(Eigen::Matrix3d mass, Eigen::Matrix3d damping, Eigen::Matrix3d stiffness, double dt)
+        : M(mass), C(damping), K(stiffness), dt(dt) {}
+
     // first-order ODEs
     // dx/dt = v
     // dv/dt = (1/m) * (F(t) - c * v - k * x)
+  private:
+    Eigen::Matrix3d M;  // mass
+    Eigen::Matrix3d C;  // damping coefficient
+    Eigen::Matrix3d K;  // stiffness
+    double m;
+    double c;
+    double k;
+    double dt;  // time step
+  public:
     void equation_of_motion(double t,
                             const std::vector<double>& state,
                             std::vector<double>& derivatives,
@@ -39,6 +51,16 @@ class MotionSolver {
         derivatives[1] = (1 / m) * (force - c * v - k * (x + 0.08));
     }
 
+    // void equation_of_motion(double t,
+    //                         const Eigen::Vector3d& statePos,
+    //                         const Eigen::Vector3d& stateVel,
+    //                         Eigen::Vector3d& derivatives,
+    //                         Eigen::Vector3d& force) {
+    //     double x = state[0];
+    //     double v = state[1];
+    //     derivatives[0] = v;
+    //     derivatives[1] = (1 / m) * (force - c * v - k * (x + 0.08));
+    // }
     // Runge-Kutta 4th order step
     void rk4_step(double t, std::vector<double>& state, double force) {
         std::vector<double> k1(2), k2(2), k3(2), k4(2), temp_state(2);
@@ -74,12 +96,6 @@ class MotionSolver {
 
         rk4_step(t, state, force);
     }
-
-  private:
-    double m;   // mass
-    double c;   // damping coefficient
-    double k;   // stiffness
-    double dt;  // time step
 };
 
 // external force function
@@ -142,7 +158,7 @@ int main() {
     float terrain_density = 1.200e3 * 2;
     float sphere_rad = 0.003;
 
-    float step_size = 2e-6;
+    float step_size = 1e-6;
     float fact_radius = 3;
 
     DEMSim.InstructBoxDomainDimension({-3, 3}, {-1, 1}, {-1.0, 1});
@@ -266,11 +282,9 @@ int main() {
 
     // Some inspectors
 
-    auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
-    auto min_z_finder = DEMSim.CreateInspector("clump_min_z");
-
     DEMSim.SetFamilyExtraMargin(1, fact_radius * sphere_rad);
     DEMSim.SetFamilyExtraMargin(2, fact_radius * sphere_rad);
+    DEMSim.SetFamilyExtraMargin(3, fact_radius * sphere_rad);
 
     DEMSim.SetInitTimeStep(step_size);
     DEMSim.SetGravitationalAcceleration(make_float3(0, 0.00, 1 * -9.81));
@@ -280,17 +294,15 @@ int main() {
 
     float sim_end = 50;
 
-    unsigned int fps = 100;
-    unsigned int datafps = 100;
+    unsigned int fps = 1000;
+    float time_out = 0.025;
+    unsigned int datafps = int(1.0/time_out);
     unsigned int modfpsGeo = datafps / fps;
-    float frame_time = 1.0 / datafps;
+    float frame_time = 1.0 / fps;
     std::cout << "Output at " << fps << " FPS" << std::endl;
     unsigned int out_steps = (unsigned int)(1.0 / (datafps * step_size));
     unsigned int frame_count = 0;
     unsigned int step_count = 0;
-
-    bool status_1 = true;
-    bool status_2 = true;
 
     // DEMSim.DisableContactBetweenFamilies(10, 1);
 
@@ -327,33 +339,35 @@ int main() {
 
     float hydroStiffness = 1000.0 * 9.81 * 0.20 * 0.20;
     float damping = 0.05 * 2 * sqrt(hydroStiffness * massFloater);
-    MotionSolver solver(massFloater, damping, hydroStiffness, frame_time);
-    std::vector<double> state = {0.0, 0.0};
+    MotionSolver solverZ(massFloater, damping, hydroStiffness, frame_time);
+    MotionSolver solverX(1.40*massFloater, damping, 0.0*hydroStiffness, frame_time);
+    std::vector<double> stateZ = {0.0, 0.0};
+    std::vector<double> stateX = {0.0, 0.0};
 
     for (float time = 0; time < sim_end; time += frame_time) {
         // DEMSim.ShowThreadCollaborationStats();
 
-        if (time >= 0.0 && status_1) {
-            status_1 = false;
-        }
         auto temp = anchoring_track->ContactAcc();
-        double force = -(0.20 * 0.20 * (-0.08 + state[0]) * 1000 * 9.81) + temp.z * massFloater;
+        double forceZ = -(0.20 * 0.20 * (-0.08 + stateZ[0]) * 1000 * 9.81) + temp.z * massFloater;
         // force += evaluate_force(0.080 + state[0], 0.20, 2 * PI / 3.56, 0.12, 2 * PI / 1.80, time);
-        std::cout << "force = " << float(force) << std::endl;
-        force += harmonic_force(time);
-        solver.solve(state, force);
+        //std::cout << "force = " << float(forceZ) << std::endl;
+        forceZ += harmonic_force(time);
+        double forceX = harmonic_force(time+0.5)/2.0;
+
+        solverZ.solve(stateZ, forceZ);
+        solverX.solve(stateX, forceX);
         // std::cout << "t = " << time << ", x = " << state[0] << ", v = " << state[1] << std::endl;
 
         DEMSim.DoDynamicsThenSync(0);
 
-        anchoring_track->SetPos(position + make_float3(0, 0, state[0]));
-        anchoring_track->SetVel(make_float3(0.1 * 0, 0, state[1]));
+        anchoring_track->SetPos(position + make_float3(stateX[0], 0, stateZ[0]));
+        anchoring_track->SetVel(make_float3(0.1 * 0, 0, stateZ[1]));
         float3 phantom_position = anchoring_track->Pos();
         float4 phantom_quat = anchoring_track->OriQ();
         phantom_track->SetPos(phantom_position);
         phantom_track->SetOriQ(phantom_quat);
 
-        int modPrintout = 5;
+        int modPrintout = datafps;
         if (frame_count % modPrintout == 0 || frame_count == 0) {
             char filename[200];
             char meshname[200];

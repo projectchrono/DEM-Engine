@@ -51,29 +51,31 @@ if (innerInteraction > DEME_TINY_FLOAT) {
     const double ABdist = length(bodyAPos - bodyBPos);
     initialLength = (innerInteraction > 1.0) ? ABdist : initialLength;  // reusing a variable that survives the loop
     innerInteraction = (innerInteraction > 1.0) ? 1.0 : innerInteraction;
-    tension=0.0;
+    tension = 0.0;
     float deltaD = (ABdist - initialLength > DEME_TINY_FLOAT) ? (ABdist - initialLength) : 0.0;
     if (deltaD > DEME_TINY_FLOAT) {
         float kn = 20.0 / initialLength;
-        float massCyl=initialLength*3.141592*ARadius*ARadius*800;
-        float c = 0.03 * 2.0 * sqrt(massCyl * kn);
+        // float massCyl=initialLength*3.141592*ARadius*ARadius*800;
+        // float c = 0.03 * 2.0 * sqrt(massCyl * kn);
+        float epsilon = deltaD / initialLength - 1;
+        float Cint = -0.80 * 0.25f * 3.141592 * (ARadius * ARadius) * epsilon;
         float3 A2B = -1.0 * (B2A);  // Unit vector pointing from A to B, which is also the segment direction
         tension = kn * deltaD;
         float3 velAveFluid = -1.0 * (ALinVel + BLinVel) / 2.0;  // fluid velocity taken as segment motion
-        if (length(velAveFluid) > DEME_TINY_FLOAT) {
-            float velNormal = dot(velAveFluid, A2B);
-            float velTangential = length(velAveFluid) - velNormal;
-            // normal
-            float3 projVonA2B = A2B * dot(velAveFluid, A2B) / dot(A2B, A2B);
-            float3 normalToSegment = velAveFluid - projVonA2B;
-            normalToSegment = normalToSegment / length(normalToSegment);
-            float drag_normal = -0.50 * 0.5f * 1000.0 * (2.0 * ARadius) * initialLength * velNormal;
-            float drag_tangential = -0.10 * 0.5f * 1000.0 * (2.0 * ARadius) * initialLength * velTangential;
-            force += normalToSegment * drag_normal + A2B * drag_tangential;
-             //printf("%f ", length(A2B));
-        }
+                                                                /*         if (length(velAveFluid) > DEME_TINY_FLOAT) {
+                                                                            float velNormal = dot(velAveFluid, A2B);
+                                                                            float velTangential = length(velAveFluid) - velNormal;
+                                                                            // normal
+                                                                            float3 projVonA2B = A2B * dot(velAveFluid, A2B) / dot(A2B, A2B);
+                                                                            float3 normalToSegment = velAveFluid - projVonA2B;
+                                                                            normalToSegment = normalToSegment / length(normalToSegment);
+                                                                            float drag_normal = -0.50 * 0.5f * 1000.0 * (2.0 * ARadius) * initialLength * velNormal;
+                                                                            float drag_tangential = -0.10 * 0.5f * 1000.0 * (2.0 * ARadius) * initialLength * velTangential;
+                                                                            force += normalToSegment * drag_normal + A2B * drag_tangential;
+                                                                            // printf("%f ", length(A2B));
+                                                                        } */
 
-        force += A2B * tension - c * velB2A;
+        force += A2B * (tension + Cint);  // - c * velB2A;
     }
 
 } else {  // If unbroken == 0, then the bond is broken, and the grain is broken, components are now separate particles,
@@ -83,7 +85,7 @@ if (innerInteraction > DEME_TINY_FLOAT) {
     // particles are in contact: This is a part of our model.
     if (overlapDepth > 0.0) {
         // Material properties
-
+        tension = -1;
         float temp = overlapDepth;
         if (temp > 0.0) {
             float3 rotVelCPA, rotVelCPB;
