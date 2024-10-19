@@ -116,6 +116,18 @@ double evaluate_force(double z0, double L, double k, double H, double omega, dou
     return F;
 }
 
+double TheoryLength(double T, double d);
+double eta_s(double x, double t, double H, double L, double T);
+double press2(double x, double t, double z, double H, double L, double T);
+double verticalForce(double time, double H, double L, double T, double size, double draft);
+double horizontalForce(double time,
+                       double waveHeight,
+                       double waveLength,
+                       double wavePeriod,
+                       double size,
+                       double draft,
+                       double postion_X);
+
 using namespace deme;
 
 int main() {
@@ -159,7 +171,7 @@ int main() {
     float sphere_rad = 0.003;
 
     float step_size = 1e-6;
-    float fact_radius = 3;
+    float fact_radius = 2.0;
 
     DEMSim.InstructBoxDomainDimension({-3, 3}, {-1, 1}, {-1.0, 1});
     // No need to add simulation `world' boundaries, b/c we'll add a cylinderical container manually
@@ -294,10 +306,10 @@ int main() {
 
     float sim_end = 50;
 
-    unsigned int fps = 1000;
-    float time_out = 0.025;
-    unsigned int datafps = int(1.0/time_out);
-    unsigned int modfpsGeo = datafps / fps;
+    unsigned int fps = 100;
+    float time_out = 0.05;
+    unsigned int datafps = int(1.0 / time_out);
+    unsigned int modfpsGeo = fps / datafps;
     float frame_time = 1.0 / fps;
     std::cout << "Output at " << fps << " FPS" << std::endl;
     unsigned int out_steps = (unsigned int)(1.0 / (datafps * step_size));
@@ -318,7 +330,7 @@ int main() {
     DEMSim.SetFamilyContactWildcardValueBoth(3, "initialLength", 0.0);
     DEMSim.SetFamilyContactWildcardValueBoth(3, "innerInteraction", 0.0);
     std::cout << "Contacts now: " << DEMSim.GetNumContacts() << std::endl;
-    DEMSim.DoDynamicsThenSync(0);
+    DEMSim.DoDynamicsThenSync(0.0);
     DEMSim.SetFamilyContactWildcardValueBoth(1, "innerInteraction", 2.0);
     DEMSim.SetFamilyContactWildcardValue(1, 2, "innerInteraction", 2.0);
     DEMSim.SetFamilyContactWildcardValue(1, 3, "innerInteraction", 2.0);
@@ -327,10 +339,18 @@ int main() {
     DEMSim.MarkFamilyPersistentContactEither(1);
     DEMSim.MarkFamilyPersistentContact(1, 2);
     DEMSim.MarkFamilyPersistentContact(1, 3);
-    DEMSim.DoDynamicsThenSync(0);
+
+    DEMSim.DoDynamicsThenSync(0.0);
 
     DEMSim.DisableContactBetweenFamilies(1, 10);
     DEMSim.DisableContactBetweenFamilies(3, 10);
+
+    fact_radius=3.0;
+
+    DEMSim.SetFamilyExtraMargin(1, fact_radius * sphere_rad);
+    //DEMSim.SetFamilyExtraMargin(2, fact_radius * sphere_rad);
+    DEMSim.SetFamilyExtraMargin(3, fact_radius * sphere_rad);
+
     std::cout << "Establishing inner forces: " << frame_count << std::endl;
 
     float3 position = anchoring_track->Pos();
@@ -339,55 +359,120 @@ int main() {
 
     float hydroStiffness = 1000.0 * 9.81 * 0.20 * 0.20;
     float damping = 0.05 * 2 * sqrt(hydroStiffness * massFloater);
-    MotionSolver solverZ(massFloater, damping, hydroStiffness, frame_time);
-    MotionSolver solverX(1.40*massFloater, damping, 0.0*hydroStiffness, frame_time);
+    MotionSolver solverZ(massFloater * 1.30, damping, hydroStiffness, frame_time);
+    MotionSolver solverX(1.40 * massFloater, damping, 0.0 * hydroStiffness, frame_time);
     std::vector<double> stateZ = {0.0, 0.0};
     std::vector<double> stateX = {0.0, 0.0};
+
+    double waveLength = 3.57;
 
     for (float time = 0; time < sim_end; time += frame_time) {
         // DEMSim.ShowThreadCollaborationStats();
 
         auto temp = anchoring_track->ContactAcc();
-        double forceZ = -(0.20 * 0.20 * (-0.08 + stateZ[0]) * 1000 * 9.81) + temp.z * massFloater;
-        // force += evaluate_force(0.080 + state[0], 0.20, 2 * PI / 3.56, 0.12, 2 * PI / 1.80, time);
-        //std::cout << "force = " << float(forceZ) << std::endl;
-        forceZ += harmonic_force(time);
-        double forceX = harmonic_force(time+0.5)/2.0;
+        // double forceZ = -(0.20 * 0.20 * (-0.08 + stateZ[0]) * 1000 * 9.81) + temp.z * massFloater;
+        //  force += evaluate_force(0.080 + state[0], 0.20, 2 * PI / 3.56, 0.12, 2 * PI / 1.80, time);
+        double draft = -0.08 + stateZ[0];
+        double forceZ = verticalForce(time, 0.12, waveLength, 1.60, 0.20, draft)+temp.z * massFloater;
+        double eta = eta_s(0, time, 0.12, waveLength, 1.60);
+
+        // forceZ += harmonic_force(time);
+        double forceX = horizontalForce(time, 0.12, waveLength, 1.60, 0.20, draft, -0.10+stateX[0]);
+        forceX -= horizontalForce(time, 0.12, waveLength, 1.60, 0.20, draft, 0.10+stateX[0]);
+        forceX+=temp.x * massFloater;
 
         solverZ.solve(stateZ, forceZ);
         solverX.solve(stateX, forceX);
         // std::cout << "t = " << time << ", x = " << state[0] << ", v = " << state[1] << std::endl;
-
-        DEMSim.DoDynamicsThenSync(0);
+        std::cout << "forceX = " << float(forceX) << " N forceZ = " << float(forceZ) << " N free surface " << eta
+                  << std::endl;
 
         anchoring_track->SetPos(position + make_float3(stateX[0], 0, stateZ[0]));
-        anchoring_track->SetVel(make_float3(0.1 * 0, 0, stateZ[1]));
+        anchoring_track->SetVel(make_float3(stateX[1], 0, stateZ[1]));
         float3 phantom_position = anchoring_track->Pos();
         float4 phantom_quat = anchoring_track->OriQ();
         phantom_track->SetPos(phantom_position);
         phantom_track->SetOriQ(phantom_quat);
 
-        int modPrintout = datafps;
-        if (frame_count % modPrintout == 0 || frame_count == 0) {
+        
+        if (frame_count % modfpsGeo == 0 || frame_count == 0) {
             char filename[200];
             char meshname[200];
             char cnt_filename[200];
-            std::cout << "Contacts now: " << DEMSim.GetNumContacts() << std::endl;
-            std::cout << "Outputting frame: " << frame_count / modPrintout << std::endl;
-            std::cout << "Force: " << temp.z * massFloater << std::endl;
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame_count / modPrintout);
-            sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame_count / modPrintout);
-            sprintf(cnt_filename, "%s/DEMdemo_contact_%04d.csv", out_dir.c_str(), frame_count / modPrintout);
+            // std::cout << "Contacts now: " << DEMSim.GetNumContacts() << std::endl;
+            std::cout << "time: " << time << " s" << std::endl;
+            std::cout << "Force: " << temp.x * massFloater << std::endl;
+            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame_count / modfpsGeo);
+            sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame_count / modfpsGeo);
+            sprintf(cnt_filename, "%s/DEMdemo_contact_%04d.csv", out_dir.c_str(), frame_count / modfpsGeo);
 
             DEMSim.WriteSphereFile(std::string(filename));
             DEMSim.WriteMeshFile(std::string(meshname));
             DEMSim.WriteContactFile(std::string(cnt_filename));
         }
         frame_count++;
-        DEMSim.DoDynamics(frame_time);
+        DEMSim.DoDynamicsThenSync(frame_time);
     }
     csvFile.close();
     DEMSim.ShowTimingStats();
     std::cout << "Fracture demo exiting..." << std::endl;
     return 0;
+}
+
+double verticalForce(double time, double H, double L, double T, double size, double draft) {
+    double dx = size / 20.0;
+    double force = 0.0;
+    for (double l = 0; l <= size; l += dx) {
+        double eta = eta_s(l, time, H, L, T);
+        double z = draft + eta;
+        force += press2(l, time, z, H, L, T) * dx * size;
+    }
+    return force;
+}
+
+double horizontalForce(double time,
+                       double waveHeight,
+                       double waveLength,
+                       double wavePeriod,
+                       double size,
+                       double draft,
+                       double postion_X) {
+    double eta = eta_s(postion_X, time, waveHeight, waveLength, wavePeriod);
+    double z = draft + eta;
+    double dz = abs(z) / 20.0;
+    double force = 0.0;
+    for (double l = draft; l <= eta; l += dz) {
+        force += press2(postion_X, time, l, waveHeight, waveLength, wavePeriod) * dz * size;
+    }
+    return force;
+}
+
+// Function to calculate the wavelength using the dispersion relation
+double TheoryLength(double T, double d) {
+    double g = 9.81;
+    return T * std::sqrt(g * d);
+}
+
+// Surface elevation function
+double eta_s(double x, double t, double H, double L, double T) {
+    const double d = 0.50;
+    return H / 2.0 * std::cos(2.0 * M_PI * x / L - 2.0 * M_PI * t / T) +
+           M_PI * H * H / 8.0 / L * std::cosh(2 * M_PI * d / L) / std::pow(std::sinh(2.0 * M_PI * d / L), 3) *
+               (2.0 + std::cosh(4.0 * M_PI * d / L)) * std::cos(4.0 * M_PI * x / L - 4.0 * M_PI * t / T);
+}
+
+// Wave-induced pressure function
+double press2(double x, double t, double z, double H, double L, double T) {
+    const double rho = 1000;
+    const double g = 9.81;
+    const double d = 0.50;
+    return rho * g * H / 2.0 * std::cosh(2 * M_PI * (z + d) / L) / std::cosh(2.0 * M_PI * d / L) *
+               std::cos(2 * M_PI * x / L - 2 * M_PI * t / T) -
+           rho * g * z +
+           3.0 / 8.0 * rho * g * M_PI * H * H / L * std::tanh(2 * M_PI * d / L) /
+               std::pow(std::sinh(2 * M_PI * d / L), 2) *
+               (std::cosh(4 * M_PI * (z + d) / L) / std::pow(std::sinh(2 * M_PI * d / L), 2) - 1.0 / 3.0) *
+               std::cos(4 * M_PI * x / L - 4 * M_PI * t / T) -
+           1.0 / 8.0 * rho * g * M_PI * H * H / L * std::tanh(2 * M_PI * d / L) /
+               std::pow(std::sinh(2 * M_PI * d / L), 2) * (std::cosh(4 * M_PI * (z + d) / L) - 1);
 }

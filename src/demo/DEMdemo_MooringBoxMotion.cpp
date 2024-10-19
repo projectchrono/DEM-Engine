@@ -24,7 +24,7 @@ int main() {
     DEMSolver DEMSim;
     DEMSim.SetVerbosity(INFO);
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
-    DEMSim.SetOutputContent(OUTPUT_CONTENT::VEL | FAMILY);
+    DEMSim.SetOutputContent(OUTPUT_CONTENT::VEL | FAMILY | OWNER_WILDCARD);
     DEMSim.SetMeshOutputFormat(MESH_FORMAT::VTK);
     DEMSim.SetContactOutputContent(DEME_POINT | OWNER | FORCE | CNT_WILDCARD);
 
@@ -46,21 +46,20 @@ int main() {
     my_force_model->SetMustPairwiseMatProp({"CoR", "mu", "Crr"});
     // Pay attention to the extra per-contact wildcard `unbroken' here.
     my_force_model->SetPerContactWildcards({"delta_time", "delta_tan_x", "delta_tan_y", "delta_tan_z",
-                                            "innerInteraction", "initialLength", "restLength", "tension"});
+                                            "innerInteraction", "initialLength", "tension"});
 
     float world_size = 10;
     float container_diameter = 0.06;
-    float terrain_density = 1.200e3 * 4;
+    float terrain_density = 2.0e3 * 2;
     float sphere_rad = 0.003;
 
     float step_size = 1e-6;
-    float fact_radius = 3;
+    float fact_radius = 2.0;
 
     DEMSim.InstructBoxDomainDimension({-3, 3}, {-1, 1}, {-1.0, 1});
     // No need to add simulation `world' boundaries, b/c we'll add a cylinderical container manually
     DEMSim.InstructBoxDomainBoundingBC("all", mat_type_container);
     // DEMSim.SetInitBinSize(sphere_rad * 5);
-    //  Now add a cylinderical boundary along with a bottom plane
     double bottom = -0;
     double top = 0.10;
 
@@ -70,7 +69,7 @@ int main() {
     templates_terrain =
         DEMSim.LoadSphereType(sphere_rad * sphere_rad * sphere_rad * 4 / 3 * 1.0e3 * PI, sphere_rad, mat_type_particle);
 
-    auto data_xyz = DEMSim.ReadClumpXyzFromCsv("../data/my/CatenaryBody.csv");
+    auto data_xyz = DEMSim.ReadClumpXyzFromCsv("../data/my/CatenaryBodyVal.csv");
     std::vector<float3> input_xyz;
 
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
@@ -88,7 +87,7 @@ int main() {
     auto allParticles = DEMSim.AddClumps(input_pile_template_type, input_xyz);
     allParticles->SetFamily(1);
 
-    auto data_xyz_anchor = DEMSim.ReadClumpXyzFromCsv("../data/my/CatenaryAnchors.csv");
+    auto data_xyz_anchor = DEMSim.ReadClumpXyzFromCsv("../data/my/CatenaryAnchorsVal.csv");
     std::vector<float3> input_xyz_2;
 
     std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type_2;
@@ -109,7 +108,7 @@ int main() {
     DEMSim.SetFamilyFixed(2);
 
     float massFloater = 3.16;
-    auto data_xyz_fairlead = DEMSim.ReadClumpXyzFromCsv("../data/my/CatenaryFairlead.csv");
+    auto data_xyz_fairlead = DEMSim.ReadClumpXyzFromCsv("../data/my/CatenaryFairleadVal.csv");
     std::vector<std::shared_ptr<DEMClumpTemplate>> clump_cylinder;
     // Then load it to system
     {  // initialize cylinder clump
@@ -146,12 +145,12 @@ int main() {
 
 
     DEMSim.SetFamilyPrescribedPosition(
-        3, " 0.110 *erf(t/sqrt(2.00))* sin(2 * deme::PI*1.0/1.80 * t)+0.02*erf(t/sqrt(2.00))", "0",
-        "-0.0126+ 0.04 *erf(t/sqrt(2.00))* sin(2 * deme::PI*1.0/1.80 * t+erf(t/sqrt(2.00))*deme::PI/6)");
+        3, " 0.080*erf(t/sqrt(5.00))* sin(2 * deme::PI*1.0/1.60 * t)-0.01*erf(t/sqrt(2.00))", "0",
+        "-0.0126+ 0.06 *erf(t/sqrt(5.00))* sin(2 * deme::PI*1.0/1.60 * t+erf(t/sqrt(5.00))*deme::PI/6)");
     DEMSim.SetFamilyPrescribedQuaternion(
         3,
-        "float4 tmp=make_float4(0,sin(erf(t/sqrt(2.00))*deme::PI/30*sin(2 * deme::PI*1.0/1.80 * "
-        "t)),0,cos(erf(t/sqrt(2.00))*deme::PI/30*sin(2 * deme::PI*1.0/1.80 * t))); return tmp;");
+        "float4 tmp=make_float4(0,sin(erf(t/sqrt(2.00))*deme::PI/29.0*sin(2 * deme::PI*1.0/1.60 * "
+        "t)),0,cos(erf(t/sqrt(5.00))*deme::PI/29.0*sin(2 * deme::PI*1.0/1.60 * t))); return tmp;");
 
     std::cout << "Total num of particles: " << the_pile->GetNumClumps() << std::endl;
     std::cout << "Total num of spheres: " << the_pile->GetNumSpheres() << std::endl;
@@ -175,7 +174,7 @@ int main() {
 
     std::filesystem::path out_dir = std::filesystem::current_path();
     std::string nameOutFolder = "R" + std::to_string(sphere_rad) + "_Int" + std::to_string(fact_radius) + "";
-    out_dir += "/DemoOutput_MooringLine";
+    out_dir += "/DemoOutput_MooringLineMotion";
     remove_all(out_dir);
     create_directory(out_dir);
 
