@@ -685,7 +685,7 @@ class DEMClumpTemplate {
 
     /// If this clump's component sphere relPos is not reported by the user in its CoM frame, then the user needs to
     /// call this method immediately to report this clump's Volume Centroid and Principal Axes, and relPos will be
-    /// adjusted by this call.
+    /// adjusted by this call so that the clump's frame is its centroid and principal system.
     void InformCentroidPrincipal(float3 center, float4 prin_Q) {
         // Getting to Centroid and Principal is a translation then a rotation (local), so the undo order to undo
         // transltion then rotation
@@ -701,8 +701,8 @@ class DEMClumpTemplate {
     }
 
     /// The opposite of InformCentroidPrincipal, and it is another way to align this clump's coordinate system with its
-    /// centroid and principal system: rotate then move this clump, so that at the end of this operation, the original
-    /// `origin' point should hit the CoM of this clump.
+    /// centroid and principal system: rotate then move this clump, so that at the end of this operation, the clump's 
+    /// frame is its centroid and principal system.
     void Move(float3 vec, float4 rot_Q) {
         for (auto& pos : relPos) {
             applyFrameTransformLocalToGlobal(pos, vec, rot_Q);
