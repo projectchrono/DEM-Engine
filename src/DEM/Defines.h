@@ -384,12 +384,12 @@ struct DEMDataKT {
     float* marginSize;
 
     // kT-owned buffer pointers, for itself's usage
-    // float maxVel_buffer; // buffer for the current max vel sent by dT
-    float maxVel = 0;              // kT's own storage of max vel
+
     float ts_buffer;               // buffer for the current ts size sent by dT
     float ts;                      // kT's own storage of ts size
     unsigned int maxDrift_buffer;  // buffer for max dT future drift steps
     unsigned int maxDrift;         // kT's own storage for max future drift
+
     voxelID_t* voxelID_buffer;
     subVoxelPos_t* locX_buffer;
     subVoxelPos_t* locY_buffer;

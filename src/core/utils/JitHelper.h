@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <core/utils/GpuError.h>
 
 #include <jitify/jitify.hpp>
 
@@ -18,6 +19,74 @@
     #undef min
     #undef strtok_r
 #endif
+
+// Used for wrapping data structures so they become usable on GPU
+template <typename T>
+class dualStruct {
+  private:
+    T* host_data;           // Pointer to host memory (pinned)
+    T* device_data;         // Pointer to device memory
+    bool modified_on_host;  // Flag to track if host data has been modified
+  public:
+    // Constructor: Initialize and allocate memory for both host and device
+    dualStruct() : modified_on_host(false) {
+        DEME_GPU_CALL(cudaMallocHost((void**)&host_data, sizeof(T)));
+        DEME_GPU_CALL(cudaMalloc((void**)&device_data, sizeof(T)));
+
+        syncToDevice();
+    }
+
+    // Constructor: Initialize and allocate memory for both host and device with init values
+    dualStruct(T init_val) : modified_on_host(false) {
+        DEME_GPU_CALL(cudaMallocHost((void**)&host_data, sizeof(T)));
+        DEME_GPU_CALL(cudaMalloc((void**)&device_data, sizeof(T)));
+
+        *host_data = init_val;
+
+        syncToDevice();
+    }
+
+    // Destructor: Free memory
+    ~dualStruct() {
+        DEME_GPU_CALL(cudaFreeHost(host_data));  // Free pinned memory
+        DEME_GPU_CALL(cudaFree(device_data));    // Free device memory
+    }
+
+    // Synchronize changes from host to device
+    void syncToDevice() {
+        DEME_GPU_CALL(cudaMemcpy(device_data, host_data, sizeof(T), cudaMemcpyHostToDevice));
+        modified_on_host = false;
+    }
+
+    // Synchronize changes from device to host
+    void syncToHost() { DEME_GPU_CALL(cudaMemcpy(host_data, device_data, sizeof(T), cudaMemcpyDeviceToHost)); }
+
+    // Check if host data has been modified and not synced
+    bool checkNoPendingModification() { return !modified_on_host; }
+
+    void markModified() { modified_on_host = true; }
+
+    void unmarkModified() { modified_on_host = false; }
+
+    // Accessor for host data (using the arrow operator)
+    T* operator->() { return host_data; }
+
+    // Dereference operator for simple types (like float) to access the value directly
+    T& operator*() {
+        return *host_data;  // Return a reference to the value
+    }
+
+    // Overloaded operator& for device pointer access
+    T* operator&() const {
+        return device_data;  // Return device pointer when using &
+    }
+
+    // Getter for the device pointer
+    T* getDevicePointer() { return device_data; }
+
+    // Getter for the host pointer
+    T* getHostPointer() { return host_data; }
+};
 
 class JitHelper {
   public:

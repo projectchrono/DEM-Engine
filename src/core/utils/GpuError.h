@@ -18,7 +18,7 @@
     { gpu_assert((res), __FILE__, __LINE__, false); }
 
 #define DEME_GPU_CALL_WATCH_BETA(res) \
-    { gpu_assert_watch_beta((res), __FILE__, __LINE__, granData->maxVel, true); }
+    { gpu_assert_watch_beta((res), __FILE__, __LINE__, *(stateParams.maxVel), true); }
 
 inline bool gpu_assert(cudaError_t code, const char* filename, int line, bool except = true) {
     if (code != cudaSuccess) {

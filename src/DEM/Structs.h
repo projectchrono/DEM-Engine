@@ -11,6 +11,7 @@
 #include <core/utils/ManagedMemory.hpp>
 #include <core/utils/csv.hpp>
 #include <core/utils/GpuError.h>
+#include <core/utils/JitHelper.h>
 #include <core/utils/Timer.hpp>
 #include <core/utils/RuntimeData.h>
 
@@ -199,7 +200,16 @@ struct kTStateParams {
 
     // Current average num of contacts per sphere has.
     float avgCntsPerSphere = 0.;
+
+    // float maxVel_buffer; // buffer for the current max vel sent by dT
+    dualStruct<float> maxVel = dualStruct<float>(0.f);  // kT's own storage of max vel
+    // float ts_buffer;               // buffer for the current ts size sent by dT
+    // float ts;                      // kT's own storage of ts size
+    // unsigned int maxDrift_buffer;  // buffer for max dT future drift steps
+    // unsigned int maxDrift;         // kT's own storage for max future drift
 };
+
+struct dTStateParams {};
 
 inline std::string pretty_format_bytes(size_t bytes) {
     // set up byte prefixes
@@ -701,7 +711,7 @@ class DEMClumpTemplate {
     }
 
     /// The opposite of InformCentroidPrincipal, and it is another way to align this clump's coordinate system with its
-    /// centroid and principal system: rotate then move this clump, so that at the end of this operation, the clump's 
+    /// centroid and principal system: rotate then move this clump, so that at the end of this operation, the clump's
     /// frame is its centroid and principal system.
     void Move(float3 vec, float4 rot_Q) {
         for (auto& pos : relPos) {

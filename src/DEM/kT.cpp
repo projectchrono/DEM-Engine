@@ -133,20 +133,22 @@ inline void DEMKinematicThread::unpackMyBuffer() {
                                                  : granData->maxDrift;
 
     // Need to reduce to check if max velocity is exceeded (right now, array marginSize is still storing absv...)
-    floatMaxReduce(granData->marginSize, &(granData->maxVel), simParams->nOwnerBodies, streamInfo.stream,
-                   stateOfSolver_resources);
-    if (granData->maxVel > simParams->errOutVel) {
+    floatMaxReduce(granData->marginSize, stateParams.maxVel.getDevicePointer(), simParams->nOwnerBodies,
+                   streamInfo.stream, stateOfSolver_resources);
+    // Get the reduced maxVel value
+    stateParams.maxVel.syncToHost();
+    if (*(stateParams.maxVel) > simParams->errOutVel) {
         DEME_ERROR(
             "System max velocity is %.7g, exceeded max allowance (%.7g).\nIf this velocity is not abnormal and you "
             "want to increase this allowance, use SetErrorOutVelocity before initializing simulation.\nOtherwise, the "
             "simulation may have diverged and relaxing the physics may help, such as decreasing the step size and "
             "modifying material properties.\nIf this happens at the start of simulation, check if there are initial "
             "penetrations, a.k.a. elements initialized inside walls.",
-            granData->maxVel, simParams->errOutVel);
-    } else if (granData->maxVel >
+            *(stateParams.maxVel), simParams->errOutVel);
+    } else if (*(stateParams.maxVel) >
                simParams->approxMaxVel) {  // If maxVel is larger than the user estimation, that is an anomaly
-        DEME_STEP_ANOMALY("Simulation entity velocity reached %.6g, over the user-estimated %.6g", granData->maxVel,
-                          simParams->approxMaxVel);
+        DEME_STEP_ANOMALY("Simulation entity velocity reached %.6g, over the user-estimated %.6g",
+                          *(stateParams.maxVel), simParams->approxMaxVel);
         anomalies.over_max_vel = true;
     }
 
@@ -169,7 +171,7 @@ inline void DEMKinematicThread::unpackMyBuffer() {
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 
-    DEME_DEBUG_PRINTF("kT received a velocity update: %.6g", granData->maxVel);
+    DEME_DEBUG_PRINTF("kT received a velocity update: %.6g", *(stateParams.maxVel));
     // DEME_DEBUG_PRINTF("A margin of thickness %.6g is added", simParams->beta);
 
     // Family number is a typical changable quantity on-the-fly. If this flag is on, kT received changes from dT.
