@@ -122,19 +122,20 @@ inline void DEMKinematicThread::unpackMyBuffer() {
     DEME_GPU_CALL(cudaMemcpy(granData->marginSize, granData->absVel_buffer, simParams->nOwnerBodies * sizeof(float),
                              cudaMemcpyDeviceToDevice));
 
-    DEME_GPU_CALL(cudaMemcpy(&(granData->ts), &(granData->ts_buffer), sizeof(float), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(&(granData->maxDrift), &(granData->maxDrift_buffer), sizeof(unsigned int),
+    DEME_GPU_CALL(cudaMemcpy(&(stateParams.ts), &(stateParams.ts_buffer), sizeof(float), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(&(stateParams.maxDrift), &(stateParams.maxDrift_buffer), sizeof(unsigned int),
                              cudaMemcpyDeviceToDevice));
 
     // Whatever drift value dT says, kT listens; unless kinematicMaxFutureDrift is negative in which case the user
     // explicitly said not caring the future drift.
+    stateParams.maxDrift.syncToHost();
     pSchedSupport->kinematicMaxFutureDrift = (pSchedSupport->kinematicMaxFutureDrift.load() < 0.)
                                                  ? pSchedSupport->kinematicMaxFutureDrift.load()
-                                                 : granData->maxDrift;
+                                                 : *(stateParams.maxDrift);
 
     // Need to reduce to check if max velocity is exceeded (right now, array marginSize is still storing absv...)
-    floatMaxReduce(granData->marginSize, stateParams.maxVel.getDevicePointer(), simParams->nOwnerBodies,
-                   streamInfo.stream, stateOfSolver_resources);
+    floatMaxReduce(granData->marginSize, &(stateParams.maxVel), simParams->nOwnerBodies, streamInfo.stream,
+                   stateOfSolver_resources);
     // Get the reduced maxVel value
     stateParams.maxVel.syncToHost();
     if (*(stateParams.maxVel) > simParams->errOutVel) {
@@ -160,7 +161,7 @@ inline void DEMKinematicThread::unpackMyBuffer() {
         misc_kernels->kernel("computeMarginFromAbsv")
             .instantiate()
             .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(simParams, granData, (size_t)simParams->nOwnerBodies);
+            .launch(simParams, granData, &(stateParams.ts), &(stateParams.maxDrift), (size_t)simParams->nOwnerBodies);
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     } else {  // If isExpandFactorFixed, then just fill in that constant array.
         size_t blocks_needed = (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;

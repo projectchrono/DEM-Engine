@@ -70,6 +70,9 @@ class DEMDynamicThread {
     // The number of for iterations dT does for a specific user "run simulation" call
     double cycleDuration;
 
+    // dT believes this amount of future drift is ideal
+    dualStruct<unsigned int> perhapsIdealFutureDrift = dualStruct<unsigned int>(0);
+
     // Buffer arrays for storing info from the dT side.
     // kT modifies these arrays; dT uses them only.
 

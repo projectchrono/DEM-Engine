@@ -961,7 +961,7 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.isAsync = !((m_suggestedFutureDrift == 0) && !auto_adjust_update_freq);
     // Ideal max drift in solverFlags may not be up-to-date, and only represents what the solver thinks it ought to be.
     // Interaction manager's copy prevails. This one is used for margin decision so should be non-negative.
-    dT->granData->perhapsIdealFutureDrift = (m_suggestedFutureDrift < 0.) ? 10 : m_suggestedFutureDrift;
+    *(dT->perhapsIdealFutureDrift) = (m_suggestedFutureDrift < 0.) ? 10 : m_suggestedFutureDrift;
     // The reason why we use dTMaxFutureDrift rather than m_updateFreq is the following...
     // dT's contact pair info is actually in a `double stale' situation. kT-supplied contact pairs are based on some old
     // position info already (because kT needs time to run after a dT's order is placed), and dT needs to use this

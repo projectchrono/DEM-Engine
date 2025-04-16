@@ -50,7 +50,11 @@ __global__ void kTModifyComponents(deme::DEMDataKT* granData, deme::notStupidBoo
     }
 }
 
-__global__ void computeMarginFromAbsv(deme::DEMSimParams* simParams, deme::DEMDataKT* granData, size_t n) {
+__global__ void computeMarginFromAbsv(deme::DEMSimParams* simParams,
+                                      deme::DEMDataKT* granData,
+                                      float* ts,
+                                      unsigned int* maxDrift,
+                                      size_t n) {
     size_t ownerID = blockIdx.x * blockDim.x + threadIdx.x;
     if (ownerID < n) {
         float absv = granData->marginSize[ownerID];
@@ -61,9 +65,9 @@ __global__ void computeMarginFromAbsv(deme::DEMSimParams* simParams, deme::DEMDa
         // User-specified extra margin also needs to be added here. This marginSize is used for bin--sph or bin--tri
         // contacts but not entirely the same as the one used for sph--sph or sph--tri contacts, since the latter is
         // stricter.
-        granData->marginSize[ownerID] = (absv * simParams->expSafetyMulti + simParams->expSafetyAdder) *
-                                            (granData->ts_buffer * granData->maxDrift) +
-                                        granData->familyExtraMarginSize[my_family];
+        granData->marginSize[ownerID] =
+            (double)(absv * simParams->expSafetyMulti + simParams->expSafetyAdder) * (*ts) * (*maxDrift) +
+            granData->familyExtraMarginSize[my_family];
     }
 }
 

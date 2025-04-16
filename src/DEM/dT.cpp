@@ -104,11 +104,10 @@ void DEMDynamicThread::packDataPointers() {
     granData->mmiZZ = mmiZZ.data();
 }
 
+// packTransferPointers
 void DEMDynamicThread::packTransferPointers(DEMKinematicThread*& kT) {
     // These are the pointers for sending data to dT
-    granData->pKTOwnedBuffer_maxDrift = &(kT->granData->maxDrift_buffer);
     granData->pKTOwnedBuffer_absVel = kT->granData->absVel_buffer;
-    granData->pKTOwnedBuffer_ts = &(kT->granData->ts_buffer);
     granData->pKTOwnedBuffer_voxelID = kT->granData->voxelID_buffer;
     granData->pKTOwnedBuffer_locX = kT->granData->locX_buffer;
     granData->pKTOwnedBuffer_locY = kT->granData->locY_buffer;
@@ -121,6 +120,10 @@ void DEMDynamicThread::packTransferPointers(DEMKinematicThread*& kT) {
     granData->pKTOwnedBuffer_relPosNode1 = kT->granData->relPosNode1_buffer;
     granData->pKTOwnedBuffer_relPosNode2 = kT->granData->relPosNode2_buffer;
     granData->pKTOwnedBuffer_relPosNode3 = kT->granData->relPosNode3_buffer;
+
+    // Single-number data are now not packaged in granData...
+    granData->pKTOwnedBuffer_ts = &(kT->stateParams.ts_buffer);
+    granData->pKTOwnedBuffer_maxDrift = &(kT->stateParams.maxDrift_buffer);
 }
 
 void DEMDynamicThread::changeFamily(unsigned int ID_from, unsigned int ID_to) {
@@ -1762,8 +1765,8 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_ts, &(simParams->h), sizeof(float), cudaMemcpyDeviceToDevice));
     // Note that perhapsIdealFutureDrift is non-negative, and it will be used to determine the margin size; however, if
     // scheduleHelper is instructed to have negative future drift then perhapsIdealFutureDrift no longer affects them.
-    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxDrift, &(granData->perhapsIdealFutureDrift),
-                             sizeof(unsigned int), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxDrift, perhapsIdealFutureDrift.getHostPointer(),
+                             sizeof(unsigned int), cudaMemcpyHostToDevice));
 
     // Family number is a typical changable quantity on-the-fly. If this flag is on, dT is responsible for sending this
     // info to kT.
@@ -2035,18 +2038,19 @@ inline void DEMDynamicThread::calibrateParams() {
             // If perhapsIdealFutureDrift needs to increase, then the following value much = perhapsIdealFutureDrift.
             comfortable_drift =
                 (float)comfortable_drift * solverFlags.targetDriftMultipleOfAvg + solverFlags.targetDriftMoreThanAvg;
-            if (granData->perhapsIdealFutureDrift > comfortable_drift) {
-                granData->perhapsIdealFutureDrift -= FUTURE_DRIFT_TWEAK_STEP_SIZE;
-            } else if (granData->perhapsIdealFutureDrift < comfortable_drift) {
-                granData->perhapsIdealFutureDrift += FUTURE_DRIFT_TWEAK_STEP_SIZE;
+            if (*perhapsIdealFutureDrift > comfortable_drift) {
+                *perhapsIdealFutureDrift -= FUTURE_DRIFT_TWEAK_STEP_SIZE;
+            } else if (*perhapsIdealFutureDrift < comfortable_drift) {
+                *perhapsIdealFutureDrift += FUTURE_DRIFT_TWEAK_STEP_SIZE;
             }
-            granData->perhapsIdealFutureDrift = hostClampBetween<unsigned int, unsigned int>(
-                granData->perhapsIdealFutureDrift, 0, solverFlags.upperBoundFutureDrift);
+            *perhapsIdealFutureDrift = hostClampBetween<unsigned int, unsigned int>(*perhapsIdealFutureDrift, 0,
+                                                                                    solverFlags.upperBoundFutureDrift);
 
             DEME_DEBUG_PRINTF("Comfortable future drift is %u", comfortable_drift);
-            DEME_DEBUG_PRINTF("Current future drift is %u", granData->perhapsIdealFutureDrift);
+            DEME_DEBUG_PRINTF("Current future drift is %u", *perhapsIdealFutureDrift);
         }
     }
+    // Actually, perhapsIdealFutureDrift seems to have no need to be on device... but I made it a dualStruct anyway
 }
 
 inline void DEMDynamicThread::ifProduceFreshThenUseItAndSendNewOrder() {
@@ -2167,7 +2171,7 @@ void DEMDynamicThread::workerThread() {
                 pSchedSupport->schedulingStats.nTimesDynamicHeldBack++;
                 // If dT waits, it is penalized, since waiting means double-wait, very bad.
                 if (solverFlags.autoUpdateFreq)
-                    granData->perhapsIdealFutureDrift += FUTURE_DRIFT_TWEAK_STEP_SIZE;
+                    *perhapsIdealFutureDrift += FUTURE_DRIFT_TWEAK_STEP_SIZE;
                 timers.GetTimer("Wait for kT update").stop();
             }
             // NOTE: This ShouldWait check should follow the ifProduceFreshThenUseItAndSendNewOrder call. Because we

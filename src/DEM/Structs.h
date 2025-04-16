@@ -203,10 +203,10 @@ struct kTStateParams {
 
     // float maxVel_buffer; // buffer for the current max vel sent by dT
     dualStruct<float> maxVel = dualStruct<float>(0.f);  // kT's own storage of max vel
-    // float ts_buffer;               // buffer for the current ts size sent by dT
-    // float ts;                      // kT's own storage of ts size
-    // unsigned int maxDrift_buffer;  // buffer for max dT future drift steps
-    // unsigned int maxDrift;         // kT's own storage for max future drift
+    dualStruct<float> ts_buffer;                        // buffer for the current ts size sent by dT
+    dualStruct<float> ts;                               // kT's own storage of ts size
+    dualStruct<unsigned int> maxDrift_buffer;           // buffer for max dT future drift steps
+    dualStruct<unsigned int> maxDrift;                  // kT's own storage for max future drift
 };
 
 struct dTStateParams {};
@@ -408,7 +408,7 @@ inline void DEME_DEVICE_PTR_DEALLOC(T*& ptr) {
     { migrate(vec, device, stream); }
 
 // Use (void) to silence unused warnings.
-#define assertm(exp, msg) assert(((void)msg, exp))
+// #define assertm(exp, msg) assert(((void)msg, exp))
 
 // #define OUTPUT_IF_GPU_FAILS(res) \
 //     { gpu_assert((res), __FILE__, __LINE__, false); throw std::runtime_error("GPU Assertion Failed!");}

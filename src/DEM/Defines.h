@@ -363,9 +363,6 @@ struct DEMDataDT {
     float* sphereWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
     float* analWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
     float* triWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
-
-    // dT believes this amount of future drift is ideal
-    unsigned int perhapsIdealFutureDrift = 0;
 };
 
 // A struct that holds pointers to data arrays that kT uses
@@ -384,12 +381,6 @@ struct DEMDataKT {
     float* marginSize;
 
     // kT-owned buffer pointers, for itself's usage
-
-    float ts_buffer;               // buffer for the current ts size sent by dT
-    float ts;                      // kT's own storage of ts size
-    unsigned int maxDrift_buffer;  // buffer for max dT future drift steps
-    unsigned int maxDrift;         // kT's own storage for max future drift
-
     voxelID_t* voxelID_buffer;
     subVoxelPos_t* locX_buffer;
     subVoxelPos_t* locY_buffer;
