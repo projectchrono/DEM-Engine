@@ -71,7 +71,7 @@ class DEMDynamicThread {
     double cycleDuration;
 
     // dT believes this amount of future drift is ideal
-    dualStruct<unsigned int> perhapsIdealFutureDrift = dualStruct<unsigned int>(0);
+    DualStruct<unsigned int> perhapsIdealFutureDrift = DualStruct<unsigned int>(0);
 
     // Buffer arrays for storing info from the dT side.
     // kT modifies these arrays; dT uses them only.
@@ -82,8 +82,9 @@ class DEMDynamicThread {
     // std::vector<contact_t, ManagedAllocator<contact_t>> contactType_buffer;
     // std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>> contactMapping_buffer;
 
-    // Pointers to simulation params-related arrays
-    DEMSimParams* simParams;
+    // Simulation params-related variables
+    DualStruct<DEMSimParams> simParams = DualStruct<DEMSimParams>();
+    ;
 
     // Pointers to those data arrays defined below, stored in a struct
     DEMDataDT* granData;
@@ -301,7 +302,7 @@ class DEMDynamicThread {
 
     DEMDynamicThread(WorkerReportChannel* pPager, ThreadManager* pSchedSup, GpuManager* pGpuDist)
         : pPagerToMain(pPager), pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
-        DEME_GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
+        // DEME_GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
         DEME_GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataDT), cudaMemAttachGlobal));
 
         cycleDuration = 0;
@@ -328,7 +329,7 @@ class DEMDynamicThread {
 
         deallocateEverything();
 
-        DEME_GPU_CALL(cudaFree(simParams));
+        // DEME_GPU_CALL(cudaFree(simParams));
         DEME_GPU_CALL(cudaFree(granData));
     }
 

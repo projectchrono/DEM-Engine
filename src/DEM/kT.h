@@ -67,8 +67,9 @@ class DEMKinematicThread {
     // kT should break out of its inner loop and return to a state where it awaits a `start' call at the outer loop
     bool kTShouldReset = false;
 
-    // Pointers to simulation params-related arrays
-    DEMSimParams* simParams;
+    // Simulation params-related variables
+    DualStruct<DEMSimParams> simParams = DualStruct<DEMSimParams>();
+    ;
 
     // Pointers to those data arrays defined below, stored in a struct
     DEMDataKT* granData;
@@ -199,7 +200,7 @@ class DEMKinematicThread {
 
     DEMKinematicThread(WorkerReportChannel* pPager, ThreadManager* pSchedSup, GpuManager* pGpuDist)
         : pPagerToMain(pPager), pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
-        DEME_GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
+        // DEME_GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
         DEME_GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataKT), cudaMemAttachGlobal));
 
         // Get a device/stream ID to use from the GPU Manager
@@ -231,7 +232,7 @@ class DEMKinematicThread {
 
         deallocateEverything();
 
-        DEME_GPU_CALL(cudaFree(simParams));
+        // DEME_GPU_CALL(cudaFree(simParams));
         DEME_GPU_CALL(cudaFree(granData));
     }
 

@@ -277,7 +277,10 @@ class DEMSolver {
     }
     /// @brief Get the current bin (for contact detection) size. Must be called from synchronized stance.
     /// @return Bin size.
-    float GetBinSize() { return kT->simParams->binSize; }
+    double GetBinSize() { return kT->simParams->binSize; }
+    // NOTE: No need to get binSize from the device, as binSize is only changed on the host
+    // { double binSize; CudaCopyToHost(&binSize, &(kT->simParams.getDevicePointer()->binSize)); return binSize; }
+
     /// @brief Get the current number of bins (for contact detection). Must be called from synchronized stance.
     /// @return Number of bins.
     size_t GetBinNum() { return kT->stateParams.numBins; }
@@ -1685,16 +1688,20 @@ class DEMSolver {
     /// Add boundaries to the simulation `world' based on user instructions
     void addWorldBoundingBox();
     /// Transfer cached solver preferences/instructions to dT and kT.
-    void transferSolverParams();
+    void setSolverParams();
     /// Transfer (CPU-side) cached simulation data (about sim world) to the GPU-side. It is called automatically during
     /// system initialization.
-    void transferSimParams();
+    void setSimParams();
     /// Transfer cached clump templates info etc. to GPU-side arrays
     void initializeGPUArrays();
     /// Allocate memory space for GPU-side arrays
     void allocateGPUArrays();
     /// Pack array pointers to a struct so they can be easily used as kernel arguments
     void packDataPointers();
+    /// @brief Move host-prepared simulation parameter data to device
+    void migrateSimParamsToDevice();
+    /// @brief Move host-prepared array and their respective pointers data to device
+    void migrateArrayDataToDevice();
     /// Warn users if the data types defined in Defines.h do not blend well with the user inputs (fist-round
     /// coarse-grain sanity check)
     void validateUserInputs();

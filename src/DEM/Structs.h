@@ -202,11 +202,11 @@ struct kTStateParams {
     float avgCntsPerSphere = 0.;
 
     // float maxVel_buffer; // buffer for the current max vel sent by dT
-    dualStruct<float> maxVel = dualStruct<float>(0.f);  // kT's own storage of max vel
-    dualStruct<float> ts_buffer;                        // buffer for the current ts size sent by dT
-    dualStruct<float> ts;                               // kT's own storage of ts size
-    dualStruct<unsigned int> maxDrift_buffer;           // buffer for max dT future drift steps
-    dualStruct<unsigned int> maxDrift;                  // kT's own storage for max future drift
+    DualStruct<float> maxVel = DualStruct<float>(0.f);  // kT's own storage of max vel
+    DualStruct<float> ts_buffer;                        // buffer for the current ts size sent by dT
+    DualStruct<float> ts;                               // kT's own storage of ts size
+    DualStruct<unsigned int> maxDrift_buffer;           // buffer for max dT future drift steps
+    DualStruct<unsigned int> maxDrift;                  // kT's own storage for max future drift
 };
 
 struct dTStateParams {};

@@ -1875,6 +1875,10 @@ size_t DEMSolver::ChangeClumpFamily(unsigned int fam_num,
     float3 L = host_make_float3(X.first, Y.first, Z.first);
     float3 U = host_make_float3(X.second, Y.second, Z.second);
     size_t count = 0;
+
+    // What follows is a host operation that uses simParams, so we do a sync
+    // But in fact this is not needed (just formality) as all used variables are only re-init modifiable
+    dT->simParams.syncToHost();
     for (bodyID_t ownerID = 0; ownerID < nOwnerBodies; ownerID++) {
         const ownerType_t this_type = dT->ownerTypes.at(ownerID);
         if (this_type != OWNER_T_CLUMP)
@@ -1923,9 +1927,9 @@ void DEMSolver::Initialize() {
     postResourceGen();
 
     // Transfer user-specified solver preference/instructions to workers
-    transferSolverParams();
+    setSolverParams();
     // Transfer some simulation params to implementation level
-    transferSimParams();
+    setSimParams();
 
     // Allocate and populate kT dT managed arrays
     allocateGPUArrays();
@@ -1933,6 +1937,11 @@ void DEMSolver::Initialize() {
 
     // Put sim data array pointers in place
     packDataPointers();
+
+    // Now that all params prepared, and all data pointers packed on host side, we need to migrate that imformation to
+    // the device
+    migrateSimParamsToDevice();
+    migrateArrayDataToDevice();
 
     // Compile some of the kernels
     jitifyKernels();
@@ -2063,8 +2072,11 @@ void DEMSolver::UpdateSimParams() {
     decideBinSize();
     decideCDMarginStrat();
 
-    transferSolverParams();
-    transferSimParams();
+    setSolverParams();
+    setSimParams();
+
+    // Now that all params prepared, we need to migrate that imformation to the device
+    migrateSimParamsToDevice();
 
     // Jitify max vel finder, in case the policy there changed
     m_approx_max_vel_func->Initialize(m_subs, true);
@@ -2076,8 +2088,12 @@ void DEMSolver::UpdateSimParams() {
 
 void DEMSolver::UpdateStepSize(double ts) {
     m_ts_size = ts;
-    kT->simParams->h = ts;
-    dT->simParams->h = ts;
+    // We for now store ts as float on devices...
+    float ts_f = ts;
+    CudaCopyToDevice(&(dT->simParams.getDevicePointer()->h), &ts_f);
+    CudaCopyToDevice(&(kT->simParams.getDevicePointer()->h), &ts_f);
+    // kT->simParams->h = ts;
+    // dT->simParams->h = ts;
 }
 
 void DEMSolver::UpdateClumps() {
@@ -2123,6 +2139,12 @@ void DEMSolver::UpdateClumps() {
     // `Update' method needs to know the number of existing clumps and spheres (before this addition)
     updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old, nExtObj_old, nAnalGM_old);
     packDataPointers();
+
+    // Now that all params prepared, and all data pointers packed on host side, we need to migrate that imformation to
+    // the device
+    migrateSimParamsToDevice();
+    migrateArrayDataToDevice();
+
     ReleaseFlattenedArrays();
     // Updating clumps is very critical
     dT->announceCritical();

@@ -42,7 +42,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       std::shared_ptr<jitify::Program>& sphTri_contact_kernels,
                       std::shared_ptr<jitify::Program>& history_kernels,
                       DEMDataKT* granData,
-                      DEMSimParams* simParams,
+                      DualStruct<DEMSimParams>& simParams,
                       SolverFlags& solverFlags,
                       VERBOSITY& verbosity,
                       std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& idGeometryA,
@@ -92,7 +92,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         bin_sphere_kernels->kernel("getNumberOfBinsEachSphereTouches")
             .instantiate()
             .configure(dim3(blocks_needed_for_bodies), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
-            .launch(simParams, granData, numBinsSphereTouches, numAnalGeoSphereTouches);
+            .launch(&simParams, granData, numBinsSphereTouches, numAnalGeoSphereTouches);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 
         // 2nd step: prefix scan sphere--bin touching pairs
@@ -134,8 +134,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         bin_sphere_kernels->kernel("populateBinSphereTouchingPairs")
             .instantiate()
             .configure(dim3(blocks_needed_for_bodies), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
-            .launch(simParams, granData, numBinsSphereTouchesScan, numAnalGeoSphereTouchesScan, binIDsEachSphereTouches,
-                    sphereIDsEachBinTouches, granData->idGeometryA, granData->idGeometryB, granData->contactType);
+            .launch(&simParams, granData, numBinsSphereTouchesScan, numAnalGeoSphereTouchesScan,
+                    binIDsEachSphereTouches, sphereIDsEachBinTouches, granData->idGeometryA, granData->idGeometryB,
+                    granData->contactType);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
         // std::cout << "Unsorted bin IDs: ";
         // displayArray<binID_t>(binIDsEachSphereTouches, *pNumBinSphereTouchPairs);
@@ -229,7 +230,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             bin_triangle_kernels->kernel("makeTriangleSandwich")
                 .instantiate()
                 .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
-                .launch(simParams, granData, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
+                .launch(&simParams, granData, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
                         sandwichBNode2, sandwichBNode3);
             DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 
@@ -242,7 +243,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 bin_triangle_kernels->kernel("getNumberOfBinsEachTriangleTouches")
                     .instantiate()
                     .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
-                    .launch(simParams, granData, numBinsTriTouches, sandwichANode1, sandwichANode2, sandwichANode3,
+                    .launch(&simParams, granData, numBinsTriTouches, sandwichANode1, sandwichANode2, sandwichANode3,
                             sandwichBNode1, sandwichBNode2, sandwichBNode3);
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
@@ -273,7 +274,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 bin_triangle_kernels->kernel("populateBinTriangleTouchingPairs")
                     .instantiate()
                     .configure(dim3(blocks_needed_for_tri), dim3(DEME_NUM_TRIANGLE_PER_BLOCK), 0, this_stream)
-                    .launch(simParams, granData, numBinsTriTouchesScan, binIDsEachTriTouches, triIDsEachBinTouches,
+                    .launch(&simParams, granData, numBinsTriTouchesScan, binIDsEachTriTouches, triIDsEachBinTouches,
                             sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1, sandwichBNode2,
                             sandwichBNode3);
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
@@ -379,7 +380,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             sphere_contact_kernels->kernel("getNumberOfSphereContactsEachBin")
                 .instantiate()
                 .configure(dim3(blocks_needed_for_bins_sph), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
-                .launch(simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
+                .launch(&simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
                         sphereIDsLookUpTable, numSphContactsInEachBin, *pNumActiveBins);
             DEME_GPU_CALL_WATCH_BETA(cudaStreamSynchronize(this_stream));
 
@@ -387,7 +388,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 sphTri_contact_kernels->kernel("getNumberOfSphTriContactsEachBin")
                     .instantiate()
                     .configure(dim3(blocks_needed_for_bins_tri), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
-                    .launch(simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
+                    .launch(&simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
                             sphereIDsLookUpTable, mapTriActBinToSphActBin, triIDsEachBinTouches_sorted,
                             activeBinIDsForTri, numTrianglesBinTouches, triIDsLookUpTable, numTriSphContactsInEachBin,
                             sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1, sandwichBNode2,
@@ -457,7 +458,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             sphere_contact_kernels->kernel("populateSphSphContactPairsEachBin")
                 .instantiate()
                 .configure(dim3(blocks_needed_for_bins_sph), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
-                .launch(simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
+                .launch(&simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
                         sphereIDsLookUpTable, sphSphContactReportOffsets, idSphA, idSphB, dType, *pNumActiveBins);
             DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 
@@ -469,7 +470,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 sphTri_contact_kernels->kernel("populateTriSphContactsEachBin")
                     .instantiate()
                     .configure(dim3(blocks_needed_for_bins_tri), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
-                    .launch(simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
+                    .launch(&simParams, granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
                             sphereIDsLookUpTable, mapTriActBinToSphActBin, triIDsEachBinTouches_sorted,
                             activeBinIDsForTri, numTrianglesBinTouches, triIDsLookUpTable, triSphContactReportOffsets,
                             idSphA, idTriB, dType, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
@@ -759,7 +760,7 @@ void overwritePrevContactArrays(DEMDataKT* kT_data,
                                 std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& previous_idGeometryA,
                                 std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& previous_idGeometryB,
                                 std::vector<contact_t, ManagedAllocator<contact_t>>& previous_contactType,
-                                DEMSimParams* simParams,
+                                DualStruct<DEMSimParams>& simParams,
                                 DEMSolverStateData& scratchPad,
                                 cudaStream_t& this_stream,
                                 size_t nContacts) {

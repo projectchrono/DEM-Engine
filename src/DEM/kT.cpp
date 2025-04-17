@@ -100,6 +100,8 @@ void DEMKinematicThread::calibrateParams() {
         }
         DEME_DEBUG_PRINTF("kT runtime per step: %.7gs", CDAccumTimer.GetPrevTime());
     }
+    // binSize is now calculated, we need to migrate that to device
+    CudaCopyToDevice(&(simParams.getDevicePointer()->binSize), &(simParams->binSize));
 }
 
 inline void DEMKinematicThread::unpackMyBuffer() {
@@ -161,14 +163,14 @@ inline void DEMKinematicThread::unpackMyBuffer() {
         misc_kernels->kernel("computeMarginFromAbsv")
             .instantiate()
             .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(simParams, granData, &(stateParams.ts), &(stateParams.maxDrift), (size_t)simParams->nOwnerBodies);
+            .launch(&simParams, granData, &(stateParams.ts), &(stateParams.maxDrift), (size_t)simParams->nOwnerBodies);
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     } else {  // If isExpandFactorFixed, then just fill in that constant array.
         size_t blocks_needed = (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
         misc_kernels->kernel("fillMarginValues")
             .instantiate()
             .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(simParams, granData, (size_t)simParams->nOwnerBodies);
+            .launch(&simParams, granData, (size_t)simParams->nOwnerBodies);
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 

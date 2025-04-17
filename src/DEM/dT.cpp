@@ -1014,6 +1014,8 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
 void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
     chpf::Writer pw;
     // pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, mass);
+
+    // simParams host version should not be different from device version, so no need to update
     std::vector<float> posX(simParams->nSpheresGM);
     std::vector<float> posY(simParams->nSpheresGM);
     std::vector<float> posZ(simParams->nSpheresGM);
@@ -1132,6 +1134,7 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
 
     outstrstream << "\n";
 
+    // simParams host version should not be different from device version, so no need to update
     for (size_t i = 0; i < simParams->nSpheresGM; i++) {
         auto this_owner = ownerClumpBody.at(i);
         family_t this_family = familyID.at(this_owner);
@@ -1237,6 +1240,8 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
 void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy) const {
     //// TODO: Note using accuracy
     chpf::Writer pw;
+
+    // simParams host version should not be different from device version, so no need to update
     std::vector<float> posX(simParams->nOwnerBodies);
     std::vector<float> posY(simParams->nOwnerBodies);
     std::vector<float> posZ(simParams->nOwnerBodies);
@@ -1351,6 +1356,7 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
     }
     outstrstream << "\n";
 
+    // simParams host version should not be different from device version, so no need to update
     for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
         // i is this owner's number. And if it is not a clump, we can move on.
         if (ownerTypes.at(i) != OWNER_T_CLUMP)
@@ -1762,7 +1768,7 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
                              cudaMemcpyDeviceToDevice));
 
     // Send simulation metrics for kT's reference.
-    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_ts, &(simParams->h), sizeof(float), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_ts, &((&simParams)->h), sizeof(float), cudaMemcpyDeviceToDevice));
     // Note that perhapsIdealFutureDrift is non-negative, and it will be used to determine the margin size; however, if
     // scheduleHelper is instructed to have negative future drift then perhapsIdealFutureDrift no longer affects them.
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxDrift, perhapsIdealFutureDrift.getHostPointer(),
@@ -1901,7 +1907,7 @@ inline void DEMDynamicThread::calculateForces() {
         prep_force_kernels->kernel("prepareAccArrays")
             .instantiate()
             .configure(dim3(blocks_needed_for_acc_prep), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(simParams, granData);
+            .launch(&simParams, granData);
 
         // prepareForceArrays needs to clear contact force arrays, only if the user asks us to record contact forces.
         // So...
@@ -1909,26 +1915,11 @@ inline void DEMDynamicThread::calculateForces() {
             prep_force_kernels->kernel("prepareForceArrays")
                 .instantiate()
                 .configure(dim3(blocks_needed_for_force_prep), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-                .launch(simParams, granData, nContactPairs);
+                .launch(&simParams, granData, nContactPairs);
         }
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
     timers.GetTimer("Clear force array").stop();
-
-    //// TODO: is there a better way??? Like memset?
-    // DEME_GPU_CALL(cudaMemset(granData->contactForces, zeros, nContactPairs * sizeof(float3)));
-    // DEME_GPU_CALL(cudaMemset(granData->alphaX, 0, simParams->nOwnerBodies * sizeof(float)));
-    // DEME_GPU_CALL(cudaMemset(granData->alphaY, 0, simParams->nOwnerBodies * sizeof(float)));
-    // DEME_GPU_CALL(cudaMemset(granData->alphaZ, 0, simParams->nOwnerBodies * sizeof(float)));
-    // DEME_GPU_CALL(cudaMemset(granData->aX,
-    //                     (double)simParams->h * (double)simParams->h * (double)simParams->Gx / (double)simParams->l,
-    //                     simParams->nOwnerBodies * sizeof(float)));
-    // DEME_GPU_CALL(cudaMemset(granData->aY,
-    //                     (double)simParams->h * (double)simParams->h * (double)simParams->Gy / (double)simParams->l,
-    //                     simParams->nOwnerBodies * sizeof(float)));
-    // DEME_GPU_CALL(cudaMemset(granData->aZ,
-    //                     (double)simParams->h * (double)simParams->h * (double)simParams->Gz / (double)simParams->l,
-    //                     simParams->nOwnerBodies * sizeof(float)));
 
     size_t blocks_needed_for_contacts =
         (nContactPairs + DT_FORCE_CALC_NTHREADS_PER_BLOCK - 1) / DT_FORCE_CALC_NTHREADS_PER_BLOCK;
@@ -1940,7 +1931,7 @@ inline void DEMDynamicThread::calculateForces() {
         cal_force_kernels->kernel("calculateContactForces")
             .instantiate()
             .configure(dim3(blocks_needed_for_contacts), dim3(DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(simParams, granData, nContactPairs);
+            .launch(&simParams, granData, nContactPairs);
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         // displayFloat3(granData->contactForces, nContactPairs);
         // displayArray<contact_t>(granData->contactType, nContactPairs);
@@ -1977,7 +1968,7 @@ inline void DEMDynamicThread::integrateOwnerMotions() {
     integrator_kernels->kernel("integrateOwners")
         .instantiate()
         .configure(dim3(blocks_needed_for_clumps), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(simParams, granData);
+        .launch(&simParams, granData);
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
@@ -1988,7 +1979,7 @@ inline void DEMDynamicThread::routineChecks() {
         mod_kernels->kernel("applyFamilyChanges")
             .instantiate()
             .configure(dim3(blocks_needed_for_clumps), dim3(DEME_NUM_MODERATORS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(simParams, granData, simParams->nOwnerBodies);
+            .launch(&simParams, granData, simParams->nOwnerBodies);
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 }
@@ -2050,7 +2041,7 @@ inline void DEMDynamicThread::calibrateParams() {
             DEME_DEBUG_PRINTF("Current future drift is %u", *perhapsIdealFutureDrift);
         }
     }
-    // Actually, perhapsIdealFutureDrift seems to have no need to be on device... but I made it a dualStruct anyway
+    // Actually, perhapsIdealFutureDrift seems to have no need to be on device... but I made it a DualStruct anyway
 }
 
 inline void DEMDynamicThread::ifProduceFreshThenUseItAndSendNewOrder() {
@@ -2211,6 +2202,8 @@ void DEMDynamicThread::workerThread() {
 
             //// TODO: make changes for variable time step size cases
             simParams->timeElapsed += (double)simParams->h;
+            // timeElapsed needs to be updated to the device each time step
+            CudaCopyToDevice(&(simParams.getDevicePointer()->timeElapsed), &(simParams->timeElapsed));
         }
 
         // Unless the user did something critical, must we wait for a kT update before next step
@@ -2330,7 +2323,7 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     inspection_kernel->kernel(kernel_name)
         .instantiate()
         .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData, simParams, resArr, boolArrExclude, n, owner_type);
+        .launch(granData, &simParams, resArr, boolArrExclude, n, owner_type);
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     if (all_domain) {
@@ -2408,6 +2401,7 @@ double DEMDynamicThread::getSimTime() const {
 
 void DEMDynamicThread::setSimTime(double time) {
     simParams->timeElapsed = time;
+    CudaCopyToDevice(&(simParams.getDevicePointer()->timeElapsed), &(simParams->timeElapsed));
 }
 
 float DEMDynamicThread::getUpdateFreq() const {

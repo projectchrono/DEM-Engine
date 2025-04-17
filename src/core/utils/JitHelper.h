@@ -20,16 +20,28 @@
     #undef strtok_r
 #endif
 
+// A to-device memcpy wrapper
+template <typename T>
+void CudaCopyToDevice(T* pD, T* pH) {
+    DEME_GPU_CALL(cudaMemcpy(pD, pH, sizeof(T), cudaMemcpyHostToDevice));
+}
+
+// A to-host memcpy wrapper
+template <typename T>
+void CudaCopyToHost(T* pH, T* pD) {
+    DEME_GPU_CALL(cudaMemcpy(pH, pD, sizeof(T), cudaMemcpyDeviceToHost));
+}
+
 // Used for wrapping data structures so they become usable on GPU
 template <typename T>
-class dualStruct {
+class DualStruct {
   private:
     T* host_data;           // Pointer to host memory (pinned)
     T* device_data;         // Pointer to device memory
     bool modified_on_host;  // Flag to track if host data has been modified
   public:
     // Constructor: Initialize and allocate memory for both host and device
-    dualStruct() : modified_on_host(false) {
+    DualStruct() : modified_on_host(false) {
         DEME_GPU_CALL(cudaMallocHost((void**)&host_data, sizeof(T)));
         DEME_GPU_CALL(cudaMalloc((void**)&device_data, sizeof(T)));
 
@@ -37,7 +49,7 @@ class dualStruct {
     }
 
     // Constructor: Initialize and allocate memory for both host and device with init values
-    dualStruct(T init_val) : modified_on_host(false) {
+    DualStruct(T init_val) : modified_on_host(false) {
         DEME_GPU_CALL(cudaMallocHost((void**)&host_data, sizeof(T)));
         DEME_GPU_CALL(cudaMalloc((void**)&device_data, sizeof(T)));
 
@@ -47,7 +59,7 @@ class dualStruct {
     }
 
     // Destructor: Free memory
-    ~dualStruct() {
+    ~DualStruct() {
         DEME_GPU_CALL(cudaFreeHost(host_data));  // Free pinned memory
         DEME_GPU_CALL(cudaFree(device_data));    // Free device memory
     }
@@ -70,6 +82,9 @@ class dualStruct {
 
     // Accessor for host data (using the arrow operator)
     T* operator->() { return host_data; }
+
+    // Accessor for host data (using the arrow operator)
+    T* operator->() const { return host_data; }
 
     // Dereference operator for simple types (like float) to access the value directly
     T& operator*() {

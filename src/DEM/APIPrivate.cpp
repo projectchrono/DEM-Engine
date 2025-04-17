@@ -917,7 +917,7 @@ void DEMSolver::addWorldBoundingBox() {
 }
 
 // This is generally used to pass individual instructions on how the solver should behave
-void DEMSolver::transferSolverParams() {
+void DEMSolver::setSolverParams() {
     // Verbosity
     kT->verbosity = verbosity;
     dT->verbosity = verbosity;
@@ -987,14 +987,15 @@ void DEMSolver::transferSolverParams() {
     dT->solverFlags.should_sort_pairs = should_sort_contacts;
 
     // Error out policies
+    kT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
+    dT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
+    // simParams-stored variables need to be sync-ed to device
     kT->simParams->errOutBinSphNum = threshold_too_many_spheres_in_bin;
     dT->simParams->errOutBinSphNum = threshold_too_many_spheres_in_bin;
     kT->simParams->errOutBinTriNum = threshold_too_many_tri_in_bin;
     dT->simParams->errOutBinTriNum = threshold_too_many_tri_in_bin;
     kT->simParams->errOutVel = threshold_error_out_vel;
     dT->simParams->errOutVel = threshold_error_out_vel;
-    kT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
-    dT->solverFlags.errOutAvgSphCnts = threshold_error_out_num_cnts;
 
     // Whether the solver should auto-update bin sizes
     kT->solverFlags.autoBinSize = auto_adjust_bin_size;
@@ -1020,7 +1021,7 @@ void DEMSolver::transferSolverParams() {
     dT->accumStepUpdater.SetCacheSize(max_drift_gauge_history_size);
 }
 
-void DEMSolver::transferSimParams() {
+void DEMSolver::setSimParams() {
     if ((!use_user_defined_expand_factor) && m_approx_max_vel < 1e-4f && m_suggestedFutureDrift > 0) {
         DEME_WARNING(
             "You instructed that the physics can stretch %u time steps into the future, and explicitly specified the "
@@ -1185,6 +1186,13 @@ void DEMSolver::packDataPointers() {
         m_owner_mesh_map[mmesh->owner] = mmesh->cache_offset;
     }
 }
+
+void DEMSolver::migrateSimParamsToDevice() {
+    dT->simParams.syncToDevice();
+    kT->simParams.syncToDevice();
+}
+
+void DEMSolver::migrateArrayDataToDevice() {}
 
 void DEMSolver::validateUserInputs() {
     // Then some checks...
