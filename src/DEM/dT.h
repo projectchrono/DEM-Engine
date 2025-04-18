@@ -60,6 +60,9 @@ class DEMDynamicThread {
     // it is allocated)
     size_t buffer_size = 0;
 
+    // Array-used memory size in bytes
+    size_t m_approx_bytes_used = 0;
+
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
 
@@ -95,7 +98,6 @@ class DEMDynamicThread {
     // Those are the smaller ones, the unique, template ones
     // The mass values
     std::vector<float, ManagedAllocator<float>> massOwnerBody;
-    DualArray<float> testarr;
 
     // The components of MOI values
     std::vector<float, ManagedAllocator<float>> mmiXX;
@@ -240,8 +242,6 @@ class DEMDynamicThread {
     // std::vector<float, ManagedAllocator<float>> contactDuration;
     // The velocity of the contact points in the global frame: can be useful in determining the time step size
     // std::vector<float3, ManagedAllocator<float3>> contactPointVel;
-
-    size_t m_approx_bytes_used = 0;
 
     // dT's total steps run (since last time the collaboration stats cache is cleared)
     uint64_t nTotalSteps = 0;

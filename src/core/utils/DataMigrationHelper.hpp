@@ -127,17 +127,19 @@ class DualStruct {
     T* getHostPointer() { return host_data; }
 };
 
-// CPU--GPU unified array
+// CPU--GPU unified array, leveraging pinned memory
 template <typename T>
 class DualArray {
   public:
     using PinnedVector = std::vector<T, PinnedAllocator<T>>;
 
-    explicit DualArray(bool use_pinned_host = true) : m_use_pinned_host(use_pinned_host) {}
+    explicit DualArray(size_t* external_counter = nullptr) : m_mem_counter(external_counter) {}
 
-    explicit DualArray(size_t n, bool use_pinned_host = true) : m_use_pinned_host(use_pinned_host) { resize(n); }
+    DualArray(size_t n, size_t* external_counter = nullptr) : m_mem_counter(external_counter) { resize(n); }
 
-    DualArray(const std::vector<T>& vec) : m_use_pinned_host(true) { attachHostVector(&vec, /*deep_copy=*/true); }
+    DualArray(const std::vector<T>& vec, size_t* external_counter = nullptr) : m_mem_counter(external_counter) {
+        attachHostVector(&vec, /*deep_copy=*/true);
+    }
 
     ~DualArray() {
         freeDevice();
@@ -145,30 +147,35 @@ class DualArray {
     }
 
     void resize(size_t n) {
-        assert(m_host_vec_ptr == internalHostPtr() && "resize() requires internal host ownership");
+        assert(m_host_vec_ptr == m_pinned_vec.get() && "resize() requires internal host ownership");
         resizeHost(n);
         resizeDevice(n);
     }
 
     void resizeHost(size_t n) {
-        if (!m_host_vec_ptr)
-            return;
+        ensureHostVector();  // allocates pinned vec if null
+        size_t old_bytes = m_host_vec_ptr->size() * sizeof(T);
         m_host_vec_ptr->resize(n);
+        size_t new_bytes = m_host_vec_ptr->size() * sizeof(T);
+        updateMemCounter(static_cast<ssize_t>(new_bytes) - static_cast<ssize_t>(old_bytes));
     }
 
-    // m_device_capacity is allocated memory, not array usable data range
     void resizeDevice(size_t n, bool allow_shrink = false) {
+        size_t old_bytes = m_device_capacity * sizeof(T);
         if (!allow_shrink && m_device_capacity >= n)
             return;
         if (m_device_ptr)
-            cudaFree(m_device_ptr);
-        DEME_GPU_CALL(cudaMalloc(&m_device_ptr, n * sizeof(T)));
+            DEME_GPU_CALL(cudaFree(m_device_ptr));
+        DEME_GPU_CALL(cudaMalloc((void**)&m_device_ptr, n * sizeof(T)));
         m_device_capacity = n;
         updateBoundDevicePointer();
+        updateMemCounter(static_cast<ssize_t>(n * sizeof(T)) - static_cast<ssize_t>(old_bytes));
     }
 
     void freeHost() {
-        m_std_vec.reset();
+        if (m_host_vec_ptr) {
+            updateMemCounter(-(ssize_t)(m_host_vec_ptr->size() * sizeof(T)));
+        }
         m_pinned_vec.reset();
         m_host_vec_ptr = nullptr;
         m_host_dirty = false;
@@ -176,6 +183,7 @@ class DualArray {
 
     void freeDevice() {
         if (m_device_ptr) {
+            updateMemCounter(-(ssize_t)(m_device_capacity * sizeof(T)));
             DEME_GPU_CALL(cudaFree(m_device_ptr));
             m_device_ptr = nullptr;
         }
@@ -186,9 +194,8 @@ class DualArray {
     void copyToDevice() {
         assert(m_host_vec_ptr);
         size_t count = m_host_vec_ptr->size();
-        if (count > m_device_capacity) {
+        if (count > m_device_capacity)
             resizeDevice(count);
-        }
         DEME_GPU_CALL(cudaMemcpy(m_device_ptr, m_host_vec_ptr->data(), count * sizeof(T), cudaMemcpyHostToDevice));
         m_host_dirty = false;
     }
@@ -200,18 +207,15 @@ class DualArray {
     }
 
     void copyToDeviceAsync(cudaStream_t& stream) {
-        assert(m_use_pinned_host && "Async copyToDeviceAsync requires pinned host memory.");
         assert(m_host_vec_ptr && m_device_ptr);
         size_t count = m_host_vec_ptr->size();
-        if (count > m_device_capacity) {
+        if (count > m_device_capacity)
             resizeDevice(count);
-        }
         cudaMemcpyAsync(m_device_ptr, m_host_vec_ptr->data(), count * sizeof(T), cudaMemcpyHostToDevice, stream);
         m_host_dirty = false;
     }
 
     void copyToHostAsync(cudaStream_t& stream) {
-        assert(m_use_pinned_host && "Async copyToHostAsync requires pinned host memory.");
         assert(m_host_vec_ptr && m_device_ptr);
         size_t count = m_host_vec_ptr->size();
         cudaMemcpyAsync(m_host_vec_ptr->data(), m_device_ptr, count * sizeof(T), cudaMemcpyDeviceToHost, stream);
@@ -228,7 +232,7 @@ class DualArray {
 
     T* device() { return m_device_ptr; }
 
-    std::vector<T>& getHostVector() { return *m_host_vec_ptr; }
+    PinnedVector& getHostVector() { return *m_host_vec_ptr; }
 
     void bindDevicePointer(T** external_ptr_to_ptr) {
         m_bound_device_ptr = external_ptr_to_ptr;
@@ -237,27 +241,29 @@ class DualArray {
 
     void unbindDevicePointer() { m_bound_device_ptr = nullptr; }
 
+    void setMemoryCounter(size_t* counter) { m_mem_counter = counter; }
+    // You can use nullptr to unbind
+
     void attachHostVector(const std::vector<T>* external_vec, bool deep_copy = true) {
+        freeHost();  // discard internal memory and update memory tracker
         if (deep_copy) {
-            m_std_vec = std::make_unique<std::vector<T>>(*external_vec);
-            m_host_vec_ptr = m_std_vec.get();
+            m_pinned_vec = std::make_unique<PinnedVector>(external_vec->begin(), external_vec->end());
+            m_host_vec_ptr = m_pinned_vec.get();
+            updateMemCounter(static_cast<ssize_t>(m_host_vec_ptr->size() * sizeof(T)));
         } else {
-            m_std_vec.reset();
-            m_host_vec_ptr = const_cast<std::vector<T>*>(external_vec);
+            m_host_vec_ptr = const_cast<PinnedVector*>(reinterpret_cast<const PinnedVector*>(external_vec));
         }
         m_host_dirty = true;
     }
 
     T& operator[](size_t i) { return (*m_host_vec_ptr)[i]; }
-
     const T& operator[](size_t i) const { return (*m_host_vec_ptr)[i]; }
 
   private:
-    bool m_use_pinned_host = false;
-
-    std::unique_ptr<std::vector<T>> m_std_vec = nullptr;
     std::unique_ptr<PinnedVector> m_pinned_vec = nullptr;
-    std::vector<T>* m_host_vec_ptr = nullptr;
+    PinnedVector* m_host_vec_ptr = nullptr;
+
+    size_t* m_mem_counter = nullptr;
 
     T* m_device_ptr = nullptr;
     size_t m_device_capacity = 0;
@@ -266,28 +272,21 @@ class DualArray {
 
     bool m_host_dirty = false;
 
-    void updateBoundDevicePointer() {
-        if (m_bound_device_ptr) {
-            *m_bound_device_ptr = m_device_ptr;
-        }
-    }
-
-    std::vector<T>* internalHostPtr() {
-        return m_use_pinned_host ? static_cast<std::vector<T>*>(m_pinned_vec.get())
-                                 : static_cast<std::vector<T>*>(m_std_vec.get());
-    }
-
-    // Optional method for cases where syncing to device without resizing (but we don't do that)
     void ensureHostVector(size_t n = 0) {
         if (!m_host_vec_ptr) {
-            if (m_use_pinned_host) {
-                m_pinned_vec = std::make_unique<PinnedVector>(n);
-                m_host_vec_ptr = m_pinned_vec.get();
-            } else {
-                m_std_vec = std::make_unique<std::vector<T>>(n);
-                m_host_vec_ptr = m_std_vec.get();
-            }
+            m_pinned_vec = std::make_unique<PinnedVector>(n);
+            m_host_vec_ptr = m_pinned_vec.get();
         }
+    }
+
+    void updateBoundDevicePointer() {
+        if (m_bound_device_ptr)
+            *m_bound_device_ptr = m_device_ptr;
+    }
+
+    void updateMemCounter(ssize_t delta) {
+        if (m_mem_counter)
+            *m_mem_counter += delta;
     }
 };
 
