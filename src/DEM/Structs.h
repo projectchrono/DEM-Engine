@@ -7,11 +7,11 @@
 #define DEME_HOST_STRUCTS
 
 #include <DEM/Defines.h>
-#include <core/utils/ManagedAllocator.hpp>
+#include <core/utils/CudaAllocator.hpp>
 #include <core/utils/ManagedMemory.hpp>
 #include <core/utils/csv.hpp>
 #include <core/utils/GpuError.h>
-#include <core/utils/JitHelper.h>
+#include <core/utils/DataMigrationHelper.hpp>
 #include <core/utils/Timer.hpp>
 #include <core/utils/RuntimeData.h>
 
@@ -98,7 +98,7 @@ const std::unordered_map<std::string, bool> force_kernel_ingredient_stats = {
     {"AOwnerMOI", false}, {"BOwnerMOI", false}, {"AGeo", false},        {"BGeo", false}};
 
 // Structs defined here will be used by some host classes in DEM.
-// NOTE: Data structs here need to be those complex ones (such as needing to include ManagedAllocator.hpp), which may
+// NOTE: Data structs here need to be those complex ones (such as needing to include CudaAllocator.hpp), which may
 // not be jitifiable.
 
 /// <summary>
@@ -379,39 +379,6 @@ enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
         DEME_DEBUG_PRINTF("Resizing vector %s, old size %zu, new size %zu, byte delta %s", name, old_size, new_size, \
                           pretty_format_bytes(byte_delta).c_str());                                                  \
     }
-
-//// TODO: this is currently not tracked...
-// ptr being a reference to a pointer is crucial
-template <typename T>
-inline void DEME_DEVICE_PTR_ALLOC(T*& ptr, size_t size) {
-    cudaPointerAttributes attrib;
-    DEME_GPU_CALL(cudaPointerGetAttributes(&attrib, ptr));
-
-    if (attrib.type != cudaMemoryType::cudaMemoryTypeUnregistered)
-        DEME_GPU_CALL(cudaFree(ptr));
-    DEME_GPU_CALL(cudaMalloc((void**)&ptr, size * sizeof(T)));
-}
-
-template <typename T>
-inline void DEME_DEVICE_PTR_DEALLOC(T*& ptr) {
-    cudaPointerAttributes attrib;
-    DEME_GPU_CALL(cudaPointerGetAttributes(&attrib, ptr));
-
-    if (attrib.type != cudaMemoryType::cudaMemoryTypeUnregistered)
-        DEME_GPU_CALL(cudaFree(ptr));
-}
-
-// Managed advise doesn't seem to do anything...
-#define DEME_ADVISE_DEVICE(vec, device) \
-    { advise(vec, ManagedAdvice::PREFERRED_LOC, device); }
-#define DEME_MIGRATE_TO_DEVICE(vec, device, stream) \
-    { migrate(vec, device, stream); }
-
-// Use (void) to silence unused warnings.
-// #define assertm(exp, msg) assert(((void)msg, exp))
-
-// #define OUTPUT_IF_GPU_FAILS(res) \
-//     { gpu_assert((res), __FILE__, __LINE__, false); throw std::runtime_error("GPU Assertion Failed!");}
 
 // =============================================================================
 // NOW SOME HOST-SIDE SIMPLE STRUCTS USED BY THE DEM MODULE

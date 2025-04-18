@@ -13,9 +13,10 @@
 // #include <set>
 
 #include <core/ApiVersion.h>
-#include <core/utils/ManagedAllocator.hpp>
+#include <core/utils/CudaAllocator.hpp>
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
+#include <core/utils/DataMigrationHelper.hpp>
 #include <nvmath/helper_math.cuh>
 #include <core/utils/GpuError.h>
 #include <core/utils/Timer.hpp>
@@ -23,8 +24,6 @@
 #include <DEM/BdrsAndObjs.h>
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
-
-// #include <core/utils/JitHelper.h>
 
 // Forward declare jitify::Program to avoid downstream dependency
 namespace jitify {
@@ -69,7 +68,6 @@ class DEMKinematicThread {
 
     // Simulation params-related variables
     DualStruct<DEMSimParams> simParams = DualStruct<DEMSimParams>();
-    ;
 
     // Pointers to those data arrays defined below, stored in a struct
     DEMDataKT* granData;

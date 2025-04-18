@@ -385,9 +385,9 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     // The following several arrays will have variable sizes, so here we only used an estimate.
     // It is cudaMalloc-ed memory, not managed, because we want explicit locality control of buffers
     buffer_size = DEME_MAX(buffer_size, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
-    DEME_DEVICE_PTR_ALLOC(granData->idGeometryA_buffer, buffer_size);
-    DEME_DEVICE_PTR_ALLOC(granData->idGeometryB_buffer, buffer_size);
-    DEME_DEVICE_PTR_ALLOC(granData->contactType_buffer, buffer_size);
+    DevicePtrAllocAttribBased(granData->idGeometryA_buffer, buffer_size);
+    DevicePtrAllocAttribBased(granData->idGeometryB_buffer, buffer_size);
+    DevicePtrAllocAttribBased(granData->contactType_buffer, buffer_size);
     // DEME_TRACKED_RESIZE_DEBUGPRINT(idGeometryA_buffer, nSpheresGM * DEME_INIT_CNT_MULTIPLIER, "idGeometryA_buffer",
     // 0); DEME_TRACKED_RESIZE_DEBUGPRINT(idGeometryB_buffer, nSpheresGM * DEME_INIT_CNT_MULTIPLIER,
     // "idGeometryB_buffer", 0); DEME_TRACKED_RESIZE_DEBUGPRINT(contactType_buffer, nSpheresGM *
@@ -399,7 +399,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
         // DEME_TRACKED_RESIZE_DEBUGPRINT(contactMapping_buffer, nSpheresGM * DEME_INIT_CNT_MULTIPLIER,
         //                         "contactMapping_buffer", NULL_MAPPING_PARTNER);
         // DEME_ADVISE_DEVICE(contactMapping_buffer, streamInfo.device);
-        DEME_DEVICE_PTR_ALLOC(granData->contactMapping_buffer, buffer_size);
+        DevicePtrAllocAttribBased(granData->contactMapping_buffer, buffer_size);
     }
     */
 }

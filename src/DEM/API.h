@@ -14,7 +14,7 @@
 #include <core/ApiVersion.h>
 #include <DEM/kT.h>
 #include <DEM/dT.h>
-#include <core/utils/ManagedAllocator.hpp>
+#include <core/utils/CudaAllocator.hpp>
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
 #include <core/utils/DEMEPaths.h>

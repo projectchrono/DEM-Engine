@@ -48,7 +48,7 @@ endif()
 
 set(core_headers
 	${CMAKE_BINARY_DIR}/src/core/ApiVersion.h
-	${CMAKE_CURRENT_SOURCE_DIR}/utils/ManagedAllocator.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/CudaAllocator.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ManagedMemory.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/JitHelper.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ThreadManager.h
@@ -57,6 +57,7 @@ set(core_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/WavefrontMeshLoader.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/csv.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/Timer.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/DataMigrationHelper.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/DEMEPaths.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/RuntimeData.h
 )

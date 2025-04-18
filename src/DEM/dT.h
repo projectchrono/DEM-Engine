@@ -13,9 +13,10 @@
 #include <set>
 
 #include <core/ApiVersion.h>
-#include <core/utils/ManagedAllocator.hpp>
+#include <core/utils/CudaAllocator.hpp>
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
+#include <core/utils/DataMigrationHelper.hpp>
 #include <nvmath/helper_math.cuh>
 #include <core/utils/GpuError.h>
 
@@ -23,8 +24,6 @@
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
 #include <DEM/AuxClasses.h>
-
-// #include <core/utils/JitHelper.h>
 
 // Forward declare jitify::Program to avoid downstream dependency
 namespace jitify {
@@ -84,7 +83,6 @@ class DEMDynamicThread {
 
     // Simulation params-related variables
     DualStruct<DEMSimParams> simParams = DualStruct<DEMSimParams>();
-    ;
 
     // Pointers to those data arrays defined below, stored in a struct
     DEMDataDT* granData;
@@ -97,6 +95,7 @@ class DEMDynamicThread {
     // Those are the smaller ones, the unique, template ones
     // The mass values
     std::vector<float, ManagedAllocator<float>> massOwnerBody;
+    DualArray<float> testarr;
 
     // The components of MOI values
     std::vector<float, ManagedAllocator<float>> mmiXX;

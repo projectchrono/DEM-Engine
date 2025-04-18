@@ -30,9 +30,9 @@ inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
     // These buffers are on dT
     DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
     dT->buffer_size = nContactPairs;
-    DEME_DEVICE_PTR_ALLOC(dT->granData->idGeometryA_buffer, nContactPairs);
-    DEME_DEVICE_PTR_ALLOC(dT->granData->idGeometryB_buffer, nContactPairs);
-    DEME_DEVICE_PTR_ALLOC(dT->granData->contactType_buffer, nContactPairs);
+    DevicePtrAllocAttribBased(dT->granData->idGeometryA_buffer, nContactPairs);
+    DevicePtrAllocAttribBased(dT->granData->idGeometryB_buffer, nContactPairs);
+    DevicePtrAllocAttribBased(dT->granData->contactType_buffer, nContactPairs);
     granData->pDTOwnedBuffer_idGeometryA = dT->granData->idGeometryA_buffer;
     granData->pDTOwnedBuffer_idGeometryB = dT->granData->idGeometryB_buffer;
     granData->pDTOwnedBuffer_contactType = dT->granData->contactType_buffer;
@@ -40,7 +40,7 @@ inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
     if (!solverFlags.isHistoryless) {
         // dT->contactMapping_buffer.resize(nContactPairs);
         // DEME_ADVISE_DEVICE(dT->contactMapping_buffer, dT->streamInfo.device);
-        DEME_DEVICE_PTR_ALLOC(dT->granData->contactMapping_buffer, nContactPairs);
+        DevicePtrAllocAttribBased(dT->granData->contactMapping_buffer, nContactPairs);
         granData->pDTOwnedBuffer_contactMapping = dT->granData->contactMapping_buffer;
     }
     // Unset the device change we just made
@@ -568,15 +568,15 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     {
         // These buffers should be on dT, to save dT access time
         DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
-        DEME_DEVICE_PTR_ALLOC(granData->voxelID_buffer, nOwnerBodies);
-        DEME_DEVICE_PTR_ALLOC(granData->locX_buffer, nOwnerBodies);
-        DEME_DEVICE_PTR_ALLOC(granData->locY_buffer, nOwnerBodies);
-        DEME_DEVICE_PTR_ALLOC(granData->locZ_buffer, nOwnerBodies);
-        DEME_DEVICE_PTR_ALLOC(granData->oriQ0_buffer, nOwnerBodies);
-        DEME_DEVICE_PTR_ALLOC(granData->oriQ1_buffer, nOwnerBodies);
-        DEME_DEVICE_PTR_ALLOC(granData->oriQ2_buffer, nOwnerBodies);
-        DEME_DEVICE_PTR_ALLOC(granData->oriQ3_buffer, nOwnerBodies);
-        DEME_DEVICE_PTR_ALLOC(granData->absVel_buffer, nOwnerBodies);
+        DevicePtrAllocAttribBased(granData->voxelID_buffer, nOwnerBodies);
+        DevicePtrAllocAttribBased(granData->locX_buffer, nOwnerBodies);
+        DevicePtrAllocAttribBased(granData->locY_buffer, nOwnerBodies);
+        DevicePtrAllocAttribBased(granData->locZ_buffer, nOwnerBodies);
+        DevicePtrAllocAttribBased(granData->oriQ0_buffer, nOwnerBodies);
+        DevicePtrAllocAttribBased(granData->oriQ1_buffer, nOwnerBodies);
+        DevicePtrAllocAttribBased(granData->oriQ2_buffer, nOwnerBodies);
+        DevicePtrAllocAttribBased(granData->oriQ3_buffer, nOwnerBodies);
+        DevicePtrAllocAttribBased(granData->absVel_buffer, nOwnerBodies);
 
         // DEME_TRACKED_RESIZE_DEBUGPRINT(voxelID_buffer, nOwnerBodies, "voxelID_buffer", 0);
         // DEME_TRACKED_RESIZE_DEBUGPRINT(locX_buffer, nOwnerBodies, "locX_buffer", 0);
@@ -597,12 +597,12 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
         if (solverFlags.canFamilyChange) {
             // DEME_TRACKED_RESIZE_DEBUGPRINT(familyID_buffer, nOwnerBodies, "familyID_buffer", 0);
             // DEME_ADVISE_DEVICE(familyID_buffer, dT->streamInfo.device);
-            DEME_DEVICE_PTR_ALLOC(granData->familyID_buffer, nOwnerBodies);
+            DevicePtrAllocAttribBased(granData->familyID_buffer, nOwnerBodies);
         }
 
-        DEME_DEVICE_PTR_ALLOC(granData->relPosNode1_buffer, nTriGM);
-        DEME_DEVICE_PTR_ALLOC(granData->relPosNode2_buffer, nTriGM);
-        DEME_DEVICE_PTR_ALLOC(granData->relPosNode3_buffer, nTriGM);
+        DevicePtrAllocAttribBased(granData->relPosNode1_buffer, nTriGM);
+        DevicePtrAllocAttribBased(granData->relPosNode2_buffer, nTriGM);
+        DevicePtrAllocAttribBased(granData->relPosNode3_buffer, nTriGM);
 
         // Unset the device change we just did
         DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
@@ -867,26 +867,26 @@ void DEMKinematicThread::initAllocation() {
 }
 
 void DEMKinematicThread::deallocateEverything() {
-    DEME_DEVICE_PTR_DEALLOC(dT->granData->idGeometryA_buffer);
-    DEME_DEVICE_PTR_DEALLOC(dT->granData->idGeometryB_buffer);
-    DEME_DEVICE_PTR_DEALLOC(dT->granData->contactType_buffer);
-    DEME_DEVICE_PTR_DEALLOC(dT->granData->contactMapping_buffer);
+    DevicePtrDeallocAttribBased(dT->granData->idGeometryA_buffer);
+    DevicePtrDeallocAttribBased(dT->granData->idGeometryB_buffer);
+    DevicePtrDeallocAttribBased(dT->granData->contactType_buffer);
+    DevicePtrDeallocAttribBased(dT->granData->contactMapping_buffer);
 
-    DEME_DEVICE_PTR_DEALLOC(granData->voxelID_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->locX_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->locY_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->locZ_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->oriQ0_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->oriQ1_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->oriQ2_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->oriQ3_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->absVel_buffer);
+    DevicePtrDeallocAttribBased(granData->voxelID_buffer);
+    DevicePtrDeallocAttribBased(granData->locX_buffer);
+    DevicePtrDeallocAttribBased(granData->locY_buffer);
+    DevicePtrDeallocAttribBased(granData->locZ_buffer);
+    DevicePtrDeallocAttribBased(granData->oriQ0_buffer);
+    DevicePtrDeallocAttribBased(granData->oriQ1_buffer);
+    DevicePtrDeallocAttribBased(granData->oriQ2_buffer);
+    DevicePtrDeallocAttribBased(granData->oriQ3_buffer);
+    DevicePtrDeallocAttribBased(granData->absVel_buffer);
 
-    DEME_DEVICE_PTR_DEALLOC(granData->familyID_buffer);
+    DevicePtrDeallocAttribBased(granData->familyID_buffer);
 
-    DEME_DEVICE_PTR_DEALLOC(granData->relPosNode1_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->relPosNode2_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->relPosNode3_buffer);
+    DevicePtrDeallocAttribBased(granData->relPosNode1_buffer);
+    DevicePtrDeallocAttribBased(granData->relPosNode2_buffer);
+    DevicePtrDeallocAttribBased(granData->relPosNode3_buffer);
 }
 
 void DEMKinematicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles) {

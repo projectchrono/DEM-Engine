@@ -6,7 +6,7 @@
 #include <DEM/Structs.h>
 #include <DEM/Defines.h>
 #include <core/utils/GpuManager.h>
-#include <core/utils/ManagedAllocator.hpp>
+#include <core/utils/CudaAllocator.hpp>
 
 namespace deme {
 

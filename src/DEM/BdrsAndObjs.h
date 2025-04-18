@@ -17,7 +17,7 @@
 #include <nvmath/helper_math.cuh>
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
-#include <core/utils/ManagedAllocator.hpp>
+#include <core/utils/CudaAllocator.hpp>
 #include <DEM/HostSideHelpers.hpp>
 
 namespace deme {
@@ -415,8 +415,8 @@ class DEMMeshConnected : public DEMInitializer {
         SetInitPos(host_make_float3(displ[0], displ[1], displ[2]));
     }
 
-    /// If this mesh's component triangles are not reported by the user in its centroid and principal system, 
-    /// then the user needs to call this method immediately to report this mesh's volume centroid and principal axes, 
+    /// If this mesh's component triangles are not reported by the user in its centroid and principal system,
+    /// then the user needs to call this method immediately to report this mesh's volume centroid and principal axes,
     /// and nodes will be adjusted by this call so that the mesh's frame is its centroid and principal system.
     void InformCentroidPrincipal(float3 center, float4 prin_Q) {
         // Getting to Centroid and Principal is a translation then a rotation (local), so the undo order to undo
@@ -433,7 +433,7 @@ class DEMMeshConnected : public DEMInitializer {
     }
 
     /// The opposite of InformCentroidPrincipal, and it is another way to align this mesh's coordinate system with its
-    /// centroid and principal system: rotate then move this mesh, so that at the end of this operation, the mesh's 
+    /// centroid and principal system: rotate then move this mesh, so that at the end of this operation, the mesh's
     /// frame is its centroid and principal system.
     void Move(float3 vec, float4 rot_Q) {
         for (auto& node : m_vertices) {
