@@ -344,18 +344,18 @@ void DEMKinematicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, cons
 
     // First get IDs and factors to device side
     size_t IDSize = IDs.size() * sizeof(bodyID_t);
-    bodyID_t* dIDs = (bodyID_t*)stateOfSolver_resources.allocateTempVector(1, IDSize);
+    bodyID_t* dIDs = (bodyID_t*)stateOfSolver_resources.allocateTempVector("dIDs", IDSize);
     DEME_GPU_CALL(cudaMemcpy(dIDs, IDs.data(), IDSize, cudaMemcpyHostToDevice));
     size_t factorSize = factors.size() * sizeof(float);
-    float* dFactors = (float*)stateOfSolver_resources.allocateTempVector(2, factorSize);
+    float* dFactors = (float*)stateOfSolver_resources.allocateTempVector("dFactors", factorSize);
     DEME_GPU_CALL(cudaMemcpy(dFactors, factors.data(), factorSize, cudaMemcpyHostToDevice));
 
     size_t idBoolSize = (size_t)simParams->nOwnerBodies * sizeof(notStupidBool_t);
     size_t ownerFactorSize = (size_t)simParams->nOwnerBodies * sizeof(float);
     // Bool table for whether this owner should change
-    notStupidBool_t* idBool = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(3, idBoolSize);
+    notStupidBool_t* idBool = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector("idBool", idBoolSize);
     DEME_GPU_CALL(cudaMemset(idBool, 0, idBoolSize));
-    float* ownerFactors = (float*)stateOfSolver_resources.allocateTempVector(4, ownerFactorSize);
+    float* ownerFactors = (float*)stateOfSolver_resources.allocateTempVector("ownerFactors", ownerFactorSize);
     size_t blocks_needed_for_marking = (IDs.size() + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
 
     // Mark on the bool array those owners that need a change
@@ -374,6 +374,10 @@ void DEMKinematicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, cons
         .launch(&granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM);
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
+    stateOfSolver_resources.finishUsingTempVector("dIDs");
+    stateOfSolver_resources.finishUsingTempVector("dFactors");
+    stateOfSolver_resources.finishUsingTempVector("idBool");
+    stateOfSolver_resources.finishUsingTempVector("ownerFactors");
     // cudaStreamDestroy(new_stream);
 }
 

@@ -7,6 +7,7 @@
 #define DEME_DATA_MIGRATION_HPP
 
 #include <cassert>
+#include <optional>
 #include <core/utils/GpuError.h>
 
 namespace deme {
@@ -288,6 +289,175 @@ class DualArray {
     void updateMemCounter(ssize_t delta) {
         if (m_mem_counter)
             *m_mem_counter += delta;
+    }
+};
+
+// Pure device data type, usually used for scratching space
+template <typename T>
+class DeviceArray {
+  public:
+    DeviceArray(size_t* external_counter = nullptr) : m_mem_counter(external_counter) {}
+
+    explicit DeviceArray(size_t n, size_t* external_counter = nullptr) : m_mem_counter(external_counter) { resize(n); }
+
+    ~DeviceArray() { free(); }
+
+    void resize(size_t n, bool allow_shrink = false) {
+        size_t old_bytes = m_capacity * sizeof(T);
+        if (!allow_shrink && m_capacity >= n)
+            return;
+
+        if (m_data)
+            DEME_GPU_CALL(cudaFree(m_data));
+
+        DEME_GPU_CALL(cudaMalloc((void**)&m_data, n * sizeof(T)));
+        m_capacity = n;
+
+        updateMemCounter(static_cast<ssize_t>(m_capacity * sizeof(T)) - static_cast<ssize_t>(old_bytes));
+    }
+
+    void free() {
+        if (m_data) {
+            updateMemCounter(-(ssize_t)(m_capacity * sizeof(T)));
+            DEME_GPU_CALL(cudaFree(m_data));
+            m_data = nullptr;
+            m_capacity = 0;
+        }
+    }
+
+    size_t size() const { return m_capacity; }
+
+    T* data() { return m_data; }
+
+    const T* data() const { return m_data; }
+
+    void setMemoryCounter(size_t* counter) { m_mem_counter = counter; }
+
+  private:
+    T* m_data = nullptr;
+    size_t m_capacity = 0;
+    size_t* m_mem_counter = nullptr;
+
+    void updateMemCounter(ssize_t delta) {
+        if (m_mem_counter)
+            *m_mem_counter += delta;
+    }
+};
+
+template <typename T>
+class DeviceVectorPool {
+  private:
+    std::vector<DeviceArray<T>> vectors;
+    std::vector<std::optional<std::string>> in_use;
+    std::unordered_map<std::string, size_t> name_to_index;
+
+    size_t* m_mem_counter = nullptr;
+
+  public:
+    explicit DeviceVectorPool(size_t* external_counter = nullptr) : m_mem_counter(external_counter) {}
+
+    ~DeviceVectorPool() { releaseAll(); }
+
+    // Claim a vector with at least `size` bytes and associate it with a name
+    T* claim(const std::string& name, size_t size) {
+        if (name_to_index.count(name)) {
+            throw std::runtime_error("Name already claimed: " + name);
+        }
+
+        // Look for a free vector
+        for (size_t i = 0; i < in_use.size(); ++i) {
+            // Found one already allocated but later freed: use it
+            if (!in_use[i]) {
+                // DeviceArray resize method integrates non-shrink check
+                vectors[i].resize(size);
+                in_use[i] = name;
+                name_to_index[name] = i;
+                return vectors[i].data();
+            }
+        }
+
+        // No free vector: expand pool
+        vectors.emplace_back(size, m_mem_counter);
+        in_use.emplace_back(name);
+        size_t new_index = vectors.size() - 1;
+        name_to_index[name] = new_index;
+        return vectors[new_index].data();
+    }
+
+    T* get(const std::string& name) {
+        auto it = name_to_index.find(name);
+        if (it == name_to_index.end()) {
+            throw std::runtime_error("Name not found: " + name);
+        }
+        return vectors[it->second].data();
+    }
+
+    void resize(const std::string& name, size_t new_size, bool allow_create = false) {
+        auto it = name_to_index.find(name);
+        if (it == name_to_index.end()) {
+            if (allow_create) {
+                claim(name, new_size);  // Will allocate if needed
+                return;
+            } else {
+                throw std::runtime_error("Cannot resize: name not found");
+            }
+        }
+
+        size_t index = it->second;
+        vectors[index].resize(new_size);
+    }
+
+    // Unclaim a named vector (make it available again)
+    void unclaim(const std::string& name) {
+        auto it = name_to_index.find(name);
+        if (it == name_to_index.end()) {
+            return;
+        }
+
+        size_t index = it->second;
+        in_use[index] = std::nullopt;
+        name_to_index.erase(it);
+    }
+
+    // This one also deallocate the memory
+    void release(const std::string& name) {
+        auto it = name_to_index.find(name);
+        if (it == name_to_index.end()) {
+            throw std::runtime_error("Cannot release: name not found");
+        }
+
+        size_t index = it->second;
+        vectors[index].free();
+        in_use[index] = std::nullopt;
+        name_to_index.erase(it);
+    }
+
+    // Release all memory (clear the vectors)
+    void releaseAll() {
+        for (const auto& entry : name_to_index) {
+            size_t index = entry.second;
+            vectors[index].free();
+        }
+        in_use.clear();
+        name_to_index.clear();
+    }
+
+    void setMemoryCounter(size_t* counter) {
+        m_mem_counter = counter;
+        for (auto& vec : vectors) {
+            vec.setMemoryCounter(counter);
+        }
+    }
+
+    // Debug utility
+    void printStatus() const {
+        for (size_t i = 0; i < vectors.size(); ++i) {
+            if (in_use[i]) {
+                std::cout << "Vector[" << i << "] in use as \"" << *in_use[i] << "\"\n";
+            } else {
+                std::cout << "Vector[" << i << "] is free\n";
+            }
+        }
     }
 };
 

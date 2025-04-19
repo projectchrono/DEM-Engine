@@ -194,18 +194,18 @@ void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const 
 
     // First get IDs and factors to device side
     size_t IDSize = IDs.size() * sizeof(bodyID_t);
-    bodyID_t* dIDs = (bodyID_t*)stateOfSolver_resources.allocateTempVector(1, IDSize);
+    bodyID_t* dIDs = (bodyID_t*)stateOfSolver_resources.allocateTempVector("dIDs", IDSize);
     DEME_GPU_CALL(cudaMemcpy(dIDs, IDs.data(), IDSize, cudaMemcpyHostToDevice));
     size_t factorSize = factors.size() * sizeof(float);
-    float* dFactors = (float*)stateOfSolver_resources.allocateTempVector(2, factorSize);
+    float* dFactors = (float*)stateOfSolver_resources.allocateTempVector("dFactors", factorSize);
     DEME_GPU_CALL(cudaMemcpy(dFactors, factors.data(), factorSize, cudaMemcpyHostToDevice));
 
     size_t idBoolSize = (size_t)simParams->nOwnerBodies * sizeof(notStupidBool_t);
     size_t ownerFactorSize = (size_t)simParams->nOwnerBodies * sizeof(float);
     // Bool table for whether this owner should change
-    notStupidBool_t* idBool = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(3, idBoolSize);
+    notStupidBool_t* idBool = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector("idBool", idBoolSize);
     DEME_GPU_CALL(cudaMemset(idBool, 0, idBoolSize));
-    float* ownerFactors = (float*)stateOfSolver_resources.allocateTempVector(4, ownerFactorSize);
+    float* ownerFactors = (float*)stateOfSolver_resources.allocateTempVector("ownerFactors", ownerFactorSize);
     size_t blocks_needed_for_marking = (IDs.size() + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
 
     // Mark on the bool array those owners that need a change
@@ -223,6 +223,11 @@ void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const 
         .configure(dim3(blocks_needed_for_changing), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
         .launch(&granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM);
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+
+    stateOfSolver_resources.finishUsingTempVector("dIDs");
+    stateOfSolver_resources.finishUsingTempVector("dFactors");
+    stateOfSolver_resources.finishUsingTempVector("idBool");
+    stateOfSolver_resources.finishUsingTempVector("ownerFactors");
 
     // cudaStreamDestroy(new_stream);
 }
@@ -1739,10 +1744,10 @@ inline void DEMDynamicThread::unpackMyBuffer() {
                              *stateOfSolver_resources.pNumContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
     if (!solverFlags.isHistoryless) {
         // Note we don't have to use dedicated memory space for unpacking contactMapping_buffer contents, because we
-        // only use it once per kT update, at the time of unpacking. So let us just use a temp vector to store it. Note
-        // we cannot use vector 0 since it may hold critical flattened owner ID info.
+        // only use it once per kT update, at the time of unpacking. So let us just use a temp vector to store it.
         size_t mapping_bytes = (*stateOfSolver_resources.pNumContacts) * sizeof(contactPairs_t);
-        granData->contactMapping = (contactPairs_t*)stateOfSolver_resources.allocateTempVector(1, mapping_bytes);
+        granData->contactMapping =
+            (contactPairs_t*)stateOfSolver_resources.allocateTempVector("contactMapping", mapping_bytes);
         DEME_GPU_CALL(cudaMemcpy(granData->contactMapping, granData->contactMapping_buffer, mapping_bytes,
                                  cudaMemcpyDeviceToDevice));
     }
@@ -1808,7 +1813,7 @@ inline void DEMDynamicThread::migratePersistentContacts() {
     // All contact wildcards are the same type, so we can just allocate one temp array for all of them
     float* newWildcards[DEME_MAX_WILDCARD_NUM];
     size_t wildcard_arr_bytes = (*stateOfSolver_resources.pNumContacts) * sizeof(float) * simParams->nContactWildcards;
-    newWildcards[0] = (float*)stateOfSolver_resources.allocateTempVector(2, wildcard_arr_bytes);
+    newWildcards[0] = (float*)stateOfSolver_resources.allocateTempVector("newWildcards", wildcard_arr_bytes);
     for (unsigned int i = 1; i < simParams->nContactWildcards; i++) {
         newWildcards[i] = newWildcards[i - 1] + (*stateOfSolver_resources.pNumContacts);
     }
@@ -1816,7 +1821,8 @@ inline void DEMDynamicThread::migratePersistentContacts() {
     // This is used for checking if there are contact history got lost in the transition by surprise. But no need to
     // check if the user did not ask for it.
     size_t sentry_bytes = (*stateOfSolver_resources.pNumPrevContacts) * sizeof(notStupidBool_t);
-    notStupidBool_t* contactSentry = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(3, sentry_bytes);
+    notStupidBool_t* contactSentry =
+        (notStupidBool_t*)stateOfSolver_resources.allocateTempVector("contactSentry", sentry_bytes);
 
     // A sentry array is here to see if there exist a contact that dT thinks it's alive but kT doesn't map it to the new
     // history array. This is just a quick and rough check: we only look at the last contact wildcard to see if it is
@@ -1854,7 +1860,7 @@ inline void DEMDynamicThread::migratePersistentContacts() {
     // Take a look, does the sentry indicate that there is an `alive' contact got lost?
     if (verbosity >= VERBOSITY::STEP_METRIC) {
         if (*stateOfSolver_resources.pNumPrevContacts > 0 && simParams->nContactWildcards > 0) {
-            size_t* lostContact = (size_t*)stateOfSolver_resources.allocateTempVector(4, sizeof(size_t));
+            size_t* lostContact = (size_t*)stateOfSolver_resources.allocateTempVector("lostContact", sizeof(size_t));
             boolSumReduce(contactSentry, lostContact, *stateOfSolver_resources.pNumPrevContacts, streamInfo.stream,
                           stateOfSolver_resources);
             if (*lostContact && solverFlags.isAsync) {
@@ -1880,6 +1886,7 @@ inline void DEMDynamicThread::migratePersistentContacts() {
                 DEME_STEP_DEBUG_EXEC(
                     displayArray<notStupidBool_t>(contactSentry, *stateOfSolver_resources.pNumPrevContacts));
             }
+            stateOfSolver_resources.finishUsingTempVector("lostContact");
         }
     }
 
@@ -1894,6 +1901,9 @@ inline void DEMDynamicThread::migratePersistentContacts() {
         DEME_GPU_CALL(cudaMemcpy(granData->contactWildcards[i], newWildcards[i],
                                  (*stateOfSolver_resources.pNumContacts) * sizeof(float), cudaMemcpyDeviceToDevice));
     }
+
+    stateOfSolver_resources.finishUsingTempVector("newWildcards");
+    stateOfSolver_resources.finishUsingTempVector("contactSentry");
 
     // granData may have changed in some of the earlier steps
     granData.syncToDevice();
@@ -2017,6 +2027,9 @@ inline void DEMDynamicThread::unpack_impl() {
     if (!solverFlags.isHistoryless) {
         migratePersistentContacts();
     }
+
+    // With unpacking finished, contactMapping temp array is no longer needed
+    stateOfSolver_resources.finishUsingTempVector("contactMapping");
 }
 
 inline void DEMDynamicThread::ifProduceFreshThenUseIt() {
@@ -2316,15 +2329,18 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     }
     // We can use temp vectors as we please
     size_t quarryTempSize = n * sizeof(float);
-    float* resArr = (float*)stateOfSolver_resources.allocateTempVector(1, quarryTempSize);
+    m_reduceResArr.resize(quarryTempSize);
+    float* resArr = (float*)m_reduceResArr.device();
     size_t regionTempSize = n * sizeof(notStupidBool_t);
     // If this boolArrExclude is 1 at an element, that means this element is exluded in the reduction
-    notStupidBool_t* boolArrExclude = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(2, regionTempSize);
+    notStupidBool_t* boolArrExclude =
+        (notStupidBool_t*)stateOfSolver_resources.allocateTempVector("boolArrExclude", regionTempSize);
     DEME_GPU_CALL(cudaMemset(boolArrExclude, 0, regionTempSize));
 
     // We may actually have 2 reduced returns: in regional reduction, key 0 and 1 give one return each.
     size_t returnSize = sizeof(float) * 2;
-    float* res = (float*)stateOfSolver_resources.allocateTempVector(3, returnSize);
+    m_reduceRes.resize(returnSize);
+    float* res = (float*)m_reduceRes.device();
     size_t blocks_needed = (n + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     inspection_kernel->kernel(kernel_name)
         .instantiate()
@@ -2344,16 +2360,18 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
                 floatSumReduce(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
                 break;
             case (CUB_REDUCE_FLAVOR::NONE):
-                return resArr;
+                stateOfSolver_resources.finishUsingTempVector("boolArrExclude");
+                m_reduceResArr.copyToHost();
+                return (float*)m_reduceResArr.host();
         }
         // If this inspection is comfined in a region, then boolArrExclude and resArr need to be sorted and reduce by
         // key
     } else {
         // Extra arrays are needed for sort and reduce by key
         notStupidBool_t* boolArrExclude_sorted =
-            (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(4, regionTempSize);
-        float* resArr_sorted = (float*)stateOfSolver_resources.allocateTempVector(5, quarryTempSize);
-        size_t* num_unique_out = (size_t*)stateOfSolver_resources.allocateTempVector(6, sizeof(size_t));
+            (notStupidBool_t*)stateOfSolver_resources.allocateTempVector("boolArrExclude_sorted", regionTempSize);
+        float* resArr_sorted = (float*)stateOfSolver_resources.allocateTempVector("resArr_sorted", quarryTempSize);
+        size_t* num_unique_out = (size_t*)stateOfSolver_resources.allocateTempVector("num_unique_out", sizeof(size_t));
         switch (reduce_flavor) {
             case (CUB_REDUCE_FLAVOR::SUM):
                 // Sort first
@@ -2377,11 +2395,21 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
                                     streamInfo.stream, stateOfSolver_resources);
                 break;
             case (CUB_REDUCE_FLAVOR::NONE):
-                return resArr;
+                stateOfSolver_resources.finishUsingTempVector("boolArrExclude");
+                stateOfSolver_resources.finishUsingTempVector("boolArrExclude_sorted");
+                stateOfSolver_resources.finishUsingTempVector("resArr_sorted");
+                stateOfSolver_resources.finishUsingTempVector("num_unique_out");
+                m_reduceResArr.copyToHost();
+                return (float*)m_reduceResArr.host();
         }
     }
 
-    return res;
+    stateOfSolver_resources.finishUsingTempVector("boolArrExclude");
+    stateOfSolver_resources.finishUsingTempVector("boolArrExclude_sorted");
+    stateOfSolver_resources.finishUsingTempVector("resArr_sorted");
+    stateOfSolver_resources.finishUsingTempVector("num_unique_out");
+    return (float*)m_reduceRes.host();
+    ;
 }
 
 void DEMDynamicThread::initAllocation() {

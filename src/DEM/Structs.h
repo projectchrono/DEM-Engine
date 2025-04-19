@@ -107,17 +107,9 @@ const std::unordered_map<std::string, bool> force_kernel_ingredient_stats = {
 /// </summary>
 class DEMSolverStateData {
   private:
-    const unsigned int numTempArrays;
-    // The vector used by CUB or by anybody else that needs scratch space.
-    // Please pay attention to the type the vector stores.
-    std::vector<scratch_t, ManagedAllocator<scratch_t>> cubScratchSpace;
-
-    // The vectors used by threads when they need temporary arrays (very typically, for storing arrays outputted by cub
-    // scan or reduce operations).
-    std::vector<std::vector<scratch_t, ManagedAllocator<scratch_t>>,
-                ManagedAllocator<std::vector<scratch_t, ManagedAllocator<scratch_t>>>>
-        threadTempVectors;
-    // You can keep more temp arrays if you construct this class with a different initializer
+    // NOTE! The type MUST be scratch_t, since all DEMSolverStateData's allocation methods use num of bytes as
+    // arguments, but DeviceVectorPool's resize considers number of elements
+    DeviceVectorPool<scratch_t> m_deviceVecPool;
 
   public:
     // Temp size_t variables that can be reused
@@ -132,7 +124,7 @@ class DEMSolverStateData {
     // Number of spheres in the previous CD step (in case user added/removed clumps from the system)
     size_t* pNumPrevSpheres;
 
-    DEMSolverStateData(unsigned int nArrays) : numTempArrays(nArrays) {
+    DEMSolverStateData(size_t* external_counter = nullptr) : m_deviceVecPool(external_counter) {
         DEME_GPU_CALL(cudaMallocManaged(&pNumContacts, sizeof(size_t)));
         DEME_GPU_CALL(cudaMallocManaged(&pTempSizeVar1, sizeof(size_t)));
         DEME_GPU_CALL(cudaMallocManaged(&pTempSizeVar2, sizeof(size_t)));
@@ -142,7 +134,6 @@ class DEMSolverStateData {
         *pNumContacts = 0;
         *pNumPrevContacts = 0;
         *pNumPrevSpheres = 0;
-        threadTempVectors.resize(numTempArrays);
     }
     ~DEMSolverStateData() {
         DEME_GPU_CALL(cudaFree(pNumContacts));
@@ -151,28 +142,28 @@ class DEMSolverStateData {
         DEME_GPU_CALL(cudaFree(pTempSizeVar3));
         DEME_GPU_CALL(cudaFree(pNumPrevContacts));
         DEME_GPU_CALL(cudaFree(pNumPrevSpheres));
-
-        cubScratchSpace.clear();
-        for (unsigned int i = 0; i < numTempArrays; i++) {
-            threadTempVectors.at(i).clear();
-        }
-        threadTempVectors.clear();
     }
 
     // Return raw pointer to swath of device memory that is at least "sizeNeeded" large
-    inline scratch_t* allocateScratchSpace(size_t sizeNeeded) {
-        if (cubScratchSpace.size() < sizeNeeded) {
-            cubScratchSpace.resize(sizeNeeded);
-        }
-        return cubScratchSpace.data();
+    scratch_t* allocateScratchSpace(size_t sizeNeeded) {
+        m_deviceVecPool.resize("ScratchSpace", sizeNeeded, true);
+        return m_deviceVecPool.get("ScratchSpace");
     }
 
-    inline scratch_t* allocateTempVector(unsigned int i, size_t sizeNeeded) {
-        if (threadTempVectors.at(i).size() < sizeNeeded) {
-            threadTempVectors.at(i).resize(sizeNeeded);
-        }
-        return threadTempVectors.at(i).data();
+    // This flavor does not prevent you from forgeting to recycle before this time step ends
+    scratch_t* allocateVector(const std::string& name, size_t sizeNeeded) {
+        m_deviceVecPool.resize(name, sizeNeeded, true);
+        return m_deviceVecPool.get(name);
     }
+
+    // This flavor prevents you from forgeting to recycle before this time step ends
+    scratch_t* allocateTempVector(const std::string& name, size_t sizeNeeded) {
+        return m_deviceVecPool.claim(name, sizeNeeded);
+    }
+
+    void finishUsingTempVector(const std::string& name) { m_deviceVecPool.unclaim(name); }
+
+    void printVectorUsage() { m_deviceVecPool.printStatus(); }
 };
 
 struct kTStateParams {

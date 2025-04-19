@@ -30,7 +30,8 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
     // space, so the information in it can be used in the next iteration.
     size_t cachedArraySizeOwner = (size_t)2 * nContactPairs * sizeof(bodyID_t);
     // Use temp vector 0 to store the flattened owner IDs. So the rest of the temp arrays start from number 1.
-    bodyID_t* idAOwner = (bodyID_t*)scratchPad.allocateTempVector(0, cachedArraySizeOwner);
+    // Note this one is not temp vector as it could be used between time steps.
+    bodyID_t* idAOwner = (bodyID_t*)scratchPad.allocateVector("idAOwner", cachedArraySizeOwner);
     bodyID_t* idBOwner = (bodyID_t*)(idAOwner + nContactPairs);
     // size_t cachedArraySizeMass = (size_t)2 * nContactPairs * sizeof(float);
     // size_t cachedArraySizeMOI = (size_t)2 * nContactPairs * sizeof(float3);
@@ -70,15 +71,15 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
     size_t tempArraySizeAcc_sorted = (size_t)2 * nContactPairs * sizeof(float3);
     size_t tempArraySizeOwnerAcc = (size_t)nClumps * sizeof(float3);
     size_t tempArraySizeOwner = (size_t)nClumps * sizeof(bodyID_t);
-    float3* acc_A = (float3*)scratchPad.allocateTempVector(1, tempArraySizeAcc);
+    float3* acc_A = (float3*)scratchPad.allocateTempVector("acc_A", tempArraySizeAcc);
     float3* acc_B = (float3*)(acc_A + nContactPairs);
-    float3* acc_A_sorted = (float3*)scratchPad.allocateTempVector(2, tempArraySizeAcc_sorted);
+    float3* acc_A_sorted = (float3*)scratchPad.allocateTempVector("acc_A_sorted", tempArraySizeAcc_sorted);
     // float3* acc_B_sorted = (float3*)(acc_A_sorted  + nContactPairs);
-    bodyID_t* idAOwner_sorted = (bodyID_t*)scratchPad.allocateTempVector(3, cachedArraySizeOwner);
+    bodyID_t* idAOwner_sorted = (bodyID_t*)scratchPad.allocateTempVector("idAOwner_sorted", cachedArraySizeOwner);
     // bodyID_t* idBOwner_sorted = (bodyID_t*)(idAOwner_sorted + nContactPairs);
     float3* accOwner = (float3*)scratchPad.allocateTempVector(
-        4, tempArraySizeOwnerAcc);  // can store both linear and angular acceleration
-    bodyID_t* uniqueOwner = (bodyID_t*)scratchPad.allocateTempVector(5, tempArraySizeOwner);
+        "accOwner", tempArraySizeOwnerAcc);  // can store both linear and angular acceleration
+    bodyID_t* uniqueOwner = (bodyID_t*)scratchPad.allocateTempVector("uniqueOwner", tempArraySizeOwner);
     // Collect accelerations for body A (modifier used to be h * h / l when we stored acc as h^2*acc)
     // NOTE!! If you pass floating point number to kernels, the number needs to be something like 1.f, not 1.0.
     // Somtimes 1.0 got converted to 0.f with the kernel call.
@@ -156,6 +157,12 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
         .configure(dim3(blocks_needed_for_stashing), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(granData->alphaX, granData->alphaY, granData->alphaZ, uniqueOwner, accOwner, *pForceCollectionRuns);
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+
+    scratchPad.finishUsingTempVector("acc_A");
+    scratchPad.finishUsingTempVector("acc_A_sorted");
+    scratchPad.finishUsingTempVector("idAOwner_sorted");
+    scratchPad.finishUsingTempVector("accOwner");
+    scratchPad.finishUsingTempVector("uniqueOwner");
 }
 
 }  // namespace deme

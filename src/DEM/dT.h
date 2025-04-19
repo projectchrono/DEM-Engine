@@ -71,7 +71,7 @@ class DEMDynamicThread {
     GpuManager::StreamInfo streamInfo;
 
     // A class that contains scratch pad and system status data (constructed with the number of temp arrays we need)
-    DEMSolverStateData stateOfSolver_resources = DEMSolverStateData(7);
+    DEMSolverStateData stateOfSolver_resources = DEMSolverStateData(&m_approx_bytes_used);
 
     // The number of for iterations dT does for a specific user "run simulation" call
     double cycleDuration;
@@ -638,6 +638,10 @@ class DEMDynamicThread {
 
     // The inspector for calculating max vel for this cycle
     std::shared_ptr<DEMInspector> approxMaxVelFunc;
+
+    // Some private arrays that can be used to store inspection results, ready to be passed somewhere else
+    DualArray<scratch_t> m_reduceResArr = DualArray<scratch_t>(&m_approx_bytes_used);
+    DualArray<scratch_t> m_reduceRes = DualArray<scratch_t>(&m_approx_bytes_used);
 
     // Migrate contact history to fit the structure of the newly received contact array
     inline void migratePersistentContacts();

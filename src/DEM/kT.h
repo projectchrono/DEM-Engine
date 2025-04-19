@@ -58,10 +58,11 @@ class DEMKinematicThread {
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
 
-    // A class that contains scratch pad and system status data (constructed with the number of temp arrays we need)
-    DEMSolverStateData stateOfSolver_resources = DEMSolverStateData(15);
-
+    // Memory usage recorder
     size_t m_approx_bytes_used = 0;
+
+    // A class that contains scratch pad and system status data (constructed with the number of temp arrays we need)
+    DEMSolverStateData stateOfSolver_resources = DEMSolverStateData(&m_approx_bytes_used);
 
     // kT should break out of its inner loop and return to a state where it awaits a `start' call at the outer loop
     bool kTShouldReset = false;
