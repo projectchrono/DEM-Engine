@@ -2408,8 +2408,8 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     stateOfSolver_resources.finishUsingTempVector("boolArrExclude_sorted");
     stateOfSolver_resources.finishUsingTempVector("resArr_sorted");
     stateOfSolver_resources.finishUsingTempVector("num_unique_out");
+    m_reduceRes.copyToHost();
     return (float*)m_reduceRes.host();
-    ;
 }
 
 void DEMDynamicThread::initAllocation() {
