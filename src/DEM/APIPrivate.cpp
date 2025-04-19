@@ -1192,7 +1192,10 @@ void DEMSolver::migrateSimParamsToDevice() {
     kT->simParams.syncToDevice();
 }
 
-void DEMSolver::migrateArrayDataToDevice() {}
+void DEMSolver::migrateArrayDataToDevice() {
+    dT->granData.syncToDevice();
+    kT->granData.syncToDevice();
+}
 
 void DEMSolver::validateUserInputs() {
     // Then some checks...

@@ -221,7 +221,7 @@ void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const 
     misc_kernels->kernel("dTModifyComponents")
         .instantiate()
         .configure(dim3(blocks_needed_for_changing), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM);
+        .launch(&granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM);
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     // cudaStreamDestroy(new_stream);
@@ -1712,6 +1712,7 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
     granData->contactPointGeometryB = contactPointGeometryB.data();
 
     // DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    // Sync to device can be delayed... we'll only need to do that before kernel calls
 }
 
 inline void DEMDynamicThread::unpackMyBuffer() {
@@ -1721,7 +1722,7 @@ inline void DEMDynamicThread::unpackMyBuffer() {
     pSchedSupport->dynamicMaxFutureDrift = (pSchedSupport->kinematicMaxFutureDrift).load();
     // DEME_DEBUG_PRINTF("dynamicMaxFutureDrift is %u", (pSchedSupport->dynamicMaxFutureDrift).load());
 
-    DEME_GPU_CALL(cudaMemcpy(stateOfSolver_resources.pNumContacts, &(granData->nContactPairs_buffer), sizeof(size_t),
+    DEME_GPU_CALL(cudaMemcpy(stateOfSolver_resources.pNumContacts, &nContactPairs_buffer, sizeof(size_t),
                              cudaMemcpyDeviceToDevice));
 
     // Need to resize those contact event-based arrays before usage
@@ -1745,6 +1746,8 @@ inline void DEMDynamicThread::unpackMyBuffer() {
         DEME_GPU_CALL(cudaMemcpy(granData->contactMapping, granData->contactMapping_buffer, mapping_bytes,
                                  cudaMemcpyDeviceToDevice));
     }
+    // Prepare for kernel calls immediately after
+    granData.syncToDevice();
 }
 
 inline void DEMDynamicThread::sendToTheirBuffer() {
@@ -1829,8 +1832,8 @@ inline void DEMDynamicThread::migratePersistentContacts() {
                     .instantiate()
                     .configure(dim3(blocks_needed_for_rearrange), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
                                streamInfo.stream)
-                    .launch(granData->contactWildcards[simParams->nContactWildcards - 1], contactSentry,
-                            *stateOfSolver_resources.pNumPrevContacts);
+                    .launch(granData.getDevicePointer()->contactWildcards[simParams->nContactWildcards - 1],
+                            contactSentry, *stateOfSolver_resources.pNumPrevContacts);
                 DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
             }
         }
@@ -1843,7 +1846,7 @@ inline void DEMDynamicThread::migratePersistentContacts() {
         prep_force_kernels->kernel("rearrangeContactWildcards")
             .instantiate()
             .configure(dim3(blocks_needed_for_rearrange), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(granData, newWildcards[0], contactSentry, simParams->nContactWildcards,
+            .launch(&granData, newWildcards[0], contactSentry, simParams->nContactWildcards,
                     *stateOfSolver_resources.pNumContacts);
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
@@ -1891,6 +1894,9 @@ inline void DEMDynamicThread::migratePersistentContacts() {
         DEME_GPU_CALL(cudaMemcpy(granData->contactWildcards[i], newWildcards[i],
                                  (*stateOfSolver_resources.pNumContacts) * sizeof(float), cudaMemcpyDeviceToDevice));
     }
+
+    // granData may have changed in some of the earlier steps
+    granData.syncToDevice();
 }
 
 inline void DEMDynamicThread::calculateForces() {
@@ -1907,7 +1913,7 @@ inline void DEMDynamicThread::calculateForces() {
         prep_force_kernels->kernel("prepareAccArrays")
             .instantiate()
             .configure(dim3(blocks_needed_for_acc_prep), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(&simParams, granData);
+            .launch(&simParams, &granData);
 
         // prepareForceArrays needs to clear contact force arrays, only if the user asks us to record contact forces.
         // So...
@@ -1915,7 +1921,7 @@ inline void DEMDynamicThread::calculateForces() {
             prep_force_kernels->kernel("prepareForceArrays")
                 .instantiate()
                 .configure(dim3(blocks_needed_for_force_prep), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-                .launch(&simParams, granData, nContactPairs);
+                .launch(&simParams, &granData, nContactPairs);
         }
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
@@ -1931,7 +1937,7 @@ inline void DEMDynamicThread::calculateForces() {
         cal_force_kernels->kernel("calculateContactForces")
             .instantiate()
             .configure(dim3(blocks_needed_for_contacts), dim3(DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(&simParams, granData, nContactPairs);
+            .launch(&simParams, &granData, nContactPairs);
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         // displayFloat3(granData->contactForces, nContactPairs);
         // displayArray<contact_t>(granData->contactType, nContactPairs);
@@ -1951,7 +1957,7 @@ inline void DEMDynamicThread::calculateForces() {
                 collect_force_kernels->kernel("forceToAcc")
                     .instantiate()
                     .configure(dim3(blocks_needed_for_contacts), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-                    .launch(granData, nContactPairs);
+                    .launch(&granData, nContactPairs);
                 DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
             }
             // displayArray<float>(granData->aZ, simParams->nOwnerBodies);
@@ -1968,7 +1974,7 @@ inline void DEMDynamicThread::integrateOwnerMotions() {
     integrator_kernels->kernel("integrateOwners")
         .instantiate()
         .configure(dim3(blocks_needed_for_clumps), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, streamInfo.stream)
-        .launch(&simParams, granData);
+        .launch(&simParams, &granData);
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
@@ -1979,7 +1985,7 @@ inline void DEMDynamicThread::routineChecks() {
         mod_kernels->kernel("applyFamilyChanges")
             .instantiate()
             .configure(dim3(blocks_needed_for_clumps), dim3(DEME_NUM_MODERATORS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(&simParams, granData, simParams->nOwnerBodies);
+            .launch(&simParams, &granData, simParams->nOwnerBodies);
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 }
@@ -2103,8 +2109,8 @@ void DEMDynamicThread::workerThread() {
                 // If wildcard-less, then prev-contact arrays are not important
                 if (!solverFlags.isHistoryless) {
                     // Note *stateOfSolver_resources.pNumContacts is now the num of contact after considering the newly
-                    // added ones
-                    kT->updatePrevContactArrays(granData, *stateOfSolver_resources.pNumContacts);
+                    // added ones. Also, passing device pointer of dT's granData is enough.
+                    kT->updatePrevContactArrays(&granData, *stateOfSolver_resources.pNumContacts);
                 }
                 new_contacts_loaded = false;
             }
@@ -2323,7 +2329,7 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     inspection_kernel->kernel(kernel_name)
         .instantiate()
         .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData, &simParams, resArr, boolArrExclude, n, owner_type);
+        .launch(&granData, &simParams, resArr, boolArrExclude, n, owner_type);
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     if (all_domain) {

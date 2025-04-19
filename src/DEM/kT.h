@@ -70,7 +70,7 @@ class DEMKinematicThread {
     DualStruct<DEMSimParams> simParams = DualStruct<DEMSimParams>();
 
     // Pointers to those data arrays defined below, stored in a struct
-    DEMDataKT* granData;
+    DualStruct<DEMDataKT> granData = DualStruct<DEMDataKT>();
 
     // Log for anomalies in the simulation
     WorkerAnomalies anomalies = WorkerAnomalies();
@@ -199,7 +199,7 @@ class DEMKinematicThread {
     DEMKinematicThread(WorkerReportChannel* pPager, ThreadManager* pSchedSup, GpuManager* pGpuDist)
         : pPagerToMain(pPager), pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
         // DEME_GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
-        DEME_GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataKT), cudaMemAttachGlobal));
+        // DEME_GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataKT), cudaMemAttachGlobal));
 
         // Get a device/stream ID to use from the GPU Manager
         streamInfo = pGpuDistributor->getAvailableStream();
@@ -231,7 +231,7 @@ class DEMKinematicThread {
         deallocateEverything();
 
         // DEME_GPU_CALL(cudaFree(simParams));
-        DEME_GPU_CALL(cudaFree(granData));
+        // DEME_GPU_CALL(cudaFree(granData));
     }
 
     // buffer exchange methods

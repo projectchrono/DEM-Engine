@@ -106,7 +106,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       std::shared_ptr<jitify::Program>& sphere_contact_kernels,
                       std::shared_ptr<jitify::Program>& sphTri_contact_kernels,
                       std::shared_ptr<jitify::Program>& history_kernels,
-                      DEMDataKT* granData,
+                      DualStruct<DEMDataKT>& granData,
                       DualStruct<DEMSimParams>& simParams,
                       SolverFlags& solverFlags,
                       VERBOSITY& verbosity,
@@ -124,7 +124,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       kTStateParams& stateParams);
 
 void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force_kernels,
-                                 DEMDataDT* granData,
+                                 DualStruct<DEMDataDT>& granData,
                                  const size_t nContactPairs,
                                  const size_t nClumps,
                                  bool contactPairArr_isFresh,
@@ -132,7 +132,7 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
                                  DEMSolverStateData& scratchPad,
                                  SolverTimers& timers);
 
-void overwritePrevContactArrays(DEMDataKT* kT_data,
+void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
                                 DEMDataDT* dT_data,
                                 std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& previous_idGeometryA,
                                 std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& previous_idGeometryB,

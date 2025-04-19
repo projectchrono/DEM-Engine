@@ -160,6 +160,7 @@ class DualArray {
         updateMemCounter(static_cast<ssize_t>(new_bytes) - static_cast<ssize_t>(old_bytes));
     }
 
+    // m_device_capacity is allocated memory, not array usable data range
     void resizeDevice(size_t n, bool allow_shrink = false) {
         size_t old_bytes = m_device_capacity * sizeof(T);
         if (!allow_shrink && m_device_capacity >= n)

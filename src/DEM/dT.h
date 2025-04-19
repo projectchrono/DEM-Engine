@@ -60,6 +60,10 @@ class DEMDynamicThread {
     // it is allocated)
     size_t buffer_size = 0;
 
+    // dT's one-element buffer of kT-supplied nContacts (as buffer, it's device-only, but I used DualStruct just for
+    // convenience...)
+    DualStruct<size_t> nContactPairs_buffer = DualStruct<size_t>(0);
+
     // Array-used memory size in bytes
     size_t m_approx_bytes_used = 0;
 
@@ -88,7 +92,7 @@ class DEMDynamicThread {
     DualStruct<DEMSimParams> simParams = DualStruct<DEMSimParams>();
 
     // Pointers to those data arrays defined below, stored in a struct
-    DEMDataDT* granData;
+    DualStruct<DEMDataDT> granData = DualStruct<DEMDataDT>();
 
     // Log for anomalies in the simulation
     WorkerAnomalies anomalies = WorkerAnomalies();
@@ -302,7 +306,7 @@ class DEMDynamicThread {
     DEMDynamicThread(WorkerReportChannel* pPager, ThreadManager* pSchedSup, GpuManager* pGpuDist)
         : pPagerToMain(pPager), pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
         // DEME_GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
-        DEME_GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataDT), cudaMemAttachGlobal));
+        // DEME_GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataDT), cudaMemAttachGlobal));
 
         cycleDuration = 0;
 
@@ -329,7 +333,7 @@ class DEMDynamicThread {
         deallocateEverything();
 
         // DEME_GPU_CALL(cudaFree(simParams));
-        DEME_GPU_CALL(cudaFree(granData));
+        // DEME_GPU_CALL(cudaFree(granData));
     }
 
     void setCycleDuration(double val) { cycleDuration = val; }

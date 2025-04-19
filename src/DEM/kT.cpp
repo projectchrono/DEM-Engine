@@ -45,6 +45,9 @@ inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
     }
     // Unset the device change we just made
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
+
+    // But we don't have to syncToDevice granData or dT->granData, and this is because all _buffer arrays don't
+    // particupate kernel computations, so even if their values are fresh only on host, it's fine
 }
 
 void DEMKinematicThread::calibrateParams() {
@@ -163,14 +166,14 @@ inline void DEMKinematicThread::unpackMyBuffer() {
         misc_kernels->kernel("computeMarginFromAbsv")
             .instantiate()
             .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(&simParams, granData, &(stateParams.ts), &(stateParams.maxDrift), (size_t)simParams->nOwnerBodies);
+            .launch(&simParams, &granData, &(stateParams.ts), &(stateParams.maxDrift), (size_t)simParams->nOwnerBodies);
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     } else {  // If isExpandFactorFixed, then just fill in that constant array.
         size_t blocks_needed = (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
         misc_kernels->kernel("fillMarginValues")
             .instantiate()
             .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(&simParams, granData, (size_t)simParams->nOwnerBodies);
+            .launch(&simParams, &granData, (size_t)simParams->nOwnerBodies);
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 
@@ -368,7 +371,7 @@ void DEMKinematicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, cons
     misc_kernels->kernel("kTModifyComponents")
         .instantiate()
         .configure(dim3(blocks_needed_for_changing), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM);
+        .launch(&granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM);
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
     // cudaStreamDestroy(new_stream);
@@ -462,7 +465,7 @@ void DEMKinematicThread::packDataPointers() {
 
 void DEMKinematicThread::packTransferPointers(DEMDynamicThread*& dT) {
     // Set the pointers to dT owned buffers
-    granData->pDTOwnedBuffer_nContactPairs = &(dT->granData->nContactPairs_buffer);
+    granData->pDTOwnedBuffer_nContactPairs = &(dT->nContactPairs_buffer);
     granData->pDTOwnedBuffer_idGeometryA = dT->granData->idGeometryA_buffer;
     granData->pDTOwnedBuffer_idGeometryB = dT->granData->idGeometryB_buffer;
     granData->pDTOwnedBuffer_contactType = dT->granData->contactType_buffer;

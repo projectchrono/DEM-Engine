@@ -29,7 +29,7 @@ namespace deme {
 #define DEME_HUGE_FLOAT 1e15
 #define DEME_BITS_PER_BYTE 8
 #define DEME_CUDA_WARP_SIZE 32
-#define DEME_MAX_WILDCARD_NUM 8
+#define DEME_MAX_WILDCARD_NUM 16
 // In bin--triangle intersection scan, all bins are enlarged by a factor of this following constant, so that no triangle
 // lies in between bins and not picked up by any bins.
 #define DEME_BIN_ENLARGE_RATIO_FOR_FACETS 0.001
@@ -320,7 +320,6 @@ struct DEMDataDT {
     materialsOffset_t* triMaterialOffset;
 
     // dT-owned buffer pointers, for itself's usage
-    size_t nContactPairs_buffer = 0;
     bodyID_t* idGeometryA_buffer;
     bodyID_t* idGeometryB_buffer;
     contact_t* contactType_buffer;
@@ -432,11 +431,11 @@ struct DEMDataKT {
     contactPairs_t* contactMapping;
 
     // data pointers that is kT's transfer destination
-    size_t* pDTOwnedBuffer_nContactPairs = NULL;
-    bodyID_t* pDTOwnedBuffer_idGeometryA = NULL;
-    bodyID_t* pDTOwnedBuffer_idGeometryB = NULL;
-    contact_t* pDTOwnedBuffer_contactType = NULL;
-    contactPairs_t* pDTOwnedBuffer_contactMapping = NULL;
+    size_t* pDTOwnedBuffer_nContactPairs = nullptr;
+    bodyID_t* pDTOwnedBuffer_idGeometryA = nullptr;
+    bodyID_t* pDTOwnedBuffer_idGeometryB = nullptr;
+    contact_t* pDTOwnedBuffer_contactType = nullptr;
+    contactPairs_t* pDTOwnedBuffer_contactMapping = nullptr;
 
     // The collection of pointers to DEM template arrays such as radiiSphere, still useful when there are template info
     // not directly jitified into the kernels

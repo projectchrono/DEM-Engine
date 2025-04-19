@@ -18,6 +18,7 @@
 
 namespace deme {
 
+// Unified memory allocator
 template <class T>
 struct ManagedAllocator {
   public:
@@ -142,6 +143,7 @@ struct ManagedAllocator {
     }
 };
 
+// Host pinned memory allocator
 template <class T>
 struct PinnedAllocator {
   public:
