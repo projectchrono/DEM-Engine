@@ -160,10 +160,24 @@ class DualArray {
         resizeDevice(n);
     }
 
+    void resize(size_t n, const T& val) {
+        assert(m_host_vec_ptr == m_pinned_vec.get() && "resize() requires internal host ownership");
+        resizeHost(n, val);
+        resizeDevice(n);
+    }
+
     void resizeHost(size_t n) {
         ensureHostVector();  // allocates pinned vec if null
         size_t old_bytes = m_host_vec_ptr->size() * sizeof(T);
         m_host_vec_ptr->resize(n);
+        size_t new_bytes = m_host_vec_ptr->size() * sizeof(T);
+        updateHostMemCounter(static_cast<ssize_t>(new_bytes) - static_cast<ssize_t>(old_bytes));
+    }
+
+    void resizeHost(size_t n, const T& val) {
+        ensureHostVector();  // allocates pinned vec if null
+        size_t old_bytes = m_host_vec_ptr->size() * sizeof(T);
+        m_host_vec_ptr->resize(n, val);
         size_t new_bytes = m_host_vec_ptr->size() * sizeof(T);
         updateHostMemCounter(static_cast<ssize_t>(new_bytes) - static_cast<ssize_t>(old_bytes));
     }

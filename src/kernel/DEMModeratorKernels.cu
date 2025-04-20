@@ -48,8 +48,8 @@ __global__ void applyFamilyChanges(deme::DEMSimParams* simParams, deme::DEMDataD
         float accY = acc.y;
         float accZ = acc.z;
 
-        float h = simParams->h;
-        float t = simParams->timeElapsed;
+        float ts = simParams->h;
+        float time = simParams->timeElapsed;
 
         // Carry out user's instructions
         { _familyChangeRules_; }
