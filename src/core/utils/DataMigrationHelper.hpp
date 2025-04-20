@@ -134,11 +134,18 @@ class DualArray {
   public:
     using PinnedVector = std::vector<T, PinnedAllocator<T>>;
 
-    explicit DualArray(size_t* external_counter = nullptr) : m_mem_counter(external_counter) {}
+    explicit DualArray(size_t* host_external_counter = nullptr, size_t* device_external_counter = nullptr)
+        : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {}
 
-    DualArray(size_t n, size_t* external_counter = nullptr) : m_mem_counter(external_counter) { resize(n); }
+    DualArray(size_t n, size_t* host_external_counter = nullptr, size_t* device_external_counter = nullptr)
+        : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {
+        resize(n);
+    }
 
-    DualArray(const std::vector<T>& vec, size_t* external_counter = nullptr) : m_mem_counter(external_counter) {
+    DualArray(const std::vector<T>& vec,
+              size_t* host_external_counter = nullptr,
+              size_t* device_external_counter = nullptr)
+        : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {
         attachHostVector(&vec, /*deep_copy=*/true);
     }
 
@@ -158,7 +165,7 @@ class DualArray {
         size_t old_bytes = m_host_vec_ptr->size() * sizeof(T);
         m_host_vec_ptr->resize(n);
         size_t new_bytes = m_host_vec_ptr->size() * sizeof(T);
-        updateMemCounter(static_cast<ssize_t>(new_bytes) - static_cast<ssize_t>(old_bytes));
+        updateHostMemCounter(static_cast<ssize_t>(new_bytes) - static_cast<ssize_t>(old_bytes));
     }
 
     // m_device_capacity is allocated memory, not array usable data range
@@ -171,12 +178,12 @@ class DualArray {
         DEME_GPU_CALL(cudaMalloc((void**)&m_device_ptr, n * sizeof(T)));
         m_device_capacity = n;
         updateBoundDevicePointer();
-        updateMemCounter(static_cast<ssize_t>(n * sizeof(T)) - static_cast<ssize_t>(old_bytes));
+        updateDeviceMemCounter(static_cast<ssize_t>(n * sizeof(T)) - static_cast<ssize_t>(old_bytes));
     }
 
     void freeHost() {
         if (m_host_vec_ptr) {
-            updateMemCounter(-(ssize_t)(m_host_vec_ptr->size() * sizeof(T)));
+            updateHostMemCounter(-(ssize_t)(m_host_vec_ptr->size() * sizeof(T)));
         }
         m_pinned_vec.reset();
         m_host_vec_ptr = nullptr;
@@ -185,7 +192,7 @@ class DualArray {
 
     void freeDevice() {
         if (m_device_ptr) {
-            updateMemCounter(-(ssize_t)(m_device_capacity * sizeof(T)));
+            updateDeviceMemCounter(-(ssize_t)(m_device_capacity * sizeof(T)));
             DEME_GPU_CALL(cudaFree(m_device_ptr));
             m_device_ptr = nullptr;
         }
@@ -243,7 +250,8 @@ class DualArray {
 
     void unbindDevicePointer() { m_bound_device_ptr = nullptr; }
 
-    void setMemoryCounter(size_t* counter) { m_mem_counter = counter; }
+    void setHostMemoryCounter(size_t* counter) { m_host_mem_counter = counter; }
+    void setDeviceMemoryCounter(size_t* counter) { m_device_mem_counter = counter; }
     // You can use nullptr to unbind
 
     void attachHostVector(const std::vector<T>* external_vec, bool deep_copy = true) {
@@ -251,7 +259,7 @@ class DualArray {
         if (deep_copy) {
             m_pinned_vec = std::make_unique<PinnedVector>(external_vec->begin(), external_vec->end());
             m_host_vec_ptr = m_pinned_vec.get();
-            updateMemCounter(static_cast<ssize_t>(m_host_vec_ptr->size() * sizeof(T)));
+            updateHostMemCounter(static_cast<ssize_t>(m_host_vec_ptr->size() * sizeof(T)));
         } else {
             m_host_vec_ptr = const_cast<PinnedVector*>(reinterpret_cast<const PinnedVector*>(external_vec));
         }
@@ -265,7 +273,8 @@ class DualArray {
     std::unique_ptr<PinnedVector> m_pinned_vec = nullptr;
     PinnedVector* m_host_vec_ptr = nullptr;
 
-    size_t* m_mem_counter = nullptr;
+    size_t* m_host_mem_counter = nullptr;
+    size_t* m_device_mem_counter = nullptr;
 
     T* m_device_ptr = nullptr;
     size_t m_device_capacity = 0;
@@ -286,9 +295,14 @@ class DualArray {
             *m_bound_device_ptr = m_device_ptr;
     }
 
-    void updateMemCounter(ssize_t delta) {
-        if (m_mem_counter)
-            *m_mem_counter += delta;
+    void updateHostMemCounter(ssize_t delta) {
+        if (m_host_mem_counter)
+            *m_host_mem_counter += delta;
+    }
+
+    void updateDeviceMemCounter(ssize_t delta) {
+        if (m_device_mem_counter)
+            *m_device_mem_counter += delta;
     }
 };
 

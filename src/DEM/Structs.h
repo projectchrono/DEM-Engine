@@ -371,6 +371,12 @@ enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
                           pretty_format_bytes(byte_delta).c_str());                                                  \
     }
 
+// DEME_WORK_ARRAY_RESIZE is a reminder for developers that a work array is resized, and this may automatically change
+// the external device pointer this array's bound to. Therefore, after this call, syncing the data pointer bundle
+// (granData) to device may be needed.
+#define DEME_WORK_ARRAY_RESIZE(vec, newsize) \
+    { vec.resize(newsize); }
+
 // =============================================================================
 // NOW SOME HOST-SIDE SIMPLE STRUCTS USED BY THE DEM MODULE
 // =============================================================================

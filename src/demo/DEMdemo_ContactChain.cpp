@@ -35,10 +35,10 @@ int main() {
 
     std::cout << "============================================================" << std::endl;
     std::cout << "Initializing DEMdemo_ContactChain demo." << std::endl;
-    
+
     float innerFriction = 0.10;
     float massMultiplier = 5.0;  // Magnitude of the external force
-    
+
     std::cout << "Inner friction: " << innerFriction << "; Mass multiplier: " << massMultiplier << "." << std::endl;
     path out_dir = "";
     out_dir += "./ContactChain_out";

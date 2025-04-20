@@ -1,7 +1,7 @@
 // DEM kernels that does some wildcard stuff, such as modifying the system as per user instruction
 #include <DEMHelperKernels.cu>
 #include <DEM/Defines.h>
-_kernelIncludes_
+_kernelIncludes_;
 
 // Mass properties are below, if jitified mass properties are in use
 _massDefs_;

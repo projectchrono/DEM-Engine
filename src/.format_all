@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# Recursively find source files and apply clang-format with -i -style=file
+find . \( \
+    -name "*.cpp" -o \
+    -name "*.c"   -o \
+    -name "*.h"   -o \
+    -name "*.hpp" -o \
+    -name "*.cu"  -o \
+    -name "*.cuh" \
+\) -exec clang-format -i -style=file {} +
+
+echo "✔ All matching source files formatted with clang-format -style=file"
+

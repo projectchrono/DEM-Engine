@@ -2,7 +2,7 @@
 #include <DEM/Defines.h>
 #include <DEMHelperKernels.cu>
 #include <DEMCollisionKernels.cu>
-_kernelIncludes_
+_kernelIncludes_;
 
 // If clump templates are jitified, they will be below
 _clumpTemplateDefs_;

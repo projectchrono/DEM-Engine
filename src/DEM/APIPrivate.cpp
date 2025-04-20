@@ -1210,10 +1210,10 @@ void DEMSolver::validateUserInputs() {
         DEME_ERROR(
             "No GPU device is detected. Try lspci and see what you get.\nIf you indeed have GPU devices, maybe you "
             "should try rebooting or reinstalling cuda components?");
-    } else if (ndevices == 1) {
-        DEME_WARNING(
-            "One GPU device is detected. On consumer cards, DEME's performance edge is limited with only one GPU.\n"
-            "Try allocating 2 GPU devices if possible.");
+        // } else if (ndevices == 1) {
+        //     DEME_WARNING(
+        //         "One GPU device is detected. On consumer cards, DEME's performance edge is limited with only one"
+        //         "GPU.\nTry allocating 2 GPU devices if possible.");
     } else if (ndevices > 2) {
         DEME_WARNING(
             "More than two GPU devices are detected.\nCurrently, DEME can make use of at most two devices.\nMore "
@@ -1672,7 +1672,7 @@ inline void DEMSolver::equipAnalGeoTemplates(std::unordered_map<std::string, std
     if (ensure_kernel_line_num) {
         analyticalEntityDefs = compact_code(analyticalEntityDefs);
     }
-    strMap["_analyticalEntityDefs_"] = analyticalEntityDefs;
+    strMap["_analyticalEntityDefs_;"] = analyticalEntityDefs;
 
     // There is a special owner-only version used by force collection kernels. We have it here so we don't have not-used
     // variable warnings while jitifying
@@ -1751,11 +1751,11 @@ inline void DEMSolver::equipMassMoiVolume(std::unordered_map<std::string, std::s
         moiAcqStrat = compact_code(moiAcqStrat);
         volumeDefs = compact_code(volumeDefs);
     }
-    strMap["_massDefs_"] = massDefs;
-    strMap["_moiDefs_"] = moiDefs;
+    strMap["_massDefs_;"] = massDefs;
+    strMap["_moiDefs_;"] = moiDefs;
     strMap["_massAcqStrat_"] = massAcqStrat;
     strMap["_moiAcqStrat_"] = moiAcqStrat;
-    strMap["_volumeDefs_"] = volumeDefs;
+    strMap["_volumeDefs_;"] = volumeDefs;
 
     DEME_DEBUG_PRINTF("Volume properties in kernel:");
     DEME_DEBUG_PRINTF("%s", volumeDefs.c_str());
@@ -1909,7 +1909,7 @@ inline void DEMSolver::equipMaterials(std::unordered_map<std::string, std::strin
     if (ensure_kernel_line_num) {
         materialDefs = compact_code(materialDefs);
     }
-    strMap["_materialDefs_"] = materialDefs;
+    strMap["_materialDefs_;"] = materialDefs;
 }
 
 inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::string>& strMap) {
@@ -1970,7 +1970,7 @@ inline void DEMSolver::equipClumpTemplates(std::unordered_map<std::string, std::
         clump_template_arrays = compact_code(clump_template_arrays);
         componentAcqStrat = compact_code(componentAcqStrat);
     }
-    strMap["_clumpTemplateDefs_"] = clump_template_arrays;
+    strMap["_clumpTemplateDefs_;"] = clump_template_arrays;
     strMap["_componentAcqStrat_"] = componentAcqStrat;
 }
 
@@ -2016,7 +2016,7 @@ inline void DEMSolver::equipSimParams(std::unordered_map<std::string, std::strin
 }
 
 inline void DEMSolver::equipKernelIncludes(std::unordered_map<std::string, std::string>& strMap) {
-    strMap["_kernelIncludes_"] = kernel_includes;
+    strMap["_kernelIncludes_;"] = kernel_includes;
 }
 
 }  // namespace deme
