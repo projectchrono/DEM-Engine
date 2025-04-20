@@ -1282,25 +1282,25 @@ void DEMSolver::SetOwnerWildcardValue(bodyID_t ownerID, const std::string& name,
     dT->setOwnerWildcardValue(ownerID, m_owner_wc_num.at(name), vals);
 }
 
-void DEMSolver::SetFamilyContactWildcardValueAny(unsigned int N, const std::string& name, float val) {
-    assertSysInit("SetFamilyContactWildcardValueAny");
+void DEMSolver::SetFamilyContactWildcardValueEither(unsigned int N, const std::string& name, float val) {
+    assertSysInit("SetFamilyContactWildcardValueEither");
     if (m_cnt_wc_num.find(name) == m_cnt_wc_num.end()) {
         DEME_ERROR(
             "No contact wildcard in the force model is named %s.\nIf you need to use it, declare it via "
             "SetPerContactWildcards in the force model first.",
             name.c_str());
     }
-    dT->setFamilyContactWildcardValueAny(N, m_cnt_wc_num.at(name), val);
+    dT->setFamilyContactWildcardValueEither(N, m_cnt_wc_num.at(name), val);
 }
-void DEMSolver::SetFamilyContactWildcardValueAll(unsigned int N, const std::string& name, float val) {
-    assertSysInit("SetFamilyContactWildcardValueAll");
+void DEMSolver::SetFamilyContactWildcardValueBoth(unsigned int N, const std::string& name, float val) {
+    assertSysInit("SetFamilyContactWildcardValueBoth");
     if (m_cnt_wc_num.find(name) == m_cnt_wc_num.end()) {
         DEME_ERROR(
             "No contact wildcard in the force model is named %s.\nIf you need to use it, declare it via "
             "SetPerContactWildcards in the force model first.",
             name.c_str());
     }
-    dT->setFamilyContactWildcardValueAll(N, m_cnt_wc_num.at(name), val);
+    dT->setFamilyContactWildcardValueBoth(N, m_cnt_wc_num.at(name), val);
 }
 void DEMSolver::SetFamilyContactWildcardValue(unsigned int N1, unsigned int N2, const std::string& name, float val) {
     assertSysInit("SetFamilyContactWildcardValue");
@@ -1454,6 +1454,42 @@ void DEMSolver::AddKernelInclude(const std::string& lib_name) {
     kernel_includes += "#include <" + lib_name + ">\n";
 }
 
+void DEMSolver::MarkFamilyPersistentContactEither(unsigned int N) {
+    assertSysInit("MarkFamilyPersistentContactEither");
+    assignFamilyPersistentContactEither(N, CONTACT_IS_PERSISTENT);
+}
+void DEMSolver::RemoveFamilyPersistentContactEither(unsigned int N) {
+    assertSysInit("RemoveFamilyPersistentContactEither");
+    assignFamilyPersistentContactEither(N, CONTACT_NOT_PERSISTENT);
+}
+
+void DEMSolver::MarkFamilyPersistentContactBoth(unsigned int N) {
+    assertSysInit("MarkFamilyPersistentContactBoth");
+    assignFamilyPersistentContactBoth(N, CONTACT_IS_PERSISTENT);
+}
+void DEMSolver::RemoveFamilyPersistentContactBoth(unsigned int N) {
+    assertSysInit("RemoveFamilyPersistentContactBoth");
+    assignFamilyPersistentContactBoth(N, CONTACT_NOT_PERSISTENT);
+}
+
+void DEMSolver::MarkFamilyPersistentContact(unsigned int N1, unsigned int N2) {
+    assertSysInit("MarkFamilyPersistentContact");
+    assignFamilyPersistentContact(N1, N2, CONTACT_IS_PERSISTENT);
+}
+void DEMSolver::RemoveFamilyPersistentContact(unsigned int N1, unsigned int N2) {
+    assertSysInit("RemoveFamilyPersistentContact");
+    assignFamilyPersistentContact(N1, N2, CONTACT_NOT_PERSISTENT);
+}
+
+void DEMSolver::MarkPersistentContact() {
+    assertSysInit("MarkPersistentContact");
+    assignPersistentContact(CONTACT_IS_PERSISTENT);
+}
+void DEMSolver::RemovePersistentContact() {
+    assertSysInit("RemovePersistentContact");
+    assignPersistentContact(CONTACT_NOT_PERSISTENT);
+}
+
 std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterial(DEMMaterial& a_material) {
     std::shared_ptr<DEMMaterial> ptr = std::make_shared<DEMMaterial>(std::move(a_material));
     ptr->load_order = m_loaded_materials.size();
@@ -1527,7 +1563,7 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clu
     clump.mark = offset;
 
     // Give it a default name
-    if (clump.m_name == DEME_NUM_CLUMP_NAME) {
+    if (clump.m_name == DEME_NULL_CLUMP_NAME) {
         char my_name[200];
         sprintf(my_name, "%04d", (int)nClumpTemplateLoad);
         clump.AssignName(std::string(my_name));
@@ -1917,7 +1953,7 @@ size_t DEMSolver::ChangeClumpFamily(unsigned int fam_num,
 // The method should be called after user inputs are in place, and before starting the simulation. It figures out a part
 // of the required simulation information such as the scale of the poblem domain, and makes sure these info live in
 // managed memory.
-void DEMSolver::Initialize() {
+void DEMSolver::Initialize(bool dry_run) {
     // A few checks first
     validateUserInputs();
 
@@ -1963,10 +1999,12 @@ void DEMSolver::Initialize() {
     /// know what they are doing
     sys_initialized = true;
 
-    // Do a dry-run: It establishes contact pairs. It helps to locate obvious problems at the start (like, too many
-    // contact pairs), and if the user needs to modify the contact wildcards before simulation starts, this step is
-    // meaningful. Dry-run is automatically done if advancing the simulation by 0 or a negative amount of time.
-    DoDynamicsThenSync(-1.0);
+    if (dry_run) {
+        // Do a dry-run: It establishes contact pairs. It helps to locate obvious problems at the start (like, too many
+        // contact pairs), and if the user needs to modify the contact wildcards before simulation starts, this step is
+        // meaningful. Dry-run is automatically done if advancing the simulation by 0 or a negative amount of time.
+        DoDynamicsThenSync(-1.0);
+    }
 }
 
 void DEMSolver::ShowTimingStats() {

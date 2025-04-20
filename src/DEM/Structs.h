@@ -33,7 +33,7 @@ namespace deme {
 // SOME HOST-SIDE CONSTANTS
 // =============================================================================
 
-const std::string DEME_NUM_CLUMP_NAME = std::string("NULL");
+const std::string DEME_NULL_CLUMP_NAME = std::string("NULL");
 const std::string OUTPUT_FILE_X_COL_NAME = std::string("X");
 const std::string OUTPUT_FILE_Y_COL_NAME = std::string("Y");
 const std::string OUTPUT_FILE_Z_COL_NAME = std::string("Z");
@@ -538,6 +538,9 @@ struct SolverFlags {
     // number of contacts for the sphere that has the most is that, well, we can have a huge sphere and it just will
     // have more contacts. But if avg cnt is high, that means probably the contact margin is out of control now.
     float errOutAvgSphCnts = 100.;
+
+    // Whether there are contacts that can never be removed.
+    bool hasPersistentContacts = false;
 };
 
 class DEMMaterial {
@@ -627,7 +630,7 @@ class DEMClumpTemplate {
     // Whether this is a big clump (not used; jitifiability is determined automatically)
     bool isBigClump = false;
     // A name given by the user. It will be outputted to file to indicate the type of a clump.
-    std::string m_name = DEME_NUM_CLUMP_NAME;
+    std::string m_name = DEME_NULL_CLUMP_NAME;
     // The volume of this type of clump.
     //// TODO: Add a method to automatically compute its volume
     float volume = 0.0;

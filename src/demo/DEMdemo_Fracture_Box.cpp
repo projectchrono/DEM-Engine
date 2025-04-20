@@ -35,7 +35,7 @@ int main() {
 
     //  E, nu, CoR, mu, Crr...
     auto mat_type_container =
-        DEMSim.LoadMaterial({{"E", 100e9}, {"nu", 0.3}, {"CoR", 0.7}, {"mu", 0.80}, {"Crr", 0.10}});
+        DEMSim.LoadMaterial({{"E", 100e7}, {"nu", 0.3}, {"CoR", 0.7}, {"mu", 0.80}, {"Crr", 0.10}});
     auto mat_type_particle = DEMSim.LoadMaterial({{"E", 60e9}, {"nu", 0.20}, {"CoR", 0.5}, {"mu", 0.5}, {"Crr", 0.05}});
     // If you don't have this line, then values will take average between 2 materials, when they are in contact
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_container, mat_type_particle, 0.2);
@@ -128,7 +128,10 @@ int main() {
     DEMSim.SetFamilyExtraMargin(1, fact_radius * sphere_rad);
 
     DEMSim.SetInitTimeStep(step_size);
-    DEMSim.SetGravitationalAcceleration(make_float3(0, 0.00, -9.81));
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0.00, 1 * -9.81));
+    // The `dry-run' option is on in this demo, which establishes the initial contact pairs while initializing. This is
+    // needed in this demo specifically, as we'll soon modify the contact wildcards associated with these contacts.
+    // You could also do a DoDynamicsThenSync(0) to achieve the same.
     DEMSim.Initialize();
     std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
 
@@ -151,6 +154,7 @@ int main() {
     std::ofstream csvFile(nameOutFile);
 
     DEMSim.SetFamilyContactWildcardValueAll(1, "initialLength", 0.0);
+    // DEMSim.SetFamilyContactWildcardValueBoth(1, "damage", 0.0);
     DEMSim.SetFamilyContactWildcardValueAll(1, "unbroken", 0.0);
 
     // Simulation loop

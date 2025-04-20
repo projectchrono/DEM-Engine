@@ -56,6 +56,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& previous_idGeometryA,
                       std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& previous_idGeometryB,
                       std::vector<contact_t, ManagedAllocator<contact_t>>& previous_contactType,
+                      std::vector<notStupidBool_t, ManagedAllocator<notStupidBool_t>>& contactPersistency,
                       std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>>& contactMapping,
                       cudaStream_t& this_stream,
                       DEMSolverStateData& scratchPad,
@@ -530,6 +531,198 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         scratchPad.finishUsingTempVector("sphSphContactReportOffsets");
         scratchPad.finishUsingTempVector("triSphContactReportOffsets");
 
+        // There is in fact one more task: If the user specified persistent contacts, we check the previous contact list
+        // and see if there are some contacts we need to add to the current list. Even if we detected 0 contacts, we
+        // might still have persistent contacts to add to the list.
+        // Also at this point, all temp arrays are freed now.
+        if (solverFlags.hasPersistentContacts && !solverFlags.isHistoryless) {
+            // A bool array to help find what persistent contacts from the prev array need to be processed...
+            size_t flag_arr_bytes = (*scratchPad.pNumPrevContacts) * sizeof(notStupidBool_t);
+            notStupidBool_t* grab_flags = (notStupidBool_t*)scratchPad.allocateTempVector("grab_flags", flag_arr_bytes);
+            size_t blocks_needed_for_flagging =
+                (*scratchPad.pNumPrevContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+            if (blocks_needed_for_flagging > 0) {
+                history_kernels->kernel("markBoolIf")
+                    .instantiate()
+                    .configure(dim3(blocks_needed_for_flagging), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream)
+                    .launch(grab_flags, granData->contactPersistency, CONTACT_IS_PERSISTENT,
+                            *scratchPad.pNumPrevContacts);
+                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+            }
+            // Store the number of persistent contacts
+            size_t* pNumPersistCnts = scratchPad.pTempSizeVar1;
+
+            // Then extract the persistent array
+            // This many elements are sufficient, at very least...
+            size_t selected_ids_bytes = (*scratchPad.pNumPrevContacts) * sizeof(bodyID_t);
+            size_t selected_types_bytes = (*scratchPad.pNumPrevContacts) * sizeof(contact_t);
+            bodyID_t* selected_idA = (bodyID_t*)scratchPad.allocateTempVector("selected_idA", selected_ids_bytes);
+            bodyID_t* selected_idB = (bodyID_t*)scratchPad.allocateTempVector("selected_idB", selected_ids_bytes);
+            contact_t* selected_types =
+                (contact_t*)scratchPad.allocateTempVector("selected_types", selected_types_bytes);
+
+            cubDEMSelectFlagged<bodyID_t, notStupidBool_t, DEMSolverStateData>(
+                granData->previous_idGeometryA, selected_idA, grab_flags, pNumPersistCnts, *scratchPad.pNumPrevContacts,
+                this_stream, scratchPad);
+            cubDEMSelectFlagged<bodyID_t, notStupidBool_t, DEMSolverStateData>(
+                granData->previous_idGeometryB, selected_idB, grab_flags, pNumPersistCnts, *scratchPad.pNumPrevContacts,
+                this_stream, scratchPad);
+            cubDEMSelectFlagged<contact_t, notStupidBool_t, DEMSolverStateData>(
+                granData->previous_contactType, selected_types, grab_flags, pNumPersistCnts,
+                *scratchPad.pNumPrevContacts, this_stream, scratchPad);
+
+            // Then concatenate the persisten
+            size_t total_ids_bytes = (*scratchPad.pNumContacts + *pNumPersistCnts) * sizeof(bodyID_t);
+            size_t total_types_bytes = (*scratchPad.pNumContacts + *pNumPersistCnts) * sizeof(contact_t);
+            size_t total_persistency_bytes = (*scratchPad.pNumContacts + *pNumPersistCnts) * sizeof(notStupidBool_t);
+            selected_ids_bytes = (*pNumPersistCnts) * sizeof(bodyID_t);
+            selected_types_bytes = (*pNumPersistCnts) * sizeof(contact_t);
+            bodyID_t* total_idA = (bodyID_t*)scratchPad.allocateTempVector("total_idA", total_ids_bytes);
+            bodyID_t* total_idB = (bodyID_t*)scratchPad.allocateTempVector("total_idB", total_ids_bytes);
+            contact_t* total_types = (contact_t*)scratchPad.allocateTempVector("total_types", total_types_bytes);
+            notStupidBool_t* total_persistency =
+                (notStupidBool_t*)scratchPad.allocateTempVector("total_persistency", total_persistency_bytes);
+            DEME_GPU_CALL(cudaMemcpy(total_idA, selected_idA, selected_ids_bytes, cudaMemcpyDeviceToDevice));
+            DEME_GPU_CALL(cudaMemcpy(total_idA + *pNumPersistCnts, granData->idGeometryA,
+                                     total_ids_bytes - selected_ids_bytes, cudaMemcpyDeviceToDevice));
+            DEME_GPU_CALL(cudaMemcpy(total_idB, selected_idB, selected_ids_bytes, cudaMemcpyDeviceToDevice));
+            DEME_GPU_CALL(cudaMemcpy(total_idB + *pNumPersistCnts, granData->idGeometryB,
+                                     total_ids_bytes - selected_ids_bytes, cudaMemcpyDeviceToDevice));
+            DEME_GPU_CALL(cudaMemcpy(total_types, selected_types, selected_types_bytes, cudaMemcpyDeviceToDevice));
+            DEME_GPU_CALL(cudaMemcpy(total_types + *pNumPersistCnts, granData->contactType,
+                                     total_types_bytes - selected_types_bytes, cudaMemcpyDeviceToDevice));
+            // For the selected portion, persistency is all 1
+            DEME_GPU_CALL(cudaMemset(total_persistency, CONTACT_NOT_PERSISTENT, total_persistency_bytes));
+            size_t blocks_needed_for_setting_1 =
+                (*pNumPersistCnts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+            if (blocks_needed_for_setting_1 > 0) {
+                history_kernels->kernel("setArr")
+                    .instantiate()
+                    .configure(dim3(blocks_needed_for_setting_1), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream)
+                    .launch(total_persistency, *pNumPersistCnts, CONTACT_IS_PERSISTENT);
+                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+            }
+            scratchPad.finishUsingTempVector("grab_flags");
+            scratchPad.finishUsingTempVector("selected_idA");
+            scratchPad.finishUsingTempVector("selected_idB");
+            scratchPad.finishUsingTempVector("selected_types");
+
+            // Then remove potential redundency in the current contact array.
+            // To do that, we sort by idA...
+            size_t* pNumTotalCnts = scratchPad.pTempSizeVar2;
+            *pNumTotalCnts = *scratchPad.pNumContacts + *pNumPersistCnts;
+            contact_t* contactType_sorted =
+                (contact_t*)scratchPad.allocateTempVector("contactType_sorted", total_types_bytes);
+            bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector("idA_sorted", total_ids_bytes);
+            bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector("idB_sorted", total_ids_bytes);
+            notStupidBool_t* persistency_sorted =
+                (notStupidBool_t*)scratchPad.allocateTempVector("persistency_sorted", total_persistency_bytes);
+            //// TODO: But do I have to SortByKey three times?? Can I zip these value arrays together??
+            // Although it is stupid, do pay attention to that it does leverage the fact that RadixSort is stable.
+            cubDEMSortByKeys<bodyID_t, bodyID_t, DEMSolverStateData>(total_idA, idA_sorted, total_idB, idB_sorted,
+                                                                     *pNumTotalCnts, this_stream, scratchPad);
+            cubDEMSortByKeys<bodyID_t, contact_t, DEMSolverStateData>(
+                total_idA, idA_sorted, total_types, contactType_sorted, *pNumTotalCnts, this_stream, scratchPad);
+            cubDEMSortByKeys<bodyID_t, notStupidBool_t, DEMSolverStateData>(
+                total_idA, idA_sorted, total_persistency, persistency_sorted, *pNumTotalCnts, this_stream, scratchPad);
+            // std::cout << "Contacts before duplication check: " << std::endl;
+            // displayArray<bodyID_t>(idA_sorted, *pNumTotalCnts);
+            // displayArray<bodyID_t>(idB_sorted, *pNumTotalCnts);
+            // displayArray<contact_t>(contactType_sorted, *pNumTotalCnts);
+            // displayArray<notStupidBool_t>(persistency_sorted, *pNumTotalCnts);
+            scratchPad.finishUsingTempVector("total_idA");
+            scratchPad.finishUsingTempVector("total_idB");
+            scratchPad.finishUsingTempVector("total_types");
+            scratchPad.finishUsingTempVector("total_persistency");
+
+            // Then we run-length it...
+            size_t run_length_bytes = simParams->nSpheresGM * sizeof(geoSphereTouches_t);
+            geoSphereTouches_t* idA_runlength =
+                (geoSphereTouches_t*)scratchPad.allocateTempVector("idA_runlength", run_length_bytes);
+            size_t unique_id_bytes = simParams->nSpheresGM * sizeof(bodyID_t);
+            bodyID_t* unique_idA = (bodyID_t*)scratchPad.allocateTempVector("unique_idA", unique_id_bytes);
+            size_t* pNumUniqueA = scratchPad.pTempSizeVar1;
+            cubDEMRunLengthEncode<bodyID_t, geoSphereTouches_t, DEMSolverStateData>(
+                idA_sorted, unique_idA, idA_runlength, pNumUniqueA, *pNumTotalCnts, this_stream, scratchPad);
+            size_t scanned_runlength_bytes = (*pNumUniqueA) * sizeof(contactPairs_t);
+            contactPairs_t* idA_scanned_runlength =
+                (contactPairs_t*)scratchPad.allocateTempVector("idA_scanned_runlength", scanned_runlength_bytes);
+            cubDEMPrefixScan<geoSphereTouches_t, contactPairs_t, DEMSolverStateData>(
+                idA_runlength, idA_scanned_runlength, *pNumUniqueA, this_stream, scratchPad);
+
+            // Then each thread will take care of an id in A to mark redundency...
+            size_t retain_flags_size = (*pNumTotalCnts) * sizeof(notStupidBool_t);
+            notStupidBool_t* retain_flags =
+                (notStupidBool_t*)scratchPad.allocateTempVector("retain_flags", retain_flags_size);
+            blocks_needed_for_setting_1 =
+                (*pNumTotalCnts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+            if (blocks_needed_for_setting_1 > 0) {
+                history_kernels->kernel("setArr")
+                    .instantiate()
+                    .configure(dim3(blocks_needed_for_setting_1), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream)
+                    .launch(retain_flags, *pNumTotalCnts, (notStupidBool_t)1);
+                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+            }
+            blocks_needed_for_flagging = (*pNumUniqueA + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
+            if (blocks_needed_for_flagging > 0) {
+                history_kernels->kernel("markDuplicateContacts")
+                    .instantiate()
+                    .configure(dim3(blocks_needed_for_flagging), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
+                    .launch(idA_runlength, idA_scanned_runlength, idB_sorted, contactType_sorted, persistency_sorted,
+                            retain_flags, *pNumUniqueA);
+                DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
+            }
+            // std::cout << "Marked retainers: " << std::endl;
+            // displayArray<notStupidBool_t>(retain_flags, *pNumTotalCnts);
+
+            // Then remove redundency based on the flag array...
+            // Note the contactPersistency array is managed by the current contact arr. It will also be copied over.
+            size_t* pNumRetainedCnts = scratchPad.pTempSizeVar1;
+            cubDEMSum<notStupidBool_t, size_t, DEMSolverStateData>(retain_flags, pNumRetainedCnts, *pNumTotalCnts,
+                                                                   this_stream, scratchPad);
+            // DEME_STEP_DEBUG_PRINTF("Found %zu contacts, including user-specified persistent contacts.",
+            //                        *pNumRetainedCnts);
+            if (*pNumRetainedCnts > idGeometryA.size()) {
+                contactEventArraysResize(*pNumRetainedCnts, idGeometryA, idGeometryB, contactType, granData);
+            }
+            if (*pNumRetainedCnts > contactPersistency.size()) {
+                contactPersistency.resize(*pNumRetainedCnts);
+                granData->contactPersistency = contactPersistency.data();
+            }
+            cubDEMSelectFlagged<bodyID_t, notStupidBool_t, DEMSolverStateData>(idA_sorted, granData->idGeometryA,
+                                                                               retain_flags, pNumRetainedCnts,
+                                                                               *pNumTotalCnts, this_stream, scratchPad);
+            cubDEMSelectFlagged<bodyID_t, notStupidBool_t, DEMSolverStateData>(idB_sorted, granData->idGeometryB,
+                                                                               retain_flags, pNumRetainedCnts,
+                                                                               *pNumTotalCnts, this_stream, scratchPad);
+            cubDEMSelectFlagged<contact_t, notStupidBool_t, DEMSolverStateData>(
+                contactType_sorted, granData->contactType, retain_flags, pNumRetainedCnts, *pNumTotalCnts, this_stream,
+                scratchPad);
+            cubDEMSelectFlagged<notStupidBool_t, notStupidBool_t, DEMSolverStateData>(
+                persistency_sorted, granData->contactPersistency, retain_flags, pNumRetainedCnts, *pNumTotalCnts,
+                this_stream, scratchPad);
+            // DEME_STEP_DEBUG_PRINTF("CUB confirms there are %zu contacts, including user-specified persistent
+            // contacts.", *pNumRetainedCnts);
+            // std::cout << "Contacts after duplication check: " << std::endl;
+            // displayArray<bodyID_t>(granData->idGeometryA, *pNumRetainedCnts);
+            // displayArray<bodyID_t>(granData->idGeometryB, *pNumRetainedCnts);
+            // displayArray<contact_t>(granData->contactType, *pNumRetainedCnts);
+            // displayArray<notStupidBool_t>(granData->contactPersistency, *pNumRetainedCnts);
+
+            // And update the number of contacts.
+            *scratchPad.pNumContacts = *pNumRetainedCnts;
+
+            // Unclaim all temp vectors
+            scratchPad.finishUsingTempVector("idA_runlength");
+            scratchPad.finishUsingTempVector("unique_idA");
+            scratchPad.finishUsingTempVector("idA_scanned_runlength");
+            scratchPad.finishUsingTempVector("contactType_sorted");
+            scratchPad.finishUsingTempVector("idA_sorted");
+            scratchPad.finishUsingTempVector("idB_sorted");
+            scratchPad.finishUsingTempVector("persistency_sorted");
+            scratchPad.finishUsingTempVector("retain_flags");
+        }
+
         timers.GetTimer("Find contact pairs").stop();
     }
 
@@ -538,28 +731,39 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     ////////////////////////////////////////////////////////////////////////////////
 
     timers.GetTimer("Build history map").start();
-    // Now, sort idGeometryAB by their owners. Needed for identifying persistent contacts in history-based models.
+    // Now, sort idGeometryAB by their owners. Needed for identifying enduring contacts in history-based models.
     if (*scratchPad.pNumContacts > 0) {
-        // All temp vectors are free now, and all of them are fairly long...
+        // All temp vectors are free now...
+        // Note that if it hasPersistentContacts, idAB and types are already sorted based on idA, so there is no need to
+        // do that again.
         size_t type_arr_bytes = (*scratchPad.pNumContacts) * sizeof(contact_t);
-        contact_t* contactType_sorted = (contact_t*)scratchPad.allocateTempVector("contactType_sorted", type_arr_bytes);
+
         size_t id_arr_bytes = (*scratchPad.pNumContacts) * sizeof(bodyID_t);
-        bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector("idA_sorted", id_arr_bytes);
-        bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector("idB_sorted", id_arr_bytes);
+        if (!solverFlags.hasPersistentContacts) {
+            contact_t* contactType_sorted =
+                (contact_t*)scratchPad.allocateTempVector("contactType_sorted", type_arr_bytes);
+            bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector("idA_sorted", id_arr_bytes);
+            bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector("idB_sorted", id_arr_bytes);
 
-        //// TODO: But do I have to SortByKey twice?? Can I zip these value arrays together??
-        // Although it is stupid, do pay attention to that it does leverage the fact that RadixSort is stable.
-        cubDEMSortByKeys<bodyID_t, bodyID_t, DEMSolverStateData>(granData->idGeometryA, idA_sorted,
-                                                                 granData->idGeometryB, idB_sorted,
-                                                                 *scratchPad.pNumContacts, this_stream, scratchPad);
-        cubDEMSortByKeys<bodyID_t, contact_t, DEMSolverStateData>(granData->idGeometryA, idA_sorted,
-                                                                  granData->contactType, contactType_sorted,
-                                                                  *scratchPad.pNumContacts, this_stream, scratchPad);
+            //// TODO: But do I have to SortByKey two times?? Can I zip these value arrays together??
+            // Although it is stupid, do pay attention to that it does leverage the fact that RadixSort is stable.
+            cubDEMSortByKeys<bodyID_t, bodyID_t, DEMSolverStateData>(granData->idGeometryA, idA_sorted,
+                                                                     granData->idGeometryB, idB_sorted,
+                                                                     *scratchPad.pNumContacts, this_stream, scratchPad);
+            cubDEMSortByKeys<bodyID_t, contact_t, DEMSolverStateData>(
+                granData->idGeometryA, idA_sorted, granData->contactType, contactType_sorted, *scratchPad.pNumContacts,
+                this_stream, scratchPad);
 
-        // Copy back to idGeometry arrays
-        DEME_GPU_CALL(cudaMemcpy(granData->idGeometryA, idA_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
-        DEME_GPU_CALL(cudaMemcpy(granData->idGeometryB, idB_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
-        DEME_GPU_CALL(cudaMemcpy(granData->contactType, contactType_sorted, type_arr_bytes, cudaMemcpyDeviceToDevice));
+            // Copy back to idGeometry arrays
+            DEME_GPU_CALL(cudaMemcpy(granData->idGeometryA, idA_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
+            DEME_GPU_CALL(cudaMemcpy(granData->idGeometryB, idB_sorted, id_arr_bytes, cudaMemcpyDeviceToDevice));
+            DEME_GPU_CALL(
+                cudaMemcpy(granData->contactType, contactType_sorted, type_arr_bytes, cudaMemcpyDeviceToDevice));
+            // Short-lifespan vectors can now be freed
+            scratchPad.finishUsingTempVector("contactType_sorted");
+            scratchPad.finishUsingTempVector("idA_sorted");
+            scratchPad.finishUsingTempVector("idB_sorted");
+        }
         // DEME_DEBUG_PRINTF("New contact IDs (A):");
         // DEME_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryA, *scratchPad.pNumContacts));
         // DEME_DEBUG_PRINTF("New contact IDs (B):");
@@ -572,12 +776,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // DEME_DEBUG_EXEC(displayArray<bodyID_t>(granData->previous_idGeometryB, *scratchPad.pNumPrevContacts));
         // DEME_DEBUG_PRINTF("Old contact types:");
         // DEME_DEBUG_EXEC(displayArray<contact_t>(granData->previous_contactType, *scratchPad.pNumPrevContacts));
-        // Short-lifespan vectors can now be freed
-        scratchPad.finishUsingTempVector("contactType_sorted");
-        scratchPad.finishUsingTempVector("idA_sorted");
-        scratchPad.finishUsingTempVector("idB_sorted");
 
-        // For history-based models, construct the persistent contact map. We dwell on the fact that idA is always
+        // For history-based models, construct the enduring contact map. We dwell on the fact that idA is always
         // for a sphere.
         // This CD run and previous CD run could have different number of spheres in them. We pick the larger
         // number to refer in building the persistent contact map to avoid potential problems.
@@ -712,6 +912,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
 
                     contact_t* old_contactType_sorted = (contact_t*)scratchPad.allocateTempVector(
                         "old_contactType_sorted", (*scratchPad.pNumPrevContacts) * sizeof(contact_t));
+                    // Sorted by type is how we shipped the old contact pair info
                     cubDEMSortByKeys<contact_t, contactPairs_t, DEMSolverStateData>(
                         granData->previous_contactType, old_contactType_sorted, one_to_n, old_arr_unsort_to_sort_map,
                         *scratchPad.pNumPrevContacts, this_stream, scratchPad);
@@ -761,6 +962,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 contactPairs_t* map_sorted =
                     (contactPairs_t*)scratchPad.allocateTempVector("map_sorted", cnt_arr_bytes);
 
+                //// TODO: But do I have to SortByKey three times?? Can I zip these value arrays together??
                 cubDEMSortByKeys<contact_t, bodyID_t, DEMSolverStateData>(
                     granData->contactType, contactType_sorted, granData->idGeometryB, idB_sorted,
                     *scratchPad.pNumContacts, this_stream, scratchPad);
@@ -842,6 +1044,7 @@ void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
                                 std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& previous_idGeometryB,
                                 std::vector<contact_t, ManagedAllocator<contact_t>>& previous_contactType,
                                 DualStruct<DEMSimParams>& simParams,
+                                std::vector<notStupidBool_t, ManagedAllocator<notStupidBool_t>>& contactPersistency,
                                 DEMSolverStateData& scratchPad,
                                 cudaStream_t& this_stream,
                                 size_t nContacts) {
@@ -874,10 +1077,14 @@ void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
         previous_idGeometryA.resize(nContacts);
         previous_idGeometryB.resize(nContacts);
         previous_contactType.resize(nContacts);
+        // In the case of user-loaded contacts, if the persistency array is not long enough then we have to manually
+        // extend it.
+        contactPersistency.resize(nContacts, CONTACT_NOT_PERSISTENT);
 
         kT_data->previous_idGeometryA = previous_idGeometryA.data();
         kT_data->previous_idGeometryB = previous_idGeometryB.data();
         kT_data->previous_contactType = previous_contactType.data();
+        kT_data->contactPersistency = contactPersistency.data();
 
         // Assuming size-updated arrays will be used on device... which might not be true
         kT_data.syncToDevice();

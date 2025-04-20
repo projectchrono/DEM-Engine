@@ -430,9 +430,9 @@ class DEMDynamicThread {
 
     /// @brief Change the value of contact wildcards no.wc_num to val if either of the contact geometries is in family
     /// N.
-    void setFamilyContactWildcardValueAny(unsigned int N, unsigned int wc_num, float val);
+    void setFamilyContactWildcardValueEither(unsigned int N, unsigned int wc_num, float val);
     /// @brief Change the value of contact wildcards no.wc_num to val if both of the contact geometries are in family N.
-    void setFamilyContactWildcardValueAll(unsigned int N, unsigned int wc_num, float val);
+    void setFamilyContactWildcardValueBoth(unsigned int N, unsigned int wc_num, float val);
     /// @brief Change the value of contact wildcards no.wc_num to val if the contacts are in family N1 and N2
     /// respectively.
     void setFamilyContactWildcardValue(unsigned int N1, unsigned int N2, unsigned int wc_num, float val);
@@ -644,7 +644,7 @@ class DEMDynamicThread {
     DualArray<scratch_t> m_reduceRes = DualArray<scratch_t>(&m_approx_bytes_used);
 
     // Migrate contact history to fit the structure of the newly received contact array
-    inline void migratePersistentContacts();
+    inline void migrateEnduringContacts();
 
     // Update clump-based acceleration array based on sphere-based force array
     inline void calculateForces();

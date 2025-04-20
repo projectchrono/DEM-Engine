@@ -291,7 +291,8 @@ void DEMKinematicThread::workerThread() {
             contactDetection(bin_sphere_kernels, bin_triangle_kernels, sphere_contact_kernels, sphTri_contact_kernels,
                              history_kernels, granData, simParams, solverFlags, verbosity, idGeometryA, idGeometryB,
                              contactType, previous_idGeometryA, previous_idGeometryB, previous_contactType,
-                             contactMapping, streamInfo.stream, stateOfSolver_resources, timers, stateParams);
+                             contactPersistency, contactMapping, streamInfo.stream, stateOfSolver_resources, timers,
+                             stateParams);
             CDAccumTimer.End();
 
             timers.GetTimer("Send to dT buffer").start();
@@ -431,6 +432,7 @@ void DEMKinematicThread::packDataPointers() {
     granData->idGeometryA = idGeometryA.data();
     granData->idGeometryB = idGeometryB.data();
     granData->contactType = contactType.data();
+    granData->contactPersistency = contactPersistency.data();
     granData->previous_idGeometryA = previous_idGeometryA.data();
     granData->previous_idGeometryB = previous_idGeometryB.data();
     granData->previous_contactType = previous_contactType.data();
@@ -653,6 +655,8 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
         DEME_TRACKED_RESIZE_DEBUGPRINT(idGeometryB, cnt_arr_size, "idGeometryB", 0);
         DEME_TRACKED_RESIZE_DEBUGPRINT(contactType, cnt_arr_size, "contactType", NOT_A_CONTACT);
         if (!solverFlags.isHistoryless) {
+            DEME_TRACKED_RESIZE_DEBUGPRINT(contactPersistency, cnt_arr_size, "contactPersistency",
+                                           CONTACT_NOT_PERSISTENT);
             DEME_TRACKED_RESIZE_DEBUGPRINT(previous_idGeometryA, cnt_arr_size, "previous_idGeometryA", 0);
             DEME_TRACKED_RESIZE_DEBUGPRINT(previous_idGeometryB, cnt_arr_size, "previous_idGeometryB", 0);
             DEME_TRACKED_RESIZE_DEBUGPRINT(previous_contactType, cnt_arr_size, "previous_contactType", NOT_A_CONTACT);
@@ -828,7 +832,7 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
 void DEMKinematicThread::updatePrevContactArrays(DEMDataDT* dT_data, size_t nContacts) {
     // Store the incoming info in temp arrays
     overwritePrevContactArrays(granData, dT_data, previous_idGeometryA, previous_idGeometryB, previous_contactType,
-                               simParams, stateOfSolver_resources, streamInfo.stream, nContacts);
+                               simParams, contactPersistency, stateOfSolver_resources, streamInfo.stream, nContacts);
     DEME_DEBUG_PRINTF("Number of contacts after a user-manual contact load: %zu", nContacts);
     DEME_DEBUG_PRINTF("Number of spheres after a user-manual contact load: %zu", (size_t)simParams->nSpheresGM);
 }

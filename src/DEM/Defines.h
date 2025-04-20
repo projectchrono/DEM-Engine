@@ -51,7 +51,7 @@ constexpr int64_t MAX_SUBVOXEL = (int64_t)1 << VOXEL_RES_POWER2;
 
 #define DEME_NUM_TRIANGLE_PER_BLOCK 512
 #define DEME_MAX_THREADS_PER_BLOCK 1024
-#define DEME_INIT_CNT_MULTIPLIER 2
+#define DEME_INIT_CNT_MULTIPLIER 1
 // If there are more than this number of analytical geometry, we may have difficulty jitify them all
 #define DEME_THRESHOLD_TOO_MANY_ANAL_GEO 64
 // If a clump has more than this number of sphere components, it is automatically considered a non-jitifiable big clump
@@ -87,6 +87,11 @@ const notStupidBool_t PREVENT_CONTACT = 1;
 const ownerType_t OWNER_T_CLUMP = 1;
 const ownerType_t OWNER_T_ANALYTICAL = 2;
 const ownerType_t OWNER_T_MESH = 4;
+
+// Contact persistency marker consts...
+const notStupidBool_t CONTACT_NOT_PERSISTENT = 0;
+const notStupidBool_t CONTACT_IS_PERSISTENT = 1;
+// const notStupidBool_t CONTACT_PERSISTENT_AND_FOUND = 2;
 
 // This ID marks that this is a new contact, not present when we did contact detection last time
 // TODO: half max add half max... so stupid... Better way?? numeric_limit won't work...
@@ -425,6 +430,7 @@ struct DEMDataKT {
     bodyID_t* idGeometryA;
     bodyID_t* idGeometryB;
     contact_t* contactType;
+    notStupidBool_t* contactPersistency;
     bodyID_t* previous_idGeometryA;
     bodyID_t* previous_idGeometryB;
     contact_t* previous_contactType;

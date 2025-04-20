@@ -48,9 +48,12 @@ inline bool gpu_assert_watch_beta(cudaError_t code, const char* filename, int li
                        "simulation objects are initially within the domain you specified.\n";
             out_msg << "------------------------------------\n";
             out_msg
-                << "If the velocity is fair, and you are using a custom force model, one thing to do is to "
+                << "If the velocity is fair, and you *are* using a custom force model, one thing to do is to "
                    "SetForceCalcThreadsPerBlock to a small number like 128 (see README.md troubleshooting for "
-                   "details).\nIf you are going to discuss this on forum https://groups.google.com/g/projectchrono, "
+                   "details).\nIf you are not using a custom model, one thing to do is to ensure the simulation "
+                   "world size (InstructBoxDomainDimension) is not orders of magnitude larger than the actual "
+                   "space the simulation entities take up.\nIf none works and you are going to discuss this on forum "
+                   "https://groups.google.com/g/projectchrono, "
                    "please include a visual rendering of the simulation before crash.\n\n";
             std::cerr << out_msg.str();
             std::stringstream out;

@@ -186,6 +186,9 @@ class DEMKinematicThread {
     // The ID that maps this analytical entity component's geometry-defining parameters, when this component is jitified
     // std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> analComponentOffset;
 
+    // Records if this contact is persistent and serves as kT's work array on treating their persistency.
+    std::vector<notStupidBool_t, ManagedAllocator<notStupidBool_t>> contactPersistency;
+
     // kT's timers
     std::vector<std::string> timer_names = {"Discretize domain",      "Find contact pairs", "Build history map",
                                             "Unpack updates from dT", "Send to dT buffer",  "Wait for dT update"};

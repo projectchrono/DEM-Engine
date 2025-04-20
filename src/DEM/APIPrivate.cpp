@@ -30,6 +30,137 @@ void DEMSolver::assertSysNotInit(const std::string& method_name) {
     }
 }
 
+bodyID_t DEMSolver::getOwnerBasedOnContactType(bodyID_t bodyB, contact_t c_type) const {
+    bodyID_t ownerB;
+    switch (c_type) {
+        case NOT_A_CONTACT:
+            break;
+        case SPHERE_SPHERE_CONTACT:
+            ownerB = dT->ownerClumpBody[bodyB];
+            break;
+        case SPHERE_MESH_CONTACT:
+            ownerB = dT->ownerMesh[bodyB];
+            break;
+        default:  // Analytical contact
+            ownerB = dT->ownerAnalBody[bodyB];
+    }
+    return ownerB;
+}
+
+void DEMSolver::assignFamilyPersistentContactEither(unsigned int N, notStupidBool_t is_or_not) {
+    if (kT->solverFlags.isHistoryless) {
+        DEME_ERROR(
+            "You cannot mark persistent contacts when using a wildcard-less/history-less contact model (since "
+            "persistency is a part of the history).\nYou can use a different force model, and if you have to use this "
+            "one, add a placeholder wildcard.");
+    }
+
+    // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
+    // as persistent but not found in CD, it will be added to the contact array.
+    for (size_t i = 0; i < *(kT->stateOfSolver_resources.pNumPrevContacts); i++) {
+        bodyID_t bodyA = kT->previous_idGeometryA[i];
+        bodyID_t bodyB = kT->previous_idGeometryB[i];
+        contact_t c_type = kT->previous_contactType[i];
+
+        bodyID_t ownerA = dT->ownerClumpBody[bodyA];
+        // As for B, it depends on type
+        bodyID_t ownerB = getOwnerBasedOnContactType(bodyB, c_type);
+
+        family_t famA = dT->familyID[ownerA];
+        family_t famB = dT->familyID[ownerB];
+        if (((unsigned int)famA == N) || ((unsigned int)famB == N)) {
+            kT->contactPersistency[i] = is_or_not;
+        }
+    }
+
+    if (is_or_not == CONTACT_IS_PERSISTENT) {
+        kT->solverFlags.hasPersistentContacts = true;
+        dT->solverFlags.hasPersistentContacts = true;
+    }
+}
+void DEMSolver::assignFamilyPersistentContactBoth(unsigned int N, notStupidBool_t is_or_not) {
+    if (kT->solverFlags.isHistoryless) {
+        DEME_ERROR(
+            "You cannot mark persistent contacts when using a wildcard-less/history-less contact model (since "
+            "persistency is a part of the history).\nYou can use a different force model, and if you have to use this "
+            "one, add a placeholder wildcard.");
+    }
+
+    // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
+    // as persistent but not found in CD, it will be added to the contact array.
+    for (size_t i = 0; i < *(kT->stateOfSolver_resources.pNumPrevContacts); i++) {
+        bodyID_t bodyA = kT->previous_idGeometryA[i];
+        bodyID_t bodyB = kT->previous_idGeometryB[i];
+        contact_t c_type = kT->previous_contactType[i];
+
+        bodyID_t ownerA = dT->ownerClumpBody[bodyA];
+        // As for B, it depends on type
+        bodyID_t ownerB = getOwnerBasedOnContactType(bodyB, c_type);
+
+        family_t famA = dT->familyID[ownerA];
+        family_t famB = dT->familyID[ownerB];
+        if (((unsigned int)famA == N) && ((unsigned int)famB == N)) {
+            kT->contactPersistency[i] = is_or_not;
+        }
+    }
+
+    if (is_or_not == CONTACT_IS_PERSISTENT) {
+        kT->solverFlags.hasPersistentContacts = true;
+        dT->solverFlags.hasPersistentContacts = true;
+    }
+}
+void DEMSolver::assignFamilyPersistentContact(unsigned int N1, unsigned int N2, notStupidBool_t is_or_not) {
+    if (kT->solverFlags.isHistoryless) {
+        DEME_ERROR(
+            "You cannot mark persistent contacts when using a wildcard-less/history-less contact model (since "
+            "persistency is a part of the history).\nYou can use a different force model, and if you have to use this "
+            "one, add a placeholder wildcard.");
+    }
+
+    // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
+    // as persistent but not found in CD, it will be added to the contact array.
+    for (size_t i = 0; i < *(kT->stateOfSolver_resources.pNumPrevContacts); i++) {
+        bodyID_t bodyA = kT->previous_idGeometryA[i];
+        bodyID_t bodyB = kT->previous_idGeometryB[i];
+        contact_t c_type = kT->previous_contactType[i];
+
+        bodyID_t ownerA = dT->ownerClumpBody[bodyA];
+        // As for B, it depends on type
+        bodyID_t ownerB = getOwnerBasedOnContactType(bodyB, c_type);
+
+        family_t famA = dT->familyID[ownerA];
+        family_t famB = dT->familyID[ownerB];
+        if ((((unsigned int)famA == N1) && ((unsigned int)famB == N2)) ||
+            (((unsigned int)famA == N2) && ((unsigned int)famB == N1))) {
+            kT->contactPersistency[i] = is_or_not;
+        }
+    }
+
+    if (is_or_not == CONTACT_IS_PERSISTENT) {
+        kT->solverFlags.hasPersistentContacts = true;
+        dT->solverFlags.hasPersistentContacts = true;
+    }
+}
+void DEMSolver::assignPersistentContact(notStupidBool_t is_or_not) {
+    if (kT->solverFlags.isHistoryless) {
+        DEME_ERROR(
+            "You cannot mark persistent contacts when using a wildcard-less/history-less contact model (since "
+            "persistency is a part of the history).\nYou can use a different force model, and if you have to use this "
+            "one, add a placeholder wildcard.");
+    }
+
+    // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
+    // as persistent but not found in CD, it will be added to the contact array.
+    for (size_t i = 0; i < *(kT->stateOfSolver_resources.pNumPrevContacts); i++) {
+        kT->contactPersistency[i] = is_or_not;
+    }
+
+    if (is_or_not == CONTACT_IS_PERSISTENT) {
+        kT->solverFlags.hasPersistentContacts = true;
+        dT->solverFlags.hasPersistentContacts = true;
+    }
+}
+
 void DEMSolver::generatePolicyResources() {
     // Process the loaded materials. The pre-process of external objects and clumps could add more materials, so this
     // call need to go after those pre-process ones.
