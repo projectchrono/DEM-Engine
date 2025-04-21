@@ -35,7 +35,7 @@ namespace deme {
 // Implementation-level classes
 class DEMKinematicThread;
 class DEMDynamicThread;
-class DEMSolverStateData;
+class DEMSolverScratchData;
 
 /// DynamicThread class
 class DEMDynamicThread {
@@ -72,7 +72,7 @@ class DEMDynamicThread {
     GpuManager::StreamInfo streamInfo;
 
     // A class that contains scratch pad and system status data (constructed with the number of temp arrays we need)
-    DEMSolverStateData stateOfSolver_resources = DEMSolverStateData(&m_approxDeviceBytesUsed);
+    DEMSolverScratchData stateOfSolver_resources = DEMSolverScratchData(&m_approxDeviceBytesUsed);
 
     // The number of for iterations dT does for a specific user "run simulation" call
     double cycleDuration;

@@ -6,7 +6,7 @@
 #include <cub/cub.cuh>
 #include <core/utils/JitHelper.h>
 #include <DEM/Defines.h>
-
+#include <DEM/Structs.h>
 #include <core/utils/GpuError.h>
 
 namespace deme {
@@ -43,14 +43,14 @@ struct CubFloatMax {
     }
 };
 
-template <typename T1, typename T2, typename T3>
+template <typename T1, typename T2>
 inline void cubDEMSelectFlagged(T1* d_in,
                                 T1* d_out,
                                 T2* d_flags,
                                 size_t* d_num_out,
                                 size_t n,
                                 cudaStream_t& this_stream,
-                                T3& scratchPad) {
+                                DEMSolverScratchData& scratchPad) {
     size_t cub_scratch_bytes = 0;
     cub::DeviceSelect::Flagged(NULL, cub_scratch_bytes, d_in, d_flags, d_out, d_num_out, n, this_stream);
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
@@ -59,8 +59,12 @@ inline void cubDEMSelectFlagged(T1* d_in,
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
-template <typename T1, typename T2, typename T3>
-inline void cubDEMPrefixScan(T1* d_in, T2* d_out, size_t n, cudaStream_t& this_stream, T3& scratchPad) {
+template <typename T1, typename T2>
+inline void cubDEMPrefixScan(T1* d_in,
+                             T2* d_out,
+                             size_t n,
+                             cudaStream_t& this_stream,
+                             DEMSolverScratchData& scratchPad) {
     // NOTE!!! Why did I not use ExclusiveSum? I found that when for a cub scan operation, if the d_in and d_out are of
     // different types, then cub defaults to use d_in type to store the scan result, but will switch to d_out type if
     // there are too many items to scan. There is however, a region where cub does not choose to switch to d_out type,
@@ -75,14 +79,14 @@ inline void cubDEMPrefixScan(T1* d_in, T2* d_out, size_t n, cudaStream_t& this_s
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
-template <typename T1, typename T2, typename T3>
+template <typename T1, typename T2>
 inline void cubDEMSortByKeys(T1* d_keys_in,
                              T1* d_keys_out,
                              T2* d_vals_in,
                              T2* d_vals_out,
                              size_t n,
                              cudaStream_t& this_stream,
-                             T3& scratchPad) {
+                             DEMSolverScratchData& scratchPad) {
     size_t cub_scratch_bytes = 0;
     cub::DeviceRadixSort::SortPairs(NULL, cub_scratch_bytes, d_keys_in, d_keys_out, d_vals_in, d_vals_out, n, 0,
                                     sizeof(T1) * DEME_BITS_PER_BYTE, this_stream);
@@ -93,8 +97,13 @@ inline void cubDEMSortByKeys(T1* d_keys_in,
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
-template <typename T1, typename T2>
-inline void cubDEMUnique(T1* d_in, T1* d_out, size_t* d_num_out, size_t n, cudaStream_t& this_stream, T2& scratchPad) {
+template <typename T1>
+inline void cubDEMUnique(T1* d_in,
+                         T1* d_out,
+                         size_t* d_num_out,
+                         size_t n,
+                         cudaStream_t& this_stream,
+                         DEMSolverScratchData& scratchPad) {
     size_t cub_scratch_bytes = 0;
     cub::DeviceSelect::Unique(NULL, cub_scratch_bytes, d_in, d_out, d_num_out, n, this_stream);
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
@@ -103,14 +112,14 @@ inline void cubDEMUnique(T1* d_in, T1* d_out, size_t* d_num_out, size_t n, cudaS
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
-template <typename T1, typename T2, typename T3>
+template <typename T1, typename T2>
 inline void cubDEMRunLengthEncode(T1* d_in,
                                   T1* d_unique_out,
                                   T2* d_counts_out,
                                   size_t* d_num_out,
                                   size_t n,
                                   cudaStream_t& this_stream,
-                                  T3& scratchPad) {
+                                  DEMSolverScratchData& scratchPad) {
     size_t cub_scratch_bytes = 0;
     cub::DeviceRunLengthEncode::Encode(NULL, cub_scratch_bytes, d_in, d_unique_out, d_counts_out, d_num_out, n,
                                        this_stream);
@@ -121,7 +130,7 @@ inline void cubDEMRunLengthEncode(T1* d_in,
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
-template <typename T1, typename T2, typename T3, typename T4>
+template <typename T1, typename T2, typename T3>
 inline void cubDEMReduceByKeys(T1* d_keys_in,
                                T1* d_unique_out,
                                T2* d_vals_in,
@@ -130,7 +139,7 @@ inline void cubDEMReduceByKeys(T1* d_keys_in,
                                T3& reduce_op,
                                size_t n,
                                cudaStream_t& this_stream,
-                               T4& scratchPad) {
+                               DEMSolverScratchData& scratchPad) {
     size_t cub_scratch_bytes = 0;
     cub::DeviceReduce::ReduceByKey(NULL, cub_scratch_bytes, d_keys_in, d_unique_out, d_vals_in, d_aggregates_out,
                                    d_num_out, reduce_op, n, this_stream);
@@ -141,8 +150,8 @@ inline void cubDEMReduceByKeys(T1* d_keys_in,
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
-template <typename T1, typename T2, typename T3>
-void cubDEMSum(T1* d_in, T2* d_out, size_t n, cudaStream_t& this_stream, T3& scratchPad) {
+template <typename T1, typename T2>
+void cubDEMSum(T1* d_in, T2* d_out, size_t n, cudaStream_t& this_stream, DEMSolverScratchData& scratchPad) {
     size_t cub_scratch_bytes = 0;
     cub::DeviceReduce::Reduce(NULL, cub_scratch_bytes, d_in, d_out, n, cub::Sum(), (T2)0, this_stream);
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
@@ -151,8 +160,8 @@ void cubDEMSum(T1* d_in, T2* d_out, size_t n, cudaStream_t& this_stream, T3& scr
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
-// template <typename T1, typename T2>
-// void cubDEMSum(T1* d_in, T1* d_out, size_t n, cudaStream_t& this_stream, T2& scratchPad) {
+// template <typename T1>
+// void cubDEMSum(T1* d_in, T1* d_out, size_t n, cudaStream_t& this_stream, DEMSolverScratchData& scratchPad) {
 //     size_t cub_scratch_bytes = 0;
 //     cub::DeviceReduce::Sum(NULL, cub_scratch_bytes, d_in, d_out, n, this_stream);
 //     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
@@ -161,8 +170,8 @@ void cubDEMSum(T1* d_in, T2* d_out, size_t n, cudaStream_t& this_stream, T3& scr
 //     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 // }
 
-template <typename T1, typename T2>
-void cubDEMMax(T1* d_in, T1* d_out, size_t n, cudaStream_t& this_stream, T2& scratchPad) {
+template <typename T1>
+void cubDEMMax(T1* d_in, T1* d_out, size_t n, cudaStream_t& this_stream, DEMSolverScratchData& scratchPad) {
     size_t cub_scratch_bytes = 0;
     cub::DeviceReduce::Max(NULL, cub_scratch_bytes, d_in, d_out, n, this_stream);
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
@@ -171,8 +180,8 @@ void cubDEMMax(T1* d_in, T1* d_out, size_t n, cudaStream_t& this_stream, T2& scr
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
-template <typename T1, typename T2>
-void cubDEMMin(T1* d_in, T1* d_out, size_t n, cudaStream_t& this_stream, T2& scratchPad) {
+template <typename T1>
+void cubDEMMin(T1* d_in, T1* d_out, size_t n, cudaStream_t& this_stream, DEMSolverScratchData& scratchPad) {
     size_t cub_scratch_bytes = 0;
     cub::DeviceReduce::Min(NULL, cub_scratch_bytes, d_in, d_out, n, this_stream);
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));

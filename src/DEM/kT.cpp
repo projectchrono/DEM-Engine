@@ -14,7 +14,7 @@
 #include <DEM/HostSideHelpers.hpp>
 #include <DEM/Defines.h>
 
-#include <algorithms/DEMCubBasedSubroutines.h>
+#include <algorithms/DEMStaticDeviceSubroutines.h>
 
 namespace deme {
 
@@ -139,8 +139,8 @@ inline void DEMKinematicThread::unpackMyBuffer() {
                                                  : *(stateParams.maxDrift);
 
     // Need to reduce to check if max velocity is exceeded (right now, array marginSize is still storing absv...)
-    floatMaxReduce(granData->marginSize, &(stateParams.maxVel), simParams->nOwnerBodies, streamInfo.stream,
-                   stateOfSolver_resources);
+    cubMaxReduce<float>(granData->marginSize, &(stateParams.maxVel), simParams->nOwnerBodies, streamInfo.stream,
+                        stateOfSolver_resources);
     // Get the reduced maxVel value
     stateParams.maxVel.syncToHost();
     if (*(stateParams.maxVel) > simParams->errOutVel) {

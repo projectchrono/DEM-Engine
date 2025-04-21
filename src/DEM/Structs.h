@@ -101,13 +101,10 @@ const std::unordered_map<std::string, bool> force_kernel_ingredient_stats = {
 // NOTE: Data structs here need to be those complex ones (such as needing to include CudaAllocator.hpp), which may
 // not be jitifiable.
 
-/// <summary>
-/// DEMSolverStateData contains information that pertains the DEM solver worker threads, at a certain point in time. It
-/// also contains space allocated as system scratch pad and as thread temporary arrays.
-/// </summary>
-class DEMSolverStateData {
+// DEMSolverScratchData mainly contains space allocated as system scratch pad and as thread temporary arrays
+class DEMSolverScratchData {
   private:
-    // NOTE! The type MUST be scratch_t, since all DEMSolverStateData's allocation methods use num of bytes as
+    // NOTE! The type MUST be scratch_t, since all DEMSolverScratchData's allocation methods use num of bytes as
     // arguments, but DeviceVectorPool's resize considers number of elements
     DeviceVectorPool<scratch_t> m_deviceVecPool;
 
@@ -124,7 +121,7 @@ class DEMSolverStateData {
     // Number of spheres in the previous CD step (in case user added/removed clumps from the system)
     size_t* pNumPrevSpheres;
 
-    DEMSolverStateData(size_t* external_counter = nullptr) : m_deviceVecPool(external_counter) {
+    DEMSolverScratchData(size_t* external_counter = nullptr) : m_deviceVecPool(external_counter) {
         DEME_GPU_CALL(cudaMallocManaged(&pNumContacts, sizeof(size_t)));
         DEME_GPU_CALL(cudaMallocManaged(&pTempSizeVar1, sizeof(size_t)));
         DEME_GPU_CALL(cudaMallocManaged(&pTempSizeVar2, sizeof(size_t)));
@@ -135,7 +132,7 @@ class DEMSolverStateData {
         *pNumPrevContacts = 0;
         *pNumPrevSpheres = 0;
     }
-    ~DEMSolverStateData() {
+    ~DEMSolverScratchData() {
         DEME_GPU_CALL(cudaFree(pNumContacts));
         DEME_GPU_CALL(cudaFree(pTempSizeVar1));
         DEME_GPU_CALL(cudaFree(pTempSizeVar2));

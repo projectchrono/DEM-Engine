@@ -8,7 +8,7 @@
 #include <core/utils/JitHelper.h>
 #include <nvmath/helper_math.cuh>
 
-#include <algorithms/DEMCubBasedSubroutines.h>
+#include <algorithms/DEMStaticDeviceSubroutines.h>
 #include <DEM/HostSideHelpers.hpp>
 
 #include <algorithms/DEMCubWrappers.cu>
@@ -23,13 +23,13 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
                                  const size_t nClumps,
                                  bool contactPairArr_isFresh,
                                  cudaStream_t& this_stream,
-                                 DEMSolverStateData& scratchPad,
+                                 DEMSolverScratchData& scratchPad,
                                  SolverTimers& timers) {
     // Preparation: allocate enough temp array memory and chop it to pieces, for the usage of cub operations. Note that
     // if contactPairArr_isFresh is false, then this allocation should not alter the size and content of the temp array
     // space, so the information in it can be used in the next iteration.
     size_t cachedArraySizeOwner = (size_t)2 * nContactPairs * sizeof(bodyID_t);
-    // Use temp vector 0 to store the flattened owner IDs. So the rest of the temp arrays start from number 1.
+    // Use temp vector to store the flattened owner IDs. 
     // Note this one is not temp vector as it could be used between time steps.
     bodyID_t* idAOwner = (bodyID_t*)scratchPad.allocateVector("idAOwner", cachedArraySizeOwner);
     bodyID_t* idBOwner = (bodyID_t*)(idAOwner + nContactPairs);
@@ -99,15 +99,15 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
 
     // Reducing the acceleration (2 * nContactPairs for both body A and B)
     // Note: to do this, idAOwner needs to be sorted along with acc_A. So we sort first.
-    cubDEMSortByKeys<bodyID_t, float3, DEMSolverStateData>(idAOwner, idAOwner_sorted, acc_A, acc_A_sorted,
-                                                           nContactPairs * 2, this_stream, scratchPad);
+    cubDEMSortByKeys<bodyID_t, float3>(idAOwner, idAOwner_sorted, acc_A, acc_A_sorted, nContactPairs * 2, this_stream,
+                                       scratchPad);
     // Then we reduce by key
     // This variable stores the cub output of how many cub runs it executed for collecting forces
     size_t* pForceCollectionRuns = scratchPad.pTempSizeVar1;
     CubFloat3Add float3_add_op;
-    cubDEMReduceByKeys<bodyID_t, float3, CubFloat3Add, DEMSolverStateData>(
-        idAOwner_sorted, uniqueOwner, acc_A_sorted, accOwner, pForceCollectionRuns, float3_add_op, nContactPairs * 2,
-        this_stream, scratchPad);
+    cubDEMReduceByKeys<bodyID_t, float3, CubFloat3Add>(idAOwner_sorted, uniqueOwner, acc_A_sorted, accOwner,
+                                                       pForceCollectionRuns, float3_add_op, nContactPairs * 2,
+                                                       this_stream, scratchPad);
     // Then we stash acceleration
     size_t blocks_needed_for_stashing =
         (*pForceCollectionRuns + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
@@ -144,12 +144,12 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     // Reducing the angular acceleration (2 * nContactPairs for both body A and B)
     // Note: to do this, idAOwner needs to be sorted along with alpha_A. So we sort first.
-    cubDEMSortByKeys<bodyID_t, float3, DEMSolverStateData>(idAOwner, idAOwner_sorted, alpha_A, alpha_A_sorted,
-                                                           nContactPairs * 2, this_stream, scratchPad);
+    cubDEMSortByKeys<bodyID_t, float3>(idAOwner, idAOwner_sorted, alpha_A, alpha_A_sorted, nContactPairs * 2,
+                                       this_stream, scratchPad);
     // Then we reduce
-    cubDEMReduceByKeys<bodyID_t, float3, CubFloat3Add, DEMSolverStateData>(
-        idAOwner_sorted, uniqueOwner, alpha_A_sorted, accOwner, pForceCollectionRuns, float3_add_op, nContactPairs * 2,
-        this_stream, scratchPad);
+    cubDEMReduceByKeys<bodyID_t, float3, CubFloat3Add>(idAOwner_sorted, uniqueOwner, alpha_A_sorted, accOwner,
+                                                       pForceCollectionRuns, float3_add_op, nContactPairs * 2,
+                                                       this_stream, scratchPad);
     // Then we stash angular acceleration
     blocks_needed_for_stashing = (*pForceCollectionRuns + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
     collect_force_kernels->kernel("stashElem")

@@ -25,7 +25,7 @@ target_link_libraries(
 
 ### HOST HEADERS ONLY (.h, .hpp) ###
 set(algorithms_interface
-	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubBasedSubroutines.h
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMStaticDeviceSubroutines.h
 )
 
 ### INTERNAL HEADERS ONLY (.h, .hpp, or .cuh) ###
@@ -36,7 +36,7 @@ set(algorithms_headers
 set(algorithms_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubWrappers.cu 
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubForceCollection.cu
-	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubUtilities.cu
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMCudaUtilities.cu
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubContactDetection.cu
 )
 

@@ -35,7 +35,7 @@ namespace deme {
 // Implementation-level classes
 class DEMKinematicThread;
 class DEMDynamicThread;
-class DEMSolverStateData;
+class DEMSolverScratchData;
 
 class DEMKinematicThread {
   protected:
@@ -63,7 +63,7 @@ class DEMKinematicThread {
     size_t m_approxHostBytesUsed = 0;
 
     // A class that contains scratch pad and system status data (constructed with the number of temp arrays we need)
-    DEMSolverStateData stateOfSolver_resources = DEMSolverStateData(&m_approxDeviceBytesUsed);
+    DEMSolverScratchData stateOfSolver_resources = DEMSolverScratchData(&m_approxDeviceBytesUsed);
 
     // kT should break out of its inner loop and return to a state where it awaits a `start' call at the outer loop
     bool kTShouldReset = false;

@@ -19,7 +19,7 @@
 #include <nvmath/helper_math.cuh>
 #include <DEM/Defines.h>
 
-#include <algorithms/DEMCubBasedSubroutines.h>
+#include <algorithms/DEMStaticDeviceSubroutines.h>
 
 namespace deme {
 
@@ -1861,8 +1861,8 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
     if (verbosity >= VERBOSITY::STEP_METRIC) {
         if (*stateOfSolver_resources.pNumPrevContacts > 0 && simParams->nContactWildcards > 0) {
             size_t* lostContact = (size_t*)stateOfSolver_resources.allocateTempVector("lostContact", sizeof(size_t));
-            boolSumReduce(contactSentry, lostContact, *stateOfSolver_resources.pNumPrevContacts, streamInfo.stream,
-                          stateOfSolver_resources);
+            cubSumReduce<notStupidBool_t, size_t>(contactSentry, lostContact, *stateOfSolver_resources.pNumPrevContacts,
+                                                  streamInfo.stream, stateOfSolver_resources);
             if (*lostContact && solverFlags.isAsync) {
                 DEME_STEP_METRIC(
                     "%zu contacts were active at time %.9g on dT, but they are not detected on kT, therefore being "
@@ -2355,13 +2355,13 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     if (all_domain) {
         switch (reduce_flavor) {
             case (CUB_REDUCE_FLAVOR::MAX):
-                floatMaxReduce(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
+                cubMaxReduce<float>(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
                 break;
             case (CUB_REDUCE_FLAVOR::MIN):
-                floatMinReduce(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
+                cubMinReduce<float>(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
                 break;
             case (CUB_REDUCE_FLAVOR::SUM):
-                floatSumReduce(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
+                cubSumReduce<float, float>(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
                 break;
             case (CUB_REDUCE_FLAVOR::NONE):
                 stateOfSolver_resources.finishUsingTempVector("boolArrExclude");
@@ -2379,24 +2379,27 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
         switch (reduce_flavor) {
             case (CUB_REDUCE_FLAVOR::SUM):
                 // Sort first
-                floatSortByKey(boolArrExclude, boolArrExclude_sorted, resArr, resArr_sorted, n, streamInfo.stream,
-                               stateOfSolver_resources);
+                cubSortByKey<notStupidBool_t, float>(boolArrExclude, boolArrExclude_sorted, resArr, resArr_sorted, n,
+                                                     streamInfo.stream, stateOfSolver_resources);
                 // Then reduce. We care about the sum for 0-marked entries only. Note boolArrExclude here is re-used for
                 // storing d_unique_out.
-                floatSumReduceByKey(boolArrExclude_sorted, boolArrExclude, resArr_sorted, res, num_unique_out, n,
-                                    streamInfo.stream, stateOfSolver_resources);
+                cubSumReduceByKey<notStupidBool_t, float>(boolArrExclude_sorted, boolArrExclude, resArr_sorted, res,
+                                                          num_unique_out, n, streamInfo.stream,
+                                                          stateOfSolver_resources);
                 break;
             case (CUB_REDUCE_FLAVOR::MAX):
-                floatSortByKey(boolArrExclude, boolArrExclude_sorted, resArr, resArr_sorted, n, streamInfo.stream,
-                               stateOfSolver_resources);
-                floatMaxReduceByKey(boolArrExclude_sorted, boolArrExclude, resArr_sorted, res, num_unique_out, n,
-                                    streamInfo.stream, stateOfSolver_resources);
+                cubSortByKey<notStupidBool_t, float>(boolArrExclude, boolArrExclude_sorted, resArr, resArr_sorted, n,
+                                                     streamInfo.stream, stateOfSolver_resources);
+                cubMaxReduceByKey<notStupidBool_t, float>(boolArrExclude_sorted, boolArrExclude, resArr_sorted, res,
+                                                          num_unique_out, n, streamInfo.stream,
+                                                          stateOfSolver_resources);
                 break;
             case (CUB_REDUCE_FLAVOR::MIN):
-                floatSortByKey(boolArrExclude, boolArrExclude_sorted, resArr, resArr_sorted, n, streamInfo.stream,
-                               stateOfSolver_resources);
-                floatMinReduceByKey(boolArrExclude_sorted, boolArrExclude, resArr_sorted, res, num_unique_out, n,
-                                    streamInfo.stream, stateOfSolver_resources);
+                cubSortByKey<notStupidBool_t, float>(boolArrExclude, boolArrExclude_sorted, resArr, resArr_sorted, n,
+                                                     streamInfo.stream, stateOfSolver_resources);
+                cubMinReduceByKey<notStupidBool_t, float>(boolArrExclude_sorted, boolArrExclude, resArr_sorted, res,
+                                                          num_unique_out, n, streamInfo.stream,
+                                                          stateOfSolver_resources);
                 break;
             case (CUB_REDUCE_FLAVOR::NONE):
                 stateOfSolver_resources.finishUsingTempVector("boolArrExclude");
