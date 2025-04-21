@@ -346,7 +346,7 @@ enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
         vec.resize(newsize, val);                                  \
         size_t new_size = vec.size();                              \
         size_t byte_delta = sizeof(float) * (new_size - old_size); \
-        m_approx_bytes_used += byte_delta;                         \
+        m_approxDeviceBytesUsed += byte_delta;                     \
     }
 
 #define DEME_TRACKED_RESIZE(vec, newsize, val)                 \
@@ -356,7 +356,7 @@ enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
         vec.resize(newsize, val);                              \
         size_t new_size = vec.size();                          \
         size_t byte_delta = item_size * (new_size - old_size); \
-        m_approx_bytes_used += byte_delta;                     \
+        m_approxDeviceBytesUsed += byte_delta;                 \
     }
 
 #define DEME_TRACKED_RESIZE_DEBUGPRINT(vec, newsize, name, val)                                                      \
@@ -366,7 +366,7 @@ enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
         vec.resize(newsize, val);                                                                                    \
         size_t new_size = vec.size();                                                                                \
         size_t byte_delta = item_size * (new_size - old_size);                                                       \
-        m_approx_bytes_used += byte_delta;                                                                           \
+        m_approxDeviceBytesUsed += byte_delta;                                                                       \
         DEME_DEBUG_PRINTF("Resizing vector %s, old size %zu, new size %zu, byte delta %s", name, old_size, new_size, \
                           pretty_format_bytes(byte_delta).c_str());                                                  \
     }

@@ -132,7 +132,7 @@ int main() {
     // The `dry-run' option is on in this demo, which establishes the initial contact pairs while initializing. This is
     // needed in this demo specifically, as we'll soon modify the contact wildcards associated with these contacts.
     // You could also do a DoDynamicsThenSync(0) to achieve the same.
-    DEMSim.Initialize(true);
+    DEMSim.Initialize(/*Do a dry run at initialization = */ true);
     std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
 
     float sim_end = 5;

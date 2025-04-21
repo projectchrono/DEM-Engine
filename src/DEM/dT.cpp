@@ -2266,8 +2266,12 @@ void DEMDynamicThread::resetUserCallStat() {
     // pSchedSupport->dynamicOwned_Prod2ConsBuffer_isFresh = false;
 }
 
-size_t DEMDynamicThread::estimateMemUsage() const {
-    return m_approx_bytes_used;
+size_t DEMDynamicThread::estimateDeviceMemUsage() const {
+    return m_approxDeviceBytesUsed;
+}
+
+size_t DEMDynamicThread::estimateHostMemUsage() const {
+    return m_approxHostBytesUsed;
 }
 
 void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::string>& Subs) {

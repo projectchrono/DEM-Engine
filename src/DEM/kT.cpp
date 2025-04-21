@@ -413,8 +413,12 @@ void DEMKinematicThread::resetUserCallStat() {
     stateParams.binCurrentChangeRate = 0.;
 }
 
-size_t DEMKinematicThread::estimateMemUsage() const {
-    return m_approx_bytes_used;
+size_t DEMKinematicThread::estimateDeviceMemUsage() const {
+    return m_approxDeviceBytesUsed;
+}
+
+size_t DEMKinematicThread::estimateHostMemUsage() const {
+    return m_approxHostBytesUsed;
 }
 
 // Put sim data array pointers in place

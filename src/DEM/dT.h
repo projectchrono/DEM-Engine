@@ -65,13 +65,14 @@ class DEMDynamicThread {
     DualStruct<size_t> nContactPairs_buffer = DualStruct<size_t>(0);
 
     // Array-used memory size in bytes
-    size_t m_approx_bytes_used = 0;
+    size_t m_approxDeviceBytesUsed = 0;
+    size_t m_approxHostBytesUsed = 0;
 
     // Object which stores the device and stream IDs for this thread
     GpuManager::StreamInfo streamInfo;
 
     // A class that contains scratch pad and system status data (constructed with the number of temp arrays we need)
-    DEMSolverStateData stateOfSolver_resources = DEMSolverStateData(&m_approx_bytes_used);
+    DEMSolverStateData stateOfSolver_resources = DEMSolverStateData(&m_approxDeviceBytesUsed);
 
     // The number of for iterations dT does for a specific user "run simulation" call
     double cycleDuration;
@@ -590,7 +591,8 @@ class DEMDynamicThread {
     // Reset kT--dT interaction coordinator stats
     void resetUserCallStat();
     // Return the approximate RAM usage
-    size_t estimateMemUsage() const;
+    size_t estimateDeviceMemUsage() const;
+    size_t estimateHostMemUsage() const;
 
     /// Return timing inforation for this current run
     void getTiming(std::vector<std::string>& names, std::vector<double>& vals);
@@ -640,8 +642,8 @@ class DEMDynamicThread {
     std::shared_ptr<DEMInspector> approxMaxVelFunc;
 
     // Some private arrays that can be used to store inspection results, ready to be passed somewhere else
-    DualArray<scratch_t> m_reduceResArr = DualArray<scratch_t>(&m_approx_bytes_used);
-    DualArray<scratch_t> m_reduceRes = DualArray<scratch_t>(&m_approx_bytes_used);
+    DualArray<scratch_t> m_reduceResArr = DualArray<scratch_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<scratch_t> m_reduceRes = DualArray<scratch_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Migrate contact history to fit the structure of the newly received contact array
     inline void migrateEnduringContacts();

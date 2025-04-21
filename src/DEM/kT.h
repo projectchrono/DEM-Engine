@@ -59,10 +59,11 @@ class DEMKinematicThread {
     GpuManager::StreamInfo streamInfo;
 
     // Memory usage recorder
-    size_t m_approx_bytes_used = 0;
+    size_t m_approxDeviceBytesUsed = 0;
+    size_t m_approxHostBytesUsed = 0;
 
     // A class that contains scratch pad and system status data (constructed with the number of temp arrays we need)
-    DEMSolverStateData stateOfSolver_resources = DEMSolverStateData(&m_approx_bytes_used);
+    DEMSolverStateData stateOfSolver_resources = DEMSolverStateData(&m_approxDeviceBytesUsed);
 
     // kT should break out of its inner loop and return to a state where it awaits a `start' call at the outer loop
     bool kTShouldReset = false;
@@ -256,7 +257,8 @@ class DEMKinematicThread {
     /// Reset kT--dT interaction coordinator stats
     void resetUserCallStat();
     /// Return the approximate RAM usage
-    size_t estimateMemUsage() const;
+    size_t estimateDeviceMemUsage() const;
+    size_t estimateHostMemUsage() const;
 
     /// Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
     void allocateManagedArrays(size_t nOwnerBodies,

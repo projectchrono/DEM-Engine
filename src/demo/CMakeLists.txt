@@ -40,9 +40,9 @@ SET(DEMOS
 		DEMdemo_FlexibleMesh
 		DEMdemo_Hopper_Sphere_Cylinder
 		DEMdemo_Fracture_Box
-		DEMdemo_MooringLine
-		DEMdemo_MooringBox
-		DEMdemo_MooringBoxMotion
+		#DEMdemo_MooringLine
+		#DEMdemo_MooringBox
+		#DEMdemo_MooringBoxMotion
 )
 
 # ------------------------------------------------------------------------------
