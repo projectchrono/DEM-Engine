@@ -12,12 +12,11 @@
 
 namespace deme {
 
-////////////////////////////////////////////////////////////////////////////////
-// Some simple device-side utilities
-////////////////////////////////////////////////////////////////////////////////
-
-// These functions interconnecting the cub-part and cpp-part of the code cannot be fully templated... Instead, all
-// possible uses must be explicitly instantiated.
+// ========================================================================
+// Instantiations of CUB-based subroutines
+// These functions interconnecting the cub-part and cpp-part of the code cannot be fully templated...
+// Instead, all possible uses must be explicitly instantiated.
+// ========================================================================
 
 ////////////////////////////////////////////////////////////////////////////////
 // Reduce::Sum

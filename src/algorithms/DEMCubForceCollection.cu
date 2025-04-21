@@ -29,7 +29,7 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
     // if contactPairArr_isFresh is false, then this allocation should not alter the size and content of the temp array
     // space, so the information in it can be used in the next iteration.
     size_t cachedArraySizeOwner = (size_t)2 * nContactPairs * sizeof(bodyID_t);
-    // Use temp vector to store the flattened owner IDs. 
+    // Use temp vector to store the flattened owner IDs.
     // Note this one is not temp vector as it could be used between time steps.
     bodyID_t* idAOwner = (bodyID_t*)scratchPad.allocateVector("idAOwner", cachedArraySizeOwner);
     bodyID_t* idBOwner = (bodyID_t*)(idAOwner + nContactPairs);

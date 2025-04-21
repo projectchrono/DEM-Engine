@@ -31,12 +31,13 @@ set(algorithms_interface
 ### INTERNAL HEADERS ONLY (.h, .hpp, or .cuh) ###
 set(algorithms_headers
 	${NVIDIAMathDir}/nvmath/helper_math.cuh
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMStaticDeviceUtilities.cuh
 )
 
 set(algorithms_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubWrappers.cu 
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubForceCollection.cu
-	${CMAKE_CURRENT_SOURCE_DIR}/DEMCudaUtilities.cu
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubInstantiations.cu
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubContactDetection.cu
 )
 

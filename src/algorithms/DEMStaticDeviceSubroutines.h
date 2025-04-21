@@ -13,9 +13,14 @@
 
 namespace deme {
 
-////////////////////////////////////////////////////////////////////////////////
-// Some simple device-side utilities
-////////////////////////////////////////////////////////////////////////////////
+// ========================================================================
+// Typically, these are CUB-based relatively heavy-duty subroutines.
+// Other files of this project may link against this .h file, without knowing
+// it's in fact about CUDA, as they are C++ only.
+// Functions here are statically compiled against available CUDA versions,
+// unlike other just-in-time compiled kernels you see in other files of
+// this project.
+// ========================================================================
 
 ////////////////////////////////////////////////////////////////////////////////
 // Cub utilities that may be needed by some user actions

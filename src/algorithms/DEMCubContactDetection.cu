@@ -9,6 +9,7 @@
 #include <nvmath/helper_math.cuh>
 
 #include <algorithms/DEMStaticDeviceSubroutines.h>
+#include <algorithms/DEMStaticDeviceUtilities.cuh>
 #include <DEM/HostSideHelpers.hpp>
 
 #include <algorithms/DEMCubWrappers.cu>
@@ -111,19 +112,23 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         cubDEMPrefixScan<binsSphereTouches_t, binSphereTouchPairs_t>(numBinsSphereTouches, numBinsSphereTouchesScan,
                                                                      simParams->nSpheresGM, this_stream, scratchPad);
         size_t* pNumBinSphereTouchPairs = scratchPad.pTempSizeVar1;
-        *pNumBinSphereTouchPairs = (size_t)numBinsSphereTouchesScan[simParams->nSpheresGM - 1] +
-                                   (size_t)numBinsSphereTouches[simParams->nSpheresGM - 1];
-        numBinsSphereTouchesScan[simParams->nSpheresGM] = *pNumBinSphereTouchPairs;
-        // The same process is done for sphere--analytical geometry pairs as well. Use vector 3 for this.
+        deviceAdd<size_t, binSphereTouchPairs_t, binsSphereTouches_t>(
+            pNumBinSphereTouchPairs, &(numBinsSphereTouchesScan[simParams->nSpheresGM - 1]),
+            &(numBinsSphereTouches[simParams->nSpheresGM - 1]), this_stream);
+        deviceAssign<binSphereTouchPairs_t, size_t>(&(numBinsSphereTouchesScan[simParams->nSpheresGM]),
+                                                    pNumBinSphereTouchPairs, this_stream);
+        // The same process is done for sphere--analytical geometry pairs as well.
         // One extra elem is used for storing the final elem in scan result.
         CD_temp_arr_bytes = (simParams->nSpheresGM + 1) * sizeof(binSphereTouchPairs_t);
         binSphereTouchPairs_t* numAnalGeoSphereTouchesScan =
             (binSphereTouchPairs_t*)scratchPad.allocateTempVector("numAnalGeoSphereTouchesScan", CD_temp_arr_bytes);
         cubDEMPrefixScan<objID_t, binSphereTouchPairs_t>(numAnalGeoSphereTouches, numAnalGeoSphereTouchesScan,
                                                          simParams->nSpheresGM, this_stream, scratchPad);
-        *(scratchPad.pNumContacts) = (size_t)numAnalGeoSphereTouches[simParams->nSpheresGM - 1] +
-                                     (size_t)numAnalGeoSphereTouchesScan[simParams->nSpheresGM - 1];
-        numAnalGeoSphereTouchesScan[simParams->nSpheresGM] = *(scratchPad.pNumContacts);
+        deviceAdd<size_t, objID_t, binSphereTouchPairs_t>(
+            scratchPad.pNumContacts, &(numAnalGeoSphereTouches[simParams->nSpheresGM - 1]),
+            &(numAnalGeoSphereTouchesScan[simParams->nSpheresGM - 1]), this_stream);
+        deviceAssign<binSphereTouchPairs_t, size_t>(&(numAnalGeoSphereTouchesScan[simParams->nSpheresGM]),
+                                                    scratchPad.pNumContacts, this_stream);
         if (*scratchPad.pNumContacts > idGeometryA.size()) {
             contactEventArraysResize(*scratchPad.pNumContacts, idGeometryA, idGeometryB, contactType, granData);
         }

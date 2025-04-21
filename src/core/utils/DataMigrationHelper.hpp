@@ -24,25 +24,22 @@ void CudaCopyToHost(T* pH, T* pD) {
     DEME_GPU_CALL(cudaMemcpy(pH, pD, sizeof(T), cudaMemcpyDeviceToHost));
 }
 
-//// TODO: this is currently not tracked...
 // ptr being a reference to a pointer is crucial
 template <typename T>
-inline void DevicePtrAllocAttribBased(T*& ptr, size_t size) {
+inline void DevicePtrDealloc(T*& ptr) {
+    if (!ptr)
+        return;
     cudaPointerAttributes attrib;
     DEME_GPU_CALL(cudaPointerGetAttributes(&attrib, ptr));
 
     if (attrib.type != cudaMemoryType::cudaMemoryTypeUnregistered)
         DEME_GPU_CALL(cudaFree(ptr));
-    DEME_GPU_CALL(cudaMalloc((void**)&ptr, size * sizeof(T)));
 }
 
 template <typename T>
-inline void DevicePtrDeallocAttribBased(T*& ptr) {
-    cudaPointerAttributes attrib;
-    DEME_GPU_CALL(cudaPointerGetAttributes(&attrib, ptr));
-
-    if (attrib.type != cudaMemoryType::cudaMemoryTypeUnregistered)
-        DEME_GPU_CALL(cudaFree(ptr));
+inline void DevicePtrAlloc(T*& ptr, size_t size) {
+    DevicePtrDealloc(ptr);
+    DEME_GPU_CALL(cudaMalloc((void**)&ptr, size * sizeof(T)));
 }
 
 // Managed advise doesn't seem to do anything...
@@ -187,9 +184,7 @@ class DualArray {
         size_t old_bytes = m_device_capacity * sizeof(T);
         if (!allow_shrink && m_device_capacity >= n)
             return;
-        if (m_device_ptr)
-            DEME_GPU_CALL(cudaFree(m_device_ptr));
-        DEME_GPU_CALL(cudaMalloc((void**)&m_device_ptr, n * sizeof(T)));
+        DevicePtrAlloc(m_device_ptr, n);
         m_device_capacity = n;
         updateBoundDevicePointer();
         updateDeviceMemCounter(static_cast<ssize_t>(n * sizeof(T)) - static_cast<ssize_t>(old_bytes));
@@ -205,11 +200,9 @@ class DualArray {
     }
 
     void freeDevice() {
-        if (m_device_ptr) {
-            updateDeviceMemCounter(-(ssize_t)(m_device_capacity * sizeof(T)));
-            DEME_GPU_CALL(cudaFree(m_device_ptr));
-            m_device_ptr = nullptr;
-        }
+        DevicePtrDealloc(m_device_ptr);
+        updateDeviceMemCounter(-(ssize_t)(m_device_capacity * sizeof(T)));
+        m_device_ptr = nullptr;
         m_device_capacity = 0;
         updateBoundDevicePointer();
     }
@@ -334,23 +327,16 @@ class DeviceArray {
         size_t old_bytes = m_capacity * sizeof(T);
         if (!allow_shrink && m_capacity >= n)
             return;
-
-        if (m_data)
-            DEME_GPU_CALL(cudaFree(m_data));
-
-        DEME_GPU_CALL(cudaMalloc((void**)&m_data, n * sizeof(T)));
+        DevicePtrAlloc(m_data, n);
         m_capacity = n;
-
         updateMemCounter(static_cast<ssize_t>(m_capacity * sizeof(T)) - static_cast<ssize_t>(old_bytes));
     }
 
     void free() {
-        if (m_data) {
-            updateMemCounter(-(ssize_t)(m_capacity * sizeof(T)));
-            DEME_GPU_CALL(cudaFree(m_data));
-            m_data = nullptr;
-            m_capacity = 0;
-        }
+        DevicePtrDealloc(m_data);
+        updateMemCounter(-(ssize_t)(m_capacity * sizeof(T)));
+        m_data = nullptr;
+        m_capacity = 0;
     }
 
     size_t size() const { return m_capacity; }
