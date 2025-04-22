@@ -66,8 +66,6 @@ class DualStruct {
     DualStruct() : modified_on_host(false) {
         DEME_GPU_CALL(cudaMallocHost((void**)&host_data, sizeof(T)));
         DEME_GPU_CALL(cudaMalloc((void**)&device_data, sizeof(T)));
-
-        syncToDevice();
     }
 
     // Constructor: Initialize and allocate memory for both host and device with init values
@@ -110,6 +108,11 @@ class DualStruct {
 
     // Dereference operator for simple types (like float) to access the value directly
     T& operator*() {
+        return *host_data;  // Return a reference to the value
+    }
+
+    // Dereference operator for simple types (like float) to access the value directly
+    T& operator*() const {
         return *host_data;  // Return a reference to the value
     }
 
@@ -207,7 +210,7 @@ class DualArray {
         updateBoundDevicePointer();
     }
 
-    void copyToDevice() {
+    void syncToDevice() {
         assert(m_host_vec_ptr);
         size_t count = m_host_vec_ptr->size();
         if (count > m_device_capacity)
@@ -216,7 +219,7 @@ class DualArray {
         m_host_dirty = false;
     }
 
-    void copyToHost() {
+    void syncToHost() {
         assert(m_device_ptr && m_host_vec_ptr);
         DEME_GPU_CALL(cudaMemcpy(m_host_vec_ptr->data(), m_device_ptr, size() * sizeof(T), cudaMemcpyDeviceToHost));
         m_host_dirty = false;

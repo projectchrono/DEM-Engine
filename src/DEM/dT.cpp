@@ -194,18 +194,18 @@ void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const 
 
     // First get IDs and factors to device side
     size_t IDSize = IDs.size() * sizeof(bodyID_t);
-    bodyID_t* dIDs = (bodyID_t*)stateOfSolver_resources.allocateTempVector("dIDs", IDSize);
+    bodyID_t* dIDs = (bodyID_t*)solverScratchSpace.allocateTempVector("dIDs", IDSize);
     DEME_GPU_CALL(cudaMemcpy(dIDs, IDs.data(), IDSize, cudaMemcpyHostToDevice));
     size_t factorSize = factors.size() * sizeof(float);
-    float* dFactors = (float*)stateOfSolver_resources.allocateTempVector("dFactors", factorSize);
+    float* dFactors = (float*)solverScratchSpace.allocateTempVector("dFactors", factorSize);
     DEME_GPU_CALL(cudaMemcpy(dFactors, factors.data(), factorSize, cudaMemcpyHostToDevice));
 
     size_t idBoolSize = (size_t)simParams->nOwnerBodies * sizeof(notStupidBool_t);
     size_t ownerFactorSize = (size_t)simParams->nOwnerBodies * sizeof(float);
     // Bool table for whether this owner should change
-    notStupidBool_t* idBool = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector("idBool", idBoolSize);
+    notStupidBool_t* idBool = (notStupidBool_t*)solverScratchSpace.allocateTempVector("idBool", idBoolSize);
     DEME_GPU_CALL(cudaMemset(idBool, 0, idBoolSize));
-    float* ownerFactors = (float*)stateOfSolver_resources.allocateTempVector("ownerFactors", ownerFactorSize);
+    float* ownerFactors = (float*)solverScratchSpace.allocateTempVector("ownerFactors", ownerFactorSize);
     size_t blocks_needed_for_marking = (IDs.size() + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
 
     // Mark on the bool array those owners that need a change
@@ -224,10 +224,10 @@ void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const 
         .launch(&granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM);
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-    stateOfSolver_resources.finishUsingTempVector("dIDs");
-    stateOfSolver_resources.finishUsingTempVector("dFactors");
-    stateOfSolver_resources.finishUsingTempVector("idBool");
-    stateOfSolver_resources.finishUsingTempVector("ownerFactors");
+    solverScratchSpace.finishUsingTempVector("dIDs");
+    solverScratchSpace.finishUsingTempVector("dFactors");
+    solverScratchSpace.finishUsingTempVector("idBool");
+    solverScratchSpace.finishUsingTempVector("ownerFactors");
 
     // cudaStreamDestroy(new_stream);
 }
@@ -349,7 +349,7 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
         // we may lose data. Also, if this is a new-boot, we allocate this array for at least
         // nSpheresGM*DEME_INIT_CNT_MULTIPLIER elements.
         size_t cnt_arr_size =
-            DEME_MAX(*stateOfSolver_resources.pNumContacts + nExtraContacts, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
+            DEME_MAX(*solverScratchSpace.numContacts + nExtraContacts, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
         DEME_TRACKED_RESIZE_DEBUGPRINT(idGeometryA, cnt_arr_size, "idGeometryA", 0);
         DEME_TRACKED_RESIZE_DEBUGPRINT(idGeometryB, cnt_arr_size, "idGeometryB", 0);
         DEME_TRACKED_RESIZE_DEBUGPRINT(contactType, cnt_arr_size, "contactType", NOT_A_CONTACT);
@@ -546,7 +546,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         size_t n_processed_sp_comp = 0;
         // This number serves as an offset for loading existing contact pairs/history. Contact array should have been
         // enlarged for loading these user-manually added contact pairs. Those pairs go after existing contact pairs.
-        size_t cnt_arr_offset = *stateOfSolver_resources.pNumContacts;
+        size_t cnt_arr_offset = *solverScratchSpace.numContacts;
         for (const auto& a_batch : input_clump_batches) {
             // Decode type number and flatten
             std::vector<unsigned int> type_marks(a_batch->GetNumClumps());
@@ -718,11 +718,11 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                           (size_t)simParams->nOwnerBodies);
 
         // If user loaded contact pairs, we need to inform kT on the first time step...
-        if (cnt_arr_offset > *stateOfSolver_resources.pNumContacts) {
-            *stateOfSolver_resources.pNumContacts = cnt_arr_offset;
+        if (cnt_arr_offset > *solverScratchSpace.numContacts) {
+            *solverScratchSpace.numContacts = cnt_arr_offset;
             new_contacts_loaded = true;
             DEME_DEBUG_PRINTF("Total number of contact pairs this sim starts with: %zu",
-                              *stateOfSolver_resources.pNumContacts);
+                              *solverScratchSpace.numContacts);
         }
 
         if (pop_family_msg) {
@@ -1498,7 +1498,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
     }
     outstrstream << "\n";
 
-    for (size_t i = 0; i < *(stateOfSolver_resources.pNumContacts); i++) {
+    for (size_t i = 0; i < *(solverScratchSpace.numContacts); i++) {
         // Geos that are involved in this contact
         auto geoA = idGeometryA.at(i);
         auto geoB = idGeometryB.at(i);
@@ -1722,32 +1722,31 @@ inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
 
 inline void DEMDynamicThread::unpackMyBuffer() {
     // Make a note on the contact number of the previous time step
-    *stateOfSolver_resources.pNumPrevContacts = *stateOfSolver_resources.pNumContacts;
+    *solverScratchSpace.numPrevContacts = *solverScratchSpace.numContacts;
     // kT's batch of produce is made with this max drift in mind
     pSchedSupport->dynamicMaxFutureDrift = (pSchedSupport->kinematicMaxFutureDrift).load();
     // DEME_DEBUG_PRINTF("dynamicMaxFutureDrift is %u", (pSchedSupport->dynamicMaxFutureDrift).load());
 
-    DEME_GPU_CALL(cudaMemcpy(stateOfSolver_resources.pNumContacts, &nContactPairs_buffer, sizeof(size_t),
-                             cudaMemcpyDeviceToDevice));
-
+    DEME_GPU_CALL(
+        cudaMemcpy(&(solverScratchSpace.numContacts), &nContactPairs_buffer, sizeof(size_t), cudaMemcpyDeviceToDevice));
+    solverScratchSpace.numContacts.syncToHost();
     // Need to resize those contact event-based arrays before usage
-    if (*stateOfSolver_resources.pNumContacts > idGeometryA.size() ||
-        *stateOfSolver_resources.pNumContacts > buffer_size) {
-        contactEventArraysResize(*stateOfSolver_resources.pNumContacts);
+    if (*solverScratchSpace.numContacts > idGeometryA.size() || *solverScratchSpace.numContacts > buffer_size) {
+        contactEventArraysResize(*solverScratchSpace.numContacts);
     }
 
     DEME_GPU_CALL(cudaMemcpy(granData->idGeometryA, granData->idGeometryA_buffer,
-                             *stateOfSolver_resources.pNumContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+                             *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->idGeometryB, granData->idGeometryB_buffer,
-                             *stateOfSolver_resources.pNumContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+                             *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->contactType, granData->contactType_buffer,
-                             *stateOfSolver_resources.pNumContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
+                             *solverScratchSpace.numContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
     if (!solverFlags.isHistoryless) {
         // Note we don't have to use dedicated memory space for unpacking contactMapping_buffer contents, because we
         // only use it once per kT update, at the time of unpacking. So let us just use a temp vector to store it.
-        size_t mapping_bytes = (*stateOfSolver_resources.pNumContacts) * sizeof(contactPairs_t);
+        size_t mapping_bytes = (*solverScratchSpace.numContacts) * sizeof(contactPairs_t);
         granData->contactMapping =
-            (contactPairs_t*)stateOfSolver_resources.allocateTempVector("contactMapping", mapping_bytes);
+            (contactPairs_t*)solverScratchSpace.allocateTempVector("contactMapping", mapping_bytes);
         DEME_GPU_CALL(cudaMemcpy(granData->contactMapping, granData->contactMapping_buffer, mapping_bytes,
                                  cudaMemcpyDeviceToDevice));
     }
@@ -1812,34 +1811,34 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
 
     // All contact wildcards are the same type, so we can just allocate one temp array for all of them
     float* newWildcards[DEME_MAX_WILDCARD_NUM];
-    size_t wildcard_arr_bytes = (*stateOfSolver_resources.pNumContacts) * sizeof(float) * simParams->nContactWildcards;
-    newWildcards[0] = (float*)stateOfSolver_resources.allocateTempVector("newWildcards", wildcard_arr_bytes);
+    size_t wildcard_arr_bytes = (*solverScratchSpace.numContacts) * sizeof(float) * simParams->nContactWildcards;
+    newWildcards[0] = (float*)solverScratchSpace.allocateTempVector("newWildcards", wildcard_arr_bytes);
     for (unsigned int i = 1; i < simParams->nContactWildcards; i++) {
-        newWildcards[i] = newWildcards[i - 1] + (*stateOfSolver_resources.pNumContacts);
+        newWildcards[i] = newWildcards[i - 1] + (*solverScratchSpace.numContacts);
     }
 
     // This is used for checking if there are contact history got lost in the transition by surprise. But no need to
     // check if the user did not ask for it.
-    size_t sentry_bytes = (*stateOfSolver_resources.pNumPrevContacts) * sizeof(notStupidBool_t);
+    size_t sentry_bytes = (*solverScratchSpace.numPrevContacts) * sizeof(notStupidBool_t);
     notStupidBool_t* contactSentry =
-        (notStupidBool_t*)stateOfSolver_resources.allocateTempVector("contactSentry", sentry_bytes);
+        (notStupidBool_t*)solverScratchSpace.allocateTempVector("contactSentry", sentry_bytes);
 
     // A sentry array is here to see if there exist a contact that dT thinks it's alive but kT doesn't map it to the new
     // history array. This is just a quick and rough check: we only look at the last contact wildcard to see if it is
     // non-0, whatever it represents.
     size_t blocks_needed_for_rearrange;
     if (verbosity >= VERBOSITY::STEP_METRIC) {
-        if (*stateOfSolver_resources.pNumPrevContacts > 0) {
+        if (*solverScratchSpace.numPrevContacts > 0) {
             // DEME_GPU_CALL(cudaMemset(contactSentry, 0, sentry_bytes));
-            blocks_needed_for_rearrange = (*stateOfSolver_resources.pNumPrevContacts + DEME_MAX_THREADS_PER_BLOCK - 1) /
-                                          DEME_MAX_THREADS_PER_BLOCK;
+            blocks_needed_for_rearrange =
+                (*solverScratchSpace.numPrevContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
             if (blocks_needed_for_rearrange > 0) {
                 prep_force_kernels->kernel("markAliveContacts")
                     .instantiate()
                     .configure(dim3(blocks_needed_for_rearrange), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
                                streamInfo.stream)
                     .launch(granData.getDevicePointer()->contactWildcards[simParams->nContactWildcards - 1],
-                            contactSentry, *stateOfSolver_resources.pNumPrevContacts);
+                            contactSentry, *solverScratchSpace.numPrevContacts);
                 DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
             }
         }
@@ -1847,63 +1846,60 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
 
     // Rearrange contact histories based on kT instruction
     blocks_needed_for_rearrange =
-        (*stateOfSolver_resources.pNumContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+        (*solverScratchSpace.numContacts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     if (blocks_needed_for_rearrange > 0) {
         prep_force_kernels->kernel("rearrangeContactWildcards")
             .instantiate()
             .configure(dim3(blocks_needed_for_rearrange), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
             .launch(&granData, newWildcards[0], contactSentry, simParams->nContactWildcards,
-                    *stateOfSolver_resources.pNumContacts);
+                    *solverScratchSpace.numContacts);
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 
     // Take a look, does the sentry indicate that there is an `alive' contact got lost?
     if (verbosity >= VERBOSITY::STEP_METRIC) {
-        if (*stateOfSolver_resources.pNumPrevContacts > 0 && simParams->nContactWildcards > 0) {
-            size_t* lostContact = (size_t*)stateOfSolver_resources.allocateTempVector("lostContact", sizeof(size_t));
-            cubSumReduce<notStupidBool_t, size_t>(contactSentry, lostContact, *stateOfSolver_resources.pNumPrevContacts,
-                                                  streamInfo.stream, stateOfSolver_resources);
+        if (*solverScratchSpace.numPrevContacts > 0 && simParams->nContactWildcards > 0) {
+            size_t* lostContact = (size_t*)solverScratchSpace.allocateTempVector("lostContact", sizeof(size_t));
+            cubSumReduce<notStupidBool_t, size_t>(contactSentry, lostContact, *solverScratchSpace.numPrevContacts,
+                                                  streamInfo.stream, solverScratchSpace);
             if (*lostContact && solverFlags.isAsync) {
                 DEME_STEP_METRIC(
                     "%zu contacts were active at time %.9g on dT, but they are not detected on kT, therefore being "
                     "removed unexpectedly!",
                     *lostContact, simParams->timeElapsed);
-                DEME_STEP_DEBUG_PRINTF("New number of contacts: %zu", *stateOfSolver_resources.pNumContacts);
-                DEME_STEP_DEBUG_PRINTF("Old number of contacts: %zu", *stateOfSolver_resources.pNumPrevContacts);
+                DEME_STEP_DEBUG_PRINTF("New number of contacts: %zu", *solverScratchSpace.numContacts);
+                DEME_STEP_DEBUG_PRINTF("Old number of contacts: %zu", *solverScratchSpace.numPrevContacts);
                 DEME_STEP_DEBUG_PRINTF("New contact A:");
-                DEME_STEP_DEBUG_EXEC(
-                    displayArray<bodyID_t>(granData->idGeometryA, *stateOfSolver_resources.pNumContacts));
+                DEME_STEP_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryA, *solverScratchSpace.numContacts));
                 DEME_STEP_DEBUG_PRINTF("New contact B:");
-                DEME_STEP_DEBUG_EXEC(
-                    displayArray<bodyID_t>(granData->idGeometryB, *stateOfSolver_resources.pNumContacts));
+                DEME_STEP_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryB, *solverScratchSpace.numContacts));
                 DEME_STEP_DEBUG_PRINTF("Old version of the last contact wildcard:");
                 DEME_STEP_DEBUG_EXEC(displayArray<float>(granData->contactWildcards[simParams->nContactWildcards - 1],
-                                                         *stateOfSolver_resources.pNumPrevContacts));
+                                                         *solverScratchSpace.numPrevContacts));
                 DEME_STEP_DEBUG_PRINTF("Old--new mapping:");
                 DEME_STEP_DEBUG_EXEC(
-                    displayArray<contactPairs_t>(granData->contactMapping, *stateOfSolver_resources.pNumContacts));
+                    displayArray<contactPairs_t>(granData->contactMapping, *solverScratchSpace.numContacts));
                 DEME_STEP_DEBUG_PRINTF("Sentry:");
-                DEME_STEP_DEBUG_EXEC(
-                    displayArray<notStupidBool_t>(contactSentry, *stateOfSolver_resources.pNumPrevContacts));
+                DEME_STEP_DEBUG_EXEC(displayArray<notStupidBool_t>(contactSentry, *solverScratchSpace.numPrevContacts));
             }
-            stateOfSolver_resources.finishUsingTempVector("lostContact");
+            solverScratchSpace.finishUsingTempVector("lostContact");
         }
     }
 
     // Copy new history back to history array (after resizing the `main' history array)
-    if (*stateOfSolver_resources.pNumContacts > contactWildcards[0].size()) {
+    if (*solverScratchSpace.numContacts > contactWildcards[0].size()) {
         for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
-            DEME_TRACKED_RESIZE_FLOAT(contactWildcards[i], *stateOfSolver_resources.pNumContacts, 0);
+            DEME_TRACKED_RESIZE_FLOAT(contactWildcards[i], *solverScratchSpace.numContacts, 0);
             granData->contactWildcards[i] = contactWildcards[i].data();
         }
     }
     for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
         DEME_GPU_CALL(cudaMemcpy(granData->contactWildcards[i], newWildcards[i],
-                                 (*stateOfSolver_resources.pNumContacts) * sizeof(float), cudaMemcpyDeviceToDevice));
+                                 (*solverScratchSpace.numContacts) * sizeof(float), cudaMemcpyDeviceToDevice));
     }
 
-    stateOfSolver_resources.finishUsingTempVector("newWildcards");
-    stateOfSolver_resources.finishUsingTempVector("contactSentry");
+    solverScratchSpace.finishUsingTempVector("newWildcards");
+    solverScratchSpace.finishUsingTempVector("contactSentry");
 
     // granData may have changed in some of the earlier steps
     granData.syncToDevice();
@@ -1911,7 +1907,7 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
 
 inline void DEMDynamicThread::calculateForces() {
     // Reset force (acceleration) arrays for this time step
-    size_t nContactPairs = *stateOfSolver_resources.pNumContacts;
+    size_t nContactPairs = *solverScratchSpace.numContacts;
 
     timers.GetTimer("Clear force array").start();
     {
@@ -1959,7 +1955,7 @@ inline void DEMDynamicThread::calculateForces() {
             // Reflect those body-wise forces on their owner clumps
             if (solverFlags.useCubForceCollect) {
                 collectContactForcesThruCub(collect_force_kernels, granData, nContactPairs, simParams->nOwnerBodies,
-                                            contactPairArr_isFresh, streamInfo.stream, stateOfSolver_resources, timers);
+                                            contactPairArr_isFresh, streamInfo.stream, solverScratchSpace, timers);
             } else {
                 blocks_needed_for_contacts =
                     (nContactPairs + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
@@ -2029,7 +2025,7 @@ inline void DEMDynamicThread::unpack_impl() {
     }
 
     // With unpacking finished, contactMapping temp array is no longer needed
-    stateOfSolver_resources.finishUsingTempVector("contactMapping");
+    solverScratchSpace.finishUsingTempVector("contactMapping");
 }
 
 inline void DEMDynamicThread::ifProduceFreshThenUseIt() {
@@ -2121,9 +2117,9 @@ void DEMDynamicThread::workerThread() {
             if (new_contacts_loaded) {
                 // If wildcard-less, then prev-contact arrays are not important
                 if (!solverFlags.isHistoryless) {
-                    // Note *stateOfSolver_resources.pNumContacts is now the num of contact after considering the newly
+                    // Note *solverScratchSpace.numContacts is now the num of contact after considering the newly
                     // added ones. Also, passing device pointer of dT's granData is enough.
-                    kT->updatePrevContactArrays(&granData, *stateOfSolver_resources.pNumContacts);
+                    kT->updatePrevContactArrays(&granData, *solverScratchSpace.numContacts);
                 }
                 new_contacts_loaded = false;
             }
@@ -2338,7 +2334,7 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     size_t regionTempSize = n * sizeof(notStupidBool_t);
     // If this boolArrExclude is 1 at an element, that means this element is exluded in the reduction
     notStupidBool_t* boolArrExclude =
-        (notStupidBool_t*)stateOfSolver_resources.allocateTempVector("boolArrExclude", regionTempSize);
+        (notStupidBool_t*)solverScratchSpace.allocateTempVector("boolArrExclude", regionTempSize);
     DEME_GPU_CALL(cudaMemset(boolArrExclude, 0, regionTempSize));
 
     // We may actually have 2 reduced returns: in regional reduction, key 0 and 1 give one return each.
@@ -2355,17 +2351,17 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     if (all_domain) {
         switch (reduce_flavor) {
             case (CUB_REDUCE_FLAVOR::MAX):
-                cubMaxReduce<float>(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
+                cubMaxReduce<float>(resArr, res, n, streamInfo.stream, solverScratchSpace);
                 break;
             case (CUB_REDUCE_FLAVOR::MIN):
-                cubMinReduce<float>(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
+                cubMinReduce<float>(resArr, res, n, streamInfo.stream, solverScratchSpace);
                 break;
             case (CUB_REDUCE_FLAVOR::SUM):
-                cubSumReduce<float, float>(resArr, res, n, streamInfo.stream, stateOfSolver_resources);
+                cubSumReduce<float, float>(resArr, res, n, streamInfo.stream, solverScratchSpace);
                 break;
             case (CUB_REDUCE_FLAVOR::NONE):
-                stateOfSolver_resources.finishUsingTempVector("boolArrExclude");
-                m_reduceResArr.copyToHost();
+                solverScratchSpace.finishUsingTempVector("boolArrExclude");
+                m_reduceResArr.syncToHost();
                 return (float*)m_reduceResArr.host();
         }
         // If this inspection is comfined in a region, then boolArrExclude and resArr need to be sorted and reduce by
@@ -2373,49 +2369,46 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     } else {
         // Extra arrays are needed for sort and reduce by key
         notStupidBool_t* boolArrExclude_sorted =
-            (notStupidBool_t*)stateOfSolver_resources.allocateTempVector("boolArrExclude_sorted", regionTempSize);
-        float* resArr_sorted = (float*)stateOfSolver_resources.allocateTempVector("resArr_sorted", quarryTempSize);
-        size_t* num_unique_out = (size_t*)stateOfSolver_resources.allocateTempVector("num_unique_out", sizeof(size_t));
+            (notStupidBool_t*)solverScratchSpace.allocateTempVector("boolArrExclude_sorted", regionTempSize);
+        float* resArr_sorted = (float*)solverScratchSpace.allocateTempVector("resArr_sorted", quarryTempSize);
+        size_t* num_unique_out = (size_t*)solverScratchSpace.allocateTempVector("num_unique_out", sizeof(size_t));
         switch (reduce_flavor) {
             case (CUB_REDUCE_FLAVOR::SUM):
                 // Sort first
                 cubSortByKey<notStupidBool_t, float>(boolArrExclude, boolArrExclude_sorted, resArr, resArr_sorted, n,
-                                                     streamInfo.stream, stateOfSolver_resources);
+                                                     streamInfo.stream, solverScratchSpace);
                 // Then reduce. We care about the sum for 0-marked entries only. Note boolArrExclude here is re-used for
                 // storing d_unique_out.
                 cubSumReduceByKey<notStupidBool_t, float>(boolArrExclude_sorted, boolArrExclude, resArr_sorted, res,
-                                                          num_unique_out, n, streamInfo.stream,
-                                                          stateOfSolver_resources);
+                                                          num_unique_out, n, streamInfo.stream, solverScratchSpace);
                 break;
             case (CUB_REDUCE_FLAVOR::MAX):
                 cubSortByKey<notStupidBool_t, float>(boolArrExclude, boolArrExclude_sorted, resArr, resArr_sorted, n,
-                                                     streamInfo.stream, stateOfSolver_resources);
+                                                     streamInfo.stream, solverScratchSpace);
                 cubMaxReduceByKey<notStupidBool_t, float>(boolArrExclude_sorted, boolArrExclude, resArr_sorted, res,
-                                                          num_unique_out, n, streamInfo.stream,
-                                                          stateOfSolver_resources);
+                                                          num_unique_out, n, streamInfo.stream, solverScratchSpace);
                 break;
             case (CUB_REDUCE_FLAVOR::MIN):
                 cubSortByKey<notStupidBool_t, float>(boolArrExclude, boolArrExclude_sorted, resArr, resArr_sorted, n,
-                                                     streamInfo.stream, stateOfSolver_resources);
+                                                     streamInfo.stream, solverScratchSpace);
                 cubMinReduceByKey<notStupidBool_t, float>(boolArrExclude_sorted, boolArrExclude, resArr_sorted, res,
-                                                          num_unique_out, n, streamInfo.stream,
-                                                          stateOfSolver_resources);
+                                                          num_unique_out, n, streamInfo.stream, solverScratchSpace);
                 break;
             case (CUB_REDUCE_FLAVOR::NONE):
-                stateOfSolver_resources.finishUsingTempVector("boolArrExclude");
-                stateOfSolver_resources.finishUsingTempVector("boolArrExclude_sorted");
-                stateOfSolver_resources.finishUsingTempVector("resArr_sorted");
-                stateOfSolver_resources.finishUsingTempVector("num_unique_out");
-                m_reduceResArr.copyToHost();
+                solverScratchSpace.finishUsingTempVector("boolArrExclude");
+                solverScratchSpace.finishUsingTempVector("boolArrExclude_sorted");
+                solverScratchSpace.finishUsingTempVector("resArr_sorted");
+                solverScratchSpace.finishUsingTempVector("num_unique_out");
+                m_reduceResArr.syncToHost();
                 return (float*)m_reduceResArr.host();
         }
     }
 
-    stateOfSolver_resources.finishUsingTempVector("boolArrExclude");
-    stateOfSolver_resources.finishUsingTempVector("boolArrExclude_sorted");
-    stateOfSolver_resources.finishUsingTempVector("resArr_sorted");
-    stateOfSolver_resources.finishUsingTempVector("num_unique_out");
-    m_reduceRes.copyToHost();
+    solverScratchSpace.finishUsingTempVector("boolArrExclude");
+    solverScratchSpace.finishUsingTempVector("boolArrExclude_sorted");
+    solverScratchSpace.finishUsingTempVector("resArr_sorted");
+    solverScratchSpace.finishUsingTempVector("num_unique_out");
+    m_reduceRes.syncToHost();
     return (float*)m_reduceRes.host();
 }
 
@@ -2433,7 +2426,7 @@ void DEMDynamicThread::deallocateEverything() {
 }
 
 size_t DEMDynamicThread::getNumContacts() const {
-    return *(stateOfSolver_resources.pNumContacts);
+    return *(solverScratchSpace.numContacts);
 }
 
 double DEMDynamicThread::getSimTime() const {
@@ -2469,7 +2462,7 @@ void DEMDynamicThread::setFamilyMeshMaterial(unsigned int N, unsigned int mat_id
 size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
                                                std::vector<float3>& points,
                                                std::vector<float3>& forces) {
-    size_t numCnt = *stateOfSolver_resources.pNumContacts;
+    size_t numCnt = *solverScratchSpace.numContacts;
     size_t numUsefulCnt = 0;
     for (size_t i = 0; i < numCnt; i++) {
         bodyID_t geoA = idGeometryA.at(i);
@@ -2523,7 +2516,7 @@ size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
                                                std::vector<float3>& forces,
                                                std::vector<float3>& torques,
                                                bool torque_in_local) {
-    size_t numCnt = *stateOfSolver_resources.pNumContacts;
+    size_t numCnt = *solverScratchSpace.numContacts;
     size_t numUsefulCnt = 0;
     for (size_t i = 0; i < numCnt; i++) {
         bodyID_t geoA = idGeometryA.at(i);
@@ -2588,7 +2581,7 @@ size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
 }
 
 void DEMDynamicThread::setFamilyContactWildcardValueEither(unsigned int N, unsigned int wc_num, float val) {
-    size_t numCnt = *stateOfSolver_resources.pNumContacts;
+    size_t numCnt = *solverScratchSpace.numContacts;
     for (size_t i = 0; i < numCnt; i++) {
         bodyID_t geoA = idGeometryA.at(i);
         bodyID_t ownerA = ownerClumpBody.at(geoA);
@@ -2606,7 +2599,7 @@ void DEMDynamicThread::setFamilyContactWildcardValueEither(unsigned int N, unsig
 }
 
 void DEMDynamicThread::setFamilyContactWildcardValueBoth(unsigned int N, unsigned int wc_num, float val) {
-    size_t numCnt = *stateOfSolver_resources.pNumContacts;
+    size_t numCnt = *solverScratchSpace.numContacts;
     for (size_t i = 0; i < numCnt; i++) {
         bodyID_t geoA = idGeometryA.at(i);
         bodyID_t ownerA = ownerClumpBody.at(geoA);
@@ -2624,7 +2617,7 @@ void DEMDynamicThread::setFamilyContactWildcardValueBoth(unsigned int N, unsigne
 }
 
 void DEMDynamicThread::setFamilyContactWildcardValue(unsigned int N1, unsigned int N2, unsigned int wc_num, float val) {
-    size_t numCnt = *stateOfSolver_resources.pNumContacts;
+    size_t numCnt = *solverScratchSpace.numContacts;
     for (size_t i = 0; i < numCnt; i++) {
         bodyID_t geoA = idGeometryA.at(i);
         bodyID_t ownerA = ownerClumpBody.at(geoA);
@@ -2642,7 +2635,7 @@ void DEMDynamicThread::setFamilyContactWildcardValue(unsigned int N1, unsigned i
 }
 
 void DEMDynamicThread::setContactWildcardValue(unsigned int wc_num, float val) {
-    size_t numCnt = *stateOfSolver_resources.pNumContacts;
+    size_t numCnt = *solverScratchSpace.numContacts;
     for (size_t i = 0; i < numCnt; i++) {
         contactWildcards[wc_num].at(i) = val;
     }

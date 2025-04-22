@@ -109,37 +109,15 @@ class DEMSolverScratchData {
     DeviceVectorPool<scratch_t> m_deviceVecPool;
 
   public:
-    // Temp size_t variables that can be reused
-    size_t* pTempSizeVar1;
-    size_t* pTempSizeVar2;
-    size_t* pTempSizeVar3;
-
     // Number of contacts in this CD step
-    size_t* pNumContacts;
+    DualStruct<size_t> numContacts = DualStruct<size_t>(0);
     // Number of contacts in the previous CD step
-    size_t* pNumPrevContacts;
+    DualStruct<size_t> numPrevContacts = DualStruct<size_t>(0);
     // Number of spheres in the previous CD step (in case user added/removed clumps from the system)
-    size_t* pNumPrevSpheres;
+    DualStruct<size_t> numPrevSpheres = DualStruct<size_t>(0);
 
-    DEMSolverScratchData(size_t* external_counter = nullptr) : m_deviceVecPool(external_counter) {
-        DEME_GPU_CALL(cudaMallocManaged(&pNumContacts, sizeof(size_t)));
-        DEME_GPU_CALL(cudaMallocManaged(&pTempSizeVar1, sizeof(size_t)));
-        DEME_GPU_CALL(cudaMallocManaged(&pTempSizeVar2, sizeof(size_t)));
-        DEME_GPU_CALL(cudaMallocManaged(&pTempSizeVar3, sizeof(size_t)));
-        DEME_GPU_CALL(cudaMallocManaged(&pNumPrevContacts, sizeof(size_t)));
-        DEME_GPU_CALL(cudaMallocManaged(&pNumPrevSpheres, sizeof(size_t)));
-        *pNumContacts = 0;
-        *pNumPrevContacts = 0;
-        *pNumPrevSpheres = 0;
-    }
-    ~DEMSolverScratchData() {
-        DEME_GPU_CALL(cudaFree(pNumContacts));
-        DEME_GPU_CALL(cudaFree(pTempSizeVar1));
-        DEME_GPU_CALL(cudaFree(pTempSizeVar2));
-        DEME_GPU_CALL(cudaFree(pTempSizeVar3));
-        DEME_GPU_CALL(cudaFree(pNumPrevContacts));
-        DEME_GPU_CALL(cudaFree(pNumPrevSpheres));
-    }
+    DEMSolverScratchData(size_t* external_counter = nullptr) : m_deviceVecPool(external_counter) {}
+    ~DEMSolverScratchData() {}
 
     // Return raw pointer to swath of device memory that is at least "sizeNeeded" large
     scratch_t* allocateScratchSpace(size_t sizeNeeded) {
@@ -159,8 +137,11 @@ class DEMSolverScratchData {
     }
 
     void finishUsingTempVector(const std::string& name) { m_deviceVecPool.unclaim(name); }
+    void finishUsingVector(const std::string& name) { finishUsingTempVector(name); }
 
     void printVectorUsage() { m_deviceVecPool.printStatus(); }
+
+    void releaseMemory() { m_deviceVecPool.releaseAll(); }
 };
 
 struct kTStateParams {

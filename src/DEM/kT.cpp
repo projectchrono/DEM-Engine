@@ -140,7 +140,7 @@ inline void DEMKinematicThread::unpackMyBuffer() {
 
     // Need to reduce to check if max velocity is exceeded (right now, array marginSize is still storing absv...)
     cubMaxReduce<float>(granData->marginSize, &(stateParams.maxVel), simParams->nOwnerBodies, streamInfo.stream,
-                        stateOfSolver_resources);
+                        solverScratchSpace);
     // Get the reduced maxVel value
     stateParams.maxVel.syncToHost();
     if (*(stateParams.maxVel) > simParams->errOutVel) {
@@ -200,26 +200,25 @@ inline void DEMKinematicThread::unpackMyBuffer() {
 }
 
 inline void DEMKinematicThread::sendToTheirBuffer() {
-    DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_nContactPairs, stateOfSolver_resources.pNumContacts,
-                             sizeof(size_t), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_nContactPairs, &(solverScratchSpace.numContacts), sizeof(size_t),
+                             cudaMemcpyDeviceToDevice));
     // Resize dT owned buffers before usage
-    if (*stateOfSolver_resources.pNumContacts > dT->buffer_size) {
-        transferArraysResize(*stateOfSolver_resources.pNumContacts);
+    if (*solverScratchSpace.numContacts > dT->buffer_size) {
+        transferArraysResize(*solverScratchSpace.numContacts);
     }
 
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA,
-                             (*stateOfSolver_resources.pNumContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+                             (*solverScratchSpace.numContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryB, granData->idGeometryB,
-                             (*stateOfSolver_resources.pNumContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+                             (*solverScratchSpace.numContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactType, granData->contactType,
-                             (*stateOfSolver_resources.pNumContacts) * sizeof(contact_t), cudaMemcpyDeviceToDevice));
+                             (*solverScratchSpace.numContacts) * sizeof(contact_t), cudaMemcpyDeviceToDevice));
     // DEME_MIGRATE_TO_DEVICE(dT->idGeometryA_buffer, dT->streamInfo.device, streamInfo.stream);
     // DEME_MIGRATE_TO_DEVICE(dT->idGeometryB_buffer, dT->streamInfo.device, streamInfo.stream);
     // DEME_MIGRATE_TO_DEVICE(dT->contactType_buffer, dT->streamInfo.device, streamInfo.stream);
     if (!solverFlags.isHistoryless) {
         DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactMapping, granData->contactMapping,
-                                 (*stateOfSolver_resources.pNumContacts) * sizeof(contactPairs_t),
-                                 cudaMemcpyDeviceToDevice));
+                                 (*solverScratchSpace.numContacts) * sizeof(contactPairs_t), cudaMemcpyDeviceToDevice));
         // DEME_MIGRATE_TO_DEVICE(dT->contactMapping_buffer, dT->streamInfo.device, streamInfo.stream);
     }
     // DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -291,7 +290,7 @@ void DEMKinematicThread::workerThread() {
             contactDetection(bin_sphere_kernels, bin_triangle_kernels, sphere_contact_kernels, sphTri_contact_kernels,
                              history_kernels, granData, simParams, solverFlags, verbosity, idGeometryA, idGeometryB,
                              contactType, previous_idGeometryA, previous_idGeometryB, previous_contactType,
-                             contactPersistency, contactMapping, streamInfo.stream, stateOfSolver_resources, timers,
+                             contactPersistency, contactMapping, streamInfo.stream, solverScratchSpace, timers,
                              stateParams);
             CDAccumTimer.End();
 
@@ -345,18 +344,18 @@ void DEMKinematicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, cons
 
     // First get IDs and factors to device side
     size_t IDSize = IDs.size() * sizeof(bodyID_t);
-    bodyID_t* dIDs = (bodyID_t*)stateOfSolver_resources.allocateTempVector("dIDs", IDSize);
+    bodyID_t* dIDs = (bodyID_t*)solverScratchSpace.allocateTempVector("dIDs", IDSize);
     DEME_GPU_CALL(cudaMemcpy(dIDs, IDs.data(), IDSize, cudaMemcpyHostToDevice));
     size_t factorSize = factors.size() * sizeof(float);
-    float* dFactors = (float*)stateOfSolver_resources.allocateTempVector("dFactors", factorSize);
+    float* dFactors = (float*)solverScratchSpace.allocateTempVector("dFactors", factorSize);
     DEME_GPU_CALL(cudaMemcpy(dFactors, factors.data(), factorSize, cudaMemcpyHostToDevice));
 
     size_t idBoolSize = (size_t)simParams->nOwnerBodies * sizeof(notStupidBool_t);
     size_t ownerFactorSize = (size_t)simParams->nOwnerBodies * sizeof(float);
     // Bool table for whether this owner should change
-    notStupidBool_t* idBool = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector("idBool", idBoolSize);
+    notStupidBool_t* idBool = (notStupidBool_t*)solverScratchSpace.allocateTempVector("idBool", idBoolSize);
     DEME_GPU_CALL(cudaMemset(idBool, 0, idBoolSize));
-    float* ownerFactors = (float*)stateOfSolver_resources.allocateTempVector("ownerFactors", ownerFactorSize);
+    float* ownerFactors = (float*)solverScratchSpace.allocateTempVector("ownerFactors", ownerFactorSize);
     size_t blocks_needed_for_marking = (IDs.size() + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
 
     // Mark on the bool array those owners that need a change
@@ -375,10 +374,10 @@ void DEMKinematicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, cons
         .launch(&granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM);
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
-    stateOfSolver_resources.finishUsingTempVector("dIDs");
-    stateOfSolver_resources.finishUsingTempVector("dFactors");
-    stateOfSolver_resources.finishUsingTempVector("idBool");
-    stateOfSolver_resources.finishUsingTempVector("ownerFactors");
+    solverScratchSpace.finishUsingTempVector("dIDs");
+    solverScratchSpace.finishUsingTempVector("dFactors");
+    solverScratchSpace.finishUsingTempVector("idBool");
+    solverScratchSpace.finishUsingTempVector("ownerFactors");
     // cudaStreamDestroy(new_stream);
 }
 
@@ -653,8 +652,7 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     // contact pairs is 2n, and I think the max is 6n (although I can't prove it). Note the estimate should be large
     // enough to decrease the number of reallocations in the simulation, but not too large that eats too much memory.
     {
-        size_t cnt_arr_size =
-            DEME_MAX(*stateOfSolver_resources.pNumPrevContacts, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
+        size_t cnt_arr_size = DEME_MAX(*solverScratchSpace.numPrevContacts, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
         DEME_TRACKED_RESIZE_DEBUGPRINT(idGeometryA, cnt_arr_size, "idGeometryA", 0);
         DEME_TRACKED_RESIZE_DEBUGPRINT(idGeometryB, cnt_arr_size, "idGeometryB", 0);
         DEME_TRACKED_RESIZE_DEBUGPRINT(contactType, cnt_arr_size, "contactType", NOT_A_CONTACT);
@@ -836,7 +834,7 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
 void DEMKinematicThread::updatePrevContactArrays(DEMDataDT* dT_data, size_t nContacts) {
     // Store the incoming info in temp arrays
     overwritePrevContactArrays(granData, dT_data, previous_idGeometryA, previous_idGeometryB, previous_contactType,
-                               simParams, contactPersistency, stateOfSolver_resources, streamInfo.stream, nContacts);
+                               simParams, contactPersistency, solverScratchSpace, streamInfo.stream, nContacts);
     DEME_DEBUG_PRINTF("Number of contacts after a user-manual contact load: %zu", nContacts);
     DEME_DEBUG_PRINTF("Number of spheres after a user-manual contact load: %zu", (size_t)simParams->nSpheresGM);
 }
