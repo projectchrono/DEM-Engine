@@ -1806,8 +1806,7 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
 }
 
 inline void DEMDynamicThread::migrateEnduringContacts() {
-    // Use this newHistory and newDuration to store temporarily the rearranged contact history.  Note we cannot use
-    // vector 0 or 1 since they may be in use (1 is used by granData->contactMapping).
+    // Use granData->contactMapping's information (stored in temp device vector) to map old and new contacts
 
     // All contact wildcards are the same type, so we can just allocate one temp array for all of them
     float* newWildcards[DEME_MAX_WILDCARD_NUM];

@@ -967,10 +967,11 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                         .launch(old_arr_unsort_to_sort_map, one_to_n, *scratchPad.numPrevContacts);
                     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                 }
-                // one_to_n used for temp storage; now give it back to the true mapping we wanted. And now, vector 0 is
-                // in use.
+                // one_to_n used for temp storage; now give it back to the true mapping we wanted.
+                // So here, old_arr_unsort_to_sort_map's memory space is not needed anymore, but one_to_n must still
+                // live, a little nuance to pay attention to. However, alas, we can always just delay memory freeing
+                // and do it all at the very end: this is exactly what I did here.
                 old_arr_unsort_to_sort_map = one_to_n;
-                scratchPad.finishUsingTempVector("one_to_n");
                 scratchPad.finishUsingTempVector("old_contactType_sorted");
             }
 
@@ -1066,6 +1067,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // This part is light on memory, so we can delay some freeing
         scratchPad.finishUsingTempVector("new_idA_runlength");
         scratchPad.finishUsingTempVector("unique_new_idA");
+        // Note one_to_n corresponds to the pointer name old_arr_unsort_to_sort_map, an exception to general "matched"
+        // naming convension. But we delayed their freeing, so you see them both freed here.
+        scratchPad.finishUsingTempVector("one_to_n");
         scratchPad.finishUsingTempVector("old_arr_unsort_to_sort_map");
 
     }  // End of contact sorting--mapping subroutine
