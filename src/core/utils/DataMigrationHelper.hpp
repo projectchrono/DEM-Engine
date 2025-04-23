@@ -35,11 +35,26 @@ inline void DevicePtrDealloc(T*& ptr) {
     if (attrib.type != cudaMemoryType::cudaMemoryTypeUnregistered)
         DEME_GPU_CALL(cudaFree(ptr));
 }
-
 template <typename T>
 inline void DevicePtrAlloc(T*& ptr, size_t size) {
     DevicePtrDealloc(ptr);
     DEME_GPU_CALL(cudaMalloc((void**)&ptr, size * sizeof(T)));
+}
+
+template <typename T>
+inline void HostPtrDealloc(T*& ptr) {
+    if (!ptr)
+        return;
+    cudaPointerAttributes attrib;
+    DEME_GPU_CALL(cudaPointerGetAttributes(&attrib, ptr));
+
+    if (attrib.type != cudaMemoryType::cudaMemoryTypeUnregistered)
+        DEME_GPU_CALL(cudaFreeHost(ptr));
+}
+template <typename T>
+inline void HostPtrAlloc(T*& ptr, size_t size) {
+    HostPtrDealloc(ptr);
+    DEME_GPU_CALL(cudaMallocHost((void**)&ptr, size * sizeof(T)));
 }
 
 // Managed advise doesn't seem to do anything...
@@ -90,9 +105,11 @@ class DualStruct : private NonCopyable {
     }
 
     // Destructor: Free memory
-    ~DualStruct() {
-        DEME_GPU_CALL(cudaFreeHost(host_data));  // Free pinned memory
-        DEME_GPU_CALL(cudaFree(device_data));    // Free device memory
+    ~DualStruct() { free(); }
+
+    void free() {
+        HostPtrDealloc(host_data);      // Free pinned memory
+        DevicePtrDealloc(device_data);  // Free device memory
     }
 
     // Synchronize changes from host to device
@@ -103,6 +120,22 @@ class DualStruct : private NonCopyable {
 
     // Synchronize changes from device to host
     void syncToHost() { DEME_GPU_CALL(cudaMemcpy(host_data, device_data, sizeof(T), cudaMemcpyDeviceToHost)); }
+
+    // Synchronize change of one field of the struct to device
+    template <typename MemberType>
+    void syncMemberToDevice(ptrdiff_t offset) {
+        DEME_GPU_CALL(cudaMemcpy(reinterpret_cast<char*>(device_data) + offset,
+                                 reinterpret_cast<char*>(host_data) + offset, sizeof(MemberType),
+                                 cudaMemcpyHostToDevice));
+    }
+
+    // Synchronize change of one field of the struct to host
+    template <typename MemberType>
+    void syncMemberToHost(ptrdiff_t offset) {
+        DEME_GPU_CALL(cudaMemcpy(reinterpret_cast<char*>(host_data) + offset,
+                                 reinterpret_cast<char*>(device_data) + offset, sizeof(MemberType),
+                                 cudaMemcpyDeviceToHost));
+    }
 
     // Check if host data has been modified and not synced
     bool checkNoPendingModification() { return !modified_on_host; }
@@ -376,27 +409,21 @@ class DeviceArray : private NonCopyable {
 
 /// @brief General abstraction of vector pool
 /// @tparam T Array data type
-/// @tparam Derived The derived type (feedback to this base class)
 /// @tparam DerivedEnclosedData The data type of the enclosed arrays in the derived pool class
-template <typename T, typename Derived, typename DerivedEnclosedData>
-class VectorPool : private NonCopyable {
+template <typename T, typename DerivedEnclosedData>
+class ResourcePool : private NonCopyable {
   protected:
     std::vector<std::unique_ptr<DerivedEnclosedData>> vectors;
     std::vector<std::optional<std::string>> in_use;
     std::unordered_map<std::string, size_t> name_to_index;
 
   public:
-    virtual ~VectorPool() { releaseAll(); }
+    virtual ~ResourcePool() { releaseAll(); }
 
-    void resize(const std::string& name, size_t new_size, bool allow_create = false) {
+    void resize(const std::string& name, size_t new_size) {
         auto it = name_to_index.find(name);
         if (it == name_to_index.end()) {
-            if (allow_create) {
-                static_cast<Derived*>(this)->claim(name, new_size);
-                return;
-            } else {
-                throw std::runtime_error("Cannot resize: name not found");
-            }
+            throw std::runtime_error("Cannot resize: name not found");
         }
         vectors[it->second]->resize(new_size);
     }
@@ -430,9 +457,9 @@ class VectorPool : private NonCopyable {
     void printStatus() const {
         for (size_t i = 0; i < in_use.size(); ++i) {
             if (in_use[i])
-                std::cout << "Vector[" << i << "] in use as \"" << *in_use[i] << "\"\n";
+                std::cout << "Storage vector[" << i << "] in use as \"" << *in_use[i] << "\"\n";
             else
-                std::cout << "Vector[" << i << "] is free\n";
+                std::cout << "Storage vector[" << i << "] is free\n";
         }
     }
 };
@@ -440,16 +467,23 @@ class VectorPool : private NonCopyable {
 /// @brief A pool that dispatches device arrays
 /// @tparam T Array data type
 template <typename T>
-class DeviceVectorPool : public VectorPool<T, DeviceVectorPool<T>, DeviceArray<T>> {
+class DeviceVectorPool : public ResourcePool<T, DeviceArray<T>> {
   public:
     explicit DeviceVectorPool(size_t* external_counter = nullptr) : m_mem_counter(external_counter) {}
 
-    T* claim(const std::string& name, size_t size) {
+    T* claim(const std::string& name, size_t size, bool allow_duplicate = false) {
         // Referring to the base class that correspond to me
-        using Base = VectorPool<T, DeviceVectorPool<T>, DeviceArray<T>>;
+        using Base = ResourcePool<T, DeviceArray<T>>;
 
-        if (Base::name_to_index.count(name))
-            throw std::runtime_error("Name already claimed: " + name);
+        if (Base::name_to_index.count(name)) {
+            if (allow_duplicate) {
+                size_t index = Base::name_to_index[name];
+                Base::vectors[index]->resize(size);
+                return Base::vectors[index]->data();
+            } else {
+                throw std::runtime_error("Name already claimed: " + name);
+            }
+        }
 
         for (size_t i = 0; i < Base::in_use.size(); ++i) {
             if (!Base::in_use[i]) {
@@ -488,17 +522,24 @@ class DeviceVectorPool : public VectorPool<T, DeviceVectorPool<T>, DeviceArray<T
 /// @brief A pool that dispatches dual arrays
 /// @tparam T Array data type
 template <typename T>
-class DualArrayPool : public VectorPool<T, DualArrayPool<T>, DualArray<T>> {
+class DualArrayPool : public ResourcePool<T, DualArray<T>> {
   public:
     explicit DualArrayPool(size_t* host_external_counter = nullptr, size_t* device_external_counter = nullptr)
         : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {}
 
-    DualArray<T>* claim(const std::string& name, size_t size) {
+    DualArray<T>* claim(const std::string& name, size_t size, bool allow_duplicate = false) {
         // Referring to the base class that correspond to me
-        using Base = VectorPool<T, DualArrayPool<T>, DualArray<T>>;
+        using Base = ResourcePool<T, DualArray<T>>;
 
-        if (Base::name_to_index.count(name))
-            throw std::runtime_error("Name already claimed: " + name);
+        if (Base::name_to_index.count(name)) {
+            if (allow_duplicate) {
+                size_t index = Base::name_to_index[name];
+                Base::vectors[index]->resize(size);
+                return Base::vectors[index].get();
+            } else {
+                throw std::runtime_error("Name already claimed: " + name);
+            }
+        }
 
         for (size_t i = 0; i < Base::in_use.size(); ++i) {
             if (!Base::in_use[i]) {
@@ -523,6 +564,20 @@ class DualArrayPool : public VectorPool<T, DualArrayPool<T>, DualArray<T>> {
         return this->vectors[it->second].get();
     }
 
+    T* getHost(const std::string& name) {
+        auto it = this->name_to_index.find(name);
+        if (it == this->name_to_index.end())
+            throw std::runtime_error("Name not found: " + name);
+        return this->vectors[it->second]->host();
+    }
+
+    T* getDevice(const std::string& name) {
+        auto it = this->name_to_index.find(name);
+        if (it == this->name_to_index.end())
+            throw std::runtime_error("Name not found: " + name);
+        return this->vectors[it->second]->device();
+    }
+
     void setMemoryCounter(size_t* host_external_counter, size_t* device_external_counter) {
         m_host_mem_counter = host_external_counter;
         m_device_mem_counter = device_external_counter;
@@ -535,6 +590,63 @@ class DualArrayPool : public VectorPool<T, DualArrayPool<T>, DualArray<T>> {
   private:
     size_t* m_host_mem_counter = nullptr;
     size_t* m_device_mem_counter = nullptr;
+};
+
+/// @brief A pool that dispatches dual structs
+/// @tparam T Struct data type
+template <typename T>
+class DualStructPool : public ResourcePool<T, DualStruct<T>> {
+  public:
+    explicit DualStructPool() {}
+
+    DualStruct<T>* claim(const std::string& name, bool allow_duplicate = false) {
+        // Referring to the base class that correspond to me
+        using Base = ResourcePool<T, DualStruct<T>>;
+
+        if (Base::name_to_index.count(name)) {
+            if (allow_duplicate) {
+                size_t index = Base::name_to_index[name];
+                return Base::vectors[index].get();
+            } else {
+                throw std::runtime_error("Name already claimed: " + name);
+            }
+        }
+
+        for (size_t i = 0; i < Base::in_use.size(); ++i) {
+            if (!Base::in_use[i]) {
+                Base::in_use[i] = name;
+                Base::name_to_index[name] = i;
+                return Base::vectors[i].get();
+            }
+        }
+
+        Base::vectors.emplace_back(std::make_unique<DualStruct<T>>());
+        Base::in_use.emplace_back(name);
+        size_t new_index = Base::vectors.size() - 1;
+        Base::name_to_index[name] = new_index;
+        return Base::vectors[new_index].get();
+    }
+
+    DualStruct<T>* get(const std::string& name) {
+        auto it = this->name_to_index.find(name);
+        if (it == this->name_to_index.end())
+            throw std::runtime_error("Name not found: " + name);
+        return this->vectors[it->second].get();
+    }
+
+    T* getHost(const std::string& name) {
+        auto it = this->name_to_index.find(name);
+        if (it == this->name_to_index.end())
+            throw std::runtime_error("Name not found: " + name);
+        return this->vectors[it->second]->getHostPointer();
+    }
+
+    T* getDevice(const std::string& name) {
+        auto it = this->name_to_index.find(name);
+        if (it == this->name_to_index.end())
+            throw std::runtime_error("Name not found: " + name);
+        return this->vectors[it->second]->getDevicePointer();
+    }
 };
 
 }  // namespace deme

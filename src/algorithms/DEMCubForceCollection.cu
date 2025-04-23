@@ -60,8 +60,8 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
             .launch(idBOwner, granData->idGeometryB, granData->ownerClumpBody, granData->ownerMesh,
                     granData->contactType, nContactPairs);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-        // displayArray<bodyID_t>(idAOwner, nContactPairs);
-        // displayArray<bodyID_t>(idBOwner, nContactPairs);
+        // displayDeviceArray<bodyID_t>(idAOwner, nContactPairs);
+        // displayDeviceArray<bodyID_t>(idBOwner, nContactPairs);
     }
 
     // ==============================================
@@ -116,9 +116,9 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
         .configure(dim3(blocks_needed_for_stashing), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(granData->aX, granData->aY, granData->aZ, uniqueOwner, accOwner, *forceCollectionRuns);
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-    // displayArray<float>(granData->aX, nClumps);
-    // displayArray<float>(granData->aY, nClumps);
-    // displayArray<float>(granData->aZ, nClumps);
+    // displayDeviceArray<float>(granData->aX, nClumps);
+    // displayDeviceArray<float>(granData->aY, nClumps);
+    // displayDeviceArray<float>(granData->aZ, nClumps);
 
     // =====================================================
     // Then take care of angular accelerations

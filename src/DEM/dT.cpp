@@ -476,7 +476,7 @@ void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, s
         }
         std::sort(familiesNoOutput.begin(), familiesNoOutput.end());
         DEME_DEBUG_PRINTF("Impl-level families that will not be outputted:");
-        DEME_DEBUG_EXEC(displayArray<family_t>(familiesNoOutput.data(), familiesNoOutput.size()));
+        DEME_DEBUG_EXEC(displayDeviceArray<family_t>(familiesNoOutput.data(), familiesNoOutput.size()));
     }
 }
 
@@ -1775,7 +1775,7 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
                              cudaMemcpyDeviceToDevice));
 
     // Send simulation metrics for kT's reference.
-    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_ts, &((&simParams)->h), sizeof(float), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_ts, &(simParams->h), sizeof(float), cudaMemcpyHostToDevice));
     // Note that perhapsIdealFutureDrift is non-negative, and it will be used to determine the margin size; however, if
     // scheduleHelper is instructed to have negative future drift then perhapsIdealFutureDrift no longer affects them.
     DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_maxDrift, perhapsIdealFutureDrift.getHostPointer(),
@@ -1837,8 +1837,8 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
                     .instantiate()
                     .configure(dim3(blocks_needed_for_rearrange), dim3(DEME_MAX_THREADS_PER_BLOCK), 0,
                                streamInfo.stream)
-                    .launch(granData.getDevicePointer()->contactWildcards[simParams->nContactWildcards - 1],
-                            contactSentry, *solverScratchSpace.numPrevContacts);
+                    .launch(granData->contactWildcards[simParams->nContactWildcards - 1], contactSentry,
+                            *solverScratchSpace.numPrevContacts);
                 DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
             }
         }
@@ -1859,9 +1859,13 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
     // Take a look, does the sentry indicate that there is an `alive' contact got lost?
     if (verbosity >= VERBOSITY::STEP_METRIC) {
         if (*solverScratchSpace.numPrevContacts > 0 && simParams->nContactWildcards > 0) {
-            size_t* lostContact = (size_t*)solverScratchSpace.allocateTempVector("lostContact", sizeof(size_t));
+            // Temp DualStruct defaults to size_t type
+            solverScratchSpace.allocateDualStruct("lostContact");
+            size_t* lostContact = solverScratchSpace.getDualStructDevice("lostContact");
             cubSumReduce<notStupidBool_t, size_t>(contactSentry, lostContact, *solverScratchSpace.numPrevContacts,
                                                   streamInfo.stream, solverScratchSpace);
+            solverScratchSpace.syncDualStructDeviceToHost("lostContact");
+            lostContact = solverScratchSpace.getDualStructHost("lostContact");
             if (*lostContact && solverFlags.isAsync) {
                 DEME_STEP_METRIC(
                     "%zu contacts were active at time %.9g on dT, but they are not detected on kT, therefore being "
@@ -1870,19 +1874,22 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
                 DEME_STEP_DEBUG_PRINTF("New number of contacts: %zu", *solverScratchSpace.numContacts);
                 DEME_STEP_DEBUG_PRINTF("Old number of contacts: %zu", *solverScratchSpace.numPrevContacts);
                 DEME_STEP_DEBUG_PRINTF("New contact A:");
-                DEME_STEP_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryA, *solverScratchSpace.numContacts));
+                DEME_STEP_DEBUG_EXEC(
+                    displayDeviceArray<bodyID_t>(granData->idGeometryA, *solverScratchSpace.numContacts));
                 DEME_STEP_DEBUG_PRINTF("New contact B:");
-                DEME_STEP_DEBUG_EXEC(displayArray<bodyID_t>(granData->idGeometryB, *solverScratchSpace.numContacts));
+                DEME_STEP_DEBUG_EXEC(
+                    displayDeviceArray<bodyID_t>(granData->idGeometryB, *solverScratchSpace.numContacts));
                 DEME_STEP_DEBUG_PRINTF("Old version of the last contact wildcard:");
-                DEME_STEP_DEBUG_EXEC(displayArray<float>(granData->contactWildcards[simParams->nContactWildcards - 1],
-                                                         *solverScratchSpace.numPrevContacts));
+                DEME_STEP_DEBUG_EXEC(displayDeviceArray<float>(
+                    granData->contactWildcards[simParams->nContactWildcards - 1], *solverScratchSpace.numPrevContacts));
                 DEME_STEP_DEBUG_PRINTF("Old--new mapping:");
                 DEME_STEP_DEBUG_EXEC(
-                    displayArray<contactPairs_t>(granData->contactMapping, *solverScratchSpace.numContacts));
+                    displayDeviceArray<contactPairs_t>(granData->contactMapping, *solverScratchSpace.numContacts));
                 DEME_STEP_DEBUG_PRINTF("Sentry:");
-                DEME_STEP_DEBUG_EXEC(displayArray<notStupidBool_t>(contactSentry, *solverScratchSpace.numPrevContacts));
+                DEME_STEP_DEBUG_EXEC(
+                    displayDeviceArray<notStupidBool_t>(contactSentry, *solverScratchSpace.numPrevContacts));
             }
-            solverScratchSpace.finishUsingTempVector("lostContact");
+            solverScratchSpace.finishUsingDualStruct("lostContact");
         }
     }
 
@@ -1946,7 +1953,7 @@ inline void DEMDynamicThread::calculateForces() {
             .launch(&simParams, &granData, nContactPairs);
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         // displayFloat3(granData->contactForces, nContactPairs);
-        // displayArray<contact_t>(granData->contactType, nContactPairs);
+        // displayDeviceArray<contact_t>(granData->contactType, nContactPairs);
         // std::cout << "===========================" << std::endl;
         timers.GetTimer("Calculate contact forces").stop();
 
@@ -1966,7 +1973,7 @@ inline void DEMDynamicThread::calculateForces() {
                     .launch(&granData, nContactPairs);
                 DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
             }
-            // displayArray<float>(granData->aZ, simParams->nOwnerBodies);
+            // displayDeviceArray<float>(granData->aZ, simParams->nOwnerBodies);
             // displayFloat3(granData->contactForces, nContactPairs);
             // std::cout << nContactPairs << std::endl;
             timers.GetTimer("Collect contact forces").stop();
@@ -2218,7 +2225,7 @@ void DEMDynamicThread::workerThread() {
             //// TODO: make changes for variable time step size cases
             simParams->timeElapsed += (double)simParams->h;
             // timeElapsed needs to be updated to the device each time step
-            CudaCopyToDevice(&(simParams.getDevicePointer()->timeElapsed), &(simParams->timeElapsed));
+            simParams.syncMemberToDevice<double>(offsetof(DEMSimParams, timeElapsed));
         }
 
         // Unless the user did something critical, must we wait for a kT update before next step
@@ -2435,7 +2442,7 @@ double DEMDynamicThread::getSimTime() const {
 
 void DEMDynamicThread::setSimTime(double time) {
     simParams->timeElapsed = time;
-    CudaCopyToDevice(&(simParams.getDevicePointer()->timeElapsed), &(simParams->timeElapsed));
+    simParams.syncMemberToDevice<double>(offsetof(DEMSimParams, timeElapsed));
 }
 
 float DEMDynamicThread::getUpdateFreq() const {

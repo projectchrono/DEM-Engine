@@ -104,7 +104,7 @@ void DEMKinematicThread::calibrateParams() {
         DEME_DEBUG_PRINTF("kT runtime per step: %.7gs", CDAccumTimer.GetPrevTime());
     }
     // binSize is now calculated, we need to migrate that to device
-    CudaCopyToDevice(&(simParams.getDevicePointer()->binSize), &(simParams->binSize));
+    simParams.syncMemberToDevice<double>(offsetof(DEMSimParams, binSize));
 }
 
 inline void DEMKinematicThread::unpackMyBuffer() {

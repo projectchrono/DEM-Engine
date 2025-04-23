@@ -2129,8 +2129,8 @@ void DEMSolver::UpdateStepSize(double ts) {
     // We for now store ts as float on devices...
     dT->simParams->h = ts;
     kT->simParams->h = ts;
-    CudaCopyToDevice(&(dT->simParams.getDevicePointer()->h), &(dT->simParams->h));
-    CudaCopyToDevice(&(kT->simParams.getDevicePointer()->h), &(kT->simParams->h));
+    dT->simParams.syncMemberToDevice<float>(offsetof(DEMSimParams, h));
+    kT->simParams.syncMemberToDevice<float>(offsetof(DEMSimParams, h));
 }
 
 void DEMSolver::UpdateClumps() {

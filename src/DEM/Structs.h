@@ -108,6 +108,7 @@ class DEMSolverScratchData {
     // arguments, but DeviceVectorPool's resize considers number of elements
     DeviceVectorPool<scratch_t> m_deviceVecPool;
     DualArrayPool<scratch_t> m_dualArrPool;
+    DualStructPool<size_t> m_dualStructPool;
 
   public:
     // Number of contacts in this CD step
@@ -118,19 +119,20 @@ class DEMSolverScratchData {
     DualStruct<size_t> numPrevSpheres = DualStruct<size_t>(0);
 
     DEMSolverScratchData(size_t* external_host_counter = nullptr, size_t* external_device_counter = nullptr)
-        : m_deviceVecPool(external_device_counter), m_dualArrPool(external_host_counter, external_device_counter) {}
-    ~DEMSolverScratchData() {}
+        : m_deviceVecPool(external_device_counter), m_dualArrPool(external_host_counter, external_device_counter) {
+        m_deviceVecPool.claim("ScratchSpace", 42);
+    }
+    ~DEMSolverScratchData() { releaseMemory(); }
 
     // Return raw pointer to swath of device memory that is at least "sizeNeeded" large
     scratch_t* allocateScratchSpace(size_t sizeNeeded) {
-        m_deviceVecPool.resize("ScratchSpace", sizeNeeded, true);
+        m_deviceVecPool.resize("ScratchSpace", sizeNeeded);
         return m_deviceVecPool.get("ScratchSpace");
     }
 
     // This flavor does not prevent you from forgeting to recycle before this time step ends
     scratch_t* allocateVector(const std::string& name, size_t sizeNeeded) {
-        m_deviceVecPool.resize(name, sizeNeeded, true);
-        return m_deviceVecPool.get(name);
+        return m_deviceVecPool.claim(name, sizeNeeded, /*allow_duplicate=*/true);
     }
 
     // This flavor prevents you from forgeting to recycle before this time step ends
@@ -143,20 +145,33 @@ class DEMSolverScratchData {
     DualArray<scratch_t>* allocateDualArray(const std::string& name, size_t sizeNeeded) {
         return m_dualArrPool.claim(name, sizeNeeded);
     }
+    scratch_t* getDualArrayHost(const std::string& name) { return m_dualArrPool.getHost(name); }
+    scratch_t* getDualArrayDevice(const std::string& name) { return m_dualArrPool.getDevice(name); }
+    void syncDualArrayDeviceToHost(const std::string& name) { m_dualArrPool.get(name)->syncToHost(); }
+    void syncDualArrayHostToDevice(const std::string& name) { m_dualArrPool.get(name)->syncToDevice(); }
+    // Likewise, all DualStruct allocated using this class will be temporary
+    DualStruct<size_t>* allocateDualStruct(const std::string& name) { return m_dualStructPool.claim(name); }
+    size_t* getDualStructHost(const std::string& name) { return m_dualStructPool.getHost(name); }
+    size_t* getDualStructDevice(const std::string& name) { return m_dualStructPool.getDevice(name); }
+    void syncDualStructDeviceToHost(const std::string& name) { m_dualStructPool.get(name)->syncToHost(); }
+    void syncDualStructHostToDevice(const std::string& name) { m_dualStructPool.get(name)->syncToDevice(); }
 
     void finishUsingTempVector(const std::string& name) { m_deviceVecPool.unclaim(name); }
     void finishUsingVector(const std::string& name) { finishUsingTempVector(name); }
     void finishUsingDualArray(const std::string& name) { m_dualArrPool.unclaim(name); }
+    void finishUsingDualStruct(const std::string& name) { m_dualStructPool.unclaim(name); }
 
     // Debug util
     void printVectorUsage() {
         m_deviceVecPool.printStatus();
         m_dualArrPool.printStatus();
+        m_dualStructPool.printStatus();
     }
 
     void releaseMemory() {
         m_deviceVecPool.releaseAll();
         m_dualArrPool.releaseAll();
+        m_dualStructPool.releaseAll();
     }
 };
 

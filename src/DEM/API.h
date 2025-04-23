@@ -280,7 +280,6 @@ class DEMSolver {
     /// @return Bin size.
     double GetBinSize() { return kT->simParams->binSize; }
     // NOTE: No need to get binSize from the device, as binSize is only changed on the host
-    // { double binSize; CudaCopyToHost(&binSize, &(kT->simParams.getDevicePointer()->binSize)); return binSize; }
 
     /// @brief Get the current number of bins (for contact detection). Must be called from synchronized stance.
     /// @return Number of bins.
