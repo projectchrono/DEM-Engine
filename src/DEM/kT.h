@@ -63,7 +63,7 @@ class DEMKinematicThread {
     size_t m_approxHostBytesUsed = 0;
 
     // A class that contains scratch pad and system status data (constructed with the number of temp arrays we need)
-    DEMSolverScratchData solverScratchSpace = DEMSolverScratchData(&m_approxDeviceBytesUsed);
+    DEMSolverScratchData solverScratchSpace = DEMSolverScratchData(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // kT should break out of its inner loop and return to a state where it awaits a `start' call at the outer loop
     bool kTShouldReset = false;

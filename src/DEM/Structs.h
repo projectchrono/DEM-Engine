@@ -107,6 +107,7 @@ class DEMSolverScratchData {
     // NOTE! The type MUST be scratch_t, since all DEMSolverScratchData's allocation methods use num of bytes as
     // arguments, but DeviceVectorPool's resize considers number of elements
     DeviceVectorPool<scratch_t> m_deviceVecPool;
+    DualArrayPool<scratch_t> m_dualArrPool;
 
   public:
     // Number of contacts in this CD step
@@ -116,7 +117,8 @@ class DEMSolverScratchData {
     // Number of spheres in the previous CD step (in case user added/removed clumps from the system)
     DualStruct<size_t> numPrevSpheres = DualStruct<size_t>(0);
 
-    DEMSolverScratchData(size_t* external_counter = nullptr) : m_deviceVecPool(external_counter) {}
+    DEMSolverScratchData(size_t* external_host_counter = nullptr, size_t* external_device_counter = nullptr)
+        : m_deviceVecPool(external_device_counter), m_dualArrPool(external_host_counter, external_device_counter) {}
     ~DEMSolverScratchData() {}
 
     // Return raw pointer to swath of device memory that is at least "sizeNeeded" large
@@ -136,12 +138,26 @@ class DEMSolverScratchData {
         return m_deviceVecPool.claim(name, sizeNeeded);
     }
 
+    // Dual arrays allocated here will always be temporary. If you need permanent dual array, create it as a member of
+    // your worker.
+    DualArray<scratch_t>* allocateDualArray(const std::string& name, size_t sizeNeeded) {
+        return m_dualArrPool.claim(name, sizeNeeded);
+    }
+
     void finishUsingTempVector(const std::string& name) { m_deviceVecPool.unclaim(name); }
     void finishUsingVector(const std::string& name) { finishUsingTempVector(name); }
+    void finishUsingDualArray(const std::string& name) { m_dualArrPool.unclaim(name); }
 
-    void printVectorUsage() { m_deviceVecPool.printStatus(); }
+    // Debug util
+    void printVectorUsage() {
+        m_deviceVecPool.printStatus();
+        m_dualArrPool.printStatus();
+    }
 
-    void releaseMemory() { m_deviceVecPool.releaseAll(); }
+    void releaseMemory() {
+        m_deviceVecPool.releaseAll();
+        m_dualArrPool.releaseAll();
+    }
 };
 
 struct kTStateParams {

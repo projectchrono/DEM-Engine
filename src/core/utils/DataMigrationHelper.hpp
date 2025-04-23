@@ -51,12 +51,23 @@ inline void DevicePtrAlloc(T*& ptr, size_t size) {
 // Use (void) to silence unused warnings.
 // #define assertm(exp, msg) assert(((void)msg, exp))
 
-// #define OUTPUT_IF_GPU_FAILS(res) \
-//     { gpu_assert((res), __FILE__, __LINE__, false); throw std::runtime_error("GPU Assertion Failed!");}
+// We protect GPU-related data types with NonCopyable, because the device pointers inside these data types are too
+// fragile for copying. If say a shallow copy is enforced to our array types in a vector-of-arrays resizing, then if you
+// check the copied array's pointer from host, CUDA might not recognize it properly. The best practice is just using
+// unique_ptr to manage these array classes if you expect to put them in places where some under-the-hood copying could
+// happen.
+class NonCopyable {
+  protected:
+    NonCopyable() = default;
+    ~NonCopyable() = default;
+
+    NonCopyable(const NonCopyable&) = delete;
+    NonCopyable& operator=(const NonCopyable&) = delete;
+};
 
 // Used for wrapping data structures so they become usable on GPU
 template <typename T>
-class DualStruct {
+class DualStruct : private NonCopyable {
   private:
     T* host_data;           // Pointer to host memory (pinned)
     T* device_data;         // Pointer to device memory
@@ -130,7 +141,7 @@ class DualStruct {
 
 // CPU--GPU unified array, leveraging pinned memory
 template <typename T>
-class DualArray {
+class DualArray : private NonCopyable {
   public:
     using PinnedVector = std::vector<T, PinnedAllocator<T>>;
 
@@ -149,10 +160,7 @@ class DualArray {
         attachHostVector(&vec, /*deep_copy=*/true);
     }
 
-    ~DualArray() {
-        freeDevice();
-        freeHost();
-    }
+    ~DualArray() { free(); }
 
     void resize(size_t n) {
         assert(m_host_vec_ptr == m_pinned_vec.get() && "resize() requires internal host ownership");
@@ -208,6 +216,11 @@ class DualArray {
         m_device_ptr = nullptr;
         m_device_capacity = 0;
         updateBoundDevicePointer();
+    }
+
+    void free() {
+        freeDevice();
+        freeHost();
     }
 
     void syncToDevice() {
@@ -318,7 +331,7 @@ class DualArray {
 
 // Pure device data type, usually used for scratching space
 template <typename T>
-class DeviceArray {
+class DeviceArray : private NonCopyable {
   public:
     DeviceArray(size_t* external_counter = nullptr) : m_mem_counter(external_counter) {}
 
@@ -361,121 +374,167 @@ class DeviceArray {
     }
 };
 
-template <typename T>
-class DeviceVectorPool {
-  private:
-    std::vector<DeviceArray<T>> vectors;
+/// @brief General abstraction of vector pool
+/// @tparam T Array data type
+/// @tparam Derived The derived type (feedback to this base class)
+/// @tparam DerivedEnclosedData The data type of the enclosed arrays in the derived pool class
+template <typename T, typename Derived, typename DerivedEnclosedData>
+class VectorPool : private NonCopyable {
+  protected:
+    std::vector<std::unique_ptr<DerivedEnclosedData>> vectors;
     std::vector<std::optional<std::string>> in_use;
     std::unordered_map<std::string, size_t> name_to_index;
 
-    size_t* m_mem_counter = nullptr;
-
   public:
-    explicit DeviceVectorPool(size_t* external_counter = nullptr) : m_mem_counter(external_counter) {}
-
-    ~DeviceVectorPool() { releaseAll(); }
-
-    // Claim a vector with at least `size` bytes and associate it with a name
-    T* claim(const std::string& name, size_t size) {
-        if (name_to_index.count(name)) {
-            throw std::runtime_error("Name already claimed: " + name);
-        }
-
-        // Look for a free vector
-        for (size_t i = 0; i < in_use.size(); ++i) {
-            // Found one already allocated but later freed: use it
-            if (!in_use[i]) {
-                // DeviceArray resize method integrates non-shrink check
-                vectors[i].resize(size);
-                in_use[i] = name;
-                name_to_index[name] = i;
-                return vectors[i].data();
-            }
-        }
-
-        // No free vector: expand pool
-        vectors.emplace_back(size, m_mem_counter);
-        in_use.emplace_back(name);
-        size_t new_index = vectors.size() - 1;
-        name_to_index[name] = new_index;
-        return vectors[new_index].data();
-    }
-
-    T* get(const std::string& name) {
-        auto it = name_to_index.find(name);
-        if (it == name_to_index.end()) {
-            throw std::runtime_error("Name not found: " + name);
-        }
-        return vectors[it->second].data();
-    }
+    virtual ~VectorPool() { releaseAll(); }
 
     void resize(const std::string& name, size_t new_size, bool allow_create = false) {
         auto it = name_to_index.find(name);
         if (it == name_to_index.end()) {
             if (allow_create) {
-                claim(name, new_size);  // Will allocate if needed
+                static_cast<Derived*>(this)->claim(name, new_size);
                 return;
             } else {
                 throw std::runtime_error("Cannot resize: name not found");
             }
         }
-
-        size_t index = it->second;
-        vectors[index].resize(new_size);
+        vectors[it->second]->resize(new_size);
     }
 
-    // Unclaim a named vector (make it available again)
     void unclaim(const std::string& name) {
         auto it = name_to_index.find(name);
-        if (it == name_to_index.end()) {
+        if (it == name_to_index.end())
             return;
-        }
-
-        size_t index = it->second;
-        in_use[index] = std::nullopt;
+        in_use[it->second] = std::nullopt;
         name_to_index.erase(it);
     }
 
-    // This one also deallocate the memory
     void release(const std::string& name) {
         auto it = name_to_index.find(name);
         if (it == name_to_index.end()) {
             throw std::runtime_error("Cannot release: name not found");
         }
-
-        size_t index = it->second;
-        vectors[index].free();
-        in_use[index] = std::nullopt;
+        vectors[it->second]->free();
+        in_use[it->second] = std::nullopt;
         name_to_index.erase(it);
     }
 
-    // Release all memory (clear the vectors)
     void releaseAll() {
-        for (const auto& entry : name_to_index) {
-            size_t index = entry.second;
-            vectors[index].free();
+        for (size_t i = 0; i < vectors.size(); ++i) {
+            vectors[i]->free();
         }
         in_use.clear();
         name_to_index.clear();
     }
 
+    void printStatus() const {
+        for (size_t i = 0; i < in_use.size(); ++i) {
+            if (in_use[i])
+                std::cout << "Vector[" << i << "] in use as \"" << *in_use[i] << "\"\n";
+            else
+                std::cout << "Vector[" << i << "] is free\n";
+        }
+    }
+};
+
+/// @brief A pool that dispatches device arrays
+/// @tparam T Array data type
+template <typename T>
+class DeviceVectorPool : public VectorPool<T, DeviceVectorPool<T>, DeviceArray<T>> {
+  public:
+    explicit DeviceVectorPool(size_t* external_counter = nullptr) : m_mem_counter(external_counter) {}
+
+    T* claim(const std::string& name, size_t size) {
+        // Referring to the base class that correspond to me
+        using Base = VectorPool<T, DeviceVectorPool<T>, DeviceArray<T>>;
+
+        if (Base::name_to_index.count(name))
+            throw std::runtime_error("Name already claimed: " + name);
+
+        for (size_t i = 0; i < Base::in_use.size(); ++i) {
+            if (!Base::in_use[i]) {
+                Base::vectors[i]->resize(size);
+                Base::in_use[i] = name;
+                Base::name_to_index[name] = i;
+                return Base::vectors[i]->data();
+            }
+        }
+
+        Base::vectors.emplace_back(std::make_unique<DeviceArray<T>>(size, m_mem_counter));
+        Base::in_use.emplace_back(name);
+        size_t new_index = Base::vectors.size() - 1;
+        Base::name_to_index[name] = new_index;
+        return Base::vectors[new_index]->data();
+    }
+
+    T* get(const std::string& name) {
+        auto it = this->name_to_index.find(name);
+        if (it == this->name_to_index.end())
+            throw std::runtime_error("Name not found: " + name);
+        return this->vectors[it->second]->data();
+    }
+
     void setMemoryCounter(size_t* counter) {
         m_mem_counter = counter;
-        for (auto& vec : vectors) {
-            vec.setMemoryCounter(counter);
+        for (auto& vec : this->vectors) {
+            vec->setMemoryCounter(counter);
         }
     }
 
-    // Debug utility
-    void printStatus() const {
-        for (size_t i = 0; i < vectors.size(); ++i) {
-            if (in_use[i]) {
-                std::cout << "Vector[" << i << "] in use as \"" << *in_use[i] << "\"\n";
-            } else {
-                std::cout << "Vector[" << i << "] is free\n";
+  private:
+    size_t* m_mem_counter = nullptr;
+};
+
+/// @brief A pool that dispatches dual arrays
+/// @tparam T Array data type
+template <typename T>
+class DualArrayPool : public VectorPool<T, DualArrayPool<T>, DualArray<T>> {
+  public:
+    explicit DualArrayPool(size_t* host_external_counter = nullptr, size_t* device_external_counter = nullptr)
+        : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {}
+
+    DualArray<T>* claim(const std::string& name, size_t size) {
+        // Referring to the base class that correspond to me
+        using Base = VectorPool<T, DualArrayPool<T>, DualArray<T>>;
+
+        if (Base::name_to_index.count(name))
+            throw std::runtime_error("Name already claimed: " + name);
+
+        for (size_t i = 0; i < Base::in_use.size(); ++i) {
+            if (!Base::in_use[i]) {
+                Base::vectors[i]->resize(size);
+                Base::in_use[i] = name;
+                Base::name_to_index[name] = i;
+                return Base::vectors[i].get();
             }
         }
+
+        Base::vectors.emplace_back(std::make_unique<DualArray<T>>(size, m_host_mem_counter, m_device_mem_counter));
+        Base::in_use.emplace_back(name);
+        size_t new_index = Base::vectors.size() - 1;
+        Base::name_to_index[name] = new_index;
+        return Base::vectors[new_index].get();
     }
+
+    DualArray<T>* get(const std::string& name) {
+        auto it = this->name_to_index.find(name);
+        if (it == this->name_to_index.end())
+            throw std::runtime_error("Name not found: " + name);
+        return this->vectors[it->second].get();
+    }
+
+    void setMemoryCounter(size_t* host_external_counter, size_t* device_external_counter) {
+        m_host_mem_counter = host_external_counter;
+        m_device_mem_counter = device_external_counter;
+        for (auto& vec : this->vectors) {
+            vec->setHostMemoryCounter(m_host_mem_counter);
+            vec->setDeviceMemoryCounter(m_device_mem_counter);
+        }
+    }
+
+  private:
+    size_t* m_host_mem_counter = nullptr;
+    size_t* m_device_mem_counter = nullptr;
 };
 
 }  // namespace deme
