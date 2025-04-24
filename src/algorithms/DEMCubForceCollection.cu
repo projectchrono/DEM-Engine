@@ -103,18 +103,21 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
                                        scratchPad);
     // Then we reduce by key
     // This variable stores the cub output of how many cub runs it executed for collecting forces
-    DualStruct<size_t> forceCollectionRuns;
+    scratchPad.allocateDualStruct("forceCollectionRuns");
+    size_t* dpForceCollectionRuns = scratchPad.getDualStructDevice("forceCollectionRuns");
+    size_t* hpForceCollectionRuns = scratchPad.getDualStructHost("forceCollectionRuns");
     CubFloat3Add float3_add_op;
     cubDEMReduceByKeys<bodyID_t, float3, CubFloat3Add>(idAOwner_sorted, uniqueOwner, acc_A_sorted, accOwner,
-                                                       &forceCollectionRuns, float3_add_op, nContactPairs * 2,
+                                                       dpForceCollectionRuns, float3_add_op, nContactPairs * 2,
                                                        this_stream, scratchPad);
+    scratchPad.syncDualStructDeviceToHost("forceCollectionRuns");
     // Then we stash acceleration
     size_t blocks_needed_for_stashing =
-        (*forceCollectionRuns + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
+        (*hpForceCollectionRuns + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
     collect_force_kernels->kernel("stashElem")
         .instantiate()
         .configure(dim3(blocks_needed_for_stashing), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(granData->aX, granData->aY, granData->aZ, uniqueOwner, accOwner, *forceCollectionRuns);
+        .launch(granData->aX, granData->aY, granData->aZ, uniqueOwner, accOwner, *hpForceCollectionRuns);
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
     // displayDeviceArray<float>(granData->aX, nClumps);
     // displayDeviceArray<float>(granData->aY, nClumps);
@@ -148,14 +151,15 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
                                        this_stream, scratchPad);
     // Then we reduce
     cubDEMReduceByKeys<bodyID_t, float3, CubFloat3Add>(idAOwner_sorted, uniqueOwner, alpha_A_sorted, accOwner,
-                                                       &forceCollectionRuns, float3_add_op, nContactPairs * 2,
+                                                       dpForceCollectionRuns, float3_add_op, nContactPairs * 2,
                                                        this_stream, scratchPad);
+    scratchPad.syncDualStructDeviceToHost("forceCollectionRuns");
     // Then we stash angular acceleration
-    blocks_needed_for_stashing = (*forceCollectionRuns + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
+    blocks_needed_for_stashing = (*hpForceCollectionRuns + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
     collect_force_kernels->kernel("stashElem")
         .instantiate()
         .configure(dim3(blocks_needed_for_stashing), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
-        .launch(granData->alphaX, granData->alphaY, granData->alphaZ, uniqueOwner, accOwner, *forceCollectionRuns);
+        .launch(granData->alphaX, granData->alphaY, granData->alphaZ, uniqueOwner, accOwner, *hpForceCollectionRuns);
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 
     scratchPad.finishUsingTempVector("acc_A");

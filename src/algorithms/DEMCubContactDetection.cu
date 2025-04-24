@@ -116,12 +116,18 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         cubDEMPrefixScan<binsSphereTouches_t, binSphereTouchPairs_t>(numBinsSphereTouches, numBinsSphereTouchesScan,
                                                                      simParams->nSpheresGM, this_stream, scratchPad);
         // If there are temp variables that need both device and host copies, we just create DualStruct on-spot
-        DualStruct<size_t> numBinSphereTouchPairs;
+        scratchPad.allocateDualStruct("numBinSphereTouchPairs");
+        size_t* pNumBinSphereTouchPairs = scratchPad.getDualStructDevice("numBinSphereTouchPairs");
         deviceAdd<size_t, binSphereTouchPairs_t, binsSphereTouches_t>(
-            &numBinSphereTouchPairs, &(numBinsSphereTouchesScan[simParams->nSpheresGM - 1]),
+            pNumBinSphereTouchPairs, &(numBinsSphereTouchesScan[simParams->nSpheresGM - 1]),
             &(numBinsSphereTouches[simParams->nSpheresGM - 1]), this_stream);
         deviceAssign<binSphereTouchPairs_t, size_t>(&(numBinsSphereTouchesScan[simParams->nSpheresGM]),
-                                                    &numBinSphereTouchPairs, this_stream);
+                                                    pNumBinSphereTouchPairs, this_stream);
+        // numBinSphereTouchPairs stores data on device, but now we need it on host, so a migrantion is needed. This
+        // cannot be forgotten.
+        scratchPad.syncDualStructDeviceToHost("numBinSphereTouchPairs");
+        // Now pNumBinSphereTouchPairs is host pointer and exclusively used on host
+        pNumBinSphereTouchPairs = scratchPad.getDualStructHost("numBinSphereTouchPairs");
         // The same process is done for sphere--analytical geometry pairs as well.
         // One extra elem is used for storing the final elem in scan result.
         CD_temp_arr_bytes = (simParams->nSpheresGM + 1) * sizeof(binSphereTouchPairs_t);
@@ -139,7 +145,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         if (*(scratchPad.numContacts) > idGeometryA.size()) {
             contactEventArraysResize(*(scratchPad.numContacts), idGeometryA, idGeometryB, contactType, granData);
         }
-        // std::cout << *numBinSphereTouchPairs << std::endl;
+        // std::cout << *pNumBinSphereTouchPairs << std::endl;
         // displayDeviceArray<binsSphereTouches_t>(numBinsSphereTouches, simParams->nSpheresGM);
         // displayDeviceArray<binSphereTouchPairs_t>(numBinsSphereTouchesScan, simParams->nSpheresGM);
 
@@ -147,13 +153,11 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // retire now.
         scratchPad.finishUsingTempVector("numBinsSphereTouches");
         scratchPad.finishUsingTempVector("numAnalGeoSphereTouches");
-        // numBinSphereTouchPairs stores data on device, but now we need it on host, so a migrantion is needed. This
-        // cannot be forgotten.
-        numBinSphereTouchPairs.syncToHost();
-        CD_temp_arr_bytes = (*numBinSphereTouchPairs) * sizeof(binID_t);
+
+        CD_temp_arr_bytes = (*pNumBinSphereTouchPairs) * sizeof(binID_t);
         binID_t* binIDsEachSphereTouches =
             (binID_t*)scratchPad.allocateTempVector("binIDsEachSphereTouches", CD_temp_arr_bytes);
-        CD_temp_arr_bytes = (*numBinSphereTouchPairs) * sizeof(bodyID_t);
+        CD_temp_arr_bytes = (*pNumBinSphereTouchPairs) * sizeof(bodyID_t);
         bodyID_t* sphereIDsEachBinTouches =
             (bodyID_t*)scratchPad.allocateTempVector("sphereIDsEachBinTouches", CD_temp_arr_bytes);
         // This kernel is also responsible of figuring out sphere--analytical geometry pairs
@@ -165,86 +169,94 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     granData->contactType);
         DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
         // std::cout << "Unsorted bin IDs: ";
-        // displayDeviceArray<binID_t>(binIDsEachSphereTouches, *numBinSphereTouchPairs);
+        // displayDeviceArray<binID_t>(binIDsEachSphereTouches, *pNumBinSphereTouchPairs);
         // std::cout << "Corresponding sphere IDs: ";
-        // displayDeviceArray<bodyID_t>(sphereIDsEachBinTouches, *numBinSphereTouchPairs);
+        // displayDeviceArray<bodyID_t>(sphereIDsEachBinTouches, *pNumBinSphereTouchPairs);
 
         // 4th step: allocate and populate SORTED binIDsEachSphereTouches and sphereIDsEachBinTouches. Note
         // numBinsSphereTouchesScan can retire now (analytical contacts have been processed).
         scratchPad.finishUsingTempVector("numBinsSphereTouchesScan");
         scratchPad.finishUsingTempVector("numAnalGeoSphereTouchesScan");
-        CD_temp_arr_bytes = (*numBinSphereTouchPairs) * sizeof(bodyID_t);
+        CD_temp_arr_bytes = (*pNumBinSphereTouchPairs) * sizeof(bodyID_t);
         bodyID_t* sphereIDsEachBinTouches_sorted =
             (bodyID_t*)scratchPad.allocateTempVector("sphereIDsEachBinTouches_sorted", CD_temp_arr_bytes);
-        CD_temp_arr_bytes = (*numBinSphereTouchPairs) * sizeof(binID_t);
+        CD_temp_arr_bytes = (*pNumBinSphereTouchPairs) * sizeof(binID_t);
         binID_t* binIDsEachSphereTouches_sorted =
             (binID_t*)scratchPad.allocateTempVector("binIDsEachSphereTouches_sorted", CD_temp_arr_bytes);
         // hostSortByKey<binID_t, bodyID_t>(granData->binIDsEachSphereTouches, granData->sphereIDsEachBinTouches,
-        //                                  *numBinSphereTouchPairs);
+        //                                  *pNumBinSphereTouchPairs);
         cubDEMSortByKeys<binID_t, bodyID_t>(binIDsEachSphereTouches, binIDsEachSphereTouches_sorted,
                                             sphereIDsEachBinTouches, sphereIDsEachBinTouches_sorted,
-                                            *numBinSphereTouchPairs, this_stream, scratchPad);
+                                            *pNumBinSphereTouchPairs, this_stream, scratchPad);
         // std::cout << "Sorted bin IDs: ";
-        // displayDeviceArray<binID_t>(binIDsEachSphereTouches_sorted, *numBinSphereTouchPairs);
+        // displayDeviceArray<binID_t>(binIDsEachSphereTouches_sorted, *pNumBinSphereTouchPairs);
         // std::cout << "Corresponding sphere IDs: ";
-        // displayDeviceArray<bodyID_t>(sphereIDsEachBinTouches_sorted, *numBinSphereTouchPairs);
+        // displayDeviceArray<bodyID_t>(sphereIDsEachBinTouches_sorted, *pNumBinSphereTouchPairs);
 
         // 5th step: use DeviceRunLengthEncode to identify those active (that have bodies in them) bins.
         // Also, binIDsEachSphereTouches is large enough for a unique scan because total sphere--bin pairs are more than
         // active bins.
         binID_t* binIDsUnique = (binID_t*)binIDsEachSphereTouches;
-        DualStruct<size_t> numActiveBins;
-        cubDEMUnique<binID_t>(binIDsEachSphereTouches_sorted, binIDsUnique, &numActiveBins, *numBinSphereTouchPairs,
+        scratchPad.allocateDualStruct("numActiveBins");
+        size_t* pNumActiveBins = scratchPad.getDualStructDevice("numActiveBins");
+        cubDEMUnique<binID_t>(binIDsEachSphereTouches_sorted, binIDsUnique, pNumActiveBins, *pNumBinSphereTouchPairs,
                               this_stream, scratchPad);
         // Allocate space for encoding output, and run it. Note the (unsorted) binIDsEachSphereTouches and
         // sphereIDsEachBinTouches can retire now.
         scratchPad.finishUsingTempVector("binIDsEachSphereTouches");
         scratchPad.finishUsingTempVector("sphereIDsEachBinTouches");
         // Get the unique check result to host
-        numActiveBins.syncToHost();
-        CD_temp_arr_bytes = (*numActiveBins) * sizeof(binID_t);
+        scratchPad.syncDualStructDeviceToHost("numActiveBins");
+        pNumActiveBins = scratchPad.getDualStructHost("numActiveBins");
+        CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(binID_t);
         // This activeBinIDs will need some host treatment later on...
         scratchPad.allocateDualArray("activeBinIDs", CD_temp_arr_bytes);
         binID_t* activeBinIDs = (binID_t*)scratchPad.getDualArrayDevice("activeBinIDs");
-        CD_temp_arr_bytes = (*numActiveBins) * sizeof(spheresBinTouches_t);
+        CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(spheresBinTouches_t);
         spheresBinTouches_t* numSpheresBinTouches =
             (spheresBinTouches_t*)scratchPad.allocateTempVector("numSpheresBinTouches", CD_temp_arr_bytes);
-        // Here you don't have to numActiveBins.syncToHost() again as the runlength should give the same numActiveBins
-        // as before
+        // Here you don't have to syncToHost() again as the runlength should give the same numActiveBins as before
+        pNumActiveBins = scratchPad.getDualStructDevice("numActiveBins");
         cubDEMRunLengthEncode<binID_t, spheresBinTouches_t>(binIDsEachSphereTouches_sorted, activeBinIDs,
-                                                            numSpheresBinTouches, &numActiveBins,
-                                                            *numBinSphereTouchPairs, this_stream, scratchPad);
-        // std::cout << "numActiveBins: " << *numActiveBins << std::endl;
+                                                            numSpheresBinTouches, pNumActiveBins,
+                                                            *pNumBinSphereTouchPairs, this_stream, scratchPad);
+        pNumActiveBins = scratchPad.getDualStructHost("numActiveBins");
+        // std::cout << "numActiveBins: " << *pNumActiveBins << std::endl;
         // std::cout << "activeBinIDs: ";
-        // displayDeviceArray<binID_t>(activeBinIDs, *numActiveBins);
+        // displayDeviceArray<binID_t>(activeBinIDs, *pNumActiveBins);
         // std::cout << "numSpheresBinTouches: ";
-        // displayDeviceArray<spheresBinTouches_t>(numSpheresBinTouches, *numActiveBins);
+        // displayDeviceArray<spheresBinTouches_t>(numSpheresBinTouches, *pNumActiveBins);
         // std::cout << "binIDsEachSphereTouches_sorted: ";
-        // displayDeviceArray<binID_t>(binIDsEachSphereTouches_sorted, *numBinSphereTouchPairs);
+        // displayDeviceArray<binID_t>(binIDsEachSphereTouches_sorted, *pNumBinSphereTouchPairs);
+        scratchPad.finishUsingDualStruct("numBinSphereTouchPairs");
 
         // We find the max geo num in a bin for the purpose of adjusting bin size.
-        DualStruct<spheresBinTouches_t> maxGeoInBin;
-        cubDEMMax<spheresBinTouches_t>(numSpheresBinTouches, &maxGeoInBin, *numActiveBins, this_stream, scratchPad);
-        maxGeoInBin.syncToHost();
-        stateParams.maxSphFoundInBin = (size_t)(*maxGeoInBin);
+        scratchPad.allocateDualStruct("maxGeoInBin");
+        spheresBinTouches_t* pMaxGeoInBin = (spheresBinTouches_t*)scratchPad.getDualStructDevice("maxGeoInBin");
+        cubDEMMax<spheresBinTouches_t>(numSpheresBinTouches, pMaxGeoInBin, *pNumActiveBins, this_stream, scratchPad);
+        scratchPad.syncDualStructDeviceToHost("maxGeoInBin");
+        // Hmm... this only works in little-endian systems... I don't use undefined behavior that often but this one...
+        stateParams.maxSphFoundInBin = *((spheresBinTouches_t*)scratchPad.getDualStructHost("maxGeoInBin"));
+        scratchPad.finishUsingDualStruct("maxGeoInBin");
 
         // Then, scan to find the offsets that are used to index into sphereIDsEachBinTouches_sorted to obtain bin-wise
         // spheres. Note binIDsEachSphereTouches_sorted can retire.
         scratchPad.finishUsingTempVector("binIDsEachSphereTouches_sorted");
-        CD_temp_arr_bytes = (*numActiveBins) * sizeof(binSphereTouchPairs_t);
+        CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(binSphereTouchPairs_t);
         binSphereTouchPairs_t* sphereIDsLookUpTable =
             (binSphereTouchPairs_t*)scratchPad.allocateTempVector("sphereIDsLookUpTable", CD_temp_arr_bytes);
         cubDEMPrefixScan<spheresBinTouches_t, binSphereTouchPairs_t>(numSpheresBinTouches, sphereIDsLookUpTable,
-                                                                     *numActiveBins, this_stream, scratchPad);
+                                                                     *pNumActiveBins, this_stream, scratchPad);
         // std::cout << "sphereIDsLookUpTable: ";
-        // displayDeviceArray<binSphereTouchPairs_t>(sphereIDsLookUpTable, *numActiveBins);
+        // displayDeviceArray<binSphereTouchPairs_t>(sphereIDsLookUpTable, *pNumActiveBins);
 
         ////////////////////////////////////////////////////////////////////////////////
         // Triangle-related discretization
         ////////////////////////////////////////////////////////////////////////////////
 
         // If there are meshes, they need to be processed too
-        DualStruct<size_t> numActiveBinsForTri;
+        scratchPad.allocateDualStruct("numActiveBinsForTri");
+        size_t* pNumActiveBinsForTri = scratchPad.getDualStructDevice("numActiveBinsForTri");
         bodyID_t* triIDsEachBinTouches_sorted;
         trianglesBinTouches_t* numTrianglesBinTouches;
         binsTriangleTouchPairs_t* triIDsLookUpTable;
@@ -299,22 +311,24 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 (binsTriangleTouchPairs_t*)scratchPad.allocateTempVector("numBinsTriTouchesScan", CD_temp_arr_bytes);
             cubDEMPrefixScan<binsTriangleTouches_t, binsTriangleTouchPairs_t>(
                 numBinsTriTouches, numBinsTriTouchesScan, simParams->nTriGM, this_stream, scratchPad);
-            DualStruct<size_t> numBinTriTouchPairs;
+            scratchPad.allocateDualStruct("numBinTriTouchPairs");
+            size_t* pNumBinTriTouchPairs = scratchPad.getDualStructDevice("numBinTriTouchPairs");
             deviceAdd<size_t, binsTriangleTouchPairs_t, binsTriangleTouches_t>(
-                &numBinTriTouchPairs, &(numBinsTriTouchesScan[simParams->nTriGM - 1]),
+                pNumBinTriTouchPairs, &(numBinsTriTouchesScan[simParams->nTriGM - 1]),
                 &(numBinsTriTouches[simParams->nTriGM - 1]), this_stream);
             deviceAssign<binsTriangleTouchPairs_t, size_t>(&(numBinsTriTouchesScan[simParams->nTriGM]),
-                                                           &numBinTriTouchPairs, this_stream);
-            numBinTriTouchPairs.syncToHost();
+                                                           pNumBinTriTouchPairs, this_stream);
+            scratchPad.syncDualStructDeviceToHost("numBinTriTouchPairs");
+            pNumBinTriTouchPairs = scratchPad.getDualStructHost("numBinTriTouchPairs");
             // Again, numBinsTriTouchesScan is used in populateBinTriangleTouchingPairs
 
             // 3rd step: use a custom kernel to figure out all sphere--bin touching pairs. Note numBinsTriTouches can
             // retire now.
             scratchPad.finishUsingTempVector("numBinsTriTouches");
-            CD_temp_arr_bytes = *numBinTriTouchPairs * sizeof(binID_t);
+            CD_temp_arr_bytes = *pNumBinTriTouchPairs * sizeof(binID_t);
             binID_t* binIDsEachTriTouches =
                 (binID_t*)scratchPad.allocateTempVector("binIDsEachTriTouches", CD_temp_arr_bytes);
-            CD_temp_arr_bytes = *numBinTriTouchPairs * sizeof(bodyID_t);
+            CD_temp_arr_bytes = *pNumBinTriTouchPairs * sizeof(bodyID_t);
             bodyID_t* triIDsEachBinTouches =
                 (bodyID_t*)scratchPad.allocateTempVector("triIDsEachBinTouches", CD_temp_arr_bytes);
             {
@@ -327,60 +341,66 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
             // std::cout << "binIDsEachTriTouches: " << std::endl;
-            // displayDeviceArray<binsTriangleTouches_t>(binIDsEachTriTouches, *numBinTriTouchPairs);
+            // displayDeviceArray<binsTriangleTouches_t>(binIDsEachTriTouches, *pNumBinTriTouchPairs);
 
             // 4th step: allocate and populate SORTED binIDsEachTriTouches and triIDsEachBinTouches. Note
             // numBinsTriTouchesScan can retire now.
             scratchPad.finishUsingTempVector("numBinsTriTouchesScan");
-            CD_temp_arr_bytes = *numBinTriTouchPairs * sizeof(bodyID_t);
+            CD_temp_arr_bytes = *pNumBinTriTouchPairs * sizeof(bodyID_t);
             triIDsEachBinTouches_sorted =
                 (bodyID_t*)scratchPad.allocateTempVector("triIDsEachBinTouches_sorted", CD_temp_arr_bytes);
-            CD_temp_arr_bytes = *numBinTriTouchPairs * sizeof(binID_t);
+            CD_temp_arr_bytes = *pNumBinTriTouchPairs * sizeof(binID_t);
             binID_t* binIDsEachTriTouches_sorted =
                 (binID_t*)scratchPad.allocateTempVector("binIDsEachTriTouches_sorted", CD_temp_arr_bytes);
             cubDEMSortByKeys<binID_t, bodyID_t>(binIDsEachTriTouches, binIDsEachTriTouches_sorted, triIDsEachBinTouches,
-                                                triIDsEachBinTouches_sorted, *numBinTriTouchPairs, this_stream,
+                                                triIDsEachBinTouches_sorted, *pNumBinTriTouchPairs, this_stream,
                                                 scratchPad);
 
             // 5th step: use DeviceRunLengthEncode to identify those active (that have tris in them) bins.
             // Also, binIDsEachTriTouches is large enough for a unique scan because total sphere--bin pairs are more
             // than active bins.
             binID_t* binIDsUnique = (binID_t*)binIDsEachTriTouches;
-            cubDEMUnique<binID_t>(binIDsEachTriTouches_sorted, binIDsUnique, &numActiveBinsForTri, *numBinTriTouchPairs,
-                                  this_stream, scratchPad);
+            cubDEMUnique<binID_t>(binIDsEachTriTouches_sorted, binIDsUnique, pNumActiveBinsForTri,
+                                  *pNumBinTriTouchPairs, this_stream, scratchPad);
             // Allocate space for encoding output, and run it. Note the (unsorted) binIDsEachTriTouches and
             // triIDsEachBinTouches can retire now.
             scratchPad.finishUsingTempVector("binIDsEachTriTouches");
             scratchPad.finishUsingTempVector("triIDsEachBinTouches");
             // Bring value to host
-            numActiveBinsForTri.syncToHost();
-            CD_temp_arr_bytes = (*numActiveBinsForTri) * sizeof(binID_t);
+            scratchPad.syncDualStructDeviceToHost("numActiveBinsForTri");
+            pNumActiveBinsForTri = scratchPad.getDualStructHost("numActiveBinsForTri");
+            CD_temp_arr_bytes = (*pNumActiveBinsForTri) * sizeof(binID_t);
             // Again, activeBinIDsForTri has some data processing needed on host, so allocated as DualArray
             scratchPad.allocateDualArray("activeBinIDsForTri", CD_temp_arr_bytes);
             activeBinIDsForTri = (binID_t*)scratchPad.getDualArrayDevice("activeBinIDsForTri");
-            CD_temp_arr_bytes = (*numActiveBinsForTri) * sizeof(trianglesBinTouches_t);
+            CD_temp_arr_bytes = (*pNumActiveBinsForTri) * sizeof(trianglesBinTouches_t);
             numTrianglesBinTouches =
                 (trianglesBinTouches_t*)scratchPad.allocateTempVector("numTrianglesBinTouches", CD_temp_arr_bytes);
             // Again, no need to bring numActiveBinsForTri to host again, as values not changed
+            pNumActiveBinsForTri = scratchPad.getDualStructDevice("numActiveBinsForTri");
             cubDEMRunLengthEncode<binID_t, trianglesBinTouches_t>(binIDsEachTriTouches_sorted, activeBinIDsForTri,
-                                                                  numTrianglesBinTouches, &numActiveBinsForTri,
-                                                                  *numBinTriTouchPairs, this_stream, scratchPad);
+                                                                  numTrianglesBinTouches, pNumActiveBinsForTri,
+                                                                  *pNumBinTriTouchPairs, this_stream, scratchPad);
+            pNumActiveBinsForTri = scratchPad.getDualStructHost("numActiveBinsForTri");
             // std::cout << "activeBinIDsForTri: " << std::endl;
-            // displayDeviceArray<binID_t>(activeBinIDsForTri, *numActiveBinsForTri);
-            // std::cout << "NumActiveBinsForTri: " << *numActiveBinsForTri << std::endl;
-            // std::cout << "NumActiveBins: " << *numActiveBins << std::endl;
+            // displayDeviceArray<binID_t>(activeBinIDsForTri, *pNumActiveBinsForTri);
+            // std::cout << "NumActiveBinsForTri: " << *pNumActiveBinsForTri << std::endl;
+            // std::cout << "NumActiveBins: " << *pNumActiveBins << std::endl;
+            scratchPad.finishUsingDualStruct("numBinTriTouchPairs");
 
             // We find the max tri num in a bin for the purpose of adjusting bin size
-            DualStruct<trianglesBinTouches_t> maxGeoInBin;
-            cubDEMMax<trianglesBinTouches_t>(numTrianglesBinTouches, &maxGeoInBin, *numActiveBinsForTri, this_stream,
+            scratchPad.allocateDualStruct("maxGeoInBin");
+            trianglesBinTouches_t* pMaxGeoInBin = (trianglesBinTouches_t*)scratchPad.getDualStructDevice("maxGeoInBin");
+            cubDEMMax<trianglesBinTouches_t>(numTrianglesBinTouches, pMaxGeoInBin, *pNumActiveBinsForTri, this_stream,
                                              scratchPad);
-            maxGeoInBin.syncToHost();
-            stateParams.maxTriFoundInBin = (size_t)(*maxGeoInBin);
+            scratchPad.syncDualStructDeviceToHost("maxGeoInBin");
+            stateParams.maxSphFoundInBin = *((trianglesBinTouches_t*)scratchPad.getDualStructHost("maxGeoInBin"));
+            scratchPad.finishUsingDualStruct("maxGeoInBin");
 
             // 6th step: map activeBinIDsForTri to activeBinIDs, so that when we are processing the bins in
             // activeBinIDsForTri, we know where to find the corresponding bin that resides in activeBinIDs, to bring
             // spheres into this bin-wise contact detection sweep.
-            CD_temp_arr_bytes = (*numActiveBinsForTri) * sizeof(binID_t);
+            CD_temp_arr_bytes = (*pNumActiveBinsForTri) * sizeof(binID_t);
             scratchPad.allocateDualArray("mapTriActBinToSphActBin", CD_temp_arr_bytes);
             {
                 // This `merge search' task is very unsuitable for GPU... So we create host version of these work arrays
@@ -391,8 +411,8 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 binID_t* activeBinIDsForTri = (binID_t*)scratchPad.getDualArrayHost("activeBinIDsForTri");
                 binID_t* activeBinIDs = (binID_t*)scratchPad.getDualArrayHost("activeBinIDs");
                 binID_t* mapTriActBinToSphActBin = (binID_t*)scratchPad.getDualArrayHost("mapTriActBinToSphActBin");
-                hostMergeSearchMapGen(activeBinIDsForTri, activeBinIDs, mapTriActBinToSphActBin, *numActiveBinsForTri,
-                                      *numActiveBins, deme::NULL_BINID);
+                hostMergeSearchMapGen(activeBinIDsForTri, activeBinIDs, mapTriActBinToSphActBin, *pNumActiveBinsForTri,
+                                      *pNumActiveBins, deme::NULL_BINID);
                 scratchPad.syncDualArrayHostToDevice("activeBinIDsForTri");
                 scratchPad.syncDualArrayHostToDevice("activeBinIDs");
                 scratchPad.syncDualArrayHostToDevice("mapTriActBinToSphActBin");
@@ -403,16 +423,16 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // activeBinIDsForTri = (binID_t*)scratchPad.getDualArrayDevice("activeBinIDsForTri");
             // activeBinIDs = (binID_t*)scratchPad.getDualArrayDevice("activeBinIDs");
             // std::cout << "mapTriActBinToSphActBin: " << std::endl;
-            // displayDeviceArray<binID_t>(mapTriActBinToSphActBin, *numActiveBinsForTri);
+            // displayDeviceArray<binID_t>(mapTriActBinToSphActBin, *pNumActiveBinsForTri);
 
             // 7th step: scan to find the offsets that are used to index into triIDsEachBinTouches_sorted to obtain
             // bin-wise triangles. Note binIDsEachTriTouches_sorted can retire.
             scratchPad.finishUsingTempVector("binIDsEachTriTouches_sorted");
-            CD_temp_arr_bytes = (*numActiveBinsForTri) * sizeof(binsTriangleTouchPairs_t);
+            CD_temp_arr_bytes = (*pNumActiveBinsForTri) * sizeof(binsTriangleTouchPairs_t);
             triIDsLookUpTable =
                 (binsTriangleTouchPairs_t*)scratchPad.allocateTempVector("triIDsLookUpTable", CD_temp_arr_bytes);
             cubDEMPrefixScan<trianglesBinTouches_t, binsTriangleTouchPairs_t>(
-                numTrianglesBinTouches, triIDsLookUpTable, *numActiveBinsForTri, this_stream, scratchPad);
+                numTrianglesBinTouches, triIDsLookUpTable, *pNumActiveBinsForTri, this_stream, scratchPad);
         }
         timers.GetTimer("Discretize domain").stop();
 
@@ -425,17 +445,17 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // find the actual pair names. A new temp array is needed for this numSphContactsInEachBin. Note we assume the
         // number of contact in each bin is the same level as the number of spheres in each bin (capped by the same data
         // type).
-        CD_temp_arr_bytes = (*numActiveBins) * sizeof(binContactPairs_t);
+        CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(binContactPairs_t);
         binContactPairs_t* numSphContactsInEachBin =
             (binContactPairs_t*)scratchPad.allocateTempVector("numSphContactsInEachBin", CD_temp_arr_bytes);
-        size_t blocks_needed_for_bins_sph = *numActiveBins;
+        size_t blocks_needed_for_bins_sph = *pNumActiveBins;
         // Some quantities and arrays for triangles as well, should we need them
         size_t blocks_needed_for_bins_tri = 0;
         // binContactPairs_t also doubles as the type for the number of tri--sph contact pairs
         binContactPairs_t* numTriSphContactsInEachBin;
         if (simParams->nTriGM > 0) {
-            blocks_needed_for_bins_tri = *numActiveBinsForTri;
-            CD_temp_arr_bytes = (*numActiveBinsForTri) * sizeof(binContactPairs_t);
+            blocks_needed_for_bins_tri = *pNumActiveBinsForTri;
+            CD_temp_arr_bytes = (*pNumActiveBinsForTri) * sizeof(binContactPairs_t);
             numTriSphContactsInEachBin =
                 (binContactPairs_t*)scratchPad.allocateTempVector("numTriSphContactsInEachBin", CD_temp_arr_bytes);
         }
@@ -445,7 +465,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 .instantiate()
                 .configure(dim3(blocks_needed_for_bins_sph), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
                 .launch(&simParams, &granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
-                        sphereIDsLookUpTable, numSphContactsInEachBin, *numActiveBins);
+                        sphereIDsLookUpTable, numSphContactsInEachBin, *pNumActiveBins);
             DEME_GPU_CALL_WATCH_BETA(cudaStreamSynchronize(this_stream));
 
             if (blocks_needed_for_bins_tri > 0) {
@@ -456,10 +476,10 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                             sphereIDsLookUpTable, mapTriActBinToSphActBin, triIDsEachBinTouches_sorted,
                             activeBinIDsForTri, numTrianglesBinTouches, triIDsLookUpTable, numTriSphContactsInEachBin,
                             sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1, sandwichBNode2,
-                            sandwichBNode3, *numActiveBinsForTri);
+                            sandwichBNode3, *pNumActiveBinsForTri);
                 DEME_GPU_CALL_WATCH_BETA(cudaStreamSynchronize(this_stream));
                 // std::cout << "numTriSphContactsInEachBin: " << std::endl;
-                // displayDeviceArray<binContactPairs_t>(numTriSphContactsInEachBin, *numActiveBinsForTri);
+                // displayDeviceArray<binContactPairs_t>(numTriSphContactsInEachBin, *pNumActiveBinsForTri);
             }
 
             //// TODO: sphere should have jitified and non-jitified part. Use a component ID > max_comp_id to signal
@@ -474,24 +494,24 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // triSphContactReportOffsets. New vectors are needed.
             // The extra entry is maybe superfluous and is for extra safety, in case the 2 sweeps do not agree with each
             // other.
-            CD_temp_arr_bytes = (*numActiveBins + 1) * sizeof(contactPairs_t);
+            CD_temp_arr_bytes = (*pNumActiveBins + 1) * sizeof(contactPairs_t);
             contactPairs_t* sphSphContactReportOffsets =
                 (contactPairs_t*)scratchPad.allocateTempVector("sphSphContactReportOffsets", CD_temp_arr_bytes);
             cubDEMPrefixScan<binContactPairs_t, contactPairs_t>(numSphContactsInEachBin, sphSphContactReportOffsets,
-                                                                *numActiveBins, this_stream, scratchPad);
+                                                                *pNumActiveBins, this_stream, scratchPad);
             contactPairs_t* triSphContactReportOffsets;
             if (simParams->nTriGM > 0) {
-                CD_temp_arr_bytes = (*numActiveBinsForTri + 1) * sizeof(contactPairs_t);
+                CD_temp_arr_bytes = (*pNumActiveBinsForTri + 1) * sizeof(contactPairs_t);
                 triSphContactReportOffsets =
                     (contactPairs_t*)scratchPad.allocateTempVector("triSphContactReportOffsets", CD_temp_arr_bytes);
                 cubDEMPrefixScan<binContactPairs_t, contactPairs_t>(numTriSphContactsInEachBin,
-                                                                    triSphContactReportOffsets, *numActiveBinsForTri,
+                                                                    triSphContactReportOffsets, *pNumActiveBinsForTri,
                                                                     this_stream, scratchPad);
             }
             // DEME_DEBUG_PRINTF("Num contacts each bin:");
-            // DEME_DEBUG_EXEC(displayDeviceArray<binContactPairs_t>(numSphContactsInEachBin, *numActiveBins));
+            // DEME_DEBUG_EXEC(displayDeviceArray<binContactPairs_t>(numSphContactsInEachBin, *pNumActiveBins));
             // DEME_DEBUG_PRINTF("Tri contact report offsets:");
-            // DEME_DEBUG_EXEC(displayDeviceArray<contactPairs_t>(triSphContactReportOffsets, *numActiveBinsForTri));
+            // DEME_DEBUG_EXEC(displayDeviceArray<contactPairs_t>(triSphContactReportOffsets, *pNumActiveBinsForTri));
             // DEME_DEBUG_PRINTF("Family number:");
             // DEME_DEBUG_EXEC(displayDeviceArray<family_t>(granData->familyID, simParams->nOwnerBodies));
 
@@ -499,24 +519,27 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             size_t nSphereGeoContact = *scratchPad.numContacts;
             size_t nSphereSphereContact = 0, nTriSphereContact = 0;
             {
-                DualStruct<size_t> numSSContact;
+                scratchPad.allocateDualStruct("numSSContact");
                 deviceAdd<size_t, binContactPairs_t, contactPairs_t>(
-                    &numSSContact, &(numSphContactsInEachBin[*numActiveBins - 1]),
-                    &(sphSphContactReportOffsets[*numActiveBins - 1]), this_stream);
-                deviceAssign<contactPairs_t, size_t>(&(sphSphContactReportOffsets[*numActiveBins]), &numSSContact,
-                                                     this_stream);
-                numSSContact.syncToHost();
-                nSphereSphereContact = *numSSContact;
+                    scratchPad.getDualStructDevice("numSSContact"), &(numSphContactsInEachBin[*pNumActiveBins - 1]),
+                    &(sphSphContactReportOffsets[*pNumActiveBins - 1]), this_stream);
+                deviceAssign<contactPairs_t, size_t>(&(sphSphContactReportOffsets[*pNumActiveBins]),
+                                                     scratchPad.getDualStructDevice("numSSContact"), this_stream);
+                scratchPad.syncDualStructDeviceToHost("numSSContact");
+                nSphereSphereContact = *scratchPad.getDualStructHost("numSSContact");
+                scratchPad.finishUsingDualStruct("numSSContact");
 
                 if (simParams->nTriGM > 0) {
-                    DualStruct<size_t> numSMContact;
+                    scratchPad.allocateDualStruct("numSMContact");
                     deviceAdd<size_t, binContactPairs_t, contactPairs_t>(
-                        &numSMContact, &(numTriSphContactsInEachBin[*numActiveBinsForTri - 1]),
-                        &(triSphContactReportOffsets[*numActiveBinsForTri - 1]), this_stream);
-                    deviceAssign<contactPairs_t, size_t>(&(triSphContactReportOffsets[*numActiveBinsForTri]),
-                                                         &numSMContact, this_stream);
-                    numSMContact.syncToHost();
-                    nTriSphereContact = *numSMContact;
+                        scratchPad.getDualStructDevice("numSMContact"),
+                        &(numTriSphContactsInEachBin[*pNumActiveBinsForTri - 1]),
+                        &(triSphContactReportOffsets[*pNumActiveBinsForTri - 1]), this_stream);
+                    deviceAssign<contactPairs_t, size_t>(&(triSphContactReportOffsets[*pNumActiveBinsForTri]),
+                                                         scratchPad.getDualStructDevice("numSMContact"), this_stream);
+                    scratchPad.syncDualStructDeviceToHost("numSMContact");
+                    nTriSphereContact = *scratchPad.getDualStructHost("numSMContact");
+                    scratchPad.finishUsingDualStruct("numSMContact");
                 }
                 // std::cout << "nSphereGeoContact: " << nSphereGeoContact << std::endl;
                 // std::cout << "nSphereSphereContact: " << nSphereSphereContact << std::endl;
@@ -536,7 +559,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 .instantiate()
                 .configure(dim3(blocks_needed_for_bins_sph), dim3(DEME_KT_CD_NTHREADS_PER_BLOCK), 0, this_stream)
                 .launch(&simParams, &granData, sphereIDsEachBinTouches_sorted, activeBinIDs, numSpheresBinTouches,
-                        sphereIDsLookUpTable, sphSphContactReportOffsets, idSphA, idSphB, dType, *numActiveBins);
+                        sphereIDsLookUpTable, sphSphContactReportOffsets, idSphA, idSphB, dType, *pNumActiveBins);
             DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 
             // Triangle--sphere contact pairs go after sphere--sphere contacts. Remember to mark their type.
@@ -551,7 +574,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                             sphereIDsLookUpTable, mapTriActBinToSphActBin, triIDsEachBinTouches_sorted,
                             activeBinIDsForTri, numTrianglesBinTouches, triIDsLookUpTable, triSphContactReportOffsets,
                             idSphA, idTriB, dType, sandwichANode1, sandwichANode2, sandwichANode3, sandwichBNode1,
-                            sandwichBNode2, sandwichBNode3, *numActiveBinsForTri);
+                            sandwichBNode2, sandwichBNode3, *pNumActiveBinsForTri);
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
                 // std::cout << "Contacts: " << std::endl;
                 // displayDeviceArray<bodyID_t>(granData->idGeometryA, *scratchPad.numContacts);
@@ -577,6 +600,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         scratchPad.finishUsingTempVector("sphSphContactReportOffsets");
         scratchPad.finishUsingTempVector("triSphContactReportOffsets");
 
+        scratchPad.finishUsingDualStruct("numActiveBins");
+        scratchPad.finishUsingDualStruct("numActiveBinsForTri");
+
         // There is in fact one more task: If the user specified persistent contacts, we check the previous contact list
         // and see if there are some contacts we need to add to the current list. Even if we detected 0 contacts, we
         // might still have persistent contacts to add to the list.
@@ -596,7 +622,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
             // Store the number of persistent contacts
-            DualStruct<size_t> numPersistCnts;
+            scratchPad.allocateDualStruct("numPersistCnts");
 
             // Then extract the persistent array
             // This many elements are sufficient, at very least...
@@ -608,46 +634,47 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 (contact_t*)scratchPad.allocateTempVector("selected_types", selected_types_bytes);
 
             cubDEMSelectFlagged<bodyID_t, notStupidBool_t>(granData->previous_idGeometryA, selected_idA, grab_flags,
-                                                           &numPersistCnts, *scratchPad.numPrevContacts, this_stream,
-                                                           scratchPad);
+                                                           scratchPad.getDualStructDevice("numPersistCnts"),
+                                                           *scratchPad.numPrevContacts, this_stream, scratchPad);
             cubDEMSelectFlagged<bodyID_t, notStupidBool_t>(granData->previous_idGeometryB, selected_idB, grab_flags,
-                                                           &numPersistCnts, *scratchPad.numPrevContacts, this_stream,
-                                                           scratchPad);
+                                                           scratchPad.getDualStructDevice("numPersistCnts"),
+                                                           *scratchPad.numPrevContacts, this_stream, scratchPad);
             cubDEMSelectFlagged<contact_t, notStupidBool_t>(granData->previous_contactType, selected_types, grab_flags,
-                                                            &numPersistCnts, *scratchPad.numPrevContacts, this_stream,
-                                                            scratchPad);
+                                                            scratchPad.getDualStructDevice("numPersistCnts"),
+                                                            *scratchPad.numPrevContacts, this_stream, scratchPad);
             // Those flag selections give the same result. Bring it to host.
-            numPersistCnts.syncToHost();
+            scratchPad.syncDualStructDeviceToHost("numPersistCnts");
+            size_t* pNumPersistCnts = scratchPad.getDualStructHost("numPersistCnts");
 
             // Then concatenate the persisten
-            size_t total_ids_bytes = (*scratchPad.numContacts + *numPersistCnts) * sizeof(bodyID_t);
-            size_t total_types_bytes = (*scratchPad.numContacts + *numPersistCnts) * sizeof(contact_t);
-            size_t total_persistency_bytes = (*scratchPad.numContacts + *numPersistCnts) * sizeof(notStupidBool_t);
-            selected_ids_bytes = (*numPersistCnts) * sizeof(bodyID_t);
-            selected_types_bytes = (*numPersistCnts) * sizeof(contact_t);
+            size_t total_ids_bytes = (*scratchPad.numContacts + *pNumPersistCnts) * sizeof(bodyID_t);
+            size_t total_types_bytes = (*scratchPad.numContacts + *pNumPersistCnts) * sizeof(contact_t);
+            size_t total_persistency_bytes = (*scratchPad.numContacts + *pNumPersistCnts) * sizeof(notStupidBool_t);
+            selected_ids_bytes = (*pNumPersistCnts) * sizeof(bodyID_t);
+            selected_types_bytes = (*pNumPersistCnts) * sizeof(contact_t);
             bodyID_t* total_idA = (bodyID_t*)scratchPad.allocateTempVector("total_idA", total_ids_bytes);
             bodyID_t* total_idB = (bodyID_t*)scratchPad.allocateTempVector("total_idB", total_ids_bytes);
             contact_t* total_types = (contact_t*)scratchPad.allocateTempVector("total_types", total_types_bytes);
             notStupidBool_t* total_persistency =
                 (notStupidBool_t*)scratchPad.allocateTempVector("total_persistency", total_persistency_bytes);
             DEME_GPU_CALL(cudaMemcpy(total_idA, selected_idA, selected_ids_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(total_idA + *numPersistCnts, granData->idGeometryA,
+            DEME_GPU_CALL(cudaMemcpy(total_idA + *pNumPersistCnts, granData->idGeometryA,
                                      total_ids_bytes - selected_ids_bytes, cudaMemcpyDeviceToDevice));
             DEME_GPU_CALL(cudaMemcpy(total_idB, selected_idB, selected_ids_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(total_idB + *numPersistCnts, granData->idGeometryB,
+            DEME_GPU_CALL(cudaMemcpy(total_idB + *pNumPersistCnts, granData->idGeometryB,
                                      total_ids_bytes - selected_ids_bytes, cudaMemcpyDeviceToDevice));
             DEME_GPU_CALL(cudaMemcpy(total_types, selected_types, selected_types_bytes, cudaMemcpyDeviceToDevice));
-            DEME_GPU_CALL(cudaMemcpy(total_types + *numPersistCnts, granData->contactType,
+            DEME_GPU_CALL(cudaMemcpy(total_types + *pNumPersistCnts, granData->contactType,
                                      total_types_bytes - selected_types_bytes, cudaMemcpyDeviceToDevice));
             // For the selected portion, persistency is all 1
             DEME_GPU_CALL(cudaMemset(total_persistency, CONTACT_NOT_PERSISTENT, total_persistency_bytes));
             size_t blocks_needed_for_setting_1 =
-                (*numPersistCnts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+                (*pNumPersistCnts + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
             if (blocks_needed_for_setting_1 > 0) {
                 history_kernels->kernel("setArr")
                     .instantiate()
                     .configure(dim3(blocks_needed_for_setting_1), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream)
-                    .launch(total_persistency, *numPersistCnts, CONTACT_IS_PERSISTENT);
+                    .launch(total_persistency, *pNumPersistCnts, CONTACT_IS_PERSISTENT);
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
             scratchPad.finishUsingTempVector("grab_flags");
@@ -657,7 +684,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
 
             // Then remove potential redundency in the current contact array.
             // To do that, we sort by idA...
-            size_t numTotalCnts = *scratchPad.numContacts + *numPersistCnts;
+            size_t numTotalCnts = *scratchPad.numContacts + *pNumPersistCnts;
             contact_t* contactType_sorted =
                 (contact_t*)scratchPad.allocateTempVector("contactType_sorted", total_types_bytes);
             bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector("idA_sorted", total_ids_bytes);
@@ -681,6 +708,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             scratchPad.finishUsingTempVector("total_idB");
             scratchPad.finishUsingTempVector("total_types");
             scratchPad.finishUsingTempVector("total_persistency");
+            scratchPad.finishUsingDualStruct("numPersistCnts");
 
             // Then we run-length it...
             size_t run_length_bytes = simParams->nSpheresGM * sizeof(geoSphereTouches_t);
@@ -688,14 +716,16 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 (geoSphereTouches_t*)scratchPad.allocateTempVector("idA_runlength", run_length_bytes);
             size_t unique_id_bytes = simParams->nSpheresGM * sizeof(bodyID_t);
             bodyID_t* unique_idA = (bodyID_t*)scratchPad.allocateTempVector("unique_idA", unique_id_bytes);
-            DualStruct<size_t> numUniqueA;
-            cubDEMRunLengthEncode<bodyID_t, geoSphereTouches_t>(idA_sorted, unique_idA, idA_runlength, &numUniqueA,
+            scratchPad.allocateDualStruct("numUniqueA");
+            cubDEMRunLengthEncode<bodyID_t, geoSphereTouches_t>(idA_sorted, unique_idA, idA_runlength,
+                                                                scratchPad.getDualStructDevice("numUniqueA"),
                                                                 numTotalCnts, this_stream, scratchPad);
-            numUniqueA.syncToHost();
-            size_t scanned_runlength_bytes = (*numUniqueA) * sizeof(contactPairs_t);
+            scratchPad.syncDualStructDeviceToHost("numUniqueA");
+            size_t* pNumUniqueA = scratchPad.getDualStructHost("numUniqueA");
+            size_t scanned_runlength_bytes = (*pNumUniqueA) * sizeof(contactPairs_t);
             contactPairs_t* idA_scanned_runlength =
                 (contactPairs_t*)scratchPad.allocateTempVector("idA_scanned_runlength", scanned_runlength_bytes);
-            cubDEMPrefixScan<geoSphereTouches_t, contactPairs_t>(idA_runlength, idA_scanned_runlength, *numUniqueA,
+            cubDEMPrefixScan<geoSphereTouches_t, contactPairs_t>(idA_runlength, idA_scanned_runlength, *pNumUniqueA,
                                                                  this_stream, scratchPad);
 
             // Then each thread will take care of an id in A to mark redundency...
@@ -710,52 +740,60 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                     .launch(retain_flags, numTotalCnts, (notStupidBool_t)1);
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
-            blocks_needed_for_flagging = (*numUniqueA + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
+            blocks_needed_for_flagging = (*pNumUniqueA + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
             if (blocks_needed_for_flagging > 0) {
                 history_kernels->kernel("markDuplicateContacts")
                     .instantiate()
                     .configure(dim3(blocks_needed_for_flagging), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
                     .launch(idA_runlength, idA_scanned_runlength, idB_sorted, contactType_sorted, persistency_sorted,
-                            retain_flags, *numUniqueA);
+                            retain_flags, *pNumUniqueA);
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
             // std::cout << "Marked retainers: " << std::endl;
             // displayDeviceArray<notStupidBool_t>(retain_flags, numTotalCnts);
+            scratchPad.finishUsingDualStruct("numUniqueA");
 
             // Then remove redundency based on the flag array...
             // Note the contactPersistency array is managed by the current contact arr. It will also be copied over.
-            DualStruct<size_t> numRetainedCnts;
-            cubDEMSum<notStupidBool_t, size_t>(retain_flags, &numRetainedCnts, numTotalCnts, this_stream, scratchPad);
-            numRetainedCnts.syncToHost();
+            scratchPad.allocateDualStruct("numRetainedCnts");
+            cubDEMSum<notStupidBool_t, size_t>(retain_flags, scratchPad.getDualStructDevice("numRetainedCnts"),
+                                               numTotalCnts, this_stream, scratchPad);
+            scratchPad.syncDualStructDeviceToHost("numRetainedCnts");
+            size_t* pNumRetainedCnts = scratchPad.getDualStructHost("numRetainedCnts");
             // DEME_STEP_DEBUG_PRINTF("Found %zu contacts, including user-specified persistent contacts.",
-            //                        *numRetainedCnts);
-            if (*numRetainedCnts > idGeometryA.size()) {
-                contactEventArraysResize(*numRetainedCnts, idGeometryA, idGeometryB, contactType, granData);
+            //                        *pNumRetainedCnts);
+            if (*pNumRetainedCnts > idGeometryA.size()) {
+                contactEventArraysResize(*pNumRetainedCnts, idGeometryA, idGeometryB, contactType, granData);
             }
-            if (*numRetainedCnts > contactPersistency.size()) {
-                contactPersistency.resize(*numRetainedCnts);
+            if (*pNumRetainedCnts > contactPersistency.size()) {
+                contactPersistency.resize(*pNumRetainedCnts);
                 granData->contactPersistency = contactPersistency.data();
             }
             cubDEMSelectFlagged<bodyID_t, notStupidBool_t>(idA_sorted, granData->idGeometryA, retain_flags,
-                                                           &numRetainedCnts, numTotalCnts, this_stream, scratchPad);
+                                                           scratchPad.getDualStructDevice("numRetainedCnts"),
+                                                           numTotalCnts, this_stream, scratchPad);
             cubDEMSelectFlagged<bodyID_t, notStupidBool_t>(idB_sorted, granData->idGeometryB, retain_flags,
-                                                           &numRetainedCnts, numTotalCnts, this_stream, scratchPad);
+                                                           scratchPad.getDualStructDevice("numRetainedCnts"),
+                                                           numTotalCnts, this_stream, scratchPad);
             cubDEMSelectFlagged<contact_t, notStupidBool_t>(contactType_sorted, granData->contactType, retain_flags,
-                                                            &numRetainedCnts, numTotalCnts, this_stream, scratchPad);
-            cubDEMSelectFlagged<notStupidBool_t, notStupidBool_t>(persistency_sorted, granData->contactPersistency,
-                                                                  retain_flags, &numRetainedCnts, numTotalCnts,
-                                                                  this_stream, scratchPad);
-            numRetainedCnts.syncToHost();  // In theory no need, but when CONTACT_IS_PERSISTENT is not 1...
+                                                            scratchPad.getDualStructDevice("numRetainedCnts"),
+                                                            numTotalCnts, this_stream, scratchPad);
+            cubDEMSelectFlagged<notStupidBool_t, notStupidBool_t>(
+                persistency_sorted, granData->contactPersistency, retain_flags,
+                scratchPad.getDualStructDevice("numRetainedCnts"), numTotalCnts, this_stream, scratchPad);
+            scratchPad.syncDualStructDeviceToHost(
+                "numRetainedCnts");  // In theory no need, but when CONTACT_IS_PERSISTENT is not 1...
             // DEME_STEP_DEBUG_PRINTF("CUB confirms there are %zu contacts, including user-specified persistent
-            // contacts.", *numRetainedCnts);
+            // contacts.", *pNumRetainedCnts);
             // std::cout << "Contacts after duplication check: " << std::endl;
-            // displayDeviceArray<bodyID_t>(granData->idGeometryA, *numRetainedCnts);
-            // displayDeviceArray<bodyID_t>(granData->idGeometryB, *numRetainedCnts);
-            // displayDeviceArray<contact_t>(granData->contactType, *numRetainedCnts);
-            // displayDeviceArray<notStupidBool_t>(granData->contactPersistency, *numRetainedCnts);
+            // displayDeviceArray<bodyID_t>(granData->idGeometryA, *pNumRetainedCnts);
+            // displayDeviceArray<bodyID_t>(granData->idGeometryB, *pNumRetainedCnts);
+            // displayDeviceArray<contact_t>(granData->contactType, *pNumRetainedCnts);
+            // displayDeviceArray<notStupidBool_t>(granData->contactPersistency, *pNumRetainedCnts);
 
             // And update the number of contacts.
-            *scratchPad.numContacts = *numRetainedCnts;
+            *scratchPad.numContacts = *pNumRetainedCnts;
+            scratchPad.finishUsingDualStruct("numRetainedCnts");
 
             // Unclaim all temp vectors
             scratchPad.finishUsingTempVector("idA_runlength");
@@ -833,16 +871,17 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             (geoSphereTouches_t*)scratchPad.allocateTempVector("new_idA_runlength", run_length_bytes);
         size_t unique_id_bytes = nSpheresSafe * sizeof(bodyID_t);
         bodyID_t* unique_new_idA = (bodyID_t*)scratchPad.allocateTempVector("unique_new_idA", unique_id_bytes);
-        DualStruct<size_t> numUniqueNewA;
+        scratchPad.allocateDualStruct("numUniqueNewA");
         cubDEMRunLengthEncode<bodyID_t, geoSphereTouches_t>(granData->idGeometryA, unique_new_idA, new_idA_runlength,
-                                                            &numUniqueNewA, *scratchPad.numContacts, this_stream,
-                                                            scratchPad);
-        numUniqueNewA.syncToHost();
+                                                            scratchPad.getDualStructDevice("numUniqueNewA"),
+                                                            *scratchPad.numContacts, this_stream, scratchPad);
+        scratchPad.syncDualStructDeviceToHost("numUniqueNewA");
+        size_t* pNumUniqueNewA = scratchPad.getDualStructHost("numUniqueNewA");
         // Now, we do a tab-keeping job: how many contacts on average a sphere has?
         {
             // Figure out how many contacts an item in idA array typically has.
             stateParams.avgCntsPerSphere =
-                (*numUniqueNewA > 0) ? (float)(*scratchPad.numContacts) / (float)(*numUniqueNewA) : 0.0;
+                (*pNumUniqueNewA > 0) ? (float)(*scratchPad.numContacts) / (float)(*pNumUniqueNewA) : 0.0;
 
             DEME_STEP_DEBUG_PRINTF("Average number of contacts for each geometry: %.7g", stateParams.avgCntsPerSphere);
             if (stateParams.avgCntsPerSphere > solverFlags.errOutAvgSphCnts) {
@@ -863,11 +902,13 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             geoSphereTouches_t* old_idA_runlength =
                 (geoSphereTouches_t*)scratchPad.allocateTempVector("old_idA_runlength", run_length_bytes);
             bodyID_t* unique_old_idA = (bodyID_t*)scratchPad.allocateTempVector("unique_old_idA", unique_id_bytes);
-            DualStruct<size_t> numUniqueOldA;
+            scratchPad.allocateDualStruct("numUniqueOldA");
             cubDEMRunLengthEncode<bodyID_t, geoSphereTouches_t>(granData->previous_idGeometryA, unique_old_idA,
-                                                                old_idA_runlength, &numUniqueOldA,
+                                                                old_idA_runlength,
+                                                                scratchPad.getDualStructDevice("numUniqueOldA"),
                                                                 *(scratchPad.numPrevContacts), this_stream, scratchPad);
-            numUniqueOldA.syncToHost();
+            scratchPad.syncDualStructDeviceToHost("numUniqueOldA");
+            size_t* pNumUniqueOldA = scratchPad.getDualStructHost("numUniqueOldA");
             // Then, add zeros to run-length arrays such that even if a sphereID is not present in idA, it has a
             // place in the run-length arrays that indicates 0 run-length
             geoSphereTouches_t* new_idA_runlength_full =
@@ -877,29 +918,30 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             DEME_GPU_CALL(cudaMemset((void*)new_idA_runlength_full, 0, run_length_bytes));
             DEME_GPU_CALL(cudaMemset((void*)old_idA_runlength_full, 0, run_length_bytes));
             size_t blocks_needed_for_mapping =
-                (*numUniqueNewA + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+                (*pNumUniqueNewA + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
             if (blocks_needed_for_mapping > 0) {
                 history_kernels->kernel("fillRunLengthArray")
                     .instantiate()
                     .configure(dim3(blocks_needed_for_mapping), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream)
-                    .launch(new_idA_runlength_full, unique_new_idA, new_idA_runlength, *numUniqueNewA);
+                    .launch(new_idA_runlength_full, unique_new_idA, new_idA_runlength, *pNumUniqueNewA);
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
 
-            blocks_needed_for_mapping = (*numUniqueOldA + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
+            blocks_needed_for_mapping = (*pNumUniqueOldA + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
             if (blocks_needed_for_mapping > 0) {
                 history_kernels->kernel("fillRunLengthArray")
                     .instantiate()
                     .configure(dim3(blocks_needed_for_mapping), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, this_stream)
-                    .launch(old_idA_runlength_full, unique_old_idA, old_idA_runlength, *numUniqueOldA);
+                    .launch(old_idA_runlength_full, unique_old_idA, old_idA_runlength, *pNumUniqueOldA);
                 DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
             }
             // DEME_DEBUG_PRINTF("Unique contact IDs (A):");
-            // DEME_DEBUG_EXEC(displayDeviceArray<bodyID_t>(unique_new_idA, *numUniqueNewA));
+            // DEME_DEBUG_EXEC(displayDeviceArray<bodyID_t>(unique_new_idA, *pNumUniqueNewA));
             // DEME_DEBUG_PRINTF("Unique contacts run-length:");
-            // DEME_DEBUG_EXEC(displayDeviceArray<geoSphereTouches_t>(new_idA_runlength, *numUniqueNewA));
+            // DEME_DEBUG_EXEC(displayDeviceArray<geoSphereTouches_t>(new_idA_runlength, *pNumUniqueNewA));
             scratchPad.finishUsingTempVector("old_idA_runlength");
             scratchPad.finishUsingTempVector("unique_old_idA");
+            scratchPad.finishUsingDualStruct("numUniqueOldA");
 
             // Then, prescan to find run-length offsets, in preparation for custom kernels
             size_t scanned_runlength_bytes = nSpheresSafe * sizeof(contactPairs_t);
@@ -1067,6 +1109,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         // This part is light on memory, so we can delay some freeing
         scratchPad.finishUsingTempVector("new_idA_runlength");
         scratchPad.finishUsingTempVector("unique_new_idA");
+        scratchPad.finishUsingDualStruct("numUniqueNewA");
         // Note one_to_n corresponds to the pointer name old_arr_unsort_to_sort_map, an exception to general "matched"
         // naming convension. But we delayed their freeing, so you see them both freed here.
         scratchPad.finishUsingTempVector("one_to_n");

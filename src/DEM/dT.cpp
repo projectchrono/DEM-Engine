@@ -263,82 +263,81 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     simParams->nMatTuples = nMatTuples;
 
     // Resize to the number of clumps
-    DEME_TRACKED_RESIZE_DEBUGPRINT(familyID, nOwnerBodies, "familyID", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(voxelID, nOwnerBodies, "voxelID", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(locX, nOwnerBodies, "locX", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(locY, nOwnerBodies, "locY", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(locZ, nOwnerBodies, "locZ", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(oriQw, nOwnerBodies, "oriQw", 1);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(oriQx, nOwnerBodies, "oriQx", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(oriQy, nOwnerBodies, "oriQy", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(oriQz, nOwnerBodies, "oriQz", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(vX, nOwnerBodies, "vX", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(vY, nOwnerBodies, "vY", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(vZ, nOwnerBodies, "vZ", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(omgBarX, nOwnerBodies, "omgBarX", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(omgBarY, nOwnerBodies, "omgBarY", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(omgBarZ, nOwnerBodies, "omgBarZ", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(aX, nOwnerBodies, "aX", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(aY, nOwnerBodies, "aY", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(aZ, nOwnerBodies, "aZ", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(alphaX, nOwnerBodies, "alphaX", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(alphaY, nOwnerBodies, "alphaY", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(alphaZ, nOwnerBodies, "alphaZ", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(accSpecified, nOwnerBodies, "accSpecified", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(angAccSpecified, nOwnerBodies, "angAccSpecified", 0);
+    DEME_TRACKED_RESIZE(familyID, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(voxelID, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(locX, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(locY, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(locZ, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(oriQw, nOwnerBodies, 1);
+    DEME_TRACKED_RESIZE(oriQx, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(oriQy, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(oriQz, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(vX, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(vY, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(vZ, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(omgBarX, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(omgBarY, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(omgBarZ, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(aX, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(aY, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(aZ, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(alphaX, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(alphaY, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(alphaZ, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(accSpecified, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(angAccSpecified, nOwnerBodies, 0);
 
     // Resize the family mask `matrix' (in fact it is flattened)
-    DEME_TRACKED_RESIZE_DEBUGPRINT(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2,
-                                   "familyMaskMatrix", DONT_PREVENT_CONTACT);
+    DEME_TRACKED_RESIZE(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
 
     // Resize to the number of geometries
-    DEME_TRACKED_RESIZE_DEBUGPRINT(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(sphereMaterialOffset, nSpheresGM, "sphereMaterialOffset", 0);
+    DEME_TRACKED_RESIZE(ownerClumpBody, nSpheresGM, 0);
+    DEME_TRACKED_RESIZE(sphereMaterialOffset, nSpheresGM, 0);
     // For clump component offset, it's only needed if clump components are jitified
     if (solverFlags.useClumpJitify) {
-        DEME_TRACKED_RESIZE_DEBUGPRINT(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
+        DEME_TRACKED_RESIZE(clumpComponentOffset, nSpheresGM, 0);
         // This extended component offset array can hold offset numbers even for big clumps (whereas
         // clumpComponentOffset is typically uint_8, so it may not). If a sphere's component offset index falls in this
         // range then it is not jitified, and the kernel needs to look for it in the global memory.
-        DEME_TRACKED_RESIZE_DEBUGPRINT(clumpComponentOffsetExt, nSpheresGM, "clumpComponentOffsetExt", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(radiiSphere, nClumpComponents, "radiiSphere", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
+        DEME_TRACKED_RESIZE(clumpComponentOffsetExt, nSpheresGM, 0);
+        DEME_TRACKED_RESIZE(radiiSphere, nClumpComponents, 0);
+        DEME_TRACKED_RESIZE(relPosSphereX, nClumpComponents, 0);
+        DEME_TRACKED_RESIZE(relPosSphereY, nClumpComponents, 0);
+        DEME_TRACKED_RESIZE(relPosSphereZ, nClumpComponents, 0);
     } else {
-        DEME_TRACKED_RESIZE_DEBUGPRINT(radiiSphere, nSpheresGM, "radiiSphere", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(relPosSphereX, nSpheresGM, "relPosSphereX", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(relPosSphereY, nSpheresGM, "relPosSphereY", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(relPosSphereZ, nSpheresGM, "relPosSphereZ", 0);
+        DEME_TRACKED_RESIZE(radiiSphere, nSpheresGM, 0);
+        DEME_TRACKED_RESIZE(relPosSphereX, nSpheresGM, 0);
+        DEME_TRACKED_RESIZE(relPosSphereY, nSpheresGM, 0);
+        DEME_TRACKED_RESIZE(relPosSphereZ, nSpheresGM, 0);
     }
 
     // Resize to the number of triangle facets
-    DEME_TRACKED_RESIZE_DEBUGPRINT(ownerMesh, nTriGM, "ownerMesh", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(relPosNode1, nTriGM, "relPosNode1", make_float3(0));
-    DEME_TRACKED_RESIZE_DEBUGPRINT(relPosNode2, nTriGM, "relPosNode2", make_float3(0));
-    DEME_TRACKED_RESIZE_DEBUGPRINT(relPosNode3, nTriGM, "relPosNode3", make_float3(0));
-    DEME_TRACKED_RESIZE_DEBUGPRINT(triMaterialOffset, nTriGM, "triMaterialOffset", 0);
+    DEME_TRACKED_RESIZE(ownerMesh, nTriGM, 0);
+    DEME_TRACKED_RESIZE(relPosNode1, nTriGM, make_float3(0));
+    DEME_TRACKED_RESIZE(relPosNode2, nTriGM, make_float3(0));
+    DEME_TRACKED_RESIZE(relPosNode3, nTriGM, make_float3(0));
+    DEME_TRACKED_RESIZE(triMaterialOffset, nTriGM, 0);
 
     // Resize to the number of analytical geometries
-    DEME_TRACKED_RESIZE_DEBUGPRINT(ownerAnalBody, nAnalGM, "ownerAnalBody", 0);
+    DEME_TRACKED_RESIZE(ownerAnalBody, nAnalGM, 0);
 
     // Resize to number of owners
-    DEME_TRACKED_RESIZE_DEBUGPRINT(ownerTypes, nOwnerBodies, "ownerTypes", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(inertiaPropOffsets, nOwnerBodies, "inertiaPropOffsets", 0);
+    DEME_TRACKED_RESIZE(ownerTypes, nOwnerBodies, 0);
+    DEME_TRACKED_RESIZE(inertiaPropOffsets, nOwnerBodies, 0);
     // If we jitify mass properties, then
     if (solverFlags.useMassJitify) {
-        DEME_TRACKED_RESIZE_DEBUGPRINT(massOwnerBody, nMassProperties, "massOwnerBody", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(mmiXX, nMassProperties, "mmiXX", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(mmiYY, nMassProperties, "mmiYY", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(mmiZZ, nMassProperties, "mmiZZ", 0);
+        DEME_TRACKED_RESIZE(massOwnerBody, nMassProperties, 0);
+        DEME_TRACKED_RESIZE(mmiXX, nMassProperties, 0);
+        DEME_TRACKED_RESIZE(mmiYY, nMassProperties, 0);
+        DEME_TRACKED_RESIZE(mmiZZ, nMassProperties, 0);
     } else {
-        DEME_TRACKED_RESIZE_DEBUGPRINT(massOwnerBody, nOwnerBodies, "massOwnerBody", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(mmiXX, nOwnerBodies, "mmiXX", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(mmiYY, nOwnerBodies, "mmiYY", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(mmiZZ, nOwnerBodies, "mmiZZ", 0);
+        DEME_TRACKED_RESIZE(massOwnerBody, nOwnerBodies, 0);
+        DEME_TRACKED_RESIZE(mmiXX, nOwnerBodies, 0);
+        DEME_TRACKED_RESIZE(mmiYY, nOwnerBodies, 0);
+        DEME_TRACKED_RESIZE(mmiZZ, nOwnerBodies, 0);
     }
     // Volume info is jitified
-    DEME_TRACKED_RESIZE_DEBUGPRINT(volumeOwnerBody, nMassProperties, "volumeOwnerBody", 0);
+    DEME_TRACKED_RESIZE(volumeOwnerBody, nMassProperties, 0);
 
     // Arrays for contact info
     // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is ~ 2n, and I
@@ -350,18 +349,15 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
         // nSpheresGM*DEME_INIT_CNT_MULTIPLIER elements.
         size_t cnt_arr_size =
             DEME_MAX(*solverScratchSpace.numContacts + nExtraContacts, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(idGeometryA, cnt_arr_size, "idGeometryA", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(idGeometryB, cnt_arr_size, "idGeometryB", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(contactType, cnt_arr_size, "contactType", NOT_A_CONTACT);
+        DEME_TRACKED_RESIZE(idGeometryA, cnt_arr_size, 0);
+        DEME_TRACKED_RESIZE(idGeometryB, cnt_arr_size, 0);
+        DEME_TRACKED_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
 
         if (!solverFlags.useNoContactRecord) {
-            DEME_TRACKED_RESIZE_DEBUGPRINT(contactForces, cnt_arr_size, "contactForces", make_float3(0));
-            DEME_TRACKED_RESIZE_DEBUGPRINT(contactTorque_convToForce, cnt_arr_size, "contactTorque_convToForce",
-                                           make_float3(0));
-            DEME_TRACKED_RESIZE_DEBUGPRINT(contactPointGeometryA, cnt_arr_size, "contactPointGeometryA",
-                                           make_float3(0));
-            DEME_TRACKED_RESIZE_DEBUGPRINT(contactPointGeometryB, cnt_arr_size, "contactPointGeometryB",
-                                           make_float3(0));
+            DEME_TRACKED_RESIZE(contactForces, cnt_arr_size, make_float3(0));
+            DEME_TRACKED_RESIZE(contactTorque_convToForce, cnt_arr_size, make_float3(0));
+            DEME_TRACKED_RESIZE(contactPointGeometryA, cnt_arr_size, make_float3(0));
+            DEME_TRACKED_RESIZE(contactPointGeometryB, cnt_arr_size, make_float3(0));
         }
         // Allocate memory for each wildcard array
         contactWildcards.resize(simParams->nContactWildcards);
@@ -393,16 +389,15 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     DevicePtrAlloc(granData->idGeometryA_buffer, buffer_size);
     DevicePtrAlloc(granData->idGeometryB_buffer, buffer_size);
     DevicePtrAlloc(granData->contactType_buffer, buffer_size);
-    // DEME_TRACKED_RESIZE_DEBUGPRINT(idGeometryA_buffer, nSpheresGM * DEME_INIT_CNT_MULTIPLIER, "idGeometryA_buffer",
-    // 0); DEME_TRACKED_RESIZE_DEBUGPRINT(idGeometryB_buffer, nSpheresGM * DEME_INIT_CNT_MULTIPLIER,
-    // "idGeometryB_buffer", 0); DEME_TRACKED_RESIZE_DEBUGPRINT(contactType_buffer, nSpheresGM *
-    // DEME_INIT_CNT_MULTIPLIER, "contactType_buffer", NOT_A_CONTACT);
+    // DEME_TRACKED_RESIZE(idGeometryA_buffer, nSpheresGM * DEME_INIT_CNT_MULTIPLIER,
+    // 0); DEME_TRACKED_RESIZE(idGeometryB_buffer, nSpheresGM * DEME_INIT_CNT_MULTIPLIER,
+    // 0); DEME_TRACKED_RESIZE(contactType_buffer, nSpheresGM *
+    // DEME_INIT_CNT_MULTIPLIER,  NOT_A_CONTACT);
     // DEME_ADVISE_DEVICE(idGeometryA_buffer, streamInfo.device);
     // DEME_ADVISE_DEVICE(idGeometryB_buffer, streamInfo.device);
     // DEME_ADVISE_DEVICE(contactType_buffer, streamInfo.device);
     if (!solverFlags.isHistoryless) {
-        // DEME_TRACKED_RESIZE_DEBUGPRINT(contactMapping_buffer, nSpheresGM * DEME_INIT_CNT_MULTIPLIER,
-        //                         "contactMapping_buffer", NULL_MAPPING_PARTNER);
+        // DEME_TRACKED_RESIZE(contactMapping_buffer, nSpheresGM * DEME_INIT_CNT_MULTIPLIER, NULL_MAPPING_PARTNER);
         // DEME_ADVISE_DEVICE(contactMapping_buffer, streamInfo.device);
         DevicePtrAlloc(granData->contactMapping_buffer, buffer_size);
     }
@@ -2419,7 +2414,7 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
 }
 
 void DEMDynamicThread::initAllocation() {
-    DEME_TRACKED_RESIZE_DEBUGPRINT(familyExtraMarginSize, NUM_AVAL_FAMILIES, "familyExtraMarginSize", 0);
+    DEME_TRACKED_RESIZE(familyExtraMarginSize, NUM_AVAL_FAMILIES, 0);
 }
 
 void DEMDynamicThread::deallocateEverything() {

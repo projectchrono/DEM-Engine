@@ -366,18 +366,7 @@ enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
         size_t new_size = vec.size();                          \
         size_t byte_delta = item_size * (new_size - old_size); \
         m_approxDeviceBytesUsed += byte_delta;                 \
-    }
-
-#define DEME_TRACKED_RESIZE_DEBUGPRINT(vec, newsize, name, val)                                                      \
-    {                                                                                                                \
-        size_t item_size = sizeof(decltype(vec)::value_type);                                                        \
-        size_t old_size = vec.size();                                                                                \
-        vec.resize(newsize, val);                                                                                    \
-        size_t new_size = vec.size();                                                                                \
-        size_t byte_delta = item_size * (new_size - old_size);                                                       \
-        m_approxDeviceBytesUsed += byte_delta;                                                                       \
-        DEME_DEBUG_PRINTF("Resizing vector %s, old size %zu, new size %zu, byte delta %s", name, old_size, new_size, \
-                          pretty_format_bytes(byte_delta).c_str());                                                  \
+        m_approxHostBytesUsed += byte_delta;                   \
     }
 
 // DEME_WORK_ARRAY_RESIZE is a reminder for developers that a work array is resized, and this may automatically change
