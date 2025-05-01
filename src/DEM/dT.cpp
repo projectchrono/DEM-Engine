@@ -89,7 +89,7 @@ void DEMDynamicThread::packDataPointers() {
     granData->triMaterialOffset = triMaterialOffset.data();
 
     // Template array pointers
-    granData->radiiSphere = radiiSphere.data();
+    radiiSphere.bindDevicePointer(&(granData->radiiSphere));
     granData->relPosSphereX = relPosSphereX.data();
     granData->relPosSphereY = relPosSphereY.data();
     granData->relPosSphereZ = relPosSphereZ.data();
@@ -97,6 +97,10 @@ void DEMDynamicThread::packDataPointers() {
     granData->mmiXX = mmiXX.data();
     granData->mmiYY = mmiYY.data();
     granData->mmiZZ = mmiZZ.data();
+}
+
+void DEMDynamicThread::migrateDataToDevice() {
+    radiiSphere.syncToDevice();
 }
 
 // packTransferPointers
@@ -295,12 +299,12 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
         // clumpComponentOffset is typically uint_8, so it may not). If a sphere's component offset index falls in this
         // range then it is not jitified, and the kernel needs to look for it in the global memory.
         DEME_TRACKED_RESIZE(clumpComponentOffsetExt, nSpheresGM, 0);
-        DEME_TRACKED_RESIZE(radiiSphere, nClumpComponents, 0);
+        DEME_DUAL_ARRAY_RESIZE(radiiSphere, nClumpComponents, 0);
         DEME_TRACKED_RESIZE(relPosSphereX, nClumpComponents, 0);
         DEME_TRACKED_RESIZE(relPosSphereY, nClumpComponents, 0);
         DEME_TRACKED_RESIZE(relPosSphereZ, nClumpComponents, 0);
     } else {
-        DEME_TRACKED_RESIZE(radiiSphere, nSpheresGM, 0);
+        DEME_DUAL_ARRAY_RESIZE(radiiSphere, nSpheresGM, 0);
         DEME_TRACKED_RESIZE(relPosSphereX, nSpheresGM, 0);
         DEME_TRACKED_RESIZE(relPosSphereY, nSpheresGM, 0);
         DEME_TRACKED_RESIZE(relPosSphereZ, nSpheresGM, 0);
@@ -484,7 +488,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         prescans_comp.push_back(0);
         for (const auto& elem : clump_templates.spRadii) {
             for (const auto& radius : elem) {
-                radiiSphere.at(k) = radius;
+                radiiSphere[k] = radius;
                 k++;
             }
             prescans_comp.push_back(k);
@@ -585,7 +589,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                             clumpComponentOffset.at(nExistSpheres + k) = RESERVED_CLUMP_COMPONENT_OFFSET;
                         }
                     } else {
-                        radiiSphere.at(nExistSpheres + k) = this_clump_no_sp_radii.at(jj);
+                        radiiSphere[nExistSpheres + k] = this_clump_no_sp_radii.at(jj);
                         const float3 relPos = this_clump_no_sp_relPos.at(jj);
                         relPosSphereX.at(nExistSpheres + k) = relPos.x;
                         relPosSphereY.at(nExistSpheres + k) = relPos.y;
@@ -1043,7 +1047,7 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
         posZ.at(num_output_spheres) = CoM.z + this_sp_deviation_z;
         // std::cout << "Sphere Pos: " << posX.at(i) << ", " << posY.at(i) << ", " << posZ.at(i) << std::endl;
 
-        spRadii.at(num_output_spheres) = radiiSphere.at(compOffset);
+        spRadii.at(num_output_spheres) = radiiSphere[compOffset];
 
         // Family number
         if (solverFlags.outputFlags & OUTPUT_CONTENT::FAMILY) {
@@ -1153,7 +1157,7 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
         pos = CoM + this_sp_deviation;
         outstrstream << pos.x << "," << pos.y << "," << pos.z;
 
-        radius = radiiSphere.at(compOffset);
+        radius = radiiSphere[compOffset];
         outstrstream << "," << radius;
 
         // Only linear velocity

@@ -450,10 +450,14 @@ void DEMKinematicThread::packDataPointers() {
     granData->relPosNode3 = relPosNode3.data();
 
     // Template array pointers
-    granData->radiiSphere = radiiSphere.data();
+    radiiSphere.bindDevicePointer(&(granData->radiiSphere));
     granData->relPosSphereX = relPosSphereX.data();
     granData->relPosSphereY = relPosSphereY.data();
     granData->relPosSphereZ = relPosSphereZ.data();
+}
+
+void DEMKinematicThread::migrateDataToDevice() {
+    radiiSphere.syncToDevice();
 }
 
 void DEMKinematicThread::packTransferPointers(DEMDynamicThread*& dT) {
@@ -610,12 +614,12 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
         // range then it is not jitified, and the kernel needs to look for it in the global memory.
         DEME_TRACKED_RESIZE(clumpComponentOffsetExt, nSpheresGM, 0);
         // Resize to the length of the clump templates
-        DEME_TRACKED_RESIZE(radiiSphere, nClumpComponents, 0);
+        DEME_DUAL_ARRAY_RESIZE(radiiSphere, nClumpComponents, 0);
         DEME_TRACKED_RESIZE(relPosSphereX, nClumpComponents, 0);
         DEME_TRACKED_RESIZE(relPosSphereY, nClumpComponents, 0);
         DEME_TRACKED_RESIZE(relPosSphereZ, nClumpComponents, 0);
     } else {
-        DEME_TRACKED_RESIZE(radiiSphere, nSpheresGM, 0);
+        DEME_DUAL_ARRAY_RESIZE(radiiSphere, nSpheresGM, 0);
         DEME_TRACKED_RESIZE(relPosSphereX, nSpheresGM, 0);
         DEME_TRACKED_RESIZE(relPosSphereY, nSpheresGM, 0);
         DEME_TRACKED_RESIZE(relPosSphereZ, nSpheresGM, 0);
@@ -663,7 +667,7 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
         prescans_comp.push_back(0);
         for (auto elem : clump_templates.spRadii) {
             for (auto radius : elem) {
-                radiiSphere.at(k) = radius;
+                radiiSphere[k] = radius;
                 k++;
             }
             prescans_comp.push_back(k);
@@ -723,7 +727,7 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
                         clumpComponentOffset.at(nExistSpheres + k) = RESERVED_CLUMP_COMPONENT_OFFSET;
                     }
                 } else {
-                    radiiSphere.at(nExistSpheres + k) = this_clump_no_sp_radii.at(j);
+                    radiiSphere[nExistSpheres + k] = this_clump_no_sp_radii.at(j);
                     const float3 relPos = this_clump_no_sp_relPos.at(j);
                     relPosSphereX.at(nExistSpheres + k) = relPos.x;
                     relPosSphereY.at(nExistSpheres + k) = relPos.y;

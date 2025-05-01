@@ -388,7 +388,6 @@ struct DEMDataKT {
     clumpComponentOffset_t* clumpComponentOffset;
     clumpComponentOffsetExt_t* clumpComponentOffsetExt;
     bodyID_t* ownerMesh;
-    // For mesh deformation
     float3* relPosNode1;
     float3* relPosNode2;
     float3* relPosNode3;

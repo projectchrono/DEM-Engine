@@ -297,6 +297,9 @@ class DualArray : private NonCopyable {
 
     T* device() { return m_device_ptr; }
 
+    // data() returns device data for the ease of packing pointers
+    T* data() { return device(); }
+
     PinnedVector& getHostVector() { return *m_host_vec_ptr; }
 
     void bindDevicePointer(T** external_ptr_to_ptr) {

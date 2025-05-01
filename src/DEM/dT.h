@@ -113,7 +113,7 @@ class DEMDynamicThread {
     std::vector<float, ManagedAllocator<float>> volumeOwnerBody;
 
     // The distinct sphere radii values
-    std::vector<float, ManagedAllocator<float>> radiiSphere;
+    DualArray<float> radiiSphere = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The distinct sphere local position (wrt CoM) values
     std::vector<float, ManagedAllocator<float>> relPosSphereX;
@@ -572,6 +572,9 @@ class DEMDynamicThread {
     /// Put sim data array pointers in place
     void packDataPointers();
     void packTransferPointers(DEMKinematicThread*& kT);
+
+    // Move array data to device
+    void migrateDataToDevice();
 
 #ifdef DEME_USE_CHPF
     void writeSpheresAsChpf(std::ofstream& ptFile) const;

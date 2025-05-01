@@ -1326,6 +1326,9 @@ void DEMSolver::migrateSimParamsToDevice() {
 void DEMSolver::migrateArrayDataToDevice() {
     dT->granData.syncToDevice();
     kT->granData.syncToDevice();
+    // Then move DualArray data to device
+    dT->migrateDataToDevice();
+    kT->migrateDataToDevice();
 }
 
 void DEMSolver::validateUserInputs() {

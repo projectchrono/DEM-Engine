@@ -93,7 +93,7 @@ class DEMKinematicThread {
     DeviceArray<oriQ_t> oriQ2_buffer = DeviceArray<oriQ_t>(&m_approxDeviceBytesUsed);
     DeviceArray<oriQ_t> oriQ3_buffer = DeviceArray<oriQ_t>(&m_approxDeviceBytesUsed);
     DeviceArray<family_t> familyID_buffer = DeviceArray<family_t>(&m_approxDeviceBytesUsed);
-    // Triangle-related
+    // Triangle-related, for mesh deformation
     DeviceArray<float3> relPosNode1_buffer = DeviceArray<float3>(&m_approxDeviceBytesUsed);
     DeviceArray<float3> relPosNode2_buffer = DeviceArray<float3>(&m_approxDeviceBytesUsed);
     DeviceArray<float3> relPosNode3_buffer = DeviceArray<float3>(&m_approxDeviceBytesUsed);
@@ -109,8 +109,9 @@ class DEMKinematicThread {
     // Those are the template array of the unique component information. Note that these arrays may be thousands-element
     // long, and only a part of it is jitified. The jitified part of it is typically the frequently used clump and maybe
     // triangle tempates; the other part may be the components for a few large clump bodies which are not frequently
-    // used. Component sphere's radius
-    std::vector<float, ManagedAllocator<float>> radiiSphere;
+    // used.
+    // Component sphere's radius
+    DualArray<float> radiiSphere = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // The distinct sphere local position (wrt CoM) values
     std::vector<float, ManagedAllocator<float>> relPosSphereX;
     std::vector<float, ManagedAllocator<float>> relPosSphereY;
@@ -345,6 +346,9 @@ class DEMKinematicThread {
     // Put sim data array pointers in place
     void packDataPointers();
     void packTransferPointers(DEMDynamicThread*& dT);
+
+    // Move array data to device
+    void migrateDataToDevice();
 
     /// Return timing inforation for this current run
     void getTiming(std::vector<std::string>& names, std::vector<double>& vals);
