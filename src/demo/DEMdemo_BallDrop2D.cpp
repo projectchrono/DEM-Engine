@@ -197,6 +197,6 @@ int main() {
 
     std::cout << "==============================================================" << std::endl;
 
-    std::cout << "DEMdemo_BallDrop exiting..." << std::endl;
+    std::cout << "DEMdemo_BallDrop2D exiting..." << std::endl;
     return 0;
 }

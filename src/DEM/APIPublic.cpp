@@ -1098,6 +1098,13 @@ void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID) {
     m_input_family_prescription.push_back(preInfo);
 }
 
+void DEMSolver::ShowMemStats() const {
+    DEME_PRINTF("kT host memory usage: %s\n", pretty_format_bytes(GetHostMemUsageKinematic()).c_str());
+    DEME_PRINTF("kT device memory usage: %s\n", pretty_format_bytes(GetDeviceMemUsageKinematic()).c_str());
+    DEME_PRINTF("dT host memory usage: %s\n", pretty_format_bytes(GetHostMemUsageDynamic()).c_str());
+    DEME_PRINTF("dT device memory usage: %s\n", pretty_format_bytes(GetDeviceMemUsageDynamic()).c_str());
+}
+
 void DEMSolver::AddFamilyPrescribedAcc(unsigned int ID,
                                        const std::string& X,
                                        const std::string& Y,

@@ -324,28 +324,22 @@ struct DEMDataDT {
     float3* relPosNode3;
     materialsOffset_t* triMaterialOffset;
 
-    // dT-owned buffer pointers, for itself's usage
-    bodyID_t* idGeometryA_buffer;
-    bodyID_t* idGeometryB_buffer;
-    contact_t* contactType_buffer;
-    contactPairs_t* contactMapping_buffer;
-
     // pointer to remote buffer where kinematic thread stores work-order data provided by the dynamic thread
-    unsigned int* pKTOwnedBuffer_maxDrift = NULL;
-    float* pKTOwnedBuffer_absVel = NULL;
-    float* pKTOwnedBuffer_ts = NULL;
-    voxelID_t* pKTOwnedBuffer_voxelID = NULL;
-    subVoxelPos_t* pKTOwnedBuffer_locX = NULL;
-    subVoxelPos_t* pKTOwnedBuffer_locY = NULL;
-    subVoxelPos_t* pKTOwnedBuffer_locZ = NULL;
-    oriQ_t* pKTOwnedBuffer_oriQ0 = NULL;
-    oriQ_t* pKTOwnedBuffer_oriQ1 = NULL;
-    oriQ_t* pKTOwnedBuffer_oriQ2 = NULL;
-    oriQ_t* pKTOwnedBuffer_oriQ3 = NULL;
-    family_t* pKTOwnedBuffer_familyID = NULL;
-    float3* pKTOwnedBuffer_relPosNode1 = NULL;
-    float3* pKTOwnedBuffer_relPosNode2 = NULL;
-    float3* pKTOwnedBuffer_relPosNode3 = NULL;
+    unsigned int* pKTOwnedBuffer_maxDrift = nullptr;
+    float* pKTOwnedBuffer_absVel = nullptr;
+    float* pKTOwnedBuffer_ts = nullptr;
+    voxelID_t* pKTOwnedBuffer_voxelID = nullptr;
+    subVoxelPos_t* pKTOwnedBuffer_locX = nullptr;
+    subVoxelPos_t* pKTOwnedBuffer_locY = nullptr;
+    subVoxelPos_t* pKTOwnedBuffer_locZ = nullptr;
+    oriQ_t* pKTOwnedBuffer_oriQ0 = nullptr;
+    oriQ_t* pKTOwnedBuffer_oriQ1 = nullptr;
+    oriQ_t* pKTOwnedBuffer_oriQ2 = nullptr;
+    oriQ_t* pKTOwnedBuffer_oriQ3 = nullptr;
+    family_t* pKTOwnedBuffer_familyID = nullptr;
+    float3* pKTOwnedBuffer_relPosNode1 = nullptr;
+    float3* pKTOwnedBuffer_relPosNode2 = nullptr;
+    float3* pKTOwnedBuffer_relPosNode3 = nullptr;
 
     // The collection of pointers to DEM template arrays such as radiiSphere, still useful when there are template info
     // not directly jitified into the kernels
@@ -362,11 +356,11 @@ struct DEMDataDT {
     // Wildcards. These are some quantities that you can associate with contact pairs and objects. Very
     // typically, contact history info in Hertzian model in this DEM tool is a wildcard, and electric charges can be
     // registered on spheres (clump components) with wildcards.
-    float* contactWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
-    float* ownerWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
-    float* sphereWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
-    float* analWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
-    float* triWildcards[DEME_MAX_WILDCARD_NUM] = {NULL};
+    float* contactWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
+    float* ownerWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
+    float* sphereWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
+    float* analWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
+    float* triWildcards[DEME_MAX_WILDCARD_NUM] = {nullptr};
 };
 
 // A struct that holds pointers to data arrays that kT uses
@@ -384,18 +378,6 @@ struct DEMDataKT {
     // Derived from absv which is for determining contact margin size.
     float* marginSize;
 
-    // kT-owned buffer pointers, for itself's usage
-    voxelID_t* voxelID_buffer;
-    subVoxelPos_t* locX_buffer;
-    subVoxelPos_t* locY_buffer;
-    subVoxelPos_t* locZ_buffer;
-    oriQ_t* oriQ0_buffer;
-    oriQ_t* oriQ1_buffer;
-    oriQ_t* oriQ2_buffer;
-    oriQ_t* oriQ3_buffer;
-    float* absVel_buffer;
-    family_t* familyID_buffer;
-
     // Family mask
     notStupidBool_t* familyMasks;
     // Extra margin size
@@ -406,25 +388,10 @@ struct DEMDataKT {
     clumpComponentOffset_t* clumpComponentOffset;
     clumpComponentOffsetExt_t* clumpComponentOffsetExt;
     bodyID_t* ownerMesh;
+    // For mesh deformation
     float3* relPosNode1;
     float3* relPosNode2;
     float3* relPosNode3;
-    // For mesh deformation
-    float3* relPosNode1_buffer;
-    float3* relPosNode2_buffer;
-    float3* relPosNode3_buffer;
-
-    // kT's own work arrays. Now these array pointers get assigned in contactDetection() which point to shared scratch
-    // spaces. No need to do forward declaration anymore. They are left here for reference, should contactDetection()
-    // need to be re-visited.
-    // binsSphereTouches_t* numBinsSphereTouches;
-    // binSphereTouchPairs_t* numBinsSphereTouchesScan;
-    // binID_t* binIDsEachSphereTouches;
-    // bodyID_t* sphereIDsEachBinTouches;
-    // binID_t* activeBinIDs;
-    // binSphereTouchPairs_t* sphereIDsLookUpTable;
-    // spheresBinTouches_t* numSpheresBinTouches;
-    // contactPairs_t* numContactsInEachBin;
 
     // kT produces contact info, and stores it, temporarily
     bodyID_t* idGeometryA;

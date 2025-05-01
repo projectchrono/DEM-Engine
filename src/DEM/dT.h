@@ -84,10 +84,10 @@ class DEMDynamicThread {
     // kT modifies these arrays; dT uses them only.
 
     // dT gets contact pair/location/history map info from kT
-    // std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA_buffer;
-    // std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB_buffer;
-    // std::vector<contact_t, ManagedAllocator<contact_t>> contactType_buffer;
-    // std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>> contactMapping_buffer;
+    DeviceArray<bodyID_t> idGeometryA_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<bodyID_t> idGeometryB_buffer = DeviceArray<bodyID_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<contact_t> contactType_buffer = DeviceArray<contact_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<contactPairs_t> contactMapping_buffer = DeviceArray<contactPairs_t>(&m_approxDeviceBytesUsed);
 
     // Simulation params-related variables
     DualStruct<DEMSimParams> simParams = DualStruct<DEMSimParams>();
@@ -295,9 +295,10 @@ class DEMDynamicThread {
     std::unordered_map<unsigned int, std::string> templateNumNameMap;
 
     // dT's timers
-    std::vector<std::string> timer_names = {"Clear force array", "Calculate contact forces", "Collect contact forces",
-                                            "Integration",       "Unpack updates from kT",   "Send to kT buffer",
-                                            "Wait for kT update"};
+    std::vector<std::string> timer_names = {
+        "Clear force array", "Calculate contact forces", "Optional CUB force reduction",
+        "Integration",       "Unpack updates from kT",   "Send to kT buffer",
+        "Wait for kT update"};
     SolverTimers timers = SolverTimers(timer_names);
 
   public:

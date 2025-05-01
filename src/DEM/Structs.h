@@ -369,10 +369,14 @@ enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
         m_approxHostBytesUsed += byte_delta;                   \
     }
 
-// DEME_WORK_ARRAY_RESIZE is a reminder for developers that a work array is resized, and this may automatically change
+// DEME_DUAL_ARRAY_RESIZE is a reminder for developers that a work array is resized, and this may automatically change
 // the external device pointer this array's bound to. Therefore, after this call, syncing the data pointer bundle
 // (granData) to device may be needed.
-#define DEME_WORK_ARRAY_RESIZE(vec, newsize) \
+#define DEME_DUAL_ARRAY_RESIZE(vec, newsize, val) \
+    { vec.resize(newsize, val); }
+
+// Simply a reminder that this is a device array resize, to distinguish from some general .resize calls
+#define DEME_DEVICE_ARRAY_RESIZE(vec, newsize) \
     { vec.resize(newsize); }
 
 // =============================================================================

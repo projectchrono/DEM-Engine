@@ -56,11 +56,6 @@ void DEMDynamicThread::packDataPointers() {
     granData->familyMasks = familyMaskMatrix.data();
     granData->familyExtraMarginSize = familyExtraMarginSize.data();
 
-    // granData->idGeometryA_buffer = idGeometryA_buffer.data();
-    // granData->idGeometryB_buffer = idGeometryB_buffer.data();
-    // granData->contactType_buffer = contactType_buffer.data();
-    // granData->contactMapping_buffer = contactMapping_buffer.data();
-
     granData->contactForces = contactForces.data();
     granData->contactTorque_convToForce = contactTorque_convToForce.data();
     granData->contactPointGeometryA = contactPointGeometryA.data();
@@ -107,19 +102,19 @@ void DEMDynamicThread::packDataPointers() {
 // packTransferPointers
 void DEMDynamicThread::packTransferPointers(DEMKinematicThread*& kT) {
     // These are the pointers for sending data to dT
-    granData->pKTOwnedBuffer_absVel = kT->granData->absVel_buffer;
-    granData->pKTOwnedBuffer_voxelID = kT->granData->voxelID_buffer;
-    granData->pKTOwnedBuffer_locX = kT->granData->locX_buffer;
-    granData->pKTOwnedBuffer_locY = kT->granData->locY_buffer;
-    granData->pKTOwnedBuffer_locZ = kT->granData->locZ_buffer;
-    granData->pKTOwnedBuffer_oriQ0 = kT->granData->oriQ0_buffer;
-    granData->pKTOwnedBuffer_oriQ1 = kT->granData->oriQ1_buffer;
-    granData->pKTOwnedBuffer_oriQ2 = kT->granData->oriQ2_buffer;
-    granData->pKTOwnedBuffer_oriQ3 = kT->granData->oriQ3_buffer;
-    granData->pKTOwnedBuffer_familyID = kT->granData->familyID_buffer;
-    granData->pKTOwnedBuffer_relPosNode1 = kT->granData->relPosNode1_buffer;
-    granData->pKTOwnedBuffer_relPosNode2 = kT->granData->relPosNode2_buffer;
-    granData->pKTOwnedBuffer_relPosNode3 = kT->granData->relPosNode3_buffer;
+    granData->pKTOwnedBuffer_absVel = kT->absVel_buffer.data();
+    granData->pKTOwnedBuffer_voxelID = kT->voxelID_buffer.data();
+    granData->pKTOwnedBuffer_locX = kT->locX_buffer.data();
+    granData->pKTOwnedBuffer_locY = kT->locY_buffer.data();
+    granData->pKTOwnedBuffer_locZ = kT->locZ_buffer.data();
+    granData->pKTOwnedBuffer_oriQ0 = kT->oriQ0_buffer.data();
+    granData->pKTOwnedBuffer_oriQ1 = kT->oriQ1_buffer.data();
+    granData->pKTOwnedBuffer_oriQ2 = kT->oriQ2_buffer.data();
+    granData->pKTOwnedBuffer_oriQ3 = kT->oriQ3_buffer.data();
+    granData->pKTOwnedBuffer_familyID = kT->familyID_buffer.data();
+    granData->pKTOwnedBuffer_relPosNode1 = kT->relPosNode1_buffer.data();
+    granData->pKTOwnedBuffer_relPosNode2 = kT->relPosNode2_buffer.data();
+    granData->pKTOwnedBuffer_relPosNode3 = kT->relPosNode3_buffer.data();
 
     // Single-number data are now not packaged in granData...
     granData->pKTOwnedBuffer_ts = &(kT->stateParams.ts_buffer);
@@ -382,25 +377,11 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     // will cause problems in the case of a re-init-ed simulation with more clumps added to system, since we may
     // accidentally clamp those arrays.
     /*
-    // Transfer buffer arrays
-    // The following several arrays will have variable sizes, so here we only used an estimate.
-    // It is cudaMalloc-ed memory, not managed, because we want explicit locality control of buffers
     buffer_size = DEME_MAX(buffer_size, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
-    DevicePtrAlloc(granData->idGeometryA_buffer, buffer_size);
-    DevicePtrAlloc(granData->idGeometryB_buffer, buffer_size);
-    DevicePtrAlloc(granData->contactType_buffer, buffer_size);
-    // DEME_TRACKED_RESIZE(idGeometryA_buffer, nSpheresGM * DEME_INIT_CNT_MULTIPLIER,
-    // 0); DEME_TRACKED_RESIZE(idGeometryB_buffer, nSpheresGM * DEME_INIT_CNT_MULTIPLIER,
-    // 0); DEME_TRACKED_RESIZE(contactType_buffer, nSpheresGM *
-    // DEME_INIT_CNT_MULTIPLIER,  NOT_A_CONTACT);
-    // DEME_ADVISE_DEVICE(idGeometryA_buffer, streamInfo.device);
-    // DEME_ADVISE_DEVICE(idGeometryB_buffer, streamInfo.device);
-    // DEME_ADVISE_DEVICE(contactType_buffer, streamInfo.device);
-    if (!solverFlags.isHistoryless) {
-        // DEME_TRACKED_RESIZE(contactMapping_buffer, nSpheresGM * DEME_INIT_CNT_MULTIPLIER, NULL_MAPPING_PARTNER);
-        // DEME_ADVISE_DEVICE(contactMapping_buffer, streamInfo.device);
-        DevicePtrAlloc(granData->contactMapping_buffer, buffer_size);
-    }
+    DEME_DEVICE_ARRAY_RESIZE(idGeometryA_buffer, buffer_size);
+    DEME_DEVICE_ARRAY_RESIZE(idGeometryB_buffer, buffer_size);
+    DEME_DEVICE_ARRAY_RESIZE(contactType_buffer, buffer_size);
+    DEME_DEVICE_ARRAY_RESIZE(contactMapping_buffer, buffer_size);
     */
 }
 
@@ -1730,11 +1711,11 @@ inline void DEMDynamicThread::unpackMyBuffer() {
         contactEventArraysResize(*solverScratchSpace.numContacts);
     }
 
-    DEME_GPU_CALL(cudaMemcpy(granData->idGeometryA, granData->idGeometryA_buffer,
+    DEME_GPU_CALL(cudaMemcpy(granData->idGeometryA, idGeometryA_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->idGeometryB, granData->idGeometryB_buffer,
+    DEME_GPU_CALL(cudaMemcpy(granData->idGeometryB, idGeometryB_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->contactType, granData->contactType_buffer,
+    DEME_GPU_CALL(cudaMemcpy(granData->contactType, contactType_buffer.data(),
                              *solverScratchSpace.numContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
     if (!solverFlags.isHistoryless) {
         // Note we don't have to use dedicated memory space for unpacking contactMapping_buffer contents, because we
@@ -1742,7 +1723,7 @@ inline void DEMDynamicThread::unpackMyBuffer() {
         size_t mapping_bytes = (*solverScratchSpace.numContacts) * sizeof(contactPairs_t);
         granData->contactMapping =
             (contactPairs_t*)solverScratchSpace.allocateTempVector("contactMapping", mapping_bytes);
-        DEME_GPU_CALL(cudaMemcpy(granData->contactMapping, granData->contactMapping_buffer, mapping_bytes,
+        DEME_GPU_CALL(cudaMemcpy(granData->contactMapping, contactMapping_buffer.data(), mapping_bytes,
                                  cudaMemcpyDeviceToDevice));
     }
     // Prepare for kernel calls immediately after
@@ -1952,7 +1933,7 @@ inline void DEMDynamicThread::calculateForces() {
         timers.GetTimer("Calculate contact forces").stop();
 
         if (!solverFlags.useForceCollectInPlace) {
-            timers.GetTimer("Collect contact forces").start();
+            timers.GetTimer("Optional CUB force reduction").start();
             // Reflect those body-wise forces on their owner clumps
             if (solverFlags.useCubForceCollect) {
                 collectContactForcesThruCub(collect_force_kernels, granData, nContactPairs, simParams->nOwnerBodies,
@@ -1970,7 +1951,7 @@ inline void DEMDynamicThread::calculateForces() {
             // displayDeviceArray<float>(granData->aZ, simParams->nOwnerBodies);
             // displayFloat3(granData->contactForces, nContactPairs);
             // std::cout << nContactPairs << std::endl;
-            timers.GetTimer("Collect contact forces").stop();
+            timers.GetTimer("Optional CUB force reduction").stop();
         }
     }
 }

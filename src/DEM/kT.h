@@ -80,19 +80,25 @@ class DEMKinematicThread {
     // Buffer arrays for storing info from the dT side.
     // dT modifies these arrays; kT uses them only.
 
-    // // kT gets clump locations and rotations from dT
-    // // The voxel ID
-    // std::vector<voxelID_t, ManagedAllocator<voxelID_t>> voxelID_buffer;
-    // // The XYZ local location inside a voxel
-    // std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locX_buffer;
-    // std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locY_buffer;
-    // std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locZ_buffer;
-    // // The clump quaternion
-    // std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ0_buffer;
-    // std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ1_buffer;
-    // std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ2_buffer;
-    // std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQ3_buffer;
-    // std::vector<family_t, ManagedAllocator<family_t>> familyID_buffer;
+    // kT gets entity locations and rotations from dT
+    // The voxel ID
+    DeviceArray<voxelID_t> voxelID_buffer = DeviceArray<voxelID_t>(&m_approxDeviceBytesUsed);
+    // The XYZ local location inside a voxel
+    DeviceArray<subVoxelPos_t> locX_buffer = DeviceArray<subVoxelPos_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<subVoxelPos_t> locY_buffer = DeviceArray<subVoxelPos_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<subVoxelPos_t> locZ_buffer = DeviceArray<subVoxelPos_t>(&m_approxDeviceBytesUsed);
+    // The clump quaternion
+    DeviceArray<oriQ_t> oriQ0_buffer = DeviceArray<oriQ_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<oriQ_t> oriQ1_buffer = DeviceArray<oriQ_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<oriQ_t> oriQ2_buffer = DeviceArray<oriQ_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<oriQ_t> oriQ3_buffer = DeviceArray<oriQ_t>(&m_approxDeviceBytesUsed);
+    DeviceArray<family_t> familyID_buffer = DeviceArray<family_t>(&m_approxDeviceBytesUsed);
+    // Triangle-related
+    DeviceArray<float3> relPosNode1_buffer = DeviceArray<float3>(&m_approxDeviceBytesUsed);
+    DeviceArray<float3> relPosNode2_buffer = DeviceArray<float3>(&m_approxDeviceBytesUsed);
+    DeviceArray<float3> relPosNode3_buffer = DeviceArray<float3>(&m_approxDeviceBytesUsed);
+    // Max vel of entities
+    DeviceArray<float> absVel_buffer = DeviceArray<float>(&m_approxDeviceBytesUsed);
 
     // kT's copy of family map
     // std::unordered_map<unsigned int, family_t> familyUserImplMap;
@@ -167,7 +173,7 @@ class DEMKinematicThread {
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB;
     std::vector<contact_t, ManagedAllocator<contact_t>> contactType;
 
-    // Contact pair info at the previous time step. This is needed by dT so persistent contacts are identified in
+    // Contact pair info at the previous time step. This is needed by dT so enduring contacts are identified in
     // history-based models.
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> previous_idGeometryA;
     std::vector<bodyID_t, ManagedAllocator<bodyID_t>> previous_idGeometryB;
@@ -233,7 +239,7 @@ class DEMKinematicThread {
 
         cudaStreamDestroy(streamInfo.stream);
 
-        deallocateEverything();
+        // deallocateEverything();
 
         // DEME_GPU_CALL(cudaFree(simParams));
         // DEME_GPU_CALL(cudaFree(granData));

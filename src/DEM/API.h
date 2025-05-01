@@ -481,6 +481,21 @@ class DEMSolver {
     std::vector<std::pair<bodyID_t, bodyID_t>> GetClumpContacts(
         std::vector<std::pair<family_t, family_t>>& family_pair) const;
 
+    /// @brief Get the host memory usage (in bytes) on dT.
+    /// @return Number of bytes.
+    size_t GetHostMemUsageDynamic() const { return dT->estimateHostMemUsage(); }
+    /// @brief Get the device memory usage (in bytes) on dT.
+    /// @return Number of bytes.
+    size_t GetDeviceMemUsageDynamic() const { return dT->estimateDeviceMemUsage(); }
+    /// @brief Get the host memory usage (in bytes) on kT.
+    /// @return Number of bytes.
+    size_t GetHostMemUsageKinematic() const { return kT->estimateHostMemUsage(); }
+    /// @brief Get the device memory usage (in bytes) on kT.
+    /// @return Number of bytes.
+    size_t GetDeviceMemUsageKinematic() const { return kT->estimateDeviceMemUsage(); }
+    /// @brief Print the current memory usage in pretty format.
+    void ShowMemStats() const;
+
     /// Load input clumps (topology types and initial locations) on a per-pair basis. Note that the initial location
     /// means the location of the clumps' CoM coordinates in the global frame.
     std::shared_ptr<DEMClumpBatch> AddClumps(DEMClumpBatch& input_batch);

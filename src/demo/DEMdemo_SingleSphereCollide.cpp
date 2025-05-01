@@ -163,6 +163,7 @@ int main() {
         unsigned int fam1 = tracker1->GetFamily(0);
         unsigned int fam2 = tracker2->GetFamily();
 
+        std::cout << "----------------------------------------" << std::endl;
         std::cout << "Max Z coord is " << max_z << std::endl;
         std::cout << "Max velocity of any point is " << max_v << std::endl;
         std::cout << "Total kinetic energy is " << KE << std::endl;
@@ -171,6 +172,8 @@ int main() {
         std::cout << "Particle 1 family is " << fam1 << std::endl;
         std::cout << "Particle 2 family is " << fam2 << std::endl;
         std::cout << "Average contacts each sphere has: " << DEMSim.GetAvgSphContacts() << std::endl;
+        DEMSim.ShowMemStats();
+        std::cout << "----------------------------------------" << std::endl;
 
         // Test changing material type on-the-fly...
         DEMSim.SetFamilyClumpMaterial(1, mat_type_3);
