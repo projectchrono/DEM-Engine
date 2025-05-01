@@ -215,26 +215,16 @@ class DEMDynamicThread {
     std::vector<float3, ManagedAllocator<float3>> contactPointGeometryA;
     std::vector<float3, ManagedAllocator<float3>> contactPointGeometryB;
     // Wildcard (extra property) arrays associated with contacts and owners
-    std::vector<std::vector<float, ManagedAllocator<float>>,
-                ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
-        contactWildcards;
-    std::vector<std::vector<float, ManagedAllocator<float>>,
-                ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
-        ownerWildcards;
+    std::vector<std::unique_ptr<DualArray<float>>> contactWildcards;
+    std::vector<std::unique_ptr<DualArray<float>>> ownerWildcards;
     // std::vector<float, ManagedAllocator<float>> contactWildcards[DEME_MAX_WILDCARD_NUM];
     // std::vector<float, ManagedAllocator<float>> ownerWildcards[DEME_MAX_WILDCARD_NUM];
     // An example of such wildcard arrays is contact history: how much did the contact point move on the geometry
     // surface compared to when the contact first emerged?
     // Geometric entities' wildcards
-    std::vector<std::vector<float, ManagedAllocator<float>>,
-                ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
-        sphereWildcards;
-    std::vector<std::vector<float, ManagedAllocator<float>>,
-                ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
-        analWildcards;
-    std::vector<std::vector<float, ManagedAllocator<float>>,
-                ManagedAllocator<std::vector<float, ManagedAllocator<float>>>>
-        triWildcards;
+    std::vector<std::unique_ptr<DualArray<float>>> sphereWildcards;
+    std::vector<std::unique_ptr<DualArray<float>>> analWildcards;
+    std::vector<std::unique_ptr<DualArray<float>>> triWildcards;
 
     // Storage for the names of the contact wildcards (whose order agrees with the impl-level wildcard numbering, from 1
     // to n)
@@ -573,16 +563,17 @@ class DEMDynamicThread {
     void packDataPointers();
     void packTransferPointers(DEMKinematicThread*& kT);
 
-    // Move array data to device
+    // Move array data to or from device
     void migrateDataToDevice();
+    void migrateDataToHost();
 
 #ifdef DEME_USE_CHPF
-    void writeSpheresAsChpf(std::ofstream& ptFile) const;
-    void writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy = 10) const;
+    void writeSpheresAsChpf(std::ofstream& ptFile);
+    void writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy = 10);
 #endif
-    void writeSpheresAsCsv(std::ofstream& ptFile) const;
-    void writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accuracy = 10) const;
-    void writeContactsAsCsv(std::ofstream& ptFile, float force_thres = DEME_TINY_FLOAT) const;
+    void writeSpheresAsCsv(std::ofstream& ptFile);
+    void writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accuracy = 10);
+    void writeContactsAsCsv(std::ofstream& ptFile, float force_thres = DEME_TINY_FLOAT);
     void writeMeshesAsVtk(std::ofstream& ptFile);
 
     /// Called each time when the user calls DoDynamicsThenSync.

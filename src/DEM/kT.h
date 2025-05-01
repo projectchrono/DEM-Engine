@@ -347,8 +347,9 @@ class DEMKinematicThread {
     void packDataPointers();
     void packTransferPointers(DEMDynamicThread*& dT);
 
-    // Move array data to device
+    // Move array data to or from device
     void migrateDataToDevice();
+    void migrateDataToHost();
 
     /// Return timing inforation for this current run
     void getTiming(std::vector<std::string>& names, std::vector<double>& vals);

@@ -36,7 +36,7 @@ inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
     // Unset the device change we just made
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
 
-    // But we don't have to syncToDevice granData or dT->granData, and this is because all _buffer arrays don't
+    // But we don't have to toDevice granData or dT->granData, and this is because all _buffer arrays don't
     // particupate kernel computations, so even if their values are fresh only on host, it's fine
 }
 
@@ -95,7 +95,7 @@ void DEMKinematicThread::calibrateParams() {
     }
     // binSize is now calculated, we need to migrate that to device
     // simParams.syncMemberToDevice<double>(offsetof(DEMSimParams, binSize));
-    simParams.syncToDevice();
+    simParams.toDevice();
 }
 
 inline void DEMKinematicThread::unpackMyBuffer() {
@@ -124,7 +124,7 @@ inline void DEMKinematicThread::unpackMyBuffer() {
 
     // Whatever drift value dT says, kT listens; unless kinematicMaxFutureDrift is negative in which case the user
     // explicitly said not caring the future drift.
-    stateParams.maxDrift.syncToHost();
+    stateParams.maxDrift.toHost();
     pSchedSupport->kinematicMaxFutureDrift = (pSchedSupport->kinematicMaxFutureDrift.load() < 0.)
                                                  ? pSchedSupport->kinematicMaxFutureDrift.load()
                                                  : *(stateParams.maxDrift);
@@ -133,7 +133,7 @@ inline void DEMKinematicThread::unpackMyBuffer() {
     cubMaxReduce<float>(granData->marginSize, &(stateParams.maxVel), simParams->nOwnerBodies, streamInfo.stream,
                         solverScratchSpace);
     // Get the reduced maxVel value
-    stateParams.maxVel.syncToHost();
+    stateParams.maxVel.toHost();
     if (*(stateParams.maxVel) > simParams->errOutVel) {
         DEME_ERROR(
             "System max velocity is %.7g, exceeded max allowance (%.7g).\nIf this velocity is not abnormal and you "
@@ -363,8 +363,8 @@ void DEMKinematicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, cons
     // Change the size of the sphere components in question
     size_t blocks_needed_for_changing =
         (simParams->nSpheresGM + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-    misc_kernels->kernel("kTModifyComponents")
-        .instantiate()
+    misc_kernels->kernel("modifyComponents")
+        .instantiate("deme::DEMDataKT")
         .configure(dim3(blocks_needed_for_changing), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
         .launch(&granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM);
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -374,6 +374,12 @@ void DEMKinematicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, cons
     solverScratchSpace.finishUsingTempVector("idBool");
     solverScratchSpace.finishUsingTempVector("ownerFactors");
     // cudaStreamDestroy(new_stream);
+
+    // Update them back to host
+    // relPosSphereX.toHost();
+    // relPosSphereY.toHost();
+    // relPosSphereZ.toHost();
+    radiiSphere.toHost();
 }
 
 void DEMKinematicThread::startThread() {
@@ -457,7 +463,22 @@ void DEMKinematicThread::packDataPointers() {
 }
 
 void DEMKinematicThread::migrateDataToDevice() {
-    radiiSphere.syncToDevice();
+    radiiSphere.toDeviceAsync(streamInfo.stream);
+    // relPosSphereX.toDeviceAsync(streamInfo.stream);
+    // relPosSphereY.toDeviceAsync(streamInfo.stream);
+    // relPosSphereZ.toDeviceAsync(streamInfo.stream);
+
+    // Might not be necessary... but it's a big call anyway, let's sync
+    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+}
+
+void DEMKinematicThread::migrateDataToHost() {
+    radiiSphere.toHostAsync(streamInfo.stream);
+    // relPosSphereX.toHostAsync(streamInfo.stream);
+    // relPosSphereY.toHostAsync(streamInfo.stream);
+    // relPosSphereZ.toHostAsync(streamInfo.stream);
+
+    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
 void DEMKinematicThread::packTransferPointers(DEMDynamicThread*& dT) {

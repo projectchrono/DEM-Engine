@@ -1921,7 +1921,7 @@ size_t DEMSolver::ChangeClumpFamily(unsigned int fam_num,
 
     // What follows is a host operation that uses simParams, so we do a sync
     // But in fact this is not needed (just formality) as all used variables are only re-init modifiable
-    dT->simParams.syncToHost();
+    dT->simParams.toHost();
     for (bodyID_t ownerID = 0; ownerID < nOwnerBodies; ownerID++) {
         const ownerType_t this_type = dT->ownerTypes.at(ownerID);
         if (this_type != OWNER_T_CLUMP)
@@ -2138,8 +2138,8 @@ void DEMSolver::UpdateStepSize(double ts) {
     kT->simParams->h = ts;
     // dT->simParams.syncMemberToDevice<float>(offsetof(DEMSimParams, h));
     // kT->simParams.syncMemberToDevice<float>(offsetof(DEMSimParams, h));
-    dT->simParams.syncToDevice();
-    kT->simParams.syncToDevice();
+    dT->simParams.toDevice();
+    kT->simParams.toDevice();
 }
 
 void DEMSolver::UpdateClumps() {

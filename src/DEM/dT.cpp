@@ -63,15 +63,15 @@ void DEMDynamicThread::packDataPointers() {
     // granData->contactHistory = contactHistory.data();
     // granData->contactDuration = contactDuration.data();
     for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
-        granData->contactWildcards[i] = contactWildcards[i].data();
+        contactWildcards[i]->bindDevicePointer(&(granData->contactWildcards[i]));
     }
     for (unsigned int i = 0; i < simParams->nOwnerWildcards; i++) {
-        granData->ownerWildcards[i] = ownerWildcards[i].data();
+        ownerWildcards[i]->bindDevicePointer(&(granData->ownerWildcards[i]));
     }
     for (unsigned int i = 0; i < simParams->nGeoWildcards; i++) {
-        granData->sphereWildcards[i] = sphereWildcards[i].data();
-        granData->analWildcards[i] = analWildcards[i].data();
-        granData->triWildcards[i] = triWildcards[i].data();
+        sphereWildcards[i]->bindDevicePointer(&(granData->sphereWildcards[i]));
+        analWildcards[i]->bindDevicePointer(&(granData->analWildcards[i]));
+        triWildcards[i]->bindDevicePointer(&(granData->triWildcards[i]));
     }
 
     // The offset info that indexes into the template arrays
@@ -100,7 +100,46 @@ void DEMDynamicThread::packDataPointers() {
 }
 
 void DEMDynamicThread::migrateDataToDevice() {
-    radiiSphere.syncToDevice();
+    radiiSphere.toDeviceAsync(streamInfo.stream);
+    // relPosSphereX.toDeviceAsync(streamInfo.stream);
+    // relPosSphereY.toDeviceAsync(streamInfo.stream);
+    // relPosSphereZ.toDeviceAsync(streamInfo.stream);
+
+    for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
+        contactWildcards[i]->toDeviceAsync(streamInfo.stream);
+    }
+    for (unsigned int i = 0; i < simParams->nOwnerWildcards; i++) {
+        ownerWildcards[i]->toDeviceAsync(streamInfo.stream);
+    }
+    for (unsigned int i = 0; i < simParams->nGeoWildcards; i++) {
+        sphereWildcards[i]->toDeviceAsync(streamInfo.stream);
+        analWildcards[i]->toDeviceAsync(streamInfo.stream);
+        triWildcards[i]->toDeviceAsync(streamInfo.stream);
+    }
+
+    // Might not be necessary... but it's a big call anyway, let's sync
+    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+}
+
+void DEMDynamicThread::migrateDataToHost() {
+    radiiSphere.toHostAsync(streamInfo.stream);
+    // relPosSphereX.toHostAsync(streamInfo.stream);
+    // relPosSphereY.toHostAsync(streamInfo.stream);
+    // relPosSphereZ.toHostAsync(streamInfo.stream);
+
+    for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
+        contactWildcards[i]->toHostAsync(streamInfo.stream);
+    }
+    for (unsigned int i = 0; i < simParams->nOwnerWildcards; i++) {
+        ownerWildcards[i]->toHostAsync(streamInfo.stream);
+    }
+    for (unsigned int i = 0; i < simParams->nGeoWildcards; i++) {
+        sphereWildcards[i]->toHostAsync(streamInfo.stream);
+        analWildcards[i]->toHostAsync(streamInfo.stream);
+        triWildcards[i]->toHostAsync(streamInfo.stream);
+    }
+
+    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
 // packTransferPointers
@@ -217,8 +256,8 @@ void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const 
     // Change the size of the sphere components in question
     size_t blocks_needed_for_changing =
         (simParams->nSpheresGM + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-    misc_kernels->kernel("dTModifyComponents")
-        .instantiate()
+    misc_kernels->kernel("modifyComponents")
+        .instantiate("deme::DEMDataDT")
         .configure(dim3(blocks_needed_for_changing), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
         .launch(&granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM);
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -229,6 +268,12 @@ void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const 
     solverScratchSpace.finishUsingTempVector("ownerFactors");
 
     // cudaStreamDestroy(new_stream);
+
+    // Update them back to host
+    // relPosSphereX.toHost();
+    // relPosSphereY.toHost();
+    // relPosSphereZ.toHost();
+    radiiSphere.toHost();
 }
 
 void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
@@ -365,15 +410,20 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
         analWildcards.resize(simParams->nGeoWildcards);
         triWildcards.resize(simParams->nGeoWildcards);
         for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
-            DEME_TRACKED_RESIZE_FLOAT(contactWildcards[i], cnt_arr_size, 0);
+            contactWildcards[i] =
+                std::make_unique<DualArray<float>>(cnt_arr_size, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
         }
         for (unsigned int i = 0; i < simParams->nOwnerWildcards; i++) {
-            DEME_TRACKED_RESIZE_FLOAT(ownerWildcards[i], nOwnerBodies, 0);
+            ownerWildcards[i] =
+                std::make_unique<DualArray<float>>(nOwnerBodies, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
         }
         for (unsigned int i = 0; i < simParams->nGeoWildcards; i++) {
-            DEME_TRACKED_RESIZE_FLOAT(sphereWildcards[i], nSpheresGM, 0);
-            DEME_TRACKED_RESIZE_FLOAT(analWildcards[i], nAnalGM, 0);
-            DEME_TRACKED_RESIZE_FLOAT(triWildcards[i], nTriGM, 0);
+            sphereWildcards[i] =
+                std::make_unique<DualArray<float>>(nSpheresGM, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+            analWildcards[i] =
+                std::make_unique<DualArray<float>>(nAnalGM, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+            triWildcards[i] =
+                std::make_unique<DualArray<float>>(nTriGM, 0, &m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
         }
     }
 
@@ -643,7 +693,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                             w_name.c_str());
                     } else {
                         for (size_t jj = 0; jj < a_batch->GetNumClumps(); jj++) {
-                            ownerWildcards[w_num].at(nExistOwners + nTotalClumpsThisCall + jj) =
+                            (*ownerWildcards[w_num])[nExistOwners + nTotalClumpsThisCall + jj] =
                                 a_batch->owner_wildcards[w_name].at(jj);
                         }
                     }
@@ -660,7 +710,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                             w_name.c_str());
                     } else {
                         for (size_t jj = 0; jj < a_batch->GetNumSpheres(); jj++) {
-                            sphereWildcards[w_num].at(nExistSpheres + n_processed_sp_comp + jj) =
+                            (*sphereWildcards[w_num])[nExistSpheres + n_processed_sp_comp + jj] =
                                 a_batch->geo_wildcards[w_name].at(jj);
                         }
                     }
@@ -681,7 +731,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                 contactType.at(cnt_arr_offset) = SPHERE_SPHERE_CONTACT;  // Only sph--sph cnt for now
                 unsigned int w_num = 0;
                 for (const auto& w_name : m_contact_wildcard_names) {
-                    contactWildcards[w_num].at(cnt_arr_offset) = a_batch->contact_wildcards.at(w_name).at(jj);
+                    (*contactWildcards[w_num])[cnt_arr_offset] = a_batch->contact_wildcards.at(w_name).at(jj);
                     w_num++;
                 }
                 cnt_arr_offset++;
@@ -784,7 +834,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                         w_name.c_str());
                 } else {
                     for (size_t jj = 0; jj < input_mesh_objs.at(i)->GetNumTriangles(); jj++) {
-                        triWildcards[w_num].at(nExistingFacets + k + jj) =
+                        (*triWildcards[w_num])[nExistingFacets + k + jj] =
                             input_mesh_objs.at(i)->geo_wildcards[w_name].at(jj);
                     }
                 }
@@ -996,9 +1046,10 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
 }
 
 #ifdef DEME_USE_CHPF
-void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
+void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) {
     chpf::Writer pw;
     // pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, mass);
+    migrateDataToHost();
 
     // simParams host version should not be different from device version, so no need to update
     std::vector<float> posX(simParams->nSpheresGM);
@@ -1074,8 +1125,9 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) const {
 }
 #endif
 
-void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
+void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) {
     std::ostringstream outstrstream;
+    migrateDataToHost();
 
     outstrstream << OUTPUT_FILE_X_COL_NAME + "," + OUTPUT_FILE_Y_COL_NAME + "," + OUTPUT_FILE_Z_COL_NAME + "," +
                         OUTPUT_FILE_R_COL_NAME;
@@ -1206,12 +1258,12 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
             // The order shouldn't be an issue... the same set is being processed here and in equip_owner_wildcards, see
             // Model.h
             for (unsigned int j = 0; j < m_owner_wildcard_names.size(); j++) {
-                outstrstream << "," << ownerWildcards[j][i];
+                outstrstream << "," << (*ownerWildcards[j])[i];
             }
         }
         if (solverFlags.outputFlags & OUTPUT_CONTENT::GEO_WILDCARD) {
             for (unsigned int j = 0; j < m_geo_wildcard_names.size(); j++) {
-                outstrstream << "," << sphereWildcards[j][i];
+                outstrstream << "," << (*sphereWildcards[j])[i];
             }
         }
 
@@ -1222,9 +1274,10 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) const {
 }
 
 #ifdef DEME_USE_CHPF
-void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy) const {
+void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy) {
     //// TODO: Note using accuracy
     chpf::Writer pw;
+    migrateDataToHost();
 
     // simParams host version should not be different from device version, so no need to update
     std::vector<float> posX(simParams->nOwnerBodies);
@@ -1304,9 +1357,10 @@ void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile, unsigned int acc
 }
 #endif
 
-void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accuracy) const {
+void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accuracy) {
     std::ostringstream outstrstream;
     outstrstream.precision(accuracy);
+    migrateDataToHost();
 
     // xyz and quaternion are always there
     outstrstream << OUTPUT_FILE_X_COL_NAME + "," + OUTPUT_FILE_Y_COL_NAME + "," + OUTPUT_FILE_Z_COL_NAME +
@@ -1418,7 +1472,7 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
             // The order shouldn't be an issue... the same set is being processed here and in equip_owner_wildcards, see
             // Model.h
             for (unsigned int j = 0; j < m_owner_wildcard_names.size(); j++) {
-                outstrstream << "," << ownerWildcards[j][i];
+                outstrstream << "," << (*ownerWildcards[j])[i];
             }
         }
 
@@ -1439,8 +1493,9 @@ inline bodyID_t DEMDynamicThread::getOwnerForContactB(const bodyID_t& geoB, cons
     }
 }
 
-void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thres) const {
+void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thres) {
     std::ostringstream outstrstream;
+    migrateDataToHost();
 
     outstrstream << OUTPUT_FILE_CNT_TYPE_NAME;
     if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::OWNER) {
@@ -1578,7 +1633,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
             // The order shouldn't be an issue... the same set is being processed here and in equip_contact_wildcards,
             // see Model.h
             for (unsigned int j = 0; j < m_contact_wildcard_names.size(); j++) {
-                outstrstream << "," << contactWildcards[j][i];
+                outstrstream << "," << (*contactWildcards[j])[i];
             }
         }
 
@@ -1590,6 +1645,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
 
 void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     std::ostringstream ostream;
+    migrateDataToHost();
 
     std::vector<size_t> vertexOffset(m_meshes.size() + 1, 0);
     size_t total_f = 0;
@@ -1709,7 +1765,7 @@ inline void DEMDynamicThread::unpackMyBuffer() {
 
     DEME_GPU_CALL(
         cudaMemcpy(&(solverScratchSpace.numContacts), &nContactPairs_buffer, sizeof(size_t), cudaMemcpyDeviceToDevice));
-    solverScratchSpace.numContacts.syncToHost();
+    solverScratchSpace.numContacts.toHost();
     // Need to resize those contact event-based arrays before usage
     if (*solverScratchSpace.numContacts > idGeometryA.size() || *solverScratchSpace.numContacts > buffer_size) {
         contactEventArraysResize(*solverScratchSpace.numContacts);
@@ -1731,7 +1787,7 @@ inline void DEMDynamicThread::unpackMyBuffer() {
                                  cudaMemcpyDeviceToDevice));
     }
     // Prepare for kernel calls immediately after
-    granData.syncToDevice();
+    granData.toDevice();
 }
 
 inline void DEMDynamicThread::sendToTheirBuffer() {
@@ -1873,10 +1929,10 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
     }
 
     // Copy new history back to history array (after resizing the `main' history array)
-    if (*solverScratchSpace.numContacts > contactWildcards[0].size()) {
+    if (*solverScratchSpace.numContacts > contactWildcards[0]->size()) {
         for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
-            DEME_TRACKED_RESIZE_FLOAT(contactWildcards[i], *solverScratchSpace.numContacts, 0);
-            granData->contactWildcards[i] = contactWildcards[i].data();
+            // Packing data pointer is not needed after binding
+            DEME_DUAL_ARRAY_RESIZE((*contactWildcards[i]), *solverScratchSpace.numContacts, 0);
         }
     }
     for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
@@ -1888,7 +1944,7 @@ inline void DEMDynamicThread::migrateEnduringContacts() {
     solverScratchSpace.finishUsingTempVector("contactSentry");
 
     // granData may have changed in some of the earlier steps
-    granData.syncToDevice();
+    granData.toDevice();
 }
 
 inline void DEMDynamicThread::calculateForces() {
@@ -2205,7 +2261,7 @@ void DEMDynamicThread::workerThread() {
             simParams->timeElapsed += (double)simParams->h;
             // timeElapsed needs to be updated to the device each time step
             // simParams.syncMemberToDevice<double>(offsetof(DEMSimParams, timeElapsed));
-            simParams.syncToDevice();
+            simParams.toDevice();
         }
 
         // Unless the user did something critical, must we wait for a kT update before next step
@@ -2348,7 +2404,7 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
                 break;
             case (CUB_REDUCE_FLAVOR::NONE):
                 solverScratchSpace.finishUsingTempVector("boolArrExclude");
-                m_reduceResArr.syncToHost();
+                m_reduceResArr.toHost();
                 return (float*)m_reduceResArr.host();
         }
         // If this inspection is comfined in a region, then boolArrExclude and resArr need to be sorted and reduce by
@@ -2386,7 +2442,7 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
                 solverScratchSpace.finishUsingTempVector("boolArrExclude_sorted");
                 solverScratchSpace.finishUsingTempVector("resArr_sorted");
                 solverScratchSpace.finishUsingTempVector("num_unique_out");
-                m_reduceResArr.syncToHost();
+                m_reduceResArr.toHost();
                 return (float*)m_reduceResArr.host();
         }
     }
@@ -2395,7 +2451,7 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
     solverScratchSpace.finishUsingTempVector("boolArrExclude_sorted");
     solverScratchSpace.finishUsingTempVector("resArr_sorted");
     solverScratchSpace.finishUsingTempVector("num_unique_out");
-    m_reduceRes.syncToHost();
+    m_reduceRes.toHost();
     return (float*)m_reduceRes.host();
 }
 
@@ -2405,10 +2461,19 @@ void DEMDynamicThread::initAllocation() {
 
 void DEMDynamicThread::deallocateEverything() {
     for (unsigned int i = 0; i < contactWildcards.size(); i++) {
-        contactWildcards.clear();
+        contactWildcards[i].reset();
     }
     for (unsigned int i = 0; i < ownerWildcards.size(); i++) {
-        ownerWildcards.clear();
+        ownerWildcards[i].reset();
+    }
+    for (unsigned int i = 0; i < sphereWildcards.size(); i++) {
+        sphereWildcards[i].reset();
+    }
+    for (unsigned int i = 0; i < analWildcards.size(); i++) {
+        analWildcards[i].reset();
+    }
+    for (unsigned int i = 0; i < triWildcards.size(); i++) {
+        triWildcards[i].reset();
     }
 }
 
@@ -2423,7 +2488,7 @@ double DEMDynamicThread::getSimTime() const {
 void DEMDynamicThread::setSimTime(double time) {
     simParams->timeElapsed = time;
     // simParams.syncMemberToDevice<double>(offsetof(DEMSimParams, timeElapsed));
-    simParams.syncToDevice();
+    simParams.toDevice();
 }
 
 float DEMDynamicThread::getUpdateFreq() const {
@@ -2569,6 +2634,7 @@ size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
 }
 
 void DEMDynamicThread::setFamilyContactWildcardValueEither(unsigned int N, unsigned int wc_num, float val) {
+    contactWildcards[wc_num]->toHost();
     size_t numCnt = *solverScratchSpace.numContacts;
     for (size_t i = 0; i < numCnt; i++) {
         bodyID_t geoA = idGeometryA.at(i);
@@ -2581,12 +2647,15 @@ void DEMDynamicThread::setFamilyContactWildcardValueEither(unsigned int N, unsig
         unsigned int famB = +(familyID.at(ownerB));
 
         if (N == famA || N == famB) {
-            contactWildcards[wc_num].at(i) = val;
+            (*contactWildcards[wc_num])[i] = val;
         }
     }
+    // Maybe the user will do another host-bound modification, so better do a non-async-ed migration
+    contactWildcards[wc_num]->toDevice();
 }
 
 void DEMDynamicThread::setFamilyContactWildcardValueBoth(unsigned int N, unsigned int wc_num, float val) {
+    contactWildcards[wc_num]->toHost();
     size_t numCnt = *solverScratchSpace.numContacts;
     for (size_t i = 0; i < numCnt; i++) {
         bodyID_t geoA = idGeometryA.at(i);
@@ -2599,12 +2668,14 @@ void DEMDynamicThread::setFamilyContactWildcardValueBoth(unsigned int N, unsigne
         unsigned int famB = +(familyID.at(ownerB));
 
         if (N == famA && N == famB) {
-            contactWildcards[wc_num].at(i) = val;
+            (*contactWildcards[wc_num])[i] = val;
         }
     }
+    contactWildcards[wc_num]->toDevice();
 }
 
 void DEMDynamicThread::setFamilyContactWildcardValue(unsigned int N1, unsigned int N2, unsigned int wc_num, float val) {
+    contactWildcards[wc_num]->toHost();
     size_t numCnt = *solverScratchSpace.numContacts;
     for (size_t i = 0; i < numCnt; i++) {
         bodyID_t geoA = idGeometryA.at(i);
@@ -2617,96 +2688,104 @@ void DEMDynamicThread::setFamilyContactWildcardValue(unsigned int N1, unsigned i
         unsigned int famB = +(familyID.at(ownerB));
 
         if ((N1 == famA && N2 == famB) || (N2 == famA && N1 == famB)) {
-            contactWildcards[wc_num].at(i) = val;
+            (*contactWildcards[wc_num])[i] = val;
         }
     }
+    contactWildcards[wc_num]->toDevice();
 }
 
 void DEMDynamicThread::setContactWildcardValue(unsigned int wc_num, float val) {
+    contactWildcards[wc_num]->toHost();
     size_t numCnt = *solverScratchSpace.numContacts;
     for (size_t i = 0; i < numCnt; i++) {
-        contactWildcards[wc_num].at(i) = val;
+        (*contactWildcards[wc_num])[i] = val;
     }
+    contactWildcards[wc_num]->toDevice();
 }
 
 void DEMDynamicThread::setOwnerWildcardValue(bodyID_t ownerID, unsigned int wc_num, const std::vector<float>& vals) {
+    ownerWildcards[wc_num]->toHost();
     for (size_t i = 0; i < vals.size(); i++) {
-        ownerWildcards[wc_num].at(ownerID + i) = vals.at(i);
+        (*ownerWildcards[wc_num])[ownerID + i] = vals.at(i);
     }
+    ownerWildcards[wc_num]->toDevice();
 }
 
 void DEMDynamicThread::setTriWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals) {
+    triWildcards[wc_num]->toHost();
     for (size_t i = 0; i < vals.size(); i++) {
-        triWildcards[wc_num].at(geoID + i) = vals.at(i);
+        (*triWildcards[wc_num])[geoID + i] = vals.at(i);
     }
+    triWildcards[wc_num]->toDevice();
 }
 
 void DEMDynamicThread::setSphWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals) {
+    sphereWildcards[wc_num]->toHost();
     for (size_t i = 0; i < vals.size(); i++) {
-        sphereWildcards[wc_num].at(geoID + i) = vals.at(i);
+        (*sphereWildcards[wc_num])[geoID + i] = vals.at(i);
     }
+    sphereWildcards[wc_num]->toDevice();
 }
 
 void DEMDynamicThread::setAnalWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals) {
+    analWildcards[wc_num]->toHost();
     for (size_t i = 0; i < vals.size(); i++) {
-        analWildcards[wc_num].at(geoID + i) = vals.at(i);
+        (*analWildcards[wc_num])[geoID + i] = vals.at(i);
     }
+    analWildcards[wc_num]->toDevice();
 }
 
 void DEMDynamicThread::setFamilyOwnerWildcardValue(unsigned int family_num,
                                                    unsigned int wc_num,
                                                    const std::vector<float>& vals) {
+    ownerWildcards[wc_num]->toHost();
     size_t count = 0;
     for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
         if (familyID[i] == family_num) {
-            ownerWildcards[wc_num].at(i) = vals.at(count);
+            (*ownerWildcards[wc_num])[i] = vals.at(count);
             if (count + 1 < vals.size()) {
                 count++;
             }
         }
     }
+    ownerWildcards[wc_num]->toDevice();
 }
 
 void DEMDynamicThread::getSphereWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n) {
     res.resize(n);
-    for (size_t i = 0; i < n; i++) {
-        res[i] = sphereWildcards[wc_num].at(ID + i);
-    }
+    CudaCopyToHost<float>(res.data(), sphereWildcards[wc_num]->data() + ID, n);
 }
 
 void DEMDynamicThread::getTriWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n) {
     res.resize(n);
-    for (size_t i = 0; i < n; i++) {
-        res[i] = triWildcards[wc_num].at(ID + i);
-    }
+    CudaCopyToHost<float>(res.data(), triWildcards[wc_num]->data() + ID, n);
 }
 
 void DEMDynamicThread::getAnalWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n) {
     res.resize(n);
-    for (size_t i = 0; i < n; i++) {
-        res[i] = analWildcards[wc_num].at(ID + i);
-    }
+    CudaCopyToHost<float>(res.data(), analWildcards[wc_num]->data() + ID, n);
 }
 
 float DEMDynamicThread::getOwnerWildcardValue(bodyID_t ID, unsigned int wc_num) {
-    return ownerWildcards[wc_num].at(ID);
+    float res;
+    CudaCopyToHost(&res, ownerWildcards[wc_num]->data() + ID);
+    return res;
 }
 
 void DEMDynamicThread::getAllOwnerWildcardValue(std::vector<float>& res, unsigned int wc_num) {
     res.resize(simParams->nOwnerBodies);
-    for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
-        res.at(i) = ownerWildcards[wc_num].at(i);
-    }
+    CudaCopyToHost<float>(res.data(), ownerWildcards[wc_num]->data(), simParams->nOwnerBodies);
 }
 
 void DEMDynamicThread::getFamilyOwnerWildcardValue(std::vector<float>& res,
                                                    unsigned int family_num,
                                                    unsigned int wc_num) {
+    ownerWildcards[wc_num]->toHost();
     res.resize(simParams->nOwnerBodies);
     size_t count = 0;
     for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
         if (familyID[i] == family_num) {
-            res.at(count) = ownerWildcards[wc_num].at(i);
+            res[count] = (*ownerWildcards[wc_num])[i];
             count++;
         }
     }

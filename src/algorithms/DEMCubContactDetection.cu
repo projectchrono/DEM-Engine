@@ -36,10 +36,10 @@ inline void contactEventArraysResize(size_t nContactPairs,
     granData->idGeometryB = idGeometryB.data();
     granData->contactType = contactType.data();
 
-    // It's safe to syncToDevice even though kT is working now and dT may write to its buffer
+    // It's safe to toDevice even though kT is working now and dT may write to its buffer
     // This is because all buffer arrays are not used in kernels so their pointers are only meaningfully stored on host,
     // so writing from host to device won't change the destination where dT writes
-    granData.syncToDevice();
+    granData.toDevice();
 }
 
 void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
@@ -69,9 +69,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         *scratchPad.numPrevContacts = 0;
         *scratchPad.numPrevSpheres = 0;
 
-        scratchPad.numContacts.syncToDevice();
-        scratchPad.numPrevContacts.syncToDevice();
-        scratchPad.numPrevSpheres.syncToDevice();
+        scratchPad.numContacts.toDevice();
+        scratchPad.numPrevContacts.toDevice();
+        scratchPad.numPrevSpheres.toDevice();
         return;
     }
     // These are needed for the solver to keep tab... But you know, we may have no triangles or no contacts, so
@@ -141,7 +141,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         deviceAssign<binSphereTouchPairs_t, size_t>(&(numAnalGeoSphereTouchesScan[simParams->nSpheresGM]),
                                                     &(scratchPad.numContacts), this_stream);
         // numContact is updated (with geo--sphere pair number), get it to host
-        scratchPad.numContacts.syncToHost();
+        scratchPad.numContacts.toHost();
         if (*(scratchPad.numContacts) > idGeometryA.size()) {
             contactEventArraysResize(*(scratchPad.numContacts), idGeometryA, idGeometryB, contactType, granData);
         }
@@ -215,7 +215,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
         CD_temp_arr_bytes = (*pNumActiveBins) * sizeof(spheresBinTouches_t);
         spheresBinTouches_t* numSpheresBinTouches =
             (spheresBinTouches_t*)scratchPad.allocateTempVector("numSpheresBinTouches", CD_temp_arr_bytes);
-        // Here you don't have to syncToHost() again as the runlength should give the same numActiveBins as before
+        // Here you don't have to toHost() again as the runlength should give the same numActiveBins as before
         pNumActiveBins = scratchPad.getDualStructDevice("numActiveBins");
         cubDEMRunLengthEncode<binID_t, spheresBinTouches_t>(binIDsEachSphereTouches_sorted, activeBinIDs,
                                                             numSpheresBinTouches, pNumActiveBins,
@@ -768,7 +768,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             if (*pNumRetainedCnts > contactPersistency.size()) {
                 contactPersistency.resize(*pNumRetainedCnts);
                 granData->contactPersistency = contactPersistency.data();
-                granData.syncToDevice();
+                granData.toDevice();
             }
             cubDEMSelectFlagged<bodyID_t, notStupidBool_t>(idA_sorted, granData->idGeometryA, retain_flags,
                                                            scratchPad.getDualStructDevice("numRetainedCnts"),
@@ -961,7 +961,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             if (*scratchPad.numContacts > contactMapping.size()) {
                 contactMapping.resize(*scratchPad.numContacts);
                 granData->contactMapping = contactMapping.data();
-                granData.syncToDevice();
+                granData.toDevice();
             }
             blocks_needed_for_mapping = (nSpheresSafe + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
             if (blocks_needed_for_mapping > 0) {
@@ -1029,7 +1029,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 granData->previous_idGeometryB = previous_idGeometryB.data();
                 granData->previous_contactType = previous_contactType.data();
 
-                granData.syncToDevice();
+                granData.toDevice();
             }
             DEME_GPU_CALL(cudaMemcpy(granData->previous_idGeometryA, granData->idGeometryA, id_arr_bytes,
                                      cudaMemcpyDeviceToDevice));
@@ -1126,9 +1126,9 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
     *scratchPad.numPrevSpheres = simParams->nSpheresGM;
 
     // dT kT may send these numbers to each other from device
-    scratchPad.numContacts.syncToDevice();
-    scratchPad.numPrevContacts.syncToDevice();
-    scratchPad.numPrevSpheres.syncToDevice();
+    scratchPad.numContacts.toDevice();
+    scratchPad.numPrevContacts.toDevice();
+    scratchPad.numPrevSpheres.toDevice();
 }
 
 void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
@@ -1178,7 +1178,7 @@ void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
         kT_data->contactPersistency = contactPersistency.data();
 
         // Assuming size-updated arrays will be used on device... which might not be true
-        kT_data.syncToDevice();
+        kT_data.toDevice();
     }
     DEME_GPU_CALL(
         cudaMemcpy(kT_data->previous_idGeometryA, idA_sorted, nContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
@@ -1199,8 +1199,8 @@ void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
     // simParams now
     *scratchPad.numPrevSpheres = simParams->nSpheresGM;
     // dT kT may send these numbers to each other from device
-    scratchPad.numPrevContacts.syncToDevice();
-    scratchPad.numPrevSpheres.syncToDevice();
+    scratchPad.numPrevContacts.toDevice();
+    scratchPad.numPrevSpheres.toDevice();
 
     scratchPad.finishUsingTempVector("idA");
     scratchPad.finishUsingTempVector("idB");

@@ -147,14 +147,14 @@ class DEMSolverScratchData {
     }
     scratch_t* getDualArrayHost(const std::string& name) { return m_dualArrPool.getHost(name); }
     scratch_t* getDualArrayDevice(const std::string& name) { return m_dualArrPool.getDevice(name); }
-    void syncDualArrayDeviceToHost(const std::string& name) { m_dualArrPool.get(name)->syncToHost(); }
-    void syncDualArrayHostToDevice(const std::string& name) { m_dualArrPool.get(name)->syncToDevice(); }
+    void syncDualArrayDeviceToHost(const std::string& name) { m_dualArrPool.get(name)->toHost(); }
+    void syncDualArrayHostToDevice(const std::string& name) { m_dualArrPool.get(name)->toDevice(); }
     // Likewise, all DualStruct allocated using this class will be temporary
     DualStruct<size_t>* allocateDualStruct(const std::string& name) { return m_dualStructPool.claim(name); }
     size_t* getDualStructHost(const std::string& name) { return m_dualStructPool.getHost(name); }
     size_t* getDualStructDevice(const std::string& name) { return m_dualStructPool.getDevice(name); }
-    void syncDualStructDeviceToHost(const std::string& name) { m_dualStructPool.get(name)->syncToHost(); }
-    void syncDualStructHostToDevice(const std::string& name) { m_dualStructPool.get(name)->syncToDevice(); }
+    void syncDualStructDeviceToHost(const std::string& name) { m_dualStructPool.get(name)->toHost(); }
+    void syncDualStructHostToDevice(const std::string& name) { m_dualStructPool.get(name)->toDevice(); }
 
     void finishUsingTempVector(const std::string& name) { m_deviceVecPool.unclaim(name); }
     void finishUsingVector(const std::string& name) { finishUsingTempVector(name); }

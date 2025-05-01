@@ -17,11 +17,19 @@ template <typename T>
 void CudaCopyToDevice(T* pD, T* pH) {
     DEME_GPU_CALL(cudaMemcpy(pD, pH, sizeof(T), cudaMemcpyHostToDevice));
 }
+template <typename T>
+void CudaCopyToDevice(T* pD, T* pH, size_t n) {
+    DEME_GPU_CALL(cudaMemcpy(pD, pH, n * sizeof(T), cudaMemcpyHostToDevice));
+}
 
 // A to-host memcpy wrapper
 template <typename T>
 void CudaCopyToHost(T* pH, T* pD) {
     DEME_GPU_CALL(cudaMemcpy(pH, pD, sizeof(T), cudaMemcpyDeviceToHost));
+}
+template <typename T>
+void CudaCopyToHost(T* pH, T* pD, size_t n) {
+    DEME_GPU_CALL(cudaMemcpy(pH, pD, n * sizeof(T), cudaMemcpyDeviceToHost));
 }
 
 // ptr being a reference to a pointer is crucial
@@ -101,7 +109,7 @@ class DualStruct : private NonCopyable {
 
         *host_data = init_val;
 
-        syncToDevice();
+        toDevice();
     }
 
     // Destructor: Free memory
@@ -113,13 +121,13 @@ class DualStruct : private NonCopyable {
     }
 
     // Synchronize changes from host to device
-    void syncToDevice() {
+    void toDevice() {
         DEME_GPU_CALL(cudaMemcpy(device_data, host_data, sizeof(T), cudaMemcpyHostToDevice));
         modified_on_host = false;
     }
 
     // Synchronize changes from device to host
-    void syncToHost() { DEME_GPU_CALL(cudaMemcpy(host_data, device_data, sizeof(T), cudaMemcpyDeviceToHost)); }
+    void toHost() { DEME_GPU_CALL(cudaMemcpy(host_data, device_data, sizeof(T), cudaMemcpyDeviceToHost)); }
 
     // // Synchronize change of one field of the struct to device
     // template <typename MemberType>
@@ -184,6 +192,11 @@ class DualArray : private NonCopyable {
     DualArray(size_t n, size_t* host_external_counter = nullptr, size_t* device_external_counter = nullptr)
         : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {
         resize(n);
+    }
+
+    DualArray(size_t n, T val, size_t* host_external_counter = nullptr, size_t* device_external_counter = nullptr)
+        : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {
+        resize(n, val);
     }
 
     DualArray(const std::vector<T>& vec,
@@ -256,7 +269,7 @@ class DualArray : private NonCopyable {
         freeHost();
     }
 
-    void syncToDevice() {
+    void toDevice() {
         assert(m_host_vec_ptr);
         size_t count = m_host_vec_ptr->size();
         if (count > m_device_capacity)
@@ -265,13 +278,13 @@ class DualArray : private NonCopyable {
         m_host_dirty = false;
     }
 
-    void syncToHost() {
+    void toHost() {
         assert(m_device_ptr && m_host_vec_ptr);
         DEME_GPU_CALL(cudaMemcpy(m_host_vec_ptr->data(), m_device_ptr, size() * sizeof(T), cudaMemcpyDeviceToHost));
         m_host_dirty = false;
     }
 
-    void copyToDeviceAsync(cudaStream_t& stream) {
+    void toDeviceAsync(cudaStream_t& stream) {
         assert(m_host_vec_ptr && m_device_ptr);
         size_t count = m_host_vec_ptr->size();
         if (count > m_device_capacity)
@@ -280,7 +293,7 @@ class DualArray : private NonCopyable {
         m_host_dirty = false;
     }
 
-    void copyToHostAsync(cudaStream_t& stream) {
+    void toHostAsync(cudaStream_t& stream) {
         assert(m_host_vec_ptr && m_device_ptr);
         size_t count = m_host_vec_ptr->size();
         cudaMemcpyAsync(m_host_vec_ptr->data(), m_device_ptr, count * sizeof(T), cudaMemcpyDeviceToHost, stream);
@@ -651,6 +664,13 @@ class DualStructPool : public ResourcePool<T, DualStruct<T>> {
         return this->vectors[it->second]->getDevicePointer();
     }
 };
+
+// A conceptual note: In DEME, DualStruct-managed simParams, granData etc. are in general considered "host-major",
+// meaning that we generally believe the data on the host is more fresh. So, we change host data freely, copy host data
+// to device more freely, but generally do not copy data from device to host. In contrast, DualArray-managed simulation
+// status or work arrays are "device-major", meaning the device copy is believed to be more fresh. So, we copy from
+// device to host more freely and concern-free, but when copying from host to device, that's either in a centrialized
+// initialization stage, or we do piecemeal and fine-grain copying which reflects the user's forced system updates only.
 
 }  // namespace deme
 

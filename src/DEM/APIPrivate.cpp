@@ -1319,13 +1319,13 @@ void DEMSolver::packDataPointers() {
 }
 
 void DEMSolver::migrateSimParamsToDevice() {
-    dT->simParams.syncToDevice();
-    kT->simParams.syncToDevice();
+    dT->simParams.toDevice();
+    kT->simParams.toDevice();
 }
 
 void DEMSolver::migrateArrayDataToDevice() {
-    dT->granData.syncToDevice();
-    kT->granData.syncToDevice();
+    dT->granData.toDevice();
+    kT->granData.toDevice();
     // Then move DualArray data to device
     dT->migrateDataToDevice();
     kT->migrateDataToDevice();
