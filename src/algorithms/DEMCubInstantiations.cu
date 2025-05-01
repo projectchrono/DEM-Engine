@@ -52,9 +52,9 @@ void cubSumReduceByKey(T1* d_keys_in,
                        cudaStream_t& this_stream,
                        DEMSolverScratchData& scratchPad) {
     // I'm not sure how to pass cuda cub::Sum() as a template argument here, so I used a custom add...
-    CubFloatAdd add_op;
-    cubDEMReduceByKeys<T1, T2, CubFloatAdd>(d_keys_in, d_unique_out, d_vals_in, d_aggregates_out, d_num_out, add_op, n,
-                                            this_stream, scratchPad);
+    CubOpAdd<T2> add_op;
+    cubDEMReduceByKeys<T1, T2, CubOpAdd<T2>>(d_keys_in, d_unique_out, d_vals_in, d_aggregates_out, d_num_out, add_op, n,
+                                             this_stream, scratchPad);
 }
 template void cubSumReduceByKey<notStupidBool_t, float>(notStupidBool_t* d_keys_in,
                                                         notStupidBool_t* d_unique_out,
@@ -107,9 +107,9 @@ void cubMaxReduceByKey(T1* d_keys_in,
                        cudaStream_t& this_stream,
                        DEMSolverScratchData& scratchPad) {
     // I'm not sure how to pass cuda cub::Max() as a template argument here, so I used a custom max...
-    CubFloatMax max_op;
-    cubDEMReduceByKeys<T1, T2, CubFloatMax>(d_keys_in, d_unique_out, d_vals_in, d_aggregates_out, d_num_out, max_op, n,
-                                            this_stream, scratchPad);
+    CubOpMax<T2> max_op;
+    cubDEMReduceByKeys<T1, T2, CubOpMax<T2>>(d_keys_in, d_unique_out, d_vals_in, d_aggregates_out, d_num_out, max_op, n,
+                                             this_stream, scratchPad);
 }
 template void cubMaxReduceByKey<notStupidBool_t, float>(notStupidBool_t* d_keys_in,
                                                         notStupidBool_t* d_unique_out,
@@ -157,9 +157,9 @@ void cubMinReduceByKey(T1* d_keys_in,
                        cudaStream_t& this_stream,
                        DEMSolverScratchData& scratchPad) {
     // I'm not sure how to pass cuda cub::Min() as a template argument here, so I used a custom min...
-    CubFloatMin min_op;
-    cubDEMReduceByKeys<T1, T2, CubFloatMin>(d_keys_in, d_unique_out, d_vals_in, d_aggregates_out, d_num_out, min_op, n,
-                                            this_stream, scratchPad);
+    CubOpMin<T2> min_op;
+    cubDEMReduceByKeys<T1, T2, CubOpMin<T2>>(d_keys_in, d_unique_out, d_vals_in, d_aggregates_out, d_num_out, min_op, n,
+                                             this_stream, scratchPad);
 }
 template void cubMinReduceByKey<notStupidBool_t, float>(notStupidBool_t* d_keys_in,
                                                         notStupidBool_t* d_unique_out,

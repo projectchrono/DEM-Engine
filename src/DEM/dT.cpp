@@ -2219,7 +2219,8 @@ void DEMDynamicThread::workerThread() {
             //// TODO: make changes for variable time step size cases
             simParams->timeElapsed += (double)simParams->h;
             // timeElapsed needs to be updated to the device each time step
-            simParams.syncMemberToDevice<double>(offsetof(DEMSimParams, timeElapsed));
+            // simParams.syncMemberToDevice<double>(offsetof(DEMSimParams, timeElapsed));
+            simParams.syncToDevice();
         }
 
         // Unless the user did something critical, must we wait for a kT update before next step
@@ -2436,7 +2437,8 @@ double DEMDynamicThread::getSimTime() const {
 
 void DEMDynamicThread::setSimTime(double time) {
     simParams->timeElapsed = time;
-    simParams.syncMemberToDevice<double>(offsetof(DEMSimParams, timeElapsed));
+    // simParams.syncMemberToDevice<double>(offsetof(DEMSimParams, timeElapsed));
+    simParams.syncToDevice();
 }
 
 float DEMDynamicThread::getUpdateFreq() const {

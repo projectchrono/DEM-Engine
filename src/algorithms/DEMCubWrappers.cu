@@ -25,20 +25,24 @@ struct CubFloat3Add {
     }
 };
 
-struct CubFloatAdd {
-    CUB_RUNTIME_FUNCTION __forceinline__ __device__ __host__ float operator()(const float& a, const float& b) const {
+template <typename T>
+struct CubOpAdd {
+    CUB_RUNTIME_FUNCTION __forceinline__ __device__ __host__ T operator()(const T& a, const T& b) const {
         return a + b;
     }
 };
 
-// Custom float min and max functor
-struct CubFloatMin {
-    CUB_RUNTIME_FUNCTION __forceinline__ __device__ __host__ float operator()(const float& a, const float& b) const {
+// Custom min and max functor
+template <typename T>
+struct CubOpMin {
+    CUB_RUNTIME_FUNCTION __forceinline__ __device__ __host__ T operator()(const T& a, const T& b) const {
         return (b < a) ? b : a;
     }
 };
-struct CubFloatMax {
-    CUB_RUNTIME_FUNCTION __forceinline__ __device__ __host__ float operator()(const float& a, const float& b) const {
+
+template <typename T>
+struct CubOpMax {
+    CUB_RUNTIME_FUNCTION __forceinline__ __device__ __host__ T operator()(const T& a, const T& b) const {
         return (b > a) ? b : a;
     }
 };

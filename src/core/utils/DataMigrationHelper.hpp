@@ -121,21 +121,21 @@ class DualStruct : private NonCopyable {
     // Synchronize changes from device to host
     void syncToHost() { DEME_GPU_CALL(cudaMemcpy(host_data, device_data, sizeof(T), cudaMemcpyDeviceToHost)); }
 
-    // Synchronize change of one field of the struct to device
-    template <typename MemberType>
-    void syncMemberToDevice(ptrdiff_t offset) {
-        DEME_GPU_CALL(cudaMemcpy(reinterpret_cast<char*>(device_data) + offset,
-                                 reinterpret_cast<char*>(host_data) + offset, sizeof(MemberType),
-                                 cudaMemcpyHostToDevice));
-    }
+    // // Synchronize change of one field of the struct to device
+    // template <typename MemberType>
+    // void syncMemberToDevice(ptrdiff_t offset) {
+    //     DEME_GPU_CALL(cudaMemcpy(reinterpret_cast<char*>(device_data) + offset,
+    //                              reinterpret_cast<char*>(host_data) + offset, sizeof(MemberType),
+    //                              cudaMemcpyHostToDevice));
+    // }
 
-    // Synchronize change of one field of the struct to host
-    template <typename MemberType>
-    void syncMemberToHost(ptrdiff_t offset) {
-        DEME_GPU_CALL(cudaMemcpy(reinterpret_cast<char*>(host_data) + offset,
-                                 reinterpret_cast<char*>(device_data) + offset, sizeof(MemberType),
-                                 cudaMemcpyDeviceToHost));
-    }
+    // // Synchronize change of one field of the struct to host
+    // template <typename MemberType>
+    // void syncMemberToHost(ptrdiff_t offset) {
+    //     DEME_GPU_CALL(cudaMemcpy(reinterpret_cast<char*>(host_data) + offset,
+    //                              reinterpret_cast<char*>(device_data) + offset, sizeof(MemberType),
+    //                              cudaMemcpyDeviceToHost));
+    // }
 
     // Check if host data has been modified and not synced
     bool checkNoPendingModification() { return !modified_on_host; }

@@ -167,6 +167,7 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
     scratchPad.finishUsingTempVector("idAOwner_sorted");
     scratchPad.finishUsingTempVector("accOwner");
     scratchPad.finishUsingTempVector("uniqueOwner");
+    scratchPad.finishUsingDualStruct("forceCollectionRuns");
 }
 
 }  // namespace deme

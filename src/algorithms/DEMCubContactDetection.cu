@@ -768,6 +768,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             if (*pNumRetainedCnts > contactPersistency.size()) {
                 contactPersistency.resize(*pNumRetainedCnts);
                 granData->contactPersistency = contactPersistency.data();
+                granData.syncToDevice();
             }
             cubDEMSelectFlagged<bodyID_t, notStupidBool_t>(idA_sorted, granData->idGeometryA, retain_flags,
                                                            scratchPad.getDualStructDevice("numRetainedCnts"),

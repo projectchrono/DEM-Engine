@@ -2129,8 +2129,10 @@ void DEMSolver::UpdateStepSize(double ts) {
     // We for now store ts as float on devices...
     dT->simParams->h = ts;
     kT->simParams->h = ts;
-    dT->simParams.syncMemberToDevice<float>(offsetof(DEMSimParams, h));
-    kT->simParams.syncMemberToDevice<float>(offsetof(DEMSimParams, h));
+    // dT->simParams.syncMemberToDevice<float>(offsetof(DEMSimParams, h));
+    // kT->simParams.syncMemberToDevice<float>(offsetof(DEMSimParams, h));
+    dT->simParams.syncToDevice();
+    kT->simParams.syncToDevice();
 }
 
 void DEMSolver::UpdateClumps() {
