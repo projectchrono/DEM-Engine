@@ -161,7 +161,9 @@ int main() {
     }
 
     DEMSim.ShowTimingStats();
-    std::cout << "==============================================================" << std::endl;
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
     std::cout << "DEMdemo_ContactChain exiting..." << std::endl;
     return 0;
 }

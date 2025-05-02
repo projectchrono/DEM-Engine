@@ -171,6 +171,10 @@ int main() {
     DEMSim.ShowTimingStats();
     DEMSim.ClearTimingStats();
 
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
+
     std::cout << "DEMdemo_Repose exiting..." << std::endl;
     return 0;
 }

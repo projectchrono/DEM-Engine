@@ -246,6 +246,10 @@ int main() {
     sprintf(cnt_filename, "%s/Contact_pairs.csv", out_dir.c_str());
     DEMSim.WriteContactFile(std::string(cnt_filename));
 
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
+
     std::cout << "DEMdemo_GRCPrep_Part3 exiting..." << std::endl;
     return 0;
 }

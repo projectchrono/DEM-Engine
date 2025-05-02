@@ -293,7 +293,9 @@ int main() {
 
         run_mode++;
         DEMSim.ShowTimingStats();
-        DEMSim.ShowAnomalies();
+        std::cout << "----------------------------------------" << std::endl;
+        DEMSim.ShowMemStats();
+        std::cout << "----------------------------------------" << std::endl;
     }
 
     std::cout << "WheelDP demo exiting..." << std::endl;

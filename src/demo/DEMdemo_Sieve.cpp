@@ -184,6 +184,10 @@ int main() {
 
     DEMSim.ShowThreadCollaborationStats();
     DEMSim.ShowTimingStats();
+
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
     std::cout << "DEMdemo_Sieve exiting..." << std::endl;
     return 0;
 }

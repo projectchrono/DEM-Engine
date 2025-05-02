@@ -146,6 +146,10 @@ int main() {
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
     std::cout << time_sec.count() << " seconds" << std::endl;
 
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
+
     std::cout << "DEMdemo_GameOfLife exiting..." << std::endl;
     return 0;
 }

@@ -151,10 +151,13 @@ int main() {
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
-    std::cout << (time_sec.count()) / sim_end / (1e-5 / step_size)
-              << " seconds (wall time) to finish 1e5 steps' simulation" << std::endl;
+    std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
 
     DEMSim.ShowTimingStats();
+
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
 
     std::cout << "DEMdemo_Mixer exiting..." << std::endl;
     return 0;

@@ -289,15 +289,34 @@ class DualArray : private NonCopyable {
         size_t count = m_host_vec_ptr->size();
         if (count > m_device_capacity)
             resizeDevice(count);
-        cudaMemcpyAsync(m_device_ptr, m_host_vec_ptr->data(), count * sizeof(T), cudaMemcpyHostToDevice, stream);
+        DEME_GPU_CALL(
+            cudaMemcpyAsync(m_device_ptr, m_host_vec_ptr->data(), count * sizeof(T), cudaMemcpyHostToDevice, stream));
         m_host_dirty = false;
     }
 
     void toHostAsync(cudaStream_t& stream) {
         assert(m_host_vec_ptr && m_device_ptr);
         size_t count = m_host_vec_ptr->size();
-        cudaMemcpyAsync(m_host_vec_ptr->data(), m_device_ptr, count * sizeof(T), cudaMemcpyDeviceToHost, stream);
+        DEME_GPU_CALL(
+            cudaMemcpyAsync(m_host_vec_ptr->data(), m_device_ptr, count * sizeof(T), cudaMemcpyDeviceToHost, stream));
         m_host_dirty = false;
+    }
+
+    // And partial update methods...
+    // They are offered with async versions only because only they are used in tracker implementation,
+    // and for sync-ed partial update you'll just manually copy.
+    void toDeviceAsync(cudaStream_t& stream, size_t start, size_t n) {
+        assert(m_host_vec_ptr && m_device_ptr);
+        // Async partial flavor aims for speed, no size check
+        DEME_GPU_CALL(cudaMemcpyAsync(m_device_ptr + start, m_host_vec_ptr->data() + start, n * sizeof(T),
+                                      cudaMemcpyHostToDevice, stream));
+    }
+
+    void toHostAsync(cudaStream_t& stream, size_t start, size_t n) {
+        assert(m_host_vec_ptr && m_device_ptr);
+        // Async partial flavor aims for speed, no size check
+        DEME_GPU_CALL(cudaMemcpyAsync(m_host_vec_ptr->data() + start, m_device_ptr + start, n * sizeof(T),
+                                      cudaMemcpyDeviceToHost, stream));
     }
 
     void markHostModified() { m_host_dirty = true; }

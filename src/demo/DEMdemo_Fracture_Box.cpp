@@ -213,6 +213,9 @@ int main() {
         frame_count++;
     }
     csvFile.close();
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
     DEMSim.ShowTimingStats();
     std::cout << "Fracture demo exiting..." << std::endl;
     return 0;

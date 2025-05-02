@@ -294,7 +294,9 @@ int main() {
 
         run_mode++;
         DEMSim.ShowTimingStats();
-        DEMSim.ShowAnomalies();
+        std::cout << "----------------------------------------" << std::endl;
+        DEMSim.ShowMemStats();
+        std::cout << "----------------------------------------" << std::endl;
     }
 
     std::cout << "DEMdemo_WheelSlopeSlip demo exiting..." << std::endl;

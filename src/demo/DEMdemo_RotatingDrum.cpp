@@ -185,6 +185,10 @@ int main() {
 
     DEMSim.ShowTimingStats();
 
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
+
     std::cout << "DEMdemo_RotatingDrum exiting..." << std::endl;
     return 0;
 }

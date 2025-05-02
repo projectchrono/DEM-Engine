@@ -2704,35 +2704,33 @@ void DEMDynamicThread::setContactWildcardValue(unsigned int wc_num, float val) {
 }
 
 void DEMDynamicThread::setOwnerWildcardValue(bodyID_t ownerID, unsigned int wc_num, const std::vector<float>& vals) {
-    ownerWildcards[wc_num]->toHost();
+    // `set' methods should in general use async-ed flavor, as it only matters when the next kernel is called, which is
+    // serial to the memory transaction
     for (size_t i = 0; i < vals.size(); i++) {
         (*ownerWildcards[wc_num])[ownerID + i] = vals.at(i);
     }
-    ownerWildcards[wc_num]->toDevice();
+    ownerWildcards[wc_num]->toDeviceAsync(streamInfo.stream, ownerID, vals.size());
 }
 
 void DEMDynamicThread::setTriWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals) {
-    triWildcards[wc_num]->toHost();
     for (size_t i = 0; i < vals.size(); i++) {
         (*triWildcards[wc_num])[geoID + i] = vals.at(i);
     }
-    triWildcards[wc_num]->toDevice();
+    triWildcards[wc_num]->toDeviceAsync(streamInfo.stream, geoID, vals.size());
 }
 
 void DEMDynamicThread::setSphWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals) {
-    sphereWildcards[wc_num]->toHost();
     for (size_t i = 0; i < vals.size(); i++) {
         (*sphereWildcards[wc_num])[geoID + i] = vals.at(i);
     }
-    sphereWildcards[wc_num]->toDevice();
+    sphereWildcards[wc_num]->toDeviceAsync(streamInfo.stream, geoID, vals.size());
 }
 
 void DEMDynamicThread::setAnalWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals) {
-    analWildcards[wc_num]->toHost();
     for (size_t i = 0; i < vals.size(); i++) {
         (*analWildcards[wc_num])[geoID + i] = vals.at(i);
     }
-    analWildcards[wc_num]->toDevice();
+    analWildcards[wc_num]->toDeviceAsync(streamInfo.stream, geoID, vals.size());
 }
 
 void DEMDynamicThread::setFamilyOwnerWildcardValue(unsigned int family_num,

@@ -929,6 +929,11 @@ class DEMSolver {
     /// @return Vector of values of the wildcards.
     std::vector<float> GetAnalWildcardValue(bodyID_t geoID, const std::string& name, size_t n);
 
+    /// @brief If the user used async-ed version of a tracker's get methods (to get a speed boost in many piecemeal
+    /// accesses of a long array), this method should be called to mark the end of to-host transactions. But usually,
+    /// the user would use sync-ed version of the methods by default and this call is not needed in that case.
+    void SyncMemoryTransfer() { DEME_GPU_CALL(cudaStreamSynchronize(dT->streamInfo.stream)); }
+
     /// Change all entities with family number ID_from to have a new number ID_to, when the condition defined by the
     /// string is satisfied by the entities in question. This should be called before initialization, and will be baked
     /// into the solver, so the conditions will be checked and changes applied every time step.
