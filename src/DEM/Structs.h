@@ -371,9 +371,11 @@ enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
 
 // DEME_DUAL_ARRAY_RESIZE is a reminder for developers that a work array is resized, and this may automatically change
 // the external device pointer this array's bound to. Therefore, after this call, syncing the data pointer bundle
-// (granData) to device may be needed.
+// (granData) to device may be needed, and you remember to cudaSetDevice beforehand so it allocates to correct places.
 #define DEME_DUAL_ARRAY_RESIZE(vec, newsize, val) \
     { vec.resize(newsize, val); }
+#define DEME_DUAL_ARRAY_RESIZE_NOVAL(vec, newsize) \
+    { vec.resize(newsize); }
 
 // Simply a reminder that this is a device array resize, to distinguish from some general .resize calls
 #define DEME_DEVICE_ARRAY_RESIZE(vec, newsize) \
@@ -502,7 +504,7 @@ struct SolverFlags {
     // This run uses contact detection in an async fashion (kT and dT working at different points in simulation time)
     bool isAsync = true;
     // If family number can potentially change (at each time step) during the simulation, because of user intervention
-    bool canFamilyChange = false;
+    bool canFamilyChangeOnDevice = false;
     // If mesh will deform in the next kT-update cycle
     std::atomic<bool> willMeshDeform = false;
     // Some output-related flags

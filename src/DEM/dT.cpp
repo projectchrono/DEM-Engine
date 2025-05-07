@@ -25,43 +25,44 @@ namespace deme {
 
 // Put sim data array pointers in place
 void DEMDynamicThread::packDataPointers() {
-    granData->inertiaPropOffsets = inertiaPropOffsets.data();
-    granData->familyID = familyID.data();
-    granData->voxelID = voxelID.data();
-    granData->ownerTypes = ownerTypes.data();
-    granData->locX = locX.data();
-    granData->locY = locY.data();
-    granData->locZ = locZ.data();
-    granData->aX = aX.data();
-    granData->aY = aY.data();
-    granData->aZ = aZ.data();
-    granData->vX = vX.data();
-    granData->vY = vY.data();
-    granData->vZ = vZ.data();
-    granData->oriQw = oriQw.data();
-    granData->oriQx = oriQx.data();
-    granData->oriQy = oriQy.data();
-    granData->oriQz = oriQz.data();
-    granData->omgBarX = omgBarX.data();
-    granData->omgBarY = omgBarY.data();
-    granData->omgBarZ = omgBarZ.data();
-    granData->alphaX = alphaX.data();
-    granData->alphaY = alphaY.data();
-    granData->alphaZ = alphaZ.data();
-    granData->accSpecified = accSpecified.data();
-    granData->angAccSpecified = angAccSpecified.data();
-    granData->idGeometryA = idGeometryA.data();
-    granData->idGeometryB = idGeometryB.data();
-    granData->contactType = contactType.data();
-    granData->familyMasks = familyMaskMatrix.data();
-    granData->familyExtraMarginSize = familyExtraMarginSize.data();
+    inertiaPropOffsets.bindDevicePointer(&(granData->inertiaPropOffsets));
+    familyID.bindDevicePointer(&(granData->familyID));
+    voxelID.bindDevicePointer(&(granData->voxelID));
+    ownerTypes.bindDevicePointer(&(granData->ownerTypes));
+    locX.bindDevicePointer(&(granData->locX));
+    locY.bindDevicePointer(&(granData->locY));
+    locZ.bindDevicePointer(&(granData->locZ));
+    aX.bindDevicePointer(&(granData->aX));
+    aY.bindDevicePointer(&(granData->aY));
+    aZ.bindDevicePointer(&(granData->aZ));
+    vX.bindDevicePointer(&(granData->vX));
+    vY.bindDevicePointer(&(granData->vY));
+    vZ.bindDevicePointer(&(granData->vZ));
+    oriQw.bindDevicePointer(&(granData->oriQw));
+    oriQx.bindDevicePointer(&(granData->oriQx));
+    oriQy.bindDevicePointer(&(granData->oriQy));
+    oriQz.bindDevicePointer(&(granData->oriQz));
+    omgBarX.bindDevicePointer(&(granData->omgBarX));
+    omgBarY.bindDevicePointer(&(granData->omgBarY));
+    omgBarZ.bindDevicePointer(&(granData->omgBarZ));
+    alphaX.bindDevicePointer(&(granData->alphaX));
+    alphaY.bindDevicePointer(&(granData->alphaY));
+    alphaZ.bindDevicePointer(&(granData->alphaZ));
+    accSpecified.bindDevicePointer(&(granData->accSpecified));
+    angAccSpecified.bindDevicePointer(&(granData->angAccSpecified));
+    idGeometryA.bindDevicePointer(&(granData->idGeometryA));
+    idGeometryB.bindDevicePointer(&(granData->idGeometryB));
+    contactType.bindDevicePointer(&(granData->contactType));
+    familyMaskMatrix.bindDevicePointer(&(granData->familyMasks));
+    familyExtraMarginSize.bindDevicePointer(&(granData->familyExtraMarginSize));
 
-    granData->contactForces = contactForces.data();
-    granData->contactTorque_convToForce = contactTorque_convToForce.data();
-    granData->contactPointGeometryA = contactPointGeometryA.data();
-    granData->contactPointGeometryB = contactPointGeometryB.data();
+    contactForces.bindDevicePointer(&(granData->contactForces));
+    contactTorque_convToForce.bindDevicePointer(&(granData->contactTorque_convToForce));
+    contactPointGeometryA.bindDevicePointer(&(granData->contactPointGeometryA));
+    contactPointGeometryB.bindDevicePointer(&(granData->contactPointGeometryB));
     // granData->contactHistory = contactHistory.data();
     // granData->contactDuration = contactDuration.data();
+
     for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
         contactWildcards[i]->bindDevicePointer(&(granData->contactWildcards[i]));
     }
@@ -75,35 +76,66 @@ void DEMDynamicThread::packDataPointers() {
     }
 
     // The offset info that indexes into the template arrays
-    granData->ownerClumpBody = ownerClumpBody.data();
-    granData->clumpComponentOffset = clumpComponentOffset.data();
-    granData->clumpComponentOffsetExt = clumpComponentOffsetExt.data();
-    granData->sphereMaterialOffset = sphereMaterialOffset.data();
-    granData->volumeOwnerBody = volumeOwnerBody.data();
+    ownerClumpBody.bindDevicePointer(&(granData->ownerClumpBody));
+    clumpComponentOffset.bindDevicePointer(&(granData->clumpComponentOffset));
+    clumpComponentOffsetExt.bindDevicePointer(&(granData->clumpComponentOffsetExt));
+    sphereMaterialOffset.bindDevicePointer(&(granData->sphereMaterialOffset));
+    volumeOwnerBody.bindDevicePointer(&(granData->volumeOwnerBody));
 
     // Mesh-related
-    granData->ownerMesh = ownerMesh.data();
-    granData->relPosNode1 = relPosNode1.data();
-    granData->relPosNode2 = relPosNode2.data();
-    granData->relPosNode3 = relPosNode3.data();
-    granData->triMaterialOffset = triMaterialOffset.data();
+    ownerMesh.bindDevicePointer(&(granData->ownerMesh));
+    relPosNode1.bindDevicePointer(&(granData->relPosNode1));
+    relPosNode2.bindDevicePointer(&(granData->relPosNode2));
+    relPosNode3.bindDevicePointer(&(granData->relPosNode3));
+    triMaterialOffset.bindDevicePointer(&(granData->triMaterialOffset));
 
     // Template array pointers
     radiiSphere.bindDevicePointer(&(granData->radiiSphere));
-    granData->relPosSphereX = relPosSphereX.data();
-    granData->relPosSphereY = relPosSphereY.data();
-    granData->relPosSphereZ = relPosSphereZ.data();
-    granData->massOwnerBody = massOwnerBody.data();
-    granData->mmiXX = mmiXX.data();
-    granData->mmiYY = mmiYY.data();
-    granData->mmiZZ = mmiZZ.data();
+    relPosSphereX.bindDevicePointer(&(granData->relPosSphereX));
+    relPosSphereY.bindDevicePointer(&(granData->relPosSphereY));
+    relPosSphereZ.bindDevicePointer(&(granData->relPosSphereZ));
+    massOwnerBody.bindDevicePointer(&(granData->massOwnerBody));
+    mmiXX.bindDevicePointer(&(granData->mmiXX));
+    mmiYY.bindDevicePointer(&(granData->mmiYY));
+    mmiZZ.bindDevicePointer(&(granData->mmiZZ));
 }
 
 void DEMDynamicThread::migrateDataToDevice() {
-    radiiSphere.toDeviceAsync(streamInfo.stream);
-    // relPosSphereX.toDeviceAsync(streamInfo.stream);
-    // relPosSphereY.toDeviceAsync(streamInfo.stream);
-    // relPosSphereZ.toDeviceAsync(streamInfo.stream);
+    inertiaPropOffsets.toDeviceAsync(streamInfo.stream);
+    familyID.toDeviceAsync(streamInfo.stream);
+    voxelID.toDeviceAsync(streamInfo.stream);
+    ownerTypes.toDeviceAsync(streamInfo.stream);
+    locX.toDeviceAsync(streamInfo.stream);
+    locY.toDeviceAsync(streamInfo.stream);
+    locZ.toDeviceAsync(streamInfo.stream);
+    aX.toDeviceAsync(streamInfo.stream);
+    aY.toDeviceAsync(streamInfo.stream);
+    aZ.toDeviceAsync(streamInfo.stream);
+    vX.toDeviceAsync(streamInfo.stream);
+    vY.toDeviceAsync(streamInfo.stream);
+    vZ.toDeviceAsync(streamInfo.stream);
+    oriQw.toDeviceAsync(streamInfo.stream);
+    oriQx.toDeviceAsync(streamInfo.stream);
+    oriQy.toDeviceAsync(streamInfo.stream);
+    oriQz.toDeviceAsync(streamInfo.stream);
+    omgBarX.toDeviceAsync(streamInfo.stream);
+    omgBarY.toDeviceAsync(streamInfo.stream);
+    omgBarZ.toDeviceAsync(streamInfo.stream);
+    alphaX.toDeviceAsync(streamInfo.stream);
+    alphaY.toDeviceAsync(streamInfo.stream);
+    alphaZ.toDeviceAsync(streamInfo.stream);
+    accSpecified.toDeviceAsync(streamInfo.stream);
+    angAccSpecified.toDeviceAsync(streamInfo.stream);
+    idGeometryA.toDeviceAsync(streamInfo.stream);
+    idGeometryB.toDeviceAsync(streamInfo.stream);
+    contactType.toDeviceAsync(streamInfo.stream);
+    familyMaskMatrix.toDeviceAsync(streamInfo.stream);
+    familyExtraMarginSize.toDeviceAsync(streamInfo.stream);
+
+    contactForces.toDeviceAsync(streamInfo.stream);
+    contactTorque_convToForce.toDeviceAsync(streamInfo.stream);
+    contactPointGeometryA.toDeviceAsync(streamInfo.stream);
+    contactPointGeometryB.toDeviceAsync(streamInfo.stream);
 
     for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
         contactWildcards[i]->toDeviceAsync(streamInfo.stream);
@@ -117,29 +149,94 @@ void DEMDynamicThread::migrateDataToDevice() {
         triWildcards[i]->toDeviceAsync(streamInfo.stream);
     }
 
+    ownerClumpBody.toDeviceAsync(streamInfo.stream);
+    clumpComponentOffset.toDeviceAsync(streamInfo.stream);
+    clumpComponentOffsetExt.toDeviceAsync(streamInfo.stream);
+    sphereMaterialOffset.toDeviceAsync(streamInfo.stream);
+    volumeOwnerBody.toDeviceAsync(streamInfo.stream);
+
+    ownerMesh.toDeviceAsync(streamInfo.stream);
+    relPosNode1.toDeviceAsync(streamInfo.stream);
+    relPosNode2.toDeviceAsync(streamInfo.stream);
+    relPosNode3.toDeviceAsync(streamInfo.stream);
+    triMaterialOffset.toDeviceAsync(streamInfo.stream);
+
+    radiiSphere.toDeviceAsync(streamInfo.stream);
+    relPosSphereX.toDeviceAsync(streamInfo.stream);
+    relPosSphereY.toDeviceAsync(streamInfo.stream);
+    relPosSphereZ.toDeviceAsync(streamInfo.stream);
+    massOwnerBody.toDeviceAsync(streamInfo.stream);
+    mmiXX.toDeviceAsync(streamInfo.stream);
+    mmiYY.toDeviceAsync(streamInfo.stream);
+    mmiZZ.toDeviceAsync(streamInfo.stream);
+
     // Might not be necessary... but it's a big call anyway, let's sync
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
-void DEMDynamicThread::migrateDataToHost() {
-    radiiSphere.toHostAsync(streamInfo.stream);
-    // relPosSphereX.toHostAsync(streamInfo.stream);
-    // relPosSphereY.toHostAsync(streamInfo.stream);
-    // relPosSphereZ.toHostAsync(streamInfo.stream);
+void DEMDynamicThread::migrateClumpHighOrderInfoToHost() {
+    vX.toHost();
+    vY.toHost();
+    vZ.toHost();
+    aX.toHost();
+    aY.toHost();
+    aZ.toHost();
+    omgBarX.toHost();
+    omgBarY.toHost();
+    omgBarZ.toHost();
+    alphaX.toHost();
+    alphaY.toHost();
+    alphaZ.toHost();
+}
 
+void DEMDynamicThread::migrateClumpPosInfoToHost() {
+    voxelID.toHost();
+    locX.toHost();
+    locY.toHost();
+    locZ.toHost();
+    oriQw.toHost();
+    oriQx.toHost();
+    oriQy.toHost();
+    oriQz.toHost();
+}
+
+void DEMDynamicThread::migrateContactInfoToHost() {
+    idGeometryA.toHost();
+    idGeometryB.toHost();
+    contactType.toHost();
+    contactForces.toHost();
+    contactTorque_convToForce.toHost();
+    contactPointGeometryA.toHost();
     for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
-        contactWildcards[i]->toHostAsync(streamInfo.stream);
+        contactWildcards[i]->toHost();
     }
-    for (unsigned int i = 0; i < simParams->nOwnerWildcards; i++) {
-        ownerWildcards[i]->toHostAsync(streamInfo.stream);
-    }
-    for (unsigned int i = 0; i < simParams->nGeoWildcards; i++) {
-        sphereWildcards[i]->toHostAsync(streamInfo.stream);
-        analWildcards[i]->toHostAsync(streamInfo.stream);
-        triWildcards[i]->toHostAsync(streamInfo.stream);
-    }
+}
 
-    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+void DEMDynamicThread::migrateFamilyToHost() {
+    if (solverFlags.canFamilyChangeOnDevice) {
+        familyID.toHost();
+    }
+}
+
+void DEMDynamicThread::migrateOwnerWildcardToHost() {
+    for (unsigned int i = 0; i < simParams->nOwnerWildcards; i++) {
+        ownerWildcards[i]->toHost();
+    }
+}
+void DEMDynamicThread::migrateSphGeoWildcardToHost() {
+    for (unsigned int i = 0; i < simParams->nGeoWildcards; i++) {
+        sphereWildcards[i]->toHost();
+    }
+}
+void DEMDynamicThread::migrateTriGeoWildcardToHost() {
+    for (unsigned int i = 0; i < simParams->nGeoWildcards; i++) {
+        triWildcards[i]->toHost();
+    }
+}
+void DEMDynamicThread::migrateAnalGeoWildcardToHost() {
+    for (unsigned int i = 0; i < simParams->nGeoWildcards; i++) {
+        analWildcards[i]->toHost();
+    }
 }
 
 // packTransferPointers
@@ -167,8 +264,12 @@ void DEMDynamicThread::packTransferPointers(DEMKinematicThread*& kT) {
 void DEMDynamicThread::changeFamily(unsigned int ID_from, unsigned int ID_to) {
     family_t ID_from_impl = ID_from;
     family_t ID_to_impl = ID_to;
+
+    migrateFamilyToHost();
     std::replace_if(
-        familyID.begin(), familyID.end(), [ID_from_impl](family_t& i) { return i == ID_from_impl; }, ID_to_impl);
+        familyID.getHostVector().begin(), familyID.getHostVector().end(),
+        [ID_from_impl](family_t& i) { return i == ID_from_impl; }, ID_to_impl);
+    familyID.toDevice();
 }
 
 void DEMDynamicThread::setSimParams(unsigned char nvXp2,
@@ -226,7 +327,7 @@ void DEMDynamicThread::setSimParams(unsigned char nvXp2,
 
 void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {
     // Set the gpu for this thread
-    // cudaSetDevice(streamInfo.device);
+    cudaSetDevice(streamInfo.device);
     // cudaStream_t new_stream;
     // cudaStreamCreate(&new_stream);
 
@@ -307,81 +408,81 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
     simParams->nMatTuples = nMatTuples;
 
     // Resize to the number of clumps
-    DEME_TRACKED_RESIZE(familyID, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(voxelID, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(locX, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(locY, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(locZ, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(oriQw, nOwnerBodies, 1);
-    DEME_TRACKED_RESIZE(oriQx, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(oriQy, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(oriQz, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(vX, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(vY, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(vZ, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(omgBarX, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(omgBarY, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(omgBarZ, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(aX, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(aY, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(aZ, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(alphaX, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(alphaY, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(alphaZ, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(accSpecified, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(angAccSpecified, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(familyID, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(voxelID, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(locX, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(locY, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(locZ, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(oriQw, nOwnerBodies, 1);
+    DEME_DUAL_ARRAY_RESIZE(oriQx, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(oriQy, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(oriQz, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(vX, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(vY, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(vZ, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(omgBarX, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(omgBarY, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(omgBarZ, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(aX, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(aY, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(aZ, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(alphaX, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(alphaY, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(alphaZ, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(accSpecified, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(angAccSpecified, nOwnerBodies, 0);
 
     // Resize the family mask `matrix' (in fact it is flattened)
-    DEME_TRACKED_RESIZE(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
+    DEME_DUAL_ARRAY_RESIZE(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
 
     // Resize to the number of geometries
-    DEME_TRACKED_RESIZE(ownerClumpBody, nSpheresGM, 0);
-    DEME_TRACKED_RESIZE(sphereMaterialOffset, nSpheresGM, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerClumpBody, nSpheresGM, 0);
+    DEME_DUAL_ARRAY_RESIZE(sphereMaterialOffset, nSpheresGM, 0);
     // For clump component offset, it's only needed if clump components are jitified
     if (solverFlags.useClumpJitify) {
-        DEME_TRACKED_RESIZE(clumpComponentOffset, nSpheresGM, 0);
+        DEME_DUAL_ARRAY_RESIZE(clumpComponentOffset, nSpheresGM, 0);
         // This extended component offset array can hold offset numbers even for big clumps (whereas
         // clumpComponentOffset is typically uint_8, so it may not). If a sphere's component offset index falls in this
         // range then it is not jitified, and the kernel needs to look for it in the global memory.
-        DEME_TRACKED_RESIZE(clumpComponentOffsetExt, nSpheresGM, 0);
+        DEME_DUAL_ARRAY_RESIZE(clumpComponentOffsetExt, nSpheresGM, 0);
         DEME_DUAL_ARRAY_RESIZE(radiiSphere, nClumpComponents, 0);
-        DEME_TRACKED_RESIZE(relPosSphereX, nClumpComponents, 0);
-        DEME_TRACKED_RESIZE(relPosSphereY, nClumpComponents, 0);
-        DEME_TRACKED_RESIZE(relPosSphereZ, nClumpComponents, 0);
+        DEME_DUAL_ARRAY_RESIZE(relPosSphereX, nClumpComponents, 0);
+        DEME_DUAL_ARRAY_RESIZE(relPosSphereY, nClumpComponents, 0);
+        DEME_DUAL_ARRAY_RESIZE(relPosSphereZ, nClumpComponents, 0);
     } else {
         DEME_DUAL_ARRAY_RESIZE(radiiSphere, nSpheresGM, 0);
-        DEME_TRACKED_RESIZE(relPosSphereX, nSpheresGM, 0);
-        DEME_TRACKED_RESIZE(relPosSphereY, nSpheresGM, 0);
-        DEME_TRACKED_RESIZE(relPosSphereZ, nSpheresGM, 0);
+        DEME_DUAL_ARRAY_RESIZE(relPosSphereX, nSpheresGM, 0);
+        DEME_DUAL_ARRAY_RESIZE(relPosSphereY, nSpheresGM, 0);
+        DEME_DUAL_ARRAY_RESIZE(relPosSphereZ, nSpheresGM, 0);
     }
 
     // Resize to the number of triangle facets
-    DEME_TRACKED_RESIZE(ownerMesh, nTriGM, 0);
-    DEME_TRACKED_RESIZE(relPosNode1, nTriGM, make_float3(0));
-    DEME_TRACKED_RESIZE(relPosNode2, nTriGM, make_float3(0));
-    DEME_TRACKED_RESIZE(relPosNode3, nTriGM, make_float3(0));
-    DEME_TRACKED_RESIZE(triMaterialOffset, nTriGM, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerMesh, nTriGM, 0);
+    DEME_DUAL_ARRAY_RESIZE(relPosNode1, nTriGM, make_float3(0));
+    DEME_DUAL_ARRAY_RESIZE(relPosNode2, nTriGM, make_float3(0));
+    DEME_DUAL_ARRAY_RESIZE(relPosNode3, nTriGM, make_float3(0));
+    DEME_DUAL_ARRAY_RESIZE(triMaterialOffset, nTriGM, 0);
 
     // Resize to the number of analytical geometries
-    DEME_TRACKED_RESIZE(ownerAnalBody, nAnalGM, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerAnalBody, nAnalGM, 0);
 
     // Resize to number of owners
-    DEME_TRACKED_RESIZE(ownerTypes, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(inertiaPropOffsets, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerTypes, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(inertiaPropOffsets, nOwnerBodies, 0);
     // If we jitify mass properties, then
     if (solverFlags.useMassJitify) {
-        DEME_TRACKED_RESIZE(massOwnerBody, nMassProperties, 0);
-        DEME_TRACKED_RESIZE(mmiXX, nMassProperties, 0);
-        DEME_TRACKED_RESIZE(mmiYY, nMassProperties, 0);
-        DEME_TRACKED_RESIZE(mmiZZ, nMassProperties, 0);
+        DEME_DUAL_ARRAY_RESIZE(massOwnerBody, nMassProperties, 0);
+        DEME_DUAL_ARRAY_RESIZE(mmiXX, nMassProperties, 0);
+        DEME_DUAL_ARRAY_RESIZE(mmiYY, nMassProperties, 0);
+        DEME_DUAL_ARRAY_RESIZE(mmiZZ, nMassProperties, 0);
     } else {
-        DEME_TRACKED_RESIZE(massOwnerBody, nOwnerBodies, 0);
-        DEME_TRACKED_RESIZE(mmiXX, nOwnerBodies, 0);
-        DEME_TRACKED_RESIZE(mmiYY, nOwnerBodies, 0);
-        DEME_TRACKED_RESIZE(mmiZZ, nOwnerBodies, 0);
+        DEME_DUAL_ARRAY_RESIZE(massOwnerBody, nOwnerBodies, 0);
+        DEME_DUAL_ARRAY_RESIZE(mmiXX, nOwnerBodies, 0);
+        DEME_DUAL_ARRAY_RESIZE(mmiYY, nOwnerBodies, 0);
+        DEME_DUAL_ARRAY_RESIZE(mmiZZ, nOwnerBodies, 0);
     }
     // Volume info is jitified
-    DEME_TRACKED_RESIZE(volumeOwnerBody, nMassProperties, 0);
+    DEME_DUAL_ARRAY_RESIZE(volumeOwnerBody, nMassProperties, 0);
 
     // Arrays for contact info
     // The lengths of contact event-based arrays are just estimates. My estimate of total contact pairs is ~ 2n, and I
@@ -393,15 +494,15 @@ void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
         // nSpheresGM*DEME_INIT_CNT_MULTIPLIER elements.
         size_t cnt_arr_size =
             DEME_MAX(*solverScratchSpace.numContacts + nExtraContacts, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
-        DEME_TRACKED_RESIZE(idGeometryA, cnt_arr_size, 0);
-        DEME_TRACKED_RESIZE(idGeometryB, cnt_arr_size, 0);
-        DEME_TRACKED_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
+        DEME_DUAL_ARRAY_RESIZE(idGeometryA, cnt_arr_size, 0);
+        DEME_DUAL_ARRAY_RESIZE(idGeometryB, cnt_arr_size, 0);
+        DEME_DUAL_ARRAY_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
 
         if (!solverFlags.useNoContactRecord) {
-            DEME_TRACKED_RESIZE(contactForces, cnt_arr_size, make_float3(0));
-            DEME_TRACKED_RESIZE(contactTorque_convToForce, cnt_arr_size, make_float3(0));
-            DEME_TRACKED_RESIZE(contactPointGeometryA, cnt_arr_size, make_float3(0));
-            DEME_TRACKED_RESIZE(contactPointGeometryB, cnt_arr_size, make_float3(0));
+            DEME_DUAL_ARRAY_RESIZE(contactForces, cnt_arr_size, make_float3(0));
+            DEME_DUAL_ARRAY_RESIZE(contactTorque_convToForce, cnt_arr_size, make_float3(0));
+            DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, cnt_arr_size, make_float3(0));
+            DEME_DUAL_ARRAY_RESIZE(contactPointGeometryB, cnt_arr_size, make_float3(0));
         }
         // Allocate memory for each wildcard array
         contactWildcards.resize(simParams->nContactWildcards);
@@ -455,35 +556,35 @@ void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, s
 
     for (unsigned int i = 0; i < clump_templates.mass.size(); i++) {
         if (solverFlags.useMassJitify) {
-            massOwnerBody.at(k) = clump_templates.mass.at(i);
+            massOwnerBody[k] = clump_templates.mass.at(i);
             float3 this_moi = clump_templates.MOI.at(i);
-            mmiXX.at(k) = this_moi.x;
-            mmiYY.at(k) = this_moi.y;
-            mmiZZ.at(k) = this_moi.z;
+            mmiXX[k] = this_moi.x;
+            mmiYY[k] = this_moi.y;
+            mmiZZ[k] = this_moi.z;
         }
         // Volume info is always registered, and even if the user does not use mass/MOI jitify, volume info may be
         // needed in void ratio computation
-        volumeOwnerBody.at(k) = clump_templates.volume.at(i);
+        volumeOwnerBody[k] = clump_templates.volume.at(i);
         k++;
     }
     for (unsigned int i = 0; i < ext_obj_mass_types.size(); i++) {
         if (solverFlags.useMassJitify) {
-            massOwnerBody.at(k) = ext_obj_mass_types.at(i);
+            massOwnerBody[k] = ext_obj_mass_types.at(i);
             float3 this_moi = ext_obj_moi_types.at(i);
-            mmiXX.at(k) = this_moi.x;
-            mmiYY.at(k) = this_moi.y;
-            mmiZZ.at(k) = this_moi.z;
+            mmiXX[k] = this_moi.x;
+            mmiYY[k] = this_moi.y;
+            mmiZZ[k] = this_moi.z;
         }
         // Currently analytical object volume is not used
         k++;
     }
     for (unsigned int i = 0; i < mesh_obj_mass_types.size(); i++) {
         if (solverFlags.useMassJitify) {
-            massOwnerBody.at(k) = mesh_obj_mass_types.at(i);
+            massOwnerBody[k] = mesh_obj_mass_types.at(i);
             float3 this_moi = mesh_obj_moi_types.at(i);
-            mmiXX.at(k) = this_moi.x;
-            mmiYY.at(k) = this_moi.y;
-            mmiZZ.at(k) = this_moi.z;
+            mmiXX[k] = this_moi.x;
+            mmiYY[k] = this_moi.y;
+            mmiZZ[k] = this_moi.z;
         }
         // Currently mesh volume is not used
         k++;
@@ -491,23 +592,18 @@ void DEMDynamicThread::registerPolicies(const std::unordered_map<unsigned int, s
 
     // Store family mask
     for (size_t i = 0; i < family_mask_matrix.size(); i++)
-        familyMaskMatrix.at(i) = family_mask_matrix.at(i);
+        familyMaskMatrix[i] = family_mask_matrix.at(i);
 
     // Store clump naming map
     templateNumNameMap = template_number_name_map;
 
     // Take notes of the families that should not be outputted
-    {
-        std::set<unsigned int>::iterator it;
-        unsigned int i = 0;
-        familiesNoOutput.resize(no_output_families.size());
-        for (it = no_output_families.begin(); it != no_output_families.end(); it++, i++) {
-            familiesNoOutput.at(i) = *it;
-        }
-        std::sort(familiesNoOutput.begin(), familiesNoOutput.end());
-        DEME_DEBUG_PRINTF("Impl-level families that will not be outputted:");
-        DEME_DEBUG_EXEC(displayDeviceArray<family_t>(familiesNoOutput.data(), familiesNoOutput.size()));
+    familiesNoOutput.clear();
+    for (unsigned int x : no_output_families) {
+        familiesNoOutput.insert(static_cast<family_t>(x));
     }
+    DEME_DEBUG_PRINTF("Impl-level families that will not be outputted:");
+    DEME_DEBUG_EXEC(for (family_t x : familiesNoOutput) { printf("%d ", static_cast<int>(x)); } printf("\n"););
 }
 
 void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
@@ -548,9 +644,9 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
 
         for (const auto& elem : clump_templates.spRelPos) {
             for (const auto& loc : elem) {
-                relPosSphereX.at(k) = loc.x;
-                relPosSphereY.at(k) = loc.y;
-                relPosSphereZ.at(k) = loc.z;
+                relPosSphereX[k] = loc.x;
+                relPosSphereY[k] = loc.y;
+                relPosSphereZ[k] = loc.z;
                 k++;
             }
         }
@@ -599,16 +695,16 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
 
             for (size_t j = 0; j < a_batch->GetNumClumps(); j++) {
                 // If got here, this is a clump
-                ownerTypes.at(nExistOwners + i) = OWNER_T_CLUMP;
+                ownerTypes[nExistOwners + i] = OWNER_T_CLUMP;
 
                 auto type_of_this_clump = type_marks.at(j);
-                inertiaPropOffsets.at(nExistOwners + i) = type_of_this_clump;
+                inertiaPropOffsets[nExistOwners + i] = type_of_this_clump;
                 if (!solverFlags.useMassJitify) {
-                    massOwnerBody.at(nExistOwners + i) = clump_templates.mass.at(type_of_this_clump);
+                    massOwnerBody[nExistOwners + i] = clump_templates.mass.at(type_of_this_clump);
                     const float3 this_moi = clump_templates.MOI.at(type_of_this_clump);
-                    mmiXX.at(nExistOwners + i) = this_moi.x;
-                    mmiYY.at(nExistOwners + i) = this_moi.y;
-                    mmiZZ.at(nExistOwners + i) = this_moi.z;
+                    mmiXX[nExistOwners + i] = this_moi.x;
+                    mmiYY[nExistOwners + i] = this_moi.y;
+                    mmiZZ[nExistOwners + i] = this_moi.z;
                 }
 
                 // For clumps, special courtesy from us to check if it falls in user's box
@@ -624,26 +720,26 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                 auto this_clump_no_sp_mat_ids = clump_templates.matIDs.at(type_of_this_clump);
 
                 for (size_t jj = 0; jj < this_clump_no_sp_radii.size(); jj++) {
-                    sphereMaterialOffset.at(nExistSpheres + k) = this_clump_no_sp_mat_ids.at(jj);
-                    ownerClumpBody.at(nExistSpheres + k) = nExistOwners + i;
+                    sphereMaterialOffset[nExistSpheres + k] = this_clump_no_sp_mat_ids.at(jj);
+                    ownerClumpBody[nExistSpheres + k] = nExistOwners + i;
 
                     // Depending on whether we jitify or flatten
                     if (solverFlags.useClumpJitify) {
                         // This component offset, is it too large that can't live in the jitified array?
                         unsigned int this_comp_offset = prescans_comp.at(type_of_this_clump) + jj;
-                        clumpComponentOffsetExt.at(nExistSpheres + k) = this_comp_offset;
+                        clumpComponentOffsetExt[nExistSpheres + k] = this_comp_offset;
                         if (this_comp_offset < simParams->nJitifiableClumpComponents) {
-                            clumpComponentOffset.at(nExistSpheres + k) = this_comp_offset;
+                            clumpComponentOffset[nExistSpheres + k] = this_comp_offset;
                         } else {
                             // If not, an indicator will be put there
-                            clumpComponentOffset.at(nExistSpheres + k) = RESERVED_CLUMP_COMPONENT_OFFSET;
+                            clumpComponentOffset[nExistSpheres + k] = RESERVED_CLUMP_COMPONENT_OFFSET;
                         }
                     } else {
                         radiiSphere[nExistSpheres + k] = this_clump_no_sp_radii.at(jj);
                         const float3 relPos = this_clump_no_sp_relPos.at(jj);
-                        relPosSphereX.at(nExistSpheres + k) = relPos.x;
-                        relPosSphereY.at(nExistSpheres + k) = relPos.y;
-                        relPosSphereZ.at(nExistSpheres + k) = relPos.z;
+                        relPosSphereX[nExistSpheres + k] = relPos.x;
+                        relPosSphereY[nExistSpheres + k] = relPos.y;
+                        relPosSphereZ[nExistSpheres + k] = relPos.z;
                     }
 
                     k++;
@@ -651,32 +747,32 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                 }
 
                 hostPositionToVoxelID<voxelID_t, subVoxelPos_t, double>(
-                    voxelID.at(nExistOwners + i), locX.at(nExistOwners + i), locY.at(nExistOwners + i),
-                    locZ.at(nExistOwners + i), (double)this_CoM_coord.x, (double)this_CoM_coord.y,
-                    (double)this_CoM_coord.z, simParams->nvXp2, simParams->nvYp2, simParams->voxelSize, simParams->l);
+                    voxelID[nExistOwners + i], locX[nExistOwners + i], locY[nExistOwners + i], locZ[nExistOwners + i],
+                    (double)this_CoM_coord.x, (double)this_CoM_coord.y, (double)this_CoM_coord.z, simParams->nvXp2,
+                    simParams->nvYp2, simParams->voxelSize, simParams->l);
 
                 // Set initial oriQ
                 auto oriQ_of_this_clump = input_clump_oriQ.at(j);
-                oriQw.at(nExistOwners + i) = oriQ_of_this_clump.w;
-                oriQx.at(nExistOwners + i) = oriQ_of_this_clump.x;
-                oriQy.at(nExistOwners + i) = oriQ_of_this_clump.y;
-                oriQz.at(nExistOwners + i) = oriQ_of_this_clump.z;
+                oriQw[nExistOwners + i] = oriQ_of_this_clump.w;
+                oriQx[nExistOwners + i] = oriQ_of_this_clump.x;
+                oriQy[nExistOwners + i] = oriQ_of_this_clump.y;
+                oriQz[nExistOwners + i] = oriQ_of_this_clump.z;
 
                 // Set initial velocity
                 auto vel_of_this_clump = input_clump_vel.at(j);
-                vX.at(nExistOwners + i) = vel_of_this_clump.x;
-                vY.at(nExistOwners + i) = vel_of_this_clump.y;
-                vZ.at(nExistOwners + i) = vel_of_this_clump.z;
+                vX[nExistOwners + i] = vel_of_this_clump.x;
+                vY[nExistOwners + i] = vel_of_this_clump.y;
+                vZ[nExistOwners + i] = vel_of_this_clump.z;
 
                 // Set initial angular velocity
                 auto angVel_of_this_clump = input_clump_angVel.at(j);
-                omgBarX.at(nExistOwners + i) = angVel_of_this_clump.x;
-                omgBarY.at(nExistOwners + i) = angVel_of_this_clump.y;
-                omgBarZ.at(nExistOwners + i) = angVel_of_this_clump.z;
+                omgBarX[nExistOwners + i] = angVel_of_this_clump.x;
+                omgBarY[nExistOwners + i] = angVel_of_this_clump.y;
+                omgBarZ[nExistOwners + i] = angVel_of_this_clump.z;
 
                 // Set family code
                 family_t this_family_num = input_clump_family.at(j);
-                familyID.at(nExistOwners + i) = this_family_num;
+                familyID[nExistOwners + i] = this_family_num;
 
                 i++;
             }
@@ -726,9 +822,9 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
                 const auto& idPair = a_batch->contact_pairs.at(jj);
                 // idPair.first + n_processed_sp_comp can take into account the sphere components that have been loaded
                 // in previous batches, makes this loading process scalable.
-                idGeometryA.at(cnt_arr_offset) = idPair.first + n_processed_sp_comp + nExistSpheres;
-                idGeometryB.at(cnt_arr_offset) = idPair.second + n_processed_sp_comp + nExistSpheres;
-                contactType.at(cnt_arr_offset) = SPHERE_SPHERE_CONTACT;  // Only sph--sph cnt for now
+                idGeometryA[cnt_arr_offset] = idPair.first + n_processed_sp_comp + nExistSpheres;
+                idGeometryB[cnt_arr_offset] = idPair.second + n_processed_sp_comp + nExistSpheres;
+                contactType[cnt_arr_offset] = SPHERE_SPHERE_CONTACT;  // Only sph--sph cnt for now
                 unsigned int w_num = 0;
                 for (const auto& w_name : m_contact_wildcard_names) {
                     (*contactWildcards[w_num])[cnt_arr_offset] = a_batch->contact_wildcards.at(w_name).at(jj);
@@ -775,41 +871,41 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
     unsigned int offset_for_ext_obj_mass_template = simParams->nDistinctClumpBodyTopologies;
     for (size_t i = 0; i < input_ext_obj_xyz.size(); i++) {
         // If got here, it is an analytical obj
-        ownerTypes.at(i + owner_offset_for_ext_obj) = OWNER_T_ANALYTICAL;
+        ownerTypes[i + owner_offset_for_ext_obj] = OWNER_T_ANALYTICAL;
         // For each analytical geometry component of this obj, it needs to know its owner number
         for (size_t j = 0; j < ext_obj_comp_num.at(i); j++) {
-            ownerAnalBody.at(k) = i + owner_offset_for_ext_obj;
+            ownerAnalBody[k] = i + owner_offset_for_ext_obj;
             k++;
         }
 
         // Analytical object mass properties are useful in force collection, but not useful in force calculation:
         // analytical component masses are jitified into kernels directly.
-        inertiaPropOffsets.at(i + owner_offset_for_ext_obj) = i + offset_for_ext_obj_mass_template;
+        inertiaPropOffsets[i + owner_offset_for_ext_obj] = i + offset_for_ext_obj_mass_template;
         if (!solverFlags.useMassJitify) {
-            massOwnerBody.at(i + owner_offset_for_ext_obj) = ext_obj_mass_types.at(i);
+            massOwnerBody[i + owner_offset_for_ext_obj] = ext_obj_mass_types.at(i);
             const float3 this_moi = ext_obj_moi_types.at(i);
-            mmiXX.at(i + owner_offset_for_ext_obj) = this_moi.x;
-            mmiYY.at(i + owner_offset_for_ext_obj) = this_moi.y;
-            mmiZZ.at(i + owner_offset_for_ext_obj) = this_moi.z;
+            mmiXX[i + owner_offset_for_ext_obj] = this_moi.x;
+            mmiYY[i + owner_offset_for_ext_obj] = this_moi.y;
+            mmiZZ[i + owner_offset_for_ext_obj] = this_moi.z;
         }
         auto this_CoM_coord = input_ext_obj_xyz.at(i) - LBF;
         // std::cout << this_CoM_coord.x << "," << this_CoM_coord.y << "," << this_CoM_coord.z << std::endl;
         hostPositionToVoxelID<voxelID_t, subVoxelPos_t, double>(
-            voxelID.at(i + owner_offset_for_ext_obj), locX.at(i + owner_offset_for_ext_obj),
-            locY.at(i + owner_offset_for_ext_obj), locZ.at(i + owner_offset_for_ext_obj), (double)this_CoM_coord.x,
+            voxelID[i + owner_offset_for_ext_obj], locX[i + owner_offset_for_ext_obj],
+            locY[i + owner_offset_for_ext_obj], locZ[i + owner_offset_for_ext_obj], (double)this_CoM_coord.x,
             (double)this_CoM_coord.y, (double)this_CoM_coord.z, simParams->nvXp2, simParams->nvYp2,
             simParams->voxelSize, simParams->l);
         // Set mesh owner's oriQ
         auto oriQ_of_this = input_ext_obj_rot.at(i);
-        oriQw.at(i + owner_offset_for_ext_obj) = oriQ_of_this.w;
-        oriQx.at(i + owner_offset_for_ext_obj) = oriQ_of_this.x;
-        oriQy.at(i + owner_offset_for_ext_obj) = oriQ_of_this.y;
-        oriQz.at(i + owner_offset_for_ext_obj) = oriQ_of_this.z;
+        oriQw[i + owner_offset_for_ext_obj] = oriQ_of_this.w;
+        oriQx[i + owner_offset_for_ext_obj] = oriQ_of_this.x;
+        oriQy[i + owner_offset_for_ext_obj] = oriQ_of_this.y;
+        oriQz[i + owner_offset_for_ext_obj] = oriQ_of_this.z;
 
         //// TODO: and initial vel?
 
         family_t this_family_num = input_ext_obj_family.at(i);
-        familyID.at(i + owner_offset_for_ext_obj) = this_family_num;
+        familyID[i + owner_offset_for_ext_obj] = this_family_num;
     }
 
     // Load in initial positions and mass properties for the owners of the meshed objects
@@ -820,7 +916,7 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
     k = 0;
     for (size_t i = 0; i < input_mesh_objs.size(); i++) {
         // If got here, it is a mesh
-        ownerTypes.at(i + owner_offset_for_mesh_obj) = OWNER_T_MESH;
+        ownerTypes[i + owner_offset_for_mesh_obj] = OWNER_T_MESH;
 
         // Store inherent geo wildcards
         {
@@ -847,27 +943,27 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
         input_mesh_objs.at(i)->cache_offset = m_meshes.size();
         m_meshes.push_back(input_mesh_objs.at(i));
 
-        inertiaPropOffsets.at(i + owner_offset_for_mesh_obj) = i + offset_for_mesh_obj_mass_template;
+        inertiaPropOffsets[i + owner_offset_for_mesh_obj] = i + offset_for_mesh_obj_mass_template;
         if (!solverFlags.useMassJitify) {
-            massOwnerBody.at(i + owner_offset_for_mesh_obj) = mesh_obj_mass_types.at(i);
+            massOwnerBody[i + owner_offset_for_mesh_obj] = mesh_obj_mass_types.at(i);
             const float3 this_moi = mesh_obj_moi_types.at(i);
-            mmiXX.at(i + owner_offset_for_mesh_obj) = this_moi.x;
-            mmiYY.at(i + owner_offset_for_mesh_obj) = this_moi.y;
-            mmiZZ.at(i + owner_offset_for_mesh_obj) = this_moi.z;
+            mmiXX[i + owner_offset_for_mesh_obj] = this_moi.x;
+            mmiYY[i + owner_offset_for_mesh_obj] = this_moi.y;
+            mmiZZ[i + owner_offset_for_mesh_obj] = this_moi.z;
         }
         auto this_CoM_coord = input_mesh_obj_xyz.at(i) - LBF;
         hostPositionToVoxelID<voxelID_t, subVoxelPos_t, double>(
-            voxelID.at(i + owner_offset_for_mesh_obj), locX.at(i + owner_offset_for_mesh_obj),
-            locY.at(i + owner_offset_for_mesh_obj), locZ.at(i + owner_offset_for_mesh_obj), (double)this_CoM_coord.x,
+            voxelID[i + owner_offset_for_mesh_obj], locX[i + owner_offset_for_mesh_obj],
+            locY[i + owner_offset_for_mesh_obj], locZ[i + owner_offset_for_mesh_obj], (double)this_CoM_coord.x,
             (double)this_CoM_coord.y, (double)this_CoM_coord.z, simParams->nvXp2, simParams->nvYp2,
             simParams->voxelSize, simParams->l);
 
         // Set mesh owner's oriQ
         auto oriQ_of_this = input_mesh_obj_rot.at(i);
-        oriQw.at(i + owner_offset_for_mesh_obj) = oriQ_of_this.w;
-        oriQx.at(i + owner_offset_for_mesh_obj) = oriQ_of_this.x;
-        oriQy.at(i + owner_offset_for_mesh_obj) = oriQ_of_this.y;
-        oriQz.at(i + owner_offset_for_mesh_obj) = oriQ_of_this.z;
+        oriQw[i + owner_offset_for_mesh_obj] = oriQ_of_this.w;
+        oriQx[i + owner_offset_for_mesh_obj] = oriQ_of_this.x;
+        oriQy[i + owner_offset_for_mesh_obj] = oriQ_of_this.y;
+        oriQz[i + owner_offset_for_mesh_obj] = oriQ_of_this.z;
 
         //// TODO: and initial vel?
 
@@ -878,16 +974,16 @@ void DEMDynamicThread::populateEntityArrays(const std::vector<std::shared_ptr<DE
             // mesh_facet_owner run length is the num of facets in this mesh entity
             if (mesh_facet_owner.at(k) != this_facet_owner)
                 break;
-            ownerMesh.at(nExistingFacets + k) = owner_offset_for_mesh_obj + this_facet_owner;
-            triMaterialOffset.at(nExistingFacets + k) = mesh_facet_materials.at(k);
+            ownerMesh[nExistingFacets + k] = owner_offset_for_mesh_obj + this_facet_owner;
+            triMaterialOffset[nExistingFacets + k] = mesh_facet_materials.at(k);
             DEMTriangle this_tri = mesh_facets.at(k);
-            relPosNode1.at(nExistingFacets + k) = this_tri.p1;
-            relPosNode2.at(nExistingFacets + k) = this_tri.p2;
-            relPosNode3.at(nExistingFacets + k) = this_tri.p3;
+            relPosNode1[nExistingFacets + k] = this_tri.p1;
+            relPosNode2[nExistingFacets + k] = this_tri.p2;
+            relPosNode3[nExistingFacets + k] = this_tri.p3;
         }
 
         family_t this_family_num = input_mesh_obj_family.at(i);
-        familyID.at(i + owner_offset_for_mesh_obj) = this_family_num;
+        familyID[i + owner_offset_for_mesh_obj] = this_family_num;
 
         // To save some mem
         m_meshes.back()->ClearWildcards();
@@ -1049,7 +1145,9 @@ void DEMDynamicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr<D
 void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) {
     chpf::Writer pw;
     // pw.write(ptFile, chpf::Compressor::Type::USE_DEFAULT, mass);
-    migrateDataToHost();
+    migrateFamilyToHost();
+    migrateClumpPosInfoToHost();
+    migrateClumpHighOrderInfoToHost();
 
     // simParams host version should not be different from device version, so no need to update
     std::vector<float> posX(simParams->nSpheresGM);
@@ -1063,19 +1161,19 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) {
     size_t num_output_spheres = 0;
 
     for (size_t i = 0; i < simParams->nSpheresGM; i++) {
-        auto this_owner = ownerClumpBody.at(i);
-        family_t this_family = familyID.at(this_owner);
+        auto this_owner = ownerClumpBody[i];
+        family_t this_family = familyID[this_owner];
         // If this (impl-level) family is in the no-output list, skip it
-        if (std::binary_search(familiesNoOutput.begin(), familiesNoOutput.end(), this_family)) {
+        if (familiesNoOutput.find(this_family) != familiesNoOutput.end()) {
             continue;
         }
 
         float3 CoM;
         float X, Y, Z;
-        voxelID_t voxel = voxelID.at(this_owner);
-        subVoxelPos_t subVoxX = locX.at(this_owner);
-        subVoxelPos_t subVoxY = locY.at(this_owner);
-        subVoxelPos_t subVoxZ = locZ.at(this_owner);
+        voxelID_t voxel = voxelID[this_owner];
+        subVoxelPos_t subVoxX = locX[this_owner];
+        subVoxelPos_t subVoxY = locY[this_owner];
+        subVoxelPos_t subVoxZ = locZ[this_owner];
         hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ,
                                                                simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
                                                                simParams->l);
@@ -1083,14 +1181,14 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) {
         CoM.y = Y + simParams->LBFY;
         CoM.z = Z + simParams->LBFZ;
 
-        size_t compOffset = (solverFlags.useClumpJitify) ? clumpComponentOffsetExt.at(i) : i;
-        float this_sp_deviation_x = relPosSphereX.at(compOffset);
-        float this_sp_deviation_y = relPosSphereY.at(compOffset);
-        float this_sp_deviation_z = relPosSphereZ.at(compOffset);
-        float this_sp_rot_0 = oriQw.at(this_owner);
-        float this_sp_rot_1 = oriQx.at(this_owner);
-        float this_sp_rot_2 = oriQy.at(this_owner);
-        float this_sp_rot_3 = oriQz.at(this_owner);
+        size_t compOffset = (solverFlags.useClumpJitify) ? clumpComponentOffsetExt[i] : i;
+        float this_sp_deviation_x = relPosSphereX[compOffset];
+        float this_sp_deviation_y = relPosSphereY[compOffset];
+        float this_sp_deviation_z = relPosSphereZ[compOffset];
+        float this_sp_rot_0 = oriQw[this_owner];
+        float this_sp_rot_1 = oriQx[this_owner];
+        float this_sp_rot_2 = oriQy[this_owner];
+        float this_sp_rot_3 = oriQz[this_owner];
         hostApplyOriQToVector3<float, float>(this_sp_deviation_x, this_sp_deviation_y, this_sp_deviation_z,
                                              this_sp_rot_0, this_sp_rot_1, this_sp_rot_2, this_sp_rot_3);
         posX.at(num_output_spheres) = CoM.x + this_sp_deviation_x;
@@ -1127,7 +1225,12 @@ void DEMDynamicThread::writeSpheresAsChpf(std::ofstream& ptFile) {
 
 void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) {
     std::ostringstream outstrstream;
-    migrateDataToHost();
+
+    migrateFamilyToHost();
+    migrateClumpPosInfoToHost();
+    migrateClumpHighOrderInfoToHost();
+    migrateOwnerWildcardToHost();
+    migrateSphGeoWildcardToHost();
 
     outstrstream << OUTPUT_FILE_X_COL_NAME + "," + OUTPUT_FILE_Y_COL_NAME + "," + OUTPUT_FILE_Z_COL_NAME + "," +
                         OUTPUT_FILE_R_COL_NAME;
@@ -1173,10 +1276,10 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) {
 
     // simParams host version should not be different from device version, so no need to update
     for (size_t i = 0; i < simParams->nSpheresGM; i++) {
-        auto this_owner = ownerClumpBody.at(i);
-        family_t this_family = familyID.at(this_owner);
+        auto this_owner = ownerClumpBody[i];
+        family_t this_family = familyID[this_owner];
         // If this (impl-level) family is in the no-output list, skip it
-        if (std::binary_search(familiesNoOutput.begin(), familiesNoOutput.end(), this_family)) {
+        if (familiesNoOutput.find(this_family) != familiesNoOutput.end()) {
             continue;
         }
 
@@ -1184,10 +1287,10 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) {
         float3 pos;
         float radius;
         float X, Y, Z;
-        voxelID_t voxel = voxelID.at(this_owner);
-        subVoxelPos_t subVoxX = locX.at(this_owner);
-        subVoxelPos_t subVoxY = locY.at(this_owner);
-        subVoxelPos_t subVoxZ = locZ.at(this_owner);
+        voxelID_t voxel = voxelID[this_owner];
+        subVoxelPos_t subVoxX = locX[this_owner];
+        subVoxelPos_t subVoxY = locY[this_owner];
+        subVoxelPos_t subVoxZ = locZ[this_owner];
         hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ,
                                                                simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
                                                                simParams->l);
@@ -1195,15 +1298,15 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) {
         CoM.y = Y + simParams->LBFY;
         CoM.z = Z + simParams->LBFZ;
 
-        size_t compOffset = (solverFlags.useClumpJitify) ? clumpComponentOffsetExt.at(i) : i;
+        size_t compOffset = (solverFlags.useClumpJitify) ? clumpComponentOffsetExt[i] : i;
         float3 this_sp_deviation;
-        this_sp_deviation.x = relPosSphereX.at(compOffset);
-        this_sp_deviation.y = relPosSphereY.at(compOffset);
-        this_sp_deviation.z = relPosSphereZ.at(compOffset);
-        float this_sp_rot_0 = oriQw.at(this_owner);
-        float this_sp_rot_1 = oriQx.at(this_owner);
-        float this_sp_rot_2 = oriQy.at(this_owner);
-        float this_sp_rot_3 = oriQz.at(this_owner);
+        this_sp_deviation.x = relPosSphereX[compOffset];
+        this_sp_deviation.y = relPosSphereY[compOffset];
+        this_sp_deviation.z = relPosSphereZ[compOffset];
+        float this_sp_rot_0 = oriQw[this_owner];
+        float this_sp_rot_1 = oriQx[this_owner];
+        float this_sp_rot_2 = oriQy[this_owner];
+        float this_sp_rot_3 = oriQz[this_owner];
         hostApplyOriQToVector3<float, float>(this_sp_deviation.x, this_sp_deviation.y, this_sp_deviation.z,
                                              this_sp_rot_0, this_sp_rot_1, this_sp_rot_2, this_sp_rot_3);
         pos = CoM + this_sp_deviation;
@@ -1214,12 +1317,12 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) {
 
         // Only linear velocity
         float3 vxyz, acc;
-        vxyz.x = vX.at(this_owner);
-        vxyz.y = vY.at(this_owner);
-        vxyz.z = vZ.at(this_owner);
-        acc.x = aX.at(this_owner);
-        acc.y = aY.at(this_owner);
-        acc.z = aZ.at(this_owner);
+        vxyz.x = vX[this_owner];
+        vxyz.y = vY[this_owner];
+        vxyz.z = vZ[this_owner];
+        acc.x = aX[this_owner];
+        acc.y = aY[this_owner];
+        acc.z = aZ[this_owner];
         if (solverFlags.outputFlags & OUTPUT_CONTENT::ABSV) {
             outstrstream << "," << length(vxyz);
         }
@@ -1228,9 +1331,9 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) {
         }
         if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_VEL) {
             float3 ang_v;
-            ang_v.x = omgBarX.at(this_owner);
-            ang_v.y = omgBarY.at(this_owner);
-            ang_v.z = omgBarZ.at(this_owner);
+            ang_v.x = omgBarX[this_owner];
+            ang_v.y = omgBarY[this_owner];
+            ang_v.z = omgBarZ[this_owner];
             outstrstream << "," << ang_v.x << "," << ang_v.y << "," << ang_v.z;
         }
 
@@ -1242,9 +1345,9 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) {
         }
         if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_ACC) {
             float3 ang_acc;
-            ang_acc.x = alphaX.at(this_owner);
-            ang_acc.y = alphaY.at(this_owner);
-            ang_acc.z = alphaZ.at(this_owner);
+            ang_acc.x = alphaX[this_owner];
+            ang_acc.y = alphaY[this_owner];
+            ang_acc.z = alphaZ[this_owner];
             outstrstream << "," << ang_acc.x << "," << ang_acc.y << "," << ang_acc.z;
         }
 
@@ -1277,7 +1380,9 @@ void DEMDynamicThread::writeSpheresAsCsv(std::ofstream& ptFile) {
 void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile, unsigned int accuracy) {
     //// TODO: Note using accuracy
     chpf::Writer pw;
-    migrateDataToHost();
+    migrateFamilyToHost();
+    migrateClumpPosInfoToHost();
+    migrateClumpHighOrderInfoToHost();
 
     // simParams host version should not be different from device version, so no need to update
     std::vector<float> posX(simParams->nOwnerBodies);
@@ -1295,19 +1400,19 @@ void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile, unsigned int acc
     size_t num_output_clumps = 0;
 
     for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
-        auto this_owner = ownerClumpBody.at(i);
-        family_t this_family = familyID.at(this_owner);
+        auto this_owner = ownerClumpBody[i];
+        family_t this_family = familyID[this_owner];
         // If this (impl-level) family is in the no-output list, skip it
-        if (std::binary_search(familiesNoOutput.begin(), familiesNoOutput.end(), this_family)) {
+        if (familiesNoOutput.find(this_family) != familiesNoOutput.end()) {
             continue;
         }
 
         float3 CoM;
         float X, Y, Z;
-        voxelID_t voxel = voxelID.at(i);
-        subVoxelPos_t subVoxX = locX.at(i);
-        subVoxelPos_t subVoxY = locY.at(i);
-        subVoxelPos_t subVoxZ = locZ.at(i);
+        voxelID_t voxel = voxelID[i];
+        subVoxelPos_t subVoxX = locX[i];
+        subVoxelPos_t subVoxY = locY[i];
+        subVoxelPos_t subVoxZ = locZ[i];
         hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ,
                                                                simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
                                                                simParams->l);
@@ -1319,13 +1424,13 @@ void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile, unsigned int acc
         posZ.at(num_output_clumps) = CoM.z;
 
         // Then quaternions
-        Qw.at(num_output_clumps) = oriQw.at(i);
-        Qx.at(num_output_clumps) = oriQx.at(i);
-        Qy.at(num_output_clumps) = oriQy.at(i);
-        Qz.at(num_output_clumps) = oriQz.at(i);
+        Qw.at(num_output_clumps) = oriQw[i];
+        Qx.at(num_output_clumps) = oriQx[i];
+        Qy.at(num_output_clumps) = oriQy[i];
+        Qz.at(num_output_clumps) = oriQz[i];
 
         // Then type of clump
-        unsigned int clump_mark = inertiaPropOffsets.at(i);
+        unsigned int clump_mark = inertiaPropOffsets[i];
         clump_type.at(num_output_clumps) = templateNumNameMap.at(clump_mark);
 
         // Family number
@@ -1360,7 +1465,11 @@ void DEMDynamicThread::writeClumpsAsChpf(std::ofstream& ptFile, unsigned int acc
 void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accuracy) {
     std::ostringstream outstrstream;
     outstrstream.precision(accuracy);
-    migrateDataToHost();
+
+    migrateFamilyToHost();
+    migrateClumpPosInfoToHost();
+    migrateClumpHighOrderInfoToHost();
+    migrateOwnerWildcardToHost();
 
     // xyz and quaternion are always there
     outstrstream << OUTPUT_FILE_X_COL_NAME + "," + OUTPUT_FILE_Y_COL_NAME + "," + OUTPUT_FILE_Z_COL_NAME +
@@ -1398,21 +1507,21 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
     // simParams host version should not be different from device version, so no need to update
     for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
         // i is this owner's number. And if it is not a clump, we can move on.
-        if (ownerTypes.at(i) != OWNER_T_CLUMP)
+        if (ownerTypes[i] != OWNER_T_CLUMP)
             continue;
 
-        family_t this_family = familyID.at(i);
+        family_t this_family = familyID[i];
         // If this (impl-level) family is in the no-output list, skip it
-        if (std::binary_search(familiesNoOutput.begin(), familiesNoOutput.end(), this_family)) {
+        if (familiesNoOutput.find(this_family) != familiesNoOutput.end()) {
             continue;
         }
 
         float3 CoM;
         float X, Y, Z;
-        voxelID_t voxel = voxelID.at(i);
-        subVoxelPos_t subVoxX = locX.at(i);
-        subVoxelPos_t subVoxY = locY.at(i);
-        subVoxelPos_t subVoxZ = locZ.at(i);
+        voxelID_t voxel = voxelID[i];
+        subVoxelPos_t subVoxX = locX[i];
+        subVoxelPos_t subVoxY = locY[i];
+        subVoxelPos_t subVoxZ = locZ[i];
         hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ,
                                                                simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
                                                                simParams->l);
@@ -1423,20 +1532,20 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
         outstrstream << CoM.x << "," << CoM.y << "," << CoM.z;
 
         // Then quaternions
-        outstrstream << "," << oriQw.at(i) << "," << oriQx.at(i) << "," << oriQy.at(i) << "," << oriQz.at(i);
+        outstrstream << "," << oriQw[i] << "," << oriQx[i] << "," << oriQy[i] << "," << oriQz[i];
 
         // Then type of clump
-        unsigned int clump_mark = inertiaPropOffsets.at(i);
+        unsigned int clump_mark = inertiaPropOffsets[i];
         outstrstream << "," << templateNumNameMap.at(clump_mark);
 
         // Only linear velocity
         float3 vxyz, ang_v, acc, ang_acc;
-        vxyz.x = vX.at(i);
-        vxyz.y = vY.at(i);
-        vxyz.z = vZ.at(i);
-        acc.x = aX.at(i);
-        acc.y = aY.at(i);
-        acc.z = aZ.at(i);
+        vxyz.x = vX[i];
+        vxyz.y = vY[i];
+        vxyz.z = vZ[i];
+        acc.x = aX[i];
+        acc.y = aY[i];
+        acc.z = aZ[i];
         if (solverFlags.outputFlags & OUTPUT_CONTENT::ABSV) {
             outstrstream << "," << length(vxyz);
         }
@@ -1444,9 +1553,9 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
             outstrstream << "," << vxyz.x << "," << vxyz.y << "," << vxyz.z;
         }
         if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_VEL) {
-            ang_v.x = omgBarX.at(i);
-            ang_v.y = omgBarY.at(i);
-            ang_v.z = omgBarZ.at(i);
+            ang_v.x = omgBarX[i];
+            ang_v.y = omgBarY[i];
+            ang_v.z = omgBarZ[i];
             outstrstream << "," << ang_v.x << "," << ang_v.y << "," << ang_v.z;
         }
         if (solverFlags.outputFlags & OUTPUT_CONTENT::ABS_ACC) {
@@ -1456,9 +1565,9 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
             outstrstream << "," << acc.x << "," << acc.y << "," << acc.z;
         }
         if (solverFlags.outputFlags & OUTPUT_CONTENT::ANG_ACC) {
-            ang_acc.x = alphaX.at(i);
-            ang_acc.y = alphaY.at(i);
-            ang_acc.z = alphaZ.at(i);
+            ang_acc.x = alphaX[i];
+            ang_acc.y = alphaY[i];
+            ang_acc.z = alphaZ[i];
             outstrstream << "," << ang_acc.x << "," << ang_acc.y << "," << ang_acc.z;
         }
 
@@ -1482,20 +1591,26 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
     ptFile << outstrstream.str();
 }
 
-inline bodyID_t DEMDynamicThread::getOwnerForContactB(const bodyID_t& geoB, const contact_t& type) const {
+bodyID_t DEMDynamicThread::getGeoOwnerID(const bodyID_t& geoB, const contact_t& type) const {
+    // These arrays can't change on device
     switch (type) {
+        case (NOT_A_CONTACT):
+            return NULL_BODYID;
         case (SPHERE_SPHERE_CONTACT):
-            return ownerClumpBody.at(geoB);
+            return ownerClumpBody[geoB];
         case (SPHERE_MESH_CONTACT):
-            return ownerMesh.at(geoB);
+            return ownerMesh[geoB];
         default:  // Default is sphere--analytical
-            return ownerAnalBody.at(geoB);
+            return ownerAnalBody[geoB];
     }
 }
 
 void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thres) {
     std::ostringstream outstrstream;
-    migrateDataToHost();
+
+    migrateFamilyToHost();
+    migrateClumpPosInfoToHost();
+    migrateContactInfoToHost();
 
     outstrstream << OUTPUT_FILE_CNT_TYPE_NAME;
     if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::OWNER) {
@@ -1535,25 +1650,25 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
 
     for (size_t i = 0; i < *(solverScratchSpace.numContacts); i++) {
         // Geos that are involved in this contact
-        auto geoA = idGeometryA.at(i);
-        auto geoB = idGeometryB.at(i);
-        auto type = contactType.at(i);
+        auto geoA = idGeometryA[i];
+        auto geoB = idGeometryB[i];
+        auto type = contactType[i];
         // We don't output fake contacts; but right now, no contact will be marked fake by kT, so no need to check that
         // if (type == NOT_A_CONTACT)
         //     continue;
 
-        float3 forcexyz = contactForces.at(i);
-        float3 torque = contactTorque_convToForce.at(i);
+        float3 forcexyz = contactForces[i];
+        float3 torque = contactTorque_convToForce[i];
         // If this force+torque is too small, then it's not an active contact
         if (length(forcexyz + torque) < force_thres) {
             continue;
         }
 
         // geoA's owner must be a sphere
-        auto ownerA = ownerClumpBody.at(geoA);
+        auto ownerA = ownerClumpBody[geoA];
         bodyID_t ownerB;
         // geoB's owner depends...
-        ownerB = getOwnerForContactB(geoB, type);
+        ownerB = getGeoOwnerID(geoB, type);
 
         // Type is mapped to SS, SM and such....
         outstrstream << contact_type_out_name_map.at(type);
@@ -1576,21 +1691,21 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
         float4 oriQA;
         float3 CoM, cntPntA, cntPntALocal;
         {
-            oriQA.w = oriQw.at(ownerA);
-            oriQA.x = oriQx.at(ownerA);
-            oriQA.y = oriQy.at(ownerA);
-            oriQA.z = oriQz.at(ownerA);
-            voxelID_t voxel = voxelID.at(ownerA);
-            subVoxelPos_t subVoxX = locX.at(ownerA);
-            subVoxelPos_t subVoxY = locY.at(ownerA);
-            subVoxelPos_t subVoxZ = locZ.at(ownerA);
+            oriQA.w = oriQw[ownerA];
+            oriQA.x = oriQx[ownerA];
+            oriQA.y = oriQy[ownerA];
+            oriQA.z = oriQz[ownerA];
+            voxelID_t voxel = voxelID[ownerA];
+            subVoxelPos_t subVoxX = locX[ownerA];
+            subVoxelPos_t subVoxY = locY[ownerA];
+            subVoxelPos_t subVoxZ = locZ[ownerA];
             hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(CoM.x, CoM.y, CoM.z, voxel, subVoxX, subVoxY,
                                                                    subVoxZ, simParams->nvXp2, simParams->nvYp2,
                                                                    simParams->voxelSize, simParams->l);
             CoM.x += simParams->LBFX;
             CoM.y += simParams->LBFY;
             CoM.z += simParams->LBFZ;
-            cntPntA = contactPointGeometryA.at(i);
+            cntPntA = contactPointGeometryA[i];
             cntPntALocal = cntPntA;
             hostApplyOriQToVector3(cntPntA.x, cntPntA.y, cntPntA.z, oriQA.w, oriQA.x, oriQA.y, oriQA.z);
             cntPntA += CoM;
@@ -1603,11 +1718,11 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
 
         // To get contact normal: it's just contact point - sphereA center, that gives you the outward normal for body A
         if (solverFlags.cntOutFlags & CNT_OUTPUT_CONTENT::NORMAL) {
-            size_t compOffset = (solverFlags.useClumpJitify) ? clumpComponentOffsetExt.at(geoA) : geoA;
+            size_t compOffset = (solverFlags.useClumpJitify) ? clumpComponentOffsetExt[geoA] : geoA;
             float3 this_sp_deviation;
-            this_sp_deviation.x = relPosSphereX.at(compOffset);
-            this_sp_deviation.y = relPosSphereY.at(compOffset);
-            this_sp_deviation.z = relPosSphereZ.at(compOffset);
+            this_sp_deviation.x = relPosSphereX[compOffset];
+            this_sp_deviation.y = relPosSphereY[compOffset];
+            this_sp_deviation.z = relPosSphereZ[compOffset];
             hostApplyOriQToVector3<float, float>(this_sp_deviation.x, this_sp_deviation.y, this_sp_deviation.z, oriQA.w,
                                                  oriQA.x, oriQA.y, oriQA.z);
             float3 pos = CoM + this_sp_deviation;
@@ -1645,7 +1760,7 @@ void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thr
 
 void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     std::ostringstream ostream;
-    migrateDataToHost();
+    migrateFamilyToHost();
 
     std::vector<size_t> vertexOffset(m_meshes.size() + 1, 0);
     size_t total_f = 0;
@@ -1656,9 +1771,9 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     std::vector<notStupidBool_t> thisMeshSkip(m_meshes.size(), 0);
     for (const auto& mmesh : m_meshes) {
         bodyID_t mowner = mmesh->owner;
-        family_t this_family = familyID.at(mowner);
+        family_t this_family = familyID[mowner];
         // If this (impl-level) family is in the no-output list, skip it
-        if (std::binary_search(familiesNoOutput.begin(), familiesNoOutput.end(), this_family)) {
+        if (familiesNoOutput.find(this_family) != familiesNoOutput.end()) {
             thisMeshSkip[mesh_num] = 1;
         }
         mesh_num++;
@@ -1732,28 +1847,20 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
 }
 
 inline void DEMDynamicThread::contactEventArraysResize(size_t nContactPairs) {
-    DEME_TRACKED_RESIZE(idGeometryA, nContactPairs, 0);
-    DEME_TRACKED_RESIZE(idGeometryB, nContactPairs, 0);
-    DEME_TRACKED_RESIZE(contactType, nContactPairs, NOT_A_CONTACT);
+    DEME_DUAL_ARRAY_RESIZE(idGeometryA, nContactPairs, 0);
+    DEME_DUAL_ARRAY_RESIZE(idGeometryB, nContactPairs, 0);
+    DEME_DUAL_ARRAY_RESIZE(contactType, nContactPairs, NOT_A_CONTACT);
 
     if (!solverFlags.useNoContactRecord) {
-        DEME_TRACKED_RESIZE(contactForces, nContactPairs, make_float3(0));
-        DEME_TRACKED_RESIZE(contactTorque_convToForce, nContactPairs, make_float3(0));
-        DEME_TRACKED_RESIZE(contactPointGeometryA, nContactPairs, make_float3(0));
-        DEME_TRACKED_RESIZE(contactPointGeometryB, nContactPairs, make_float3(0));
+        DEME_DUAL_ARRAY_RESIZE(contactForces, nContactPairs, make_float3(0));
+        DEME_DUAL_ARRAY_RESIZE(contactTorque_convToForce, nContactPairs, make_float3(0));
+        DEME_DUAL_ARRAY_RESIZE(contactPointGeometryA, nContactPairs, make_float3(0));
+        DEME_DUAL_ARRAY_RESIZE(contactPointGeometryB, nContactPairs, make_float3(0));
     }
 
-    // Re-pack pointers in case the arrays got reallocated
-    granData->idGeometryA = idGeometryA.data();
-    granData->idGeometryB = idGeometryB.data();
-    granData->contactType = contactType.data();
-    granData->contactForces = contactForces.data();
-    granData->contactTorque_convToForce = contactTorque_convToForce.data();
-    granData->contactPointGeometryA = contactPointGeometryA.data();
-    granData->contactPointGeometryB = contactPointGeometryB.data();
+    // Re-packing pointers now is automatic
 
-    // DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-    // Sync to device can be delayed... we'll only need to do that before kernel calls
+    // Sync pointers to device can be delayed... we'll only need to do that before kernel calls
 }
 
 inline void DEMDynamicThread::unpackMyBuffer() {
@@ -1819,7 +1926,7 @@ inline void DEMDynamicThread::sendToTheirBuffer() {
 
     // Family number is a typical changable quantity on-the-fly. If this flag is on, dT is responsible for sending this
     // info to kT.
-    if (solverFlags.canFamilyChange) {
+    if (solverFlags.canFamilyChangeOnDevice) {
         DEME_GPU_CALL(cudaMemcpy(granData->pKTOwnedBuffer_familyID, granData->familyID,
                                  simParams->nOwnerBodies * sizeof(family_t), cudaMemcpyDeviceToDevice));
     }
@@ -1987,7 +2094,7 @@ inline void DEMDynamicThread::calculateForces() {
             .configure(dim3(blocks_needed_for_contacts), dim3(DT_FORCE_CALC_NTHREADS_PER_BLOCK), 0, streamInfo.stream)
             .launch(&simParams, &granData, nContactPairs);
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-        // displayFloat3(granData->contactForces, nContactPairs);
+        // displayDeviceFloat3(granData->contactForces, nContactPairs);
         // displayDeviceArray<contact_t>(granData->contactType, nContactPairs);
         // std::cout << "===========================" << std::endl;
         timers.GetTimer("Calculate contact forces").stop();
@@ -2009,7 +2116,7 @@ inline void DEMDynamicThread::calculateForces() {
                 DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
             }
             // displayDeviceArray<float>(granData->aZ, simParams->nOwnerBodies);
-            // displayFloat3(granData->contactForces, nContactPairs);
+            // displayDeviceFloat3(granData->contactForces, nContactPairs);
             // std::cout << nContactPairs << std::endl;
             timers.GetTimer("Optional CUB force reduction").stop();
         }
@@ -2027,7 +2134,7 @@ inline void DEMDynamicThread::integrateOwnerMotions() {
 }
 
 inline void DEMDynamicThread::routineChecks() {
-    if (solverFlags.canFamilyChange) {
+    if (solverFlags.canFamilyChangeOnDevice) {
         size_t blocks_needed_for_clumps =
             (simParams->nOwnerBodies + DEME_NUM_MODERATORS_PER_BLOCK - 1) / DEME_NUM_MODERATORS_PER_BLOCK;
         mod_kernels->kernel("applyFamilyChanges")
@@ -2128,6 +2235,9 @@ void DEMDynamicThread::workerThread() {
     // Set the gpu for this thread
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
     DEME_GPU_CALL(cudaStreamCreate(&streamInfo.stream));
+
+    // Allocate arrays whose length does not depend on user inputs
+    initAllocation();
 
     while (!pSchedSupport->dynamicShouldJoin) {
         {
@@ -2339,7 +2449,7 @@ void DEMDynamicThread::jitifyKernels(const std::unordered_map<std::string, std::
             "DEMIntegrationKernels", JitHelper::KERNEL_DIR / "DEMIntegrationKernels.cu", Subs, DEME_JITIFY_OPTIONS)));
     }
     // Then kernels that are... wildcards, which make on-the-fly changes to solver data
-    if (solverFlags.canFamilyChange) {
+    if (solverFlags.canFamilyChangeOnDevice) {
         mod_kernels = std::make_shared<jitify::Program>(std::move(JitHelper::buildProgram(
             "DEMModeratorKernels", JitHelper::KERNEL_DIR / "DEMModeratorKernels.cu", Subs, DEME_JITIFY_OPTIONS)));
     }
@@ -2370,9 +2480,14 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
             owner_type = OWNER_T_CLUMP | OWNER_T_MESH | OWNER_T_ANALYTICAL;
             break;
     }
+
+    // This device set effectively bind the `master' thread, or say the API thread, to the dT device; but it is needed,
+    // as the inspector will inspect dT data, most likely.
+    DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
+
     // We can use temp vectors as we please
     size_t quarryTempSize = n * sizeof(float);
-    m_reduceResArr.resize(quarryTempSize);
+    DEME_DUAL_ARRAY_RESIZE_NOVAL(m_reduceResArr, quarryTempSize);
     float* resArr = (float*)m_reduceResArr.device();
     size_t regionTempSize = n * sizeof(notStupidBool_t);
     // If this boolArrExclude is 1 at an element, that means this element is exluded in the reduction
@@ -2382,7 +2497,7 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
 
     // We may actually have 2 reduced returns: in regional reduction, key 0 and 1 give one return each.
     size_t returnSize = sizeof(float) * 2;
-    m_reduceRes.resize(returnSize);
+    DEME_DUAL_ARRAY_RESIZE_NOVAL(m_reduceRes, returnSize);
     float* res = (float*)m_reduceRes.device();
     size_t blocks_needed = (n + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
     inspection_kernel->kernel(kernel_name)
@@ -2456,7 +2571,7 @@ float* DEMDynamicThread::inspectCall(const std::shared_ptr<jitify::Program>& ins
 }
 
 void DEMDynamicThread::initAllocation() {
-    DEME_TRACKED_RESIZE(familyExtraMarginSize, NUM_AVAL_FAMILIES, 0);
+    DEME_DUAL_ARRAY_RESIZE(familyExtraMarginSize, NUM_AVAL_FAMILIES, 0);
 }
 
 void DEMDynamicThread::deallocateEverything() {
@@ -2496,20 +2611,24 @@ float DEMDynamicThread::getUpdateFreq() const {
 }
 
 void DEMDynamicThread::setFamilyClumpMaterial(unsigned int N, unsigned int mat_id) {
+    migrateFamilyToHost();
     for (size_t i = 0; i < simParams->nSpheresGM; i++) {
-        bodyID_t owner_id = ownerClumpBody[i];
+        bodyID_t owner_id = ownerClumpBody[i];  // No device-side change
         if (+(familyID[owner_id]) == N) {
-            sphereMaterialOffset[i] = (family_t)mat_id;
+            sphereMaterialOffset[i] = (materialsOffset_t)mat_id;
         }
     }
+    sphereMaterialOffset.toDevice();
 }
 void DEMDynamicThread::setFamilyMeshMaterial(unsigned int N, unsigned int mat_id) {
+    migrateFamilyToHost();
     for (size_t i = 0; i < simParams->nTriGM; i++) {
-        bodyID_t owner_id = ownerMesh[i];
+        bodyID_t owner_id = ownerMesh[i];  // No device-side change
         if (+(familyID[owner_id]) == N) {
-            triMaterialOffset[i] = (family_t)mat_id;
+            triMaterialOffset[i] = (materialsOffset_t)mat_id;
         }
     }
+    triMaterialOffset.toDevice();
 }
 
 size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
@@ -2517,12 +2636,17 @@ size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
                                                std::vector<float3>& forces) {
     size_t numCnt = *solverScratchSpace.numContacts;
     size_t numUsefulCnt = 0;
+    idGeometryA.toHost();
+    idGeometryB.toHost();
+    contactType.toHost();
+    contactForces.toHost();
+
     for (size_t i = 0; i < numCnt; i++) {
-        bodyID_t geoA = idGeometryA.at(i);
-        bodyID_t ownerA = ownerClumpBody.at(geoA);
-        bodyID_t geoB = idGeometryB.at(i);
-        contact_t typeB = contactType.at(i);
-        bodyID_t ownerB = getOwnerForContactB(geoB, typeB);
+        bodyID_t geoA = idGeometryA[i];
+        bodyID_t ownerA = ownerClumpBody[geoA];
+        bodyID_t geoB = idGeometryB[i];
+        contact_t typeB = contactType[i];
+        bodyID_t ownerB = getGeoOwnerID(geoB, typeB);
 
         if ((ownerID != ownerA) && (ownerID != ownerB)) {
             continue;
@@ -2537,21 +2661,22 @@ size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
         float3 CoM;
         float4 oriQ;
         if (ownerID == ownerA) {
-            cntPnt = contactPointGeometryA[i];
+            cntPnt = contactPointGeometryA(i);
         } else {
-            cntPnt = contactPointGeometryB[i];
+            cntPnt = contactPointGeometryB(i);
             // Force dir flipped
             force = -force;
         }
 
-        oriQ.w = oriQw.at(ownerID);
-        oriQ.x = oriQx.at(ownerID);
-        oriQ.y = oriQy.at(ownerID);
-        oriQ.z = oriQz.at(ownerID);
-        voxelID_t voxel = voxelID.at(ownerID);
-        subVoxelPos_t subVoxX = locX.at(ownerID);
-        subVoxelPos_t subVoxY = locY.at(ownerID);
-        subVoxelPos_t subVoxZ = locZ.at(ownerID);
+        // Right now this method just use inefficient piecemeal device data transaction
+        oriQ.w = oriQw(ownerID);
+        oriQ.x = oriQx(ownerID);
+        oriQ.y = oriQy(ownerID);
+        oriQ.z = oriQz(ownerID);
+        voxelID_t voxel = voxelID(ownerID);
+        subVoxelPos_t subVoxX = locX(ownerID);
+        subVoxelPos_t subVoxY = locY(ownerID);
+        subVoxelPos_t subVoxZ = locZ(ownerID);
         hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(CoM.x, CoM.y, CoM.z, voxel, subVoxX, subVoxY, subVoxZ,
                                                                simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
                                                                simParams->l);
@@ -2571,12 +2696,18 @@ size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
                                                bool torque_in_local) {
     size_t numCnt = *solverScratchSpace.numContacts;
     size_t numUsefulCnt = 0;
+    idGeometryA.toHost();
+    idGeometryB.toHost();
+    contactType.toHost();
+    contactForces.toHost();
+    contactTorque_convToForce.toHost();
+
     for (size_t i = 0; i < numCnt; i++) {
-        bodyID_t geoA = idGeometryA.at(i);
-        bodyID_t ownerA = ownerClumpBody.at(geoA);
-        bodyID_t geoB = idGeometryB.at(i);
-        contact_t typeB = contactType.at(i);
-        bodyID_t ownerB = getOwnerForContactB(geoB, typeB);
+        bodyID_t geoA = idGeometryA[i];
+        bodyID_t ownerA = ownerClumpBody[geoA];
+        bodyID_t geoB = idGeometryB[i];
+        contact_t typeB = contactType[i];
+        bodyID_t ownerB = getGeoOwnerID(geoB, typeB);
 
         if ((ownerID != ownerA) && (ownerID != ownerB)) {
             continue;
@@ -2593,18 +2724,19 @@ size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
         float3 CoM;
         float4 oriQ;
         if (ownerID == ownerA) {
-            cntPnt = contactPointGeometryA[i];
+            cntPnt = contactPointGeometryA(i);
         } else {
-            cntPnt = contactPointGeometryB[i];
+            cntPnt = contactPointGeometryB(i);
             // Force dir flipped
             force = -force;
             torque = -torque;
         }
 
-        oriQ.w = oriQw.at(ownerID);
-        oriQ.x = oriQx.at(ownerID);
-        oriQ.y = oriQy.at(ownerID);
-        oriQ.z = oriQz.at(ownerID);
+        // Right now this method just use inefficient piecemeal device data transaction
+        oriQ.w = oriQw(ownerID);
+        oriQ.x = oriQx(ownerID);
+        oriQ.y = oriQy(ownerID);
+        oriQ.z = oriQz(ownerID);
         // Must derive torque in local...
         {
             hostApplyOriQToVector3(torque.x, torque.y, torque.z, oriQ.w, -oriQ.x, -oriQ.y, -oriQ.z);
@@ -2615,10 +2747,10 @@ size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
             }
         }
 
-        voxelID_t voxel = voxelID.at(ownerID);
-        subVoxelPos_t subVoxX = locX.at(ownerID);
-        subVoxelPos_t subVoxY = locY.at(ownerID);
-        subVoxelPos_t subVoxZ = locZ.at(ownerID);
+        voxelID_t voxel = voxelID(ownerID);
+        subVoxelPos_t subVoxX = locX(ownerID);
+        subVoxelPos_t subVoxY = locY(ownerID);
+        subVoxelPos_t subVoxZ = locZ(ownerID);
         hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(CoM.x, CoM.y, CoM.z, voxel, subVoxX, subVoxY, subVoxZ,
                                                                simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
                                                                simParams->l);
@@ -2633,59 +2765,29 @@ size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
     return numUsefulCnt;
 }
 
-void DEMDynamicThread::setFamilyContactWildcardValueEither(unsigned int N, unsigned int wc_num, float val) {
+void DEMDynamicThread::setFamilyContactWildcardValue_impl(
+    unsigned int N1,
+    unsigned int N2,
+    unsigned int wc_num,
+    float val,
+    const std::function<bool(unsigned int, unsigned int, unsigned int, unsigned int)>& condition) {
+    // Get host updated then send all to device
+    migrateFamilyToHost();
     contactWildcards[wc_num]->toHost();
+    idGeometryA.toHost();
+    idGeometryB.toHost();
+    contactType.toHost();
+
     size_t numCnt = *solverScratchSpace.numContacts;
     for (size_t i = 0; i < numCnt; i++) {
-        bodyID_t geoA = idGeometryA.at(i);
-        bodyID_t ownerA = ownerClumpBody.at(geoA);
-        bodyID_t geoB = idGeometryB.at(i);
-        contact_t typeB = contactType.at(i);
-        bodyID_t ownerB = getOwnerForContactB(geoB, typeB);
+        bodyID_t geoA = idGeometryA[i];
+        bodyID_t ownerA = ownerClumpBody[geoA];
+        bodyID_t geoB = idGeometryB[i];
+        contact_t typeB = contactType[i];
+        bodyID_t ownerB = getGeoOwnerID(geoB, typeB);
 
-        unsigned int famA = +(familyID.at(ownerA));
-        unsigned int famB = +(familyID.at(ownerB));
-
-        if (N == famA || N == famB) {
-            (*contactWildcards[wc_num])[i] = val;
-        }
-    }
-    // Maybe the user will do another host-bound modification, so better do a non-async-ed migration
-    contactWildcards[wc_num]->toDevice();
-}
-
-void DEMDynamicThread::setFamilyContactWildcardValueBoth(unsigned int N, unsigned int wc_num, float val) {
-    contactWildcards[wc_num]->toHost();
-    size_t numCnt = *solverScratchSpace.numContacts;
-    for (size_t i = 0; i < numCnt; i++) {
-        bodyID_t geoA = idGeometryA.at(i);
-        bodyID_t ownerA = ownerClumpBody.at(geoA);
-        bodyID_t geoB = idGeometryB.at(i);
-        contact_t typeB = contactType.at(i);
-        bodyID_t ownerB = getOwnerForContactB(geoB, typeB);
-
-        unsigned int famA = +(familyID.at(ownerA));
-        unsigned int famB = +(familyID.at(ownerB));
-
-        if (N == famA && N == famB) {
-            (*contactWildcards[wc_num])[i] = val;
-        }
-    }
-    contactWildcards[wc_num]->toDevice();
-}
-
-void DEMDynamicThread::setFamilyContactWildcardValue(unsigned int N1, unsigned int N2, unsigned int wc_num, float val) {
-    contactWildcards[wc_num]->toHost();
-    size_t numCnt = *solverScratchSpace.numContacts;
-    for (size_t i = 0; i < numCnt; i++) {
-        bodyID_t geoA = idGeometryA.at(i);
-        bodyID_t ownerA = ownerClumpBody.at(geoA);
-        bodyID_t geoB = idGeometryB.at(i);
-        contact_t typeB = contactType.at(i);
-        bodyID_t ownerB = getOwnerForContactB(geoB, typeB);
-
-        unsigned int famA = +(familyID.at(ownerA));
-        unsigned int famB = +(familyID.at(ownerB));
+        unsigned int famA = +(familyID[ownerA]);
+        unsigned int famB = +(familyID[ownerB]);
 
         if ((N1 == famA && N2 == famB) || (N2 == famA && N1 == famB)) {
             (*contactWildcards[wc_num])[i] = val;
@@ -2694,7 +2796,29 @@ void DEMDynamicThread::setFamilyContactWildcardValue(unsigned int N1, unsigned i
     contactWildcards[wc_num]->toDevice();
 }
 
+void DEMDynamicThread::setFamilyContactWildcardValueEither(unsigned int N, unsigned int wc_num, float val) {
+    setFamilyContactWildcardValue_impl(N, /*no use*/ 0, wc_num, val,
+                                       [](unsigned int famA, unsigned int famB, unsigned int N1, unsigned int N2) {
+                                           return N1 == famA || N1 == famB;
+                                       });
+}
+
+void DEMDynamicThread::setFamilyContactWildcardValueBoth(unsigned int N, unsigned int wc_num, float val) {
+    setFamilyContactWildcardValue_impl(N, /*no use*/ 0, wc_num, val,
+                                       [](unsigned int famA, unsigned int famB, unsigned int N1, unsigned int N2) {
+                                           return N1 == famA && N1 == famB;
+                                       });
+}
+
+void DEMDynamicThread::setFamilyContactWildcardValue(unsigned int N1, unsigned int N2, unsigned int wc_num, float val) {
+    setFamilyContactWildcardValue_impl(N1, N2, wc_num, val,
+                                       [](unsigned int famA, unsigned int famB, unsigned int N1, unsigned int N2) {
+                                           return (N1 == famA && N2 == famB) || (N2 == famA && N1 == famB);
+                                       });
+}
+
 void DEMDynamicThread::setContactWildcardValue(unsigned int wc_num, float val) {
+    // Get host updated then send all to device
     contactWildcards[wc_num]->toHost();
     size_t numCnt = *solverScratchSpace.numContacts;
     for (size_t i = 0; i < numCnt; i++) {
@@ -2709,6 +2833,7 @@ void DEMDynamicThread::setOwnerWildcardValue(bodyID_t ownerID, unsigned int wc_n
     for (size_t i = 0; i < vals.size(); i++) {
         (*ownerWildcards[wc_num])[ownerID + i] = vals.at(i);
     }
+    // Partial send to device
     ownerWildcards[wc_num]->toDeviceAsync(streamInfo.stream, ownerID, vals.size());
 }
 
@@ -2716,6 +2841,7 @@ void DEMDynamicThread::setTriWildcardValue(bodyID_t geoID, unsigned int wc_num, 
     for (size_t i = 0; i < vals.size(); i++) {
         (*triWildcards[wc_num])[geoID + i] = vals.at(i);
     }
+    // Partial send to device
     triWildcards[wc_num]->toDeviceAsync(streamInfo.stream, geoID, vals.size());
 }
 
@@ -2723,6 +2849,7 @@ void DEMDynamicThread::setSphWildcardValue(bodyID_t geoID, unsigned int wc_num, 
     for (size_t i = 0; i < vals.size(); i++) {
         (*sphereWildcards[wc_num])[geoID + i] = vals.at(i);
     }
+    // Partial send to device
     sphereWildcards[wc_num]->toDeviceAsync(streamInfo.stream, geoID, vals.size());
 }
 
@@ -2730,16 +2857,19 @@ void DEMDynamicThread::setAnalWildcardValue(bodyID_t geoID, unsigned int wc_num,
     for (size_t i = 0; i < vals.size(); i++) {
         (*analWildcards[wc_num])[geoID + i] = vals.at(i);
     }
+    // Partial send to device
     analWildcards[wc_num]->toDeviceAsync(streamInfo.stream, geoID, vals.size());
 }
 
 void DEMDynamicThread::setFamilyOwnerWildcardValue(unsigned int family_num,
                                                    unsigned int wc_num,
                                                    const std::vector<float>& vals) {
+    // Get host updated then send all to device
     ownerWildcards[wc_num]->toHost();
+    migrateFamilyToHost();
     size_t count = 0;
     for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
-        if (familyID[i] == family_num) {
+        if (+(familyID[i]) == family_num) {
             (*ownerWildcards[wc_num])[i] = vals.at(count);
             if (count + 1 < vals.size()) {
                 count++;
@@ -2750,39 +2880,35 @@ void DEMDynamicThread::setFamilyOwnerWildcardValue(unsigned int family_num,
 }
 
 void DEMDynamicThread::getSphereWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n) {
-    res.resize(n);
-    CudaCopyToHost<float>(res.data(), sphereWildcards[wc_num]->data() + ID, n);
+    res = std::move(sphereWildcards[wc_num]->getVal(ID, n));
 }
 
 void DEMDynamicThread::getTriWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n) {
-    res.resize(n);
-    CudaCopyToHost<float>(res.data(), triWildcards[wc_num]->data() + ID, n);
+    res = std::move(triWildcards[wc_num]->getVal(ID, n));
 }
 
 void DEMDynamicThread::getAnalWildcardValue(std::vector<float>& res, bodyID_t ID, unsigned int wc_num, size_t n) {
-    res.resize(n);
-    CudaCopyToHost<float>(res.data(), analWildcards[wc_num]->data() + ID, n);
+    res = std::move(analWildcards[wc_num]->getVal(ID, n));
 }
 
 float DEMDynamicThread::getOwnerWildcardValue(bodyID_t ID, unsigned int wc_num) {
-    float res;
-    CudaCopyToHost(&res, ownerWildcards[wc_num]->data() + ID);
-    return res;
+    return ownerWildcards[wc_num]->getVal(ID);
 }
 
 void DEMDynamicThread::getAllOwnerWildcardValue(std::vector<float>& res, unsigned int wc_num) {
-    res.resize(simParams->nOwnerBodies);
-    CudaCopyToHost<float>(res.data(), ownerWildcards[wc_num]->data(), simParams->nOwnerBodies);
+    res = std::move(ownerWildcards[wc_num]->getVal(0, simParams->nOwnerBodies));
 }
 
 void DEMDynamicThread::getFamilyOwnerWildcardValue(std::vector<float>& res,
                                                    unsigned int family_num,
                                                    unsigned int wc_num) {
+    // Get host updated then extract partial from it
     ownerWildcards[wc_num]->toHost();
+    migrateFamilyToHost();
     res.resize(simParams->nOwnerBodies);
     size_t count = 0;
     for (size_t i = 0; i < simParams->nOwnerBodies; i++) {
-        if (familyID[i] == family_num) {
+        if (+(familyID[i]) == family_num) {
             res[count] = (*ownerWildcards[wc_num])[i];
             count++;
         }
@@ -2790,54 +2916,54 @@ void DEMDynamicThread::getFamilyOwnerWildcardValue(std::vector<float>& res,
     res.resize(count);
 }
 
-float3 DEMDynamicThread::getOwnerAngVel(bodyID_t ownerID) const {
+float3 DEMDynamicThread::getOwnerAngVel(bodyID_t ownerID) {
     float3 angVel;
-    angVel.x = omgBarX.at(ownerID);
-    angVel.y = omgBarY.at(ownerID);
-    angVel.z = omgBarZ.at(ownerID);
+    angVel.x = omgBarX(ownerID);
+    angVel.y = omgBarY(ownerID);
+    angVel.z = omgBarZ(ownerID);
     return angVel;
 }
 
-float4 DEMDynamicThread::getOwnerOriQ(bodyID_t ownerID) const {
+float4 DEMDynamicThread::getOwnerOriQ(bodyID_t ownerID) {
     float4 oriQ;
-    oriQ.w = oriQw.at(ownerID);
-    oriQ.x = oriQx.at(ownerID);
-    oriQ.y = oriQy.at(ownerID);
-    oriQ.z = oriQz.at(ownerID);
+    oriQ.w = oriQw(ownerID);
+    oriQ.x = oriQx(ownerID);
+    oriQ.y = oriQy(ownerID);
+    oriQ.z = oriQz(ownerID);
     return oriQ;
 }
 
-float3 DEMDynamicThread::getOwnerAcc(bodyID_t ownerID) const {
+float3 DEMDynamicThread::getOwnerAcc(bodyID_t ownerID) {
     float3 acc;
-    acc.x = aX.at(ownerID);
-    acc.y = aY.at(ownerID);
-    acc.z = aZ.at(ownerID);
+    acc.x = aX(ownerID);
+    acc.y = aY(ownerID);
+    acc.z = aZ(ownerID);
     return acc;
 }
 
-float3 DEMDynamicThread::getOwnerAngAcc(bodyID_t ownerID) const {
+float3 DEMDynamicThread::getOwnerAngAcc(bodyID_t ownerID) {
     float3 aa;
-    aa.x = alphaX.at(ownerID);
-    aa.y = alphaY.at(ownerID);
-    aa.z = alphaZ.at(ownerID);
+    aa.x = alphaX(ownerID);
+    aa.y = alphaY(ownerID);
+    aa.z = alphaZ(ownerID);
     return aa;
 }
 
-float3 DEMDynamicThread::getOwnerVel(bodyID_t ownerID) const {
+float3 DEMDynamicThread::getOwnerVel(bodyID_t ownerID) {
     float3 vel;
-    vel.x = vX.at(ownerID);
-    vel.y = vY.at(ownerID);
-    vel.z = vZ.at(ownerID);
+    vel.x = vX(ownerID);
+    vel.y = vY(ownerID);
+    vel.z = vZ(ownerID);
     return vel;
 }
 
-float3 DEMDynamicThread::getOwnerPos(bodyID_t ownerID) const {
+float3 DEMDynamicThread::getOwnerPos(bodyID_t ownerID) {
     float3 pos;
     double X, Y, Z;
-    voxelID_t voxel = voxelID.at(ownerID);
-    subVoxelPos_t subVoxX = locX.at(ownerID);
-    subVoxelPos_t subVoxY = locY.at(ownerID);
-    subVoxelPos_t subVoxZ = locZ.at(ownerID);
+    voxelID_t voxel = voxelID(ownerID);
+    subVoxelPos_t subVoxX = locX(ownerID);
+    subVoxelPos_t subVoxY = locY(ownerID);
+    subVoxelPos_t subVoxZ = locZ(ownerID);
     hostVoxelIDToPosition<double, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ, simParams->nvXp2,
                                                             simParams->nvYp2, simParams->voxelSize, simParams->l);
     pos.x = X + simParams->LBFX;
@@ -2847,9 +2973,9 @@ float3 DEMDynamicThread::getOwnerPos(bodyID_t ownerID) const {
 }
 
 void DEMDynamicThread::setOwnerAngVel(bodyID_t ownerID, float3 angVel) {
-    omgBarX.at(ownerID) = angVel.x;
-    omgBarY.at(ownerID) = angVel.y;
-    omgBarZ.at(ownerID) = angVel.z;
+    omgBarX.setVal(streamInfo.stream, angVel.x, ownerID);
+    omgBarY.setVal(streamInfo.stream, angVel.y, ownerID);
+    omgBarZ.setVal(streamInfo.stream, angVel.z, ownerID);
 }
 
 void DEMDynamicThread::setOwnerPos(bodyID_t ownerID, float3 pos) {
@@ -2858,22 +2984,27 @@ void DEMDynamicThread::setOwnerPos(bodyID_t ownerID, float3 pos) {
     X = pos.x - simParams->LBFX;
     Y = pos.y - simParams->LBFY;
     Z = pos.z - simParams->LBFZ;
-    hostPositionToVoxelID<voxelID_t, subVoxelPos_t, double>(voxelID.at(ownerID), locX.at(ownerID), locY.at(ownerID),
-                                                            locZ.at(ownerID), X, Y, Z, simParams->nvXp2,
+    voxelID_t vID;
+    subVoxelPos_t subIDx, subIDy, subIDz;
+    hostPositionToVoxelID<voxelID_t, subVoxelPos_t, double>(vID, subIDx, subIDy, subIDz, X, Y, Z, simParams->nvXp2,
                                                             simParams->nvYp2, simParams->voxelSize, simParams->l);
+    voxelID.setVal(streamInfo.stream, vID, ownerID);
+    locX.setVal(streamInfo.stream, subIDx, ownerID);
+    locY.setVal(streamInfo.stream, subIDy, ownerID);
+    locZ.setVal(streamInfo.stream, subIDz, ownerID);
 }
 
 void DEMDynamicThread::setOwnerOriQ(bodyID_t ownerID, float4 oriQ) {
-    oriQw.at(ownerID) = oriQ.w;
-    oriQx.at(ownerID) = oriQ.x;
-    oriQy.at(ownerID) = oriQ.y;
-    oriQz.at(ownerID) = oriQ.z;
+    oriQw.setVal(streamInfo.stream, oriQ.w, ownerID);
+    oriQx.setVal(streamInfo.stream, oriQ.x, ownerID);
+    oriQy.setVal(streamInfo.stream, oriQ.y, ownerID);
+    oriQz.setVal(streamInfo.stream, oriQ.z, ownerID);
 }
 
 void DEMDynamicThread::setOwnerVel(bodyID_t ownerID, float3 vel) {
-    vX.at(ownerID) = vel.x;
-    vY.at(ownerID) = vel.y;
-    vZ.at(ownerID) = vel.z;
+    vX.setVal(streamInfo.stream, vel.x, ownerID);
+    vY.setVal(streamInfo.stream, vel.y, ownerID);
+    vZ.setVal(streamInfo.stream, vel.z, ownerID);
 }
 
 void DEMDynamicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles) {
@@ -2882,6 +3013,9 @@ void DEMDynamicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTrian
         relPosNode2[start + i] = triangles[i].p2;
         relPosNode3[start + i] = triangles[i].p3;
     }
+    relPosNode1.toDeviceAsync(streamInfo.stream, start, triangles.size());
+    relPosNode2.toDeviceAsync(streamInfo.stream, start, triangles.size());
+    relPosNode3.toDeviceAsync(streamInfo.stream, start, triangles.size());
 }
 
 void DEMDynamicThread::updateTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& updates) {
@@ -2890,6 +3024,23 @@ void DEMDynamicThread::updateTriNodeRelPos(size_t start, const std::vector<DEMTr
         relPosNode2[start + i] += updates[i].p2;
         relPosNode3[start + i] += updates[i].p3;
     }
+    relPosNode1.toDeviceAsync(streamInfo.stream, start, updates.size());
+    relPosNode2.toDeviceAsync(streamInfo.stream, start, updates.size());
+    relPosNode3.toDeviceAsync(streamInfo.stream, start, updates.size());
+}
+
+void DEMDynamicThread::addOwnerNextStepAcc(bodyID_t ownerID, float3 acc) {
+    accSpecified.setVal(streamInfo.stream, 1, ownerID);
+    aX.setVal(streamInfo.stream, acc.x, ownerID);
+    aY.setVal(streamInfo.stream, acc.y, ownerID);
+    aZ.setVal(streamInfo.stream, acc.z, ownerID);
+}
+
+void DEMDynamicThread::addOwnerNextStepAngAcc(bodyID_t ownerID, float3 angAcc) {
+    angAccSpecified.setVal(streamInfo.stream, 1, ownerID);
+    alphaX.setVal(streamInfo.stream, angAcc.x, ownerID);
+    alphaY.setVal(streamInfo.stream, angAcc.y, ownerID);
+    alphaZ.setVal(streamInfo.stream, angAcc.z, ownerID);
 }
 
 }  // namespace deme

@@ -170,6 +170,7 @@ class DEMTracker {
     /// @brief Set the quaternion which represents the orientation of this tracked object's coordinate system.
     void SetOriQ(float4 oriQ, size_t offset = 0);
     void SetOriQ(const std::vector<float>& oriQ, size_t offset = 0);
+
     /// Add an extra acc to the tracked body, for the next time step. Note if the user intends to add a persistent
     /// external force, then using family prescription is the better method.
     void AddAcc(float3 acc, size_t offset = 0);

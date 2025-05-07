@@ -30,116 +30,69 @@ void DEMSolver::assertSysNotInit(const std::string& method_name) {
     }
 }
 
-bodyID_t DEMSolver::getOwnerBasedOnContactType(bodyID_t bodyB, contact_t c_type) const {
-    bodyID_t ownerB;
-    switch (c_type) {
-        case NOT_A_CONTACT:
-            break;
-        case SPHERE_SPHERE_CONTACT:
-            ownerB = dT->ownerClumpBody[bodyB];
-            break;
-        case SPHERE_MESH_CONTACT:
-            ownerB = dT->ownerMesh[bodyB];
-            break;
-        default:  // Analytical contact
-            ownerB = dT->ownerAnalBody[bodyB];
+void DEMSolver::assignFamilyPersistentContact_impl(
+    unsigned int N1,
+    unsigned int N2,
+    notStupidBool_t is_or_not,
+    const std::function<bool(family_t, family_t, unsigned int, unsigned int)>& condition) {
+    if (kT->solverFlags.isHistoryless) {
+        DEME_ERROR(
+            "You cannot mark persistent contacts when using a wildcard-less/history-less contact model (since "
+            "persistency is a part of the history).\nYou can use a different force model, and if you have to use this "
+            "one, add a placeholder wildcard.");
     }
-    return ownerB;
+    // Get device-major info to host first
+    kT->previous_idGeometryA.toHost();
+    kT->previous_idGeometryB.toHost();
+    kT->previous_contactType.toHost();
+    kT->contactPersistency.toHost();
+    if (dT->solverFlags.canFamilyChangeOnDevice) {
+        dT->familyID.toHost();
+    }
+
+    // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
+    // as persistent but not found in CD, it will be added to the contact array.
+    for (size_t i = 0; i < *(kT->solverScratchSpace.numPrevContacts); i++) {
+        bodyID_t bodyA = kT->previous_idGeometryA[i];
+        bodyID_t bodyB = kT->previous_idGeometryB[i];
+        contact_t c_type = kT->previous_contactType[i];
+
+        bodyID_t ownerA = dT->ownerClumpBody[bodyA];  // ownerClumpBody can't change on device
+        // As for B, it depends on type
+        bodyID_t ownerB = dT->getGeoOwnerID(bodyB, c_type);
+
+        family_t famA = dT->familyID[ownerA];
+        family_t famB = dT->familyID[ownerB];
+        if (condition(famA, famB, N1, N2)) {
+            kT->contactPersistency[i] = is_or_not;
+        }
+    }
+
+    if (is_or_not == CONTACT_IS_PERSISTENT) {
+        kT->solverFlags.hasPersistentContacts = true;
+        dT->solverFlags.hasPersistentContacts = true;
+    }
+    kT->contactPersistency.toDevice();
 }
 
 void DEMSolver::assignFamilyPersistentContactEither(unsigned int N, notStupidBool_t is_or_not) {
-    if (kT->solverFlags.isHistoryless) {
-        DEME_ERROR(
-            "You cannot mark persistent contacts when using a wildcard-less/history-less contact model (since "
-            "persistency is a part of the history).\nYou can use a different force model, and if you have to use this "
-            "one, add a placeholder wildcard.");
-    }
-
-    // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
-    // as persistent but not found in CD, it will be added to the contact array.
-    for (size_t i = 0; i < *(kT->solverScratchSpace.numPrevContacts); i++) {
-        bodyID_t bodyA = kT->previous_idGeometryA[i];
-        bodyID_t bodyB = kT->previous_idGeometryB[i];
-        contact_t c_type = kT->previous_contactType[i];
-
-        bodyID_t ownerA = dT->ownerClumpBody[bodyA];
-        // As for B, it depends on type
-        bodyID_t ownerB = getOwnerBasedOnContactType(bodyB, c_type);
-
-        family_t famA = dT->familyID[ownerA];
-        family_t famB = dT->familyID[ownerB];
-        if (((unsigned int)famA == N) || ((unsigned int)famB == N)) {
-            kT->contactPersistency[i] = is_or_not;
-        }
-    }
-
-    if (is_or_not == CONTACT_IS_PERSISTENT) {
-        kT->solverFlags.hasPersistentContacts = true;
-        dT->solverFlags.hasPersistentContacts = true;
-    }
+    assignFamilyPersistentContact_impl(N, /*no use*/ 0, is_or_not,
+                                       [](family_t famA, family_t famB, unsigned int N1, unsigned int N2) {
+                                           return ((unsigned int)famA == N1) || ((unsigned int)famB == N1);
+                                       });
 }
 void DEMSolver::assignFamilyPersistentContactBoth(unsigned int N, notStupidBool_t is_or_not) {
-    if (kT->solverFlags.isHistoryless) {
-        DEME_ERROR(
-            "You cannot mark persistent contacts when using a wildcard-less/history-less contact model (since "
-            "persistency is a part of the history).\nYou can use a different force model, and if you have to use this "
-            "one, add a placeholder wildcard.");
-    }
-
-    // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
-    // as persistent but not found in CD, it will be added to the contact array.
-    for (size_t i = 0; i < *(kT->solverScratchSpace.numPrevContacts); i++) {
-        bodyID_t bodyA = kT->previous_idGeometryA[i];
-        bodyID_t bodyB = kT->previous_idGeometryB[i];
-        contact_t c_type = kT->previous_contactType[i];
-
-        bodyID_t ownerA = dT->ownerClumpBody[bodyA];
-        // As for B, it depends on type
-        bodyID_t ownerB = getOwnerBasedOnContactType(bodyB, c_type);
-
-        family_t famA = dT->familyID[ownerA];
-        family_t famB = dT->familyID[ownerB];
-        if (((unsigned int)famA == N) && ((unsigned int)famB == N)) {
-            kT->contactPersistency[i] = is_or_not;
-        }
-    }
-
-    if (is_or_not == CONTACT_IS_PERSISTENT) {
-        kT->solverFlags.hasPersistentContacts = true;
-        dT->solverFlags.hasPersistentContacts = true;
-    }
+    assignFamilyPersistentContact_impl(N, /*no use*/ 0, is_or_not,
+                                       [](family_t famA, family_t famB, unsigned int N1, unsigned int N2) {
+                                           return ((unsigned int)famA == N1) && ((unsigned int)famB == N1);
+                                       });
 }
 void DEMSolver::assignFamilyPersistentContact(unsigned int N1, unsigned int N2, notStupidBool_t is_or_not) {
-    if (kT->solverFlags.isHistoryless) {
-        DEME_ERROR(
-            "You cannot mark persistent contacts when using a wildcard-less/history-less contact model (since "
-            "persistency is a part of the history).\nYou can use a different force model, and if you have to use this "
-            "one, add a placeholder wildcard.");
-    }
-
-    // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
-    // as persistent but not found in CD, it will be added to the contact array.
-    for (size_t i = 0; i < *(kT->solverScratchSpace.numPrevContacts); i++) {
-        bodyID_t bodyA = kT->previous_idGeometryA[i];
-        bodyID_t bodyB = kT->previous_idGeometryB[i];
-        contact_t c_type = kT->previous_contactType[i];
-
-        bodyID_t ownerA = dT->ownerClumpBody[bodyA];
-        // As for B, it depends on type
-        bodyID_t ownerB = getOwnerBasedOnContactType(bodyB, c_type);
-
-        family_t famA = dT->familyID[ownerA];
-        family_t famB = dT->familyID[ownerB];
-        if ((((unsigned int)famA == N1) && ((unsigned int)famB == N2)) ||
-            (((unsigned int)famA == N2) && ((unsigned int)famB == N1))) {
-            kT->contactPersistency[i] = is_or_not;
-        }
-    }
-
-    if (is_or_not == CONTACT_IS_PERSISTENT) {
-        kT->solverFlags.hasPersistentContacts = true;
-        dT->solverFlags.hasPersistentContacts = true;
-    }
+    assignFamilyPersistentContact_impl(N1, N2, is_or_not,
+                                       [](family_t famA, family_t famB, unsigned int N1, unsigned int N2) {
+                                           return (((unsigned int)famA == N1) && ((unsigned int)famB == N2)) ||
+                                                  (((unsigned int)famA == N2) && ((unsigned int)famB == N1));
+                                       });
 }
 void DEMSolver::assignPersistentContact(notStupidBool_t is_or_not) {
     if (kT->solverFlags.isHistoryless) {
@@ -148,6 +101,7 @@ void DEMSolver::assignPersistentContact(notStupidBool_t is_or_not) {
             "persistency is a part of the history).\nYou can use a different force model, and if you have to use this "
             "one, add a placeholder wildcard.");
     }
+    kT->contactPersistency.toHost();
 
     // What we mark are actually the prev contact arrays. These arrays will be checked by kT and if a contact is marked
     // as persistent but not found in CD, it will be added to the contact array.
@@ -159,6 +113,7 @@ void DEMSolver::assignPersistentContact(notStupidBool_t is_or_not) {
         kT->solverFlags.hasPersistentContacts = true;
         dT->solverFlags.hasPersistentContacts = true;
     }
+    kT->contactPersistency.toDevice();
 }
 
 void DEMSolver::generatePolicyResources() {
@@ -362,40 +317,38 @@ void DEMSolver::jitifyKernels() {
     dT->approxMaxVelFunc = m_approx_max_vel_func;
 }
 
-bodyID_t DEMSolver::getGeoOwnerID(const bodyID_t& geoID, const contact_t& cnt_type) const {
-    switch (cnt_type) {
-        case NOT_A_CONTACT:
-            return NULL_BODYID;
-        case SPHERE_SPHERE_CONTACT:
-            return dT->ownerClumpBody.at(geoID);
-        case SPHERE_MESH_CONTACT:
-            return dT->ownerMesh.at(geoID);
-        default:
-            return dT->ownerAnalBody.at(geoID);
-    }
-}
-
 void DEMSolver::getContacts_impl(std::vector<bodyID_t>& idA,
                                  std::vector<bodyID_t>& idB,
                                  std::vector<contact_t>& cnt_type,
                                  std::vector<family_t>& famA,
                                  std::vector<family_t>& famB,
                                  std::function<bool(contact_t)> type_func) const {
+    // Get device-major info to host first
+    if (dT->solverFlags.canFamilyChangeOnDevice) {
+        dT->familyID.toHostAsync(dT->streamInfo.stream);
+    }
+    dT->idGeometryA.toHostAsync(dT->streamInfo.stream);
+    dT->idGeometryB.toHostAsync(dT->streamInfo.stream);
+    dT->contactType.toHostAsync(dT->streamInfo.stream);
+
     size_t num_contacts = dT->getNumContacts();
     idA.resize(num_contacts);
     idB.resize(num_contacts);
     cnt_type.resize(num_contacts);
     famA.resize(num_contacts);
     famB.resize(num_contacts);
+    // Try overlapping mem transfer with allocation...
+    dT->syncMemoryTransfer();
+
     size_t useful_contacts = 0;
     for (size_t i = 0; i < num_contacts; i++) {
-        contact_t this_type = dT->contactType.at(i);
+        contact_t this_type = dT->contactType[i];
         if (type_func(this_type)) {
-            idA[useful_contacts] = getGeoOwnerID(dT->idGeometryA.at(i), this_type);
-            idB[useful_contacts] = getGeoOwnerID(dT->idGeometryB.at(i), this_type);
+            idA[useful_contacts] = dT->getGeoOwnerID(dT->idGeometryA[i], this_type);
+            idB[useful_contacts] = dT->getGeoOwnerID(dT->idGeometryB[i], this_type);
             cnt_type[useful_contacts] = this_type;
-            famA[useful_contacts] = dT->familyID.at(idA[useful_contacts]);
-            famB[useful_contacts] = dT->familyID.at(idB[useful_contacts]);
+            famA[useful_contacts] = dT->familyID[idA[useful_contacts]];
+            famB[useful_contacts] = dT->familyID[idB[useful_contacts]];
             useful_contacts++;
         }
     }
@@ -1104,8 +1057,8 @@ void DEMSolver::setSolverParams() {
     dTkT_InteractionManager->kinematicMaxFutureDrift = m_suggestedFutureDrift;
 
     // Tell kT and dT whether the user enforeced potential on-the-fly family number changes
-    kT->solverFlags.canFamilyChange = famnum_can_change_conditionally;
-    dT->solverFlags.canFamilyChange = famnum_can_change_conditionally;
+    kT->solverFlags.canFamilyChangeOnDevice = famnum_can_change_conditionally;
+    dT->solverFlags.canFamilyChangeOnDevice = famnum_can_change_conditionally;
 
     // Force reduction strategy
     kT->solverFlags.useCubForceCollect = use_cub_to_reduce_force;
@@ -1195,7 +1148,7 @@ void DEMSolver::setSimParams() {
 }
 
 void DEMSolver::allocateGPUArrays() {
-    // Resize managed arrays based on the statistical data we had from the previous step
+    // Resize arrays based on the statistical data we have
     std::thread dThread = std::move(std::thread([this]() {
         this->dT->allocateManagedArrays(
             this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes, this->nSpheresGM, this->nTriGM,

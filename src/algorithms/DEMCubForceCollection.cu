@@ -94,8 +94,8 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
         .configure(dim3(blocks_needed_for_contacts), dim3(DEME_NUM_BODIES_PER_BLOCK), 0, this_stream)
         .launch(acc_B, granData->contactForces, idBOwner, -1.f, nContactPairs, &granData);
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
-    // displayFloat3(acc_A, 2 * nContactPairs);
-    // displayFloat3(granData->contactForces, nContactPairs);
+    // displayDeviceFloat3(acc_A, 2 * nContactPairs);
+    // displayDeviceFloat3(granData->contactForces, nContactPairs);
 
     // Reducing the acceleration (2 * nContactPairs for both body A and B)
     // Note: to do this, idAOwner needs to be sorted along with acc_A. So we sort first.

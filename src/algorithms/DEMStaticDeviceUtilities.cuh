@@ -23,7 +23,7 @@ __global__ void oneNumAdd(T1* res, const T2* a, const T3* b) {
 }
 template <typename T1, typename T2, typename T3>
 void deviceAdd(T1* res, const T2* a, const T3* b, cudaStream_t& this_stream) {
-    oneNumAdd<T1, T2, T3><<<1, 1>>>(res, a, b);
+    oneNumAdd<T1, T2, T3><<<1, 1, 0, this_stream>>>(res, a, b);
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
@@ -34,7 +34,7 @@ __global__ void oneNumAssign(T1* res, const T2* a) {
 }
 template <typename T1, typename T2>
 void deviceAssign(T1* res, const T2* a, cudaStream_t& this_stream) {
-    oneNumAssign<T1, T2><<<1, 1>>>(res, a);
+    oneNumAssign<T1, T2><<<1, 1, 0, this_stream>>>(res, a);
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 

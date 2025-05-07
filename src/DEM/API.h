@@ -40,6 +40,8 @@ class DEMTracker;
 //            3. Instruct how many dT steps should at LEAST do before receiving kT update
 //            4. Sleepers that don't participate CD or integration
 //            5. Update the game of life demo (it's about model ingredient usage)
+//            6. Methods urgently need device conversion: getOwnerContactForces,
+//
 //            9. wT takes care of an extra output when it crashes
 //            10. Recover sph--mesh contact pairs in restarted sim by mesh name
 //            11. A dry-run to map contact pair file with current clump batch based on cnt points location
@@ -929,10 +931,10 @@ class DEMSolver {
     /// @return Vector of values of the wildcards.
     std::vector<float> GetAnalWildcardValue(bodyID_t geoID, const std::string& name, size_t n);
 
-    /// @brief If the user used async-ed version of a tracker's get methods (to get a speed boost in many piecemeal
+    /// @brief If the user used async-ed version of a tracker's get/set methods (to get a speed boost in many piecemeal
     /// accesses of a long array), this method should be called to mark the end of to-host transactions. But usually,
     /// the user would use sync-ed version of the methods by default and this call is not needed in that case.
-    void SyncMemoryTransfer() { DEME_GPU_CALL(cudaStreamSynchronize(dT->streamInfo.stream)); }
+    void SyncMemoryTransfer();
 
     /// Change all entities with family number ID_from to have a new number ID_to, when the condition defined by the
     /// string is satisfied by the entities in question. This should be called before initialization, and will be baked
@@ -1805,9 +1807,6 @@ class DEMSolver {
     void assertSysNotInit(const std::string& method_name);
     /// Print due information on worker threads reported anomalies
     bool goThroughWorkerAnomalies();
-    /// @brief Get the owner ID of this geometry, depending on the contact type.
-    /// @return Owner ID of this geometry.
-    bodyID_t getGeoOwnerID(const bodyID_t& geoID, const contact_t& cnt_type) const;
     /// @brief Implementation of getting (unsorted) contact pairs from dT.
     /// @param type_func Exclude certain contact types from being outputted if this evaluates to false.
     void getContacts_impl(std::vector<bodyID_t>& idA,
@@ -1816,8 +1815,12 @@ class DEMSolver {
                           std::vector<family_t>& famA,
                           std::vector<family_t>& famB,
                           std::function<bool(contact_t)> type_func) const;
-    /// Get owner B's ID based on contact type.
-    bodyID_t getOwnerBasedOnContactType(bodyID_t bodyB, contact_t c_type) const;
+    /// The implimentation of persistency assignment
+    void assignFamilyPersistentContact_impl(
+        unsigned int N1,
+        unsigned int N2,
+        notStupidBool_t is_or_not,
+        const std::function<bool(family_t, family_t, unsigned int, unsigned int)>& condition);
 
     // Persistent contact implementations
     void assignFamilyPersistentContactEither(unsigned int N, notStupidBool_t is_or_not);

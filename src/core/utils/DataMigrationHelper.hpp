@@ -187,7 +187,9 @@ class DualArray : private NonCopyable {
     using PinnedVector = std::vector<T, PinnedAllocator<T>>;
 
     explicit DualArray(size_t* host_external_counter = nullptr, size_t* device_external_counter = nullptr)
-        : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {}
+        : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {
+        ensureHostVector();
+    }
 
     DualArray(size_t n, size_t* host_external_counter = nullptr, size_t* device_external_counter = nullptr)
         : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {
@@ -214,6 +216,7 @@ class DualArray : private NonCopyable {
         resizeDevice(n);
     }
 
+    // This resize flavor fills host values only!
     void resize(size_t n, const T& val) {
         assert(m_host_vec_ptr == m_pinned_vec.get() && "resize() requires internal host ownership");
         resizeHost(n, val);
@@ -271,11 +274,37 @@ class DualArray : private NonCopyable {
 
     void toDevice() {
         assert(m_host_vec_ptr);
-        size_t count = m_host_vec_ptr->size();
+        size_t count = size();
         if (count > m_device_capacity)
             resizeDevice(count);
         DEME_GPU_CALL(cudaMemcpy(m_device_ptr, m_host_vec_ptr->data(), count * sizeof(T), cudaMemcpyHostToDevice));
         m_host_dirty = false;
+    }
+
+    void toDevice(size_t start, size_t n) {
+        assert(m_host_vec_ptr && m_device_ptr);
+        // Partial flavor aims for speed, no size check
+        DEME_GPU_CALL(
+            cudaMemcpy(m_device_ptr + start, m_host_vec_ptr->data() + start, n * sizeof(T), cudaMemcpyHostToDevice));
+    }
+
+    void toDeviceAsync(cudaStream_t& stream) {
+        assert(m_host_vec_ptr);
+        size_t count = size();
+        if (count > m_device_capacity)
+            resizeDevice(count);
+        DEME_GPU_CALL(
+            cudaMemcpyAsync(m_device_ptr, m_host_vec_ptr->data(), count * sizeof(T), cudaMemcpyHostToDevice, stream));
+        m_host_dirty = false;
+    }
+
+    // And partial update methods...
+    // Normally this is preferred when they are used in tracker implementation
+    void toDeviceAsync(cudaStream_t& stream, size_t start, size_t n) {
+        assert(m_host_vec_ptr && m_device_ptr);
+        // Partial flavor aims for speed, no size check
+        DEME_GPU_CALL(cudaMemcpyAsync(m_device_ptr + start, m_host_vec_ptr->data() + start, n * sizeof(T),
+                                      cudaMemcpyHostToDevice, stream));
     }
 
     void toHost() {
@@ -284,32 +313,17 @@ class DualArray : private NonCopyable {
         m_host_dirty = false;
     }
 
-    void toDeviceAsync(cudaStream_t& stream) {
-        assert(m_host_vec_ptr && m_device_ptr);
-        size_t count = m_host_vec_ptr->size();
-        if (count > m_device_capacity)
-            resizeDevice(count);
+    void toHost(size_t start, size_t n) {
+        assert(m_device_ptr && m_host_vec_ptr);
         DEME_GPU_CALL(
-            cudaMemcpyAsync(m_device_ptr, m_host_vec_ptr->data(), count * sizeof(T), cudaMemcpyHostToDevice, stream));
-        m_host_dirty = false;
+            cudaMemcpy(m_host_vec_ptr->data() + start, m_device_ptr + start, n * sizeof(T), cudaMemcpyDeviceToHost));
     }
 
     void toHostAsync(cudaStream_t& stream) {
         assert(m_host_vec_ptr && m_device_ptr);
-        size_t count = m_host_vec_ptr->size();
         DEME_GPU_CALL(
-            cudaMemcpyAsync(m_host_vec_ptr->data(), m_device_ptr, count * sizeof(T), cudaMemcpyDeviceToHost, stream));
+            cudaMemcpyAsync(m_host_vec_ptr->data(), m_device_ptr, size() * sizeof(T), cudaMemcpyDeviceToHost, stream));
         m_host_dirty = false;
-    }
-
-    // And partial update methods...
-    // They are offered with async versions only because only they are used in tracker implementation,
-    // and for sync-ed partial update you'll just manually copy.
-    void toDeviceAsync(cudaStream_t& stream, size_t start, size_t n) {
-        assert(m_host_vec_ptr && m_device_ptr);
-        // Async partial flavor aims for speed, no size check
-        DEME_GPU_CALL(cudaMemcpyAsync(m_device_ptr + start, m_host_vec_ptr->data() + start, n * sizeof(T),
-                                      cudaMemcpyHostToDevice, stream));
     }
 
     void toHostAsync(cudaStream_t& stream, size_t start, size_t n) {
@@ -317,6 +331,40 @@ class DualArray : private NonCopyable {
         // Async partial flavor aims for speed, no size check
         DEME_GPU_CALL(cudaMemcpyAsync(m_host_vec_ptr->data() + start, m_device_ptr + start, n * sizeof(T),
                                       cudaMemcpyDeviceToHost, stream));
+    }
+
+    T getVal(size_t start) {
+        toHost(start, 1);  // sync from device to host
+        return (*m_host_vec_ptr)[start];
+    }
+
+    std::vector<T> getVal(size_t start, size_t n) {
+        toHost(start, n);  // sync from device to host
+        return std::vector<T>(m_host_vec_ptr->begin() + start, m_host_vec_ptr->begin() + start + n);
+    }
+
+    void setVal(const T& data, size_t start) {
+        (*m_host_vec_ptr)[start] = data;
+        toDevice(start, 1);
+    }
+
+    void setVal(const std::vector<T>& data, size_t start, size_t n = 0) {
+        size_t count = (n > 0) ? n : data.size();
+        // Copy to host vector
+        std::copy(data.begin(), data.begin() + count, m_host_vec_ptr->begin() + start);
+        toDevice(start, count);
+    }
+
+    void setVal(cudaStream_t& stream, const T& data, size_t start) {
+        (*m_host_vec_ptr)[start] = data;
+        toDeviceAsync(stream, start, 1);
+    }
+
+    void setVal(cudaStream_t& stream, const std::vector<T>& data, size_t start, size_t n = 0) {
+        size_t count = (n > 0) ? n : data.size();
+        // Copy to host vector
+        std::copy(data.begin(), data.begin() + count, m_host_vec_ptr->begin() + start);
+        toDeviceAsync(stream, start, count);
     }
 
     void markHostModified() { m_host_dirty = true; }
@@ -359,6 +407,7 @@ class DualArray : private NonCopyable {
 
     T& operator[](size_t i) { return (*m_host_vec_ptr)[i]; }
     const T& operator[](size_t i) const { return (*m_host_vec_ptr)[i]; }
+    T operator()(size_t i) { return getVal(i); }
 
   private:
     std::unique_ptr<PinnedVector> m_pinned_vec = nullptr;

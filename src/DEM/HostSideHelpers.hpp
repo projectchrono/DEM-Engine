@@ -46,6 +46,15 @@ inline T1 locateMaskPair(const T1& i, const T1& j) {
     return (1 + j) * j / 2 + i;
 }
 
+// Debug-purpose array printer
+template <typename T1>
+inline void displayArray(T1* arr, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        std::cout << +(arr[i]) << " ";
+    }
+    std::cout << std::endl;
+}
+
 // An extremely inefficient device vector view function
 template <typename T1>
 inline void displayDeviceArray(T1* arr, size_t n) {
@@ -57,9 +66,11 @@ inline void displayDeviceArray(T1* arr, size_t n) {
     std::cout << std::endl;
 }
 
-inline void displayFloat3(float3* arr, size_t n) {
+inline void displayDeviceFloat3(float3* arr, size_t n) {
+    std::vector<float3> tmp(n);
+    DEME_GPU_CALL(cudaMemcpy(tmp.data(), arr, n * sizeof(float3), cudaMemcpyDeviceToHost));
     for (size_t i = 0; i < n; i++) {
-        std::cout << "(" << +(arr[i].x) << ", " << +(arr[i].y) << ", " << +(arr[i].z) << "), ";
+        std::cout << "(" << +(tmp[i].x) << ", " << +(tmp[i].y) << ", " << +(tmp[i].z) << "), ";
     }
     std::cout << std::endl;
 }

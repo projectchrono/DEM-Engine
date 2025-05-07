@@ -19,22 +19,16 @@
 namespace deme {
 
 inline void contactEventArraysResize(size_t nContactPairs,
-                                     std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& idGeometryA,
-                                     std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& idGeometryB,
-                                     std::vector<contact_t, ManagedAllocator<contact_t>>& contactType,
+                                     DualArray<bodyID_t>& idGeometryA,
+                                     DualArray<bodyID_t>& idGeometryB,
+                                     DualArray<contact_t>& contactType,
                                      DualStruct<DEMDataKT>& granData) {
-    //// TODO: not tracked? Gotta do something on it
-    // DEME_TRACKED_RESIZE(idGeometryA, nContactPairs);
-    // DEME_TRACKED_RESIZE(idGeometryB, nContactPairs);
-    // DEME_TRACKED_RESIZE(contactType, nContactPairs);
-    idGeometryA.resize(nContactPairs);
-    idGeometryB.resize(nContactPairs);
-    contactType.resize(nContactPairs);
+    // Note these resizing are automatically on kT's device
+    DEME_DUAL_ARRAY_RESIZE_NOVAL(idGeometryA, nContactPairs);
+    DEME_DUAL_ARRAY_RESIZE_NOVAL(idGeometryB, nContactPairs);
+    DEME_DUAL_ARRAY_RESIZE_NOVAL(contactType, nContactPairs);
 
-    // Re-pack pointers in case the arrays got reallocated
-    granData->idGeometryA = idGeometryA.data();
-    granData->idGeometryB = idGeometryB.data();
-    granData->contactType = contactType.data();
+    // Re-packing pointers now is automatic
 
     // It's safe to toDevice even though kT is working now and dT may write to its buffer
     // This is because all buffer arrays are not used in kernels so their pointers are only meaningfully stored on host,
@@ -51,14 +45,14 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                       DualStruct<DEMSimParams>& simParams,
                       SolverFlags& solverFlags,
                       VERBOSITY& verbosity,
-                      std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& idGeometryA,
-                      std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& idGeometryB,
-                      std::vector<contact_t, ManagedAllocator<contact_t>>& contactType,
-                      std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& previous_idGeometryA,
-                      std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& previous_idGeometryB,
-                      std::vector<contact_t, ManagedAllocator<contact_t>>& previous_contactType,
-                      std::vector<notStupidBool_t, ManagedAllocator<notStupidBool_t>>& contactPersistency,
-                      std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>>& contactMapping,
+                      DualArray<bodyID_t>& idGeometryA,
+                      DualArray<bodyID_t>& idGeometryB,
+                      DualArray<contact_t>& contactType,
+                      DualArray<bodyID_t>& previous_idGeometryA,
+                      DualArray<bodyID_t>& previous_idGeometryB,
+                      DualArray<contact_t>& previous_contactType,
+                      DualArray<notStupidBool_t>& contactPersistency,
+                      DualArray<contactPairs_t>& contactMapping,
                       cudaStream_t& this_stream,
                       DEMSolverScratchData& scratchPad,
                       SolverTimers& timers,
@@ -513,7 +507,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // DEME_DEBUG_PRINTF("Tri contact report offsets:");
             // DEME_DEBUG_EXEC(displayDeviceArray<contactPairs_t>(triSphContactReportOffsets, *pNumActiveBinsForTri));
             // DEME_DEBUG_PRINTF("Family number:");
-            // DEME_DEBUG_EXEC(displayDeviceArray<family_t>(granData->familyID, simParams->nOwnerBodies));
+            // DEME_DEBUG_EXEC(displayDeviceArray<family_t>(granData->familyID.device(), simParams->nOwnerBodies));
 
             // Add sphere--sphere contacts together with sphere--analytical geometry contacts
             size_t nSphereGeoContact = *scratchPad.numContacts;
@@ -766,8 +760,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
                 contactEventArraysResize(*pNumRetainedCnts, idGeometryA, idGeometryB, contactType, granData);
             }
             if (*pNumRetainedCnts > contactPersistency.size()) {
-                contactPersistency.resize(*pNumRetainedCnts);
-                granData->contactPersistency = contactPersistency.data();
+                DEME_DUAL_ARRAY_RESIZE_NOVAL(contactPersistency, *pNumRetainedCnts);
                 granData.toDevice();
             }
             cubDEMSelectFlagged<bodyID_t, notStupidBool_t>(idA_sorted, granData->idGeometryA, retain_flags,
@@ -959,8 +952,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // manually store the mapping. This mapping's elemental values are the indices of the corresponding
             // contacts in the previous contact array.
             if (*scratchPad.numContacts > contactMapping.size()) {
-                contactMapping.resize(*scratchPad.numContacts);
-                granData->contactMapping = contactMapping.data();
+                DEME_DUAL_ARRAY_RESIZE_NOVAL(contactMapping, *scratchPad.numContacts);
                 granData.toDevice();
             }
             blocks_needed_for_mapping = (nSpheresSafe + DEME_NUM_BODIES_PER_BLOCK - 1) / DEME_NUM_BODIES_PER_BLOCK;
@@ -1021,14 +1013,12 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
             // Finally, copy new contact array to old contact array for the record. Note we register old contact pairs
             // with the array sorted by A, but when supplying dT, it was sorted by contact type.
             if (*scratchPad.numContacts > previous_idGeometryA.size()) {
-                previous_idGeometryA.resize(*scratchPad.numContacts);
-                previous_idGeometryB.resize(*scratchPad.numContacts);
-                previous_contactType.resize(*scratchPad.numContacts);
+                // Note these resizing are automatically on kT's device
+                DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_idGeometryA, *scratchPad.numContacts);
+                DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_idGeometryB, *scratchPad.numContacts);
+                DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_contactType, *scratchPad.numContacts);
 
-                granData->previous_idGeometryA = previous_idGeometryA.data();
-                granData->previous_idGeometryB = previous_idGeometryB.data();
-                granData->previous_contactType = previous_contactType.data();
-
+                // Re-packing pointers now is automatic
                 granData.toDevice();
             }
             DEME_GPU_CALL(cudaMemcpy(granData->previous_idGeometryA, granData->idGeometryA, id_arr_bytes,
@@ -1133,11 +1123,11 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
 
 void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
                                 DEMDataDT* dT_data,
-                                std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& previous_idGeometryA,
-                                std::vector<bodyID_t, ManagedAllocator<bodyID_t>>& previous_idGeometryB,
-                                std::vector<contact_t, ManagedAllocator<contact_t>>& previous_contactType,
+                                DualArray<bodyID_t>& previous_idGeometryA,
+                                DualArray<bodyID_t>& previous_idGeometryB,
+                                DualArray<contact_t>& previous_contactType,
                                 DualStruct<DEMSimParams>& simParams,
-                                std::vector<notStupidBool_t, ManagedAllocator<notStupidBool_t>>& contactPersistency,
+                                DualArray<notStupidBool_t>& contactPersistency,
                                 DEMSolverScratchData& scratchPad,
                                 cudaStream_t& this_stream,
                                 size_t nContacts) {
@@ -1165,19 +1155,15 @@ void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
 
     // Finally, copy sorted user contact array to the storage
     if (nContacts > previous_idGeometryA.size()) {
-        previous_idGeometryA.resize(nContacts);
-        previous_idGeometryB.resize(nContacts);
-        previous_contactType.resize(nContacts);
+        // Note these resizing are automatically on kT's device
+        DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_idGeometryA, nContacts);
+        DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_idGeometryB, nContacts);
+        DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_contactType, nContacts);
         // In the case of user-loaded contacts, if the persistency array is not long enough then we have to manually
         // extend it.
-        contactPersistency.resize(nContacts, CONTACT_NOT_PERSISTENT);
+        DEME_DUAL_ARRAY_RESIZE(contactPersistency, nContacts, CONTACT_NOT_PERSISTENT);
 
-        kT_data->previous_idGeometryA = previous_idGeometryA.data();
-        kT_data->previous_idGeometryB = previous_idGeometryB.data();
-        kT_data->previous_contactType = previous_contactType.data();
-        kT_data->contactPersistency = contactPersistency.data();
-
-        // Assuming size-updated arrays will be used on device... which might not be true
+        // Re-packing pointers now is automatic
         kT_data.toDevice();
     }
     DEME_GPU_CALL(

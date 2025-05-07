@@ -224,63 +224,78 @@ void DEMSolver::SetContactOutputContent(const std::vector<std::string>& content)
     }
 }
 
+void DEMSolver::SyncMemoryTransfer() {
+    dT->syncMemoryTransfer();
+    kT->syncMemoryTransfer();
+}
+
 std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
     // Is this owner a clump?
-    ownerType_t this_type = dT->ownerTypes.at(ownerID);
-    std::vector<bodyID_t> geo_to_watch;  // geo IDs that need to scan
+    ownerType_t this_type = dT->ownerTypes[ownerID];  // ownerTypes has no way to change on device
+    std::vector<bodyID_t> geo_to_watch;               // geo IDs that need to scan
+
+    // Get device-major info to host first
+    dT->idGeometryA.toHostAsync(dT->streamInfo.stream);
+    dT->idGeometryB.toHostAsync(dT->streamInfo.stream);
+    dT->contactType.toHostAsync(dT->streamInfo.stream);
+
+    // These arrays can't change on device
     switch (this_type) {
         case OWNER_T_CLUMP:
             for (bodyID_t i = 0; i < nSpheresGM; i++) {
-                if (ownerID == dT->ownerClumpBody.at(i))
+                if (ownerID == dT->ownerClumpBody[i])
                     geo_to_watch.push_back(i);
             }
             break;
         case OWNER_T_ANALYTICAL:
             for (bodyID_t i = 0; i < nAnalGM; i++) {
-                if (ownerID == dT->ownerAnalBody.at(i))
+                if (ownerID == dT->ownerAnalBody[i])
                     geo_to_watch.push_back(i);
             }
             break;
         case OWNER_T_MESH:
             for (bodyID_t i = 0; i < nTriGM; i++) {
-                if (ownerID == dT->ownerMesh.at(i))
+                if (ownerID == dT->ownerMesh[i])
                     geo_to_watch.push_back(i);
             }
             break;
     }
 
+    // Try overlapping mem transfer with allocation...
+    dT->syncMemoryTransfer();
+
     std::vector<bodyID_t> clumps_in_cnt;
     // If this is not clump, then checking idB for it is enough
     if (this_type != OWNER_T_CLUMP) {
         for (size_t i = 0; i < dT->getNumContacts(); i++) {
-            auto idA = dT->idGeometryA.at(i);
-            auto idB = dT->idGeometryB.at(i);
+            auto idA = dT->idGeometryA[i];
+            auto idB = dT->idGeometryB[i];
             if (!check_exist(geo_to_watch, idB))
                 continue;
-            auto cnt_type = dT->contactType.at(i);
+            auto cnt_type = dT->contactType[i];
             // If it is a mesh facet, then contact type needs to match
             if (this_type == OWNER_T_MESH) {
                 if (cnt_type == SPHERE_MESH_CONTACT) {
-                    clumps_in_cnt.push_back(dT->ownerClumpBody.at(idA));
+                    clumps_in_cnt.push_back(dT->ownerClumpBody[idA]);
                 }
             } else {  // If analytical, then contact type larger than PLANE is fine
                 if (cnt_type >= SPHERE_PLANE_CONTACT) {
-                    clumps_in_cnt.push_back(dT->ownerClumpBody.at(idA));
+                    clumps_in_cnt.push_back(dT->ownerClumpBody[idA]);
                 }
             }
         }
     } else {  // If a clump, then both idA and idB need to be checked
         for (size_t i = 0; i < dT->getNumContacts(); i++) {
-            auto idA = dT->idGeometryA.at(i);
-            auto idB = dT->idGeometryB.at(i);
-            auto cnt_type = dT->contactType.at(i);
+            auto idA = dT->idGeometryA[i];
+            auto idB = dT->idGeometryB[i];
+            auto cnt_type = dT->contactType[i];
             if (check_exist(geo_to_watch, idA)) {
                 if (cnt_type == SPHERE_SPHERE_CONTACT) {
-                    clumps_in_cnt.push_back(dT->ownerClumpBody.at(idB));
+                    clumps_in_cnt.push_back(dT->ownerClumpBody[idB]);
                 }
             } else if (check_exist(geo_to_watch, idB)) {
                 if (cnt_type == SPHERE_SPHERE_CONTACT) {
-                    clumps_in_cnt.push_back(dT->ownerClumpBody.at(idA));
+                    clumps_in_cnt.push_back(dT->ownerClumpBody[idA]);
                 }
             }
         }
@@ -385,20 +400,15 @@ float3 DEMSolver::GetOwnerAngAcc(bodyID_t ownerID) const {
     return dT->getOwnerAngAcc(ownerID);
 }
 unsigned int DEMSolver::GetOwnerFamily(bodyID_t ownerID) const {
-    return (unsigned int)(+(dT->familyID.at(ownerID)));
+    // Get from device by default
+    return (unsigned int)(+(dT->familyID(ownerID)));
 }
 
 void DEMSolver::AddOwnerNextStepAcc(bodyID_t ownerID, float3 acc) {
-    dT->accSpecified[ownerID] = 1;
-    dT->aX[ownerID] = acc.x;
-    dT->aY[ownerID] = acc.y;
-    dT->aZ[ownerID] = acc.z;
+    dT->addOwnerNextStepAcc(ownerID, acc);
 }
 void DEMSolver::AddOwnerNextStepAngAcc(bodyID_t ownerID, float3 angAcc) {
-    dT->angAccSpecified[ownerID] = 1;
-    dT->alphaX[ownerID] = angAcc.x;
-    dT->alphaY[ownerID] = angAcc.y;
-    dT->alphaZ[ownerID] = angAcc.z;
+    dT->addOwnerNextStepAngAcc(ownerID, angAcc);
 }
 void DEMSolver::SetOwnerPosition(bodyID_t ownerID, float3 pos) {
     dT->setOwnerPos(ownerID, pos);
@@ -413,30 +423,32 @@ void DEMSolver::SetOwnerOriQ(bodyID_t ownerID, float4 oriQ) {
     dT->setOwnerOriQ(ownerID, oriQ);
 }
 void DEMSolver::SetOwnerFamily(bodyID_t ownerID, family_t fam) {
-    kT->familyID.at(ownerID) = fam;
-    dT->familyID.at(ownerID) = fam;
+    kT->familyID.setVal(kT->streamInfo.stream, fam, ownerID);
+    dT->familyID.setVal(dT->streamInfo.stream, fam, ownerID);
 }
 
 float DEMSolver::GetOwnerMass(bodyID_t ownerID) const {
+    // No mechanism to change mass properties on device, so [] operator is fine
     if (jitify_mass_moi) {
-        inertiaOffset_t offset = dT->inertiaPropOffsets.at(ownerID);
-        return dT->massOwnerBody.at(offset);
+        inertiaOffset_t offset = dT->inertiaPropOffsets[ownerID];
+        return dT->massOwnerBody[offset];
     } else {
-        return dT->massOwnerBody.at(ownerID);
+        return dT->massOwnerBody[ownerID];
     }
 }
 
 float3 DEMSolver::GetOwnerMOI(bodyID_t ownerID) const {
+    // No mechanism to change mass properties on device, so [] operator is fine
     if (jitify_mass_moi) {
-        inertiaOffset_t offset = dT->inertiaPropOffsets.at(ownerID);
-        float m1 = dT->mmiXX.at(offset);
-        float m2 = dT->mmiYY.at(offset);
-        float m3 = dT->mmiZZ.at(offset);
+        inertiaOffset_t offset = dT->inertiaPropOffsets[ownerID];
+        float m1 = dT->mmiXX[offset];
+        float m2 = dT->mmiYY[offset];
+        float m3 = dT->mmiZZ[offset];
         return host_make_float3(m1, m2, m3);
     } else {
-        float m1 = dT->mmiXX.at(ownerID);
-        float m2 = dT->mmiYY.at(ownerID);
-        float m3 = dT->mmiZZ.at(ownerID);
+        float m1 = dT->mmiXX[ownerID];
+        float m2 = dT->mmiYY[ownerID];
+        float m3 = dT->mmiZZ[ownerID];
         return host_make_float3(m1, m2, m3);
     }
 }
@@ -1678,8 +1690,8 @@ void DEMSolver::DisableContactBetweenFamilies(unsigned int ID1, unsigned int ID2
     } else {
         // If initialized, directly pass this info to workers
         unsigned int posInMat = locateMaskPair<unsigned int>(ID1, ID2);
-        kT->familyMaskMatrix.at(posInMat) = PREVENT_CONTACT;
-        dT->familyMaskMatrix.at(posInMat) = PREVENT_CONTACT;
+        kT->familyMaskMatrix.setVal(PREVENT_CONTACT, posInMat);
+        dT->familyMaskMatrix.setVal(PREVENT_CONTACT, posInMat);
     }
 }
 
@@ -1697,8 +1709,8 @@ void DEMSolver::EnableContactBetweenFamilies(unsigned int ID1, unsigned int ID2)
     } else {
         // If initialized, directly pass this info to workers
         unsigned int posInMat = locateMaskPair<unsigned int>(ID1, ID2);
-        kT->familyMaskMatrix.at(posInMat) = DONT_PREVENT_CONTACT;
-        dT->familyMaskMatrix.at(posInMat) = DONT_PREVENT_CONTACT;
+        kT->familyMaskMatrix.setVal(DONT_PREVENT_CONTACT, posInMat);
+        dT->familyMaskMatrix.setVal(DONT_PREVENT_CONTACT, posInMat);
     }
 }
 
@@ -1711,8 +1723,8 @@ void DEMSolver::SetFamilyExtraMargin(unsigned int N, float extra_size) {
         DEME_ERROR("You are adding an extra margin of size %.7g, but the size should not be smaller than 0.",
                    extra_size);
     }
-    kT->familyExtraMarginSize.at(N) = extra_size;
-    dT->familyExtraMarginSize.at(N) = extra_size;
+    kT->familyExtraMarginSize.setVal(extra_size, N);
+    dT->familyExtraMarginSize.setVal(extra_size, N);
 }
 
 void DEMSolver::ClearCache() {
@@ -1919,18 +1931,26 @@ size_t DEMSolver::ChangeClumpFamily(unsigned int fam_num,
     float3 U = host_make_float3(X.second, Y.second, Z.second);
     size_t count = 0;
 
-    // What follows is a host operation that uses simParams, so we do a sync
-    // But in fact this is not needed (just formality) as all used variables are only re-init modifiable
-    dT->simParams.toHost();
+    // And get those device-major data from device
+    if (dT->solverFlags.canFamilyChangeOnDevice) {
+        dT->familyID.toHost();
+        kT->familyID.toHost();
+    }
+    dT->voxelID.toHost();
+    dT->locX.toHost();
+    dT->locY.toHost();
+    dT->locZ.toHost();
+
     for (bodyID_t ownerID = 0; ownerID < nOwnerBodies; ownerID++) {
-        const ownerType_t this_type = dT->ownerTypes.at(ownerID);
+        // ownerTypes has no way to change on device
+        const ownerType_t this_type = dT->ownerTypes[ownerID];
         if (this_type != OWNER_T_CLUMP)
             continue;
         float3 CoM;
-        voxelID_t voxel = dT->voxelID.at(ownerID);
-        subVoxelPos_t subVoxX = dT->locX.at(ownerID);
-        subVoxelPos_t subVoxY = dT->locY.at(ownerID);
-        subVoxelPos_t subVoxZ = dT->locZ.at(ownerID);
+        voxelID_t voxel = dT->voxelID[ownerID];
+        subVoxelPos_t subVoxX = dT->locX[ownerID];
+        subVoxelPos_t subVoxY = dT->locY[ownerID];
+        subVoxelPos_t subVoxZ = dT->locZ[ownerID];
         hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(CoM.x, CoM.y, CoM.z, voxel, subVoxX, subVoxY, subVoxZ,
                                                                dT->simParams->nvXp2, dT->simParams->nvYp2,
                                                                dT->simParams->voxelSize, dT->simParams->l);
@@ -1941,19 +1961,22 @@ size_t DEMSolver::ChangeClumpFamily(unsigned int fam_num,
         // In region. This can be generalized in future versions.
         if (isBetween(CoM, L, U)) {
             if (orig_fam.size() == 0) {
-                dT->familyID.at(ownerID) = fam_num;
-                kT->familyID.at(ownerID) = fam_num;  // Must do both for dT and kT
+                dT->familyID[ownerID] = fam_num;
+                kT->familyID[ownerID] = fam_num;  // Must do both for dT and kT
                 count++;
             } else {
-                unsigned int old_fam = dT->familyID.at(ownerID);
+                unsigned int old_fam = dT->familyID[ownerID];
                 if (check_exist(orig_fam, old_fam)) {
-                    dT->familyID.at(ownerID) = fam_num;
-                    kT->familyID.at(ownerID) = fam_num;
+                    dT->familyID[ownerID] = fam_num;
+                    kT->familyID[ownerID] = fam_num;
                     count++;
                 }
             }
         }
     }
+
+    dT->familyID.toDevice();
+    kT->familyID.toDevice();
     return count;
 }
 
@@ -2270,6 +2293,9 @@ void DEMSolver::DoDynamicsThenSync(double thisCallDuration) {
     // dT is finished, but the user asks us to sync, so we have to make kT sync with dT. This can be done by calling
     // resetWorkerThreads.
     resetWorkerThreads();
+
+    // This is hardly needed
+    // SyncMemoryTransfer();
 }
 
 void DEMSolver::ShowThreadCollaborationStats() {

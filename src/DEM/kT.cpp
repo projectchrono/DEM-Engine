@@ -172,7 +172,7 @@ inline void DEMKinematicThread::unpackMyBuffer() {
     // DEME_DEBUG_PRINTF("A margin of thickness %.6g is added", simParams->beta);
 
     // Family number is a typical changable quantity on-the-fly. If this flag is on, kT received changes from dT.
-    if (solverFlags.canFamilyChange) {
+    if (solverFlags.canFamilyChangeOnDevice) {
         DEME_GPU_CALL(cudaMemcpy(granData->familyID, familyID_buffer.data(), simParams->nOwnerBodies * sizeof(family_t),
                                  cudaMemcpyDeviceToDevice));
     }
@@ -219,6 +219,9 @@ void DEMKinematicThread::workerThread() {
     // Set the device for this thread
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
     DEME_GPU_CALL(cudaStreamCreate(&streamInfo.stream));
+
+    // Allocate arrays whose length does not depend on user inputs
+    initAllocation();
 
     while (!pSchedSupport->kinematicShouldJoin) {
         {
@@ -327,13 +330,17 @@ void DEMKinematicThread::getTiming(std::vector<std::string>& names, std::vector<
 void DEMKinematicThread::changeFamily(unsigned int ID_from, unsigned int ID_to) {
     family_t ID_from_impl = ID_from;
     family_t ID_to_impl = ID_to;
+
+    migrateFamilyToHost();
     std::replace_if(
-        familyID.begin(), familyID.end(), [ID_from_impl](family_t& i) { return i == ID_from_impl; }, ID_to_impl);
+        familyID.getHostVector().begin(), familyID.getHostVector().end(),
+        [ID_from_impl](family_t& i) { return i == ID_from_impl; }, ID_to_impl);
+    familyID.toDevice();
 }
 
 void DEMKinematicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {
     // Set the gpu for this thread
-    // cudaSetDevice(streamInfo.device);
+    cudaSetDevice(streamInfo.device);
     // cudaStream_t new_stream;
     // cudaStreamCreate(&new_stream);
 
@@ -423,50 +430,80 @@ size_t DEMKinematicThread::estimateHostMemUsage() const {
 
 // Put sim data array pointers in place
 void DEMKinematicThread::packDataPointers() {
-    granData->familyID = familyID.data();
-    granData->voxelID = voxelID.data();
-    granData->locX = locX.data();
-    granData->locY = locY.data();
-    granData->locZ = locZ.data();
-    granData->oriQw = oriQw.data();
-    granData->oriQx = oriQx.data();
-    granData->oriQy = oriQy.data();
-    granData->oriQz = oriQz.data();
-    granData->marginSize = marginSize.data();
-    granData->idGeometryA = idGeometryA.data();
-    granData->idGeometryB = idGeometryB.data();
-    granData->contactType = contactType.data();
-    granData->contactPersistency = contactPersistency.data();
-    granData->previous_idGeometryA = previous_idGeometryA.data();
-    granData->previous_idGeometryB = previous_idGeometryB.data();
-    granData->previous_contactType = previous_contactType.data();
-    granData->contactMapping = contactMapping.data();
-    granData->familyMasks = familyMaskMatrix.data();
-    granData->familyExtraMarginSize = familyExtraMarginSize.data();
+    familyID.bindDevicePointer(&(granData->familyID));
+    voxelID.bindDevicePointer(&(granData->voxelID));
+    locX.bindDevicePointer(&(granData->locX));
+    locY.bindDevicePointer(&(granData->locY));
+    locZ.bindDevicePointer(&(granData->locZ));
+    oriQw.bindDevicePointer(&(granData->oriQw));
+    oriQx.bindDevicePointer(&(granData->oriQx));
+    oriQy.bindDevicePointer(&(granData->oriQy));
+    oriQz.bindDevicePointer(&(granData->oriQz));
+    marginSize.bindDevicePointer(&(granData->marginSize));
+    idGeometryA.bindDevicePointer(&(granData->idGeometryA));
+    idGeometryB.bindDevicePointer(&(granData->idGeometryB));
+    contactType.bindDevicePointer(&(granData->contactType));
+    contactPersistency.bindDevicePointer(&(granData->contactPersistency));
+    previous_idGeometryA.bindDevicePointer(&(granData->previous_idGeometryA));
+    previous_idGeometryB.bindDevicePointer(&(granData->previous_idGeometryB));
+    previous_contactType.bindDevicePointer(&(granData->previous_contactType));
+    contactMapping.bindDevicePointer(&(granData->contactMapping));
+    familyMaskMatrix.bindDevicePointer(&(granData->familyMasks));
+    familyExtraMarginSize.bindDevicePointer(&(granData->familyExtraMarginSize));
 
     // The offset info that indexes into the template arrays
-    granData->ownerClumpBody = ownerClumpBody.data();
-    granData->clumpComponentOffset = clumpComponentOffset.data();
-    granData->clumpComponentOffsetExt = clumpComponentOffsetExt.data();
+    ownerClumpBody.bindDevicePointer(&(granData->ownerClumpBody));
+    clumpComponentOffset.bindDevicePointer(&(granData->clumpComponentOffset));
+    clumpComponentOffsetExt.bindDevicePointer(&(granData->clumpComponentOffsetExt));
 
     // Mesh-related
-    granData->ownerMesh = ownerMesh.data();
-    granData->relPosNode1 = relPosNode1.data();
-    granData->relPosNode2 = relPosNode2.data();
-    granData->relPosNode3 = relPosNode3.data();
+    ownerMesh.bindDevicePointer(&(granData->ownerMesh));
+    relPosNode1.bindDevicePointer(&(granData->relPosNode1));
+    relPosNode2.bindDevicePointer(&(granData->relPosNode2));
+    relPosNode3.bindDevicePointer(&(granData->relPosNode3));
 
     // Template array pointers
     radiiSphere.bindDevicePointer(&(granData->radiiSphere));
-    granData->relPosSphereX = relPosSphereX.data();
-    granData->relPosSphereY = relPosSphereY.data();
-    granData->relPosSphereZ = relPosSphereZ.data();
+    relPosSphereX.bindDevicePointer(&(granData->relPosSphereX));
+    relPosSphereY.bindDevicePointer(&(granData->relPosSphereY));
+    relPosSphereZ.bindDevicePointer(&(granData->relPosSphereZ));
 }
 
 void DEMKinematicThread::migrateDataToDevice() {
+    familyID.toDeviceAsync(streamInfo.stream);
+    voxelID.toDeviceAsync(streamInfo.stream);
+    locX.toDeviceAsync(streamInfo.stream);
+    locY.toDeviceAsync(streamInfo.stream);
+    locZ.toDeviceAsync(streamInfo.stream);
+    oriQw.toDeviceAsync(streamInfo.stream);
+    oriQx.toDeviceAsync(streamInfo.stream);
+    oriQy.toDeviceAsync(streamInfo.stream);
+    oriQz.toDeviceAsync(streamInfo.stream);
+    marginSize.toDeviceAsync(streamInfo.stream);
+    idGeometryA.toDeviceAsync(streamInfo.stream);
+    idGeometryB.toDeviceAsync(streamInfo.stream);
+    contactType.toDeviceAsync(streamInfo.stream);
+    contactPersistency.toDeviceAsync(streamInfo.stream);
+    previous_idGeometryA.toDeviceAsync(streamInfo.stream);
+    previous_idGeometryB.toDeviceAsync(streamInfo.stream);
+    previous_contactType.toDeviceAsync(streamInfo.stream);
+    contactMapping.toDeviceAsync(streamInfo.stream);
+    familyMaskMatrix.toDeviceAsync(streamInfo.stream);
+    familyExtraMarginSize.toDeviceAsync(streamInfo.stream);
+
+    ownerClumpBody.toDeviceAsync(streamInfo.stream);
+    clumpComponentOffset.toDeviceAsync(streamInfo.stream);
+    clumpComponentOffsetExt.toDeviceAsync(streamInfo.stream);
+
+    ownerMesh.toDeviceAsync(streamInfo.stream);
+    relPosNode1.toDeviceAsync(streamInfo.stream);
+    relPosNode2.toDeviceAsync(streamInfo.stream);
+    relPosNode3.toDeviceAsync(streamInfo.stream);
+
     radiiSphere.toDeviceAsync(streamInfo.stream);
-    // relPosSphereX.toDeviceAsync(streamInfo.stream);
-    // relPosSphereY.toDeviceAsync(streamInfo.stream);
-    // relPosSphereZ.toDeviceAsync(streamInfo.stream);
+    relPosSphereX.toDeviceAsync(streamInfo.stream);
+    relPosSphereY.toDeviceAsync(streamInfo.stream);
+    relPosSphereZ.toDeviceAsync(streamInfo.stream);
 
     // Might not be necessary... but it's a big call anyway, let's sync
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -479,6 +516,12 @@ void DEMKinematicThread::migrateDataToHost() {
     // relPosSphereZ.toHostAsync(streamInfo.stream);
 
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+}
+
+void DEMKinematicThread::migrateFamilyToHost() {
+    if (solverFlags.canFamilyChangeOnDevice) {
+        familyID.toHost();
+    }
 }
 
 void DEMKinematicThread::packTransferPointers(DEMDynamicThread*& dT) {
@@ -569,19 +612,19 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     simParams->nMatTuples = nMatTuples;
 
     // Resize the family mask `matrix' (in fact it is flattened)
-    DEME_TRACKED_RESIZE(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
+    DEME_DUAL_ARRAY_RESIZE(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
 
     // Resize to the number of clumps
-    DEME_TRACKED_RESIZE(familyID, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(voxelID, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(locX, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(locY, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(locZ, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(oriQw, nOwnerBodies, 1);
-    DEME_TRACKED_RESIZE(oriQx, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(oriQy, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(oriQz, nOwnerBodies, 0);
-    DEME_TRACKED_RESIZE(marginSize, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(familyID, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(voxelID, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(locX, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(locY, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(locZ, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(oriQw, nOwnerBodies, 1);
+    DEME_DUAL_ARRAY_RESIZE(oriQx, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(oriQy, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(oriQz, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(marginSize, nOwnerBodies, 0);
 
     // Transfer buffer arrays
     // It is cudaMalloc-ed memory, not managed, because we want explicit locality control of buffers
@@ -606,7 +649,7 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
         // DEME_ADVISE_DEVICE(oriQ2_buffer, dT->streamInfo.device);
         // DEME_ADVISE_DEVICE(oriQ3_buffer, dT->streamInfo.device);
 
-        if (solverFlags.canFamilyChange) {
+        if (solverFlags.canFamilyChangeOnDevice) {
             // DEME_ADVISE_DEVICE(familyID_buffer, dT->streamInfo.device);
             DEME_DEVICE_ARRAY_RESIZE(familyID_buffer, nOwnerBodies);
         }
@@ -620,30 +663,30 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     }
 
     // Resize to the number of spheres (or plus num of triangle facets)
-    DEME_TRACKED_RESIZE(ownerClumpBody, nSpheresGM, 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerClumpBody, nSpheresGM, 0);
 
     // Resize to the number of triangle facets
-    DEME_TRACKED_RESIZE(ownerMesh, nTriGM, 0);
-    DEME_TRACKED_RESIZE(relPosNode1, nTriGM, make_float3(0));
-    DEME_TRACKED_RESIZE(relPosNode2, nTriGM, make_float3(0));
-    DEME_TRACKED_RESIZE(relPosNode3, nTriGM, make_float3(0));
+    DEME_DUAL_ARRAY_RESIZE(ownerMesh, nTriGM, 0);
+    DEME_DUAL_ARRAY_RESIZE(relPosNode1, nTriGM, make_float3(0));
+    DEME_DUAL_ARRAY_RESIZE(relPosNode2, nTriGM, make_float3(0));
+    DEME_DUAL_ARRAY_RESIZE(relPosNode3, nTriGM, make_float3(0));
 
     if (solverFlags.useClumpJitify) {
-        DEME_TRACKED_RESIZE(clumpComponentOffset, nSpheresGM, 0);
+        DEME_DUAL_ARRAY_RESIZE(clumpComponentOffset, nSpheresGM, 0);
         // This extended component offset array can hold offset numbers even for big clumps (whereas
         // clumpComponentOffset is typically uint_8, so it may not). If a sphere's component offset index falls in this
         // range then it is not jitified, and the kernel needs to look for it in the global memory.
-        DEME_TRACKED_RESIZE(clumpComponentOffsetExt, nSpheresGM, 0);
+        DEME_DUAL_ARRAY_RESIZE(clumpComponentOffsetExt, nSpheresGM, 0);
         // Resize to the length of the clump templates
         DEME_DUAL_ARRAY_RESIZE(radiiSphere, nClumpComponents, 0);
-        DEME_TRACKED_RESIZE(relPosSphereX, nClumpComponents, 0);
-        DEME_TRACKED_RESIZE(relPosSphereY, nClumpComponents, 0);
-        DEME_TRACKED_RESIZE(relPosSphereZ, nClumpComponents, 0);
+        DEME_DUAL_ARRAY_RESIZE(relPosSphereX, nClumpComponents, 0);
+        DEME_DUAL_ARRAY_RESIZE(relPosSphereY, nClumpComponents, 0);
+        DEME_DUAL_ARRAY_RESIZE(relPosSphereZ, nClumpComponents, 0);
     } else {
         DEME_DUAL_ARRAY_RESIZE(radiiSphere, nSpheresGM, 0);
-        DEME_TRACKED_RESIZE(relPosSphereX, nSpheresGM, 0);
-        DEME_TRACKED_RESIZE(relPosSphereY, nSpheresGM, 0);
-        DEME_TRACKED_RESIZE(relPosSphereZ, nSpheresGM, 0);
+        DEME_DUAL_ARRAY_RESIZE(relPosSphereX, nSpheresGM, 0);
+        DEME_DUAL_ARRAY_RESIZE(relPosSphereY, nSpheresGM, 0);
+        DEME_DUAL_ARRAY_RESIZE(relPosSphereZ, nSpheresGM, 0);
     }
 
     // Arrays for kT produced contact info
@@ -652,15 +695,15 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     // enough to decrease the number of reallocations in the simulation, but not too large that eats too much memory.
     {
         size_t cnt_arr_size = DEME_MAX(*solverScratchSpace.numPrevContacts, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
-        DEME_TRACKED_RESIZE(idGeometryA, cnt_arr_size, 0);
-        DEME_TRACKED_RESIZE(idGeometryB, cnt_arr_size, 0);
-        DEME_TRACKED_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
+        DEME_DUAL_ARRAY_RESIZE(idGeometryA, cnt_arr_size, 0);
+        DEME_DUAL_ARRAY_RESIZE(idGeometryB, cnt_arr_size, 0);
+        DEME_DUAL_ARRAY_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
         if (!solverFlags.isHistoryless) {
-            DEME_TRACKED_RESIZE(contactPersistency, cnt_arr_size, CONTACT_NOT_PERSISTENT);
-            DEME_TRACKED_RESIZE(previous_idGeometryA, cnt_arr_size, 0);
-            DEME_TRACKED_RESIZE(previous_idGeometryB, cnt_arr_size, 0);
-            DEME_TRACKED_RESIZE(previous_contactType, cnt_arr_size, NOT_A_CONTACT);
-            DEME_TRACKED_RESIZE(contactMapping, cnt_arr_size, NULL_MAPPING_PARTNER);
+            DEME_DUAL_ARRAY_RESIZE(contactPersistency, cnt_arr_size, CONTACT_NOT_PERSISTENT);
+            DEME_DUAL_ARRAY_RESIZE(previous_idGeometryA, cnt_arr_size, 0);
+            DEME_DUAL_ARRAY_RESIZE(previous_idGeometryB, cnt_arr_size, 0);
+            DEME_DUAL_ARRAY_RESIZE(previous_contactType, cnt_arr_size, NOT_A_CONTACT);
+            DEME_DUAL_ARRAY_RESIZE(contactMapping, cnt_arr_size, NULL_MAPPING_PARTNER);
         }
     }
 }
@@ -668,7 +711,7 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
 void DEMKinematicThread::registerPolicies(const std::vector<notStupidBool_t>& family_mask_matrix) {
     // Store family mask
     for (size_t i = 0; i < family_mask_matrix.size(); i++)
-        familyMaskMatrix.at(i) = family_mask_matrix.at(i);
+        familyMaskMatrix[i] = family_mask_matrix.at(i);
 }
 
 void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
@@ -698,9 +741,9 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
 
         for (auto elem : clump_templates.spRelPos) {
             for (auto loc : elem) {
-                relPosSphereX.at(k) = loc.x;
-                relPosSphereY.at(k) = loc.y;
-                relPosSphereZ.at(k) = loc.z;
+                relPosSphereX[k] = loc.x;
+                relPosSphereY[k] = loc.y;
+                relPosSphereZ[k] = loc.z;
                 k++;
             }
         }
@@ -734,32 +777,32 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
             auto this_clump_no_sp_relPos = clump_templates.spRelPos.at(type_of_this_clump);
 
             for (size_t j = 0; j < this_clump_no_sp_radii.size(); j++) {
-                ownerClumpBody.at(nExistSpheres + k) = nExistOwners + i;
+                ownerClumpBody[nExistSpheres + k] = nExistOwners + i;
 
                 // Depending on whether we jitify or flatten
                 if (solverFlags.useClumpJitify) {
                     // This component offset, is it too large that can't live in the jitified array?
                     unsigned int this_comp_offset = prescans_comp.at(type_of_this_clump) + j;
-                    clumpComponentOffsetExt.at(nExistSpheres + k) = this_comp_offset;
+                    clumpComponentOffsetExt[nExistSpheres + k] = this_comp_offset;
                     if (this_comp_offset < simParams->nJitifiableClumpComponents) {
-                        clumpComponentOffset.at(nExistSpheres + k) = this_comp_offset;
+                        clumpComponentOffset[nExistSpheres + k] = this_comp_offset;
                     } else {
                         // If not, an indicator will be put there
-                        clumpComponentOffset.at(nExistSpheres + k) = RESERVED_CLUMP_COMPONENT_OFFSET;
+                        clumpComponentOffset[nExistSpheres + k] = RESERVED_CLUMP_COMPONENT_OFFSET;
                     }
                 } else {
                     radiiSphere[nExistSpheres + k] = this_clump_no_sp_radii.at(j);
                     const float3 relPos = this_clump_no_sp_relPos.at(j);
-                    relPosSphereX.at(nExistSpheres + k) = relPos.x;
-                    relPosSphereY.at(nExistSpheres + k) = relPos.y;
-                    relPosSphereZ.at(nExistSpheres + k) = relPos.z;
+                    relPosSphereX[nExistSpheres + k] = relPos.x;
+                    relPosSphereY[nExistSpheres + k] = relPos.y;
+                    relPosSphereZ[nExistSpheres + k] = relPos.z;
                 }
 
                 k++;
             }
 
             family_t this_family_num = input_clump_family.at(i);
-            familyID.at(nExistOwners + i) = this_family_num;
+            familyID[nExistOwners + i] = this_family_num;
         }
     }
 
@@ -767,7 +810,7 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
     size_t owner_offset_for_ext_obj = nExistOwners + input_clump_types.size();
     for (size_t i = 0; i < input_ext_obj_family.size(); i++) {
         family_t this_family_num = input_ext_obj_family.at(i);
-        familyID.at(i + owner_offset_for_ext_obj) = this_family_num;
+        familyID[i + owner_offset_for_ext_obj] = this_family_num;
     }
 
     // Mesh objs
@@ -781,15 +824,15 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
             // input_mesh_facet_owner run length is the num of facets in this mesh entity
             if (input_mesh_facet_owner.at(k) != this_facet_owner)
                 break;
-            ownerMesh.at(nExistingFacets + k) = owner_offset_for_mesh_obj + this_facet_owner;
+            ownerMesh[nExistingFacets + k] = owner_offset_for_mesh_obj + this_facet_owner;
             DEMTriangle this_tri = input_mesh_facets.at(k);
-            relPosNode1.at(nExistingFacets + k) = this_tri.p1;
-            relPosNode2.at(nExistingFacets + k) = this_tri.p2;
-            relPosNode3.at(nExistingFacets + k) = this_tri.p3;
+            relPosNode1[nExistingFacets + k] = this_tri.p1;
+            relPosNode2[nExistingFacets + k] = this_tri.p2;
+            relPosNode3[nExistingFacets + k] = this_tri.p3;
         }
 
         family_t this_family_num = input_mesh_obj_family.at(i);
-        familyID.at(i + owner_offset_for_mesh_obj) = this_family_num;
+        familyID[i + owner_offset_for_mesh_obj] = this_family_num;
         // DEME_DEBUG_PRINTF("kT just loaded a mesh in family %u", +(this_family_num));
         // DEME_DEBUG_PRINTF("Number of triangle facets loaded thus far: %zu", k);
     }
@@ -874,7 +917,7 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
 }
 
 void DEMKinematicThread::initAllocation() {
-    DEME_TRACKED_RESIZE(familyExtraMarginSize, NUM_AVAL_FAMILIES, 0);
+    DEME_DUAL_ARRAY_RESIZE(familyExtraMarginSize, NUM_AVAL_FAMILIES, 0);
 }
 
 void DEMKinematicThread::deallocateEverything() {
@@ -887,6 +930,9 @@ void DEMKinematicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTri
         relPosNode2[start + i] = triangles[i].p2;
         relPosNode3[start + i] = triangles[i].p3;
     }
+    relPosNode1.toDeviceAsync(streamInfo.stream, start, triangles.size());
+    relPosNode2.toDeviceAsync(streamInfo.stream, start, triangles.size());
+    relPosNode3.toDeviceAsync(streamInfo.stream, start, triangles.size());
 }
 
 void DEMKinematicThread::updateTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& updates) {
@@ -895,6 +941,9 @@ void DEMKinematicThread::updateTriNodeRelPos(size_t start, const std::vector<DEM
         relPosNode2[start + i] += updates[i].p2;
         relPosNode3[start + i] += updates[i].p3;
     }
+    relPosNode1.toDeviceAsync(streamInfo.stream, start, updates.size());
+    relPosNode2.toDeviceAsync(streamInfo.stream, start, updates.size());
+    relPosNode3.toDeviceAsync(streamInfo.stream, start, updates.size());
 }
 
 }  // namespace deme

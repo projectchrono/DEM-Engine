@@ -113,89 +113,94 @@ class DEMKinematicThread {
     // Component sphere's radius
     DualArray<float> radiiSphere = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // The distinct sphere local position (wrt CoM) values
-    std::vector<float, ManagedAllocator<float>> relPosSphereX;
-    std::vector<float, ManagedAllocator<float>> relPosSphereY;
-    std::vector<float, ManagedAllocator<float>> relPosSphereZ;
+    DualArray<float> relPosSphereX = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> relPosSphereY = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> relPosSphereZ = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Triangles (templates) are given a special place (unlike other analytical shapes), b/c we expect them to appear
     // frequently as meshes.
-    std::vector<float3, ManagedAllocator<float3>> relPosNode1;
-    std::vector<float3, ManagedAllocator<float3>> relPosNode2;
-    std::vector<float3, ManagedAllocator<float3>> relPosNode3;
+    DualArray<float3> relPosNode1 = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float3> relPosNode2 = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float3> relPosNode3 = DualArray<float3>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // External object's components may need the following arrays to store some extra defining features of them. We
     // assume there are usually not too many of them in a simulation.
     // Relative position w.r.t. the owner. For example, the following 3 arrays may hold center points for plates, or tip
     // positions for cones.
-    std::vector<float, ManagedAllocator<float>> relPosEntityX;
-    std::vector<float, ManagedAllocator<float>> relPosEntityY;
-    std::vector<float, ManagedAllocator<float>> relPosEntityZ;
+    DualArray<float> relPosEntityX = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> relPosEntityY = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> relPosEntityZ = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // Some orientation specifiers. For example, the following 3 arrays may hold normal vectors for planes, or center
     // axis vectors for cylinders.
-    std::vector<float, ManagedAllocator<float>> oriEntityX;
-    std::vector<float, ManagedAllocator<float>> oriEntityY;
-    std::vector<float, ManagedAllocator<float>> oriEntityZ;
+    DualArray<float> oriEntityX = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> oriEntityY = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> oriEntityZ = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // Some size specifiers. For example, the following 3 arrays may hold top, bottom and length information for finite
     // cylinders.
-    std::vector<float, ManagedAllocator<float>> sizeEntity1;
-    std::vector<float, ManagedAllocator<float>> sizeEntity2;
-    std::vector<float, ManagedAllocator<float>> sizeEntity3;
+    DualArray<float> sizeEntity1 = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> sizeEntity2 = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<float> sizeEntity3 = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The voxel ID (split into 3 parts, representing XYZ location)
-    std::vector<voxelID_t, ManagedAllocator<voxelID_t>> voxelID;
+    DualArray<voxelID_t> voxelID = DualArray<voxelID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The XYZ local location inside a voxel
-    std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locX;
-    std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locY;
-    std::vector<subVoxelPos_t, ManagedAllocator<subVoxelPos_t>> locZ;
+    DualArray<subVoxelPos_t> locX = DualArray<subVoxelPos_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<subVoxelPos_t> locY = DualArray<subVoxelPos_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<subVoxelPos_t> locZ = DualArray<subVoxelPos_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The clump quaternion
-    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQw;
-    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQx;
-    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQy;
-    std::vector<oriQ_t, ManagedAllocator<oriQ_t>> oriQz;
+    DualArray<oriQ_t> oriQw = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<oriQ_t> oriQx = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<oriQ_t> oriQy = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<oriQ_t> oriQz = DualArray<oriQ_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // dT-supplied system velocity
-    std::vector<float, ManagedAllocator<float>> marginSize;
+    DualArray<float> marginSize = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Clump's family identification code. Used in determining whether they can be contacts between two families, and
     // whether a family has prescribed motions.
-    std::vector<family_t, ManagedAllocator<family_t>> familyID;
+    DualArray<family_t> familyID = DualArray<family_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // A long array (usually 32640 elements) registering whether between 2 families there should be contacts
-    std::vector<notStupidBool_t, ManagedAllocator<notStupidBool_t>> familyMaskMatrix;
+    DualArray<notStupidBool_t> familyMaskMatrix =
+        DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The amount of contact margin that each family should add to its associated contact geometries. Default is 0, and
     // that means geometries should be considered in contact when they are physically in contact.
-    std::vector<float, ManagedAllocator<float>> familyExtraMarginSize;
+    DualArray<float> familyExtraMarginSize = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // kT computed contact pair info
-    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryA;
-    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> idGeometryB;
-    std::vector<contact_t, ManagedAllocator<contact_t>> contactType;
+    DualArray<bodyID_t> idGeometryA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> idGeometryB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<contact_t> contactType = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Contact pair info at the previous time step. This is needed by dT so enduring contacts are identified in
     // history-based models.
-    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> previous_idGeometryA;
-    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> previous_idGeometryB;
-    std::vector<contact_t, ManagedAllocator<contact_t>> previous_contactType;
-    std::vector<contactPairs_t, ManagedAllocator<contactPairs_t>> contactMapping;
+    DualArray<bodyID_t> previous_idGeometryA = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> previous_idGeometryB = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<contact_t> previous_contactType = DualArray<contact_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<contactPairs_t> contactMapping =
+        DualArray<contactPairs_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // Sphere-related arrays in managed memory
     // Owner body ID of this component
-    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerClumpBody;
-    std::vector<bodyID_t, ManagedAllocator<bodyID_t>> ownerMesh;
+    DualArray<bodyID_t> ownerClumpBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    DualArray<bodyID_t> ownerMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The ID that maps this sphere component's geometry-defining parameters, when this component is jitified
-    std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> clumpComponentOffset;
+    DualArray<clumpComponentOffset_t> clumpComponentOffset =
+        DualArray<clumpComponentOffset_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // The ID that maps this sphere component's geometry-defining parameters, when this component is not jitified (too
     // many templates)
-    std::vector<clumpComponentOffsetExt_t, ManagedAllocator<clumpComponentOffsetExt_t>> clumpComponentOffsetExt;
+    DualArray<clumpComponentOffsetExt_t> clumpComponentOffsetExt =
+        DualArray<clumpComponentOffsetExt_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     // The ID that maps this analytical entity component's geometry-defining parameters, when this component is jitified
-    // std::vector<clumpComponentOffset_t, ManagedAllocator<clumpComponentOffset_t>> analComponentOffset;
+    // DualArray<clumpComponentOffset_t> analComponentOffset;
 
     // Records if this contact is persistent and serves as kT's work array on treating their persistency.
-    std::vector<notStupidBool_t, ManagedAllocator<notStupidBool_t>> contactPersistency;
+    DualArray<notStupidBool_t> contactPersistency =
+        DualArray<notStupidBool_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // kT's timers
     std::vector<std::string> timer_names = {"Discretize domain",      "Find contact pairs", "Build history map",
@@ -222,9 +227,6 @@ class DEMKinematicThread {
 
         // Launch a worker thread bound to this instance
         th = std::move(std::thread([this]() { this->workerThread(); }));
-
-        // Allocate arrays whose length does not depend on user inputs
-        initAllocation();
     }
     ~DEMKinematicThread() {
         // std::cout << "Kinematic thread closing..." << std::endl;
@@ -351,6 +353,9 @@ class DEMKinematicThread {
     void migrateDataToDevice();
     void migrateDataToHost();
 
+    // Sync my stream
+    void syncMemoryTransfer() { DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream)); }
+
     /// Return timing inforation for this current run
     void getTiming(std::vector<std::string>& names, std::vector<double>& vals);
 
@@ -451,6 +456,9 @@ class DEMKinematicThread {
     };
 
     AccumTimer CDAccumTimer = AccumTimer();
+
+    // A collection of migrate-to-host methods. Bulk migrate-to-host is by nature on-demand only.
+    void migrateFamilyToHost();
 
 };  // kT ends
 
