@@ -102,7 +102,7 @@ class DEMDynamicThread {
 
     // Those are the smaller ones, the unique, template ones
     // The mass values
-    DualArray<float> massOwnerBody = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
+    ManagedArray<float> massOwnerBody = ManagedArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The components of MOI values
     DualArray<float> mmiXX = DualArray<float>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
