@@ -347,40 +347,6 @@ enum class ADAPT_TS_TYPE { NONE, MAX_VEL, INT_DIFF };
             "-I" + std::string(DEME_CUDA_TOOLKIT_HEADERS), "-diag-suppress=550", "-diag-suppress=177" \
     }
 
-// I wasn't able to resolve a decltype problem with vector of vectors, so I have to create another macro for this kind
-// of tracked resize... not ideal.
-#define DEME_TRACKED_RESIZE_FLOAT(vec, newsize, val)               \
-    {                                                              \
-        size_t old_size = vec.size();                              \
-        vec.resize(newsize, val);                                  \
-        size_t new_size = vec.size();                              \
-        size_t byte_delta = sizeof(float) * (new_size - old_size); \
-        m_approxDeviceBytesUsed += byte_delta;                     \
-    }
-
-#define DEME_TRACKED_RESIZE(vec, newsize, val)                 \
-    {                                                          \
-        size_t item_size = sizeof(decltype(vec)::value_type);  \
-        size_t old_size = vec.size();                          \
-        vec.resize(newsize, val);                              \
-        size_t new_size = vec.size();                          \
-        size_t byte_delta = item_size * (new_size - old_size); \
-        m_approxDeviceBytesUsed += byte_delta;                 \
-        m_approxHostBytesUsed += byte_delta;                   \
-    }
-
-// DEME_DUAL_ARRAY_RESIZE is a reminder for developers that a work array is resized, and this may automatically change
-// the external device pointer this array's bound to. Therefore, after this call, syncing the data pointer bundle
-// (granData) to device may be needed, and you remember to cudaSetDevice beforehand so it allocates to correct places.
-#define DEME_DUAL_ARRAY_RESIZE(vec, newsize, val) \
-    { vec.resize(newsize, val); }
-#define DEME_DUAL_ARRAY_RESIZE_NOVAL(vec, newsize) \
-    { vec.resize(newsize); }
-
-// Simply a reminder that this is a device array resize, to distinguish from some general .resize calls
-#define DEME_DEVICE_ARRAY_RESIZE(vec, newsize) \
-    { vec.resize(newsize); }
-
 // =============================================================================
 // NOW SOME HOST-SIDE SIMPLE STRUCTS USED BY THE DEM MODULE
 // =============================================================================
