@@ -166,7 +166,7 @@ int main() {
         if (curr_step % out_steps == 0) {
             char filename[100], meshname[100];
             sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
-            sprintf(meshname, "DEMdemo_mesh_%04d.vtk",  currframe);
+            sprintf(meshname, "DEMdemo_mesh_%04d.vtk", currframe);
             DEMSim.WriteSphereFile(out_dir / filename);
             // DEMSim.WriteMeshFile(out_dir / meshname);
             std::cout << "Compression bulk density: " << bulk_density << std::endl;
@@ -254,7 +254,7 @@ int main() {
             char filename[100], meshname[100];
             std::cout << "Outputting frame: " << currframe << std::endl;
             sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
-            sprintf(meshname, "DEMdemo_mesh_%04d.vtk",  currframe++);
+            sprintf(meshname, "DEMdemo_mesh_%04d.vtk", currframe++);
             DEMSim.WriteSphereFile(out_dir / filename);
             DEMSim.WriteMeshFile(out_dir / meshname);
             DEMSim.ShowThreadCollaborationStats();

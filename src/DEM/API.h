@@ -1013,20 +1013,22 @@ class DEMSolver {
 
     /// Write the current status of clumps to a file
     void WriteClumpFile(const std::string& outfilename, unsigned int accuracy = 10) const;
-    void WriteClumpFile(const std::filesystem::path& outfilename, unsigned int accuracy = 10) const {WriteClumpFile(outfilename.string(),accuracy);}
+    void WriteClumpFile(const std::filesystem::path& outfilename, unsigned int accuracy = 10) const {
+        WriteClumpFile(outfilename.string(), accuracy);
+    }
     /// Write the current status of `clumps' to a file, but not as clumps, instead, as each individual sphere. This may
     /// make small-scale rendering easier.
     void WriteSphereFile(const std::string& outfilename) const;
-    void WriteSphereFile(const std::filesystem::path& outfilename) const {WriteSphereFile(outfilename.string());}
+    void WriteSphereFile(const std::filesystem::path& outfilename) const { WriteSphereFile(outfilename.string()); }
     /// @brief Write all contact pairs to a file.
     /// @details The outputted torque using this method is in global, rather than each object's local coordinate system.
     /// @param outfilename Output filename.
     /// @param force_thres Forces with magnitude smaller than this amount will not be outputted.
     void WriteContactFile(const std::string& outfilename, float force_thres = DEME_TINY_FLOAT) const;
-    void WriteContactFile(const std::filesystem::path& outfilename) const {WriteContactFile(outfilename.string());}
+    void WriteContactFile(const std::filesystem::path& outfilename) const { WriteContactFile(outfilename.string()); }
     /// Write the current status of all meshes to a file
     void WriteMeshFile(const std::string& outfilename) const;
-    void WriteMeshFile(const std::filesystem::path& outfilename) const {WriteMeshFile(outfilename.string());}
+    void WriteMeshFile(const std::filesystem::path& outfilename) const { WriteMeshFile(outfilename.string()); }
 
     /// @brief Read 3 columns of your choice from a CSV filem and group them by clump_header.
     /// @param infilename CSV filename.

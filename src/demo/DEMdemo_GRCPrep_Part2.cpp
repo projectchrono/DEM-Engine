@@ -227,7 +227,7 @@ int main() {
             std::cout << "Bulk density in compression " << matter_mass / total_volume << std::endl;
             DEMSim.ShowThreadCollaborationStats();
             char filename[100];
-            sprintf(filename, "DEMdemo_output_%04d.csv",  currframe++);
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe++);
             DEMSim.WriteSphereFile(out_dir / filename);
         }
         now_z -= compressor_v * step_size;

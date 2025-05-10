@@ -173,7 +173,7 @@ int main() {
         sprintf(meshname, "DEMdemo_mesh_%04d.vtk", frame_count++);
         DEMSim.WriteSphereFile(out_dir / filename);
         DEMSim.WriteMeshFile(out_dir / meshname);
-        std::filesystem::path force_filepath = out_dir/force_filename;
+        std::filesystem::path force_filepath = out_dir / force_filename;
         writeFloat3VectorsToCSV(force_csv_header, {points, forces}, force_filepath.string(), num_force_pairs);
         DEMSim.ShowThreadCollaborationStats();
         DEMSim.DoDynamics(frame_time);
@@ -198,7 +198,7 @@ int main() {
             sprintf(meshname, "DEMdemo_mesh_%04d.vtk", frame_count++);
             DEMSim.WriteSphereFile(out_dir / filename);
             DEMSim.WriteMeshFile(out_dir / meshname);
-            std::filesystem::path force_filepath = out_dir/force_filename;
+            std::filesystem::path force_filepath = out_dir / force_filename;
             // We write force pairs that are related to the mesh to a file
             num_force_pairs = flex_mesh_tracker->GetContactForces(points, forces);
             writeFloat3VectorsToCSV(force_csv_header, {points, forces}, force_filepath.string(), num_force_pairs);

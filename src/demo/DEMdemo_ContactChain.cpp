@@ -136,7 +136,7 @@ int main() {
         std::cout << "Output file: " << currframe << " at time " << t << " s." << std::endl;
         char filename[100], cnt_filename[100];
         sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
-        sprintf(cnt_filename, "Contact_pairs_%04d.csv",  currframe);
+        sprintf(cnt_filename, "Contact_pairs_%04d.csv", currframe);
 
         DEMSim.WriteSphereFile(out_dir / filename);
         DEMSim.WriteContactFile(out_dir / cnt_filename);

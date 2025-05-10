@@ -158,7 +158,7 @@ int main() {
         for (float t = 0; t < settle_batch_time; t += settle_frame_time) {
             std::cout << "Frame: " << currframe << std::endl;
             char filename[100];
-            sprintf(filename, "DEMdemo_output_%04d.csv",  currframe++);
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe++);
             DEMSim.WriteSphereFile(out_dir / filename);
             DEMSim.DoDynamicsThenSync(settle_frame_time);
         }

@@ -173,7 +173,7 @@ int main() {
         char filename[100], meshname[100];
         std::cout << "Outputting frame: " << frame_count << std::endl;
         sprintf(filename, "DEMdemo_output_%04d.csv", frame_count);
-        sprintf(meshname, "DEMdemo_mesh_%04d.vtk",frame_count++);
+        sprintf(meshname, "DEMdemo_mesh_%04d.vtk", frame_count++);
         DEMSim.WriteSphereFile(out_dir / filename);
         DEMSim.WriteMeshFile(out_dir / meshname);
         DEMSim.ShowThreadCollaborationStats();
@@ -200,7 +200,7 @@ int main() {
         if (step_count % out_steps == 0) {
             char filename[100], meshname[100];
             std::cout << "Outputting frame: " << frame_count << std::endl;
-            sprintf(filename, "DEMdemo_output_%04d.csv",  frame_count);
+            sprintf(filename, "DEMdemo_output_%04d.csv", frame_count);
             sprintf(meshname, "DEMdemo_mesh_%04d.vtk", frame_count++);
             DEMSim.WriteSphereFile(out_dir / filename);
             DEMSim.WriteMeshFile(out_dir / meshname);

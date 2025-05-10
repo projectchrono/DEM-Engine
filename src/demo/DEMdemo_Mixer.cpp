@@ -128,11 +128,11 @@ int main() {
     for (float t = 0; t < sim_end; t += frame_time) {
         std::cout << "Frame: " << currframe << std::endl;
         char filename[100], meshfilename[100], cnt_filename[100];
-        sprintf(filename, "DEMdemo_output_%04d.csv",  currframe);
-        sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk",  currframe);
-        sprintf(cnt_filename, "Contact_pairs_%04d.csv",  currframe++);
+        sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+        sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk", currframe);
+        sprintf(cnt_filename, "Contact_pairs_%04d.csv", currframe++);
         DEMSim.WriteSphereFile(out_dir / filename);
-        DEMSim.WriteMeshFile(out_dir/meshfilename);
+        DEMSim.WriteMeshFile(out_dir / meshfilename);
         // DEMSim.WriteContactFile(out_dir / cnt_filename);
 
         float max_v = max_v_finder->GetValue();

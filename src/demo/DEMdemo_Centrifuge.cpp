@@ -160,7 +160,7 @@ int main() {
             std::cout << "Frame: " << currframe << std::endl;
             DEMSim.ShowThreadCollaborationStats();
             char filename[100];
-            sprintf(filename, "DEMdemo_output_%04d.csv",  currframe);
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
             DEMSim.WriteSphereFile(out_dir / filename);
             currframe++;
             max_v = max_v_finder->GetValue();

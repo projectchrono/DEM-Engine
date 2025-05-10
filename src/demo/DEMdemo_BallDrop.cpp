@@ -166,10 +166,10 @@ int main() {
                 for (float t = 0; t < settle_time; t += frame_time) {
                     std::cout << "Frame: " << currframe << std::endl;
                     char filename[100], meshfilename[100];
-                    sprintf(filename, "DEMdemo_output_%04d.csv",  currframe);
+                    sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
                     sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk", currframe);
-                    DEMSim.WriteSphereFile(out_dir/filename);
-                    DEMSim.WriteMeshFile(out_dir/meshfilename);
+                    DEMSim.WriteSphereFile(out_dir / filename);
+                    DEMSim.WriteMeshFile(out_dir / meshfilename);
                     currframe++;
 
                     DEMSim.DoDynamicsThenSync(frame_time);
@@ -202,10 +202,10 @@ int main() {
                     std::cout << "Frame: " << currframe << std::endl;
                     char filename[100], meshfilename[100], cnt_filename[100];
                     sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
-                    sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk",  currframe);
+                    sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk", currframe);
                     // sprintf(cnt_filename, "Contact_pairs_%04d.csv", currframe);
-                    DEMSim.WriteSphereFile(out_dir/filename);
-                    DEMSim.WriteMeshFile(out_dir/meshfilename);
+                    DEMSim.WriteSphereFile(out_dir / filename);
+                    DEMSim.WriteMeshFile(out_dir / meshfilename);
                     // DEMSim.WriteContactFile(out_dir / cnt_filename);
                     currframe++;
                 }

@@ -136,15 +136,15 @@ int main() {
         char filename[100], meshfilename[100];
         sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
         sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk", currframe);
-        DEMSim.WriteSphereFile(out_dir/filename);
-        DEMSim.WriteMeshFile(out_dir/meshfilename);
+        DEMSim.WriteSphereFile(out_dir / filename);
+        DEMSim.WriteMeshFile(out_dir / meshfilename);
         currframe++;
 
         DEMSim.DoDynamicsThenSync(frame_time);
         DEMSim.ShowThreadCollaborationStats();
     }
 
-    path cp_filename = out_dir/"bed.csv";
+    path cp_filename = out_dir / "bed.csv";
     DEMSim.WriteClumpFile(cp_filename);
 
     // This is to show that you can change the material for all the particles in a family... although here,
@@ -168,10 +168,10 @@ int main() {
         std::cout << "Frame: " << currframe << std::endl;
         char filename[100], meshfilename[100], cnt_filename[100];
         sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
-        sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk",  currframe);
+        sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk", currframe);
         // sprintf(cnt_filename, "Contact_pairs_%04d.csv", currframe);
-        DEMSim.WriteSphereFile(out_dir/filename);
-        DEMSim.WriteMeshFile(out_dir/meshfilename);
+        DEMSim.WriteSphereFile(out_dir / filename);
+        DEMSim.WriteMeshFile(out_dir / meshfilename);
         // DEMSim.WriteContactFile(out_dir / cnt_filename);
         currframe++;
 
