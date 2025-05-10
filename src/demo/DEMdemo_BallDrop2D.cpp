@@ -44,7 +44,7 @@ int main() {
     DEMSim.SetMeshOutputFormat("VTK");
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_BallDrop2D";
+    out_dir /= "DemoOutput_BallDrop2D";
     create_directory(out_dir);
 
     // E, nu, CoR, mu, Crr...
@@ -133,20 +133,19 @@ int main() {
     // We can let it settle first
     for (float t = 0; t < settle_time; t += frame_time) {
         std::cout << "Frame: " << currframe << std::endl;
-        char filename[200], meshfilename[200];
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-        sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
-        DEMSim.WriteSphereFile(std::string(filename));
-        DEMSim.WriteMeshFile(std::string(meshfilename));
+        char filename[100], meshfilename[100];
+        sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+        sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk", currframe);
+        DEMSim.WriteSphereFile(out_dir/filename);
+        DEMSim.WriteMeshFile(out_dir/meshfilename);
         currframe++;
 
         DEMSim.DoDynamicsThenSync(frame_time);
         DEMSim.ShowThreadCollaborationStats();
     }
 
-    char cp_filename[200];
-    sprintf(cp_filename, "%s/bed.csv", out_dir.c_str());
-    DEMSim.WriteClumpFile(std::string(cp_filename));
+    path cp_filename = out_dir/"bed.csv";
+    DEMSim.WriteClumpFile(cp_filename);
 
     // This is to show that you can change the material for all the particles in a family... although here,
     // mat_type_terrain_sim and mat_type_terrain are the same material so there is no effect; you can define
@@ -167,13 +166,13 @@ int main() {
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_time; t += frame_time) {
         std::cout << "Frame: " << currframe << std::endl;
-        char filename[200], meshfilename[200], cnt_filename[200];
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-        sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
-        // sprintf(cnt_filename, "%s/Contact_pairs_%04d.csv", out_dir.c_str(), currframe);
-        DEMSim.WriteSphereFile(std::string(filename));
-        DEMSim.WriteMeshFile(std::string(meshfilename));
-        // DEMSim.WriteContactFile(std::string(cnt_filename));
+        char filename[100], meshfilename[100], cnt_filename[100];
+        sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+        sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk",  currframe);
+        // sprintf(cnt_filename, "Contact_pairs_%04d.csv", currframe);
+        DEMSim.WriteSphereFile(out_dir/filename);
+        DEMSim.WriteMeshFile(out_dir/meshfilename);
+        // DEMSim.WriteContactFile(out_dir / cnt_filename);
         currframe++;
 
         DEMSim.DoDynamics(frame_time);

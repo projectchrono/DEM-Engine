@@ -11,6 +11,7 @@
 #include <thread>
 #include <unordered_map>
 #include <set>
+#include <functional>
 
 #include <core/ApiVersion.h>
 #include <core/utils/CudaAllocator.hpp>
@@ -19,7 +20,6 @@
 #include <core/utils/DataMigrationHelper.hpp>
 #include <nvmath/helper_math.cuh>
 #include <core/utils/GpuError.h>
-
 #include <DEM/BdrsAndObjs.h>
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>

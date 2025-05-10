@@ -76,12 +76,12 @@ void EllpsiodFallingOver() {
 
     float frame_time = 1e-1;
     path out_dir = current_path();
-    out_dir += "/DemoOutput_TestPack";
+    out_dir /= "DemoOutput_TestPack";
     create_directory(out_dir);
     for (int i = 0; i < 6.0 / frame_time; i++) {
         char filename[100];
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-        DEMSim.WriteSphereFile(std::string(filename));
+        sprintf(filename, "DEMdemo_output_%04d.csv", i);
+        DEMSim.WriteSphereFile(out_dir / filename);
         std::cout << "Frame: " << i << std::endl;
         float4 oriQ = ellipsoid_tracker->OriQ();
         float3 angVel = ellipsoid_tracker->AngVelLocal();
@@ -130,13 +130,13 @@ void SphereRollUpIncline() {
         DEMSim.Initialize();
 
         path out_dir = current_path();
-        out_dir += "/DemoOutput_TestPack";
+        out_dir /= "DemoOutput_TestPack";
         create_directory(out_dir);
         for (int i = 0; i < 0.15 / step_time; i++) {
             char filename[100];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
+            sprintf(filename, "DEMdemo_output_%04d.csv", i);
             // if (i % 100 == 0) {
-            //     DEMSim.WriteSphereFile(std::string(filename));
+            //     DEMSim.WriteSphereFile(out_dir / filename);
             // }
             std::cout << "Frame: " << i << std::endl;
             float3 vel = sphere_tracker->Vel();
@@ -254,15 +254,15 @@ void SphereStack() {
                 float top_sp_Z = 99999.9;
                 float3 pos = make_float3(0);
                 path out_dir = current_path();
-                out_dir += "/DemoOutput_TestPack";
+                out_dir /= "DemoOutput_TestPack";
                 create_directory(out_dir);
                 int i = 0;
                 while (!is_near(pos.z, top_sp_Z, 1e-4)) {
                     top_sp_Z = pos.z;
                     if (run_num == 0) {
                         char filename[100];
-                        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-                        DEMSim.WriteSphereFile(std::string(filename));
+                        sprintf(filename, "DEMdemo_output_%04d.csv", i);
+                        DEMSim.WriteSphereFile(out_dir / filename);
                     }
                     DEMSim.DoDynamics(frame_time);
                     pos = sphere_tracker->Pos();

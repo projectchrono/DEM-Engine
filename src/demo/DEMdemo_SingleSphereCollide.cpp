@@ -120,7 +120,7 @@ int main() {
 
     // Ready simulation
     path out_dir = current_path();
-    out_dir += "/DemoOutput_SingleSphereCollide";
+    out_dir /= "DemoOutput_SingleSphereCollide";
     create_directory(out_dir);
     // bool changed_family = false;
 
@@ -133,17 +133,17 @@ int main() {
         //     changed_family = true;
         // }
 
-        char filename[200];
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-        DEMSim.WriteSphereFile(std::string(filename));
+        char filename[100];
+        sprintf(filename, "DEMdemo_output_%04d.csv", i);
+        DEMSim.WriteSphereFile(out_dir / filename);
 
-        char cnt_filename[200];
-        sprintf(cnt_filename, "%s/Contact_pairs_%04d.csv", out_dir.c_str(), i);
-        // DEMSim.WriteContactFile(std::string(cnt_filename));
+        char cnt_filename[100];
+        sprintf(cnt_filename, "Contact_pairs_%04d.csv", i);
+        // DEMSim.WriteContactFile(out_dir / cnt_filename);
 
-        char meshfilename[200];
-        sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), i);
-        DEMSim.WriteMeshFile(std::string(meshfilename));
+        char meshfilename[100];
+        sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk", i);
+        DEMSim.WriteMeshFile(out_dir / meshfilename);
 
         // Testing persistent contact functionality...
         DEMSim.MarkPersistentContact();

@@ -27,6 +27,10 @@ else()
 	)
 endif()
 
+# if(WIN32)
+# target_compile_options(DEM PRIVATE /GR)
+# endif()
+
 set(DEM_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/kT.h
 	${CMAKE_CURRENT_SOURCE_DIR}/dT.h

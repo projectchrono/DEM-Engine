@@ -10,6 +10,11 @@
 #include <optional>
 #include <core/utils/GpuError.h>
 
+#if defined(_WIN32) || defined(_WIN64)
+#include <basetsd.h>
+typedef SSIZE_T ssize_t;
+#endif
+
 namespace deme {
 
 // A to-device memcpy wrapper

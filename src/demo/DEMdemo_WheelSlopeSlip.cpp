@@ -29,7 +29,7 @@ const double math_PI = 3.1415927;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DemoOuput_WheelSlopeSlip";
+    out_dir /= "DemoOuput_WheelSlopeSlip";
     std::filesystem::create_directory(out_dir);
 
     // `World'
@@ -262,12 +262,12 @@ int main() {
         bool start_measure = false;
         for (double t = 0; t < sim_end; t += step_size, curr_step++) {
             if (curr_step % out_steps == 0) {
-                char filename[200], meshname[200];
+                char filename[100], meshname[100];
                 std::cout << "Outputting frame: " << currframe << std::endl;
-                sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-                // sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
-                DEMSim.WriteSphereFile(std::string(filename));
-                // DEMSim.WriteMeshFile(std::string(meshname));
+                sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+                // sprintf(meshname, "DEMdemo_mesh_%04d.vtk", currframe);
+                DEMSim.WriteSphereFile(out_dir / filename);
+                // DEMSim.WriteMeshFile(out_dir / meshname);
                 DEMSim.ShowThreadCollaborationStats();
                 currframe++;
             }

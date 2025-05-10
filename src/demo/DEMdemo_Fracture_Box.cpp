@@ -117,7 +117,7 @@ int main() {
 
     std::filesystem::path out_dir = std::filesystem::current_path();
     std::string nameOutFolder = "R" + std::to_string(sphere_rad) + "_Int" + std::to_string(fact_radius) + "";
-    out_dir += "/DemoOutput_Fracture_" + nameOutFolder;
+    out_dir /= "DemoOutput_Fracture_" + nameOutFolder;
     remove_all(out_dir);
     create_directory(out_dir);
 
@@ -194,18 +194,18 @@ int main() {
             csvFile << (L - L0) / L0 << "; " << stress << std::endl;
 
             if (frame_count % modfpsGeo == 0) {
-                char filename[200];
-                char meshname[200];
-                char cnt_filename[200];
+                char filename[100];
+                char meshname[100];
+                char cnt_filename[100];
 
                 std::cout << "Outputting frame: " << frame_count / modfpsGeo << std::endl;
-                sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame_count / modfpsGeo);
-                sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame_count / modfpsGeo);
-                sprintf(cnt_filename, "%s/DEMdemo_contact_%04d.csv", out_dir.c_str(), frame_count / modfpsGeo);
+                sprintf(filename, "DEMdemo_output_%04d.csv", frame_count / modfpsGeo);
+                sprintf(meshname, "DEMdemo_mesh_%04d.vtk", frame_count / modfpsGeo);
+                sprintf(cnt_filename, "DEMdemo_contact_%04d.csv", frame_count / modfpsGeo);
 
-                DEMSim.WriteSphereFile(std::string(filename));
-                DEMSim.WriteMeshFile(std::string(meshname));
-                DEMSim.WriteContactFile(std::string(cnt_filename));
+                DEMSim.WriteSphereFile(out_dir / filename);
+                DEMSim.WriteMeshFile(out_dir / meshname);
+                DEMSim.WriteContactFile(out_dir / cnt_filename);
             }
         }
 

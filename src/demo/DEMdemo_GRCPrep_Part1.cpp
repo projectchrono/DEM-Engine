@@ -119,7 +119,7 @@ int main() {
     float time_end = 10.0;
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_GRCPrep_Part1";
+    out_dir /= "DemoOutput_GRCPrep_Part1";
     create_directory(out_dir);
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
@@ -157,9 +157,9 @@ int main() {
         // point of time.
         for (float t = 0; t < settle_batch_time; t += settle_frame_time) {
             std::cout << "Frame: " << currframe << std::endl;
-            char filename[200];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-            DEMSim.WriteSphereFile(std::string(filename));
+            char filename[100];
+            sprintf(filename, "DEMdemo_output_%04d.csv",  currframe++);
+            DEMSim.WriteSphereFile(out_dir / filename);
             DEMSim.DoDynamicsThenSync(settle_frame_time);
         }
 
@@ -172,16 +172,16 @@ int main() {
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
     std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
 
-    char cp_filename[200];
-    sprintf(cp_filename, "%s/GRC_3e5.csv", out_dir.c_str());
-    DEMSim.WriteClumpFile(std::string(cp_filename));
+    char cp_filename[100];
+    sprintf(cp_filename, "GRC_3e5.csv");
+    DEMSim.WriteClumpFile(out_dir / cp_filename);
 
     DEMSim.ShowThreadCollaborationStats();
     DEMSim.ClearThreadCollaborationStats();
 
-    char cnt_filename[200];
-    sprintf(cnt_filename, "%s/Contact_pairs_3e5.csv", out_dir.c_str());
-    DEMSim.WriteContactFile(std::string(cnt_filename));
+    char cnt_filename[100];
+    sprintf(cnt_filename, "Contact_pairs_3e5.csv");
+    DEMSim.WriteContactFile(out_dir / cnt_filename);
 
     std::cout << "----------------------------------------" << std::endl;
     DEMSim.ShowMemStats();

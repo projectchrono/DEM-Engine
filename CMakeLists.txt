@@ -10,12 +10,12 @@
 cmake_minimum_required(VERSION 3.18)
 
 # Version information
-set(DEME_VERSION_MAJOR   0)
+set(DEME_VERSION_MAJOR   2)
 set(DEME_VERSION_MINOR   0)
 set(DEME_VERSION_PATCH   0)
 
 project(
-	Simulator-MUlti-Gpu 
+	Chrono-DEM-Engine
 	VERSION ${DEME_VERSION_MAJOR}.${DEME_VERSION_MINOR}.${DEME_VERSION_PATCH}
 	LANGUAGES CXX CUDA
 )

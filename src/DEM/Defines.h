@@ -35,10 +35,10 @@ namespace deme {
 #define DEME_BIN_ENLARGE_RATIO_FOR_FACETS 0.001
 
 // A few pre-computed constants
-constexpr double TWO_OVER_THREE = 0.666666666666667;
-constexpr double FOUR_OVER_THREE = 1.333333333333333;
-constexpr double FIVE_OVER_THREE = 1.666666666666667;
-constexpr double TWO_TIMES_SQRT_FIVE_OVER_SIX = 1.825741858350554;
+constexpr double TWO_OVER_THREE = 2./3.;
+constexpr double FOUR_OVER_THREE = 4./3.;
+constexpr double FIVE_OVER_THREE = 5./3.; 
+constexpr double TWO_TIMES_SQRT_FIVE_OVER_SIX = 1.825741858350554; // 2. * std::sqrt(5. / 6.)
 constexpr double PI = 3.1415926535897932385;
 constexpr double PI_SQUARED = 9.869604401089358;
 

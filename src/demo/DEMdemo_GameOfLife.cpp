@@ -128,14 +128,14 @@ int main() {
     DEMSim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_GameOfLife";
+    out_dir /= "DemoOutput_GameOfLife";
     create_directory(out_dir);
 
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < 3000; i++) {
         char filename[100];
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-        DEMSim.WriteSphereFile(std::string(filename));
+        sprintf(filename, "DEMdemo_output_%04d.csv",  i);
+        DEMSim.WriteSphereFile(out_dir / filename);
         std::cout << "Frame: " << i << std::endl;
         std::cout << "Average contacts each sphere has: " << DEMSim.GetAvgSphContacts() << std::endl;
 

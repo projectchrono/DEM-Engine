@@ -31,11 +31,11 @@ void AdvanceSimulation(DEMSolver& DEMSim,
                        unsigned int& currframe) {
     for (double t = 0; t < time; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
-            char filename[200], meshfile[200];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            sprintf(meshfile, "%s/DEMdemo_excavator_%04d.vtk", out_dir.c_str(), currframe);
-            DEMSim.WriteSphereFile(std::string(filename));
-            DEMSim.WriteMeshFile(std::string(meshfile));
+            char filename[100], meshfile[100];
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+            sprintf(meshfile, "DEMdemo_excavator_%04d.vtk", currframe);
+            DEMSim.WriteSphereFile(out_dir / filename);
+            DEMSim.WriteMeshFile(out_dir / meshfile);
             std::cout << "Frame: " << currframe << std::endl;
             currframe++;
             DEMSim.ShowThreadCollaborationStats();
@@ -133,7 +133,7 @@ int main() {
     DEMSim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Plow";
+    out_dir /= "DemoOutput_Plow";
     create_directory(out_dir);
 
     unsigned int fps = 20;

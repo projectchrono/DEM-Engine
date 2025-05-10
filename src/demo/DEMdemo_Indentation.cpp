@@ -65,7 +65,7 @@ int main() {
     DEMSim.EnableOwnerWildcardOutput();
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Indentation";
+    out_dir /= "DemoOutput_Indentation";
     create_directory(out_dir);
 
     // E, nu, CoR, mu, Crr...
@@ -161,16 +161,9 @@ int main() {
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
 
-    // Settle
+    // Settling phase, no output
     for (double t = 0; t < 0.3; t += frame_time) {
-        // char filename[200], meshname[200];
-        // std::cout << "Outputting frame: " << currframe << std::endl;
-        // sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-        // sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
-        // DEMSim.WriteSphereFile(std::string(filename));
-        // DEMSim.WriteMeshFile(std::string(meshname));
         DEMSim.ShowThreadCollaborationStats();
-
         DEMSim.DoDynamicsThenSync(frame_time);
     }
     double init_max_z = max_z_finder->GetValue();
@@ -223,12 +216,12 @@ int main() {
 
             // Feed displacement info to wildcard, then leverage the output method to output it to the file
             DEMSim.SetFamilyOwnerWildcardValue(1, "gran_strain", gran_strain);
-            char filename[200], meshname[200];
+            char filename[100], meshname[100];
             std::cout << "Outputting frame: " << currframe << std::endl;
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
-            DEMSim.WriteSphereFile(std::string(filename));
-            DEMSim.WriteMeshFile(std::string(meshname));
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+            sprintf(meshname, "DEMdemo_mesh_%04d.vtk", currframe++);
+            DEMSim.WriteSphereFile(out_dir / filename);
+            DEMSim.WriteMeshFile(out_dir / meshname);
             DEMSim.ShowThreadCollaborationStats();
         }
 

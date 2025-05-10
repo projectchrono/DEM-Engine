@@ -156,7 +156,7 @@ int main() {
     DEMSim.Initialize();
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DemoOutput_Electrostatic";
+    out_dir /= "DemoOutput_Electrostatic";
     std::filesystem::create_directory(out_dir);
 
     float sim_end = 9.0;
@@ -170,12 +170,12 @@ int main() {
     // Settle
     DEMSim.DisableContactBetweenFamilies(0, 1);
     for (float t = 0; t < 1.; t += frame_time) {
-        char filename[200], meshname[200];
+        char filename[100], meshname[100];
         std::cout << "Outputting frame: " << frame_count << std::endl;
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame_count);
-        sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame_count++);
-        DEMSim.WriteSphereFile(std::string(filename));
-        DEMSim.WriteMeshFile(std::string(meshname));
+        sprintf(filename, "DEMdemo_output_%04d.csv", frame_count);
+        sprintf(meshname, "DEMdemo_mesh_%04d.vtk",frame_count++);
+        DEMSim.WriteSphereFile(out_dir / filename);
+        DEMSim.WriteMeshFile(out_dir / meshname);
         DEMSim.ShowThreadCollaborationStats();
 
         DEMSim.DoDynamics(frame_time);
@@ -198,12 +198,12 @@ int main() {
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (float t = 0; t < sim_end; t += step_size, step_count++) {
         if (step_count % out_steps == 0) {
-            char filename[200], meshname[200];
+            char filename[100], meshname[100];
             std::cout << "Outputting frame: " << frame_count << std::endl;
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame_count);
-            sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame_count++);
-            DEMSim.WriteSphereFile(std::string(filename));
-            DEMSim.WriteMeshFile(std::string(meshname));
+            sprintf(filename, "DEMdemo_output_%04d.csv",  frame_count);
+            sprintf(meshname, "DEMdemo_mesh_%04d.vtk", frame_count++);
+            DEMSim.WriteSphereFile(out_dir / filename);
+            DEMSim.WriteMeshFile(out_dir / meshname);
             DEMSim.ShowThreadCollaborationStats();
         }
 

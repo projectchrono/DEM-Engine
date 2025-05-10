@@ -173,7 +173,7 @@ int main() {
 
     std::filesystem::path out_dir = std::filesystem::current_path();
     std::string nameOutFolder = "R" + std::to_string(sphere_rad) + "_Int" + std::to_string(fact_radius) + "";
-    out_dir += "/DemoOutput_MooringLineMotion";
+    out_dir /= "DemoOutput_MooringLineMotion";
     remove_all(out_dir);
     create_directory(out_dir);
 
@@ -254,13 +254,13 @@ int main() {
 
             std::cout << "Outputting frame: " << frame_count << std::endl;
             std::cout << "Force: " << temp.z * massFloater << std::endl;
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame_count);
-            sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame_count);
-            sprintf(cnt_filename, "%s/DEMdemo_contact_%04d.csv", out_dir.c_str(), frame_count);
+            sprintf(filename, "DEMdemo_output_%04d.csv", frame_count);
+            sprintf(meshname, "DEMdemo_mesh_%04d.vtk", frame_count);
+            sprintf(cnt_filename, "DEMdemo_contact_%04d.csv", frame_count);
 
-            DEMSim.WriteSphereFile(std::string(filename));
-            DEMSim.WriteMeshFile(std::string(meshname));
-            DEMSim.WriteContactFile(std::string(cnt_filename));
+            DEMSim.WriteSphereFile(out_dir / filename);
+            DEMSim.WriteMeshFile(out_dir / meshname);
+            DEMSim.WriteContactFile(out_dir / cnt_filename);
         }
 
         DEMSim.DoDynamics(frame_time);

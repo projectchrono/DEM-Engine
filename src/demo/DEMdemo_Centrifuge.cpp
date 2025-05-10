@@ -144,7 +144,7 @@ int main() {
     DEMSim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Centrifuge";
+    out_dir /= "DemoOutput_Centrifuge";
     create_directory(out_dir);
 
     float time_end = 20.0;
@@ -160,8 +160,8 @@ int main() {
             std::cout << "Frame: " << currframe << std::endl;
             DEMSim.ShowThreadCollaborationStats();
             char filename[100];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            DEMSim.WriteSphereFile(std::string(filename));
+            sprintf(filename, "DEMdemo_output_%04d.csv",  currframe);
+            DEMSim.WriteSphereFile(out_dir / filename);
             currframe++;
             max_v = max_v_finder->GetValue();
             std::cout << "Max velocity of any point in simulation is " << max_v << std::endl;
