@@ -42,7 +42,7 @@ class DEMDynamicThread {
   protected:
     WorkerReportChannel* pPagerToMain;
     ThreadManager* pSchedSupport;
-    GpuManager* pGpuDistributor;
+    // GpuManager* pGpuDistributor;
 
     // dT verbosity
     VERBOSITY verbosity = INFO;
@@ -293,25 +293,18 @@ class DEMDynamicThread {
     std::unordered_map<unsigned int, std::string> templateNumNameMap;
 
     // dT's timers
-    std::vector<std::string> timer_names = {
-        "Clear force array", "Calculate contact forces", "Optional CUB force reduction",
-        "Integration",       "Unpack updates from kT",   "Send to kT buffer",
-        "Wait for kT update"};
+    std::vector<std::string> timer_names = {"Clear force array", "Calculate contact forces", "Optional force reduction",
+                                            "Integration",       "Unpack updates from kT",   "Send to kT buffer",
+                                            "Wait for kT update"};
     SolverTimers timers = SolverTimers(timer_names);
 
   public:
     friend class DEMSolver;
     friend class DEMKinematicThread;
 
-    DEMDynamicThread(WorkerReportChannel* pPager, ThreadManager* pSchedSup, GpuManager* pGpuDist)
-        : pPagerToMain(pPager), pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
-        // DEME_GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
-        // DEME_GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataDT), cudaMemAttachGlobal));
-
+    DEMDynamicThread(WorkerReportChannel* pPager, ThreadManager* pSchedSup, const GpuManager::StreamInfo& sInfo)
+        : pPagerToMain(pPager), pSchedSupport(pSchedSup), streamInfo(sInfo) {
         cycleDuration = 0;
-
-        // Get a device/stream ID to use from the GPU Manager
-        streamInfo = pGpuDistributor->getAvailableStream();
 
         pPagerToMain->userCallDone = false;
         pSchedSupport->dynamicShouldJoin = false;
@@ -328,9 +321,6 @@ class DEMDynamicThread {
         cudaStreamDestroy(streamInfo.stream);
 
         deallocateEverything();
-
-        // DEME_GPU_CALL(cudaFree(simParams));
-        // DEME_GPU_CALL(cudaFree(granData));
     }
 
     void setCycleDuration(double val) { cycleDuration = val; }
@@ -461,21 +451,21 @@ class DEMDynamicThread {
     void changeFamily(unsigned int ID_from, unsigned int ID_to);
 
     /// Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
-    void allocateManagedArrays(size_t nOwnerBodies,
-                               size_t nOwnerClumps,
-                               unsigned int nExtObj,
-                               size_t nTriMeshes,
-                               size_t nSpheresGM,
-                               size_t nTriGM,
-                               unsigned int nAnalGM,
-                               size_t nExtraContacts,
-                               unsigned int nMassProperties,
-                               unsigned int nClumpTopo,
-                               unsigned int nClumpComponents,
-                               unsigned int nJitifiableClumpComponents,
-                               unsigned int nMatTuples);
+    void allocateGPUArrays(size_t nOwnerBodies,
+                           size_t nOwnerClumps,
+                           unsigned int nExtObj,
+                           size_t nTriMeshes,
+                           size_t nSpheresGM,
+                           size_t nTriGM,
+                           unsigned int nAnalGM,
+                           size_t nExtraContacts,
+                           unsigned int nMassProperties,
+                           unsigned int nClumpTopo,
+                           unsigned int nClumpComponents,
+                           unsigned int nJitifiableClumpComponents,
+                           unsigned int nMatTuples);
 
-    // Components of initManagedArrays
+    // Components of initGPUArrays
     void buildTrackedObjs(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                           const std::vector<unsigned int>& ext_obj_comp_num,
                           const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
@@ -515,28 +505,28 @@ class DEMDynamicThread {
                           const std::set<unsigned int>& no_output_families);
 
     /// Initialized managed arrays
-    void initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
-                           const std::vector<float3>& input_ext_obj_xyz,
-                           const std::vector<float4>& input_ext_obj_rot,
-                           const std::vector<unsigned int>& input_ext_obj_family,
-                           const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
-                           const std::vector<float3>& input_mesh_obj_xyz,
-                           const std::vector<float4>& input_mesh_obj_rot,
-                           const std::vector<unsigned int>& input_mesh_obj_family,
-                           const std::vector<unsigned int>& mesh_facet_owner,
-                           const std::vector<materialsOffset_t>& mesh_facet_materials,
-                           const std::vector<DEMTriangle>& mesh_facets,
-                           const std::unordered_map<unsigned int, std::string>& template_number_name_map,
-                           const ClumpTemplateFlatten& clump_templates,
-                           const std::vector<float>& ext_obj_mass_types,
-                           const std::vector<float3>& ext_obj_moi_types,
-                           const std::vector<unsigned int>& ext_obj_comp_num,
-                           const std::vector<float>& mesh_obj_mass_types,
-                           const std::vector<float3>& mesh_obj_moi_types,
-                           const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
-                           const std::vector<notStupidBool_t>& family_mask_matrix,
-                           const std::set<unsigned int>& no_output_families,
-                           std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs);
+    void initGPUArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
+                       const std::vector<float3>& input_ext_obj_xyz,
+                       const std::vector<float4>& input_ext_obj_rot,
+                       const std::vector<unsigned int>& input_ext_obj_family,
+                       const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
+                       const std::vector<float3>& input_mesh_obj_xyz,
+                       const std::vector<float4>& input_mesh_obj_rot,
+                       const std::vector<unsigned int>& input_mesh_obj_family,
+                       const std::vector<unsigned int>& mesh_facet_owner,
+                       const std::vector<materialsOffset_t>& mesh_facet_materials,
+                       const std::vector<DEMTriangle>& mesh_facets,
+                       const std::unordered_map<unsigned int, std::string>& template_number_name_map,
+                       const ClumpTemplateFlatten& clump_templates,
+                       const std::vector<float>& ext_obj_mass_types,
+                       const std::vector<float3>& ext_obj_moi_types,
+                       const std::vector<unsigned int>& ext_obj_comp_num,
+                       const std::vector<float>& mesh_obj_mass_types,
+                       const std::vector<float3>& mesh_obj_moi_types,
+                       const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
+                       const std::vector<notStupidBool_t>& family_mask_matrix,
+                       const std::set<unsigned int>& no_output_families,
+                       std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs);
 
     /// Add more clumps and/or meshes into the system, without re-initialization. It must be clump/mesh-addition only,
     /// no other changes to the system.
@@ -578,7 +568,7 @@ class DEMDynamicThread {
 
     // Move array data to or from device
     void migrateDataToDevice();
-    void migrateDataToHost();
+    // void migrateDataToHost();
 
 #ifdef DEME_USE_CHPF
     void writeSpheresAsChpf(std::ofstream& ptFile);
@@ -755,6 +745,7 @@ class DEMDynamicThread {
     void migrateTriGeoWildcardToHost();
     void migrateAnalGeoWildcardToHost();
     void migrateContactInfoToHost();
+    void migrateDeviceModifiableInfoToHost();
 
 };  // dT ends
 

@@ -41,7 +41,7 @@ class DEMKinematicThread {
   protected:
     WorkerReportChannel* pPagerToMain;
     ThreadManager* pSchedSupport;
-    GpuManager* pGpuDistributor;
+    // GpuManager* pGpuDistributor;
 
     // kT verbosity
     VERBOSITY verbosity = INFO;
@@ -213,14 +213,8 @@ class DEMKinematicThread {
     friend class DEMSolver;
     friend class DEMDynamicThread;
 
-    DEMKinematicThread(WorkerReportChannel* pPager, ThreadManager* pSchedSup, GpuManager* pGpuDist)
-        : pPagerToMain(pPager), pSchedSupport(pSchedSup), pGpuDistributor(pGpuDist) {
-        // DEME_GPU_CALL(cudaMallocManaged(&simParams, sizeof(DEMSimParams), cudaMemAttachGlobal));
-        // DEME_GPU_CALL(cudaMallocManaged(&granData, sizeof(DEMDataKT), cudaMemAttachGlobal));
-
-        // Get a device/stream ID to use from the GPU Manager
-        streamInfo = pGpuDistributor->getAvailableStream();
-
+    DEMKinematicThread(WorkerReportChannel* pPager, ThreadManager* pSchedSup, const GpuManager::StreamInfo& sInfo)
+        : pPagerToMain(pPager), pSchedSupport(pSchedSup), streamInfo(sInfo) {
         pPagerToMain->userCallDone = false;
         pSchedSupport->kinematicShouldJoin = false;
         pSchedSupport->kinematicStarted = false;
@@ -243,9 +237,6 @@ class DEMKinematicThread {
         cudaStreamDestroy(streamInfo.stream);
 
         // deallocateEverything();
-
-        // DEME_GPU_CALL(cudaFree(simParams));
-        // DEME_GPU_CALL(cudaFree(granData));
     }
 
     // buffer exchange methods
@@ -270,21 +261,21 @@ class DEMKinematicThread {
     size_t estimateHostMemUsage() const;
 
     /// Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
-    void allocateManagedArrays(size_t nOwnerBodies,
-                               size_t nOwnerClumps,
-                               unsigned int nExtObj,
-                               size_t nTriMeshes,
-                               size_t nSpheresGM,
-                               size_t nTriGM,
-                               unsigned int nAnalGM,
-                               size_t nExtraContacts,
-                               unsigned int nMassProperties,
-                               unsigned int nClumpTopo,
-                               unsigned int nClumpComponents,
-                               unsigned int nJitifiableClumpComponents,
-                               unsigned int nMatTuples);
+    void allocateGPUArrays(size_t nOwnerBodies,
+                           size_t nOwnerClumps,
+                           unsigned int nExtObj,
+                           size_t nTriMeshes,
+                           size_t nSpheresGM,
+                           size_t nTriGM,
+                           unsigned int nAnalGM,
+                           size_t nExtraContacts,
+                           unsigned int nMassProperties,
+                           unsigned int nClumpTopo,
+                           unsigned int nClumpComponents,
+                           unsigned int nJitifiableClumpComponents,
+                           unsigned int nMatTuples);
 
-    // initManagedArrays's components
+    // initGPUArrays's components
     void registerPolicies(const std::vector<notStupidBool_t>& family_mask_matrix);
     void populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                               const std::vector<unsigned int>& input_ext_obj_family,
@@ -297,13 +288,13 @@ class DEMKinematicThread {
                               size_t nExistingFacets);
 
     /// Initialize managed arrays
-    void initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
-                           const std::vector<unsigned int>& input_ext_obj_family,
-                           const std::vector<unsigned int>& input_mesh_obj_family,
-                           const std::vector<unsigned int>& input_mesh_facet_owner,
-                           const std::vector<DEMTriangle>& input_mesh_facets,
-                           const std::vector<notStupidBool_t>& family_mask_matrix,
-                           const ClumpTemplateFlatten& clump_templates);
+    void initGPUArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
+                       const std::vector<unsigned int>& input_ext_obj_family,
+                       const std::vector<unsigned int>& input_mesh_obj_family,
+                       const std::vector<unsigned int>& input_mesh_facet_owner,
+                       const std::vector<DEMTriangle>& input_mesh_facets,
+                       const std::vector<notStupidBool_t>& family_mask_matrix,
+                       const ClumpTemplateFlatten& clump_templates);
 
     /// Add more clumps and/or meshes into the system, without re-initialization. It must be clump/mesh-addition only,
     /// no other changes to the system.
@@ -351,7 +342,7 @@ class DEMKinematicThread {
 
     // Move array data to or from device
     void migrateDataToDevice();
-    void migrateDataToHost();
+    // void migrateDataToHost();
 
     // Sync my stream
     void syncMemoryTransfer() { DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream)); }
@@ -459,6 +450,7 @@ class DEMKinematicThread {
 
     // A collection of migrate-to-host methods. Bulk migrate-to-host is by nature on-demand only.
     void migrateFamilyToHost();
+    void migrateDeviceModifiableInfoToHost();
 
 };  // kT ends
 

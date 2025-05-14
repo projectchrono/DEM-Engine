@@ -449,6 +449,6 @@ int main() {
     DEMSim.ShowMemStats();
     std::cout << "----------------------------------------" << std::endl;
 
-    std::cout << "DEMdemo exiting..." << std::endl;
+    std::cout << "DEMdemo_Hopper exiting..." << std::endl;
     return 0;
 }

@@ -41,7 +41,7 @@ class DEMTracker;
 //            4. Sleepers that don't participate CD or integration
 //            5. Update the game of life demo (it's about model ingredient usage)
 //            6. Methods urgently need device conversion: getOwnerContactForces,
-//
+//            7. Set the device numbers to use
 //            9. wT takes care of an extra output when it crashes
 //            10. Recover sph--mesh contact pairs in restarted sim by mesh name
 //            11. A dry-run to map contact pair file with current clump batch based on cnt points location
@@ -1757,28 +1757,32 @@ class DEMSolver {
     /// Transfer (CPU-side) cached simulation data (about sim world) to the GPU-side. It is called automatically during
     /// system initialization.
     void setSimParams();
-    /// Transfer cached clump templates info etc. to GPU-side arrays
+    /// Transfer cached clump templates info etc. to GPU-side arrays.
     void initializeGPUArrays();
-    /// Allocate memory space for GPU-side arrays
+    /// Allocate memory space for GPU-side arrays.
     void allocateGPUArrays();
-    /// Pack array pointers to a struct so they can be easily used as kernel arguments
+    /// Pack array pointers to a struct so they can be easily used as kernel arguments.
     void packDataPointers();
-    /// @brief Move host-prepared simulation parameter data to device
+    /// @brief Move host-prepared simulation parameter data to device.
     void migrateSimParamsToDevice();
-    /// @brief Move host-prepared array and their respective pointers data to device
+    /// @brief Move host-prepared array data to device.
     void migrateArrayDataToDevice();
+    /// @brief Move device-modified array data to host. This is important when the simulation already started, but some
+    /// data need to be re-cooked on host. For small updates to the host, we don't need to do this, just directly modify
+    /// the device array.
+    void migrateArrayDataToHost();
     /// Warn users if the data types defined in Defines.h do not blend well with the user inputs (fist-round
-    /// coarse-grain sanity check)
+    /// coarse-grain sanity check).
     void validateUserInputs();
-    /// Prepare the material/contact proxy matrix force computation kernels
+    /// Prepare the material/contact proxy matrix force computation kernels.
     void figureOutMaterialProxies();
-    /// Figure out info about external objects and how they should be jitified
+    /// Figure out info about external objects and how they should be jitified.
     void preprocessAnalyticalObjs();
-    /// Figure out info about external meshed objects
+    /// Figure out info about external meshed objects.
     void preprocessTriangleObjs();
-    /// Report simulation stats at initialization
+    /// Report simulation stats at initialization.
     void reportInitStats() const;
-    /// Based on user input, prepare family_mask_matrix (family contact map matrix)
+    /// Based on user input, prepare family_mask_matrix (family contact map matrix).
     void figureOutFamilyMasks();
     /// Reset kT and dT back to a status like when the simulation system is constructed. I decided to make this a
     /// private method because it can be dangerous, as if it is called when kT is waiting at the outer loop, it will
@@ -1786,7 +1790,7 @@ class DEMSolver {
     /// this call does not reset the collaboration log between kT and dT.
     void resetWorkerThreads();
     /// Transfer newly loaded clumps/meshed objects to the GPU-side in mid-simulation and allocate GPU memory space for
-    /// them
+    /// them.
     void updateClumpMeshArrays(size_t nOwners,
                                size_t nClumps,
                                size_t nSpheres,

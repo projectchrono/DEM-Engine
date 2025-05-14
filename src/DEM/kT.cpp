@@ -509,19 +509,14 @@ void DEMKinematicThread::migrateDataToDevice() {
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
-void DEMKinematicThread::migrateDataToHost() {
-    radiiSphere.toHostAsync(streamInfo.stream);
-    // relPosSphereX.toHostAsync(streamInfo.stream);
-    // relPosSphereY.toHostAsync(streamInfo.stream);
-    // relPosSphereZ.toHostAsync(streamInfo.stream);
-
-    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
-}
-
 void DEMKinematicThread::migrateFamilyToHost() {
     if (solverFlags.canFamilyChangeOnDevice) {
         familyID.toHost();
     }
+}
+
+void DEMKinematicThread::migrateDeviceModifiableInfoToHost() {
+    migrateFamilyToHost();
 }
 
 void DEMKinematicThread::packTransferPointers(DEMDynamicThread*& dT) {
@@ -582,19 +577,19 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
     simParams->nGeoWildcards = geo_wildcards.size();
 }
 
-void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
-                                               size_t nOwnerClumps,
-                                               unsigned int nExtObj,
-                                               size_t nTriMeshes,
-                                               size_t nSpheresGM,
-                                               size_t nTriGM,
-                                               unsigned int nAnalGM,
-                                               size_t nExtraContacts,
-                                               unsigned int nMassProperties,
-                                               unsigned int nClumpTopo,
-                                               unsigned int nClumpComponents,
-                                               unsigned int nJitifiableClumpComponents,
-                                               unsigned int nMatTuples) {
+void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
+                                           size_t nOwnerClumps,
+                                           unsigned int nExtObj,
+                                           size_t nTriMeshes,
+                                           size_t nSpheresGM,
+                                           size_t nTriGM,
+                                           unsigned int nAnalGM,
+                                           size_t nExtraContacts,
+                                           unsigned int nMassProperties,
+                                           unsigned int nClumpTopo,
+                                           unsigned int nClumpComponents,
+                                           unsigned int nJitifiableClumpComponents,
+                                           unsigned int nMatTuples) {
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
 
     // Sizes of these arrays
@@ -838,13 +833,13 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
     }
 }
 
-void DEMKinematicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
-                                           const std::vector<unsigned int>& input_ext_obj_family,
-                                           const std::vector<unsigned int>& input_mesh_obj_family,
-                                           const std::vector<unsigned int>& input_mesh_facet_owner,
-                                           const std::vector<DEMTriangle>& input_mesh_facets,
-                                           const std::vector<notStupidBool_t>& family_mask_matrix,
-                                           const ClumpTemplateFlatten& clump_templates) {
+void DEMKinematicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
+                                       const std::vector<unsigned int>& input_ext_obj_family,
+                                       const std::vector<unsigned int>& input_mesh_obj_family,
+                                       const std::vector<unsigned int>& input_mesh_facet_owner,
+                                       const std::vector<DEMTriangle>& input_mesh_facets,
+                                       const std::vector<notStupidBool_t>& family_mask_matrix,
+                                       const ClumpTemplateFlatten& clump_templates) {
     // Get the info into the managed memory from the host side. Can this process be more efficient? Maybe, but it's
     // initialization anyway.
 
@@ -873,7 +868,9 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
 }
 
 void DEMKinematicThread::updatePrevContactArrays(DEMDataDT* dT_data, size_t nContacts) {
-    // Store the incoming info in temp arrays
+    // Store the incoming info in kT's arrays
+    // Note kT never had the responsibility to migrate contact info to host, even at UpdateClumps, as even in this case
+    // its host-side update comes from dT
     overwritePrevContactArrays(granData, dT_data, previous_idGeometryA, previous_idGeometryB, previous_contactType,
                                simParams, contactPersistency, solverScratchSpace, streamInfo.stream, nContacts);
     DEME_DEBUG_PRINTF("Number of contacts after a user-manual contact load: %zu", nContacts);

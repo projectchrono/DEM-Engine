@@ -174,6 +174,17 @@ void DEMDynamicThread::migrateDataToDevice() {
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 }
 
+void DEMDynamicThread::migrateDeviceModifiableInfoToHost() {
+    migrateClumpPosInfoToHost();
+    migrateClumpHighOrderInfoToHost();
+    migrateFamilyToHost();
+    migrateContactInfoToHost();
+    migrateOwnerWildcardToHost();
+    migrateSphGeoWildcardToHost();
+    migrateTriGeoWildcardToHost();
+    migrateAnalGeoWildcardToHost();
+}
+
 void DEMDynamicThread::migrateClumpHighOrderInfoToHost() {
     vX.toHost();
     vY.toHost();
@@ -207,6 +218,7 @@ void DEMDynamicThread::migrateContactInfoToHost() {
     contactForces.toHost();
     contactTorque_convToForce.toHost();
     contactPointGeometryA.toHost();
+    contactPointGeometryB.toHost();
     for (unsigned int i = 0; i < simParams->nContactWildcards; i++) {
         contactWildcards[i]->toHost();
     }
@@ -377,19 +389,19 @@ void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const 
     radiiSphere.toHost();
 }
 
-void DEMDynamicThread::allocateManagedArrays(size_t nOwnerBodies,
-                                             size_t nOwnerClumps,
-                                             unsigned int nExtObj,
-                                             size_t nTriMeshes,
-                                             size_t nSpheresGM,
-                                             size_t nTriGM,
-                                             unsigned int nAnalGM,
-                                             size_t nExtraContacts,
-                                             unsigned int nMassProperties,
-                                             unsigned int nClumpTopo,
-                                             unsigned int nClumpComponents,
-                                             unsigned int nJitifiableClumpComponents,
-                                             unsigned int nMatTuples) {
+void DEMDynamicThread::allocateGPUArrays(size_t nOwnerBodies,
+                                         size_t nOwnerClumps,
+                                         unsigned int nExtObj,
+                                         size_t nTriMeshes,
+                                         size_t nSpheresGM,
+                                         size_t nTriGM,
+                                         unsigned int nAnalGM,
+                                         size_t nExtraContacts,
+                                         unsigned int nMassProperties,
+                                         unsigned int nClumpTopo,
+                                         unsigned int nClumpComponents,
+                                         unsigned int nJitifiableClumpComponents,
+                                         unsigned int nMatTuples) {
     // dT buffer arrays should be on dT and this is to ensure that
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
 
@@ -1062,28 +1074,28 @@ void DEMDynamicThread::buildTrackedObjs(const std::vector<std::shared_ptr<DEMClu
     DEME_DEBUG_PRINTF("Total number of trackers on the record: %u", nTrackersProcessed);
 }
 
-void DEMDynamicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
-                                         const std::vector<float3>& input_ext_obj_xyz,
-                                         const std::vector<float4>& input_ext_obj_rot,
-                                         const std::vector<unsigned int>& input_ext_obj_family,
-                                         const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
-                                         const std::vector<float3>& input_mesh_obj_xyz,
-                                         const std::vector<float4>& input_mesh_obj_rot,
-                                         const std::vector<unsigned int>& input_mesh_obj_family,
-                                         const std::vector<unsigned int>& mesh_facet_owner,
-                                         const std::vector<materialsOffset_t>& mesh_facet_materials,
-                                         const std::vector<DEMTriangle>& mesh_facets,
-                                         const std::unordered_map<unsigned int, std::string>& template_number_name_map,
-                                         const ClumpTemplateFlatten& clump_templates,
-                                         const std::vector<float>& ext_obj_mass_types,
-                                         const std::vector<float3>& ext_obj_moi_types,
-                                         const std::vector<unsigned int>& ext_obj_comp_num,
-                                         const std::vector<float>& mesh_obj_mass_types,
-                                         const std::vector<float3>& mesh_obj_moi_types,
-                                         const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
-                                         const std::vector<notStupidBool_t>& family_mask_matrix,
-                                         const std::set<unsigned int>& no_output_families,
-                                         std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs) {
+void DEMDynamicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
+                                     const std::vector<float3>& input_ext_obj_xyz,
+                                     const std::vector<float4>& input_ext_obj_rot,
+                                     const std::vector<unsigned int>& input_ext_obj_family,
+                                     const std::vector<std::shared_ptr<DEMMeshConnected>>& input_mesh_objs,
+                                     const std::vector<float3>& input_mesh_obj_xyz,
+                                     const std::vector<float4>& input_mesh_obj_rot,
+                                     const std::vector<unsigned int>& input_mesh_obj_family,
+                                     const std::vector<unsigned int>& mesh_facet_owner,
+                                     const std::vector<materialsOffset_t>& mesh_facet_materials,
+                                     const std::vector<DEMTriangle>& mesh_facets,
+                                     const std::unordered_map<unsigned int, std::string>& template_number_name_map,
+                                     const ClumpTemplateFlatten& clump_templates,
+                                     const std::vector<float>& ext_obj_mass_types,
+                                     const std::vector<float3>& ext_obj_moi_types,
+                                     const std::vector<unsigned int>& ext_obj_comp_num,
+                                     const std::vector<float>& mesh_obj_mass_types,
+                                     const std::vector<float3>& mesh_obj_moi_types,
+                                     const std::vector<std::shared_ptr<DEMMaterial>>& loaded_materials,
+                                     const std::vector<notStupidBool_t>& family_mask_matrix,
+                                     const std::set<unsigned int>& no_output_families,
+                                     std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs) {
     // Get the info into the managed memory from the host side. Can this process be more efficient? Maybe, but it's
     // initialization anyway.
 
@@ -2100,7 +2112,7 @@ inline void DEMDynamicThread::calculateForces() {
         timers.GetTimer("Calculate contact forces").stop();
 
         if (!solverFlags.useForceCollectInPlace) {
-            timers.GetTimer("Optional CUB force reduction").start();
+            timers.GetTimer("Optional force reduction").start();
             // Reflect those body-wise forces on their owner clumps
             if (solverFlags.useCubForceCollect) {
                 collectContactForcesThruCub(collect_force_kernels, granData, nContactPairs, simParams->nOwnerBodies,
@@ -2118,7 +2130,7 @@ inline void DEMDynamicThread::calculateForces() {
             // displayDeviceArray<float>(granData->aZ, simParams->nOwnerBodies);
             // displayDeviceFloat3(granData->contactForces, nContactPairs);
             // std::cout << nContactPairs << std::endl;
-            timers.GetTimer("Optional CUB force reduction").stop();
+            timers.GetTimer("Optional force reduction").stop();
         }
     }
 }
@@ -2789,7 +2801,7 @@ void DEMDynamicThread::setFamilyContactWildcardValue_impl(
         unsigned int famA = +(familyID[ownerA]);
         unsigned int famB = +(familyID[ownerB]);
 
-        if ((N1 == famA && N2 == famB) || (N2 == famA && N1 == famB)) {
+        if (condition(famA, famB, N1, N2)) {
             (*contactWildcards[wc_num])[i] = val;
         }
     }

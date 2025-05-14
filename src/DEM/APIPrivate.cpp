@@ -1150,16 +1150,16 @@ void DEMSolver::setSimParams() {
 void DEMSolver::allocateGPUArrays() {
     // Resize arrays based on the statistical data we have
     std::thread dThread = std::move(std::thread([this]() {
-        this->dT->allocateManagedArrays(
-            this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes, this->nSpheresGM, this->nTriGM,
-            this->nAnalGM, this->nExtraContacts, this->nDistinctMassProperties, this->nDistinctClumpBodyTopologies,
-            this->nDistinctClumpComponents, this->nJitifiableClumpComponents, this->nMatTuples);
+        this->dT->allocateGPUArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
+                                    this->nSpheresGM, this->nTriGM, this->nAnalGM, this->nExtraContacts,
+                                    this->nDistinctMassProperties, this->nDistinctClumpBodyTopologies,
+                                    this->nDistinctClumpComponents, this->nJitifiableClumpComponents, this->nMatTuples);
     }));
     std::thread kThread = std::move(std::thread([this]() {
-        this->kT->allocateManagedArrays(
-            this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes, this->nSpheresGM, this->nTriGM,
-            this->nAnalGM, this->nExtraContacts, this->nDistinctMassProperties, this->nDistinctClumpBodyTopologies,
-            this->nDistinctClumpComponents, this->nJitifiableClumpComponents, this->nMatTuples);
+        this->kT->allocateGPUArrays(this->nOwnerBodies, this->nOwnerClumps, this->nExtObj, this->nTriMeshes,
+                                    this->nSpheresGM, this->nTriGM, this->nAnalGM, this->nExtraContacts,
+                                    this->nDistinctMassProperties, this->nDistinctClumpBodyTopologies,
+                                    this->nDistinctClumpComponents, this->nJitifiableClumpComponents, this->nMatTuples);
     }));
     dThread.join();
     kThread.join();
@@ -1171,7 +1171,7 @@ void DEMSolver::initializeGPUArrays() {
                                                    m_template_sp_radii, m_template_sp_relPos, m_template_clump_volume);
 
     // Now we can feed those GPU-side arrays with the cached API-level simulation info
-    dT->initManagedArrays(
+    dT->initGPUArrays(
         // Clump batchs' initial stats
         cached_input_clump_batches,
         // Analytical objects' initial stats
@@ -1194,7 +1194,7 @@ void DEMSolver::initializeGPUArrays() {
         // I/O and misc.
         m_no_output_families, m_tracked_objs);
 
-    kT->initManagedArrays(
+    kT->initGPUArrays(
         // Clump batchs' initial stats
         cached_input_clump_batches,
         // Analytical objects' initial stats
@@ -1282,6 +1282,11 @@ void DEMSolver::migrateArrayDataToDevice() {
     // Then move DualArray data to device
     dT->migrateDataToDevice();
     kT->migrateDataToDevice();
+}
+
+void DEMSolver::migrateArrayDataToHost() {
+    dT->migrateDeviceModifiableInfoToHost();
+    kT->migrateDeviceModifiableInfoToHost();
 }
 
 void DEMSolver::validateUserInputs() {

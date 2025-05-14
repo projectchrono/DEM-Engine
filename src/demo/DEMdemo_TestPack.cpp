@@ -96,11 +96,6 @@ void EllpsiodFallingOver() {
 }
 
 void SphereRollUpIncline() {
-    std::cout << "\nPlease Note!! You probably should allocate more host-side memory for this demo (around 8GiB?).\nIt "
-                 "is because Jitify seems to use increasingly more memory if we continuously construct and destruct "
-                 "DEMSolver.\nIt is not clear to me how this should be fixed, yet you probably should not construct "
-                 "and destruct DEMSolver too often in a program anyway.\n"
-              << std::endl;
     // First, test the case when alpha = 35
     float sphere_rad = 0.2;
     float mass = 5.0;

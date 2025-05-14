@@ -27,8 +27,22 @@ DEMSolver::DEMSolver(unsigned int nGPUs) {
     // 2 means 2 threads (nGPUs is currently not used)
     dTkT_GpuManager = new GpuManager(2);
 
-    dT = new DEMDynamicThread(dTMain_InteractionManager, dTkT_InteractionManager, dTkT_GpuManager);
-    kT = new DEMKinematicThread(kTMain_InteractionManager, dTkT_InteractionManager, dTkT_GpuManager);
+    // Thread-based worker creation may be needed as the workers allocate DualStructs on construction
+    std::thread dT_construct([&]() {
+        // Get a device/stream ID to use from the GPU Manager
+        const GpuManager::StreamInfo dT_stream_info = dTkT_GpuManager->getAvailableStream();
+        DEME_GPU_CALL(cudaSetDevice(dT_stream_info.device));
+        dT = new DEMDynamicThread(dTMain_InteractionManager, dTkT_InteractionManager, dT_stream_info);
+    });
+
+    std::thread kT_construct([&]() {
+        const GpuManager::StreamInfo kT_stream_info = dTkT_GpuManager->getAvailableStream();
+        DEME_GPU_CALL(cudaSetDevice(kT_stream_info.device));
+        kT = new DEMKinematicThread(kTMain_InteractionManager, dTkT_InteractionManager, kT_stream_info);
+    });
+
+    dT_construct.join();
+    kT_construct.join();
 
     // Make friends
     dT->kT = kT;
@@ -2199,6 +2213,9 @@ void DEMSolver::UpdateClumps() {
 
     // This method requires kT and dT are sync-ed
     // resetWorkerThreads();
+
+    // NOTE!!! This step in UpdateClumps is extremely important, as we'll soon modify device-major arrays on host!
+    migrateArrayDataToHost();
 
     // Record the number of entities, before adding to the system
     size_t nOwners_old = nOwnerBodies;

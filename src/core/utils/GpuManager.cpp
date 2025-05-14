@@ -68,6 +68,7 @@ const std::vector<GpuManager::StreamInfo>& GpuManager::getStreamsFromDevice(cons
 }
 
 const GpuManager::StreamInfo& GpuManager::getAvailableStream() {
+    std::lock_guard<std::mutex> lock(stream_manipulation_mutex);
     // Iterate over stream lists by device
     for (auto by_device = this->streams.begin(); by_device != streams.end(); by_device++) {
         // Iterate over streams in each device
@@ -85,6 +86,7 @@ const GpuManager::StreamInfo& GpuManager::getAvailableStream() {
 }
 
 const GpuManager::StreamInfo& GpuManager::getAvailableStreamFromDevice(int index) {
+    std::lock_guard<std::mutex> lock(stream_manipulation_mutex);
     for (auto stream = this->streams[index].begin(); stream != this->streams[index].end(); stream++) {
         if (!stream->_impl_active) {
             stream->_impl_active = true;
@@ -97,6 +99,7 @@ const GpuManager::StreamInfo& GpuManager::getAvailableStreamFromDevice(int index
 }
 
 void GpuManager::setStreamAvailable(const StreamInfo& info) {
+    std::lock_guard<std::mutex> lock(stream_manipulation_mutex);
     for (auto stream = this->streams[info.device].begin(); stream != this->streams[info.device].end(); stream++) {
         if (stream->stream == info.stream) {
             stream->_impl_active = false;
