@@ -135,8 +135,8 @@ int main() {
     DEMSim.Initialize(/*Do a dry run at initialization = */ true);
     std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
 
-    float sim_end = 5;
-    unsigned int fps = 20;
+    float sim_end = 2;
+    unsigned int fps = 100;
     unsigned int datafps = 1000;
     unsigned int modfpsGeo = datafps / fps;
     float frame_time = 1.0 / datafps;

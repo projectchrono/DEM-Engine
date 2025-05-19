@@ -867,7 +867,7 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
                          input_mesh_facets, clump_templates, nExistingOwners, nExistingSpheres, nExistingFacets);
 }
 
-void DEMKinematicThread::updatePrevContactArrays(DEMDataDT* dT_data, size_t nContacts) {
+void DEMKinematicThread::updatePrevContactArrays(DualStruct<DEMDataDT>& dT_data, size_t nContacts) {
     // Store the incoming info in kT's arrays
     // Note kT never had the responsibility to migrate contact info to host, even at UpdateClumps, as even in this case
     // its host-side update comes from dT
