@@ -108,7 +108,7 @@ void collectContactForcesThruCub(std::shared_ptr<jitify::Program>& collect_force
                                  SolverTimers& timers);
 
 void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
-                                DEMDataDT* dT_data,
+                                DualStruct<DEMDataDT>& dT_data,
                                 DualArray<bodyID_t>& previous_idGeometryA,
                                 DualArray<bodyID_t>& previous_idGeometryB,
                                 DualArray<contact_t>& previous_contactType,

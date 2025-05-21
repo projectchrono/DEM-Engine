@@ -2282,8 +2282,11 @@ void DEMDynamicThread::workerThread() {
                 // If wildcard-less, then prev-contact arrays are not important
                 if (!solverFlags.isHistoryless) {
                     // Note *solverScratchSpace.numContacts is now the num of contact after considering the newly
-                    // added ones. Also, passing device pointer of dT's granData is enough.
-                    kT->updatePrevContactArrays(&granData, *solverScratchSpace.numContacts);
+                    // added ones. Also note, when this method is called, there will be memory allocations, so it has to
+                    // be done on kT's device.
+                    DEME_GPU_CALL(cudaSetDevice(kT->streamInfo.device));
+                    kT->updatePrevContactArrays(granData, *solverScratchSpace.numContacts);
+                    DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
                 }
                 new_contacts_loaded = false;
             }

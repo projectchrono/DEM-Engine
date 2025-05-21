@@ -380,7 +380,7 @@ class DEMKinematicThread {
     void updateTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& updates);
 
     /// Update (overwrite) kT's previous contact array based on input
-    void updatePrevContactArrays(DEMDataDT* dT_data, size_t nContacts);
+    void updatePrevContactArrays(DualStruct<DEMDataDT>& dT_data, size_t nContacts);
 
   private:
     const std::string Name = "kT";

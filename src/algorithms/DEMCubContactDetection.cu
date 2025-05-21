@@ -1122,7 +1122,7 @@ void contactDetection(std::shared_ptr<jitify::Program>& bin_sphere_kernels,
 }
 
 void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
-                                DEMDataDT* dT_data,
+                                DualStruct<DEMDataDT>& dT_data,
                                 DualArray<bodyID_t>& previous_idGeometryA,
                                 DualArray<bodyID_t>& previous_idGeometryB,
                                 DualArray<contact_t>& previous_contactType,
@@ -1131,29 +1131,7 @@ void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
                                 DEMSolverScratchData& scratchPad,
                                 cudaStream_t& this_stream,
                                 size_t nContacts) {
-    // Copy to temp array for easier usage
-    bodyID_t* idA = (bodyID_t*)scratchPad.allocateTempVector("idA", nContacts * sizeof(bodyID_t));
-    bodyID_t* idB = (bodyID_t*)scratchPad.allocateTempVector("idB", nContacts * sizeof(bodyID_t));
-    contact_t* cType = (contact_t*)scratchPad.allocateTempVector("cType", nContacts * sizeof(contact_t));
-    DEME_GPU_CALL(cudaMemcpy(idA, dT_data->idGeometryA, nContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(idB, dT_data->idGeometryB, nContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(cType, dT_data->contactType, nContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
-
-    // Prev contact arrays actually need to be sorted based on idA
-    bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector("idA_sorted", nContacts * sizeof(bodyID_t));
-    bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector("idB_sorted", nContacts * sizeof(bodyID_t));
-    contact_t* cType_sorted = (contact_t*)scratchPad.allocateTempVector("cType_sorted", nContacts * sizeof(contact_t));
-    //// TODO: Why the CUB-based routine will just not run here? Is it related to when and where this method is called?
-    /// I have to for now use the host to do the sorting.
-    DEME_GPU_CALL(cudaMemcpy(idA_sorted, idA, nContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(idB_sorted, idB, nContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(cType_sorted, cType, nContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
-    hostSortByKey(idA, idB_sorted, nContacts);
-    hostSortByKey(idA_sorted, cType_sorted, nContacts);
-    // cubDEMSortByKeys<bodyID_t, bodyID_t >(idA, idA_sorted, idB, idB_sorted, nContacts, this_stream, scratchPad);
-    // cubDEMSortByKeys<bodyID_t, contact_t >(idA, idA_sorted, cType, cType_sorted, nContacts, this_stream, scratchPad);
-
-    // Finally, copy sorted user contact array to the storage
+    // Make sure the storage is large enough
     if (nContacts > previous_idGeometryA.size()) {
         // Note these resizing are automatically on kT's device
         DEME_DUAL_ARRAY_RESIZE_NOVAL(previous_idGeometryA, nContacts);
@@ -1166,19 +1144,35 @@ void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
         // Re-packing pointers now is automatic
         kT_data.toDevice();
     }
-    DEME_GPU_CALL(
-        cudaMemcpy(kT_data->previous_idGeometryA, idA_sorted, nContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(
-        cudaMemcpy(kT_data->previous_idGeometryB, idB_sorted, nContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(kT_data->previous_contactType, cType_sorted, nContacts * sizeof(contact_t),
-                             cudaMemcpyDeviceToDevice));
 
-    // printf("Old contact IDs (A):\n");
-    // displayDeviceArray<bodyID_t>(idA_sorted, nContacts);
-    // printf("Old contact IDs (B):\n");
-    // displayDeviceArray<bodyID_t>(idB_sorted, nContacts);
-    // printf("Old contact types:\n");
-    // displayDeviceArray<contact_t>(cType_sorted, nContacts);
+    // Copy to temp array for easier usage
+    bodyID_t* idA = (bodyID_t*)scratchPad.allocateTempVector("idA", nContacts * sizeof(bodyID_t));
+    bodyID_t* idB = (bodyID_t*)scratchPad.allocateTempVector("idB", nContacts * sizeof(bodyID_t));
+    contact_t* cType = (contact_t*)scratchPad.allocateTempVector("cType", nContacts * sizeof(contact_t));
+    DEME_GPU_CALL(cudaMemcpy(idA, dT_data->idGeometryA, nContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(idB, dT_data->idGeometryB, nContacts * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(cType, dT_data->contactType, nContacts * sizeof(contact_t), cudaMemcpyDeviceToDevice));
+
+    // Prev contact arrays actually need to be sorted based on idA
+    // bodyID_t* idA_sorted = (bodyID_t*)scratchPad.allocateTempVector("idA_sorted", nContacts * sizeof(bodyID_t));
+    // bodyID_t* idB_sorted = (bodyID_t*)scratchPad.allocateTempVector("idB_sorted", nContacts * sizeof(bodyID_t));
+    // contact_t* cType_sorted = (contact_t*)scratchPad.allocateTempVector("cType_sorted", nContacts *
+    // sizeof(contact_t)); DEME_GPU_CALL(cudaMemcpy(idA_sorted, idA, nContacts * sizeof(bodyID_t),
+    // cudaMemcpyDeviceToDevice)); DEME_GPU_CALL(cudaMemcpy(idB_sorted, idB, nContacts * sizeof(bodyID_t),
+    // cudaMemcpyDeviceToDevice)); DEME_GPU_CALL(cudaMemcpy(cType_sorted, cType, nContacts * sizeof(contact_t),
+    // cudaMemcpyDeviceToDevice)); hostSortByKey(idA, idB_sorted, nContacts); hostSortByKey(idA_sorted, cType_sorted,
+    // nContacts); DEME_GPU_CALL(
+    //     cudaMemcpy(kT_data->previous_idGeometryA, idA_sorted, nContacts * sizeof(bodyID_t),
+    //     cudaMemcpyDeviceToDevice));
+    // DEME_GPU_CALL(
+    //     cudaMemcpy(kT_data->previous_idGeometryB, idB_sorted, nContacts * sizeof(bodyID_t),
+    //     cudaMemcpyDeviceToDevice));
+    // DEME_GPU_CALL(cudaMemcpy(kT_data->previous_contactType, cType_sorted, nContacts * sizeof(contact_t),
+    //                          cudaMemcpyDeviceToDevice));
+    cubDEMSortByKeys<bodyID_t, bodyID_t>(idA, kT_data->previous_idGeometryA, idB, kT_data->previous_idGeometryB,
+                                         nContacts, this_stream, scratchPad);
+    cubDEMSortByKeys<bodyID_t, contact_t>(idA, kT_data->previous_idGeometryA, cType, kT_data->previous_contactType,
+                                          nContacts, this_stream, scratchPad);
 
     *scratchPad.numPrevContacts = nContacts;
     // If nSpheresGM is updated, then it should have been taken care of in the init/populate array phase and in kT's
@@ -1191,9 +1185,9 @@ void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
     scratchPad.finishUsingTempVector("idA");
     scratchPad.finishUsingTempVector("idB");
     scratchPad.finishUsingTempVector("cType");
-    scratchPad.finishUsingTempVector("idA_sorted");
-    scratchPad.finishUsingTempVector("idB_sorted");
-    scratchPad.finishUsingTempVector("cType_sorted");
+    // scratchPad.finishUsingTempVector("idA_sorted");
+    // scratchPad.finishUsingTempVector("idB_sorted");
+    // scratchPad.finishUsingTempVector("cType_sorted");
 }
 
 }  // namespace deme

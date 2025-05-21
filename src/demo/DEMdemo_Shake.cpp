@@ -167,7 +167,7 @@ int main() {
     // Output the final configuration of the clumps as a file. This is just a demonstration. This particular
     // configuration is not that useful as no other demos actually use it, unlike the GRC-1 soil.
     char cp_filename[100];
-    sprintf(cp_filename, "GRC_rho%4.f.csv", bulk_density);
+    sprintf(cp_filename, "settled_rho%4.f.csv", bulk_density);
     DEMSim.WriteClumpFile(out_dir / cp_filename);
 
     std::cout << "Shake demo exiting..." << std::endl;
