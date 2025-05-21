@@ -67,7 +67,6 @@ inline void HostPtrDealloc(T*& ptr) {
 }
 template <typename T>
 inline void HostPtrAlloc(T*& ptr, size_t size) {
-    HostPtrDealloc(ptr);
     DEME_GPU_CALL(cudaMallocHost((void**)&ptr, size * sizeof(T)));
 }
 

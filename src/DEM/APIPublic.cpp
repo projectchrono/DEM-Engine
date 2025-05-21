@@ -2004,8 +2004,8 @@ size_t DEMSolver::ChangeClumpFamily(unsigned int fam_num,
 }
 
 // The method should be called after user inputs are in place, and before starting the simulation. It figures out a part
-// of the required simulation information such as the scale of the poblem domain, and makes sure these info live in
-// managed memory.
+// of the required simulation information such as the scale of the problem domain, and makes sure these info live in
+// GPU memory.
 void DEMSolver::Initialize(bool dry_run) {
     // A few checks first
     validateUserInputs();
@@ -2020,7 +2020,7 @@ void DEMSolver::Initialize(bool dry_run) {
     // Transfer some simulation params to implementation level
     setSimParams();
 
-    // Allocate and populate kT dT managed arrays
+    // Allocate and populate kT dT arrays
     allocateGPUArrays();
     initializeGPUArrays();
 

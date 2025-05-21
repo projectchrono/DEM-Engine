@@ -146,7 +146,7 @@ void SphereRollUpIncline() {
     }
 
     std::cout << "======================================" << std::endl;
-    // Then try to generate the plot (alpha = [0, 30], Crr = [0.2, 0.6])
+    // Then try to generate the plot (alpha = [1, 60], Crr = [0.0, 0.3])
     float run_time = 1.0;
     unsigned int i = 0;
     for (float alpha = 60; alpha >= 1; alpha -= 1) {

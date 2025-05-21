@@ -157,14 +157,15 @@ inline void DEMKinematicThread::unpackMyBuffer() {
         misc_kernels->kernel("computeMarginFromAbsv")
             .instantiate()
             .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(&simParams, &granData, &(stateParams.ts), &(stateParams.maxDrift), (size_t)simParams->nOwnerBodies);
+            .launch(&simParams, &granData, &(stateParams.ts), &(stateParams.maxDrift),
+                    (size_t)(simParams->nOwnerBodies));
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     } else {  // If isExpandFactorFixed, then just fill in that constant array.
         size_t blocks_needed = (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
         misc_kernels->kernel("fillMarginValues")
             .instantiate()
             .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(&simParams, &granData, (size_t)simParams->nOwnerBodies);
+            .launch(&simParams, &granData, (size_t)(simParams->nOwnerBodies));
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 
@@ -218,7 +219,6 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
 void DEMKinematicThread::workerThread() {
     // Set the device for this thread
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
-    DEME_GPU_CALL(cudaStreamCreate(&streamInfo.stream));
 
     // Allocate arrays whose length does not depend on user inputs
     initAllocation();
@@ -383,9 +383,9 @@ void DEMKinematicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, cons
     // cudaStreamDestroy(new_stream);
 
     // Update them back to host
-    // relPosSphereX.toHost();
-    // relPosSphereY.toHost();
-    // relPosSphereZ.toHost();
+    relPosSphereX.toHost();
+    relPosSphereY.toHost();
+    relPosSphereZ.toHost();
     radiiSphere.toHost();
 }
 
@@ -622,7 +622,7 @@ void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
     DEME_DUAL_ARRAY_RESIZE(marginSize, nOwnerBodies, 0);
 
     // Transfer buffer arrays
-    // It is cudaMalloc-ed memory, not managed, because we want explicit locality control of buffers
+    // It is cudaMalloc-ed memory, not on host, because we want explicit locality control of buffers
     {
         // These buffers should be on dT, to save dT access time
         DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
@@ -840,7 +840,7 @@ void DEMKinematicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClum
                                        const std::vector<DEMTriangle>& input_mesh_facets,
                                        const std::vector<notStupidBool_t>& family_mask_matrix,
                                        const ClumpTemplateFlatten& clump_templates) {
-    // Get the info into the managed memory from the host side. Can this process be more efficient? Maybe, but it's
+    // Get the info into the GPU memory from the host side. Can this process be more efficient? Maybe, but it's
     // initialization anyway.
 
     registerPolicies(family_mask_matrix);

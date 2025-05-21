@@ -56,7 +56,7 @@ class DEMDynamicThread {
     // Friend system DEMKinematicThread
     DEMKinematicThread* kT;
 
-    // Number of items in the buffer array (which is not a managed vector, due to our need to explicitly control where
+    // Number of items in the buffer array (which is not a dual vector, due to our need to explicitly control where
     // it is allocated)
     size_t buffer_size = 0;
 
@@ -98,7 +98,7 @@ class DEMDynamicThread {
     // Log for anomalies in the simulation
     WorkerAnomalies anomalies = WorkerAnomalies();
 
-    // Body-related arrays in managed memory, for dT's personal use (not transfer buffer)
+    // Body-related arrays, for dT's personal use (not transfer buffer)
 
     // Those are the smaller ones, the unique, template ones
     // The mass values
@@ -255,11 +255,11 @@ class DEMDynamicThread {
     // Number of threads per block for dT force calculation kernels
     unsigned int DT_FORCE_CALC_NTHREADS_PER_BLOCK = 256;
 
-    // Template-related arrays in managed memory
+    // Template-related arrays
     // Belonged-body ID
     DualArray<bodyID_t> ownerClumpBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> ownerMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    std::vector<bodyID_t> ownerAnalBody;  // Not managed since all analytical bodies are jitified
+    std::vector<bodyID_t> ownerAnalBody;  // Not device side since all analytical bodies are jitified
 
     // The ID that maps this sphere component's geometry-defining parameters, when this component is jitified
     DualArray<clumpComponentOffset_t> clumpComponentOffset =
@@ -309,6 +309,12 @@ class DEMDynamicThread {
         pPagerToMain->userCallDone = false;
         pSchedSupport->dynamicShouldJoin = false;
         pSchedSupport->dynamicStarted = false;
+
+        // I found creating the stream here is needed (rather than creating it in the child thread).
+        // This is because in smaller problems, the array data transfer portion (which needs the stream) could even be
+        // reached before the stream is created in the child thread. So we have to create the stream here before
+        // spawning the child thread.
+        DEME_GPU_CALL(cudaStreamCreate(&streamInfo.stream));
 
         // Launch a worker thread bound to this instance
         th = std::move(std::thread([this]() { this->workerThread(); }));
@@ -450,7 +456,7 @@ class DEMDynamicThread {
     /// @brief Change all entities with (user-level) family number ID_from to have a new number ID_to.
     void changeFamily(unsigned int ID_from, unsigned int ID_to);
 
-    /// Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
+    /// Resize arrays
     void allocateGPUArrays(size_t nOwnerBodies,
                            size_t nOwnerClumps,
                            unsigned int nExtObj,
@@ -504,7 +510,7 @@ class DEMDynamicThread {
                           const std::vector<notStupidBool_t>& family_mask_matrix,
                           const std::set<unsigned int>& no_output_families);
 
-    /// Initialized managed arrays
+    /// Initialized arrays
     void initGPUArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                        const std::vector<float3>& input_ext_obj_xyz,
                        const std::vector<float4>& input_ext_obj_rot,

@@ -183,7 +183,7 @@ class DEMKinematicThread {
     DualArray<contactPairs_t> contactMapping =
         DualArray<contactPairs_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
-    // Sphere-related arrays in managed memory
+    // Sphere-related arrays
     // Owner body ID of this component
     DualArray<bodyID_t> ownerClumpBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> ownerMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
@@ -218,6 +218,12 @@ class DEMKinematicThread {
         pPagerToMain->userCallDone = false;
         pSchedSupport->kinematicShouldJoin = false;
         pSchedSupport->kinematicStarted = false;
+
+        // I found creating the stream here is needed (rather than creating it in the child thread).
+        // This is because in smaller problems, the array data transfer portion (which needs the stream) could even be
+        // reached before the stream is created in the child thread. So we have to create the stream here before
+        // spawning the child thread.
+        DEME_GPU_CALL(cudaStreamCreate(&streamInfo.stream));
 
         // Launch a worker thread bound to this instance
         th = std::move(std::thread([this]() { this->workerThread(); }));
@@ -260,7 +266,7 @@ class DEMKinematicThread {
     size_t estimateDeviceMemUsage() const;
     size_t estimateHostMemUsage() const;
 
-    /// Resize managed arrays (and perhaps Instruct/Suggest their preferred residence location as well?)
+    /// Resize arrays
     void allocateGPUArrays(size_t nOwnerBodies,
                            size_t nOwnerClumps,
                            unsigned int nExtObj,
@@ -287,7 +293,7 @@ class DEMKinematicThread {
                               size_t nExistSpheres,
                               size_t nExistingFacets);
 
-    /// Initialize managed arrays
+    /// Initialize arrays
     void initGPUArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
                        const std::vector<unsigned int>& input_ext_obj_family,
                        const std::vector<unsigned int>& input_mesh_obj_family,

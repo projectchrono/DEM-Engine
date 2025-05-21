@@ -383,9 +383,9 @@ void DEMDynamicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const 
     // cudaStreamDestroy(new_stream);
 
     // Update them back to host
-    // relPosSphereX.toHost();
-    // relPosSphereY.toHost();
-    // relPosSphereZ.toHost();
+    relPosSphereX.toHost();
+    relPosSphereY.toHost();
+    relPosSphereZ.toHost();
     radiiSphere.toHost();
 }
 
@@ -1096,7 +1096,7 @@ void DEMDynamicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpB
                                      const std::vector<notStupidBool_t>& family_mask_matrix,
                                      const std::set<unsigned int>& no_output_families,
                                      std::vector<std::shared_ptr<DEMTrackedObj>>& tracked_objs) {
-    // Get the info into the managed memory from the host side. Can this process be more efficient? Maybe, but it's
+    // Get the info into the GPU memory from the host side. Can this process be more efficient? Maybe, but it's
     // initialization anyway.
 
     registerPolicies(template_number_name_map, clump_templates, ext_obj_mass_types, ext_obj_moi_types,
@@ -2081,6 +2081,7 @@ inline void DEMDynamicThread::calculateForces() {
             .instantiate()
             .configure(dim3(blocks_needed_for_acc_prep), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
             .launch(&simParams, &granData);
+        DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
         // prepareForceArrays needs to clear contact force arrays, only if the user asks us to record contact forces.
         // So...
@@ -2089,8 +2090,8 @@ inline void DEMDynamicThread::calculateForces() {
                 .instantiate()
                 .configure(dim3(blocks_needed_for_force_prep), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
                 .launch(&simParams, &granData, nContactPairs);
+            DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
         }
-        DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
     timers.GetTimer("Clear force array").stop();
 
@@ -2246,7 +2247,6 @@ inline void DEMDynamicThread::ifProduceFreshThenUseItAndSendNewOrder() {
 void DEMDynamicThread::workerThread() {
     // Set the gpu for this thread
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
-    DEME_GPU_CALL(cudaStreamCreate(&streamInfo.stream));
 
     // Allocate arrays whose length does not depend on user inputs
     initAllocation();

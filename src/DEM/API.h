@@ -1580,7 +1580,7 @@ class DEMSolver {
     //// TODO: These re-initialization flavors haven't been added
 
     // This is the cached material information.
-    // It will be massaged into the managed memory upon Initialize().
+    // It will be massaged into the GPU memory upon Initialize().
     std::vector<std::shared_ptr<DEMMaterial>> m_loaded_materials;
 
     // Pair-wise material properties

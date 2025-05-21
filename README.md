@@ -27,6 +27,8 @@ __A dual-GPU DEM solver with complex grain geometry support__
 
 <li><a href="#install-as-library">Install as C++ library</a></li>
 
+<li><a href="#postprocessing">Postprocessing recommendation</a></li>
+
 <li><a href="#licensing">Licensing</a></li>
 
 <li><a href="#limitations">Limitations</a></li>
@@ -198,6 +200,11 @@ Set the `CMAKE_INSTALL_PREFIX` flag in `cmake` GUI to your desired installation 
 ninja install
 ```
 
+In the build folder
+```
+cmake --install .
+```
+
 We provide examples of linking against both [Chrono](https://github.com/projectchrono/chrono) and _DEME_ for co-simulations in [chrono-projects](https://github.com/projectchrono/chrono-projects/tree/feature/DEME). You need to checkout the `feature/DEME` branch after cloning the code.
 
 You need to build `chrono-projects` linking against a Chrono installation (Chrono installation guide is [here](https://api.projectchrono.org/tutorial_install_chrono_linux.html); note you have to `make install` to install Chrono, not just build it), then link against _DEME_. The steps for building `chrono-projects`:
@@ -211,6 +218,10 @@ You need to build `chrono-projects` linking against a Chrono installation (Chron
 Then build the project and you should be able to run the demo scripts that demonstrate the co-simulation between _DEME_ and Chrono.
 
 More documentations on using this package for co-simulations are being added.
+
+<h2 id="postprocessing">Postprocessing recommendation</h2>
+
+Table To Points, Glyph, Glyph Type=Sphere (Theta and Phi Resolition), Scale Array, Scale Factor=2, Glyph Mode=All Points
 
 <h2 id="licensing">Licensing</h2>
 
