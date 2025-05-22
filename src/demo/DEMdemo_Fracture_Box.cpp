@@ -136,7 +136,7 @@ int main() {
     std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
 
     float sim_end = 2;
-    unsigned int fps = 100;
+    unsigned int fps = 200;
     unsigned int datafps = 1000;
     unsigned int modfpsGeo = datafps / fps;
     float frame_time = 1.0 / datafps;

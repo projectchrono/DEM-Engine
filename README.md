@@ -1,7 +1,8 @@
 # SBEL GPU DEM-Engine
 __A dual-GPU DEM solver with complex grain geometry support__
 
-<p style="color: red; font-size: 150%; font-weight: bold;">DEM-Engine now works on both Linux (including WSL) and Windows!</p>
+<p style="color: red; font-size: 140%; font-weight: bold;">DEM-Engine now works on both Linux (including WSL) and Windows!</p>
+<p style="color: red; font-size: 110%; font-weight: bold;">Windows users are still encouraged to use it  via WSL for a more well-tested experience.</p>
 
 <p>
   <img width="380" src="https://i.imgur.com/DKGlM14.jpg">
@@ -62,7 +63,6 @@ To install _pyDEME_, use a Linux machine, install CUDA if you do not already hav
 Some additional troubleshooting tips for getting CUDA ready:
 
 - I recommend getting the newest CUDA. But note that the recent releases CUDA 12.1, 12.2 and 12.3 appear to cause troubles with jitify and you should not use them with DEME.
-- On WSL this code may be buildable (and [this](https://docs.nvidia.com/cuda/wsl-user-guide/index.html) is the guide for installing CUDA on WSL), but may not run. This is due to the [many limitations on unified memory and pinned memory support](https://docs.nvidia.com/cuda/wsl-user-guide/index.html#known-limitations-for-linux-cuda-applications) on WSL. We are looking into it and for now, a native Linux machine or cluster is recommended.
 
 Once CUDA is ready, you can `pip` install _pyDEME_. In your conda environement, do
 ```
@@ -82,13 +82,15 @@ pip3 install DEME
 
 `pyDEME` can be replaced with an environement name of your choice. Other Python versions other than 3.11 should work as well.
 
-Then [Python scripts](https://github.com/projectchrono/DEM-Engine/tree/pyDEME_demo/src/demo) can be executed in this environment. To understand the content of each Python demo, refer to the explanations of the C++ demos with the same names in **Examples** section.
+Then [Python scripts](https://github.com/projectchrono/DEM-Engine/tree/pyDEME_demo/src/demo) can be executed in this environment. To understand the content of each Python demo, refer to the explanations of the C++ demos with the same names in <a href="#examples">Numerical examples</a> section.
 
 <h2 id="compilation">Compilation</h2>
 
 You can also build C++ _DEME_ from source. It allows for potentially more performance and more tailoring.
 
-On a Linux machine, [install CUDA](https://developer.nvidia.com/cuda-downloads). The newest release is recommended.
+### Linux and WSL
+
+First, [install CUDA](https://developer.nvidia.com/cuda-downloads). The newest release is recommended.
 
 Once CUDA is ready, clone this project and then:
 
@@ -123,11 +125,11 @@ Some additional troubleshooting tips for generating the project:
 
 - If some dependencies such as CUB are not found, then you probably need to manually set `$PATH` and `$LD_LIBRARY_PATH`. An example is given below for a specific version of CUDA, note it may be different on your machine or cluster. You should also inspect if `nvidia-smi` and `nvcc --version` give correct returns.
 ```
-export CPATH=/usr/local/cuda-12.5/targets/x86_64-linux/include${CPATH:+:${CPATH}}
-export PATH=/usr/local/cuda-12.5/bin${PATH:+:${PATH}}
-export PATH=/usr/local/cuda-12.5/lib64/cmake${PATH:+:${PATH}}
-export LD_LIBRARY_PATH=/usr/local/cuda-12.5/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-export CUDA_HOME=/usr/local/cuda-12.5
+export CPATH=/usr/local/cuda-12.8/targets/x86_64-linux/include${CPATH:+:${CPATH}}
+export PATH=/usr/local/cuda-12.8/bin${PATH:+:${PATH}}
+export PATH=/usr/local/cuda-12.8/lib64/cmake${PATH:+:${PATH}}
+export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export CUDA_HOME=/usr/local/cuda-12.8
 ```
 
 Finally, build the project.
@@ -140,11 +142,20 @@ Some additional troubleshooting tips for building the project:
 
 - If you see some grammatical errors during compilation, such as `filesystem` not being a member of `std` or arguments not expanded with `...`, then manually setting the flag `TargetCXXStandard` to `STD_CXX17` might help.
 - If CUB is not found, then you may manually set it in the `ccmake` GUI as `/usr/local/cuda/lib64/cmake/cub`. It may be a slightly different path on your machine or cluster.
-- If `libcudacxx` is not found, then you may manually set it in the `ccmake` GUI as `/usr/local/cuda-12.0/targets/x86_64-linux/lib/cmake/libcudacxx`. Depending on your CUDA version it may be a slightly different path on your machine or cluster. You may also try to find these packages using `find`.
+- If `libcudacxx` is not found, then you may manually set it in the `ccmake` GUI as `/usr/local/cuda-12.8/targets/x86_64-linux/lib/cmake/libcudacxx`. Depending on your CUDA version it may be a slightly different path on your machine or cluster. You may also try to find these packages using `find`. 
 
-<h2 id="examples">Examples</h2>
+### Windows
 
-After the build process is done, you can start trying out the demos.
+The process is similar to [the installation of Chrono](https://api.projectchrono.org/tutorial_install_chrono.html), which you can use as reference. The steps depend on your choice of tools, and what listed here are our recommendation.
+
+- Follow the guide in the **Linux and WSL** section to install CUDA on Windows.
+- Use [Sourcetree](https://www.sourcetreeapp.com/) to clone the repo's main branch, with the _recursive_ option on.
+- Use [CMake GUI](https://cmake.org/download/) to configure the project. You should get all the dependency fields filled automatically; if not, manually fill them. Example CUB directory: `C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.8/lib/cmake/cub`. Use the default `x64` architecture and `MSVC` compiler. If you need to install this package as a library later, you can specify a `CMAKE_INSTALL_PREFIX`.
+- After configuration and generation, find the file `Chrono-DEM-Engine.sln` in the build directory, open it using Visual Studio, select `Release` build type and build the project.
+
+<h2 id="examples">Numerical examples</h2>
+
+After the build process is done, you can start trying out the demos. On Windows, these demos may be in the `bin\Release` directory instead.
 
 - `./bin/DEMdemo_SingleSphereCollide` can be used to test a correct installation. If it runs outputting a lot of texts (those are debug messages; the user do not have to worry about the content) and stops without an error in the end, the installation is probably good.
 - An all-rounder beginner example featuring a bladed mixer interacting with complex shaped particles: `./bin/DEMdemo_Mixer`.
@@ -164,7 +175,7 @@ After the build process is done, you can start trying out the demos.
 Some additional troubleshooting tips for running the demos:
 
 - If errors similar to `CUDA_ERROR_UNSUPPORTED_PTX_VERSION` are encountered while you run the demos, or (rarely) the simulations proceed without detecting any contacts, then please make sure the CUDA installation is the same version as when the code is compiled.
-- Another cause for the simulations proceeding without detecting any contacts, could be the force kernel silently failed. This could also lead to a **too-many-geometries-in-bin** crash. The cause is usually that the force kernel was launched with too many threads per block, therefore not enough registers can be leveraged. This can be avoided by calling `SetForceCalcThreadsPerBlock` prior to the start of simulation with the argument being 256 or even smaller choices like 128.
+- Another cause for the simulations proceeding without detecting any contacts, could be the force kernel silently failed. This could also lead to a **too-many-geometries-in-bin** crash. The cause is usually that the force kernel was launched with too many threads per block, therefore not enough registers can be leveraged. This can be avoided by calling `SetForceCalcThreadsPerBlock` prior to the start of simulation with the argument being smaller choices like 128. **Note that you should only try this if you are using a custom force model**.
 - Used your own force model but got runtime compilation error like `expression must have pointer-to-object type but it has type "float"`, or `unknown variable "delta_time"`? Check out what we did in demo `DEMdemo_Electrostatic`. You may need to manually specify what material properties are pairwise and what contact wildcards you have using `SetMustPairwiseMatProp` and `SetPerContactWildcards`.
 - Just running provided demos or a script that used to work, but the jitification of the force model failed or the simulation fails at the first kernel call (probably in `DEMCubContactDetection.cu`)? Then did you pull a new version and just re-built in-place? A new update may modify the force model, and the force model in _DEME_ are given as text files so might not be automatically copied over when the project is re-built. I am sorry for the trouble it might cause, but you can do a clean re-build from an empty directory and it should fix the problem. Do not forget to first commit your own branches' changes and relocate the data you generated in the build directory. Another solution is to copy everything in `src/DEM` to the `DEM` directory in the build directory, then everything in `src/kernel` to the `kernel` directory in the build directory, then try again.
 
@@ -194,18 +205,26 @@ _DEME_ is designed to simulate the interaction among clump-represented particles
 
 <h2 id="install-as-library">Install as library</h2>
 
-Set the `CMAKE_INSTALL_PREFIX` flag in `cmake` GUI to your desired installation path and then 
+### Linux and WSL
+
+Set `CMAKE_INSTALL_PREFIX` flag in `cmake` GUI to your desired installation path and then 
 
 ```
 ninja install
 ```
 
-In the build folder
+### Windows
+
+Set `CMAKE_INSTALL_PREFIX` flag in `cmake` GUI to your desired installation path, then open a command line window in Visual Studio (may be found in Tools -> Command Line), and use the following command to install
 ```
 cmake --install .
 ```
 
-We provide examples of linking against both [Chrono](https://github.com/projectchrono/chrono) and _DEME_ for co-simulations in [chrono-projects](https://github.com/projectchrono/chrono-projects/tree/feature/DEME). You need to checkout the `feature/DEME` branch after cloning the code.
+### Example scripts in Chrono-projects
+
+We provide examples of linking against both [Chrono](https://github.com/projectchrono/chrono) and _DEME_ for co-simulations in [chrono-projects](https://github.com/projectchrono/chrono-projects/tree/feature/DEME). 
+
+**For now, you need to checkout the `feature/DEME` branch of chrono-projects after cloning the code to access the scripts!**
 
 You need to build `chrono-projects` linking against a Chrono installation (Chrono installation guide is [here](https://api.projectchrono.org/tutorial_install_chrono_linux.html); note you have to `make install` to install Chrono, not just build it), then link against _DEME_. The steps for building `chrono-projects`:
 
@@ -221,7 +240,10 @@ More documentations on using this package for co-simulations are being added.
 
 <h2 id="postprocessing">Postprocessing recommendation</h2>
 
-Table To Points, Glyph, Glyph Type=Sphere (Theta and Phi Resolition), Scale Array, Scale Factor=2, Glyph Mode=All Points
+_DEME_ mainly outputs clumps or component spheres in `csv` format, so you can postprocess the raw data however you desire. The following is simply an example work flow which gives a quick and interactive rendering scene of the outputted component spheres (`WriteSphereFile`) using [ParaView](https://www.paraview.org/). 
+
+- Directly load the outputted `vtk` mesh files in ParaView and show them.
+- Load the `csv` component sphere files. Use filter **Table To Points**, and set X, Y and Z coordinates to be read from the _X_, _Y_ and _Z_ columns of the `csv` files, then click **Apply**. After that, apply **Glyph** filter. Set **Glyph Type** to be _Sphere_ (you may reduce **Theta** and **Phi Resolition** to save memory), then set the option **Scale Array** to be the _r_ column of the `csv` file, set **Scale Factor** to be 2 (_DEME_ outputs the radii but in ParaView we should scale the spheres by diameter). Finally, set **Glyph Mode** to _All Points_, then click **Apply**.
 
 <h2 id="licensing">Licensing</h2>
 
