@@ -18,7 +18,7 @@
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
 #include <core/utils/DEMEPaths.h>
-#include <kernel/DEMHelperKernels.cu>
+#include <kernel/DEMHelperKernels.cuh>
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
 #include <DEM/BdrsAndObjs.h>
@@ -265,17 +265,17 @@ class DEMSolver {
     void SetAdaptiveBinSizeMaxRate(float rate) { auto_adjust_max_rate = (rate > 0) ? rate : 0; }
     /// @brief Set how fast kT changes the direction of bin size adjustmemt when there's a more beneficial direction.
     /// @param acc 0.01: slowly change direction; 1: quickly change direction
-    void SetAdaptiveBinSizeAcc(float acc) { auto_adjust_acc = hostClampBetween(acc, 0.01, 1.0); }
+    void SetAdaptiveBinSizeAcc(float acc) { auto_adjust_acc = clampBetween(acc, 0.01, 1.0); }
     /// @brief Set how proactive the solver is in avoiding the bin being too big (leading to too many geometries in a
     /// bin).
     /// @param ratio 0: not proavtive; 1: very proactive.
     void SetAdaptiveBinSizeUpperProactivity(float ratio) {
-        auto_adjust_upper_proactive_ratio = hostClampBetween(ratio, 0.0, 1.0);
+        auto_adjust_upper_proactive_ratio = clampBetween(ratio, 0.0, 1.0);
     }
     /// @brief Set how proactive the solver is in avoiding the bin being too small (leading to too many bins in domain).
     /// @param ratio 0: not proavtive; 1: very proactive.
     void SetAdaptiveBinSizeLowerProactivity(float ratio) {
-        auto_adjust_lower_proactive_ratio = hostClampBetween(ratio, 0.0, 1.0);
+        auto_adjust_lower_proactive_ratio = clampBetween(ratio, 0.0, 1.0);
     }
     /// @brief Get the current bin (for contact detection) size. Must be called from synchronized stance.
     /// @return Bin size.

@@ -526,7 +526,7 @@ std::vector<float3> DEMSolver::GetMeshNodesGlobal(bodyID_t ownerID) {
     float4 mesh_oriQ = dT->getOwnerOriQ(ownerID);
     std::vector<float3> nodes(m_meshes.at(m_owner_mesh_map.at(ownerID))->GetCoordsVertices());
     for (auto& pnt : nodes) {
-        hostApplyFrameTransformLocalToGlobal<float3, float3, float4>(pnt, mesh_pos, mesh_oriQ);
+        applyFrameTransformLocalToGlobal<float3, float3, float4>(pnt, mesh_pos, mesh_oriQ);
     }
     return nodes;
 }
@@ -1974,9 +1974,9 @@ size_t DEMSolver::ChangeClumpFamily(unsigned int fam_num,
         subVoxelPos_t subVoxX = dT->locX[ownerID];
         subVoxelPos_t subVoxY = dT->locY[ownerID];
         subVoxelPos_t subVoxZ = dT->locZ[ownerID];
-        hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(CoM.x, CoM.y, CoM.z, voxel, subVoxX, subVoxY, subVoxZ,
-                                                               dT->simParams->nvXp2, dT->simParams->nvYp2,
-                                                               dT->simParams->voxelSize, dT->simParams->l);
+        voxelIDToPosition<float, voxelID_t, subVoxelPos_t>(CoM.x, CoM.y, CoM.z, voxel, subVoxX, subVoxY, subVoxZ,
+                                                           dT->simParams->nvXp2, dT->simParams->nvYp2,
+                                                           dT->simParams->voxelSize, dT->simParams->l);
         CoM.x += dT->simParams->LBFX;
         CoM.y += dT->simParams->LBFY;
         CoM.z += dT->simParams->LBFZ;

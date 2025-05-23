@@ -310,7 +310,7 @@ std::vector<float> DEMTracker::GetAngVelLocal(size_t offset) {
 float3 DEMTracker::AngVelGlobal(size_t offset) {
     float3 ang_v = sys->GetOwnerAngVel(obj->ownerID + offset);
     float4 oriQ = sys->GetOwnerOriQ(obj->ownerID + offset);
-    hostApplyOriQToVector3(ang_v.x, ang_v.y, ang_v.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+    applyOriQToVector3(ang_v.x, ang_v.y, ang_v.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
     return ang_v;
 }
 std::vector<float> DEMTracker::GetAngVelGlobal(size_t offset) {
@@ -380,7 +380,7 @@ std::vector<float> DEMTracker::GetContactAngAccLocal(size_t offset) {
 float3 DEMTracker::ContactAngAccGlobal(size_t offset) {
     float3 ang_acc = sys->GetOwnerAngAcc(obj->ownerID + offset);
     float4 oriQ = sys->GetOwnerOriQ(obj->ownerID + offset);
-    hostApplyOriQToVector3(ang_acc.x, ang_acc.y, ang_acc.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
+    applyOriQToVector3(ang_acc.x, ang_acc.y, ang_acc.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
     return ang_acc;
 }
 std::vector<float> DEMTracker::GetContactAngAccGlobal(size_t offset) {

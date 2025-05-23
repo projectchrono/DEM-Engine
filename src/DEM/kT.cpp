@@ -74,7 +74,7 @@ void DEMKinematicThread::calibrateParams() {
             // Acc is done. Now apply it to bin size change speed
             stateParams.binCurrentChangeRate += speed_update;
             // But, the speed must fall in range
-            stateParams.binCurrentChangeRate = hostClampBetween(
+            stateParams.binCurrentChangeRate = clampBetween(
                 stateParams.binCurrentChangeRate, -stateParams.binTopChangeRate, stateParams.binTopChangeRate);
 
             // Change bin size

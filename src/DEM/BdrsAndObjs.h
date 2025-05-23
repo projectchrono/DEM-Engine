@@ -14,7 +14,7 @@
 #include <array>
 #include <cmath>
 
-#include <kernel/DEMHelperKernels.cu>
+#include <kernel/DEMHelperKernels.cuh>
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
 #include <core/utils/CudaAllocator.hpp>
@@ -436,7 +436,7 @@ class DEMMeshConnected : public DEMInitializer {
     /// frame is its centroid and principal system.
     void Move(float3 vec, float4 rot_Q) {
         for (auto& node : m_vertices) {
-            hostApplyFrameTransformLocalToGlobal(node, vec, rot_Q);
+            applyFrameTransformLocalToGlobal(node, vec, rot_Q);
         }
     }
     void Move(const std::vector<float>& vec, const std::vector<float>& rot_Q) {

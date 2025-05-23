@@ -1,5 +1,5 @@
 // DEM kernels that does some wildcard stuff, such as modifying the system as per user instruction
-#include <DEMHelperKernels.cu>
+#include <DEMHelperKernels.cuh>
 #include <DEM/Defines.h>
 _kernelIncludes_;
 

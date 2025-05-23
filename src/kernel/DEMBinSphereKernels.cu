@@ -1,6 +1,6 @@
 // DEM bin--sphere relations-related custom kernels
 #include <DEM/Defines.h>
-#include <DEMHelperKernels.cu>
+#include <DEMHelperKernels.cuh>
 _kernelIncludes_;
 
 // If clump templates are jitified, they will be below

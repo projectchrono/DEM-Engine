@@ -33,7 +33,7 @@
 #include <map>
 #include <unordered_map>
 
-#include <kernel/DEMHelperKernels.cu>
+#include <kernel/DEMHelperKernels.cuh>
 #include <DEM/BdrsAndObjs.h>
 #include <core/utils/WavefrontMeshLoader.hpp>
 

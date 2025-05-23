@@ -18,7 +18,7 @@
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
 #include <core/utils/DataMigrationHelper.hpp>
-#include <kernel/DEMHelperKernels.cu>
+#include <kernel/DEMHelperKernels.cuh>
 #include <core/utils/GpuError.h>
 #include <DEM/BdrsAndObjs.h>
 #include <DEM/Defines.h>

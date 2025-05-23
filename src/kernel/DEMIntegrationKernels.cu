@@ -1,5 +1,5 @@
 // DEM integration related custom kernels
-#include <DEMHelperKernels.cu>
+#include <DEMHelperKernels.cuh>
 #include <DEM/Defines.h>
 _kernelIncludes_;
 

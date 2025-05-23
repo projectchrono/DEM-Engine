@@ -21,7 +21,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <unordered_map>
-#include <kernel/DEMHelperKernels.cu>
+#include <kernel/DEMHelperKernels.cuh>
 #include <DEM/HostSideHelpers.hpp>
 #include <filesystem>
 #include <cstring>
@@ -652,7 +652,7 @@ class DEMClumpTemplate {
     /// frame is its centroid and principal system.
     void Move(float3 vec, float4 rot_Q) {
         for (auto& pos : relPos) {
-            hostApplyFrameTransformLocalToGlobal(pos, vec, rot_Q);
+            applyFrameTransformLocalToGlobal(pos, vec, rot_Q);
         }
     }
     void Move(const std::vector<float>& vec, const std::vector<float>& rot_Q) {
