@@ -4,7 +4,6 @@
 //	SPDX-License-Identifier: BSD-3-Clause
 
 #include <cub/cub.cuh>
-#include <core/utils/JitHelper.h>
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
 #include <core/utils/GpuError.h>

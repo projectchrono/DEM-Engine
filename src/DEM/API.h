@@ -40,7 +40,6 @@ class DEMTracker;
 //            3. Instruct how many dT steps should at LEAST do before receiving kT update
 //            4. Sleepers that don't participate CD or integration
 //            5. Update the game of life demo (it's about model ingredient usage)
-//            6. Methods urgently need device conversion: getOwnerContactForces,
 //            7. Set the device numbers to use
 //            9. wT takes care of an extra output when it crashes
 //            10. Recover sph--mesh contact pairs in restarted sim by mesh name
@@ -566,7 +565,7 @@ class DEMSolver {
     template <typename T>
     std::shared_ptr<DEMTracker> Track(const std::shared_ptr<T>& obj) {
         // Create a middle man: DEMTrackedObj. The reason we use it is because a simple struct should be used to
-        // transfer to  dT for owner-number processing. If we cut the middle man and use things such as DEMExtObj, there
+        // transfer to dT for owner-number processing. If we cut the middle man and use things such as DEMExtObj, there
         // will not be a universal treatment that dT can apply, besides we may have some include-related issues.
         DEMTrackedObj tracked_obj;
         tracked_obj.load_order = obj->load_order;
@@ -828,21 +827,23 @@ class DEMSolver {
     /// @brief Cancel contact persistence qualification. Work like the inverse of MarkPersistentContact.
     void RemovePersistentContact();
 
-    /// @brief Get all contact forces that concern a owner.
-    /// @param ownerID The ID of the owner.
+    /// @brief Get all contact forces that concern a list of owners.
+    /// @param ownerIDs The IDs of the owners.
     /// @param points Fill this vector of float3 with the XYZ components of the contact points.
     /// @param forces Fill this vector of float3 with the XYZ components of the forces.
     /// @return Number of force pairs.
-    size_t GetOwnerContactForces(bodyID_t ownerID, std::vector<float3>& points, std::vector<float3>& forces);
+    size_t GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
+                                 std::vector<float3>& points,
+                                 std::vector<float3>& forces);
 
-    /// @brief Get all contact forces that concern a owner.
-    /// @param ownerID The ID of the owner.
+    /// @brief Get all contact forces that concern a list of owners.
+    /// @param ownerIDs The IDs of the owners.
     /// @param points Fill this vector of float3 with the XYZ components of the contact points.
     /// @param forces Fill this vector of float3 with the XYZ components of the forces.
     /// @param torques Fill this vector of float3 with the XYZ components of the torques (in local frame).
     /// @param torque_in_local If true, output torque in this body's local ref frame.
     /// @return Number of force pairs.
-    size_t GetOwnerContactForces(bodyID_t ownerID,
+    size_t GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
                                  std::vector<float3>& points,
                                  std::vector<float3>& forces,
                                  std::vector<float3>& torques,

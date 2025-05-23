@@ -84,6 +84,7 @@ void DEMDynamicThread::packDataPointers() {
 
     // Mesh-related
     ownerMesh.bindDevicePointer(&(granData->ownerMesh));
+    ownerAnalBody.bindDevicePointer(&(granData->ownerAnalBody));
     relPosNode1.bindDevicePointer(&(granData->relPosNode1));
     relPosNode2.bindDevicePointer(&(granData->relPosNode2));
     relPosNode3.bindDevicePointer(&(granData->relPosNode3));
@@ -156,6 +157,7 @@ void DEMDynamicThread::migrateDataToDevice() {
     volumeOwnerBody.toDeviceAsync(streamInfo.stream);
 
     ownerMesh.toDeviceAsync(streamInfo.stream);
+    ownerAnalBody.toDeviceAsync(streamInfo.stream);
     relPosNode1.toDeviceAsync(streamInfo.stream);
     relPosNode2.toDeviceAsync(streamInfo.stream);
     relPosNode3.toDeviceAsync(streamInfo.stream);
@@ -171,7 +173,7 @@ void DEMDynamicThread::migrateDataToDevice() {
     mmiZZ.toDeviceAsync(streamInfo.stream);
 
     // Might not be necessary... but it's a big call anyway, let's sync
-    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    syncMemoryTransfer();
 }
 
 void DEMDynamicThread::migrateDeviceModifiableInfoToHost() {
@@ -248,6 +250,20 @@ void DEMDynamicThread::migrateTriGeoWildcardToHost() {
 void DEMDynamicThread::migrateAnalGeoWildcardToHost() {
     for (unsigned int i = 0; i < simParams->nGeoWildcards; i++) {
         analWildcards[i]->toHost();
+    }
+}
+
+bodyID_t DEMDynamicThread::getGeoOwnerID(const bodyID_t& geoB, const contact_t& type) const {
+    // These arrays can't change on device
+    switch (type) {
+        case (NOT_A_CONTACT):
+            return NULL_BODYID;
+        case (SPHERE_SPHERE_CONTACT):
+            return ownerClumpBody[geoB];
+        case (SPHERE_MESH_CONTACT):
+            return ownerMesh[geoB];
+        default:  // Default is sphere--analytical
+            return ownerAnalBody[geoB];
     }
 }
 
@@ -1603,20 +1619,6 @@ void DEMDynamicThread::writeClumpsAsCsv(std::ofstream& ptFile, unsigned int accu
     ptFile << outstrstream.str();
 }
 
-bodyID_t DEMDynamicThread::getGeoOwnerID(const bodyID_t& geoB, const contact_t& type) const {
-    // These arrays can't change on device
-    switch (type) {
-        case (NOT_A_CONTACT):
-            return NULL_BODYID;
-        case (SPHERE_SPHERE_CONTACT):
-            return ownerClumpBody[geoB];
-        case (SPHERE_MESH_CONTACT):
-            return ownerMesh[geoB];
-        default:  // Default is sphere--analytical
-            return ownerAnalBody[geoB];
-    }
-}
-
 void DEMDynamicThread::writeContactsAsCsv(std::ofstream& ptFile, float force_thres) {
     std::ostringstream outstrstream;
 
@@ -1821,7 +1823,7 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
             float4 ownerOriQ = this->getOwnerOriQ(mowner);
             for (const auto& v : mmesh->GetCoordsVertices()) {
                 float3 point = v;
-                applyFrameTransformLocalToGlobal(point, ownerPos, ownerOriQ);
+                hostApplyFrameTransformLocalToGlobal(point, ownerPos, ownerOriQ);
                 ostream << point.x << " " << point.y << " " << point.z << std::endl;
             }
         }
@@ -2646,137 +2648,115 @@ void DEMDynamicThread::setFamilyMeshMaterial(unsigned int N, unsigned int mat_id
     triMaterialOffset.toDevice();
 }
 
-size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
+size_t DEMDynamicThread::getOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
                                                std::vector<float3>& points,
                                                std::vector<float3>& forces) {
+    // Set the gpu for this thread
+    DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
+    // Allocate enough space
     size_t numCnt = *solverScratchSpace.numContacts;
-    size_t numUsefulCnt = 0;
-    idGeometryA.toHost();
-    idGeometryB.toHost();
-    contactType.toHost();
-    contactForces.toHost();
+    solverScratchSpace.allocateDualArray("points", numCnt * sizeof(float3));
+    solverScratchSpace.allocateDualArray("forces", numCnt * sizeof(float3));
+    solverScratchSpace.allocateDualArray("ownerIDs", ownerIDs.size() * sizeof(bodyID_t));
+    solverScratchSpace.allocateDualStruct("numUsefulCnt");
 
-    for (size_t i = 0; i < numCnt; i++) {
-        bodyID_t geoA = idGeometryA[i];
-        bodyID_t ownerA = ownerClumpBody[geoA];
-        bodyID_t geoB = idGeometryB[i];
-        contact_t typeB = contactType[i];
-        bodyID_t ownerB = getGeoOwnerID(geoB, typeB);
-
-        if ((ownerID != ownerA) && (ownerID != ownerB)) {
-            continue;
-        }
-        float3 force = contactForces[i];
-        if (length(force) < DEME_TINY_FLOAT) {
-            continue;
-        }
-
-        numUsefulCnt++;
-        float3 cntPnt;
-        float3 CoM;
-        float4 oriQ;
-        if (ownerID == ownerA) {
-            cntPnt = contactPointGeometryA(i);
-        } else {
-            cntPnt = contactPointGeometryB(i);
-            // Force dir flipped
-            force = -force;
-        }
-
-        // Right now this method just use inefficient piecemeal device data transaction
-        oriQ.w = oriQw(ownerID);
-        oriQ.x = oriQx(ownerID);
-        oriQ.y = oriQy(ownerID);
-        oriQ.z = oriQz(ownerID);
-        voxelID_t voxel = voxelID(ownerID);
-        subVoxelPos_t subVoxX = locX(ownerID);
-        subVoxelPos_t subVoxY = locY(ownerID);
-        subVoxelPos_t subVoxZ = locZ(ownerID);
-        hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(CoM.x, CoM.y, CoM.z, voxel, subVoxX, subVoxY, subVoxZ,
-                                                               simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
-                                                               simParams->l);
-        CoM.x += simParams->LBFX;
-        CoM.y += simParams->LBFY;
-        CoM.z += simParams->LBFZ;
-        applyFrameTransformLocalToGlobal<float3, float3, float4>(cntPnt, CoM, oriQ);
-        points.push_back(cntPnt);
-        forces.push_back(force);
+    const std::vector<bodyID_t> ownerIDs_sorted = hostSort(ownerIDs);
+    bodyID_t* h_ownerIDs = (bodyID_t*)solverScratchSpace.getDualArrayHost("ownerIDs");
+    for (size_t i = 0; i < ownerIDs_sorted.size(); i++) {
+        h_ownerIDs[i] = ownerIDs_sorted[i];
     }
+    solverScratchSpace.syncDualArrayHostToDevice("ownerIDs");
+
+    size_t* h_numUsefulCnt = solverScratchSpace.getDualStructHost("numUsefulCnt");
+    *h_numUsefulCnt = 0;
+    solverScratchSpace.syncDualStructHostToDevice("numUsefulCnt");
+    size_t* d_numUsefulCnt = solverScratchSpace.getDualStructDevice("numUsefulCnt");
+    bodyID_t* d_ownerIDs = (bodyID_t*)solverScratchSpace.getDualArrayDevice("ownerIDs");
+    float3* d_points = (float3*)solverScratchSpace.getDualArrayDevice("points");
+    float3* d_forces = (float3*)solverScratchSpace.getDualArrayDevice("forces");
+
+    getContactForcesConcerningOwners(d_points, d_forces, nullptr, d_numUsefulCnt, d_ownerIDs, ownerIDs_sorted.size(),
+                                     &simParams, &granData, numCnt, false, false, streamInfo.stream);
+
+    // Bring back to host
+    solverScratchSpace.syncDualStructDeviceToHost("numUsefulCnt");
+    solverScratchSpace.syncDualArrayDeviceToHost("points");
+    solverScratchSpace.syncDualArrayDeviceToHost("forces");
+    size_t numUsefulCnt = *h_numUsefulCnt;
+    float3* h_points = (float3*)solverScratchSpace.getDualArrayHost("points");
+    float3* h_forces = (float3*)solverScratchSpace.getDualArrayHost("forces");
+    points.resize(numUsefulCnt);
+    forces.resize(numUsefulCnt);
+    for (size_t i = 0; i < numUsefulCnt; i++) {
+        points[i] = h_points[i];
+        forces[i] = h_forces[i];
+    }
+
+    solverScratchSpace.finishUsingDualArray("points");
+    solverScratchSpace.finishUsingDualArray("forces");
+    solverScratchSpace.finishUsingDualArray("ownerIDs");
+    solverScratchSpace.finishUsingDualStruct("numUsefulCnt");
     return numUsefulCnt;
 }
-size_t DEMDynamicThread::getOwnerContactForces(bodyID_t ownerID,
+
+size_t DEMDynamicThread::getOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
                                                std::vector<float3>& points,
                                                std::vector<float3>& forces,
                                                std::vector<float3>& torques,
                                                bool torque_in_local) {
+    // Set the gpu for this thread
+    // Set the gpu for this thread
+    DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
+    // Allocate enough space
     size_t numCnt = *solverScratchSpace.numContacts;
-    size_t numUsefulCnt = 0;
-    idGeometryA.toHost();
-    idGeometryB.toHost();
-    contactType.toHost();
-    contactForces.toHost();
-    contactTorque_convToForce.toHost();
+    solverScratchSpace.allocateDualArray("points", numCnt * sizeof(float3));
+    solverScratchSpace.allocateDualArray("forces", numCnt * sizeof(float3));
+    solverScratchSpace.allocateDualArray("torques", numCnt * sizeof(float3));
+    solverScratchSpace.allocateDualArray("ownerIDs", ownerIDs.size() * sizeof(bodyID_t));
+    solverScratchSpace.allocateDualStruct("numUsefulCnt");
 
-    for (size_t i = 0; i < numCnt; i++) {
-        bodyID_t geoA = idGeometryA[i];
-        bodyID_t ownerA = ownerClumpBody[geoA];
-        bodyID_t geoB = idGeometryB[i];
-        contact_t typeB = contactType[i];
-        bodyID_t ownerB = getGeoOwnerID(geoB, typeB);
-
-        if ((ownerID != ownerA) && (ownerID != ownerB)) {
-            continue;
-        }
-        float3 force = contactForces[i];
-        // Note torque, like force, is in global
-        float3 torque = contactTorque_convToForce[i];
-        if (length(force) + length(torque) < DEME_TINY_FLOAT) {
-            continue;
-        }
-
-        numUsefulCnt++;
-        float3 cntPnt;
-        float3 CoM;
-        float4 oriQ;
-        if (ownerID == ownerA) {
-            cntPnt = contactPointGeometryA(i);
-        } else {
-            cntPnt = contactPointGeometryB(i);
-            // Force dir flipped
-            force = -force;
-            torque = -torque;
-        }
-
-        // Right now this method just use inefficient piecemeal device data transaction
-        oriQ.w = oriQw(ownerID);
-        oriQ.x = oriQx(ownerID);
-        oriQ.y = oriQy(ownerID);
-        oriQ.z = oriQz(ownerID);
-        // Must derive torque in local...
-        {
-            hostApplyOriQToVector3(torque.x, torque.y, torque.z, oriQ.w, -oriQ.x, -oriQ.y, -oriQ.z);
-            // Force times point...
-            torque = cross(cntPnt, torque);
-            if (!torque_in_local) {  // back to global if needed
-                hostApplyOriQToVector3(torque.x, torque.y, torque.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
-            }
-        }
-
-        voxelID_t voxel = voxelID(ownerID);
-        subVoxelPos_t subVoxX = locX(ownerID);
-        subVoxelPos_t subVoxY = locY(ownerID);
-        subVoxelPos_t subVoxZ = locZ(ownerID);
-        hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(CoM.x, CoM.y, CoM.z, voxel, subVoxX, subVoxY, subVoxZ,
-                                                               simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
-                                                               simParams->l);
-        CoM.x += simParams->LBFX;
-        CoM.y += simParams->LBFY;
-        CoM.z += simParams->LBFZ;
-        applyFrameTransformLocalToGlobal<float3, float3, float4>(cntPnt, CoM, oriQ);
-        points.push_back(cntPnt);
-        forces.push_back(force);
-        torques.push_back(torque);
+    const std::vector<bodyID_t> ownerIDs_sorted = hostSort(ownerIDs);
+    bodyID_t* h_ownerIDs = (bodyID_t*)solverScratchSpace.getDualArrayHost("ownerIDs");
+    for (size_t i = 0; i < ownerIDs_sorted.size(); i++) {
+        h_ownerIDs[i] = ownerIDs_sorted[i];
     }
+    solverScratchSpace.syncDualArrayHostToDevice("ownerIDs");
+
+    size_t* h_numUsefulCnt = solverScratchSpace.getDualStructHost("numUsefulCnt");
+    *h_numUsefulCnt = 0;
+    solverScratchSpace.syncDualStructHostToDevice("numUsefulCnt");
+    size_t* d_numUsefulCnt = solverScratchSpace.getDualStructDevice("numUsefulCnt");
+    bodyID_t* d_ownerIDs = (bodyID_t*)solverScratchSpace.getDualArrayDevice("ownerIDs");
+    float3* d_points = (float3*)solverScratchSpace.getDualArrayDevice("points");
+    float3* d_forces = (float3*)solverScratchSpace.getDualArrayDevice("forces");
+    float3* d_torques = (float3*)solverScratchSpace.getDualArrayDevice("torques");
+
+    getContactForcesConcerningOwners(d_points, d_forces, d_torques, d_numUsefulCnt, d_ownerIDs, ownerIDs_sorted.size(),
+                                     &simParams, &granData, numCnt, true, torque_in_local, streamInfo.stream);
+
+    // Bring back to host
+    solverScratchSpace.syncDualStructDeviceToHost("numUsefulCnt");
+    solverScratchSpace.syncDualArrayDeviceToHost("points");
+    solverScratchSpace.syncDualArrayDeviceToHost("forces");
+    solverScratchSpace.syncDualArrayDeviceToHost("torques");
+    size_t numUsefulCnt = *h_numUsefulCnt;
+    float3* h_points = (float3*)solverScratchSpace.getDualArrayHost("points");
+    float3* h_forces = (float3*)solverScratchSpace.getDualArrayHost("forces");
+    float3* h_torques = (float3*)solverScratchSpace.getDualArrayHost("torques");
+    points.resize(numUsefulCnt);
+    forces.resize(numUsefulCnt);
+    torques.resize(numUsefulCnt);
+    for (size_t i = 0; i < numUsefulCnt; i++) {
+        points[i] = h_points[i];
+        forces[i] = h_forces[i];
+        torques[i] = h_torques[i];
+    }
+
+    solverScratchSpace.finishUsingDualArray("points");
+    solverScratchSpace.finishUsingDualArray("forces");
+    solverScratchSpace.finishUsingDualArray("torques");
+    solverScratchSpace.finishUsingDualArray("ownerIDs");
+    solverScratchSpace.finishUsingDualStruct("numUsefulCnt");
     return numUsefulCnt;
 }
 
@@ -2849,7 +2829,7 @@ void DEMDynamicThread::setOwnerWildcardValue(bodyID_t ownerID, unsigned int wc_n
         (*ownerWildcards[wc_num])[ownerID + i] = vals.at(i);
     }
     // Partial send to device
-    ownerWildcards[wc_num]->toDeviceAsync(streamInfo.stream, ownerID, vals.size());
+    ownerWildcards[wc_num]->toDevice(ownerID, vals.size());
 }
 
 void DEMDynamicThread::setTriWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals) {
@@ -2857,7 +2837,7 @@ void DEMDynamicThread::setTriWildcardValue(bodyID_t geoID, unsigned int wc_num, 
         (*triWildcards[wc_num])[geoID + i] = vals.at(i);
     }
     // Partial send to device
-    triWildcards[wc_num]->toDeviceAsync(streamInfo.stream, geoID, vals.size());
+    triWildcards[wc_num]->toDevice(geoID, vals.size());
 }
 
 void DEMDynamicThread::setSphWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals) {
@@ -2865,7 +2845,7 @@ void DEMDynamicThread::setSphWildcardValue(bodyID_t geoID, unsigned int wc_num, 
         (*sphereWildcards[wc_num])[geoID + i] = vals.at(i);
     }
     // Partial send to device
-    sphereWildcards[wc_num]->toDeviceAsync(streamInfo.stream, geoID, vals.size());
+    sphereWildcards[wc_num]->toDevice(geoID, vals.size());
 }
 
 void DEMDynamicThread::setAnalWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals) {
@@ -2873,7 +2853,7 @@ void DEMDynamicThread::setAnalWildcardValue(bodyID_t geoID, unsigned int wc_num,
         (*analWildcards[wc_num])[geoID + i] = vals.at(i);
     }
     // Partial send to device
-    analWildcards[wc_num]->toDeviceAsync(streamInfo.stream, geoID, vals.size());
+    analWildcards[wc_num]->toDevice(geoID, vals.size());
 }
 
 void DEMDynamicThread::setFamilyOwnerWildcardValue(unsigned int family_num,
@@ -2906,7 +2886,7 @@ void DEMDynamicThread::getAnalWildcardValue(std::vector<float>& res, bodyID_t ID
     res = std::move(analWildcards[wc_num]->getVal(ID, n));
 }
 
-float DEMDynamicThread::getOwnerWildcardValue(bodyID_t ID, unsigned int wc_num) {
+float DEMDynamicThread::getOwnerWildcardValue(bodyID_t ID, unsigned int wc_num, bodyID_t n) {
     return ownerWildcards[wc_num]->getVal(ID);
 }
 
@@ -2931,7 +2911,7 @@ void DEMDynamicThread::getFamilyOwnerWildcardValue(std::vector<float>& res,
     res.resize(count);
 }
 
-float3 DEMDynamicThread::getOwnerAngVel(bodyID_t ownerID) {
+float3 DEMDynamicThread::getOwnerAngVel(bodyID_t ownerID, bodyID_t n) {
     float3 angVel;
     angVel.x = omgBarX(ownerID);
     angVel.y = omgBarY(ownerID);
@@ -2939,7 +2919,7 @@ float3 DEMDynamicThread::getOwnerAngVel(bodyID_t ownerID) {
     return angVel;
 }
 
-float4 DEMDynamicThread::getOwnerOriQ(bodyID_t ownerID) {
+float4 DEMDynamicThread::getOwnerOriQ(bodyID_t ownerID, bodyID_t n) {
     float4 oriQ;
     oriQ.w = oriQw(ownerID);
     oriQ.x = oriQx(ownerID);
@@ -2948,7 +2928,7 @@ float4 DEMDynamicThread::getOwnerOriQ(bodyID_t ownerID) {
     return oriQ;
 }
 
-float3 DEMDynamicThread::getOwnerAcc(bodyID_t ownerID) {
+float3 DEMDynamicThread::getOwnerAcc(bodyID_t ownerID, bodyID_t n) {
     float3 acc;
     acc.x = aX(ownerID);
     acc.y = aY(ownerID);
@@ -2956,7 +2936,7 @@ float3 DEMDynamicThread::getOwnerAcc(bodyID_t ownerID) {
     return acc;
 }
 
-float3 DEMDynamicThread::getOwnerAngAcc(bodyID_t ownerID) {
+float3 DEMDynamicThread::getOwnerAngAcc(bodyID_t ownerID, bodyID_t n) {
     float3 aa;
     aa.x = alphaX(ownerID);
     aa.y = alphaY(ownerID);
@@ -2964,7 +2944,7 @@ float3 DEMDynamicThread::getOwnerAngAcc(bodyID_t ownerID) {
     return aa;
 }
 
-float3 DEMDynamicThread::getOwnerVel(bodyID_t ownerID) {
+float3 DEMDynamicThread::getOwnerVel(bodyID_t ownerID, bodyID_t n) {
     float3 vel;
     vel.x = vX(ownerID);
     vel.y = vY(ownerID);
@@ -2972,7 +2952,7 @@ float3 DEMDynamicThread::getOwnerVel(bodyID_t ownerID) {
     return vel;
 }
 
-float3 DEMDynamicThread::getOwnerPos(bodyID_t ownerID) {
+float3 DEMDynamicThread::getOwnerPos(bodyID_t ownerID, bodyID_t n) {
     float3 pos;
     double X, Y, Z;
     voxelID_t voxel = voxelID(ownerID);
@@ -3031,6 +3011,7 @@ void DEMDynamicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTrian
     relPosNode1.toDeviceAsync(streamInfo.stream, start, triangles.size());
     relPosNode2.toDeviceAsync(streamInfo.stream, start, triangles.size());
     relPosNode3.toDeviceAsync(streamInfo.stream, start, triangles.size());
+    syncMemoryTransfer();
 }
 
 void DEMDynamicThread::updateTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& updates) {
@@ -3042,6 +3023,7 @@ void DEMDynamicThread::updateTriNodeRelPos(size_t start, const std::vector<DEMTr
     relPosNode1.toDeviceAsync(streamInfo.stream, start, updates.size());
     relPosNode2.toDeviceAsync(streamInfo.stream, start, updates.size());
     relPosNode3.toDeviceAsync(streamInfo.stream, start, updates.size());
+    syncMemoryTransfer();
 }
 
 void DEMDynamicThread::addOwnerNextStepAcc(bodyID_t ownerID, float3 acc) {

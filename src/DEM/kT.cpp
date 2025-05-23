@@ -506,7 +506,7 @@ void DEMKinematicThread::migrateDataToDevice() {
     relPosSphereZ.toDeviceAsync(streamInfo.stream);
 
     // Might not be necessary... but it's a big call anyway, let's sync
-    DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
+    syncMemoryTransfer();
 }
 
 void DEMKinematicThread::migrateFamilyToHost() {
@@ -930,6 +930,7 @@ void DEMKinematicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTri
     relPosNode1.toDeviceAsync(streamInfo.stream, start, triangles.size());
     relPosNode2.toDeviceAsync(streamInfo.stream, start, triangles.size());
     relPosNode3.toDeviceAsync(streamInfo.stream, start, triangles.size());
+    syncMemoryTransfer();
 }
 
 void DEMKinematicThread::updateTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& updates) {
@@ -941,6 +942,7 @@ void DEMKinematicThread::updateTriNodeRelPos(size_t start, const std::vector<DEM
     relPosNode1.toDeviceAsync(streamInfo.stream, start, updates.size());
     relPosNode2.toDeviceAsync(streamInfo.stream, start, updates.size());
     relPosNode3.toDeviceAsync(streamInfo.stream, start, updates.size());
+    syncMemoryTransfer();
 }
 
 }  // namespace deme

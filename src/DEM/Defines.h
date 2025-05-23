@@ -122,6 +122,13 @@ constexpr unsigned int THRESHOLD_CANT_JITIFY_ALL_COMP =
 // Max size change the bin auto-adjust algorithm can apply to the bin size per step
 constexpr float BIN_SIZE_MAX_CHANGE_RATE = 0.2;
 
+// Device version of getting geo owner ID
+#define DEME_GET_GEO_OWNER_ID(geoB, type)                                 \
+    ((type) == NOT_A_CONTACT           ? NULL_BODYID                      \
+     : (type) == SPHERE_SPHERE_CONTACT ? granData->ownerClumpBody[(geoB)] \
+     : (type) == SPHERE_MESH_CONTACT   ? granData->ownerMesh[(geoB)]      \
+                                       : granData->ownerAnalBody[(geoB)])
+
 // Some enums...
 // Verbosity
 enum VERBOSITY {
@@ -319,6 +326,7 @@ struct DEMDataDT {
     clumpComponentOffsetExt_t* clumpComponentOffsetExt;
     materialsOffset_t* sphereMaterialOffset;
     bodyID_t* ownerMesh;
+    bodyID_t* ownerAnalBody;
     float3* relPosNode1;
     float3* relPosNode2;
     float3* relPosNode3;
@@ -388,6 +396,7 @@ struct DEMDataKT {
     clumpComponentOffset_t* clumpComponentOffset;
     clumpComponentOffsetExt_t* clumpComponentOffsetExt;
     bodyID_t* ownerMesh;
+    bodyID_t* ownerAnalBody;
     float3* relPosNode1;
     float3* relPosNode2;
     float3* relPosNode3;

@@ -259,7 +259,7 @@ class DEMDynamicThread {
     // Belonged-body ID
     DualArray<bodyID_t> ownerClumpBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
     DualArray<bodyID_t> ownerMesh = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
-    std::vector<bodyID_t> ownerAnalBody;  // Not device side since all analytical bodies are jitified
+    DualArray<bodyID_t> ownerAnalBody = DualArray<bodyID_t>(&m_approxHostBytesUsed, &m_approxDeviceBytesUsed);
 
     // The ID that maps this sphere component's geometry-defining parameters, when this component is jitified
     DualArray<clumpComponentOffset_t> clumpComponentOffset =
@@ -360,19 +360,19 @@ class DEMDynamicThread {
     /// @brief Get total number of contacts.
     /// @return Number of contacts.
     size_t getNumContacts() const;
-    /// Get this owner's position in user unit
-    float3 getOwnerPos(bodyID_t ownerID);
-    /// Get this owner's angular velocity
-    float3 getOwnerAngVel(bodyID_t ownerID);
-    /// Get this owner's quaternion
-    float4 getOwnerOriQ(bodyID_t ownerID);
-    /// Get this owner's velocity
-    float3 getOwnerVel(bodyID_t ownerID);
-    /// Get this owner's acceleration
-    float3 getOwnerAcc(bodyID_t ownerID);
-    /// Get this owner's angular acceleration
-    float3 getOwnerAngAcc(bodyID_t ownerID);
-    // Get the current auto-adjusted update freq
+    /// Get this owner's position in user unit, for n consecutive items.
+    float3 getOwnerPos(bodyID_t ownerID, bodyID_t n = 1);
+    /// Get this owner's angular velocity, for n consecutive items.
+    float3 getOwnerAngVel(bodyID_t ownerID, bodyID_t n = 1);
+    /// Get this owner's quaternion, for n consecutive items.
+    float4 getOwnerOriQ(bodyID_t ownerID, bodyID_t n = 1);
+    /// Get this owner's velocity, for n consecutive items.
+    float3 getOwnerVel(bodyID_t ownerID, bodyID_t n = 1);
+    /// Get this owner's acceleration, for n consecutive items.
+    float3 getOwnerAcc(bodyID_t ownerID, bodyID_t n = 1);
+    /// Get this owner's angular acceleration, for n consecutive items.
+    float3 getOwnerAngAcc(bodyID_t ownerID, bodyID_t n = 1);
+    // Get the current auto-adjusted update freq.
     float getUpdateFreq() const;
 
     /// Set this owner's position in user unit
@@ -412,11 +412,11 @@ class DEMDynamicThread {
     /// @brief Add an extra angular acceleration to a owner for the next time step.
     void addOwnerNextStepAngAcc(bodyID_t ownerID, float3 angAcc);
 
-    /// @brief Returns the wildacard value of this owner.
-    float getOwnerWildcardValue(bodyID_t ID, unsigned int wc_num);
-    /// @brief  Fill res with the wc_num wildcard value.
+    /// @brief Returns the wildacard value of this owner, for n consecutive items.
+    float getOwnerWildcardValue(bodyID_t ID, unsigned int wc_num, bodyID_t n = 1);
+    /// @brief Fill res with the wc_num wildcard value.
     void getAllOwnerWildcardValue(std::vector<float>& res, unsigned int wc_num);
-    /// @brief  Fill res with the wc_num wildcard value for entities with family number family_num.
+    /// @brief Fill res with the wc_num wildcard value for entities with family number family_num.
     void getFamilyOwnerWildcardValue(std::vector<float>& res, unsigned int family_num, unsigned int wc_num);
 
     /// @brief Fill res with the `wc_num' wildcard values, for n spheres starting from ID.
@@ -437,10 +437,12 @@ class DEMDynamicThread {
     /// @brief Change the value of contact wildcards no.wc_num to val.
     void setContactWildcardValue(unsigned int wc_num, float val);
 
-    /// @brief Get all forces concerning this owner.
-    size_t getOwnerContactForces(bodyID_t ownerID, std::vector<float3>& points, std::vector<float3>& forces);
-    /// @brief Get all forces concerning this owner.
-    size_t getOwnerContactForces(bodyID_t ownerID,
+    /// @brief Get all forces concerning all provided owners.
+    size_t getOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
+                                 std::vector<float3>& points,
+                                 std::vector<float3>& forces);
+    /// @brief Get all forces concerning all provided owners.
+    size_t getOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
                                  std::vector<float3>& points,
                                  std::vector<float3>& forces,
                                  std::vector<float3>& torques,

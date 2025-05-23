@@ -3,6 +3,8 @@
 //
 //	SPDX-License-Identifier: BSD-3-Clause
 
+#include <numeric>
+
 #include <DEM/API.h>
 #include <DEM/AuxClasses.h>
 #include <DEM/HostSideHelpers.hpp>
@@ -177,6 +179,8 @@ float* DEMInspector::GetValues() {
 
 float* DEMInspector::dT_GetValue() {
     // assertInit(); // This one the user should not use
+    // Also, this call breaks the chain-that-bind, but I'm not too worried, as it's used in dT's workerThread only,
+    // meaning the device number is well-defined.
     return dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
 }
 
@@ -279,6 +283,12 @@ std::vector<bodyID_t> DEMTracker::GetContactClumps(size_t offset) {
 
 bodyID_t DEMTracker::GetOwnerID(size_t offset) {
     return obj->ownerID + offset;
+}
+
+std::vector<bodyID_t> DEMTracker::GetOwnerIDs() {
+    std::vector<bodyID_t> vec(obj->nSpanOwners);
+    std::iota(vec.begin(), vec.end(), obj->ownerID);
+    return vec;
 }
 
 float3 DEMTracker::Pos(size_t offset) {
@@ -418,7 +428,7 @@ size_t DEMTracker::GetContactForces(std::vector<float3>& points, std::vector<flo
     assertThereIsForcePairs("GetContactForces");
     points.clear();
     forces.clear();
-    return sys->GetOwnerContactForces(obj->ownerID + offset, points, forces);
+    return sys->GetOwnerContactForces({obj->ownerID + (bodyID_t)offset}, points, forces);
 }
 size_t DEMTracker::GetContactForces(std::vector<std::vector<float>>& points,
                                     std::vector<std::vector<float>>& forces,
@@ -445,7 +455,7 @@ size_t DEMTracker::GetContactForcesAndLocalTorque(std::vector<float3>& points,
     points.clear();
     forces.clear();
     torques.clear();
-    return sys->GetOwnerContactForces(obj->ownerID + offset, points, forces, torques, true);
+    return sys->GetOwnerContactForces({obj->ownerID + (bodyID_t)offset}, points, forces, torques, true);
 }
 size_t DEMTracker::GetContactForcesAndLocalTorque(std::vector<std::vector<float>>& points,
                                                   std::vector<std::vector<float>>& forces,
@@ -476,7 +486,7 @@ size_t DEMTracker::GetContactForcesAndGlobalTorque(std::vector<float3>& points,
     points.clear();
     forces.clear();
     torques.clear();
-    return sys->GetOwnerContactForces(obj->ownerID + offset, points, forces, torques, false);
+    return sys->GetOwnerContactForces({obj->ownerID + (bodyID_t)offset}, points, forces, torques, false);
 }
 size_t DEMTracker::GetContactForcesAndGlobalTorque(std::vector<std::vector<float>>& points,
                                                    std::vector<std::vector<float>>& forces,

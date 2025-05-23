@@ -652,7 +652,7 @@ class DEMClumpTemplate {
     /// frame is its centroid and principal system.
     void Move(float3 vec, float4 rot_Q) {
         for (auto& pos : relPos) {
-            applyFrameTransformLocalToGlobal(pos, vec, rot_Q);
+            hostApplyFrameTransformLocalToGlobal(pos, vec, rot_Q);
         }
     }
     void Move(const std::vector<float>& vec, const std::vector<float>& rot_Q) {

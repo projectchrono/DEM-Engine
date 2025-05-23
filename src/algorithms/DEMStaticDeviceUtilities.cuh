@@ -38,6 +38,24 @@ void deviceAssign(T1* res, const T2* a, cudaStream_t& this_stream) {
     DEME_GPU_CALL(cudaStreamSynchronize(this_stream));
 }
 
+// Binary search on GPU, which is probably quite divergent... use if absolutely needs to
+template <typename T1, typename T2>
+inline __device__ bool cuda_binary_search(T1* A, const T1& val, T2 imin, T2 imax, T2& res) {
+    while (imax >= imin) {
+        T2 imid = imin + (imax - imin) / 2;
+        if (val == A[imid]) {
+            res = imid;
+            return true;
+        } else if (val > A[imid]) {
+            imin = imid + 1;
+        } else {
+            imax = imid - 1;
+        }
+    }
+
+    return false;
+}
+
 }  // namespace deme
 
 #endif

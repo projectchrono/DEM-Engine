@@ -526,7 +526,7 @@ std::vector<float3> DEMSolver::GetMeshNodesGlobal(bodyID_t ownerID) {
     float4 mesh_oriQ = dT->getOwnerOriQ(ownerID);
     std::vector<float3> nodes(m_meshes.at(m_owner_mesh_map.at(ownerID))->GetCoordsVertices());
     for (auto& pnt : nodes) {
-        applyFrameTransformLocalToGlobal<float3, float3, float4>(pnt, mesh_pos, mesh_oriQ);
+        hostApplyFrameTransformLocalToGlobal<float3, float3, float4>(pnt, mesh_pos, mesh_oriQ);
     }
     return nodes;
 }
@@ -1438,15 +1438,17 @@ std::vector<float> DEMSolver::GetAllOwnerWildcardValue(const std::string& name) 
     dT->getAllOwnerWildcardValue(res, m_owner_wc_num.at(name));
     return res;
 }
-size_t DEMSolver::GetOwnerContactForces(bodyID_t ownerID, std::vector<float3>& points, std::vector<float3>& forces) {
-    return dT->getOwnerContactForces(ownerID, points, forces);
+size_t DEMSolver::GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
+                                        std::vector<float3>& points,
+                                        std::vector<float3>& forces) {
+    return dT->getOwnerContactForces(ownerIDs, points, forces);
 }
-size_t DEMSolver::GetOwnerContactForces(bodyID_t ownerID,
+size_t DEMSolver::GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
                                         std::vector<float3>& points,
                                         std::vector<float3>& forces,
                                         std::vector<float3>& torques,
                                         bool torque_in_local) {
-    return dT->getOwnerContactForces(ownerID, points, forces, torques, torque_in_local);
+    return dT->getOwnerContactForces(ownerIDs, points, forces, torques, torque_in_local);
 }
 
 std::vector<float> DEMSolver::GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name) {
@@ -2377,6 +2379,8 @@ float DEMSolver::dTInspectReduce(const std::shared_ptr<jitify::Program>& inspect
                                  INSPECT_ENTITY_TYPE thing_to_insp,
                                  CUB_REDUCE_FLAVOR reduce_flavor,
                                  bool all_domain) {
+    // Note they are currently running in the device associated with the main, but it's not a big issue
+    //// TODO: Think about the implication on using more than 2 GPUs
     float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
     return (float)(*pRes);
 }
@@ -2386,6 +2390,8 @@ float* DEMSolver::dTInspectNoReduce(const std::shared_ptr<jitify::Program>& insp
                                     INSPECT_ENTITY_TYPE thing_to_insp,
                                     CUB_REDUCE_FLAVOR reduce_flavor,
                                     bool all_domain) {
+    // Note they are currently running in the device associated with the main, but it's not a big issue
+    //// TODO: Think about the implication on using more than 2 GPUs
     float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
     return pRes;
 }

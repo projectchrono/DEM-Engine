@@ -8,6 +8,7 @@
 
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
+#include <core/utils/JitHelper.h>
 #include <core/utils/GpuManager.h>
 #include <core/utils/CudaAllocator.hpp>
 
@@ -117,6 +118,19 @@ void overwritePrevContactArrays(DualStruct<DEMDataKT>& kT_data,
                                 DEMSolverScratchData& scratchPad,
                                 cudaStream_t& this_stream,
                                 size_t nContacts);
+
+void getContactForcesConcerningOwners(float3* d_points,
+                                      float3* d_forces,
+                                      float3* d_torques,
+                                      size_t* d_numUsefulCnt,
+                                      bodyID_t* d_ownerIDs,
+                                      size_t IDListSize,
+                                      DEMSimParams* simParams,
+                                      DEMDataDT* granData,
+                                      size_t numCnt,
+                                      bool need_torque,
+                                      bool torque_in_local,
+                                      cudaStream_t& this_stream);
 
 }  // namespace deme
 

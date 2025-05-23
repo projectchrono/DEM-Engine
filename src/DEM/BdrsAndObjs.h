@@ -437,7 +437,7 @@ class DEMMeshConnected : public DEMInitializer {
     /// frame is its centroid and principal system.
     void Move(float3 vec, float4 rot_Q) {
         for (auto& node : m_vertices) {
-            applyFrameTransformLocalToGlobal(node, vec, rot_Q);
+            hostApplyFrameTransformLocalToGlobal(node, vec, rot_Q);
         }
     }
     void Move(const std::vector<float>& vec, const std::vector<float>& rot_Q) {

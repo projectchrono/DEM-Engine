@@ -8,7 +8,7 @@
 
 // I can only include CUDAMathHelpers.cu here and if I do it in other kernel files such as DEMBinSphereKernels.cu too,
 // there will be double-load problem where operators are re-defined. Not sure how to resolve it.
-#include <CUDAMathHelpers.cu>
+#include <kernel/CUDAMathHelpers.cu>
 
 // inline __device__ voxelID_t position2VoxelID
 
@@ -159,6 +159,14 @@ inline __device__ void applyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Qw, con
         ((T2)2.0 * (Qy * Qz - Qw * Qx)) * oldZ;
     Z = ((T2)2.0 * (Qx * Qz - Qw * Qy)) * oldX + ((T2)2.0 * (Qy * Qz + Qw * Qx)) * oldY +
         ((T2)2.0 * (Qw * Qw + Qz * Qz) - (T2)1.0) * oldZ;
+}
+
+template <typename T1, typename T2, typename T3>
+inline void applyFrameTransformLocalToGlobal(T1& pos, const T2& vec, const T3& rot_Q) {
+    applyOriQToVector3(pos.x, pos.y, pos.z, rot_Q.w, rot_Q.x, rot_Q.y, rot_Q.z);
+    pos.x += vec.x;
+    pos.y += vec.y;
+    pos.z += vec.z;
 }
 
 template <typename T1>

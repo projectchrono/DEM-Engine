@@ -409,6 +409,9 @@ class DualArray : private NonCopyable {
 
     T* device() { return m_device_ptr; }
 
+    // Overloaded operator& for device pointer access
+    T* operator&() const { return m_device_ptr; }
+
     // data() returns device data for the ease of packing pointers
     T* data() { return device(); }
 

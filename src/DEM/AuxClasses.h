@@ -102,26 +102,40 @@ class DEMTracker {
 
     /// Get the owner ID of the tracked obj.
     bodyID_t GetOwnerID(size_t offset = 0);
+    /// Get the owner IDs of all the tracked objects.
+    std::vector<bodyID_t> GetOwnerIDs();
 
     /// Get the position of this tracked object.
     float3 Pos(size_t offset = 0);
     std::vector<float> GetPos(size_t offset = 0);
+    /// Get the positions of all tracked objects.
+    float3 Positions();
+    std::vector<float> GetPositions();
+
     /// Get the angular velocity of this tracked object in its own local coordinate system. Applying OriQ to it would
     /// give you the ang vel in global frame.
     float3 AngVelLocal(size_t offset = 0);
     std::vector<float> GetAngVelLocal(size_t offset = 0);
+    /// Get the angular velocity of all tracked objects in their own local coordinate system. Applying OriQ to it would
+    /// give you the ang vel in global frame.
+    float3 AngularVelocitiesLocal();
+    std::vector<float> GetAngularVelocitiesLocal();
+
     /// Get the angular velocity of this tracked object in global coordinate system.
     float3 AngVelGlobal(size_t offset = 0);
     std::vector<float> GetAngVelGlobal(size_t offset = 0);
+
     /// Get the velocity of this tracked object in global frame.
     float3 Vel(size_t offset = 0);
     std::vector<float> GetVel(size_t offset = 0);
+
     /// Get the quaternion that represents the orientation of this tracked object's own coordinate system.
     float4 OriQ(size_t offset = 0);
     /// @brief Get the quaternion that represents the orientation of this tracked object's own coordinate system.
     /// @return A vector of 4 floats. The order is (x, y, z, w). If using Chrono naming convention, then it is (e1, e2,
     /// e3, e0).
     std::vector<float> GetOriQ(size_t offset = 0);
+
     /// @brief Get the family number of the tracked object.
     /// @param offset The offset of the entites to get family number out of.
     /// @return The family number.

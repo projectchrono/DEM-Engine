@@ -18,11 +18,45 @@
 #include <fstream>
 #include <filesystem>
 #include <random>
+#include <thread>
+#include <future>
+#include <utility>
+#include <tuple>
+#include <type_traits>
+
 #include <nvmath/helper_math.cuh>
 #include <DEM/VariableTypes.h>
-// #include <DEM/Defines.h>
 
 namespace deme {
+
+// Generic helper function to run something in a thread and get the result
+template <typename Func, typename... Args>
+inline auto run_in_thread(Func&& func, Args&&... args) -> decltype(func(args...)) {
+    using ReturnType = decltype(func(args...));
+
+    std::promise<ReturnType> prom;
+    std::future<ReturnType> fut = prom.get_future();
+
+    // Capture everything in a tuple
+    auto bound_args = std::make_tuple(std::forward<Func>(func), std::forward<Args>(args)...);
+
+    std::thread t([&prom, bound_args = std::move(bound_args)]() mutable {
+        try {
+            auto result = std::apply(std::move(std::get<0>(bound_args)),
+                                     std::apply(
+                                         [](auto&&, auto&&... args_inner) {
+                                             return std::make_tuple(std::forward<decltype(args_inner)>(args_inner)...);
+                                         },
+                                         std::move(bound_args)));
+            prom.set_value(std::move(result));
+        } catch (...) {
+            prom.set_exception(std::current_exception());
+        }
+    });
+
+    t.join();
+    return fut.get();
+}
 
 inline int randomZeroOrOne() {
     std::random_device rd;   // Random number device to seed the generator
@@ -86,6 +120,17 @@ inline bool isBetween(const float3& coord, const float3& L, const float3& U) {
         return false;
     }
     if (coord.x > U.x || coord.y > U.y || coord.z > U.z) {
+        return false;
+    }
+    return true;
+}
+
+template <typename T>
+inline bool isBetween(const T& x, const T& L, const T& U) {
+    if (x < L) {
+        return false;
+    }
+    if (x > U) {
         return false;
     }
     return true;
@@ -340,6 +385,13 @@ inline std::vector<T1> hostRemoveElem(const std::vector<T1>& vec, const std::vec
     return v;
 }
 
+// Host version of sort and return
+template <typename T1>
+std::vector<T1> hostSort(std::vector<T1> input) {
+    std::sort(input.begin(), input.end());
+    return input;  // May be moved or elided
+}
+
 // Contribution from https://stackoverflow.com/questions/1577475/c-sorting-and-keeping-track-of-indexes
 template <typename T1>
 inline std::vector<size_t> hostSortIndices(const std::vector<T1>& v) {
@@ -556,7 +608,7 @@ inline void hostApplyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Qw, const T2& 
 
 /// Host version of applying a local rotation then a translation.
 template <typename T1, typename T2, typename T3>
-inline void applyFrameTransformLocalToGlobal(T1& pos, const T2& vec, const T3& rot_Q) {
+inline void hostApplyFrameTransformLocalToGlobal(T1& pos, const T2& vec, const T3& rot_Q) {
     hostApplyOriQToVector3(pos.x, pos.y, pos.z, rot_Q.w, rot_Q.x, rot_Q.y, rot_Q.z);
     pos.x += vec.x;
     pos.y += vec.y;
@@ -578,7 +630,7 @@ inline std::vector<double> FrameTransformLocalToGlobal(const std::vector<double>
     deme_Q.y = rot_Q[1];
     deme_Q.z = rot_Q[2];
     deme_Q.w = rot_Q[3];
-    applyFrameTransformLocalToGlobal<double3, double3, double4>(deme_pos, deme_vec, deme_Q);
+    hostApplyFrameTransformLocalToGlobal<double3, double3, double4>(deme_pos, deme_vec, deme_Q);
     return {deme_pos.x, deme_pos.y, deme_pos.z};
 }
 
