@@ -8,6 +8,11 @@
 
 namespace deme {
 
+#if defined(_WIN32) || defined(_WIN64)
+    #include <basetsd.h>
+typedef SSIZE_T ssize_t;
+#endif
+
 typedef uint16_t subVoxelPos_t;  ///< uint16 or uint32
 
 typedef uint64_t voxelID_t;

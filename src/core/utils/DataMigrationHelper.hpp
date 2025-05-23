@@ -9,11 +9,7 @@
 #include <cassert>
 #include <optional>
 #include <core/utils/GpuError.h>
-
-#if defined(_WIN32) || defined(_WIN64)
-    #include <basetsd.h>
-typedef SSIZE_T ssize_t;
-#endif
+#include <DEM/VariableTypes.h>
 
 namespace deme {
 

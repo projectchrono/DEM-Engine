@@ -32,11 +32,10 @@ __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
         contact_t typeB = granData->contactType[i];
         bodyID_t ownerB = DEME_GET_GEO_OWNER_ID(geoB, typeB);
 
-        bodyID_t tmp;
         bool AorB;  // true for A, false for B
-        if (cuda_binary_search<bodyID_t, bodyID_t>(d_ownerIDs, ownerA, 0, IDListSize - 1, tmp)) {
+        if (cuda_binary_search<bodyID_t, ssize_t>(d_ownerIDs, ownerA, 0, IDListSize - 1)) {
             AorB = true;
-        } else if (cuda_binary_search<bodyID_t, bodyID_t>(d_ownerIDs, ownerB, 0, IDListSize - 1, tmp)) {
+        } else if (cuda_binary_search<bodyID_t, ssize_t>(d_ownerIDs, ownerB, 0, IDListSize - 1)) {
             AorB = false;
         } else {
             return;
