@@ -970,7 +970,7 @@ void DEMSolver::addWorldBoundingBox() {
     if (bottom) {
         float3 bottom_loc = (m_user_box_min + m_user_box_max) / 2.;
         bottom_loc.z = m_user_box_min.z;
-        box->AddPlane(bottom_loc, host_make_float3(0, 0, 1), m_bounding_box_material);
+        box->AddPlane(bottom_loc, make_float3(0, 0, 1), m_bounding_box_material);
     }
 
     if (sides) {
@@ -978,25 +978,25 @@ void DEMSolver::addWorldBoundingBox() {
 
         float3 left = center;
         left.x = m_user_box_min.x;
-        box->AddPlane(left, host_make_float3(1, 0, 0), m_bounding_box_material);
+        box->AddPlane(left, make_float3(1, 0, 0), m_bounding_box_material);
 
         float3 right = center;
         right.x = m_user_box_max.x;
-        box->AddPlane(right, host_make_float3(-1, 0, 0), m_bounding_box_material);
+        box->AddPlane(right, make_float3(-1, 0, 0), m_bounding_box_material);
 
         float3 front = center;
         front.y = m_user_box_min.y;
-        box->AddPlane(front, host_make_float3(0, 1, 0), m_bounding_box_material);
+        box->AddPlane(front, make_float3(0, 1, 0), m_bounding_box_material);
 
         float3 the_back = center;
         the_back.y = m_user_box_max.y;
-        box->AddPlane(the_back, host_make_float3(0, -1, 0), m_bounding_box_material);
+        box->AddPlane(the_back, make_float3(0, -1, 0), m_bounding_box_material);
     }
 
     if (top) {
         float3 top_loc = (m_user_box_min + m_user_box_max) / 2.;
         top_loc.z = m_user_box_max.z;
-        box->AddPlane(top_loc, host_make_float3(0, 0, -1), m_bounding_box_material);
+        box->AddPlane(top_loc, make_float3(0, 0, -1), m_bounding_box_material);
     }
 }
 

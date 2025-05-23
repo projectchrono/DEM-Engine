@@ -573,7 +573,7 @@ class DEMClumpTemplate {
     /// Set MOI (in principal frame).
     void SetMOI(const std::vector<float>& MOI) {
         assertThreeElements(MOI, "SetMOI", "MOI");
-        SetMOI(host_make_float3(MOI[0], MOI[1], MOI[2]));
+        SetMOI(make_float3(MOI[0], MOI[1], MOI[2]));
     }
 
     /// Set material types for the mesh. Technically, you can set that for each individual mesh facet.
@@ -592,7 +592,7 @@ class DEMClumpTemplate {
     // float3 CoM = make_float3(0);
     // CoM frame's orientation quaternion in the frame which is used to report the positions of this clump's component
     // spheres. Usually unit quaternion.
-    // float4 CoM_oriQ = host_make_float4(0, 0, 0, 1);
+    // float4 CoM_oriQ = make_float4(0, 0, 0, 1);
 
     // Each clump template will have a unique mark number. When clumps are loaded to the system, this mark will help
     // find their type offset.
@@ -643,8 +643,8 @@ class DEMClumpTemplate {
     void InformCentroidPrincipal(const std::vector<float>& center, const std::vector<float>& prin_Q) {
         assertThreeElements(center, "InformCentroidPrincipal", "center");
         assertFourElements(prin_Q, "InformCentroidPrincipal", "prin_Q");
-        InformCentroidPrincipal(host_make_float3(center[0], center[1], center[2]),
-                                host_make_float4(prin_Q[0], prin_Q[1], prin_Q[2], prin_Q[3]));
+        InformCentroidPrincipal(make_float3(center[0], center[1], center[2]),
+                                make_float4(prin_Q[0], prin_Q[1], prin_Q[2], prin_Q[3]));
     }
 
     /// The opposite of InformCentroidPrincipal, and it is another way to align this clump's coordinate system with its
@@ -658,7 +658,7 @@ class DEMClumpTemplate {
     void Move(const std::vector<float>& vec, const std::vector<float>& rot_Q) {
         assertThreeElements(vec, "Move", "vec");
         assertFourElements(rot_Q, "Move", "rot_Q");
-        Move(host_make_float3(vec[0], vec[1], vec[2]), host_make_float4(rot_Q[0], rot_Q[1], rot_Q[2], rot_Q[3]));
+        Move(make_float3(vec[0], vec[1], vec[2]), make_float4(rot_Q[0], rot_Q[1], rot_Q[2], rot_Q[3]));
     }
 
     /// Scale all geometry component of this clump
@@ -730,7 +730,7 @@ class DEMClumpBatch : public DEMInitializer {
         vel.resize(num, make_float3(0));
         angVel.resize(num, make_float3(0));
         xyz.resize(num);
-        oriQ.resize(num, host_make_float4(0, 0, 0, 1));
+        oriQ.resize(num, make_float4(0, 0, 0, 1));
         obj_type = OWNER_TYPE::CLUMP;
     }
     ~DEMClumpBatch() {}
@@ -755,13 +755,13 @@ class DEMClumpBatch : public DEMInitializer {
     void SetPos(float3 input) { SetPos(std::vector<float3>(nClumps, input)); }
     void SetPos(const std::vector<float>& input) {
         assertThreeElements(input, "SetPos", "input");
-        SetPos(host_make_float3(input[0], input[1], input[2]));
+        SetPos(make_float3(input[0], input[1], input[2]));
     }
     void SetPos(const std::vector<std::vector<float>>& input) {
         assertThreeElementsVector(input, "SetPos", "input");
         std::vector<float3> pos_xyz(input.size());
         for (size_t i = 0; i < input.size(); i++) {
-            pos_xyz[i] = host_make_float3(input[i][0], input[i][1], input[i][2]);
+            pos_xyz[i] = make_float3(input[i][0], input[i][1], input[i][2]);
         }
         SetPos(pos_xyz);
     }
@@ -773,13 +773,13 @@ class DEMClumpBatch : public DEMInitializer {
     void SetVel(float3 input) { SetVel(std::vector<float3>(nClumps, input)); }
     void SetVel(const std::vector<float>& input) {
         assertThreeElements(input, "SetVel", "input");
-        SetVel(host_make_float3(input[0], input[1], input[2]));
+        SetVel(make_float3(input[0], input[1], input[2]));
     }
     void SetVel(const std::vector<std::vector<float>>& input) {
         assertThreeElementsVector(input, "SetVel", "input");
         std::vector<float3> vel_xyz(input.size());
         for (size_t i = 0; i < input.size(); i++) {
-            vel_xyz[i] = host_make_float3(input[i][0], input[i][1], input[i][2]);
+            vel_xyz[i] = make_float3(input[i][0], input[i][1], input[i][2]);
         }
         SetVel(vel_xyz);
     }
@@ -791,13 +791,13 @@ class DEMClumpBatch : public DEMInitializer {
     void SetAngVel(float3 input) { SetAngVel(std::vector<float3>(nClumps, input)); }
     void SetAngVel(const std::vector<float>& input) {
         assertThreeElements(input, "SetAngVel", "input");
-        SetAngVel(host_make_float3(input[0], input[1], input[2]));
+        SetAngVel(make_float3(input[0], input[1], input[2]));
     }
     void SetAngVel(const std::vector<std::vector<float>>& input) {
         assertThreeElementsVector(input, "SetAngVel", "input");
         std::vector<float3> vel_xyz(input.size());
         for (size_t i = 0; i < input.size(); i++) {
-            vel_xyz[i] = host_make_float3(input[i][0], input[i][1], input[i][2]);
+            vel_xyz[i] = make_float3(input[i][0], input[i][1], input[i][2]);
         }
         SetAngVel(vel_xyz);
     }
@@ -809,13 +809,13 @@ class DEMClumpBatch : public DEMInitializer {
     void SetOriQ(float4 input) { SetOriQ(std::vector<float4>(nClumps, input)); }
     void SetOriQ(const std::vector<float>& input) {
         assertFourElements(input, "SetOriQ", "input");
-        SetOriQ(host_make_float4(input[0], input[1], input[2], input[3]));
+        SetOriQ(make_float4(input[0], input[1], input[2], input[3]));
     }
     void SetOriQ(const std::vector<std::vector<float>>& input) {
         assertFourElementsVector(input, "SetOriQ", "input");
         std::vector<float4> Q(input.size());
         for (size_t i = 0; i < input.size(); i++) {
-            Q[i] = host_make_float4(input[i][0], input[i][1], input[i][2], input[i][3]);
+            Q[i] = make_float4(input[i][0], input[i][1], input[i][2], input[i][3]);
         }
         SetOriQ(Q);
     }

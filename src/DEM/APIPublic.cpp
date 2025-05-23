@@ -458,12 +458,12 @@ float3 DEMSolver::GetOwnerMOI(bodyID_t ownerID) const {
         float m1 = dT->mmiXX[offset];
         float m2 = dT->mmiYY[offset];
         float m3 = dT->mmiZZ[offset];
-        return host_make_float3(m1, m2, m3);
+        return make_float3(m1, m2, m3);
     } else {
         float m1 = dT->mmiXX[ownerID];
         float m2 = dT->mmiYY[ownerID];
         float m3 = dT->mmiZZ[ownerID];
-        return host_make_float3(m1, m2, m3);
+        return make_float3(m1, m2, m3);
     }
 }
 
@@ -603,12 +603,12 @@ void DEMSolver::SetExpandSafetyType(const std::string& insp_type) {
 }
 
 void DEMSolver::InstructBoxDomainDimension(float x, float y, float z, const std::string& dir_exact) {
-    m_user_box_min = host_make_float3(-x / 2., -y / 2., -z / 2.);
-    m_user_box_max = host_make_float3(x / 2., y / 2., z / 2.);
+    m_user_box_min = make_float3(-x / 2., -y / 2., -z / 2.);
+    m_user_box_max = make_float3(x / 2., y / 2., z / 2.);
 
     float3 enlarge_amount =
-        host_make_float3(x * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2., y * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2.,
-                         z * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2.);
+        make_float3(x * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2., y * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2.,
+                    z * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2.);
     m_target_box_min = m_user_box_min - enlarge_amount;
     m_target_box_max = m_user_box_max + enlarge_amount;
 
@@ -635,13 +635,11 @@ void DEMSolver::InstructBoxDomainDimension(const std::pair<float, float>& x,
                                            const std::pair<float, float>& y,
                                            const std::pair<float, float>& z,
                                            const std::string& dir_exact) {
-    m_user_box_min =
-        host_make_float3(DEME_MIN(x.first, x.second), DEME_MIN(y.first, y.second), DEME_MIN(z.first, z.second));
-    m_user_box_max =
-        host_make_float3(DEME_MAX(x.second, x.first), DEME_MAX(y.second, y.first), DEME_MAX(z.second, z.first));
+    m_user_box_min = make_float3(DEME_MIN(x.first, x.second), DEME_MIN(y.first, y.second), DEME_MIN(z.first, z.second));
+    m_user_box_max = make_float3(DEME_MAX(x.second, x.first), DEME_MAX(y.second, y.first), DEME_MAX(z.second, z.first));
 
     float3 enlarge_amount =
-        host_make_float3(std::abs(x.second - x.first), std::abs(y.second - y.first), std::abs(z.second - z.first));
+        make_float3(std::abs(x.second - x.first), std::abs(y.second - y.first), std::abs(z.second - z.first));
     enlarge_amount *= DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2.;
     m_target_box_min = m_user_box_min - enlarge_amount;
     m_target_box_max = m_user_box_max + enlarge_amount;
@@ -1952,8 +1950,8 @@ size_t DEMSolver::ChangeClumpFamily(unsigned int fam_num,
                                     const std::pair<double, double>& Y,
                                     const std::pair<double, double>& Z,
                                     const std::set<unsigned int>& orig_fam) {
-    float3 L = host_make_float3(X.first, Y.first, Z.first);
-    float3 U = host_make_float3(X.second, Y.second, Z.second);
+    float3 L = make_float3(X.first, Y.first, Z.first);
+    float3 U = make_float3(X.second, Y.second, Z.second);
     size_t count = 0;
 
     // And get those device-major data from device

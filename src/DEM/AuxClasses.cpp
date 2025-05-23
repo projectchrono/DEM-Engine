@@ -514,7 +514,7 @@ void DEMTracker::AddAcc(float3 acc, size_t offset) {
 }
 void DEMTracker::AddAcc(const std::vector<float>& acc, size_t offset) {
     assertThreeElements(acc, "AddAcc", "acc");
-    AddAcc(host_make_float3(acc[0], acc[1], acc[2]), offset);
+    AddAcc(make_float3(acc[0], acc[1], acc[2]), offset);
 }
 
 void DEMTracker::AddAngAcc(float3 angAcc, size_t offset) {
@@ -522,7 +522,7 @@ void DEMTracker::AddAngAcc(float3 angAcc, size_t offset) {
 }
 void DEMTracker::AddAngAcc(const std::vector<float>& angAcc, size_t offset) {
     assertThreeElements(angAcc, "AddAngAcc", "angAcc");
-    AddAngAcc(host_make_float3(angAcc[0], angAcc[1], angAcc[2]), offset);
+    AddAngAcc(make_float3(angAcc[0], angAcc[1], angAcc[2]), offset);
 }
 
 void DEMTracker::SetPos(float3 pos, size_t offset) {
@@ -530,7 +530,7 @@ void DEMTracker::SetPos(float3 pos, size_t offset) {
 }
 void DEMTracker::SetPos(const std::vector<float>& pos, size_t offset) {
     assertThreeElements(pos, "SetPos", "pos");
-    SetPos(host_make_float3(pos[0], pos[1], pos[2]), offset);
+    SetPos(make_float3(pos[0], pos[1], pos[2]), offset);
 }
 
 void DEMTracker::SetAngVel(float3 angVel, size_t offset) {
@@ -538,7 +538,7 @@ void DEMTracker::SetAngVel(float3 angVel, size_t offset) {
 }
 void DEMTracker::SetAngVel(const std::vector<float>& angVel, size_t offset) {
     assertThreeElements(angVel, "SetAngVel", "angVel");
-    SetAngVel(host_make_float3(angVel[0], angVel[1], angVel[2]), offset);
+    SetAngVel(make_float3(angVel[0], angVel[1], angVel[2]), offset);
 }
 
 void DEMTracker::SetVel(float3 vel, size_t offset) {
@@ -546,7 +546,7 @@ void DEMTracker::SetVel(float3 vel, size_t offset) {
 }
 void DEMTracker::SetVel(const std::vector<float>& vel, size_t offset) {
     assertThreeElements(vel, "SetVel", "vel");
-    SetVel(host_make_float3(vel[0], vel[1], vel[2]), offset);
+    SetVel(make_float3(vel[0], vel[1], vel[2]), offset);
 }
 
 void DEMTracker::SetOriQ(float4 oriQ, size_t offset) {
@@ -554,7 +554,7 @@ void DEMTracker::SetOriQ(float4 oriQ, size_t offset) {
 }
 void DEMTracker::SetOriQ(const std::vector<float>& oriQ, size_t offset) {
     assertFourElements(oriQ, "SetOriQ", "oriQ");
-    SetOriQ(host_make_float4(oriQ[0], oriQ[1], oriQ[2], oriQ[3]), offset);
+    SetOriQ(make_float4(oriQ[0], oriQ[1], oriQ[2], oriQ[3]), offset);
 }
 
 void DEMTracker::SetFamily(const std::vector<unsigned int>& fam_nums) {
@@ -588,7 +588,7 @@ void DEMTracker::UpdateMesh(const std::vector<std::vector<float>>& new_nodes) {
     assertThreeElementsVector(new_nodes, "UpdateMesh", "new_nodes");
     std::vector<float3> float3_nodes(new_nodes.size());
     for (size_t i = 0; i < new_nodes.size(); i++) {
-        float3_nodes[i] = host_make_float3(new_nodes[i][0], new_nodes[i][1], new_nodes[i][2]);
+        float3_nodes[i] = make_float3(new_nodes[i][0], new_nodes[i][1], new_nodes[i][2]);
     }
     UpdateMesh(float3_nodes);
 }
@@ -603,7 +603,7 @@ void DEMTracker::UpdateMeshByIncrement(const std::vector<std::vector<float>>& de
     assertThreeElementsVector(deformation, "UpdateMeshByIncrement", "deformation");
     std::vector<float3> float3_nodes(deformation.size());
     for (size_t i = 0; i < deformation.size(); i++) {
-        float3_nodes[i] = host_make_float3(deformation[i][0], deformation[i][1], deformation[i][2]);
+        float3_nodes[i] = make_float3(deformation[i][0], deformation[i][1], deformation[i][2]);
     }
     UpdateMeshByIncrement(float3_nodes);
 }

@@ -199,24 +199,6 @@ inline void hostMergeSearchMapGen(T1* arr1, T1* arr2, T1* map, size_t size1, siz
     }
 }
 
-//// TODO: Why is there a namespace (?) issue that makes us able to use make_float3 properly in demo scripts, but not in
-/// any of these DEM system h or cpp files?
-inline float3 host_make_float3(float a, float b, float c) {
-    float3 f;
-    f.x = a;
-    f.y = b;
-    f.z = c;
-    return f;
-}
-inline float4 host_make_float4(float x, float y, float z, float w) {
-    float4 f;
-    f.x = x;
-    f.y = y;
-    f.z = z;
-    f.w = w;
-    return f;
-}
-
 inline size_t hostCalcBinNum(binID_t& nbX,
                              binID_t& nbY,
                              binID_t& nbZ,

@@ -83,7 +83,7 @@ class DEMSolver {
     void SetGravitationalAcceleration(float3 g) { G = g; }
     void SetGravitationalAcceleration(const std::vector<float>& g) {
         assertThreeElements(g, "SetGravitationalAcceleration", "g");
-        G = host_make_float3(g[0], g[1], g[2]);
+        G = make_float3(g[0], g[1], g[2]);
     }
     /// Set the initial time step size. If using constant step size, then this will be used throughout; otherwise, the
     /// actual step size depends on the variable step strategy.
@@ -323,9 +323,9 @@ class DEMSolver {
         assertThreeElementsVector(sp_locations_xyz, "LoadClumpType", "sp_locations_xyz");
         std::vector<float3> loc_xyz(sp_locations_xyz.size());
         for (size_t i = 0; i < sp_locations_xyz.size(); i++) {
-            loc_xyz[i] = host_make_float3(sp_locations_xyz[i][0], sp_locations_xyz[i][1], sp_locations_xyz[i][2]);
+            loc_xyz[i] = make_float3(sp_locations_xyz[i][0], sp_locations_xyz[i][1], sp_locations_xyz[i][2]);
         }
-        return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), sp_radii, loc_xyz, sp_materials);
+        return LoadClumpType(mass, make_float3(moi[0], moi[1], moi[2]), sp_radii, loc_xyz, sp_materials);
     }
     /// An overload of LoadClumpType where all components use the same material
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
@@ -342,9 +342,9 @@ class DEMSolver {
         assertThreeElementsVector(sp_locations_xyz, "LoadClumpType", "sp_locations_xyz");
         std::vector<float3> loc_xyz(sp_locations_xyz.size());
         for (size_t i = 0; i < sp_locations_xyz.size(); i++) {
-            loc_xyz[i] = host_make_float3(sp_locations_xyz[i][0], sp_locations_xyz[i][1], sp_locations_xyz[i][2]);
+            loc_xyz[i] = make_float3(sp_locations_xyz[i][0], sp_locations_xyz[i][1], sp_locations_xyz[i][2]);
         }
-        return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), sp_radii, loc_xyz, sp_material);
+        return LoadClumpType(mass, make_float3(moi[0], moi[1], moi[2]), sp_radii, loc_xyz, sp_material);
     }
     /// An overload of LoadClumpType where the user builds the DEMClumpTemplate struct themselves then supply it
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(DEMClumpTemplate& clump);
@@ -358,7 +358,7 @@ class DEMSolver {
                                                     const std::string filename,
                                                     const std::vector<std::shared_ptr<DEMMaterial>>& sp_materials) {
         assertThreeElements(moi, "LoadClumpType", "moi");
-        return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), filename, sp_materials);
+        return LoadClumpType(mass, make_float3(moi[0], moi[1], moi[2]), filename, sp_materials);
     }
     /// An overload of LoadClumpType which loads sphere components from a file and all components use the same material
     std::shared_ptr<DEMClumpTemplate> LoadClumpType(float mass,
@@ -370,7 +370,7 @@ class DEMSolver {
                                                     const std::string filename,
                                                     const std::shared_ptr<DEMMaterial>& sp_material) {
         assertThreeElements(moi, "LoadClumpType", "moi");
-        return LoadClumpType(mass, host_make_float3(moi[0], moi[1], moi[2]), filename, sp_material);
+        return LoadClumpType(mass, make_float3(moi[0], moi[1], moi[2]), filename, sp_material);
     }
     /// A simplified version of LoadClumpType: it just loads a one-sphere clump template
     std::shared_ptr<DEMClumpTemplate> LoadSphereType(float mass,
@@ -511,7 +511,7 @@ class DEMSolver {
         assertThreeElementsVector(input_xyz, "AddClumps", "input_xyz");
         std::vector<float3> loc_xyz(input_xyz.size());
         for (size_t i = 0; i < input_xyz.size(); i++) {
-            loc_xyz[i] = host_make_float3(input_xyz[i][0], input_xyz[i][1], input_xyz[i][2]);
+            loc_xyz[i] = make_float3(input_xyz[i][0], input_xyz[i][1], input_xyz[i][2]);
         }
         return AddClumps(input_types, loc_xyz);
     }
@@ -527,7 +527,7 @@ class DEMSolver {
     std::shared_ptr<DEMClumpBatch> AddClumps(std::shared_ptr<DEMClumpTemplate>& input_type,
                                              const std::vector<float>& input_xyz) {
         assertThreeElements(input_xyz, "AddClumps", "input_xyz");
-        return AddClumps(input_type, host_make_float3(input_xyz[0], input_xyz[1], input_xyz[2]));
+        return AddClumps(input_type, make_float3(input_xyz[0], input_xyz[1], input_xyz[2]));
     }
 
     /// @brief Load clumps (of the same template) into the simulation.
@@ -543,7 +543,7 @@ class DEMSolver {
         assertThreeElementsVector(input_xyz, "AddClumps", "input_xyz");
         std::vector<float3> loc_xyz(input_xyz.size());
         for (size_t i = 0; i < input_xyz.size(); i++) {
-            loc_xyz[i] = host_make_float3(input_xyz[i][0], input_xyz[i][1], input_xyz[i][2]);
+            loc_xyz[i] = make_float3(input_xyz[i][0], input_xyz[i][1], input_xyz[i][2]);
         }
         return AddClumps(input_type, loc_xyz);
     }
@@ -1005,8 +1005,7 @@ class DEMSolver {
                                              const std::shared_ptr<DEMMaterial>& material) {
         assertThreeElements(pos, "AddBCPlane", "pos");
         assertThreeElements(normal, "AddBCPlane", "normal");
-        return AddBCPlane(host_make_float3(pos[0], pos[1], pos[2]), host_make_float3(normal[0], normal[1], normal[2]),
-                          material);
+        return AddBCPlane(make_float3(pos[0], pos[1], pos[2]), make_float3(normal[0], normal[1], normal[2]), material);
     }
 
     /// Remove host-side cached vectors (so you can re-define them, and then re-initialize system)
