@@ -17,7 +17,7 @@
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
 #include <core/utils/DataMigrationHelper.hpp>
-#include <nvmath/helper_math.cuh>
+#include <kernel/DEMHelperKernels.cu>
 #include <core/utils/GpuError.h>
 #include <core/utils/Timer.hpp>
 

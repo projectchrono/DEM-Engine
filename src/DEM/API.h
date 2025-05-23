@@ -18,7 +18,7 @@
 #include <core/utils/ThreadManager.h>
 #include <core/utils/GpuManager.h>
 #include <core/utils/DEMEPaths.h>
-#include <nvmath/helper_math.cuh>
+#include <kernel/DEMHelperKernels.cu>
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
 #include <DEM/BdrsAndObjs.h>

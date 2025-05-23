@@ -24,7 +24,7 @@
 #include <tuple>
 #include <type_traits>
 
-#include <nvmath/helper_math.cuh>
+#include <kernel/DEMHelperKernels.cu>
 #include <DEM/VariableTypes.h>
 
 namespace deme {

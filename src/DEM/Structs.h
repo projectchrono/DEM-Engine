@@ -21,7 +21,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <unordered_map>
-#include <nvmath/helper_math.cuh>
+#include <kernel/DEMHelperKernels.cu>
 #include <DEM/HostSideHelpers.hpp>
 #include <filesystem>
 #include <cstring>

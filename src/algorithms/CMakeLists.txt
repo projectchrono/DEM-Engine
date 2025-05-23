@@ -30,7 +30,6 @@ set(algorithms_interface
 
 ### INTERNAL HEADERS ONLY (.h, .hpp, or .cuh) ###
 set(algorithms_headers
-	${NVIDIAMathDir}/nvmath/helper_math.cuh
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMStaticDeviceUtilities.cuh
 )
 

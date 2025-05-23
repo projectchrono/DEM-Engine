@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <DEM/VariableTypes.h>
+#include "cuda_runtime.h"
 
 #define DEME_MIN(a, b) ((a < b) ? a : b)
 #define DEME_MAX(a, b) ((a > b) ? a : b)

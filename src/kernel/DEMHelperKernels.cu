@@ -3,12 +3,8 @@
 #ifndef DEME_HELPER_KERNELS_CU
 #define DEME_HELPER_KERNELS_CU
 
-// #include <thirdparty/nvidia_helper_math/helper_math.cuh>
 #include <DEM/Defines.h>
-
-// I can only include CUDAMathHelpers.cu here and if I do it in other kernel files such as DEMBinSphereKernels.cu too,
-// there will be double-load problem where operators are re-defined. Not sure how to resolve it.
-#include <kernel/CUDAMathHelpers.cu>
+#include <kernel/CUDAMathHelpers.cuh>
 
 // inline __device__ voxelID_t position2VoxelID
 
@@ -177,7 +173,7 @@ inline __device__ T1 distSquared(const T1& x1, const T1& y1, const T1& z1, const
 // Get the maginitude of a 3-component vector
 template <typename T1>
 inline __device__ T1 magVector3(T1& x, T1& y, T1& z) {
-    return magnitude = sqrt(x * x + y * y + z * z);
+    return sqrt(x * x + y * y + z * z);
 }
 
 // Normalize a 3-component vector

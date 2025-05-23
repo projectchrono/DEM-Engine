@@ -5,7 +5,7 @@
 
 #include <cub/cub.cuh>
 // #include <thrust/sort.h>
-#include <nvmath/helper_math.cuh>
+#include <kernel/DEMHelperKernels.cu>
 
 #include <algorithms/DEMStaticDeviceSubroutines.h>
 #include <algorithms/DEMStaticDeviceUtilities.cuh>

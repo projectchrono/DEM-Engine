@@ -14,7 +14,7 @@
 #include <array>
 #include <cmath>
 
-#include <nvmath/helper_math.cuh>
+#include <kernel/DEMHelperKernels.cu>
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
 #include <core/utils/CudaAllocator.hpp>
