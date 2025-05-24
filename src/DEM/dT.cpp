@@ -1815,8 +1815,8 @@ void DEMDynamicThread::writeMeshesAsVtk(std::ofstream& ptFile) {
     for (const auto& mmesh : m_meshes) {
         if (!thisMeshSkip[mesh_num]) {
             bodyID_t mowner = mmesh->owner;
-            float3 ownerPos = this->getOwnerPos(mowner);
-            float4 ownerOriQ = this->getOwnerOriQ(mowner);
+            float3 ownerPos = this->getOwnerPos(mowner)[0];
+            float4 ownerOriQ = this->getOwnerOriQ(mowner)[0];
             for (const auto& v : mmesh->GetCoordsVertices()) {
                 float3 point = v;
                 applyFrameTransformLocalToGlobal(point, ownerPos, ownerOriQ);
@@ -2676,9 +2676,9 @@ size_t DEMDynamicThread::getOwnerContactForces(const std::vector<bodyID_t>& owne
 
     // Bring back to host
     solverScratchSpace.syncDualStructDeviceToHost("numUsefulCnt");
-    solverScratchSpace.syncDualArrayDeviceToHost("points");
-    solverScratchSpace.syncDualArrayDeviceToHost("forces");
     size_t numUsefulCnt = *h_numUsefulCnt;
+    solverScratchSpace.syncDualArrayDeviceToHost("points", 0, numUsefulCnt);
+    solverScratchSpace.syncDualArrayDeviceToHost("forces", 0, numUsefulCnt);
     float3* h_points = (float3*)solverScratchSpace.getDualArrayHost("points");
     float3* h_forces = (float3*)solverScratchSpace.getDualArrayHost("forces");
     points.resize(numUsefulCnt);
@@ -2700,7 +2700,6 @@ size_t DEMDynamicThread::getOwnerContactForces(const std::vector<bodyID_t>& owne
                                                std::vector<float3>& forces,
                                                std::vector<float3>& torques,
                                                bool torque_in_local) {
-    // Set the gpu for this thread
     // Set the gpu for this thread
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
     // Allocate enough space
@@ -2732,10 +2731,10 @@ size_t DEMDynamicThread::getOwnerContactForces(const std::vector<bodyID_t>& owne
 
     // Bring back to host
     solverScratchSpace.syncDualStructDeviceToHost("numUsefulCnt");
-    solverScratchSpace.syncDualArrayDeviceToHost("points");
-    solverScratchSpace.syncDualArrayDeviceToHost("forces");
-    solverScratchSpace.syncDualArrayDeviceToHost("torques");
     size_t numUsefulCnt = *h_numUsefulCnt;
+    solverScratchSpace.syncDualArrayDeviceToHost("points", 0, numUsefulCnt);
+    solverScratchSpace.syncDualArrayDeviceToHost("forces", 0, numUsefulCnt);
+    solverScratchSpace.syncDualArrayDeviceToHost("torques", 0, numUsefulCnt);
     float3* h_points = (float3*)solverScratchSpace.getDualArrayHost("points");
     float3* h_forces = (float3*)solverScratchSpace.getDualArrayHost("forces");
     float3* h_torques = (float3*)solverScratchSpace.getDualArrayHost("torques");
@@ -2882,8 +2881,8 @@ void DEMDynamicThread::getAnalWildcardValue(std::vector<float>& res, bodyID_t ID
     res = std::move(analWildcards[wc_num]->getVal(ID, n));
 }
 
-float DEMDynamicThread::getOwnerWildcardValue(bodyID_t ID, unsigned int wc_num, bodyID_t n) {
-    return ownerWildcards[wc_num]->getVal(ID);
+std::vector<float> DEMDynamicThread::getOwnerWildcardValue(bodyID_t ID, unsigned int wc_num, bodyID_t n) {
+    return std::move(ownerWildcards[wc_num]->getVal(ID, n));
 }
 
 void DEMDynamicThread::getAllOwnerWildcardValue(std::vector<float>& res, unsigned int wc_num) {
@@ -2907,60 +2906,86 @@ void DEMDynamicThread::getFamilyOwnerWildcardValue(std::vector<float>& res,
     res.resize(count);
 }
 
-float3 DEMDynamicThread::getOwnerAngVel(bodyID_t ownerID, bodyID_t n) {
-    float3 angVel;
-    angVel.x = omgBarX(ownerID);
-    angVel.y = omgBarY(ownerID);
-    angVel.z = omgBarZ(ownerID);
+std::vector<float3> DEMDynamicThread::getOwnerAngVel(bodyID_t ownerID, bodyID_t n) {
+    std::vector<float3> angVel(n);
+    auto X = omgBarX.getVal(ownerID, n);
+    auto Y = omgBarY.getVal(ownerID, n);
+    auto Z = omgBarZ.getVal(ownerID, n);
+    for (bodyID_t i = 0; i < n; i++) {
+        angVel[i] = make_float3(X[i], Y[i], Z[i]);
+    }
     return angVel;
 }
 
-float4 DEMDynamicThread::getOwnerOriQ(bodyID_t ownerID, bodyID_t n) {
-    float4 oriQ;
-    oriQ.w = oriQw(ownerID);
-    oriQ.x = oriQx(ownerID);
-    oriQ.y = oriQy(ownerID);
-    oriQ.z = oriQz(ownerID);
+std::vector<float4> DEMDynamicThread::getOwnerOriQ(bodyID_t ownerID, bodyID_t n) {
+    std::vector<float4> oriQ(n);
+    auto W = oriQw.getVal(ownerID, n);
+    auto X = oriQx.getVal(ownerID, n);
+    auto Y = oriQy.getVal(ownerID, n);
+    auto Z = oriQz.getVal(ownerID, n);
+    for (bodyID_t i = 0; i < n; i++) {
+        oriQ[i] = make_float4(X[i], Y[i], Z[i], W[i]);
+    }
     return oriQ;
 }
 
-float3 DEMDynamicThread::getOwnerAcc(bodyID_t ownerID, bodyID_t n) {
-    float3 acc;
-    acc.x = aX(ownerID);
-    acc.y = aY(ownerID);
-    acc.z = aZ(ownerID);
+std::vector<float3> DEMDynamicThread::getOwnerAcc(bodyID_t ownerID, bodyID_t n) {
+    std::vector<float3> acc(n);
+    auto X = aX.getVal(ownerID, n);
+    auto Y = aY.getVal(ownerID, n);
+    auto Z = aZ.getVal(ownerID, n);
+    for (bodyID_t i = 0; i < n; i++) {
+        acc[i] = make_float3(X[i], Y[i], Z[i]);
+    }
     return acc;
 }
 
-float3 DEMDynamicThread::getOwnerAngAcc(bodyID_t ownerID, bodyID_t n) {
-    float3 aa;
-    aa.x = alphaX(ownerID);
-    aa.y = alphaY(ownerID);
-    aa.z = alphaZ(ownerID);
+std::vector<float3> DEMDynamicThread::getOwnerAngAcc(bodyID_t ownerID, bodyID_t n) {
+    std::vector<float3> aa(n);
+    auto X = alphaX.getVal(ownerID, n);
+    auto Y = alphaY.getVal(ownerID, n);
+    auto Z = alphaZ.getVal(ownerID, n);
+    for (bodyID_t i = 0; i < n; i++) {
+        aa[i] = make_float3(X[i], Y[i], Z[i]);
+    }
     return aa;
 }
 
-float3 DEMDynamicThread::getOwnerVel(bodyID_t ownerID, bodyID_t n) {
-    float3 vel;
-    vel.x = vX(ownerID);
-    vel.y = vY(ownerID);
-    vel.z = vZ(ownerID);
+std::vector<float3> DEMDynamicThread::getOwnerVel(bodyID_t ownerID, bodyID_t n) {
+    std::vector<float3> vel(n);
+    auto X = vX.getVal(ownerID, n);
+    auto Y = vY.getVal(ownerID, n);
+    auto Z = vZ.getVal(ownerID, n);
+    for (bodyID_t i = 0; i < n; i++) {
+        vel[i] = make_float3(X[i], Y[i], Z[i]);
+    }
     return vel;
 }
 
-float3 DEMDynamicThread::getOwnerPos(bodyID_t ownerID, bodyID_t n) {
-    float3 pos;
-    double X, Y, Z;
-    voxelID_t voxel = voxelID(ownerID);
-    subVoxelPos_t subVoxX = locX(ownerID);
-    subVoxelPos_t subVoxY = locY(ownerID);
-    subVoxelPos_t subVoxZ = locZ(ownerID);
-    voxelIDToPosition<double, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel, subVoxX, subVoxY, subVoxZ, simParams->nvXp2,
-                                                        simParams->nvYp2, simParams->voxelSize, simParams->l);
-    pos.x = X + simParams->LBFX;
-    pos.y = Y + simParams->LBFY;
-    pos.z = Z + simParams->LBFZ;
+std::vector<float3> DEMDynamicThread::getOwnerPos(bodyID_t ownerID, bodyID_t n) {
+    std::vector<float3> pos(n);
+    std::vector<voxelID_t> voxel = voxelID.getVal(ownerID, n);
+    std::vector<subVoxelPos_t> subVoxX = locX.getVal(ownerID, n);
+    std::vector<subVoxelPos_t> subVoxY = locY.getVal(ownerID, n);
+    std::vector<subVoxelPos_t> subVoxZ = locZ.getVal(ownerID, n);
+    for (bodyID_t i = 0; i < n; i++) {
+        double X, Y, Z;
+        voxelIDToPosition<double, voxelID_t, subVoxelPos_t>(X, Y, Z, voxel[i], subVoxX[i], subVoxY[i], subVoxZ[i],
+                                                            simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
+                                                            simParams->l);
+        pos[i] = make_float3(X + simParams->LBFX, Y + simParams->LBFY, Z + simParams->LBFZ);
+    }
     return pos;
+}
+
+std::vector<unsigned int> DEMDynamicThread::getOwnerFamily(bodyID_t ownerID, bodyID_t n) {
+    std::vector<unsigned int> fam(n);
+    // Get from device by default, even not needed
+    auto short_fam = familyID.getVal(ownerID, n);
+    for (bodyID_t i = 0; i < n; i++) {
+        fam[i] = (unsigned int)(+(short_fam[i]));
+    }
+    return fam;
 }
 
 void DEMDynamicThread::setOwnerAngVel(bodyID_t ownerID, float3 angVel) {

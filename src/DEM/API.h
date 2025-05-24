@@ -412,33 +412,39 @@ class DEMSolver {
                                  float val);
 
     /// @brief Get the clumps that are in contact with this owner as a vector.
+    /// @details No multi-owner bulk version. This is due to efficiency concerns. If getting multiple owners' contacting
+    /// clumps is needed, use family-based GetClumpContacts methods.
     /// @param ownerID The ID of the owner that is being queried.
     /// @return Clump owner IDs in contact with this owner.
     std::vector<bodyID_t> GetOwnerContactClumps(bodyID_t ownerID) const;
-    /// Get position of a owner
-    float3 GetOwnerPosition(bodyID_t ownerID) const;
-    /// Get angular velocity of a owner
-    float3 GetOwnerAngVel(bodyID_t ownerID) const;
-    /// Get quaternion of a owner
-    float4 GetOwnerOriQ(bodyID_t ownerID) const;
-    /// Get velocity of a owner
-    float3 GetOwnerVelocity(bodyID_t ownerID) const;
-    /// Get the acceleration of a owner
-    float3 GetOwnerAcc(bodyID_t ownerID) const;
-    /// Get the angular acceleration of a owner
-    float3 GetOwnerAngAcc(bodyID_t ownerID) const;
-    /// @brief Get the family number of a owner.
-    /// @param ownerID The owner's ID.
+    /// Get position of n consecutive owners.
+    std::vector<float3> GetOwnerPosition(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// Get angular velocity of n consecutive owners.
+    std::vector<float3> GetOwnerAngVel(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// Get quaternion of n consecutive owners.
+    std::vector<float4> GetOwnerOriQ(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// Get velocity of n consecutive owners.
+    std::vector<float3> GetOwnerVelocity(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// Get the acceleration of n consecutive owners.
+    std::vector<float3> GetOwnerAcc(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// Get the angular acceleration of n consecutive owners.
+    std::vector<float3> GetOwnerAngAcc(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// @brief Get the family number of n consecutive owners.
+    /// @param ownerID First owner's ID.
+    /// @param n The number of consecutive owners.
     /// @return The family number.
-    unsigned int GetOwnerFamily(bodyID_t ownerID) const;
-    /// @brief Get the mass of a owner.
-    /// @param ownerID The owner's ID.
+    std::vector<unsigned int> GetOwnerFamily(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// @brief Get the mass of n consecutive owners.
+    /// @param ownerID First owner's ID.
+    /// @param n The number of consecutive owners.
     /// @return The mass.
-    float GetOwnerMass(bodyID_t ownerID) const;
-    /// @brief Get the moment of inertia (in principal axis frame) of a owner.
-    /// @param ownerID The owner's ID.
+    std::vector<float> GetOwnerMass(bodyID_t ownerID, bodyID_t n = 1) const;
+    /// @brief Get the moment of inertia (in principal axis frame) of n consecutive owners.
+    /// @param ownerID First owner's ID.
+    /// @param n The number of consecutive owners.
     /// @return The moment of inertia (in principal axis frame).
-    float3 GetOwnerMOI(bodyID_t ownerID) const;
+    std::vector<float3> GetOwnerMOI(bodyID_t ownerID, bodyID_t n = 1) const;
+
     /// Set position of a owner
     void SetOwnerPosition(bodyID_t ownerID, float3 pos);
     /// Set angular velocity of a owner
@@ -903,11 +909,12 @@ class DEMSolver {
     /// @param extra_size The thickness of the extra contact margin.
     void SetFamilyExtraMargin(unsigned int N, float extra_size);
 
-    /// @brief Get the owner wildcard's values of a owner.
-    /// @param ownerID Owner's ID.
+    /// @brief Get the owner wildcard's values of some owners.
+    /// @param ownerID Starting owner's ID.
     /// @param name Wildcard's name.
+    /// @param n Total number of owners to query, starting from ownerID.
     /// @return Value of this wildcard.
-    float GetOwnerWildcardValue(bodyID_t ownerID, const std::string& name);
+    std::vector<float> GetOwnerWildcardValue(bodyID_t ownerID, const std::string& name, bodyID_t n = 1);
     /// @brief Get the owner wildcard's values of all entities.
     std::vector<float> GetAllOwnerWildcardValue(const std::string& name);
     /// @brief Get the owner wildcard's values of all entities in family N.

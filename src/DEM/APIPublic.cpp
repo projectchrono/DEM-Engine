@@ -395,27 +395,149 @@ std::vector<std::pair<bodyID_t, bodyID_t>> DEMSolver::GetClumpContacts(
     return out_pair;
 }
 
-float3 DEMSolver::GetOwnerPosition(bodyID_t ownerID) const {
-    return dT->getOwnerPos(ownerID);
+std::vector<float3> DEMSolver::GetOwnerPosition(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerPos(ownerID, n);
 }
-float3 DEMSolver::GetOwnerAngVel(bodyID_t ownerID) const {
-    return dT->getOwnerAngVel(ownerID);
+std::vector<float3> DEMSolver::GetOwnerAngVel(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerAngVel(ownerID, n);
 }
-float3 DEMSolver::GetOwnerVelocity(bodyID_t ownerID) const {
-    return dT->getOwnerVel(ownerID);
+std::vector<float3> DEMSolver::GetOwnerVelocity(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerVel(ownerID, n);
 }
-float4 DEMSolver::GetOwnerOriQ(bodyID_t ownerID) const {
-    return dT->getOwnerOriQ(ownerID);
+std::vector<float4> DEMSolver::GetOwnerOriQ(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerOriQ(ownerID, n);
 }
-float3 DEMSolver::GetOwnerAcc(bodyID_t ownerID) const {
-    return dT->getOwnerAcc(ownerID);
+std::vector<float3> DEMSolver::GetOwnerAcc(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerAcc(ownerID, n);
 }
-float3 DEMSolver::GetOwnerAngAcc(bodyID_t ownerID) const {
-    return dT->getOwnerAngAcc(ownerID);
+std::vector<float3> DEMSolver::GetOwnerAngAcc(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerAngAcc(ownerID, n);
 }
-unsigned int DEMSolver::GetOwnerFamily(bodyID_t ownerID) const {
-    // Get from device by default
-    return (unsigned int)(+(dT->familyID(ownerID)));
+std::vector<unsigned int> DEMSolver::GetOwnerFamily(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerFamily(ownerID, n);
+}
+
+std::vector<float> DEMSolver::GetOwnerWildcardValue(bodyID_t ownerID, const std::string& name, bodyID_t n) {
+    assertSysInit("GetOwnerWildcardValue");
+    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
+        DEME_ERROR(
+            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerOwnerWildcards first.",
+            name.c_str());
+    }
+    return dT->getOwnerWildcardValue(ownerID, m_owner_wc_num.at(name), n);
+}
+
+std::vector<float> DEMSolver::GetAllOwnerWildcardValue(const std::string& name) {
+    assertSysInit("GetAllOwnerWildcardValue");
+    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
+        DEME_ERROR(
+            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerOwnerWildcards first.",
+            name.c_str());
+    }
+    std::vector<float> res;
+    dT->getAllOwnerWildcardValue(res, m_owner_wc_num.at(name));
+    return res;
+}
+
+std::vector<float> DEMSolver::GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name) {
+    assertSysInit("GetFamilyOwnerWildcardValue");
+    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
+        DEME_ERROR(
+            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerOwnerWildcards first.",
+            name.c_str());
+    }
+    std::vector<float> res;
+    dT->getFamilyOwnerWildcardValue(res, N, m_owner_wc_num.at(name));
+    return res;
+}
+
+std::vector<float> DEMSolver::GetTriWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
+    assertSysInit("GetTriWildcardValue");
+    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
+        DEME_ERROR(
+            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerGeometryWildcards in the force model first.",
+            name.c_str());
+    }
+    std::vector<float> res;
+    dT->getTriWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
+    return res;
+}
+
+std::vector<float> DEMSolver::GetSphereWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
+    assertSysInit("GetSphereWildcardValue");
+    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
+        DEME_ERROR(
+            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerGeometryWildcards in the force model first.",
+            name.c_str());
+    }
+    std::vector<float> res;
+    dT->getSphereWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
+    return res;
+}
+
+std::vector<float> DEMSolver::GetAnalWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
+    assertSysInit("GetAnalWildcardValue");
+    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
+        DEME_ERROR(
+            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerGeometryWildcards in the force model first.",
+            name.c_str());
+    }
+    std::vector<float> res;
+    dT->getAnalWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
+    return res;
+}
+
+size_t DEMSolver::GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
+                                        std::vector<float3>& points,
+                                        std::vector<float3>& forces) {
+    return dT->getOwnerContactForces(ownerIDs, points, forces);
+}
+size_t DEMSolver::GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
+                                        std::vector<float3>& points,
+                                        std::vector<float3>& forces,
+                                        std::vector<float3>& torques,
+                                        bool torque_in_local) {
+    return dT->getOwnerContactForces(ownerIDs, points, forces, torques, torque_in_local);
+}
+
+std::vector<float> DEMSolver::GetOwnerMass(bodyID_t ownerID, bodyID_t n) const {
+    std::vector<float> res(n);
+    for (bodyID_t i = 0; i < n; i++) {
+        // No mechanism to change mass properties on device, so [] operator is fine
+        if (jitify_mass_moi) {
+            inertiaOffset_t offset = dT->inertiaPropOffsets[ownerID + i];
+            res[i] = dT->massOwnerBody[offset];
+        } else {
+            res[i] = dT->massOwnerBody[ownerID + i];
+        }
+    }
+    return res;
+}
+
+std::vector<float3> DEMSolver::GetOwnerMOI(bodyID_t ownerID, bodyID_t n) const {
+    std::vector<float3> res(n);
+    for (bodyID_t i = 0; i < n; i++) {
+        // No mechanism to change mass properties on device, so [] operator is fine
+        if (jitify_mass_moi) {
+            inertiaOffset_t offset = dT->inertiaPropOffsets[ownerID + i];
+            float m1 = dT->mmiXX[offset];
+            float m2 = dT->mmiYY[offset];
+            float m3 = dT->mmiZZ[offset];
+            res[i] = make_float3(m1, m2, m3);
+        } else {
+            float m1 = dT->mmiXX[ownerID + i];
+            float m2 = dT->mmiYY[ownerID + i];
+            float m3 = dT->mmiZZ[ownerID + i];
+            res[i] = make_float3(m1, m2, m3);
+        }
+    }
+    return res;
 }
 
 void DEMSolver::AddOwnerNextStepAcc(bodyID_t ownerID, float3 acc) {
@@ -439,32 +561,6 @@ void DEMSolver::SetOwnerOriQ(bodyID_t ownerID, float4 oriQ) {
 void DEMSolver::SetOwnerFamily(bodyID_t ownerID, family_t fam) {
     kT->familyID.setVal(kT->streamInfo.stream, fam, ownerID);
     dT->familyID.setVal(dT->streamInfo.stream, fam, ownerID);
-}
-
-float DEMSolver::GetOwnerMass(bodyID_t ownerID) const {
-    // No mechanism to change mass properties on device, so [] operator is fine
-    if (jitify_mass_moi) {
-        inertiaOffset_t offset = dT->inertiaPropOffsets[ownerID];
-        return dT->massOwnerBody[offset];
-    } else {
-        return dT->massOwnerBody[ownerID];
-    }
-}
-
-float3 DEMSolver::GetOwnerMOI(bodyID_t ownerID) const {
-    // No mechanism to change mass properties on device, so [] operator is fine
-    if (jitify_mass_moi) {
-        inertiaOffset_t offset = dT->inertiaPropOffsets[ownerID];
-        float m1 = dT->mmiXX[offset];
-        float m2 = dT->mmiYY[offset];
-        float m3 = dT->mmiZZ[offset];
-        return make_float3(m1, m2, m3);
-    } else {
-        float m1 = dT->mmiXX[ownerID];
-        float m2 = dT->mmiYY[ownerID];
-        float m3 = dT->mmiZZ[ownerID];
-        return make_float3(m1, m2, m3);
-    }
 }
 
 void DEMSolver::SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& new_nodes) {
@@ -522,8 +618,8 @@ std::vector<float3> DEMSolver::GetMeshNodesGlobal(bodyID_t ownerID) {
     if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
         DEME_ERROR("Owner %zu is not a mesh, you therefore cannot get its nodes' coordinates.", (size_t)ownerID);
     }
-    float3 mesh_pos = dT->getOwnerPos(ownerID);
-    float4 mesh_oriQ = dT->getOwnerOriQ(ownerID);
+    float3 mesh_pos = dT->getOwnerPos(ownerID)[0];
+    float4 mesh_oriQ = dT->getOwnerOriQ(ownerID)[0];
     std::vector<float3> nodes(m_meshes.at(m_owner_mesh_map.at(ownerID))->GetCoordsVertices());
     for (auto& pnt : nodes) {
         applyFrameTransformLocalToGlobal<float3, float3, float4>(pnt, mesh_pos, mesh_oriQ);
@@ -1372,94 +1468,6 @@ void DEMSolver::SetFamilyOwnerWildcardValue(unsigned int N, const std::string& n
             name.c_str());
     }
     dT->setFamilyOwnerWildcardValue(N, m_owner_wc_num.at(name), vals);
-}
-
-std::vector<float> DEMSolver::GetTriWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
-    assertSysInit("GetTriWildcardValue");
-    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
-        DEME_ERROR(
-            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerGeometryWildcards in the force model first.",
-            name.c_str());
-    }
-    std::vector<float> res;
-    dT->getTriWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
-    return res;
-}
-
-std::vector<float> DEMSolver::GetSphereWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
-    assertSysInit("GetSphereWildcardValue");
-    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
-        DEME_ERROR(
-            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerGeometryWildcards in the force model first.",
-            name.c_str());
-    }
-    std::vector<float> res;
-    dT->getSphereWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
-    return res;
-}
-
-std::vector<float> DEMSolver::GetAnalWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
-    assertSysInit("GetAnalWildcardValue");
-    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
-        DEME_ERROR(
-            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerGeometryWildcards in the force model first.",
-            name.c_str());
-    }
-    std::vector<float> res;
-    dT->getAnalWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
-    return res;
-}
-
-float DEMSolver::GetOwnerWildcardValue(bodyID_t ownerID, const std::string& name) {
-    assertSysInit("GetOwnerWildcardValue");
-    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
-        DEME_ERROR(
-            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerOwnerWildcards first.",
-            name.c_str());
-    }
-    return dT->getOwnerWildcardValue(ownerID, m_owner_wc_num.at(name));
-}
-
-std::vector<float> DEMSolver::GetAllOwnerWildcardValue(const std::string& name) {
-    assertSysInit("GetAllOwnerWildcardValue");
-    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
-        DEME_ERROR(
-            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerOwnerWildcards first.",
-            name.c_str());
-    }
-    std::vector<float> res;
-    dT->getAllOwnerWildcardValue(res, m_owner_wc_num.at(name));
-    return res;
-}
-size_t DEMSolver::GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
-                                        std::vector<float3>& points,
-                                        std::vector<float3>& forces) {
-    return dT->getOwnerContactForces(ownerIDs, points, forces);
-}
-size_t DEMSolver::GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
-                                        std::vector<float3>& points,
-                                        std::vector<float3>& forces,
-                                        std::vector<float3>& torques,
-                                        bool torque_in_local) {
-    return dT->getOwnerContactForces(ownerIDs, points, forces, torques, torque_in_local);
-}
-
-std::vector<float> DEMSolver::GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name) {
-    assertSysInit("GetFamilyOwnerWildcardValue");
-    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
-        DEME_ERROR(
-            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerOwnerWildcards first.",
-            name.c_str());
-    }
-    std::vector<float> res;
-    dT->getFamilyOwnerWildcardValue(res, N, m_owner_wc_num.at(name));
-    return res;
 }
 
 void DEMSolver::SetContactWildcards(const std::set<std::string>& wildcards) {

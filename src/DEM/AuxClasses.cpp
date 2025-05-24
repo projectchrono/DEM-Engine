@@ -292,15 +292,27 @@ std::vector<bodyID_t> DEMTracker::GetOwnerIDs() {
 }
 
 float3 DEMTracker::Pos(size_t offset) {
-    return sys->GetOwnerPosition(obj->ownerID + offset);
+    return sys->GetOwnerPosition(obj->ownerID + offset)[0];
 }
 std::vector<float> DEMTracker::GetPos(size_t offset) {
     float3 res = Pos(offset);
     return {res.x, res.y, res.z};
 }
+std::vector<float3> DEMTracker::Positions() {
+    return sys->GetOwnerPosition(obj->ownerID, obj->nSpanOwners);
+}
+std::vector<std::vector<float>> DEMTracker::GetPositions() {
+    std::vector<float3> res = Positions();
+    std::vector<std::vector<float>> pos(res.size());
+    for (size_t i = 0; i < res.size(); i++) {
+        std::vector<float> tmp = {res[i].x, res[i].y, res[i].z};
+        pos[i] = tmp;
+    }
+    return pos;
+}
 
 float3 DEMTracker::AngVelLocal(size_t offset) {
-    return sys->GetOwnerAngVel(obj->ownerID + offset);
+    return sys->GetOwnerAngVel(obj->ownerID + offset)[0];
 }
 std::vector<float> DEMTracker::GetAngVelLocal(size_t offset) {
     float3 res = AngVelLocal(offset);
@@ -308,8 +320,8 @@ std::vector<float> DEMTracker::GetAngVelLocal(size_t offset) {
 }
 
 float3 DEMTracker::AngVelGlobal(size_t offset) {
-    float3 ang_v = sys->GetOwnerAngVel(obj->ownerID + offset);
-    float4 oriQ = sys->GetOwnerOriQ(obj->ownerID + offset);
+    float3 ang_v = sys->GetOwnerAngVel(obj->ownerID + offset)[0];
+    float4 oriQ = sys->GetOwnerOriQ(obj->ownerID + offset)[0];
     applyOriQToVector3(ang_v.x, ang_v.y, ang_v.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
     return ang_v;
 }
@@ -319,7 +331,7 @@ std::vector<float> DEMTracker::GetAngVelGlobal(size_t offset) {
 }
 
 float3 DEMTracker::Vel(size_t offset) {
-    return sys->GetOwnerVelocity(obj->ownerID + offset);
+    return sys->GetOwnerVelocity(obj->ownerID + offset)[0];
 }
 std::vector<float> DEMTracker::GetVel(size_t offset) {
     float3 res = Vel(offset);
@@ -327,7 +339,7 @@ std::vector<float> DEMTracker::GetVel(size_t offset) {
 }
 
 float4 DEMTracker::OriQ(size_t offset) {
-    return sys->GetOwnerOriQ(obj->ownerID + offset);
+    return sys->GetOwnerOriQ(obj->ownerID + offset)[0];
 }
 std::vector<float> DEMTracker::GetOriQ(size_t offset) {
     float4 res = OriQ(offset);
@@ -335,15 +347,15 @@ std::vector<float> DEMTracker::GetOriQ(size_t offset) {
 }
 
 unsigned int DEMTracker::GetFamily(size_t offset) {
-    return sys->GetOwnerFamily(obj->ownerID + offset);
+    return sys->GetOwnerFamily(obj->ownerID + offset)[0];
 }
 
 float DEMTracker::Mass(size_t offset) {
-    return sys->GetOwnerMass(obj->ownerID + offset);
+    return sys->GetOwnerMass(obj->ownerID + offset)[0];
 }
 
 float3 DEMTracker::MOI(size_t offset) {
-    return sys->GetOwnerMOI(obj->ownerID + offset);
+    return sys->GetOwnerMOI(obj->ownerID + offset)[0];
 }
 std::vector<float> DEMTracker::GetMOI(size_t offset) {
     float3 res = MOI(offset);
@@ -362,7 +374,7 @@ std::vector<float> DEMTracker::GetMOI(size_t offset) {
 // }
 
 float3 DEMTracker::ContactAcc(size_t offset) {
-    return sys->GetOwnerAcc(obj->ownerID + offset);
+    return sys->GetOwnerAcc(obj->ownerID + offset)[0];
 }
 std::vector<float> DEMTracker::GetContactAcc(size_t offset) {
     float3 res = ContactAcc(offset);
@@ -370,7 +382,7 @@ std::vector<float> DEMTracker::GetContactAcc(size_t offset) {
 }
 
 float3 DEMTracker::ContactAngAccLocal(size_t offset) {
-    return sys->GetOwnerAngAcc(obj->ownerID + offset);
+    return sys->GetOwnerAngAcc(obj->ownerID + offset)[0];
 }
 std::vector<float> DEMTracker::GetContactAngAccLocal(size_t offset) {
     float3 res = ContactAngAccLocal(offset);
@@ -378,8 +390,8 @@ std::vector<float> DEMTracker::GetContactAngAccLocal(size_t offset) {
 }
 
 float3 DEMTracker::ContactAngAccGlobal(size_t offset) {
-    float3 ang_acc = sys->GetOwnerAngAcc(obj->ownerID + offset);
-    float4 oriQ = sys->GetOwnerOriQ(obj->ownerID + offset);
+    float3 ang_acc = sys->GetOwnerAngAcc(obj->ownerID + offset)[0];
+    float4 oriQ = sys->GetOwnerOriQ(obj->ownerID + offset)[0];
     applyOriQToVector3(ang_acc.x, ang_acc.y, ang_acc.z, oriQ.w, oriQ.x, oriQ.y, oriQ.z);
     return ang_acc;
 }
@@ -389,7 +401,11 @@ std::vector<float> DEMTracker::GetContactAngAccGlobal(size_t offset) {
 }
 
 float DEMTracker::GetOwnerWildcardValue(const std::string& name, size_t offset) {
-    return sys->GetOwnerWildcardValue(obj->ownerID + offset, name);
+    return sys->GetOwnerWildcardValue(obj->ownerID + offset, name)[0];
+}
+
+std::vector<float> DEMTracker::GetOwnerWildcardValues(const std::string& name) {
+    return sys->GetOwnerWildcardValue(obj->ownerID, name, obj->nSpanOwners);
 }
 
 float DEMTracker::GetGeometryWildcardValue(const std::string& name, size_t offset) {

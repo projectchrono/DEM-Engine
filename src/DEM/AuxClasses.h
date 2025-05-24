@@ -109,8 +109,8 @@ class DEMTracker {
     float3 Pos(size_t offset = 0);
     std::vector<float> GetPos(size_t offset = 0);
     /// Get the positions of all tracked objects.
-    float3 Positions();
-    std::vector<float> GetPositions();
+    std::vector<float3> Positions();
+    std::vector<std::vector<float>> GetPositions();
 
     /// Get the angular velocity of this tracked object in its own local coordinate system. Applying OriQ to it would
     /// give you the ang vel in global frame.
@@ -118,8 +118,8 @@ class DEMTracker {
     std::vector<float> GetAngVelLocal(size_t offset = 0);
     /// Get the angular velocity of all tracked objects in their own local coordinate system. Applying OriQ to it would
     /// give you the ang vel in global frame.
-    float3 AngularVelocitiesLocal();
-    std::vector<float> GetAngularVelocitiesLocal();
+    std::vector<float3> AngularVelocitiesLocal();
+    std::vector<std::vector<float>> GetAngularVelocitiesLocal();
 
     /// Get the angular velocity of this tracked object in global coordinate system.
     float3 AngVelGlobal(size_t offset = 0);
@@ -142,6 +142,9 @@ class DEMTracker {
     unsigned int GetFamily(size_t offset = 0);
 
     /// @brief Get the clumps that are in contact with this tracked owner as a vector.
+    /// @details No bulk version that gets the contacting clumps for all the entities tracked by this tracker. This is
+    /// efficiency concern. If you need to get all contact pairs involving all clumps tracked by this tracker, consider
+    /// putting them in one family and use DEMSolver's GetClumpContacts method.
     /// @param offset Offset to the first item this tracker is tracking. Default is 0.
     /// @return Clump owner IDs in contact with this owner.
     std::vector<bodyID_t> GetContactClumps(size_t offset = 0);
@@ -162,6 +165,10 @@ class DEMTracker {
 
     /// Get the owner's wildcard value.
     float GetOwnerWildcardValue(const std::string& name, size_t offset = 0);
+    /// @brief Get the owner wildcard values for all the owners entities tracked by this tracker.
+    /// @param name Name of the wildcard.
+    /// @return All the values.
+    std::vector<float> GetOwnerWildcardValues(const std::string& name);
     /// @brief Get the geometry wildcard values for all the geometry entities tracked by this tracker.
     /// @param name Name of the wildcard.
     /// @return All the values.
@@ -245,12 +252,12 @@ class DEMTracker {
     /// @details C++ users do not have to use this method. This is mainly for python wrapper.
     std::vector<std::vector<float>> GetMeshNodesGlobalAsVectorOfVector();
 
-    /// @brief Set a wildcard value of the owner this tracker is tracking.
+    /// @brief Set owner wildcard value of a owner this tracker is tracking.
     /// @param name Name of the wildcard.
     /// @param wc Wildcard value.
     /// @param offset The offset to this owner (where to start the modification). If first owner, input 0.
     void SetOwnerWildcardValue(const std::string& name, float wc, size_t offset = 0);
-    /// @brief Set a wildcard value of the owner this tracker is tracking.
+    /// @brief Set owner wildcard values of all the owners this tracker is tracking.
     /// @param name Name of the wildcard.
     /// @param wc Wildcard values as a vector (must have same length as the number of tracked owners).
     void SetOwnerWildcardValues(const std::string& name, const std::vector<float>& wc);

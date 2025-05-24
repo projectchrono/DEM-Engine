@@ -361,17 +361,19 @@ class DEMDynamicThread {
     /// @return Number of contacts.
     size_t getNumContacts() const;
     /// Get this owner's position in user unit, for n consecutive items.
-    float3 getOwnerPos(bodyID_t ownerID, bodyID_t n = 1);
+    std::vector<float3> getOwnerPos(bodyID_t ownerID, bodyID_t n = 1);
     /// Get this owner's angular velocity, for n consecutive items.
-    float3 getOwnerAngVel(bodyID_t ownerID, bodyID_t n = 1);
+    std::vector<float3> getOwnerAngVel(bodyID_t ownerID, bodyID_t n = 1);
     /// Get this owner's quaternion, for n consecutive items.
-    float4 getOwnerOriQ(bodyID_t ownerID, bodyID_t n = 1);
+    std::vector<float4> getOwnerOriQ(bodyID_t ownerID, bodyID_t n = 1);
     /// Get this owner's velocity, for n consecutive items.
-    float3 getOwnerVel(bodyID_t ownerID, bodyID_t n = 1);
+    std::vector<float3> getOwnerVel(bodyID_t ownerID, bodyID_t n = 1);
     /// Get this owner's acceleration, for n consecutive items.
-    float3 getOwnerAcc(bodyID_t ownerID, bodyID_t n = 1);
+    std::vector<float3> getOwnerAcc(bodyID_t ownerID, bodyID_t n = 1);
     /// Get this owner's angular acceleration, for n consecutive items.
-    float3 getOwnerAngAcc(bodyID_t ownerID, bodyID_t n = 1);
+    std::vector<float3> getOwnerAngAcc(bodyID_t ownerID, bodyID_t n = 1);
+    /// Get this owner's family number, for n consecutive items.
+    std::vector<unsigned int> getOwnerFamily(bodyID_t ownerID, bodyID_t n = 1);
     // Get the current auto-adjusted update freq.
     float getUpdateFreq() const;
 
@@ -413,7 +415,7 @@ class DEMDynamicThread {
     void addOwnerNextStepAngAcc(bodyID_t ownerID, float3 angAcc);
 
     /// @brief Returns the wildacard value of this owner, for n consecutive items.
-    float getOwnerWildcardValue(bodyID_t ID, unsigned int wc_num, bodyID_t n = 1);
+    std::vector<float> getOwnerWildcardValue(bodyID_t ID, unsigned int wc_num, bodyID_t n = 1);
     /// @brief Fill res with the wc_num wildcard value.
     void getAllOwnerWildcardValue(std::vector<float>& res, unsigned int wc_num);
     /// @brief Fill res with the wc_num wildcard value for entities with family number family_num.
