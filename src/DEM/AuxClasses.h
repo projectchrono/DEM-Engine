@@ -124,44 +124,96 @@ class DEMTracker {
     /// Get the angular velocity of this tracked object in global coordinate system.
     float3 AngVelGlobal(size_t offset = 0);
     std::vector<float> GetAngVelGlobal(size_t offset = 0);
+    /// Get the angular velocity of all objects tracked by this tracker, in global coordinate system.
+    std::vector<float3> AngularVelocitiesGlobal();
+    std::vector<std::vector<float>> GetAngularVelocitiesGlobal();
 
     /// Get the velocity of this tracked object in global frame.
     float3 Vel(size_t offset = 0);
     std::vector<float> GetVel(size_t offset = 0);
+    /// Get the velocities of all objects tracked by this tracker, in global frame.
+    std::vector<float3> Velocities();
+    std::vector<std::vector<float>> GetVelocities();
 
     /// Get the quaternion that represents the orientation of this tracked object's own coordinate system.
     float4 OriQ(size_t offset = 0);
     /// @brief Get the quaternion that represents the orientation of this tracked object's own coordinate system.
-    /// @return A vector of 4 floats. The order is (x, y, z, w). If using Chrono naming convention, then it is (e1, e2,
-    /// e3, e0).
+    /// @return A vector of 4 floats. The order is (x, y, z, w). If compared against Chrono naming convention, then it
+    /// is saying our ordering here is (e1, e2, e3, e0).
     std::vector<float> GetOriQ(size_t offset = 0);
+    /// Get all quaternions that represent the orientation of all the tracked objects' own coordinate systems.
+    std::vector<float4> OrientationQuaternions();
+    /// @brief Get all quaternions that represent the orientation of all the tracked objects' own coordinate systems.
+    /// @return A vector of 4-float vectors. The order is (x, y, z, w). If compared against Chrono naming convention,
+    /// then it is saying our ordering here is (e1, e2, e3, e0).
+    std::vector<std::vector<float>> GetOrientationQuaternions();
 
     /// @brief Get the family number of the tracked object.
     /// @param offset The offset of the entites to get family number out of.
     /// @return The family number.
     unsigned int GetFamily(size_t offset = 0);
+    /// @brief Get the family numbers of all the tracked object.
+    /// @return The family numbers as a vector.
+    std::vector<unsigned int> GetFamilies();
 
     /// @brief Get the clumps that are in contact with this tracked owner as a vector.
     /// @details No bulk version that gets the contacting clumps for all the entities tracked by this tracker. This is
     /// efficiency concern. If you need to get all contact pairs involving all clumps tracked by this tracker, consider
-    /// putting them in one family and use DEMSolver's GetClumpContacts method.
+    /// putting them in one family and use DEMSolver's GetClumpContacts method, then the owner ID list-based
+    /// GetOwnerContactForces method if you further need the contact forces information.
     /// @param offset Offset to the first item this tracker is tracking. Default is 0.
     /// @return Clump owner IDs in contact with this owner.
     std::vector<bodyID_t> GetContactClumps(size_t offset = 0);
 
-    /// Get the a portion of the acceleration of this tracked object, that is the result of its contact with other
-    /// simulation entities. In most cases, this means excluding the gravitational acceleration. The acceleration is in
-    /// global frame.
+    /// @brief Get the portion of the acceleration of this tracked object, that is the result of its contact with other
+    /// simulation entities. The acceleration is in global frame.
+    /// @details In most cases, this means the acceleration excluding the gravitational acceleration.
     float3 ContactAcc(size_t offset = 0);
     std::vector<float> GetContactAcc(size_t offset = 0);
-    /// Get the a portion of the angular acceleration of this tracked object, that is the result of its contact with
-    /// other simulation entities. The acceleration is in this object's local frame.
+    /// @brief Get the acceleration experienced by all objects tracked by this tracker, that is the result of their
+    /// contact with other simulation entities. The acceleration is in global frame.
+    /// @details In most cases, this means the acceleration excluding the gravitational acceleration.
+    std::vector<float3> ContactAccelerations();
+    std::vector<std::vector<float>> GetContactAccelerations();
+
+    /// @brief Get the a portion of the angular acceleration of this tracked object, that is the result of its contact
+    /// with other simulation entities. The acceleration is in this object's local frame.
+    /// @details In most cases, this means the angular acceleration excluding the gravitational acceleration.
     float3 ContactAngAccLocal(size_t offset = 0);
     std::vector<float> GetContactAngAccLocal(size_t offset = 0);
-    /// Get the a portion of the angular acceleration of this tracked object, that is the result of its contact with
-    /// other simulation entities. The acceleration is in this object's global frame.
+    /// @brief Get the angular acceleration experienced by all objects tracked by this tracker, that is the result of
+    /// their contact with other simulation entities. The acceleration is in this object's local frame.
+    /// @details In most cases, this means the angular acceleration excluding the gravitational acceleration.
+    std::vector<float3> ContactAngularAccelerationsLocal();
+    std::vector<std::vector<float>> GetContactAngularAccelerationsLocal();
+
+    /// @brief Get the a portion of the angular acceleration of this tracked object, that is the result of its contact
+    /// with other simulation entities. The acceleration is in this object's global frame.
+    /// @details In most cases, this means the angular acceleration excluding the gravitational acceleration.
     float3 ContactAngAccGlobal(size_t offset = 0);
     std::vector<float> GetContactAngAccGlobal(size_t offset = 0);
+    /// @brief Get the angular acceleration experienced by all objects tracked by this tracker, that is the result of
+    /// their contact with other simulation entities. The acceleration is in this object's global frame.
+    /// @details In most cases, this means the angular acceleration excluding the gravitational acceleration.
+    std::vector<float3> ContactAngularAccelerationsGlobal();
+    std::vector<std::vector<float>> GetContactAngularAccelerationsGlobal();
+
+    /// @brief Get the mass of the tracked object.
+    /// @param offset The offset to this entites. If first entites, input 0.
+    /// @return Mass.
+    float Mass(size_t offset = 0);
+    /// @brief Get the masses of all the tracked objects.
+    /// @return Masses as a vector.
+    std::vector<float> Masses();
+    /// @brief Get the moment of inertia (in principal axis frame) of the tracked object.
+    /// @param offset The offset to this entites. If first entites, input 0.
+    /// @return The moment of inertia (in principal axis frame).
+    float3 MOI(size_t offset = 0);
+    std::vector<float> GetMOI(size_t offset = 0);
+    /// @brief Get the moment of inertia (in principal axis frame) of all the tracked objects.
+    /// @return The moment of inertia (in principal axis frame) of each element as a vector.
+    std::vector<float3> MOIs();
+    std::vector<std::vector<float>> GetMOIs();
 
     /// Get the owner's wildcard value.
     float GetOwnerWildcardValue(const std::string& name, size_t offset = 0);
@@ -212,15 +264,6 @@ class DEMTracker {
     /// @param fam_num Family number to change to.
     /// @param offset The offset to this entites. If first entites, input 0.
     void SetFamily(unsigned int fam_num, size_t offset);
-    /// @brief Get the mass of the tracked object.
-    /// @param offset The offset to this entites. If first entites, input 0.
-    /// @return Mass.
-    float Mass(size_t offset = 0);
-    /// @brief Get the moment of inertia (in principal axis frame) of the tracked object.
-    /// @param offset The offset to this entites. If first entites, input 0.
-    /// @return The moment of inertia (in principal axis frame).
-    float3 MOI(size_t offset = 0);
-    std::vector<float> GetMOI(size_t offset = 0);
 
     /// @brief Apply the new mesh node positions such that the tracked mesh is replaced by the new_nodes.
     /// @details This affects triangle facets' relative positions wrt the mesh center (CoM) only; mesh's overall
@@ -283,6 +326,15 @@ class DEMTracker {
     size_t GetContactForces(std::vector<std::vector<float>>& points,
                             std::vector<std::vector<float>>& forces,
                             size_t offset = 0);
+    /// @brief Get all contact forces that concern all objects tracked by this tracker, as a vector.
+    /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
+    /// experiences. If a contact involves two owners this tracker tracks, then the force for that contact will be given
+    /// as the force experienced by whichever owner that appears earlier in the list of owners.
+    /// @param points The contact point XYZ as float3 vector.
+    /// @param forces The force in XYZ as float3 vector. The force in global frame.
+    /// @return Number of force pairs.
+    size_t GetContactForcesForAll(std::vector<float3>& points, std::vector<float3>& forces);
+    size_t GetContactForcesForAll(std::vector<std::vector<float>>& points, std::vector<std::vector<float>>& forces);
 
     /// @brief Get all contact forces and global torques that concern this track object, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
@@ -304,6 +356,25 @@ class DEMTracker {
                                            std::vector<std::vector<float>>& forces,
                                            std::vector<std::vector<float>>& torques,
                                            size_t offset = 0);
+    /// @brief Get all contact forces and global torques that concern all objects tracked by this tracker, as a vector.
+    /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
+    /// experiences. Since we are getting all force pairs, the torque should be considered as `extra torque', since you
+    /// should be able to derive the normal and tangential force-induced torques based on all the force pairs. The extra
+    /// torques emerge depending on your force model. For example, in the default force model, rolling friction could
+    /// contribute to the torque. But if you do not have rolling friction, then you do not have torque here. The torques
+    /// are given in the global frame of this object that is being tracked. If a contact involves two owners this
+    /// tracker tracks, then the force for that contact will be given as the force experienced by whichever owner that
+    /// appears earlier in the list of owners.
+    /// @param points The contact point XYZ as float3 vector.
+    /// @param forces The force in XYZ as float3 vector. The force in global frame.
+    /// @param torques The contact torque. The torque is in global frame.
+    /// @return Number of force pairs.
+    size_t GetContactForcesAndGlobalTorqueForAll(std::vector<float3>& points,
+                                                 std::vector<float3>& forces,
+                                                 std::vector<float3>& torques);
+    size_t GetContactForcesAndGlobalTorqueForAll(std::vector<std::vector<float>>& points,
+                                                 std::vector<std::vector<float>>& forces,
+                                                 std::vector<std::vector<float>>& torques);
 
     /// @brief Get all contact forces and local torques that concern this track object, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
@@ -325,6 +396,25 @@ class DEMTracker {
                                           std::vector<std::vector<float>>& forces,
                                           std::vector<std::vector<float>>& torques,
                                           size_t offset = 0);
+    /// @brief Get all contact forces and local torques that concern all objects tracked by this tracker, as a vector.
+    /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
+    /// experiences. Since we are getting all force pairs, the torque should be considered as `extra torque', since you
+    /// should be able to derive the normal and tangential force-induced torques based on all the force pairs. The extra
+    /// torques emerge depending on your force model. For example, in the default force model, rolling friction could
+    /// contribute to the torque. But if you do not have rolling friction, then you do not have torque here. The torques
+    /// are given in the local frame of this object that is being tracked. If a contact involves two owners this tracker
+    /// tracks, then the force for that contact will be given as the force experienced by whichever owner that appears
+    /// earlier in the list of owners.
+    /// @param points The contact point XYZ as float3 vector.
+    /// @param forces The force in XYZ as float3 vector. The force in global frame.
+    /// @param torques The contact torque. The torque is in local frame.
+    /// @return Number of force pairs.
+    size_t GetContactForcesAndLocalTorqueForAll(std::vector<float3>& points,
+                                                std::vector<float3>& forces,
+                                                std::vector<float3>& torques);
+    size_t GetContactForcesAndLocalTorqueForAll(std::vector<std::vector<float>>& points,
+                                                std::vector<std::vector<float>>& forces,
+                                                std::vector<std::vector<float>>& torques);
 };
 
 class DEMForceModel {

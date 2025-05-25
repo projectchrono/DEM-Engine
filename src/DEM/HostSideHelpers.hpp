@@ -468,6 +468,26 @@ std::vector<T1> hostUniqueVector(const std::vector<T1>& vec) {
     return unique_vec;
 }
 
+template <typename T1, typename T2>
+inline std::vector<std::vector<T1>> Real3VectorToVecOfVec(const std::vector<T2>& vec) {
+    std::vector<std::vector<T1>> res(vec.size());
+    for (size_t i = 0; i < vec.size(); i++) {
+        std::vector<T1> tmp = {vec[i].x, vec[i].y, vec[i].z};
+        res[i] = tmp;
+    }
+    return res;
+}
+
+template <typename T1, typename T2>
+inline std::vector<std::vector<T1>> Real4VectorToVecOfVec(const std::vector<T2>& vec) {
+    std::vector<std::vector<T1>> res(vec.size());
+    for (size_t i = 0; i < vec.size(); i++) {
+        std::vector<T1> tmp = {vec[i].x, vec[i].y, vec[i].z, vec[i].w};
+        res[i] = tmp;
+    }
+    return res;
+}
+
 template <typename T1>
 inline bool check_exist(const std::set<T1>& the_set, const T1& key) {
     return the_set.find(key) != the_set.end();

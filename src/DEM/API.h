@@ -413,7 +413,8 @@ class DEMSolver {
 
     /// @brief Get the clumps that are in contact with this owner as a vector.
     /// @details No multi-owner bulk version. This is due to efficiency concerns. If getting multiple owners' contacting
-    /// clumps is needed, use family-based GetClumpContacts methods.
+    /// clumps is needed, use family-based GetClumpContacts method, then the owner ID list-based c method if you further
+    /// need the contact forces information.
     /// @param ownerID The ID of the owner that is being queried.
     /// @return Clump owner IDs in contact with this owner.
     std::vector<bodyID_t> GetOwnerContactClumps(bodyID_t ownerID) const;
@@ -843,6 +844,9 @@ class DEMSolver {
                                  std::vector<float3>& forces);
 
     /// @brief Get all contact forces that concern a list of owners.
+    /// @details If a contact involves at least one of the owner IDs provided as the first arg this method, it will be
+    /// outputted. Note if a contact involves two IDs of the user-provided list, then the force for that contact will be
+    /// given as the force experienced by whichever owner that appears earlier in the ID list.
     /// @param ownerIDs The IDs of the owners.
     /// @param points Fill this vector of float3 with the XYZ components of the contact points.
     /// @param forces Fill this vector of float3 with the XYZ components of the forces.

@@ -149,6 +149,7 @@ class DEMSolverScratchData {
     scratch_t* getDualArrayDevice(const std::string& name) { return m_dualArrPool.getDevice(name); }
     void syncDualArrayDeviceToHost(const std::string& name) { m_dualArrPool.get(name)->toHost(); }
     void syncDualArrayHostToDevice(const std::string& name) { m_dualArrPool.get(name)->toDevice(); }
+    // When using these methods, remember the type is scratch_t
     void syncDualArrayDeviceToHost(const std::string& name, size_t start, size_t n) {
         m_dualArrPool.get(name)->toHost(start, n);
     }

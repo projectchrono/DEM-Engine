@@ -2677,8 +2677,10 @@ size_t DEMDynamicThread::getOwnerContactForces(const std::vector<bodyID_t>& owne
     // Bring back to host
     solverScratchSpace.syncDualStructDeviceToHost("numUsefulCnt");
     size_t numUsefulCnt = *h_numUsefulCnt;
-    solverScratchSpace.syncDualArrayDeviceToHost("points", 0, numUsefulCnt);
-    solverScratchSpace.syncDualArrayDeviceToHost("forces", 0, numUsefulCnt);
+    if (numUsefulCnt > 0) {
+        solverScratchSpace.syncDualArrayDeviceToHost("points", 0, numUsefulCnt * sizeof(float3));
+        solverScratchSpace.syncDualArrayDeviceToHost("forces", 0, numUsefulCnt * sizeof(float3));
+    }
     float3* h_points = (float3*)solverScratchSpace.getDualArrayHost("points");
     float3* h_forces = (float3*)solverScratchSpace.getDualArrayHost("forces");
     points.resize(numUsefulCnt);
@@ -2732,9 +2734,11 @@ size_t DEMDynamicThread::getOwnerContactForces(const std::vector<bodyID_t>& owne
     // Bring back to host
     solverScratchSpace.syncDualStructDeviceToHost("numUsefulCnt");
     size_t numUsefulCnt = *h_numUsefulCnt;
-    solverScratchSpace.syncDualArrayDeviceToHost("points", 0, numUsefulCnt);
-    solverScratchSpace.syncDualArrayDeviceToHost("forces", 0, numUsefulCnt);
-    solverScratchSpace.syncDualArrayDeviceToHost("torques", 0, numUsefulCnt);
+    if (numUsefulCnt > 0) {
+        solverScratchSpace.syncDualArrayDeviceToHost("points", 0, numUsefulCnt * sizeof(float3));
+        solverScratchSpace.syncDualArrayDeviceToHost("forces", 0, numUsefulCnt * sizeof(float3));
+        solverScratchSpace.syncDualArrayDeviceToHost("torques", 0, numUsefulCnt * sizeof(float3));
+    }
     float3* h_points = (float3*)solverScratchSpace.getDualArrayHost("points");
     float3* h_forces = (float3*)solverScratchSpace.getDualArrayHost("forces");
     float3* h_torques = (float3*)solverScratchSpace.getDualArrayHost("torques");
