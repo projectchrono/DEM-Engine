@@ -469,6 +469,35 @@ std::vector<T1> hostUniqueVector(const std::vector<T1>& vec) {
 }
 
 template <typename T1, typename T2>
+inline std::vector<T1> VecOfVecToReal3Vector(const std::vector<std::vector<T2>>& vec) {
+    std::vector<T1> res(vec.size());
+    for (size_t i = 0; i < vec.size(); i++) {
+        T1 tmp;
+        tmp.x = vec[i][0];
+        tmp.y = vec[i][1];
+        tmp.z = vec[i][2];
+
+        res[i] = tmp;
+    }
+    return res;
+}
+
+template <typename T1, typename T2>
+inline std::vector<T1> VecOfVecToReal4Vector(const std::vector<std::vector<T2>>& vec) {
+    std::vector<T1> res(vec.size());
+    for (size_t i = 0; i < vec.size(); i++) {
+        T1 tmp;
+        tmp.x = vec[i][0];
+        tmp.y = vec[i][1];
+        tmp.z = vec[i][2];
+        tmp.w = vec[i][3];
+
+        res[i] = tmp;
+    }
+    return res;
+}
+
+template <typename T1, typename T2>
 inline std::vector<std::vector<T1>> Real3VectorToVecOfVec(const std::vector<T2>& vec) {
     std::vector<std::vector<T1>> res(vec.size());
     for (size_t i = 0; i < vec.size(); i++) {
@@ -661,8 +690,9 @@ template <typename T>
 inline void assertThreeElements(const std::vector<T>& vec, const std::string& func_name, const std::string& var_name) {
     if (vec.size() != 3) {
         std::stringstream out;
-        out << func_name << "'s " << var_name << " argument needs to be a length 3 list/vector. The provided size is "
-            << vec.size() << ".\n";
+        out << func_name << "'s " << var_name
+            << " argument needs to be, or be consisted of, length-3 lists/vectors. The provided size is " << vec.size()
+            << ".\n";
         throw std::runtime_error(out.str());
     }
 }
@@ -670,8 +700,9 @@ template <typename T>
 inline void assertFourElements(const std::vector<T>& vec, const std::string& func_name, const std::string& var_name) {
     if (vec.size() != 4) {
         std::stringstream out;
-        out << func_name << "'s " << var_name << " argument needs to be a length 4 list/vector. The provided size is "
-            << vec.size() << ".\n";
+        out << func_name << "'s " << var_name
+            << " argument needs to be, or be consisted of, length-4 lists/vectors. The provided size is " << vec.size()
+            << ".\n";
         throw std::runtime_error(out.str());
     }
 }
