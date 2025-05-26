@@ -691,7 +691,7 @@ inline void assertThreeElements(const std::vector<T>& vec, const std::string& fu
     if (vec.size() != 3) {
         std::stringstream out;
         out << func_name << "'s " << var_name
-            << " argument needs to be, or be consisted of, length-3 lists/vectors. The provided size is " << vec.size()
+            << " argument needs to be, or be composed of, length-3 lists/vectors. The provided size is " << vec.size()
             << ".\n";
         throw std::runtime_error(out.str());
     }
@@ -701,7 +701,7 @@ inline void assertFourElements(const std::vector<T>& vec, const std::string& fun
     if (vec.size() != 4) {
         std::stringstream out;
         out << func_name << "'s " << var_name
-            << " argument needs to be, or be consisted of, length-4 lists/vectors. The provided size is " << vec.size()
+            << " argument needs to be, or be composed of, length-4 lists/vectors. The provided size is " << vec.size()
             << ".\n";
         throw std::runtime_error(out.str());
     }

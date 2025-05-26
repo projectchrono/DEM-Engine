@@ -79,8 +79,8 @@ endif()
 # Let the user decide if they want to use managed arrays, rather than default cudaMalloc and cudaMallocHost memory.
 # Note that turning this on gives no performance benefits, and it's considered legacy.
 set(USE_MANAGED_ARRAYS_DESC
-    "Toggle using managed CUDA arrays, rather than manually controlled CUDA host and device memory, to store all working data. "
-	"Note switching it on makes this project only operable on a Linux platform (excluding WSL)."
+	"Use managed CUDA arrays (instead of manual CUDA host and device memory) to store data"
+	"Switching it on makes the project operable on a Linux platform (excluding WSL) only."
 )
 option(USE_MANAGED_ARRAYS "${USE_MANAGED_ARRAYS_DESC}" OFF)
 
