@@ -53,9 +53,6 @@ find_path(
 	PATHS "${CMAKE_CURRENT_LIST_DIR}/thirdparty/jitify"
 )
 
-# nvidia_helper_math doesn't require any extra configuration, so just set the path 
-set(NVIDIAMathDir ${CMAKE_CURRENT_LIST_DIR}/thirdparty/nvidia_helper_math)
-
 # Let the user decide if they want to use ChPF
 option(USE_CHPF "Toggle the use of ChPF for outputting" OFF)
 
@@ -79,6 +76,13 @@ if(USE_CHPF)
     endif()
 endif()
 
+# Let the user decide if they want to use managed arrays, rather than default cudaMalloc and cudaMallocHost memory.
+# Note that turning this on gives no performance benefits, and it's considered legacy.
+set(USE_MANAGED_ARRAYS_DESC
+    "Toggle using managed CUDA arrays, rather than manually controlled CUDA host and device memory, to store all working data. "
+	"Note switching it on makes this project only operable on a Linux platform (excluding WSL)."
+)
+option(USE_MANAGED_ARRAYS "${USE_MANAGED_ARRAYS_DESC}" OFF)
 
 # ---------------------------------------------------------------------------- #
 # Global Configuration
@@ -173,6 +177,11 @@ else()
 		PUBLIC CUDA::cuda_driver
 		PUBLIC DEMERuntimeDataHelper
 	)
+endif()
+
+# If use managed arrays, define a macro
+if(USE_MANAGED_ARRAYS)
+	target_compile_definitions(simulator_multi_gpu PUBLIC DEME_USE_MANAGED_ARRAYS)
 endif()
 
 # Specific to Windows...

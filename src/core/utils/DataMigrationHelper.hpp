@@ -193,6 +193,7 @@ class DualStruct : private NonCopyable {
     T* getHostPointer() { return host_data; }
 };
 
+#ifndef DEME_USE_MANAGED_ARRAYS
 // CPU--GPU unified array, leveraging pinned memory
 template <typename T>
 class DualArray : private NonCopyable {
@@ -476,6 +477,180 @@ class DualArray : private NonCopyable {
             *m_device_mem_counter += delta;
     }
 };
+#else
+// CPU--GPU unified array, leveraging managed memory
+template <typename T>
+class DualArray : private NonCopyable {
+  public:
+    using ManagedVector = std::vector<T, ManagedAllocator<T>>;
+
+    explicit DualArray(size_t* host_external_counter = nullptr, size_t* device_external_counter = nullptr)
+        : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {
+        ensureHostVector();
+    }
+
+    DualArray(size_t n, size_t* host_external_counter = nullptr, size_t* device_external_counter = nullptr)
+        : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {
+        resize(n);
+    }
+
+    DualArray(size_t n, T val, size_t* host_external_counter = nullptr, size_t* device_external_counter = nullptr)
+        : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {
+        resize(n, val);
+    }
+
+    ~DualArray() { free(); }
+
+    void resize(size_t n) {
+        assert(m_host_vec_ptr == m_pinned_vec.get() && "resize() requires internal host ownership");
+        resizeHost(n);
+        resizeDevice(n);
+    }
+
+    // This resize flavor fills host values only!
+    void resize(size_t n, const T& val) {
+        assert(m_host_vec_ptr == m_pinned_vec.get() && "resize() requires internal host ownership");
+        resizeHost(n, val);
+        resizeDevice(n);
+    }
+
+    void resizeHost(size_t n) {
+        ensureHostVector();  // allocates pinned vec if null
+        size_t old_bytes = m_host_vec_ptr->size() * sizeof(T);
+        m_host_vec_ptr->resize(n);
+        size_t new_bytes = m_host_vec_ptr->size() * sizeof(T);
+        updateMemCounter(static_cast<ssize_t>(new_bytes) - static_cast<ssize_t>(old_bytes));
+        updateBoundDevicePointer();
+    }
+
+    void resizeHost(size_t n, const T& val) {
+        ensureHostVector();  // allocates pinned vec if null
+        size_t old_bytes = m_host_vec_ptr->size() * sizeof(T);
+        m_host_vec_ptr->resize(n, val);
+        size_t new_bytes = m_host_vec_ptr->size() * sizeof(T);
+        updateMemCounter(static_cast<ssize_t>(new_bytes) - static_cast<ssize_t>(old_bytes));
+        updateBoundDevicePointer();
+    }
+
+    // m_device_capacity is allocated memory, not array usable data range
+    void resizeDevice(size_t n, bool allow_shrink = false) {}
+
+    void freeHost() {
+        if (m_host_vec_ptr) {
+            updateMemCounter(-(ssize_t)(m_host_vec_ptr->size() * sizeof(T)));
+        }
+        m_pinned_vec.reset();
+        m_host_vec_ptr = nullptr;
+        updateBoundDevicePointer();
+    }
+
+    void freeDevice() {}
+
+    void free() {
+        freeDevice();
+        freeHost();
+    }
+
+    void toDevice() {}
+
+    void toDevice(size_t start, size_t n) {}
+
+    void toDeviceAsync(cudaStream_t& stream) {}
+
+    void toDeviceAsync(cudaStream_t& stream, size_t start, size_t n) {}
+
+    void toHost() {}
+
+    void toHost(size_t start, size_t n) {}
+
+    void toHostAsync(cudaStream_t& stream) {}
+
+    void toHostAsync(cudaStream_t& stream, size_t start, size_t n) {}
+
+    T getVal(size_t start) { return (*m_host_vec_ptr)[start]; }
+
+    std::vector<T> getVal(size_t start, size_t n) {
+        return std::vector<T>(m_host_vec_ptr->begin() + start, m_host_vec_ptr->begin() + start + n);
+    }
+
+    void setVal(const T& data, size_t start) { (*m_host_vec_ptr)[start] = data; }
+
+    void setVal(const std::vector<T>& data, size_t start, size_t n = 0) {
+        size_t count = (n > 0) ? n : data.size();
+        std::copy(data.begin(), data.begin() + count, m_host_vec_ptr->begin() + start);
+    }
+
+    void setVal(cudaStream_t& stream, const T& data, size_t start) { (*m_host_vec_ptr)[start] = data; }
+
+    void setVal(cudaStream_t& stream, const std::vector<T>& data, size_t start, size_t n = 0) {
+        size_t count = (n > 0) ? n : data.size();
+        std::copy(data.begin(), data.begin() + count, m_host_vec_ptr->begin() + start);
+    }
+
+    void markHostModified() { m_host_dirty = true; }
+    void unmarkHostModified() { m_host_dirty = false; }
+
+    // Array's in-use data range is always stored on host by size()
+    size_t size() const { return m_host_vec_ptr ? m_host_vec_ptr->size() : 0; }
+
+    T* host() { return m_host_vec_ptr ? m_host_vec_ptr->data() : nullptr; }
+
+    T* device() { return host(); }
+
+    // Overloaded operator& for device pointer access
+    T* operator&() const { return host(); }
+
+    // data() returns device data for the ease of packing pointers
+    T* data() { return host(); }
+
+    ManagedVector& getHostVector() { return *m_host_vec_ptr; }
+
+    void bindDevicePointer(T** external_ptr_to_ptr) {
+        m_bound_device_ptr = external_ptr_to_ptr;
+        updateBoundDevicePointer();
+    }
+
+    void unbindDevicePointer() { m_bound_device_ptr = nullptr; }
+
+    void setHostMemoryCounter(size_t* counter) { m_host_mem_counter = counter; }
+    void setDeviceMemoryCounter(size_t* counter) { m_device_mem_counter = counter; }
+    // You can use nullptr to unbind
+
+    T& operator[](size_t i) { return (*m_host_vec_ptr)[i]; }
+    const T& operator[](size_t i) const { return (*m_host_vec_ptr)[i]; }
+    T operator()(size_t i) { return getVal(i); }
+
+  private:
+    std::unique_ptr<ManagedVector> m_pinned_vec = nullptr;
+    ManagedVector* m_host_vec_ptr = nullptr;
+
+    size_t* m_host_mem_counter = nullptr;
+    size_t* m_device_mem_counter = nullptr;
+
+    T** m_bound_device_ptr = nullptr;
+
+    bool m_host_dirty = false;
+
+    void ensureHostVector(size_t n = 0) {
+        if (!m_host_vec_ptr) {
+            m_pinned_vec = std::make_unique<ManagedVector>(n);
+            m_host_vec_ptr = m_pinned_vec.get();
+        }
+    }
+
+    void updateBoundDevicePointer() {
+        if (m_bound_device_ptr)
+            *m_bound_device_ptr = host();
+    }
+
+    void updateMemCounter(ssize_t delta) {
+        if (m_host_mem_counter)
+            *m_host_mem_counter += delta;
+        if (m_device_mem_counter)
+            *m_device_mem_counter += delta;
+    }
+};
+#endif
 
 // Pure device data type, usually used for scratching space
 template <typename T>
@@ -774,177 +949,6 @@ class DualStructPool : public ResourcePool<T, DualStruct<T>> {
         if (it == this->name_to_index.end())
             throw std::runtime_error("Name not found: " + name);
         return this->vectors[it->second]->getDevicePointer();
-    }
-};
-
-// CPU--GPU unified array, leveraging managed memory
-// NOTE: Temporarily not in use, potentially enabled later for Linux platforms only.
-template <typename T>
-class ManagedArray : private NonCopyable {
-  public:
-    using ManagedVector = std::vector<T, ManagedAllocator<T>>;
-
-    explicit ManagedArray(size_t* host_external_counter = nullptr, size_t* device_external_counter = nullptr)
-        : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {
-        ensureHostVector();
-    }
-
-    ManagedArray(size_t n, size_t* host_external_counter = nullptr, size_t* device_external_counter = nullptr)
-        : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {
-        resize(n);
-    }
-
-    ManagedArray(size_t n, T val, size_t* host_external_counter = nullptr, size_t* device_external_counter = nullptr)
-        : m_host_mem_counter(host_external_counter), m_device_mem_counter(device_external_counter) {
-        resize(n, val);
-    }
-
-    ~ManagedArray() { free(); }
-
-    void resize(size_t n) {
-        assert(m_host_vec_ptr == m_pinned_vec.get() && "resize() requires internal host ownership");
-        resizeHost(n);
-        resizeDevice(n);
-    }
-
-    // This resize flavor fills host values only!
-    void resize(size_t n, const T& val) {
-        assert(m_host_vec_ptr == m_pinned_vec.get() && "resize() requires internal host ownership");
-        resizeHost(n, val);
-        resizeDevice(n);
-    }
-
-    void resizeHost(size_t n) {
-        ensureHostVector();  // allocates pinned vec if null
-        size_t old_bytes = m_host_vec_ptr->size() * sizeof(T);
-        m_host_vec_ptr->resize(n);
-        size_t new_bytes = m_host_vec_ptr->size() * sizeof(T);
-        updateMemCounter(static_cast<ssize_t>(new_bytes) - static_cast<ssize_t>(old_bytes));
-        updateBoundDevicePointer();
-    }
-
-    void resizeHost(size_t n, const T& val) {
-        ensureHostVector();  // allocates pinned vec if null
-        size_t old_bytes = m_host_vec_ptr->size() * sizeof(T);
-        m_host_vec_ptr->resize(n, val);
-        size_t new_bytes = m_host_vec_ptr->size() * sizeof(T);
-        updateMemCounter(static_cast<ssize_t>(new_bytes) - static_cast<ssize_t>(old_bytes));
-        updateBoundDevicePointer();
-    }
-
-    // m_device_capacity is allocated memory, not array usable data range
-    void resizeDevice(size_t n, bool allow_shrink = false) {}
-
-    void freeHost() {
-        if (m_host_vec_ptr) {
-            updateMemCounter(-(ssize_t)(m_host_vec_ptr->size() * sizeof(T)));
-        }
-        m_pinned_vec.reset();
-        m_host_vec_ptr = nullptr;
-        updateBoundDevicePointer();
-    }
-
-    void freeDevice() {}
-
-    void free() {
-        freeDevice();
-        freeHost();
-    }
-
-    void toDevice() {}
-
-    void toDevice(size_t start, size_t n) {}
-
-    void toDeviceAsync(cudaStream_t& stream) {}
-
-    void toDeviceAsync(cudaStream_t& stream, size_t start, size_t n) {}
-
-    void toHost() {}
-
-    void toHost(size_t start, size_t n) {}
-
-    void toHostAsync(cudaStream_t& stream) {}
-
-    void toHostAsync(cudaStream_t& stream, size_t start, size_t n) {}
-
-    T getVal(size_t start) { return (*m_host_vec_ptr)[start]; }
-
-    std::vector<T> getVal(size_t start, size_t n) {
-        return std::vector<T>(m_host_vec_ptr->begin() + start, m_host_vec_ptr->begin() + start + n);
-    }
-
-    void setVal(const T& data, size_t start) { (*m_host_vec_ptr)[start] = data; }
-
-    void setVal(const std::vector<T>& data, size_t start, size_t n = 0) {
-        size_t count = (n > 0) ? n : data.size();
-        std::copy(data.begin(), data.begin() + count, m_host_vec_ptr->begin() + start);
-    }
-
-    void setVal(cudaStream_t& stream, const T& data, size_t start) { (*m_host_vec_ptr)[start] = data; }
-
-    void setVal(cudaStream_t& stream, const std::vector<T>& data, size_t start, size_t n = 0) {
-        size_t count = (n > 0) ? n : data.size();
-        std::copy(data.begin(), data.begin() + count, m_host_vec_ptr->begin() + start);
-    }
-
-    void markHostModified() { m_host_dirty = true; }
-    void unmarkHostModified() { m_host_dirty = false; }
-
-    // Array's in-use data range is always stored on host by size()
-    size_t size() const { return m_host_vec_ptr ? m_host_vec_ptr->size() : 0; }
-
-    T* host() { return m_host_vec_ptr ? m_host_vec_ptr->data() : nullptr; }
-
-    T* device() { return host(); }
-
-    // data() returns device data for the ease of packing pointers
-    T* data() { return host(); }
-
-    ManagedVector& getHostVector() { return *m_host_vec_ptr; }
-
-    void bindDevicePointer(T** external_ptr_to_ptr) {
-        m_bound_device_ptr = external_ptr_to_ptr;
-        updateBoundDevicePointer();
-    }
-
-    void unbindDevicePointer() { m_bound_device_ptr = nullptr; }
-
-    void setHostMemoryCounter(size_t* counter) { m_host_mem_counter = counter; }
-    void setDeviceMemoryCounter(size_t* counter) { m_device_mem_counter = counter; }
-    // You can use nullptr to unbind
-
-    T& operator[](size_t i) { return (*m_host_vec_ptr)[i]; }
-    const T& operator[](size_t i) const { return (*m_host_vec_ptr)[i]; }
-    T operator()(size_t i) { return getVal(i); }
-
-  private:
-    std::unique_ptr<ManagedVector> m_pinned_vec = nullptr;
-    ManagedVector* m_host_vec_ptr = nullptr;
-
-    size_t* m_host_mem_counter = nullptr;
-    size_t* m_device_mem_counter = nullptr;
-
-    T** m_bound_device_ptr = nullptr;
-
-    bool m_host_dirty = false;
-
-    void ensureHostVector(size_t n = 0) {
-        if (!m_host_vec_ptr) {
-            m_pinned_vec = std::make_unique<ManagedVector>(n);
-            m_host_vec_ptr = m_pinned_vec.get();
-        }
-    }
-
-    void updateBoundDevicePointer() {
-        if (m_bound_device_ptr)
-            *m_bound_device_ptr = host();
-    }
-
-    void updateMemCounter(ssize_t delta) {
-        if (m_host_mem_counter)
-            *m_host_mem_counter += delta;
-        if (m_device_mem_counter)
-            *m_device_mem_counter += delta;
     }
 };
 

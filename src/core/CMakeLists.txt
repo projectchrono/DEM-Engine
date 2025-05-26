@@ -28,7 +28,6 @@ target_include_directories(
 	core
 	PUBLIC $<BUILD_INTERFACE:${ProjectIncludeSource}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 	PUBLIC $<BUILD_INTERFACE:${ProjectIncludeGenerated}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-	PUBLIC $<BUILD_INTERFACE:${NVIDIAMathDir}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
 
@@ -100,10 +99,6 @@ install(
 )
 
 # Install Third-party Headers 
-install(
-	DIRECTORY ${NVIDIAMathDir}/nvmath
-		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
 install(
 	FILES 
 		"${NVIDIAJitifyPath}/jitify.hpp"

@@ -15,7 +15,6 @@ target_include_directories(
 	algorithms	
 	PUBLIC ${ProjectIncludeSource}
 	PUBLIC ${ProjectIncludeGenerated}
-	PUBLIC ${NVIDIAMathDir}
 )
 
 target_link_libraries(

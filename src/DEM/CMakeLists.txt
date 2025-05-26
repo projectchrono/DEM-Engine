@@ -11,7 +11,6 @@ target_include_directories(
 	DEM
 	PUBLIC ${ProjectIncludeSource}
 	PUBLIC ${ProjectIncludeGenerated}
-	PUBLIC ${NVIDIAMathDir}
 )
 
 if(USE_CHPF)
