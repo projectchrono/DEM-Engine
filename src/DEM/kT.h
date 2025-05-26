@@ -372,6 +372,9 @@ class DEMKinematicThread {
     // Jitify kT kernels (at initialization) based on existing knowledge of this run
     void jitifyKernels(const std::unordered_map<std::string, std::string>& Subs);
 
+    /// Set this owner's family number, for n consecutive items.
+    void setOwnerFamily(bodyID_t ownerID, family_t fam, bodyID_t n = 1);
+
     /// Rewrite the relative positions of the flattened triangle soup, starting from `start', using triangle nodal
     /// positions in `triangles'.
     void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles);

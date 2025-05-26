@@ -626,7 +626,7 @@ size_t DEMTracker::GetContactForcesAndGlobalTorqueForAll(std::vector<std::vector
 }
 
 void DEMTracker::AddAcc(float3 acc, size_t offset) {
-    sys->AddOwnerNextStepAcc(obj->ownerID + offset, acc);
+    sys->AddOwnerNextStepAcc(obj->ownerID + offset, {acc});
 }
 void DEMTracker::AddAcc(const std::vector<float>& acc, size_t offset) {
     assertThreeElements(acc, "AddAcc", "acc");
@@ -634,7 +634,7 @@ void DEMTracker::AddAcc(const std::vector<float>& acc, size_t offset) {
 }
 
 void DEMTracker::AddAngAcc(float3 angAcc, size_t offset) {
-    sys->AddOwnerNextStepAngAcc(obj->ownerID + offset, angAcc);
+    sys->AddOwnerNextStepAngAcc(obj->ownerID + offset, {angAcc});
 }
 void DEMTracker::AddAngAcc(const std::vector<float>& angAcc, size_t offset) {
     assertThreeElements(angAcc, "AddAngAcc", "angAcc");
@@ -642,7 +642,7 @@ void DEMTracker::AddAngAcc(const std::vector<float>& angAcc, size_t offset) {
 }
 
 void DEMTracker::SetPos(float3 pos, size_t offset) {
-    sys->SetOwnerPosition(obj->ownerID + offset, pos);
+    sys->SetOwnerPosition(obj->ownerID + offset, {pos});
 }
 void DEMTracker::SetPos(const std::vector<float>& pos, size_t offset) {
     assertThreeElements(pos, "SetPos", "pos");
@@ -650,7 +650,7 @@ void DEMTracker::SetPos(const std::vector<float>& pos, size_t offset) {
 }
 
 void DEMTracker::SetAngVel(float3 angVel, size_t offset) {
-    sys->SetOwnerAngVel(obj->ownerID + offset, angVel);
+    sys->SetOwnerAngVel(obj->ownerID + offset, {angVel});
 }
 void DEMTracker::SetAngVel(const std::vector<float>& angVel, size_t offset) {
     assertThreeElements(angVel, "SetAngVel", "angVel");
@@ -658,7 +658,7 @@ void DEMTracker::SetAngVel(const std::vector<float>& angVel, size_t offset) {
 }
 
 void DEMTracker::SetVel(float3 vel, size_t offset) {
-    sys->SetOwnerVelocity(obj->ownerID + offset, vel);
+    sys->SetOwnerVelocity(obj->ownerID + offset, {vel});
 }
 void DEMTracker::SetVel(const std::vector<float>& vel, size_t offset) {
     assertThreeElements(vel, "SetVel", "vel");
@@ -666,27 +666,20 @@ void DEMTracker::SetVel(const std::vector<float>& vel, size_t offset) {
 }
 
 void DEMTracker::SetOriQ(float4 oriQ, size_t offset) {
-    sys->SetOwnerOriQ(obj->ownerID + offset, oriQ);
+    sys->SetOwnerOriQ(obj->ownerID + offset, {oriQ});
 }
 void DEMTracker::SetOriQ(const std::vector<float>& oriQ, size_t offset) {
     assertFourElements(oriQ, "SetOriQ", "oriQ");
     SetOriQ(make_float4(oriQ[0], oriQ[1], oriQ[2], oriQ[3]), offset);
 }
 
-void DEMTracker::SetFamily(const std::vector<unsigned int>& fam_nums) {
-    assertOwnerSize(fam_nums.size(), "SetFamily");
-    for (size_t i = 0; i < fam_nums.size(); i++) {
-        sys->SetOwnerFamily(obj->ownerID + i, fam_nums[i]);
-    }
-}
 void DEMTracker::SetFamily(unsigned int fam_num) {
-    for (size_t i = 0; i < obj->nSpanOwners; i++) {
-        sys->SetOwnerFamily(obj->ownerID + i, fam_num);
-    }
+    sys->SetOwnerFamily(obj->ownerID, fam_num, obj->nSpanOwners);
 }
 void DEMTracker::SetFamily(unsigned int fam_num, size_t offset) {
     sys->SetOwnerFamily(obj->ownerID + offset, fam_num);
 }
+
 void DEMTracker::ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {
     std::vector<bodyID_t> offsetted_IDs(IDs);
     size_t offset = obj->ownerID;

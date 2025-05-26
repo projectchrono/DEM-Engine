@@ -540,27 +540,31 @@ std::vector<float3> DEMSolver::GetOwnerMOI(bodyID_t ownerID, bodyID_t n) const {
     return res;
 }
 
-void DEMSolver::AddOwnerNextStepAcc(bodyID_t ownerID, float3 acc) {
+void DEMSolver::AddOwnerNextStepAcc(bodyID_t ownerID, const std::vector<float3>& acc) {
     dT->addOwnerNextStepAcc(ownerID, acc);
 }
-void DEMSolver::AddOwnerNextStepAngAcc(bodyID_t ownerID, float3 angAcc) {
+void DEMSolver::AddOwnerNextStepAngAcc(bodyID_t ownerID, const std::vector<float3>& angAcc) {
     dT->addOwnerNextStepAngAcc(ownerID, angAcc);
 }
-void DEMSolver::SetOwnerPosition(bodyID_t ownerID, float3 pos) {
+void DEMSolver::SetOwnerPosition(bodyID_t ownerID, const std::vector<float3>& pos) {
     dT->setOwnerPos(ownerID, pos);
 }
-void DEMSolver::SetOwnerAngVel(bodyID_t ownerID, float3 angVel) {
+void DEMSolver::SetOwnerAngVel(bodyID_t ownerID, const std::vector<float3>& angVel) {
     dT->setOwnerAngVel(ownerID, angVel);
 }
-void DEMSolver::SetOwnerVelocity(bodyID_t ownerID, float3 vel) {
+void DEMSolver::SetOwnerVelocity(bodyID_t ownerID, const std::vector<float3>& vel) {
     dT->setOwnerVel(ownerID, vel);
 }
-void DEMSolver::SetOwnerOriQ(bodyID_t ownerID, float4 oriQ) {
+void DEMSolver::SetOwnerOriQ(bodyID_t ownerID, const std::vector<float4>& oriQ) {
     dT->setOwnerOriQ(ownerID, oriQ);
 }
-void DEMSolver::SetOwnerFamily(bodyID_t ownerID, family_t fam) {
-    kT->familyID.setVal(kT->streamInfo.stream, fam, ownerID);
-    dT->familyID.setVal(dT->streamInfo.stream, fam, ownerID);
+void DEMSolver::SetOwnerFamily(bodyID_t ownerID, unsigned int fam, bodyID_t n) {
+    if (fam > std::numeric_limits<family_t>::max()) {
+        DEME_ERROR("You called SetOwnerFamily with family number %u, but family number should not be larger than %u.",
+                   fam, std::numeric_limits<family_t>::max());
+    }
+    kT->setOwnerFamily(ownerID, static_cast<family_t>(fam), n);
+    dT->setOwnerFamily(ownerID, static_cast<family_t>(fam), n);
 }
 
 void DEMSolver::SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& new_nodes) {
@@ -582,7 +586,7 @@ void DEMSolver::SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<f
     dT->setTriNodeRelPos(triID, new_triangles);
     dT->solverFlags.willMeshDeform = true;
 
-    // kT just received update from dT, to avoid mem hazards
+    // kT just receives update from dT, to avoid mem hazards
     // kT->setTriNodeRelPos(triID, new_triangles);
 }
 void DEMSolver::UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& updates) {
@@ -602,10 +606,11 @@ void DEMSolver::UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vecto
     for (size_t i = 0; i < mesh->GetNumTriangles(); i++) {
         new_triangles[i] = mesh->GetTriangle(i);
     }
+    // This is correct to use setTriNodeRelPos, as mesh is already modified in this method
     dT->setTriNodeRelPos(triID, new_triangles);
     dT->solverFlags.willMeshDeform = true;
 
-    // kT just received update from dT, to avoid mem hazards
+    // kT just receives update from dT, to avoid mem hazards
     // kT->setTriNodeRelPos(triID, new_triangles);
 }
 std::shared_ptr<DEMMeshConnected>& DEMSolver::GetCachedMesh(bodyID_t ownerID) {

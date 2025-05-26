@@ -377,14 +377,22 @@ class DEMDynamicThread {
     // Get the current auto-adjusted update freq.
     float getUpdateFreq() const;
 
-    /// Set this owner's position in user unit
-    void setOwnerPos(bodyID_t ownerID, float3 pos);
-    /// Set this owner's angular velocity
-    void setOwnerAngVel(bodyID_t ownerID, float3 angVel);
-    /// Set this owner's quaternion
-    void setOwnerOriQ(bodyID_t ownerID, float4 oriQ);
-    /// Set this owner's velocity
-    void setOwnerVel(bodyID_t ownerID, float3 vel);
+    /// Set consecutive owners' position in user unit.
+    void setOwnerPos(bodyID_t ownerID, const std::vector<float3>& pos);
+    /// Set consecutive owners's angular velocity.
+    void setOwnerAngVel(bodyID_t ownerID, const std::vector<float3>& angVel);
+    /// Set consecutive owners' quaternion.
+    void setOwnerOriQ(bodyID_t ownerID, const std::vector<float4>& oriQ);
+    /// Set consecutive owners' velocity.
+    void setOwnerVel(bodyID_t ownerID, const std::vector<float3>& vel);
+    /// Set consecutive owners' family number, for n consecutive items.
+    void setOwnerFamily(bodyID_t ownerID, family_t fam, bodyID_t n = 1);
+
+    /// @brief Add an extra acceleration to consecutive owners for the next time step.
+    void addOwnerNextStepAcc(bodyID_t ownerID, const std::vector<float3>& acc);
+    /// @brief Add an extra angular acceleration to consecutive owners for the next time step.
+    void addOwnerNextStepAngAcc(bodyID_t ownerID, const std::vector<float3>& angAcc);
+
     /// Rewrite the relative positions of the flattened triangle soup, starting from `start', using triangle nodal
     /// positions in `triangles'.
     void setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles);
@@ -408,11 +416,6 @@ class DEMDynamicThread {
     void setSphWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
     /// @brief Set the geometry wildcards of analytical components, starting from geoID, for the length of vals.
     void setAnalWildcardValue(bodyID_t geoID, unsigned int wc_num, const std::vector<float>& vals);
-
-    /// @brief Add an extra acceleration to a owner for the next time step.
-    void addOwnerNextStepAcc(bodyID_t ownerID, float3 acc);
-    /// @brief Add an extra angular acceleration to a owner for the next time step.
-    void addOwnerNextStepAngAcc(bodyID_t ownerID, float3 angAcc);
 
     /// @brief Returns the wildacard value of this owner, for n consecutive items.
     std::vector<float> getOwnerWildcardValue(bodyID_t ID, unsigned int wc_num, bodyID_t n = 1);

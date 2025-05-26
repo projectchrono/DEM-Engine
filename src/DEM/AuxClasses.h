@@ -243,7 +243,6 @@ class DEMTracker {
     /// @brief Set the quaternion which represents the orientation of this tracked object's coordinate system.
     void SetOriQ(float4 oriQ, size_t offset = 0);
     void SetOriQ(const std::vector<float>& oriQ, size_t offset = 0);
-
     /// Add an extra acc to the tracked body, for the next time step. Note if the user intends to add a persistent
     /// external force, then using family prescription is the better method.
     void AddAcc(float3 acc, size_t offset = 0);
@@ -252,18 +251,16 @@ class DEMTracker {
     /// persistent external torque, then using family prescription is the better method.
     void AddAngAcc(float3 angAcc, size_t offset = 0);
     void AddAngAcc(const std::vector<float>& angAcc, size_t offset = 0);
-    /// Change the size of clump entities
-    void ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors);
     /// @brief Change the family numbers of all the entities tracked by this tracker.
     /// @param fam_num Family number to change to.
     void SetFamily(unsigned int fam_num);
-    /// @brief Change the family numbers of all the entities tracked by this tracker.
-    /// @param fam_nums The family numbers to change to for each entity.
-    void SetFamily(const std::vector<unsigned int>& fam_nums);
     /// @brief Change the family number of one entities tracked by this tracker.
     /// @param fam_num Family number to change to.
     /// @param offset The offset to this entites. If first entites, input 0.
     void SetFamily(unsigned int fam_num, size_t offset);
+
+    /// Change the size of clump entities
+    void ChangeClumpSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors);
 
     /// @brief Apply the new mesh node positions such that the tracked mesh is replaced by the new_nodes.
     /// @details This affects triangle facets' relative positions wrt the mesh center (CoM) only; mesh's overall

@@ -446,18 +446,35 @@ class DEMSolver {
     /// @return The moment of inertia (in principal axis frame).
     std::vector<float3> GetOwnerMOI(bodyID_t ownerID, bodyID_t n = 1) const;
 
-    /// Set position of a owner
-    void SetOwnerPosition(bodyID_t ownerID, float3 pos);
-    /// Set angular velocity of a owner
-    void SetOwnerAngVel(bodyID_t ownerID, float3 angVel);
-    /// Set velocity of a owner
-    void SetOwnerVelocity(bodyID_t ownerID, float3 vel);
-    /// Set quaternion of a owner
-    void SetOwnerOriQ(bodyID_t ownerID, float4 oriQ);
-    /// @brief Set the family number of a owner.
-    /// @param ownerID The ID (offset) of the owner.
+    /// @brief Set position of consecutive owners starting from ownerID, based on input position vector. N (the size of
+    /// the input vector) elements will be modified.
+    void SetOwnerPosition(bodyID_t ownerID, const std::vector<float3>& pos);
+    /// Set angular velocity of consecutive owners starting from ownerID, based on input angular velocity vector. N (the
+    /// size of the input vector) elements will be modified.
+    void SetOwnerAngVel(bodyID_t ownerID, const std::vector<float3>& angVel);
+    /// Set velocity of consecutive owners starting from ownerID, based on input velocity vector. N (the size of the
+    /// input vector) elements will be modified.
+    void SetOwnerVelocity(bodyID_t ownerID, const std::vector<float3>& vel);
+    /// Set quaternion of consecutive owners starting from ownerID, based on input quaternion vector. N (the size of the
+    /// input vector) elements will be modified.
+    void SetOwnerOriQ(bodyID_t ownerID, const std::vector<float4>& oriQ);
+    /// @brief Set the family number of consecutive owners.
+    /// @param ownerID The ID of the owner.
     /// @param fam Family number.
-    void SetOwnerFamily(bodyID_t ownerID, family_t fam);
+    /// @param n Number of consecutive owners.
+    void SetOwnerFamily(bodyID_t ownerID, unsigned int fam, bodyID_t n = 1);
+
+    /// @brief Add an extra accelerations to consecutive owners for the next time step.
+    /// @param ownerID The number of the starting owner.
+    /// @param acc The extra acceleration to add. N (the size of this vector) elements will be modified based on its
+    /// values.
+    void AddOwnerNextStepAcc(bodyID_t ownerID, const std::vector<float3>& acc);
+    /// @brief Add an extra angular accelerations to consecutive owners for the next time step.
+    /// @param ownerID The number of the starting owner.
+    /// @param acc The extra angular acceleration to add. N (the size of this vector) elements will be modified based on
+    /// its values.
+    void AddOwnerNextStepAngAcc(bodyID_t ownerID, const std::vector<float3>& angAcc);
+
     /// @brief Rewrite the relative positions of the flattened triangle soup.
     void SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& new_nodes);
     /// @brief Update the relative positions of the flattened triangle soup.
@@ -595,15 +612,6 @@ class DEMSolver {
     /// Create a inspector object that can help query some statistical info of the clumps in the simulation
     std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity = "clump_max_z");
     std::shared_ptr<DEMInspector> CreateInspector(const std::string& quantity, const std::string& region);
-
-    /// @brief Add an extra acceleration to a owner for the next time step.
-    /// @param ownerID The number of that owner.
-    /// @param acc The extra acceleration to add.
-    void AddOwnerNextStepAcc(bodyID_t ownerID, float3 acc);
-    /// @brief Add an extra angular acceleration to a owner for the next time step.
-    /// @param ownerID The number of that owner.
-    /// @param acc The extra angular acceleration to add.
-    void AddOwnerNextStepAngAcc(bodyID_t ownerID, float3 angAcc);
 
     /// Instruct the solver that the 2 input families should not have contacts (a.k.a. ignored, if such a pair is
     /// encountered in contact detection). These 2 families can be the same (which means no contact within members of

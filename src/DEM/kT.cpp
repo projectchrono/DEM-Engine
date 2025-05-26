@@ -921,6 +921,10 @@ void DEMKinematicThread::deallocateEverything() {
     // Device and dual array will have their destructor called once kT is gone, so this is not needed
 }
 
+void DEMKinematicThread::setOwnerFamily(bodyID_t ownerID, family_t fam, bodyID_t n) {
+    familyID.setVal(std::vector<family_t>(n, fam), ownerID);
+}
+
 void DEMKinematicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles) {
     for (size_t i = 0; i < triangles.size(); i++) {
         relPosNode1[start + i] = triangles[i].p1;
@@ -933,6 +937,7 @@ void DEMKinematicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTri
     syncMemoryTransfer();
 }
 
+// It's true that this method is never used in either kT or dT
 void DEMKinematicThread::updateTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& updates) {
     for (size_t i = 0; i < updates.size(); i++) {
         relPosNode1[start + i] += updates[i].p1;

@@ -2992,39 +2992,51 @@ std::vector<unsigned int> DEMDynamicThread::getOwnerFamily(bodyID_t ownerID, bod
     return fam;
 }
 
-void DEMDynamicThread::setOwnerAngVel(bodyID_t ownerID, float3 angVel) {
-    omgBarX.setVal(streamInfo.stream, angVel.x, ownerID);
-    omgBarY.setVal(streamInfo.stream, angVel.y, ownerID);
-    omgBarZ.setVal(streamInfo.stream, angVel.z, ownerID);
+void DEMDynamicThread::setOwnerAngVel(bodyID_t ownerID, const std::vector<float3>& angVel) {
+    omgBarX.setVal(streamInfo.stream, RealTupleVectorToXComponentVector<float, float3>(angVel), ownerID);
+    omgBarY.setVal(streamInfo.stream, RealTupleVectorToYComponentVector<float, float3>(angVel), ownerID);
+    omgBarZ.setVal(streamInfo.stream, RealTupleVectorToZComponentVector<float, float3>(angVel), ownerID);
+    syncMemoryTransfer();
 }
 
-void DEMDynamicThread::setOwnerPos(bodyID_t ownerID, float3 pos) {
-    // Convert to relative pos wrt LBF point first
-    double X, Y, Z;
-    X = pos.x - simParams->LBFX;
-    Y = pos.y - simParams->LBFY;
-    Z = pos.z - simParams->LBFZ;
-    voxelID_t vID;
-    subVoxelPos_t subIDx, subIDy, subIDz;
-    positionToVoxelID<voxelID_t, subVoxelPos_t, double>(vID, subIDx, subIDy, subIDz, X, Y, Z, simParams->nvXp2,
-                                                        simParams->nvYp2, simParams->voxelSize, simParams->l);
+void DEMDynamicThread::setOwnerPos(bodyID_t ownerID, const std::vector<float3>& pos) {
+    std::vector<voxelID_t> vID(pos.size());
+    std::vector<subVoxelPos_t> subIDx(pos.size()), subIDy(pos.size()), subIDz(pos.size());
+
+    for (size_t i = 0; i < pos.size(); i++) {
+        // Convert to relative pos wrt LBF point first
+        double X = pos[i].x - simParams->LBFX;
+        double Y = pos[i].y - simParams->LBFY;
+        double Z = pos[i].z - simParams->LBFZ;
+        positionToVoxelID<voxelID_t, subVoxelPos_t, double>(vID[i], subIDx[i], subIDy[i], subIDz[i], X, Y, Z,
+                                                            simParams->nvXp2, simParams->nvYp2, simParams->voxelSize,
+                                                            simParams->l);
+    }
+
     voxelID.setVal(streamInfo.stream, vID, ownerID);
     locX.setVal(streamInfo.stream, subIDx, ownerID);
     locY.setVal(streamInfo.stream, subIDy, ownerID);
     locZ.setVal(streamInfo.stream, subIDz, ownerID);
+    syncMemoryTransfer();
 }
 
-void DEMDynamicThread::setOwnerOriQ(bodyID_t ownerID, float4 oriQ) {
-    oriQw.setVal(streamInfo.stream, oriQ.w, ownerID);
-    oriQx.setVal(streamInfo.stream, oriQ.x, ownerID);
-    oriQy.setVal(streamInfo.stream, oriQ.y, ownerID);
-    oriQz.setVal(streamInfo.stream, oriQ.z, ownerID);
+void DEMDynamicThread::setOwnerOriQ(bodyID_t ownerID, const std::vector<float4>& oriQ) {
+    oriQw.setVal(streamInfo.stream, RealTupleVectorToWComponentVector<float, float4>(oriQ), ownerID);
+    oriQx.setVal(streamInfo.stream, RealTupleVectorToXComponentVector<float, float4>(oriQ), ownerID);
+    oriQy.setVal(streamInfo.stream, RealTupleVectorToYComponentVector<float, float4>(oriQ), ownerID);
+    oriQz.setVal(streamInfo.stream, RealTupleVectorToZComponentVector<float, float4>(oriQ), ownerID);
+    syncMemoryTransfer();
 }
 
-void DEMDynamicThread::setOwnerVel(bodyID_t ownerID, float3 vel) {
-    vX.setVal(streamInfo.stream, vel.x, ownerID);
-    vY.setVal(streamInfo.stream, vel.y, ownerID);
-    vZ.setVal(streamInfo.stream, vel.z, ownerID);
+void DEMDynamicThread::setOwnerVel(bodyID_t ownerID, const std::vector<float3>& vel) {
+    vX.setVal(streamInfo.stream, RealTupleVectorToXComponentVector<float, float3>(vel), ownerID);
+    vY.setVal(streamInfo.stream, RealTupleVectorToYComponentVector<float, float3>(vel), ownerID);
+    vZ.setVal(streamInfo.stream, RealTupleVectorToZComponentVector<float, float3>(vel), ownerID);
+    syncMemoryTransfer();
+}
+
+void DEMDynamicThread::setOwnerFamily(bodyID_t ownerID, family_t fam, bodyID_t n) {
+    familyID.setVal(std::vector<family_t>(n, fam), ownerID);
 }
 
 void DEMDynamicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles) {
@@ -3039,6 +3051,7 @@ void DEMDynamicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTrian
     syncMemoryTransfer();
 }
 
+// It's true that this method is never used in either kT or dT
 void DEMDynamicThread::updateTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& updates) {
     for (size_t i = 0; i < updates.size(); i++) {
         relPosNode1[start + i] += updates[i].p1;
@@ -3051,18 +3064,20 @@ void DEMDynamicThread::updateTriNodeRelPos(size_t start, const std::vector<DEMTr
     syncMemoryTransfer();
 }
 
-void DEMDynamicThread::addOwnerNextStepAcc(bodyID_t ownerID, float3 acc) {
-    accSpecified.setVal(streamInfo.stream, 1, ownerID);
-    aX.setVal(streamInfo.stream, acc.x, ownerID);
-    aY.setVal(streamInfo.stream, acc.y, ownerID);
-    aZ.setVal(streamInfo.stream, acc.z, ownerID);
+void DEMDynamicThread::addOwnerNextStepAcc(bodyID_t ownerID, const std::vector<float3>& acc) {
+    accSpecified.setVal(streamInfo.stream, std::vector<notStupidBool_t>(acc.size(), 1), ownerID);
+    aX.setVal(streamInfo.stream, RealTupleVectorToXComponentVector<float, float3>(acc), ownerID);
+    aY.setVal(streamInfo.stream, RealTupleVectorToYComponentVector<float, float3>(acc), ownerID);
+    aZ.setVal(streamInfo.stream, RealTupleVectorToZComponentVector<float, float3>(acc), ownerID);
+    syncMemoryTransfer();
 }
 
-void DEMDynamicThread::addOwnerNextStepAngAcc(bodyID_t ownerID, float3 angAcc) {
-    angAccSpecified.setVal(streamInfo.stream, 1, ownerID);
-    alphaX.setVal(streamInfo.stream, angAcc.x, ownerID);
-    alphaY.setVal(streamInfo.stream, angAcc.y, ownerID);
-    alphaZ.setVal(streamInfo.stream, angAcc.z, ownerID);
+void DEMDynamicThread::addOwnerNextStepAngAcc(bodyID_t ownerID, const std::vector<float3>& angAcc) {
+    angAccSpecified.setVal(streamInfo.stream, std::vector<notStupidBool_t>(angAcc.size(), 1), ownerID);
+    alphaX.setVal(streamInfo.stream, RealTupleVectorToXComponentVector<float, float3>(angAcc), ownerID);
+    alphaY.setVal(streamInfo.stream, RealTupleVectorToYComponentVector<float, float3>(angAcc), ownerID);
+    alphaZ.setVal(streamInfo.stream, RealTupleVectorToZComponentVector<float, float3>(angAcc), ownerID);
+    syncMemoryTransfer();
 }
 
 }  // namespace deme
