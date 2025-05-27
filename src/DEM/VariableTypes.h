@@ -8,9 +8,12 @@
 
 namespace deme {
 
-#if defined(_WIN32) || defined(_WIN64)
-    #include <basetsd.h>
-typedef SSIZE_T ssize_t;
+// static_assert(sizeof(size_t) >= sizeof(unsigned long long), "This code should be compiled on 64-bit systems!");
+
+#if defined(_WIN64)
+typedef long long ssize_t;
+#elif defined(_WIN32)
+typedef long ssize_t;
 #endif
 
 typedef uint16_t subVoxelPos_t;  ///< uint16 or uint32

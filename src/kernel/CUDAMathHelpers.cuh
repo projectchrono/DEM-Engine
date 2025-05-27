@@ -39,6 +39,12 @@
 #ifndef HELPER_MATH_H
 #define HELPER_MATH_H
 
+#if defined(_WIN32) || defined(_WIN64)
+    #undef max
+    #undef min
+    #undef strtok_r
+#endif
+
 #include "cuda_runtime.h"
 
 #ifndef EXIT_WAIVED
