@@ -11,8 +11,6 @@
 
 namespace deme {
 
-static_assert(sizeof(size_t) >= sizeof(unsigned long long), "This code should be compiled on 64-bit systems!");
-
 __global__ void getContactForcesConcerningOwners_impl(float3* d_points,
                                                       float3* d_forces,
                                                       float3* d_torques,
