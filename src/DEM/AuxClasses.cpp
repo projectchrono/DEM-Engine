@@ -550,30 +550,12 @@ size_t DEMTracker::GetContactForces(std::vector<float3>& points, std::vector<flo
     forces.clear();
     return sys->GetOwnerContactForces({obj->ownerID + (bodyID_t)offset}, points, forces);
 }
-size_t DEMTracker::GetContactForces(std::vector<std::vector<float>>& points,
-                                    std::vector<std::vector<float>>& forces,
-                                    size_t offset) {
-    std::vector<float3> float3_points, float3_forces;
-    size_t nPairs = GetContactForces(float3_points, float3_forces, offset);
 
-    points = Real3VectorToVecOfVec<float, float3>(float3_points);
-    forces = Real3VectorToVecOfVec<float, float3>(float3_forces);
-    return nPairs;
-}
 size_t DEMTracker::GetContactForcesForAll(std::vector<float3>& points, std::vector<float3>& forces) {
     assertThereIsForcePairs("GetContactForcesForAll");
     points.clear();
     forces.clear();
     return sys->GetOwnerContactForces(GetOwnerIDs(), points, forces);
-}
-size_t DEMTracker::GetContactForcesForAll(std::vector<std::vector<float>>& points,
-                                          std::vector<std::vector<float>>& forces) {
-    std::vector<float3> float3_points, float3_forces;
-    size_t nPairs = GetContactForcesForAll(float3_points, float3_forces);
-
-    points = Real3VectorToVecOfVec<float, float3>(float3_points);
-    forces = Real3VectorToVecOfVec<float, float3>(float3_forces);
-    return nPairs;
 }
 
 size_t DEMTracker::GetContactForcesAndLocalTorque(std::vector<float3>& points,
@@ -587,18 +569,7 @@ size_t DEMTracker::GetContactForcesAndLocalTorque(std::vector<float3>& points,
     torques.clear();
     return sys->GetOwnerContactForces({obj->ownerID + (bodyID_t)offset}, points, forces, torques, true);
 }
-size_t DEMTracker::GetContactForcesAndLocalTorque(std::vector<std::vector<float>>& points,
-                                                  std::vector<std::vector<float>>& forces,
-                                                  std::vector<std::vector<float>>& torques,
-                                                  size_t offset) {
-    std::vector<float3> float3_points, float3_forces, float3_torques;
-    size_t nPairs = GetContactForcesAndLocalTorque(float3_points, float3_forces, float3_torques, offset);
 
-    points = Real3VectorToVecOfVec<float, float3>(float3_points);
-    forces = Real3VectorToVecOfVec<float, float3>(float3_forces);
-    torques = Real3VectorToVecOfVec<float, float3>(float3_torques);
-    return nPairs;
-}
 size_t DEMTracker::GetContactForcesAndLocalTorqueForAll(std::vector<float3>& points,
                                                         std::vector<float3>& forces,
                                                         std::vector<float3>& torques) {
@@ -607,17 +578,6 @@ size_t DEMTracker::GetContactForcesAndLocalTorqueForAll(std::vector<float3>& poi
     forces.clear();
     torques.clear();
     return sys->GetOwnerContactForces(GetOwnerIDs(), points, forces, torques, true);
-}
-size_t DEMTracker::GetContactForcesAndLocalTorqueForAll(std::vector<std::vector<float>>& points,
-                                                        std::vector<std::vector<float>>& forces,
-                                                        std::vector<std::vector<float>>& torques) {
-    std::vector<float3> float3_points, float3_forces, float3_torques;
-    size_t nPairs = GetContactForcesAndLocalTorqueForAll(float3_points, float3_forces, float3_torques);
-
-    points = Real3VectorToVecOfVec<float, float3>(float3_points);
-    forces = Real3VectorToVecOfVec<float, float3>(float3_forces);
-    torques = Real3VectorToVecOfVec<float, float3>(float3_torques);
-    return nPairs;
 }
 
 size_t DEMTracker::GetContactForcesAndGlobalTorque(std::vector<float3>& points,
@@ -631,18 +591,7 @@ size_t DEMTracker::GetContactForcesAndGlobalTorque(std::vector<float3>& points,
     torques.clear();
     return sys->GetOwnerContactForces({obj->ownerID + (bodyID_t)offset}, points, forces, torques, false);
 }
-size_t DEMTracker::GetContactForcesAndGlobalTorque(std::vector<std::vector<float>>& points,
-                                                   std::vector<std::vector<float>>& forces,
-                                                   std::vector<std::vector<float>>& torques,
-                                                   size_t offset) {
-    std::vector<float3> float3_points, float3_forces, float3_torques;
-    size_t nPairs = GetContactForcesAndGlobalTorque(float3_points, float3_forces, float3_torques, offset);
 
-    points = Real3VectorToVecOfVec<float, float3>(float3_points);
-    forces = Real3VectorToVecOfVec<float, float3>(float3_forces);
-    torques = Real3VectorToVecOfVec<float, float3>(float3_torques);
-    return nPairs;
-}
 size_t DEMTracker::GetContactForcesAndGlobalTorqueForAll(std::vector<float3>& points,
                                                          std::vector<float3>& forces,
                                                          std::vector<float3>& torques) {
@@ -651,17 +600,6 @@ size_t DEMTracker::GetContactForcesAndGlobalTorqueForAll(std::vector<float3>& po
     forces.clear();
     torques.clear();
     return sys->GetOwnerContactForces(GetOwnerIDs(), points, forces, torques, false);
-}
-size_t DEMTracker::GetContactForcesAndGlobalTorqueForAll(std::vector<std::vector<float>>& points,
-                                                         std::vector<std::vector<float>>& forces,
-                                                         std::vector<std::vector<float>>& torques) {
-    std::vector<float3> float3_points, float3_forces, float3_torques;
-    size_t nPairs = GetContactForcesAndGlobalTorqueForAll(float3_points, float3_forces, float3_torques);
-
-    points = Real3VectorToVecOfVec<float, float3>(float3_points);
-    forces = Real3VectorToVecOfVec<float, float3>(float3_forces);
-    torques = Real3VectorToVecOfVec<float, float3>(float3_torques);
-    return nPairs;
 }
 
 void DEMTracker::AddAcc(float3 acc, size_t offset) {

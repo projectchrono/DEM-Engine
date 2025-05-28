@@ -349,9 +349,7 @@ class DEMTracker {
     /// @param offset The offset to this owner (where to start querying). If first entity, input 0.
     /// @return Number of force pairs.
     size_t GetContactForces(std::vector<float3>& points, std::vector<float3>& forces, size_t offset = 0);
-    size_t GetContactForces(std::vector<std::vector<float>>& points,
-                            std::vector<std::vector<float>>& forces,
-                            size_t offset = 0);
+
     /// @brief Get all contact forces that concern all objects tracked by this tracker, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
     /// experiences. If a contact involves two owners this tracker tracks, then the force for that contact will be given
@@ -360,7 +358,6 @@ class DEMTracker {
     /// @param forces The force in XYZ as float3 vector. The force in global frame.
     /// @return Number of force pairs.
     size_t GetContactForcesForAll(std::vector<float3>& points, std::vector<float3>& forces);
-    size_t GetContactForcesForAll(std::vector<std::vector<float>>& points, std::vector<std::vector<float>>& forces);
 
     /// @brief Get all contact forces and global torques that concern this track object, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
@@ -378,10 +375,7 @@ class DEMTracker {
                                            std::vector<float3>& forces,
                                            std::vector<float3>& torques,
                                            size_t offset = 0);
-    size_t GetContactForcesAndGlobalTorque(std::vector<std::vector<float>>& points,
-                                           std::vector<std::vector<float>>& forces,
-                                           std::vector<std::vector<float>>& torques,
-                                           size_t offset = 0);
+
     /// @brief Get all contact forces and global torques that concern all objects tracked by this tracker, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
     /// experiences. Since we are getting all force pairs, the torque should be considered as `extra torque', since you
@@ -398,9 +392,6 @@ class DEMTracker {
     size_t GetContactForcesAndGlobalTorqueForAll(std::vector<float3>& points,
                                                  std::vector<float3>& forces,
                                                  std::vector<float3>& torques);
-    size_t GetContactForcesAndGlobalTorqueForAll(std::vector<std::vector<float>>& points,
-                                                 std::vector<std::vector<float>>& forces,
-                                                 std::vector<std::vector<float>>& torques);
 
     /// @brief Get all contact forces and local torques that concern this track object, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
@@ -418,10 +409,7 @@ class DEMTracker {
                                           std::vector<float3>& forces,
                                           std::vector<float3>& torques,
                                           size_t offset = 0);
-    size_t GetContactForcesAndLocalTorque(std::vector<std::vector<float>>& points,
-                                          std::vector<std::vector<float>>& forces,
-                                          std::vector<std::vector<float>>& torques,
-                                          size_t offset = 0);
+
     /// @brief Get all contact forces and local torques that concern all objects tracked by this tracker, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
     /// experiences. Since we are getting all force pairs, the torque should be considered as `extra torque', since you
@@ -438,9 +426,6 @@ class DEMTracker {
     size_t GetContactForcesAndLocalTorqueForAll(std::vector<float3>& points,
                                                 std::vector<float3>& forces,
                                                 std::vector<float3>& torques);
-    size_t GetContactForcesAndLocalTorqueForAll(std::vector<std::vector<float>>& points,
-                                                std::vector<std::vector<float>>& forces,
-                                                std::vector<std::vector<float>>& torques);
 };
 
 class DEMForceModel {
