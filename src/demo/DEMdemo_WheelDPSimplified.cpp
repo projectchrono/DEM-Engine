@@ -29,7 +29,7 @@ const double math_PI = 3.1415927;
 
 int main() {
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DemoOutput_WheelDPSimplified";
+    out_dir /= "DemoOutput_WheelDPSimplified";
     std::filesystem::create_directory(out_dir);
 
     DEMSolver DEMSim;
@@ -171,12 +171,12 @@ int main() {
     float max_z = max_z_finder->GetValue();
     wheel_tracker->SetPos(make_float3(-0.45, 0, max_z + 0.03 + wheel_rad));
     for (double t = 0; t < 1.; t += frame_time) {
-        char filename[200], meshname[200];
+        char filename[100], meshname[100];
         std::cout << "Outputting frame: " << currframe << std::endl;
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-        sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
-        DEMSim.WriteSphereFile(std::string(filename));
-        DEMSim.WriteMeshFile(std::string(meshname));
+        sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+        sprintf(meshname, "DEMdemo_mesh_%04d.vtk", currframe++);
+        DEMSim.WriteSphereFile(out_dir / filename);
+        DEMSim.WriteMeshFile(out_dir / meshname);
 
         DEMSim.DoDynamics(frame_time);
     }
@@ -191,12 +191,12 @@ int main() {
 
     for (double t = 0; t < sim_end; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
-            char filename[200], meshname[200];
+            char filename[100], meshname[100];
             std::cout << "Outputting frame: " << currframe << std::endl;
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
-            DEMSim.WriteSphereFile(std::string(filename));
-            DEMSim.WriteMeshFile(std::string(meshname));
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+            sprintf(meshname, "DEMdemo_mesh_%04d.vtk", currframe++);
+            DEMSim.WriteSphereFile(out_dir / filename);
+            DEMSim.WriteMeshFile(out_dir / meshname);
             DEMSim.ShowThreadCollaborationStats();
         }
 
@@ -217,7 +217,9 @@ int main() {
     std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
 
     DEMSim.ShowTimingStats();
-    DEMSim.ShowAnomalies();
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
 
     std::cout << "WheelDPSimpilified demo exiting..." << std::endl;
     return 0;

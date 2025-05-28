@@ -129,4 +129,3 @@ if (overlapDepth > 0.0) {
     delta_tan_z = delta_tan.z;
     force.y = 0.0;
 }
-

@@ -11,7 +11,6 @@ target_include_directories(
 	DEM
 	PUBLIC ${ProjectIncludeSource}
 	PUBLIC ${ProjectIncludeGenerated}
-	PUBLIC ${NVIDIAMathDir}
 	PUBLIC ${PYTHON_INCLUDE_DIRS}
 )
 
@@ -42,6 +41,10 @@ else()
 		-static-libgcc -static-libstdc++
 	)
 endif()
+
+# if(WIN32)
+# target_compile_options(DEM PRIVATE /GR)
+# endif()
 
 set(DEM_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/kT.h
@@ -110,7 +113,6 @@ if(PYTHON_BUILD)
 		PUBLIC ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
 		PUBLIC ${ProjectIncludeSource}
 		PUBLIC ${ProjectIncludeGenerated}
-		PUBLIC ${NVIDIAMathDir}
 		PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/DEM
 		PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/core
 		PUBLIC ${CMAKE_INSTALL_INCLUDEDIR}/algorithms

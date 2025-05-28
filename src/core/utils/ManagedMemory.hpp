@@ -8,7 +8,7 @@
 
 #include <vector>
 
-#include "ManagedAllocator.hpp"
+#include "CudaAllocator.hpp"
 
 // Convenience functions to help with Managed Memory (allocated using ManagedAllocator, typically)
 namespace deme {

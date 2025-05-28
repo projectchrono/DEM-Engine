@@ -14,10 +14,10 @@
 #include <array>
 #include <cmath>
 
-#include <nvmath/helper_math.cuh>
+#include <kernel/DEMHelperKernels.cuh>
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
-#include <core/utils/ManagedAllocator.hpp>
+#include <core/utils/CudaAllocator.hpp>
 #include <DEM/HostSideHelpers.hpp>
 
 namespace deme {
@@ -84,12 +84,12 @@ class DEMExternObj : public DEMInitializer {
     // // CoM frame's orientation quaternion in the frame which is used to report all its components' properties.
     // Usually
     // // unit quaternion.
-    // float4 CoM_oriQ = host_make_float4(0, 0, 0, 1);
+    // float4 CoM_oriQ = make_float4(0, 0, 0, 1);
 
     // Obj's CoM initial position
     float3 init_pos = make_float3(0);
     // Obj's initial orientation quaternion
-    float4 init_oriQ = host_make_float4(0, 0, 0, 1);
+    float4 init_oriQ = make_float4(0, 0, 0, 1);
     // Obj's mass (huge by default)
     float mass = 1e6;
     // Obj's MOI (huge by default)
@@ -125,7 +125,7 @@ class DEMExternObj : public DEMInitializer {
     void SetMOI(float3 MOI) { this->MOI = MOI; }
     void SetMOI(const std::vector<float>& MOI) {
         assertThreeElements(MOI, "SetMOI", "MOI");
-        SetMOI(host_make_float3(MOI[0], MOI[1], MOI[2]));
+        SetMOI(make_float3(MOI[0], MOI[1], MOI[2]));
     }
 
     /// @brief Set the initial quaternion for this object (before simulation initializes).
@@ -133,7 +133,7 @@ class DEMExternObj : public DEMInitializer {
     void SetInitQuat(const float4 rotQ) { init_oriQ = rotQ; }
     void SetInitQuat(const std::vector<float>& rotQ) {
         assertFourElements(rotQ, "SetInitQuat", "rotQ");
-        SetInitQuat(host_make_float4(rotQ[0], rotQ[1], rotQ[2], rotQ[3]));
+        SetInitQuat(make_float4(rotQ[0], rotQ[1], rotQ[2], rotQ[3]));
     }
 
     /// @brief Set the initial position for this object (before simulation initializes).
@@ -141,7 +141,7 @@ class DEMExternObj : public DEMInitializer {
     void SetInitPos(const float3 displ) { init_pos = displ; }
     void SetInitPos(const std::vector<float>& displ) {
         assertThreeElements(displ, "SetInitPos", "displ");
-        SetInitPos(host_make_float3(displ[0], displ[1], displ[2]));
+        SetInitPos(make_float3(displ[0], displ[1], displ[2]));
     }
 
     /// Add a plane with infinite size
@@ -159,7 +159,7 @@ class DEMExternObj : public DEMInitializer {
                   const std::shared_ptr<DEMMaterial>& material) {
         assertThreeElements(pos, "AddPlane", "pos");
         assertThreeElements(normal, "AddPlane", "normal");
-        AddPlane(host_make_float3(pos[0], pos[1], pos[2]), host_make_float3(normal[0], normal[1], normal[2]), material);
+        AddPlane(make_float3(pos[0], pos[1], pos[2]), make_float3(normal[0], normal[1], normal[2]), material);
     }
 
     /*
@@ -193,7 +193,7 @@ class DEMExternObj : public DEMInitializer {
         DEMAnalEntParams params;
         params.cyl.center = pos;
         params.cyl.radius = rad;
-        params.cyl.dir = host_make_float3(0, 0, 1);
+        params.cyl.dir = make_float3(0, 0, 1);
         params.cyl.normal = normal;
         entity_params.push_back(params);
     }
@@ -202,7 +202,7 @@ class DEMExternObj : public DEMInitializer {
                       const std::shared_ptr<DEMMaterial>& material,
                       const objNormal_t normal = ENTITY_NORMAL_INWARD) {
         assertThreeElements(pos, "AddZCylinder", "pos");
-        AddZCylinder(host_make_float3(pos[0], pos[1], pos[2]), rad, material, normal);
+        AddZCylinder(make_float3(pos[0], pos[1], pos[2]), rad, material, normal);
     }
 
     /// Add a cylinder of infinite length, which is along a user-specific axis
@@ -227,8 +227,7 @@ class DEMExternObj : public DEMInitializer {
                      const objNormal_t normal = ENTITY_NORMAL_INWARD) {
         assertThreeElements(pos, "AddCylinder", "pos");
         assertThreeElements(axis, "AddCylinder", "axis");
-        AddCylinder(host_make_float3(pos[0], pos[1], pos[2]), host_make_float3(axis[0], axis[1], axis[2]), rad,
-                    material, normal);
+        AddCylinder(make_float3(pos[0], pos[1], pos[2]), make_float3(axis[0], axis[1], axis[2]), rad, material, normal);
     }
 };
 
@@ -379,12 +378,12 @@ class DEMMeshConnected : public DEMInitializer {
     // float3 CoM = make_float3(0);
     // // CoM frame's orientation quaternion in the frame which is used to report all the mesh's node coordinates.
     // // It is usually unit quaternion.
-    // float4 CoM_oriQ = host_make_float4(0, 0, 0, 1);
+    // float4 CoM_oriQ = make_float4(0, 0, 0, 1);
 
     // Mesh's CoM initial position
     float3 init_pos = make_float3(0);
     // Mesh's initial orientation quaternion
-    float4 init_oriQ = host_make_float4(0, 0, 0, 1);
+    float4 init_oriQ = make_float4(0, 0, 0, 1);
     // Mesh's mass
     float mass = 1.f;
     // Mesh's MOI
@@ -459,7 +458,7 @@ class DEMMeshConnected : public DEMInitializer {
     /// Set MOI (in principal frame).
     void SetMOI(const std::vector<float>& MOI) {
         assertThreeElements(MOI, "SetMOI", "MOI");
-        SetMOI(host_make_float3(MOI[0], MOI[1], MOI[2]));
+        SetMOI(make_float3(MOI[0], MOI[1], MOI[2]));
     }
     /// Set mesh family number.
     void SetFamily(unsigned int num) { this->family_code = num; }
@@ -490,19 +489,19 @@ class DEMMeshConnected : public DEMInitializer {
     void SetInitQuat(const float4 rotQ) { init_oriQ = rotQ; }
     void SetInitQuat(const std::vector<float>& rotQ) {
         assertFourElements(rotQ, "SetInitQuat", "rotQ");
-        SetInitQuat(host_make_float4(rotQ[0], rotQ[1], rotQ[2], rotQ[3]));
+        SetInitQuat(make_float4(rotQ[0], rotQ[1], rotQ[2], rotQ[3]));
     }
 
     /// @brief Transform the meshed object so it gets to its initial position, before the simulation starts.
     void SetInitPos(const float3 displ) { init_pos = displ; }
     void SetInitPos(const std::vector<float>& displ) {
         assertThreeElements(displ, "SetInitPos", "displ");
-        SetInitPos(host_make_float3(displ[0], displ[1], displ[2]));
+        SetInitPos(make_float3(displ[0], displ[1], displ[2]));
     }
 
-    /// If this mesh's component sphere relPos is not reported by the user in its CoM frame, then the user needs to
-    /// call this method immediately to report this mesh's Volume Centroid and Principal Axes, and relPos will be
-    /// adjusted by this call.
+    /// If this mesh's component triangles are not reported by the user in its centroid and principal system,
+    /// then the user needs to call this method immediately to report this mesh's volume centroid and principal axes,
+    /// and nodes will be adjusted by this call so that the mesh's frame is its centroid and principal system.
     void InformCentroidPrincipal(float3 center, float4 prin_Q) {
         // Getting to Centroid and Principal is a translation then a rotation (local), so the undo order to undo
         // translation then rotation
@@ -513,13 +512,13 @@ class DEMMeshConnected : public DEMInitializer {
     void InformCentroidPrincipal(const std::vector<float>& center, const std::vector<float>& prin_Q) {
         assertThreeElements(center, "InformCentroidPrincipal", "center");
         assertFourElements(prin_Q, "InformCentroidPrincipal", "prin_Q");
-        InformCentroidPrincipal(host_make_float3(center[0], center[1], center[2]),
-                                host_make_float4(prin_Q[0], prin_Q[1], prin_Q[2], prin_Q[3]));
+        InformCentroidPrincipal(make_float3(center[0], center[1], center[2]),
+                                make_float4(prin_Q[0], prin_Q[1], prin_Q[2], prin_Q[3]));
     }
 
     /// The opposite of InformCentroidPrincipal, and it is another way to align this mesh's coordinate system with its
-    /// centroid and principal system: rotate then move this clump, so that at the end of this operation, the original
-    /// `origin' point should hit the CoM of this mesh.
+    /// centroid and principal system: rotate then move this mesh, so that at the end of this operation, the mesh's
+    /// frame is its centroid and principal system.
     void Move(float3 vec, float4 rot_Q) {
         for (auto& node : m_vertices) {
             applyFrameTransformLocalToGlobal(node, vec, rot_Q);
@@ -528,7 +527,7 @@ class DEMMeshConnected : public DEMInitializer {
     void Move(const std::vector<float>& vec, const std::vector<float>& rot_Q) {
         assertThreeElements(vec, "Move", "vec");
         assertFourElements(rot_Q, "Move", "rot_Q");
-        Move(host_make_float3(vec[0], vec[1], vec[2]), host_make_float4(rot_Q[0], rot_Q[1], rot_Q[2], rot_Q[3]));
+        Move(make_float3(vec[0], vec[1], vec[2]), make_float4(rot_Q[0], rot_Q[1], rot_Q[2], rot_Q[3]));
     }
 
     /// Mirror all points in the mesh about a plane. If this changes the mass properties of this mesh, it is the user's
@@ -573,8 +572,8 @@ class DEMMeshConnected : public DEMInitializer {
     void Mirror(const std::vector<float>& plane_point, const std::vector<float>& plane_normal) {
         assertThreeElements(plane_point, "Mirror", "plane_point");
         assertThreeElements(plane_normal, "Mirror", "plane_normal");
-        Mirror(host_make_float3(plane_point[0], plane_point[1], plane_point[2]),
-               host_make_float3(plane_normal[0], plane_normal[1], plane_normal[2]));
+        Mirror(make_float3(plane_point[0], plane_point[1], plane_point[2]),
+               make_float3(plane_normal[0], plane_normal[1], plane_normal[2]));
     }
 
     /// @brief Scale all geometry component of this mesh.
@@ -606,7 +605,7 @@ class DEMMeshConnected : public DEMInitializer {
     }
     void Scale(const std::vector<float>& s) {
         assertThreeElements(s, "Scale", "s");
-        Scale(host_make_float3(s[0], s[1], s[2]));
+        Scale(make_float3(s[0], s[1], s[2]));
     }
 
     ////////////////////////////////////////////////////////

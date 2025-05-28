@@ -167,7 +167,7 @@ int main() {
     DEMSim.Initialize();
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DemoOutput_SolarSystem";
+    out_dir /= "DemoOutput_SolarSystem";
     std::filesystem::create_directory(out_dir);
 
     // Settle phase
@@ -178,9 +178,9 @@ int main() {
 
     for (double t = 0; t < 2000.; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
-            char filename[200];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            DEMSim.WriteSphereFile(std::string(filename));
+            char filename[100];
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+            DEMSim.WriteSphereFile(out_dir / filename);
             std::cout << "Day " << currframe << "..." << std::endl;
             currframe++;
             // std::cout << "Num contacts: " << DEMSim.GetNumContacts() << std::endl;

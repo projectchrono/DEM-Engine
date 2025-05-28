@@ -35,10 +35,10 @@ int main() {
 
     std::cout << "============================================================" << std::endl;
     std::cout << "Initializing DEMdemo_ContactChain demo." << std::endl;
-    
+
     float innerFriction = 0.10;
     float massMultiplier = 5.0;  // Magnitude of the external force
-    
+
     std::cout << "Inner friction: " << innerFriction << "; Mass multiplier: " << massMultiplier << "." << std::endl;
     path out_dir = "";
     out_dir += "./ContactChain_out";
@@ -134,12 +134,12 @@ int main() {
 
     for (float t = 0; t < sim_time; t += frame_time) {
         std::cout << "Output file: " << currframe << " at time " << t << " s." << std::endl;
-        char filename[200], meshfilename[200], cnt_filename[200];
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-        sprintf(cnt_filename, "%s/Contact_pairs_%04d.csv", out_dir.c_str(), currframe);
+        char filename[100], cnt_filename[100];
+        sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+        sprintf(cnt_filename, "Contact_pairs_%04d.csv", currframe);
 
-        DEMSim.WriteSphereFile(std::string(filename));
-        DEMSim.WriteContactFile(std::string(cnt_filename));
+        DEMSim.WriteSphereFile(out_dir / filename);
+        DEMSim.WriteContactFile(out_dir / cnt_filename);
         currframe++;
 
         DEMSim.DoDynamicsThenSync(frame_time);
@@ -161,7 +161,9 @@ int main() {
     }
 
     DEMSim.ShowTimingStats();
-    std::cout << "==============================================================" << std::endl;
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
     std::cout << "DEMdemo_ContactChain exiting..." << std::endl;
     return 0;
 }

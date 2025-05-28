@@ -3,8 +3,10 @@
 
 #include <cuda_runtime_api.h>
 #include <vector>
+#include <mutex>
 #include <core/ApiVersion.h>
 
+// A device number manager that evenly distributes the streams needed to all the available devices
 class GpuManager {
   public:
     GpuManager(unsigned int total_streams = 1);
@@ -44,6 +46,7 @@ class GpuManager {
   private:
     int ndevices;
     std::vector<std::vector<StreamInfo>> streams;
+    std::mutex stream_manipulation_mutex;
 };
 
 #endif

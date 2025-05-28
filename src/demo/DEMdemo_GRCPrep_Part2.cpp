@@ -187,7 +187,7 @@ int main() {
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_GRCPrep_Part2";
+    out_dir /= "DemoOutput_GRCPrep_Part2";
     create_directory(out_dir);
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
@@ -200,9 +200,9 @@ int main() {
 
     for (float t = 0; t < settle_batch_time; t += settle_frame_time) {
         std::cout << "Frame: " << currframe << std::endl;
-        char filename[200];
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-        DEMSim.WriteSphereFile(std::string(filename));
+        char filename[100];
+        sprintf(filename, "DEMdemo_output_%04d.csv", currframe++);
+        DEMSim.WriteSphereFile(out_dir / filename);
         DEMSim.DoDynamicsThenSync(settle_frame_time);
         DEMSim.ShowThreadCollaborationStats();
     }
@@ -226,9 +226,9 @@ int main() {
             matter_mass = total_mass_finder->GetValue();
             std::cout << "Bulk density in compression " << matter_mass / total_volume << std::endl;
             DEMSim.ShowThreadCollaborationStats();
-            char filename[200];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-            DEMSim.WriteSphereFile(std::string(filename));
+            char filename[100];
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe++);
+            DEMSim.WriteSphereFile(out_dir / filename);
         }
         now_z -= compressor_v * step_size;
         compressor_tracker->SetPos(make_float3(0, 0, now_z));
@@ -242,9 +242,9 @@ int main() {
             matter_mass = total_mass_finder->GetValue();
             std::cout << "Bulk density in compression " << matter_mass / total_volume << std::endl;
             DEMSim.ShowThreadCollaborationStats();
-            char filename[200];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-            DEMSim.WriteSphereFile(std::string(filename));
+            char filename[100];
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe++);
+            DEMSim.WriteSphereFile(out_dir / filename);
         }
         now_z += compressor_v * step_size;
         compressor_tracker->SetPos(make_float3(0, 0, now_z));
@@ -263,15 +263,19 @@ int main() {
     std::cout << "Bulk density after settling " << matter_mass / total_volume << std::endl;
 
     // Final write
-    char cp2_filename[200];
-    sprintf(cp2_filename, "%s/GRC_3e6.csv", out_dir.c_str());
-    DEMSim.WriteClumpFile(std::string(cp2_filename));
+    char cp_filename[100];
+    sprintf(cp_filename, "GRC_3e6.csv");
+    DEMSim.WriteClumpFile(out_dir / cp_filename);
 
     DEMSim.ClearThreadCollaborationStats();
 
-    char cnt_filename[200];
-    sprintf(cnt_filename, "%s/Contact_pairs_3e6.csv", out_dir.c_str());
-    DEMSim.WriteContactFile(std::string(cnt_filename));
+    char cnt_filename[100];
+    sprintf(cnt_filename, "Contact_pairs_3e6.csv");
+    DEMSim.WriteContactFile(out_dir / cnt_filename);
+
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
 
     std::cout << "DEMdemo_GRCPrep_Part2 exiting..." << std::endl;
     return 0;

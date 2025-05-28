@@ -15,7 +15,6 @@ target_include_directories(
 	algorithms	
 	PUBLIC ${ProjectIncludeSource}
 	PUBLIC ${ProjectIncludeGenerated}
-	PUBLIC ${NVIDIAMathDir}
 )
 
 if(NOT PYTHON_BUILD)
@@ -32,19 +31,20 @@ else()
 endif()
 ### HOST HEADERS ONLY (.h, .hpp) ###
 set(algorithms_interface
-	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubBasedSubroutines.h
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMStaticDeviceSubroutines.h
 )
 
 ### INTERNAL HEADERS ONLY (.h, .hpp, or .cuh) ###
 set(algorithms_headers
-	${NVIDIAMathDir}/nvmath/helper_math.cuh
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMStaticDeviceUtilities.cuh
 )
 
 set(algorithms_sources
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubWrappers.cu 
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubForceCollection.cu
-	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubUtilities.cu
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubInstantiations.cu
 	${CMAKE_CURRENT_SOURCE_DIR}/DEMCubContactDetection.cu
+	${CMAKE_CURRENT_SOURCE_DIR}/DEMDynamicMisc.cu
 )
 
 target_sources(

@@ -1,7 +1,7 @@
 // DEM kernels that does some wildcard stuff, such as modifying the system as per user instruction
-#include <DEMHelperKernels.cu>
+#include <DEMHelperKernels.cuh>
 #include <DEM/Defines.h>
-_kernelIncludes_
+_kernelIncludes_;
 
 // Mass properties are below, if jitified mass properties are in use
 _massDefs_;
@@ -48,8 +48,8 @@ __global__ void applyFamilyChanges(deme::DEMSimParams* simParams, deme::DEMDataD
         float accY = acc.y;
         float accZ = acc.z;
 
-        float h = simParams->h;
-        float t = simParams->timeElapsed;
+        float ts = simParams->h;
+        float time = simParams->timeElapsed;
 
         // Carry out user's instructions
         { _familyChangeRules_; }

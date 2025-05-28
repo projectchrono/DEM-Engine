@@ -111,7 +111,7 @@ int main() {
     DEMSim.Initialize();
 
     std::filesystem::path out_dir = std::filesystem::current_path();
-    out_dir += "/DemoOutput_Shake";
+    out_dir /= "DemoOutput_Shake";
     std::filesystem::create_directory(out_dir);
 
     // Settle phase
@@ -121,9 +121,9 @@ int main() {
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
     compressor_tracker->SetPos(make_float3(0, 0, max_z_finder->GetValue()));
     for (double t = 0; t < 0.5; t += 0.1) {
-        char filename[200];
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-        DEMSim.WriteSphereFile(std::string(filename));
+        char filename[100];
+        sprintf(filename, "DEMdemo_output_%04d.csv", currframe++);
+        DEMSim.WriteSphereFile(out_dir / filename);
         DEMSim.DoDynamicsThenSync(0.1);
     }
 
@@ -136,9 +136,9 @@ int main() {
     std::chrono::high_resolution_clock::time_point start = std::chrono::high_resolution_clock::now();
     for (double t = 0; t < sim_end; t += step_size, curr_step++) {
         if (curr_step % out_steps == 0) {
-            char filename[200];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-            DEMSim.WriteSphereFile(std::string(filename));
+            char filename[100];
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe++);
+            DEMSim.WriteSphereFile(out_dir / filename);
             std::cout << "Max system velocity: " << max_v_finder->GetValue() << std::endl;
             DEMSim.ShowThreadCollaborationStats();
         }
@@ -166,9 +166,9 @@ int main() {
 
     // Output the final configuration of the clumps as a file. This is just a demonstration. This particular
     // configuration is not that useful as no other demos actually use it, unlike the GRC-1 soil.
-    char cp_filename[200];
-    sprintf(cp_filename, "%s/GRC_rho%4.f.csv", out_dir.c_str(), bulk_density);
-    DEMSim.WriteClumpFile(std::string(cp_filename));
+    char cp_filename[100];
+    sprintf(cp_filename, "settled_rho%4.f.csv", bulk_density);
+    DEMSim.WriteClumpFile(out_dir / cp_filename);
 
     std::cout << "Shake demo exiting..." << std::endl;
     return 0;

@@ -14,37 +14,30 @@
 #include <DEM/HostSideHelpers.hpp>
 #include <DEM/Defines.h>
 
-#include <algorithms/DEMCubBasedSubroutines.h>
+#include <algorithms/DEMStaticDeviceSubroutines.h>
 
 namespace deme {
 
 inline void DEMKinematicThread::transferArraysResize(size_t nContactPairs) {
-    // TODO: This memory usage is not tracked... How can I track the size changes on my friend's end??
-    // dT->idGeometryA_buffer.resize(nContactPairs);
-    // dT->idGeometryB_buffer.resize(nContactPairs);
-    // dT->contactType_buffer.resize(nContactPairs);
-    // DEME_ADVISE_DEVICE(dT->idGeometryA_buffer, dT->streamInfo.device);
-    // DEME_ADVISE_DEVICE(dT->idGeometryB_buffer, dT->streamInfo.device);
-    // DEME_ADVISE_DEVICE(dT->contactType_buffer, dT->streamInfo.device);
-
     // These buffers are on dT
     DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
     dT->buffer_size = nContactPairs;
-    DEME_DEVICE_PTR_ALLOC(dT->granData->idGeometryA_buffer, nContactPairs);
-    DEME_DEVICE_PTR_ALLOC(dT->granData->idGeometryB_buffer, nContactPairs);
-    DEME_DEVICE_PTR_ALLOC(dT->granData->contactType_buffer, nContactPairs);
-    granData->pDTOwnedBuffer_idGeometryA = dT->granData->idGeometryA_buffer;
-    granData->pDTOwnedBuffer_idGeometryB = dT->granData->idGeometryB_buffer;
-    granData->pDTOwnedBuffer_contactType = dT->granData->contactType_buffer;
+    DEME_DEVICE_ARRAY_RESIZE(dT->idGeometryA_buffer, nContactPairs);
+    DEME_DEVICE_ARRAY_RESIZE(dT->idGeometryB_buffer, nContactPairs);
+    DEME_DEVICE_ARRAY_RESIZE(dT->contactType_buffer, nContactPairs);
+    granData->pDTOwnedBuffer_idGeometryA = dT->idGeometryA_buffer.data();
+    granData->pDTOwnedBuffer_idGeometryB = dT->idGeometryB_buffer.data();
+    granData->pDTOwnedBuffer_contactType = dT->contactType_buffer.data();
 
     if (!solverFlags.isHistoryless) {
-        // dT->contactMapping_buffer.resize(nContactPairs);
-        // DEME_ADVISE_DEVICE(dT->contactMapping_buffer, dT->streamInfo.device);
-        DEME_DEVICE_PTR_ALLOC(dT->granData->contactMapping_buffer, nContactPairs);
-        granData->pDTOwnedBuffer_contactMapping = dT->granData->contactMapping_buffer;
+        DEME_DEVICE_ARRAY_RESIZE(dT->contactMapping_buffer, nContactPairs);
+        granData->pDTOwnedBuffer_contactMapping = dT->contactMapping_buffer.data();
     }
     // Unset the device change we just made
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
+
+    // But we don't have to toDevice granData or dT->granData, and this is because all _buffer arrays don't
+    // particupate kernel computations, so even if their values are fresh only on host, it's fine
 }
 
 void DEMKinematicThread::calibrateParams() {
@@ -81,7 +74,7 @@ void DEMKinematicThread::calibrateParams() {
             // Acc is done. Now apply it to bin size change speed
             stateParams.binCurrentChangeRate += speed_update;
             // But, the speed must fall in range
-            stateParams.binCurrentChangeRate = hostClampBetween(
+            stateParams.binCurrentChangeRate = clampBetween(
                 stateParams.binCurrentChangeRate, -stateParams.binTopChangeRate, stateParams.binTopChangeRate);
 
             // Change bin size
@@ -100,53 +93,59 @@ void DEMKinematicThread::calibrateParams() {
         }
         DEME_DEBUG_PRINTF("kT runtime per step: %.7gs", CDAccumTimer.GetPrevTime());
     }
+    // binSize is now calculated, we need to migrate that to device
+    // simParams.syncMemberToDevice<double>(offsetof(DEMSimParams, binSize));
+    simParams.toDevice();
 }
 
 inline void DEMKinematicThread::unpackMyBuffer() {
-    DEME_GPU_CALL(cudaMemcpy(granData->voxelID, granData->voxelID_buffer, simParams->nOwnerBodies * sizeof(voxelID_t),
+    DEME_GPU_CALL(cudaMemcpy(granData->voxelID, voxelID_buffer.data(), simParams->nOwnerBodies * sizeof(voxelID_t),
                              cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->locX, granData->locX_buffer, simParams->nOwnerBodies * sizeof(subVoxelPos_t),
+    DEME_GPU_CALL(cudaMemcpy(granData->locX, locX_buffer.data(), simParams->nOwnerBodies * sizeof(subVoxelPos_t),
                              cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->locY, granData->locY_buffer, simParams->nOwnerBodies * sizeof(subVoxelPos_t),
+    DEME_GPU_CALL(cudaMemcpy(granData->locY, locY_buffer.data(), simParams->nOwnerBodies * sizeof(subVoxelPos_t),
                              cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->locZ, granData->locZ_buffer, simParams->nOwnerBodies * sizeof(subVoxelPos_t),
+    DEME_GPU_CALL(cudaMemcpy(granData->locZ, locZ_buffer.data(), simParams->nOwnerBodies * sizeof(subVoxelPos_t),
                              cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->oriQw, granData->oriQ0_buffer, simParams->nOwnerBodies * sizeof(oriQ_t),
+    DEME_GPU_CALL(cudaMemcpy(granData->oriQw, oriQ0_buffer.data(), simParams->nOwnerBodies * sizeof(oriQ_t),
                              cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->oriQx, granData->oriQ1_buffer, simParams->nOwnerBodies * sizeof(oriQ_t),
+    DEME_GPU_CALL(cudaMemcpy(granData->oriQx, oriQ1_buffer.data(), simParams->nOwnerBodies * sizeof(oriQ_t),
                              cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->oriQy, granData->oriQ2_buffer, simParams->nOwnerBodies * sizeof(oriQ_t),
+    DEME_GPU_CALL(cudaMemcpy(granData->oriQy, oriQ2_buffer.data(), simParams->nOwnerBodies * sizeof(oriQ_t),
                              cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->oriQz, granData->oriQ3_buffer, simParams->nOwnerBodies * sizeof(oriQ_t),
+    DEME_GPU_CALL(cudaMemcpy(granData->oriQz, oriQ3_buffer.data(), simParams->nOwnerBodies * sizeof(oriQ_t),
                              cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(granData->marginSize, granData->absVel_buffer, simParams->nOwnerBodies * sizeof(float),
+    DEME_GPU_CALL(cudaMemcpy(granData->marginSize, absVel_buffer.data(), simParams->nOwnerBodies * sizeof(float),
                              cudaMemcpyDeviceToDevice));
 
-    DEME_GPU_CALL(cudaMemcpy(&(granData->ts), &(granData->ts_buffer), sizeof(double), cudaMemcpyDeviceToDevice));
-    DEME_GPU_CALL(cudaMemcpy(&(granData->maxDrift), &(granData->maxDrift_buffer), sizeof(unsigned int),
+    DEME_GPU_CALL(cudaMemcpy(&(stateParams.ts), &(stateParams.ts_buffer), sizeof(double), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(&(stateParams.maxDrift), &(stateParams.maxDrift_buffer), sizeof(unsigned int),
                              cudaMemcpyDeviceToDevice));
 
     // Whatever drift value dT says, kT listens; unless kinematicMaxFutureDrift is negative in which case the user
     // explicitly said not caring the future drift.
+    stateParams.maxDrift.toHost();
     pSchedSupport->kinematicMaxFutureDrift = (pSchedSupport->kinematicMaxFutureDrift.load() < 0.)
                                                  ? pSchedSupport->kinematicMaxFutureDrift.load()
-                                                 : granData->maxDrift;
+                                                 : *(stateParams.maxDrift);
 
     // Need to reduce to check if max velocity is exceeded (right now, array marginSize is still storing absv...)
-    floatMaxReduce(granData->marginSize, &(granData->maxVel), simParams->nOwnerBodies, streamInfo.stream,
-                   stateOfSolver_resources);
-    if (granData->maxVel > simParams->errOutVel) {
+    cubMaxReduce<float>(granData->marginSize, &(stateParams.maxVel), simParams->nOwnerBodies, streamInfo.stream,
+                        solverScratchSpace);
+    // Get the reduced maxVel value
+    stateParams.maxVel.toHost();
+    if (*(stateParams.maxVel) > simParams->errOutVel) {
         DEME_ERROR(
             "System max velocity is %.7g, exceeded max allowance (%.7g).\nIf this velocity is not abnormal and you "
             "want to increase this allowance, use SetErrorOutVelocity before initializing simulation.\nOtherwise, the "
             "simulation may have diverged and relaxing the physics may help, such as decreasing the step size and "
             "modifying material properties.\nIf this happens at the start of simulation, check if there are initial "
             "penetrations, a.k.a. elements initialized inside walls.",
-            granData->maxVel, simParams->errOutVel);
-    } else if (granData->maxVel >
+            *(stateParams.maxVel), simParams->errOutVel);
+    } else if (*(stateParams.maxVel) >
                simParams->approxMaxVel) {  // If maxVel is larger than the user estimation, that is an anomaly
-        DEME_STEP_ANOMALY("Simulation entity velocity reached %.6g, over the user-estimated %.6g", granData->maxVel,
-                          simParams->approxMaxVel);
+        DEME_STEP_ANOMALY("Simulation entity velocity reached %.6g, over the user-estimated %.6g",
+                          *(stateParams.maxVel), simParams->approxMaxVel);
         anomalies.over_max_vel = true;
     }
 
@@ -158,18 +157,19 @@ inline void DEMKinematicThread::unpackMyBuffer() {
         misc_kernels->kernel("computeMarginFromAbsv")
             .instantiate()
             .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(simParams, granData, (size_t)simParams->nOwnerBodies);
+            .launch(&simParams, &granData, &(stateParams.ts), &(stateParams.maxDrift),
+                    (size_t)(simParams->nOwnerBodies));
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     } else {  // If isExpandFactorFixed, then just fill in that constant array.
         size_t blocks_needed = (simParams->nOwnerBodies + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
         misc_kernels->kernel("fillMarginValues")
             .instantiate()
             .configure(dim3(blocks_needed), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-            .launch(simParams, granData, (size_t)simParams->nOwnerBodies);
+            .launch(&simParams, &granData, (size_t)(simParams->nOwnerBodies));
         DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
     }
 
-    DEME_DEBUG_PRINTF("kT received a velocity update: %.6g", granData->maxVel);
+    DEME_DEBUG_PRINTF("kT received a velocity update: %.6g", *(stateParams.maxVel));
     DEME_DEBUG_PRINTF("kT received roughly %zu bytes in clump states transfer",
                       (size_t)simParams->nOwnerBodies * sizeof(voxelID_t) +
                           simParams->nOwnerBodies * sizeof(subVoxelPos_t) * 3 +
@@ -177,20 +177,20 @@ inline void DEMKinematicThread::unpackMyBuffer() {
     // DEME_DEBUG_PRINTF("A margin of thickness %.6g is added", simParams->beta);
 
     // Family number is a typical changable quantity on-the-fly. If this flag is on, kT received changes from dT.
-    if (solverFlags.canFamilyChange) {
-        DEME_GPU_CALL(cudaMemcpy(granData->familyID, granData->familyID_buffer,
-                                 simParams->nOwnerBodies * sizeof(family_t), cudaMemcpyDeviceToDevice));
+    if (solverFlags.canFamilyChangeOnDevice) {
+        DEME_GPU_CALL(cudaMemcpy(granData->familyID, familyID_buffer.data(), simParams->nOwnerBodies * sizeof(family_t),
+                                 cudaMemcpyDeviceToDevice));
     }
 
     // If dT received a mesh deformation request from user, then it is now passed to kT
     if (solverFlags.willMeshDeform) {
         DEME_DEBUG_PRINTF("kT is unpacking a triangle soup update...");
-        DEME_GPU_CALL(cudaMemcpy(granData->relPosNode1, granData->relPosNode1_buffer,
-                                 simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
-        DEME_GPU_CALL(cudaMemcpy(granData->relPosNode2, granData->relPosNode2_buffer,
-                                 simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
-        DEME_GPU_CALL(cudaMemcpy(granData->relPosNode3, granData->relPosNode3_buffer,
-                                 simParams->nTriGM * sizeof(float3), cudaMemcpyDeviceToDevice));
+        DEME_GPU_CALL(cudaMemcpy(granData->relPosNode1, relPosNode1_buffer.data(), simParams->nTriGM * sizeof(float3),
+                                 cudaMemcpyDeviceToDevice));
+        DEME_GPU_CALL(cudaMemcpy(granData->relPosNode2, relPosNode2_buffer.data(), simParams->nTriGM * sizeof(float3),
+                                 cudaMemcpyDeviceToDevice));
+        DEME_GPU_CALL(cudaMemcpy(granData->relPosNode3, relPosNode3_buffer.data(), simParams->nTriGM * sizeof(float3),
+                                 cudaMemcpyDeviceToDevice));
         // dT won't be sending if kT is loading, so it is safe
         solverFlags.willMeshDeform = false;
         DEME_DEBUG_PRINTF("kT received roughly %zu in this triangle soup update",
@@ -199,26 +199,25 @@ inline void DEMKinematicThread::unpackMyBuffer() {
 }
 
 inline void DEMKinematicThread::sendToTheirBuffer() {
-    DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_nContactPairs, stateOfSolver_resources.pNumContacts,
-                             sizeof(size_t), cudaMemcpyDeviceToDevice));
+    DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_nContactPairs, &(solverScratchSpace.numContacts), sizeof(size_t),
+                             cudaMemcpyDeviceToDevice));
     // Resize dT owned buffers before usage
-    if (*stateOfSolver_resources.pNumContacts > dT->buffer_size) {
-        transferArraysResize(*stateOfSolver_resources.pNumContacts);
+    if (*solverScratchSpace.numContacts > dT->buffer_size) {
+        transferArraysResize(*solverScratchSpace.numContacts);
     }
 
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryA, granData->idGeometryA,
-                             (*stateOfSolver_resources.pNumContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+                             (*solverScratchSpace.numContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_idGeometryB, granData->idGeometryB,
-                             (*stateOfSolver_resources.pNumContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
+                             (*solverScratchSpace.numContacts) * sizeof(bodyID_t), cudaMemcpyDeviceToDevice));
     DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactType, granData->contactType,
-                             (*stateOfSolver_resources.pNumContacts) * sizeof(contact_t), cudaMemcpyDeviceToDevice));
+                             (*solverScratchSpace.numContacts) * sizeof(contact_t), cudaMemcpyDeviceToDevice));
     // DEME_MIGRATE_TO_DEVICE(dT->idGeometryA_buffer, dT->streamInfo.device, streamInfo.stream);
     // DEME_MIGRATE_TO_DEVICE(dT->idGeometryB_buffer, dT->streamInfo.device, streamInfo.stream);
     // DEME_MIGRATE_TO_DEVICE(dT->contactType_buffer, dT->streamInfo.device, streamInfo.stream);
     if (!solverFlags.isHistoryless) {
         DEME_GPU_CALL(cudaMemcpy(granData->pDTOwnedBuffer_contactMapping, granData->contactMapping,
-                                 (*stateOfSolver_resources.pNumContacts) * sizeof(contactPairs_t),
-                                 cudaMemcpyDeviceToDevice));
+                                 (*solverScratchSpace.numContacts) * sizeof(contactPairs_t), cudaMemcpyDeviceToDevice));
         // DEME_MIGRATE_TO_DEVICE(dT->contactMapping_buffer, dT->streamInfo.device, streamInfo.stream);
     }
     // DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
@@ -227,7 +226,9 @@ inline void DEMKinematicThread::sendToTheirBuffer() {
 void DEMKinematicThread::workerThread() {
     // Set the device for this thread
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
-    DEME_GPU_CALL(cudaStreamCreate(&streamInfo.stream));
+
+    // Allocate arrays whose length does not depend on user inputs
+    initAllocation();
 
     while (!pSchedSupport->kinematicShouldJoin) {
         {
@@ -290,7 +291,8 @@ void DEMKinematicThread::workerThread() {
             contactDetection(bin_sphere_kernels, bin_triangle_kernels, sphere_contact_kernels, sphTri_contact_kernels,
                              history_kernels, granData, simParams, solverFlags, verbosity, idGeometryA, idGeometryB,
                              contactType, previous_idGeometryA, previous_idGeometryB, previous_contactType,
-                             contactMapping, streamInfo.stream, stateOfSolver_resources, timers, stateParams);
+                             contactPersistency, contactMapping, streamInfo.stream, solverScratchSpace, timers,
+                             stateParams);
             CDAccumTimer.End();
 
             timers.GetTimer("Send to dT buffer").start();
@@ -307,6 +309,10 @@ void DEMKinematicThread::workerThread() {
 
             // Signal the dynamic that it has fresh produce
             pSchedSupport->cv_DynamicCanProceed.notify_all();
+
+            // std::cout << "kT host mem usage: " << pretty_format_bytes(estimateHostMemUsage()) << std::endl;
+            // std::cout << "kT device mem usage: " << pretty_format_bytes(estimateDeviceMemUsage()) << std::endl;
+            // solverScratchSpace.printVectorUsage();
         }
 
         // In case the dynamic is hanging in there...
@@ -331,30 +337,34 @@ void DEMKinematicThread::getTiming(std::vector<std::string>& names, std::vector<
 void DEMKinematicThread::changeFamily(unsigned int ID_from, unsigned int ID_to) {
     family_t ID_from_impl = ID_from;
     family_t ID_to_impl = ID_to;
+
+    migrateFamilyToHost();
     std::replace_if(
-        familyID.begin(), familyID.end(), [ID_from_impl](family_t& i) { return i == ID_from_impl; }, ID_to_impl);
+        familyID.getHostVector().begin(), familyID.getHostVector().end(),
+        [ID_from_impl](family_t& i) { return i == ID_from_impl; }, ID_to_impl);
+    familyID.toDevice();
 }
 
 void DEMKinematicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, const std::vector<float>& factors) {
     // Set the gpu for this thread
-    // cudaSetDevice(streamInfo.device);
+    cudaSetDevice(streamInfo.device);
     // cudaStream_t new_stream;
     // cudaStreamCreate(&new_stream);
 
     // First get IDs and factors to device side
     size_t IDSize = IDs.size() * sizeof(bodyID_t);
-    bodyID_t* dIDs = (bodyID_t*)stateOfSolver_resources.allocateTempVector(1, IDSize);
+    bodyID_t* dIDs = (bodyID_t*)solverScratchSpace.allocateTempVector("dIDs", IDSize);
     DEME_GPU_CALL(cudaMemcpy(dIDs, IDs.data(), IDSize, cudaMemcpyHostToDevice));
     size_t factorSize = factors.size() * sizeof(float);
-    float* dFactors = (float*)stateOfSolver_resources.allocateTempVector(2, factorSize);
+    float* dFactors = (float*)solverScratchSpace.allocateTempVector("dFactors", factorSize);
     DEME_GPU_CALL(cudaMemcpy(dFactors, factors.data(), factorSize, cudaMemcpyHostToDevice));
 
     size_t idBoolSize = (size_t)simParams->nOwnerBodies * sizeof(notStupidBool_t);
     size_t ownerFactorSize = (size_t)simParams->nOwnerBodies * sizeof(float);
     // Bool table for whether this owner should change
-    notStupidBool_t* idBool = (notStupidBool_t*)stateOfSolver_resources.allocateTempVector(3, idBoolSize);
+    notStupidBool_t* idBool = (notStupidBool_t*)solverScratchSpace.allocateTempVector("idBool", idBoolSize);
     DEME_GPU_CALL(cudaMemset(idBool, 0, idBoolSize));
-    float* ownerFactors = (float*)stateOfSolver_resources.allocateTempVector(4, ownerFactorSize);
+    float* ownerFactors = (float*)solverScratchSpace.allocateTempVector("ownerFactors", ownerFactorSize);
     size_t blocks_needed_for_marking = (IDs.size() + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
 
     // Mark on the bool array those owners that need a change
@@ -367,13 +377,23 @@ void DEMKinematicThread::changeOwnerSizes(const std::vector<bodyID_t>& IDs, cons
     // Change the size of the sphere components in question
     size_t blocks_needed_for_changing =
         (simParams->nSpheresGM + DEME_MAX_THREADS_PER_BLOCK - 1) / DEME_MAX_THREADS_PER_BLOCK;
-    misc_kernels->kernel("kTModifyComponents")
-        .instantiate()
+    misc_kernels->kernel("modifyComponents")
+        .instantiate("deme::DEMDataKT")
         .configure(dim3(blocks_needed_for_changing), dim3(DEME_MAX_THREADS_PER_BLOCK), 0, streamInfo.stream)
-        .launch(granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM);
+        .launch(&granData, idBool, ownerFactors, (size_t)simParams->nSpheresGM);
     DEME_GPU_CALL(cudaStreamSynchronize(streamInfo.stream));
 
+    solverScratchSpace.finishUsingTempVector("dIDs");
+    solverScratchSpace.finishUsingTempVector("dFactors");
+    solverScratchSpace.finishUsingTempVector("idBool");
+    solverScratchSpace.finishUsingTempVector("ownerFactors");
     // cudaStreamDestroy(new_stream);
+
+    // Update them back to host
+    relPosSphereX.toHost();
+    relPosSphereY.toHost();
+    relPosSphereZ.toHost();
+    radiiSphere.toHost();
 }
 
 void DEMKinematicThread::startThread() {
@@ -407,68 +427,112 @@ void DEMKinematicThread::resetUserCallStat() {
     stateParams.binCurrentChangeRate = 0.;
 }
 
-size_t DEMKinematicThread::estimateMemUsage() const {
-    return m_approx_bytes_used;
+size_t DEMKinematicThread::estimateDeviceMemUsage() const {
+    return m_approxDeviceBytesUsed;
+}
+
+size_t DEMKinematicThread::estimateHostMemUsage() const {
+    return m_approxHostBytesUsed;
 }
 
 // Put sim data array pointers in place
 void DEMKinematicThread::packDataPointers() {
-    granData->familyID = familyID.data();
-    granData->voxelID = voxelID.data();
-    granData->locX = locX.data();
-    granData->locY = locY.data();
-    granData->locZ = locZ.data();
-    granData->oriQw = oriQw.data();
-    granData->oriQx = oriQx.data();
-    granData->oriQy = oriQy.data();
-    granData->oriQz = oriQz.data();
-    granData->marginSize = marginSize.data();
-    granData->idGeometryA = idGeometryA.data();
-    granData->idGeometryB = idGeometryB.data();
-    granData->contactType = contactType.data();
-    granData->previous_idGeometryA = previous_idGeometryA.data();
-    granData->previous_idGeometryB = previous_idGeometryB.data();
-    granData->previous_contactType = previous_contactType.data();
-    granData->contactMapping = contactMapping.data();
-    granData->familyMasks = familyMaskMatrix.data();
-    granData->familyExtraMarginSize = familyExtraMarginSize.data();
-
-    // for kT, those state vectors are fed by dT, so each has a buffer
-    // granData->voxelID_buffer = voxelID_buffer.data();
-    // granData->locX_buffer = locX_buffer.data();
-    // granData->locY_buffer = locY_buffer.data();
-    // granData->locZ_buffer = locZ_buffer.data();
-    // granData->oriQ0_buffer = oriQ0_buffer.data();
-    // granData->oriQ1_buffer = oriQ1_buffer.data();
-    // granData->oriQ2_buffer = oriQ2_buffer.data();
-    // granData->oriQ3_buffer = oriQ3_buffer.data();
-    // granData->familyID_buffer = familyID_buffer.data();
+    familyID.bindDevicePointer(&(granData->familyID));
+    voxelID.bindDevicePointer(&(granData->voxelID));
+    locX.bindDevicePointer(&(granData->locX));
+    locY.bindDevicePointer(&(granData->locY));
+    locZ.bindDevicePointer(&(granData->locZ));
+    oriQw.bindDevicePointer(&(granData->oriQw));
+    oriQx.bindDevicePointer(&(granData->oriQx));
+    oriQy.bindDevicePointer(&(granData->oriQy));
+    oriQz.bindDevicePointer(&(granData->oriQz));
+    marginSize.bindDevicePointer(&(granData->marginSize));
+    idGeometryA.bindDevicePointer(&(granData->idGeometryA));
+    idGeometryB.bindDevicePointer(&(granData->idGeometryB));
+    contactType.bindDevicePointer(&(granData->contactType));
+    contactPersistency.bindDevicePointer(&(granData->contactPersistency));
+    previous_idGeometryA.bindDevicePointer(&(granData->previous_idGeometryA));
+    previous_idGeometryB.bindDevicePointer(&(granData->previous_idGeometryB));
+    previous_contactType.bindDevicePointer(&(granData->previous_contactType));
+    contactMapping.bindDevicePointer(&(granData->contactMapping));
+    familyMaskMatrix.bindDevicePointer(&(granData->familyMasks));
+    familyExtraMarginSize.bindDevicePointer(&(granData->familyExtraMarginSize));
 
     // The offset info that indexes into the template arrays
-    granData->ownerClumpBody = ownerClumpBody.data();
-    granData->clumpComponentOffset = clumpComponentOffset.data();
-    granData->clumpComponentOffsetExt = clumpComponentOffsetExt.data();
+    ownerClumpBody.bindDevicePointer(&(granData->ownerClumpBody));
+    clumpComponentOffset.bindDevicePointer(&(granData->clumpComponentOffset));
+    clumpComponentOffsetExt.bindDevicePointer(&(granData->clumpComponentOffsetExt));
 
     // Mesh-related
-    granData->ownerMesh = ownerMesh.data();
-    granData->relPosNode1 = relPosNode1.data();
-    granData->relPosNode2 = relPosNode2.data();
-    granData->relPosNode3 = relPosNode3.data();
+    ownerMesh.bindDevicePointer(&(granData->ownerMesh));
+    relPosNode1.bindDevicePointer(&(granData->relPosNode1));
+    relPosNode2.bindDevicePointer(&(granData->relPosNode2));
+    relPosNode3.bindDevicePointer(&(granData->relPosNode3));
 
     // Template array pointers
-    granData->radiiSphere = radiiSphere.data();
-    granData->relPosSphereX = relPosSphereX.data();
-    granData->relPosSphereY = relPosSphereY.data();
-    granData->relPosSphereZ = relPosSphereZ.data();
+    radiiSphere.bindDevicePointer(&(granData->radiiSphere));
+    relPosSphereX.bindDevicePointer(&(granData->relPosSphereX));
+    relPosSphereY.bindDevicePointer(&(granData->relPosSphereY));
+    relPosSphereZ.bindDevicePointer(&(granData->relPosSphereZ));
+}
+
+void DEMKinematicThread::migrateDataToDevice() {
+    familyID.toDeviceAsync(streamInfo.stream);
+    voxelID.toDeviceAsync(streamInfo.stream);
+    locX.toDeviceAsync(streamInfo.stream);
+    locY.toDeviceAsync(streamInfo.stream);
+    locZ.toDeviceAsync(streamInfo.stream);
+    oriQw.toDeviceAsync(streamInfo.stream);
+    oriQx.toDeviceAsync(streamInfo.stream);
+    oriQy.toDeviceAsync(streamInfo.stream);
+    oriQz.toDeviceAsync(streamInfo.stream);
+    marginSize.toDeviceAsync(streamInfo.stream);
+    idGeometryA.toDeviceAsync(streamInfo.stream);
+    idGeometryB.toDeviceAsync(streamInfo.stream);
+    contactType.toDeviceAsync(streamInfo.stream);
+    contactPersistency.toDeviceAsync(streamInfo.stream);
+    previous_idGeometryA.toDeviceAsync(streamInfo.stream);
+    previous_idGeometryB.toDeviceAsync(streamInfo.stream);
+    previous_contactType.toDeviceAsync(streamInfo.stream);
+    contactMapping.toDeviceAsync(streamInfo.stream);
+    familyMaskMatrix.toDeviceAsync(streamInfo.stream);
+    familyExtraMarginSize.toDeviceAsync(streamInfo.stream);
+
+    ownerClumpBody.toDeviceAsync(streamInfo.stream);
+    clumpComponentOffset.toDeviceAsync(streamInfo.stream);
+    clumpComponentOffsetExt.toDeviceAsync(streamInfo.stream);
+
+    ownerMesh.toDeviceAsync(streamInfo.stream);
+    relPosNode1.toDeviceAsync(streamInfo.stream);
+    relPosNode2.toDeviceAsync(streamInfo.stream);
+    relPosNode3.toDeviceAsync(streamInfo.stream);
+
+    radiiSphere.toDeviceAsync(streamInfo.stream);
+    relPosSphereX.toDeviceAsync(streamInfo.stream);
+    relPosSphereY.toDeviceAsync(streamInfo.stream);
+    relPosSphereZ.toDeviceAsync(streamInfo.stream);
+
+    // Might not be necessary... but it's a big call anyway, let's sync
+    syncMemoryTransfer();
+}
+
+void DEMKinematicThread::migrateFamilyToHost() {
+    if (solverFlags.canFamilyChangeOnDevice) {
+        familyID.toHost();
+    }
+}
+
+void DEMKinematicThread::migrateDeviceModifiableInfoToHost() {
+    migrateFamilyToHost();
 }
 
 void DEMKinematicThread::packTransferPointers(DEMDynamicThread*& dT) {
     // Set the pointers to dT owned buffers
-    granData->pDTOwnedBuffer_nContactPairs = &(dT->granData->nContactPairs_buffer);
-    granData->pDTOwnedBuffer_idGeometryA = dT->granData->idGeometryA_buffer;
-    granData->pDTOwnedBuffer_idGeometryB = dT->granData->idGeometryB_buffer;
-    granData->pDTOwnedBuffer_contactType = dT->granData->contactType_buffer;
-    granData->pDTOwnedBuffer_contactMapping = dT->granData->contactMapping_buffer;
+    granData->pDTOwnedBuffer_nContactPairs = &(dT->nContactPairs_buffer);
+    granData->pDTOwnedBuffer_idGeometryA = dT->idGeometryA_buffer.data();
+    granData->pDTOwnedBuffer_idGeometryB = dT->idGeometryB_buffer.data();
+    granData->pDTOwnedBuffer_contactType = dT->contactType_buffer.data();
+    granData->pDTOwnedBuffer_contactMapping = dT->contactMapping_buffer.data();
 }
 
 void DEMKinematicThread::setSimParams(unsigned char nvXp2,
@@ -520,19 +584,19 @@ void DEMKinematicThread::setSimParams(unsigned char nvXp2,
     simParams->nGeoWildcards = geo_wildcards.size();
 }
 
-void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
-                                               size_t nOwnerClumps,
-                                               unsigned int nExtObj,
-                                               size_t nTriMeshes,
-                                               size_t nSpheresGM,
-                                               size_t nTriGM,
-                                               unsigned int nAnalGM,
-                                               size_t nExtraContacts,
-                                               unsigned int nMassProperties,
-                                               unsigned int nClumpTopo,
-                                               unsigned int nClumpComponents,
-                                               unsigned int nJitifiableClumpComponents,
-                                               unsigned int nMatTuples) {
+void DEMKinematicThread::allocateGPUArrays(size_t nOwnerBodies,
+                                           size_t nOwnerClumps,
+                                           unsigned int nExtObj,
+                                           size_t nTriMeshes,
+                                           size_t nSpheresGM,
+                                           size_t nTriGM,
+                                           unsigned int nAnalGM,
+                                           size_t nExtraContacts,
+                                           unsigned int nMassProperties,
+                                           unsigned int nClumpTopo,
+                                           unsigned int nClumpComponents,
+                                           unsigned int nJitifiableClumpComponents,
+                                           unsigned int nMatTuples) {
     DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
 
     // Sizes of these arrays
@@ -550,44 +614,34 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     simParams->nMatTuples = nMatTuples;
 
     // Resize the family mask `matrix' (in fact it is flattened)
-    DEME_TRACKED_RESIZE_DEBUGPRINT(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2,
-                                   "familyMaskMatrix", DONT_PREVENT_CONTACT);
+    DEME_DUAL_ARRAY_RESIZE(familyMaskMatrix, (NUM_AVAL_FAMILIES + 1) * NUM_AVAL_FAMILIES / 2, DONT_PREVENT_CONTACT);
 
     // Resize to the number of clumps
-    DEME_TRACKED_RESIZE_DEBUGPRINT(familyID, nOwnerBodies, "familyID", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(voxelID, nOwnerBodies, "voxelID", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(locX, nOwnerBodies, "locX", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(locY, nOwnerBodies, "locY", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(locZ, nOwnerBodies, "locZ", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(oriQw, nOwnerBodies, "oriQw", 1);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(oriQx, nOwnerBodies, "oriQx", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(oriQy, nOwnerBodies, "oriQy", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(oriQz, nOwnerBodies, "oriQz", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(marginSize, nOwnerBodies, "marginSize", 0);
+    DEME_DUAL_ARRAY_RESIZE(familyID, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(voxelID, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(locX, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(locY, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(locZ, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(oriQw, nOwnerBodies, 1);
+    DEME_DUAL_ARRAY_RESIZE(oriQx, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(oriQy, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(oriQz, nOwnerBodies, 0);
+    DEME_DUAL_ARRAY_RESIZE(marginSize, nOwnerBodies, 0);
 
     // Transfer buffer arrays
-    // It is cudaMalloc-ed memory, not managed, because we want explicit locality control of buffers
+    // It is cudaMalloc-ed memory, not on host, because we want explicit locality control of buffers
     {
         // These buffers should be on dT, to save dT access time
         DEME_GPU_CALL(cudaSetDevice(dT->streamInfo.device));
-        DEME_DEVICE_PTR_ALLOC(granData->voxelID_buffer, nOwnerBodies);
-        DEME_DEVICE_PTR_ALLOC(granData->locX_buffer, nOwnerBodies);
-        DEME_DEVICE_PTR_ALLOC(granData->locY_buffer, nOwnerBodies);
-        DEME_DEVICE_PTR_ALLOC(granData->locZ_buffer, nOwnerBodies);
-        DEME_DEVICE_PTR_ALLOC(granData->oriQ0_buffer, nOwnerBodies);
-        DEME_DEVICE_PTR_ALLOC(granData->oriQ1_buffer, nOwnerBodies);
-        DEME_DEVICE_PTR_ALLOC(granData->oriQ2_buffer, nOwnerBodies);
-        DEME_DEVICE_PTR_ALLOC(granData->oriQ3_buffer, nOwnerBodies);
-        DEME_DEVICE_PTR_ALLOC(granData->absVel_buffer, nOwnerBodies);
-
-        // DEME_TRACKED_RESIZE_DEBUGPRINT(voxelID_buffer, nOwnerBodies, "voxelID_buffer", 0);
-        // DEME_TRACKED_RESIZE_DEBUGPRINT(locX_buffer, nOwnerBodies, "locX_buffer", 0);
-        // DEME_TRACKED_RESIZE_DEBUGPRINT(locY_buffer, nOwnerBodies, "locY_buffer", 0);
-        // DEME_TRACKED_RESIZE_DEBUGPRINT(locZ_buffer, nOwnerBodies, "locZ_buffer", 0);
-        // DEME_TRACKED_RESIZE_DEBUGPRINT(oriQ0_buffer, nOwnerBodies, "oriQ0_buffer", 0);
-        // DEME_TRACKED_RESIZE_DEBUGPRINT(oriQ1_buffer, nOwnerBodies, "oriQ1_buffer", 0);
-        // DEME_TRACKED_RESIZE_DEBUGPRINT(oriQ2_buffer, nOwnerBodies, "oriQ2_buffer", 0);
-        // DEME_TRACKED_RESIZE_DEBUGPRINT(oriQ3_buffer, nOwnerBodies, "oriQ3_buffer", 0);
+        DEME_DEVICE_ARRAY_RESIZE(voxelID_buffer, nOwnerBodies);
+        DEME_DEVICE_ARRAY_RESIZE(locX_buffer, nOwnerBodies);
+        DEME_DEVICE_ARRAY_RESIZE(locY_buffer, nOwnerBodies);
+        DEME_DEVICE_ARRAY_RESIZE(locZ_buffer, nOwnerBodies);
+        DEME_DEVICE_ARRAY_RESIZE(oriQ0_buffer, nOwnerBodies);
+        DEME_DEVICE_ARRAY_RESIZE(oriQ1_buffer, nOwnerBodies);
+        DEME_DEVICE_ARRAY_RESIZE(oriQ2_buffer, nOwnerBodies);
+        DEME_DEVICE_ARRAY_RESIZE(oriQ3_buffer, nOwnerBodies);
+        DEME_DEVICE_ARRAY_RESIZE(absVel_buffer, nOwnerBodies);
         // DEME_ADVISE_DEVICE(voxelID_buffer, dT->streamInfo.device);
         // DEME_ADVISE_DEVICE(locX_buffer, dT->streamInfo.device);
         // DEME_ADVISE_DEVICE(locY_buffer, dT->streamInfo.device);
@@ -596,45 +650,45 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
         // DEME_ADVISE_DEVICE(oriQ1_buffer, dT->streamInfo.device);
         // DEME_ADVISE_DEVICE(oriQ2_buffer, dT->streamInfo.device);
         // DEME_ADVISE_DEVICE(oriQ3_buffer, dT->streamInfo.device);
-        if (solverFlags.canFamilyChange) {
-            // DEME_TRACKED_RESIZE_DEBUGPRINT(familyID_buffer, nOwnerBodies, "familyID_buffer", 0);
+
+        if (solverFlags.canFamilyChangeOnDevice) {
             // DEME_ADVISE_DEVICE(familyID_buffer, dT->streamInfo.device);
-            DEME_DEVICE_PTR_ALLOC(granData->familyID_buffer, nOwnerBodies);
+            DEME_DEVICE_ARRAY_RESIZE(familyID_buffer, nOwnerBodies);
         }
 
-        DEME_DEVICE_PTR_ALLOC(granData->relPosNode1_buffer, nTriGM);
-        DEME_DEVICE_PTR_ALLOC(granData->relPosNode2_buffer, nTriGM);
-        DEME_DEVICE_PTR_ALLOC(granData->relPosNode3_buffer, nTriGM);
+        DEME_DEVICE_ARRAY_RESIZE(relPosNode1_buffer, nOwnerBodies);
+        DEME_DEVICE_ARRAY_RESIZE(relPosNode2_buffer, nOwnerBodies);
+        DEME_DEVICE_ARRAY_RESIZE(relPosNode3_buffer, nOwnerBodies);
 
         // Unset the device change we just did
         DEME_GPU_CALL(cudaSetDevice(streamInfo.device));
     }
 
     // Resize to the number of spheres (or plus num of triangle facets)
-    DEME_TRACKED_RESIZE_DEBUGPRINT(ownerClumpBody, nSpheresGM, "ownerClumpBody", 0);
+    DEME_DUAL_ARRAY_RESIZE(ownerClumpBody, nSpheresGM, 0);
 
     // Resize to the number of triangle facets
-    DEME_TRACKED_RESIZE_DEBUGPRINT(ownerMesh, nTriGM, "ownerMesh", 0);
-    DEME_TRACKED_RESIZE_DEBUGPRINT(relPosNode1, nTriGM, "relPosNode1", make_float3(0));
-    DEME_TRACKED_RESIZE_DEBUGPRINT(relPosNode2, nTriGM, "relPosNode2", make_float3(0));
-    DEME_TRACKED_RESIZE_DEBUGPRINT(relPosNode3, nTriGM, "relPosNode3", make_float3(0));
+    DEME_DUAL_ARRAY_RESIZE(ownerMesh, nTriGM, 0);
+    DEME_DUAL_ARRAY_RESIZE(relPosNode1, nTriGM, make_float3(0));
+    DEME_DUAL_ARRAY_RESIZE(relPosNode2, nTriGM, make_float3(0));
+    DEME_DUAL_ARRAY_RESIZE(relPosNode3, nTriGM, make_float3(0));
 
     if (solverFlags.useClumpJitify) {
-        DEME_TRACKED_RESIZE_DEBUGPRINT(clumpComponentOffset, nSpheresGM, "clumpComponentOffset", 0);
+        DEME_DUAL_ARRAY_RESIZE(clumpComponentOffset, nSpheresGM, 0);
         // This extended component offset array can hold offset numbers even for big clumps (whereas
         // clumpComponentOffset is typically uint_8, so it may not). If a sphere's component offset index falls in this
         // range then it is not jitified, and the kernel needs to look for it in the global memory.
-        DEME_TRACKED_RESIZE_DEBUGPRINT(clumpComponentOffsetExt, nSpheresGM, "clumpComponentOffsetExt", 0);
+        DEME_DUAL_ARRAY_RESIZE(clumpComponentOffsetExt, nSpheresGM, 0);
         // Resize to the length of the clump templates
-        DEME_TRACKED_RESIZE_DEBUGPRINT(radiiSphere, nClumpComponents, "radiiSphere", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(relPosSphereX, nClumpComponents, "relPosSphereX", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(relPosSphereY, nClumpComponents, "relPosSphereY", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(relPosSphereZ, nClumpComponents, "relPosSphereZ", 0);
+        DEME_DUAL_ARRAY_RESIZE(radiiSphere, nClumpComponents, 0);
+        DEME_DUAL_ARRAY_RESIZE(relPosSphereX, nClumpComponents, 0);
+        DEME_DUAL_ARRAY_RESIZE(relPosSphereY, nClumpComponents, 0);
+        DEME_DUAL_ARRAY_RESIZE(relPosSphereZ, nClumpComponents, 0);
     } else {
-        DEME_TRACKED_RESIZE_DEBUGPRINT(radiiSphere, nSpheresGM, "radiiSphere", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(relPosSphereX, nSpheresGM, "relPosSphereX", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(relPosSphereY, nSpheresGM, "relPosSphereY", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(relPosSphereZ, nSpheresGM, "relPosSphereZ", 0);
+        DEME_DUAL_ARRAY_RESIZE(radiiSphere, nSpheresGM, 0);
+        DEME_DUAL_ARRAY_RESIZE(relPosSphereX, nSpheresGM, 0);
+        DEME_DUAL_ARRAY_RESIZE(relPosSphereY, nSpheresGM, 0);
+        DEME_DUAL_ARRAY_RESIZE(relPosSphereZ, nSpheresGM, 0);
     }
 
     // Arrays for kT produced contact info
@@ -642,16 +696,16 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
     // contact pairs is 2n, and I think the max is 6n (although I can't prove it). Note the estimate should be large
     // enough to decrease the number of reallocations in the simulation, but not too large that eats too much memory.
     {
-        size_t cnt_arr_size =
-            DEME_MAX(*stateOfSolver_resources.pNumPrevContacts, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(idGeometryA, cnt_arr_size, "idGeometryA", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(idGeometryB, cnt_arr_size, "idGeometryB", 0);
-        DEME_TRACKED_RESIZE_DEBUGPRINT(contactType, cnt_arr_size, "contactType", NOT_A_CONTACT);
+        size_t cnt_arr_size = DEME_MAX(*solverScratchSpace.numPrevContacts, nSpheresGM * DEME_INIT_CNT_MULTIPLIER);
+        DEME_DUAL_ARRAY_RESIZE(idGeometryA, cnt_arr_size, 0);
+        DEME_DUAL_ARRAY_RESIZE(idGeometryB, cnt_arr_size, 0);
+        DEME_DUAL_ARRAY_RESIZE(contactType, cnt_arr_size, NOT_A_CONTACT);
         if (!solverFlags.isHistoryless) {
-            DEME_TRACKED_RESIZE_DEBUGPRINT(previous_idGeometryA, cnt_arr_size, "previous_idGeometryA", 0);
-            DEME_TRACKED_RESIZE_DEBUGPRINT(previous_idGeometryB, cnt_arr_size, "previous_idGeometryB", 0);
-            DEME_TRACKED_RESIZE_DEBUGPRINT(previous_contactType, cnt_arr_size, "previous_contactType", NOT_A_CONTACT);
-            DEME_TRACKED_RESIZE_DEBUGPRINT(contactMapping, cnt_arr_size, "contactMapping", NULL_MAPPING_PARTNER);
+            DEME_DUAL_ARRAY_RESIZE(contactPersistency, cnt_arr_size, CONTACT_NOT_PERSISTENT);
+            DEME_DUAL_ARRAY_RESIZE(previous_idGeometryA, cnt_arr_size, 0);
+            DEME_DUAL_ARRAY_RESIZE(previous_idGeometryB, cnt_arr_size, 0);
+            DEME_DUAL_ARRAY_RESIZE(previous_contactType, cnt_arr_size, NOT_A_CONTACT);
+            DEME_DUAL_ARRAY_RESIZE(contactMapping, cnt_arr_size, NULL_MAPPING_PARTNER);
         }
     }
 }
@@ -659,7 +713,7 @@ void DEMKinematicThread::allocateManagedArrays(size_t nOwnerBodies,
 void DEMKinematicThread::registerPolicies(const std::vector<notStupidBool_t>& family_mask_matrix) {
     // Store family mask
     for (size_t i = 0; i < family_mask_matrix.size(); i++)
-        familyMaskMatrix.at(i) = family_mask_matrix.at(i);
+        familyMaskMatrix[i] = family_mask_matrix.at(i);
 }
 
 void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
@@ -679,7 +733,7 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
         prescans_comp.push_back(0);
         for (auto elem : clump_templates.spRadii) {
             for (auto radius : elem) {
-                radiiSphere.at(k) = radius;
+                radiiSphere[k] = radius;
                 k++;
             }
             prescans_comp.push_back(k);
@@ -689,9 +743,9 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
 
         for (auto elem : clump_templates.spRelPos) {
             for (auto loc : elem) {
-                relPosSphereX.at(k) = loc.x;
-                relPosSphereY.at(k) = loc.y;
-                relPosSphereZ.at(k) = loc.z;
+                relPosSphereX[k] = loc.x;
+                relPosSphereY[k] = loc.y;
+                relPosSphereZ[k] = loc.z;
                 k++;
             }
         }
@@ -725,32 +779,32 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
             auto this_clump_no_sp_relPos = clump_templates.spRelPos.at(type_of_this_clump);
 
             for (size_t j = 0; j < this_clump_no_sp_radii.size(); j++) {
-                ownerClumpBody.at(nExistSpheres + k) = nExistOwners + i;
+                ownerClumpBody[nExistSpheres + k] = nExistOwners + i;
 
                 // Depending on whether we jitify or flatten
                 if (solverFlags.useClumpJitify) {
                     // This component offset, is it too large that can't live in the jitified array?
                     unsigned int this_comp_offset = prescans_comp.at(type_of_this_clump) + j;
-                    clumpComponentOffsetExt.at(nExistSpheres + k) = this_comp_offset;
+                    clumpComponentOffsetExt[nExistSpheres + k] = this_comp_offset;
                     if (this_comp_offset < simParams->nJitifiableClumpComponents) {
-                        clumpComponentOffset.at(nExistSpheres + k) = this_comp_offset;
+                        clumpComponentOffset[nExistSpheres + k] = this_comp_offset;
                     } else {
                         // If not, an indicator will be put there
-                        clumpComponentOffset.at(nExistSpheres + k) = RESERVED_CLUMP_COMPONENT_OFFSET;
+                        clumpComponentOffset[nExistSpheres + k] = RESERVED_CLUMP_COMPONENT_OFFSET;
                     }
                 } else {
-                    radiiSphere.at(nExistSpheres + k) = this_clump_no_sp_radii.at(j);
+                    radiiSphere[nExistSpheres + k] = this_clump_no_sp_radii.at(j);
                     const float3 relPos = this_clump_no_sp_relPos.at(j);
-                    relPosSphereX.at(nExistSpheres + k) = relPos.x;
-                    relPosSphereY.at(nExistSpheres + k) = relPos.y;
-                    relPosSphereZ.at(nExistSpheres + k) = relPos.z;
+                    relPosSphereX[nExistSpheres + k] = relPos.x;
+                    relPosSphereY[nExistSpheres + k] = relPos.y;
+                    relPosSphereZ[nExistSpheres + k] = relPos.z;
                 }
 
                 k++;
             }
 
             family_t this_family_num = input_clump_family.at(i);
-            familyID.at(nExistOwners + i) = this_family_num;
+            familyID[nExistOwners + i] = this_family_num;
         }
     }
 
@@ -758,7 +812,7 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
     size_t owner_offset_for_ext_obj = nExistOwners + input_clump_types.size();
     for (size_t i = 0; i < input_ext_obj_family.size(); i++) {
         family_t this_family_num = input_ext_obj_family.at(i);
-        familyID.at(i + owner_offset_for_ext_obj) = this_family_num;
+        familyID[i + owner_offset_for_ext_obj] = this_family_num;
     }
 
     // Mesh objs
@@ -772,28 +826,28 @@ void DEMKinematicThread::populateEntityArrays(const std::vector<std::shared_ptr<
             // input_mesh_facet_owner run length is the num of facets in this mesh entity
             if (input_mesh_facet_owner.at(k) != this_facet_owner)
                 break;
-            ownerMesh.at(nExistingFacets + k) = owner_offset_for_mesh_obj + this_facet_owner;
+            ownerMesh[nExistingFacets + k] = owner_offset_for_mesh_obj + this_facet_owner;
             DEMTriangle this_tri = input_mesh_facets.at(k);
-            relPosNode1.at(nExistingFacets + k) = this_tri.p1;
-            relPosNode2.at(nExistingFacets + k) = this_tri.p2;
-            relPosNode3.at(nExistingFacets + k) = this_tri.p3;
+            relPosNode1[nExistingFacets + k] = this_tri.p1;
+            relPosNode2[nExistingFacets + k] = this_tri.p2;
+            relPosNode3[nExistingFacets + k] = this_tri.p3;
         }
 
         family_t this_family_num = input_mesh_obj_family.at(i);
-        familyID.at(i + owner_offset_for_mesh_obj) = this_family_num;
+        familyID[i + owner_offset_for_mesh_obj] = this_family_num;
         // DEME_DEBUG_PRINTF("kT just loaded a mesh in family %u", +(this_family_num));
         // DEME_DEBUG_PRINTF("Number of triangle facets loaded thus far: %zu", k);
     }
 }
 
-void DEMKinematicThread::initManagedArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
-                                           const std::vector<unsigned int>& input_ext_obj_family,
-                                           const std::vector<unsigned int>& input_mesh_obj_family,
-                                           const std::vector<unsigned int>& input_mesh_facet_owner,
-                                           const std::vector<DEMTriangle>& input_mesh_facets,
-                                           const std::vector<notStupidBool_t>& family_mask_matrix,
-                                           const ClumpTemplateFlatten& clump_templates) {
-    // Get the info into the managed memory from the host side. Can this process be more efficient? Maybe, but it's
+void DEMKinematicThread::initGPUArrays(const std::vector<std::shared_ptr<DEMClumpBatch>>& input_clump_batches,
+                                       const std::vector<unsigned int>& input_ext_obj_family,
+                                       const std::vector<unsigned int>& input_mesh_obj_family,
+                                       const std::vector<unsigned int>& input_mesh_facet_owner,
+                                       const std::vector<DEMTriangle>& input_mesh_facets,
+                                       const std::vector<notStupidBool_t>& family_mask_matrix,
+                                       const ClumpTemplateFlatten& clump_templates) {
+    // Get the info into the GPU memory from the host side. Can this process be more efficient? Maybe, but it's
     // initialization anyway.
 
     registerPolicies(family_mask_matrix);
@@ -820,10 +874,12 @@ void DEMKinematicThread::updateClumpMeshArrays(const std::vector<std::shared_ptr
                          input_mesh_facets, clump_templates, nExistingOwners, nExistingSpheres, nExistingFacets);
 }
 
-void DEMKinematicThread::updatePrevContactArrays(DEMDataDT* dT_data, size_t nContacts) {
-    // Store the incoming info in temp arrays
+void DEMKinematicThread::updatePrevContactArrays(DualStruct<DEMDataDT>& dT_data, size_t nContacts) {
+    // Store the incoming info in kT's arrays
+    // Note kT never had the responsibility to migrate contact info to host, even at UpdateClumps, as even in this case
+    // its host-side update comes from dT
     overwritePrevContactArrays(granData, dT_data, previous_idGeometryA, previous_idGeometryB, previous_contactType,
-                               simParams, stateOfSolver_resources, streamInfo.stream, nContacts);
+                               simParams, contactPersistency, solverScratchSpace, streamInfo.stream, nContacts);
     DEME_DEBUG_PRINTF("Number of contacts after a user-manual contact load: %zu", nContacts);
     DEME_DEBUG_PRINTF("Number of spheres after a user-manual contact load: %zu", (size_t)simParams->nSpheresGM);
 }
@@ -865,30 +921,15 @@ void DEMKinematicThread::jitifyKernels(const std::unordered_map<std::string, std
 }
 
 void DEMKinematicThread::initAllocation() {
-    DEME_TRACKED_RESIZE_DEBUGPRINT(familyExtraMarginSize, NUM_AVAL_FAMILIES, "familyExtraMarginSize", 0);
+    DEME_DUAL_ARRAY_RESIZE(familyExtraMarginSize, NUM_AVAL_FAMILIES, 0);
 }
 
 void DEMKinematicThread::deallocateEverything() {
-    DEME_DEVICE_PTR_DEALLOC(dT->granData->idGeometryA_buffer);
-    DEME_DEVICE_PTR_DEALLOC(dT->granData->idGeometryB_buffer);
-    DEME_DEVICE_PTR_DEALLOC(dT->granData->contactType_buffer);
-    DEME_DEVICE_PTR_DEALLOC(dT->granData->contactMapping_buffer);
+    // Device and dual array will have their destructor called once kT is gone, so this is not needed
+}
 
-    DEME_DEVICE_PTR_DEALLOC(granData->voxelID_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->locX_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->locY_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->locZ_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->oriQ0_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->oriQ1_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->oriQ2_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->oriQ3_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->absVel_buffer);
-
-    DEME_DEVICE_PTR_DEALLOC(granData->familyID_buffer);
-
-    DEME_DEVICE_PTR_DEALLOC(granData->relPosNode1_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->relPosNode2_buffer);
-    DEME_DEVICE_PTR_DEALLOC(granData->relPosNode3_buffer);
+void DEMKinematicThread::setOwnerFamily(bodyID_t ownerID, family_t fam, bodyID_t n) {
+    familyID.setVal(std::vector<family_t>(n, fam), ownerID);
 }
 
 void DEMKinematicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& triangles) {
@@ -897,14 +938,23 @@ void DEMKinematicThread::setTriNodeRelPos(size_t start, const std::vector<DEMTri
         relPosNode2[start + i] = triangles[i].p2;
         relPosNode3[start + i] = triangles[i].p3;
     }
+    relPosNode1.toDeviceAsync(streamInfo.stream, start, triangles.size());
+    relPosNode2.toDeviceAsync(streamInfo.stream, start, triangles.size());
+    relPosNode3.toDeviceAsync(streamInfo.stream, start, triangles.size());
+    syncMemoryTransfer();
 }
 
+// It's true that this method is never used in either kT or dT
 void DEMKinematicThread::updateTriNodeRelPos(size_t start, const std::vector<DEMTriangle>& updates) {
     for (size_t i = 0; i < updates.size(); i++) {
         relPosNode1[start + i] += updates[i].p1;
         relPosNode2[start + i] += updates[i].p2;
         relPosNode3[start + i] += updates[i].p3;
     }
+    relPosNode1.toDeviceAsync(streamInfo.stream, start, updates.size());
+    relPosNode2.toDeviceAsync(streamInfo.stream, start, updates.size());
+    relPosNode3.toDeviceAsync(streamInfo.stream, start, updates.size());
+    syncMemoryTransfer();
 }
 
 }  // namespace deme

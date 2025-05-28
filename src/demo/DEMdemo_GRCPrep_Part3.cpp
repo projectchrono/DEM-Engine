@@ -171,7 +171,7 @@ int main() {
     unsigned int out_steps = (unsigned int)(1.0 / (fps * step_size));
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_GRCPrep_Part3";
+    out_dir /= "DemoOutput_GRCPrep_Part3";
     create_directory(out_dir);
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
@@ -203,9 +203,9 @@ int main() {
             float max_v = max_v_finder->GetValue();
             std::cout << "Highest velocity is " << max_v << std::endl;
             DEMSim.ShowThreadCollaborationStats();
-            char filename[200];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-            DEMSim.WriteSphereFile(std::string(filename));
+            char filename[100];
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe++);
+            DEMSim.WriteSphereFile(out_dir / filename);
         }
         now_z -= compressor_v * step_size;
         compressor_tracker->SetPos(make_float3(0, 0, now_z));
@@ -221,9 +221,9 @@ int main() {
             float max_v = max_v_finder->GetValue();
             std::cout << "Highest velocity is " << max_v << std::endl;
             DEMSim.ShowThreadCollaborationStats();
-            char filename[200];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe++);
-            DEMSim.WriteSphereFile(std::string(filename));
+            char filename[100];
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe++);
+            DEMSim.WriteSphereFile(out_dir / filename);
         }
         now_z += compressor_v * step_size;
         compressor_tracker->SetPos(make_float3(0, 0, now_z));
@@ -236,15 +236,20 @@ int main() {
     matter_mass = total_mass_finder->GetValue();
     std::cout << "Bulk density after settling " << matter_mass / total_volume << std::endl;
 
-    char cp_filename[200];
-    sprintf(cp_filename, "%s/GRC_20e6.csv", out_dir.c_str());
-    DEMSim.WriteClumpFile(std::string(cp_filename));
+    // Final write
+    char cp_filename[100];
+    sprintf(cp_filename, "GRC_20e6.csv");
+    DEMSim.WriteClumpFile(out_dir / cp_filename);
 
     DEMSim.ClearThreadCollaborationStats();
 
-    char cnt_filename[200];
-    sprintf(cnt_filename, "%s/Contact_pairs.csv", out_dir.c_str());
-    DEMSim.WriteContactFile(std::string(cnt_filename));
+    char cnt_filename[100];
+    sprintf(cnt_filename, "Contact_pairs.csv");
+    DEMSim.WriteContactFile(out_dir / cnt_filename);
+
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
 
     std::cout << "DEMdemo_GRCPrep_Part3 exiting..." << std::endl;
     return 0;

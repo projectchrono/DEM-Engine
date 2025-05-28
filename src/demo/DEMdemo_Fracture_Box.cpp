@@ -35,7 +35,7 @@ int main() {
 
     //  E, nu, CoR, mu, Crr...
     auto mat_type_container =
-        DEMSim.LoadMaterial({{"E", 100e9}, {"nu", 0.3}, {"CoR", 0.7}, {"mu", 0.80}, {"Crr", 0.10}});
+        DEMSim.LoadMaterial({{"E", 100e7}, {"nu", 0.3}, {"CoR", 0.7}, {"mu", 0.80}, {"Crr", 0.10}});
     auto mat_type_particle = DEMSim.LoadMaterial({{"E", 60e9}, {"nu", 0.20}, {"CoR", 0.5}, {"mu", 0.5}, {"Crr", 0.05}});
     // If you don't have this line, then values will take average between 2 materials, when they are in contact
     DEMSim.SetMaterialPropertyPair("CoR", mat_type_container, mat_type_particle, 0.2);
@@ -117,7 +117,7 @@ int main() {
 
     std::filesystem::path out_dir = std::filesystem::current_path();
     std::string nameOutFolder = "R" + std::to_string(sphere_rad) + "_Int" + std::to_string(fact_radius) + "";
-    out_dir += "/DemoOutput_Fracture_" + nameOutFolder;
+    out_dir /= "DemoOutput_Fracture_" + nameOutFolder;
     remove_all(out_dir);
     create_directory(out_dir);
 
@@ -128,12 +128,15 @@ int main() {
     DEMSim.SetFamilyExtraMargin(1, fact_radius * sphere_rad);
 
     DEMSim.SetInitTimeStep(step_size);
-    DEMSim.SetGravitationalAcceleration(make_float3(0, 0.00, -9.81));
-    DEMSim.Initialize();
+    DEMSim.SetGravitationalAcceleration(make_float3(0, 0, -9.81));
+    // The `dry-run' option is on in this demo, which establishes the initial contact pairs while initializing. This is
+    // needed in this demo specifically, as we'll soon modify the contact wildcards associated with these contacts.
+    // You could also do a DoDynamicsThenSync(0) to achieve the same.
+    DEMSim.Initialize(/*Do a dry run at initialization = */ true);
     std::cout << "Initial number of contacts: " << DEMSim.GetNumContacts() << std::endl;
 
-    float sim_end = 5;
-    unsigned int fps = 1000;
+    float sim_end = 2;
+    unsigned int fps = 200;
     unsigned int datafps = 1000;
     unsigned int modfpsGeo = datafps / fps;
     float frame_time = 1.0 / datafps;
@@ -150,8 +153,9 @@ int main() {
     std::string nameOutFile = "data_R" + std::to_string(sphere_rad) + "_Int" + std::to_string(fact_radius) + ".csv";
     std::ofstream csvFile(nameOutFile);
 
-    DEMSim.SetFamilyContactWildcardValueAll(1, "initialLength", 0.0);
-    DEMSim.SetFamilyContactWildcardValueAll(1, "unbroken", 0.0);
+    DEMSim.SetFamilyContactWildcardValueBoth(1, "initialLength", 0.0);
+    // DEMSim.SetFamilyContactWildcardValueBoth(1, "damage", 0.0);
+    DEMSim.SetFamilyContactWildcardValueBoth(1, "unbroken", 0.0);
 
     // Simulation loop
     for (float t = 0; t < sim_end; t += frame_time) {
@@ -162,7 +166,7 @@ int main() {
         if (t >= 0.0 && status_1) {
             status_1 = false;
             DEMSim.DoDynamicsThenSync(0);
-            DEMSim.SetFamilyContactWildcardValueAll(1, "unbroken", 2.0);
+            DEMSim.SetFamilyContactWildcardValueBoth(1, "unbroken", 2.0);
             DEMSim.ChangeFamily(20, 21);  // start compression
 
             L0 = max_z_finder->GetValue() - min_z_finder->GetValue() + 2 * sphere_rad;
@@ -190,18 +194,18 @@ int main() {
             csvFile << (L - L0) / L0 << "; " << stress << std::endl;
 
             if (frame_count % modfpsGeo == 0) {
-                char filename[200];
-                char meshname[200];
-                char cnt_filename[200];
+                char filename[100];
+                char meshname[100];
+                char cnt_filename[100];
 
                 std::cout << "Outputting frame: " << frame_count / modfpsGeo << std::endl;
-                sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame_count / modfpsGeo);
-                sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame_count / modfpsGeo);
-                sprintf(cnt_filename, "%s/DEMdemo_contact_%04d.csv", out_dir.c_str(), frame_count / modfpsGeo);
+                sprintf(filename, "DEMdemo_output_%04d.csv", frame_count / modfpsGeo);
+                sprintf(meshname, "DEMdemo_mesh_%04d.vtk", frame_count / modfpsGeo);
+                sprintf(cnt_filename, "DEMdemo_contact_%04d.csv", frame_count / modfpsGeo);
 
-                DEMSim.WriteSphereFile(std::string(filename));
-                DEMSim.WriteMeshFile(std::string(meshname));
-                DEMSim.WriteContactFile(std::string(cnt_filename));
+                DEMSim.WriteSphereFile(out_dir / filename);
+                DEMSim.WriteMeshFile(out_dir / meshname);
+                DEMSim.WriteContactFile(out_dir / cnt_filename);
             }
         }
 
@@ -209,6 +213,9 @@ int main() {
         frame_count++;
     }
     csvFile.close();
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
     DEMSim.ShowTimingStats();
     std::cout << "Fracture demo exiting..." << std::endl;
     return 0;

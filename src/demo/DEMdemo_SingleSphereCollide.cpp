@@ -23,11 +23,11 @@ using namespace std::filesystem;
 
 int main() {
     DEMSolver DEMSim;
-    DEMSim.SetVerbosity(STEP_DEBUG);
+    DEMSim.SetVerbosity("STEP_METRIC");
     DEMSim.SetOutputFormat(OUTPUT_FORMAT::CSV);
     DEMSim.SetContactOutputContent({"OWNER", "FORCE", "POINT", "COMPONENT", "NORMAL", "TORQUE"});
     DEMSim.EnsureKernelErrMsgLineNum();
-    DEMSim.SetNoForceRecord();
+    // DEMSim.SetNoForceRecord();
 
     // srand(time(NULL));
     srand(4150);
@@ -76,6 +76,9 @@ int main() {
     auto bot_plane = DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/plane_20by20.obj").string(), mat_type_2);
     bot_plane->SetInitPos(make_float3(0, 0, -1.25));
     bot_plane->SetMass(10000.);
+    // Track the mesh
+    auto tracker_mesh = DEMSim.Track(bot_plane);
+
     // Just testing adding another mesh...
     auto another_plane =
         DEMSim.AddWavefrontMeshObject((GET_DATA_PATH() / "mesh/plane_20by20.obj").string(), mat_type_2);
@@ -120,11 +123,15 @@ int main() {
 
     // Ready simulation
     path out_dir = current_path();
-    out_dir += "/DemoOutput_SingleSphereCollide";
+    out_dir /= "DemoOutput_SingleSphereCollide";
     create_directory(out_dir);
-    // bool changed_family = false;
 
-    for (int i = 0; i < 100; i++) {
+    // Get sphere particles' IDs
+    unsigned int sphere1ID = tracker1->GetOwnerID();
+    unsigned int sphere2ID = tracker2->GetOwnerIDs()[0];
+
+    float frame_time = 1e-2;
+    for (int i = 0; i < (int)(1.0 / frame_time); i++) {
         std::cout << "Frame: " << i << std::endl;
 
         // if ((!changed_family) && i >= 10) {
@@ -133,19 +140,22 @@ int main() {
         //     changed_family = true;
         // }
 
-        char filename[200];
-        sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), i);
-        DEMSim.WriteSphereFile(std::string(filename));
+        char filename[100];
+        sprintf(filename, "DEMdemo_output_%04d.csv", i);
+        DEMSim.WriteSphereFile(out_dir / filename);
 
-        char cnt_filename[200];
-        sprintf(cnt_filename, "%s/Contact_pairs_%04d.csv", out_dir.c_str(), i);
-        // DEMSim.WriteContactFile(std::string(cnt_filename));
+        char cnt_filename[100];
+        sprintf(cnt_filename, "Contact_pairs_%04d.csv", i);
+        // DEMSim.WriteContactFile(out_dir / cnt_filename);
 
-        char meshfilename[200];
-        sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), i);
-        DEMSim.WriteMeshFile(std::string(meshfilename));
+        char meshfilename[100];
+        sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk", i);
+        DEMSim.WriteMeshFile(out_dir / meshfilename);
 
-        DEMSim.DoDynamicsThenSync(1e-2);
+        // Testing persistent contact functionality...
+        DEMSim.MarkPersistentContact();
+
+        DEMSim.DoDynamicsThenSync(frame_time);
         max_z = max_z_finder->GetValue();
         max_v = max_v_finder->GetValue();
         KE = KE_finder->GetValue();
@@ -158,8 +168,18 @@ int main() {
                                  std::pair<float, float>(pos1.z - 0.1, pos1.z + 0.1));
         tracker2->SetFamily(i % 10 + 1);
         unsigned int fam1 = tracker1->GetFamily(0);
-        unsigned int fam2 = tracker2->GetFamily();
+        unsigned int fam2 = tracker2->GetFamilies()[0];
 
+        // Test getting all contact force pairs concerning different trackers
+        std::vector<float3> forces_mesh, points_mesh, forces_spheres, points_spheres;
+        tracker_mesh->GetContactForcesForAll(points_mesh, forces_mesh);
+        // GetOwnerContactForces is another way to query the contact forces, if you don't want to write them to files.
+        // If a contact involves at least one of the owner IDs provided as the first arg of GetOwnerContactForces, it
+        // will be outputted. Note if a contact involves two IDs of the user-provided list, then the force for that
+        // contact will be given as the force experienced by whichever owner that appears earlier in the ID list.
+        DEMSim.GetOwnerContactForces({sphere1ID, sphere2ID}, points_spheres, forces_spheres);
+
+        std::cout << "----------------------------------------" << std::endl;
         std::cout << "Max Z coord is " << max_z << std::endl;
         std::cout << "Max velocity of any point is " << max_v << std::endl;
         std::cout << "Total kinetic energy is " << KE << std::endl;
@@ -168,6 +188,16 @@ int main() {
         std::cout << "Particle 1 family is " << fam1 << std::endl;
         std::cout << "Particle 2 family is " << fam2 << std::endl;
         std::cout << "Average contacts each sphere has: " << DEMSim.GetAvgSphContacts() << std::endl;
+        if (points_spheres.size() == 1) {
+            std::cout << "Two spheres collide, the contact is at (" << points_spheres[0].x << ", "
+                      << points_spheres[0].y << ", " << points_spheres[0].z << ")." << std::endl;
+        } else if (points_mesh.size() == 2) {
+            std::cout << "Spheres hit the mesh, the contact is at (" << points_mesh[0].x << ", " << points_mesh[0].y
+                      << ", " << points_mesh[0].z << ") and (" << points_mesh[1].x << ", " << points_mesh[1].y << ", "
+                      << points_mesh[1].z << ")." << std::endl;
+        }
+        DEMSim.ShowMemStats();
+        std::cout << "----------------------------------------" << std::endl;
 
         // Test changing material type on-the-fly...
         DEMSim.SetFamilyClumpMaterial(1, mat_type_3);

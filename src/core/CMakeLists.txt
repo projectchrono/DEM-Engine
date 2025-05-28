@@ -54,7 +54,6 @@ target_include_directories(
 	core
 	PUBLIC $<BUILD_INTERFACE:${ProjectIncludeSource}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 	PUBLIC $<BUILD_INTERFACE:${ProjectIncludeGenerated}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-	PUBLIC $<BUILD_INTERFACE:${NVIDIAMathDir}> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
 if(NOT PYTHON_BUILD)
@@ -82,7 +81,7 @@ endif()
 
 set(core_headers
 	${CMAKE_BINARY_DIR}/src/core/ApiVersion.h
-	${CMAKE_CURRENT_SOURCE_DIR}/utils/ManagedAllocator.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/CudaAllocator.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ManagedMemory.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/JitHelper.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/ThreadManager.h
@@ -91,6 +90,7 @@ set(core_headers
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/WavefrontMeshLoader.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/csv.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/Timer.hpp
+	${CMAKE_CURRENT_SOURCE_DIR}/utils/DataMigrationHelper.hpp
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/DEMEPaths.h
 	${CMAKE_CURRENT_SOURCE_DIR}/utils/RuntimeData.h
 )
@@ -134,11 +134,7 @@ install(
 
 # Install Third-party Headers
 install(
-	DIRECTORY ${NVIDIAMathDir}/nvmath
-		DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
-install(
-	FILES
+	FILES 
 		"${NVIDIAJitifyPath}/jitify.hpp"
 	DESTINATION
 		${CMAKE_INSTALL_INCLUDEDIR}/jitify

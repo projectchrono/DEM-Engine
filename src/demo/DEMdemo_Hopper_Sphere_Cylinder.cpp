@@ -60,8 +60,8 @@ int main() {
     double gateWidth = 0.1295;
 
     path out_dir = current_path();
-    out_dir += "/Test_Plastic_Sphere_Cylinder/";
-    out_dir += "Hopper/";
+    out_dir /= "Test_Plastic_Sphere_Cylinder";
+    out_dir /= "Hopper";
 
     auto mat_type_bottom = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
     auto mat_type_flume = DEMSim.LoadMaterial({{"E", 10e9}, {"nu", 0.3}, {"CoR", 0.60}});
@@ -141,7 +141,7 @@ int main() {
 
     remove_all(out_dir);
     create_directories(out_dir);
-    char filename[200], meshfile[200];
+    char filename[100], meshfile[100];
 
     auto max_z_finder = DEMSim.CreateInspector("clump_max_z");
     auto min_z_finder = DEMSim.CreateInspector("clump_min_z");
@@ -232,8 +232,8 @@ int main() {
         bool initialization = true;
         double consolidation = true;
 
-        sprintf(meshfile, "%s/DEMdemo_funnel_%04d.vtk", out_dir.c_str(), frame);
-        DEMSim.WriteMeshFile(std::string(meshfile));
+        sprintf(meshfile, "DEMdemo_funnel_%04d.vtk", frame);
+        DEMSim.WriteMeshFile(out_dir / meshfile);
 
         while (initialization) {
             std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
@@ -281,8 +281,8 @@ int main() {
 
             if (generate) {
                 std::cout << "frame : " << frame << std::endl;
-                sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), frame);
-                DEMSim.WriteSphereFile(std::string(filename));
+                sprintf(filename, "DEMdemo_settling_%04d.csv", frame);
+                DEMSim.WriteSphereFile(out_dir / filename);
                 // DEMSim.ShowThreadCollaborationStats();
                 frame++;
             }
@@ -294,8 +294,8 @@ int main() {
             if (!initialization) {
                 for (int i = 0; i < (int)(0.3 / settle_frame_time); i++) {
                     DEMSim.DoDynamics(settle_frame_time);
-                    sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), i);
-                    DEMSim.WriteSphereFile(std::string(filename));
+                    sprintf(filename, "DEMdemo_settling_%04d.csv", i);
+                    DEMSim.WriteSphereFile(out_dir / filename);
                     std::cout << "consolidating for " << i * settle_frame_time << "s " << std::endl;
                 }
             }
@@ -320,8 +320,8 @@ int main() {
         bool initialization = true;
         double consolidation = true;
 
-        sprintf(meshfile, "%s/DEMdemo_funnel_%04d.vtk", out_dir.c_str(), frame);
-        DEMSim.WriteMeshFile(std::string(meshfile));
+        sprintf(meshfile, "DEMdemo_funnel_%04d.vtk", frame);
+        DEMSim.WriteMeshFile(out_dir / meshfile);
 
         while (initialization) {
             std::vector<std::shared_ptr<DEMClumpTemplate>> input_pile_template_type;
@@ -368,8 +368,8 @@ int main() {
 
             if (generate) {
                 std::cout << "frame : " << frame << std::endl;
-                sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), frame);
-                DEMSim.WriteSphereFile(std::string(filename));
+                sprintf(filename, "DEMdemo_settling_%04d.csv", frame);
+                DEMSim.WriteSphereFile(out_dir / filename);
                 // DEMSim.ShowThreadCollaborationStats();
                 frame++;
             }
@@ -381,8 +381,8 @@ int main() {
             if (!initialization) {
                 for (int i = 0; i < (int)(0.4 / settle_frame_time); i++) {
                     DEMSim.DoDynamics(settle_frame_time);
-                    sprintf(filename, "%s/DEMdemo_settling_%04d.csv", out_dir.c_str(), frame++);
-                    DEMSim.WriteSphereFile(std::string(filename));
+                    sprintf(filename, "DEMdemo_settling_%04d.csv", frame++);
+                    DEMSim.WriteSphereFile(out_dir / filename);
                     std::cout << "consolidating for " << i * settle_frame_time << "s " << std::endl;
                 }
             }
@@ -398,10 +398,10 @@ int main() {
     std::cout << "Frame: " << timeOut << std::endl;
     frame = 0;
 
-    DEMSim.WriteMeshFile(std::string(meshfile));
-    char cnt_filename[200];
-    // sprintf(cnt_filename, "%s/Contact_pairs_1_.csv", out_dir.c_str());
-    sprintf(meshfile, "%s/DEMdemo_funnel_%04d.vtk", out_dir.c_str(), frame);
+    DEMSim.WriteMeshFile(out_dir / meshfile);
+    char cnt_filename[100];
+    // sprintf(cnt_filename, "Contact_pairs_1_.csv");
+    sprintf(meshfile, "DEMdemo_funnel_%04d.vtk", frame);
 
     bool status = true;
     bool stopGate = true;
@@ -413,11 +413,11 @@ int main() {
         totalRunTime += timeStep;
 
         if (!(i % timeOut) || i == 0) {
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), frame);
-            sprintf(meshfile, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), frame);
+            sprintf(filename, "DEMdemo_output_%04d.csv", frame);
+            sprintf(meshfile, "DEMdemo_mesh_%04d.vtk", frame);
 
-            DEMSim.WriteMeshFile(std::string(meshfile));
-            DEMSim.WriteSphereFile(std::string(filename));
+            DEMSim.WriteMeshFile(out_dir / meshfile);
+            DEMSim.WriteSphereFile(out_dir / filename);
 
             std::cout << "Frame: " << frame << std::endl;
             std::cout << "Elapsed time: " << totalRunTime << std::endl;
@@ -445,6 +445,10 @@ int main() {
     DEMSim.ShowTimingStats();
     DEMSim.ClearTimingStats();
 
-    std::cout << "DEMdemo exiting..." << std::endl;
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
+
+    std::cout << "DEMdemo_Hopper exiting..." << std::endl;
     return 0;
 }

@@ -19,11 +19,45 @@
 #include <filesystem>
 #include <unordered_map>
 #include <random>
-#include <nvmath/helper_math.cuh>
+#include <thread>
+#include <future>
+#include <utility>
+#include <tuple>
+#include <type_traits>
+
+#include <kernel/DEMHelperKernels.cuh>
 #include <DEM/VariableTypes.h>
-// #include <DEM/Defines.h>
 
 namespace deme {
+
+// Generic helper function to run something in a thread and get the result
+template <typename Func, typename... Args>
+inline auto run_in_thread(Func&& func, Args&&... args) -> decltype(func(args...)) {
+    using ReturnType = decltype(func(args...));
+
+    std::promise<ReturnType> prom;
+    std::future<ReturnType> fut = prom.get_future();
+
+    // Capture everything in a tuple
+    auto bound_args = std::make_tuple(std::forward<Func>(func), std::forward<Args>(args)...);
+
+    std::thread t([&prom, bound_args = std::move(bound_args)]() mutable {
+        try {
+            auto result = std::apply(std::move(std::get<0>(bound_args)),
+                                     std::apply(
+                                         [](auto&&, auto&&... args_inner) {
+                                             return std::make_tuple(std::forward<decltype(args_inner)>(args_inner)...);
+                                         },
+                                         std::move(bound_args)));
+            prom.set_value(std::move(result));
+        } catch (...) {
+            prom.set_exception(std::current_exception());
+        }
+    });
+
+    t.join();
+    return fut.get();
+}
 
 inline int randomZeroOrOne() {
     std::random_device rd;   // Random number device to seed the generator
@@ -47,6 +81,7 @@ inline T1 locateMaskPair(const T1& i, const T1& j) {
     return (1 + j) * j / 2 + i;
 }
 
+// Debug-purpose array printer
 template <typename T1>
 inline void displayArray(T1* arr, size_t n) {
     for (size_t i = 0; i < n; i++) {
@@ -55,9 +90,22 @@ inline void displayArray(T1* arr, size_t n) {
     std::cout << std::endl;
 }
 
-inline void displayFloat3(float3* arr, size_t n) {
+// An extremely inefficient device vector view function
+template <typename T1>
+inline void displayDeviceArray(T1* arr, size_t n) {
+    std::vector<T1> tmp(n);
+    DEME_GPU_CALL(cudaMemcpy(tmp.data(), arr, n * sizeof(T1), cudaMemcpyDeviceToHost));
     for (size_t i = 0; i < n; i++) {
-        std::cout << "(" << +(arr[i].x) << ", " << +(arr[i].y) << ", " << +(arr[i].z) << "), ";
+        std::cout << +(tmp[i]) << " ";
+    }
+    std::cout << std::endl;
+}
+
+inline void displayDeviceFloat3(float3* arr, size_t n) {
+    std::vector<float3> tmp(n);
+    DEME_GPU_CALL(cudaMemcpy(tmp.data(), arr, n * sizeof(float3), cudaMemcpyDeviceToHost));
+    for (size_t i = 0; i < n; i++) {
+        std::cout << "(" << +(tmp[i].x) << ", " << +(tmp[i].y) << ", " << +(tmp[i].z) << "), ";
     }
     std::cout << std::endl;
 }
@@ -78,12 +126,15 @@ inline bool isBetween(const float3& coord, const float3& L, const float3& U) {
     return true;
 }
 
-// Make sure a T1 type triplet falls in a range, then output as T2 type
-template <typename T1, typename T2>
-inline T2 hostClampBetween(const T1& data, const T2& low, const T2& high) {
-    T2 res;
-    res = DEME_MIN(DEME_MAX(data, low), high);
-    return res;
+template <typename T>
+inline bool isBetween(const T& x, const T& L, const T& U) {
+    if (x < L) {
+        return false;
+    }
+    if (x > U) {
+        return false;
+    }
+    return true;
 }
 
 template <typename T1>
@@ -139,24 +190,6 @@ inline void hostMergeSearchMapGen(T1* arr1, T1* arr2, T1* map, size_t size1, siz
             }
         }
     }
-}
-
-//// TODO: Why is there a namespace (?) issue that makes us able to use make_float3 properly in demo scripts, but not in
-/// any of these DEM system h or cpp files?
-inline float3 host_make_float3(float a, float b, float c) {
-    float3 f;
-    f.x = a;
-    f.y = b;
-    f.z = c;
-    return f;
-}
-inline float4 host_make_float4(float x, float y, float z, float w) {
-    float4 f;
-    f.x = x;
-    f.y = y;
-    f.z = z;
-    f.w = w;
-    return f;
 }
 
 inline size_t hostCalcBinNum(binID_t& nbX,
@@ -327,6 +360,13 @@ inline std::vector<T1> hostRemoveElem(const std::vector<T1>& vec, const std::vec
     return v;
 }
 
+// Host version of sort and return
+template <typename T1>
+std::vector<T1> hostSort(std::vector<T1> input) {
+    std::sort(input.begin(), input.end());
+    return input;  // May be moved or elided
+}
+
 // Contribution from https://stackoverflow.com/questions/1577475/c-sorting-and-keeping-track-of-indexes
 template <typename T1>
 inline std::vector<size_t> hostSortIndices(const std::vector<T1>& v) {
@@ -404,72 +444,6 @@ inline void hostScanForJumps(T1* arr, T1* arr_elem, T2* jump_loc, T3* jump_len, 
     }
 }
 
-// Chops a long ID (typically voxelID) into XYZ components
-template <typename T1, typename T2>
-inline void hostIDChopper(T1& X, T1& Y, T1& Z, const T2& ID, const unsigned char& nvXp2, const unsigned char& nvYp2) {
-    X = ID & (((T1)1 << nvXp2) - 1);  // & operation here equals modulo
-    Y = (ID >> nvXp2) & (((T1)1 << nvYp2) - 1);
-    Z = (ID) >> (nvXp2 + nvYp2);
-}
-
-// Packs XYZ components back to a long ID (typically voxelID)
-template <typename T1, typename T2>
-inline void hostIDPacker(T1& ID,
-                         const T2& X,
-                         const T2& Y,
-                         const T2& Z,
-                         const unsigned char& nvXp2,
-                         const unsigned char& nvYp2) {
-    ID = X;
-    ID += Y << nvXp2;
-    ID += Z << (nvXp2 + nvYp2);
-}
-
-// From a voxelID to (usually double-precision) xyz coordinate
-template <typename T1, typename T2, typename T3>
-inline void hostVoxelIDToPosition(T1& X,
-                                  T1& Y,
-                                  T1& Z,
-                                  const T2& ID,
-                                  const T3& subPosX,
-                                  const T3& subPosY,
-                                  const T3& subPosZ,
-                                  const unsigned char& nvXp2,
-                                  const unsigned char& nvYp2,
-                                  const T1& voxelSize,
-                                  const T1& l) {
-    T2 voxelIDX, voxelIDY, voxelIDZ;
-    hostIDChopper<T2, T2>(voxelIDX, voxelIDY, voxelIDZ, ID, nvXp2, nvYp2);
-    X = (T1)voxelIDX * voxelSize + (T1)subPosX * l;
-    Y = (T1)voxelIDY * voxelSize + (T1)subPosY * l;
-    Z = (T1)voxelIDZ * voxelSize + (T1)subPosZ * l;
-}
-
-// From xyz coordinate (usually double-precision) to voxelID
-template <typename T1, typename T2, typename T3>
-inline void hostPositionToVoxelID(T1& ID,
-                                  T2& subPosX,
-                                  T2& subPosY,
-                                  T2& subPosZ,
-                                  const T3& X,
-                                  const T3& Y,
-                                  const T3& Z,
-                                  const unsigned char& nvXp2,
-                                  const unsigned char& nvYp2,
-                                  const T3& voxelSize,
-                                  const T3& l) {
-    voxelID_t voxelNumX = X / voxelSize;
-    voxelID_t voxelNumY = Y / voxelSize;
-    voxelID_t voxelNumZ = Z / voxelSize;
-    subPosX = (X - (T3)voxelNumX * voxelSize) / l;
-    subPosY = (Y - (T3)voxelNumY * voxelSize) / l;
-    subPosZ = (Z - (T3)voxelNumZ * voxelSize) / l;
-
-    ID = voxelNumX;
-    ID += voxelNumY << nvXp2;
-    ID += voxelNumZ << (nvXp2 + nvYp2);
-}
-
 template <typename T1, typename T2>
 inline bool inBoxRegion(const T1& X,
                         const T1& Y,
@@ -493,6 +467,88 @@ std::vector<T1> hostUniqueVector(const std::vector<T1>& vec) {
     auto tmp_it = std::unique(unique_vec.begin(), unique_vec.end());
     unique_vec.resize(std::distance(unique_vec.begin(), tmp_it));
     return unique_vec;
+}
+
+template <typename T1, typename T2>
+inline std::vector<T1> VecOfVecToReal3Vector(const std::vector<std::vector<T2>>& vec) {
+    std::vector<T1> res(vec.size());
+    for (size_t i = 0; i < vec.size(); i++) {
+        T1 tmp;
+        tmp.x = vec[i][0];
+        tmp.y = vec[i][1];
+        tmp.z = vec[i][2];
+
+        res[i] = tmp;
+    }
+    return res;
+}
+
+template <typename T1, typename T2>
+inline std::vector<T1> VecOfVecToReal4Vector(const std::vector<std::vector<T2>>& vec) {
+    std::vector<T1> res(vec.size());
+    for (size_t i = 0; i < vec.size(); i++) {
+        T1 tmp;
+        tmp.x = vec[i][0];
+        tmp.y = vec[i][1];
+        tmp.z = vec[i][2];
+        tmp.w = vec[i][3];
+
+        res[i] = tmp;
+    }
+    return res;
+}
+
+template <typename T1, typename T2>
+inline std::vector<std::vector<T1>> Real3VectorToVecOfVec(const std::vector<T2>& vec) {
+    std::vector<std::vector<T1>> res(vec.size());
+    for (size_t i = 0; i < vec.size(); i++) {
+        std::vector<T1> tmp = {vec[i].x, vec[i].y, vec[i].z};
+        res[i] = tmp;
+    }
+    return res;
+}
+
+template <typename T1, typename T2>
+inline std::vector<std::vector<T1>> Real4VectorToVecOfVec(const std::vector<T2>& vec) {
+    std::vector<std::vector<T1>> res(vec.size());
+    for (size_t i = 0; i < vec.size(); i++) {
+        std::vector<T1> tmp = {vec[i].x, vec[i].y, vec[i].z, vec[i].w};
+        res[i] = tmp;
+    }
+    return res;
+}
+
+template <typename T1, typename T2>
+inline std::vector<T1> RealTupleVectorToXComponentVector(const std::vector<T2>& vec) {
+    std::vector<T1> res(vec.size());
+    for (size_t i = 0; i < vec.size(); i++) {
+        res[i] = vec[i].x;
+    }
+    return res;
+}
+template <typename T1, typename T2>
+inline std::vector<T1> RealTupleVectorToYComponentVector(const std::vector<T2>& vec) {
+    std::vector<T1> res(vec.size());
+    for (size_t i = 0; i < vec.size(); i++) {
+        res[i] = vec[i].y;
+    }
+    return res;
+}
+template <typename T1, typename T2>
+inline std::vector<T1> RealTupleVectorToZComponentVector(const std::vector<T2>& vec) {
+    std::vector<T1> res(vec.size());
+    for (size_t i = 0; i < vec.size(); i++) {
+        res[i] = vec[i].z;
+    }
+    return res;
+}
+template <typename T1, typename T2>
+inline std::vector<T1> RealTupleVectorToWComponentVector(const std::vector<T2>& vec) {
+    std::vector<T1> res(vec.size());
+    for (size_t i = 0; i < vec.size(); i++) {
+        res[i] = vec[i].w;
+    }
+    return res;
 }
 
 template <typename T1>
@@ -527,28 +583,6 @@ inline std::vector<std::string> parse_string_line(const std::string& in_str, con
     return result;
 }
 
-/// Host version of applying a quaternion to a vector
-template <typename T1, typename T2>
-inline void hostApplyOriQToVector3(T1& X, T1& Y, T1& Z, const T2& Qw, const T2& Qx, const T2& Qy, const T2& Qz) {
-    T1 oldX = X;
-    T1 oldY = Y;
-    T1 oldZ = Z;
-    X = ((T2)2.0 * (Qw * Qw + Qx * Qx) - (T2)1.0) * oldX + ((T2)2.0 * (Qx * Qy - Qw * Qz)) * oldY +
-        ((T2)2.0 * (Qx * Qz + Qw * Qy)) * oldZ;
-    Y = ((T2)2.0 * (Qx * Qy + Qw * Qz)) * oldX + ((T2)2.0 * (Qw * Qw + Qy * Qy) - (T2)1.0) * oldY +
-        ((T2)2.0 * (Qy * Qz - Qw * Qx)) * oldZ;
-    Z = ((T2)2.0 * (Qx * Qz - Qw * Qy)) * oldX + ((T2)2.0 * (Qy * Qz + Qw * Qx)) * oldY +
-        ((T2)2.0 * (Qw * Qw + Qz * Qz) - (T2)1.0) * oldZ;
-}
-
-/// Host version of applying a local rotation then a translation.
-template <typename T1, typename T2, typename T3>
-inline void applyFrameTransformLocalToGlobal(T1& pos, const T2& vec, const T3& rot_Q) {
-    hostApplyOriQToVector3(pos.x, pos.y, pos.z, rot_Q.w, rot_Q.x, rot_Q.y, rot_Q.z);
-    pos.x += vec.x;
-    pos.y += vec.y;
-    pos.z += vec.z;
-}
 /// Apply a local rotation then a translation, then return the result.
 inline std::vector<double> FrameTransformLocalToGlobal(const std::vector<double>& pos,
                                                        const std::vector<double>& vec,
@@ -576,7 +610,7 @@ inline void applyFrameTransformGlobalToLocal(T1& pos, const T2& vec, const T3& r
     pos.x -= vec.x;
     pos.y -= vec.y;
     pos.z -= vec.z;
-    hostApplyOriQToVector3(pos.x, pos.y, pos.z, rot_Q.w, -rot_Q.x, -rot_Q.y, -rot_Q.z);
+    applyOriQToVector3(pos.x, pos.y, pos.z, rot_Q.w, -rot_Q.x, -rot_Q.y, -rot_Q.z);
 }
 /// Translating the inverse of the provided vec then applying a local inverse rotation of the provided rot_Q, then
 /// return the result.
@@ -657,8 +691,9 @@ template <typename T>
 inline void assertThreeElements(const std::vector<T>& vec, const std::string& func_name, const std::string& var_name) {
     if (vec.size() != 3) {
         std::stringstream out;
-        out << func_name << "'s " << var_name << " argument needs to be a length 3 list/vector. The provided size is "
-            << vec.size() << ".\n";
+        out << func_name << "'s " << var_name
+            << " argument needs to be, or be composed of, length-3 lists/vectors. The provided size is " << vec.size()
+            << ".\n";
         throw std::runtime_error(out.str());
     }
 }
@@ -666,8 +701,9 @@ template <typename T>
 inline void assertFourElements(const std::vector<T>& vec, const std::string& func_name, const std::string& var_name) {
     if (vec.size() != 4) {
         std::stringstream out;
-        out << func_name << "'s " << var_name << " argument needs to be a length 4 list/vector. The provided size is "
-            << vec.size() << ".\n";
+        out << func_name << "'s " << var_name
+            << " argument needs to be, or be composed of, length-4 lists/vectors. The provided size is " << vec.size()
+            << ".\n";
         throw std::runtime_error(out.str());
     }
 }

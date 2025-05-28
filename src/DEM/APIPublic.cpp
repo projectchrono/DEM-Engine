@@ -27,8 +27,22 @@ DEMSolver::DEMSolver(unsigned int nGPUs) {
     // 2 means 2 threads (nGPUs is currently not used)
     dTkT_GpuManager = new GpuManager(2);
 
-    dT = new DEMDynamicThread(dTMain_InteractionManager, dTkT_InteractionManager, dTkT_GpuManager);
-    kT = new DEMKinematicThread(kTMain_InteractionManager, dTkT_InteractionManager, dTkT_GpuManager);
+    // Thread-based worker creation may be needed as the workers allocate DualStructs on construction
+    std::thread dT_construct([&]() {
+        // Get a device/stream ID to use from the GPU Manager
+        const GpuManager::StreamInfo dT_stream_info = dTkT_GpuManager->getAvailableStream();
+        DEME_GPU_CALL(cudaSetDevice(dT_stream_info.device));
+        dT = new DEMDynamicThread(dTMain_InteractionManager, dTkT_InteractionManager, dT_stream_info);
+    });
+
+    std::thread kT_construct([&]() {
+        const GpuManager::StreamInfo kT_stream_info = dTkT_GpuManager->getAvailableStream();
+        DEME_GPU_CALL(cudaSetDevice(kT_stream_info.device));
+        kT = new DEMKinematicThread(kTMain_InteractionManager, dTkT_InteractionManager, kT_stream_info);
+    });
+
+    dT_construct.join();
+    kT_construct.join();
 
     // Make friends
     dT->kT = kT;
@@ -228,63 +242,78 @@ void DEMSolver::SetContactOutputContent(const std::vector<std::string>& content)
     }
 }
 
+void DEMSolver::SyncMemoryTransfer() {
+    dT->syncMemoryTransfer();
+    kT->syncMemoryTransfer();
+}
+
 std::vector<bodyID_t> DEMSolver::GetOwnerContactClumps(bodyID_t ownerID) const {
     // Is this owner a clump?
-    ownerType_t this_type = dT->ownerTypes.at(ownerID);
-    std::vector<bodyID_t> geo_to_watch;  // geo IDs that need to scan
+    ownerType_t this_type = dT->ownerTypes[ownerID];  // ownerTypes has no way to change on device
+    std::vector<bodyID_t> geo_to_watch;               // geo IDs that need to scan
+
+    // Get device-major info to host first
+    dT->idGeometryA.toHostAsync(dT->streamInfo.stream);
+    dT->idGeometryB.toHostAsync(dT->streamInfo.stream);
+    dT->contactType.toHostAsync(dT->streamInfo.stream);
+
+    // These arrays can't change on device
     switch (this_type) {
         case OWNER_T_CLUMP:
             for (bodyID_t i = 0; i < nSpheresGM; i++) {
-                if (ownerID == dT->ownerClumpBody.at(i))
+                if (ownerID == dT->ownerClumpBody[i])
                     geo_to_watch.push_back(i);
             }
             break;
         case OWNER_T_ANALYTICAL:
             for (bodyID_t i = 0; i < nAnalGM; i++) {
-                if (ownerID == dT->ownerAnalBody.at(i))
+                if (ownerID == dT->ownerAnalBody[i])
                     geo_to_watch.push_back(i);
             }
             break;
         case OWNER_T_MESH:
             for (bodyID_t i = 0; i < nTriGM; i++) {
-                if (ownerID == dT->ownerMesh.at(i))
+                if (ownerID == dT->ownerMesh[i])
                     geo_to_watch.push_back(i);
             }
             break;
     }
 
+    // Try overlapping mem transfer with allocation...
+    dT->syncMemoryTransfer();
+
     std::vector<bodyID_t> clumps_in_cnt;
     // If this is not clump, then checking idB for it is enough
     if (this_type != OWNER_T_CLUMP) {
         for (size_t i = 0; i < dT->getNumContacts(); i++) {
-            auto idA = dT->idGeometryA.at(i);
-            auto idB = dT->idGeometryB.at(i);
+            auto idA = dT->idGeometryA[i];
+            auto idB = dT->idGeometryB[i];
             if (!check_exist(geo_to_watch, idB))
                 continue;
-            auto cnt_type = dT->contactType.at(i);
+            auto cnt_type = dT->contactType[i];
             // If it is a mesh facet, then contact type needs to match
             if (this_type == OWNER_T_MESH) {
                 if (cnt_type == SPHERE_MESH_CONTACT) {
-                    clumps_in_cnt.push_back(dT->ownerClumpBody.at(idA));
+                    clumps_in_cnt.push_back(dT->ownerClumpBody[idA]);
                 }
             } else {  // If analytical, then contact type larger than PLANE is fine
                 if (cnt_type >= SPHERE_PLANE_CONTACT) {
-                    clumps_in_cnt.push_back(dT->ownerClumpBody.at(idA));
+                    clumps_in_cnt.push_back(dT->ownerClumpBody[idA]);
                 }
             }
         }
     } else {  // If a clump, then both idA and idB need to be checked
         for (size_t i = 0; i < dT->getNumContacts(); i++) {
-            auto idA = dT->idGeometryA.at(i);
-            auto idB = dT->idGeometryB.at(i);
-            auto cnt_type = dT->contactType.at(i);
+            auto idA = dT->idGeometryA[i];
+            auto idB = dT->idGeometryB[i];
+            auto cnt_type = dT->contactType[i];
             if (check_exist(geo_to_watch, idA)) {
                 if (cnt_type == SPHERE_SPHERE_CONTACT) {
-                    clumps_in_cnt.push_back(dT->ownerClumpBody.at(idB));
+                    clumps_in_cnt.push_back(dT->ownerClumpBody[idB]);
                 }
             } else if (check_exist(geo_to_watch, idB)) {
                 if (cnt_type == SPHERE_SPHERE_CONTACT) {
-                    clumps_in_cnt.push_back(dT->ownerClumpBody.at(idA));
+                    clumps_in_cnt.push_back(dT->ownerClumpBody[idA]);
                 }
             }
         }
@@ -370,79 +399,176 @@ std::vector<std::pair<bodyID_t, bodyID_t>> DEMSolver::GetClumpContacts(
     return out_pair;
 }
 
-float3 DEMSolver::GetOwnerPosition(bodyID_t ownerID) const {
-    return dT->getOwnerPos(ownerID);
+std::vector<float3> DEMSolver::GetOwnerPosition(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerPos(ownerID, n);
 }
-float3 DEMSolver::GetOwnerAngVel(bodyID_t ownerID) const {
-    return dT->getOwnerAngVel(ownerID);
+std::vector<float3> DEMSolver::GetOwnerAngVel(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerAngVel(ownerID, n);
 }
-float3 DEMSolver::GetOwnerVelocity(bodyID_t ownerID) const {
-    return dT->getOwnerVel(ownerID);
+std::vector<float3> DEMSolver::GetOwnerVelocity(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerVel(ownerID, n);
 }
-float4 DEMSolver::GetOwnerOriQ(bodyID_t ownerID) const {
-    return dT->getOwnerOriQ(ownerID);
+std::vector<float4> DEMSolver::GetOwnerOriQ(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerOriQ(ownerID, n);
 }
-float3 DEMSolver::GetOwnerAcc(bodyID_t ownerID) const {
-    return dT->getOwnerAcc(ownerID);
+std::vector<float3> DEMSolver::GetOwnerAcc(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerAcc(ownerID, n);
 }
-float3 DEMSolver::GetOwnerAngAcc(bodyID_t ownerID) const {
-    return dT->getOwnerAngAcc(ownerID);
+std::vector<float3> DEMSolver::GetOwnerAngAcc(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerAngAcc(ownerID, n);
 }
-unsigned int DEMSolver::GetOwnerFamily(bodyID_t ownerID) const {
-    return (unsigned int)(+(dT->familyID.at(ownerID)));
+std::vector<unsigned int> DEMSolver::GetOwnerFamily(bodyID_t ownerID, bodyID_t n) const {
+    return dT->getOwnerFamily(ownerID, n);
 }
 
-void DEMSolver::AddOwnerNextStepAcc(bodyID_t ownerID, float3 acc) {
-    dT->accSpecified[ownerID] = 1;
-    dT->aX[ownerID] = acc.x;
-    dT->aY[ownerID] = acc.y;
-    dT->aZ[ownerID] = acc.z;
+std::vector<float> DEMSolver::GetOwnerWildcardValue(bodyID_t ownerID, const std::string& name, bodyID_t n) {
+    assertSysInit("GetOwnerWildcardValue");
+    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
+        DEME_ERROR(
+            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerOwnerWildcards first.",
+            name.c_str());
+    }
+    return dT->getOwnerWildcardValue(ownerID, m_owner_wc_num.at(name), n);
 }
-void DEMSolver::AddOwnerNextStepAngAcc(bodyID_t ownerID, float3 angAcc) {
-    dT->angAccSpecified[ownerID] = 1;
-    dT->alphaX[ownerID] = angAcc.x;
-    dT->alphaY[ownerID] = angAcc.y;
-    dT->alphaZ[ownerID] = angAcc.z;
+
+std::vector<float> DEMSolver::GetAllOwnerWildcardValue(const std::string& name) {
+    assertSysInit("GetAllOwnerWildcardValue");
+    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
+        DEME_ERROR(
+            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerOwnerWildcards first.",
+            name.c_str());
+    }
+    std::vector<float> res;
+    dT->getAllOwnerWildcardValue(res, m_owner_wc_num.at(name));
+    return res;
 }
-void DEMSolver::SetOwnerPosition(bodyID_t ownerID, float3 pos) {
+
+std::vector<float> DEMSolver::GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name) {
+    assertSysInit("GetFamilyOwnerWildcardValue");
+    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
+        DEME_ERROR(
+            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerOwnerWildcards first.",
+            name.c_str());
+    }
+    std::vector<float> res;
+    dT->getFamilyOwnerWildcardValue(res, N, m_owner_wc_num.at(name));
+    return res;
+}
+
+std::vector<float> DEMSolver::GetTriWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
+    assertSysInit("GetTriWildcardValue");
+    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
+        DEME_ERROR(
+            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerGeometryWildcards in the force model first.",
+            name.c_str());
+    }
+    std::vector<float> res;
+    dT->getTriWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
+    return res;
+}
+
+std::vector<float> DEMSolver::GetSphereWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
+    assertSysInit("GetSphereWildcardValue");
+    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
+        DEME_ERROR(
+            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerGeometryWildcards in the force model first.",
+            name.c_str());
+    }
+    std::vector<float> res;
+    dT->getSphereWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
+    return res;
+}
+
+std::vector<float> DEMSolver::GetAnalWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
+    assertSysInit("GetAnalWildcardValue");
+    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
+        DEME_ERROR(
+            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
+            "SetPerGeometryWildcards in the force model first.",
+            name.c_str());
+    }
+    std::vector<float> res;
+    dT->getAnalWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
+    return res;
+}
+
+size_t DEMSolver::GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
+                                        std::vector<float3>& points,
+                                        std::vector<float3>& forces) {
+    return dT->getOwnerContactForces(ownerIDs, points, forces);
+}
+size_t DEMSolver::GetOwnerContactForces(const std::vector<bodyID_t>& ownerIDs,
+                                        std::vector<float3>& points,
+                                        std::vector<float3>& forces,
+                                        std::vector<float3>& torques,
+                                        bool torque_in_local) {
+    return dT->getOwnerContactForces(ownerIDs, points, forces, torques, torque_in_local);
+}
+
+std::vector<float> DEMSolver::GetOwnerMass(bodyID_t ownerID, bodyID_t n) const {
+    std::vector<float> res(n);
+    for (bodyID_t i = 0; i < n; i++) {
+        // No mechanism to change mass properties on device, so [] operator is fine
+        if (jitify_mass_moi) {
+            inertiaOffset_t offset = dT->inertiaPropOffsets[ownerID + i];
+            res[i] = dT->massOwnerBody[offset];
+        } else {
+            res[i] = dT->massOwnerBody[ownerID + i];
+        }
+    }
+    return res;
+}
+
+std::vector<float3> DEMSolver::GetOwnerMOI(bodyID_t ownerID, bodyID_t n) const {
+    std::vector<float3> res(n);
+    for (bodyID_t i = 0; i < n; i++) {
+        // No mechanism to change mass properties on device, so [] operator is fine
+        if (jitify_mass_moi) {
+            inertiaOffset_t offset = dT->inertiaPropOffsets[ownerID + i];
+            float m1 = dT->mmiXX[offset];
+            float m2 = dT->mmiYY[offset];
+            float m3 = dT->mmiZZ[offset];
+            res[i] = make_float3(m1, m2, m3);
+        } else {
+            float m1 = dT->mmiXX[ownerID + i];
+            float m2 = dT->mmiYY[ownerID + i];
+            float m3 = dT->mmiZZ[ownerID + i];
+            res[i] = make_float3(m1, m2, m3);
+        }
+    }
+    return res;
+}
+
+void DEMSolver::AddOwnerNextStepAcc(bodyID_t ownerID, const std::vector<float3>& acc) {
+    dT->addOwnerNextStepAcc(ownerID, acc);
+}
+void DEMSolver::AddOwnerNextStepAngAcc(bodyID_t ownerID, const std::vector<float3>& angAcc) {
+    dT->addOwnerNextStepAngAcc(ownerID, angAcc);
+}
+void DEMSolver::SetOwnerPosition(bodyID_t ownerID, const std::vector<float3>& pos) {
     dT->setOwnerPos(ownerID, pos);
 }
-void DEMSolver::SetOwnerAngVel(bodyID_t ownerID, float3 angVel) {
+void DEMSolver::SetOwnerAngVel(bodyID_t ownerID, const std::vector<float3>& angVel) {
     dT->setOwnerAngVel(ownerID, angVel);
 }
-void DEMSolver::SetOwnerVelocity(bodyID_t ownerID, float3 vel) {
+void DEMSolver::SetOwnerVelocity(bodyID_t ownerID, const std::vector<float3>& vel) {
     dT->setOwnerVel(ownerID, vel);
 }
-void DEMSolver::SetOwnerOriQ(bodyID_t ownerID, float4 oriQ) {
+void DEMSolver::SetOwnerOriQ(bodyID_t ownerID, const std::vector<float4>& oriQ) {
     dT->setOwnerOriQ(ownerID, oriQ);
 }
-void DEMSolver::SetOwnerFamily(bodyID_t ownerID, family_t fam) {
-    kT->familyID.at(ownerID) = fam;
-    dT->familyID.at(ownerID) = fam;
-}
-
-float DEMSolver::GetOwnerMass(bodyID_t ownerID) const {
-    if (jitify_mass_moi) {
-        inertiaOffset_t offset = dT->inertiaPropOffsets.at(ownerID);
-        return dT->massOwnerBody.at(offset);
-    } else {
-        return dT->massOwnerBody.at(ownerID);
+void DEMSolver::SetOwnerFamily(bodyID_t ownerID, unsigned int fam, bodyID_t n) {
+    if (fam > std::numeric_limits<family_t>::max()) {
+        DEME_ERROR("You called SetOwnerFamily with family number %u, but family number should not be larger than %u.",
+                   fam, std::numeric_limits<family_t>::max());
     }
-}
-
-float3 DEMSolver::GetOwnerMOI(bodyID_t ownerID) const {
-    if (jitify_mass_moi) {
-        inertiaOffset_t offset = dT->inertiaPropOffsets.at(ownerID);
-        float m1 = dT->mmiXX.at(offset);
-        float m2 = dT->mmiYY.at(offset);
-        float m3 = dT->mmiZZ.at(offset);
-        return host_make_float3(m1, m2, m3);
-    } else {
-        float m1 = dT->mmiXX.at(ownerID);
-        float m2 = dT->mmiYY.at(ownerID);
-        float m3 = dT->mmiZZ.at(ownerID);
-        return host_make_float3(m1, m2, m3);
-    }
+    kT->setOwnerFamily(ownerID, static_cast<family_t>(fam), n);
+    dT->setOwnerFamily(ownerID, static_cast<family_t>(fam), n);
 }
 
 void DEMSolver::SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& new_nodes) {
@@ -464,7 +590,7 @@ void DEMSolver::SetTriNodeRelPos(size_t owner, size_t triID, const std::vector<f
     dT->setTriNodeRelPos(triID, new_triangles);
     dT->solverFlags.willMeshDeform = true;
 
-    // kT just received update from dT, to avoid mem hazards
+    // kT just receives update from dT, to avoid mem hazards
     // kT->setTriNodeRelPos(triID, new_triangles);
 }
 void DEMSolver::UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vector<float3>& updates) {
@@ -484,10 +610,11 @@ void DEMSolver::UpdateTriNodeRelPos(size_t owner, size_t triID, const std::vecto
     for (size_t i = 0; i < mesh->GetNumTriangles(); i++) {
         new_triangles[i] = mesh->GetTriangle(i);
     }
+    // This is correct to use setTriNodeRelPos, as mesh is already modified in this method
     dT->setTriNodeRelPos(triID, new_triangles);
     dT->solverFlags.willMeshDeform = true;
 
-    // kT just received update from dT, to avoid mem hazards
+    // kT just receives update from dT, to avoid mem hazards
     // kT->setTriNodeRelPos(triID, new_triangles);
 }
 std::shared_ptr<DEMMeshConnected>& DEMSolver::GetCachedMesh(bodyID_t ownerID) {
@@ -500,8 +627,8 @@ std::vector<float3> DEMSolver::GetMeshNodesGlobal(bodyID_t ownerID) {
     if (m_owner_mesh_map.find(ownerID) == m_owner_mesh_map.end()) {
         DEME_ERROR("Owner %zu is not a mesh, you therefore cannot get its nodes' coordinates.", (size_t)ownerID);
     }
-    float3 mesh_pos = dT->getOwnerPos(ownerID);
-    float4 mesh_oriQ = dT->getOwnerOriQ(ownerID);
+    float3 mesh_pos = dT->getOwnerPos(ownerID)[0];
+    float4 mesh_oriQ = dT->getOwnerOriQ(ownerID)[0];
     std::vector<float3> nodes(m_meshes.at(m_owner_mesh_map.at(ownerID))->GetCoordsVertices());
     for (auto& pnt : nodes) {
         applyFrameTransformLocalToGlobal<float3, float3, float4>(pnt, mesh_pos, mesh_oriQ);
@@ -581,12 +708,12 @@ void DEMSolver::SetExpandSafetyType(const std::string& insp_type) {
 }
 
 void DEMSolver::InstructBoxDomainDimension(float x, float y, float z, const std::string& dir_exact) {
-    m_user_box_min = host_make_float3(-x / 2., -y / 2., -z / 2.);
-    m_user_box_max = host_make_float3(x / 2., y / 2., z / 2.);
+    m_user_box_min = make_float3(-x / 2., -y / 2., -z / 2.);
+    m_user_box_max = make_float3(x / 2., y / 2., z / 2.);
 
     float3 enlarge_amount =
-        host_make_float3(x * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2., y * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2.,
-                         z * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2.);
+        make_float3(x * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2., y * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2.,
+                    z * DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2.);
     m_target_box_min = m_user_box_min - enlarge_amount;
     m_target_box_max = m_user_box_max + enlarge_amount;
 
@@ -613,13 +740,11 @@ void DEMSolver::InstructBoxDomainDimension(const std::pair<float, float>& x,
                                            const std::pair<float, float>& y,
                                            const std::pair<float, float>& z,
                                            const std::string& dir_exact) {
-    m_user_box_min =
-        host_make_float3(DEME_MIN(x.first, x.second), DEME_MIN(y.first, y.second), DEME_MIN(z.first, z.second));
-    m_user_box_max =
-        host_make_float3(DEME_MAX(x.second, x.first), DEME_MAX(y.second, y.first), DEME_MAX(z.second, z.first));
+    m_user_box_min = make_float3(DEME_MIN(x.first, x.second), DEME_MIN(y.first, y.second), DEME_MIN(z.first, z.second));
+    m_user_box_max = make_float3(DEME_MAX(x.second, x.first), DEME_MAX(y.second, y.first), DEME_MAX(z.second, z.first));
 
     float3 enlarge_amount =
-        host_make_float3(std::abs(x.second - x.first), std::abs(y.second - y.first), std::abs(z.second - z.first));
+        make_float3(std::abs(x.second - x.first), std::abs(y.second - y.first), std::abs(z.second - z.first));
     enlarge_amount *= DEFAULT_BOX_DOMAIN_ENLARGE_RATIO / 2.;
     m_target_box_min = m_user_box_min - enlarge_amount;
     m_target_box_max = m_user_box_max + enlarge_amount;
@@ -1106,6 +1231,13 @@ void DEMSolver::SetFamilyPrescribedQuaternion(unsigned int ID) {
     m_input_family_prescription.push_back(preInfo);
 }
 
+void DEMSolver::ShowMemStats() const {
+    DEME_PRINTF("kT host memory usage: %s\n", pretty_format_bytes(GetHostMemUsageKinematic()).c_str());
+    DEME_PRINTF("kT device memory usage: %s\n", pretty_format_bytes(GetDeviceMemUsageKinematic()).c_str());
+    DEME_PRINTF("dT host memory usage: %s\n", pretty_format_bytes(GetHostMemUsageDynamic()).c_str());
+    DEME_PRINTF("dT device memory usage: %s\n", pretty_format_bytes(GetDeviceMemUsageDynamic()).c_str());
+}
+
 void DEMSolver::AddFamilyPrescribedAcc(unsigned int ID,
                                        const std::string& X,
                                        const std::string& Y,
@@ -1290,25 +1422,25 @@ void DEMSolver::SetOwnerWildcardValue(bodyID_t ownerID, const std::string& name,
     dT->setOwnerWildcardValue(ownerID, m_owner_wc_num.at(name), vals);
 }
 
-void DEMSolver::SetFamilyContactWildcardValueAny(unsigned int N, const std::string& name, float val) {
-    assertSysInit("SetFamilyContactWildcardValueAny");
+void DEMSolver::SetFamilyContactWildcardValueEither(unsigned int N, const std::string& name, float val) {
+    assertSysInit("SetFamilyContactWildcardValueEither");
     if (m_cnt_wc_num.find(name) == m_cnt_wc_num.end()) {
         DEME_ERROR(
             "No contact wildcard in the force model is named %s.\nIf you need to use it, declare it via "
             "SetPerContactWildcards in the force model first.",
             name.c_str());
     }
-    dT->setFamilyContactWildcardValueAny(N, m_cnt_wc_num.at(name), val);
+    dT->setFamilyContactWildcardValueEither(N, m_cnt_wc_num.at(name), val);
 }
-void DEMSolver::SetFamilyContactWildcardValueAll(unsigned int N, const std::string& name, float val) {
-    assertSysInit("SetFamilyContactWildcardValueAll");
+void DEMSolver::SetFamilyContactWildcardValueBoth(unsigned int N, const std::string& name, float val) {
+    assertSysInit("SetFamilyContactWildcardValueBoth");
     if (m_cnt_wc_num.find(name) == m_cnt_wc_num.end()) {
         DEME_ERROR(
             "No contact wildcard in the force model is named %s.\nIf you need to use it, declare it via "
             "SetPerContactWildcards in the force model first.",
             name.c_str());
     }
-    dT->setFamilyContactWildcardValueAll(N, m_cnt_wc_num.at(name), val);
+    dT->setFamilyContactWildcardValueBoth(N, m_cnt_wc_num.at(name), val);
 }
 void DEMSolver::SetFamilyContactWildcardValue(unsigned int N1, unsigned int N2, const std::string& name, float val) {
     assertSysInit("SetFamilyContactWildcardValue");
@@ -1351,92 +1483,6 @@ void DEMSolver::SetFamilyOwnerWildcardValue(unsigned int N, const std::string& n
     dT->setFamilyOwnerWildcardValue(N, m_owner_wc_num.at(name), vals);
 }
 
-std::vector<float> DEMSolver::GetTriWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
-    assertSysInit("GetTriWildcardValue");
-    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
-        DEME_ERROR(
-            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerGeometryWildcards in the force model first.",
-            name.c_str());
-    }
-    std::vector<float> res;
-    dT->getTriWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
-    return res;
-}
-
-std::vector<float> DEMSolver::GetSphereWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
-    assertSysInit("GetSphereWildcardValue");
-    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
-        DEME_ERROR(
-            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerGeometryWildcards in the force model first.",
-            name.c_str());
-    }
-    std::vector<float> res;
-    dT->getSphereWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
-    return res;
-}
-
-std::vector<float> DEMSolver::GetAnalWildcardValue(bodyID_t geoID, const std::string& name, size_t n) {
-    assertSysInit("GetAnalWildcardValue");
-    if (m_geo_wc_num.find(name) == m_geo_wc_num.end()) {
-        DEME_ERROR(
-            "No geometry wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerGeometryWildcards in the force model first.",
-            name.c_str());
-    }
-    std::vector<float> res;
-    dT->getAnalWildcardValue(res, geoID, m_geo_wc_num.at(name), n);
-    return res;
-}
-
-float DEMSolver::GetOwnerWildcardValue(bodyID_t ownerID, const std::string& name) {
-    assertSysInit("GetOwnerWildcardValue");
-    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
-        DEME_ERROR(
-            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerOwnerWildcards first.",
-            name.c_str());
-    }
-    return dT->getOwnerWildcardValue(ownerID, m_owner_wc_num.at(name));
-}
-
-std::vector<float> DEMSolver::GetAllOwnerWildcardValue(const std::string& name) {
-    assertSysInit("GetAllOwnerWildcardValue");
-    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
-        DEME_ERROR(
-            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerOwnerWildcards first.",
-            name.c_str());
-    }
-    std::vector<float> res;
-    dT->getAllOwnerWildcardValue(res, m_owner_wc_num.at(name));
-    return res;
-}
-size_t DEMSolver::GetOwnerContactForces(bodyID_t ownerID, std::vector<float3>& points, std::vector<float3>& forces) {
-    return dT->getOwnerContactForces(ownerID, points, forces);
-}
-size_t DEMSolver::GetOwnerContactForces(bodyID_t ownerID,
-                                        std::vector<float3>& points,
-                                        std::vector<float3>& forces,
-                                        std::vector<float3>& torques,
-                                        bool torque_in_local) {
-    return dT->getOwnerContactForces(ownerID, points, forces, torques, torque_in_local);
-}
-
-std::vector<float> DEMSolver::GetFamilyOwnerWildcardValue(unsigned int N, const std::string& name) {
-    assertSysInit("GetFamilyOwnerWildcardValue");
-    if (m_owner_wc_num.find(name) == m_owner_wc_num.end()) {
-        DEME_ERROR(
-            "No owner wildcard in the force model is named %s.\nIf you need to use it, declare it via "
-            "SetPerOwnerWildcards first.",
-            name.c_str());
-    }
-    std::vector<float> res;
-    dT->getFamilyOwnerWildcardValue(res, N, m_owner_wc_num.at(name));
-    return res;
-}
-
 void DEMSolver::SetContactWildcards(const std::set<std::string>& wildcards) {
     m_force_model[DEFAULT_FORCE_MODEL_NAME]->SetPerContactWildcards(wildcards);
 }
@@ -1460,6 +1506,42 @@ void DEMSolver::DisableFamilyOutput(unsigned int ID) {
 
 void DEMSolver::AddKernelInclude(const std::string& lib_name) {
     kernel_includes += "#include <" + lib_name + ">\n";
+}
+
+void DEMSolver::MarkFamilyPersistentContactEither(unsigned int N) {
+    assertSysInit("MarkFamilyPersistentContactEither");
+    assignFamilyPersistentContactEither(N, CONTACT_IS_PERSISTENT);
+}
+void DEMSolver::RemoveFamilyPersistentContactEither(unsigned int N) {
+    assertSysInit("RemoveFamilyPersistentContactEither");
+    assignFamilyPersistentContactEither(N, CONTACT_NOT_PERSISTENT);
+}
+
+void DEMSolver::MarkFamilyPersistentContactBoth(unsigned int N) {
+    assertSysInit("MarkFamilyPersistentContactBoth");
+    assignFamilyPersistentContactBoth(N, CONTACT_IS_PERSISTENT);
+}
+void DEMSolver::RemoveFamilyPersistentContactBoth(unsigned int N) {
+    assertSysInit("RemoveFamilyPersistentContactBoth");
+    assignFamilyPersistentContactBoth(N, CONTACT_NOT_PERSISTENT);
+}
+
+void DEMSolver::MarkFamilyPersistentContact(unsigned int N1, unsigned int N2) {
+    assertSysInit("MarkFamilyPersistentContact");
+    assignFamilyPersistentContact(N1, N2, CONTACT_IS_PERSISTENT);
+}
+void DEMSolver::RemoveFamilyPersistentContact(unsigned int N1, unsigned int N2) {
+    assertSysInit("RemoveFamilyPersistentContact");
+    assignFamilyPersistentContact(N1, N2, CONTACT_NOT_PERSISTENT);
+}
+
+void DEMSolver::MarkPersistentContact() {
+    assertSysInit("MarkPersistentContact");
+    assignPersistentContact(CONTACT_IS_PERSISTENT);
+}
+void DEMSolver::RemovePersistentContact() {
+    assertSysInit("RemovePersistentContact");
+    assignPersistentContact(CONTACT_NOT_PERSISTENT);
 }
 
 std::shared_ptr<DEMMaterial> DEMSolver::LoadMaterial(DEMMaterial& a_material) {
@@ -1535,7 +1617,7 @@ std::shared_ptr<DEMClumpTemplate> DEMSolver::LoadClumpType(DEMClumpTemplate& clu
     clump.mark = offset;
 
     // Give it a default name
-    if (clump.m_name == DEME_NUM_CLUMP_NAME) {
+    if (clump.m_name == DEME_NULL_CLUMP_NAME) {
         char my_name[200];
         sprintf(my_name, "%04d", (int)nClumpTemplateLoad);
         clump.AssignName(std::string(my_name));
@@ -1643,8 +1725,8 @@ void DEMSolver::DisableContactBetweenFamilies(unsigned int ID1, unsigned int ID2
     } else {
         // If initialized, directly pass this info to workers
         unsigned int posInMat = locateMaskPair<unsigned int>(ID1, ID2);
-        kT->familyMaskMatrix.at(posInMat) = PREVENT_CONTACT;
-        dT->familyMaskMatrix.at(posInMat) = PREVENT_CONTACT;
+        kT->familyMaskMatrix.setVal(PREVENT_CONTACT, posInMat);
+        dT->familyMaskMatrix.setVal(PREVENT_CONTACT, posInMat);
     }
 }
 
@@ -1662,8 +1744,8 @@ void DEMSolver::EnableContactBetweenFamilies(unsigned int ID1, unsigned int ID2)
     } else {
         // If initialized, directly pass this info to workers
         unsigned int posInMat = locateMaskPair<unsigned int>(ID1, ID2);
-        kT->familyMaskMatrix.at(posInMat) = DONT_PREVENT_CONTACT;
-        dT->familyMaskMatrix.at(posInMat) = DONT_PREVENT_CONTACT;
+        kT->familyMaskMatrix.setVal(DONT_PREVENT_CONTACT, posInMat);
+        dT->familyMaskMatrix.setVal(DONT_PREVENT_CONTACT, posInMat);
     }
 }
 
@@ -1676,8 +1758,8 @@ void DEMSolver::SetFamilyExtraMargin(unsigned int N, float extra_size) {
         DEME_ERROR("You are adding an extra margin of size %.7g, but the size should not be smaller than 0.",
                    extra_size);
     }
-    kT->familyExtraMarginSize.at(N) = extra_size;
-    dT->familyExtraMarginSize.at(N) = extra_size;
+    kT->familyExtraMarginSize.setVal(extra_size, N);
+    dT->familyExtraMarginSize.setVal(extra_size, N);
 }
 
 void DEMSolver::ClearCache() {
@@ -1788,12 +1870,14 @@ void DEMSolver::WriteSphereFile(const std::string& outfilename) const {
         case (OUTPUT_FORMAT::CHPF): {
             std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
             dT->writeSpheresAsChpf(ptFile);
+            ptFile.close();
             break;
         }
 #endif
         case (OUTPUT_FORMAT::CSV): {
             std::ofstream ptFile(outfilename, std::ios::out);
             dT->writeSpheresAsCsv(ptFile);
+            ptFile.close();
             break;
         }
         case (OUTPUT_FORMAT::BINARY): {
@@ -1802,6 +1886,7 @@ void DEMSolver::WriteSphereFile(const std::string& outfilename) const {
             std::ofstream ptFile(outfilename, std::ios::out);
             DEME_WARNING("Binary sphere output is not implemented yet, using CSV...");
             dT->writeSpheresAsCsv(ptFile);
+            ptFile.close();
             break;
         }
         default:
@@ -1815,12 +1900,14 @@ void DEMSolver::WriteClumpFile(const std::string& outfilename, unsigned int accu
         case (OUTPUT_FORMAT::CHPF): {
             std::ofstream ptFile(outfilename, std::ios::out | std::ios::binary);
             dT->writeClumpsAsChpf(ptFile, accuracy);
+            ptFile.close();
             break;
         }
 #endif
         case (OUTPUT_FORMAT::CSV): {
             std::ofstream ptFile(outfilename, std::ios::out);
             dT->writeClumpsAsCsv(ptFile, accuracy);
+            ptFile.close();
             break;
         }
         case (OUTPUT_FORMAT::BINARY): {
@@ -1829,6 +1916,7 @@ void DEMSolver::WriteClumpFile(const std::string& outfilename, unsigned int accu
             std::ofstream ptFile(outfilename, std::ios::out);
             DEME_WARNING("Binary clump output is not implemented yet, using CSV...");
             dT->writeClumpsAsCsv(ptFile, accuracy);
+            ptFile.close();
             break;
         }
         default:
@@ -1847,6 +1935,7 @@ void DEMSolver::WriteContactFile(const std::string& outfilename, float force_thr
         case (OUTPUT_FORMAT::CSV): {
             std::ofstream ptFile(outfilename, std::ios::out);
             dT->writeContactsAsCsv(ptFile, force_thres);
+            ptFile.close();
             break;
         }
         case (OUTPUT_FORMAT::BINARY): {
@@ -1855,6 +1944,7 @@ void DEMSolver::WriteContactFile(const std::string& outfilename, float force_thr
             DEME_WARNING("Binary contact pair output is not implemented yet, using CSV...");
             std::ofstream ptFile(outfilename, std::ios::out);
             dT->writeContactsAsCsv(ptFile, force_thres);
+            ptFile.close();
             break;
         }
         default:
@@ -1868,6 +1958,7 @@ void DEMSolver::WriteMeshFile(const std::string& outfilename) const {
         case (MESH_FORMAT::VTK): {
             std::ofstream ptFile(outfilename, std::ios::out);
             dT->writeMeshesAsVtk(ptFile);
+            ptFile.close();
             break;
         }
         default:
@@ -1881,21 +1972,33 @@ size_t DEMSolver::ChangeClumpFamily(unsigned int fam_num,
                                     const std::pair<double, double>& Y,
                                     const std::pair<double, double>& Z,
                                     const std::set<unsigned int>& orig_fam) {
-    float3 L = host_make_float3(X.first, Y.first, Z.first);
-    float3 U = host_make_float3(X.second, Y.second, Z.second);
+    float3 L = make_float3(X.first, Y.first, Z.first);
+    float3 U = make_float3(X.second, Y.second, Z.second);
     size_t count = 0;
+
+    // And get those device-major data from device
+    if (dT->solverFlags.canFamilyChangeOnDevice) {
+        dT->familyID.toHost();
+        kT->familyID.toHost();
+    }
+    dT->voxelID.toHost();
+    dT->locX.toHost();
+    dT->locY.toHost();
+    dT->locZ.toHost();
+
     for (bodyID_t ownerID = 0; ownerID < nOwnerBodies; ownerID++) {
-        const ownerType_t this_type = dT->ownerTypes.at(ownerID);
+        // ownerTypes has no way to change on device
+        const ownerType_t this_type = dT->ownerTypes[ownerID];
         if (this_type != OWNER_T_CLUMP)
             continue;
         float3 CoM;
-        voxelID_t voxel = dT->voxelID.at(ownerID);
-        subVoxelPos_t subVoxX = dT->locX.at(ownerID);
-        subVoxelPos_t subVoxY = dT->locY.at(ownerID);
-        subVoxelPos_t subVoxZ = dT->locZ.at(ownerID);
-        hostVoxelIDToPosition<float, voxelID_t, subVoxelPos_t>(CoM.x, CoM.y, CoM.z, voxel, subVoxX, subVoxY, subVoxZ,
-                                                               dT->simParams->nvXp2, dT->simParams->nvYp2,
-                                                               dT->simParams->voxelSize, dT->simParams->l);
+        voxelID_t voxel = dT->voxelID[ownerID];
+        subVoxelPos_t subVoxX = dT->locX[ownerID];
+        subVoxelPos_t subVoxY = dT->locY[ownerID];
+        subVoxelPos_t subVoxZ = dT->locZ[ownerID];
+        voxelIDToPosition<float, voxelID_t, subVoxelPos_t>(CoM.x, CoM.y, CoM.z, voxel, subVoxX, subVoxY, subVoxZ,
+                                                           dT->simParams->nvXp2, dT->simParams->nvYp2,
+                                                           dT->simParams->voxelSize, dT->simParams->l);
         CoM.x += dT->simParams->LBFX;
         CoM.y += dT->simParams->LBFY;
         CoM.z += dT->simParams->LBFZ;
@@ -1903,26 +2006,29 @@ size_t DEMSolver::ChangeClumpFamily(unsigned int fam_num,
         // In region. This can be generalized in future versions.
         if (isBetween(CoM, L, U)) {
             if (orig_fam.size() == 0) {
-                dT->familyID.at(ownerID) = fam_num;
-                kT->familyID.at(ownerID) = fam_num;  // Must do both for dT and kT
+                dT->familyID[ownerID] = fam_num;
+                kT->familyID[ownerID] = fam_num;  // Must do both for dT and kT
                 count++;
             } else {
-                unsigned int old_fam = dT->familyID.at(ownerID);
+                unsigned int old_fam = dT->familyID[ownerID];
                 if (check_exist(orig_fam, old_fam)) {
-                    dT->familyID.at(ownerID) = fam_num;
-                    kT->familyID.at(ownerID) = fam_num;
+                    dT->familyID[ownerID] = fam_num;
+                    kT->familyID[ownerID] = fam_num;
                     count++;
                 }
             }
         }
     }
+
+    dT->familyID.toDevice();
+    kT->familyID.toDevice();
     return count;
 }
 
 // The method should be called after user inputs are in place, and before starting the simulation. It figures out a part
-// of the required simulation information such as the scale of the poblem domain, and makes sure these info live in
-// managed memory.
-void DEMSolver::Initialize() {
+// of the required simulation information such as the scale of the problem domain, and makes sure these info live in
+// GPU memory.
+void DEMSolver::Initialize(bool dry_run) {
     // A few checks first
     validateUserInputs();
 
@@ -1932,16 +2038,21 @@ void DEMSolver::Initialize() {
     postResourceGen();
 
     // Transfer user-specified solver preference/instructions to workers
-    transferSolverParams();
+    setSolverParams();
     // Transfer some simulation params to implementation level
-    transferSimParams();
+    setSimParams();
 
-    // Allocate and populate kT dT managed arrays
+    // Allocate and populate kT dT arrays
     allocateGPUArrays();
     initializeGPUArrays();
 
     // Put sim data array pointers in place
     packDataPointers();
+
+    // Now that all params prepared, and all data pointers packed on host side, we need to migrate that imformation to
+    // the device
+    migrateSimParamsToDevice();
+    migrateArrayDataToDevice();
 
     // Compile some of the kernels
     jitifyKernels();
@@ -1963,10 +2074,12 @@ void DEMSolver::Initialize() {
     /// know what they are doing
     sys_initialized = true;
 
-    // Do a dry-run: It establishes contact pairs. It helps to locate obvious problems at the start (like, too many
-    // contact pairs), and if the user needs to modify the contact wildcards before simulation starts, this step is
-    // meaningful. Dry-run is automatically done if advancing the simulation by 0 or a negative amount of time.
-    DoDynamicsThenSync(-1.0);
+    if (dry_run) {
+        // Do a dry-run: It establishes contact pairs. It helps to locate obvious problems at the start (like, too many
+        // contact pairs), and if the user needs to modify the contact wildcards before simulation starts, this step is
+        // meaningful. Dry-run is automatically done if advancing the simulation by 0 or a negative amount of time.
+        DoDynamicsThenSync(-1.0);
+    }
 }
 
 void DEMSolver::ShowTimingStats() {
@@ -2072,8 +2185,11 @@ void DEMSolver::UpdateSimParams() {
     decideBinSize();
     decideCDMarginStrat();
 
-    transferSolverParams();
-    transferSimParams();
+    setSolverParams();
+    setSimParams();
+
+    // Now that all params prepared, we need to migrate that imformation to the device
+    migrateSimParamsToDevice();
 
     // Jitify max vel finder, in case the policy there changed
     m_approx_max_vel_func->Initialize(m_subs, true);
@@ -2085,8 +2201,13 @@ void DEMSolver::UpdateSimParams() {
 
 void DEMSolver::UpdateStepSize(double ts) {
     m_ts_size = ts;
-    kT->simParams->h = ts;
+    // We for now store ts as float on devices...
     dT->simParams->h = ts;
+    kT->simParams->h = ts;
+    // dT->simParams.syncMemberToDevice<float>(offsetof(DEMSimParams, h));
+    // kT->simParams.syncMemberToDevice<float>(offsetof(DEMSimParams, h));
+    dT->simParams.toDevice();
+    kT->simParams.toDevice();
 }
 
 void DEMSolver::UpdateClumps() {
@@ -2115,6 +2236,9 @@ void DEMSolver::UpdateClumps() {
     // This method requires kT and dT are sync-ed
     // resetWorkerThreads();
 
+    // NOTE!!! This step in UpdateClumps is extremely important, as we'll soon modify device-major arrays on host!
+    migrateArrayDataToHost();
+
     // Record the number of entities, before adding to the system
     size_t nOwners_old = nOwnerBodies;
     size_t nClumps_old = nOwnerClumps;
@@ -2132,6 +2256,12 @@ void DEMSolver::UpdateClumps() {
     // `Update' method needs to know the number of existing clumps and spheres (before this addition)
     updateClumpMeshArrays(nOwners_old, nClumps_old, nSpheres_old, nTriMesh_old, nFacets_old, nExtObj_old, nAnalGM_old);
     packDataPointers();
+
+    // Now that all params prepared, and all data pointers packed on host side, we need to migrate that imformation to
+    // the device
+    migrateSimParamsToDevice();
+    migrateArrayDataToDevice();
+
     ReleaseFlattenedArrays();
     // Updating clumps is very critical
     dT->announceCritical();
@@ -2211,6 +2341,9 @@ void DEMSolver::DoDynamicsThenSync(double thisCallDuration) {
     // dT is finished, but the user asks us to sync, so we have to make kT sync with dT. This can be done by calling
     // resetWorkerThreads.
     resetWorkerThreads();
+
+    // This is hardly needed
+    // SyncMemoryTransfer();
 }
 
 void DEMSolver::ShowThreadCollaborationStats() {
@@ -2266,6 +2399,8 @@ float DEMSolver::dTInspectReduce(const std::shared_ptr<jitify::Program>& inspect
                                  INSPECT_ENTITY_TYPE thing_to_insp,
                                  CUB_REDUCE_FLAVOR reduce_flavor,
                                  bool all_domain) {
+    // Note they are currently running in the device associated with the main, but it's not a big issue
+    //// TODO: Think about the implication on using more than 2 GPUs
     float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
     return (float)(*pRes);
 }
@@ -2275,6 +2410,8 @@ float* DEMSolver::dTInspectNoReduce(const std::shared_ptr<jitify::Program>& insp
                                     INSPECT_ENTITY_TYPE thing_to_insp,
                                     CUB_REDUCE_FLAVOR reduce_flavor,
                                     bool all_domain) {
+    // Note they are currently running in the device associated with the main, but it's not a big issue
+    //// TODO: Think about the implication on using more than 2 GPUs
     float* pRes = dT->inspectCall(inspection_kernel, kernel_name, thing_to_insp, reduce_flavor, all_domain);
     return pRes;
 }

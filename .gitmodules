@@ -1,7 +1,8 @@
 [submodule "thirdparty/jitify"]
 	path = thirdparty/jitify
-	url = https://github.com/NVIDIA/jitify.git
+	url = https://github.com/Ruochun/jitify.git
 [submodule "thirdparty/pybind11"]
 	path = thirdparty/pybind11
 	url = https://github.com/pybind/pybind11.git
 	branch = stable
+	

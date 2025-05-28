@@ -10,15 +10,21 @@
 cmake_minimum_required(VERSION 3.18)
 
 # Version information
-set(DEME_VERSION_MAJOR   0)
+set(DEME_VERSION_MAJOR   2)
 set(DEME_VERSION_MINOR   0)
 set(DEME_VERSION_PATCH   0)
 
 project(
-	Simulator-MUlti-Gpu 
+	Chrono-DEM-Engine
 	VERSION ${DEME_VERSION_MAJOR}.${DEME_VERSION_MINOR}.${DEME_VERSION_PATCH}
 	LANGUAGES CXX CUDA
 )
+
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  message(STATUS "Setting CMAKE_BUILD_TYPE to 'Release' (default)")
+  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "RelWithDebInfo" "MinSizeRel")
+endif()
 
 add_compile_options(-fno-lto)
 
@@ -28,6 +34,7 @@ set(CMAKE_HAVE_THREADS_LIBRARY 1)
 set(CMAKE_USE_WIN32_THREADS_INIT 0)
 set(CMAKE_USE_PTHREADS_INIT 1)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
+
 
 # ---------------------------------------------------------------------------- #
 # Additional Packages
@@ -67,9 +74,6 @@ set(NVIDIAJitifyPath "${CMAKE_CURRENT_LIST_DIR}/thirdparty/jitify")
 # Include pyBind11 library
 include_directories(${PYTHON_INCLUDE_DIRS})
 
-# nvidia_helper_math doesn't require any extra configuration, so just set the path
-set(NVIDIAMathDir ${CMAKE_CURRENT_LIST_DIR}/thirdparty/nvidia_helper_math)
-
 # Let the user decide if they want to use ChPF
 option(USE_CHPF "Toggle the use of ChPF for outputting" OFF)
 
@@ -92,6 +96,14 @@ if(USE_CHPF)
         set(ChPF_IMPORTED_NAME "ChPF")
     endif()
 endif()
+
+# Let the user decide if they want to use managed arrays, rather than default cudaMalloc and cudaMallocHost memory.
+# Note that turning this on gives no performance benefits, and it's considered legacy.
+set(USE_MANAGED_ARRAYS_DESC
+	"Use managed CUDA arrays (instead of manual CUDA host and device memory) to store data"
+	"Switching it on makes the project operable on a Linux platform (excluding WSL) only."
+)
+option(USE_MANAGED_ARRAYS "${USE_MANAGED_ARRAYS_DESC}" OFF)
 
 # ---------------------------------------------------------------------------- #
 # Global Configuration
@@ -206,6 +218,10 @@ else()
 	)
 endif()
 
+# If use managed arrays, define a macro
+if(USE_MANAGED_ARRAYS)
+	target_compile_definitions(simulator_multi_gpu PUBLIC DEME_USE_MANAGED_ARRAYS)
+endif()
 
 # Specific to Windows...
 if(WIN32)

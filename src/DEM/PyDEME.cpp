@@ -16,7 +16,6 @@
 #include <string>
 
 #include <core/utils/RuntimeData.h>
-#include <nvmath/helper_math.cuh>
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
 #include <core/utils/ManagedAllocator.hpp>

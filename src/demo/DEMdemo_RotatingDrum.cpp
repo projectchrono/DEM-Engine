@@ -142,7 +142,7 @@ int main() {
     DEMSim.Initialize();
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_RotatingDrum";
+    out_dir /= "DemoOutput_RotatingDrum";
     create_directory(out_dir);
 
     float time_end = 20.0;
@@ -162,8 +162,8 @@ int main() {
             std::cout << "Maximum system velocity: " << max_v << std::endl;
             std::cout << "------------------------------------" << std::endl;
             char filename[100];
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            DEMSim.WriteSphereFile(std::string(filename));
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+            DEMSim.WriteSphereFile(out_dir / filename);
             currframe++;
         }
 
@@ -184,6 +184,10 @@ int main() {
     DEMSim.ClearThreadCollaborationStats();
 
     DEMSim.ShowTimingStats();
+
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
 
     std::cout << "DEMdemo_RotatingDrum exiting..." << std::endl;
     return 0;

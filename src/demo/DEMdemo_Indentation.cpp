@@ -31,24 +31,29 @@ inline void buildContactMap(std::vector<std::vector<bodyID_t>>& map,
     relative_pos.clear();
     map.resize(num_particles);
     relative_pos.resize(num_particles);
-    std::vector<float3> particle_xyz(num_particles);
-    // At system-level, the clump's ID may not start from 0; but a batch of clumps loaded together have consecutive IDs.
+    // At system-level, the clump's ID may not start from 0 (although they are consecutive), so we can get the actual
+    // starting ID as the offset for later use
     size_t clump_ID_offset = particle_tracker->GetOwnerID();
-    for (unsigned int i = 0; i < num_particles; i++) {
-        particle_xyz[i] = particle_tracker->Pos(i);
-    }
+    // Use Positions to get all particle locations in bulk (rather than using inefficient piecemeal Pos() method)
+    std::vector<float3> particle_xyz = particle_tracker->Positions();
+    assert(particle_xyz.size() == num_particles);
+
     for (unsigned int i = 0; i < cnt_pairs.size(); i++) {
         const auto& pair = cnt_pairs.at(i);
-        map[pair.first - clump_ID_offset].push_back(pair.second);
-        map[pair.second - clump_ID_offset].push_back(pair.first);
+        // Here, what we store is the ID of contact partners but starting from 0 (rather than whatever the system
+        // assigns them), so we subtract the offset
+        map[pair.first - clump_ID_offset].push_back(pair.second - clump_ID_offset);
+        map[pair.second - clump_ID_offset].push_back(pair.first - clump_ID_offset);
     }
     for (unsigned int i = 0; i < num_particles; i++) {
         // Main particle location
         float3 main_loc = particle_xyz[i];
         std::vector<float3> init_rel_pos;
         // Compute all this guy's partners' relative positions wrt to itself
+        // The purpose of that we store 0-based partner ID is clear now: We can directly use pre-filled particle_xyz,
+        // and it's efficient
         for (const auto& ID : map[i]) {
-            init_rel_pos.push_back(DEMSim.GetOwnerPosition(ID) - main_loc);
+            init_rel_pos.push_back(particle_xyz[ID] - main_loc);
         }
         relative_pos[i] = init_rel_pos;
     }
@@ -65,7 +70,7 @@ int main() {
     DEMSim.EnableOwnerWildcardOutput();
 
     path out_dir = current_path();
-    out_dir += "/DemoOutput_Indentation";
+    out_dir /= "DemoOutput_Indentation";
     create_directory(out_dir);
 
     // E, nu, CoR, mu, Crr...
@@ -161,23 +166,16 @@ int main() {
     unsigned int currframe = 0;
     unsigned int curr_step = 0;
 
-    // Settle
+    // Settling phase, no output
     for (double t = 0; t < 0.3; t += frame_time) {
-        // char filename[200], meshname[200];
-        // std::cout << "Outputting frame: " << currframe << std::endl;
-        // sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-        // sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
-        // DEMSim.WriteSphereFile(std::string(filename));
-        // DEMSim.WriteMeshFile(std::string(meshname));
         DEMSim.ShowThreadCollaborationStats();
-
         DEMSim.DoDynamicsThenSync(frame_time);
     }
     double init_max_z = max_z_finder->GetValue();
     std::cout << "After settling, max particle Z coord is " << init_max_z << std::endl;
 
     // Record init positions of the particles
-    std::vector<std::vector<bodyID_t>> particle_cnt_map;
+    std::vector<std::vector<bodyID_t>> particle_cnt_map;  // bodyID_t is just unsigned int
     std::vector<std::vector<float3>> particle_init_relative_pos;
     // Build contact map (contact partner owner IDs) for all particles
     buildContactMap(particle_cnt_map, particle_init_relative_pos, DEMSim, particle_tracker, num_particles);
@@ -200,12 +198,14 @@ int main() {
         if (curr_step % out_steps == 0) {
             // Compute relative displacement
             std::vector<float> gran_strain(num_particles);
+            // Pre-fill all particle locations
+            std::vector<float3> particle_xyz = particle_tracker->Positions();
             for (unsigned int i = 0; i < num_particles; i++) {
-                float3 main_loc = particle_tracker->Pos(i);
-                // Compute contact partners' new locations
+                float3 main_loc = particle_xyz[i];
+                // Compute contact partners' new locations, using pre-filled xyz
                 std::vector<float3> rel_pos;
                 for (auto& ID : particle_cnt_map.at(i)) {
-                    rel_pos.push_back(DEMSim.GetOwnerPosition(ID) - main_loc);
+                    rel_pos.push_back(particle_xyz[ID] - main_loc);
                 }
                 // How large is the strain?
                 // float3 strains = make_float3(0);
@@ -223,12 +223,12 @@ int main() {
 
             // Feed displacement info to wildcard, then leverage the output method to output it to the file
             DEMSim.SetFamilyOwnerWildcardValue(1, "gran_strain", gran_strain);
-            char filename[200], meshname[200];
+            char filename[100], meshname[100];
             std::cout << "Outputting frame: " << currframe << std::endl;
-            sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-            sprintf(meshname, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe++);
-            DEMSim.WriteSphereFile(std::string(filename));
-            DEMSim.WriteMeshFile(std::string(meshname));
+            sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+            sprintf(meshname, "DEMdemo_mesh_%04d.vtk", currframe++);
+            DEMSim.WriteSphereFile(out_dir / filename);
+            DEMSim.WriteMeshFile(out_dir / meshname);
             DEMSim.ShowThreadCollaborationStats();
         }
 
@@ -238,10 +238,13 @@ int main() {
     }
     std::chrono::high_resolution_clock::time_point end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_sec = std::chrono::duration_cast<std::chrono::duration<double>>(end - start);
-    std::cout << (time_sec.count()) / sim_end / (1e-5 / step_size)
-              << " seconds (wall time) to finish 1e5 steps' simulation" << std::endl;
+    std::cout << time_sec.count() << " seconds (wall time) to finish the simulation" << std::endl;
 
     DEMSim.ShowTimingStats();
+
+    std::cout << "----------------------------------------" << std::endl;
+    DEMSim.ShowMemStats();
+    std::cout << "----------------------------------------" << std::endl;
     std::cout << "DEMdemo_Indentation exiting..." << std::endl;
     return 0;
 }

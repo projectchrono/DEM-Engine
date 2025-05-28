@@ -47,7 +47,7 @@ int main() {
             DEMSim.SetMeshOutputFormat("VTK");
 
             path out_dir = current_path();
-            out_dir += "/DemoOutput_BallDrop";
+            out_dir /= "DemoOutput_BallDrop";
             create_directory(out_dir);
 
             // E, nu, CoR, mu, Crr...
@@ -97,11 +97,10 @@ int main() {
             // If first run, settle the material bed, then save to file; if not first run, just load the saved material
             // bed file.
             if (run_num > 0) {
-                char cp_filename[200];
-                sprintf(cp_filename, "%s/bed.csv", out_dir.c_str());
+                path cp_filename = out_dir / "bed.csv";
 
-                auto clump_xyz = DEMSim.ReadClumpXyzFromCsv(std::string(cp_filename));
-                auto clump_quaternion = DEMSim.ReadClumpQuatFromCsv(std::string(cp_filename));
+                auto clump_xyz = DEMSim.ReadClumpXyzFromCsv(cp_filename.string());
+                auto clump_quaternion = DEMSim.ReadClumpQuatFromCsv(cp_filename.string());
                 for (int i = 0; i < templates_terrain.size(); i++) {
                     char t_name[20];
                     sprintf(t_name, "%04d", i);
@@ -166,20 +165,19 @@ int main() {
                 // We can let it settle first
                 for (float t = 0; t < settle_time; t += frame_time) {
                     std::cout << "Frame: " << currframe << std::endl;
-                    char filename[200], meshfilename[200];
-                    sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-                    sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
-                    DEMSim.WriteSphereFile(std::string(filename));
-                    DEMSim.WriteMeshFile(std::string(meshfilename));
+                    char filename[100], meshfilename[100];
+                    sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+                    sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk", currframe);
+                    DEMSim.WriteSphereFile(out_dir / filename);
+                    DEMSim.WriteMeshFile(out_dir / meshfilename);
                     currframe++;
 
                     DEMSim.DoDynamicsThenSync(frame_time);
                     DEMSim.ShowThreadCollaborationStats();
                 }
 
-                char cp_filename[200];
-                sprintf(cp_filename, "%s/bed.csv", out_dir.c_str());
-                DEMSim.WriteClumpFile(std::string(cp_filename));
+                path cp_filename = out_dir / "bed.csv";
+                DEMSim.WriteClumpFile(cp_filename);
             }
 
             // This is to show that you can change the material for all the particles in a family... although here,
@@ -202,13 +200,13 @@ int main() {
                 // Just output files for the first test. You can output all of them if you want.
                 if (run_num == 0) {
                     std::cout << "Frame: " << currframe << std::endl;
-                    char filename[200], meshfilename[200], cnt_filename[200];
-                    sprintf(filename, "%s/DEMdemo_output_%04d.csv", out_dir.c_str(), currframe);
-                    sprintf(meshfilename, "%s/DEMdemo_mesh_%04d.vtk", out_dir.c_str(), currframe);
-                    // sprintf(cnt_filename, "%s/Contact_pairs_%04d.csv", out_dir.c_str(), currframe);
-                    DEMSim.WriteSphereFile(std::string(filename));
-                    DEMSim.WriteMeshFile(std::string(meshfilename));
-                    // DEMSim.WriteContactFile(std::string(cnt_filename));
+                    char filename[100], meshfilename[100], cnt_filename[100];
+                    sprintf(filename, "DEMdemo_output_%04d.csv", currframe);
+                    sprintf(meshfilename, "DEMdemo_mesh_%04d.vtk", currframe);
+                    // sprintf(cnt_filename, "Contact_pairs_%04d.csv", currframe);
+                    DEMSim.WriteSphereFile(out_dir / filename);
+                    DEMSim.WriteMeshFile(out_dir / meshfilename);
+                    // DEMSim.WriteContactFile(out_dir / cnt_filename);
                     currframe++;
                 }
 
