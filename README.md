@@ -1,8 +1,9 @@
 # SBEL GPU DEM-Engine
 __A dual-GPU DEM solver with complex grain geometry support__
 
-<p style="color: red; font-size: 140%; font-weight: bold;">DEM-Engine now works on both Linux (including WSL) and Windows!</p>
-<p style="color: red; font-size: 110%; font-weight: bold;">Windows users are still encouraged to use it  via WSL for a more well-tested experience.</p>
+### 🚨 DEM-Engine now works on both Linux (including WSL) and Windows! 🚨
+
+**⚠️ Windows users are still encouraged to use it via WSL for a more well-tested experience. ⚠️**
 
 <p>
   <img width="380" src="https://i.imgur.com/DKGlM14.jpg">
