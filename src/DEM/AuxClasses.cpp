@@ -647,7 +647,7 @@ size_t DEMTracker::GetContactForcesAndLocalTorqueForAll(std::vector<float3>& poi
     return sys->GetOwnerContactForces(GetOwnerIDs(), points, forces, torques, true);
 }
 std::vector<std::vector<std::vector<float>>> DEMTracker::GetContactForcesAndGlobalTorqueForAll() {
-      std::vector<float3> float3_points, float3_forces, float3_torques;
+    std::vector<float3> float3_points, float3_forces, float3_torques;
     std::vector<std::vector<float>> points, forces, torques;
     size_t nPairs = GetContactForcesAndLocalTorqueForAll(float3_points, float3_forces, float3_torques);
 
@@ -669,7 +669,7 @@ std::vector<std::vector<std::vector<float>>> DEMTracker::GetContactForcesAndGlob
     return_vec.push_back(forces);
     return_vec.push_back(torques);
 
-    return return_vec;  
+    return return_vec;
 }
 
 size_t DEMTracker::GetContactForcesAndGlobalTorque(std::vector<float3>& points,
@@ -719,7 +719,7 @@ size_t DEMTracker::GetContactForcesAndGlobalTorqueForAll(std::vector<float3>& po
     return sys->GetOwnerContactForces(GetOwnerIDs(), points, forces, torques, false);
 }
 std::vector<std::vector<std::vector<float>>> DEMTracker::GetContactForcesAndLocalTorqueForAll() {
-          std::vector<float3> float3_points, float3_forces, float3_torques;
+    std::vector<float3> float3_points, float3_forces, float3_torques;
     std::vector<std::vector<float>> points, forces, torques;
     size_t nPairs = GetContactForcesAndGlobalTorqueForAll(float3_points, float3_forces, float3_torques);
 
@@ -741,7 +741,7 @@ std::vector<std::vector<std::vector<float>>> DEMTracker::GetContactForcesAndLoca
     return_vec.push_back(forces);
     return_vec.push_back(torques);
 
-    return return_vec;  
+    return return_vec;
 }
 
 void DEMTracker::AddAcc(float3 acc, size_t offset) {

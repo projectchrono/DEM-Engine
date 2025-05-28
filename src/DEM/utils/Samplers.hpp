@@ -630,9 +630,8 @@ inline std::vector<std::vector<float>> DEMBoxHCPSampler(const std::vector<float>
 
     std::vector<std::vector<float>> return_vec;
 
-    std::vector<float3> return_val =
-        DEMBoxHCPSampler(make_float3(BoxCenter[0], BoxCenter[1], BoxCenter[2]),
-                            make_float3(HalfDims[0], HalfDims[1], HalfDims[2]), GridSize);
+    std::vector<float3> return_val = DEMBoxHCPSampler(make_float3(BoxCenter[0], BoxCenter[1], BoxCenter[2]),
+                                                      make_float3(HalfDims[0], HalfDims[1], HalfDims[2]), GridSize);
 
     for (int i = 0; i < return_val.size(); i++) {
         std::vector<float> tmp;

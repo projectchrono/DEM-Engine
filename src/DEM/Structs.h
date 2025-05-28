@@ -211,8 +211,8 @@ struct kTStateParams {
 
     // float maxVel_buffer; // buffer for the current max vel sent by dT
     DualStruct<float> maxVel = DualStruct<float>(0.f);  // kT's own storage of max vel
-    DualStruct<float> ts_buffer;                        // buffer for the current ts size sent by dT
-    DualStruct<float> ts;                               // kT's own storage of ts size
+    DualStruct<double> ts_buffer;                       // buffer for the current ts size sent by dT
+    DualStruct<double> ts;                              // kT's own storage of ts size
     DualStruct<unsigned int> maxDrift_buffer;           // buffer for max dT future drift steps
     DualStruct<unsigned int> maxDrift;                  // kT's own storage for max future drift
 };

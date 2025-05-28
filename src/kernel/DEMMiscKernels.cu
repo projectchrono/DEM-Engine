@@ -35,7 +35,7 @@ __global__ void modifyComponents(DEMData* granData, deme::notStupidBool_t* idBoo
 
 __global__ void computeMarginFromAbsv(deme::DEMSimParams* simParams,
                                       deme::DEMDataKT* granData,
-                                      float* ts,
+                                      double* ts,
                                       unsigned int* maxDrift,
                                       size_t n) {
     size_t ownerID = blockIdx.x * blockDim.x + threadIdx.x;

@@ -397,7 +397,7 @@ class DEMTracker {
     size_t GetContactForcesAndGlobalTorqueForAll(std::vector<float3>& points,
                                                  std::vector<float3>& forces,
                                                  std::vector<float3>& torques);
-    std::vector<std::vector<std::vector<float>>> GetContactForcesAndGlobalTorqueForAll();                                    
+    std::vector<std::vector<std::vector<float>>> GetContactForcesAndGlobalTorqueForAll();
 
     /// @brief Get all contact forces and local torques that concern this track object, as a vector.
     /// @details Every force pair will be queried using this function, instead of a reduced total force that this object
@@ -433,7 +433,7 @@ class DEMTracker {
     size_t GetContactForcesAndLocalTorqueForAll(std::vector<float3>& points,
                                                 std::vector<float3>& forces,
                                                 std::vector<float3>& torques);
-    std::vector<std::vector<std::vector<float>>> GetContactForcesAndLocalTorqueForAll();                                               
+    std::vector<std::vector<std::vector<float>>> GetContactForcesAndLocalTorqueForAll();
 };
 
 // class DEMForceModel : public std::enable_shared_from_this<DEMForceModel> {
