@@ -18,7 +18,7 @@
 #include <core/utils/RuntimeData.h>
 #include <DEM/Defines.h>
 #include <DEM/Structs.h>
-#include <core/utils/ManagedAllocator.hpp>
+#include <core/utils/DataMigrationHelper.hpp>
 #include <DEM/HostSideHelpers.hpp>
 #include <DEM/utils/Samplers.hpp>
 
@@ -248,11 +248,6 @@ PYBIND11_MODULE(DEME, obj) {
 
         .def("SetFamily", static_cast<void (deme::DEMTracker::*)(unsigned int)>(&deme::DEMTracker::SetFamily),
              "Change the family numbers of all the entities tracked by this tracker.", py::arg("fam_num"))
-        .def("SetFamily",
-             static_cast<void (deme::DEMTracker::*)(const std::vector<unsigned int>&)>(&deme::DEMTracker::SetFamily),
-             "Change the family numbers of all the entities tracked by this tracker by supplying a list the same "
-             "length as the number of tracked entities.",
-             py::arg("fam_nums"))
         .def("SetFamily", static_cast<void (deme::DEMTracker::*)(unsigned int, size_t)>(&deme::DEMTracker::SetFamily),
              "Change the family number of one entities tracked by this tracker.", py::arg("fam_num"), py::arg("offset"))
 
@@ -714,9 +709,9 @@ PYBIND11_MODULE(DEME, obj) {
              "Set the names for the extra quantities that will be associated with each geometry entity (such as "
              "sphere, triangle).")
 
-        .def("SetFamilyContactWildcardValueAny", &deme::DEMSolver::SetFamilyContactWildcardValueAny,
+        .def("SetFamilyContactWildcardValueEither", &deme::DEMSolver::SetFamilyContactWildcardValueEither,
              "Change the value of contact wildcards to val if either of the contact geometries is in family N.")
-        .def("SetFamilyContactWildcardValueAll", &deme::DEMSolver::SetFamilyContactWildcardValueAll,
+        .def("SetFamilyContactWildcardValueBoth", &deme::DEMSolver::SetFamilyContactWildcardValueBoth,
              "Change the value of contact wildcards to val if both of the contact geometries are in family N.")
         .def("SetFamilyContactWildcardValue", &deme::DEMSolver::SetFamilyContactWildcardValue,
              "Change the value of contact wildcards to val if one of the contact geometry is in family N1, and the "
@@ -777,13 +772,21 @@ PYBIND11_MODULE(DEME, obj) {
              "Assign a multiplier to our estimated maximum system velocity, when deriving the thinckness of the "
              "contact `safety' margin.")
         .def("Initialize", &deme::DEMSolver::Initialize, "Initializes the system.")
-        .def("WriteSphereFile", &deme::DEMSolver::WriteSphereFile, "Writes a sphere file.")
-        .def("WriteMeshFile", &deme::DEMSolver::WriteMeshFile, "Write the current status of all meshes to a file.")
-        .def("WriteClumpFile", &deme::DEMSolver::WriteClumpFile, "Write the current status of clumps to a file.",
-             py::arg("outfilename"), py::arg("accuracy") = 10)
-        .def("WriteContactFile", &deme::DEMSolver::WriteContactFile,
-             "Write all contact pairs to a file. Forces smaller than threshold will not be outputted.",
-             py::arg("outfilename"), py::arg("force_thres") = 1e-15)
+        .def("WriteSphereFile",
+             static_cast<void (deme::DEMSolver::*)(const std::string&) const>(&deme::DEMSolver::WriteSphereFile),
+             "Writes the current status of clumps (but decomposed as spheres) file.")
+        .def("WriteMeshFile",
+             static_cast<void (deme::DEMSolver::*)(const std::string&) const>(&deme::DEMSolver::WriteMeshFile),
+             "Write the current status of all meshes to a file.")
+        .def("WriteClumpFile",
+             static_cast<void (deme::DEMSolver::*)(const std::string&, unsigned int) const>(
+                 &deme::DEMSolver::WriteClumpFile),
+             "Write the current status of clumps to a file.", py::arg("outfilename"), py::arg("accuracy") = 10)
+        .def(
+            "WriteContactFile",
+            static_cast<void (deme::DEMSolver::*)(const std::string&, float) const>(&deme::DEMSolver::WriteContactFile),
+            "Write all contact pairs to a file. Forces smaller than threshold will not be outputted.",
+            py::arg("outfilename"), py::arg("force_thres") = 1e-15)
         // Maybe add checkpoint-reading methods here...
         .def("DoDynamics", &deme::DEMSolver::DoDynamics,
              "Advance simulation by this amount of time (but does not attempt to sync kT and dT). This can work with "
